@@ -22,7 +22,8 @@ A self-hosted wine cellar management app built with the MERN stack. Track your b
 ```bash
 git clone https://github.com/jagduvi1/Cellarion.git
 cd Cellarion
-cp backend/.env.example backend/.env
+cp .env.example .env
+# Edit .env and set JWT_SECRET and MEILI_MASTER_KEY to strong random strings
 docker-compose up --build
 ```
 
@@ -37,7 +38,7 @@ docker-compose up --build
 After the containers are running:
 
 ```bash
-docker exec cellarion-backend-1 node src/seed-demo.js
+docker exec cellarion-backend node src/seed-demo.js
 ```
 
 This creates:
@@ -182,25 +183,24 @@ Cellarion/
 | POST/PUT/DELETE | `/wines` | Manage wine definitions |
 | GET/PUT | `/wine-requests` | Review user wine requests |
 | CRUD | `/taxonomy/*` | Manage countries, regions, grapes |
-| GET | `/audit` | View audit log |
-| GET/PUT | `/users` | Manage user accounts |
+| GET/DELETE | `/images` | Manage bottle images |
 
 ---
 
 ## Environment Variables
 
-Copy `backend/.env.example` to `backend/.env` and adjust as needed:
+Copy `.env.example` to `.env` in the project root and set the two required values:
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `MONGO_URI` | `mongodb://mongo:27017/winecellar` | MongoDB connection |
-| `JWT_SECRET` | — | **Required. Use a long random string.** |
-| `JWT_EXPIRES_IN` | `7d` | Token TTL |
-| `PORT` | `5000` | Backend port |
-| `FRONTEND_URL` | `http://localhost:3000` | CORS origin |
-| `MEILI_URL` | `http://meilisearch:7700` | Meilisearch URL |
-| `MEILI_MASTER_KEY` | — | **Required. Use a long random string.** |
-| `REMBG_URL` | `http://rembg:5001` | Background removal service |
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `JWT_SECRET` | **Yes** | — | Long random string for signing JWTs |
+| `MEILI_MASTER_KEY` | **Yes** | — | Long random string for Meilisearch auth |
+| `MONGO_URI` | No | `mongodb://mongo:27017/winecellar` | MongoDB connection |
+| `JWT_EXPIRES_IN` | No | `7d` | Token TTL |
+| `PORT` | No | `5000` | Backend port |
+| `FRONTEND_URL` | No | `http://localhost:3000` | CORS origin |
+| `MEILI_URL` | No | `http://meilisearch:7700` | Meilisearch URL |
+| `REMBG_URL` | No | `http://rembg:5000` | Background removal service |
 
 ---
 
@@ -222,7 +222,7 @@ Candidates above the threshold (default 0.75) appear as warnings with a "Use Thi
 
 1. Fork the repo and create a feature branch
 2. Run the app with `docker-compose up --build`
-3. Seed demo data with `docker exec cellarion-backend-1 node src/seed-demo.js`
+3. Seed demo data with `docker exec cellarion-backend node src/seed-demo.js`
 4. Submit a pull request with a clear description of your changes
 
 ---

@@ -1,7 +1,7 @@
 services:
   mongo:
     image: mongo:7
-    container_name: wine-cellar-mongo
+    container_name: cellarion-mongo
     ports:
       - "27017:27017"
     volumes:
@@ -14,7 +14,7 @@ services:
 
   meilisearch:
     image: getmeili/meilisearch:v1.6
-    container_name: wine-cellar-meilisearch
+    container_name: cellarion-meilisearch
     ports:
       - "7700:7700"
     environment:
@@ -30,7 +30,7 @@ services:
 
   backend:
     build: ./backend
-    container_name: wine-cellar-backend
+    container_name: cellarion-backend
     ports:
       - "5000:5000"
     environment:
@@ -59,7 +59,7 @@ services:
 
   rembg:
     build: ./rembg
-    container_name: wine-cellar-rembg
+    container_name: cellarion-rembg
     ports:
       - "5001:5000"
     healthcheck:
@@ -75,7 +75,7 @@ services:
 
   frontend:
     build: ./frontend
-    container_name: wine-cellar-frontend
+    container_name: cellarion-frontend
     ports:
       - "3000:3000"
     environment:
