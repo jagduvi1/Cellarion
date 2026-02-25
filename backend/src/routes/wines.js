@@ -1,8 +1,11 @@
 const express = require('express');
 const WineDefinition = require('../models/WineDefinition');
 const searchService = require('../services/search');
+const { requireAuth } = require('../middleware/auth');
 
 const router = express.Router();
+
+const USER_SEARCH_LIMIT = 10;
 
 // MongoDB fallback search (used when Meilisearch is unavailable)
 async function mongoSearch(filter, sort, limit, offset, search) {
@@ -39,22 +42,32 @@ async function mongoSearch(filter, sort, limit, offset, search) {
   return { wines, total };
 }
 
-// GET /api/wines - Search/list wines (public, no auth required)
-router.get('/', async (req, res) => {
+// GET /api/wines - Search/list wines (auth required)
+// Regular users: search term mandatory, results capped at USER_SEARCH_LIMIT.
+// Admin / somm: full browse and unlimited results.
+router.get('/', requireAuth, async (req, res) => {
   try {
+    const isPrivileged = req.user.roles.includes('admin') || req.user.roles.includes('somm');
+
     const {
       country,
       region,
       grapes,
       type,
       search,
-      limit = 50,
+      limit = isPrivileged ? 50 : USER_SEARCH_LIMIT,
       offset = 0,
       sort = 'name'
     } = req.query;
 
-    const parsedLimit = parseInt(limit);
-    const parsedOffset = parseInt(offset);
+    if (!isPrivileged && !search) {
+      return res.status(400).json({ error: 'A search term is required' });
+    }
+
+    const parsedLimit = isPrivileged
+      ? parseInt(limit, 10)
+      : Math.min(parseInt(limit, 10) || USER_SEARCH_LIMIT, USER_SEARCH_LIMIT);
+    const parsedOffset = parseInt(offset, 10);
     const grapeIds = grapes ? grapes.split(',') : [];
 
     // Build MongoDB filter (used for non-search queries and as fallback)
@@ -113,8 +126,8 @@ router.get('/', async (req, res) => {
   }
 });
 
-// GET /api/wines/:id - Get single wine definition
-router.get('/:id', async (req, res) => {
+// GET /api/wines/:id - Get single wine definition (auth required)
+router.get('/:id', requireAuth, async (req, res) => {
   try {
     const wine = await WineDefinition.findById(req.params.id)
       .populate(['country', 'region', 'grapes']);

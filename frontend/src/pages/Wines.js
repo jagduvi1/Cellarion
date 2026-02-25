@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useAuth } from '../contexts/AuthContext';
 import ImageGallery from '../components/ImageGallery';
 import './Wines.css';
 
@@ -41,8 +42,11 @@ function WineCardImage({ wine }) {
 }
 
 function Wines() {
+  const { token, user } = useAuth();
+  const isPrivileged = user?.roles?.includes('admin') || user?.roles?.includes('somm');
+
   const [wines, setWines] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState('');
   const [filters, setFilters] = useState({
     type: '',
@@ -50,7 +54,11 @@ function Wines() {
   });
 
   useEffect(() => {
-    fetchWines();
+    if (search.length > 0 || isPrivileged) {
+      fetchWines();
+    } else {
+      setWines([]);
+    }
   }, [search, filters]);
 
   const fetchWines = async () => {
@@ -62,7 +70,9 @@ function Wines() {
       params.append('sort', filters.sort);
       params.append('limit', '50');
 
-      const res = await fetch(`/api/wines?${params}`);
+      const res = await fetch(`/api/wines?${params}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
       const data = await res.json();
       if (res.ok) {
         setWines(data.wines);
@@ -122,7 +132,7 @@ function Wines() {
         <div className="loading">Loading wines...</div>
       ) : wines.length === 0 ? (
         <div className="empty-state">
-          <p>No wines found matching your criteria</p>
+          <p>{search.length === 0 && !isPrivileged ? 'Enter a search term to browse wines.' : 'No wines found matching your criteria.'}</p>
         </div>
       ) : (
         <div className="wines-grid">

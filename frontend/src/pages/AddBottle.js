@@ -32,36 +32,20 @@ function AddBottle() {
   });
   const [uploadedImages, setUploadedImages] = useState([]);
 
-  // Load recent wines on mount so list isn't blank before typing
-  useEffect(() => {
-    loadRecentWines();
-  }, []);
-
   useEffect(() => {
     if (search.length > 0) {
       searchWines();
     } else {
-      loadRecentWines();
+      setWines([]);
     }
   }, [search]);
-
-  const loadRecentWines = async () => {
-    setLoading(true);
-    try {
-      const res = await fetch('/api/wines?sort=-createdAt&limit=12');
-      const data = await res.json();
-      if (res.ok) setWines(data.wines);
-    } catch (err) {
-      console.error('Failed to load recent wines:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const searchWines = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/wines?search=${encodeURIComponent(search)}&limit=20`);
+      const res = await fetch(`/api/wines?search=${encodeURIComponent(search)}&limit=10`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
       const data = await res.json();
       if (res.ok) {
         setWines(data.wines);
@@ -179,15 +163,12 @@ function AddBottle() {
 
           {!loading && wines.length === 0 && (
             <div className="empty-state">
-              <p>{search.length > 2 ? 'No wines matched your search.' : 'No wines in the registry yet.'}</p>
+              <p>{search.length > 0 ? 'No wines matched your search.' : 'Start typing to search for a wine.'}</p>
             </div>
           )}
 
           {wines.length > 0 && (
             <>
-              {search.length <= 2 && (
-                <p className="wines-list-label">Recently added wines — or start typing to search</p>
-              )}
               <div className="wines-list">
                 {wines.map(wine => (
                   <div key={wine._id} className="wine-row" onClick={() => handleSelectWine(wine)}>
