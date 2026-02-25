@@ -229,4 +229,6 @@ Candidates above the threshold (default 0.75) appear as warnings with a "Use Thi
 
 ## License
 
-MIT
+[GNU Affero General Public License v3.0 (AGPL-3.0)](LICENSE)
+
+You are free to use, modify, and self-host this software. If you run a modified version as a network service, you must make your source code available to users of that service. Commercial hosting of this software as a managed service requires a separate agreement.
