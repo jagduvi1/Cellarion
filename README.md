@@ -226,12 +226,35 @@ Candidates above the threshold (default 0.75) appear as warnings with a "Use Thi
 
 ---
 
+## Testing
+
+### Frontend
+
+```bash
+cd frontend && npm test -- --watchAll=false
+```
+
+Uses Jest + React Testing Library (bundled with Create React App). Covers drink-window logic, currency conversion, and more.
+
+### Backend
+
+```bash
+cd backend && npm test
+```
+
+Uses Jest. Covers the wine normalisation/similarity algorithms, cellar access control, and auth middleware.
+
+**Run both test suites before opening a pull request. PRs with failing tests will not be merged.**
+
+---
+
 ## Contributing
 
-1. Fork the repo and create a feature branch
-2. Run the app with `docker-compose up --build`
-3. Seed demo data with `docker exec cellarion-backend node src/seed-demo.js`
-4. Submit a pull request with a clear description of your changes
+1. Fork the repo and create a feature branch off `main`
+2. Make your changes
+3. Run the tests (`cd frontend && npm test -- --watchAll=false` and `cd backend && npm test`)
+4. Smoke-test in Docker: `docker-compose up --build`
+5. Submit a pull request with a clear description of your changes
 
 ---
 
