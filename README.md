@@ -53,8 +53,8 @@ This creates:
 
 | Account | Email | Password | Role |
 |---------|-------|----------|------|
-| Admin   | admin@cellarion.app | Admin1234 | admin |
-| Demo user | user@cellarion.app | User1234 | user |
+| Admin   | admin@cellarion.app | Admin1234!demo | admin |
+| Demo user | user@cellarion.app | User1234!demo | user |
 
 …plus 2 countries, 2 regions, 5 grape varieties, 2 wine definitions, and a demo cellar with sample bottles.
 
