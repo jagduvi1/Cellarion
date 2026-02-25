@@ -6,8 +6,8 @@
  *   docker exec cellarion-backend node src/seed-demo.js
  *
  * Default credentials created:
- *   Admin:  admin@cellarion.app / Admin1234
- *   User:   user@cellarion.app  / User1234
+ *   Admin:  admin@cellarion.app / Admin1234!demo
+ *   User:   user@cellarion.app  / User1234!demo
  *
  * Data created:
  *   2 countries  (France, New Zealand)
@@ -43,8 +43,8 @@ async function seed() {
     admin = await User.create({
       username: 'admin',
       email: 'admin@cellarion.app',
-      password: 'Admin1234',
-      role: 'admin'
+      password: 'Admin1234!demo',
+      roles: ['admin']
     });
     console.log('  Created: admin@cellarion.app (admin)');
   } else {
@@ -56,8 +56,8 @@ async function seed() {
     demoUser = await User.create({
       username: 'demouser',
       email: 'user@cellarion.app',
-      password: 'User1234',
-      role: 'user'
+      password: 'User1234!demo',
+      roles: ['user']
     });
     console.log('  Created: user@cellarion.app (user)');
   } else {
@@ -234,8 +234,8 @@ async function seed() {
   }
 
   console.log('\nDemo seed complete!');
-  console.log('  Admin: admin@cellarion.app / Admin1234');
-  console.log('  User:  user@cellarion.app  / User1234');
+  console.log('  Admin: admin@cellarion.app / Admin1234!demo');
+  console.log('  User:  user@cellarion.app  / User1234!demo');
   await mongoose.disconnect();
 }
 
