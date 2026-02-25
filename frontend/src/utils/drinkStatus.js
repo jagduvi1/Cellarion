@@ -53,14 +53,31 @@ export function getGroupWorstStatus(bottles) {
   return null;
 }
 
-/** Format a date string for display (e.g. "Mar 15, 2027") */
+/** Format a date string for display (e.g. "Mar 2027") */
 export function formatDrinkDate(dateStr) {
   if (!dateStr) return '';
-  return new Date(dateStr).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+  return new Date(dateStr).toLocaleDateString('en-US', { year: 'numeric', month: 'short' });
 }
 
 /** Convert a Date or ISO string to yyyy-mm-dd for date input value */
 export function toInputDate(dateStr) {
   if (!dateStr) return '';
   return new Date(dateStr).toISOString().slice(0, 10);
+}
+
+/** Convert a Date or ISO string to yyyy-mm for month input value */
+export function toMonthInput(dateStr) {
+  if (!dateStr) return '';
+  return new Date(dateStr).toISOString().slice(0, 7);
+}
+
+/**
+ * Convert a yyyy-mm month string to the last day of that month (yyyy-mm-dd).
+ * Used when storing drinkBefore so the full month is included in the window.
+ */
+export function monthToLastDay(yearMonth) {
+  if (!yearMonth) return null;
+  const [year, month] = yearMonth.split('-').map(Number);
+  const lastDay = new Date(year, month, 0).getDate();
+  return `${yearMonth}-${String(lastDay).padStart(2, '0')}`;
 }
