@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useAuth, usePlan } from '../contexts/AuthContext';
-import { getDrinkStatus, formatDrinkDate, toInputDate } from '../utils/drinkStatus';
+import { getDrinkStatus, formatDrinkDate, toInputDate, toMonthInput, monthToLastDay } from '../utils/drinkStatus';
 import { fetchRates, convertAmount } from '../utils/currency';
 import './BottleDetail.css';
 
@@ -385,8 +385,8 @@ function EditForm({ bottle, token, onSaved, onCancel }) {
   const [form, setForm] = useState({
     vintage:          bottle.vintage || '',
     rating:           bottle.rating  || '',
-    drinkFrom:        toInputDate(bottle.drinkFrom),
-    drinkBefore:      toInputDate(bottle.drinkBefore),
+    drinkFrom:        toMonthInput(bottle.drinkFrom),
+    drinkBefore:      toMonthInput(bottle.drinkBefore),
     notes:            bottle.notes   || '',
     price:            bottle.price   || '',
     currency:         bottle.currency || 'USD',
@@ -412,8 +412,8 @@ function EditForm({ bottle, token, onSaved, onCancel }) {
           ...form,
           price:  form.price  ? parseFloat(form.price)  : null,
           rating: form.rating ? parseInt(form.rating)   : null,
-          drinkFrom:    form.drinkFrom    || null,
-          drinkBefore:  form.drinkBefore  || null,
+          drinkFrom:    form.drinkFrom   ? `${form.drinkFrom}-01`         : null,
+          drinkBefore:  form.drinkBefore ? monthToLastDay(form.drinkBefore) : null,
           purchaseDate: form.purchaseDate || null,
         })
       });
@@ -486,11 +486,11 @@ function EditForm({ bottle, token, onSaved, onCancel }) {
         <div className="drink-window-fields">
           <div>
             <label className="sublabel">Drink From</label>
-            <input type="date" value={form.drinkFrom} onChange={set('drinkFrom')} />
+            <input type="month" value={form.drinkFrom} onChange={set('drinkFrom')} />
           </div>
           <div>
             <label className="sublabel">Drink Before</label>
-            <input type="date" value={form.drinkBefore} onChange={set('drinkBefore')} />
+            <input type="month" value={form.drinkBefore} onChange={set('drinkBefore')} />
           </div>
         </div>
       </div>

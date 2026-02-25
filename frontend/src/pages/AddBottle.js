@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { CURRENCIES } from '../config/currencies';
+import { monthToLastDay } from '../utils/drinkStatus';
 import ImageUpload from '../components/ImageUpload';
 import './AddBottle.css';
 
@@ -87,7 +88,9 @@ function AddBottle() {
         wineDefinition: selectedWine._id,
         ...bottleData,
         price: bottleData.price ? parseFloat(bottleData.price) : undefined,
-        rating: bottleData.rating ? parseInt(bottleData.rating) : undefined
+        rating: bottleData.rating ? parseInt(bottleData.rating) : undefined,
+        drinkFrom:   bottleData.drinkFrom   ? `${bottleData.drinkFrom}-01`          : undefined,
+        drinkBefore: bottleData.drinkBefore ? monthToLastDay(bottleData.drinkBefore) : undefined,
       };
 
       // Create N individual bottle records
@@ -363,7 +366,7 @@ function AddBottle() {
                 <div>
                   <label className="sublabel">Drink From</label>
                   <input
-                    type="date"
+                    type="month"
                     value={bottleData.drinkFrom}
                     onChange={(e) => setBottleData({ ...bottleData, drinkFrom: e.target.value })}
                   />
@@ -371,7 +374,7 @@ function AddBottle() {
                 <div>
                   <label className="sublabel">Drink Before</label>
                   <input
-                    type="date"
+                    type="month"
                     value={bottleData.drinkBefore}
                     onChange={(e) => setBottleData({ ...bottleData, drinkBefore: e.target.value })}
                   />
