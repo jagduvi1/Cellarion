@@ -1,0 +1,63 @@
+{
+  "country": "Greece",
+  "regions": [
+    {
+      "region": "Santorini",
+      "subRegions": [],
+      "grapes": [
+        "Assyrtiko"
+      ],
+      "agingRules": {},
+      "prestigeLevel": "Elite"
+    },
+    {
+      "region": "Naoussa",
+      "subRegions": [],
+      "grapes": [
+        "Xinomavro"
+      ],
+      "agingRules": {},
+      "prestigeLevel": "Very High"
+    },
+    {
+      "region": "Nemea",
+      "subRegions": [],
+      "grapes": [
+        "Agiorgitiko"
+      ],
+      "agingRules": {},
+      "prestigeLevel": "High"
+    },
+    {
+      "region": "Mantinia",
+      "subRegions": [],
+      "grapes": [
+        "Moschofilero"
+      ],
+      "agingRules": {},
+      "prestigeLevel": "High"
+    },
+    {
+      "region": "Crete",
+      "subRegions": [],
+      "grapes": [
+        "Vidiano",
+        "Liatiko",
+        "Kotsifali"
+      ],
+      "agingRules": {},
+      "prestigeLevel": "Medium"
+    },
+    {
+      "region": "Rapsani",
+      "subRegions": [],
+      "grapes": [
+        "Xinomavro",
+        "Krasato",
+        "Stavroto"
+      ],
+      "agingRules": {},
+      "prestigeLevel": "High"
+    }
+  ]
+}

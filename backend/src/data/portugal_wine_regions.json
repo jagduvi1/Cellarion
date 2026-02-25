@@ -1,0 +1,93 @@
+{
+  "country": "Portugal",
+  "regions": [
+    {
+      "region": "Douro",
+      "subRegions": [
+        "Baixo Corgo",
+        "Cima Corgo",
+        "Douro Superior"
+      ],
+      "grapes": [
+        "Touriga Nacional",
+        "Touriga Franca",
+        "Tinta Roriz",
+        "Tinta Barroca"
+      ],
+      "agingRules": {},
+      "prestigeLevel": "Very High"
+    },
+    {
+      "region": "Porto",
+      "subRegions": [],
+      "grapes": [
+        "Touriga Nacional",
+        "Touriga Franca",
+        "Tinta Roriz"
+      ],
+      "agingRules": {
+        "Ruby": "Short aging, fruit-forward",
+        "Tawny": "Extended oxidative aging in barrel",
+        "Vintage": "Long bottle aging, only top years"
+      },
+      "prestigeLevel": "Elite"
+    },
+    {
+      "region": "Dão",
+      "subRegions": [],
+      "grapes": [
+        "Touriga Nacional",
+        "Jaen",
+        "Alfrocheiro"
+      ],
+      "agingRules": {},
+      "prestigeLevel": "High"
+    },
+    {
+      "region": "Alentejo",
+      "subRegions": [],
+      "grapes": [
+        "Alicante Bouschet",
+        "Aragonez",
+        "Trincadeira"
+      ],
+      "agingRules": {},
+      "prestigeLevel": "High"
+    },
+    {
+      "region": "Vinho Verde",
+      "subRegions": [],
+      "grapes": [
+        "Alvarinho",
+        "Loureiro"
+      ],
+      "agingRules": {},
+      "prestigeLevel": "Medium"
+    },
+    {
+      "region": "Bairrada",
+      "subRegions": [],
+      "grapes": [
+        "Baga"
+      ],
+      "agingRules": {},
+      "prestigeLevel": "High"
+    },
+    {
+      "region": "Madeira",
+      "subRegions": [],
+      "grapes": [
+        "Sercial",
+        "Verdelho",
+        "Bual",
+        "Malvasia"
+      ],
+      "agingRules": {
+        "Finest": "Minimum 3 years aging",
+        "Reserve": "Minimum 5 years aging",
+        "Vintage": "Minimum 20 years aging"
+      },
+      "prestigeLevel": "Elite"
+    }
+  ]
+}

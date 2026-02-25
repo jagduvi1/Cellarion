@@ -1,0 +1,112 @@
+{
+  "country": "Spain",
+  "regions": [
+    {
+      "region": "Rioja",
+      "subRegions": ["Rioja Alta", "Rioja Alavesa", "Rioja Oriental"],
+      "grapes": ["Tempranillo", "Garnacha", "Graciano", "Mazuelo"],
+      "agingRules": {
+        "Crianza": "Minimum 24 months total, at least 12 months in oak",
+        "Reserva": "Minimum 36 months total, at least 12 months in oak",
+        "Gran Reserva": "Minimum 60 months total, at least 24 months in oak"
+      },
+      "prestigeLevel": "Very High"
+    },
+    {
+      "region": "Ribera del Duero",
+      "subRegions": [],
+      "grapes": ["Tempranillo"],
+      "agingRules": {
+        "Crianza": "Minimum 24 months total, at least 12 months in oak",
+        "Reserva": "Minimum 36 months total",
+        "Gran Reserva": "Minimum 60 months total"
+      },
+      "prestigeLevel": "Very High"
+    },
+    {
+      "region": "Priorat",
+      "subRegions": [],
+      "grapes": ["Garnacha", "Cariñena"],
+      "agingRules": {},
+      "prestigeLevel": "Elite"
+    },
+    {
+      "region": "Rías Baixas",
+      "subRegions": [],
+      "grapes": ["Albariño"],
+      "agingRules": {},
+      "prestigeLevel": "High"
+    },
+    {
+      "region": "Toro",
+      "subRegions": [],
+      "grapes": ["Tinta de Toro"],
+      "agingRules": {},
+      "prestigeLevel": "High"
+    },
+    {
+      "region": "Bierzo",
+      "subRegions": [],
+      "grapes": ["Mencía"],
+      "agingRules": {},
+      "prestigeLevel": "High"
+    },
+    {
+      "region": "Penedès",
+      "subRegions": [],
+      "grapes": ["Xarel·lo", "Macabeo", "Parellada"],
+      "agingRules": {},
+      "prestigeLevel": "Medium"
+    },
+    {
+      "region": "Cava",
+      "subRegions": [],
+      "grapes": ["Macabeo", "Xarel·lo", "Parellada", "Chardonnay"],
+      "agingRules": {
+        "Cava": "Minimum 9 months on lees",
+        "Reserva": "Minimum 18 months on lees",
+        "Gran Reserva": "Minimum 30 months on lees"
+      },
+      "prestigeLevel": "High"
+    },
+    {
+      "region": "Navarra",
+      "subRegions": [],
+      "grapes": ["Garnacha", "Tempranillo"],
+      "agingRules": {},
+      "prestigeLevel": "Medium"
+    },
+    {
+      "region": "Jumilla",
+      "subRegions": [],
+      "grapes": ["Monastrell"],
+      "agingRules": {},
+      "prestigeLevel": "Medium"
+    },
+    {
+      "region": "Yecla",
+      "subRegions": [],
+      "grapes": ["Monastrell"],
+      "agingRules": {},
+      "prestigeLevel": "Medium"
+    },
+    {
+      "region": "Castilla y León",
+      "subRegions": [],
+      "grapes": ["Tempranillo"],
+      "agingRules": {},
+      "prestigeLevel": "Medium"
+    },
+    {
+      "region": "Andalucía (Sherry)",
+      "subRegions": ["Jerez", "Sanlúcar de Barrameda", "El Puerto de Santa María"],
+      "grapes": ["Palomino", "Pedro Ximénez", "Moscatel"],
+      "agingRules": {
+        "Fino": "Biological aging under flor",
+        "Amontillado": "Biological + oxidative aging",
+        "Oloroso": "Oxidative aging"
+      },
+      "prestigeLevel": "High"
+    }
+  ]
+}

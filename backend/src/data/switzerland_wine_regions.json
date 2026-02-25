@@ -1,0 +1,61 @@
+{
+  "country": "Switzerland",
+  "regions": [
+    {
+      "region": "Valais",
+      "subRegions": [],
+      "grapes": [
+        "Pinot Noir",
+        "Chasselas",
+        "Petite Arvine",
+        "Humagne Rouge"
+      ],
+      "agingRules": {},
+      "prestigeLevel": "Very High"
+    },
+    {
+      "region": "Vaud",
+      "subRegions": [
+        "Lavaux",
+        "La Côte",
+        "Chablais"
+      ],
+      "grapes": [
+        "Chasselas",
+        "Pinot Noir",
+        "Gamay"
+      ],
+      "agingRules": {},
+      "prestigeLevel": "Very High"
+    },
+    {
+      "region": "Geneva",
+      "subRegions": [],
+      "grapes": [
+        "Gamay",
+        "Pinot Noir",
+        "Chasselas"
+      ],
+      "agingRules": {},
+      "prestigeLevel": "High"
+    },
+    {
+      "region": "Ticino",
+      "subRegions": [],
+      "grapes": [
+        "Merlot"
+      ],
+      "agingRules": {},
+      "prestigeLevel": "High"
+    },
+    {
+      "region": "Graubünden",
+      "subRegions": [],
+      "grapes": [
+        "Pinot Noir"
+      ],
+      "agingRules": {},
+      "prestigeLevel": "High"
+    }
+  ]
+}

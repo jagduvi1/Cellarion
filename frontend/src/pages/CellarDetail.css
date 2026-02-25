@@ -1,0 +1,460 @@
+.cellar-detail-page {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.back-link {
+  color: #7B9E88;
+  text-decoration: none;
+  display: inline-block;
+  margin-bottom: 0.75rem;
+}
+
+.back-link:hover {
+  text-decoration: underline;
+}
+
+.cellar-description {
+  color: #9A9484;
+  margin-top: 0.5rem;
+}
+
+.shared-by-label {
+  margin-top: 0.35rem;
+  font-size: 0.85rem;
+  color: #9A9484;
+}
+
+.shared-role-tag {
+  font-weight: 600;
+}
+
+.shared-role-tag--editor {
+  color: #C8A87E;
+}
+
+.shared-role-tag--viewer {
+  color: #9A9484;
+}
+
+/* ── Header actions ── */
+.header-actions {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+/* Hide the text label on small screens, keep icons */
+@media (max-width: 500px) {
+  .btn-label { display: none; }
+  .btn-icon  { padding: 0.45rem 0.6rem; }
+}
+
+/* ── Overflow menu ── */
+.more-menu-wrap {
+  position: relative;
+}
+
+.btn-more {
+  font-size: 1.2rem;
+  letter-spacing: 0.05em;
+  padding: 0.35rem 0.65rem;
+  line-height: 1;
+}
+
+.more-menu-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 99;
+}
+
+.more-menu-dropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 100;
+  background: #1c1c1c;
+  border: 1px solid #2a2a2a;
+  border-radius: 10px;
+  padding: 0.4rem;
+  min-width: 170px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.more-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.55rem 0.75rem;
+  border-radius: 6px;
+  font-size: 0.88rem;
+  color: #E8DFD0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-decoration: none;
+  white-space: nowrap;
+  width: 100%;
+  text-align: left;
+  transition: background 0.12s;
+}
+
+.more-menu-item:hover {
+  background: rgba(255,255,255,0.06);
+}
+
+.more-menu-divider {
+  height: 1px;
+  background: #2a2a2a;
+  margin: 0.3rem 0.4rem;
+}
+
+.more-menu-item--danger {
+  color: #E07060;
+}
+
+.more-menu-item--danger:hover {
+  background: rgba(224,112,96,0.1);
+}
+
+/* Color dot button — small colored circle, clickable for all users */
+.btn-color-dot {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px solid rgba(255,255,255,0.25);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: border-color 0.15s, transform 0.15s;
+  padding: 0;
+}
+.btn-color-dot:hover {
+  border-color: rgba(255,255,255,0.6);
+  transform: scale(1.15);
+}
+
+/* Modal subtitle (personal color note) */
+.modal-subtitle {
+  color: #9A9484;
+  font-size: 0.85rem;
+  margin: -0.25rem 0 1rem;
+}
+
+/* Danger button — delete actions */
+.btn-danger {
+  background: transparent;
+  color: #E07060;
+  border: 1px solid #E07060;
+  padding: 0.4rem 0.9rem;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.875rem;
+  font-weight: 500;
+  transition: background 0.15s, color 0.15s;
+}
+.btn-danger:hover:not(:disabled) {
+  background: #E07060;
+  color: #111;
+}
+.btn-danger:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* Delete modal warning text */
+.delete-warning {
+  background: rgba(224, 112, 96, 0.1);
+  border: 1px solid rgba(224, 112, 96, 0.35);
+  border-radius: 6px;
+  padding: 0.75rem 1rem;
+  color: #E8DFD0;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  margin-bottom: 0.5rem;
+}
+.delete-recovery {
+  color: #9A9484;
+  font-size: 0.82rem;
+  margin: 0 0 1rem;
+}
+
+/* ── Statistics ── */
+.statistics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 0.75rem;
+  margin: 1.25rem 0;
+}
+
+.stat-card {
+  background: #1c1c1c;
+  border: 1px solid #2a2a2a;
+  border-radius: 8px;
+  padding: 1rem;
+  text-align: center;
+}
+
+.stat-card h3 {
+  margin: 0;
+  color: #7B9E88;
+  font-size: 1.75rem;
+}
+
+.stat-card p {
+  margin: 0.4rem 0 0 0;
+  color: #9A9484;
+  font-size: 0.85rem;
+}
+
+/* ── Filters bar ── */
+.filters-bar {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr 1fr;
+  gap: 0.75rem;
+  margin: 1.25rem 0;
+}
+
+.filters-bar-5 {
+  grid-template-columns: 2fr 1fr 1fr 1fr 1fr;
+}
+
+.search-input,
+.filter-input,
+.filter-select {
+  padding: 0.75rem;
+  border: 1px solid #2a2a2a;
+  border-radius: 4px;
+  font-size: 16px;
+  min-height: 44px;
+  background: #1c1c1c;
+  color: #E8DFD0;
+}
+
+.search-input:focus,
+.filter-input:focus,
+.filter-select:focus {
+  outline: none;
+  border-color: #7B9E88;
+}
+
+/* ── Drink alert strip ── */
+.drink-alert-strip {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  background: #1e1a10;
+  border: 1px solid #3a2e10;
+  border-radius: 8px;
+  padding: 0.65rem 1rem;
+  margin-bottom: 1rem;
+  font-size: 0.875rem;
+  flex-wrap: wrap;
+}
+
+.drink-strip-label {
+  color: #9A9484;
+}
+
+.drink-strip-link {
+  color: #C8A87E;
+  text-decoration: none;
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+.drink-strip-link:hover {
+  text-decoration: underline;
+}
+
+/* ── Drink alert badges (in strip) ── */
+.drink-badge {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 10px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.drink-badge.overdue {
+  background: #2d1414;
+  color: #E07060;
+  border: 1px solid #5a2020;
+}
+
+.drink-badge.soon {
+  background: #2d1e10;
+  color: #e0a060;
+  border: 1px solid #5a3a10;
+}
+
+/* ── Compact bottle list ── */
+.bottles-list {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.bottle-card {
+  display: flex;
+  align-items: center;
+  gap: 0.875rem;
+  background: #1c1c1c;
+  border: 1px solid #2a2a2a;
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+  min-height: 68px;
+}
+
+.bottle-card:hover {
+  border-color: #7B9E88;
+  background: rgba(123, 158, 136, 0.06);
+}
+
+.bottle-wine-image {
+  width: 32px;
+  height: 46px;
+  object-fit: contain;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+.bottle-wine-placeholder {
+  width: 32px;
+  height: 46px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+.bottle-wine-placeholder.red       { background: #2d1414; }
+.bottle-wine-placeholder.white     { background: #2d2510; }
+.bottle-wine-placeholder.rosé      { background: #2d1420; }
+.bottle-wine-placeholder.sparkling { background: #14202d; }
+.bottle-wine-placeholder.dessert   { background: #1f1430; }
+.bottle-wine-placeholder.fortified { background: #142d18; }
+
+.bottle-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.bottle-name {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #E8DFD0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-bottom: 0.2rem;
+}
+
+.bottle-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.82rem;
+  color: #9A9484;
+  flex-wrap: wrap;
+}
+
+.bottle-producer {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.bottle-vintage {
+  white-space: nowrap;
+  font-weight: 500;
+}
+
+.bottle-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-top: 0.3rem;
+}
+
+/* ── Rack badge ── */
+.rack-badge {
+  display: inline-block;
+  font-size: 0.72rem;
+  color: #C8A87E;
+  background: #2a1f14;
+  border: 1px solid #4a3520;
+  border-radius: 10px;
+  padding: 1px 8px;
+  text-decoration: none;
+}
+
+.rack-badge:hover {
+  background: #3a2a1a;
+}
+
+/* ── Drink status badges ── */
+.drink-status-badge {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 10px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.drink-status-badge.overdue  { background: #2d1414; color: #E07060; border: 1px solid #5a2020; }
+.drink-status-badge.soon     { background: #2d1e10; color: #e0a060; border: 1px solid #5a3a10; }
+.drink-status-badge.inWindow { background: #142d1c; color: #6B9E78; border: 1px solid #1e4a2a; }
+.drink-status-badge.notReady { background: #14202d; color: #7aade0; border: 1px solid #1e3a5a; }
+
+.drink-status-badge.badge-sm {
+  font-size: 0.7rem;
+  padding: 1px 7px;
+}
+
+/* ── Chevron ── */
+.bottle-chevron {
+  font-size: 1.4rem;
+  color: #4a4a4a;
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+/* ── Mobile ── */
+@media (max-width: 768px) {
+  .filters-bar,
+  .filters-bar-5 {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    gap: 0.5rem;
+    padding-bottom: 0.5rem;
+    grid-template-columns: unset;
+  }
+
+  .search-input,
+  .filter-input,
+  .filter-select {
+    flex-shrink: 0;
+    min-width: 140px;
+    max-width: 200px;
+  }
+
+  .search-input {
+    min-width: 180px;
+  }
+
+  .statistics-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 480px) {
+  .statistics-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}

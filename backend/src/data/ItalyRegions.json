@@ -1,0 +1,549 @@
+
+{
+  "country": "Italy",
+  "regions": [
+    {
+      "name": "Piemonte",
+      "appellations": [
+        {
+          "name": "Barolo",
+          "classification": "DOCG",
+          "grapes": { "primary": ["Nebbiolo"], "permitted": [] },
+          "styles": ["red"],
+          "aging_rules": { "legal_min_months": 38, "notes": "Riserva: 62 months minimum. Typical wood aging 18–24 months within total." },
+          "prestige_level": "Iconic DOCG"
+        },
+        {
+          "name": "Barbaresco",
+          "classification": "DOCG",
+          "grapes": { "primary": ["Nebbiolo"], "permitted": [] },
+          "styles": ["red"],
+          "aging_rules": { "legal_min_months": 26, "notes": "Riserva: 50 months minimum." },
+          "prestige_level": "Top DOCG"
+        },
+        {
+          "name": "Roero",
+          "classification": "DOCG",
+          "grapes": { "primary": ["Nebbiolo"], "permitted": ["Arneis (for Roero Arneis bianco)"] },
+          "styles": ["red", "white"],
+          "aging_rules": { "legal_min_months": 20, "notes": "Roero Riserva: 32 months. Whites generally no legal élevage minimum." },
+          "prestige_level": "DOCG"
+        },
+        {
+          "name": "Asti / Moscato d’Asti",
+          "classification": "DOCG",
+          "grapes": { "primary": ["Moscato Bianco"], "permitted": [] },
+          "styles": ["sparkling (sweet)", "frizzante"],
+          "aging_rules": { "legal_min_months": null, "notes": "Tank method; no legal aging minimum." },
+          "prestige_level": "DOCG"
+        },
+        {
+          "name": "Gattinara",
+          "classification": "DOCG",
+          "grapes": { "primary": ["Nebbiolo (Spanna)"], "permitted": ["Vespolina", "Uva Rara (Bonarda Novarese)"] },
+          "styles": ["red"],
+          "aging_rules": { "legal_min_months": 35, "notes": "Riserva typically 47+ months." },
+          "prestige_level": "DOCG (Alto Piemonte)"
+        },
+        {
+          "name": "Ghemme",
+          "classification": "DOCG",
+          "grapes": { "primary": ["Nebbiolo (Spanna)"], "permitted": ["Vespolina", "Uva Rara"] },
+          "styles": ["red"],
+          "aging_rules": { "legal_min_months": 34, "notes": "Riserva ~46+ months." },
+          "prestige_level": "DOCG (Alto Piemonte)"
+        },
+        {
+          "name": "Nizza",
+          "classification": "DOCG",
+          "grapes": { "primary": ["Barbera"], "permitted": [] },
+          "styles": ["red"],
+          "aging_rules": { "legal_min_months": 18, "notes": "Riserva: 30 months; wood aging required." },
+          "prestige_level": "Single‑comune Barbera DOCG"
+        },
+        {
+          "name": "Barbera d’Asti",
+          "classification": "DOCG",
+          "grapes": { "primary": ["Barbera"], "permitted": [] },
+          "styles": ["red"],
+          "aging_rules": { "legal_min_months": null, "notes": "Superiore: ≥14 months with wood." },
+          "prestige_level": "DOCG"
+        },
+        {
+          "name": "Gavi (Cortese di Gavi)",
+          "classification": "DOCG",
+          "grapes": { "primary": ["Cortese"], "permitted": [] },
+          "styles": ["white", "sparkling"],
+          "aging_rules": { "legal_min_months": null, "notes": "Gavi Riserva: ≥12 months (often with bottle aging)." },
+          "prestige_level": "DOCG"
+        },
+        {
+          "name": "Langhe",
+          "classification": "DOC",
+          "grapes": { "primary": ["Nebbiolo", "Barbera", "Dolcetto", "Arneis", "Chardonnay"], "permitted": ["many local/international"] },
+          "styles": ["red", "white", "rosé"],
+          "aging_rules": { "legal_min_months": null, "notes": "Varies by varietal bottling; typically no legal minimum." },
+          "prestige_level": "Umbrella DOC"
+        }
+      ]
+    },
+    {
+      "name": "Lombardia",
+      "appellations": [
+        {
+          "name": "Franciacorta",
+          "classification": "DOCG",
+          "grapes": { "primary": ["Chardonnay", "Pinot Nero"], "permitted": ["Pinot Bianco (limits)"] },
+          "styles": ["sparkling (traditional method)"],
+          "aging_rules": { "legal_min_months": 18, "notes": "NV: ≥18 months on lees; Millesimato: ≥30; Riserva: ≥60 on lees." },
+          "prestige_level": "Top Italian metodo classico DOCG"
+        },
+        {
+          "name": "Valtellina Superiore",
+          "classification": "DOCG",
+          "grapes": { "primary": ["Nebbiolo (Chiavennasca)"], "permitted": [] },
+          "styles": ["red"],
+          "aging_rules": { "legal_min_months": 24, "notes": "Riserva typically ≥36 months." },
+          "prestige_level": "Alpine Nebbiolo DOCG"
+        },
+        {
+          "name": "Sforzato di Valtellina (Sfursat)",
+          "classification": "DOCG",
+          "grapes": { "primary": ["Nebbiolo (Chiavennasca)"], "permitted": [] },
+          "styles": ["red (appassimento)"],
+          "aging_rules": { "legal_min_months": 20, "notes": "Includes appassimento drying period; higher alc." },
+          "prestige_level": "Appassimento Nebbiolo DOCG"
+        },
+        {
+          "name": "Oltrepò Pavese Metodo Classico",
+          "classification": "DOCG",
+          "grapes": { "primary": ["Pinot Nero"], "permitted": ["Chardonnay", "Pinot Bianco", "Pinot Grigio"] },
+          "styles": ["sparkling (traditional method)"] ,
+          "aging_rules": { "legal_min_months": 15, "notes": "Vintage and Cruasé rosé often longer; Riserva ≥24 months on lees." },
+          "prestige_level": "Sparkling DOCG"
+        }
+      ]
+    },
+    {
+      "name": "Veneto",
+      "appellations": [
+        {
+          "name": "Amarone della Valpolicella",
+          "classification": "DOCG",
+          "grapes": { "primary": ["Corvina", "Corvinone"], "permitted": ["Rondinella", "Molinara", "Oseleta", "others (limits)"] },
+          "styles": ["red (dry, appassimento)"],
+          "aging_rules": { "legal_min_months": 24, "notes": "Riserva: ≥48 months." },
+          "prestige_level": "Iconic appassimento DOCG"
+        },
+        {
+          "name": "Valpolicella",
+          "classification": "DOC",
+          "grapes": { "primary": ["Corvina", "Corvinone"], "permitted": ["Rondinella", "Molinara", "others"] },
+          "styles": ["red"],
+          "aging_rules": { "legal_min_months": null, "notes": "Classico/Superiore tiers; Ripasso style has its own rules." },
+          "prestige_level": "DOC"
+        },
+        {
+          "name": "Soave Superiore",
+          "classification": "DOCG",
+          "grapes": { "primary": ["Garganega"], "permitted": ["Trebbiano di Soave (Verdicchio)", "Chardonnay (limits)"] },
+          "styles": ["white"],
+          "aging_rules": { "legal_min_months": 12, "notes": "Soave Classico DOC has no legal aging minimum." },
+          "prestige_level": "DOCG (white)"
+        },
+        {
+          "name": "Bardolino Superiore",
+          "classification": "DOCG",
+          "grapes": { "primary": ["Corvina"], "permitted": ["Rondinella", "Molinara", "others"] },
+          "styles": ["red"],
+          "aging_rules": { "legal_min_months": 12, "notes": "Standard Bardolino DOC no legal minimum." },
+          "prestige_level": "DOCG"
+        },
+        {
+          "name": "Conegliano Valdobbiadene Prosecco Superiore",
+          "classification": "DOCG",
+          "grapes": { "primary": ["Glera"], "permitted": ["Verdiso", "Perera", "Bianchetta Trevigiana", "Pinot Nero (rosé, still wine base)", "Chardonnay", "Pinot Bianco", "Pinot Grigio"] },
+          "styles": ["sparkling (tank method)", "still (rare)"],
+          "aging_rules": { "legal_min_months": null, "notes": "No lees‑aging requirement; Rive & Cartizze have stricter origin rules." },
+          "prestige_level": "DOCG (hillside ‘Superiore’)"
+        }
+      ]
+    },
+    {
+      "name": "Trentino‑Alto Adige / Südtirol",
+      "appellations": [
+        {
+          "name": "Alto Adige / Südtirol",
+          "classification": "DOC",
+          "grapes": { "primary": ["Pinot Grigio", "Gewürztraminer", "Sauvignon Blanc", "Chardonnay", "Lagrein", "Pinot Nero"], "permitted": ["Kerner", "Müller‑Thurgau", "Sylvaner", "etc."] },
+          "styles": ["white", "red", "rosé"],
+          "aging_rules": { "legal_min_months": null, "notes": "Varies by sub‑zone/varietal." },
+          "prestige_level": "DOC"
+        },
+        {
+          "name": "Teroldego Rotaliano",
+          "classification": "DOC",
+          "grapes": { "primary": ["Teroldego"], "permitted": [] },
+          "styles": ["red"],
+          "aging_rules": { "legal_min_months": null, "notes": "Riserva versions aged longer (often ≥24 months)." },
+          "prestige_level": "DOC (Trentino)"
+        }
+      ]
+    },
+    {
+      "name": "Friuli‑Venezia Giulia",
+      "appellations": [
+        {
+          "name": "Collio (Goriziano)",
+          "classification": "DOC",
+          "grapes": { "primary": ["Friulano", "Sauvignon Blanc", "Pinot Grigio", "Ribolla Gialla", "Chardonnay"], "permitted": ["Malvasia Istriana", "others"] },
+          "styles": ["white", "orange (skin‑contact, traditional)", "red (limited)"] ,
+          "aging_rules": { "legal_min_months": null, "notes": "No DOC‑wide minimum; many premium whites see lees/barrel time." },
+          "prestige_level": "Historic white DOC"
+        },
+        {
+          "name": "Friuli Colli Orientali",
+          "classification": "DOC",
+          "grapes": { "primary": ["Friulano", "Ribolla Gialla", "Picolit", "Refosco dal Peduncolo Rosso"], "permitted": ["international whites/reds"] },
+          "styles": ["white", "sweet (Picolit)", "red"],
+          "aging_rules": { "legal_min_months": null, "notes": "Picolit DOCG has separate stricter rules (sweet)." },
+          "prestige_level": "DOC (quality whites)"
+        }
+      ]
+    },
+    {
+      "name": "Liguria",
+      "appellations": [
+        {
+          "name": "Cinque Terre",
+          "classification": "DOC",
+          "grapes": { "primary": ["Bosco"], "permitted": ["Albarola", "Vermentino"] },
+          "styles": ["white", "sweet (Sciacchetrà)"],
+          "aging_rules": { "legal_min_months": null, "notes": "Sciacchetrà sweet wines have defined parameters; no general aging minimum." },
+          "prestige_level": "DOC (coastal terraces)"
+        },
+        {
+          "name": "Riviera Ligure di Ponente",
+          "classification": "DOC",
+          "grapes": { "primary": ["Pigato (Vermentino biotype)", "Vermentino", "Rossese"], "permitted": [] },
+          "styles": ["white", "red", "rosé"],
+          "aging_rules": { "legal_min_months": null, "notes": "No DOC‑wide minimum." },
+          "prestige_level": "DOC"
+        }
+      ]
+    },
+    {
+      "name": "Emilia‑Romagna",
+      "appellations": [
+        {
+          "name": "Lambrusco di Sorbara / Grasparossa / Salamino",
+          "classification": "DOC",
+          "grapes": { "primary": ["Lambrusco varieties"], "permitted": [] },
+          "styles": ["sparkling (secco to dolce)", "frizzante"],
+          "aging_rules": { "legal_min_months": null, "notes": "Tank or ancestrale; no DOC‑wide aging minimum." },
+          "prestige_level": "DOC cluster"
+        },
+        {
+          "name": "Romagna Albana",
+          "classification": "DOCG",
+          "grapes": { "primary": ["Albana"], "permitted": [] },
+          "styles": ["white", "sweet (Passito)"],
+          "aging_rules": { "legal_min_months": null, "notes": "Secco and Passito styles; no universal aging minimum." },
+          "prestige_level": "DOCG (first Italian white DOCG)"
+        }
+      ]
+    },
+    {
+      "name": "Toscana",
+      "appellations": [
+        {
+          "name": "Chianti Classico",
+          "classification": "DOCG",
+          "grapes": { "primary": ["Sangiovese"], "permitted": ["Canaiolo", "Colorino", "Merlot", "Cabernet Sauvignon"] },
+          "styles": ["red"],
+          "aging_rules": { "legal_min_months": 12, "notes": "Annata typically 12 months; Riserva ≥24 months incl. ≥3 months bottle; Gran Selezione ≥30 months." },
+          "prestige_level": "Historic DOCG (Gallo Nero)"
+        },
+        {
+          "name": "Chianti",
+          "classification": "DOCG",
+          "grapes": { "primary": ["Sangiovese"], "permitted": ["Canaiolo", "Colorino", "Merlot/Cabernet (limited)"] },
+          "styles": ["red"],
+          "aging_rules": { "legal_min_months": null, "notes": "Riserva ≥24 months; subzones have specifics." },
+          "prestige_level": "DOCG"
+        },
+        {
+          "name": "Brunello di Montalcino",
+          "classification": "DOCG",
+          "grapes": { "primary": ["Sangiovese (Brunello)"], "permitted": [] },
+          "styles": ["red"],
+          "aging_rules": { "legal_min_months": 60, "notes": "Includes ≥24 months in wood and ≥4 months in bottle (Riserva ≥6 years)." },
+          "prestige_level": "Iconic DOCG"
+        },
+        {
+          "name": "Vino Nobile di Montepulciano",
+          "classification": "DOCG",
+          "grapes": { "primary": ["Sangiovese (Prugnolo Gentile)"], "permitted": ["Canaiolo", "Mammolo", "others limited"] },
+          "styles": ["red"],
+          "aging_rules": { "legal_min_months": 24, "notes": "Riserva ≥36 months." },
+          "prestige_level": "DOCG"
+        },
+        {
+          "name": "Bolgheri",
+          "classification": "DOC",
+          "grapes": { "primary": ["Cabernet Sauvignon", "Merlot", "Cabernet Franc"], "permitted": ["Petit Verdot", "Syrah", "Sangiovese (limits)"] },
+          "styles": ["red", "white", "rosé"],
+          "aging_rules": { "legal_min_months": null, "notes": "No DOC‑wide aging minimum; estate practices vary (Super Tuscans)." },
+          "prestige_level": "High‑prestige coastal DOC"
+        },
+        {
+          "name": "Morellino di Scansano",
+          "classification": "DOCG",
+          "grapes": { "primary": ["Sangiovese (Morellino)"], "permitted": ["local/international complements"] },
+          "styles": ["red"],
+          "aging_rules": { "legal_min_months": null, "notes": "Riserva ≥24 months incl. ≥12 in wood." },
+          "prestige_level": "DOCG (Maremma)"
+        },
+        {
+          "name": "Vernaccia di San Gimignano",
+          "classification": "DOCG",
+          "grapes": { "primary": ["Vernaccia di San Gimignano"], "permitted": ["minor local/international whites (limits)"] },
+          "styles": ["white"],
+          "aging_rules": { "legal_min_months": null, "notes": "Riserva requires longer aging and higher extract." },
+          "prestige_level": "DOCG (white)"
+        }
+      ]
+    },
+    {
+      "name": "Umbria",
+      "appellations": [
+        {
+          "name": "Sagrantino di Montefalco",
+          "classification": "DOCG",
+          "grapes": { "primary": ["Sagrantino"], "permitted": [] },
+          "styles": ["red (secco)", "sweet (passito)"] ,
+          "aging_rules": { "legal_min_months": 33, "notes": "Secco must include ≥12 months in wood; additional bottle aging required." },
+          "prestige_level": "Powerful tannic DOCG"
+        },
+        {
+          "name": "Orvieto",
+          "classification": "DOC",
+          "grapes": { "primary": ["Grechetto", "Procanico (Trebbiano Toscano)"] , "permitted": ["Verdello", "Malvasia", "Drupeggio"] },
+          "styles": ["white", "sweet (Classico Superiore/late harvest)"] ,
+          "aging_rules": { "legal_min_months": null, "notes": "No DOC‑wide aging minimum." },
+          "prestige_level": "DOC"
+        }
+      ]
+    },
+    {
+      "name": "Marche",
+      "appellations": [
+        {
+          "name": "Verdicchio dei Castelli di Jesi Riserva",
+          "classification": "DOCG",
+          "grapes": { "primary": ["Verdicchio"], "permitted": [] },
+          "styles": ["white"],
+          "aging_rules": { "legal_min_months": 18, "notes": "Matelica Riserva DOCG also ≥18 months." },
+          "prestige_level": "DOCG (Riserva)"
+        },
+        {
+          "name": "Rosso Conero",
+          "classification": "DOC",
+          "grapes": { "primary": ["Montepulciano"], "permitted": ["Sangiovese (limits)"] },
+          "styles": ["red"],
+          "aging_rules": { "legal_min_months": null, "notes": "DOCG ‘Conero Riserva’ has stricter rules/aging." },
+          "prestige_level": "DOC"
+        }
+      ]
+    },
+    {
+      "name": "Lazio",
+      "appellations": [
+        {
+          "name": "Frascati",
+          "classification": "DOC",
+          "grapes": { "primary": ["Malvasia del Lazio (Malvasia Puntinata)", "Malvasia bianca di Candia"], "permitted": ["Trebbiano varieties", "Bellone", "Greco", "others"] },
+          "styles": ["white", "sparkling"],
+          "aging_rules": { "legal_min_months": null, "notes": "Superiore and Cannellino (sweet) have added requirements." },
+          "prestige_level": "DOC"
+        }
+      ]
+    },
+    {
+      "name": "Abruzzo",
+      "appellations": [
+        {
+          "name": "Montepulciano d’Abruzzo",
+          "classification": "DOC",
+          "grapes": { "primary": ["Montepulciano"], "permitted": [] },
+          "styles": ["red", "rosé (Cerasuolo d’Abruzzo separate DOC)"],
+          "aging_rules": { "legal_min_months": null, "notes": "Riserva ≥24 months (often wood)." },
+          "prestige_level": "DOC"
+        },
+        {
+          "name": "Trebbiano d’Abruzzo",
+          "classification": "DOC",
+          "grapes": { "primary": ["Trebbiano Abruzzese/Toscano"], "permitted": [] },
+          "styles": ["white"],
+          "aging_rules": { "legal_min_months": null, "notes": "No DOC‑wide minimum." },
+          "prestige_level": "DOC"
+        }
+      ]
+    },
+    {
+      "name": "Molise",
+      "appellations": [
+        {
+          "name": "Biferno",
+          "classification": "DOC",
+          "grapes": { "primary": ["Montepulciano", "Aglianico"], "permitted": ["Trebbiano (for bianco)"] },
+          "styles": ["red", "white", "rosé"],
+          "aging_rules": { "legal_min_months": null, "notes": "Riserva categories aged longer." },
+          "prestige_level": "DOC"
+        }
+      ]
+    },
+    {
+      "name": "Campania",
+      "appellations": [
+        {
+          "name": "Taurasi",
+          "classification": "DOCG",
+          "grapes": { "primary": ["Aglianico"], "permitted": [] },
+          "styles": ["red"],
+          "aging_rules": { "legal_min_months": 36, "notes": "Includes wood; Riserva ≥48 months (with longer wood)." },
+          "prestige_level": "Aglianico DOCG"
+        },
+        {
+          "name": "Fiano di Avellino",
+          "classification": "DOCG",
+          "grapes": { "primary": ["Fiano"], "permitted": [] },
+          "styles": ["white"],
+          "aging_rules": { "legal_min_months": null, "notes": "No DOCG‑wide minimum." },
+          "prestige_level": "DOCG (white)"
+        },
+        {
+          "name": "Greco di Tufo",
+          "classification": "DOCG",
+          "grapes": { "primary": ["Greco"], "permitted": [] },
+          "styles": ["white", "sparkling"],
+          "aging_rules": { "legal_min_months": null, "notes": "Spumante rules separate." },
+          "prestige_level": "DOCG (white)"
+        }
+      ]
+    },
+    {
+      "name": "Puglia",
+      "appellations": [
+        {
+          "name": "Primitivo di Manduria Dolce Naturale",
+          "classification": "DOCG",
+          "grapes": { "primary": ["Primitivo"], "permitted": [] },
+          "styles": ["sweet red"],
+          "aging_rules": { "legal_min_months": null, "notes": "Natural sweet style from late harvest/overripe fruit." },
+          "prestige_level": "DOCG (sweet)"
+        },
+        {
+          "name": "Primitivo di Manduria",
+          "classification": "DOC",
+          "grapes": { "primary": ["Primitivo"], "permitted": [] },
+          "styles": ["red"],
+          "aging_rules": { "legal_min_months": null, "notes": "Riserva ≥24 months (often wood)." },
+          "prestige_level": "DOC"
+        },
+        {
+          "name": "Salice Salentino",
+          "classification": "DOC",
+          "grapes": { "primary": ["Negroamaro"], "permitted": ["Malvasia Nera"] },
+          "styles": ["red", "rosé", "white (less common)"] ,
+          "aging_rules": { "legal_min_months": null, "notes": "Riserva aged longer." },
+          "prestige_level": "DOC"
+        }
+      ]
+    },
+    {
+      "name": "Basilicata",
+      "appellations": [
+        {
+          "name": "Aglianico del Vulture",
+          "classification": "DOCG/DOC (Superiore DOCG tier exists)",
+          "grapes": { "primary": ["Aglianico"], "permitted": [] },
+          "styles": ["red"],
+          "aging_rules": { "legal_min_months": 24, "notes": "Superiore/Riserva tiers longer (often 36–48 months)." },
+          "prestige_level": "Volcanic Aglianico"
+        }
+      ]
+    },
+    {
+      "name": "Calabria",
+      "appellations": [
+        {
+          "name": "Cirò",
+          "classification": "DOC",
+          "grapes": { "primary": ["Gaglioppo"], "permitted": ["Greco Bianco (for white)", "others"] },
+          "styles": ["red", "white", "rosé"],
+          "aging_rules": { "legal_min_months": null, "notes": "Riserva aged longer." },
+          "prestige_level": "DOC"
+        }
+      ]
+    },
+    {
+      "name": "Sicilia",
+      "appellations": [
+        {
+          "name": "Cerasuolo di Vittoria",
+          "classification": "DOCG",
+          "grapes": { "primary": ["Nero d’Avola", "Frappato"], "permitted": [] },
+          "styles": ["red"],
+          "aging_rules": { "legal_min_months": 18, "notes": "Classico often ≥30 months with territory restriction." },
+          "prestige_level": "Sicily’s lone DOCG"
+        },
+        {
+          "name": "Etna",
+          "classification": "DOC",
+          "grapes": { "primary": ["Nerello Mascalese", "Nerello Cappuccio"], "permitted": ["Carricante (for white)", "Catarratto", "Minnella"] },
+          "styles": ["red", "white", "rosé", "sparkling"],
+          "aging_rules": { "legal_min_months": null, "notes": "Etna Rosso Riserva often aged ≥48 months with wood requirements." },
+          "prestige_level": "Volcanic benchmark DOC"
+        },
+        {
+          "name": "Marsala",
+          "classification": "DOC",
+          "grapes": { "primary": ["Grillo", "Catarratto", "Inzolia"], "permitted": ["others depending on style"] },
+          "styles": ["fortified (secco to dolce)"],
+          "aging_rules": { "legal_min_months": 12, "notes": "Aging depends on category: Superiore, Vergine/Solera, etc., up to 5–10+ years." },
+          "prestige_level": "Historic fortified DOC"
+        }
+      ]
+    },
+    {
+      "name": "Sardegna",
+      "appellations": [
+        {
+          "name": "Vermentino di Gallura",
+          "classification": "DOCG",
+          "grapes": { "primary": ["Vermentino"], "permitted": [] },
+          "styles": ["white", "sparkling"],
+          "aging_rules": { "legal_min_months": null, "notes": "Superiore category higher extract/abv; no universal aging minimum." },
+          "prestige_level": "Island’s DOCG (white)"
+        },
+        {
+          "name": "Cannonau di Sardegna",
+          "classification": "DOC",
+          "grapes": { "primary": ["Cannonau (Grenache)"] , "permitted": [] },
+          "styles": ["red", "rosé", "sweet (passito)"] ,
+          "aging_rules": { "legal_min_months": null, "notes": "Riserva often ≥24 months including wood; Classico variants exist." },
+          "prestige_level": "DOC"
+        },
+        {
+          "name": "Carignano del Sulcis",
+          "classification": "DOC",
+          "grapes": { "primary": ["Carignano (Carignan)"] , "permitted": [] },
+          "styles": ["red", "rosé"],
+          "aging_rules": { "legal_min_months": null, "notes": "Riserva and Superiore with longer aging." },
+          "prestige_level": "DOC"
+        }
+      ]
+    }
+  ]
+}

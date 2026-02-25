@@ -1,0 +1,158 @@
+.cellar-history-page {
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.page-subtitle {
+  color: #9A9484;
+  margin: 0.25rem 0 0 0;
+}
+
+/* ── Summary pills ── */
+.history-summary-row {
+  display: flex;
+  gap: 0.75rem;
+  margin: 1.5rem 0;
+  flex-wrap: wrap;
+}
+
+.history-summary-pill {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.5rem 1rem;
+  border-radius: 20px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  border: 1px solid transparent;
+}
+
+.history-summary-pill.empty { opacity: 0.35; }
+
+.history-summary-pill.drank  { background: #2a142d; color: #c07ad0; border-color: #5a2060; }
+.history-summary-pill.gifted { background: #2d1e10; color: #e0a060; border-color: #5a3a10; }
+.history-summary-pill.sold   { background: #142d1c; color: #6B9E78; border-color: #1e4a2a; }
+.history-summary-pill.other  { background: #1a1a1a; color: #9A9484; border-color: #3a3a3a; }
+
+.pill-count {
+  font-size: 1.1rem;
+}
+
+/* ── Sections ── */
+.history-section {
+  margin-bottom: 2rem;
+}
+
+.history-section-header {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.75rem 1rem;
+  border-radius: 8px 8px 0 0;
+  border-left: 4px solid;
+  margin-bottom: 0.5rem;
+}
+
+.history-section-header h2 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.history-section-icon { font-size: 1.2rem; }
+
+.section-count {
+  font-weight: 400;
+  opacity: 0.7;
+}
+
+.history-section.drank  .history-section-header { background: #2a142d; color: #c07ad0; border-color: #8e44ad; }
+.history-section.gifted .history-section-header { background: #2d1e10; color: #e0a060; border-color: #e67e22; }
+.history-section.sold   .history-section-header { background: #142d1c; color: #6B9E78; border-color: #27ae60; }
+.history-section.other  .history-section-header { background: #1a1a1a; color: #9A9484; border-color: #3a3a3a; }
+
+/* ── Bottle cards ── */
+.history-bottles {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.history-bottle-card {
+  background: #1c1c1c;
+  border: 1px solid #2a2a2a;
+  border-radius: 8px;
+  padding: 1rem 1.25rem;
+  border-left: 4px solid transparent;
+}
+
+.history-bottle-card.drank  { border-left-color: #8e44ad; }
+.history-bottle-card.gifted { border-left-color: #e67e22; }
+.history-bottle-card.sold   { border-left-color: #27ae60; }
+.history-bottle-card.other  { border-left-color: #3a3a3a; }
+
+.history-bottle-main {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.5rem;
+}
+
+.history-bottle-image {
+  width: 36px;
+  height: 50px;
+  object-fit: contain;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+.history-bottle-info h3 {
+  margin: 0 0 0.15rem 0;
+  font-size: 0.95rem;
+  color: #E8DFD0;
+}
+
+.history-producer {
+  margin: 0 0 0.2rem 0;
+  font-size: 0.8rem;
+  color: #9A9484;
+}
+
+.history-meta {
+  display: flex;
+  gap: 0.5rem;
+  font-size: 0.8rem;
+  color: #c8c0b4;
+  flex-wrap: wrap;
+}
+
+/* ── Consumption details ── */
+.history-bottle-details {
+  padding-left: 0;
+}
+
+.history-rating {
+  font-size: 0.85rem;
+  color: #c8c0b4;
+  margin-bottom: 0.25rem;
+}
+
+.rating-label {
+  margin-left: 0.4rem;
+  color: #9A9484;
+  font-size: 0.78rem;
+}
+
+.history-note {
+  margin: 0;
+  font-size: 0.85rem;
+  color: #c8c0b4;
+  font-style: italic;
+}
+
+@media (max-width: 600px) {
+  .history-summary-row {
+    gap: 0.5rem;
+  }
+  .history-bottle-card {
+    padding: 0.75rem 1rem;
+  }
+}

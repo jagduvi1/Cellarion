@@ -1,0 +1,557 @@
+{
+  "grapes": [
+    {
+      "name": "Cabernet Sauvignon",
+      "color": "Red",
+      "origin": "France (Bordeaux)",
+      "characteristics": [
+        "High tannin",
+        "Blackcurrant",
+        "Cedar"
+      ],
+      "agingPotential": "Long",
+      "prestige": "Very High"
+    },
+    {
+      "name": "Merlot",
+      "color": "Red",
+      "origin": "France (Bordeaux)",
+      "characteristics": [
+        "Plush",
+        "Plum",
+        "Chocolate"
+      ],
+      "agingPotential": "Medium to Long",
+      "prestige": "High"
+    },
+    {
+      "name": "Pinot Noir",
+      "color": "Red",
+      "origin": "France (Burgundy)",
+      "characteristics": [
+        "Red berries",
+        "Earthy",
+        "High acidity"
+      ],
+      "agingPotential": "Medium to Long",
+      "prestige": "Very High"
+    },
+    {
+      "name": "Syrah",
+      "color": "Red",
+      "origin": "France (Rhône)",
+      "characteristics": [
+        "Black pepper",
+        "Dark fruit",
+        "Savory"
+      ],
+      "agingPotential": "Long",
+      "prestige": "High"
+    },
+    {
+      "name": "Grenache",
+      "color": "Red",
+      "origin": "Spain",
+      "characteristics": [
+        "Red fruit",
+        "Spice",
+        "High alcohol"
+      ],
+      "agingPotential": "Medium",
+      "prestige": "High"
+    },
+    {
+      "name": "Zinfandel",
+      "color": "Red",
+      "origin": "Croatia",
+      "characteristics": [
+        "Ripe berry",
+        "Spice",
+        "High alcohol"
+      ],
+      "agingPotential": "Medium",
+      "prestige": "Medium"
+    },
+    {
+      "name": "Cabernet Franc",
+      "color": "Red",
+      "origin": "France (Loire)",
+      "characteristics": [
+        "Herbal",
+        "Red fruit",
+        "Fresh acidity"
+      ],
+      "agingPotential": "Medium to Long",
+      "prestige": "High"
+    },
+    {
+      "name": "Carmenère",
+      "color": "Red",
+      "origin": "France (Bordeaux)",
+      "characteristics": [
+        "Green pepper",
+        "Dark fruit"
+      ],
+      "agingPotential": "Medium",
+      "prestige": "High"
+    },
+    {
+      "name": "Malbec",
+      "color": "Red",
+      "origin": "France (Cahors)",
+      "characteristics": [
+        "Dark fruit",
+        "Velvety tannins"
+      ],
+      "agingPotential": "Medium to Long",
+      "prestige": "High"
+    },
+    {
+      "name": "Bonarda",
+      "color": "Red",
+      "origin": "Italy",
+      "characteristics": [
+        "Juicy",
+        "Soft tannins"
+      ],
+      "agingPotential": "Short to Medium",
+      "prestige": "Medium"
+    },
+    {
+      "name": "Nebbiolo",
+      "color": "Red",
+      "origin": "Italy (Piedmont)",
+      "characteristics": [
+        "High tannin",
+        "Rose",
+        "Tar"
+      ],
+      "agingPotential": "Very Long",
+      "prestige": "Elite"
+    },
+    {
+      "name": "Sangiovese",
+      "color": "Red",
+      "origin": "Italy (Tuscany)",
+      "characteristics": [
+        "Red cherry",
+        "Herbal",
+        "High acidity"
+      ],
+      "agingPotential": "Medium to Long",
+      "prestige": "Very High"
+    },
+    {
+      "name": "Tempranillo",
+      "color": "Red",
+      "origin": "Spain",
+      "characteristics": [
+        "Cherry",
+        "Leather",
+        "Tobacco"
+      ],
+      "agingPotential": "Medium to Long",
+      "prestige": "Very High"
+    },
+    {
+      "name": "Garnacha",
+      "color": "Red",
+      "origin": "Spain",
+      "characteristics": [
+        "Red fruit",
+        "Warm spice"
+      ],
+      "agingPotential": "Medium",
+      "prestige": "High"
+    },
+    {
+      "name": "Mazuelo",
+      "color": "Red",
+      "origin": "Spain",
+      "characteristics": [
+        "High acidity",
+        "Firm tannin"
+      ],
+      "agingPotential": "Long",
+      "prestige": "Medium"
+    },
+    {
+      "name": "Graciano",
+      "color": "Red",
+      "origin": "Spain",
+      "characteristics": [
+        "Aromatic",
+        "High acidity"
+      ],
+      "agingPotential": "Long",
+      "prestige": "High"
+    },
+    {
+      "name": "Tinta Roriz",
+      "color": "Red",
+      "origin": "Portugal",
+      "characteristics": [
+        "Structure",
+        "Dark fruit"
+      ],
+      "agingPotential": "Long",
+      "prestige": "High"
+    },
+    {
+      "name": "Touriga Nacional",
+      "color": "Red",
+      "origin": "Portugal",
+      "characteristics": [
+        "Floral",
+        "Powerful",
+        "Structured"
+      ],
+      "agingPotential": "Long",
+      "prestige": "Very High"
+    },
+    {
+      "name": "Touriga Franca",
+      "color": "Red",
+      "origin": "Portugal",
+      "characteristics": [
+        "Spice",
+        "Dark fruit"
+      ],
+      "agingPotential": "Long",
+      "prestige": "High"
+    },
+    {
+      "name": "Tinta Barroca",
+      "color": "Red",
+      "origin": "Portugal",
+      "characteristics": [
+        "Soft",
+        "Plush"
+      ],
+      "agingPotential": "Medium",
+      "prestige": "Medium"
+    },
+    {
+      "name": "Alicante Bouschet",
+      "color": "Red",
+      "origin": "France",
+      "characteristics": [
+        "Deep color",
+        "Rich fruit"
+      ],
+      "agingPotential": "Medium to Long",
+      "prestige": "High"
+    },
+    {
+      "name": "Baga",
+      "color": "Red",
+      "origin": "Portugal",
+      "characteristics": [
+        "High tannin",
+        "Earthy"
+      ],
+      "agingPotential": "Long",
+      "prestige": "High"
+    },
+    {
+      "name": "Blaufränkisch",
+      "color": "Red",
+      "origin": "Austria",
+      "characteristics": [
+        "Spice",
+        "Dark cherry"
+      ],
+      "agingPotential": "Long",
+      "prestige": "Very High"
+    },
+    {
+      "name": "Zweigelt",
+      "color": "Red",
+      "origin": "Austria",
+      "characteristics": [
+        "Juicy",
+        "Soft tannins"
+      ],
+      "agingPotential": "Medium",
+      "prestige": "Medium"
+    },
+    {
+      "name": "St. Laurent",
+      "color": "Red",
+      "origin": "Austria",
+      "characteristics": [
+        "Silky",
+        "Aromatic"
+      ],
+      "agingPotential": "Medium",
+      "prestige": "High"
+    },
+    {
+      "name": "Pinotage",
+      "color": "Red",
+      "origin": "South Africa",
+      "characteristics": [
+        "Smoky",
+        "Dark fruit"
+      ],
+      "agingPotential": "Medium",
+      "prestige": "High"
+    },
+    {
+      "name": "Saperavi",
+      "color": "Red",
+      "origin": "Georgia",
+      "characteristics": [
+        "Deep color",
+        "High acidity"
+      ],
+      "agingPotential": "Long",
+      "prestige": "High"
+    },
+    {
+      "name": "Xinomavro",
+      "color": "Red",
+      "origin": "Greece",
+      "characteristics": [
+        "High tannin",
+        "Savory"
+      ],
+      "agingPotential": "Long",
+      "prestige": "Very High"
+    },
+    {
+      "name": "Agiorgitiko",
+      "color": "Red",
+      "origin": "Greece",
+      "characteristics": [
+        "Plush",
+        "Red fruit"
+      ],
+      "agingPotential": "Medium",
+      "prestige": "High"
+    },
+    {
+      "name": "Kékfrankos",
+      "color": "Red",
+      "origin": "Hungary",
+      "characteristics": [
+        "Fresh acidity",
+        "Spice"
+      ],
+      "agingPotential": "Medium",
+      "prestige": "High"
+    },
+    {
+      "name": "Kadarka",
+      "color": "Red",
+      "origin": "Hungary",
+      "characteristics": [
+        "Light",
+        "Spicy"
+      ],
+      "agingPotential": "Short to Medium",
+      "prestige": "Medium"
+    },
+    {
+      "name": "Juhfark",
+      "color": "White",
+      "origin": "Hungary",
+      "characteristics": [
+        "Mineral",
+        "Structured"
+      ],
+      "agingPotential": "Long",
+      "prestige": "High"
+    },
+    {
+      "name": "Aleksandrouli",
+      "color": "Red",
+      "origin": "Georgia",
+      "characteristics": [
+        "Red fruit",
+        "Floral"
+      ],
+      "agingPotential": "Medium",
+      "prestige": "High"
+    },
+    {
+      "name": "Mujuretuli",
+      "color": "Red",
+      "origin": "Georgia",
+      "characteristics": [
+        "Soft",
+        "Aromatic"
+      ],
+      "agingPotential": "Medium",
+      "prestige": "High"
+    },
+    {
+      "name": "Chardonnay",
+      "color": "White",
+      "origin": "France (Burgundy)",
+      "characteristics": [
+        "Apple",
+        "Citrus",
+        "Oak adaptable"
+      ],
+      "agingPotential": "Medium to Long",
+      "prestige": "Very High"
+    },
+    {
+      "name": "Sauvignon Blanc",
+      "color": "White",
+      "origin": "France (Loire)",
+      "characteristics": [
+        "High acidity",
+        "Herbaceous"
+      ],
+      "agingPotential": "Short to Medium",
+      "prestige": "High"
+    },
+    {
+      "name": "Riesling",
+      "color": "White",
+      "origin": "Germany",
+      "characteristics": [
+        "High acidity",
+        "Citrus",
+        "Petrol"
+      ],
+      "agingPotential": "Very Long",
+      "prestige": "Very High"
+    },
+    {
+      "name": "Grüner Veltliner",
+      "color": "White",
+      "origin": "Austria",
+      "characteristics": [
+        "White pepper",
+        "Mineral"
+      ],
+      "agingPotential": "Medium to Long",
+      "prestige": "Very High"
+    },
+    {
+      "name": "Chenin Blanc",
+      "color": "White",
+      "origin": "France (Loire)",
+      "characteristics": [
+        "Apple",
+        "Honey",
+        "High acidity"
+      ],
+      "agingPotential": "Long",
+      "prestige": "High"
+    },
+    {
+      "name": "Semillon",
+      "color": "White",
+      "origin": "France",
+      "characteristics": [
+        "Waxy",
+        "Honeyed"
+      ],
+      "agingPotential": "Long",
+      "prestige": "High"
+    },
+    {
+      "name": "Viognier",
+      "color": "White",
+      "origin": "France",
+      "characteristics": [
+        "Floral",
+        "Stone fruit"
+      ],
+      "agingPotential": "Short to Medium",
+      "prestige": "Medium"
+    },
+    {
+      "name": "Albariño",
+      "color": "White",
+      "origin": "Spain",
+      "characteristics": [
+        "Saline",
+        "Citrus"
+      ],
+      "agingPotential": "Medium",
+      "prestige": "High"
+    },
+    {
+      "name": "Assyrtiko",
+      "color": "White",
+      "origin": "Greece",
+      "characteristics": [
+        "High acidity",
+        "Saline"
+      ],
+      "agingPotential": "Long",
+      "prestige": "Elite"
+    },
+    {
+      "name": "Furmint",
+      "color": "White",
+      "origin": "Hungary",
+      "characteristics": [
+        "High acidity",
+        "Mineral"
+      ],
+      "agingPotential": "Very Long",
+      "prestige": "Elite"
+    },
+    {
+      "name": "Rkatsiteli",
+      "color": "White",
+      "origin": "Georgia",
+      "characteristics": [
+        "Apple",
+        "Structured"
+      ],
+      "agingPotential": "Long",
+      "prestige": "High"
+    },
+    {
+      "name": "Mtsvane",
+      "color": "White",
+      "origin": "Georgia",
+      "characteristics": [
+        "Fresh",
+        "Herbal"
+      ],
+      "agingPotential": "Medium",
+      "prestige": "High"
+    },
+    {
+      "name": "Chasselas",
+      "color": "White",
+      "origin": "Switzerland",
+      "characteristics": [
+        "Subtle",
+        "Mineral"
+      ],
+      "agingPotential": "Short",
+      "prestige": "High"
+    },
+    {
+      "name": "Petite Arvine",
+      "color": "White",
+      "origin": "Switzerland",
+      "characteristics": [
+        "Saline",
+        "Citrus"
+      ],
+      "agingPotential": "Medium",
+      "prestige": "High"
+    },
+    {
+      "name": "Silvaner",
+      "color": "White",
+      "origin": "Germany",
+      "characteristics": [
+        "Herbal",
+        "Soft acidity"
+      ],
+      "agingPotential": "Medium",
+      "prestige": "Medium"
+    }
+  ]
+}

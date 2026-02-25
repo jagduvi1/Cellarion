@@ -1,0 +1,73 @@
+{
+  "country": "South Africa",
+  "regions": [
+    {
+      "region": "Stellenbosch",
+      "subRegions": [],
+      "grapes": [
+        "Cabernet Sauvignon",
+        "Merlot",
+        "Syrah",
+        "Pinotage",
+        "Chenin Blanc"
+      ],
+      "agingRules": {},
+      "prestigeLevel": "Very High"
+    },
+    {
+      "region": "Paarl",
+      "subRegions": [],
+      "grapes": [
+        "Shiraz",
+        "Cabernet Sauvignon",
+        "Chenin Blanc"
+      ],
+      "agingRules": {},
+      "prestigeLevel": "High"
+    },
+    {
+      "region": "Swartland",
+      "subRegions": [],
+      "grapes": [
+        "Syrah",
+        "Grenache",
+        "Chenin Blanc"
+      ],
+      "agingRules": {},
+      "prestigeLevel": "High"
+    },
+    {
+      "region": "Franschhoek",
+      "subRegions": [],
+      "grapes": [
+        "Cabernet Sauvignon",
+        "Chardonnay",
+        "Semillon"
+      ],
+      "agingRules": {},
+      "prestigeLevel": "High"
+    },
+    {
+      "region": "Walker Bay",
+      "subRegions": [
+        "Hemel-en-Aarde"
+      ],
+      "grapes": [
+        "Pinot Noir",
+        "Chardonnay"
+      ],
+      "agingRules": {},
+      "prestigeLevel": "Very High"
+    },
+    {
+      "region": "Constantia",
+      "subRegions": [],
+      "grapes": [
+        "Sauvignon Blanc",
+        "Muscat"
+      ],
+      "agingRules": {},
+      "prestigeLevel": "High"
+    }
+  ]
+}

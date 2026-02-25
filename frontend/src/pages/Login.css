@@ -1,0 +1,95 @@
+.login-page {
+  min-height: 100vh;
+  background: linear-gradient(160deg, #0a0a0a 0%, #0f1a12 60%, #141e17 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+}
+
+.login-card {
+  background: #1c1c1c;
+  border: 1px solid #2a2a2a;
+  border-radius: 14px;
+  padding: 2.5rem;
+  width: 100%;
+  max-width: 440px;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.6);
+}
+
+.login-header {
+  text-align: center;
+  margin-bottom: 2rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.login-header svg {
+  /* subtle glow behind logo */
+  filter: drop-shadow(0 0 18px rgba(123, 158, 136, 0.25));
+}
+
+.login-header p {
+  color: #9A9484;
+  margin: 0;
+  font-size: 0.95rem;
+  letter-spacing: 0.03em;
+}
+
+.mode-toggle {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  margin-bottom: 1.5rem;
+  border: 1px solid #2a2a2a;
+  border-radius: 6px;
+  overflow: hidden;
+  background: #141414;
+}
+
+.mode-toggle button {
+  padding: 0.75rem;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 1rem;
+  transition: all 0.2s;
+  color: #9A9484;
+}
+
+.mode-toggle button.active {
+  background: #7B9E88;
+  color: #0d0d0d;
+  font-weight: 600;
+}
+
+.mode-toggle button:not(.active):hover {
+  background: rgba(123, 158, 136, 0.1);
+  color: #E8DFD0;
+}
+
+.btn-full {
+  width: 100%;
+  margin-top: 0.5rem;
+}
+
+/* Override form inputs inside login card for dark theme */
+.login-card .form-group label {
+  color: #c8c0b4;
+}
+
+.login-card .form-group input {
+  background: #252525;
+  border-color: #333;
+  color: #E8DFD0;
+}
+
+.login-card .form-group input::placeholder {
+  color: #5a5550;
+}
+
+.login-card .form-group input:focus {
+  border-color: #7B9E88;
+  background: #2a2a2a;
+}

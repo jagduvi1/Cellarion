@@ -1,0 +1,461 @@
+
+{
+  "country": "France",
+  "regions": [
+    {
+      "name": "Bordeaux",
+      "appellations": [
+        {
+          "name": "Médoc",
+          "classification": "AOP",
+          "grapes": { "primary": ["Cabernet Sauvignon", "Merlot"], "permitted": ["Cabernet Franc", "Petit Verdot", "Malbec", "Carménère"] },
+          "styles": ["red"],
+          "aging_rules": { "legal_min_months": null, "notes": "No AOP-wide legal aging minimum; many estates mature 12–24 months in barrique." },
+          "prestige_level": "Left Bank AOP"
+        },
+        {
+          "name": "Haut-Médoc",
+          "classification": "AOP",
+          "grapes": { "primary": ["Cabernet Sauvignon", "Merlot"], "permitted": ["Cabernet Franc", "Petit Verdot", "Malbec", "Carménère"] },
+          "styles": ["red"],
+          "aging_rules": { "legal_min_months": null, "notes": "Estate-driven élevage (often 12–18 months in oak)." },
+          "prestige_level": "Left Bank AOP"
+        },
+        {
+          "name": "Pauillac",
+          "classification": "AOP",
+          "grapes": { "primary": ["Cabernet Sauvignon", "Merlot"], "permitted": ["Cabernet Franc", "Petit Verdot", "Malbec", "Carménère"] },
+          "styles": ["red"],
+          "aging_rules": { "legal_min_months": null, "notes": "Top châteaux typically 18–24 months in barrique." },
+          "prestige_level": "Classed growth commune"
+        },
+        {
+          "name": "Margaux",
+          "classification": "AOP",
+          "grapes": { "primary": ["Cabernet Sauvignon", "Merlot"], "permitted": ["Cabernet Franc", "Petit Verdot", "Malbec", "Carménère"] },
+          "styles": ["red"],
+          "aging_rules": { "legal_min_months": null, "notes": "Estate-driven élevage (often 18–24 months)." },
+          "prestige_level": "Classed growth commune"
+        },
+        {
+          "name": "Saint-Julien",
+          "classification": "AOP",
+          "grapes": { "primary": ["Cabernet Sauvignon", "Merlot"], "permitted": ["Cabernet Franc", "Petit Verdot", "Malbec", "Carménère"] },
+          "styles": ["red"],
+          "aging_rules": { "legal_min_months": null, "notes": "No legal minimum; typical barrique aging ~18 months." },
+          "prestige_level": "Classed growth commune"
+        },
+        {
+          "name": "Saint-Estèphe",
+          "classification": "AOP",
+          "grapes": { "primary": ["Cabernet Sauvignon", "Merlot"], "permitted": ["Cabernet Franc", "Petit Verdot", "Malbec", "Carménère"] },
+          "styles": ["red"],
+          "aging_rules": { "legal_min_months": null, "notes": "Estate-driven; often robust style with ~18–24 months oak." },
+          "prestige_level": "Classed growth commune"
+        },
+        {
+          "name": "Graves / Pessac-Léognan",
+          "classification": "AOP",
+          "grapes": { "primary": ["Cabernet Sauvignon", "Merlot", "Sauvignon Blanc", "Sémillon"], "permitted": ["Cabernet Franc", "Petit Verdot", "Muscadelle"] },
+          "styles": ["red", "white (dry)"],
+          "aging_rules": { "legal_min_months": null, "notes": "Whites often see barrel fermentation or élevage on lees; reds commonly 12–18 months in oak." },
+          "prestige_level": "Graves’ elite sub-appellation"
+        },
+        {
+          "name": "Sauternes",
+          "classification": "AOP",
+          "grapes": { "primary": ["Sémillon", "Sauvignon Blanc"], "permitted": ["Muscadelle"] },
+          "styles": ["sweet (botrytized)"],
+          "aging_rules": { "legal_min_months": null, "notes": "No AOP-wide minimum; many châteaux age 18–36 months in oak." },
+          "prestige_level": "Premier sweet wine AOP"
+        },
+        {
+          "name": "Barsac",
+          "classification": "AOP",
+          "grapes": { "primary": ["Sémillon", "Sauvignon Blanc"], "permitted": ["Muscadelle"] },
+          "styles": ["sweet (botrytized)"] ,
+          "aging_rules": { "legal_min_months": null, "notes": "Practices similar to Sauternes; often 18–36 months in oak." },
+          "prestige_level": "Sweet wine AOP (may use Sauternes label)"
+        },
+        {
+          "name": "Saint-Émilion",
+          "classification": "AOP",
+          "grapes": { "primary": ["Merlot", "Cabernet Franc"], "permitted": ["Cabernet Sauvignon", "Petit Verdot", "Malbec", "Carménère"] },
+          "styles": ["red"],
+          "aging_rules": { "legal_min_months": null, "notes": "Estate-driven; grand vins often 12–18+ months in barrique." },
+          "prestige_level": "Right Bank AOP (classified estates)"
+        },
+        {
+          "name": "Pomerol",
+          "classification": "AOP",
+          "grapes": { "primary": ["Merlot", "Cabernet Franc"], "permitted": ["Cabernet Sauvignon", "Petit Verdot", "Malbec", "Carménère"] },
+          "styles": ["red"],
+          "aging_rules": { "legal_min_months": null, "notes": "Top estates frequently 16–24 months in barrique." },
+          "prestige_level": "Right Bank AOP"
+        }
+      ]
+    },
+    {
+      "name": "Burgundy (Bourgogne)",
+      "appellations": [
+        {
+          "name": "Chablis",
+          "classification": "AOP",
+          "grapes": { "primary": ["Chardonnay"], "permitted": [] },
+          "styles": ["white"],
+          "aging_rules": { "legal_min_months": null, "notes": "No AOP-wide minimum; élevage in steel or neutral oak; Grand Cru more often in oak." },
+          "prestige_level": "Cool-climate Chardonnay"
+        },
+        {
+          "name": "Côte de Nuits (communes: Gevrey-Chambertin, Vosne-Romanée, Nuits-Saint-Georges, etc.)",
+          "classification": "AOP",
+          "grapes": { "primary": ["Pinot Noir"], "permitted": ["Chardonnay (rare white in some communes)"] },
+          "styles": ["red", "white (limited)"] ,
+          "aging_rules": { "legal_min_months": null, "notes": "No AOP-wide minimum; domaine-driven barrel aging common (12–18 months)." },
+          "prestige_level": "Home of many Grand Crus"
+        },
+        {
+          "name": "Côte de Beaune (communes: Meursault, Puligny-Montrachet, Chassagne-Montrachet, etc.)",
+          "classification": "AOP",
+          "grapes": { "primary": ["Chardonnay"], "permitted": ["Pinot Noir (reds in Beaune/Volnay/Pommard)"] },
+          "styles": ["white", "red"],
+          "aging_rules": { "legal_min_months": null, "notes": "Barrel élevage typical; no AOP-wide minimum." },
+          "prestige_level": "Iconic white Burgundy"
+        },
+        {
+          "name": "Côte Chalonnaise (e.g., Mercurey, Givry, Rully)",
+          "classification": "AOP",
+          "grapes": { "primary": ["Pinot Noir", "Chardonnay"], "permitted": [] },
+          "styles": ["red", "white", "sparkling (Crémant de Bourgogne)"] ,
+          "aging_rules": { "legal_min_months": null, "notes": "Crémant de Bourgogne: ≥9 months on lees (traditional method)." },
+          "prestige_level": "Value Burgundy"
+        },
+        {
+          "name": "Mâconnais (e.g., Pouilly-Fuissé)",
+          "classification": "AOP",
+          "grapes": { "primary": ["Chardonnay"], "permitted": [] },
+          "styles": ["white"],
+          "aging_rules": { "legal_min_months": null, "notes": "No AOP-wide minimum; some climats in Pouilly-Fuissé are Premier Cru." },
+          "prestige_level": "Southern Burgundy whites"
+        }
+      ]
+    },
+    {
+      "name": "Champagne",
+      "appellations": [
+        {
+          "name": "Champagne",
+          "classification": "AOP",
+          "grapes": { "primary": ["Chardonnay", "Pinot Noir", "Meunier"], "permitted": ["Pinot Blanc", "Pinot Gris", "Arbane", "Petit Meslier"] },
+          "styles": ["sparkling (traditional method)"] ,
+          "aging_rules": { "legal_min_months": 15, "notes": "Non‑vintage: ≥15 months total (≥12 on lees); Vintage: ≥36 months on lees." },
+          "prestige_level": "Flagship French sparkling"
+        }
+      ]
+    },
+    {
+      "name": "Rhône Valley",
+      "appellations": [
+        {
+          "name": "Côte‑Rôtie",
+          "classification": "AOP",
+          "grapes": { "primary": ["Syrah"], "permitted": ["Viognier (co‑ferment up to ~20% allowed)"] },
+          "styles": ["red"],
+          "aging_rules": { "legal_min_months": null, "notes": "No AOP-wide minimum; new oak varies by producer." },
+          "prestige_level": "Northern Rhône cru"
+        },
+        {
+          "name": "Condrieu",
+          "classification": "AOP",
+          "grapes": { "primary": ["Viognier"], "permitted": [] },
+          "styles": ["white"],
+          "aging_rules": { "legal_min_months": null, "notes": "Often barrel‑fermented/aged; no legal minimum." },
+          "prestige_level": "Viognier benchmark"
+        },
+        {
+          "name": "Hermitage",
+          "classification": "AOP",
+          "grapes": { "primary": ["Syrah"], "permitted": ["Marsanne", "Roussanne (for white)"] },
+          "styles": ["red", "white"],
+          "aging_rules": { "legal_min_months": null, "notes": "No legal minimum; long cellar potential." },
+          "prestige_level": "Iconic Northern Rhône cru"
+        },
+        {
+          "name": "Cornas",
+          "classification": "AOP",
+          "grapes": { "primary": ["Syrah"], "permitted": [] },
+          "styles": ["red"],
+          "aging_rules": { "legal_min_months": null, "notes": "Syrah only; typically robust style." },
+          "prestige_level": "Northern Rhône cru"
+        },
+        {
+          "name": "Crozes‑Hermitage",
+          "classification": "AOP",
+          "grapes": { "primary": ["Syrah"], "permitted": ["Marsanne", "Roussanne (white)"] },
+          "styles": ["red", "white"],
+          "aging_rules": { "legal_min_months": null, "notes": "No legal minimum; varied élevage by producer." },
+          "prestige_level": "Largest Northern Rhône AOP"
+        },
+        {
+          "name": "Saint‑Joseph",
+          "classification": "AOP",
+          "grapes": { "primary": ["Syrah"], "permitted": ["Marsanne", "Roussanne (white)"] },
+          "styles": ["red", "white"],
+          "aging_rules": { "legal_min_months": null, "notes": "No legal minimum." },
+          "prestige_level": "Northern Rhône AOP"
+        },
+        {
+          "name": "Châteauneuf‑du‑Pape",
+          "classification": "AOP",
+          "grapes": { "primary": ["Grenache"], "permitted": ["Syrah", "Mourvèdre", "Cinsault", "Counoise", "Clairette", "Roussanne", "and others (13+ varieties total)"] },
+          "styles": ["red", "white"],
+          "aging_rules": { "legal_min_months": null, "notes": "No legal aging minimum; min. alcohol and yield rules apply." },
+          "prestige_level": "Flagship Southern Rhône cru"
+        },
+        {
+          "name": "Gigondas",
+          "classification": "AOP",
+          "grapes": { "primary": ["Grenache"], "permitted": ["Syrah", "Mourvèdre", "Cinsault"] },
+          "styles": ["red", "rosé (limited)"] ,
+          "aging_rules": { "legal_min_months": null, "notes": "No legal minimum; reds dominate." },
+          "prestige_level": "Southern Rhône cru"
+        },
+        {
+          "name": "Vacqueyras",
+          "classification": "AOP",
+          "grapes": { "primary": ["Grenache"], "permitted": ["Syrah", "Mourvèdre"] },
+          "styles": ["red", "white", "rosé"],
+          "aging_rules": { "legal_min_months": null, "notes": "No legal minimum." },
+          "prestige_level": "Southern Rhône cru"
+        },
+        {
+          "name": "Côtes du Rhône",
+          "classification": "AOP",
+          "grapes": { "primary": ["Grenache", "Syrah", "Mourvèdre"], "permitted": ["Cinsault", "Carignan", "others"] },
+          "styles": ["red", "white", "rosé"],
+          "aging_rules": { "legal_min_months": null, "notes": "Foundation AOP with Villages and named villages tiers." },
+          "prestige_level": "Regional AOP"
+        }
+      ]
+    },
+    {
+      "name": "Loire Valley",
+      "appellations": [
+        {
+          "name": "Sancerre",
+          "classification": "AOP",
+          "grapes": { "primary": ["Sauvignon Blanc"], "permitted": ["Pinot Noir (rosé/red)"] },
+          "styles": ["white", "rosé", "red"],
+          "aging_rules": { "legal_min_months": null, "notes": "No legal minimum; stainless or oak per producer." },
+          "prestige_level": "Central Vineyards benchmark"
+        },
+        {
+          "name": "Pouilly‑Fumé",
+          "classification": "AOP",
+          "grapes": { "primary": ["Sauvignon Blanc"], "permitted": [] },
+          "styles": ["white"],
+          "aging_rules": { "legal_min_months": null, "notes": "No legal minimum; known for smoky ‘fumé’ character." },
+          "prestige_level": "Central Vineyards benchmark"
+        },
+        {
+          "name": "Vouvray",
+          "classification": "AOP",
+          "grapes": { "primary": ["Chenin Blanc"], "permitted": [] },
+          "styles": ["white (sec to moelleux)", "sparkling"],
+          "aging_rules": { "legal_min_months": null, "notes": "Sweetness varies by vintage; sparkling traditional method." },
+          "prestige_level": "Touraine Chenin flagship"
+        },
+        {
+          "name": "Chinon",
+          "classification": "AOP",
+          "grapes": { "primary": ["Cabernet Franc"], "permitted": ["Chenin Blanc (white)"] },
+          "styles": ["red", "rosé", "white (limited)"] ,
+          "aging_rules": { "legal_min_months": null, "notes": "No legal minimum; cellar-worthy reds from tuffeau slopes." },
+          "prestige_level": "Touraine red benchmark"
+        },
+        {
+          "name": "Muscadet Sèvre‑et‑Maine Sur Lie",
+          "classification": "AOP",
+          "grapes": { "primary": ["Melon de Bourgogne"], "permitted": [] },
+          "styles": ["white"],
+          "aging_rules": { "legal_min_months": 6, "notes": "Sur lie until at least March 1 following harvest; bottling Mar 1–Nov 30." },
+          "prestige_level": "Atlantic white; lees‑aged"
+        },
+        {
+          "name": "Saumur / Saumur‑Champigny",
+          "classification": "AOP",
+          "grapes": { "primary": ["Chenin Blanc (Saumur blanc)", "Cabernet Franc (red)"] , "permitted": ["Chardonnay", "Sauvignon Blanc", "others (for blends)"] },
+          "styles": ["white", "red", "sparkling (Saumur Mousseux)"] ,
+          "aging_rules": { "legal_min_months": null, "notes": "Crémant de Loire: ≥9 months on lees (traditional method)." },
+          "prestige_level": "Anjou‑Saumur heartland"
+        }
+      ]
+    },
+    {
+      "name": "Alsace",
+      "appellations": [
+        {
+          "name": "Alsace AOP",
+          "classification": "AOP",
+          "grapes": { "primary": ["Riesling", "Gewürztraminer", "Pinot Gris", "Muscat", "Pinot Blanc", "Sylvaner", "Chardonnay (for Crémant)", "Pinot Noir"], "permitted": [] },
+          "styles": ["white", "rosé (Pinot Noir)", "red (Pinot Noir)", "sparkling (Crémant d'Alsace)"] ,
+          "aging_rules": { "legal_min_months": null, "notes": "VT/SGN allowed (must‑weight rules); Crémant d’Alsace: ≥9 months on lees." },
+          "prestige_level": "Single‑varietal focus"
+        },
+        {
+          "name": "Alsace Grand Cru (51 sites)",
+          "classification": "AOP",
+          "grapes": { "primary": ["Riesling", "Gewürztraminer", "Pinot Gris", "Muscat"], "permitted": [] },
+          "styles": ["white (dry to sweet)"] ,
+          "aging_rules": { "legal_min_months": null, "notes": "Site‑specific rules; VT/SGN possible." },
+          "prestige_level": "Top terroir whites"
+        }
+      ]
+    },
+    {
+      "name": "Languedoc‑Roussillon",
+      "appellations": [
+        {
+          "name": "Minervois",
+          "classification": "AOP",
+          "grapes": { "primary": ["Grenache", "Syrah"], "permitted": ["Carignan", "Cinsault", "Mourvèdre", "others"] },
+          "styles": ["red", "rosé", "white"],
+          "aging_rules": { "legal_min_months": null, "notes": "No AOP‑wide minimum; emphasis on blends." },
+          "prestige_level": "Key Languedoc AOP"
+        },
+        {
+          "name": "Corbières",
+          "classification": "AOP",
+          "grapes": { "primary": ["Grenache", "Carignan", "Syrah", "Mourvèdre"], "permitted": ["Cinsault", "others"] },
+          "styles": ["red", "rosé", "white"],
+          "aging_rules": { "legal_min_months": null, "notes": "No legal minimum." },
+          "prestige_level": "Largest Languedoc AOP"
+        },
+        {
+          "name": "Faugères",
+          "classification": "AOP",
+          "grapes": { "primary": ["Syrah", "Grenache", "Mourvèdre"], "permitted": ["Carignan", "Cinsault"] },
+          "styles": ["red", "rosé", "white"],
+          "aging_rules": { "legal_min_months": null, "notes": "Schist soils; no legal minimum." },
+          "prestige_level": "Schist terroir AOP"
+        },
+        {
+          "name": "Fitou",
+          "classification": "AOP",
+          "grapes": { "primary": ["Carignan", "Grenache"], "permitted": ["Syrah", "Mourvèdre"] },
+          "styles": ["red"],
+          "aging_rules": { "legal_min_months": null, "notes": "Red‑only appellation." },
+          "prestige_level": "Historic Languedoc AOP"
+        },
+        {
+          "name": "Limoux (Blanquette / Crémant de Limoux)",
+          "classification": "AOP",
+          "grapes": { "primary": ["Mauzac (Blanquette)"], "permitted": ["Chardonnay", "Chenin Blanc", "Pinot Noir (for Crémant)"] },
+          "styles": ["sparkling (traditional method)", "white (still, Limoux Blanc)"] ,
+          "aging_rules": { "legal_min_months": 9, "notes": "Traditional method with ≥9 months on lees (longer for some styles)." },
+          "prestige_level": "Historic French fizz"
+        }
+      ]
+    },
+    {
+      "name": "Provence",
+      "appellations": [
+        {
+          "name": "Côtes de Provence",
+          "classification": "AOP",
+          "grapes": { "primary": ["Grenache", "Cinsault", "Syrah"], "permitted": ["Mourvèdre", "Tibouren", "Carignan", "others"] },
+          "styles": ["rosé", "red", "white"],
+          "aging_rules": { "legal_min_months": null, "notes": "Rosé‑led; no AOP‑wide minimum." },
+          "prestige_level": "Provence rosé flagship"
+        },
+        {
+          "name": "Bandol",
+          "classification": "AOP",
+          "grapes": { "primary": ["Mourvèdre"], "permitted": ["Grenache", "Cinsault", "Clairette", "Ugni Blanc (for white/rosé blends)"] },
+          "styles": ["red", "rosé", "white"],
+          "aging_rules": { "legal_min_months": 18, "notes": "Reds require ≥18 months in oak; structured, ageworthy style." },
+          "prestige_level": "Mourvèdre stronghold"
+        }
+      ]
+    },
+    {
+      "name": "Southwest (Sud‑Ouest)",
+      "appellations": [
+        {
+          "name": "Cahors",
+          "classification": "AOP",
+          "grapes": { "primary": ["Malbec (Côt)"], "permitted": ["Merlot", "Tannat"] },
+          "styles": ["red"],
+          "aging_rules": { "legal_min_months": null, "notes": "Malbec‑led blends; no legal minimum." },
+          "prestige_level": "Malbec heartland"
+        },
+        {
+          "name": "Madiran",
+          "classification": "AOP",
+          "grapes": { "primary": ["Tannat"], "permitted": ["Cabernet Franc", "Cabernet Sauvignon", "Fer Servadou"] },
+          "styles": ["red"],
+          "aging_rules": { "legal_min_months": null, "notes": "Often oak‑aged; robust tannins." },
+          "prestige_level": "Tannat stronghold"
+        },
+        {
+          "name": "Gaillac",
+          "classification": "AOP",
+          "grapes": { "primary": ["Len de l'El", "Mauzac", "Duras"], "permitted": ["Sauvignon Blanc", "Syrah", "others"] },
+          "styles": ["white", "red", "rosé", "sparkling", "sweet"],
+          "aging_rules": { "legal_min_months": null, "notes": "Diverse styles including méthode ancestrale sparkling." },
+          "prestige_level": "Diverse, historic AOP"
+        }
+      ]
+    },
+    {
+      "name": "Beaujolais",
+      "appellations": [
+        {
+          "name": "Beaujolais / Beaujolais‑Villages",
+          "classification": "AOP",
+          "grapes": { "primary": ["Gamay"], "permitted": ["Chardonnay (for blanc)"] },
+          "styles": ["red", "rosé", "white (limited)"] ,
+          "aging_rules": { "legal_min_months": null, "notes": "Beaujolais Nouveau release: third Thursday of November post‑harvest." },
+          "prestige_level": "Regional appellations"
+        },
+        {
+          "name": "Crus (e.g., Morgon, Fleurie, Moulin‑à‑Vent, Brouilly, Régnié, Chiroubles, Côte de Brouilly, Juliénas, Chénas, Saint‑Amour)",
+          "classification": "AOP",
+          "grapes": { "primary": ["Gamay"], "permitted": [] },
+          "styles": ["red"],
+          "aging_rules": { "legal_min_months": null, "notes": "No AOP‑wide minimum; some crus age in foudre/barrique." },
+          "prestige_level": "Top Beaujolais terroirs"
+        }
+      ]
+    },
+    {
+      "name": "Corsica (Corse)",
+      "appellations": [
+        {
+          "name": "Patrimonio",
+          "classification": "AOP",
+          "grapes": { "primary": ["Niellucciu (Sangiovese)"], "permitted": ["Vermentinu (Vermentino) for whites"] },
+          "styles": ["red", "white", "rosé"],
+          "aging_rules": { "legal_min_months": null, "notes": "No AOP‑wide minimum." },
+          "prestige_level": "Corsican benchmark"
+        },
+        {
+          "name": "Ajaccio",
+          "classification": "AOP",
+          "grapes": { "primary": ["Sciaccarellu"], "permitted": ["Niellucciu", "Grenache", "others"] },
+          "styles": ["red", "rosé", "white"],
+          "aging_rules": { "legal_min_months": null, "notes": "No AOP‑wide minimum." },
+          "prestige_level": "Granite‑influenced AOP"
+        },
+        {
+          "name": "Vin de Corse (Corse)",
+          "classification": "AOP",
+          "grapes": { "primary": ["Niellucciu", "Sciaccarellu", "Vermentinu"], "permitted": ["Grenache", "Cinsault", "others"] },
+          "styles": ["red", "rosé", "white"],
+          "aging_rules": { "legal_min_months": null, "notes": "Includes named sub‑zones (e.g., Figari, Porto‑Vecchio)." },
+          "prestige_level": "Island‑wide AOP"
+        }
+      ]
+    }
+  ]
+}

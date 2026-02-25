@@ -1,0 +1,76 @@
+{
+  "country": "United States",
+  "regions": [
+    {
+      "region": "California",
+      "subRegions": [
+        "Napa Valley",
+        "Sonoma County",
+        "Paso Robles",
+        "Santa Barbara County"
+      ],
+      "grapes": [
+        "Cabernet Sauvignon",
+        "Chardonnay",
+        "Pinot Noir",
+        "Zinfandel",
+        "Syrah"
+      ],
+      "agingRules": {},
+      "prestigeLevel": "Very High"
+    },
+    {
+      "region": "Oregon",
+      "subRegions": [
+        "Willamette Valley"
+      ],
+      "grapes": [
+        "Pinot Noir",
+        "Chardonnay"
+      ],
+      "agingRules": {},
+      "prestigeLevel": "High"
+    },
+    {
+      "region": "Washington",
+      "subRegions": [
+        "Columbia Valley",
+        "Walla Walla Valley"
+      ],
+      "grapes": [
+        "Cabernet Sauvignon",
+        "Merlot",
+        "Syrah",
+        "Riesling"
+      ],
+      "agingRules": {},
+      "prestigeLevel": "High"
+    },
+    {
+      "region": "New York",
+      "subRegions": [
+        "Finger Lakes",
+        "Long Island"
+      ],
+      "grapes": [
+        "Riesling",
+        "Chardonnay",
+        "Cabernet Franc"
+      ],
+      "agingRules": {},
+      "prestigeLevel": "Medium"
+    },
+    {
+      "region": "Texas",
+      "subRegions": [
+        "Texas High Plains"
+      ],
+      "grapes": [
+        "Tempranillo",
+        "Cabernet Sauvignon"
+      ],
+      "agingRules": {},
+      "prestigeLevel": "Emerging"
+    }
+  ]
+}

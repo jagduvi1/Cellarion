@@ -1,0 +1,59 @@
+{
+  "country": "Georgia",
+  "regions": [
+    {
+      "region": "Kakheti",
+      "subRegions": [
+        "Telavi",
+        "Kvareli",
+        "Mukuzani"
+      ],
+      "grapes": [
+        "Saperavi",
+        "Rkatsiteli",
+        "Mtsvane"
+      ],
+      "agingRules": {
+        "Qvevri": "Fermented and aged in clay vessels, often with skins",
+        "Oak": "Traditional barrel aging for structured reds"
+      },
+      "prestigeLevel": "Elite"
+    },
+    {
+      "region": "Kartli",
+      "subRegions": [
+        "Shida Kartli",
+        "Kvemo Kartli"
+      ],
+      "grapes": [
+        "Chinuri",
+        "Goruli Mtsvane"
+      ],
+      "agingRules": {},
+      "prestigeLevel": "High"
+    },
+    {
+      "region": "Imereti",
+      "subRegions": [],
+      "grapes": [
+        "Tsolikouri",
+        "Tsitska",
+        "Krakhuna"
+      ],
+      "agingRules": {
+        "Qvevri": "Partial skin contact, lighter qvevri style"
+      },
+      "prestigeLevel": "High"
+    },
+    {
+      "region": "Racha-Lechkhumi",
+      "subRegions": [],
+      "grapes": [
+        "Aleksandrouli",
+        "Mujuretuli"
+      ],
+      "agingRules": {},
+      "prestigeLevel": "High"
+    }
+  ]
+}

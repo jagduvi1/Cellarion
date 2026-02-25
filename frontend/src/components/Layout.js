@@ -1,0 +1,165 @@
+import { useState } from 'react';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
+import { PLANS } from '../config/plans';
+import CellarionLogo from './CellarionLogo';
+import './Layout.css';
+
+function Layout({ children }) {
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  const handleLogout = () => {
+    logout();
+    navigate('/login');
+  };
+
+  const isActive = (path) => {
+    return location.pathname === path || location.pathname.startsWith(path + '/');
+  };
+
+  const closeMenu = () => setMobileMenuOpen(false);
+
+  const planLabel = user ? (PLANS[user.plan]?.label || user.plan || 'Free') : null;
+  const roles = user?.roles || [];
+
+  return (
+    <div className="layout">
+      <nav className="navbar">
+        <div className="navbar-top">
+          <div className="navbar-brand">
+            <Link to="/" onClick={closeMenu} className="brand-link">
+              <CellarionLogo size={30} color="#7B9E88" />
+              <span>Cellarion</span>
+            </Link>
+          </div>
+
+          {user && (
+            <button
+              className="hamburger"
+              onClick={() => setMobileMenuOpen(o => !o)}
+              aria-label="Toggle navigation"
+              aria-expanded={mobileMenuOpen}
+            >
+              <span className={`hamburger-icon ${mobileMenuOpen ? 'open' : ''}`}>
+                <span /><span /><span />
+              </span>
+            </button>
+          )}
+        </div>
+
+        {user && (
+          <div className={`navbar-menu ${mobileMenuOpen ? 'open' : ''}`}>
+            <Link
+              to="/cellars"
+              className={isActive('/cellars') ? 'active' : ''}
+              onClick={closeMenu}
+            >
+              My Cellars
+            </Link>
+            <Link
+              to="/wines"
+              className={isActive('/wines') ? 'active' : ''}
+              onClick={closeMenu}
+            >
+              Wine Registry
+            </Link>
+            <Link
+              to="/wine-requests"
+              className={isActive('/wine-requests') ? 'active' : ''}
+              onClick={closeMenu}
+            >
+              My Requests
+            </Link>
+
+            {(roles.includes('somm') || roles.includes('admin')) && (
+              <>
+                <div className="navbar-divider" />
+                <Link
+                  to="/somm/maturity"
+                  className={`somm-link ${isActive('/somm/maturity') ? 'active' : ''}`}
+                  onClick={closeMenu}
+                >
+                  Maturity Queue
+                </Link>
+                <Link
+                  to="/somm/prices"
+                  className={`somm-link ${isActive('/somm/prices') ? 'active' : ''}`}
+                  onClick={closeMenu}
+                >
+                  Price Queue
+                </Link>
+              </>
+            )}
+
+            {roles.includes('admin') && (
+              <>
+                <div className="navbar-divider" />
+                <Link
+                  to="/admin/requests"
+                  className={`admin-link ${isActive('/admin/requests') ? 'active' : ''}`}
+                  onClick={closeMenu}
+                >
+                  Admin Requests
+                </Link>
+                <Link
+                  to="/admin/taxonomy"
+                  className={`admin-link ${isActive('/admin/taxonomy') ? 'active' : ''}`}
+                  onClick={closeMenu}
+                >
+                  Taxonomy
+                </Link>
+                <Link
+                  to="/admin/images"
+                  className={`admin-link ${isActive('/admin/images') ? 'active' : ''}`}
+                  onClick={closeMenu}
+                >
+                  Image Review
+                </Link>
+                <Link
+                  to="/admin/audit"
+                  className={`admin-link ${isActive('/admin/audit') ? 'active' : ''}`}
+                  onClick={closeMenu}
+                >
+                  Audit Log
+                </Link>
+                <Link
+                  to="/admin/users"
+                  className={`admin-link ${isActive('/admin/users') ? 'active' : ''}`}
+                  onClick={closeMenu}
+                >
+                  Users
+                </Link>
+              </>
+            )}
+
+            <div className="navbar-user">
+              <span className="user-info">
+                👤 {user.username}
+                {roles.includes('admin') && <span className="badge">Admin</span>}
+                {roles.includes('somm')  && <span className="badge badge--somm">Somm</span>}
+                <span className={`badge badge--plan badge--plan-${user.plan || 'free'}`}>{planLabel}</span>
+              </span>
+              <div className="navbar-user-actions">
+                <Link to="/settings" className={`btn-settings ${isActive('/settings') ? 'active' : ''}`} onClick={closeMenu}>
+                  Settings
+                </Link>
+                <button onClick={handleLogout} className="btn-logout">
+                  Logout
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </nav>
+
+      <main className="main-content">
+        {children}
+      </main>
+    </div>
+  );
+}
+
+export default Layout;

@@ -1,0 +1,59 @@
+{
+  "country": "New Zealand",
+  "regions": [
+    {
+      "region": "Marlborough",
+      "subRegions": [],
+      "grapes": [
+        "Sauvignon Blanc",
+        "Pinot Noir"
+      ],
+      "agingRules": {},
+      "prestigeLevel": "Very High"
+    },
+    {
+      "region": "Central Otago",
+      "subRegions": [],
+      "grapes": [
+        "Pinot Noir"
+      ],
+      "agingRules": {},
+      "prestigeLevel": "Very High"
+    },
+    {
+      "region": "Hawke’s Bay",
+      "subRegions": [
+        "Gimblett Gravels"
+      ],
+      "grapes": [
+        "Cabernet Sauvignon",
+        "Merlot",
+        "Syrah",
+        "Chardonnay"
+      ],
+      "agingRules": {},
+      "prestigeLevel": "High"
+    },
+    {
+      "region": "Martinborough",
+      "subRegions": [],
+      "grapes": [
+        "Pinot Noir",
+        "Chardonnay"
+      ],
+      "agingRules": {},
+      "prestigeLevel": "High"
+    },
+    {
+      "region": "Nelson",
+      "subRegions": [],
+      "grapes": [
+        "Sauvignon Blanc",
+        "Pinot Noir",
+        "Chardonnay"
+      ],
+      "agingRules": {},
+      "prestigeLevel": "Medium"
+    }
+  ]
+}

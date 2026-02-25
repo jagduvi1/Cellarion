@@ -1,0 +1,465 @@
+.cellar-racks-page {
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+/* ---- New rack form ---- */
+.new-rack-form {
+  margin-bottom: 1.5rem;
+  padding: 1.25rem;
+}
+
+.new-rack-form h3 {
+  margin: 0 0 1rem 0;
+  color: #E8DFD0;
+}
+
+.new-rack-fields {
+  display: flex;
+  align-items: flex-end;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.new-rack-fields .form-group {
+  margin: 0;
+}
+
+.new-rack-fields input[type="number"] {
+  width: 80px;
+}
+
+/* ---- Rack tabs ---- */
+.rack-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 0;
+  flex-wrap: wrap;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.rack-tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0.5rem 0.875rem;
+  border: 1px solid #2a2a2a;
+  border-bottom: none;
+  border-radius: 8px 8px 0 0;
+  background: #1a1a1a;
+  color: #9A9484;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+  white-space: nowrap;
+  min-height: 40px;
+}
+
+.rack-tab:hover {
+  background: #222;
+  color: #E8DFD0;
+}
+
+.rack-tab.active {
+  background: #1c1c1c;
+  color: #E8DFD0;
+  font-weight: 600;
+  border-color: #2a2a2a;
+  position: relative;
+  z-index: 1;
+}
+
+.rack-tab-count {
+  font-size: 0.72rem;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  padding: 1px 6px;
+  font-weight: 400;
+}
+
+.rack-tab.active .rack-tab-count {
+  background: rgba(123, 158, 136, 0.2);
+  color: #7B9E88;
+}
+
+/* ---- Rack container ---- */
+.rack-container {
+  margin-bottom: 2rem;
+  padding: 1.25rem;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  background: #1c1c1c;
+  border: 1px solid #2a2a2a;
+  border-radius: 0 8px 8px 8px;
+}
+
+.rack-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 1rem;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.rack-header h2 {
+  margin: 0 0 0.25rem 0;
+  color: #E8DFD0;
+}
+
+.rack-dims {
+  font-size: 0.85rem;
+  color: #9A9484;
+}
+
+/* ---- Rack grid (keep dark wood aesthetic) ---- */
+.rack-grid {
+  display: grid;
+  gap: 10px;
+  width: max-content;
+  padding: 16px;
+  background: #5c3d1e;
+  border-radius: 10px;
+  box-shadow: inset 0 2px 8px rgba(0,0,0,0.4), 0 4px 12px rgba(0,0,0,0.2);
+}
+
+.rack-slot {
+  position: relative;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 2px solid #a07850;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: border-color 0.15s, background 0.15s, box-shadow 0.15s, transform 0.1s;
+  background: #3a2410;
+  box-shadow: inset 0 2px 5px rgba(0,0,0,0.5);
+  flex-shrink: 0;
+}
+
+.rack-slot.empty:hover {
+  border-color: #c9a96e;
+  background: #4a3218;
+  box-shadow: inset 0 2px 5px rgba(0,0,0,0.4), 0 0 0 2px rgba(201,169,110,0.4);
+  transform: scale(1.08);
+}
+
+/* Wine-type solid colors for filled slots */
+.rack-slot.filled.type-red        { background: #c0392b; border-color: #922b21; }
+.rack-slot.filled.type-white      { background: #d4ac0d; border-color: #9a7d0a; }
+.rack-slot.filled.type-rosé       { background: #e91e8c; border-color: #ad1457; }
+.rack-slot.filled.type-sparkling  { background: #27ae60; border-color: #1e8449; }
+.rack-slot.filled.type-dessert    { background: #8e44ad; border-color: #6c3483; }
+.rack-slot.filled.type-fortified  { background: #d35400; border-color: #a04000; }
+
+/* Bottle opening highlight */
+.rack-slot.filled::after {
+  content: '';
+  position: absolute;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: rgba(0,0,0,0.25);
+  box-shadow: inset 0 1px 3px rgba(0,0,0,0.6);
+  pointer-events: none;
+}
+
+.rack-slot.filled:hover {
+  box-shadow: inset 0 2px 5px rgba(0,0,0,0.4), 0 0 0 3px rgba(255,255,255,0.25);
+  transform: scale(1.08);
+}
+
+.rack-slot.active {
+  box-shadow: inset 0 2px 5px rgba(0,0,0,0.4), 0 0 0 3px rgba(255,255,255,0.5);
+  transform: scale(1.08);
+  z-index: 100;
+}
+
+/* Highlighted slot */
+@keyframes rack-pulse {
+  0%   { box-shadow: inset 0 2px 5px rgba(0,0,0,0.4), 0 0 0 3px #f1c40f, 0 0 12px 4px rgba(241,196,15,0.6); }
+  50%  { box-shadow: inset 0 2px 5px rgba(0,0,0,0.4), 0 0 0 5px #f1c40f, 0 0 20px 8px rgba(241,196,15,0.3); }
+  100% { box-shadow: inset 0 2px 5px rgba(0,0,0,0.4), 0 0 0 3px #f1c40f, 0 0 12px 4px rgba(241,196,15,0.6); }
+}
+
+.rack-slot.highlighted {
+  animation: rack-pulse 1.4s ease-in-out 4;
+  z-index: 100;
+}
+
+.slot-num {
+  font-size: 0.55rem;
+  color: #6b5040;
+  user-select: none;
+  font-weight: 600;
+}
+
+/* ---- Slot modal overlay ---- */
+.slot-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.65);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 1rem;
+}
+
+.slot-modal {
+  background: #1c1c1c;
+  border: 1px solid #2a2a2a;
+  border-radius: 10px;
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.5);
+  width: 100%;
+  max-width: 340px;
+  max-height: 90vh;
+  overflow-y: auto;
+  overflow: hidden;
+}
+
+.consume-modal-box {
+  max-width: 380px;
+}
+
+.consume-modal-form {
+  padding: 1rem 1rem 0.5rem;
+}
+
+.consume-modal-form .form-group {
+  margin-bottom: 0.75rem;
+}
+
+.consume-modal-actions {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: flex-end;
+  padding: 0.75rem 0 0.25rem;
+}
+
+/* ---- Slot popup content ---- */
+.slot-popup {
+  /* no positioning — content lives inside .slot-modal */
+}
+
+.slot-popup-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid #2a2a2a;
+  background: #1a1a1a;
+}
+
+.slot-popup-title {
+  font-weight: 600;
+  color: #E8DFD0;
+  font-size: 0.85rem;
+}
+
+.slot-popup-close {
+  background: none;
+  border: none;
+  font-size: 1.4rem;
+  color: #9A9484;
+  cursor: pointer;
+  padding: 0 0.25rem;
+  line-height: 1;
+  min-height: 36px;
+  min-width: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.slot-popup-close:hover {
+  color: #E8DFD0;
+}
+
+/* ---- Empty slot: bottle search & list ---- */
+.slot-search {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  border: none;
+  border-bottom: 1px solid #2a2a2a;
+  font-size: 16px;
+  outline: none;
+  box-sizing: border-box;
+  min-height: 44px;
+  background: #1c1c1c;
+  color: #E8DFD0;
+}
+
+.slot-search::placeholder {
+  color: #5a5550;
+}
+
+.slot-search:focus {
+  background: #222;
+}
+
+.slot-bottle-list {
+  max-height: 260px;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.slot-bottle-item {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.75rem 1rem;
+  cursor: pointer;
+  transition: background 0.1s;
+  min-height: 48px;
+  border-bottom: 1px solid #222;
+}
+
+.slot-bottle-item:hover {
+  background: rgba(123, 158, 136, 0.08);
+}
+
+.slot-bottle-type-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.slot-bottle-type-dot.type-red       { background: #e74c3c; }
+.slot-bottle-type-dot.type-white     { background: #f1c40f; }
+.slot-bottle-type-dot.type-rosé      { background: #fd79a8; }
+.slot-bottle-type-dot.type-sparkling { background: #74b9ff; }
+.slot-bottle-type-dot.type-dessert   { background: #a29bfe; }
+.slot-bottle-type-dot.type-fortified { background: #55efc4; }
+
+.slot-bottle-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.slot-bottle-info strong {
+  font-size: 0.875rem;
+  color: #E8DFD0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.slot-bottle-meta {
+  font-size: 0.75rem;
+  color: #9A9484;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.slot-empty-msg {
+  padding: 1.5rem 1rem;
+  text-align: center;
+  color: #9A9484;
+  font-size: 0.85rem;
+  margin: 0;
+}
+
+/* ---- Filled slot: bottle detail ---- */
+.slot-bottle-detail {
+  display: flex;
+  gap: 0.75rem;
+  padding: 1rem;
+}
+
+.slot-detail-img {
+  width: 40px;
+  height: 60px;
+  object-fit: contain;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+
+.slot-detail-info {
+  min-width: 0;
+}
+
+.slot-detail-info h4 {
+  margin: 0 0 0.25rem 0;
+  font-size: 0.9rem;
+  color: #E8DFD0;
+}
+
+.slot-detail-producer {
+  margin: 0 0 0.25rem 0;
+  font-size: 0.8rem;
+  color: #c8c0b4;
+}
+
+.slot-detail-meta {
+  margin: 0 0 0.15rem 0;
+  font-size: 0.75rem;
+  color: #9A9484;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.slot-detail-notes {
+  margin: 0.5rem 0 0 0;
+  font-size: 0.75rem;
+  color: #9A9484;
+  font-style: italic;
+}
+
+.slot-popup-actions {
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  border-top: 1px solid #2a2a2a;
+  background: #1a1a1a;
+}
+
+.slot-popup-actions .btn {
+  flex: 1;
+  text-align: center;
+}
+
+/* ---- Mobile ---- */
+@media (max-width: 768px) {
+  .new-rack-fields {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .new-rack-fields input[type="number"] {
+    width: 100%;
+  }
+
+  .new-rack-fields .form-group {
+    width: 100%;
+  }
+
+  .rack-container {
+    padding: 0.875rem;
+  }
+}
+
+@media (max-width: 600px) {
+  .rack-slot {
+    width: 36px;
+    height: 36px;
+  }
+
+  .rack-slot.filled::after {
+    width: 17px;
+    height: 17px;
+  }
+
+  .rack-grid {
+    gap: 7px;
+    padding: 12px;
+  }
+}

@@ -1,0 +1,63 @@
+{
+  "country": "Hungary",
+  "regions": [
+    {
+      "region": "Tokaj",
+      "subRegions": [],
+      "grapes": [
+        "Furmint",
+        "Hárslevelű",
+        "Sárgamuskotály"
+      ],
+      "agingRules": {
+        "Aszú": "Botrytised grapes, aged in barrel and bottle",
+        "Eszencia": "Very high sugar, extremely long aging"
+      },
+      "prestigeLevel": "Elite"
+    },
+    {
+      "region": "Eger",
+      "subRegions": [],
+      "grapes": [
+        "Kékfrankos",
+        "Kadarka",
+        "Bikavér Blend"
+      ],
+      "agingRules": {},
+      "prestigeLevel": "High"
+    },
+    {
+      "region": "Villány",
+      "subRegions": [],
+      "grapes": [
+        "Cabernet Franc",
+        "Cabernet Sauvignon",
+        "Merlot"
+      ],
+      "agingRules": {},
+      "prestigeLevel": "High"
+    },
+    {
+      "region": "Somló",
+      "subRegions": [],
+      "grapes": [
+        "Juhfark",
+        "Furmint"
+      ],
+      "agingRules": {},
+      "prestigeLevel": "High"
+    },
+    {
+      "region": "Balaton",
+      "subRegions": [
+        "Badacsony"
+      ],
+      "grapes": [
+        "Olaszrizling",
+        "Furmint"
+      ],
+      "agingRules": {},
+      "prestigeLevel": "Medium"
+    }
+  ]
+}

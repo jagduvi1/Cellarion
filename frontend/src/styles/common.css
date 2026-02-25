@@ -1,0 +1,226 @@
+/* Common styles used across the application */
+
+/* ── Buttons ── */
+.btn {
+  padding: 0.75rem 1.5rem;
+  border: none;
+  border-radius: 4px;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-weight: 500;
+  /* Minimum touch target */
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+  line-height: 1.2;
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  background: #7B9E88;
+  color: #0d0d0d;
+  font-weight: 600;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: #5f8470;
+  color: #fff;
+}
+
+.btn-secondary {
+  background: #2e2e2e;
+  color: #c8c0b4;
+  border: 1px solid #3a3a3a;
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background: #3a3a3a;
+  color: #E8DFD0;
+}
+
+.btn-success {
+  background: #6B9E78;
+  color: #0d0d0d;
+  font-weight: 600;
+}
+
+.btn-success:hover:not(:disabled) {
+  background: #5a8a66;
+  color: #fff;
+}
+
+.btn-danger {
+  background: #E07060;
+  color: white;
+}
+
+.btn-danger:hover:not(:disabled) {
+  background: #c45a4a;
+}
+
+.btn-small {
+  padding: 0.5rem 1rem;
+  font-size: 0.9rem;
+  min-height: 38px;
+}
+
+/* ── Cards ── */
+.card {
+  background: #1c1c1c;
+  border: 1px solid #2a2a2a;
+  border-radius: 8px;
+  padding: 1.5rem;
+}
+
+/* ── Forms ── */
+.form-group {
+  margin-bottom: 1.25rem;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-weight: 500;
+  color: #c8c0b4;
+  font-size: 0.95rem;
+}
+
+.form-group input,
+.form-group textarea,
+.form-group select {
+  width: 100%;
+  padding: 0.75rem;
+  border: 1px solid #2a2a2a;
+  border-radius: 4px;
+  font-size: 16px;
+  font-family: inherit;
+  min-height: 44px;
+  background: #252525;
+  color: #E8DFD0;
+}
+
+.form-group input::placeholder,
+.form-group textarea::placeholder {
+  color: #5a5550;
+}
+
+.form-group select option {
+  background: #252525;
+  color: #E8DFD0;
+}
+
+.form-group input:focus,
+.form-group textarea:focus,
+.form-group select:focus {
+  outline: none;
+  border-color: #7B9E88;
+  background: #2a2a2a;
+}
+
+.form-actions {
+  display: flex;
+  gap: 1rem;
+  margin-top: 1.5rem;
+}
+
+/* ── Alerts ── */
+.alert {
+  padding: 1rem;
+  border-radius: 4px;
+  margin-bottom: 1rem;
+}
+
+.alert-error {
+  background: #2d1414;
+  color: #E07060;
+  border: 1px solid #5a2020;
+}
+
+.alert-success {
+  background: #142d1c;
+  color: #6B9E78;
+  border: 1px solid #1e4a2a;
+}
+
+.alert-info {
+  background: #14202d;
+  color: #7aade0;
+  border: 1px solid #1e3a5a;
+}
+
+/* ── Loading ── */
+.loading {
+  text-align: center;
+  padding: 3rem;
+  color: #9A9484;
+}
+
+/* ── Grid layouts ── */
+.grid-2 {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1.5rem;
+}
+
+.grid-3 {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1.5rem;
+}
+
+/* ── Modal box (shared) ── */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.65);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 1rem;
+}
+
+.modal-box {
+  background: #1c1c1c;
+  border: 1px solid #2a2a2a;
+  border-radius: 10px;
+  padding: 1.5rem;
+  width: 100%;
+  max-width: 440px;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.5);
+}
+
+/* ── Mobile overrides ── */
+@media (max-width: 768px) {
+  .grid-2,
+  .grid-3 {
+    grid-template-columns: 1fr;
+  }
+
+  .form-actions {
+    flex-direction: column;
+  }
+
+  /* Full-width only for buttons that live directly in .form-actions */
+  .form-actions .btn {
+    width: 100%;
+  }
+
+  .card {
+    padding: 1rem;
+  }
+
+  .modal-box {
+    padding: 1.25rem;
+    margin: 0;
+  }
+}

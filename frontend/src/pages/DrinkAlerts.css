@@ -1,0 +1,177 @@
+.drink-alerts-page {
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.page-subtitle {
+  color: #9A9484;
+  margin: 0.25rem 0 0 0;
+}
+
+/* ── Summary pills ── */
+.alert-summary-row {
+  display: flex;
+  gap: 0.75rem;
+  margin: 1.5rem 0;
+  flex-wrap: wrap;
+}
+
+.alert-summary-pill {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.5rem 1rem;
+  border-radius: 20px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  border: 1px solid transparent;
+}
+
+.alert-summary-pill.empty {
+  opacity: 0.4;
+}
+
+.alert-summary-pill.overdue  { background: #2d1414; color: #E07060;  border-color: #5a2020; }
+.alert-summary-pill.soon     { background: #2d1e10; color: #e0a060;  border-color: #5a3a10; }
+.alert-summary-pill.inWindow { background: #142d1c; color: #6B9E78;  border-color: #1e4a2a; }
+.alert-summary-pill.notReady { background: #14202d; color: #7aade0;  border-color: #1e3a5a; }
+
+.pill-count {
+  font-size: 1.1rem;
+}
+
+/* ── Sections ── */
+.alert-section {
+  margin-bottom: 2rem;
+}
+
+.alert-section-header {
+  padding: 0.75rem 1rem;
+  border-radius: 8px 8px 0 0;
+  border-left: 4px solid;
+  margin-bottom: 0.5rem;
+}
+
+.alert-section-header h2 {
+  margin: 0 0 0.2rem 0;
+  font-size: 1.1rem;
+}
+
+.alert-section-header p {
+  margin: 0;
+  font-size: 0.85rem;
+  opacity: 0.85;
+}
+
+.section-count {
+  font-weight: 400;
+  opacity: 0.7;
+}
+
+.alert-section.overdue  .alert-section-header { background: #2d1414; color: #E07060; border-color: #e74c3c; }
+.alert-section.soon     .alert-section-header { background: #2d1e10; color: #e0a060; border-color: #e67e22; }
+.alert-section.inWindow .alert-section-header { background: #142d1c; color: #6B9E78; border-color: #27ae60; }
+.alert-section.notReady .alert-section-header { background: #14202d; color: #7aade0; border-color: #3498db; }
+.alert-section.noDates  .alert-section-header { background: #1a1a1a; color: #9A9484; border-color: #3a3a3a; }
+
+/* ── Bottle cards ── */
+.alert-bottles {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.alert-bottle-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: #1c1c1c;
+  border: 1px solid #2a2a2a;
+  border-radius: 8px;
+  padding: 1rem 1.25rem;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.alert-bottle-card.overdue  { border-left: 4px solid #e74c3c; }
+.alert-bottle-card.soon     { border-left: 4px solid #e67e22; }
+.alert-bottle-card.inWindow { border-left: 4px solid #27ae60; }
+.alert-bottle-card.notReady { border-left: 4px solid #3498db; }
+.alert-bottle-card.noDates  { border-left: 4px solid #3a3a3a; }
+
+.alert-bottle-main {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.alert-bottle-image {
+  width: 36px;
+  height: 50px;
+  object-fit: contain;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+.alert-bottle-info h3 {
+  margin: 0 0 0.15rem 0;
+  font-size: 0.95rem;
+  color: #E8DFD0;
+}
+
+.alert-producer {
+  margin: 0;
+  font-size: 0.8rem;
+  color: #9A9484;
+}
+
+.alert-vintage {
+  margin: 0;
+  font-size: 0.8rem;
+  color: #c8c0b4;
+}
+
+.alert-bottle-window {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.4rem;
+  font-size: 0.82rem;
+  color: #c8c0b4;
+  text-align: right;
+}
+
+.arrow {
+  color: #4a4a4a;
+}
+
+.no-dates-text {
+  color: #4a4a4a;
+  font-style: italic;
+}
+
+.drink-status-pill {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 10px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.drink-status-pill.overdue  { background: #2d1414; color: #E07060; }
+.drink-status-pill.soon     { background: #2d1e10; color: #e0a060; }
+.drink-status-pill.inWindow { background: #142d1c; color: #6B9E78; }
+.drink-status-pill.notReady { background: #14202d; color: #7aade0; }
+
+@media (max-width: 600px) {
+  .alert-bottle-card {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .alert-bottle-window {
+    align-items: flex-start;
+    text-align: left;
+  }
+  .alert-summary-row {
+    gap: 0.5rem;
+  }
+}

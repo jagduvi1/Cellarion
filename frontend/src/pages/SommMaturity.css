@@ -1,0 +1,372 @@
+.somm-page {
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.somm-subtitle {
+  color: #9A9484;
+  font-size: 0.95rem;
+  margin: 0.25rem 0 0 0;
+}
+
+/* ── Tabs ── */
+.somm-tabs {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1.25rem;
+  border-bottom: 1px solid #2a2a2a;
+  padding-bottom: 0.75rem;
+}
+
+.somm-tab {
+  background: none;
+  border: 1px solid #2a2a2a;
+  border-radius: 6px;
+  color: #9A9484;
+  padding: 0.45rem 1.1rem;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  min-height: 38px;
+}
+
+.somm-tab:hover {
+  background: #1c1c1c;
+  color: #E8DFD0;
+}
+
+.somm-tab.active {
+  background: #1c1c1c;
+  border-color: #7B9E88;
+  color: #7B9E88;
+  font-weight: 600;
+}
+
+/* ── Empty state ── */
+.somm-empty {
+  text-align: center;
+  padding: 3rem 1rem;
+  color: #9A9484;
+  font-style: italic;
+}
+
+/* ── Card list ── */
+.somm-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+/* ── Profile card ── */
+.somm-card {
+  background: #1c1c1c;
+  border: 1px solid #2a2a2a;
+  border-radius: 10px;
+  overflow: hidden;
+  transition: border-color 0.15s;
+}
+
+.somm-card.expanded {
+  border-color: #3a3a3a;
+}
+
+.somm-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.9rem 1.1rem;
+  cursor: pointer;
+  user-select: none;
+  min-height: 56px;
+}
+
+.somm-card-header:hover {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.somm-card-identity {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+.somm-wine-thumb {
+  width: 38px;
+  height: 52px;
+  object-fit: contain;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+
+.somm-wine-thumb-placeholder {
+  width: 38px;
+  height: 52px;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+
+.somm-wine-thumb-placeholder.red      { background: #2d1414; }
+.somm-wine-thumb-placeholder.white    { background: #2d2510; }
+.somm-wine-thumb-placeholder.rosé     { background: #2d1420; }
+.somm-wine-thumb-placeholder.sparkling{ background: #14202d; }
+.somm-wine-thumb-placeholder.dessert  { background: #1f1430; }
+.somm-wine-thumb-placeholder.fortified{ background: #142d18; }
+
+.somm-wine-name {
+  display: block;
+  color: #E8DFD0;
+  font-size: 0.95rem;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.somm-wine-meta {
+  display: block;
+  color: #9A9484;
+  font-size: 0.82rem;
+  margin-top: 0.1rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.somm-card-right {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+.somm-vintage-pill {
+  background: #111;
+  border: 1px solid #3a3a3a;
+  border-radius: 6px;
+  padding: 0.2rem 0.6rem;
+  font-size: 0.82rem;
+  color: #C8A87E;
+  font-weight: 600;
+}
+
+.somm-status-pill {
+  border-radius: 6px;
+  padding: 0.2rem 0.65rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.somm-status-pill.pending  { background: rgba(224,160,60,0.12);  color: #e0a060; border: 1px solid rgba(224,160,60,0.25); }
+.somm-status-pill.reviewed { background: rgba(107,158,120,0.12); color: #6B9E78; border: 1px solid rgba(107,158,120,0.25); }
+
+.somm-chevron {
+  color: #9A9484;
+  font-size: 0.75rem;
+}
+
+/* ── Inline form ── */
+.somm-form {
+  padding: 1rem 1.1rem 1.1rem;
+  border-top: 1px solid #2a2a2a;
+}
+
+.somm-form-hint {
+  font-size: 0.85rem;
+  color: #9A9484;
+  margin: 0 0 1rem 0;
+  line-height: 1.5;
+}
+
+.somm-year-hint {
+  font-size: 0.78rem;
+  color: #9A9484;
+  font-weight: 400;
+}
+
+/* ── Phase rows ── */
+.somm-phases {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  border: 1px solid #2a2a2a;
+  border-radius: 8px;
+  overflow: hidden;
+  margin-bottom: 1rem;
+}
+
+.somm-phase-row {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid #2a2a2a;
+}
+
+.somm-phase-row:last-child {
+  border-bottom: none;
+}
+
+/* Phase label column */
+.somm-phase-label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  width: 160px;
+  flex-shrink: 0;
+  padding-left: 0.5rem;
+  border-left: 3px solid transparent;
+}
+
+.somm-phase-label--early { border-left-color: #C8A87E; background: rgba(200,168,126,0.04); }
+.somm-phase-label--peak  { border-left-color: #7B9E88; background: rgba(123,158,136,0.05); }
+.somm-phase-label--late  { border-left-color: #9A8474; background: rgba(154,132,116,0.04); }
+
+.somm-phase-name {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #E8DFD0;
+}
+
+.somm-phase-yrs {
+  font-size: 0.75rem;
+  color: #9A9484;
+  min-height: 1em;
+}
+
+/* Phase inputs column */
+.somm-phase-inputs {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.5rem;
+  flex: 1;
+}
+
+.somm-range-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  flex: 1;
+  max-width: 120px;
+}
+
+.somm-range-field label {
+  font-size: 0.72rem;
+  color: #9A9484;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.somm-range-field input {
+  width: 100%;
+}
+
+.somm-range-dash {
+  color: #9A9484;
+  font-size: 1rem;
+  padding-bottom: 0.4rem;
+  flex-shrink: 0;
+}
+
+/* ── Live preview ── */
+.somm-preview {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.6rem 0.9rem;
+  border-radius: 8px;
+  margin-bottom: 0;
+  font-size: 0.88rem;
+}
+
+.somm-preview--not-ready { background: rgba(122,173,224,0.08); border: 1px solid rgba(122,173,224,0.2); }
+.somm-preview--early     { background: rgba(200,168,126,0.08); border: 1px solid rgba(200,168,126,0.2); }
+.somm-preview--peak      { background: rgba(107,158,120,0.08); border: 1px solid rgba(107,158,120,0.2); }
+.somm-preview--late      { background: rgba(154,132,116,0.08); border: 1px solid rgba(154,132,116,0.2); }
+.somm-preview--declining { background: rgba(224,112,96,0.08);  border: 1px solid rgba(224,112,96,0.2); }
+
+.somm-preview-label {
+  color: #9A9484;
+  flex-shrink: 0;
+}
+
+/* ── Maturity badges (shared with BottleDetail via identical class names) ── */
+.maturity-badge {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 10px;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.maturity-badge--not-ready { background: #14202d; color: #7aade0; border: 1px solid #1e3a5a; }
+.maturity-badge--early     { background: #2d2010; color: #C8A87E; border: 1px solid #5a3a10; }
+.maturity-badge--peak      { background: #142d1c; color: #6B9E78; border: 1px solid #1e4a2a; }
+.maturity-badge--late      { background: #1e1814; color: #9A8474; border: 1px solid #3a2a20; }
+.maturity-badge--declining { background: #2d1414; color: #E07060; border: 1px solid #5a2020; }
+.maturity-badge--pending   { background: #1e1e1e; color: #9A9484; border: 1px solid #3a3a3a; }
+
+.somm-set-by {
+  font-size: 0.82rem;
+  color: #9A9484;
+  margin: 0.75rem 0 0 0;
+}
+
+.somm-form-actions {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-top: 1rem;
+}
+
+/* ── Mobile ── */
+@media (max-width: 600px) {
+  .somm-phase-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.6rem;
+    padding: 0.75rem;
+  }
+
+  .somm-phase-label {
+    width: 100%;
+    flex-direction: row;
+    align-items: baseline;
+    gap: 0.5rem;
+    border-left: none;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+    padding: 0 0 0.4rem 0;
+  }
+
+  .somm-phase-inputs {
+    width: 100%;
+  }
+
+  .somm-range-field {
+    max-width: none;
+  }
+
+  .somm-card-header {
+    padding: 0.75rem;
+  }
+
+  .somm-form {
+    padding: 0.85rem 0.75rem;
+  }
+
+  .somm-form-actions {
+    flex-direction: column;
+  }
+
+  .somm-form-actions .btn {
+    width: 100%;
+    text-align: center;
+    justify-content: center;
+  }
+
+  .somm-tabs {
+    flex-wrap: wrap;
+  }
+}

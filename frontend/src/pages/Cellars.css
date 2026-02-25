@@ -1,0 +1,152 @@
+.cellars-page {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2rem;
+}
+
+.page-header h1 {
+  margin: 0;
+  color: #E8DFD0;
+}
+
+/* Plan limit notice */
+.plan-limit-notice {
+  display: flex;
+  gap: 0.85rem;
+  align-items: flex-start;
+  background: rgba(200, 168, 126, 0.08);
+  border: 1px solid rgba(200, 168, 126, 0.25);
+  border-radius: 8px;
+  padding: 0.9rem 1rem;
+  margin-bottom: 1.25rem;
+}
+
+.plan-limit-notice__icon {
+  font-size: 1.1rem;
+  flex-shrink: 0;
+  margin-top: 0.1rem;
+}
+
+.plan-limit-notice strong {
+  color: #C8A87E;
+  display: block;
+  margin-bottom: 0.2rem;
+}
+
+.plan-limit-notice p {
+  margin: 0;
+  font-size: 0.88rem;
+  color: #9A9484;
+  line-height: 1.5;
+}
+
+.cellars-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 1.5rem;
+}
+
+.cellar-card {
+  background: #1c1c1c;
+  border: 1px solid #2a2a2a;
+  border-radius: 8px;
+  padding: 1.5rem;
+  text-decoration: none;
+  color: inherit;
+  transition: all 0.2s;
+  cursor: pointer;
+}
+
+.cellar-card:hover {
+  border-color: #7B9E88;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  transform: translateY(-2px);
+}
+
+.cellar-card-header {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 0.5rem;
+}
+
+.cellar-card-header h3 {
+  margin: 0;
+  color: #E8DFD0;
+  flex: 1;
+}
+
+.role-badge {
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.role-badge--editor {
+  background: rgba(200, 168, 126, 0.15);
+  color: #C8A87E;
+  border: 1px solid rgba(200, 168, 126, 0.3);
+}
+
+.role-badge--viewer {
+  background: rgba(154, 148, 132, 0.12);
+  color: #9A9484;
+  border: 1px solid rgba(154, 148, 132, 0.25);
+}
+
+.cellar-card h3 {
+  margin: 0 0 0.5rem 0;
+  color: #E8DFD0;
+}
+
+.cellar-card .description {
+  color: #9A9484;
+  margin: 0.5rem 0;
+  font-size: 0.9rem;
+}
+
+.cellar-footer {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid #2a2a2a;
+}
+
+.view-link {
+  color: #7B9E88;
+  font-weight: 500;
+}
+
+.create-form {
+  margin-bottom: 2rem;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 3rem;
+  background: #1c1c1c;
+  border-radius: 8px;
+  color: #9A9484;
+}
+
+@media (max-width: 768px) {
+  .page-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1rem;
+  }
+
+  .cellars-grid {
+    grid-template-columns: 1fr;
+  }
+}

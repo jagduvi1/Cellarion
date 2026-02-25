@@ -1,0 +1,81 @@
+{
+  "country": "Germany",
+  "regions": [
+    {
+      "region": "Mosel",
+      "subRegions": [
+        "Bernkastel",
+        "Saar",
+        "Ruwer"
+      ],
+      "grapes": [
+        "Riesling"
+      ],
+      "agingRules": {
+        "Kabinett": "Light-bodied, early drinking",
+        "Spätlese": "Riper grapes, moderate aging",
+        "Auslese": "Selected ripe grapes, longer aging"
+      },
+      "prestigeLevel": "Very High"
+    },
+    {
+      "region": "Rheingau",
+      "subRegions": [],
+      "grapes": [
+        "Riesling",
+        "Spätburgunder"
+      ],
+      "agingRules": {},
+      "prestigeLevel": "Very High"
+    },
+    {
+      "region": "Pfalz",
+      "subRegions": [],
+      "grapes": [
+        "Riesling",
+        "Spätburgunder"
+      ],
+      "agingRules": {},
+      "prestigeLevel": "High"
+    },
+    {
+      "region": "Nahe",
+      "subRegions": [],
+      "grapes": [
+        "Riesling"
+      ],
+      "agingRules": {},
+      "prestigeLevel": "High"
+    },
+    {
+      "region": "Rheinhessen",
+      "subRegions": [],
+      "grapes": [
+        "Riesling",
+        "Silvaner"
+      ],
+      "agingRules": {},
+      "prestigeLevel": "Medium"
+    },
+    {
+      "region": "Baden",
+      "subRegions": [],
+      "grapes": [
+        "Spätburgunder",
+        "Grauburgunder",
+        "Weissburgunder"
+      ],
+      "agingRules": {},
+      "prestigeLevel": "High"
+    },
+    {
+      "region": "Franken",
+      "subRegions": [],
+      "grapes": [
+        "Silvaner"
+      ],
+      "agingRules": {},
+      "prestigeLevel": "Medium"
+    }
+  ]
+}

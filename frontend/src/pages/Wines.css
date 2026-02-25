@@ -1,0 +1,111 @@
+.wines-page {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.wines-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+  gap: 1.5rem;
+}
+
+.results-count {
+  color: #9A9484;
+  font-size: 0.9rem;
+  margin: 0 0 1rem 0;
+}
+
+.wine-card {
+  background: #1c1c1c;
+  border: 1px solid #2a2a2a;
+  border-radius: 8px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.wine-image {
+  width: 100%;
+  height: 140px;
+  object-fit: contain;
+  background: #252525;
+  border-bottom: 1px solid #2a2a2a;
+  padding: 0.5rem;
+}
+
+.wine-image-placeholder {
+  width: 100%;
+  height: 80px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.wine-card-gallery {
+  border-bottom: 1px solid #2a2a2a;
+}
+
+.wine-card-gallery .image-carousel {
+  border-radius: 0;
+}
+
+.wine-image-placeholder.red    { background: #2d1414; color: #E07060; }
+.wine-image-placeholder.white  { background: #2d2510; color: #C8A87E; }
+.wine-image-placeholder.rosé   { background: #2d1420; color: #d06090; }
+.wine-image-placeholder.sparkling { background: #14202d; color: #7aade0; }
+.wine-image-placeholder.dessert { background: #1f1430; color: #b07ad0; }
+.wine-image-placeholder.fortified { background: #142d18; color: #6B9E78; }
+
+.wine-card-body {
+  padding: 1.25rem;
+  flex: 1;
+}
+
+.wine-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: start;
+  margin-bottom: 0.5rem;
+}
+
+.wine-header h3 {
+  margin: 0;
+  color: #E8DFD0;
+  flex: 1;
+}
+
+.wine-type {
+  padding: 0.25rem 0.75rem;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.wine-type.red { background: #2d1414; color: #E07060; }
+.wine-type.white { background: #2d2510; color: #C8A87E; }
+.wine-type.rosé { background: #2d1420; color: #d06090; }
+.wine-type.sparkling { background: #14202d; color: #7aade0; }
+.wine-type.dessert { background: #1f1430; color: #b07ad0; }
+.wine-type.fortified { background: #142d18; color: #6B9E78; }
+
+.wine-details {
+  margin-top: 1rem;
+  font-size: 0.9rem;
+  line-height: 1.6;
+  color: #9A9484;
+}
+
+.wine-details div {
+  margin-bottom: 0.25rem;
+}
+
+@media (max-width: 768px) {
+  .wines-grid {
+    grid-template-columns: 1fr;
+  }
+}

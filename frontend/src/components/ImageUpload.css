@@ -1,0 +1,365 @@
+.image-upload {
+  margin-top: 0.5rem;
+}
+
+.upload-buttons {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.btn-upload {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.25rem;
+  border: 2px dashed #3498db;
+  background: #f0f8ff;
+  color: #3498db;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 600;
+  transition: all 0.2s;
+}
+
+.btn-upload:hover {
+  background: #d6eaf8;
+  border-color: #2980b9;
+}
+
+.btn-upload:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-upload-secondary {
+  border-color: #bdc3c7;
+  background: #fafafa;
+  color: #555;
+}
+
+.btn-upload-secondary:hover {
+  background: #ecf0f1;
+  border-color: #95a5a6;
+}
+
+.upload-icon {
+  font-size: 1.2rem;
+}
+
+.upload-status {
+  margin-top: 0.75rem;
+  color: #3498db;
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.upload-error {
+  margin-top: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  background: #ffeef0;
+  color: #c62828;
+  border-radius: 4px;
+  font-size: 0.85rem;
+}
+
+/* ===== Preview Cards ===== */
+
+.upload-previews {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-top: 1rem;
+}
+
+.preview-card {
+  width: 180px;
+  border: 2px solid #ddd;
+  border-radius: 8px;
+  overflow: hidden;
+  background: white;
+}
+
+.preview-card:has(.preview-badge-ok) {
+  border-color: #27ae60;
+}
+
+.preview-image-wrap {
+  position: relative;
+  width: 100%;
+  height: 220px;
+  background: #f5f5f5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.preview-img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+.preview-img-dimmed {
+  opacity: 0.3;
+  filter: blur(1px);
+}
+
+/* Processing / failed overlay */
+.preview-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  background: rgba(0, 0, 0, 0.5);
+  color: white;
+  font-size: 0.8rem;
+  font-weight: 500;
+  text-align: center;
+  padding: 0.5rem;
+}
+
+.preview-overlay-failed {
+  background: rgba(192, 57, 43, 0.7);
+}
+
+/* Spinner */
+.spinner {
+  width: 28px;
+  height: 28px;
+  border: 3px solid rgba(255,255,255,0.3);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.btn-retry {
+  margin-top: 0.25rem;
+  padding: 0.25rem 0.75rem;
+  border: 1px solid white;
+  background: transparent;
+  color: white;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.75rem;
+}
+
+.btn-retry:hover {
+  background: rgba(255,255,255,0.2);
+}
+
+/* Preview footer with status + remove */
+.preview-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.4rem 0.5rem;
+  border-top: 1px solid #eee;
+  gap: 0.25rem;
+}
+
+.preview-badge-ok {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: #27ae60;
+  text-transform: uppercase;
+}
+
+.preview-badge-processing {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: #3498db;
+  text-transform: uppercase;
+}
+
+.preview-badge-failed {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: #c0392b;
+  text-transform: uppercase;
+}
+
+.btn-remove {
+  border: none;
+  background: none;
+  color: #e74c3c;
+  cursor: pointer;
+  font-size: 0.75rem;
+  font-weight: 500;
+  padding: 0.15rem 0.3rem;
+  border-radius: 3px;
+}
+
+.btn-remove:hover {
+  background: #ffeef0;
+}
+
+/* ===== Camera Modal ===== */
+
+.camera-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 9999;
+  background: #000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.camera-container {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.camera-video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.camera-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.bottle-guide {
+  max-height: 90%;
+  max-width: 80%;
+  object-fit: contain;
+  opacity: 0.6;
+}
+
+.overlay-hint {
+  position: absolute;
+  bottom: 110px;
+  color: rgba(255,255,255,0.9);
+  font-size: 0.95rem;
+  font-weight: 600;
+  text-shadow: 0 2px 6px rgba(0,0,0,0.8);
+  letter-spacing: 0.03em;
+}
+
+.camera-controls {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 2.5rem;
+  padding: 1.5rem 1rem 2.5rem;
+  background: linear-gradient(transparent, rgba(0,0,0,0.6));
+}
+
+.camera-btn {
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.15s;
+}
+
+.camera-btn:hover {
+  transform: scale(1.1);
+}
+
+.camera-btn:active {
+  transform: scale(0.95);
+}
+
+.camera-btn-close {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.2);
+  color: white;
+  font-size: 1.3rem;
+  backdrop-filter: blur(4px);
+}
+
+.camera-btn-capture {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  background: white;
+  padding: 4px;
+}
+
+.capture-ring {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  border: 3px solid #333;
+  background: white;
+  transition: background 0.15s;
+}
+
+.camera-btn-capture:active .capture-ring {
+  background: #ddd;
+}
+
+.camera-btn-switch {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.2);
+  color: white;
+  font-size: 1.5rem;
+  backdrop-filter: blur(4px);
+}
+
+.camera-error-overlay {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1.5rem;
+  padding: 2rem;
+  color: white;
+  text-align: center;
+}
+
+.camera-error-overlay p {
+  font-size: 1rem;
+  max-width: 300px;
+}
+
+@media (min-width: 768px) {
+  .camera-container {
+    max-width: 500px;
+    max-height: 80vh;
+    border-radius: 12px;
+    overflow: hidden;
+  }
+
+  .camera-controls {
+    border-radius: 0 0 12px 12px;
+  }
+}

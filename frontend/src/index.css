@@ -1,0 +1,195 @@
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background: #111111;
+  color: #E8DFD0;
+  /* Remove 300ms tap delay on mobile */
+  touch-action: manipulation;
+}
+
+h1 {
+  font-size: 1.8rem;
+  margin: 0 0 1rem 0;
+  color: #E8DFD0;
+}
+
+h2 {
+  font-size: 1.4rem;
+  margin: 0 0 1rem 0;
+  color: #E8DFD0;
+}
+
+h3 {
+  font-size: 1.1rem;
+  margin: 0 0 0.5rem 0;
+  color: #E8DFD0;
+}
+
+p {
+  margin: 0 0 0.75rem 0;
+  line-height: 1.6;
+}
+
+/* Prevent iOS from zooming on input focus — keep at 16px+ */
+input, select, textarea {
+  font-family: inherit;
+  font-size: 16px;
+  box-sizing: border-box;
+}
+
+a {
+  color: #7B9E88;
+}
+
+/* ── Page header ── */
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 1.5rem;
+  gap: 1rem;
+}
+
+.page-header h1 {
+  margin: 0;
+}
+
+/* ── Back link ── */
+.back-link {
+  color: #7B9E88;
+  text-decoration: none;
+  display: inline-block;
+  margin-bottom: 0.75rem;
+  font-size: 0.9rem;
+  /* Ensure touch target */
+  padding: 0.25rem 0;
+}
+
+.back-link:hover {
+  text-decoration: underline;
+}
+
+/* ── Empty / loading states ── */
+.empty-state {
+  text-align: center;
+  padding: 3rem 1.5rem;
+  background: #1c1c1c;
+  border-radius: 8px;
+  border: 2px dashed #2a2a2a;
+  color: #9A9484;
+}
+
+.empty-state p {
+  margin-bottom: 1rem;
+}
+
+.loading {
+  text-align: center;
+  padding: 3rem;
+  color: #9A9484;
+}
+
+/* ── Producer label ── */
+.producer {
+  color: #9A9484;
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+/* ── Filters bar ── */
+.filters-bar {
+  display: flex;
+  gap: 0.75rem;
+  margin: 1.25rem 0;
+  flex-wrap: wrap;
+}
+
+.filters-bar input,
+.filters-bar select {
+  padding: 0.75rem;
+  border: 1px solid #2a2a2a;
+  border-radius: 4px;
+  font-size: 16px;
+  background: #1c1c1c;
+  color: #E8DFD0;
+  min-height: 44px;
+}
+
+.filters-bar input:focus,
+.filters-bar select:focus {
+  outline: none;
+  border-color: #7B9E88;
+}
+
+.filters-bar input {
+  flex: 1;
+  min-width: 160px;
+}
+
+.search-input {
+  flex: 2;
+  min-width: 160px;
+  padding: 0.75rem;
+  border: 1px solid #2a2a2a;
+  border-radius: 4px;
+  font-size: 16px;
+  min-height: 44px;
+  background: #1c1c1c;
+  color: #E8DFD0;
+}
+
+.search-input:focus {
+  outline: none;
+  border-color: #7B9E88;
+}
+
+/* ── Grid helpers ── */
+.grid-2 {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1rem;
+}
+
+/* ── Mobile overrides ── */
+@media (max-width: 768px) {
+  h1 {
+    font-size: 1.5rem;
+  }
+
+  .page-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.75rem;
+    margin-bottom: 1.25rem;
+  }
+
+  .page-header .header-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    width: 100%;
+  }
+
+  .page-header .header-actions .btn {
+    flex: 1;
+    min-width: 100px;
+    text-align: center;
+    white-space: nowrap;
+  }
+
+  .grid-2 {
+    grid-template-columns: 1fr;
+  }
+
+  .filters-bar {
+    flex-direction: column;
+  }
+}

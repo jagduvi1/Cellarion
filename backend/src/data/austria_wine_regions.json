@@ -1,0 +1,74 @@
+{
+  "country": "Austria",
+  "regions": [
+    {
+      "region": "Wachau",
+      "subRegions": [],
+      "grapes": [
+        "Grüner Veltliner",
+        "Riesling"
+      ],
+      "agingRules": {
+        "Steinfeder": "Light style, early drinking",
+        "Federspiel": "Medium-bodied, some aging",
+        "Smaragd": "Full-bodied, suitable for aging"
+      },
+      "prestigeLevel": "Elite"
+    },
+    {
+      "region": "Kamptal",
+      "subRegions": [],
+      "grapes": [
+        "Grüner Veltliner",
+        "Riesling"
+      ],
+      "agingRules": {},
+      "prestigeLevel": "Very High"
+    },
+    {
+      "region": "Kremstal",
+      "subRegions": [],
+      "grapes": [
+        "Grüner Veltliner",
+        "Riesling"
+      ],
+      "agingRules": {},
+      "prestigeLevel": "High"
+    },
+    {
+      "region": "Wagram",
+      "subRegions": [],
+      "grapes": [
+        "Grüner Veltliner"
+      ],
+      "agingRules": {},
+      "prestigeLevel": "High"
+    },
+    {
+      "region": "Burgenland",
+      "subRegions": [
+        "Neusiedlersee",
+        "Leithaberg"
+      ],
+      "grapes": [
+        "Blaufränkisch",
+        "Zweigelt",
+        "St. Laurent"
+      ],
+      "agingRules": {},
+      "prestigeLevel": "Very High"
+    },
+    {
+      "region": "Styria",
+      "subRegions": [
+        "Südsteiermark"
+      ],
+      "grapes": [
+        "Sauvignon Blanc",
+        "Morillon"
+      ],
+      "agingRules": {},
+      "prestigeLevel": "High"
+    }
+  ]
+}

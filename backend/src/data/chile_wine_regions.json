@@ -1,0 +1,67 @@
+{
+  "country": "Chile",
+  "regions": [
+    {
+      "region": "Maipo Valley",
+      "subRegions": [],
+      "grapes": [
+        "Cabernet Sauvignon",
+        "Carmenère"
+      ],
+      "agingRules": {},
+      "prestigeLevel": "Very High"
+    },
+    {
+      "region": "Colchagua Valley",
+      "subRegions": [],
+      "grapes": [
+        "Carmenère",
+        "Cabernet Sauvignon",
+        "Syrah"
+      ],
+      "agingRules": {},
+      "prestigeLevel": "Very High"
+    },
+    {
+      "region": "Casablanca Valley",
+      "subRegions": [],
+      "grapes": [
+        "Sauvignon Blanc",
+        "Chardonnay",
+        "Pinot Noir"
+      ],
+      "agingRules": {},
+      "prestigeLevel": "High"
+    },
+    {
+      "region": "Aconcagua Valley",
+      "subRegions": [],
+      "grapes": [
+        "Cabernet Sauvignon",
+        "Syrah"
+      ],
+      "agingRules": {},
+      "prestigeLevel": "High"
+    },
+    {
+      "region": "Leyda Valley",
+      "subRegions": [],
+      "grapes": [
+        "Sauvignon Blanc",
+        "Pinot Noir"
+      ],
+      "agingRules": {},
+      "prestigeLevel": "High"
+    },
+    {
+      "region": "Itata Valley",
+      "subRegions": [],
+      "grapes": [
+        "País",
+        "Cinsault"
+      ],
+      "agingRules": {},
+      "prestigeLevel": "Emerging"
+    }
+  ]
+}

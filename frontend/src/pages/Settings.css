@@ -1,0 +1,43 @@
+.settings-page {
+  max-width: 500px;
+  margin: 0 auto;
+}
+
+.settings-page h1 {
+  margin-bottom: 1.5rem;
+}
+
+.settings-card {
+  padding: 1.5rem;
+}
+
+.settings-section-title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #E8DFD0;
+  margin: 0 0 1.25rem 0;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid #2a2a2a;
+}
+
+.settings-hint {
+  font-size: 0.82rem;
+  color: #9A9484;
+  margin: 0.15rem 0 0.65rem 0;
+}
+
+.settings-select {
+  max-width: 180px;
+}
+
+.settings-actions {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-top: 1.25rem;
+}
+
+.settings-saved {
+  font-size: 0.85rem;
+  color: #6B9E78;
+}

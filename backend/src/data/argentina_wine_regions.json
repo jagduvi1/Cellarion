@@ -1,0 +1,72 @@
+{
+  "country": "Argentina",
+  "regions": [
+    {
+      "region": "Mendoza",
+      "subRegions": [
+        "Luján de Cuyo",
+        "Maipú",
+        "Uco Valley"
+      ],
+      "grapes": [
+        "Malbec",
+        "Cabernet Sauvignon",
+        "Bonarda",
+        "Chardonnay"
+      ],
+      "agingRules": {},
+      "prestigeLevel": "Very High"
+    },
+    {
+      "region": "Uco Valley",
+      "subRegions": [
+        "Tupungato",
+        "Gualtallary",
+        "Altamira"
+      ],
+      "grapes": [
+        "Malbec",
+        "Cabernet Franc",
+        "Chardonnay"
+      ],
+      "agingRules": {},
+      "prestigeLevel": "Elite"
+    },
+    {
+      "region": "Salta",
+      "subRegions": [
+        "Cafayate"
+      ],
+      "grapes": [
+        "Torrontés",
+        "Malbec"
+      ],
+      "agingRules": {},
+      "prestigeLevel": "High"
+    },
+    {
+      "region": "Patagonia",
+      "subRegions": [
+        "Río Negro",
+        "Neuquén"
+      ],
+      "grapes": [
+        "Pinot Noir",
+        "Malbec",
+        "Merlot"
+      ],
+      "agingRules": {},
+      "prestigeLevel": "High"
+    },
+    {
+      "region": "San Juan",
+      "subRegions": [],
+      "grapes": [
+        "Syrah",
+        "Malbec"
+      ],
+      "agingRules": {},
+      "prestigeLevel": "Medium"
+    }
+  ]
+}

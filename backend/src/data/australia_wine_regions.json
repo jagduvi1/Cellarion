@@ -1,0 +1,65 @@
+{
+  "country": "Australia",
+  "regions": [
+    {
+      "region": "Barossa Valley",
+      "subRegions": [],
+      "grapes": [
+        "Shiraz",
+        "Grenache",
+        "Cabernet Sauvignon"
+      ],
+      "agingRules": {},
+      "prestigeLevel": "Very High"
+    },
+    {
+      "region": "McLaren Vale",
+      "subRegions": [],
+      "grapes": [
+        "Shiraz",
+        "Grenache"
+      ],
+      "agingRules": {},
+      "prestigeLevel": "High"
+    },
+    {
+      "region": "Margaret River",
+      "subRegions": [],
+      "grapes": [
+        "Cabernet Sauvignon",
+        "Chardonnay"
+      ],
+      "agingRules": {},
+      "prestigeLevel": "Very High"
+    },
+    {
+      "region": "Hunter Valley",
+      "subRegions": [],
+      "grapes": [
+        "Semillon",
+        "Shiraz"
+      ],
+      "agingRules": {},
+      "prestigeLevel": "High"
+    },
+    {
+      "region": "Yarra Valley",
+      "subRegions": [],
+      "grapes": [
+        "Pinot Noir",
+        "Chardonnay"
+      ],
+      "agingRules": {},
+      "prestigeLevel": "High"
+    },
+    {
+      "region": "Clare Valley",
+      "subRegions": [],
+      "grapes": [
+        "Riesling"
+      ],
+      "agingRules": {},
+      "prestigeLevel": "High"
+    }
+  ]
+}

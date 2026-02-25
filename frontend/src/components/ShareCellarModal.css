@@ -1,0 +1,275 @@
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.65);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 1rem;
+}
+
+.share-modal {
+  background: #1c1c1c;
+  border: 1px solid #2a2a2a;
+  border-radius: 12px;
+  width: 100%;
+  max-width: 520px;
+  padding: 1.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.share-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.share-modal-header h2 {
+  margin: 0;
+  font-size: 1.15rem;
+  color: #E8DFD0;
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.modal-close-btn {
+  background: none;
+  border: none;
+  color: #9A9484;
+  font-size: 1.1rem;
+  cursor: pointer;
+  padding: 0.2rem 0.4rem;
+  border-radius: 4px;
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+.modal-close-btn:hover {
+  color: #E8DFD0;
+  background: #2a2a2a;
+}
+
+/* ── Add form ── */
+.share-add-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.share-form-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #9A9484;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.share-input-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: stretch;
+}
+
+.share-email-input {
+  flex: 1;
+  min-width: 0;
+  background: #111111;
+  border: 1px solid #2a2a2a;
+  color: #E8DFD0;
+  padding: 0.55rem 0.75rem;
+  border-radius: 6px;
+  font-size: 0.9rem;
+}
+
+.share-email-input:focus {
+  outline: none;
+  border-color: #7B9E88;
+}
+
+.share-role-select {
+  background: #111111;
+  border: 1px solid #2a2a2a;
+  color: #E8DFD0;
+  padding: 0.55rem 0.5rem;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.share-role-select:focus {
+  outline: none;
+  border-color: #7B9E88;
+}
+
+.share-role-select--sm {
+  padding: 0.3rem 0.4rem;
+  font-size: 0.82rem;
+}
+
+.share-role-hint {
+  font-size: 0.8rem;
+  color: #9A9484;
+  margin: 0;
+  line-height: 1.5;
+}
+
+/* ── Members list ── */
+.share-members {
+  border-top: 1px solid #2a2a2a;
+  padding-top: 1rem;
+}
+
+.share-members-title {
+  margin: 0 0 0.75rem 0;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #9A9484;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.share-members-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.share-member-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  background: #111111;
+  border: 1px solid #2a2a2a;
+  border-radius: 8px;
+  padding: 0.65rem 0.85rem;
+}
+
+.share-member-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-width: 0;
+}
+
+.share-member-name {
+  font-weight: 600;
+  color: #E8DFD0;
+  font-size: 0.9rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.share-member-email {
+  font-size: 0.78rem;
+  color: #9A9484;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.share-member-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-shrink: 0;
+}
+
+.btn-remove-member {
+  background: none;
+  border: 1px solid #3a2a2a;
+  color: #E07060;
+  padding: 0.3rem 0.6rem;
+  border-radius: 5px;
+  font-size: 0.8rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.btn-remove-member:hover {
+  background: rgba(224, 112, 96, 0.1);
+  border-color: #E07060;
+}
+
+.share-empty {
+  color: #9A9484;
+  font-size: 0.9rem;
+  text-align: center;
+  margin: 0;
+  padding: 0.5rem 0;
+}
+
+/* ── Plan share limit notice ── */
+.share-limit-notice {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+  background: rgba(200, 168, 126, 0.08);
+  border: 1px solid rgba(200, 168, 126, 0.25);
+  border-radius: 8px;
+  padding: 0.85rem 1rem;
+  font-size: 0.88rem;
+}
+
+.share-limit-notice span {
+  font-size: 1rem;
+  flex-shrink: 0;
+  margin-top: 0.1rem;
+}
+
+.share-limit-notice strong {
+  color: #C8A87E;
+  display: block;
+  margin-bottom: 0.2rem;
+}
+
+.share-limit-notice p {
+  margin: 0;
+  color: #9A9484;
+  line-height: 1.5;
+}
+
+/* ── Alerts reuse ── */
+.alert-success {
+  background: rgba(107, 158, 120, 0.12);
+  border: 1px solid rgba(107, 158, 120, 0.3);
+  color: #6B9E78;
+  padding: 0.6rem 0.85rem;
+  border-radius: 6px;
+  font-size: 0.9rem;
+}
+
+/* ── Mobile ── */
+@media (max-width: 520px) {
+  .share-modal {
+    padding: 1.25rem;
+  }
+
+  .share-input-row {
+    flex-direction: column;
+  }
+
+  .share-member-item {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+
+  .share-member-controls {
+    width: 100%;
+    justify-content: flex-end;
+  }
+}

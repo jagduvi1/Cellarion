@@ -1,0 +1,100 @@
+/* Re-uses .somm-page, .somm-card, .somm-card-header, etc. from SommMaturity.css
+   Only price-queue-specific overrides are defined here. */
+
+.sp-count {
+  font-size: 0.85rem;
+  color: #9A9484;
+  margin: 0 0 1rem 0;
+}
+
+/* ── Last-price chip shown in the card header ── */
+.sp-last-price {
+  font-size: 0.82rem;
+  color: #E8DFD0;
+  font-weight: 500;
+  background: #111;
+  border: 1px solid #3a3a3a;
+  border-radius: 6px;
+  padding: 0.2rem 0.6rem;
+  white-space: nowrap;
+}
+
+.sp-last-age {
+  color: #9A9484;
+  font-weight: 400;
+}
+
+.sp-bottle-count {
+  font-size: 0.75rem;
+  color: #9A9484;
+  background: rgba(154, 148, 132, 0.1);
+  border: 1px solid #2a2a2a;
+  border-radius: 6px;
+  padding: 0.15rem 0.5rem;
+  white-space: nowrap;
+}
+
+/* ── Previous price block ── */
+.sp-previous {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  background: rgba(154, 148, 132, 0.06);
+  border: 1px solid #2a2a2a;
+  border-radius: 6px;
+  padding: 0.55rem 0.75rem;
+  margin-bottom: 0.9rem;
+  font-size: 0.85rem;
+}
+
+.sp-previous-label {
+  color: #9A9484;
+  flex-shrink: 0;
+}
+
+.sp-previous strong {
+  color: #E8DFD0;
+}
+
+.sp-previous-age {
+  color: #9A9484;
+}
+
+.sp-previous-source {
+  color: #9A9484;
+  font-style: italic;
+}
+
+.sp-previous-converted {
+  color: #9A9484;
+  font-size: 0.8rem;
+}
+
+/* ── Inline form row ── */
+.sp-form-row {
+  display: grid;
+  grid-template-columns: 1fr 100px 1fr;
+  gap: 0.75rem;
+  align-items: end;
+}
+
+.sp-price-field {}
+.sp-currency-field {}
+.sp-source-field {}
+
+/* ── Mobile ── */
+@media (max-width: 600px) {
+  .sp-form-row {
+    grid-template-columns: 1fr 90px;
+  }
+
+  .sp-source-field {
+    grid-column: 1 / -1;
+  }
+
+  .sp-last-price,
+  .sp-bottle-count {
+    display: none;
+  }
+}

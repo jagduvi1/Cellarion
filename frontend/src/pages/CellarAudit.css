@@ -1,0 +1,90 @@
+.cellar-audit-page {
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+/* ── Event list ── */
+.cellar-audit-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  border: 1px solid #2a2a2a;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.cellar-audit-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.85rem;
+  padding: 0.85rem 1rem;
+  border-bottom: 1px solid #1e1e1e;
+  transition: background 0.15s;
+}
+
+.cellar-audit-item:last-child {
+  border-bottom: none;
+}
+
+.cellar-audit-item:hover {
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.cellar-audit-icon {
+  font-size: 1rem;
+  line-height: 1.4;
+  flex-shrink: 0;
+  width: 1.4rem;
+  text-align: center;
+}
+
+.cellar-audit-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.cellar-audit-primary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  align-items: baseline;
+  margin-bottom: 0.2rem;
+}
+
+.cellar-audit-label {
+  color: #E8DFD0;
+  font-weight: 500;
+  font-size: 0.9rem;
+}
+
+.cellar-audit-detail {
+  color: #9A9484;
+  font-size: 0.85rem;
+}
+
+.cellar-audit-meta {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+  font-size: 0.78rem;
+  color: #9A9484;
+}
+
+.cellar-audit-sep {
+  opacity: 0.5;
+}
+
+.cellar-audit-user {
+  color: #7B9E88;
+  font-weight: 500;
+}
+
+.cellar-audit-time {
+  color: #9A9484;
+}
+
+@media (max-width: 480px) {
+  .cellar-audit-item {
+    padding: 0.7rem;
+  }
+}

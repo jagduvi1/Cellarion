@@ -1,0 +1,56 @@
+.wine-requests-page {
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.requests-list {
+  display: grid;
+  gap: 1rem;
+}
+
+.request-card {
+  background: #1c1c1c;
+  border: 1px solid #2a2a2a;
+  border-radius: 8px;
+  padding: 1.5rem;
+}
+
+.request-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.request-header h3 {
+  margin: 0;
+}
+
+.status-badge {
+  padding: 0.25rem 0.75rem;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.status-pending  { background: #2d2510; color: #C8A87E; }
+.status-resolved { background: #142d1c; color: #6B9E78; }
+.status-rejected { background: #2d1414; color: #E07060; }
+
+.resolution,
+.admin-notes {
+  margin-top: 1rem;
+  padding: 1rem;
+  background: #1a1a1a;
+  border-radius: 4px;
+  font-size: 0.9rem;
+  border: 1px solid #2a2a2a;
+}
+
+.request-footer {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid #2a2a2a;
+  color: #9A9484;
+}
