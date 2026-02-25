@@ -2,6 +2,14 @@
 
 A self-hosted wine cellar management app built with the MERN stack. Track your bottles, organize them into cellars and racks, search a shared wine registry, and get drink-window recommendations.
 
+## Hosted Version
+
+Cellarion is also available as a publicly hosted service at:
+
+👉 https://cellarion.app
+
+The hosted version runs the same open-source codebase as this repository, maintained by the project author. Anyone can create an account and use Cellarion without self-hosting.
+
 ## Stack
 
 - **MongoDB 7** — Database
@@ -137,7 +145,7 @@ Cellarion/
 | **WineDefinition** | Vintage-neutral wine entry in the shared registry. Admins create and manage these. |
 | **Bottle** | A user's bottle: references a WineDefinition and adds vintage, price, rating, notes, rack location. |
 | **Cellar** | Named container of Bottles, owned by a user. Can be shared with other users. |
-| **Rack** | 8×4 grid within a Cellar for physical bottle placement. |
+| **Rack** | X×X grid within a Cellar for physical bottle placement. |
 | **WineRequest** | User-submitted wine suggestion. Admins review and fulfil by creating a WineDefinition. |
 | **Taxonomy** | Admin-managed Countries, Regions, and Grapes to prevent free-text proliferation. |
 
