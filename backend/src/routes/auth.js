@@ -6,7 +6,7 @@ const User = require('../models/User');
 const { requireAuth } = require('../middleware/auth');
 const { logAudit } = require('../services/audit');
 const rateLimitsConfig = require('../config/rateLimits');
-const { sendVerificationEmail, EMAIL_VERIFICATION_ENABLED } = require('../services/mailgun');
+const { sendVerificationEmail, sendPasswordResetEmail, EMAIL_VERIFICATION_ENABLED } = require('../services/mailgun');
 
 const router = express.Router();
 
@@ -19,6 +19,17 @@ const authLimiter = rateLimit({
   handler: (req, res) => {
     logAudit(req, 'system.rate_limit_exceeded', {}, { limiter: 'auth', limit: rateLimitsConfig.get().auth.max });
     res.status(429).json({ error: 'Too many attempts, please try again later' });
+  }
+});
+
+// Separate limiter for password reset — 5 per 15 min per IP
+const resetLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: (req, res) => {
+    res.status(429).json({ error: 'Too many reset attempts, please try again later' });
   }
 });
 
@@ -313,6 +324,88 @@ router.post('/logout', requireAuth, async (req, res) => {
   } catch (error) {
     console.error('Logout error:', error);
     res.status(500).json({ error: 'Logout failed' });
+  }
+});
+
+// POST /api/auth/forgot-password - Request a password reset email
+router.post('/forgot-password', resetLimiter, async (req, res) => {
+  if (!EMAIL_VERIFICATION_ENABLED) {
+    return res.status(503).json({ error: 'Password reset by email is not available on this instance. Contact your administrator.' });
+  }
+
+  const { email } = req.body;
+  if (!email) {
+    return res.status(400).json({ error: 'Email is required' });
+  }
+
+  // Always return the same message to prevent email enumeration
+  const genericResponse = { message: 'If that email exists, a reset link has been sent.' };
+
+  try {
+    const user = await User.findOne({ email: email.toLowerCase() });
+    if (!user) {
+      return res.status(200).json(genericResponse);
+    }
+
+    const resetToken = user.setPasswordResetToken();
+    await user.save();
+
+    sendPasswordResetEmail(user.email, user.username, resetToken).catch(err => {
+      console.error('Failed to send password reset email:', err.message);
+    });
+
+    logAudit(req, 'auth.password_reset_requested',
+      { type: 'user', id: user._id },
+      { email: user.email }
+    );
+
+    res.status(200).json(genericResponse);
+  } catch (error) {
+    console.error('Forgot password error:', error);
+    res.status(500).json({ error: 'Failed to process password reset request' });
+  }
+});
+
+// POST /api/auth/reset-password - Reset password using token from email
+router.post('/reset-password', resetLimiter, async (req, res) => {
+  const { token, password } = req.body;
+
+  if (!token || !password) {
+    return res.status(400).json({ error: 'Token and new password are required' });
+  }
+
+  const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^a-zA-Z\d]).{12,}$/;
+  if (!passwordRegex.test(password)) {
+    return res.status(400).json({
+      error: 'Password must be at least 12 characters and include an uppercase letter, lowercase letter, number, and special character'
+    });
+  }
+
+  try {
+    const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+    const user = await User.findOne({
+      passwordResetTokenHash: tokenHash,
+      passwordResetExpiresAt: { $gt: new Date() }
+    });
+
+    if (!user || !user.validatePasswordResetToken(token)) {
+      return res.status(400).json({ error: 'Invalid or expired reset token' });
+    }
+
+    user.password = password;
+    user.passwordResetTokenHash = null;
+    user.passwordResetExpiresAt = null;
+    await user.save();
+
+    logAudit(req, 'auth.password_reset',
+      { type: 'user', id: user._id },
+      { username: user.username }
+    );
+
+    res.status(200).json({ message: 'Password reset successfully. You can now log in.' });
+  } catch (error) {
+    console.error('Reset password error:', error);
+    res.status(500).json({ error: 'Failed to reset password' });
   }
 });
 

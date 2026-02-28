@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import { CURRENCIES } from '../config/currencies';
@@ -7,6 +8,10 @@ import './Settings.css';
 function Settings() {
   const { t, i18n } = useTranslation();
   const { user, updatePreferences } = useAuth();
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const isWelcome = searchParams.get('welcome') === '1';
+
   const [currency, setCurrency] = useState(user?.preferences?.currency || 'USD');
   const [language, setLanguage] = useState(user?.preferences?.language || i18n.language?.split('-')[0] || 'en');
   const [saving, setSaving] = useState(false);
@@ -24,6 +29,7 @@ function Settings() {
       i18n.changeLanguage(language);
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
+      if (isWelcome) navigate('/settings', { replace: true });
     } else {
       setError(result.error);
     }
@@ -32,6 +38,19 @@ function Settings() {
   return (
     <div className="settings-page">
       <h1>{t('settings.title')}</h1>
+
+      {isWelcome && (
+        <div className="alert alert-info settings-welcome">
+          <strong>Welcome to Cellarion!</strong> Set your preferred currency and language before you start.
+          <button
+            className="settings-welcome-dismiss"
+            onClick={() => navigate('/settings', { replace: true })}
+            aria-label="Dismiss"
+          >
+            ×
+          </button>
+        </div>
+      )}
 
       <div className="card settings-card">
         <h2 className="settings-section-title">{t('settings.displayPreferences')}</h2>

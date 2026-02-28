@@ -41,3 +41,26 @@
   font-size: 0.85rem;
   color: #6B9E78;
 }
+
+.settings-welcome {
+  position: relative;
+  margin-bottom: 1.25rem;
+}
+
+.settings-welcome-dismiss {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.75rem;
+  background: none;
+  border: none;
+  color: inherit;
+  font-size: 1.25rem;
+  cursor: pointer;
+  line-height: 1;
+  padding: 0;
+  opacity: 0.7;
+}
+
+.settings-welcome-dismiss:hover {
+  opacity: 1;
+}

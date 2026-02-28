@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import CellarionLogo from '../components/CellarionLogo';
 import './Login.css';
@@ -37,6 +37,8 @@ function Login() {
       if (result.requiresVerification) {
         setRegisteredEmail(result.email);
         setRegistered(true);
+      } else if (mode === 'register') {
+        navigate('/settings?welcome=1');
       } else {
         navigate('/cellars');
       }
@@ -199,6 +201,13 @@ function Login() {
               required
             />
           </div>
+          {mode === 'login' && (
+            <div style={{ textAlign: 'right', marginTop: '-0.5rem', marginBottom: '1rem' }}>
+              <Link to="/forgot-password" style={{ fontSize: '0.85rem', color: '#7B9E88' }}>
+                Forgot password?
+              </Link>
+            </div>
+          )}
           <button type="submit" className="btn btn-primary btn-full" disabled={loading}>
             {loading ? 'Loading...' : mode === 'login' ? 'Login' : 'Create Account'}
           </button>

@@ -25,7 +25,7 @@ function VerifyEmail() {
     verifyEmail(token).then(result => {
       if (result.success) {
         setStatus('success');
-        setTimeout(() => navigate('/cellars', { replace: true }), 1500);
+        setTimeout(() => navigate('/settings?welcome=1', { replace: true }), 1500);
       } else {
         setStatus('error');
         setErrorMessage(result.error || 'Verification failed. The link may have expired.');
