@@ -164,8 +164,10 @@ All traffic enters through nginx on port 80. Internal services are not exposed o
 
 | Method | Path | Description |
 |--------|------|-------------|
-| POST | `/register` | Create account |
-| POST | `/login` | Login, returns JWT |
+| POST | `/register` | Create account (sends verification email if Mailgun is configured) |
+| POST | `/login` | Login, returns JWT (blocked until email is verified when Mailgun is configured) |
+| GET | `/verify-email?token=` | Verify email address, returns JWT on success |
+| POST | `/resend-verification` | Resend verification email |
 
 ### Cellars — `/api/cellars` *(auth required)*
 
@@ -222,6 +224,24 @@ Copy `.env.example` to `.env` in the project root and set the two required value
 | `FRONTEND_URL` | No | `http://localhost` | CORS origin — set to your domain in production |
 | `MEILI_URL` | No | `http://meilisearch:7700` | Meilisearch URL |
 | `REMBG_URL` | No | `http://rembg:5000` | Background removal service |
+| `MAILGUN_API_KEY` | No | — | Mailgun API key — enables email verification when set |
+| `MAILGUN_DOMAIN` | No | — | Mailgun sending domain (e.g. `mg.yourdomain.com`) |
+| `MAILGUN_FROM` | No | `Cellarion <no-reply@{DOMAIN}>` | Sender address shown in verification emails |
+| `MAILGUN_API_URL` | No | `https://api.mailgun.net` | Use `https://api.eu.mailgun.net` for EU region |
+
+### Email verification
+
+When both `MAILGUN_API_KEY` and `MAILGUN_DOMAIN` are set, email verification is enabled:
+
+- New users receive a verification link after registering and cannot log in until they click it.
+- The link expires after **24 hours**. A resend option is available on the login page and the `/verify-email` page.
+- If Mailgun is not configured, registration issues a token immediately — the same behaviour as before.
+
+**Existing users:** After enabling verification on a running instance, existing accounts will have `emailVerified: false` and will be locked out. Run this once in the MongoDB shell to restore access:
+
+```js
+db.users.updateMany({ emailVerified: { $exists: false } }, { $set: { emailVerified: true } })
+```
 
 ---
 
