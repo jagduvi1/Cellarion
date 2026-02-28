@@ -44,7 +44,8 @@ async function seed() {
       username: 'admin',
       email: 'admin@cellarion.app',
       password: 'Admin1234!demo',
-      roles: ['admin']
+      roles: ['admin'],
+      emailVerified: true
     });
     console.log('  Created: admin@cellarion.app (admin)');
   } else {
@@ -57,7 +58,8 @@ async function seed() {
       username: 'demouser',
       email: 'user@cellarion.app',
       password: 'User1234!demo',
-      roles: ['user']
+      roles: ['user'],
+      emailVerified: true
     });
     console.log('  Created: user@cellarion.app (user)');
   } else {

@@ -58,11 +58,26 @@ const userSchema = new mongoose.Schema({
     type: String,
     default: null
   },
+  emailVerified: {
+    type: Boolean,
+    default: false
+  },
+  emailVerificationTokenHash: {
+    type: String,
+    default: null
+  },
+  emailVerificationExpiresAt: {
+    type: Date,
+    default: null
+  },
   createdAt: {
     type: Date,
     default: Date.now
   }
 });
+
+// Sparse index so verify-email lookup is efficient; sparse avoids bloat after verification
+userSchema.index({ emailVerificationTokenHash: 1 }, { sparse: true });
 
 // Hash password before saving
 userSchema.pre('save', async function(next) {
@@ -97,11 +112,29 @@ userSchema.methods.validateRefreshToken = function(token) {
   return crypto.timingSafeEqual(Buffer.from(hash), Buffer.from(this.refreshTokenHash));
 };
 
+// Generate a raw verification token, store its hash, set 24h expiry; returns raw token to email
+userSchema.methods.setEmailVerificationToken = function() {
+  const token = crypto.randomBytes(32).toString('hex');
+  this.emailVerificationTokenHash = crypto.createHash('sha256').update(token).digest('hex');
+  this.emailVerificationExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+  return token;
+};
+
+// Validate a candidate token against the stored hash and expiry
+userSchema.methods.validateEmailVerificationToken = function(candidateToken) {
+  if (!this.emailVerificationTokenHash || !this.emailVerificationExpiresAt) return false;
+  if (Date.now() > this.emailVerificationExpiresAt.getTime()) return false;
+  const hash = crypto.createHash('sha256').update(candidateToken).digest('hex');
+  return crypto.timingSafeEqual(Buffer.from(hash), Buffer.from(this.emailVerificationTokenHash));
+};
+
 // Remove sensitive fields from JSON responses
 userSchema.methods.toJSON = function() {
   const obj = this.toObject();
   delete obj.password;
   delete obj.refreshTokenHash;
+  delete obj.emailVerificationTokenHash;
+  delete obj.emailVerificationExpiresAt;
   return obj;
 };
 

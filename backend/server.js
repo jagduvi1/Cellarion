@@ -8,6 +8,10 @@ if (missingEnv.length > 0) {
   process.exit(1);
 }
 
+if (!process.env.MAILGUN_API_KEY || !process.env.MAILGUN_DOMAIN) {
+  console.warn('Warning: MAILGUN_API_KEY / MAILGUN_DOMAIN not set — email verification disabled.');
+}
+
 const fs = require('fs');
 const app = require('./src/app');
 const connectDB = require('./src/config/db');

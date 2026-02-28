@@ -22,6 +22,7 @@ import BottleDetail from './pages/BottleDetail';
 import SommMaturity from './pages/SommMaturity';
 import SommPrices from './pages/SommPrices';
 import Settings from './pages/Settings';
+import VerifyEmail from './pages/VerifyEmail';
 import './styles/common.css';
 
 function AppRoutes() {
@@ -37,8 +38,9 @@ function AppRoutes() {
 
   return (
     <Routes>
-      {/* Public route */}
+      {/* Public routes */}
       <Route path="/login" element={user ? <Navigate to="/cellars" replace /> : <Login />} />
+      <Route path="/verify-email" element={<VerifyEmail />} />
 
       {/* Protected routes wrapped in Layout */}
       <Route

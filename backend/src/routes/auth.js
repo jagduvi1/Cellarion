@@ -6,6 +6,7 @@ const User = require('../models/User');
 const { requireAuth } = require('../middleware/auth');
 const { logAudit } = require('../services/audit');
 const rateLimitsConfig = require('../config/rateLimits');
+const { sendVerificationEmail, EMAIL_VERIFICATION_ENABLED } = require('../services/mailgun');
 
 const router = express.Router();
 
@@ -18,6 +19,17 @@ const authLimiter = rateLimit({
   handler: (req, res) => {
     logAudit(req, 'system.rate_limit_exceeded', {}, { limiter: 'auth', limit: rateLimitsConfig.get().auth.max });
     res.status(429).json({ error: 'Too many attempts, please try again later' });
+  }
+});
+
+// Separate limiter for resend — 5 per 15 min to prevent email-bombing
+const resendLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: (req, res) => {
+    res.status(429).json({ error: 'Too many resend attempts, please try again later' });
   }
 });
 
@@ -79,7 +91,28 @@ router.post('/register', authLimiter, async (req, res) => {
       roles: ['user']
     });
 
-    // Issue tokens (saves refreshTokenHash to user doc inside)
+    if (EMAIL_VERIFICATION_ENABLED) {
+      // Generate verification token, save user, send email — no JWT issued yet
+      const verificationToken = user.setEmailVerificationToken();
+      await user.save();
+
+      sendVerificationEmail(user.email, user.username, verificationToken).catch(err => {
+        console.error('Failed to send verification email:', err.message);
+      });
+
+      logAudit(req, 'auth.register',
+        { type: 'user', id: user._id },
+        { username: user.username, email: user.email }
+      );
+
+      return res.status(202).json({
+        message: 'Registration successful. Please check your email to verify your account.',
+        email: user.email
+      });
+    }
+
+    // Verification disabled — issue tokens immediately (current behaviour)
+    user.emailVerified = true;
     const accessToken = await issueTokens(user, res);
 
     logAudit(req, 'auth.register',
@@ -132,6 +165,19 @@ router.post('/login', authLimiter, async (req, res) => {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
+    // Block login until email is verified (only when verification is enabled)
+    if (EMAIL_VERIFICATION_ENABLED && !user.emailVerified) {
+      logAudit(req, 'auth.login.unverified',
+        { type: 'user', id: user._id },
+        { username: user.username }
+      );
+      return res.status(403).json({
+        error: 'Please verify your email address before logging in.',
+        code: 'EMAIL_NOT_VERIFIED',
+        email: user.email
+      });
+    }
+
     const accessToken = await issueTokens(user, res);
 
     logAudit(req, 'auth.login.success',
@@ -149,6 +195,81 @@ router.post('/login', authLimiter, async (req, res) => {
   }
 });
 
+// GET /api/auth/verify-email?token=:token - Verify email address
+router.get('/verify-email', async (req, res) => {
+  const { token } = req.query;
+
+  if (!token) {
+    return res.status(400).json({ error: 'Verification token is required' });
+  }
+
+  try {
+    const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+    const user = await User.findOne({ emailVerificationTokenHash: tokenHash });
+
+    if (!user || !user.validateEmailVerificationToken(token)) {
+      return res.status(400).json({ error: 'Invalid or expired verification token' });
+    }
+
+    user.emailVerified = true;
+    user.emailVerificationTokenHash = null;
+    user.emailVerificationExpiresAt = null;
+
+    const accessToken = await issueTokens(user, res);
+
+    logAudit(req, 'auth.email_verified',
+      { type: 'user', id: user._id },
+      { username: user.username, email: user.email }
+    );
+
+    res.json({
+      message: 'Email verified successfully.',
+      token: accessToken,
+      user: user.toJSON()
+    });
+  } catch (error) {
+    console.error('Email verification error:', error);
+    res.status(500).json({ error: 'Email verification failed' });
+  }
+});
+
+// POST /api/auth/resend-verification - Resend verification email
+router.post('/resend-verification', resendLimiter, async (req, res) => {
+  const { email } = req.body;
+
+  if (!email) {
+    return res.status(400).json({ error: 'Email is required' });
+  }
+
+  // Always respond with the same message to prevent email enumeration
+  const genericResponse = { message: 'If that email exists and is unverified, a new link has been sent.' };
+
+  try {
+    const user = await User.findOne({ email: email.toLowerCase() });
+
+    if (!user || user.emailVerified || !EMAIL_VERIFICATION_ENABLED) {
+      return res.status(200).json(genericResponse);
+    }
+
+    const verificationToken = user.setEmailVerificationToken();
+    await user.save();
+
+    sendVerificationEmail(user.email, user.username, verificationToken).catch(err => {
+      console.error('Failed to resend verification email:', err.message);
+    });
+
+    logAudit(req, 'auth.verification_resent',
+      { type: 'user', id: user._id },
+      { email: user.email }
+    );
+
+    res.status(200).json(genericResponse);
+  } catch (error) {
+    console.error('Resend verification error:', error);
+    res.status(500).json({ error: 'Failed to resend verification email' });
+  }
+});
+
 // POST /api/auth/refresh - Issue new access token using httpOnly refresh token cookie
 router.post('/refresh', async (req, res) => {
   const incomingToken = req.cookies?.refreshToken;
@@ -160,7 +281,7 @@ router.post('/refresh', async (req, res) => {
     // Decode without verification to get the user ID, then validate hash in DB
     // (Refresh tokens are opaque random bytes — not JWTs — so just look up by hash)
     // We find the user whose stored hash matches this token
-    const tokenHash = require('crypto').createHash('sha256').update(incomingToken).digest('hex');
+    const tokenHash = crypto.createHash('sha256').update(incomingToken).digest('hex');
     const user = await User.findOne({ refreshTokenHash: tokenHash });
 
     if (!user) {

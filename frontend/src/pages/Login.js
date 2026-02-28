@@ -9,12 +9,19 @@ function Login() {
   const [formData, setFormData] = useState({ username: '', email: '', password: '' });
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [registered, setRegistered] = useState(false);
+  const [registeredEmail, setRegisteredEmail] = useState('');
+  const [pendingVerificationEmail, setPendingVerificationEmail] = useState(null);
+  const [resendStatus, setResendStatus] = useState(null); // null | 'sending' | 'sent' | 'error'
+
   const { login, register } = useAuth();
   const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError(null);
+    setPendingVerificationEmail(null);
+    setResendStatus(null);
     setLoading(true);
 
     let result;
@@ -25,12 +32,75 @@ function Login() {
     }
 
     setLoading(false);
+
     if (result.success) {
-      navigate('/cellars');
+      if (result.requiresVerification) {
+        setRegisteredEmail(result.email);
+        setRegistered(true);
+      } else {
+        navigate('/cellars');
+      }
     } else {
+      if (result.code === 'EMAIL_NOT_VERIFIED') {
+        setPendingVerificationEmail(result.email);
+      }
       setError(result.error);
     }
   };
+
+  const handleResend = async () => {
+    if (!pendingVerificationEmail) return;
+    setResendStatus('sending');
+    try {
+      const res = await fetch('/api/auth/resend-verification', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: pendingVerificationEmail })
+      });
+      setResendStatus(res.ok ? 'sent' : 'error');
+    } catch {
+      setResendStatus('error');
+    }
+  };
+
+  const switchMode = (newMode) => {
+    setMode(newMode);
+    setError(null);
+    setPendingVerificationEmail(null);
+    setResendStatus(null);
+  };
+
+  if (registered) {
+    return (
+      <div className="login-page">
+        <div className="login-card">
+          <div className="login-header">
+            <CellarionLogo size={90} color="#7B9E88" showText />
+          </div>
+          <div className="alert alert-success">
+            <strong>Check your email!</strong>
+            <br />
+            We sent a verification link to <strong>{registeredEmail}</strong>.
+            Click the link in that email to activate your account.
+          </div>
+          <p style={{ color: '#9A9484', fontSize: '0.9rem', textAlign: 'center', marginTop: '1rem' }}>
+            Didn&apos;t receive it?{' '}
+            <button
+              className="btn btn-secondary btn-small"
+              style={{ display: 'inline', padding: '4px 12px', fontSize: '0.85rem' }}
+              onClick={() => {
+                setPendingVerificationEmail(registeredEmail);
+                setRegistered(false);
+                setMode('login');
+              }}
+            >
+              Resend verification email
+            </button>
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="login-page">
@@ -43,19 +113,39 @@ function Login() {
         <div className="mode-toggle">
           <button
             className={mode === 'login' ? 'active' : ''}
-            onClick={() => { setMode('login'); setError(null); }}
+            onClick={() => switchMode('login')}
           >
             Login
           </button>
           <button
             className={mode === 'register' ? 'active' : ''}
-            onClick={() => { setMode('register'); setError(null); }}
+            onClick={() => switchMode('register')}
           >
             Register
           </button>
         </div>
 
         {error && <div className="alert alert-error">{error}</div>}
+
+        {pendingVerificationEmail && (
+          <div style={{ marginBottom: '1rem', textAlign: 'center' }}>
+            {resendStatus === 'sent' && (
+              <div className="alert alert-success">Verification email resent. Check your inbox.</div>
+            )}
+            {resendStatus === 'error' && (
+              <div className="alert alert-error">Failed to resend. Please try again.</div>
+            )}
+            {resendStatus !== 'sent' && (
+              <button
+                className="btn btn-secondary btn-small"
+                onClick={handleResend}
+                disabled={resendStatus === 'sending'}
+              >
+                {resendStatus === 'sending' ? 'Sending...' : 'Resend verification email'}
+              </button>
+            )}
+          </div>
+        )}
 
         <form onSubmit={handleSubmit}>
           <div className="form-group">

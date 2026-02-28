@@ -176,12 +176,18 @@ export const AuthProvider = ({ children }) => {
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'Registration failed');
 
-      storeToken(data.token);
-      setUser(data.user);
-      if (data.user?.preferences?.language) {
-        i18n.changeLanguage(data.user.preferences.language);
+      if (data.token) {
+        // Verification disabled — logged in immediately
+        storeToken(data.token);
+        setUser(data.user);
+        if (data.user?.preferences?.language) {
+          i18n.changeLanguage(data.user.preferences.language);
+        }
+        return { success: true };
       }
-      return { success: true };
+
+      // Verification enabled — user must confirm email before logging in
+      return { success: true, email: data.email, requiresVerification: true };
     } catch (error) {
       return { success: false, error: error.message };
     }
@@ -197,7 +203,31 @@ export const AuthProvider = ({ children }) => {
       });
 
       const data = await response.json();
-      if (!response.ok) throw new Error(data.error || 'Login failed');
+      if (!response.ok) {
+        const err = new Error(data.error || 'Login failed');
+        err.code = data.code;
+        err.email = data.email;
+        throw err;
+      }
+
+      storeToken(data.token);
+      setUser(data.user);
+      if (data.user?.preferences?.language) {
+        i18n.changeLanguage(data.user.preferences.language);
+      }
+      return { success: true };
+    } catch (error) {
+      return { success: false, error: error.message, code: error.code, email: error.email };
+    }
+  };
+
+  const verifyEmail = async (token) => {
+    try {
+      const response = await fetch(`/api/auth/verify-email?token=${encodeURIComponent(token)}`, {
+        credentials: 'include'
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Verification failed');
 
       storeToken(data.token);
       setUser(data.user);
@@ -237,6 +267,7 @@ export const AuthProvider = ({ children }) => {
     register,
     login,
     logout,
+    verifyEmail,
     updatePreferences,
     apiFetch
   };
