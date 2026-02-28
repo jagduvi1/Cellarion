@@ -34,7 +34,7 @@ function CellarRacks() {
 
   useEffect(() => {
     fetchAll();
-  }, [id, token]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // When racks load and a highlight param is set, find and select that slot
   useEffect(() => {
