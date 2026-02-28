@@ -2,8 +2,6 @@ services:
   mongo:
     image: mongo:7
     container_name: cellarion-mongo
-    ports:
-      - "27017:27017"
     volumes:
       - mongo-data:/data/db
     healthcheck:
@@ -15,11 +13,9 @@ services:
   meilisearch:
     image: getmeili/meilisearch:v1.6
     container_name: cellarion-meilisearch
-    ports:
-      - "7700:7700"
     environment:
       - MEILI_MASTER_KEY=${MEILI_MASTER_KEY}
-      - MEILI_ENV=development
+      - MEILI_ENV=production
     volumes:
       - meili-data:/meili_data
     healthcheck:
@@ -31,20 +27,16 @@ services:
   backend:
     build: ./backend
     container_name: cellarion-backend
-    ports:
-      - "5000:5000"
     environment:
       - MONGO_URI=mongodb://mongo:27017/winecellar
       - JWT_SECRET=${JWT_SECRET}
       - JWT_EXPIRES_IN=7d
       - PORT=5000
-      - FRONTEND_URL=http://localhost:3000
+      - FRONTEND_URL=${FRONTEND_URL:-http://localhost}
       - MEILI_URL=http://meilisearch:7700
       - MEILI_MASTER_KEY=${MEILI_MASTER_KEY}
       - REMBG_URL=http://rembg:5000
     volumes:
-      - ./backend:/app
-      - /app/node_modules
       - image-data:/app/uploads
     depends_on:
       mongo:
@@ -60,8 +52,6 @@ services:
   rembg:
     build: ./rembg
     container_name: cellarion-rembg
-    ports:
-      - "5001:5000"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
       interval: 30s
@@ -77,17 +67,10 @@ services:
     build: ./frontend
     container_name: cellarion-frontend
     ports:
-      - "3000:3000"
-    environment:
-      - REACT_APP_API_URL=http://localhost:5000
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules
+      - "80:80"
     depends_on:
       backend:
         condition: service_healthy
-    stdin_open: true
-    tty: true
 
 volumes:
   mongo-data:
