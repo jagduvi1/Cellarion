@@ -36,6 +36,10 @@ services:
       - MEILI_URL=http://meilisearch:7700
       - MEILI_MASTER_KEY=${MEILI_MASTER_KEY}
       - REMBG_URL=http://rembg:5000
+      - MAILGUN_API_KEY=${MAILGUN_API_KEY:-}
+      - MAILGUN_DOMAIN=${MAILGUN_DOMAIN:-}
+      - MAILGUN_FROM=${MAILGUN_FROM:-}
+      - MAILGUN_API_URL=${MAILGUN_API_URL:-}
     volumes:
       - image-data:/app/uploads
     depends_on:
