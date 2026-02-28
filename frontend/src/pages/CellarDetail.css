@@ -45,6 +45,15 @@
   flex-shrink: 0;
 }
 
+/* On mobile the global rule stretches .btn inside .header-actions to flex:1.
+   Override that here so the icon buttons stay compact, not wide blocks. */
+@media (max-width: 768px) {
+  .page-header .header-actions .btn {
+    flex: none;
+    min-width: unset;
+  }
+}
+
 /* Hide the text label on small screens, keep icons */
 @media (max-width: 500px) {
   .btn-label { display: none; }
@@ -426,26 +435,25 @@
 @media (max-width: 768px) {
   .filters-bar,
   .filters-bar-5 {
-    display: flex;
-    flex-direction: row;
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
     gap: 0.5rem;
-    padding-bottom: 0.5rem;
-    grid-template-columns: unset;
+    overflow: visible;
+    padding-bottom: 0;
+  }
+
+  /* Search input spans the full two-column width */
+  .filters-bar .search-input,
+  .filters-bar-5 .search-input {
+    grid-column: 1 / -1;
   }
 
   .search-input,
   .filter-input,
   .filter-select {
-    flex-shrink: 0;
-    min-width: 140px;
-    max-width: 200px;
-  }
-
-  .search-input {
-    min-width: 180px;
+    min-width: unset;
+    max-width: unset;
+    width: 100%;
   }
 
   .statistics-grid {

@@ -70,6 +70,26 @@ function Login() {
     setResendStatus(null);
   };
 
+  const footer = (
+    <footer className="login-footer">
+      <p>
+        Cellarion is{' '}
+        <a href="https://github.com/jagduvi1/Cellarion" target="_blank" rel="noopener noreferrer">
+          open source
+        </a>
+        . Have an idea or found a bug?{' '}
+        <a href="https://github.com/jagduvi1/Cellarion/issues" target="_blank" rel="noopener noreferrer">
+          Open an issue on GitHub
+        </a>
+        .
+      </p>
+      <p>
+        Need help with your account?{' '}
+        <a href="mailto:support@cellarion.app">Contact support</a>.
+      </p>
+    </footer>
+  );
+
   if (registered) {
     return (
       <div className="login-page">
@@ -98,6 +118,7 @@ function Login() {
             </button>
           </p>
         </div>
+        {footer}
       </div>
     );
   }
@@ -183,6 +204,7 @@ function Login() {
           </button>
         </form>
       </div>
+      {footer}
     </div>
   );
 }

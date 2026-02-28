@@ -13,6 +13,8 @@ body {
   color: #E8DFD0;
   /* Remove 300ms tap delay on mobile */
   touch-action: manipulation;
+  /* Prevent stray elements from creating a page-wide horizontal scrollbar */
+  overflow-x: hidden;
 }
 
 h1 {
@@ -183,6 +185,12 @@ a {
     min-width: 100px;
     text-align: center;
     white-space: nowrap;
+  }
+
+  /* Overflow menu trigger should never grow — keep it compact */
+  .page-header .header-actions .btn-more {
+    flex: none;
+    min-width: unset;
   }
 
   .grid-2 {

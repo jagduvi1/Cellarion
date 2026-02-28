@@ -2,9 +2,11 @@
   min-height: 100vh;
   background: linear-gradient(160deg, #0a0a0a 0%, #0f1a12 60%, #141e17 100%);
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
   padding: 2rem;
+  gap: 1.5rem;
 }
 
 .login-card {
@@ -92,4 +94,37 @@
 .login-card .form-group input:focus {
   border-color: #7B9E88;
   background: #2a2a2a;
+}
+
+/* ── Open-source footer ── */
+.login-footer {
+  text-align: center;
+  color: #5a5550;
+  font-size: 0.8rem;
+  line-height: 1.7;
+  max-width: 380px;
+}
+
+.login-footer p {
+  margin: 0.2rem 0;
+}
+
+.login-footer a {
+  color: #7B9E88;
+  text-decoration: none;
+}
+
+.login-footer a:hover {
+  text-decoration: underline;
+}
+
+@media (max-width: 480px) {
+  .login-page {
+    padding: 1rem;
+    gap: 1.25rem;
+  }
+
+  .login-card {
+    padding: 1.5rem 1.25rem;
+  }
 }

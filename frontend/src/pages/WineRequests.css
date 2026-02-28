@@ -54,3 +54,14 @@
   border-top: 1px solid #2a2a2a;
   color: #9A9484;
 }
+
+@media (max-width: 600px) {
+  .request-card {
+    padding: 1rem;
+  }
+
+  .request-header {
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+}
