@@ -4,11 +4,13 @@ A self-hosted wine cellar management app built with the MERN stack. Track your b
 
 ## Hosted Version
 
-Cellarion is also available as a publicly hosted service at:
+A demo of Cellarion is publicly available at:
 
-👉 https://cellarion.app
+👉 https://demo.cellarion.app
 
-The hosted version runs the same open-source codebase as this repository, maintained by the project author. Anyone can create an account and use Cellarion without self-hosting.
+> **Note:** This is a demo instance running the latest open-source codebase. The full hosted service will launch at **https://cellarion.app** — stay tuned.
+
+Anyone can create an account on the demo site and try out the full feature set.
 
 ## Stack
 
@@ -17,6 +19,7 @@ The hosted version runs the same open-source codebase as this repository, mainta
 - **React 19** — Frontend
 - **Node.js 20** — Runtime
 - **Meilisearch** — Fuzzy search
+- **nginx** — Reverse proxy / static file server
 - **Docker Compose** — Containerization
 
 ## Quick Start
@@ -35,11 +38,12 @@ cp .env.example .env
 docker-compose up --build
 ```
 
+The app is served by nginx on port 80:
+
 | URL | Description |
 |-----|-------------|
-| http://localhost:3000 | Frontend (React) |
-| http://localhost:5000/api/health | Backend health check |
-| http://localhost:7700 | Meilisearch (search engine) |
+| http://localhost | Frontend (React SPA) |
+| http://localhost/api/health | Backend health check |
 
 ### Seed demo data
 
@@ -121,20 +125,23 @@ Cellarion/
 │   │   ├── contexts/AuthContext.js
 │   │   ├── pages/                # All app screens
 │   │   └── styles/common.css
-│   └── Dockerfile
+│   ├── nginx.conf                # nginx config (SPA + /api/ proxy)
+│   └── Dockerfile                # Multi-stage: Node build → nginx:alpine
 ├── rembg/                        # Python background-removal service
 └── docker-compose.yml
 ```
 
 ### Services
 
-| Service      | Port  | Description                     |
-|--------------|-------|---------------------------------|
-| MongoDB      | 27017 | Internal only                   |
-| Meilisearch  | 7700  | Fuzzy search engine             |
-| Backend      | 5000  | Express REST API                |
-| Frontend     | 3000  | React dev server                |
-| rembg        | 5001  | Background removal (optional)   |
+All traffic enters through nginx on port 80. Internal services are not exposed on the host.
+
+| Service      | Host port | Description                        |
+|--------------|-----------|------------------------------------|
+| nginx        | **80**    | Serves React SPA + proxies `/api/` |
+| Backend      | internal  | Express REST API (port 5000)       |
+| MongoDB      | internal  | Database (port 27017)              |
+| Meilisearch  | internal  | Fuzzy search engine (port 7700)    |
+| rembg        | internal  | Background removal (port 5000)     |
 
 ---
 
@@ -212,7 +219,7 @@ Copy `.env.example` to `.env` in the project root and set the two required value
 | `MONGO_URI` | No | `mongodb://mongo:27017/winecellar` | MongoDB connection |
 | `JWT_EXPIRES_IN` | No | `7d` | Token TTL |
 | `PORT` | No | `5000` | Backend port |
-| `FRONTEND_URL` | No | `http://localhost:3000` | CORS origin |
+| `FRONTEND_URL` | No | `http://localhost` | CORS origin — set to your domain in production |
 | `MEILI_URL` | No | `http://meilisearch:7700` | Meilisearch URL |
 | `REMBG_URL` | No | `http://rembg:5000` | Background removal service |
 
