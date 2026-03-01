@@ -23,7 +23,7 @@ function AddBottle() {
     vintage: '',
     price: '',
     currency: user?.preferences?.currency || 'USD',
-    bottleSize: '750ml',
+    bottleSize: '750ml (Standard)',
     purchaseDate: '',
     purchaseLocation: '',
     purchaseUrl: '',

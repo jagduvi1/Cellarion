@@ -12,6 +12,8 @@ function WineRequests() {
   const [showForm, setShowForm] = useState(false);
   const [formData, setFormData] = useState({ wineName: '', sourceUrl: '', image: '' });
   const [imageFile, setImageFile] = useState(null);
+  const [imageBgRemoved, setImageBgRemoved] = useState(null);
+  const [processingBg, setProcessingBg] = useState(false);
 
   useEffect(() => {
     fetchRequests();
@@ -31,6 +33,8 @@ function WineRequests() {
 
   const clearImage = () => {
     setImageFile(null);
+    setImageBgRemoved(null);
+    setProcessingBg(false);
   };
 
   const compressImage = (file) => {
@@ -56,12 +60,33 @@ function WineRequests() {
     });
   };
 
+  const removeBgPreview = async (file) => {
+    setProcessingBg(true);
+    setImageBgRemoved(null);
+    try {
+      const compressed = await compressImage(file);
+      const res = await apiFetch('/api/images/remove-bg-preview', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image: compressed })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setImageBgRemoved(data.processedImage);
+      }
+    } catch (err) {
+      console.error('BG removal preview failed:', err);
+    } finally {
+      setProcessingBg(false);
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
       let imageValue = formData.image || null;
       if (imageFile) {
-        imageValue = await compressImage(imageFile);
+        imageValue = imageBgRemoved || await compressImage(imageFile);
       }
       const res = await apiFetch('/api/wine-requests', {
         method: 'POST',
@@ -73,6 +98,8 @@ function WineRequests() {
         clearImage();
         setShowForm(false);
         fetchRequests();
+      } else {
+        alert('Failed to submit request');
       }
     } catch (err) {
       alert('Failed to submit request');
@@ -127,8 +154,11 @@ function WineRequests() {
                 onCapture={(file) => {
                   setImageFile(file);
                   setFormData(prev => ({ ...prev, image: '' }));
+                  removeBgPreview(file);
                 }}
                 onRemove={clearImage}
+                processedUrl={imageBgRemoved}
+                processing={processingBg}
               />
               {!imageFile && (
                 <div className="image-input-row" style={{ marginTop: '0.5rem' }}>

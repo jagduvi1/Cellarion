@@ -157,6 +157,43 @@ router.get('/:id', requireAuth, async (req, res) => {
   }
 });
 
+// POST /api/images/remove-bg-preview - Remove background from a base64 image (no DB storage)
+router.post('/remove-bg-preview', requireAuth, async (req, res) => {
+  try {
+    const { image } = req.body;
+    if (!image || typeof image !== 'string') {
+      return res.status(400).json({ error: 'image (base64 data URL) is required' });
+    }
+
+    // Strip data URL prefix and decode
+    const base64Data = image.replace(/^data:image\/\w+;base64,/, '');
+    const buffer = Buffer.from(base64Data, 'base64');
+
+    const REMBG_URL = process.env.REMBG_URL || 'http://rembg:5000';
+    const formData = new FormData();
+    const blob = new Blob([buffer], { type: 'image/jpeg' });
+    formData.append('image', blob, 'input.jpg');
+
+    const response = await fetch(`${REMBG_URL}/remove-bg`, {
+      method: 'POST',
+      body: formData,
+      signal: AbortSignal.timeout(120000)
+    });
+
+    if (!response.ok) {
+      return res.status(502).json({ error: 'Background removal service failed' });
+    }
+
+    const resultBuffer = Buffer.from(await response.arrayBuffer());
+    const processedBase64 = `data:image/png;base64,${resultBuffer.toString('base64')}`;
+
+    res.json({ processedImage: processedBase64 });
+  } catch (error) {
+    console.error('BG preview removal error:', error.message);
+    res.status(500).json({ error: 'Failed to remove background' });
+  }
+});
+
 // POST /api/images/link-to-bottle - Link uploaded images to a bottle after creation
 router.post('/link-to-bottle', requireAuth, async (req, res) => {
   try {

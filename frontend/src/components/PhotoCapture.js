@@ -7,7 +7,7 @@ import './ImageUpload.css'; // reuse camera + button styles
  * Manages its own preview state internally so no URL string
  * ever flows in from outside (avoids js/xss-through-dom taint path).
  */
-function PhotoCapture({ onCapture, onRemove }) {
+function PhotoCapture({ onCapture, onRemove, processedUrl, processing }) {
   const [capturedFile, setCapturedFile] = useState(null);
   const [capturedUrl, setCapturedUrl] = useState('');
   const [cameraOpen, setCameraOpen] = useState(false);
@@ -144,7 +144,17 @@ function PhotoCapture({ onCapture, onRemove }) {
 
       {capturedFile ? (
         <div className="upload-preview-wrapper">
-          {capturedUrl && <img src={capturedUrl} alt="Preview" className="upload-preview" />}
+          {processedUrl ? (
+            <img src={processedUrl} alt="Preview" className="upload-preview" />
+          ) : (
+            capturedUrl && <img src={capturedUrl} alt="Preview" className={`upload-preview${processing ? ' preview-img-dimmed' : ''}`} />
+          )}
+          {processing && (
+            <div className="preview-overlay">
+              <div className="spinner"></div>
+              <span>Removing background…</span>
+            </div>
+          )}
           <button type="button" className="btn-remove-image" onClick={handleRemove} aria-label="Remove image">×</button>
         </div>
       ) : (
