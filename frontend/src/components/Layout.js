@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import { PLANS } from '../config/plans';
 import CellarionLogo from './CellarionLogo';
+import NotificationBell from './NotificationBell';
 import './Layout.css';
 
 function Layout({ children }) {
@@ -161,6 +162,7 @@ function Layout({ children }) {
                 <span className={`badge badge--plan badge--plan-${user.plan || 'free'}`}>{planLabel}</span>
               </span>
               <div className="navbar-user-actions">
+                <NotificationBell />
                 <Link to="/settings" className={`btn-settings ${isActive('/settings') ? 'active' : ''}`} onClick={closeMenu}>
                   {t('nav.settings')}
                 </Link>

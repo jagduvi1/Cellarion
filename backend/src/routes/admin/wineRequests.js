@@ -5,6 +5,7 @@ const WineDefinition = require('../../models/WineDefinition');
 const { generateWineKey } = require('../../utils/normalize');
 const searchService = require('../../services/search');
 const { logAudit } = require('../../services/audit');
+const { createNotification } = require('../../services/notifications');
 
 const router = express.Router();
 
@@ -123,6 +124,15 @@ router.put('/:id/resolve', async (req, res) => {
     wineRequest.adminNotes = adminNotes?.trim() || '';
 
     await wineRequest.save();
+
+    createNotification(
+      wineRequest.user,
+      'wine_request_resolved',
+      'Wine request approved',
+      `Your request for "${wineRequest.wineName}" has been approved. It was added to the registry as "${linkedWine.name}" by ${linkedWine.producer}.`,
+      '/wine-requests'
+    );
+
     await wineRequest.populate([
       { path: 'user', select: 'username email' },
       {
@@ -173,6 +183,15 @@ router.put('/:id/reject', async (req, res) => {
     wineRequest.adminNotes = adminNotes.trim();
 
     await wineRequest.save();
+
+    createNotification(
+      wineRequest.user,
+      'wine_request_rejected',
+      'Wine request declined',
+      `Your request for "${wineRequest.wineName}" was declined. Reason: ${adminNotes.trim()}`,
+      '/wine-requests'
+    );
+
     await wineRequest.populate([
       { path: 'user', select: 'username email' },
       { path: 'resolvedBy', select: 'username' }

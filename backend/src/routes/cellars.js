@@ -8,6 +8,7 @@ const AuditLog = require('../models/AuditLog');
 const BottleImage = require('../models/BottleImage');
 const { getCellarRole } = require('../utils/cellarAccess');
 const { logAudit } = require('../services/audit');
+const { createNotification } = require('../services/notifications');
 const { getPlanConfig } = require('../config/plans');
 
 const router = express.Router();
@@ -548,6 +549,15 @@ router.post('/:id/members', async (req, res) => {
 
     cellar.members.push({ user: userToAdd._id, role });
     await cellar.save();
+
+    const sharingUser = await User.findById(req.user.id).select('username').lean();
+    createNotification(
+      userToAdd._id,
+      'cellar_shared',
+      'Cellar shared with you',
+      `${sharingUser?.username ?? 'Someone'} shared their cellar "${cellar.name}" with you (${role}).`,
+      '/cellars'
+    );
 
     logAudit(req, 'cellar.share.add',
       { type: 'cellar', id: cellar._id, cellarId: cellar._id },

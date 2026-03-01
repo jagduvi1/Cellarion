@@ -22,6 +22,7 @@ const racksRoute = require('./routes/racks');
 const imagesRoute = require('./routes/images');
 const sommMaturityRoute = require('./routes/somm/maturity');
 const sommPricesRoute  = require('./routes/somm/prices');
+const notificationsRoute = require('./routes/notifications');
 const rateLimitsConfig = require('./config/rateLimits');
 const { logAudit } = require('./services/audit');
 
@@ -112,6 +113,7 @@ app.use('/api/racks', racksRoute);
 app.use('/api/images', imagesRoute);
 app.use('/api/somm/maturity', sommMaturityRoute);
 app.use('/api/somm/prices',  sommPricesRoute);
+app.use('/api/notifications', notificationsRoute);
 
 // 404 handler
 app.use((req, res) => {

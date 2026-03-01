@@ -5,6 +5,7 @@ const WineDefinition = require('../../models/WineDefinition');
 const searchService = require('../../services/search');
 const { reprocessAllImages } = require('../../services/imageProcessor');
 const { logAudit } = require('../../services/audit');
+const { createNotification } = require('../../services/notifications');
 
 const router = express.Router();
 
@@ -62,9 +63,10 @@ router.put('/:id/approve', async (req, res) => {
 
     // Auto-assign as wine image if the wine doesn't already have one
     const wineDefId = image.wineDefinition;
+    let approvedWine = null;
     if (wineDefId) {
-      const wine = await WineDefinition.findById(wineDefId);
-      if (wine && !wine.image) {
+      approvedWine = await WineDefinition.findById(wineDefId);
+      if (approvedWine && !approvedWine.image) {
         await BottleImage.updateMany(
           { wineDefinition: wineDefId, assignedToWine: true },
           { assignedToWine: false }
@@ -77,6 +79,17 @@ router.put('/:id/approve', async (req, res) => {
         searchService.indexWine(wineDefId);
       }
     }
+
+    const wineLabel = approvedWine
+      ? `"${approvedWine.name}" by ${approvedWine.producer}`
+      : 'a wine';
+    createNotification(
+      image.uploadedBy,
+      'image_approved',
+      'Image approved',
+      `Your image for ${wineLabel} has been approved.`,
+      null
+    );
 
     await image.populate([
       { path: 'uploadedBy', select: 'username' },
@@ -108,6 +121,20 @@ router.put('/:id/reject', async (req, res) => {
     image.reviewedBy = req.user.id;
     image.reviewedAt = new Date();
     await image.save();
+
+    const rejectedWine = image.wineDefinition
+      ? await WineDefinition.findById(image.wineDefinition).select('name producer').lean()
+      : null;
+    const rejectedWineLabel = rejectedWine
+      ? `"${rejectedWine.name}" by ${rejectedWine.producer}`
+      : 'a wine';
+    createNotification(
+      image.uploadedBy,
+      'image_rejected',
+      'Image rejected',
+      `Your image for ${rejectedWineLabel} was rejected by an admin.`,
+      null
+    );
 
     await image.populate([
       { path: 'uploadedBy', select: 'username' },
