@@ -8,6 +8,7 @@ const AuditLog = require('../models/AuditLog');
 const BottleImage = require('../models/BottleImage');
 const { getCellarRole } = require('../utils/cellarAccess');
 const { logAudit } = require('../services/audit');
+const { getSnapshotsForDates, getOrCreateDailySnapshot } = require('../utils/exchangeRates');
 const { createNotification } = require('../services/notifications');
 const { getPlanConfig } = require('../config/plans');
 
@@ -110,14 +111,42 @@ router.get('/:id/statistics', async (req, res) => {
       populate: ['country', 'region', 'grapes']
     });
 
+    // Batch-load historical rate snapshots for all priceSetAt dates (one DB query)
+    const targetCurrency = req.query.currency || null;
+    let snapshotMap = new Map();
+    let todaySnapshot = null;
+    if (targetCurrency) {
+      const priceDates = [...new Set(
+        bottles
+          .filter(b => b.price && b.priceSetAt)
+          .map(b => b.priceSetAt.toISOString().slice(0, 10))
+      )];
+      if (priceDates.length > 0) {
+        snapshotMap = await getSnapshotsForDates(priceDates);
+      }
+      // Fetch today's snapshot as fallback for bottles without priceSetAt
+      todaySnapshot = await getOrCreateDailySnapshot();
+    }
+
+    // Helper: convert amount from one currency to another using USD-based rates.
+    // Returns null if conversion is not possible.
+    function convertWithRates(amount, from, to, rates) {
+      if (!rates || !from || !to || from === to) return null;
+      const fromRate = rates[from];
+      const toRate = rates[to];
+      if (!fromRate || !toRate) return null;
+      return (amount / fromRate) * toRate;
+    }
+
     // Calculate statistics
     const stats = {
       totalBottles: bottles.length,
       uniqueWines: new Set(bottles.map(b => b.wineDefinition?._id.toString())).size,
       totalValue: 0,
       averagePrice: 0,
-      valuesByCurrency: {},
-      priceCount: 0,
+      convertedTotal: 0,
+      convertedAverage: 0,
+      convertedCurrency: targetCurrency,
       byCountry: {},
       byType: {},
       byVintage: {},
@@ -128,6 +157,8 @@ router.get('/:id/statistics', async (req, res) => {
 
     let priceCount = 0;
     let priceSum = 0;
+    let convertedSum = 0;
+    let convertedCount = 0;
     let oldestYear = Infinity;
     let newestYear = -Infinity;
 
@@ -136,9 +167,29 @@ router.get('/:id/statistics', async (req, res) => {
       if (bottle.price) {
         const currency = bottle.currency || 'USD';
         stats.totalValue += bottle.price;
-        stats.valuesByCurrency[currency] = (stats.valuesByCurrency[currency] || 0) + bottle.price;
         priceSum += bottle.price;
         priceCount++;
+
+        // Currency-converted total: bottles already in the target currency are
+        // used as-is; others are converted using the historical rate from the
+        // day the price was entered, falling back to today's rates.
+        if (targetCurrency) {
+          if (currency === targetCurrency) {
+            convertedSum += bottle.price;
+            convertedCount++;
+          } else {
+            const dateKey = bottle.priceSetAt
+              ? bottle.priceSetAt.toISOString().slice(0, 10)
+              : null;
+            const rates = (dateKey && snapshotMap.get(dateKey))
+              || (todaySnapshot ? todaySnapshot.rates : null);
+            const converted = convertWithRates(bottle.price, currency, targetCurrency, rates);
+            if (converted !== null) {
+              convertedSum += converted;
+              convertedCount++;
+            }
+          }
+        }
       }
 
       // By country
@@ -170,7 +221,8 @@ router.get('/:id/statistics', async (req, res) => {
     });
 
     stats.averagePrice = priceCount > 0 ? priceSum / priceCount : 0;
-    stats.priceCount = priceCount;
+    stats.convertedTotal = convertedSum;
+    stats.convertedAverage = convertedCount > 0 ? convertedSum / convertedCount : 0;
     stats.oldestVintage = oldestYear !== Infinity ? oldestYear : null;
     stats.newestVintage = newestYear !== -Infinity ? newestYear : null;
 
@@ -191,6 +243,8 @@ router.get('/:id/statistics', async (req, res) => {
     // Round values
     stats.totalValue = Math.round(stats.totalValue * 100) / 100;
     stats.averagePrice = Math.round(stats.averagePrice * 100) / 100;
+    stats.convertedTotal = Math.round(stats.convertedTotal * 100) / 100;
+    stats.convertedAverage = Math.round(stats.convertedAverage * 100) / 100;
 
     res.json({ statistics: stats });
   } catch (error) {
