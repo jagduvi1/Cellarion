@@ -70,6 +70,14 @@ const userSchema = new mongoose.Schema({
     type: Date,
     default: null
   },
+  passwordResetTokenHash: {
+    type: String,
+    default: null
+  },
+  passwordResetExpiresAt: {
+    type: Date,
+    default: null
+  },
   createdAt: {
     type: Date,
     default: Date.now
@@ -78,6 +86,7 @@ const userSchema = new mongoose.Schema({
 
 // Sparse index so verify-email lookup is efficient; sparse avoids bloat after verification
 userSchema.index({ emailVerificationTokenHash: 1 }, { sparse: true });
+userSchema.index({ passwordResetTokenHash: 1 }, { sparse: true });
 
 // Hash password before saving
 userSchema.pre('save', async function(next) {
@@ -128,6 +137,22 @@ userSchema.methods.validateEmailVerificationToken = function(candidateToken) {
   return crypto.timingSafeEqual(Buffer.from(hash), Buffer.from(this.emailVerificationTokenHash));
 };
 
+// Generate a raw password-reset token, store its hash, set 1h expiry; returns raw token to email
+userSchema.methods.setPasswordResetToken = function() {
+  const token = crypto.randomBytes(32).toString('hex');
+  this.passwordResetTokenHash = crypto.createHash('sha256').update(token).digest('hex');
+  this.passwordResetExpiresAt = new Date(Date.now() + 60 * 60 * 1000);
+  return token;
+};
+
+// Validate a password-reset token against the stored hash and expiry
+userSchema.methods.validatePasswordResetToken = function(candidateToken) {
+  if (!this.passwordResetTokenHash || !this.passwordResetExpiresAt) return false;
+  if (Date.now() > this.passwordResetExpiresAt.getTime()) return false;
+  const hash = crypto.createHash('sha256').update(candidateToken).digest('hex');
+  return crypto.timingSafeEqual(Buffer.from(hash), Buffer.from(this.passwordResetTokenHash));
+};
+
 // Remove sensitive fields from JSON responses
 userSchema.methods.toJSON = function() {
   const obj = this.toObject();
@@ -135,6 +160,8 @@ userSchema.methods.toJSON = function() {
   delete obj.refreshTokenHash;
   delete obj.emailVerificationTokenHash;
   delete obj.emailVerificationExpiresAt;
+  delete obj.passwordResetTokenHash;
+  delete obj.passwordResetExpiresAt;
   return obj;
 };
 

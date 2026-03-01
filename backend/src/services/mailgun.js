@@ -64,4 +64,53 @@ async function sendVerificationEmail(toEmail, username, token) {
   });
 }
 
-module.exports = { sendVerificationEmail, EMAIL_VERIFICATION_ENABLED };
+/**
+ * Send a password-reset link to a user.
+ * @param {string} toEmail  - Recipient email address
+ * @param {string} username - Username for greeting
+ * @param {string} token    - Raw (unhashed) reset token
+ */
+async function sendPasswordResetEmail(toEmail, username, token) {
+  const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+  const link = `${frontendUrl}/reset-password?token=${encodeURIComponent(token)}`;
+
+  await mg.messages.create(DOMAIN, {
+    from: FROM,
+    to: [toEmail],
+    subject: 'Reset your Cellarion password',
+    text: [
+      `Hello ${username},`,
+      '',
+      'We received a request to reset the password for your Cellarion account.',
+      'Click the link below to set a new password. This link expires in 1 hour.',
+      '',
+      link,
+      '',
+      'If you did not request a password reset, you can safely ignore this email.'
+    ].join('\n'),
+    html: `
+      <div style="font-family:sans-serif;max-width:480px;margin:0 auto;color:#2a2a2a;">
+        <p>Hello <strong>${username}</strong>,</p>
+        <p>We received a request to reset the password for your Cellarion account.
+           Click the button below to set a new password.
+           This link expires in <strong>1 hour</strong>.</p>
+        <p style="margin:2rem 0;">
+          <a href="${link}"
+             style="background:#7B9E88;color:#0d0d0d;padding:12px 28px;
+                    border-radius:4px;text-decoration:none;font-weight:600;
+                    display:inline-block;">
+            Reset Password
+          </a>
+        </p>
+        <p>Or copy this link into your browser:</p>
+        <p style="word-break:break-all;color:#555;font-size:0.85em;">${link}</p>
+        <hr style="border:none;border-top:1px solid #ddd;margin:2rem 0;" />
+        <p style="color:#9A9484;font-size:0.85em;">
+          If you did not request a password reset, you can safely ignore this email.
+        </p>
+      </div>
+    `
+  });
+}
+
+module.exports = { sendVerificationEmail, sendPasswordResetEmail, EMAIL_VERIFICATION_ENABLED };

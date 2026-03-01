@@ -13,6 +13,8 @@ function Login() {
   const [registeredEmail, setRegisteredEmail] = useState('');
   const [pendingVerificationEmail, setPendingVerificationEmail] = useState(null);
   const [resendStatus, setResendStatus] = useState(null); // null | 'sending' | 'sent' | 'error'
+  const [forgotEmail, setForgotEmail] = useState('');
+  const [forgotStatus, setForgotStatus] = useState(null); // null | 'sending' | 'sent' | 'error'
 
   const { login, register } = useAuth();
   const navigate = useNavigate();
@@ -63,11 +65,28 @@ function Login() {
     }
   };
 
+  const handleForgot = async (e) => {
+    e.preventDefault();
+    setForgotStatus('sending');
+    try {
+      const res = await fetch('/api/auth/forgot-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: forgotEmail })
+      });
+      setForgotStatus(res.ok ? 'sent' : 'error');
+    } catch {
+      setForgotStatus('error');
+    }
+  };
+
   const switchMode = (newMode) => {
     setMode(newMode);
     setError(null);
     setPendingVerificationEmail(null);
     setResendStatus(null);
+    setForgotEmail('');
+    setForgotStatus(null);
   };
 
   const footer = (
@@ -89,6 +108,69 @@ function Login() {
       </p>
     </footer>
   );
+
+  if (mode === 'forgot') {
+    return (
+      <div className="login-page">
+        <div className="login-card">
+          <div className="login-header">
+            <CellarionLogo size={90} color="#7B9E88" showText />
+            <p>Reset your password</p>
+          </div>
+
+          {forgotStatus === 'sent' ? (
+            <>
+              <div className="alert alert-success">
+                If that email exists, a reset link has been sent. Check your inbox.
+              </div>
+              <button
+                className="btn btn-secondary btn-full"
+                style={{ marginTop: '1rem' }}
+                onClick={() => switchMode('login')}
+              >
+                Back to login
+              </button>
+            </>
+          ) : (
+            <form onSubmit={handleForgot}>
+              <p style={{ color: '#9A9484', fontSize: '0.9rem', marginBottom: '1.25rem' }}>
+                Enter your email address and we&apos;ll send you a link to reset your password.
+              </p>
+              <div className="form-group">
+                <label>Email</label>
+                <input
+                  type="email"
+                  value={forgotEmail}
+                  onChange={(e) => setForgotEmail(e.target.value)}
+                  required
+                  autoFocus
+                />
+              </div>
+              {forgotStatus === 'error' && (
+                <div className="alert alert-error">Something went wrong. Please try again.</div>
+              )}
+              <button
+                type="submit"
+                className="btn btn-primary btn-full"
+                disabled={forgotStatus === 'sending'}
+              >
+                {forgotStatus === 'sending' ? 'Sending...' : 'Send reset link'}
+              </button>
+              <button
+                type="button"
+                className="btn btn-secondary btn-full"
+                style={{ marginTop: '0.75rem' }}
+                onClick={() => switchMode('login')}
+              >
+                Back to login
+              </button>
+            </form>
+          )}
+        </div>
+        {footer}
+      </div>
+    );
+  }
 
   if (registered) {
     return (
@@ -199,6 +281,24 @@ function Login() {
               required
             />
           </div>
+          {mode === 'login' && (
+            <div style={{ textAlign: 'right', marginTop: '-0.75rem', marginBottom: '1rem' }}>
+              <button
+                type="button"
+                onClick={() => switchMode('forgot')}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: '#7B9E88',
+                  cursor: 'pointer',
+                  fontSize: '0.85rem',
+                  padding: 0
+                }}
+              >
+                Forgot password?
+              </button>
+            </div>
+          )}
           <button type="submit" className="btn btn-primary btn-full" disabled={loading}>
             {loading ? 'Loading...' : mode === 'login' ? 'Login' : 'Create Account'}
           </button>

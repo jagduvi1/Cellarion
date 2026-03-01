@@ -24,6 +24,7 @@ import SommMaturity from './pages/SommMaturity';
 import SommPrices from './pages/SommPrices';
 import Settings from './pages/Settings';
 import VerifyEmail from './pages/VerifyEmail';
+import ResetPassword from './pages/ResetPassword';
 import './styles/common.css';
 
 function AppRoutes() {
@@ -42,6 +43,7 @@ function AppRoutes() {
       {/* Public routes */}
       <Route path="/login" element={user ? <Navigate to="/cellars" replace /> : <Login />} />
       <Route path="/verify-email" element={<VerifyEmail />} />
+      <Route path="/reset-password" element={<ResetPassword />} />
 
       {/* Protected routes wrapped in Layout */}
       <Route
