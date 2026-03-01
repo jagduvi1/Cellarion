@@ -39,16 +39,14 @@ def remove_bg():
             cmin, cmax = np.where(cols)[0][[0, -1]]
             cropped = img.crop((cmin, rmin, cmax + 1, rmax + 1))
 
-            # Add 5% padding around the tight crop
-            pad_x = int(cropped.width * 0.05)
-            pad_y = int(cropped.height * 0.05)
+            # Add 12% padding around the tight crop so the subject fills
+            # ~88% of the canvas in both dimensions regardless of aspect ratio.
+            # No fixed minimum — the subject itself dictates the canvas size,
+            # ensuring wide and tall subjects both appear large in the card.
+            pad_x = int(cropped.width * 0.12)
+            pad_y = int(cropped.height * 0.12)
             out_w = cropped.width + 2 * pad_x
             out_h = cropped.height + 2 * pad_y
-
-            # Enforce a minimum canvas (300×600) so bottles always render
-            # at a decent size regardless of how far away the photo was taken
-            out_w = max(out_w, 300)
-            out_h = max(out_h, 600)
 
             canvas = Image.new("RGBA", (out_w, out_h), (0, 0, 0, 0))
             paste_x = (out_w - cropped.width) // 2
