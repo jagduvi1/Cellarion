@@ -5,6 +5,7 @@ const Cellar = require('../models/Cellar');
 const Rack = require('../models/Rack');
 const WineDefinition = require('../models/WineDefinition');
 const WineVintageProfile = require('../models/WineVintageProfile');
+const BottleImage = require('../models/BottleImage');
 const { getCellarRole } = require('../utils/cellarAccess');
 const { logAudit } = require('../services/audit');
 const { getOrCreateDailySnapshot, getSnapshotForDate } = require('../utils/exchangeRates');
@@ -143,8 +144,23 @@ router.get('/:id', async (req, res) => {
       if (snapshot) bottleObj.priceCurrencyRates = snapshot.rates;
     }
 
+    // Include the uploader's own pending image (pre-approval) so they see
+    // it immediately on their bottle — other users see wine?.image after approval
+    const pendingImg = await BottleImage.findOne({
+      $or: [
+        { bottle: bottle._id },
+        { wineDefinition: bottle.wineDefinition }
+      ],
+      uploadedBy: req.user.id,
+      status: { $in: ['uploaded', 'processing', 'processed'] }
+    }).sort({ createdAt: -1 }).lean();
+
+    const pendingImageUrl = pendingImg
+      ? (pendingImg.processedUrl || pendingImg.originalUrl)
+      : null;
+
     const ucEntry = cellar.userColors?.find(uc => uc.user.toString() === req.user.id.toString());
-    res.json({ bottle: bottleObj, userRole: role, cellarColor: ucEntry?.color || null });
+    res.json({ bottle: bottleObj, userRole: role, cellarColor: ucEntry?.color || null, pendingImageUrl });
   } catch (error) {
     console.error('Get bottle error:', error);
     res.status(500).json({ error: 'Failed to get bottle' });

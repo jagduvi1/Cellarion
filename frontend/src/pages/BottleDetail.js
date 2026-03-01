@@ -59,6 +59,13 @@ function BottleDetail() {
         setBottle(data.bottle);
         setUserRole(data.userRole);
         setCellarColor(data.cellarColor || null);
+        if (data.pendingImageUrl) {
+          const API_URL = process.env.REACT_APP_API_URL || '';
+          const url = data.pendingImageUrl.startsWith('http')
+            ? data.pendingImageUrl
+            : `${API_URL}${data.pendingImageUrl}`;
+          setPendingImage(url);
+        }
         // Fetch the sommelier maturity profile for this wine+vintage
         const wine = data.bottle?.wineDefinition;
         const vintage = data.bottle?.vintage;
