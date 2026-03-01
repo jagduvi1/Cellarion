@@ -1,4 +1,5 @@
 const express = require('express');
+const mongoose = require('mongoose');
 const { requireAuth, requireRole } = require('../../middleware/auth');
 const { normalizeString } = require('../../utils/normalize');
 const Country = require('../../models/Country');
@@ -123,7 +124,13 @@ router.delete('/countries/:id', async (req, res) => {
 router.get('/regions', async (req, res) => {
   try {
     const { country } = req.query;
-    const filter = country ? { country } : {};
+    const filter = {};
+    if (country) {
+      if (!mongoose.Types.ObjectId.isValid(country)) {
+        return res.status(400).json({ error: 'Invalid country id' });
+      }
+      filter.country = country;
+    }
 
     const regions = await Region.find(filter)
       .populate('country', 'name')
@@ -378,8 +385,18 @@ router.get('/appellations', async (req, res) => {
   try {
     const { country, region } = req.query;
     const filter = {};
-    if (country) filter.country = country;
-    if (region) filter.region = region;
+    if (country) {
+      if (!mongoose.Types.ObjectId.isValid(country)) {
+        return res.status(400).json({ error: 'Invalid country id' });
+      }
+      filter.country = country;
+    }
+    if (region) {
+      if (!mongoose.Types.ObjectId.isValid(region)) {
+        return res.status(400).json({ error: 'Invalid region id' });
+      }
+      filter.region = region;
+    }
 
     const appellations = await Appellation.find(filter)
       .populate('country', 'name')
