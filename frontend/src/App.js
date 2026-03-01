@@ -24,6 +24,7 @@ import BottleDetail from './pages/BottleDetail';
 import SommMaturity from './pages/SommMaturity';
 import SommPrices from './pages/SommPrices';
 import Settings from './pages/Settings';
+import Plans from './pages/Plans';
 import VerifyEmail from './pages/VerifyEmail';
 import ResetPassword from './pages/ResetPassword';
 import './styles/common.css';
@@ -160,6 +161,14 @@ function AppRoutes() {
         element={
           <ProtectedRoute>
             <Layout><Settings /></Layout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/plans"
+        element={
+          <ProtectedRoute>
+            <Layout><Plans /></Layout>
           </ProtectedRoute>
         }
       />

@@ -19,11 +19,16 @@ const requireAuth = async (req, res, next) => {
     // Support old tokens that carry a single `role` string
     const roles = decoded.roles || (decoded.role ? [decoded.role] : ['user']);
 
+    // Resolve effective plan: downgrade to free if the plan has expired
+    const planExpired = decoded.planExpiresAt && Date.now() > new Date(decoded.planExpiresAt).getTime();
+    const effectivePlan = planExpired ? 'free' : (decoded.plan || 'free');
+
     // Attach user info to request
     req.user = {
       id: decoded.id,
       roles,
-      plan: decoded.plan || 'free'
+      plan: effectivePlan,
+      planExpiresAt: decoded.planExpiresAt || null,
     };
 
     next();

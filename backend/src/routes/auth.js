@@ -48,7 +48,7 @@ const resendLimiter = rateLimit({
 const generateAccessToken = (user) => {
   const roles = user.roles && user.roles.length > 0 ? user.roles : ['user'];
   return jwt.sign(
-    { id: user._id, roles, plan: user.plan || 'free' },
+    { id: user._id, roles, plan: user.plan || 'free', planExpiresAt: user.planExpiresAt || null },
     process.env.JWT_SECRET,
     { expiresIn: process.env.ACCESS_TOKEN_EXPIRES_IN || '15m' }
   );

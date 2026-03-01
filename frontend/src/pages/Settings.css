@@ -41,3 +41,47 @@
   font-size: 0.85rem;
   color: #6B9E78;
 }
+
+/* ── Plan card ── */
+.settings-plan-card {
+  padding: 1.5rem;
+  margin-bottom: 1.25rem;
+}
+
+.settings-plan-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.settings-plan-badge {
+  display: inline-block;
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 0.2rem 0.6rem;
+  border-radius: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.settings-plan-badge--free    { background: rgba(154,148,132,0.15); color: #9A9484; }
+.settings-plan-badge--basic   { background: rgba(200,168,126,0.15); color: #C8A87E; }
+.settings-plan-badge--premium { background: rgba(123,158,136,0.18); color: #7B9E88; }
+
+.settings-plan-desc {
+  font-size: 0.85rem;
+  color: #9A9484;
+}
+
+.settings-plan-expired {
+  color: #E07060;
+  font-weight: 600;
+}
+
+.settings-plan-link {
+  display: inline-block;
+  margin-top: 0.5rem;
+  font-size: 0.82rem;
+}

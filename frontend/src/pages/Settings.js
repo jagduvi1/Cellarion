@@ -1,7 +1,9 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import { CURRENCIES } from '../config/currencies';
+import { PLANS } from '../config/plans';
 import './Settings.css';
 
 function Settings() {
@@ -29,9 +31,40 @@ function Settings() {
     }
   };
 
+  const planKey = user?.plan || 'free';
+  const planExpiresAt = user?.planExpiresAt || null;
+  const planLabel = PLANS[planKey]?.label || planKey;
+  const planExpired = planExpiresAt && Date.now() > new Date(planExpiresAt).getTime();
+
+  function formatExpiry(expiresAt) {
+    if (!expiresAt) return t('settings.plan.noExpiry');
+    if (Date.now() > new Date(expiresAt).getTime()) return t('plans.expired');
+    return new Date(expiresAt).toLocaleDateString(undefined, {
+      year: 'numeric', month: 'long', day: 'numeric'
+    });
+  }
+
   return (
     <div className="settings-page">
       <h1>{t('settings.title')}</h1>
+
+      {/* ── Your Plan card ── */}
+      <div className="card settings-card settings-plan-card">
+        <h2 className="settings-section-title">{t('settings.plan.title')}</h2>
+        <div className="settings-plan-row">
+          <span className={`settings-plan-badge settings-plan-badge--${planKey}`}>{planLabel}</span>
+          <span className="settings-plan-desc">{PLANS[planKey]?.description}</span>
+        </div>
+        <p className="settings-hint">
+          {planExpired
+            ? <span className="settings-plan-expired">{t('plans.expired')}</span>
+            : <>{t('settings.plan.expires')} <strong>{formatExpiry(planExpiresAt)}</strong></>
+          }
+        </p>
+        <Link to="/plans" className="btn btn-secondary settings-plan-link">
+          {t('settings.plan.comparePlans')}
+        </Link>
+      </div>
 
       <div className="card settings-card">
         <h2 className="settings-section-title">{t('settings.displayPreferences')}</h2>

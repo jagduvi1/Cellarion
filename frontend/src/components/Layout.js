@@ -78,6 +78,13 @@ function Layout({ children }) {
             >
               {t('nav.myRequests')}
             </Link>
+            <Link
+              to="/plans"
+              className={isActive('/plans') ? 'active' : ''}
+              onClick={closeMenu}
+            >
+              {t('nav.plans')}
+            </Link>
 
             {(roles.includes('somm') || roles.includes('admin')) && (
               <>

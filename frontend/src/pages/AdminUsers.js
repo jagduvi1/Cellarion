@@ -7,8 +7,42 @@ import './AdminUsers.css';
 const PAGE_SIZE = 50;
 const ALL_ROLES = ['user', 'somm', 'admin'];
 
+const DURATION_OPTIONS = [
+  { value: '30',   labelKey: 'admin.users.duration30' },
+  { value: '90',   labelKey: 'admin.users.duration90' },
+  { value: '180',  labelKey: 'admin.users.duration180' },
+  { value: '365',  labelKey: 'admin.users.duration365' },
+  { value: 'null', labelKey: 'admin.users.durationNever' },
+];
+
 function PlanBadge({ plan }) {
   return <span className={`users-badge users-badge--plan users-badge--${plan}`}>{PLANS[plan]?.label || plan}</span>;
+}
+
+function ExpiryBadge({ planExpiresAt, t }) {
+  if (!planExpiresAt) {
+    return <span className="users-expiry users-expiry--never">{t('admin.users.expiryNever')}</span>;
+  }
+  const now = Date.now();
+  const exp = new Date(planExpiresAt).getTime();
+  const daysLeft = Math.ceil((exp - now) / (1000 * 60 * 60 * 24));
+
+  if (now > exp) {
+    return <span className="users-expiry users-expiry--expired">{t('admin.users.expiryExpired')}</span>;
+  }
+  if (daysLeft <= 30) {
+    return (
+      <span className="users-expiry users-expiry--soon">
+        {new Date(planExpiresAt).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}
+        {' '}({daysLeft}d)
+      </span>
+    );
+  }
+  return (
+    <span className="users-expiry">
+      {new Date(planExpiresAt).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}
+    </span>
+  );
 }
 
 function RoleBadges({ roles = [] }) {
@@ -41,6 +75,72 @@ function RoleCheckboxes({ userId, currentRoles = [], disabled, onChange }) {
           {r}
         </label>
       ))}
+    </div>
+  );
+}
+
+/**
+ * Inline plan-change cell: picking a new plan opens a duration picker.
+ * Applying sends { plan, expiresInDays } to the parent.
+ */
+function PlanCell({ user, disabled, onApply, t }) {
+  const [pendingPlan, setPendingPlan] = useState(null);
+  const [duration, setDuration] = useState('365');
+
+  function handlePlanSelect(e) {
+    const newPlan = e.target.value;
+    if (newPlan === user.plan) {
+      setPendingPlan(null);
+    } else {
+      setPendingPlan(newPlan);
+    }
+  }
+
+  function handleApply() {
+    onApply(user._id, pendingPlan, duration === 'null' ? null : Number(duration));
+    setPendingPlan(null);
+  }
+
+  function handleCancel() {
+    setPendingPlan(null);
+  }
+
+  return (
+    <div className="users-plan-cell">
+      <div className="users-select-cell">
+        <PlanBadge plan={pendingPlan || user.plan} />
+        <select
+          className="users-inline-select"
+          value={pendingPlan || user.plan}
+          disabled={disabled}
+          onChange={handlePlanSelect}
+        >
+          {PLAN_NAMES.map(p => (
+            <option key={p} value={p}>{PLANS[p].label}</option>
+          ))}
+        </select>
+      </div>
+
+      {pendingPlan && (
+        <div className="users-duration-picker">
+          <label className="users-duration-label">{t('admin.users.durationLabel')}</label>
+          <select
+            className="users-inline-select"
+            value={duration}
+            onChange={e => setDuration(e.target.value)}
+          >
+            {DURATION_OPTIONS.map(o => (
+              <option key={o.value} value={o.value}>{t(o.labelKey)}</option>
+            ))}
+          </select>
+          <button className="btn btn-primary btn-xs" onClick={handleApply} disabled={disabled}>
+            {t('admin.users.applyPlanBtn')}
+          </button>
+          <button className="btn btn-secondary btn-xs" onClick={handleCancel} disabled={disabled}>
+            {t('admin.users.cancelPlanBtn')}
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -99,17 +199,20 @@ function AdminUsers() {
     setOffset(0);
   }
 
-  async function changePlan(userId, newPlan) {
+  async function changePlan(userId, newPlan, expiresInDays) {
     setUpdating(prev => ({ ...prev, [userId + '_plan']: true }));
     try {
       const res = await apiFetch(`/api/admin/users/${userId}/plan`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ plan: newPlan })
+        body: JSON.stringify({ plan: newPlan, expiresInDays })
       });
       const data = await res.json();
       if (res.ok) {
-        setUsers(prev => prev.map(u => u._id === userId ? { ...u, plan: data.user.plan } : u));
+        setUsers(prev => prev.map(u => u._id === userId
+          ? { ...u, plan: data.user.plan, planExpiresAt: data.user.planExpiresAt, planStartedAt: data.user.planStartedAt }
+          : u
+        ));
       } else {
         alert(data.error || 'Failed to change plan');
       }
@@ -201,6 +304,7 @@ function AdminUsers() {
                   <th>{t('admin.users.colUsername')}</th>
                   <th>{t('admin.users.colEmail')}</th>
                   <th>{t('admin.users.colPlan')}</th>
+                  <th>{t('admin.users.colExpiry')}</th>
                   <th>{t('admin.users.colRoles')}</th>
                   <th>{t('admin.users.colJoined')}</th>
                 </tr>
@@ -211,19 +315,15 @@ function AdminUsers() {
                     <td className="users-username">{u.username}</td>
                     <td className="users-email">{u.email}</td>
                     <td>
-                      <div className="users-select-cell">
-                        <PlanBadge plan={u.plan} />
-                        <select
-                          className="users-inline-select"
-                          value={u.plan}
-                          disabled={updating[u._id + '_plan']}
-                          onChange={e => changePlan(u._id, e.target.value)}
-                        >
-                          {PLAN_NAMES.map(p => (
-                            <option key={p} value={p}>{PLANS[p].label}</option>
-                          ))}
-                        </select>
-                      </div>
+                      <PlanCell
+                        user={u}
+                        disabled={updating[u._id + '_plan']}
+                        onApply={changePlan}
+                        t={t}
+                      />
+                    </td>
+                    <td>
+                      <ExpiryBadge planExpiresAt={u.planExpiresAt} t={t} />
                     </td>
                     <td>
                       <div className="users-roles-cell">

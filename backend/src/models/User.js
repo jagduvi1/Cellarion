@@ -41,6 +41,14 @@ const userSchema = new mongoose.Schema({
     enum: ['free', 'basic', 'premium'],
     default: 'free'
   },
+  planStartedAt: {
+    type: Date,
+    default: null
+  },
+  planExpiresAt: {
+    type: Date,
+    default: null   // null = no expiry (indefinite)
+  },
   preferences: {
     currency: {
       type: String,
