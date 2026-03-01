@@ -102,6 +102,13 @@ function Layout({ children }) {
               <>
                 <div className="navbar-divider" />
                 <Link
+                  to="/admin/wines"
+                  className={`admin-link ${isActive('/admin/wines') ? 'active' : ''}`}
+                  onClick={closeMenu}
+                >
+                  {t('nav.wineLibrary')}
+                </Link>
+                <Link
                   to="/admin/requests"
                   className={`admin-link ${isActive('/admin/requests') ? 'active' : ''}`}
                   onClick={closeMenu}

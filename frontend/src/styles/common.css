@@ -224,3 +224,10 @@
     margin: 0;
   }
 }
+
+.grape-count {
+  font-weight: 400;
+  font-size: 0.82rem;
+  color: #7B9E88;
+  margin-left: 0.25rem;
+}

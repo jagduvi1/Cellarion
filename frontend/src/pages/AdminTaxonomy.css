@@ -51,9 +51,77 @@
   border-color: #3a3a3a;
 }
 
+.taxonomy-item.editing {
+  border-color: #7B9E88;
+  background: rgba(123, 158, 136, 0.04);
+}
+
+.taxonomy-item-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.taxonomy-item-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+.taxonomy-badge {
+  display: inline-block;
+  margin-left: 0.5rem;
+  padding: 0.15rem 0.45rem;
+  font-size: 0.7rem;
+  border-radius: 10px;
+  background: #2a2a2a;
+  color: #9A9484;
+  vertical-align: middle;
+}
+
+.taxonomy-badge--prestige {
+  background: rgba(200, 168, 126, 0.15);
+  color: #C8A87E;
+}
+
+.taxonomy-badge--color {
+  font-weight: 600;
+}
+
+.taxonomy-badge--red {
+  background: rgba(180, 60, 60, 0.2);
+  color: #d97a7a;
+}
+
+.taxonomy-badge--white {
+  background: rgba(220, 200, 140, 0.2);
+  color: #ddd09a;
+}
+
+.taxonomy-synonyms {
+  color: #9A9484;
+  font-size: 0.85em;
+}
+
 .create-form {
   margin-bottom: 2rem;
+  max-width: 900px;
 }
+
+.admin-taxonomy-page .create-form {
+  max-width: 100%;
+}
+
+.taxonomy-full-form {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.form-row-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+}
+
 
 @media (max-width: 600px) {
   .taxonomy-item {
@@ -64,5 +132,9 @@
 
   .taxonomy-item .btn {
     align-self: flex-end;
+  }
+
+  .form-row-2 {
+    grid-template-columns: 1fr;
   }
 }

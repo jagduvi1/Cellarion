@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
+import GrapePicker from '../components/GrapePicker';
 import './AdminRequests.css';
 
 function AdminRequests() {
@@ -14,17 +15,24 @@ function AdminRequests() {
     mode: 'create', // 'create' or 'link'
     adminNotes: '',
     wineDefinitionId: '',
-    wineData: { name: '', producer: '', country: '', type: 'red', appellation: '', image: '' }
+    wineData: { name: '', producer: '', country: '', region: '', type: 'red', appellation: '', grapes: [], image: '' }
   });
   const [duplicates, setDuplicates] = useState([]);
   const [countries, setCountries] = useState([]);
+  const [regions, setRegions] = useState([]);
+  const [appellations, setAppellations] = useState([]);
+  const [grapes, setGrapes] = useState([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
 
   useEffect(() => {
     fetchRequests();
-    fetchCountries();
   }, [statusFilter, apiFetch]);
+
+  useEffect(() => {
+    fetchCountries();
+    fetchGrapes();
+  }, [apiFetch]);
 
   const fetchRequests = async () => {
     setLoading(true);
@@ -50,6 +58,40 @@ function AdminRequests() {
     }
   };
 
+  const fetchRegions = async (countryId) => {
+    if (!countryId) { setRegions([]); setAppellations([]); return; }
+    try {
+      const res = await apiFetch(`/api/admin/taxonomy/regions?country=${countryId}`);
+      const data = await res.json();
+      if (res.ok) setRegions(data.regions);
+    } catch (err) {
+      console.error('Failed to fetch regions:', err);
+    }
+  };
+
+  const fetchAppellations = async (countryId, regionId) => {
+    if (!countryId) { setAppellations([]); return; }
+    try {
+      const params = new URLSearchParams({ country: countryId });
+      if (regionId) params.set('region', regionId);
+      const res = await apiFetch(`/api/admin/taxonomy/appellations?${params}`);
+      const data = await res.json();
+      if (res.ok) setAppellations(data.appellations || []);
+    } catch (err) {
+      console.error('Failed to fetch appellations:', err);
+    }
+  };
+
+  const fetchGrapes = async () => {
+    try {
+      const res = await apiFetch('/api/admin/taxonomy/grapes');
+      const data = await res.json();
+      if (res.ok) setGrapes(data.grapes);
+    } catch (err) {
+      console.error('Failed to fetch grapes:', err);
+    }
+  };
+
   const checkDuplicates = async (name, producer) => {
     if (!name || !producer) return;
     try {
@@ -65,6 +107,7 @@ function AdminRequests() {
 
   const handleSelectRequest = (request) => {
     setSelected(request);
+    setRegions([]);
     setResolveData({
       mode: 'create',
       adminNotes: '',
@@ -73,8 +116,10 @@ function AdminRequests() {
         name: request.wineName,
         producer: '',
         country: '',
+        region: '',
         type: 'red',
         appellation: '',
+        grapes: [],
         image: request.image || ''
       }
     });
@@ -262,13 +307,33 @@ function AdminRequests() {
                           <select
                             value={resolveData.wineData.country}
                             onChange={(e) => {
-                              const wineData = { ...resolveData.wineData, country: e.target.value };
+                              const wineData = { ...resolveData.wineData, country: e.target.value, region: '', appellation: '' };
                               setResolveData({ ...resolveData, wineData });
+                              fetchRegions(e.target.value);
+                              fetchAppellations(e.target.value, '');
                             }}
                           >
                             <option value="">{t('admin.requests.selectCountry')}</option>
                             {countries.map(c => (
                               <option key={c._id} value={c._id}>{c.name}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="form-group">
+                          <label>{t('admin.requests.regionLabel')}</label>
+                          <select
+                            value={resolveData.wineData.region}
+                            onChange={(e) => {
+                              const regionId = e.target.value;
+                              const wineData = { ...resolveData.wineData, region: regionId, appellation: '' };
+                              setResolveData({ ...resolveData, wineData });
+                              fetchAppellations(resolveData.wineData.country, regionId);
+                            }}
+                            disabled={!resolveData.wineData.country}
+                          >
+                            <option value="">{t('admin.requests.selectRegion')}</option>
+                            {regions.map(r => (
+                              <option key={r._id} value={r._id}>{r.name}</option>
                             ))}
                           </select>
                         </div>
@@ -288,15 +353,38 @@ function AdminRequests() {
                         </div>
                         <div className="form-group">
                           <label>{t('admin.requests.appellationLabel')}</label>
-                          <input
-                            type="text"
+                          <select
                             value={resolveData.wineData.appellation}
                             onChange={(e) => {
                               const wineData = { ...resolveData.wineData, appellation: e.target.value };
                               setResolveData({ ...resolveData, wineData });
                             }}
-                          />
+                            disabled={!resolveData.wineData.country}
+                          >
+                            <option value="">{t('admin.requests.selectAppellation')}</option>
+                            {appellations.map(a => (
+                              <option key={a._id} value={a.name}>{a.name}</option>
+                            ))}
+                          </select>
                         </div>
+                        {grapes.length > 0 && (
+                          <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+                            <label>
+                              {t('admin.requests.grapesLabel')}
+                              {resolveData.wineData.grapes.length > 0 && (
+                                <span className="grape-count"> ({resolveData.wineData.grapes.length} selected)</span>
+                              )}
+                            </label>
+                            <GrapePicker
+                              grapes={grapes}
+                              selected={resolveData.wineData.grapes}
+                              onChange={(ids) => {
+                                const wineData = { ...resolveData.wineData, grapes: ids };
+                                setResolveData({ ...resolveData, wineData });
+                              }}
+                            />
+                          </div>
+                        )}
                         <div className="form-group" style={{ gridColumn: '1 / -1' }}>
                           <label>{t('admin.requests.imageUrlLabel')}</label>
                           <input

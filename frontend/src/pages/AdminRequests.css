@@ -150,6 +150,7 @@
   margin-left: auto;
 }
 
+
 @media (max-width: 1024px) {
   .admin-layout {
     grid-template-columns: 1fr;

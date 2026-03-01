@@ -22,6 +22,47 @@ const router = express.Router();
 // All routes require admin role
 router.use(requireAuth, requireRole('admin'));
 
+// GET /api/admin/wines - List wine definitions
+router.get('/', async (req, res) => {
+  try {
+    const { search, page = 1, limit = 50 } = req.query;
+
+    let query = {};
+    if (search) {
+      const escaped = escapeRegex(search);
+      query = {
+        $or: [
+          { name: new RegExp(escaped, 'i') },
+          { producer: new RegExp(escaped, 'i') }
+        ]
+      };
+    }
+
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+
+    const [wines, total] = await Promise.all([
+      WineDefinition.find(query)
+        .populate('country', 'name')
+        .populate('region', 'name')
+        .populate('grapes', 'name')
+        .sort({ name: 1 })
+        .skip(skip)
+        .limit(parseInt(limit)),
+      WineDefinition.countDocuments(query)
+    ]);
+
+    res.json({
+      wines,
+      total,
+      page: parseInt(page),
+      pages: Math.ceil(total / parseInt(limit))
+    });
+  } catch (error) {
+    console.error('List wines error:', error);
+    res.status(500).json({ error: 'Failed to list wines' });
+  }
+});
+
 // POST /api/admin/wines - Create wine definition
 router.post('/', async (req, res) => {
   try {
@@ -159,6 +200,21 @@ router.get('/duplicates', async (req, res) => {
   } catch (error) {
     console.error('Find duplicates error:', error);
     res.status(500).json({ error: 'Failed to find duplicates' });
+  }
+});
+
+// GET /api/admin/wines/:id - Get single wine definition
+router.get('/:id', async (req, res) => {
+  try {
+    const wine = await WineDefinition.findById(req.params.id)
+      .populate('country', 'name')
+      .populate('region', 'name')
+      .populate('grapes', 'name');
+    if (!wine) return res.status(404).json({ error: 'Wine not found' });
+    res.json({ wine });
+  } catch (error) {
+    console.error('Get wine error:', error);
+    res.status(500).json({ error: 'Failed to get wine' });
   }
 });
 

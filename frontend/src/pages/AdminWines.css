@@ -1,0 +1,127 @@
+.admin-wines-page {
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.wines-search {
+  display: flex;
+  gap: 0.5rem;
+  margin: 1.5rem 0;
+}
+
+.wines-search-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.wines-meta {
+  font-size: 0.85rem;
+  color: #9A9484;
+  margin-bottom: 1rem;
+}
+
+.wine-form-card {
+  margin-bottom: 2rem;
+}
+
+.wine-form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+}
+
+
+/* Table */
+.wines-table-wrap {
+  overflow-x: auto;
+  border: 1px solid #2a2a2a;
+  border-radius: 8px;
+}
+
+.wines-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.wines-table th {
+  background: #1c1c1c;
+  color: #9A9484;
+  font-weight: 600;
+  text-align: left;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid #2a2a2a;
+  white-space: nowrap;
+}
+
+.wines-table td {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid #1c1c1c;
+  vertical-align: middle;
+}
+
+.wines-table tr:last-child td {
+  border-bottom: none;
+}
+
+.wines-table tr:hover td {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.wines-table tr.row-editing td {
+  background: rgba(123, 158, 136, 0.06);
+}
+
+.wine-name {
+  font-weight: 600;
+  color: #E8DFD0;
+}
+
+.grapes-cell {
+  color: #9A9484;
+  font-size: 0.85rem;
+  max-width: 200px;
+}
+
+.row-actions {
+  display: flex;
+  gap: 0.4rem;
+  white-space: nowrap;
+}
+
+/* Type badges */
+.type-badge {
+  display: inline-block;
+  padding: 0.15rem 0.5rem;
+  border-radius: 10px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+.type-red    { background: rgba(180,60,60,0.2); color: #d97a7a; }
+.type-white  { background: rgba(220,200,140,0.2); color: #ddd09a; }
+.type-rosé   { background: rgba(200,120,140,0.2); color: #d99aaa; }
+.type-sparkling { background: rgba(140,180,220,0.2); color: #9abedd; }
+.type-dessert { background: rgba(200,168,126,0.2); color: #C8A87E; }
+.type-fortified { background: rgba(140,100,60,0.2); color: #b88a5a; }
+
+/* Pagination */
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  margin-top: 1.5rem;
+  color: #9A9484;
+}
+
+@media (max-width: 768px) {
+  .wine-form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .wine-form-grid [style*="gridColumn"] {
+    grid-column: auto !important;
+  }
+}

@@ -10,6 +10,7 @@ import Wines from './pages/Wines';
 import WineRequests from './pages/WineRequests';
 import AdminRequests from './pages/AdminRequests';
 import AdminTaxonomy from './pages/AdminTaxonomy';
+import AdminWines from './pages/AdminWines';
 import AdminImages from './pages/AdminImages';
 import AdminAudit from './pages/AdminAudit';
 import AdminUsers from './pages/AdminUsers';
@@ -161,6 +162,14 @@ function AppRoutes() {
       />
 
       {/* Admin routes */}
+      <Route
+        path="/admin/wines"
+        element={
+          <ProtectedRoute requireAdmin>
+            <Layout><AdminWines /></Layout>
+          </ProtectedRoute>
+        }
+      />
       <Route
         path="/admin/requests"
         element={
