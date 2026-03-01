@@ -27,13 +27,13 @@ const PLANS = {
   basic: {
     description: 'More space to grow your collection.',
     maxCellars: 5,
-    maxSharesPerCellar: 5,
+    maxSharesPerCellar: 1,
     features: {
       priceEvolution: false,
     },
     featureList: [
       '5 cellars',
-      '5 shared members per cellar',
+      '1 shared member per cellar',
       'Everything in Free',
     ],
   },
