@@ -6,6 +6,15 @@ import './ImageUpload.css'; // reuse camera + button styles
  * Calls onCapture(file) with the final cropped File.
  * Shows a preview with a remove button once a file is chosen.
  */
+// Only allow safe URL schemes to prevent javascript: URIs reaching img src
+function sanitizeImageUrl(url) {
+  if (!url) return '';
+  if (url.startsWith('blob:') || url.startsWith('data:image/') ||
+      url.startsWith('https://') || url.startsWith('http://') ||
+      url.startsWith('/')) return url;
+  return '';
+}
+
 function PhotoCapture({ onCapture, onRemove, preview }) {
   const [cameraOpen, setCameraOpen] = useState(false);
   const [cameraError, setCameraError] = useState(null);
@@ -118,7 +127,7 @@ function PhotoCapture({ onCapture, onRemove, preview }) {
 
       {preview ? (
         <div className="upload-preview-wrapper">
-          <img src={preview} alt="Preview" className="upload-preview" />
+          <img src={sanitizeImageUrl(preview)} alt="Preview" className="upload-preview" />
           <button type="button" className="btn-remove-image" onClick={onRemove} aria-label="Remove image">×</button>
         </div>
       ) : (
