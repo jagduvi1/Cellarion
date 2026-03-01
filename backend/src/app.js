@@ -35,7 +35,11 @@ app.use(helmet({
   hsts: { maxAge: 31536000, includeSubDomains: true, preload: true },
   frameguard: { action: 'deny' },
   referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
-  contentSecurityPolicy: false // Managed separately; CSP breaks React SPA without careful tuning
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'none'"],
+    },
+  }
 }));
 
 // Middleware

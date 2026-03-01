@@ -19,7 +19,8 @@ router.get('/', async (req, res) => {
     const filter = {};
 
     if (search) {
-      const re = new RegExp(search.trim(), 'i');
+      const escaped = search.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const re = new RegExp(escaped, 'i');
       filter.$or = [{ username: re }, { email: re }];
     }
     if (plan && PLAN_NAMES.includes(plan)) {

@@ -128,7 +128,7 @@ async function search(query, { countryId, regionId, type, grapeIds, limit = 50, 
 
   // Build sort array
   const meiliSort = [];
-  if (sort && sort !== 'relevance') {
+  if (sort && typeof sort === 'string' && sort !== 'relevance') {
     const desc = sort.startsWith('-');
     const field = desc ? sort.slice(1) : sort;
     if (['name', 'producer', 'type', 'createdAt'].includes(field)) {

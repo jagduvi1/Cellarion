@@ -65,5 +65,5 @@ def remove_bg():
             mimetype='image/png',
             download_name='output.png'
         )
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    except Exception:
+        return jsonify({"error": "Image processing failed"}), 500
