@@ -10,7 +10,8 @@ import './CellarDetail.css';
 function CellarDetail() {
   const { t } = useTranslation();
   const { id } = useParams();
-  const { apiFetch } = useAuth();
+  const { apiFetch, user } = useAuth();
+  const userCurrency = user?.preferences?.currency || 'USD';
   const navigate = useNavigate();
   const [cellar, setCellar] = useState(null);
   const [bottles, setBottles] = useState([]);
@@ -232,11 +233,11 @@ function CellarDetail() {
             <p>{t('cellarDetail.uniqueWines')}</p>
           </div>
           <div className="stat-card">
-            <h3>${statistics.totalValue.toFixed(2)}</h3>
+            <h3>{statistics.totalValue.toFixed(2)} {userCurrency}</h3>
             <p>{t('cellarDetail.totalValue')}</p>
           </div>
           <div className="stat-card">
-            <h3>${statistics.averagePrice.toFixed(2)}</h3>
+            <h3>{statistics.averagePrice.toFixed(2)} {userCurrency}</h3>
             <p>{t('cellarDetail.avgPrice')}</p>
           </div>
         </div>
