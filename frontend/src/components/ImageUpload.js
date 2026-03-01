@@ -2,6 +2,8 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import './ImageUpload.css';
 
+const API_URL = process.env.REACT_APP_API_URL || '';
+
 function ImageUpload({ bottleId, wineDefinitionId, onUploadComplete }) {
   const { apiFetch } = useAuth();
   const [uploading, setUploading] = useState(false);
@@ -351,7 +353,7 @@ function ImageUpload({ bottleId, wineDefinitionId, onUploadComplete }) {
               <div className="preview-image-wrap">
                 {img.status === 'processed' && img.processedSrc ? (
                   <img
-                    src={img.processedSrc}
+                    src={img.processedSrc.startsWith('http') ? img.processedSrc : `${API_URL}${img.processedSrc}`}
                     alt="Processed"
                     className="preview-img"
                   />
