@@ -47,6 +47,7 @@ app.use(cookieParser());
 // Routes that accept base64 images need a larger body limit
 app.use('/api/images/remove-bg-preview', express.json({ limit: '5mb' }));
 app.use('/api/wine-requests', express.json({ limit: '5mb' }));
+app.use('/api/admin/wine-requests', express.json({ limit: '5mb' }));
 app.use(express.json({ limit: '10kb' }));
 app.use(cors({
   origin: process.env.FRONTEND_URL || 'http://localhost:3000',

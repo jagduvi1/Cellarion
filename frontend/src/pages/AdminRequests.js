@@ -143,7 +143,9 @@ function AdminRequests() {
         type: 'red',
         appellation: '',
         grapes: [],
-        image: request.image || ''
+        // Only pre-fill if it's a real URL; base64 is already stored in the DB
+        // and the backend falls back to wineRequest.image automatically
+        image: (request.image && !request.image.startsWith('data:')) ? request.image : ''
       }
     });
     setDuplicates([]);
