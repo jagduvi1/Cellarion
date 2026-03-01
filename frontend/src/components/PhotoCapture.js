@@ -2,20 +2,14 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import './ImageUpload.css'; // reuse camera + button styles
 
 /**
- * PhotoCapture — camera modal + crop, no upload.
- * Calls onCapture(file) with the final cropped File.
- * Shows a preview with a remove button once a file is chosen.
+ * PhotoCapture — camera modal + file picker, no upload.
+ * Calls onCapture(file) with the selected File.
+ * Manages its own preview state internally so no URL string
+ * ever flows in from outside (avoids js/xss-through-dom taint path).
  */
-// Only allow safe URL schemes to prevent javascript: URIs reaching img src
-function sanitizeImageUrl(url) {
-  if (!url) return '';
-  if (url.startsWith('blob:') || url.startsWith('data:image/') ||
-      url.startsWith('https://') || url.startsWith('http://') ||
-      url.startsWith('/')) return url;
-  return '';
-}
-
-function PhotoCapture({ onCapture, onRemove, preview }) {
+function PhotoCapture({ onCapture, onRemove }) {
+  const [capturedFile, setCapturedFile] = useState(null);
+  const [capturedUrl, setCapturedUrl] = useState('');
   const [cameraOpen, setCameraOpen] = useState(false);
   const [cameraError, setCameraError] = useState(null);
   const [facingMode, setFacingMode] = useState('environment');
@@ -23,6 +17,14 @@ function PhotoCapture({ onCapture, onRemove, preview }) {
   const canvasRef = useRef(null);
   const streamRef = useRef(null);
   const fileInputRef = useRef(null);
+
+  // Create / revoke the preview blob URL whenever the captured file changes
+  useEffect(() => {
+    if (!capturedFile) { setCapturedUrl(''); return; }
+    const url = URL.createObjectURL(capturedFile);
+    setCapturedUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [capturedFile]);
 
   useEffect(() => {
     return () => {
@@ -56,7 +58,7 @@ function PhotoCapture({ onCapture, onRemove, preview }) {
     } catch (err) {
       if (err.name === 'NotAllowedError') setCameraError('Camera access denied. Please allow camera permissions.');
       else if (err.name === 'NotFoundError') setCameraError('No camera found on this device.');
-      else setCameraError('Could not access camera: ' + err.message);
+      else setCameraError('Could not access camera.');
     }
   }, [facingMode]);
 
@@ -89,10 +91,25 @@ function PhotoCapture({ onCapture, onRemove, preview }) {
     canvas.toBlob((blob) => {
       if (blob) {
         stopCamera();
-        onCapture(new File([blob], `photo-${Date.now()}.jpg`, { type: 'image/jpeg' }));
+        const file = new File([blob], `photo-${Date.now()}.jpg`, { type: 'image/jpeg' });
+        setCapturedFile(file);
+        onCapture(file);
       }
     }, 'image/jpeg', 0.92);
   }, [stopCamera, onCapture]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleFileChange = useCallback((e) => {
+    const file = e.target.files[0];
+    e.target.value = '';
+    if (!file) return;
+    setCapturedFile(file);
+    onCapture(file);
+  }, [onCapture]);
+
+  const handleRemove = useCallback(() => {
+    setCapturedFile(null);
+    onRemove?.();
+  }, [onRemove]);
 
   return (
     <>
@@ -125,10 +142,10 @@ function PhotoCapture({ onCapture, onRemove, preview }) {
         </div>
       )}
 
-      {preview ? (
+      {capturedFile ? (
         <div className="upload-preview-wrapper">
-          <img src={sanitizeImageUrl(preview)} alt="Preview" className="upload-preview" />
-          <button type="button" className="btn-remove-image" onClick={onRemove} aria-label="Remove image">×</button>
+          {capturedUrl && <img src={capturedUrl} alt="Preview" className="upload-preview" />}
+          <button type="button" className="btn-remove-image" onClick={handleRemove} aria-label="Remove image">×</button>
         </div>
       ) : (
         <div className="upload-buttons">
@@ -140,7 +157,7 @@ function PhotoCapture({ onCapture, onRemove, preview }) {
             ref={fileInputRef}
             type="file"
             accept="image/jpeg,image/png,image/webp,image/heic"
-            onChange={(e) => { Array.from(e.target.files).forEach(f => onCapture(f)); e.target.value = ''; }}
+            onChange={handleFileChange}
             style={{ display: 'none' }}
           />
           <button type="button" className="btn btn-upload btn-upload-secondary" onClick={() => fileInputRef.current?.click()}>

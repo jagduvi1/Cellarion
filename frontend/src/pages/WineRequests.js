@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import PhotoCapture from '../components/PhotoCapture';
@@ -12,19 +12,10 @@ function WineRequests() {
   const [showForm, setShowForm] = useState(false);
   const [formData, setFormData] = useState({ wineName: '', sourceUrl: '', image: '' });
   const [imageFile, setImageFile] = useState(null);
-  const [imagePreview, setImagePreview] = useState('');
-  const previewUrlRef = useRef('');
 
   useEffect(() => {
     fetchRequests();
   }, [apiFetch]);
-
-  // Revoke preview object URL when it changes or component unmounts
-  useEffect(() => {
-    return () => {
-      if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
-    };
-  }, []);
 
   const fetchRequests = async () => {
     try {
@@ -38,22 +29,8 @@ function WineRequests() {
     }
   };
 
-  const handleImageChange = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
-    const url = URL.createObjectURL(file);
-    previewUrlRef.current = url;
-    setImageFile(file);
-    setImagePreview(url);
-    setFormData(prev => ({ ...prev, image: '' }));
-  };
-
   const clearImage = () => {
-    if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
-    previewUrlRef.current = '';
     setImageFile(null);
-    setImagePreview('');
   };
 
   const compressImage = (file) => {
@@ -147,18 +124,13 @@ function WineRequests() {
               <label>{t('wineRequests.imageLabel', 'Image')} <span className="label-optional">({t('common.optional', 'optional')})</span></label>
 
               <PhotoCapture
-                preview={imagePreview || null}
                 onCapture={(file) => {
-                  if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
-                  const url = URL.createObjectURL(file);
-                  previewUrlRef.current = url;
                   setImageFile(file);
-                  setImagePreview(url);
                   setFormData(prev => ({ ...prev, image: '' }));
                 }}
                 onRemove={clearImage}
               />
-              {!imagePreview && (
+              {!imageFile && (
                 <div className="image-input-row" style={{ marginTop: '0.5rem' }}>
                   <span className="image-or">{t('common.or', 'or')}</span>
                   <input
