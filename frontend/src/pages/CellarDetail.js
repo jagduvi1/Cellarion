@@ -543,10 +543,10 @@ function BottlesList({ bottles, rackMap, cellarId }) {
             tabIndex={0}
             onKeyDown={e => e.key === 'Enter' && navigate(`/cellars/${cellarId}/bottles/${bottle._id}`)}
           >
-            {bottle.wineDefinition?.image ? (
+            {(bottle.wineDefinition?.image || bottle.pendingImageUrl) ? (
               <img
-                src={bottle.wineDefinition.image}
-                alt={bottle.wineDefinition.name}
+                src={bottle.wineDefinition?.image || bottle.pendingImageUrl}
+                alt={bottle.wineDefinition?.name}
                 className="bottle-wine-image"
                 onError={e => { e.target.style.display = 'none'; }}
               />

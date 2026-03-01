@@ -5,6 +5,7 @@ const Bottle = require('../models/Bottle');
 const Rack = require('../models/Rack');
 const User = require('../models/User');
 const AuditLog = require('../models/AuditLog');
+const BottleImage = require('../models/BottleImage');
 const { getCellarRole } = require('../utils/cellarAccess');
 const { logAudit } = require('../services/audit');
 const { getPlanConfig } = require('../config/plans');
@@ -366,6 +367,29 @@ router.get('/:id', async (req, res) => {
       return 0;
     });
 
+    // Attach the uploader's own pending image to each bottle (visible before admin approval)
+    const bottleIds = bottles.map(b => b._id);
+    const pendingImages = await BottleImage.find({
+      bottle: { $in: bottleIds },
+      uploadedBy: req.user.id,
+      status: { $in: ['uploaded', 'processing', 'processed'] }
+    }).sort({ createdAt: -1 }).lean();
+
+    // Keep only the most recent pending image per bottle
+    const pendingByBottle = {};
+    for (const img of pendingImages) {
+      const key = img.bottle.toString();
+      if (!pendingByBottle[key]) {
+        pendingByBottle[key] = img.processedUrl || img.originalUrl;
+      }
+    }
+
+    const bottleItems = bottles.map(b => {
+      const obj = b.toObject();
+      obj.pendingImageUrl = pendingByBottle[b._id.toString()] || null;
+      return obj;
+    });
+
     const cellarObj = cellar.toObject();
     cellarObj.userRole = role;
     cellarObj.userColor = getUserColor(cellar, req.user.id);
@@ -373,8 +397,8 @@ router.get('/:id', async (req, res) => {
     res.json({
       cellar: cellarObj,
       bottles: {
-        count: bottles.length,
-        items: bottles
+        count: bottleItems.length,
+        items: bottleItems
       }
     });
   } catch (error) {
