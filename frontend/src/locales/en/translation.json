@@ -205,6 +205,7 @@
     "drinkBefore": "Drink Before",
     "bottlePhotos": "Bottle Photos",
     "photosHint": "Take a photo or upload an image. Background will be automatically removed.",
+    "photosNotice": "Images are reviewed by an admin before being added to the shared wine registry, where they will be visible to all Cellarion users.",
     "addBottleBtn": "Add Bottle to Cellar"
   },
 

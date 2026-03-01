@@ -55,6 +55,87 @@
   color: #9A9484;
 }
 
+.label-optional {
+  font-weight: 400;
+  color: #9A9484;
+  font-size: 0.85em;
+}
+
+.image-input-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.image-pick-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.image-or {
+  color: #9A9484;
+  font-size: 0.85rem;
+  flex-shrink: 0;
+}
+
+.image-url-input {
+  flex: 1;
+  min-width: 180px;
+}
+
+.upload-preview-wrapper {
+  position: relative;
+  display: inline-block;
+}
+
+.upload-preview {
+  display: block;
+  max-width: 220px;
+  max-height: 220px;
+  object-fit: contain;
+  border: 1px solid #2a2a2a;
+  border-radius: 6px;
+}
+
+.btn-remove-image {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: none;
+  background: #3a1a1a;
+  color: #E07060;
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.btn-remove-image:hover {
+  background: #5a2020;
+}
+
+.image-public-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.4rem;
+  margin-top: 0.6rem;
+  margin-bottom: 0;
+  font-size: 0.8rem;
+  color: #9A9484;
+  line-height: 1.4;
+}
+
 @media (max-width: 600px) {
   .request-card {
     padding: 1rem;

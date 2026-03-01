@@ -224,6 +224,17 @@
   margin-bottom: 0.35rem;
 }
 
+.image-public-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.4rem;
+  margin-top: 0.75rem;
+  margin-bottom: 0;
+  font-size: 0.8rem;
+  color: #9A9484;
+  line-height: 1.4;
+}
+
 /* ── Mobile ── */
 @media (max-width: 768px) {
   .step span {

@@ -14,12 +14,30 @@
   align-items: flex-start;
 }
 
+.bd-wine-image-wrap {
+  position: relative;
+  flex-shrink: 0;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.3rem;
+}
+
 .bd-wine-image {
   width: 70px;
   height: 100px;
   object-fit: contain;
   border-radius: 4px;
-  flex-shrink: 0;
+}
+
+.bd-pending-badge {
+  font-size: 0.65rem;
+  color: #9A9484;
+  background: rgba(154, 148, 132, 0.12);
+  border: 1px solid rgba(154, 148, 132, 0.25);
+  border-radius: 3px;
+  padding: 1px 5px;
+  white-space: nowrap;
 }
 
 .bd-wine-placeholder {
@@ -558,6 +576,82 @@
 .maturity-badge--declining { background: #2d1414; color: #E07060; border: 1px solid #5a2020; }
 .maturity-badge--pending   { background: #1e1e1e; color: #9A9484; border: 1px solid #3a3a3a; }
 
+/* ── Bottle edit image upload ── */
+.bd-image-section {
+  border-top: 1px solid #2a2a2a;
+  padding-top: 1.25rem;
+  margin-top: 0.5rem;
+}
+
+.bd-label-optional {
+  font-weight: 400;
+  color: #9A9484;
+  font-size: 0.85em;
+}
+
+.bd-image-status--done {
+  margin-top: 0.5rem;
+  font-size: 0.82rem;
+  color: #7B9E88;
+}
+
+/* Shared image upload styles (also used in WineRequests) */
+.image-pick-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.upload-preview-wrapper {
+  position: relative;
+  display: inline-block;
+}
+
+.upload-preview {
+  display: block;
+  max-width: 220px;
+  max-height: 220px;
+  object-fit: contain;
+  border: 1px solid #2a2a2a;
+  border-radius: 6px;
+}
+
+.btn-remove-image {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: none;
+  background: #3a1a1a;
+  color: #E07060;
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.btn-remove-image:hover {
+  background: #5a2020;
+}
+
+.image-public-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.4rem;
+  margin-top: 0.6rem;
+  margin-bottom: 0;
+  font-size: 0.8rem;
+  color: #9A9484;
+  line-height: 1.4;
+}
+
 /* ── Mobile ── */
 @media (max-width: 600px) {
   .bd-detail-grid {
@@ -590,3 +684,4 @@
     width: 100%;
   }
 }
+

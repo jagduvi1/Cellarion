@@ -7,7 +7,7 @@ const API_URL = process.env.REACT_APP_API_URL || '';
 function ImageUpload({ bottleId, wineDefinitionId, onUploadComplete }) {
   const { apiFetch } = useAuth();
   const [uploading, setUploading] = useState(false);
-  const [images, setImages] = useState([]); // { id, originalSrc, processedSrc, status }
+  const [images, setImages] = useState([]);
   const [error, setError] = useState(null);
   const [cameraOpen, setCameraOpen] = useState(false);
   const [cameraError, setCameraError] = useState(null);
@@ -64,18 +64,14 @@ function ImageUpload({ bottleId, wineDefinitionId, onUploadComplete }) {
     pollTimers.current[imageId] = setTimeout(poll, 2000);
   }, [apiFetch]);
 
-  // Cleanup poll timers on unmount
   useEffect(() => {
-    return () => {
-      Object.values(pollTimers.current).forEach(clearTimeout);
-    };
+    return () => { Object.values(pollTimers.current).forEach(clearTimeout); };
   }, []);
 
   const uploadFile = async (file) => {
     if (!file) return;
 
     const localSrc = URL.createObjectURL(file);
-
     setUploading(true);
     setError(null);
 
@@ -85,18 +81,10 @@ function ImageUpload({ bottleId, wineDefinitionId, onUploadComplete }) {
     if (wineDefinitionId) formData.append('wineDefinitionId', wineDefinitionId);
 
     try {
-      const res = await apiFetch('/api/images/upload', {
-        method: 'POST',
-        body: formData
-      });
+      const res = await apiFetch('/api/images/upload', { method: 'POST', body: formData });
       const data = await res.json();
       if (res.ok) {
-        const newImage = {
-          id: data.image._id,
-          originalSrc: localSrc,
-          processedSrc: null,
-          status: 'processing'
-        };
+        const newImage = { id: data.image._id, originalSrc: localSrc, processedSrc: null, status: 'processing' };
         setImages(prev => [...prev, newImage]);
         if (onUploadComplete) onUploadComplete(data.image);
         pollImage(data.image._id);
@@ -111,6 +99,8 @@ function ImageUpload({ bottleId, wineDefinitionId, onUploadComplete }) {
       setUploading(false);
     }
   };
+
+  // --- Image management ---
 
   const removeImage = (imageId) => {
     if (pollTimers.current[imageId]) {
@@ -129,9 +119,7 @@ function ImageUpload({ bottleId, wineDefinitionId, onUploadComplete }) {
       p.id === imageId ? { ...p, status: 'processing' } : p
     ));
     try {
-      await apiFetch(`/api/images/${imageId}/retry`, {
-        method: 'POST'
-      });
+      await apiFetch(`/api/images/${imageId}/retry`, { method: 'POST' });
       pollImage(imageId);
     } catch (err) {
       setImages(prev => prev.map(p =>
@@ -154,26 +142,16 @@ function ImageUpload({ bottleId, wineDefinitionId, onUploadComplete }) {
   const startCamera = useCallback(async () => {
     setCameraError(null);
     setCameraOpen(true);
-
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          facingMode: facingMode,
-          width: { ideal: 1920 },
-          height: { ideal: 1080 }
-        },
+        video: { facingMode, width: { ideal: 1920 }, height: { ideal: 1080 } },
         audio: false
       });
-
       streamRef.current = stream;
-
       requestAnimationFrame(() => {
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-        }
+        if (videoRef.current) videoRef.current.srcObject = stream;
       });
     } catch (err) {
-      console.error('Camera access error:', err);
       if (err.name === 'NotAllowedError') {
         setCameraError('Camera access denied. Please allow camera permissions.');
       } else if (err.name === 'NotFoundError') {
@@ -187,23 +165,16 @@ function ImageUpload({ bottleId, wineDefinitionId, onUploadComplete }) {
   const switchCamera = useCallback(() => {
     const newMode = facingMode === 'environment' ? 'user' : 'environment';
     setFacingMode(newMode);
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach(track => track.stop());
-    }
+    if (streamRef.current) streamRef.current.getTracks().forEach(t => t.stop());
   }, [facingMode]);
 
   useEffect(() => {
-    if (cameraOpen && !cameraError) {
-      startCamera();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [facingMode]);
+    if (cameraOpen && !cameraError) startCamera();
+  }, [facingMode]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     return () => {
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach(track => track.stop());
-      }
+      if (streamRef.current) streamRef.current.getTracks().forEach(t => t.stop());
     };
   }, []);
 
@@ -214,9 +185,6 @@ function ImageUpload({ bottleId, wineDefinitionId, onUploadComplete }) {
 
     const vw = video.videoWidth;
     const vh = video.videoHeight;
-
-    // Crop to the bottle overlay region + 10% margin for safety
-    // Overlay is 80% wide, 90% tall — add margin so nothing gets clipped
     const cropW = Math.min(Math.round(vw * 0.95), vw);
     const cropH = Math.min(Math.round(vh * 0.98), vh);
     const cropX = Math.round((vw - cropW) / 2);
@@ -224,17 +192,15 @@ function ImageUpload({ bottleId, wineDefinitionId, onUploadComplete }) {
 
     canvas.width = cropW;
     canvas.height = cropH;
-    const ctx = canvas.getContext('2d');
-    ctx.drawImage(video, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
+    canvas.getContext('2d').drawImage(video, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
 
     canvas.toBlob((blob) => {
       if (blob) {
-        const file = new File([blob], `photo-${Date.now()}.jpg`, { type: 'image/jpeg' });
         stopCamera();
-        uploadFile(file);
+        uploadFile(new File([blob], `photo-${Date.now()}.jpg`, { type: 'image/jpeg' }));
       }
     }, 'image/jpeg', 0.92);
-  }, [stopCamera]);
+  }, [stopCamera, uploadFile]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="image-upload">
@@ -245,77 +211,32 @@ function ImageUpload({ bottleId, wineDefinitionId, onUploadComplete }) {
             {cameraError ? (
               <div className="camera-error-overlay">
                 <p>{cameraError}</p>
-                <button
-                  type="button"
-                  className="btn btn-secondary"
-                  onClick={stopCamera}
-                >
-                  Close
-                </button>
+                <button type="button" className="btn btn-secondary" onClick={stopCamera}>Close</button>
               </div>
             ) : (
               <>
-                <video
-                  ref={videoRef}
-                  autoPlay
-                  playsInline
-                  muted
-                  className="camera-video"
-                />
-
+                <video ref={videoRef} autoPlay playsInline muted className="camera-video" />
                 <div className="camera-overlay">
-                  <img
-                    src="/bottle-overlay.png"
-                    alt=""
-                    className="bottle-guide"
-                  />
+                  <img src="/bottle-overlay.png" alt="" className="bottle-guide" />
                   <p className="overlay-hint">Place bottle in the center</p>
                 </div>
-
                 <div className="camera-controls">
-                  <button
-                    type="button"
-                    className="camera-btn camera-btn-close"
-                    onClick={stopCamera}
-                    title="Close"
-                  >
-                    ✕
-                  </button>
-
-                  <button
-                    type="button"
-                    className="camera-btn camera-btn-capture"
-                    onClick={capturePhoto}
-                    title="Take Photo"
-                  >
+                  <button type="button" className="camera-btn camera-btn-close" onClick={stopCamera} title="Close">✕</button>
+                  <button type="button" className="camera-btn camera-btn-capture" onClick={capturePhoto} title="Take Photo">
                     <span className="capture-ring"></span>
                   </button>
-
-                  <button
-                    type="button"
-                    className="camera-btn camera-btn-switch"
-                    onClick={switchCamera}
-                    title="Switch Camera"
-                  >
-                    ⟲
-                  </button>
+                  <button type="button" className="camera-btn camera-btn-switch" onClick={switchCamera} title="Switch Camera">⟲</button>
                 </div>
               </>
             )}
           </div>
-
           <canvas ref={canvasRef} style={{ display: 'none' }} />
         </div>
       )}
 
       {/* Upload buttons */}
       <div className="upload-buttons">
-        <button
-          type="button"
-          className="btn btn-upload"
-          onClick={startCamera}
-          disabled={uploading || cameraOpen}
-        >
+        <button type="button" className="btn btn-upload" onClick={startCamera} disabled={uploading || cameraOpen}>
           <span className="upload-icon">📷</span>
           Take Photo
         </button>
@@ -325,18 +246,10 @@ function ImageUpload({ bottleId, wineDefinitionId, onUploadComplete }) {
           type="file"
           accept="image/jpeg,image/png,image/webp,image/heic"
           multiple
-          onChange={(e) => {
-            Array.from(e.target.files).forEach(uploadFile);
-            e.target.value = '';
-          }}
+          onChange={(e) => { Array.from(e.target.files).forEach(uploadFile); e.target.value = ''; }}
           style={{ display: 'none' }}
         />
-        <button
-          type="button"
-          className="btn btn-upload btn-upload-secondary"
-          onClick={() => fileInputRef.current?.click()}
-          disabled={uploading}
-        >
+        <button type="button" className="btn btn-upload btn-upload-secondary" onClick={() => fileInputRef.current?.click()} disabled={uploading}>
           <span className="upload-icon">📁</span>
           Choose File
         </button>
@@ -345,7 +258,6 @@ function ImageUpload({ bottleId, wineDefinitionId, onUploadComplete }) {
       {uploading && <p className="upload-status">Uploading...</p>}
       {error && <div className="upload-error">{error}</div>}
 
-      {/* Image previews with processing status */}
       {images.length > 0 && (
         <div className="upload-previews">
           {images.map((img) => (
@@ -364,46 +276,24 @@ function ImageUpload({ bottleId, wineDefinitionId, onUploadComplete }) {
                     className={`preview-img ${img.status === 'processing' ? 'preview-img-dimmed' : ''}`}
                   />
                 )}
-
                 {img.status === 'processing' && (
                   <div className="preview-overlay">
                     <div className="spinner"></div>
                     <span>Removing background...</span>
                   </div>
                 )}
-
                 {img.status === 'failed' && (
                   <div className="preview-overlay preview-overlay-failed">
                     <span>Processing failed</span>
-                    <button
-                      type="button"
-                      className="btn-retry"
-                      onClick={() => retryImage(img.id)}
-                    >
-                      Retry
-                    </button>
+                    <button type="button" className="btn-retry" onClick={() => retryImage(img.id)}>Retry</button>
                   </div>
                 )}
               </div>
-
               <div className="preview-footer">
-                {img.status === 'processed' && (
-                  <span className="preview-badge-ok">Ready</span>
-                )}
-                {img.status === 'processing' && (
-                  <span className="preview-badge-processing">Processing</span>
-                )}
-                {img.status === 'failed' && (
-                  <span className="preview-badge-failed">Failed</span>
-                )}
-                <button
-                  type="button"
-                  className="btn-remove"
-                  onClick={() => removeImage(img.id)}
-                  title="Remove this image"
-                >
-                  ✕ Remove
-                </button>
+                {img.status === 'processed' && <span className="preview-badge-ok">Ready</span>}
+                {img.status === 'processing' && <span className="preview-badge-processing">Processing</span>}
+                {img.status === 'failed' && <span className="preview-badge-failed">Failed</span>}
+                <button type="button" className="btn-remove" onClick={() => removeImage(img.id)} title="Remove this image">✕ Remove</button>
               </div>
             </div>
           ))}

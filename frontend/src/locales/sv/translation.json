@@ -205,6 +205,7 @@
     "drinkBefore": "Drick senast",
     "bottlePhotos": "Flaskfoton",
     "photosHint": "Ta ett foto eller ladda upp en bild. Bakgrunden tas bort automatiskt.",
+    "photosNotice": "Bilder granskas av en administratör innan de läggs till i det delade vinregistret, där de visas för alla Cellarion-användare.",
     "addBottleBtn": "Lägg till flaska i källaren"
   },
 

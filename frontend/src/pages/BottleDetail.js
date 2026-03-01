@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { useAuth, usePlan } from '../contexts/AuthContext';
 import { getDrinkStatus, formatDrinkDate, toInputDate, toMonthInput, monthToLastDay } from '../utils/drinkStatus';
 import { fetchRates, convertAmount, convertAmountHistorical } from '../utils/currency';
+import ImageUpload from '../components/ImageUpload';
 import './BottleDetail.css';
 
 const CURRENT_YEAR = new Date().getFullYear();
@@ -42,6 +43,7 @@ function BottleDetail() {
   const [error, setError] = useState(null);
   const [editing, setEditing] = useState(false);
   const [consumeOpen, setConsumeOpen] = useState(false);
+  const [pendingImage, setPendingImage] = useState(null);
 
 
   useEffect(() => {
@@ -154,13 +156,18 @@ function BottleDetail() {
       {/* Wine header */}
       <div className="bd-wine-header card">
         <div className="bd-wine-identity">
-          {wine?.image ? (
-            <img
-              src={wine.image}
-              alt={wine.name}
-              className="bd-wine-image"
-              onError={e => { e.target.style.display = 'none'; }}
-            />
+          {(pendingImage || wine?.image) ? (
+            <div className="bd-wine-image-wrap">
+              <img
+                src={pendingImage || wine.image}
+                alt={wine?.name}
+                className="bd-wine-image"
+                onError={e => { e.target.style.display = 'none'; }}
+              />
+              {pendingImage && !wine?.image && (
+                <span className="bd-pending-badge">{t('bottleDetail.pendingReview', 'Pending review')}</span>
+              )}
+            </div>
           ) : (
             <div className={`bd-wine-placeholder ${wine?.type}`} />
           )}
@@ -185,6 +192,7 @@ function BottleDetail() {
           bottle={bottle}
           onSaved={handleBottleUpdated}
           onCancel={() => setEditing(false)}
+          onImageUploaded={(url) => setPendingImage(url)}
         />
       ) : (
         <ViewDetails
@@ -385,7 +393,9 @@ function ViewDetails({ bottle, rackInfo, cellarId, drinkStatus, vintageProfile, 
 }
 
 // ── Edit form ──
-function EditForm({ bottle, onSaved, onCancel }) {
+const API_URL = process.env.REACT_APP_API_URL || '';
+
+function EditForm({ bottle, onSaved, onCancel, onImageUploaded }) {
   const { t } = useTranslation();
   const { apiFetch } = useAuth();
   const [form, setForm] = useState({
@@ -403,6 +413,8 @@ function EditForm({ bottle, onSaved, onCancel }) {
   });
   const [saving, setSaving] = useState(false);
   const [error, setError]   = useState(null);
+
+  const hasWineImage = !!bottle.wineDefinition?.image;
 
   const set = (field) => (e) => setForm(f => ({ ...f, [field]: e.target.value }));
 
@@ -515,6 +527,33 @@ function EditForm({ bottle, onSaved, onCancel }) {
         <label>{t('addBottle.purchaseUrl')}</label>
         <input type="url" value={form.purchaseUrl} onChange={set('purchaseUrl')} placeholder="https://…" />
       </div>
+
+      {!hasWineImage && (
+        <div className="form-group bd-image-section">
+          <label>
+            {t('bottleDetail.addWineImage', 'Wine Photo')}
+            <span className="bd-label-optional"> ({t('common.optional', 'optional')})</span>
+          </label>
+          <ImageUpload
+            bottleId={bottle._id}
+            wineDefinitionId={bottle.wineDefinition?._id}
+            onUploadComplete={(img) => {
+              if (onImageUploaded && img?.originalUrl) {
+                const url = img.originalUrl.startsWith('http')
+                  ? img.originalUrl
+                  : `${API_URL}${img.originalUrl}`;
+                onImageUploaded(url);
+              }
+            }}
+          />
+          <p className="image-public-notice">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flexShrink: 0, marginTop: '1px' }}>
+              <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+            </svg>
+            {t('bottleDetail.imageNotice', 'Images are reviewed by an admin before being added to the shared wine registry, where they will be visible to all Cellarion users.')}
+          </p>
+        </div>
+      )}
 
       <div className="form-actions">
         <button type="submit" className="btn btn-primary" disabled={saving}>

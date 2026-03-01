@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
+import PhotoCapture from '../components/PhotoCapture';
 import './WineRequests.css';
 
 function WineRequests() {
@@ -9,23 +10,27 @@ function WineRequests() {
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
-  const [formData, setFormData] = useState({
-    wineName: '',
-    sourceUrl: '',
-    image: ''
-  });
+  const [formData, setFormData] = useState({ wineName: '', sourceUrl: '', image: '' });
+  const [imageFile, setImageFile] = useState(null);
+  const [imagePreview, setImagePreview] = useState('');
+  const previewUrlRef = useRef('');
 
   useEffect(() => {
     fetchRequests();
   }, [apiFetch]);
 
+  // Revoke preview object URL when it changes or component unmounts
+  useEffect(() => {
+    return () => {
+      if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
+    };
+  }, []);
+
   const fetchRequests = async () => {
     try {
       const res = await apiFetch('/api/wine-requests');
       const data = await res.json();
-      if (res.ok) {
-        setRequests(data.requests);
-      }
+      if (res.ok) setRequests(data.requests);
     } catch (err) {
       console.error('Failed to fetch requests:', err);
     } finally {
@@ -33,22 +38,74 @@ function WineRequests() {
     }
   };
 
+  const handleImageChange = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
+    const url = URL.createObjectURL(file);
+    previewUrlRef.current = url;
+    setImageFile(file);
+    setImagePreview(url);
+    setFormData(prev => ({ ...prev, image: '' }));
+  };
+
+  const clearImage = () => {
+    if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
+    previewUrlRef.current = '';
+    setImageFile(null);
+    setImagePreview('');
+  };
+
+  const compressImage = (file) => {
+    return new Promise((resolve) => {
+      const img = new Image();
+      const url = URL.createObjectURL(file);
+      img.onload = () => {
+        const MAX = 900;
+        let w = img.naturalWidth;
+        let h = img.naturalHeight;
+        if (w > MAX || h > MAX) {
+          if (w > h) { h = Math.round(h * MAX / w); w = MAX; }
+          else { w = Math.round(w * MAX / h); h = MAX; }
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = w;
+        canvas.height = h;
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        URL.revokeObjectURL(url);
+        resolve(canvas.toDataURL('image/jpeg', 0.82));
+      };
+      img.src = url;
+    });
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
+      let imageValue = formData.image || null;
+      if (imageFile) {
+        imageValue = await compressImage(imageFile);
+      }
       const res = await apiFetch('/api/wine-requests', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData)
+        body: JSON.stringify({ ...formData, image: imageValue })
       });
       if (res.ok) {
         setFormData({ wineName: '', sourceUrl: '', image: '' });
+        clearImage();
         setShowForm(false);
         fetchRequests();
       }
     } catch (err) {
       alert('Failed to submit request');
     }
+  };
+
+  const handleCancel = () => {
+    clearImage();
+    setFormData({ wineName: '', sourceUrl: '', image: '' });
+    setShowForm(false);
   };
 
   return (
@@ -84,18 +141,47 @@ function WineRequests() {
                 placeholder="https://..."
               />
             </div>
+
+            {/* Image field */}
             <div className="form-group">
-              <label>{t('wineRequests.imageUrlLabel')}</label>
-              <input
-                type="url"
-                value={formData.image}
-                onChange={(e) => setFormData({ ...formData, image: e.target.value })}
-                placeholder="https://..."
+              <label>{t('wineRequests.imageLabel', 'Image')} <span className="label-optional">({t('common.optional', 'optional')})</span></label>
+
+              <PhotoCapture
+                preview={imagePreview || null}
+                onCapture={(file) => {
+                  if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
+                  const url = URL.createObjectURL(file);
+                  previewUrlRef.current = url;
+                  setImageFile(file);
+                  setImagePreview(url);
+                  setFormData(prev => ({ ...prev, image: '' }));
+                }}
+                onRemove={clearImage}
               />
+              {!imagePreview && (
+                <div className="image-input-row" style={{ marginTop: '0.5rem' }}>
+                  <span className="image-or">{t('common.or', 'or')}</span>
+                  <input
+                    type="url"
+                    value={formData.image}
+                    onChange={(e) => setFormData({ ...formData, image: e.target.value })}
+                    placeholder={t('wineRequests.imageUrlPlaceholder', 'Paste image URL…')}
+                    className="image-url-input"
+                  />
+                </div>
+              )}
+
+              <p className="image-public-notice">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flexShrink: 0, marginTop: '1px' }}>
+                  <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+                </svg>
+                {t('wineRequests.imageNotice', 'Images are reviewed by an admin before being added to the shared wine registry, where they will be visible to all Cellarion users.')}
+              </p>
             </div>
+
             <div className="form-actions">
               <button type="submit" className="btn btn-success">{t('wineRequests.submitRequest')}</button>
-              <button type="button" onClick={() => setShowForm(false)} className="btn btn-secondary">
+              <button type="button" onClick={handleCancel} className="btn btn-secondary">
                 {t('common.cancel')}
               </button>
             </div>

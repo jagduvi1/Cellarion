@@ -24,6 +24,9 @@ function AdminRequests() {
   const [grapes, setGrapes] = useState([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
+  const [linkSearch, setLinkSearch] = useState('');
+  const [linkResults, setLinkResults] = useState([]);
+  const [linkSearching, setLinkSearching] = useState(false);
 
   useEffect(() => {
     fetchRequests();
@@ -33,6 +36,26 @@ function AdminRequests() {
     fetchCountries();
     fetchGrapes();
   }, [apiFetch]);
+
+  useEffect(() => {
+    if (resolveData.mode !== 'link' || linkSearch.length < 2) {
+      setLinkResults([]);
+      return;
+    }
+    const timer = setTimeout(async () => {
+      setLinkSearching(true);
+      try {
+        const res = await apiFetch(`/api/wines?search=${encodeURIComponent(linkSearch)}&limit=8`);
+        const data = await res.json();
+        if (res.ok) setLinkResults(data.wines || []);
+      } catch (err) {
+        console.error('Wine search failed:', err);
+      } finally {
+        setLinkSearching(false);
+      }
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [linkSearch, resolveData.mode, apiFetch]);
 
   const fetchRequests = async () => {
     setLoading(true);
@@ -125,6 +148,8 @@ function AdminRequests() {
     });
     setDuplicates([]);
     setError(null);
+    setLinkSearch('');
+    setLinkResults([]);
   };
 
   const handleResolve = async () => {
@@ -408,11 +433,11 @@ function AdminRequests() {
                               <span className="similarity">{Math.round(d.scores.overall * 100)}{t('admin.requests.match')}</span>
                               <button
                                 className="btn btn-secondary btn-small"
-                                onClick={() => setResolveData({
-                                  ...resolveData,
-                                  mode: 'link',
-                                  wineDefinitionId: d.wine._id
-                                })}
+                                onClick={() => {
+                                  setResolveData({ ...resolveData, mode: 'link', wineDefinitionId: d.wine._id });
+                                  setLinkSearch(`${d.wine.name}${d.wine.producer ? ' — ' + d.wine.producer : ''}`);
+                                  setLinkResults([]);
+                                }}
                               >
                                 {t('admin.requests.useThis')}
                               </button>
@@ -424,14 +449,44 @@ function AdminRequests() {
                   )}
 
                   {resolveData.mode === 'link' && (
-                    <div className="form-group">
-                      <label>{t('admin.requests.wineDefIdLabel')}</label>
-                      <input
-                        type="text"
-                        value={resolveData.wineDefinitionId}
-                        onChange={(e) => setResolveData({ ...resolveData, wineDefinitionId: e.target.value })}
-                        placeholder={t('admin.requests.wineDefIdPlaceholder')}
-                      />
+                    <div className="form-group link-search-group">
+                      <label>{t('admin.requests.linkSearchLabel', 'Search Wine Registry')}</label>
+                      <div className="link-search-wrapper">
+                        <input
+                          type="text"
+                          value={linkSearch}
+                          onChange={(e) => {
+                            setLinkSearch(e.target.value);
+                            setResolveData(prev => ({ ...prev, wineDefinitionId: '' }));
+                          }}
+                          placeholder={t('admin.requests.linkSearchPlaceholder', 'Search by name or producer…')}
+                          autoComplete="off"
+                        />
+                        {linkSearching && <span className="link-search-spinner">{t('common.loading', 'Loading…')}</span>}
+                        {linkResults.length > 0 && (
+                          <ul className="link-search-results">
+                            {linkResults.map(wine => (
+                              <li
+                                key={wine._id}
+                                className="link-search-result"
+                                onMouseDown={() => {
+                                  setResolveData(prev => ({ ...prev, wineDefinitionId: wine._id }));
+                                  setLinkSearch(`${wine.name}${wine.producer ? ' — ' + wine.producer : ''}`);
+                                  setLinkResults([]);
+                                }}
+                              >
+                                <span className="link-result-name">{wine.name}</span>
+                                {wine.producer && <span className="link-result-producer">{wine.producer}</span>}
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+                      {resolveData.wineDefinitionId && (
+                        <div className="link-selected-id">
+                          {t('admin.requests.selectedId', 'Selected ID:')} <code>{resolveData.wineDefinitionId}</code>
+                        </div>
+                      )}
                     </div>
                   )}
 
