@@ -122,7 +122,7 @@
 
 .detail-image {
   width: 100%;
-  max-height: 300px;
+  max-height: 480px;
   object-fit: contain;
   border: 1px solid #2a2a2a;
   border-radius: 4px;
