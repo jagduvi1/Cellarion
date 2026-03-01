@@ -4,7 +4,7 @@ import './ImageUpload.css';
 
 const API_URL = process.env.REACT_APP_API_URL || '';
 
-function ImageUpload({ bottleId, wineDefinitionId, onUploadComplete }) {
+function ImageUpload({ bottleId, wineDefinitionId, onUploadComplete, onProcessingComplete }) {
   const { apiFetch } = useAuth();
   const [uploading, setUploading] = useState(false);
   const [images, setImages] = useState([]);
@@ -37,6 +37,12 @@ function ImageUpload({ bottleId, wineDefinitionId, onUploadComplete }) {
               ? { ...p, processedSrc: img.processedUrl, status: 'processed' }
               : p
           ));
+          if (onProcessingComplete && img.processedUrl) {
+            const url = img.processedUrl.startsWith('http')
+              ? img.processedUrl
+              : `${API_URL}${img.processedUrl}`;
+            onProcessingComplete(url);
+          }
           delete pollTimers.current[imageId];
           return;
         }

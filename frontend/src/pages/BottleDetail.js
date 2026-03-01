@@ -545,6 +545,7 @@ function EditForm({ bottle, onSaved, onCancel, onImageUploaded }) {
                 onImageUploaded(url);
               }
             }}
+            onProcessingComplete={(url) => onImageUploaded?.(url)}
           />
           <p className="image-public-notice">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flexShrink: 0, marginTop: '1px' }}>
