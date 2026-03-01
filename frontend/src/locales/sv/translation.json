@@ -246,6 +246,7 @@
     "priceEvolution": "Prisutveckling",
     "premiumFeature": "Premiumfunktion",
     "premiumFeatureDesc": "Följ hur marknadsvärdet på detta vin förändras över tid. Tillgänglig i Premium-planen.",
+    "agingMaturityPremiumDesc": "Se expertens lagringsfönster och mognadsfaser för denna årgång. Tillgänglig i Premium-planen.",
     "editDetails": "✏️ Redigera detaljer",
     "removeBottle": "🍷 Ta bort flaska",
     "editBottleTitle": "Redigera flaskdetaljer",

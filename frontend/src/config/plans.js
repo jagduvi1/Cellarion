@@ -10,6 +10,7 @@ export const PLANS = {
     maxCellars: 1,
     maxSharesPerCellar: 1,
     features: {
+      agingMaturity: false,
       priceEvolution: false,
     },
     featureList: [
@@ -27,6 +28,7 @@ export const PLANS = {
     maxCellars: 5,
     maxSharesPerCellar: 1,
     features: {
+      agingMaturity: false,
       priceEvolution: false,
     },
     featureList: [
@@ -41,11 +43,13 @@ export const PLANS = {
     maxCellars: -1,  // -1 = unlimited
     maxSharesPerCellar: -1,
     features: {
+      agingMaturity: true,
       priceEvolution: true,
     },
     featureList: [
       'Unlimited cellars',
       'Unlimited shared members per cellar',
+      'Aging & maturity profiles',
       'Price evolution tracking',
       'Everything in Basic',
     ],

@@ -232,6 +232,7 @@ function BottleDetail() {
 function ViewDetails({ bottle, rackInfo, cellarId, drinkStatus, vintageProfile, priceHistory, rates, userCurrency, canEdit, onEdit, onRemove }) {
   const { t } = useTranslation();
   const { plan, hasFeature } = usePlan();
+  const hasAgingMaturity = hasFeature('agingMaturity');
   const hasPriceEvolution = hasFeature('priceEvolution');
   const maturityStatus = getMaturityStatus(vintageProfile);
 
@@ -273,39 +274,40 @@ function ViewDetails({ bottle, rackInfo, cellarId, drinkStatus, vintageProfile, 
         )}
       </div>
 
-      {/* Sommelier maturity section — shown when a profile exists for this wine+vintage */}
+      {/* Sommelier maturity section — premium feature, not shown for NV */}
       {bottle.vintage && bottle.vintage !== 'NV' && (
         <div className="bd-section">
           <span className="bd-section-label">{t('bottleDetail.sommMaturity')}</span>
-          {!vintageProfile ? (
-            <span className="bd-no-dates">{t('bottleDetail.loadingMaturity')}</span>
-          ) : vintageProfile.status === 'pending' ? (
-            <div className="bd-maturity-pending">
-              <span className="maturity-badge maturity-badge--pending">{t('bottleDetail.awaitingSommelier')}</span>
-              <span className="bd-maturity-note">
-                {t('bottleDetail.sommelierWillSet')}
-              </span>
-            </div>
+          {hasAgingMaturity ? (
+            !vintageProfile ? (
+              <span className="bd-no-dates">{t('bottleDetail.loadingMaturity')}</span>
+            ) : vintageProfile.status === 'pending' ? (
+              <div className="bd-maturity-pending">
+                <span className="maturity-badge maturity-badge--pending">{t('bottleDetail.awaitingSommelier')}</span>
+                <span className="bd-maturity-note">
+                  {t('bottleDetail.sommelierWillSet')}
+                </span>
+              </div>
+            ) : (
+              <div className="bd-maturity-reviewed">
+                {maturityStatus && (
+                  <span className={`maturity-badge maturity-badge--${maturityStatus.status}`}>
+                    {maturityStatus.label}
+                  </span>
+                )}
+                <MaturityPhaseTable profile={vintageProfile} />
+                {vintageProfile.sommNotes && (
+                  <p className="bd-maturity-notes">{vintageProfile.sommNotes}</p>
+                )}
+              </div>
+            )
           ) : (
-            <div className="bd-maturity-reviewed">
-              {/* Current status badge */}
-              {maturityStatus && (
-                <span className={`maturity-badge maturity-badge--${maturityStatus.status}`}>
-                  {maturityStatus.label}
-                </span>
-              )}
-
-              {/* Phase table */}
-              <MaturityPhaseTable profile={vintageProfile} />
-
-              {vintageProfile.sommNotes && (
-                <p className="bd-maturity-notes">{vintageProfile.sommNotes}</p>
-              )}
-              {vintageProfile.setBy && (
-                <span className="bd-maturity-attribution">
-                  — {vintageProfile.setBy.username}
-                </span>
-              )}
+            <div className="bd-price-evolution bd-price-evolution--locked">
+              <span className="bd-price-evolution__icon">🔒</span>
+              <div>
+                <strong>{t('bottleDetail.premiumFeature')}</strong>
+                <p>{t('bottleDetail.agingMaturityPremiumDesc')}</p>
+              </div>
             </div>
           )}
         </div>

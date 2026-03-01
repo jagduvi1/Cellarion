@@ -246,6 +246,7 @@
     "priceEvolution": "Price Evolution",
     "premiumFeature": "Premium feature",
     "premiumFeatureDesc": "Track how the market value of this wine changes over time. Available on the Premium plan.",
+    "agingMaturityPremiumDesc": "See expert aging windows and maturity phases for this vintage. Available on the Premium plan.",
     "editDetails": "✏️ Edit Details",
     "removeBottle": "🍷 Remove Bottle",
     "editBottleTitle": "Edit Bottle Details",
