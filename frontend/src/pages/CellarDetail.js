@@ -3,6 +3,7 @@ import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import { getDrinkStatus } from '../utils/drinkStatus';
+import { fetchRates, convertAmount } from '../utils/currency';
 import ShareCellarModal from '../components/ShareCellarModal';
 import CellarColorPicker from '../components/CellarColorPicker';
 import './CellarDetail.css';
@@ -24,6 +25,11 @@ function CellarDetail() {
   const [showColorPicker, setShowColorPicker] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
+  const [rates, setRates] = useState(null);
+
+  useEffect(() => {
+    fetchRates().then(r => setRates(r));
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const [filters, setFilters] = useState({
     search: '',
     vintage: '',
@@ -222,7 +228,23 @@ function CellarDetail() {
         </div>
       )}
 
-      {statistics && (
+      {statistics && (() => {
+        // Convert each currency bucket to the user's preferred currency using live rates
+        let convertedTotal = 0;
+        const byCurrency = statistics.valuesByCurrency || {};
+        for (const [currency, amount] of Object.entries(byCurrency)) {
+          if (currency === userCurrency) {
+            convertedTotal += amount;
+          } else {
+            const c = convertAmount(amount, currency, userCurrency, rates);
+            convertedTotal += c !== null ? c : amount;
+          }
+        }
+        const convertedAvg = statistics.priceCount > 0
+          ? convertedTotal / statistics.priceCount
+          : 0;
+
+        return (
         <div className="statistics-grid">
           <div className="stat-card">
             <h3>{statistics.totalBottles}</h3>
@@ -233,15 +255,16 @@ function CellarDetail() {
             <p>{t('cellarDetail.uniqueWines')}</p>
           </div>
           <div className="stat-card">
-            <h3>{statistics.totalValue.toFixed(2)} {userCurrency}</h3>
+            <h3>{convertedTotal.toFixed(2)} {userCurrency}</h3>
             <p>{t('cellarDetail.totalValue')}</p>
           </div>
           <div className="stat-card">
-            <h3>{statistics.averagePrice.toFixed(2)} {userCurrency}</h3>
+            <h3>{convertedAvg.toFixed(2)} {userCurrency}</h3>
             <p>{t('cellarDetail.avgPrice')}</p>
           </div>
         </div>
-      )}
+        );
+      })()}
 
       <div className="filters-bar filters-bar-5">
         <input

@@ -116,6 +116,8 @@ router.get('/:id/statistics', async (req, res) => {
       uniqueWines: new Set(bottles.map(b => b.wineDefinition?._id.toString())).size,
       totalValue: 0,
       averagePrice: 0,
+      valuesByCurrency: {},
+      priceCount: 0,
       byCountry: {},
       byType: {},
       byVintage: {},
@@ -132,7 +134,9 @@ router.get('/:id/statistics', async (req, res) => {
     bottles.forEach(bottle => {
       // Total value calculation
       if (bottle.price) {
+        const currency = bottle.currency || 'USD';
         stats.totalValue += bottle.price;
+        stats.valuesByCurrency[currency] = (stats.valuesByCurrency[currency] || 0) + bottle.price;
         priceSum += bottle.price;
         priceCount++;
       }
@@ -166,6 +170,7 @@ router.get('/:id/statistics', async (req, res) => {
     });
 
     stats.averagePrice = priceCount > 0 ? priceSum / priceCount : 0;
+    stats.priceCount = priceCount;
     stats.oldestVintage = oldestYear !== Infinity ? oldestYear : null;
     stats.newestVintage = newestYear !== -Infinity ? newestYear : null;
 
