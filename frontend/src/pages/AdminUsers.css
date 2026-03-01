@@ -183,6 +183,55 @@
   opacity: 0.4;
 }
 
+/* ── Plan cell with duration picker ── */
+.users-plan-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.users-duration-picker {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  padding: 0.35rem 0.5rem;
+  background: #141414;
+  border: 1px solid #2a2a2a;
+  border-radius: 6px;
+}
+
+.users-duration-label {
+  font-size: 0.72rem;
+  color: #9A9484;
+  white-space: nowrap;
+}
+
+.btn-xs {
+  font-size: 0.72rem;
+  padding: 0.2rem 0.55rem;
+}
+
+/* ── Expiry display ── */
+.users-expiry {
+  font-size: 0.78rem;
+  color: #9A9484;
+}
+
+.users-expiry--never {
+  color: #555;
+  font-style: italic;
+}
+
+.users-expiry--expired {
+  color: #E07060;
+  font-weight: 600;
+}
+
+.users-expiry--soon {
+  color: #C8A87E;
+}
+
 /* ── Pagination ── */
 .users-pagination {
   display: flex;
@@ -204,8 +253,10 @@
     flex: 1 1 100%;
   }
 
-  .users-table th:nth-child(5),
-  .users-table td:nth-child(5) {
+  .users-table th:nth-child(4),
+  .users-table td:nth-child(4),
+  .users-table th:nth-child(6),
+  .users-table td:nth-child(6) {
     display: none;
   }
 }

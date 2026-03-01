@@ -33,7 +33,7 @@ router.get('/', async (req, res) => {
 
     const [users, total] = await Promise.all([
       User.find(filter)
-        .select('username email roles plan createdAt')
+        .select('username email roles plan planStartedAt planExpiresAt createdAt')
         .sort({ createdAt: -1 })
         .skip(Number(offset))
         .limit(Number(limit)),
@@ -47,28 +47,51 @@ router.get('/', async (req, res) => {
   }
 });
 
-// PATCH /api/admin/users/:id/plan - Change a user's plan
+// PATCH /api/admin/users/:id/plan - Change a user's plan (and optional expiry)
 router.patch('/:id/plan', async (req, res) => {
   try {
-    const { plan } = req.body;
+    const { plan, expiresInDays } = req.body;
 
     if (!plan || !PLAN_NAMES.includes(plan)) {
       return res.status(400).json({ error: `plan must be one of: ${PLAN_NAMES.join(', ')}` });
     }
 
-    const user = await User.findById(req.params.id).select('username email roles plan');
+    // expiresInDays: positive integer = days from now; null/undefined = no expiry
+    if (expiresInDays !== undefined && expiresInDays !== null) {
+      const days = Number(expiresInDays);
+      if (!Number.isInteger(days) || days < 1) {
+        return res.status(400).json({ error: 'expiresInDays must be a positive integer or null' });
+      }
+    }
+
+    const user = await User.findById(req.params.id).select('username email roles plan planStartedAt planExpiresAt');
     if (!user) return res.status(404).json({ error: 'User not found' });
 
     const previousPlan = user.plan;
+    const now = new Date();
     user.plan = plan;
+    user.planStartedAt = now;
+    user.planExpiresAt = (expiresInDays != null)
+      ? new Date(now.getTime() + Number(expiresInDays) * 24 * 60 * 60 * 1000)
+      : null;
     await user.save();
 
     logAudit(req, 'admin.user.plan.change',
       { type: 'user', id: user._id },
-      { username: user.username, from: previousPlan, to: plan }
+      { username: user.username, from: previousPlan, to: plan, expiresAt: user.planExpiresAt }
     );
 
-    res.json({ user: { _id: user._id, username: user.username, email: user.email, roles: user.roles, plan: user.plan } });
+    res.json({
+      user: {
+        _id: user._id,
+        username: user.username,
+        email: user.email,
+        roles: user.roles,
+        plan: user.plan,
+        planStartedAt: user.planStartedAt,
+        planExpiresAt: user.planExpiresAt,
+      }
+    });
   } catch (error) {
     console.error('Admin change plan error:', error);
     res.status(500).json({ error: 'Failed to change plan' });
@@ -94,7 +117,7 @@ router.patch('/:id/roles', async (req, res) => {
       return res.status(400).json({ error: 'You cannot change your own roles' });
     }
 
-    const user = await User.findById(req.params.id).select('username email roles plan');
+    const user = await User.findById(req.params.id).select('username email roles plan planStartedAt planExpiresAt');
     if (!user) return res.status(404).json({ error: 'User not found' });
 
     const previousRoles = [...user.roles];
@@ -106,7 +129,7 @@ router.patch('/:id/roles', async (req, res) => {
       { username: user.username, from: previousRoles, to: user.roles }
     );
 
-    res.json({ user: { _id: user._id, username: user.username, email: user.email, roles: user.roles, plan: user.plan } });
+    res.json({ user: { _id: user._id, username: user.username, email: user.email, roles: user.roles, plan: user.plan, planStartedAt: user.planStartedAt, planExpiresAt: user.planExpiresAt } });
   } catch (error) {
     console.error('Admin change roles error:', error);
     res.status(500).json({ error: 'Failed to change roles' });

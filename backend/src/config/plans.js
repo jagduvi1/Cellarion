@@ -4,28 +4,52 @@
  * maxCellars:         max owned cellars; -1 = unlimited
  * maxSharesPerCellar: max members per cellar; -1 = unlimited
  * features:           boolean feature flags for gated functionality
+ * description:        short human-readable summary of the plan
+ * featureList:        ordered list of features displayed on the Plans page
  */
 const PLANS = {
   free: {
+    description: 'Get started with wine tracking at no cost.',
     maxCellars: 1,
     maxSharesPerCellar: 1,
     features: {
       priceEvolution: false,
     },
+    featureList: [
+      '1 cellar',
+      '1 shared member per cellar',
+      'Bottle tracking (vintages, ratings, notes)',
+      'Drink-window alerts',
+      'Rack management',
+      'Wine requests',
+    ],
   },
   basic: {
+    description: 'More space to grow your collection.',
     maxCellars: 5,
-    maxSharesPerCellar: 5,
+    maxSharesPerCellar: 1,
     features: {
       priceEvolution: false,
     },
+    featureList: [
+      '5 cellars',
+      '1 shared member per cellar',
+      'Everything in Free',
+    ],
   },
   premium: {
+    description: 'Unlimited access and advanced analytics.',
     maxCellars: -1,
     maxSharesPerCellar: -1,
     features: {
       priceEvolution: true,
     },
+    featureList: [
+      'Unlimited cellars',
+      'Unlimited shared members per cellar',
+      'Price evolution tracking',
+      'Everything in Basic',
+    ],
   },
 };
 

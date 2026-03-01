@@ -6,27 +6,49 @@
 export const PLANS = {
   free: {
     label: 'Free',
+    description: 'Get started with wine tracking at no cost.',
     maxCellars: 1,
     maxSharesPerCellar: 1,
     features: {
       priceEvolution: false,
     },
+    featureList: [
+      '1 cellar',
+      '1 shared member per cellar',
+      'Bottle tracking (vintages, ratings, notes)',
+      'Drink-window alerts',
+      'Rack management',
+      'Wine requests',
+    ],
   },
   basic: {
     label: 'Basic',
+    description: 'More space to grow your collection.',
     maxCellars: 5,
-    maxSharesPerCellar: 5,
+    maxSharesPerCellar: 1,
     features: {
       priceEvolution: false,
     },
+    featureList: [
+      '5 cellars',
+      '1 shared member per cellar',
+      'Everything in Free',
+    ],
   },
   premium: {
     label: 'Premium',
+    description: 'Unlimited access and advanced analytics.',
     maxCellars: -1,  // -1 = unlimited
     maxSharesPerCellar: -1,
     features: {
       priceEvolution: true,
     },
+    featureList: [
+      'Unlimited cellars',
+      'Unlimited shared members per cellar',
+      'Price evolution tracking',
+      'Everything in Basic',
+    ],
   },
 };
 

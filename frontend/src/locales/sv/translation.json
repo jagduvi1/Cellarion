@@ -56,6 +56,7 @@
     "settings": "Inställningar",
     "logout": "Logga ut",
     "toggleNav": "Växla navigering",
+    "plans": "Abonnemang",
     "badge": {
       "admin": "Admin",
       "somm": "Somm"
@@ -88,7 +89,24 @@
     "languageSv": "Svenska",
     "saveBtn": "Spara",
     "savingBtn": "Sparar…",
-    "savedMsg": "Sparat"
+    "savedMsg": "Sparat",
+    "plan": {
+      "title": "Ditt abonnemang",
+      "expires": "Giltigt till:",
+      "noExpiry": "Inget utgångsdatum",
+      "comparePlans": "Jämför abonnemang →"
+    }
+  },
+
+  "plans": {
+    "title": "Abonnemang",
+    "subtitle": "Jämför de tillgängliga abonnemangsnivåerna.",
+    "yourPlan": "Ditt nuvarande abonnemang:",
+    "expires": "Giltigt till:",
+    "noExpiry": "Inget utgångsdatum",
+    "expired": "Utgånget",
+    "currentTag": "Ditt abonnemang",
+    "adminManaged": "Abonnemang hanteras av din administratör."
   },
 
   "cellars": {
@@ -543,8 +561,19 @@
       "colUsername": "Användarnamn",
       "colEmail": "E-post",
       "colPlan": "Plan",
+      "colExpiry": "Utgångsdatum",
       "colRoles": "Roller",
       "colJoined": "Gick med",
+      "expiryNever": "Aldrig",
+      "expiryExpired": "Utgånget",
+      "durationLabel": "Giltighetstid:",
+      "duration30": "30 dagar",
+      "duration90": "90 dagar",
+      "duration180": "180 dagar",
+      "duration365": "1 år",
+      "durationNever": "Inget utgångsdatum",
+      "applyPlanBtn": "Tillämpa",
+      "cancelPlanBtn": "Avbryt",
       "page": "Sida {{current}} av {{total}}",
       "previousBtn": "Föregående",
       "nextBtn": "Nästa"
