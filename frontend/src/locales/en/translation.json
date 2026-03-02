@@ -106,7 +106,8 @@
     "noExpiry": "No expiry (indefinite)",
     "expired": "Expired",
     "currentTag": "Your plan",
-    "adminManaged": "Plans are managed by your administrator."
+    "adminManaged": "Plans are managed by your administrator.",
+    "tryPremium": "Try Premium free for 30 days"
   },
 
   "cellars": {
@@ -562,6 +563,9 @@
       "colEmail": "Email",
       "colPlan": "Plan",
       "colExpiry": "Expiry",
+      "colTrial": "Trial",
+      "trialAvailable": "Available",
+      "resetTrialBtn": "Reset trial",
       "colRoles": "Roles",
       "colJoined": "Joined",
       "expiryNever": "Never",

@@ -33,7 +33,7 @@ router.get('/', async (req, res) => {
 
     const [users, total] = await Promise.all([
       User.find(filter)
-        .select('username email roles plan planStartedAt planExpiresAt createdAt')
+        .select('username email roles plan planStartedAt planExpiresAt trialEligible createdAt')
         .sort({ createdAt: -1 })
         .skip(Number(offset))
         .limit(Number(limit)),
@@ -95,6 +95,39 @@ router.patch('/:id/plan', async (req, res) => {
   } catch (error) {
     console.error('Admin change plan error:', error);
     res.status(500).json({ error: 'Failed to change plan' });
+  }
+});
+
+// PATCH /api/admin/users/:id/trial-eligible - Reset trial eligibility so the user can start another trial
+router.patch('/:id/trial-eligible', async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id)
+      .select('username email roles plan planStartedAt planExpiresAt trialEligible');
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    user.trialEligible = true;
+    await user.save();
+
+    logAudit(req, 'admin.user.trial.reset',
+      { type: 'user', id: user._id },
+      { username: user.username }
+    );
+
+    res.json({
+      user: {
+        _id: user._id,
+        username: user.username,
+        email: user.email,
+        roles: user.roles,
+        plan: user.plan,
+        planStartedAt: user.planStartedAt,
+        planExpiresAt: user.planExpiresAt,
+        trialEligible: user.trialEligible,
+      }
+    });
+  } catch (error) {
+    console.error('Reset trial eligibility error:', error);
+    res.status(500).json({ error: 'Failed to reset trial eligibility' });
   }
 });
 

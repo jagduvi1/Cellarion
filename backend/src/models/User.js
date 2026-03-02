@@ -49,6 +49,10 @@ const userSchema = new mongoose.Schema({
     type: Date,
     default: null   // null = no expiry (indefinite)
   },
+  trialEligible: {
+    type: Boolean,
+    default: true   // admin can reset to true to allow another trial
+  },
   preferences: {
     currency: {
       type: String,

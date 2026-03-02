@@ -1,6 +1,7 @@
 const express = require('express');
 const User = require('../models/User');
 const { requireAuth, requireRole } = require('../middleware/auth');
+const { logAudit } = require('../services/audit');
 
 const router = express.Router();
 
@@ -59,6 +60,38 @@ router.patch('/preferences', requireAuth, async (req, res) => {
   } catch (error) {
     console.error('Update preferences error:', error);
     res.status(500).json({ error: 'Failed to update preferences' });
+  }
+});
+
+// POST /api/users/trial - Activate the 30-day Premium trial (one-time per user)
+router.post('/trial', requireAuth, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    if (!user.trialEligible) {
+      return res.status(400).json({ error: 'Trial already used' });
+    }
+
+    const planActive = user.plan === 'premium' &&
+      (!user.planExpiresAt || Date.now() < new Date(user.planExpiresAt).getTime());
+    if (planActive) {
+      return res.status(400).json({ error: 'Already on Premium plan' });
+    }
+
+    const now = new Date();
+    user.plan = 'premium';
+    user.planStartedAt = now;
+    user.planExpiresAt = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+    user.trialEligible = false;
+    await user.save();
+
+    logAudit(req, 'user.trial.start', { type: 'user', id: user._id }, { endsAt: user.planExpiresAt });
+
+    res.json({ user: user.toJSON() });
+  } catch (error) {
+    console.error('Start trial error:', error);
+    res.status(500).json({ error: 'Failed to start trial' });
   }
 });
 

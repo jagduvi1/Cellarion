@@ -223,6 +223,29 @@ function AdminUsers() {
     }
   }
 
+  async function resetTrial(userId) {
+    setUpdating(prev => ({ ...prev, [userId + '_trial']: true }));
+    try {
+      const res = await apiFetch(`/api/admin/users/${userId}/trial-eligible`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setUsers(prev => prev.map(u => u._id === userId
+          ? { ...u, trialEligible: data.user.trialEligible }
+          : u
+        ));
+      } else {
+        alert(data.error || 'Failed to reset trial');
+      }
+    } catch {
+      alert('Network error');
+    } finally {
+      setUpdating(prev => ({ ...prev, [userId + '_trial']: false }));
+    }
+  }
+
   async function changeRoles(userId, newRoles) {
     setUpdating(prev => ({ ...prev, [userId + '_roles']: true }));
     try {
@@ -305,6 +328,7 @@ function AdminUsers() {
                   <th>{t('admin.users.colEmail')}</th>
                   <th>{t('admin.users.colPlan')}</th>
                   <th>{t('admin.users.colExpiry')}</th>
+                  <th>{t('admin.users.colTrial')}</th>
                   <th>{t('admin.users.colRoles')}</th>
                   <th>{t('admin.users.colJoined')}</th>
                 </tr>
@@ -324,6 +348,20 @@ function AdminUsers() {
                     </td>
                     <td>
                       <ExpiryBadge planExpiresAt={u.planExpiresAt} t={t} />
+                    </td>
+                    <td className="users-trial-cell">
+                      {u.trialEligible
+                        ? <span className="users-trial-badge users-trial-badge--available">{t('admin.users.trialAvailable')}</span>
+                        : (
+                          <button
+                            className="btn btn-secondary btn-xs"
+                            disabled={updating[u._id + '_trial']}
+                            onClick={() => resetTrial(u._id)}
+                          >
+                            {t('admin.users.resetTrialBtn')}
+                          </button>
+                        )
+                      }
                     </td>
                     <td>
                       <div className="users-roles-cell">

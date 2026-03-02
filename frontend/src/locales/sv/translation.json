@@ -106,7 +106,8 @@
     "noExpiry": "Inget utgångsdatum",
     "expired": "Utgånget",
     "currentTag": "Ditt abonnemang",
-    "adminManaged": "Abonnemang hanteras av din administratör."
+    "adminManaged": "Abonnemang hanteras av din administratör.",
+    "tryPremium": "Prova Premium gratis i 30 dagar"
   },
 
   "cellars": {
@@ -562,6 +563,9 @@
       "colEmail": "E-post",
       "colPlan": "Plan",
       "colExpiry": "Utgångsdatum",
+      "colTrial": "Provperiod",
+      "trialAvailable": "Tillgänglig",
+      "resetTrialBtn": "Återställ provperiod",
       "colRoles": "Roller",
       "colJoined": "Gick med",
       "expiryNever": "Aldrig",

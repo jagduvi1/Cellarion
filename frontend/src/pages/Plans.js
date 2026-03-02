@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import { PLANS, PLAN_NAMES } from '../config/plans';
@@ -5,11 +6,24 @@ import './Plans.css';
 
 function Plans() {
   const { t } = useTranslation();
-  const { user } = useAuth();
+  const { user, startTrial } = useAuth();
+  const [trialLoading, setTrialLoading] = useState(false);
+  const [trialError, setTrialError] = useState(null);
 
   const userPlan = user?.plan || 'free';
   const userExpiresAt = user?.planExpiresAt || null;
   const planExpired = userExpiresAt && Date.now() > new Date(userExpiresAt).getTime();
+
+  const isPremiumActive = userPlan === 'premium' && !planExpired;
+  const canTrial = !isPremiumActive && user?.trialEligible === true;
+
+  async function handleStartTrial() {
+    setTrialLoading(true);
+    setTrialError(null);
+    const result = await startTrial();
+    setTrialLoading(false);
+    if (!result.success) setTrialError(result.error);
+  }
 
   function formatExpiry(expiresAt) {
     if (!expiresAt) return t('plans.noExpiry');
@@ -63,6 +77,19 @@ function Plans() {
                   </li>
                 ))}
               </ul>
+
+              {planKey === 'premium' && canTrial && (
+                <div className="plans-trial-wrap">
+                  <button
+                    className="btn btn-primary plans-trial-btn"
+                    onClick={handleStartTrial}
+                    disabled={trialLoading}
+                  >
+                    {trialLoading ? t('common.saving') : t('plans.tryPremium')}
+                  </button>
+                  {trialError && <p className="plans-trial-error">{trialError}</p>}
+                </div>
+              )}
             </div>
           );
         })}

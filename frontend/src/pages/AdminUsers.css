@@ -228,6 +228,16 @@
   font-weight: 600;
 }
 
+.users-trial-cell {
+  white-space: nowrap;
+}
+
+.users-trial-badge--available {
+  font-size: 0.75rem;
+  color: #7BAF7B;
+  font-weight: 500;
+}
+
 .users-expiry--soon {
   color: #C8A87E;
 }
