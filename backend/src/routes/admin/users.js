@@ -18,7 +18,7 @@ router.get('/', async (req, res) => {
 
     const filter = {};
 
-    if (search) {
+    if (typeof search === 'string' && search) {
       const escaped = search.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       const re = new RegExp(escaped, 'i');
       filter.$or = [{ username: re }, { email: re }];
