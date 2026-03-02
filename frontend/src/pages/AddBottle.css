@@ -158,6 +158,13 @@
   flex-wrap: wrap;
 }
 
+.wine-grapes {
+  font-size: 0.78rem;
+  color: #9A9484;
+  margin: 0.2rem 0 0 0;
+  font-style: italic;
+}
+
 .wine-type-pill {
   padding: 0.1rem 0.5rem;
   border-radius: 10px;

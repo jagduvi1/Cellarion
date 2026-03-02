@@ -494,6 +494,7 @@
       "searchPlaceholder": "Search wines or producers...",
       "noWines": "No wines found.",
       "totalCount": "{{count}} wine definition(s)",
+      "wineDefinitions": "wine definitions",
       "createBtn": "Create Wine",
       "saveBtn": "Save Changes",
       "deleteConfirm": "Delete \"{{name}}\"? This cannot be undone if no bottles reference it."

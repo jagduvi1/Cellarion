@@ -184,6 +184,9 @@ function AddBottle() {
                         {wine.region && <span>• {wine.region.name}</span>}
                         <span className={`wine-type-pill ${wine.type}`}>{wine.type}</span>
                       </div>
+                      {wine.grapes?.length > 0 && (
+                        <p className="wine-grapes">{wine.grapes.map(g => g.name).join(', ')}</p>
+                      )}
                     </div>
                     <button className="btn btn-primary btn-small">{t('addBottle.selectBtn')}</button>
                   </div>

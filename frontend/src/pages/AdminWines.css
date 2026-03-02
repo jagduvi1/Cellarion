@@ -3,6 +3,11 @@
   margin: 0 auto;
 }
 
+.page-subtitle {
+  color: #9A9484;
+  margin: 0.25rem 0 0 0;
+}
+
 .wines-search {
   display: flex;
   gap: 0.5rem;

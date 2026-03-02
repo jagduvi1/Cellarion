@@ -218,7 +218,10 @@ function AdminWines() {
   return (
     <div className="admin-wines-page">
       <div className="page-header">
-        <h1>{t('admin.wines.title')}</h1>
+        <div>
+          <h1>{t('admin.wines.title')}</h1>
+          {!loading && <p className="page-subtitle">{total.toLocaleString()} {t('admin.wines.wineDefinitions')}</p>}
+        </div>
         <button className="btn btn-primary" onClick={openCreate}>
           {t('admin.wines.newWine')}
         </button>

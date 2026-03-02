@@ -494,6 +494,7 @@
       "searchPlaceholder": "Sök viner eller producenter...",
       "noWines": "Inga viner hittades.",
       "totalCount": "{{count}} vindefinition(er)",
+      "wineDefinitions": "vindefinitioner",
       "createBtn": "Skapa vin",
       "saveBtn": "Spara ändringar",
       "deleteConfirm": "Ta bort \"{{name}}\"? Detta kan inte ångras om inga flaskor refererar till det."
