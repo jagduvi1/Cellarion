@@ -41,6 +41,19 @@ const wineDefinitionSchema = new mongoose.Schema({
     type: String,
     trim: true
   },
+  classification: {
+    type: String,
+    trim: true,
+    default: null
+  },
+  lwin: {
+    lwin7: {
+      type: String,
+      trim: true,
+      sparse: true,
+      index: true
+    }
+  },
   grapes: [{
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Grape'
