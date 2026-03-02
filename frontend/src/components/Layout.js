@@ -152,6 +152,13 @@ function Layout({ children }) {
                   {t('nav.users')}
                 </Link>
                 <Link
+                  to="/admin/import"
+                  className={`admin-link ${isActive('/admin/import') ? 'active' : ''}`}
+                  onClick={closeMenu}
+                >
+                  Import Wines
+                </Link>
+                <Link
                   to="/admin/settings"
                   className={`admin-link ${isActive('/admin/settings') ? 'active' : ''}`}
                   onClick={closeMenu}

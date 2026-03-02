@@ -321,6 +321,10 @@ function AdminWines() {
                   disabled={!formData.country}
                 >
                   <option value="">{t('admin.wines.selectAppellation')}</option>
+                  {/* Show current value even if it isn't in the taxonomy (e.g. from bulk import) */}
+                  {formData.appellation && !appellations.some(a => a.name === formData.appellation) && (
+                    <option value={formData.appellation}>{formData.appellation}</option>
+                  )}
                   {appellations.map(a => (
                     <option key={a._id} value={a.name}>{a.name}</option>
                   ))}
