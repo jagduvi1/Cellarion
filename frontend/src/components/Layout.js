@@ -72,6 +72,16 @@ function Layout({ children }) {
               </Link>
             )}
             <Link
+              to="/statistics"
+              className={isActive('/statistics') ? 'active' : ''}
+              onClick={closeMenu}
+            >
+              Analytics
+              {user.plan !== 'premium' && (
+                <span className="nav-stats-hint" title="Premium feature">★</span>
+              )}
+            </Link>
+            <Link
               to="/wine-requests"
               className={isActive('/wine-requests') ? 'active' : ''}
               onClick={closeMenu}

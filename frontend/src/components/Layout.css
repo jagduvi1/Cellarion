@@ -332,3 +332,12 @@
     padding-right: calc(1rem + env(safe-area-inset-right));
   }
 }
+
+/* Analytics nav link premium hint */
+.nav-stats-hint {
+  font-size: 0.6rem;
+  color: #D4A070;
+  margin-left: 0.3rem;
+  vertical-align: super;
+  font-weight: 700;
+}
