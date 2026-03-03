@@ -66,6 +66,27 @@ function convertRating(value, fromScale, toScale) {
 }
 
 /**
+ * Format a normalized rating delta (difference between two normalized 0-100 scores).
+ * Unlike fromNormalized, this does NOT apply the floor offset for the 100-pt scale,
+ * since a delta is a difference, not a point on the scale.
+ */
+function formatDelta(normalizedDelta, scale) {
+  if (normalizedDelta == null || isNaN(normalizedDelta)) return '—';
+  const n = Number(normalizedDelta);
+  let raw;
+  switch (scale) {
+    case '5':   raw = (n / 100) * 5;   break;
+    case '20':  raw = (n / 100) * 20;  break;
+    case '100': raw = (n / 100) * 50;  break; // no +50 floor offset for deltas
+    default:    raw = (n / 100) * 5;   break;
+  }
+  const meta = SCALE_META[scale] || SCALE_META['5'];
+  const precision = meta.step < 1 ? 10 : 1;
+  const rounded = Math.round(raw * precision) / precision;
+  return `${rounded.toFixed(meta.step < 1 ? 1 : 0)}${meta.suffix}`;
+}
+
+/**
  * Validate that a value is within the allowed range for a given scale.
  * Returns true if valid, false otherwise.
  */
@@ -77,4 +98,4 @@ function isValidRating(value, scale) {
   return v >= meta.min && v <= meta.max;
 }
 
-module.exports = { SCALE_META, VALID_SCALES, toNormalized, fromNormalized, convertRating, isValidRating };
+module.exports = { SCALE_META, VALID_SCALES, toNormalized, fromNormalized, convertRating, isValidRating, formatDelta };

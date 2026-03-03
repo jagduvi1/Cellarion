@@ -4,7 +4,7 @@ import { ComposableMap, Geographies, Geography } from 'react-simple-maps';
 import worldData from 'world-atlas/countries-110m.json';
 import { useAuth } from '../contexts/AuthContext';
 import { NUM_TO_A2 } from '../utils/isoCountryCodes';
-import { fromNormalized, formatRating, SCALE_META } from '../utils/ratingUtils';
+import { fromNormalized, formatRating, formatDelta, SCALE_META } from '../utils/ratingUtils';
 import './Statistics.css';
 
 // ── Color palette ─────────────────────────────────────────────────────────────
@@ -59,6 +59,30 @@ function fmtRating(normalized, targetScale) {
   const scale = SCALE_META[targetScale] ? targetScale : '5';
   const converted = fromNormalized(normalized, scale);
   return formatRating(converted, scale);
+}
+
+/**
+ * Format a normalized delta for display in the user's preferred scale.
+ * Uses formatDelta (no floor offset) rather than fromNormalized.
+ */
+function fmtDelta(normalizedDelta, targetScale) {
+  if (normalizedDelta == null) return '—';
+  const scale = SCALE_META[targetScale] ? targetScale : '5';
+  return formatDelta(normalizedDelta, scale);
+}
+
+/**
+ * Return a tooltip string for a rating band in the user's preferred scale.
+ * E.g. bandSub('81-100', '100') → "91–100pts"
+ */
+function bandSub(bandKey, targetScale) {
+  const scale = SCALE_META[targetScale] ? targetScale : '5';
+  const [lo, hi] = bandKey.split('-').map(Number);
+  const meta = SCALE_META[scale];
+  const prec = meta.step < 1 ? 1 : 0;
+  const loVal = fromNormalized(lo, scale);
+  const hiVal = fromNormalized(hi, scale);
+  return `${loVal.toFixed(prec)}–${hiVal.toFixed(prec)}${meta.suffix}`;
 }
 
 function fmtCurrency(amount, currency) {
@@ -189,11 +213,11 @@ function VintageBarChart({ data }) {
 // ── Rating Distribution ───────────────────────────────────────────────────────
 // Bands are normalized 0-100 keys; labels show descriptive quality tier
 const RATING_BANDS = [
-  { key: '81-100', label: 'Excellent', sub: '4.1–5★ · 16–20/20 · 91–100pts', color: '#7B9E88' },
-  { key: '61-80',  label: 'Very Good', sub: '3.1–4★ · 12–16/20 · 81–90pts',  color: '#D4C87A' },
-  { key: '41-60',  label: 'Good',      sub: '2.1–3★ · 8–12/20 · 71–80pts',   color: '#D4A070' },
-  { key: '21-40',  label: 'Fair',      sub: '1.1–2★ · 4–8/20 · 61–70pts',    color: '#C08050' },
-  { key: '0-20',   label: 'Poor',      sub: '1★ · 1–4/20 · 50–60pts',        color: '#C0504D' },
+  { key: '81-100', label: 'Excellent', color: '#7B9E88' },
+  { key: '61-80',  label: 'Very Good', color: '#D4C87A' },
+  { key: '41-60',  label: 'Good',      color: '#D4A070' },
+  { key: '21-40',  label: 'Fair',      color: '#C08050' },
+  { key: '0-20',   label: 'Poor',      color: '#C0504D' },
 ];
 
 function RatingChart({ byRating, avg, targetScale }) {
@@ -206,7 +230,7 @@ function RatingChart({ byRating, avg, targetScale }) {
         const count = byRating[band.key] || 0;
         const pct   = total > 0 ? (count / total) * 100 : 0;
         return (
-          <div key={band.key} className="rating-row" title={band.sub}>
+          <div key={band.key} className="rating-row" title={bandSub(band.key, targetScale)}>
             <span className="rating-stars" style={{ color: band.color, minWidth: 70, fontSize: '0.8rem' }}>{band.label}</span>
             <div className="rating-track">
               <div className="rating-fill" style={{ width: `${(count / maxVal) * 100}%`, background: band.color }} />
@@ -545,7 +569,7 @@ function RegretSignalCard({ regretSignal, targetScale }) {
       {avgDelta !== null && (
         <div className="regret-signal-avg">
           Avg delta: <strong style={{ color: avgDelta >= 0 ? '#7B9E88' : '#E07060' }}>
-            {avgDelta >= 0 ? '+' : ''}{fmtRating(Math.abs(avgDelta), targetScale)}
+            {avgDelta >= 0 ? '+' : ''}{fmtDelta(Math.abs(avgDelta), targetScale)}
           </strong> across {count} bottle{count !== 1 ? 's' : ''}
         </div>
       )}
@@ -563,7 +587,7 @@ function RegretSignalCard({ regretSignal, targetScale }) {
                   <div className="rs-name">{b.name}</div>
                   <div className="rs-vintage">{b.vintage}</div>
                 </div>
-                <div className="rs-delta rs-delta--positive">+{fmtRating(b.delta, targetScale)}</div>
+                <div className="rs-delta rs-delta--positive">+{fmtDelta(b.delta, targetScale)}</div>
                 <div className="rs-ratings">{fmtRating(b.rating, targetScale)} → {fmtRating(b.consumedRating, targetScale)}</div>
               </div>
             ))}
@@ -581,7 +605,7 @@ function RegretSignalCard({ regretSignal, targetScale }) {
                   <div className="rs-name">{b.name}</div>
                   <div className="rs-vintage">{b.vintage}</div>
                 </div>
-                <div className="rs-delta rs-delta--negative">{fmtRating(b.delta, targetScale)}</div>
+                <div className="rs-delta rs-delta--negative">{fmtDelta(b.delta, targetScale)}</div>
                 <div className="rs-ratings">{fmtRating(b.rating, targetScale)} → {fmtRating(b.consumedRating, targetScale)}</div>
               </div>
             ))}
