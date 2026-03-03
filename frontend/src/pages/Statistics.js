@@ -925,6 +925,36 @@ function PremiumGate() {
   );
 }
 
+// ── Upgrade Card (inline upsell for locked sections) ─────────────────────────
+function UpgradeCard({ plan = 'basic', features = [], fullWidth = false }) {
+  const isPremiumCard = plan === 'premium';
+  const label  = isPremiumCard ? 'Premium' : 'Basic';
+  const color  = isPremiumCard ? '#7B5A8A' : '#4a8a9a';
+  const badge  = isPremiumCard ? '★ Premium' : 'Basic';
+
+  return (
+    <div className={`stats-card upgrade-card upgrade-card--${plan}${fullWidth ? ' stats-card--full' : ''}`}>
+      <div className="upgrade-card-inner">
+        <div className="upgrade-card-header">
+          <span className="upgrade-card-icon">🔒</span>
+          <span className="upgrade-card-badge" style={{ color }}>{badge}</span>
+        </div>
+        <p className="upgrade-card-tagline">Unlock with {label}</p>
+        {features.length > 0 && (
+          <div className="upgrade-card-features">
+            {features.map((f, i) => (
+              <span key={i} className="upgrade-card-feature">{f}</span>
+            ))}
+          </div>
+        )}
+        <Link to="/plans" className="btn upgrade-card-btn" style={{ borderColor: color, color }}>
+          Upgrade to {label}
+        </Link>
+      </div>
+    </div>
+  );
+}
+
 // ── Empty State ───────────────────────────────────────────────────────────────
 function EmptyCollection() {
   return (
@@ -944,11 +974,12 @@ function Statistics() {
   const [loading, setLoading] = useState(true);
   const [error, setError]  = useState(null);
 
-  const planExpired = user?.planExpiresAt && Date.now() > new Date(user.planExpiresAt).getTime();
-  const isPremium   = user?.plan === 'premium' && !planExpired;
+  const planExpired   = user?.planExpiresAt && Date.now() > new Date(user.planExpiresAt).getTime();
+  const effectivePlan = planExpired ? 'free' : (user?.plan || 'free');
+  const isBasic       = effectivePlan === 'basic' || effectivePlan === 'premium';
+  const isPremium     = effectivePlan === 'premium';
 
   const load = useCallback(async () => {
-    if (!isPremium) { setLoading(false); return; }
     try {
       const res  = await apiFetch('/api/stats/overview');
       const data = await res.json();
@@ -959,11 +990,9 @@ function Statistics() {
     } finally {
       setLoading(false);
     }
-  }, [isPremium, apiFetch]);
+  }, [apiFetch]);
 
   useEffect(() => { load(); }, [load]);
-
-  if (!isPremium) return <PremiumGate />;
 
   if (loading) {
     return (
@@ -1014,6 +1043,17 @@ function Statistics() {
   const hasForecast    = drinkWindowForecast && drinkWindowForecast.some(d => d.count > 0);
   const hasProducers   = topProducers && topProducers.length > 0;
 
+  const PREMIUM_FEATURES = [
+    '🎯 Cellar health score & grade',
+    '😬 Regret Index — bottles past prime',
+    '🚨 Urgency ladder — drink these now',
+    '🔭 Drink window forecast by year',
+    '⏳ Patience Payoff — does aging reward you?',
+    '💎 Joy Per Dollar — best value wines',
+    '🤯 Expectation vs Reality',
+    '💰 Collection value & most valuable bottles',
+  ];
+
   return (
     <div className="stats-page">
 
@@ -1022,42 +1062,55 @@ function Statistics() {
         <div>
           <h1 className="stats-title">Collection Analytics</h1>
           <p className="stats-subtitle">
-            Complete insights across {overview.totalCellars} cellar{overview.totalCellars !== 1 ? 's' : ''}
-            {overview.totalCountries > 0
-              && ` · ${overview.totalCountries} countries · ${overview.totalGrapes} grape varieties`}
+            {isBasic
+              ? `Complete insights across ${overview.totalCellars} cellar${overview.totalCellars !== 1 ? 's' : ''}${overview.totalCountries > 0 ? ` · ${overview.totalCountries} countries · ${overview.totalGrapes} grape varieties` : ''}`
+              : 'Your collection at a glance'
+            }
           </p>
         </div>
-        <span className="stats-premium-badge">★ Premium</span>
+        {isPremium
+          ? <span className="stats-plan-badge stats-plan-badge--premium">★ Premium</span>
+          : isBasic
+            ? <span className="stats-plan-badge stats-plan-badge--basic">Basic</span>
+            : null
+        }
       </div>
 
       {/* ── Primary KPIs ── */}
-      <div className="kpi-grid">
+      <div className={`kpi-grid${isPremium ? '' : isBasic ? ' kpi-grid--5' : ' kpi-grid--3'}`}>
         <KPICard icon="🍾" label="Active Bottles" value={fmt(total)}
           sub={`${fmt(overview.uniqueWines)} unique wines`} accentColor="#7B9E88" />
         <KPICard icon="🌍" label="Countries" value={fmt(overview.totalCountries)}
           sub={`${fmt(overview.totalGrapes)} grape varieties`} accentColor="#6EC6C6" />
-        <KPICard icon="💰" label="Est. Collection Value"
-          value={overview.totalValue > 0 ? fmtCurrency(overview.totalValue, currency) : '—'}
-          sub={overview.avgPrice > 0 ? `avg ${fmtCurrency(overview.avgPrice, currency)} / bottle` : undefined}
-          accentColor="#D4A070" />
         <KPICard icon="⭐" label="Avg Rating"
           value={overview.avgRating ? `${overview.avgRating} / 5` : '—'}
           accentColor="#D4C87A" />
-        <KPICard icon="📅" label="Avg Vintage Age"
-          value={overview.avgVintageAge ? `${overview.avgVintageAge} yrs` : '—'}
-          sub={overview.oldestVintage
-            ? `${overview.oldestVintage} → ${overview.newestVintage}` : undefined}
-          accentColor="#8B6A9A" />
-        <KPICard icon="⏱" label="Drink Soon / Overdue"
-          value={`${drinkWindow.soon + drinkWindow.overdue}`}
-          sub={drinkWindow.overdue > 0
-            ? `${drinkWindow.overdue} past window`
-            : `${drinkWindow.inWindow} in window`}
-          accentColor={drinkWindow.overdue > 0 ? '#E07060' : '#7B9E88'} />
+        {isBasic && (
+          <KPICard icon="📅" label="Avg Vintage Age"
+            value={overview.avgVintageAge ? `${overview.avgVintageAge} yrs` : '—'}
+            sub={overview.oldestVintage
+              ? `${overview.oldestVintage} → ${overview.newestVintage}` : undefined}
+            accentColor="#8B6A9A" />
+        )}
+        {isBasic && (
+          <KPICard icon="⏱" label="Drink Soon / Overdue"
+            value={`${drinkWindow.soon + drinkWindow.overdue}`}
+            sub={drinkWindow.overdue > 0
+              ? `${drinkWindow.overdue} past window`
+              : `${drinkWindow.inWindow} in window`}
+            accentColor={drinkWindow.overdue > 0 ? '#E07060' : '#7B9E88'} />
+        )}
+        {isPremium && (
+          <KPICard icon="💰" label="Est. Collection Value"
+            value={overview.totalValue > 0 ? fmtCurrency(overview.totalValue, currency) : '—'}
+            sub={overview.avgPrice > 0
+              ? `avg ${fmtCurrency(overview.avgPrice, currency)} / bottle` : undefined}
+            accentColor="#D4A070" />
+        )}
       </div>
 
-      {/* ── Secondary KPIs (consumption) ── */}
-      {hasConsumption && (
+      {/* ── Secondary KPIs (consumption) — basic+ only ── */}
+      {isBasic && hasConsumption && (
         <div className="kpi-grid kpi-grid--secondary">
           <KPICard icon="✓" label="Total Consumed" value={fmt(overview.totalConsumed)} />
           <KPICard icon="🥂" label="Bottles Drunk"  value={fmt(overview.bottlesDrunk)} />
@@ -1070,39 +1123,38 @@ function Statistics() {
         </div>
       )}
 
-      {/* ── Health + Regret row ── */}
-      <div className="stats-grid stats-grid--insight">
-
-        <div className="stats-card">
-          <h2 className="stats-card-title">
-            Cellar Health Score
-            <span className="stats-card-title-note">How well-timed is your collection?</span>
-          </h2>
-          <HealthScoreCard
-            healthScore={overview.healthScore}
-            healthGrade={overview.healthGrade}
-            drinkWindow={drinkWindow}
-          />
+      {/* ── Health + Regret row — premium only ── */}
+      {isPremium && (
+        <div className="stats-grid stats-grid--insight">
+          <div className="stats-card">
+            <h2 className="stats-card-title">
+              Cellar Health Score
+              <span className="stats-card-title-note">How well-timed is your collection?</span>
+            </h2>
+            <HealthScoreCard
+              healthScore={overview.healthScore}
+              healthGrade={overview.healthGrade}
+              drinkWindow={drinkWindow}
+            />
+          </div>
+          <div className={`stats-card stats-card--regret${overview.regretIndex >= 15 ? ' stats-card--regret-alert' : ''}`}>
+            <h2 className="stats-card-title">
+              Regret Index
+              <span className="stats-card-title-note">Bottles past their prime, still unopened</span>
+            </h2>
+            <RegretIndexCard
+              regretIndex={overview.regretIndex}
+              overdueCount={drinkWindow.overdue}
+              total={total}
+            />
+          </div>
         </div>
-
-        <div className={`stats-card stats-card--regret${overview.regretIndex >= 15 ? ' stats-card--regret-alert' : ''}`}>
-          <h2 className="stats-card-title">
-            Regret Index
-            <span className="stats-card-title-note">Bottles past their prime, still unopened</span>
-          </h2>
-          <RegretIndexCard
-            regretIndex={overview.regretIndex}
-            overdueCount={drinkWindow.overdue}
-            total={total}
-          />
-        </div>
-
-      </div>
+      )}
 
       {/* ── Main Grid ── */}
       <div className="stats-grid">
 
-        {/* Wine Types Donut */}
+        {/* Wine Types Donut — FREE+ */}
         <div className="stats-card">
           <h2 className="stats-card-title">Wine Types</h2>
           {total > 0 ? (
@@ -1126,171 +1178,213 @@ function Statistics() {
           )}
         </div>
 
-        {/* Drinking Windows */}
-        <div className="stats-card">
-          <h2 className="stats-card-title">Drinking Windows</h2>
-          <DrinkWindowViz drinkWindow={drinkWindow} windowCoverage={windowCoverage} total={total} />
-        </div>
+        {/* Drinking Windows (basic+) or Top 5 Origins (free) */}
+        {isBasic ? (
+          <div className="stats-card">
+            <h2 className="stats-card-title">Drinking Windows</h2>
+            <DrinkWindowViz drinkWindow={drinkWindow} windowCoverage={windowCoverage} total={total} />
+          </div>
+        ) : (
+          <div className="stats-card">
+            <h2 className="stats-card-title">
+              Top Origins
+              <span className="stats-card-title-note">Top 5</span>
+            </h2>
+            <HBarChart data={byCountry} colors={COUNTRY_COLORS} maxItems={5} />
+          </div>
+        )}
 
-        {/* Vintage Distribution */}
-        <div className="stats-card stats-card--full">
-          <h2 className="stats-card-title">
-            Vintage Distribution
-            {overview.oldestVintage && (
-              <span className="stats-card-title-note">
-                {overview.oldestVintage} – {overview.newestVintage}
-              </span>
+        {/* Vintage Distribution — BASIC+ */}
+        {isBasic && (
+          <div className="stats-card stats-card--full">
+            <h2 className="stats-card-title">
+              Vintage Distribution
+              {overview.oldestVintage && (
+                <span className="stats-card-title-note">
+                  {overview.oldestVintage} – {overview.newestVintage}
+                </span>
+              )}
+            </h2>
+            <VintageBarChart data={byVintage} />
+          </div>
+        )}
+
+        {/* Upgrade cards — FREE users only */}
+        {!isBasic && (
+          <>
+            <UpgradeCard plan="basic" fullWidth features={[
+              '📅 Vintage distribution chart',
+              '🗺️ World origins map',
+              '🍇 Top grapes & regions',
+              '⭐ Rating breakdown',
+              '⏱ Drinking window status',
+              '📈 Consumption history',
+              '🏃 Cellar pace tracker',
+              '🏠 Cellar breakdown',
+            ]} />
+            <UpgradeCard plan="premium" fullWidth features={PREMIUM_FEATURES} />
+          </>
+        )}
+
+        {/* ── BASIC+ sections ── */}
+        {isBasic && (
+          <>
+            {/* World Map — BASIC */}
+            <div className="stats-card stats-card--full">
+              <h2 className="stats-card-title">
+                Collection Origins
+                <span className="stats-card-title-note">Darker = more bottles</span>
+              </h2>
+              <WorldMapChart byCountry={byCountry} />
+            </div>
+
+            {/* Top Origins — BASIC */}
+            <div className="stats-card">
+              <h2 className="stats-card-title">Top Origins</h2>
+              <HBarChart data={byCountry} colors={COUNTRY_COLORS} />
+            </div>
+
+            {/* Top Grape Varieties — BASIC */}
+            <div className="stats-card">
+              <h2 className="stats-card-title">Top Grape Varieties</h2>
+              <HBarChart data={byGrape} colors={GRAPE_COLORS} />
+            </div>
+
+            {/* Top Regions — BASIC */}
+            {byRegion && byRegion.length > 0 && (
+              <div className="stats-card">
+                <h2 className="stats-card-title">Top Regions</h2>
+                <HBarChart data={byRegion}
+                  colors={['#7aade0', '#6a9dd0', '#5a8dc0', '#4a7db0', '#3a6da0']} />
+              </div>
             )}
-          </h2>
-          <VintageBarChart data={byVintage} />
-        </div>
 
-        {/* Drink Window Forecast */}
-        {hasForecast && (
-          <div className="stats-card stats-card--full">
-            <h2 className="stats-card-title">
-              Drink Window Forecast
-              <span className="stats-card-title-note">Bottles in window by year</span>
-            </h2>
-            <DrinkForecastChart forecast={drinkWindowForecast} />
-          </div>
+            {/* Top Producers — BASIC */}
+            {hasProducers && (
+              <div className="stats-card">
+                <h2 className="stats-card-title">Top Producers</h2>
+                <HBarChart data={topProducers}
+                  colors={['#D4A070', '#C4906A', '#B48064', '#A4705E', '#946058']} />
+              </div>
+            )}
+
+            {/* Rating Distribution — BASIC */}
+            <div className="stats-card">
+              <h2 className="stats-card-title">Rating Distribution</h2>
+              <RatingChart byRating={byRating} avg={overview.avgRating} />
+            </div>
+
+            {/* Bottle Sizes — BASIC */}
+            {hasMultipleSizes && (
+              <div className="stats-card">
+                <h2 className="stats-card-title">Bottle Sizes</h2>
+                <BottleSizeChart byBottleSize={byBottleSize} />
+              </div>
+            )}
+
+            {/* Purchase History — BASIC */}
+            {hasPurchaseDates && (
+              <div className="stats-card">
+                <h2 className="stats-card-title">Purchases by Year</h2>
+                <PurchaseHistoryChart byPurchaseYear={byPurchaseYear} />
+              </div>
+            )}
+
+            {/* Pace — BASIC */}
+            <div className="stats-card">
+              <h2 className="stats-card-title">
+                Cellar Pace &amp; Trajectory
+                <span className="stats-card-title-note">Intake vs consumption rate</span>
+              </h2>
+              <PaceCard pace={pace} totalBottles={total} />
+            </div>
+
+            {/* Consumption History — BASIC */}
+            <div className="stats-card stats-card--full">
+              <h2 className="stats-card-title">Consumption History</h2>
+              <ConsumptionChart
+                consumptionByYear={consumptionByYear}
+                consumptionByReason={consumptionByReason}
+              />
+            </div>
+
+            {/* Cellar Breakdown — BASIC */}
+            <div className="stats-card">
+              <h2 className="stats-card-title">Cellar Breakdown</h2>
+              <CellarBreakdownViz cellars={cellarBreakdown} currency={currency} />
+            </div>
+
+            {/* Premium upgrade for basic users OR premium-only content */}
+            {!isPremium ? (
+              <UpgradeCard plan="premium" fullWidth features={PREMIUM_FEATURES} />
+            ) : (
+              <>
+                {/* Drink Window Forecast — PREMIUM */}
+                {hasForecast && (
+                  <div className="stats-card stats-card--full">
+                    <h2 className="stats-card-title">
+                      Drink Window Forecast
+                      <span className="stats-card-title-note">Bottles in window by year</span>
+                    </h2>
+                    <DrinkForecastChart forecast={drinkWindowForecast} />
+                  </div>
+                )}
+
+                {/* Urgency Ladder — PREMIUM */}
+                {hasUrgency && (
+                  <div className="stats-card stats-card--full">
+                    <h2 className="stats-card-title">
+                      Drink These Now
+                      <span className="stats-card-title-note">Ordered by urgency</span>
+                    </h2>
+                    <UrgencyLadder bottles={urgencyLadder} currency={currency} />
+                  </div>
+                )}
+
+                {/* Holding Time — PREMIUM */}
+                <div className="stats-card">
+                  <h2 className="stats-card-title">
+                    Patience Payoff
+                    <span className="stats-card-title-note">Does aging reward you?</span>
+                  </h2>
+                  <HoldingTimeChart holdingTime={holdingTime} />
+                </div>
+
+                {/* Joy Per Dollar — PREMIUM */}
+                <div className="stats-card">
+                  <h2 className="stats-card-title">
+                    Joy Per {currency}
+                    <span className="stats-card-title-note">Rating vs price by type</span>
+                  </h2>
+                  <JoyPerDollarChart data={joyPerDollar} currency={currency} />
+                </div>
+
+                {/* Regret Signal — PREMIUM */}
+                {hasConsumption && (
+                  <div className="stats-card stats-card--full">
+                    <h2 className="stats-card-title">
+                      Expectation vs Reality
+                      <span className="stats-card-title-note">When wines surprised or disappointed you</span>
+                    </h2>
+                    <RegretSignalCard regretSignal={regretSignal} />
+                  </div>
+                )}
+
+                {/* Most Valuable Bottles — PREMIUM */}
+                <div className="stats-card">
+                  <h2 className="stats-card-title">Most Valuable Bottles</h2>
+                  <TopValueList bottles={topValueBottles} currency={currency} />
+                </div>
+              </>
+            )}
+          </>
         )}
-
-        {/* Urgency Ladder */}
-        {hasUrgency && (
-          <div className="stats-card stats-card--full">
-            <h2 className="stats-card-title">
-              Drink These Now
-              <span className="stats-card-title-note">Ordered by urgency</span>
-            </h2>
-            <UrgencyLadder bottles={urgencyLadder} currency={currency} />
-          </div>
-        )}
-
-        {/* World Map — full width */}
-        <div className="stats-card stats-card--full">
-          <h2 className="stats-card-title">
-            Collection Origins
-            <span className="stats-card-title-note">Darker = more bottles</span>
-          </h2>
-          <WorldMapChart byCountry={byCountry} />
-        </div>
-
-        {/* Top Origins bar chart */}
-        <div className="stats-card">
-          <h2 className="stats-card-title">Top Origins</h2>
-          <HBarChart data={byCountry} colors={COUNTRY_COLORS} />
-        </div>
-
-        {/* Top Grape Varieties */}
-        <div className="stats-card">
-          <h2 className="stats-card-title">Top Grape Varieties</h2>
-          <HBarChart data={byGrape} colors={GRAPE_COLORS} />
-        </div>
-
-        {/* Top Regions */}
-        {byRegion && byRegion.length > 0 && (
-          <div className="stats-card">
-            <h2 className="stats-card-title">Top Regions</h2>
-            <HBarChart data={byRegion}
-              colors={['#7aade0', '#6a9dd0', '#5a8dc0', '#4a7db0', '#3a6da0']} />
-          </div>
-        )}
-
-        {/* Top Producers */}
-        {hasProducers && (
-          <div className="stats-card">
-            <h2 className="stats-card-title">Top Producers</h2>
-            <HBarChart data={topProducers}
-              colors={['#D4A070', '#C4906A', '#B48064', '#A4705E', '#946058']} />
-          </div>
-        )}
-
-        {/* Rating Distribution */}
-        <div className="stats-card">
-          <h2 className="stats-card-title">Rating Distribution</h2>
-          <RatingChart byRating={byRating} avg={overview.avgRating} />
-        </div>
-
-        {/* Bottle Sizes */}
-        {hasMultipleSizes && (
-          <div className="stats-card">
-            <h2 className="stats-card-title">Bottle Sizes</h2>
-            <BottleSizeChart byBottleSize={byBottleSize} />
-          </div>
-        )}
-
-        {/* Purchase History */}
-        {hasPurchaseDates && (
-          <div className="stats-card">
-            <h2 className="stats-card-title">Purchases by Year</h2>
-            <PurchaseHistoryChart byPurchaseYear={byPurchaseYear} />
-          </div>
-        )}
-
-        {/* Pace */}
-        <div className="stats-card">
-          <h2 className="stats-card-title">
-            Cellar Pace &amp; Trajectory
-            <span className="stats-card-title-note">Intake vs consumption rate</span>
-          </h2>
-          <PaceCard pace={pace} totalBottles={total} />
-        </div>
-
-        {/* Consumption History */}
-        <div className="stats-card stats-card--full">
-          <h2 className="stats-card-title">Consumption History</h2>
-          <ConsumptionChart
-            consumptionByYear={consumptionByYear}
-            consumptionByReason={consumptionByReason}
-          />
-        </div>
-
-        {/* Holding Time */}
-        <div className="stats-card">
-          <h2 className="stats-card-title">
-            Patience Payoff
-            <span className="stats-card-title-note">Does aging reward you?</span>
-          </h2>
-          <HoldingTimeChart holdingTime={holdingTime} />
-        </div>
-
-        {/* Joy Per Dollar */}
-        <div className="stats-card">
-          <h2 className="stats-card-title">
-            Joy Per {currency}
-            <span className="stats-card-title-note">Rating vs price by type</span>
-          </h2>
-          <JoyPerDollarChart data={joyPerDollar} currency={currency} />
-        </div>
-
-        {/* Regret Signal */}
-        {hasConsumption && (
-          <div className="stats-card stats-card--full">
-            <h2 className="stats-card-title">
-              Expectation vs Reality
-              <span className="stats-card-title-note">When wines surprised or disappointed you</span>
-            </h2>
-            <RegretSignalCard regretSignal={regretSignal} />
-          </div>
-        )}
-
-        {/* Most Valuable Bottles */}
-        <div className="stats-card">
-          <h2 className="stats-card-title">Most Valuable Bottles</h2>
-          <TopValueList bottles={topValueBottles} currency={currency} />
-        </div>
-
-        {/* Cellar Breakdown */}
-        <div className="stats-card">
-          <h2 className="stats-card-title">Cellar Breakdown</h2>
-          <CellarBreakdownViz cellars={cellarBreakdown} currency={currency} />
-        </div>
 
       </div>
 
       <p className="stats-footnote">
-        Active bottles only · Prices converted using today's exchange rates to {currency} ·
+        Active bottles only ·{' '}
+        {isPremium && `Prices converted using today's exchange rates to ${currency} · `}
         Drink windows use your personal dates where set, falling back to sommelier profiles ·
         Only your owned cellars are included
       </p>

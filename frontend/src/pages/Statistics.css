@@ -734,6 +734,131 @@
   color: #5a5550;
 }
 
+/* ── KPI Grid Variants ──────────────────────────────────────────────────────── */
+.kpi-grid--3 {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.kpi-grid--5 {
+  grid-template-columns: repeat(5, 1fr);
+}
+
+/* ── Plan Badges ────────────────────────────────────────────────────────────── */
+.stats-plan-badge {
+  padding: 0.35rem 1rem;
+  border-radius: 20px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  flex-shrink: 0;
+  margin-top: 0.25rem;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+  color: #fff;
+}
+
+.stats-plan-badge--premium {
+  background: linear-gradient(135deg, #7B5A8A 0%, #C08840 100%);
+}
+
+.stats-plan-badge--basic {
+  background: linear-gradient(135deg, #2a6a7a 0%, #4a8a9a 100%);
+}
+
+/* ── Upgrade Card ───────────────────────────────────────────────────────────── */
+.upgrade-card {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 200px;
+}
+
+.upgrade-card--basic {
+  border-color: rgba(74, 138, 154, 0.2);
+  background: linear-gradient(135deg, #1c1c1c 0%, #161e21 100%);
+}
+
+.upgrade-card--premium {
+  border-color: rgba(123, 90, 138, 0.2);
+  background: linear-gradient(135deg, #1c1c1c 0%, #1a1620 100%);
+}
+
+.upgrade-card-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 0.875rem;
+  max-width: 640px;
+  width: 100%;
+  padding: 0.5rem 1rem;
+}
+
+.upgrade-card-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.upgrade-card-icon {
+  font-size: 1.5rem;
+  line-height: 1;
+}
+
+.upgrade-card-badge {
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.upgrade-card-tagline {
+  font-size: 1rem;
+  color: #c8c0b4;
+  margin: 0;
+  font-weight: 500;
+}
+
+.upgrade-card-features {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.45rem 1.5rem;
+  width: 100%;
+  text-align: left;
+}
+
+.upgrade-card-feature {
+  font-size: 0.82rem;
+  color: #7a7068;
+}
+
+.upgrade-card-btn {
+  margin-top: 0.25rem;
+  font-size: 0.875rem;
+  padding: 0.6rem 1.75rem;
+  background: transparent;
+  border: 1px solid;
+  border-radius: 6px;
+  text-decoration: none;
+  font-weight: 600;
+  transition: background 0.15s, color 0.15s;
+}
+
+.upgrade-card-btn:hover {
+  background: rgba(255,255,255,0.06);
+}
+
+/* ── Responsive ─────────────────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .kpi-grid--3,
+  .kpi-grid--5 {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .upgrade-card-features {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* ── Premium Gate ───────────────────────────────────────────────────────────── */
 .premium-gate {
   position: relative;

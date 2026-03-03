@@ -23,6 +23,7 @@ const PLANS = {
       'Drink-window alerts',
       'Rack management',
       'Wine requests',
+      'Basic collection stats (types, origins, rating)',
     ],
   },
   basic: {
@@ -37,6 +38,8 @@ const PLANS = {
       '5 cellars',
       '1 shared member per cellar',
       'Everything in Free',
+      'Full analytics: vintage charts, world map, regions, producers',
+      'Consumption history & cellar pace',
     ],
   },
   premium: {
@@ -53,6 +56,10 @@ const PLANS = {
       'Aging & maturity profiles',
       'Price evolution tracking',
       'Everything in Basic',
+      'Cellar health score & Regret Index',
+      'Urgency ladder, drink window forecast',
+      'Joy Per Dollar, Patience Payoff, Expectation vs Reality',
+      'Collection value & most valuable bottles',
     ],
   },
 };

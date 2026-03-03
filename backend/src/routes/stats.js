@@ -48,19 +48,12 @@ function classifyWindow(from, before, now, msPerDay) {
   return now < from ? 'notReady' : 'inWindow';
 }
 
-// GET /api/stats/overview — comprehensive analytics (premium only)
+// GET /api/stats/overview — collection analytics (all authenticated users)
 router.get('/overview', async (req, res) => {
   try {
     const dbUser = await User.findById(req.user.id)
       .select('plan planExpiresAt preferences')
       .lean();
-
-    const planExpired =
-      dbUser.planExpiresAt && Date.now() > new Date(dbUser.planExpiresAt).getTime();
-
-    if (dbUser.plan !== 'premium' || planExpired) {
-      return res.status(403).json({ error: 'Premium plan required', code: 'PREMIUM_REQUIRED' });
-    }
 
     const cellars = await Cellar.find({ user: req.user.id, deletedAt: null }).lean();
     const cellarIds = cellars.map(c => c._id);
