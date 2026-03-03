@@ -51,6 +51,7 @@ app.use(cookieParser());
 app.use('/api/images/remove-bg-preview', express.json({ limit: '5mb' }));
 app.use('/api/wine-requests', express.json({ limit: '5mb' }));
 app.use('/api/admin/wine-requests', express.json({ limit: '5mb' }));
+app.use('/api/wines/scan-label', express.json({ limit: '300kb' }));
 app.use(express.json({ limit: '10kb' }));
 app.use(cors({
   origin: process.env.FRONTEND_URL || 'http://localhost:3000',

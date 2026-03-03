@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
@@ -35,6 +35,114 @@ function AddBottle() {
     drinkBefore: ''
   });
   const [uploadedImages, setUploadedImages] = useState([]);
+
+  // ── Label-scan camera ──
+  const [labelCam, setLabelCam] = useState({ open: false, error: null });
+  const [labelScanning, setLabelScanning] = useState(false);
+  const [labelFacing, setLabelFacing] = useState('environment');
+  const labelVideoRef = useRef(null);
+  const labelCanvasRef = useRef(null);
+  const labelStreamRef = useRef(null);
+
+  const stopLabelCamera = useCallback(() => {
+    if (labelStreamRef.current) {
+      labelStreamRef.current.getTracks().forEach(t => t.stop());
+      labelStreamRef.current = null;
+    }
+    setLabelCam({ open: false, error: null });
+  }, []);
+
+  const startLabelCamera = useCallback(async () => {
+    setLabelCam({ open: true, error: null });
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: labelFacing, width: { ideal: 1280 }, height: { ideal: 720 } },
+        audio: false
+      });
+      labelStreamRef.current = stream;
+      requestAnimationFrame(() => {
+        if (labelVideoRef.current) labelVideoRef.current.srcObject = stream;
+      });
+    } catch (err) {
+      let msg = 'Could not access camera.';
+      if (err.name === 'NotAllowedError') msg = 'Camera access denied. Please allow camera permissions.';
+      else if (err.name === 'NotFoundError') msg = 'No camera found on this device.';
+      setLabelCam({ open: true, error: msg });
+    }
+  }, [labelFacing]);
+
+  // Restart camera when facing mode changes while camera is open
+  useEffect(() => {
+    if (labelCam.open && !labelCam.error) {
+      if (labelStreamRef.current) labelStreamRef.current.getTracks().forEach(t => t.stop());
+      startLabelCamera();
+    }
+  }, [labelFacing]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Stop camera on unmount
+  useEffect(() => {
+    return () => {
+      if (labelStreamRef.current) labelStreamRef.current.getTracks().forEach(t => t.stop());
+    };
+  }, []);
+
+  const captureLabelPhoto = useCallback(async () => {
+    const video = labelVideoRef.current;
+    const canvas = labelCanvasRef.current;
+    if (!video || !canvas) return;
+
+    // Resize to max 800px to keep API cost low
+    const MAX_DIM = 800;
+    let vw = video.videoWidth;
+    let vh = video.videoHeight;
+    if (vw > MAX_DIM || vh > MAX_DIM) {
+      if (vw >= vh) { vh = Math.round((vh / vw) * MAX_DIM); vw = MAX_DIM; }
+      else { vw = Math.round((vw / vh) * MAX_DIM); vh = MAX_DIM; }
+    }
+    canvas.width = vw;
+    canvas.height = vh;
+    canvas.getContext('2d').drawImage(video, 0, 0, vw, vh);
+
+    // Stop the stream right after capture
+    if (labelStreamRef.current) {
+      labelStreamRef.current.getTracks().forEach(t => t.stop());
+      labelStreamRef.current = null;
+    }
+    setLabelScanning(true);
+
+    canvas.toBlob(async (blob) => {
+      if (!blob) {
+        setLabelCam({ open: true, error: 'Capture failed. Please try again.' });
+        setLabelScanning(false);
+        return;
+      }
+      try {
+        const base64 = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result.split(',')[1]);
+          reader.onerror = () => reject(reader.error);
+          reader.readAsDataURL(blob);
+        });
+
+        const res = await apiFetch('/api/wines/scan-label', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ image: base64, mediaType: 'image/jpeg' })
+        });
+        const data = await res.json();
+        if (res.ok && data.query) {
+          setSearch(data.query);
+          stopLabelCamera();
+        } else {
+          setLabelCam({ open: true, error: data.error || 'Could not read label. Try again.' });
+        }
+      } catch {
+        setLabelCam({ open: true, error: 'Scan failed. Please try again.' });
+      } finally {
+        setLabelScanning(false);
+      }
+    }, 'image/jpeg', 0.55);
+  }, [apiFetch, stopLabelCamera]);
 
   useEffect(() => {
     if (search.length > 0) {
@@ -116,6 +224,43 @@ function AddBottle() {
 
   return (
     <div className="add-bottle-page">
+      {/* Label-scan camera modal */}
+      {labelCam.open && (
+        <div className="camera-modal">
+          <div className="camera-container">
+            {labelCam.error ? (
+              <div className="camera-error-overlay">
+                <p>{labelCam.error}</p>
+                <button type="button" className="btn btn-secondary" onClick={stopLabelCamera}>Close</button>
+              </div>
+            ) : (
+              <>
+                <video ref={labelVideoRef} autoPlay playsInline muted className="camera-video" />
+                {labelScanning ? (
+                  <div className="label-scan-overlay">
+                    <div className="label-scan-spinner" />
+                    <span>Reading label…</span>
+                  </div>
+                ) : (
+                  <>
+                    <div className="camera-overlay">
+                      <p className="overlay-hint">Point at the wine label</p>
+                    </div>
+                    <div className="camera-controls">
+                      <button type="button" className="camera-btn camera-btn-close" onClick={stopLabelCamera} title="Close">✕</button>
+                      <button type="button" className="camera-btn camera-btn-capture" onClick={captureLabelPhoto} title="Scan Label">
+                        <span className="capture-ring"></span>
+                      </button>
+                      <button type="button" className="camera-btn camera-btn-switch" onClick={() => setLabelFacing(f => f === 'environment' ? 'user' : 'environment')} title="Switch Camera">⟲</button>
+                    </div>
+                  </>
+                )}
+              </>
+            )}
+          </div>
+          <canvas ref={labelCanvasRef} style={{ display: 'none' }} />
+        </div>
+      )}
       <div className="page-header">
         <div>
           <Link to={`/cellars/${cellarId}`} className="back-link">{t('addBottle.backToCellar')}</Link>
@@ -141,14 +286,29 @@ function AddBottle() {
         <div className="card">
           <h2>{t('addBottle.searchForWine')}</h2>
           <div className="search-section">
-            <input
-              type="text"
-              placeholder={t('addBottle.searchPlaceholder')}
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="search-input-large"
-              autoFocus
-            />
+            <div className="search-input-wrapper">
+              <input
+                type="text"
+                placeholder={t('addBottle.searchPlaceholder')}
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="search-input-large search-input-with-camera"
+                autoFocus
+              />
+              <button
+                type="button"
+                className="search-camera-btn"
+                onClick={startLabelCamera}
+                disabled={labelCam.open}
+                title="Scan wine label with camera"
+                aria-label="Scan wine label with camera"
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+                  <circle cx="12" cy="13" r="4"/>
+                </svg>
+              </button>
+            </div>
             <p className="help-text">
               {t('addBottle.cantFindWine')} <Link to="/wine-requests">{t('addBottle.requestNewWine')}</Link>
             </p>

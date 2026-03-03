@@ -52,6 +52,10 @@
   margin-bottom: 1.5rem;
 }
 
+.search-input-wrapper {
+  position: relative;
+}
+
 .search-input-large {
   width: 100%;
   padding: 0.875rem 1rem;
@@ -63,9 +67,66 @@
   color: #E8DFD0;
 }
 
+.search-input-with-camera {
+  padding-right: 48px;
+}
+
 .search-input-large:focus {
   outline: none;
   border-color: #7B9E88;
+}
+
+/* Camera icon button inside the search field */
+.search-camera-btn {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #9A9484;
+  padding: 6px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.2s, background 0.2s;
+}
+
+.search-camera-btn:hover {
+  color: #7B9E88;
+  background: rgba(123, 158, 136, 0.12);
+}
+
+.search-camera-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* Scanning overlay shown inside the camera modal while Claude processes the image */
+.label-scan-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.78);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  color: white;
+  font-size: 1rem;
+  font-weight: 600;
+  z-index: 10;
+}
+
+.label-scan-spinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid rgba(255, 255, 255, 0.3);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
 }
 
 .help-text {
