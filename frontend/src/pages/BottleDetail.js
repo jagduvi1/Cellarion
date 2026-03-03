@@ -411,7 +411,7 @@ const API_URL = process.env.REACT_APP_API_URL || '';
 
 function EditForm({ bottle, onSaved, onCancel, onImageUploaded }) {
   const { t } = useTranslation();
-  const { apiFetch } = useAuth();
+  const { apiFetch, user } = useAuth();
   const [form, setForm] = useState({
     vintage:          bottle.vintage     || '',
     rating:           bottle.rating      || '',
@@ -420,7 +420,9 @@ function EditForm({ bottle, onSaved, onCancel, onImageUploaded }) {
     drinkBefore:      toMonthInput(bottle.drinkBefore),
     notes:            bottle.notes   || '',
     price:            bottle.price   || '',
-    currency:         bottle.currency || 'USD',
+    // If bottle has a price, keep stored currency (price and currency must stay in sync).
+    // If no price yet, default to user's preference so they don't have to change it every time.
+    currency:         bottle.price ? (bottle.currency || 'USD') : (user?.preferences?.currency || bottle.currency || 'USD'),
     bottleSize:       bottle.bottleSize || '750ml',
     purchaseDate:     toInputDate(bottle.purchaseDate),
     purchaseLocation: bottle.purchaseLocation || '',
