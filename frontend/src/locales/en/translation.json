@@ -267,7 +267,10 @@
     "maturityPhaseEarly": "Early drinking",
     "maturityPhasePeak": "Optimal maturity ⭐",
     "maturityPhaseLate": "Late maturity",
-    "rackSlot": "slot"
+    "rackSlot": "slot",
+    "grapes": "Grape Varieties",
+    "noGrapes": "No grape varieties listed",
+    "addPhoto": "Add photo"
   },
 
   "drinkAlerts": {

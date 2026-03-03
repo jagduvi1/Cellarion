@@ -179,7 +179,14 @@ function BottleDetail() {
               )}
             </div>
           ) : (
-            <div className={`bd-wine-placeholder ${wine?.type}`} />
+            <div className="bd-wine-image-wrap">
+              <div className={`bd-wine-placeholder ${wine?.type}`} />
+              {!editing && (userRole === 'owner' || userRole === 'editor') && (
+                <button className="bd-add-photo-hint" onClick={() => setEditing(true)}>
+                  {t('bottleDetail.addPhoto', 'Add photo')}
+                </button>
+              )}
+            </div>
           )}
           <div className="bd-wine-meta">
             <h1 style={cellarColor ? { borderLeft: `4px solid ${cellarColor}`, paddingLeft: '0.75rem' } : {}}>
@@ -215,6 +222,7 @@ function BottleDetail() {
           rates={rates}
           userCurrency={user?.preferences?.currency || 'USD'}
           canEdit={userRole === 'owner' || userRole === 'editor'}
+          hasImage={!!(pendingImage || bottle.wineDefinition?.image)}
           onEdit={() => setEditing(true)}
           onRemove={() => setConsumeOpen(true)}
         />
@@ -233,12 +241,14 @@ function BottleDetail() {
 }
 
 // ── View mode ──
-function ViewDetails({ bottle, rackInfo, cellarId, drinkStatus, vintageProfile, priceHistory, rates, userCurrency, canEdit, onEdit, onRemove }) {
+function ViewDetails({ bottle, rackInfo, cellarId, drinkStatus, vintageProfile, priceHistory, rates, userCurrency, canEdit, hasImage, onEdit, onRemove }) {
   const { t } = useTranslation();
   const { plan, hasFeature } = usePlan();
   const hasAgingMaturity = hasFeature('agingMaturity');
   const hasPriceEvolution = hasFeature('priceEvolution');
   const maturityStatus = getMaturityStatus(vintageProfile);
+  const wine = bottle.wineDefinition;
+  const grapes = wine?.grapes || [];
 
   return (
     <div className="bd-details card">
@@ -277,6 +287,20 @@ function ViewDetails({ bottle, rackInfo, cellarId, drinkStatus, vintageProfile, 
               })()}
             </span>
           </div>
+        )}
+      </div>
+
+      {/* Grapes */}
+      <div className="bd-section">
+        <span className="bd-section-label">{t('bottleDetail.grapes', 'Grape Varieties')}</span>
+        {grapes.length > 0 ? (
+          <div className="bd-grapes">
+            {grapes.map(g => (
+              <span key={g._id} className="bd-grape-pill">{g.name}</span>
+            ))}
+          </div>
+        ) : (
+          <span className="bd-missing-hint">{t('bottleDetail.noGrapes', 'No grape varieties listed')}</span>
         )}
       </div>
 

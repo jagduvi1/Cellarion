@@ -267,7 +267,10 @@
     "maturityPhaseEarly": "Tidig drickning",
     "maturityPhasePeak": "Optimal mognad ⭐",
     "maturityPhaseLate": "Sen mognad",
-    "rackSlot": "plats"
+    "rackSlot": "plats",
+    "grapes": "Druvsorter",
+    "noGrapes": "Inga druvsorter angivna",
+    "addPhoto": "Lägg till foto"
   },
 
   "drinkAlerts": {
