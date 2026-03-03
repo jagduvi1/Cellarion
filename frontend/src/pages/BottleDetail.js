@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { useAuth, usePlan } from '../contexts/AuthContext';
 import { getDrinkStatus, formatDrinkDate, toInputDate, toMonthInput, monthToLastDay } from '../utils/drinkStatus';
 import { fetchRates, convertAmount, convertAmountHistorical } from '../utils/currency';
+import { CURRENCIES } from '../config/currencies';
 import ImageUpload from '../components/ImageUpload';
 import RatingInput from '../components/RatingInput';
 import RatingDisplay from '../components/RatingDisplay';
@@ -493,10 +494,7 @@ function EditForm({ bottle, onSaved, onCancel, onImageUploaded }) {
         <div className="form-group">
           <label>{t('common.currency')}</label>
           <select value={form.currency} onChange={set('currency')}>
-            <option>USD</option>
-            <option>EUR</option>
-            <option>GBP</option>
-            <option>CAD</option>
+            {CURRENCIES.map(c => <option key={c} value={c}>{c}</option>)}
           </select>
         </div>
 
