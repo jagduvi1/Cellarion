@@ -11,6 +11,7 @@ const { logAudit } = require('../services/audit');
 const { getSnapshotsForDates, getOrCreateDailySnapshot } = require('../utils/exchangeRates');
 const { createNotification } = require('../services/notifications');
 const { getPlanConfig } = require('../config/plans');
+const { toNormalized } = require('../utils/ratingUtils');
 
 const router = express.Router();
 
@@ -213,10 +214,11 @@ router.get('/:id/statistics', async (req, res) => {
         }
       }
 
-      // By rating
+      // By rating — normalize to 0-100 and bucket into 5 bands
       if (bottle.rating) {
-        const ratingKey = `${bottle.rating} stars`;
-        stats.byRating[ratingKey] = (stats.byRating[ratingKey] || 0) + 1;
+        const norm = toNormalized(bottle.rating, bottle.ratingScale || '5');
+        const band = norm <= 20 ? '0-20' : norm <= 40 ? '21-40' : norm <= 60 ? '41-60' : norm <= 80 ? '61-80' : '81-100';
+        stats.byRating[band] = (stats.byRating[band] || 0) + 1;
       }
     });
 
@@ -356,12 +358,19 @@ router.get('/:id', async (req, res) => {
 
     if (minRating) {
       const min = parseFloat(minRating);
-      bottles = bottles.filter(b => b.rating && b.rating >= min);
+      // minRating is sent as a normalized 0-100 value; compare against normalized bottle rating
+      bottles = bottles.filter(b => {
+        if (!b.rating) return false;
+        return toNormalized(b.rating, b.ratingScale || '5') >= min;
+      });
     }
 
     if (maxRating) {
       const max = parseFloat(maxRating);
-      bottles = bottles.filter(b => b.rating && b.rating <= max);
+      bottles = bottles.filter(b => {
+        if (!b.rating) return false;
+        return toNormalized(b.rating, b.ratingScale || '5') <= max;
+      });
     }
 
     if (search) {

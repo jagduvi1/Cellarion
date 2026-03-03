@@ -81,9 +81,13 @@ const bottleSchema = new mongoose.Schema({
     maxlength: [2000, 'Notes too long']
   },
   rating: {
-    type: Number,
-    min: [1, 'Rating must be between 1 and 5'],
-    max: [5, 'Rating must be between 1 and 5']
+    type: Number
+  },
+  // Scale used when rating was recorded: '5' (stars), '20' (Davis), '100' (Parker)
+  ratingScale: {
+    type: String,
+    enum: ['5', '20', '100'],
+    default: '5'
   },
   // Bottle lifecycle — 'active' until the user consumes/gifts/sells it
   status: {
@@ -104,9 +108,12 @@ const bottleSchema = new mongoose.Schema({
   },
   // Rating given at consumption time (separate from the pre-drink rating)
   consumedRating: {
-    type: Number,
-    min: [1, 'Rating must be between 1 and 5'],
-    max: [5, 'Rating must be between 1 and 5']
+    type: Number
+  },
+  consumedRatingScale: {
+    type: String,
+    enum: ['5', '20', '100'],
+    default: '5'
   },
   createdAt: {
     type: Date,

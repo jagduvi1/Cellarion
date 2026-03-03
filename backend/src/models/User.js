@@ -64,6 +64,11 @@ const userSchema = new mongoose.Schema({
       type: String,
       default: 'en',
       trim: true
+    },
+    ratingScale: {
+      type: String,
+      enum: ['5', '20', '100'],
+      default: '5'
     }
   },
   refreshTokenHash: {

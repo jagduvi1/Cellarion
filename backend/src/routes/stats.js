@@ -5,6 +5,7 @@ const Bottle = require('../models/Bottle');
 const User = require('../models/User');
 const WineVintageProfile = require('../models/WineVintageProfile');
 const { getOrCreateDailySnapshot } = require('../utils/exchangeRates');
+const { toNormalized } = require('../utils/ratingUtils');
 
 const router = express.Router();
 router.use(requireAuth);
@@ -167,10 +168,12 @@ router.get('/overview', async (req, res) => {
         if (v != null) { totalValue += v; priceCount++; }
       }
 
-      // Rating
+      // Rating — normalize to 0-100 for cross-scale aggregation
       if (b.rating) {
-        ratingSum += b.rating; ratingCount++;
-        byRating[b.rating] = (byRating[b.rating] || 0) + 1;
+        const normRating = toNormalized(b.rating, b.ratingScale || '5');
+        ratingSum += normRating; ratingCount++;
+        const band = normRating <= 20 ? '0-20' : normRating <= 40 ? '21-40' : normRating <= 60 ? '41-60' : normRating <= 80 ? '61-80' : '81-100';
+        byRating[band] = (byRating[band] || 0) + 1;
       }
 
       // Wine type
@@ -315,7 +318,10 @@ router.get('/overview', async (req, res) => {
         outputByYear[consumedYear] = (outputByYear[consumedYear] || 0) + 1;
       }
 
-      if (b.consumedRating) { cRatingSum += b.consumedRating; cRatingCount++; }
+      if (b.consumedRating) {
+        const normCR = toNormalized(b.consumedRating, b.consumedRatingScale || '5');
+        cRatingSum += normCR; cRatingCount++;
+      }
 
       // Holding time analysis
       const anchor = b.purchaseDate || b.createdAt;
@@ -328,7 +334,8 @@ router.get('/overview', async (req, res) => {
           daysHeld < 3650 ? '5–10yr' : '10+yr';
         holdingBuckets[bucket].count++;
         if (b.consumedRating) {
-          holdingBuckets[bucket].ratingSum   += b.consumedRating;
+          const normCR = toNormalized(b.consumedRating, b.consumedRatingScale || '5');
+          holdingBuckets[bucket].ratingSum   += normCR;
           holdingBuckets[bucket].ratingCount++;
         }
       }
@@ -338,24 +345,27 @@ router.get('/overview', async (req, res) => {
         const type  = b.wineDefinition?.type || 'unknown';
         const priceCvt = toTarget(b.price, b.currency || 'USD');
         if (priceCvt && priceCvt > 0) {
+          const normCR = toNormalized(b.consumedRating, b.consumedRatingScale || '5');
           if (!jpdByType[type]) jpdByType[type] = { ratingSum: 0, ratingCount: 0, priceSum: 0, priceCount: 0 };
-          jpdByType[type].ratingSum   += b.consumedRating;
+          jpdByType[type].ratingSum   += normCR;
           jpdByType[type].ratingCount++;
           jpdByType[type].priceSum    += priceCvt;
           jpdByType[type].priceCount++;
         }
       }
 
-      // Regret signal: pre-drink rating vs consumed rating
+      // Regret signal: pre-drink rating vs consumed rating (both normalized to 0-100)
       if (b.rating && b.consumedRating) {
         const wd = b.wineDefinition;
+        const normR  = toNormalized(b.rating,         b.ratingScale         || '5');
+        const normCR = toNormalized(b.consumedRating, b.consumedRatingScale || '5');
         regretItems.push({
-          name:          wd?.name     || 'Unknown',
-          vintage:       b.vintage    || 'NV',
-          type:          wd?.type     || 'unknown',
-          rating:        b.rating,
-          consumedRating: b.consumedRating,
-          delta:         b.consumedRating - b.rating,
+          name:           wd?.name  || 'Unknown',
+          vintage:        b.vintage || 'NV',
+          type:           wd?.type  || 'unknown',
+          rating:         normR,
+          consumedRating: normCR,
+          delta:          normCR - normR,
         });
       }
     }
@@ -508,6 +518,8 @@ router.get('/overview', async (req, res) => {
           avgPrice:          priceCount > 0 ? Math.round((totalValue / priceCount) * 100) / 100 : 0,
           avgRating:         ratingCount  > 0 ? Math.round((ratingSum  / ratingCount)  * 10) / 10 : null,
           avgConsumedRating: cRatingCount > 0 ? Math.round((cRatingSum / cRatingCount) * 10) / 10 : null,
+          // avgRating / avgConsumedRating are normalized 0-100 scores for cross-scale aggregation
+          targetRatingScale: req.user?.preferences?.ratingScale || '5',
           oldestVintage:     oldestYear !== Infinity  ? oldestYear  : null,
           newestVintage:     newestYear !== -Infinity ? newestYear  : null,
           avgVintageAge:     vintageAgeCount > 0 ? Math.round(vintageAgeSum / vintageAgeCount) : null,
@@ -559,7 +571,7 @@ function buildEmptyStats(currency) {
       healthScore: null, healthGrade: null, regretIndex: 0,
     },
     byType: {}, byCountry: [], byRegion: [], byGrape: [],
-    byVintage: [], byRating: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 },
+    byVintage: [], byRating: { '0-20': 0, '21-40': 0, '41-60': 0, '61-80': 0, '81-100': 0 },
     byBottleSize: {}, byPurchaseYear: [],
     drinkWindow:   { overdue: 0, soon: 0, inWindow: 0, notReady: 0, noWindow: 0 },
     windowCoverage: { userSet: 0, sommSet: 0, none: 0 },

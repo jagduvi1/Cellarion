@@ -24,10 +24,11 @@ router.get('/profile', requireAuth, async (req, res) => {
 // PATCH /api/users/preferences - Update current user's preferences
 const ALLOWED_CURRENCIES = ['USD', 'EUR', 'GBP', 'SEK', 'NOK', 'DKK', 'CHF', 'CAD', 'AUD'];
 const ALLOWED_LANGUAGES = ['en', 'sv'];
+const ALLOWED_RATING_SCALES = ['5', '20', '100'];
 
 router.patch('/preferences', requireAuth, async (req, res) => {
   try {
-    const { currency, language } = req.body;
+    const { currency, language, ratingScale } = req.body;
     const update = {};
 
     if (currency !== undefined) {
@@ -42,6 +43,13 @@ router.patch('/preferences', requireAuth, async (req, res) => {
         return res.status(400).json({ error: `Invalid language. Allowed: ${ALLOWED_LANGUAGES.join(', ')}` });
       }
       update['preferences.language'] = language;
+    }
+
+    if (ratingScale !== undefined) {
+      if (!ALLOWED_RATING_SCALES.includes(String(ratingScale))) {
+        return res.status(400).json({ error: `Invalid rating scale. Allowed: ${ALLOWED_RATING_SCALES.join(', ')}` });
+      }
+      update['preferences.ratingScale'] = String(ratingScale);
     }
 
     if (Object.keys(update).length === 0) {

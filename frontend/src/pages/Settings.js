@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import { CURRENCIES } from '../config/currencies';
 import { PLANS } from '../config/plans';
+import { SCALE_META, VALID_SCALES } from '../utils/ratingUtils';
 import './Settings.css';
 
 function Settings() {
@@ -11,6 +12,7 @@ function Settings() {
   const { user, updatePreferences } = useAuth();
   const [currency, setCurrency] = useState(user?.preferences?.currency || 'USD');
   const [language, setLanguage] = useState(user?.preferences?.language || i18n.language?.split('-')[0] || 'en');
+  const [ratingScale, setRatingScale] = useState(user?.preferences?.ratingScale || '5');
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState(null);
@@ -20,7 +22,7 @@ function Settings() {
     setSaving(true);
     setError(null);
     setSaved(false);
-    const result = await updatePreferences({ currency, language });
+    const result = await updatePreferences({ currency, language, ratingScale });
     setSaving(false);
     if (result.success) {
       i18n.changeLanguage(language);
@@ -100,6 +102,25 @@ function Settings() {
             >
               <option value="en">{t('settings.languageEn')}</option>
               <option value="sv">{t('settings.languageSv')}</option>
+            </select>
+          </div>
+
+          <div className="form-group">
+            <label htmlFor="rating-scale-select">{t('settings.defaultRatingScale', 'Default Rating Scale')}</label>
+            <p className="settings-hint">
+              {t('settings.ratingScaleHint', 'Choose which rating scale to use by default when adding ratings. You can always override per bottle.')}
+            </p>
+            <select
+              id="rating-scale-select"
+              className="input settings-select"
+              value={ratingScale}
+              onChange={e => setRatingScale(e.target.value)}
+            >
+              {VALID_SCALES.map(s => (
+                <option key={s} value={s}>
+                  {SCALE_META[s].label} ({SCALE_META[s].min}–{SCALE_META[s].max}{SCALE_META[s].suffix})
+                </option>
+              ))}
             </select>
           </div>
 

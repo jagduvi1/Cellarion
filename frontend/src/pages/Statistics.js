@@ -4,6 +4,7 @@ import { ComposableMap, Geographies, Geography } from 'react-simple-maps';
 import worldData from 'world-atlas/countries-110m.json';
 import { useAuth } from '../contexts/AuthContext';
 import { NUM_TO_A2 } from '../utils/isoCountryCodes';
+import { fromNormalized, formatRating, SCALE_META } from '../utils/ratingUtils';
 import './Statistics.css';
 
 // ── Color palette ─────────────────────────────────────────────────────────────
@@ -47,6 +48,17 @@ const GRADE_COLORS = { A: '#7B9E88', B: '#D4C87A', C: '#D4A070', D: '#C0504D', F
 function fmt(n) {
   if (n == null) return '—';
   return n.toLocaleString();
+}
+
+/**
+ * Format a normalized 0-100 rating for display in the user's preferred scale.
+ * `targetScale` comes from overview.targetRatingScale (user's preference).
+ */
+function fmtRating(normalized, targetScale) {
+  if (normalized == null) return '—';
+  const scale = SCALE_META[targetScale] ? targetScale : '5';
+  const converted = fromNormalized(normalized, scale);
+  return formatRating(converted, scale);
 }
 
 function fmtCurrency(amount, currency) {
@@ -175,33 +187,42 @@ function VintageBarChart({ data }) {
 }
 
 // ── Rating Distribution ───────────────────────────────────────────────────────
-function RatingChart({ byRating, avg }) {
+// Bands are normalized 0-100 keys; labels show descriptive quality tier
+const RATING_BANDS = [
+  { key: '81-100', label: 'Excellent', sub: '4.1–5★ · 16–20/20 · 91–100pts', color: '#7B9E88' },
+  { key: '61-80',  label: 'Very Good', sub: '3.1–4★ · 12–16/20 · 81–90pts',  color: '#D4C87A' },
+  { key: '41-60',  label: 'Good',      sub: '2.1–3★ · 8–12/20 · 71–80pts',   color: '#D4A070' },
+  { key: '21-40',  label: 'Fair',      sub: '1.1–2★ · 4–8/20 · 61–70pts',    color: '#C08050' },
+  { key: '0-20',   label: 'Poor',      sub: '1★ · 1–4/20 · 50–60pts',        color: '#C0504D' },
+];
+
+function RatingChart({ byRating, avg, targetScale }) {
   const total  = Object.values(byRating).reduce((s, v) => s + v, 0);
   const maxVal = Math.max(...Object.values(byRating), 1);
 
   return (
     <div className="rating-chart">
-      {[5, 4, 3, 2, 1].map(stars => {
-        const count = byRating[stars] || 0;
+      {RATING_BANDS.map(band => {
+        const count = byRating[band.key] || 0;
         const pct   = total > 0 ? (count / total) * 100 : 0;
         return (
-          <div key={stars} className="rating-row">
-            <span className="rating-stars">{'★'.repeat(stars)}{'☆'.repeat(5 - stars)}</span>
+          <div key={band.key} className="rating-row" title={band.sub}>
+            <span className="rating-stars" style={{ color: band.color, minWidth: 70, fontSize: '0.8rem' }}>{band.label}</span>
             <div className="rating-track">
-              <div className="rating-fill" style={{ width: `${(count / maxVal) * 100}%` }} />
+              <div className="rating-fill" style={{ width: `${(count / maxVal) * 100}%`, background: band.color }} />
             </div>
             <span className="rating-count">{count}</span>
             <span className="rating-pct">{pct.toFixed(0)}%</span>
           </div>
         );
       })}
-      {avg && (
+      {avg != null && (
         <div className="rating-avg">
-          Average: <strong>{avg.toFixed(1)}</strong> ★
+          Average: <strong>{fmtRating(avg, targetScale)}</strong>
           {total > 0 && <span> across {total} rated bottle{total !== 1 ? 's' : ''}</span>}
         </div>
       )}
-      {!avg && total === 0 && <p className="stats-empty">No rated bottles yet</p>}
+      {avg == null && total === 0 && <p className="stats-empty">No rated bottles yet</p>}
     </div>
   );
 }
@@ -431,7 +452,7 @@ function UrgencyLadder({ bottles, currency }) {
 }
 
 // ── Holding Time Chart ────────────────────────────────────────────────────────
-function HoldingTimeChart({ holdingTime }) {
+function HoldingTimeChart({ holdingTime, targetScale }) {
   const hasData = holdingTime && holdingTime.some(d => d.count > 0);
   if (!hasData) {
     return (
@@ -453,9 +474,9 @@ function HoldingTimeChart({ holdingTime }) {
                 style={{ width: `${(d.count / maxCount) * 100}%` }} />
             </div>
             <span className="holding-count">{d.count}</span>
-            {d.avgConsumedRating && (
+            {d.avgConsumedRating != null && (
               <span className="holding-rating">
-                {d.avgConsumedRating.toFixed(1)} ★
+                {fmtRating(d.avgConsumedRating, targetScale)}
               </span>
             )}
           </div>
@@ -469,7 +490,7 @@ function HoldingTimeChart({ holdingTime }) {
 }
 
 // ── Joy Per Dollar ────────────────────────────────────────────────────────────
-function JoyPerDollarChart({ data, currency }) {
+function JoyPerDollarChart({ data, currency, targetScale }) {
   if (!data || data.length === 0) {
     return (
       <p className="stats-empty">
@@ -495,7 +516,7 @@ function JoyPerDollarChart({ data, currency }) {
                 }} />
             </div>
             <div className="jpd-stats">
-              <span className="jpd-rating">{d.avgRating} ★</span>
+              <span className="jpd-rating">{fmtRating(d.avgRating, targetScale)}</span>
               <span className="jpd-price">avg {fmtCurrency(d.avgPrice, currency)}</span>
               <span className="jpd-count">{d.count} bottles</span>
             </div>
@@ -508,7 +529,7 @@ function JoyPerDollarChart({ data, currency }) {
 }
 
 // ── Regret Signal (expectation vs reality) ────────────────────────────────────
-function RegretSignalCard({ regretSignal }) {
+function RegretSignalCard({ regretSignal, targetScale }) {
   const { surprises, disappointments, avgDelta, count } = regretSignal;
 
   if (count === 0) {
@@ -524,8 +545,8 @@ function RegretSignalCard({ regretSignal }) {
       {avgDelta !== null && (
         <div className="regret-signal-avg">
           Avg delta: <strong style={{ color: avgDelta >= 0 ? '#7B9E88' : '#E07060' }}>
-            {avgDelta >= 0 ? '+' : ''}{avgDelta}
-          </strong> stars across {count} bottle{count !== 1 ? 's' : ''}
+            {avgDelta >= 0 ? '+' : ''}{fmtRating(Math.abs(avgDelta), targetScale)}
+          </strong> across {count} bottle{count !== 1 ? 's' : ''}
         </div>
       )}
       <div className="regret-signal-cols">
@@ -542,8 +563,8 @@ function RegretSignalCard({ regretSignal }) {
                   <div className="rs-name">{b.name}</div>
                   <div className="rs-vintage">{b.vintage}</div>
                 </div>
-                <div className="rs-delta rs-delta--positive">+{b.delta} ★</div>
-                <div className="rs-ratings">{b.rating} → {b.consumedRating}</div>
+                <div className="rs-delta rs-delta--positive">+{fmtRating(b.delta, targetScale)}</div>
+                <div className="rs-ratings">{fmtRating(b.rating, targetScale)} → {fmtRating(b.consumedRating, targetScale)}</div>
               </div>
             ))}
         </div>
@@ -560,8 +581,8 @@ function RegretSignalCard({ regretSignal }) {
                   <div className="rs-name">{b.name}</div>
                   <div className="rs-vintage">{b.vintage}</div>
                 </div>
-                <div className="rs-delta rs-delta--negative">{b.delta} ★</div>
-                <div className="rs-ratings">{b.rating} → {b.consumedRating}</div>
+                <div className="rs-delta rs-delta--negative">{fmtRating(b.delta, targetScale)}</div>
+                <div className="rs-ratings">{fmtRating(b.rating, targetScale)} → {fmtRating(b.consumedRating, targetScale)}</div>
               </div>
             ))}
         </div>
@@ -1036,6 +1057,7 @@ function Statistics() {
 
   const total          = overview.totalBottles;
   const currency       = overview.currency;
+  const targetScale    = overview.targetRatingScale || '5';
   const hasConsumption = overview.totalConsumed > 0;
   const hasMultipleSizes = Object.keys(byBottleSize).length > 1;
   const hasPurchaseDates = byPurchaseYear && byPurchaseYear.length > 0;
@@ -1083,7 +1105,7 @@ function Statistics() {
         <KPICard icon="🌍" label="Countries" value={fmt(overview.totalCountries)}
           sub={`${fmt(overview.totalGrapes)} grape varieties`} accentColor="#6EC6C6" />
         <KPICard icon="⭐" label="Avg Rating"
-          value={overview.avgRating ? `${overview.avgRating} / 5` : '—'}
+          value={overview.avgRating != null ? fmtRating(overview.avgRating, targetScale) : '—'}
           accentColor="#D4C87A" />
         {isBasic && (
           <KPICard icon="📅" label="Avg Vintage Age"
@@ -1116,9 +1138,9 @@ function Statistics() {
           <KPICard icon="🥂" label="Bottles Drunk"  value={fmt(overview.bottlesDrunk)} />
           <KPICard icon="🎁" label="Gifted"          value={fmt(overview.bottlesGifted)} />
           <KPICard icon="💵" label="Sold"            value={fmt(overview.bottlesSold)} />
-          {overview.avgConsumedRating && (
+          {overview.avgConsumedRating != null && (
             <KPICard icon="🌟" label="Avg Consumed Rating"
-              value={`${overview.avgConsumedRating} / 5`} />
+              value={fmtRating(overview.avgConsumedRating, targetScale)} />
           )}
         </div>
       )}
@@ -1271,7 +1293,7 @@ function Statistics() {
             {/* Rating Distribution — BASIC */}
             <div className="stats-card">
               <h2 className="stats-card-title">Rating Distribution</h2>
-              <RatingChart byRating={byRating} avg={overview.avgRating} />
+              <RatingChart byRating={byRating} avg={overview.avgRating} targetScale={targetScale} />
             </div>
 
             {/* Bottle Sizes — BASIC */}
@@ -1347,7 +1369,7 @@ function Statistics() {
                     Patience Payoff
                     <span className="stats-card-title-note">Does aging reward you?</span>
                   </h2>
-                  <HoldingTimeChart holdingTime={holdingTime} />
+                  <HoldingTimeChart holdingTime={holdingTime} targetScale={targetScale} />
                 </div>
 
                 {/* Joy Per Dollar — PREMIUM */}
@@ -1356,7 +1378,7 @@ function Statistics() {
                     Joy Per {currency}
                     <span className="stats-card-title-note">Rating vs price by type</span>
                   </h2>
-                  <JoyPerDollarChart data={joyPerDollar} currency={currency} />
+                  <JoyPerDollarChart data={joyPerDollar} currency={currency} targetScale={targetScale} />
                 </div>
 
                 {/* Regret Signal — PREMIUM */}
@@ -1366,7 +1388,7 @@ function Statistics() {
                       Expectation vs Reality
                       <span className="stats-card-title-note">When wines surprised or disappointed you</span>
                     </h2>
-                    <RegretSignalCard regretSignal={regretSignal} />
+                    <RegretSignalCard regretSignal={regretSignal} targetScale={targetScale} />
                   </div>
                 )}
 

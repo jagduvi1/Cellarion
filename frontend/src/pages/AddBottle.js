@@ -5,6 +5,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { CURRENCIES } from '../config/currencies';
 import { monthToLastDay } from '../utils/drinkStatus';
 import ImageUpload from '../components/ImageUpload';
+import RatingInput from '../components/RatingInput';
 import './AddBottle.css';
 
 function AddBottle() {
@@ -29,6 +30,7 @@ function AddBottle() {
     purchaseUrl: '',
     notes: '',
     rating: '',
+    ratingScale: user?.preferences?.ratingScale || '5',
     drinkFrom: '',
     drinkBefore: ''
   });
@@ -72,7 +74,8 @@ function AddBottle() {
         wineDefinition: selectedWine._id,
         ...bottleData,
         price: bottleData.price ? parseFloat(bottleData.price) : undefined,
-        rating: bottleData.rating ? parseInt(bottleData.rating) : undefined,
+        rating: bottleData.rating ? parseFloat(bottleData.rating) : undefined,
+        ratingScale: bottleData.ratingScale || '5',
         drinkFrom:   bottleData.drinkFrom   ? `${bottleData.drinkFrom}-01`          : undefined,
         drinkBefore: bottleData.drinkBefore ? monthToLastDay(bottleData.drinkBefore) : undefined,
       };
@@ -281,17 +284,13 @@ function AddBottle() {
 
               <div className="form-group">
                 <label>{t('addBottle.ratingLabel')}</label>
-                <select
+                <RatingInput
                   value={bottleData.rating}
-                  onChange={(e) => setBottleData({ ...bottleData, rating: e.target.value })}
-                >
-                  <option value="">{t('common.noRating')}</option>
-                  <option value="5">⭐⭐⭐⭐⭐ (5 stars)</option>
-                  <option value="4">⭐⭐⭐⭐ (4 stars)</option>
-                  <option value="3">⭐⭐⭐ (3 stars)</option>
-                  <option value="2">⭐⭐ (2 stars)</option>
-                  <option value="1">⭐ (1 star)</option>
-                </select>
+                  scale={bottleData.ratingScale}
+                  onChange={v => setBottleData({ ...bottleData, rating: v ?? '' })}
+                  onScaleChange={s => setBottleData({ ...bottleData, ratingScale: s, rating: '' })}
+                  allowScaleOverride
+                />
               </div>
 
               <div className="form-group">

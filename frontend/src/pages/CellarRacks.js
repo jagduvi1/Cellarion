@@ -2,12 +2,13 @@ import { useState, useEffect, useMemo } from 'react';
 import { useParams, Link, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
+import RatingInput from '../components/RatingInput';
 import './CellarRacks.css';
 
 function CellarRacks() {
   const { t } = useTranslation();
   const { id } = useParams();
-  const { apiFetch } = useAuth();
+  const { apiFetch, user } = useAuth();
   const [searchParams] = useSearchParams();
   const highlightBottleId = searchParams.get('highlight');
   const [highlightPos, setHighlightPos] = useState(null); // { rackId, position }
@@ -158,12 +159,12 @@ function CellarRacks() {
   };
 
   // --- soft-remove bottle via the shared consume endpoint ---
-  const handleConsumeSubmit = async (reason, note, rating) => {
+  const handleConsumeSubmit = async (reason, note, rating, consumedRatingScale) => {
     const { bottleId } = consumeModal;
     const res = await apiFetch(`/api/bottles/${bottleId}/consume`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ reason, note, rating })
+      body: JSON.stringify({ reason, note, rating, consumedRatingScale })
     });
     const data = await res.json();
     if (res.ok) {
@@ -314,6 +315,7 @@ function CellarRacks() {
       {/* Consume/remove modal */}
       {consumeModal && (
         <ConsumeModal
+          defaultRatingScale={user?.preferences?.ratingScale || '5'}
           onSubmit={handleConsumeSubmit}
           onCancel={() => setConsumeModal(null)}
         />
@@ -471,17 +473,18 @@ function FilledSlotContent({ position, slot, canEdit, onRemoveFromRack, onConsum
 }
 
 // ---- Consume / remove modal ----
-function ConsumeModal({ onSubmit, onCancel }) {
+function ConsumeModal({ defaultRatingScale, onSubmit, onCancel }) {
   const { t } = useTranslation();
-  const [reason, setReason] = useState('drank');
-  const [note, setNote]     = useState('');
-  const [rating, setRating] = useState('');
-  const [saving, setSaving] = useState(false);
+  const [reason,       setReason]      = useState('drank');
+  const [note,         setNote]        = useState('');
+  const [rating,       setRating]      = useState('');
+  const [ratingScale,  setRatingScale] = useState(defaultRatingScale || '5');
+  const [saving,       setSaving]      = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setSaving(true);
-    await onSubmit(reason, note || undefined, rating || undefined);
+    await onSubmit(reason, note || undefined, rating || undefined, ratingScale);
     setSaving(false);
   };
 
@@ -505,14 +508,13 @@ function ConsumeModal({ onSubmit, onCancel }) {
           {reason === 'drank' && (
             <div className="form-group">
               <label>{t('bottleDetail.ratingOptional')}</label>
-              <select value={rating} onChange={e => setRating(e.target.value)}>
-                <option value="">&mdash; {t('bottleDetail.noRatingOption')} &mdash;</option>
-                <option value="1">&#9733; 1 star</option>
-                <option value="2">&#9733;&#9733; 2 stars</option>
-                <option value="3">&#9733;&#9733;&#9733; 3 stars</option>
-                <option value="4">&#9733;&#9733;&#9733;&#9733; 4 stars</option>
-                <option value="5">&#9733;&#9733;&#9733;&#9733;&#9733; 5 stars</option>
-              </select>
+              <RatingInput
+                value={rating}
+                scale={ratingScale}
+                onChange={v => setRating(v ?? '')}
+                onScaleChange={s => { setRatingScale(s); setRating(''); }}
+                allowScaleOverride
+              />
             </div>
           )}
           <div className="form-group">

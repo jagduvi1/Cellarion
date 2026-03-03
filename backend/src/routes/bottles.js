@@ -9,6 +9,7 @@ const BottleImage = require('../models/BottleImage');
 const { getCellarRole } = require('../utils/cellarAccess');
 const { logAudit } = require('../services/audit');
 const { getOrCreateDailySnapshot, getSnapshotForDate } = require('../utils/exchangeRates');
+const { isValidRating, VALID_SCALES } = require('../utils/ratingUtils');
 
 // Strip HTML tags from user-supplied text to prevent XSS in rendered output
 const stripHtml = (str) => (str ? str.replace(/<[^>]*>/g, '').trim() : str);
@@ -34,12 +35,20 @@ router.post('/', async (req, res) => {
       location,
       notes,
       rating,
+      ratingScale,
       drinkFrom,
       drinkBefore
     } = req.body;
 
     if (!cellar || !wineDefinition) {
       return res.status(400).json({ error: 'Cellar and wine definition are required' });
+    }
+
+    const resolvedRatingScale = ratingScale && VALID_SCALES.includes(ratingScale) ? ratingScale : '5';
+    if (rating !== undefined && rating !== null && rating !== '') {
+      if (!isValidRating(rating, resolvedRatingScale)) {
+        return res.status(400).json({ error: `Rating is out of range for the ${resolvedRatingScale}-point scale` });
+      }
     }
 
     // Verify user has editor/owner access to this cellar
@@ -77,7 +86,8 @@ router.post('/', async (req, res) => {
       purchaseUrl,
       location: stripHtml(location),
       notes: stripHtml(notes),
-      rating,
+      rating: (rating !== undefined && rating !== null && rating !== '') ? parseFloat(rating) : undefined,
+      ratingScale: resolvedRatingScale,
       drinkFrom,
       drinkBefore
     });
@@ -185,7 +195,7 @@ router.put('/:id', async (req, res) => {
     const updateFields = [
       'vintage', 'price', 'currency', 'bottleSize',
       'purchaseDate', 'purchaseLocation', 'purchaseUrl',
-      'location', 'notes', 'rating',
+      'location', 'notes', 'rating', 'ratingScale',
       'drinkFrom', 'drinkBefore'
     ];
 
@@ -212,6 +222,20 @@ router.put('/:id', async (req, res) => {
         bottle[field] = newVal;
       }
     });
+
+    // Validate and coerce rating if it was updated
+    if ('rating' in req.body) {
+      const scale = bottle.ratingScale || '5';
+      const ratingVal = req.body.rating;
+      if (ratingVal !== undefined && ratingVal !== null && ratingVal !== '') {
+        if (!isValidRating(ratingVal, scale)) {
+          return res.status(400).json({ error: `Rating is out of range for the ${scale}-point scale` });
+        }
+        bottle.rating = parseFloat(ratingVal);
+      } else {
+        bottle.rating = undefined;
+      }
+    }
 
     // Re-anchor the price date whenever price or currency is being updated,
     // and ensure today's rate snapshot exists for future lookups.
@@ -259,10 +283,19 @@ router.post('/:id/consume', async (req, res) => {
       return res.status(403).json({ error: 'Not authorized to consume this bottle' });
     }
 
-    const { reason = 'drank', note, rating } = req.body;
+    const { reason = 'drank', note, rating, consumedRatingScale } = req.body;
     const validReasons = ['drank', 'gifted', 'sold', 'other'];
     if (!validReasons.includes(reason)) {
       return res.status(400).json({ error: 'Invalid reason' });
+    }
+
+    const resolvedConsumedScale = consumedRatingScale && VALID_SCALES.includes(consumedRatingScale)
+      ? consumedRatingScale
+      : '5';
+    if (rating !== undefined && rating !== null && rating !== '') {
+      if (!isValidRating(rating, resolvedConsumedScale)) {
+        return res.status(400).json({ error: `Rating is out of range for the ${resolvedConsumedScale}-point scale` });
+      }
     }
 
     // Remove from any rack slot so the slot is freed up
@@ -275,7 +308,10 @@ router.post('/:id/consume', async (req, res) => {
     bottle.consumedAt = new Date();
     bottle.consumedReason = reason;
     if (note) bottle.consumedNote = stripHtml(note);
-    if (rating) bottle.consumedRating = parseInt(rating);
+    if (rating !== undefined && rating !== null && rating !== '') {
+      bottle.consumedRating = parseFloat(rating);
+      bottle.consumedRatingScale = resolvedConsumedScale;
+    }
 
     await bottle.save();
 
