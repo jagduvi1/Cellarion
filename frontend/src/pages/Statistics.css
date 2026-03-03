@@ -906,3 +906,668 @@
     font-size: 1.05rem;
   }
 }
+
+/* ── Insight Grid (health + regret) ──────────────────────────────────────────── */
+.stats-grid--insight {
+  grid-template-columns: 1fr 1fr;
+  margin-bottom: 1.25rem;
+}
+
+/* ── Drink Window Coverage Note ─────────────────────────────────────────────── */
+.drink-coverage-note {
+  margin-top: 1rem;
+  padding-top: 0.875rem;
+  border-top: 1px solid #252525;
+  font-size: 0.72rem;
+  color: #5a5550;
+  line-height: 1.4;
+}
+
+/* ── Cellar Health Score ─────────────────────────────────────────────────────── */
+.health-card {
+  display: flex;
+  align-items: center;
+  gap: 2rem;
+}
+
+.health-gauge-wrap {
+  flex-shrink: 0;
+}
+
+.health-gauge {
+  width: 110px;
+  height: 110px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px;
+  box-sizing: border-box;
+}
+
+.health-gauge-inner {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background: #1c1c1c;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+}
+
+.health-grade {
+  font-size: 1.8rem;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.05em;
+}
+
+.health-score-num {
+  font-size: 0.6rem;
+  color: #5a5550;
+  line-height: 1;
+}
+
+.health-breakdown {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.health-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 0.82rem;
+}
+
+.health-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.health-label {
+  flex: 1;
+  color: #c8c0b4;
+}
+
+.health-val {
+  color: #E8DFD0;
+  font-weight: 600;
+  min-width: 24px;
+  text-align: right;
+}
+
+/* ── Regret Index ────────────────────────────────────────────────────────────── */
+.stats-card--regret-alert {
+  border-color: rgba(224, 112, 96, 0.25);
+  background: linear-gradient(135deg, #1c1c1c 0%, #1f1917 100%);
+}
+
+.regret-card {
+  text-align: center;
+}
+
+.regret-number {
+  font-size: 3.5rem;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.04em;
+  margin-bottom: 0.25rem;
+}
+
+.regret-label {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: #9A9484;
+  margin-bottom: 0.875rem;
+}
+
+.regret-desc {
+  font-size: 0.875rem;
+  color: #c8c0b4;
+  margin-bottom: 1rem;
+  line-height: 1.5;
+}
+
+.regret-message {
+  font-size: 0.85rem;
+  color: #9A9484;
+  border-left: 3px solid;
+  padding: 0.5rem 0.875rem;
+  text-align: left;
+  background: rgba(255,255,255,0.03);
+  border-radius: 0 6px 6px 0;
+  margin-bottom: 1rem;
+  line-height: 1.45;
+}
+
+.regret-bar-wrap {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.regret-bar-track {
+  flex: 1;
+  height: 8px;
+  background: #252525;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.regret-bar-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.6s cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+.regret-bar-label {
+  font-size: 0.72rem;
+  color: #5a5550;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* ── Drink Window Forecast ───────────────────────────────────────────────────── */
+.forecast-chart {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  height: 180px;
+  padding-bottom: 28px;
+  padding-top: 20px;
+  overflow-x: auto;
+}
+
+.forecast-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  flex: 1;
+  min-width: 36px;
+  max-width: 56px;
+  height: 100%;
+  justify-content: flex-end;
+  position: relative;
+  cursor: default;
+}
+
+.forecast-col--current .forecast-bar {
+  background: linear-gradient(to top, #4a7060, #7B9E88);
+}
+
+.forecast-col--current .forecast-year {
+  color: #7B9E88;
+  font-weight: 700;
+}
+
+.forecast-count {
+  font-size: 0.65rem;
+  color: #9A9484;
+  min-height: 14px;
+  text-align: center;
+}
+
+.forecast-bar {
+  width: 100%;
+  background: linear-gradient(to top, #2a3a30, #4a6a58);
+  border-radius: 3px 3px 0 0;
+  transition: opacity 0.15s;
+  min-height: 0;
+}
+
+.forecast-col:hover .forecast-bar {
+  opacity: 0.75;
+}
+
+.forecast-year {
+  font-size: 0.62rem;
+  color: #5a5550;
+  position: absolute;
+  bottom: 0;
+  white-space: nowrap;
+}
+
+.forecast-now-label {
+  position: absolute;
+  bottom: -1px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 0.58rem;
+  color: #7B9E88;
+  margin-top: 2px;
+}
+
+/* ── Urgency Ladder ──────────────────────────────────────────────────────────── */
+.urgency-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.urgency-item {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.65rem 0.875rem;
+  background: #222;
+  border: 1px solid #2a2a2a;
+  border-radius: 7px;
+  transition: border-color 0.15s;
+}
+
+.urgency-item:hover {
+  border-color: #3a3a3a;
+}
+
+.urgency-rank {
+  font-size: 0.72rem;
+  font-weight: 800;
+  width: 20px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.urgency-type-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.urgency-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.urgency-name {
+  font-size: 0.85rem;
+  color: #E8DFD0;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.urgency-meta {
+  font-size: 0.72rem;
+  color: #9A9484;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.urgency-source-badge {
+  font-size: 0.6rem;
+  background: #2a3a30;
+  color: #7B9E88;
+  padding: 0.1rem 0.4rem;
+  border-radius: 3px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 700;
+}
+
+.urgency-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.1rem;
+  flex-shrink: 0;
+}
+
+.urgency-days {
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.urgency-price {
+  font-size: 0.72rem;
+  color: #9A9484;
+}
+
+/* ── Holding Time ────────────────────────────────────────────────────────────── */
+.holding-chart {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  margin-bottom: 0.875rem;
+}
+
+.holding-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.holding-bucket {
+  width: 56px;
+  font-size: 0.78rem;
+  color: #c8c0b4;
+  flex-shrink: 0;
+  text-align: right;
+}
+
+.holding-track {
+  flex: 1;
+  height: 8px;
+  background: #252525;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.holding-fill {
+  height: 100%;
+  background: linear-gradient(to right, #4a7060, #7B9E88);
+  border-radius: 4px;
+  transition: width 0.5s cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+.holding-count {
+  font-size: 0.78rem;
+  color: #9A9484;
+  width: 24px;
+  text-align: right;
+  flex-shrink: 0;
+}
+
+.holding-rating {
+  font-size: 0.75rem;
+  color: #D4C87A;
+  min-width: 40px;
+  text-align: right;
+  flex-shrink: 0;
+}
+
+.holding-note {
+  font-size: 0.75rem;
+  color: #5a5550;
+  font-style: italic;
+  line-height: 1.4;
+  margin: 0;
+}
+
+/* ── Joy Per Dollar ──────────────────────────────────────────────────────────── */
+.jpd-chart {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+  margin-bottom: 0.875rem;
+}
+
+.jpd-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.jpd-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.jpd-label {
+  width: 72px;
+  font-size: 0.78rem;
+  color: #c8c0b4;
+  flex-shrink: 0;
+  text-align: right;
+}
+
+.jpd-track {
+  flex: 1;
+  height: 10px;
+  background: #252525;
+  border-radius: 5px;
+  overflow: hidden;
+}
+
+.jpd-fill {
+  height: 100%;
+  border-radius: 5px;
+  opacity: 0.85;
+  transition: width 0.5s cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+.jpd-stats {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.1rem;
+  min-width: 80px;
+  flex-shrink: 0;
+}
+
+.jpd-rating {
+  font-size: 0.78rem;
+  color: #D4C87A;
+  font-weight: 600;
+}
+
+.jpd-price {
+  font-size: 0.68rem;
+  color: #9A9484;
+}
+
+.jpd-count {
+  font-size: 0.65rem;
+  color: #5a5550;
+}
+
+.jpd-note {
+  font-size: 0.75rem;
+  color: #5a5550;
+  font-style: italic;
+  margin: 0;
+  line-height: 1.4;
+}
+
+/* ── Regret Signal ───────────────────────────────────────────────────────────── */
+.regret-signal-avg {
+  font-size: 0.875rem;
+  color: #9A9484;
+  text-align: center;
+  margin-bottom: 1.25rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid #252525;
+}
+
+.regret-signal-cols {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+}
+
+.regret-signal-col-header {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-weight: 700;
+  margin-bottom: 0.75rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid #252525;
+}
+
+.regret-signal-col-header--good { color: #7B9E88; }
+.regret-signal-col-header--bad  { color: #E07060; }
+
+.regret-signal-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.45rem 0;
+  border-bottom: 1px solid #1e1e1e;
+}
+
+.regret-signal-item:last-child {
+  border-bottom: none;
+}
+
+.rs-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.rs-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.rs-name {
+  font-size: 0.8rem;
+  color: #E8DFD0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rs-vintage {
+  font-size: 0.68rem;
+  color: #5a5550;
+}
+
+.rs-delta {
+  font-size: 0.82rem;
+  font-weight: 700;
+  flex-shrink: 0;
+  min-width: 36px;
+  text-align: right;
+}
+
+.rs-delta--positive { color: #7B9E88; }
+.rs-delta--negative { color: #E07060; }
+
+.rs-ratings {
+  font-size: 0.68rem;
+  color: #5a5550;
+  flex-shrink: 0;
+  min-width: 52px;
+  text-align: right;
+}
+
+/* ── Pace Card ───────────────────────────────────────────────────────────────── */
+.pace-card {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.pace-stats {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  background: #222;
+  border: 1px solid #2a2a2a;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.pace-stat {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 1rem 0.75rem;
+  gap: 0.3rem;
+}
+
+.pace-stat-value {
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: #E8DFD0;
+  line-height: 1;
+}
+
+.pace-stat-label {
+  font-size: 0.65rem;
+  color: #9A9484;
+  text-align: center;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  line-height: 1.3;
+}
+
+.pace-divider {
+  width: 1px;
+  background: #2a2a2a;
+  align-self: stretch;
+  margin: 0.5rem 0;
+}
+
+.pace-runway {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  justify-content: center;
+  padding: 0.875rem;
+  background: #222;
+  border: 1px solid #2a2a2a;
+  border-radius: 8px;
+}
+
+.pace-runway-num {
+  font-size: 2rem;
+  font-weight: 800;
+  color: #7B9E88;
+  line-height: 1;
+}
+
+.pace-runway-label {
+  font-size: 0.85rem;
+  color: #9A9484;
+  line-height: 1.4;
+}
+
+/* ── Responsive updates for new components ───────────────────────────────────── */
+@media (max-width: 900px) {
+  .stats-grid--insight {
+    grid-template-columns: 1fr;
+  }
+  .health-card {
+    gap: 1.25rem;
+  }
+  .regret-signal-cols {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+}
+
+@media (max-width: 768px) {
+  .health-card {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .health-gauge-wrap {
+    align-self: center;
+  }
+  .pace-stats {
+    flex-direction: column;
+  }
+  .pace-divider {
+    width: auto;
+    height: 1px;
+    align-self: stretch;
+    margin: 0 0.5rem;
+  }
+  .jpd-stats {
+    display: none;
+  }
+  .forecast-chart {
+    gap: 3px;
+  }
+}

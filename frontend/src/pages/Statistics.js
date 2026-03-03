@@ -38,6 +38,8 @@ const GRAPE_COLORS = [
   '#8B6A9A', '#7B5A8A', '#6B4A7A', '#5B3A6A', '#4B2A5A',
 ];
 
+const GRADE_COLORS = { A: '#7B9E88', B: '#D4C87A', C: '#D4A070', D: '#C0504D', F: '#9A2020' };
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function fmt(n) {
   if (n == null) return '—';
@@ -58,72 +60,50 @@ function fmtCurrency(amount, currency) {
   }
 }
 
+function fmtDays(days) {
+  if (days === null || days === undefined) return '—';
+  if (days < 0) return `${Math.abs(days)}d overdue`;
+  if (days === 0) return 'Today';
+  return `${days}d left`;
+}
+
 // ── SVG Donut Chart ───────────────────────────────────────────────────────────
-// Segments start at 12 o'clock and go clockwise.
-// Formula: dashoffset = C/4 - cumulative (no rotation transform needed).
 function DonutChart({ segments, total, size = 180 }) {
-  const R = size * 0.355;
-  const C = 2 * Math.PI * R;
+  const R  = size * 0.355;
+  const C  = 2 * Math.PI * R;
   const cx = size / 2;
   const cy = size / 2;
   const validSegs = segments.filter(s => s.value > 0);
-
-  let cumulative = 0;
+  let cumulative  = 0;
 
   return (
     <svg
-      width={size}
-      height={size}
+      width={size} height={size}
       viewBox={`0 0 ${size} ${size}`}
       className="donut-svg"
       role="img"
       aria-label={`Donut chart: ${total} total bottles`}
     >
-      {/* Background ring */}
       <circle cx={cx} cy={cy} r={R} fill="none" stroke="#252525" strokeWidth="22" />
-
-      {total === 0 ? null : validSegs.map((seg, i) => {
-        const len = (seg.value / total) * C;
+      {total > 0 && validSegs.map((seg, i) => {
+        const len       = (seg.value / total) * C;
         const dashoffset = C / 4 - cumulative;
         cumulative += len;
         return (
-          <circle
-            key={i}
-            cx={cx}
-            cy={cy}
-            r={R}
-            fill="none"
-            stroke={seg.color}
-            strokeWidth="20"
-            strokeDasharray={`${len} ${C}`}
-            strokeDashoffset={dashoffset}
+          <circle key={i}
+            cx={cx} cy={cy} r={R}
+            fill="none" stroke={seg.color} strokeWidth="20"
+            strokeDasharray={`${len} ${C}`} strokeDashoffset={dashoffset}
             strokeLinecap="butt"
           >
             <title>{seg.label}: {seg.value} ({total > 0 ? ((seg.value / total) * 100).toFixed(1) : 0}%)</title>
           </circle>
         );
       })}
-
-      {/* Center text */}
-      <text
-        x={cx}
-        y={cy - size * 0.06}
-        textAnchor="middle"
-        fontSize={size * 0.155}
-        fontWeight="700"
-        fill="#E8DFD0"
-      >
-        {total}
-      </text>
-      <text
-        x={cx}
-        y={cy + size * 0.1}
-        textAnchor="middle"
-        fontSize={size * 0.07}
-        fill="#9A9484"
-      >
-        bottles
-      </text>
+      <text x={cx} y={cy - size * 0.06} textAnchor="middle"
+        fontSize={size * 0.155} fontWeight="700" fill="#E8DFD0">{total}</text>
+      <text x={cx} y={cy + size * 0.1} textAnchor="middle"
+        fontSize={size * 0.07} fill="#9A9484">bottles</text>
     </svg>
   );
 }
@@ -131,7 +111,7 @@ function DonutChart({ segments, total, size = 180 }) {
 // ── Horizontal Bar Chart ──────────────────────────────────────────────────────
 function HBarChart({ data, colors, maxItems = 12 }) {
   if (!data || data.length === 0) return <p className="stats-empty">No data yet</p>;
-  const items = data.slice(0, maxItems);
+  const items  = data.slice(0, maxItems);
   const maxVal = Math.max(...items.map(d => d.count), 1);
 
   return (
@@ -140,13 +120,12 @@ function HBarChart({ data, colors, maxItems = 12 }) {
         <div key={i} className="hbar-row">
           <span className="hbar-label" title={d.name}>{d.name}</span>
           <div className="hbar-track">
-            <div
-              className="hbar-fill"
-              style={{
-                width: `${(d.count / maxVal) * 100}%`,
-                background: Array.isArray(colors) ? (colors[i % colors.length] || '#7B9E88') : (colors || '#7B9E88'),
-              }}
-            />
+            <div className="hbar-fill" style={{
+              width: `${(d.count / maxVal) * 100}%`,
+              background: Array.isArray(colors)
+                ? (colors[i % colors.length] || '#7B9E88')
+                : (colors || '#7B9E88'),
+            }} />
           </div>
           <span className="hbar-count">{d.count}</span>
         </div>
@@ -159,8 +138,8 @@ function HBarChart({ data, colors, maxItems = 12 }) {
 function VintageBarChart({ data }) {
   if (!data || data.length === 0) return <p className="stats-empty">No vintage data yet</p>;
 
-  const numeric = data.filter(d => d.year !== 'NV');
-  const nvItem = data.find(d => d.year === 'NV');
+  const numeric  = data.filter(d => d.year !== 'NV');
+  const nvItem   = data.find(d => d.year === 'NV');
   const maxCount = Math.max(...data.map(d => d.count), 1);
   const BAR_HEIGHT = 160;
 
@@ -168,31 +147,22 @@ function VintageBarChart({ data }) {
     <div className="vintage-chart">
       <div className="vintage-bars">
         {numeric.map((d, i) => (
-          <div
-            key={i}
-            className="vintage-bar-wrap"
-            title={`${d.year}: ${d.count} bottle${d.count !== 1 ? 's' : ''}`}
-          >
+          <div key={i} className="vintage-bar-wrap"
+            title={`${d.year}: ${d.count} bottle${d.count !== 1 ? 's' : ''}`}>
             <div className="vintage-bar-count">{d.count > 1 ? d.count : ''}</div>
-            <div
-              className="vintage-bar"
-              style={{ height: `${Math.max(4, (d.count / maxCount) * BAR_HEIGHT)}px` }}
-            />
+            <div className="vintage-bar"
+              style={{ height: `${Math.max(4, (d.count / maxCount) * BAR_HEIGHT)}px` }} />
             <div className="vintage-bar-label">
               {numeric.length > 20 ? d.year.slice(-2) : d.year}
             </div>
           </div>
         ))}
         {nvItem && (
-          <div
-            className="vintage-bar-wrap vintage-bar-wrap--nv"
-            title={`NV: ${nvItem.count} bottle${nvItem.count !== 1 ? 's' : ''}`}
-          >
+          <div className="vintage-bar-wrap vintage-bar-wrap--nv"
+            title={`NV: ${nvItem.count} bottle${nvItem.count !== 1 ? 's' : ''}`}>
             <div className="vintage-bar-count">{nvItem.count}</div>
-            <div
-              className="vintage-bar vintage-bar--nv"
-              style={{ height: `${Math.max(4, (nvItem.count / maxCount) * BAR_HEIGHT)}px` }}
-            />
+            <div className="vintage-bar vintage-bar--nv"
+              style={{ height: `${Math.max(4, (nvItem.count / maxCount) * BAR_HEIGHT)}px` }} />
             <div className="vintage-bar-label">NV</div>
           </div>
         )}
@@ -203,24 +173,19 @@ function VintageBarChart({ data }) {
 
 // ── Rating Distribution ───────────────────────────────────────────────────────
 function RatingChart({ byRating, avg }) {
-  const total = Object.values(byRating).reduce((s, v) => s + v, 0);
+  const total  = Object.values(byRating).reduce((s, v) => s + v, 0);
   const maxVal = Math.max(...Object.values(byRating), 1);
 
   return (
     <div className="rating-chart">
       {[5, 4, 3, 2, 1].map(stars => {
         const count = byRating[stars] || 0;
-        const pct = total > 0 ? (count / total) * 100 : 0;
+        const pct   = total > 0 ? (count / total) * 100 : 0;
         return (
           <div key={stars} className="rating-row">
-            <span className="rating-stars">
-              {'★'.repeat(stars)}{'☆'.repeat(5 - stars)}
-            </span>
+            <span className="rating-stars">{'★'.repeat(stars)}{'☆'.repeat(5 - stars)}</span>
             <div className="rating-track">
-              <div
-                className="rating-fill"
-                style={{ width: `${(count / maxVal) * 100}%` }}
-              />
+              <div className="rating-fill" style={{ width: `${(count / maxVal) * 100}%` }} />
             </div>
             <span className="rating-count">{count}</span>
             <span className="rating-pct">{pct.toFixed(0)}%</span>
@@ -233,45 +198,39 @@ function RatingChart({ byRating, avg }) {
           {total > 0 && <span> across {total} rated bottle{total !== 1 ? 's' : ''}</span>}
         </div>
       )}
-      {!avg && total === 0 && (
-        <p className="stats-empty">No rated bottles yet</p>
-      )}
+      {!avg && total === 0 && <p className="stats-empty">No rated bottles yet</p>}
     </div>
   );
 }
 
 // ── Drink Window Visualization ────────────────────────────────────────────────
-function DrinkWindowViz({ drinkWindow, total }) {
+function DrinkWindowViz({ drinkWindow, windowCoverage, total }) {
   const segments = [
-    { key: 'overdue',  label: 'Past Drink Window', color: '#E07060', icon: '⚠' },
+    { key: 'overdue',  label: 'Past Drink Window',    color: '#E07060', icon: '⚠' },
     { key: 'soon',     label: 'Drink Soon (≤90 days)', color: '#D4A070', icon: '⏱' },
-    { key: 'inWindow', label: 'In Optimal Window', color: '#7B9E88', icon: '✓' },
-    { key: 'notReady', label: 'Not Ready Yet', color: '#7aade0', icon: '◷' },
-    { key: 'noWindow', label: 'No Dates Set', color: '#3a3a3a', icon: '—' },
+    { key: 'inWindow', label: 'In Optimal Window',    color: '#7B9E88', icon: '✓' },
+    { key: 'notReady', label: 'Not Ready Yet',         color: '#7aade0', icon: '◷' },
+    { key: 'noWindow', label: 'No Dates Set',          color: '#3a3a3a', icon: '—' },
   ];
+
+  const hasCoverage = windowCoverage && (windowCoverage.userSet + windowCoverage.sommSet) > 0;
 
   return (
     <div className="drink-window">
-      {/* Segmented progress bar */}
       <div className="drink-bar">
         {total > 0 ? segments.map(seg => {
           const count = drinkWindow[seg.key] || 0;
-          const pct = (count / total) * 100;
+          const pct   = (count / total) * 100;
           if (pct === 0) return null;
           return (
-            <div
-              key={seg.key}
-              className="drink-segment"
+            <div key={seg.key} className="drink-segment"
               style={{ width: `${pct}%`, background: seg.color }}
-              title={`${seg.label}: ${count}`}
-            />
+              title={`${seg.label}: ${count}`} />
           );
         }) : (
           <div className="drink-segment" style={{ width: '100%', background: '#252525' }} />
         )}
       </div>
-
-      {/* Legend */}
       <div className="drink-legend">
         {segments.map(seg => {
           const count = drinkWindow[seg.key] || 0;
@@ -280,13 +239,376 @@ function DrinkWindowViz({ drinkWindow, total }) {
               <span className="drink-legend-dot" style={{ background: seg.color }} />
               <span className="drink-legend-icon">{seg.icon}</span>
               <span className="drink-legend-label">{seg.label}</span>
-              <span className="drink-legend-count" style={{ color: count > 0 && seg.key !== 'noWindow' ? seg.color : undefined }}>
+              <span className="drink-legend-count"
+                style={{ color: count > 0 && seg.key !== 'noWindow' ? seg.color : undefined }}>
                 {count}
               </span>
             </div>
           );
         })}
       </div>
+      {hasCoverage && (
+        <div className="drink-coverage-note">
+          Window source: {windowCoverage.userSet} set by you
+          {windowCoverage.sommSet > 0 && ` · ${windowCoverage.sommSet} from sommelier profiles`}
+          {windowCoverage.none > 0 && ` · ${windowCoverage.none} without data`}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Cellar Health Score ───────────────────────────────────────────────────────
+function HealthScoreCard({ healthScore, healthGrade, drinkWindow }) {
+  const score    = healthScore ?? 0;
+  const gradeColor = healthGrade ? (GRADE_COLORS[healthGrade] || '#7B9E88') : '#555';
+  const withWindow = drinkWindow.overdue + drinkWindow.soon + drinkWindow.inWindow + drinkWindow.notReady;
+
+  return (
+    <div className="health-card">
+      <div className="health-gauge-wrap">
+        <div className="health-gauge" style={{
+          background: `conic-gradient(${gradeColor} 0% ${score}%, #252525 ${score}% 100%)`,
+        }}>
+          <div className="health-gauge-inner">
+            <span className="health-grade" style={{ color: gradeColor }}>
+              {healthGrade || '—'}
+            </span>
+            <span className="health-score-num">{healthScore !== null ? `${score}/100` : 'N/A'}</span>
+          </div>
+        </div>
+      </div>
+      <div className="health-breakdown">
+        <div className="health-row">
+          <span className="health-dot" style={{ background: '#7B9E88' }} />
+          <span className="health-label">In optimal window</span>
+          <span className="health-val">{drinkWindow.inWindow}</span>
+        </div>
+        <div className="health-row">
+          <span className="health-dot" style={{ background: '#7aade0' }} />
+          <span className="health-label">Ageing nicely</span>
+          <span className="health-val">{drinkWindow.notReady}</span>
+        </div>
+        <div className="health-row">
+          <span className="health-dot" style={{ background: '#D4A070' }} />
+          <span className="health-label">Drink soon</span>
+          <span className="health-val">{drinkWindow.soon}</span>
+        </div>
+        <div className="health-row">
+          <span className="health-dot" style={{ background: '#E07060' }} />
+          <span className="health-label">Past window</span>
+          <span className="health-val">{drinkWindow.overdue}</span>
+        </div>
+        {withWindow === 0 && (
+          <p className="stats-empty" style={{ margin: '0.5rem 0 0' }}>
+            Add drink window dates to see your score
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Regret Index ──────────────────────────────────────────────────────────────
+function RegretIndexCard({ regretIndex, overdueCount, total }) {
+  const level =
+    regretIndex >= 30 ? 'critical' :
+    regretIndex >= 15 ? 'warning'  :
+    regretIndex > 0   ? 'mild'     : 'great';
+
+  const messages = {
+    critical: 'Many bottles past their prime. Open them — time is running out.',
+    warning:  'Some bottles need attention. Plan a tasting soon.',
+    mild:     'A few bottles slipping by. Stay on top of your cellar.',
+    great:    'Excellent! Your cellar is well managed.',
+  };
+
+  const levelColors = {
+    critical: '#E07060',
+    warning:  '#D4A070',
+    mild:     '#D4C87A',
+    great:    '#7B9E88',
+  };
+
+  const color = levelColors[level];
+
+  return (
+    <div className="regret-card">
+      <div className="regret-number" style={{ color }}>
+        {regretIndex}%
+      </div>
+      <div className="regret-label">Regret Index</div>
+      <div className="regret-desc">
+        {overdueCount} bottle{overdueCount !== 1 ? 's' : ''} past their optimal drinking window,
+        still unopened.
+      </div>
+      <div className="regret-message" style={{ borderLeftColor: color, color: '#E8DFD0' }}>
+        {messages[level]}
+      </div>
+      {total > 0 && (
+        <div className="regret-bar-wrap">
+          <div className="regret-bar-track">
+            <div
+              className="regret-bar-fill"
+              style={{ width: `${Math.min(100, regretIndex)}%`, background: color }}
+            />
+          </div>
+          <span className="regret-bar-label">of windowed bottles</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Drink Window Forecast ─────────────────────────────────────────────────────
+function DrinkForecastChart({ forecast }) {
+  if (!forecast || forecast.length === 0) return <p className="stats-empty">No forecast data</p>;
+  const maxCount = Math.max(...forecast.map(d => d.count), 1);
+  const BAR_H    = 120;
+
+  return (
+    <div className="forecast-chart">
+      {forecast.map((d, i) => (
+        <div key={i} className={`forecast-col${d.isCurrent ? ' forecast-col--current' : ''}`}
+          title={`${d.year}: ${d.count} bottle${d.count !== 1 ? 's' : ''} in window`}>
+          <div className="forecast-count">{d.count > 0 ? d.count : ''}</div>
+          <div className="forecast-bar"
+            style={{ height: `${Math.max(d.count > 0 ? 4 : 0, (d.count / maxCount) * BAR_H)}px` }} />
+          <div className="forecast-year">{d.year}</div>
+          {d.isCurrent && <div className="forecast-now-label">now</div>}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ── Urgency Ladder ────────────────────────────────────────────────────────────
+function UrgencyLadder({ bottles, currency }) {
+  if (!bottles || bottles.length === 0) {
+    return (
+      <p className="stats-empty">
+        No bottles need urgent attention — your cellar is well timed!
+      </p>
+    );
+  }
+
+  return (
+    <ol className="urgency-list">
+      {bottles.map((b, i) => {
+        const isOverdue = b.status === 'overdue';
+        const color     = isOverdue ? '#E07060' : '#D4A070';
+        return (
+          <li key={i} className="urgency-item">
+            <span className="urgency-rank" style={{ color }}>{i + 1}</span>
+            <span className="urgency-type-dot"
+              style={{ background: TYPE_COLORS[b.type] || '#7B9E88' }}
+              title={TYPE_LABELS[b.type] || b.type} />
+            <div className="urgency-info">
+              <div className="urgency-name" title={b.name}>{b.name}</div>
+              <div className="urgency-meta">
+                {b.producer}{b.producer && b.vintage ? ' · ' : ''}{b.vintage}
+                {b.source === 'somm' && <span className="urgency-source-badge">somm</span>}
+              </div>
+            </div>
+            <div className="urgency-right">
+              <span className="urgency-days" style={{ color }}>
+                {isOverdue
+                  ? `${Math.abs(b.daysRemaining || 0)}d ago`
+                  : fmtDays(b.daysRemaining)}
+              </span>
+              {b.price && (
+                <span className="urgency-price">{fmtCurrency(b.price, currency)}</span>
+              )}
+            </div>
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
+// ── Holding Time Chart ────────────────────────────────────────────────────────
+function HoldingTimeChart({ holdingTime }) {
+  const hasData = holdingTime && holdingTime.some(d => d.count > 0);
+  if (!hasData) {
+    return (
+      <p className="stats-empty">
+        Mark bottles as consumed to see your patience profile.
+      </p>
+    );
+  }
+  const maxCount = Math.max(...holdingTime.map(d => d.count), 1);
+
+  return (
+    <div>
+      <div className="holding-chart">
+        {holdingTime.map((d, i) => (
+          <div key={i} className="holding-row">
+            <span className="holding-bucket">{d.bucket}</span>
+            <div className="holding-track">
+              <div className="holding-fill"
+                style={{ width: `${(d.count / maxCount) * 100}%` }} />
+            </div>
+            <span className="holding-count">{d.count}</span>
+            {d.avgConsumedRating && (
+              <span className="holding-rating">
+                {d.avgConsumedRating.toFixed(1)} ★
+              </span>
+            )}
+          </div>
+        ))}
+      </div>
+      <p className="holding-note">
+        Higher ratings at longer holding times suggest aging is rewarding for your cellar.
+      </p>
+    </div>
+  );
+}
+
+// ── Joy Per Dollar ────────────────────────────────────────────────────────────
+function JoyPerDollarChart({ data, currency }) {
+  if (!data || data.length === 0) {
+    return (
+      <p className="stats-empty">
+        Rate your consumed bottles to see which type gives you the most joy per {currency}.
+      </p>
+    );
+  }
+  const maxScore = Math.max(...data.map(d => d.score), 1);
+
+  return (
+    <div>
+      <div className="jpd-chart">
+        {data.map((d, i) => (
+          <div key={i} className="jpd-row">
+            <span className="jpd-dot"
+              style={{ background: TYPE_COLORS[d.type] || '#7B9E88' }} />
+            <span className="jpd-label">{TYPE_LABELS[d.type] || d.type}</span>
+            <div className="jpd-track">
+              <div className="jpd-fill"
+                style={{
+                  width:      `${(d.score / maxScore) * 100}%`,
+                  background: TYPE_COLORS[d.type] || '#7B9E88',
+                }} />
+            </div>
+            <div className="jpd-stats">
+              <span className="jpd-rating">{d.avgRating} ★</span>
+              <span className="jpd-price">avg {fmtCurrency(d.avgPrice, currency)}</span>
+              <span className="jpd-count">{d.count} bottles</span>
+            </div>
+          </div>
+        ))}
+      </div>
+      <p className="jpd-note">Score = enjoyment rating per {currency}1,000 spent. Higher = better value.</p>
+    </div>
+  );
+}
+
+// ── Regret Signal (expectation vs reality) ────────────────────────────────────
+function RegretSignalCard({ regretSignal }) {
+  const { surprises, disappointments, avgDelta, count } = regretSignal;
+
+  if (count === 0) {
+    return (
+      <p className="stats-empty">
+        Rate bottles before and after drinking to track expectation vs reality.
+      </p>
+    );
+  }
+
+  return (
+    <div className="regret-signal">
+      {avgDelta !== null && (
+        <div className="regret-signal-avg">
+          Avg delta: <strong style={{ color: avgDelta >= 0 ? '#7B9E88' : '#E07060' }}>
+            {avgDelta >= 0 ? '+' : ''}{avgDelta}
+          </strong> stars across {count} bottle{count !== 1 ? 's' : ''}
+        </div>
+      )}
+      <div className="regret-signal-cols">
+        <div className="regret-signal-col">
+          <div className="regret-signal-col-header regret-signal-col-header--good">
+            🎉 Surprises
+          </div>
+          {surprises.length === 0
+            ? <p className="stats-empty" style={{ margin: '0.5rem 0' }}>None yet</p>
+            : surprises.map((b, i) => (
+              <div key={i} className="regret-signal-item">
+                <span className="rs-dot" style={{ background: TYPE_COLORS[b.type] || '#7B9E88' }} />
+                <div className="rs-info">
+                  <div className="rs-name">{b.name}</div>
+                  <div className="rs-vintage">{b.vintage}</div>
+                </div>
+                <div className="rs-delta rs-delta--positive">+{b.delta} ★</div>
+                <div className="rs-ratings">{b.rating} → {b.consumedRating}</div>
+              </div>
+            ))}
+        </div>
+        <div className="regret-signal-col">
+          <div className="regret-signal-col-header regret-signal-col-header--bad">
+            😬 Disappointments
+          </div>
+          {disappointments.length === 0
+            ? <p className="stats-empty" style={{ margin: '0.5rem 0' }}>None yet</p>
+            : disappointments.map((b, i) => (
+              <div key={i} className="regret-signal-item">
+                <span className="rs-dot" style={{ background: TYPE_COLORS[b.type] || '#7B9E88' }} />
+                <div className="rs-info">
+                  <div className="rs-name">{b.name}</div>
+                  <div className="rs-vintage">{b.vintage}</div>
+                </div>
+                <div className="rs-delta rs-delta--negative">{b.delta} ★</div>
+                <div className="rs-ratings">{b.rating} → {b.consumedRating}</div>
+              </div>
+            ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Pace Card ─────────────────────────────────────────────────────────────────
+function PaceCard({ pace, totalBottles }) {
+  const { avgIntakePerYear, avgOutputPerYear, netPerYear, runway } = pace;
+  const isGrowing    = netPerYear > 0;
+  const isShrinking  = netPerYear < 0;
+  const isBalanced   = netPerYear === 0;
+  const netColor     = isGrowing ? '#7aade0' : isShrinking ? '#E07060' : '#9A9484';
+  const netLabel     = isGrowing ? 'Growing' : isShrinking ? 'Shrinking' : 'Balanced';
+
+  return (
+    <div className="pace-card">
+      <div className="pace-stats">
+        <div className="pace-stat">
+          <span className="pace-stat-value">{avgIntakePerYear}</span>
+          <span className="pace-stat-label">bottles in / year</span>
+        </div>
+        <div className="pace-divider" />
+        <div className="pace-stat">
+          <span className="pace-stat-value">{avgOutputPerYear}</span>
+          <span className="pace-stat-label">bottles out / year</span>
+        </div>
+        <div className="pace-divider" />
+        <div className="pace-stat">
+          <span className="pace-stat-value" style={{ color: netColor }}>
+            {netPerYear > 0 ? '+' : ''}{netPerYear}
+          </span>
+          <span className="pace-stat-label" style={{ color: netColor }}>{netLabel}</span>
+        </div>
+      </div>
+      {runway !== null && (
+        <div className="pace-runway">
+          <span className="pace-runway-num">{runway}</span>
+          <span className="pace-runway-label">
+            {runway === 1 ? 'year' : 'years'} of wine at current consumption
+          </span>
+        </div>
+      )}
+      {avgOutputPerYear === 0 && (
+        <p className="stats-empty" style={{ marginTop: '0.75rem' }}>
+          Consume bottles to see your cellar trajectory.
+        </p>
+      )}
     </div>
   );
 }
@@ -301,10 +623,9 @@ function ConsumptionChart({ consumptionByYear, consumptionByReason }) {
     );
   }
 
-  const reasons = ['drank', 'gifted', 'sold', 'other'];
+  const reasons  = ['drank', 'gifted', 'sold', 'other'];
   const maxTotal = Math.max(
-    ...consumptionByYear.map(d => reasons.reduce((s, r) => s + (d[r] || 0), 0)),
-    1
+    ...consumptionByYear.map(d => reasons.reduce((s, r) => s + (d[r] || 0), 0)), 1
   );
   const BAR_H = 120;
   const total = Object.values(consumptionByReason).reduce((s, v) => s + v, 0);
@@ -316,21 +637,15 @@ function ConsumptionChart({ consumptionByYear, consumptionByReason }) {
           const yearTotal = reasons.reduce((s, r) => s + (d[r] || 0), 0);
           return (
             <div key={i} className="consumption-year-col">
-              <div
-                className="consumption-bar-stack"
-                style={{ height: `${BAR_H}px` }}
-                title={`${d.year}: ${yearTotal} bottle${yearTotal !== 1 ? 's' : ''}`}
-              >
+              <div className="consumption-bar-stack" style={{ height: `${BAR_H}px` }}
+                title={`${d.year}: ${yearTotal} bottle${yearTotal !== 1 ? 's' : ''}`}>
                 {reasons.map(r => {
                   const h = maxTotal > 0 ? ((d[r] || 0) / maxTotal) * BAR_H : 0;
                   if (h === 0) return null;
                   return (
-                    <div
-                      key={r}
-                      className="consumption-segment"
+                    <div key={r} className="consumption-segment"
                       style={{ height: `${h}px`, background: REASON_COLORS[r] }}
-                      title={`${r}: ${d[r] || 0}`}
-                    />
+                      title={`${r}: ${d[r] || 0}`} />
                   );
                 })}
               </div>
@@ -339,7 +654,6 @@ function ConsumptionChart({ consumptionByYear, consumptionByReason }) {
           );
         })}
       </div>
-
       <div className="consumption-legend">
         {reasons.map(r => (
           <span key={r} className="consumption-legend-item">
@@ -348,7 +662,6 @@ function ConsumptionChart({ consumptionByYear, consumptionByReason }) {
           </span>
         ))}
       </div>
-
       <div className="consumption-totals">
         <strong>{total}</strong> total bottles consumed
       </div>
@@ -356,31 +669,26 @@ function ConsumptionChart({ consumptionByYear, consumptionByReason }) {
   );
 }
 
-// ── Purchase History (small bar chart) ───────────────────────────────────────
+// ── Purchase History ──────────────────────────────────────────────────────────
 function PurchaseHistoryChart({ byPurchaseYear }) {
   if (!byPurchaseYear || byPurchaseYear.length === 0) {
     return <p className="stats-empty">No purchase date data</p>;
   }
   const maxVal = Math.max(...byPurchaseYear.map(d => d.count), 1);
-  const BAR_H = 80;
+  const BAR_H  = 80;
 
   return (
     <div className="vintage-chart">
       <div className="vintage-bars">
         {byPurchaseYear.map((d, i) => (
-          <div
-            key={i}
-            className="vintage-bar-wrap"
-            title={`${d.year}: ${d.count} bottle${d.count !== 1 ? 's' : ''} purchased`}
-          >
+          <div key={i} className="vintage-bar-wrap"
+            title={`${d.year}: ${d.count} bottle${d.count !== 1 ? 's' : ''} purchased`}>
             <div className="vintage-bar-count">{d.count > 1 ? d.count : ''}</div>
-            <div
-              className="vintage-bar"
+            <div className="vintage-bar"
               style={{
                 height: `${Math.max(4, (d.count / maxVal) * BAR_H)}px`,
                 background: 'linear-gradient(to top, #5f7a8a, #7aade0)',
-              }}
-            />
+              }} />
             <div className="vintage-bar-label">
               {byPurchaseYear.length > 15 ? d.year.slice(-2) : d.year}
             </div>
@@ -394,11 +702,7 @@ function PurchaseHistoryChart({ byPurchaseYear }) {
 // ── Top Value Bottles ─────────────────────────────────────────────────────────
 function TopValueList({ bottles, currency }) {
   if (!bottles || bottles.length === 0) {
-    return (
-      <p className="stats-empty">
-        Add prices to your bottles to see your most valuable wines.
-      </p>
-    );
+    return <p className="stats-empty">Add prices to your bottles to see your most valuable wines.</p>;
   }
 
   return (
@@ -406,14 +710,14 @@ function TopValueList({ bottles, currency }) {
       {bottles.map((b, i) => (
         <li key={i} className="top-bottle-item">
           <span className="top-bottle-rank" data-rank={i + 1}>#{i + 1}</span>
-          <span
-            className="top-bottle-type-dot"
+          <span className="top-bottle-type-dot"
             style={{ background: TYPE_COLORS[b.type] || '#7B9E88' }}
-            title={TYPE_LABELS[b.type] || b.type}
-          />
+            title={TYPE_LABELS[b.type] || b.type} />
           <div className="top-bottle-info">
             <div className="top-bottle-name" title={b.name}>{b.name}</div>
-            <div className="top-bottle-meta">{b.producer}{b.producer && b.vintage ? ' · ' : ''}{b.vintage}</div>
+            <div className="top-bottle-meta">
+              {b.producer}{b.producer && b.vintage ? ' · ' : ''}{b.vintage}
+            </div>
           </div>
           <span className="top-bottle-price" style={{ color: TYPE_COLORS[b.type] || '#7B9E88' }}>
             {fmtCurrency(b.price, currency)}
@@ -426,9 +730,7 @@ function TopValueList({ bottles, currency }) {
 
 // ── Cellar Breakdown ──────────────────────────────────────────────────────────
 function CellarBreakdownViz({ cellars, currency }) {
-  if (!cellars || cellars.length === 0) {
-    return <p className="stats-empty">No cellars found</p>;
-  }
+  if (!cellars || cellars.length === 0) return <p className="stats-empty">No cellars found</p>;
   const maxCount = Math.max(...cellars.map(c => c.bottleCount), 1);
 
   return (
@@ -442,10 +744,8 @@ function CellarBreakdownViz({ cellars, currency }) {
             )}
           </div>
           <div className="cellar-breakdown-track">
-            <div
-              className="cellar-breakdown-fill"
-              style={{ width: `${(c.bottleCount / maxCount) * 100}%` }}
-            />
+            <div className="cellar-breakdown-fill"
+              style={{ width: `${(c.bottleCount / maxCount) * 100}%` }} />
           </div>
           <div className="cellar-breakdown-meta">
             <span>{c.bottleCount} bottle{c.bottleCount !== 1 ? 's' : ''}</span>
@@ -460,8 +760,8 @@ function CellarBreakdownViz({ cellars, currency }) {
 // ── Bottle Size Chart ─────────────────────────────────────────────────────────
 function BottleSizeChart({ byBottleSize }) {
   const entries = Object.entries(byBottleSize).sort((a, b) => b[1] - a[1]);
-  if (entries.length <= 1) return null; // hide if all one size
-  const total = entries.reduce((s, [, v]) => s + v, 0);
+  if (entries.length <= 1) return null;
+  const total      = entries.reduce((s, [, v]) => s + v, 0);
   const sizeColors = ['#7B9E88', '#6EC6C6', '#D4C87A', '#D4A070', '#8B6A9A'];
 
   return (
@@ -470,13 +770,10 @@ function BottleSizeChart({ byBottleSize }) {
         <div key={size} className="hbar-row">
           <span className="hbar-label">{size}</span>
           <div className="hbar-track">
-            <div
-              className="hbar-fill"
-              style={{
-                width: `${(count / total) * 100}%`,
-                background: sizeColors[i % sizeColors.length],
-              }}
-            />
+            <div className="hbar-fill" style={{
+              width: `${(count / total) * 100}%`,
+              background: sizeColors[i % sizeColors.length],
+            }} />
           </div>
           <span className="hbar-count">{count}</span>
           <span className="hbar-pct">{((count / total) * 100).toFixed(0)}%</span>
@@ -514,11 +811,11 @@ function PremiumGate() {
         <div className="pgf-item"><span>🍷</span> Wine type &amp; origin breakdown</div>
         <div className="pgf-item"><span>📅</span> Vintage distribution by year</div>
         <div className="pgf-item"><span>💰</span> Collection value analysis</div>
-        <div className="pgf-item"><span>⏱</span> Drinking window status</div>
-        <div className="pgf-item"><span>🍇</span> Grape variety rankings</div>
-        <div className="pgf-item"><span>📈</span> Consumption history over time</div>
-        <div className="pgf-item"><span>🏆</span> Most valuable bottle rankings</div>
-        <div className="pgf-item"><span>🏛</span> Per-cellar breakdown</div>
+        <div className="pgf-item"><span>⏱</span> Drinking window forecast</div>
+        <div className="pgf-item"><span>🎯</span> Cellar health score</div>
+        <div className="pgf-item"><span>😬</span> Regret Index — bottles past their prime</div>
+        <div className="pgf-item"><span>🚨</span> Urgency ladder — drink these now</div>
+        <div className="pgf-item"><span>💎</span> Joy Per Dollar — best bang for your buck</div>
       </div>
       <Link to="/plans" className="btn btn-primary premium-gate-btn">
         Upgrade to Premium
@@ -530,7 +827,7 @@ function PremiumGate() {
   );
 }
 
-// ── Empty State (no bottles) ──────────────────────────────────────────────────
+// ── Empty State ───────────────────────────────────────────────────────────────
 function EmptyCollection() {
   return (
     <div className="stats-empty-state">
@@ -545,18 +842,17 @@ function EmptyCollection() {
 // ── Main Statistics Page ──────────────────────────────────────────────────────
 function Statistics() {
   const { user, apiFetch } = useAuth();
-  const [stats, setStats] = useState(null);
+  const [stats, setStats]  = useState(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [error, setError]  = useState(null);
 
-  const planExpired =
-    user?.planExpiresAt && Date.now() > new Date(user.planExpiresAt).getTime();
-  const isPremium = user?.plan === 'premium' && !planExpired;
+  const planExpired = user?.planExpiresAt && Date.now() > new Date(user.planExpiresAt).getTime();
+  const isPremium   = user?.plan === 'premium' && !planExpired;
 
   const load = useCallback(async () => {
     if (!isPremium) { setLoading(false); return; }
     try {
-      const res = await apiFetch('/api/stats/overview');
+      const res  = await apiFetch('/api/stats/overview');
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to load statistics');
       setStats(data.stats);
@@ -593,45 +889,44 @@ function Statistics() {
   const {
     overview, byType, byCountry, byRegion, byGrape,
     byVintage, byRating, byBottleSize, byPurchaseYear,
-    drinkWindow, topValueBottles, consumptionByYear,
-    consumptionByReason, cellarBreakdown,
+    drinkWindow, windowCoverage, topValueBottles,
+    consumptionByYear, consumptionByReason, cellarBreakdown,
+    drinkWindowForecast, urgencyLadder, holdingTime,
+    joyPerDollar, regretSignal, pace, topProducers,
   } = stats;
 
   if (overview.totalBottles === 0 && overview.totalConsumed === 0) {
-    return (
-      <div className="stats-page">
-        <EmptyCollection />
-      </div>
-    );
+    return <div className="stats-page"><EmptyCollection /></div>;
   }
 
-  // Build donut segments for wine types
   const typeSegments = Object.entries(byType)
     .filter(([, v]) => v > 0)
     .sort((a, b) => b[1] - a[1])
     .map(([type, value]) => ({
-      type,
-      label: TYPE_LABELS[type] || type,
-      value,
-      color: TYPE_COLORS[type] || '#6a6a6a',
+      type, label: TYPE_LABELS[type] || type,
+      value, color: TYPE_COLORS[type] || '#6a6a6a',
     }));
 
-  const total = overview.totalBottles;
-  const currency = overview.currency;
+  const total          = overview.totalBottles;
+  const currency       = overview.currency;
   const hasConsumption = overview.totalConsumed > 0;
   const hasMultipleSizes = Object.keys(byBottleSize).length > 1;
   const hasPurchaseDates = byPurchaseYear && byPurchaseYear.length > 0;
+  const hasUrgency     = urgencyLadder && urgencyLadder.length > 0;
+  const hasForecast    = drinkWindowForecast && drinkWindowForecast.some(d => d.count > 0);
+  const hasProducers   = topProducers && topProducers.length > 0;
 
   return (
     <div className="stats-page">
 
-      {/* ── Page Header ── */}
+      {/* ── Header ── */}
       <div className="stats-header">
         <div>
           <h1 className="stats-title">Collection Analytics</h1>
           <p className="stats-subtitle">
             Complete insights across {overview.totalCellars} cellar{overview.totalCellars !== 1 ? 's' : ''}
-            {overview.totalCountries > 0 && ` · ${overview.totalCountries} countries · ${overview.totalGrapes} grape varieties`}
+            {overview.totalCountries > 0
+              && ` · ${overview.totalCountries} countries · ${overview.totalGrapes} grape varieties`}
           </p>
         </div>
         <span className="stats-premium-badge">★ Premium</span>
@@ -639,67 +934,72 @@ function Statistics() {
 
       {/* ── Primary KPIs ── */}
       <div className="kpi-grid">
-        <KPICard
-          icon="🍾"
-          label="Active Bottles"
-          value={fmt(total)}
-          sub={`${fmt(overview.uniqueWines)} unique wines`}
-          accentColor="#7B9E88"
-        />
-        <KPICard
-          icon="🌍"
-          label="Countries"
-          value={fmt(overview.totalCountries)}
-          sub={`${fmt(overview.totalGrapes)} grape varieties`}
-          accentColor="#6EC6C6"
-        />
-        <KPICard
-          icon="💰"
-          label="Est. Collection Value"
+        <KPICard icon="🍾" label="Active Bottles" value={fmt(total)}
+          sub={`${fmt(overview.uniqueWines)} unique wines`} accentColor="#7B9E88" />
+        <KPICard icon="🌍" label="Countries" value={fmt(overview.totalCountries)}
+          sub={`${fmt(overview.totalGrapes)} grape varieties`} accentColor="#6EC6C6" />
+        <KPICard icon="💰" label="Est. Collection Value"
           value={overview.totalValue > 0 ? fmtCurrency(overview.totalValue, currency) : '—'}
           sub={overview.avgPrice > 0 ? `avg ${fmtCurrency(overview.avgPrice, currency)} / bottle` : undefined}
-          accentColor="#D4A070"
-        />
-        <KPICard
-          icon="⭐"
-          label="Avg Rating"
+          accentColor="#D4A070" />
+        <KPICard icon="⭐" label="Avg Rating"
           value={overview.avgRating ? `${overview.avgRating} / 5` : '—'}
-          accentColor="#D4C87A"
-        />
-        <KPICard
-          icon="📅"
-          label="Avg Vintage Age"
+          accentColor="#D4C87A" />
+        <KPICard icon="📅" label="Avg Vintage Age"
           value={overview.avgVintageAge ? `${overview.avgVintageAge} yrs` : '—'}
           sub={overview.oldestVintage
-            ? `${overview.oldestVintage} → ${overview.newestVintage}`
-            : undefined}
-          accentColor="#8B6A9A"
-        />
-        <KPICard
-          icon="⏱"
-          label="Drink Soon / Overdue"
+            ? `${overview.oldestVintage} → ${overview.newestVintage}` : undefined}
+          accentColor="#8B6A9A" />
+        <KPICard icon="⏱" label="Drink Soon / Overdue"
           value={`${drinkWindow.soon + drinkWindow.overdue}`}
-          sub={drinkWindow.overdue > 0 ? `${drinkWindow.overdue} past window` : `${drinkWindow.inWindow} in window`}
-          accentColor={drinkWindow.overdue > 0 ? '#E07060' : '#7B9E88'}
-        />
+          sub={drinkWindow.overdue > 0
+            ? `${drinkWindow.overdue} past window`
+            : `${drinkWindow.inWindow} in window`}
+          accentColor={drinkWindow.overdue > 0 ? '#E07060' : '#7B9E88'} />
       </div>
 
       {/* ── Secondary KPIs (consumption) ── */}
       {hasConsumption && (
         <div className="kpi-grid kpi-grid--secondary">
           <KPICard icon="✓" label="Total Consumed" value={fmt(overview.totalConsumed)} />
-          <KPICard icon="🥂" label="Bottles Drunk" value={fmt(overview.bottlesDrunk)} />
-          <KPICard icon="🎁" label="Gifted" value={fmt(overview.bottlesGifted)} />
-          <KPICard icon="💵" label="Sold" value={fmt(overview.bottlesSold)} />
+          <KPICard icon="🥂" label="Bottles Drunk"  value={fmt(overview.bottlesDrunk)} />
+          <KPICard icon="🎁" label="Gifted"          value={fmt(overview.bottlesGifted)} />
+          <KPICard icon="💵" label="Sold"            value={fmt(overview.bottlesSold)} />
           {overview.avgConsumedRating && (
-            <KPICard
-              icon="🌟"
-              label="Avg Consumed Rating"
-              value={`${overview.avgConsumedRating} / 5`}
-            />
+            <KPICard icon="🌟" label="Avg Consumed Rating"
+              value={`${overview.avgConsumedRating} / 5`} />
           )}
         </div>
       )}
+
+      {/* ── Health + Regret row ── */}
+      <div className="stats-grid stats-grid--insight">
+
+        <div className="stats-card">
+          <h2 className="stats-card-title">
+            Cellar Health Score
+            <span className="stats-card-title-note">How well-timed is your collection?</span>
+          </h2>
+          <HealthScoreCard
+            healthScore={overview.healthScore}
+            healthGrade={overview.healthGrade}
+            drinkWindow={drinkWindow}
+          />
+        </div>
+
+        <div className={`stats-card stats-card--regret${overview.regretIndex >= 15 ? ' stats-card--regret-alert' : ''}`}>
+          <h2 className="stats-card-title">
+            Regret Index
+            <span className="stats-card-title-note">Bottles past their prime, still unopened</span>
+          </h2>
+          <RegretIndexCard
+            regretIndex={overview.regretIndex}
+            overdueCount={drinkWindow.overdue}
+            total={total}
+          />
+        </div>
+
+      </div>
 
       {/* ── Main Grid ── */}
       <div className="stats-grid">
@@ -731,10 +1031,10 @@ function Statistics() {
         {/* Drinking Windows */}
         <div className="stats-card">
           <h2 className="stats-card-title">Drinking Windows</h2>
-          <DrinkWindowViz drinkWindow={drinkWindow} total={total} />
+          <DrinkWindowViz drinkWindow={drinkWindow} windowCoverage={windowCoverage} total={total} />
         </div>
 
-        {/* Vintage Distribution — full width */}
+        {/* Vintage Distribution */}
         <div className="stats-card stats-card--full">
           <h2 className="stats-card-title">
             Vintage Distribution
@@ -746,6 +1046,28 @@ function Statistics() {
           </h2>
           <VintageBarChart data={byVintage} />
         </div>
+
+        {/* Drink Window Forecast */}
+        {hasForecast && (
+          <div className="stats-card stats-card--full">
+            <h2 className="stats-card-title">
+              Drink Window Forecast
+              <span className="stats-card-title-note">Bottles in window by year</span>
+            </h2>
+            <DrinkForecastChart forecast={drinkWindowForecast} />
+          </div>
+        )}
+
+        {/* Urgency Ladder */}
+        {hasUrgency && (
+          <div className="stats-card stats-card--full">
+            <h2 className="stats-card-title">
+              Drink These Now
+              <span className="stats-card-title-note">Ordered by urgency</span>
+            </h2>
+            <UrgencyLadder bottles={urgencyLadder} currency={currency} />
+          </div>
+        )}
 
         {/* Top Origins */}
         <div className="stats-card">
@@ -763,7 +1085,17 @@ function Statistics() {
         {byRegion && byRegion.length > 0 && (
           <div className="stats-card">
             <h2 className="stats-card-title">Top Regions</h2>
-            <HBarChart data={byRegion} colors={['#7aade0', '#6a9dd0', '#5a8dc0', '#4a7db0', '#3a6da0']} />
+            <HBarChart data={byRegion}
+              colors={['#7aade0', '#6a9dd0', '#5a8dc0', '#4a7db0', '#3a6da0']} />
+          </div>
+        )}
+
+        {/* Top Producers */}
+        {hasProducers && (
+          <div className="stats-card">
+            <h2 className="stats-card-title">Top Producers</h2>
+            <HBarChart data={topProducers}
+              colors={['#D4A070', '#C4906A', '#B48064', '#A4705E', '#946058']} />
           </div>
         )}
 
@@ -773,7 +1105,7 @@ function Statistics() {
           <RatingChart byRating={byRating} avg={overview.avgRating} />
         </div>
 
-        {/* Bottle Sizes (only if multiple) */}
+        {/* Bottle Sizes */}
         {hasMultipleSizes && (
           <div className="stats-card">
             <h2 className="stats-card-title">Bottle Sizes</h2>
@@ -783,13 +1115,22 @@ function Statistics() {
 
         {/* Purchase History */}
         {hasPurchaseDates && (
-          <div className={`stats-card${!hasMultipleSizes && byRegion.length === 0 ? ' stats-card--full' : ''}`}>
+          <div className="stats-card">
             <h2 className="stats-card-title">Purchases by Year</h2>
             <PurchaseHistoryChart byPurchaseYear={byPurchaseYear} />
           </div>
         )}
 
-        {/* Consumption History — full width */}
+        {/* Pace */}
+        <div className="stats-card">
+          <h2 className="stats-card-title">
+            Cellar Pace &amp; Trajectory
+            <span className="stats-card-title-note">Intake vs consumption rate</span>
+          </h2>
+          <PaceCard pace={pace} totalBottles={total} />
+        </div>
+
+        {/* Consumption History */}
         <div className="stats-card stats-card--full">
           <h2 className="stats-card-title">Consumption History</h2>
           <ConsumptionChart
@@ -797,6 +1138,35 @@ function Statistics() {
             consumptionByReason={consumptionByReason}
           />
         </div>
+
+        {/* Holding Time */}
+        <div className="stats-card">
+          <h2 className="stats-card-title">
+            Patience Payoff
+            <span className="stats-card-title-note">Does aging reward you?</span>
+          </h2>
+          <HoldingTimeChart holdingTime={holdingTime} />
+        </div>
+
+        {/* Joy Per Dollar */}
+        <div className="stats-card">
+          <h2 className="stats-card-title">
+            Joy Per {currency}
+            <span className="stats-card-title-note">Rating vs price by type</span>
+          </h2>
+          <JoyPerDollarChart data={joyPerDollar} currency={currency} />
+        </div>
+
+        {/* Regret Signal */}
+        {hasConsumption && (
+          <div className="stats-card stats-card--full">
+            <h2 className="stats-card-title">
+              Expectation vs Reality
+              <span className="stats-card-title-note">When wines surprised or disappointed you</span>
+            </h2>
+            <RegretSignalCard regretSignal={regretSignal} />
+          </div>
+        )}
 
         {/* Most Valuable Bottles */}
         <div className="stats-card">
@@ -814,6 +1184,7 @@ function Statistics() {
 
       <p className="stats-footnote">
         Active bottles only · Prices converted using today's exchange rates to {currency} ·
+        Drink windows use your personal dates where set, falling back to sommelier profiles ·
         Only your owned cellars are included
       </p>
     </div>
