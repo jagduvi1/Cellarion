@@ -66,7 +66,7 @@ router.get('/:id', async (req, res) => {
 // PUT /api/admin/wine-requests/:id/resolve - Resolve wine request
 router.put('/:id/resolve', async (req, res) => {
   try {
-    const { wineDefinitionId, createNew, wineData, adminNotes } = req.body;
+    const { wineDefinitionId, createNew, wineData, adminNotes, applyGrapes } = req.body;
 
     const wineRequest = await WineRequest.findById(req.params.id);
     if (!wineRequest) {
@@ -79,7 +79,26 @@ router.put('/:id/resolve', async (req, res) => {
 
     let linkedWine;
 
-    if (createNew && wineData) {
+    // ── Grape suggestion: apply selected grapes to the linked wine ──
+    if (wineRequest.requestType === 'grape_suggestion') {
+      if (!wineRequest.linkedWineDefinition) {
+        return res.status(400).json({ error: 'Grape suggestion has no linked wine definition' });
+      }
+      linkedWine = await WineDefinition.findById(wineRequest.linkedWineDefinition);
+      if (!linkedWine) {
+        return res.status(404).json({ error: 'Linked wine definition not found' });
+      }
+      if (Array.isArray(applyGrapes) && applyGrapes.length > 0) {
+        const existing = new Set(linkedWine.grapes.map(g => g.toString()));
+        for (const grapeId of applyGrapes) {
+          if (!existing.has(grapeId.toString())) {
+            linkedWine.grapes.push(grapeId);
+          }
+        }
+        await linkedWine.save();
+        searchService.indexWine(linkedWine._id);
+      }
+    } else if (createNew && wineData) {
       // Create new wine definition
       const { name, producer, country, region, appellation, grapes, type, image } = wineData;
 
@@ -125,11 +144,15 @@ router.put('/:id/resolve', async (req, res) => {
 
     await wineRequest.save();
 
+    const notifMsg = wineRequest.requestType === 'grape_suggestion'
+      ? `Your grape suggestion for "${wineRequest.wineName}" has been reviewed. Thank you for helping improve the wine registry!`
+      : `Your request for "${wineRequest.wineName}" has been approved. It was added to the registry as "${linkedWine.name}" by ${linkedWine.producer}.`;
+
     createNotification(
       wineRequest.user,
       'wine_request_resolved',
       'Wine request approved',
-      `Your request for "${wineRequest.wineName}" has been approved. It was added to the registry as "${linkedWine.name}" by ${linkedWine.producer}.`,
+      notifMsg,
       '/wine-requests'
     );
 

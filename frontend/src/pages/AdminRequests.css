@@ -228,6 +228,26 @@
   color: #9A9484;
 }
 
+.grape-suggestion-note {
+  font-size: 0.85rem;
+  color: #9A9484;
+  margin-bottom: 1rem;
+}
+
+.request-type-badge {
+  font-size: 0.68rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: #9A9484;
+  background: rgba(154, 148, 132, 0.12);
+  border: 1px solid rgba(154, 148, 132, 0.25);
+  border-radius: 4px;
+  padding: 0.1rem 0.5rem;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
 @media (max-width: 1024px) {
   .admin-layout {
     grid-template-columns: 1fr;

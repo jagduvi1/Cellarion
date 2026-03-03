@@ -1,6 +1,12 @@
 const mongoose = require('mongoose');
 
 const wineRequestSchema = new mongoose.Schema({
+  requestType: {
+    type: String,
+    enum: ['new_wine', 'grape_suggestion'],
+    default: 'new_wine',
+    index: true
+  },
   wineName: {
     type: String,
     required: [true, 'Wine name is required'],
@@ -8,15 +14,19 @@ const wineRequestSchema = new mongoose.Schema({
   },
   sourceUrl: {
     type: String,
-    required: [true, 'Source URL is required'],
     trim: true,
     validate: {
       validator: function(v) {
+        if (!v) return true; // optional for grape suggestions
         return /^https?:\/\/.+/.test(v);
       },
       message: 'Please provide a valid URL'
     }
   },
+  suggestedGrapes: [{
+    type: String,
+    trim: true
+  }],
   image: {
     type: String,
     trim: true

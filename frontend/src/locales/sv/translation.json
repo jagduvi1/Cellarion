@@ -275,7 +275,14 @@
     "contributePhotoAction": "Lägg till foto",
     "contributeGrapesTitle": "Hjälp gemenskapen",
     "contributeGrapesMsg": "Druvsorter är inte angivna för det här vinet ännu. Föreslå dem och vårt team granskar.",
-    "contributeGrapesAction": "Föreslå druvsorter"
+    "contributeGrapesAction": "Föreslå druvsorter",
+    "suggestGrapesTitle": "Föreslå druvsorter",
+    "suggestGrapesLabel": "Druvsorter",
+    "suggestGrapesPlaceholder": "t.ex. Cabernet Sauvignon, Merlot",
+    "suggestGrapesHint": "Separera flera sorter med kommatecken",
+    "suggestGrapesSubmit": "Skicka förslag",
+    "suggestGrapesThankYou": "Tack för ditt bidrag!",
+    "suggestGrapesConfirm": "Ditt förslag har skickats in för granskning. Vårt team lägger till de verifierade sorterna i vinregistret."
   },
 
   "drinkAlerts": {
@@ -363,7 +370,9 @@
     "noRequests": "Du har inte skickat några vinförfrågningar ännu.",
     "linkedTo": "Kopplad till:",
     "adminNotes": "Adminanteckningar:",
-    "submitted": "Skickad {{date}}"
+    "submitted": "Skickad {{date}}",
+    "grapeSuggestion": "Druvförslag",
+    "suggestedGrapes": "Föreslagna"
   },
 
   "history": {
@@ -438,7 +447,11 @@
       "statusPending": "väntande",
       "statusResolved": "löst",
       "statusRejected": "avvisat",
-      "statusAll": "Alla"
+      "statusAll": "Alla",
+      "typeGrapeSuggestion": "Druvförslag",
+      "suggestedGrapes": "Föreslagna sorter",
+      "applyGrapesNote": "Välj de druvsorter som ska läggas till för det här vinet. Okända namn kan läggas till i taxonomin först.",
+      "applyGrapesLabel": "Druvor att lägga till"
     },
     "taxonomy": {
       "title": "Admin: Taxonomihantering",

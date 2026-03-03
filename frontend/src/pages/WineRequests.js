@@ -202,14 +202,28 @@ function WineRequests() {
           {requests.map(request => (
             <div key={request._id} className="request-card">
               <div className="request-header">
-                <h3>{request.wineName}</h3>
+                <div className="request-title-row">
+                  <h3>{request.wineName}</h3>
+                  {request.requestType === 'grape_suggestion' && (
+                    <span className="request-type-badge">{t('wineRequests.grapeSuggestion', 'Grape suggestion')}</span>
+                  )}
+                </div>
                 <span className={`status-badge status-${request.status}`}>
                   {request.status}
                 </span>
               </div>
-              <p><strong>{t('common.source')}:</strong> <a href={request.sourceUrl} target="_blank" rel="noopener noreferrer">
-                {request.sourceUrl}
-              </a></p>
+              {request.requestType === 'grape_suggestion' ? (
+                request.suggestedGrapes?.length > 0 && (
+                  <p className="request-grapes">
+                    <strong>{t('wineRequests.suggestedGrapes', 'Suggested')}: </strong>
+                    {request.suggestedGrapes.join(', ')}
+                  </p>
+                )
+              ) : (
+                <p><strong>{t('common.source')}:</strong> <a href={request.sourceUrl} target="_blank" rel="noopener noreferrer">
+                  {request.sourceUrl}
+                </a></p>
+              )}
               {request.status === 'resolved' && request.linkedWineDefinition && (
                 <div className="resolution">
                   <strong>{t('wineRequests.linkedTo')}</strong> {request.linkedWineDefinition.name} by {request.linkedWineDefinition.producer}

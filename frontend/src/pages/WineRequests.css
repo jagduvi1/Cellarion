@@ -18,12 +18,39 @@
 .request-header {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
   margin-bottom: 1rem;
+  gap: 0.5rem;
+}
+
+.request-title-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
 }
 
 .request-header h3 {
   margin: 0;
+}
+
+.request-type-badge {
+  font-size: 0.68rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: #9A9484;
+  background: rgba(154, 148, 132, 0.12);
+  border: 1px solid rgba(154, 148, 132, 0.25);
+  border-radius: 4px;
+  padding: 0.1rem 0.5rem;
+  white-space: nowrap;
+}
+
+.request-grapes {
+  font-size: 0.9rem;
+  color: #9A9484;
+  margin: 0 0 0.5rem 0;
 }
 
 .status-badge {

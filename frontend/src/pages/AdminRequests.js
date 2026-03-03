@@ -132,9 +132,10 @@ function AdminRequests() {
     setSelected(request);
     setRegions([]);
     setResolveData({
-      mode: 'create',
+      mode: request.requestType === 'grape_suggestion' ? 'apply_grapes' : 'create',
       adminNotes: '',
       wineDefinitionId: '',
+      applyGrapes: [],
       wineData: {
         name: request.wineName,
         producer: '',
@@ -143,8 +144,6 @@ function AdminRequests() {
         type: 'red',
         appellation: '',
         grapes: [],
-        // Only pre-fill if it's a real URL; base64 is already stored in the DB
-        // and the backend falls back to wineRequest.image automatically
         image: (request.image && !request.image.startsWith('data:')) ? request.image : ''
       }
     });
@@ -159,7 +158,9 @@ function AdminRequests() {
     setError(null);
     try {
       const body = { adminNotes: resolveData.adminNotes };
-      if (resolveData.mode === 'create') {
+      if (resolveData.mode === 'apply_grapes') {
+        body.applyGrapes = resolveData.applyGrapes || [];
+      } else if (resolveData.mode === 'create') {
         body.createNew = true;
         body.wineData = resolveData.wineData;
       } else {
@@ -269,15 +270,31 @@ function AdminRequests() {
           ) : (
             <div>
               <div className="request-detail card">
-                <h2>{selected.wineName}</h2>
+                <h2>
+                  {selected.wineName}
+                  {selected.requestType === 'grape_suggestion' && (
+                    <span className="request-type-badge" style={{ marginLeft: '0.6rem', fontSize: '0.7rem' }}>
+                      {t('admin.requests.typeGrapeSuggestion', 'Grape suggestion')}
+                    </span>
+                  )}
+                </h2>
                 <p><strong>{t('admin.requests.requestedBy')}</strong> {selected.user?.username} ({selected.user?.email})</p>
                 <p><strong>{t('admin.requests.date')}</strong> {new Date(selected.createdAt).toLocaleDateString()}</p>
-                <p>
-                  <strong>{t('common.source')}:</strong>{' '}
-                  <a href={selected.sourceUrl} target="_blank" rel="noopener noreferrer">
-                    {selected.sourceUrl}
-                  </a>
-                </p>
+                {selected.requestType === 'grape_suggestion' ? (
+                  selected.suggestedGrapes?.length > 0 && (
+                    <p>
+                      <strong>{t('admin.requests.suggestedGrapes', 'Suggested varieties')}: </strong>
+                      {selected.suggestedGrapes.join(', ')}
+                    </p>
+                  )
+                ) : (
+                  <p>
+                    <strong>{t('common.source')}:</strong>{' '}
+                    <a href={selected.sourceUrl} target="_blank" rel="noopener noreferrer">
+                      {selected.sourceUrl}
+                    </a>
+                  </p>
+                )}
                 {selected.image && (
                   <img src={selected.image} alt="Wine" className="wine-image-preview" />
                 )}
@@ -287,6 +304,29 @@ function AdminRequests() {
                 <div className="resolve-panel card">
                   {error && <div className="alert alert-error">{error}</div>}
 
+                  {selected.requestType === 'grape_suggestion' ? (
+                    // ── Grape suggestion: pick grapes to apply ──
+                    <div>
+                      <p className="grape-suggestion-note">
+                        {t('admin.requests.applyGrapesNote', 'Select the grape varieties to add to this wine. Unrecognised names can be added to the taxonomy first.')}
+                      </p>
+                      {grapes.length > 0 && (
+                        <div className="form-group">
+                          <label>
+                            {t('admin.requests.applyGrapesLabel', 'Grapes to add')}
+                            {resolveData.applyGrapes?.length > 0 && (
+                              <span className="grape-count"> ({resolveData.applyGrapes.length} selected)</span>
+                            )}
+                          </label>
+                          <GrapePicker
+                            grapes={grapes}
+                            selected={resolveData.applyGrapes || []}
+                            onChange={(ids) => setResolveData({ ...resolveData, applyGrapes: ids })}
+                          />
+                        </div>
+                      )}
+                    </div>
+                  ) : (
                   <div className="mode-tabs">
                     <button
                       className={`tab-btn ${resolveData.mode === 'create' ? 'active' : ''}`}
@@ -301,6 +341,7 @@ function AdminRequests() {
                       {t('admin.requests.linkExistingWine')}
                     </button>
                   </div>
+                  )}
 
                   {resolveData.mode === 'create' && (
                     <div>

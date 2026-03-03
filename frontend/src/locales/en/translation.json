@@ -275,7 +275,14 @@
     "contributePhotoAction": "Add a photo",
     "contributeGrapesTitle": "Help the community",
     "contributeGrapesMsg": "Grape varieties aren't listed for this wine yet. Suggest them and our team will review.",
-    "contributeGrapesAction": "Suggest grapes"
+    "contributeGrapesAction": "Suggest grapes",
+    "suggestGrapesTitle": "Suggest Grape Varieties",
+    "suggestGrapesLabel": "Grape varieties",
+    "suggestGrapesPlaceholder": "e.g. Cabernet Sauvignon, Merlot",
+    "suggestGrapesHint": "Separate multiple varieties with commas",
+    "suggestGrapesSubmit": "Submit suggestion",
+    "suggestGrapesThankYou": "Thanks for contributing!",
+    "suggestGrapesConfirm": "Your suggestion has been submitted for review. Our team will add the verified varieties to the wine registry."
   },
 
   "drinkAlerts": {
@@ -363,7 +370,9 @@
     "noRequests": "You haven't submitted any wine requests yet.",
     "linkedTo": "Linked to:",
     "adminNotes": "Admin Notes:",
-    "submitted": "Submitted {{date}}"
+    "submitted": "Submitted {{date}}",
+    "grapeSuggestion": "Grape suggestion",
+    "suggestedGrapes": "Suggested"
   },
 
   "history": {
@@ -438,7 +447,11 @@
       "statusPending": "pending",
       "statusResolved": "resolved",
       "statusRejected": "rejected",
-      "statusAll": "All"
+      "statusAll": "All",
+      "typeGrapeSuggestion": "Grape suggestion",
+      "suggestedGrapes": "Suggested varieties",
+      "applyGrapesNote": "Select the grape varieties to add to this wine. Unrecognised names can be added to the taxonomy first.",
+      "applyGrapesLabel": "Grapes to add"
     },
     "taxonomy": {
       "title": "Admin: Taxonomy Management",

@@ -46,6 +46,7 @@ function BottleDetail() {
   const [error, setError] = useState(null);
   const [editing, setEditing] = useState(false);
   const [consumeOpen, setConsumeOpen] = useState(false);
+  const [suggestGrapesOpen, setSuggestGrapesOpen] = useState(false);
   const [pendingImage, setPendingImage] = useState(null);
 
 
@@ -217,6 +218,7 @@ function BottleDetail() {
           canEdit={userRole === 'owner' || userRole === 'editor'}
           hasImage={!!(pendingImage || bottle.wineDefinition?.image)}
           onEdit={() => setEditing(true)}
+          onSuggestGrapes={() => setSuggestGrapesOpen(true)}
           onRemove={() => setConsumeOpen(true)}
         />
       )}
@@ -227,6 +229,13 @@ function BottleDetail() {
           defaultRatingScale={user?.preferences?.ratingScale || '5'}
           onConfirm={handleConsumeConfirm}
           onCancel={() => setConsumeOpen(false)}
+        />
+      )}
+
+      {suggestGrapesOpen && (
+        <SuggestGrapesModal
+          wine={wine}
+          onClose={() => setSuggestGrapesOpen(false)}
         />
       )}
     </div>
@@ -266,7 +275,7 @@ function ContributePrompt({ storageKey, icon, title, message, actionLabel, onAct
 }
 
 // ── View mode ──
-function ViewDetails({ bottle, rackInfo, cellarId, drinkStatus, vintageProfile, priceHistory, rates, userCurrency, canEdit, hasImage, onEdit, onRemove }) {
+function ViewDetails({ bottle, rackInfo, cellarId, drinkStatus, vintageProfile, priceHistory, rates, userCurrency, canEdit, hasImage, onEdit, onSuggestGrapes, onRemove }) {
   const { t } = useTranslation();
   const { plan, hasFeature } = usePlan();
   const hasAgingMaturity = hasFeature('agingMaturity');
@@ -343,7 +352,7 @@ function ViewDetails({ bottle, rackInfo, cellarId, drinkStatus, vintageProfile, 
             title={t('bottleDetail.contributeGrapesTitle', 'Help the community')}
             message={t('bottleDetail.contributeGrapesMsg', 'Grape varieties aren\'t listed for this wine yet. Suggest them and our team will review.')}
             actionLabel={t('bottleDetail.contributeGrapesAction', 'Suggest grapes')}
-            actionHref="/wine-requests"
+            onAction={onSuggestGrapes}
           />
         ) : (
           <span className="bd-missing-hint">{t('bottleDetail.noGrapes', 'No grape varieties listed')}</span>
@@ -648,6 +657,86 @@ function EditForm({ bottle, onSaved, onCancel, onImageUploaded }) {
         <button type="button" className="btn btn-secondary" onClick={onCancel}>{t('common.cancel')}</button>
       </div>
     </form>
+  );
+}
+
+// ── Suggest grapes modal ──
+function SuggestGrapesModal({ wine, onClose }) {
+  const { t } = useTranslation();
+  const { apiFetch } = useAuth();
+  const [grapes, setGrapes] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
+  const [error, setError] = useState(null);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    const suggestedGrapes = grapes.split(',').map(g => g.trim()).filter(Boolean);
+    if (!suggestedGrapes.length) return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      const res = await apiFetch('/api/wine-requests', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          requestType: 'grape_suggestion',
+          linkedWineDefinition: wine._id,
+          suggestedGrapes
+        })
+      });
+      const data = await res.json();
+      if (res.ok) setSubmitted(true);
+      else setError(data.error || t('common.error', 'An error occurred'));
+    } catch {
+      setError(t('common.networkError', 'Network error'));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-box" onClick={e => e.stopPropagation()}>
+        {submitted ? (
+          <>
+            <h2>{t('bottleDetail.suggestGrapesThankYou', 'Thanks for contributing!')}</h2>
+            <p className="modal-wine-name">{wine?.name}</p>
+            <p style={{ fontSize: '0.9rem', color: '#9A9484', marginBottom: '1.25rem' }}>
+              {t('bottleDetail.suggestGrapesConfirm', 'Your suggestion has been submitted for review. Our team will add the verified varieties to the wine registry.')}
+            </p>
+            <div className="modal-actions">
+              <button className="btn btn-secondary" onClick={onClose}>{t('common.close', 'Close')}</button>
+            </div>
+          </>
+        ) : (
+          <>
+            <h2>{t('bottleDetail.suggestGrapesTitle', 'Suggest Grape Varieties')}</h2>
+            <p className="modal-wine-name">{wine?.name}</p>
+            <form onSubmit={handleSubmit}>
+              <div className="form-group">
+                <label>{t('bottleDetail.suggestGrapesLabel', 'Grape varieties')}</label>
+                <input
+                  type="text"
+                  value={grapes}
+                  onChange={e => setGrapes(e.target.value)}
+                  placeholder={t('bottleDetail.suggestGrapesPlaceholder', 'e.g. Cabernet Sauvignon, Merlot')}
+                  autoFocus
+                />
+                <small className="form-hint">{t('bottleDetail.suggestGrapesHint', 'Separate multiple varieties with commas')}</small>
+              </div>
+              {error && <div className="alert alert-error">{error}</div>}
+              <div className="modal-actions">
+                <button type="button" className="btn btn-secondary" onClick={onClose}>{t('common.cancel')}</button>
+                <button type="submit" className="btn btn-primary" disabled={submitting || !grapes.trim()}>
+                  {submitting ? t('common.saving') : t('bottleDetail.suggestGrapesSubmit', 'Submit suggestion')}
+                </button>
+              </div>
+            </form>
+          </>
+        )}
+      </div>
+    </div>
   );
 }
 

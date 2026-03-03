@@ -1,61 +1,71 @@
 const express = require('express');
 const { requireAuth } = require('../middleware/auth');
 const WineRequest = require('../models/WineRequest');
+const WineDefinition = require('../models/WineDefinition');
 
 const router = express.Router();
 
 // All routes require authentication
 router.use(requireAuth);
 
-// POST /api/wine-requests - Submit wine request
+// Validate a URL string — returns error message or null if valid
+function validateUrl(url) {
+  if (!url || typeof url !== 'string') return 'Source URL is required';
+  if (url.length > 2048) return 'URL is too long (max 2048 characters)';
+  let parsed;
+  try { parsed = new URL(url); } catch { return 'Please provide a valid URL'; }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return 'URL must use http or https protocol';
+  const h = parsed.hostname.toLowerCase();
+  const private_ = [
+    /^localhost$/, /^127\.\d+\.\d+\.\d+$/, /^10\.\d+\.\d+\.\d+$/,
+    /^172\.(1[6-9]|2\d|3[01])\.\d+\.\d+$/, /^192\.168\.\d+\.\d+$/,
+    /^169\.254\.\d+\.\d+$/, /^0\.0\.0\.0$/, /^\[?::1?\]?$/
+  ];
+  if (private_.some(p => p.test(h))) return 'URLs pointing to private/internal addresses are not allowed';
+  return null;
+}
+
+// POST /api/wine-requests - Submit wine request (new_wine or grape_suggestion)
 router.post('/', async (req, res) => {
   try {
-    const { wineName, sourceUrl, image } = req.body;
+    const { requestType = 'new_wine', wineName, sourceUrl, image, linkedWineDefinition, suggestedGrapes } = req.body;
 
-    if (!wineName || !sourceUrl) {
-      return res.status(400).json({ error: 'Wine name and source URL are required' });
+    if (requestType === 'grape_suggestion') {
+      // ── Grape suggestion for an existing wine ──
+      if (!linkedWineDefinition) {
+        return res.status(400).json({ error: 'linkedWineDefinition is required for grape suggestions' });
+      }
+      if (!Array.isArray(suggestedGrapes) || suggestedGrapes.length === 0) {
+        return res.status(400).json({ error: 'At least one grape variety is required' });
+      }
+      const wine = await WineDefinition.findById(linkedWineDefinition);
+      if (!wine) return res.status(404).json({ error: 'Wine not found' });
+
+      const wineRequest = new WineRequest({
+        requestType: 'grape_suggestion',
+        wineName: wine.name,
+        linkedWineDefinition: wine._id,
+        suggestedGrapes: suggestedGrapes.map(g => String(g).trim()).filter(Boolean).slice(0, 20),
+        user: req.user.id,
+        status: 'pending'
+      });
+      await wineRequest.save();
+      return res.status(201).json({ wineRequest });
     }
 
-    // Validate URL: max length, valid format, public hosts only
-    if (sourceUrl.length > 2048) {
-      return res.status(400).json({ error: 'URL is too long (max 2048 characters)' });
-    }
-
-    let parsedUrl;
-    try {
-      parsedUrl = new URL(sourceUrl);
-    } catch {
-      return res.status(400).json({ error: 'Please provide a valid URL' });
-    }
-
-    if (parsedUrl.protocol !== 'http:' && parsedUrl.protocol !== 'https:') {
-      return res.status(400).json({ error: 'URL must use http or https protocol' });
-    }
-
-    // Block private/internal hostnames (SSRF prevention)
-    const hostname = parsedUrl.hostname.toLowerCase();
-    const privatePatterns = [
-      /^localhost$/,
-      /^127\.\d+\.\d+\.\d+$/,
-      /^10\.\d+\.\d+\.\d+$/,
-      /^172\.(1[6-9]|2\d|3[01])\.\d+\.\d+$/,
-      /^192\.168\.\d+\.\d+$/,
-      /^169\.254\.\d+\.\d+$/,
-      /^0\.0\.0\.0$/,
-      /^\[?::1?\]?$/
-    ];
-    if (privatePatterns.some(p => p.test(hostname))) {
-      return res.status(400).json({ error: 'URLs pointing to private/internal addresses are not allowed' });
-    }
+    // ── New wine request ──
+    if (!wineName) return res.status(400).json({ error: 'Wine name and source URL are required' });
+    const urlErr = validateUrl(sourceUrl);
+    if (urlErr) return res.status(400).json({ error: urlErr });
 
     const wineRequest = new WineRequest({
+      requestType: 'new_wine',
       wineName: wineName.trim(),
       sourceUrl: sourceUrl.trim(),
       image: image?.trim() || null,
       user: req.user.id,
       status: 'pending'
     });
-
     await wineRequest.save();
     res.status(201).json({ wineRequest });
   } catch (error) {
