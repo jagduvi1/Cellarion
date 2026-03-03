@@ -142,7 +142,7 @@ router.get('/overview', async (req, res) => {
     let vintageAgeSum = 0, vintageAgeCount = 0;
 
     const byType        = {};
-    const byCountry     = {};
+    const byCountry     = {}; // name → { count, code }
     const byRegion      = {};
     const byGrape       = {};
     const byVintage     = {};
@@ -186,7 +186,10 @@ router.get('/overview', async (req, res) => {
 
       // Country / Region / Grapes
       const country = wd?.country?.name || 'Unknown';
-      byCountry[country] = (byCountry[country] || 0) + 1;
+      if (!byCountry[country]) {
+        byCountry[country] = { count: 0, code: wd?.country?.code || null };
+      }
+      byCountry[country].count++;
       if (wd?.region?.name) byRegion[wd.region.name] = (byRegion[wd.region.name] || 0) + 1;
       for (const g of (wd?.grapes || [])) {
         const gn = g.name || 'Unknown';
@@ -463,11 +466,17 @@ router.get('/overview', async (req, res) => {
       .map(([name, count]) => ({ name, count }));
 
     // ── Format helpers ────────────────────────────────────────────────────────
+    // For simple {name: count} maps (region, grape, producer)
     const sortDesc = (obj) =>
       Object.entries(obj)
         .sort((a, b) => b[1] - a[1])
         .slice(0, 15)
         .map(([name, count]) => ({ name, count }));
+
+    // byCountry uses {name: {count, code}} — expose all for the map, bar chart slices itself
+    const byCountryArr = Object.entries(byCountry)
+      .sort((a, b) => b[1].count - a[1].count)
+      .map(([name, d]) => ({ name, count: d.count, code: d.code }));
 
     const sortedVintages = Object.entries(byVintage)
       .filter(([y]) => y !== 'NV')
@@ -499,7 +508,7 @@ router.get('/overview', async (req, res) => {
           totalConsumed:     consumedBottles.length,
           uniqueWines:       uniqueWineIds.size,
           totalCellars:      cellars.length,
-          totalCountries:    Object.keys(byCountry).length,
+          totalCountries:    Object.keys(byCountry).length, // byCountry still keyed by name here
           totalGrapes:       Object.keys(byGrape).length,
           totalValue:        Math.round(totalValue * 100) / 100,
           currency:          targetCurrency,
@@ -517,7 +526,7 @@ router.get('/overview', async (req, res) => {
           regretIndex,
         },
         byType,
-        byCountry:        sortDesc(byCountry),
+        byCountry:        byCountryArr,
         byRegion:         sortDesc(byRegion),
         byGrape:          sortDesc(byGrape),
         byVintage:        sortedVintages,

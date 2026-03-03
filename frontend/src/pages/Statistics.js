@@ -1,6 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
+import { ComposableMap, Geographies, Geography } from 'react-simple-maps';
+import worldData from 'world-atlas/countries-110m.json';
 import { useAuth } from '../contexts/AuthContext';
+import { NUM_TO_A2 } from '../utils/isoCountryCodes';
 import './Statistics.css';
 
 // ── Color palette ─────────────────────────────────────────────────────────────
@@ -783,6 +786,101 @@ function BottleSizeChart({ byBottleSize }) {
   );
 }
 
+// ── World Map ─────────────────────────────────────────────────────────────────
+function getCountryFill(count, maxCount) {
+  if (!count || count === 0) return '#161f1c';
+  const t = maxCount > 1 ? Math.log(count) / Math.log(maxCount) : 1;
+  // Interpolate rgb(38,61,50) → rgb(123,158,136)  (dark green → brand green)
+  const r = Math.round(38  + t * (123 - 38));
+  const g = Math.round(61  + t * (158 - 61));
+  const b = Math.round(50  + t * (136 - 50));
+  return `rgb(${r},${g},${b})`;
+}
+
+function WorldMapChart({ byCountry }) {
+  const [hovered, setHovered] = useState(null);
+
+  // Index by ISO alpha-2 for O(1) lookup during render
+  const byCode = {};
+  for (const c of byCountry) {
+    if (c.code) byCode[c.code] = c;
+  }
+
+  const maxCount = byCountry.length > 0 ? Math.max(...byCountry.map(c => c.count)) : 1;
+  const mappedCount  = byCountry.filter(c => c.code).length;
+  const unmappedCount = byCountry.length - mappedCount;
+
+  return (
+    <div className="worldmap-wrap">
+      {/* Hover info bar */}
+      <div className="worldmap-info-bar">
+        {hovered ? (
+          <>
+            <span className="worldmap-info-name">{hovered.name}</span>
+            <span className="worldmap-info-count">
+              {hovered.count} bottle{hovered.count !== 1 ? 's' : ''}
+            </span>
+          </>
+        ) : (
+          <span className="worldmap-info-hint">Hover a country to see details</span>
+        )}
+      </div>
+
+      {/* Map */}
+      <ComposableMap
+        width={800}
+        height={400}
+        projection="geoEqualEarth"
+        projectionConfig={{ scale: 155 }}
+        style={{ width: '100%', height: 'auto', display: 'block' }}
+      >
+        <Geographies geography={worldData}>
+          {({ geographies }) =>
+            geographies.map(geo => {
+              const alpha2  = NUM_TO_A2[String(geo.id)];
+              const data    = alpha2 ? byCode[alpha2] : null;
+              const fill    = getCountryFill(data?.count, maxCount);
+              const hasData = !!data;
+
+              return (
+                <Geography
+                  key={geo.rsmKey}
+                  geography={geo}
+                  fill={fill}
+                  stroke="#0a1512"
+                  strokeWidth={0.35}
+                  onMouseEnter={() => hasData && setHovered(data)}
+                  onMouseLeave={() => setHovered(null)}
+                  style={{
+                    default: { outline: 'none', transition: 'fill 0.1s' },
+                    hover:   { fill: hasData ? '#9bbfa8' : '#1e2e28', outline: 'none', cursor: 'default' },
+                    pressed: { outline: 'none' },
+                  }}
+                />
+              );
+            })
+          }
+        </Geographies>
+      </ComposableMap>
+
+      {/* Legend */}
+      <div className="worldmap-legend">
+        <div className="worldmap-legend-scale">
+          <span>1</span>
+          <div className="worldmap-legend-gradient" />
+          <span>{maxCount.toLocaleString()}</span>
+          <span className="worldmap-legend-unit">bottles</span>
+        </div>
+        {unmappedCount > 0 && (
+          <span className="worldmap-legend-note">
+            {unmappedCount} countr{unmappedCount !== 1 ? 'ies' : 'y'} without ISO code hidden
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── KPI Card ──────────────────────────────────────────────────────────────────
 function KPICard({ icon, label, value, sub, accentColor }) {
   return (
@@ -1069,7 +1167,16 @@ function Statistics() {
           </div>
         )}
 
-        {/* Top Origins */}
+        {/* World Map — full width */}
+        <div className="stats-card stats-card--full">
+          <h2 className="stats-card-title">
+            Collection Origins
+            <span className="stats-card-title-note">Darker = more bottles</span>
+          </h2>
+          <WorldMapChart byCountry={byCountry} />
+        </div>
+
+        {/* Top Origins bar chart */}
         <div className="stats-card">
           <h2 className="stats-card-title">Top Origins</h2>
           <HBarChart data={byCountry} colors={COUNTRY_COLORS} />
