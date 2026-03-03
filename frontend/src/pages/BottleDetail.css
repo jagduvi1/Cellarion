@@ -47,20 +47,75 @@
   flex-shrink: 0;
 }
 
-.bd-add-photo-hint {
+/* ── Contribution prompt ── */
+.bd-contribute {
+  position: relative;
+  background: rgba(154, 148, 132, 0.07);
+  border: 1px solid rgba(154, 148, 132, 0.18);
+  border-left: 3px solid rgba(154, 148, 132, 0.4);
+  border-radius: 6px;
+  padding: 0.75rem 2.2rem 0.75rem 0.9rem;
+  margin-bottom: 0.25rem;
+}
+
+.bd-contribute__dismiss {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.6rem;
   background: none;
   border: none;
-  color: #5a5248;
-  font-size: 0.68rem;
+  color: #4a4a4a;
+  font-size: 1.05rem;
+  line-height: 1;
   cursor: pointer;
   padding: 0;
-  margin-top: 0.25rem;
-  text-align: center;
-  line-height: 1.3;
   transition: color 0.15s;
 }
-.bd-add-photo-hint:hover {
+.bd-contribute__dismiss:hover { color: #9A9484; }
+
+.bd-contribute__body {
+  display: flex;
+  gap: 0.6rem;
+  align-items: flex-start;
+  margin-bottom: 0.6rem;
+}
+
+.bd-contribute__icon {
+  font-size: 1rem;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.bd-contribute__title {
+  display: block;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #C8B99A;
+  margin-bottom: 0.2rem;
+}
+
+.bd-contribute__msg {
+  font-size: 0.82rem;
+  color: #7a7268;
+  margin: 0;
+  line-height: 1.45;
+}
+
+.bd-contribute__action {
+  display: inline-block;
+  background: none;
+  border: 1px solid rgba(154, 148, 132, 0.35);
+  border-radius: 4px;
   color: #9A9484;
+  font-size: 0.78rem;
+  padding: 0.2rem 0.65rem;
+  cursor: pointer;
+  text-decoration: none;
+  transition: color 0.15s, border-color 0.15s;
+}
+.bd-contribute__action:hover {
+  color: #C8B99A;
+  border-color: rgba(200, 185, 154, 0.5);
 }
 
 .bd-wine-placeholder.red      { background: #2d1414; }

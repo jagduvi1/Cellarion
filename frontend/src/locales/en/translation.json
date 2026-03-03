@@ -270,7 +270,12 @@
     "rackSlot": "slot",
     "grapes": "Grape Varieties",
     "noGrapes": "No grape varieties listed",
-    "addPhoto": "Add photo"
+    "contributePhotoTitle": "Help the community",
+    "contributePhotoMsg": "This wine has no photo yet. Adding one helps other collectors recognise it — it will be reviewed before going public.",
+    "contributePhotoAction": "Add a photo",
+    "contributeGrapesTitle": "Help the community",
+    "contributeGrapesMsg": "Grape varieties aren't listed for this wine yet. Suggest them and our team will review.",
+    "contributeGrapesAction": "Suggest grapes"
   },
 
   "drinkAlerts": {

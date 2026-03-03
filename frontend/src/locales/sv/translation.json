@@ -270,7 +270,12 @@
     "rackSlot": "plats",
     "grapes": "Druvsorter",
     "noGrapes": "Inga druvsorter angivna",
-    "addPhoto": "Lägg till foto"
+    "contributePhotoTitle": "Hjälp gemenskapen",
+    "contributePhotoMsg": "Det finns inget foto för det här vinet ännu. Att lägga till ett hjälper andra samlare att känna igen det — det granskas innan det publiceras.",
+    "contributePhotoAction": "Lägg till foto",
+    "contributeGrapesTitle": "Hjälp gemenskapen",
+    "contributeGrapesMsg": "Druvsorter är inte angivna för det här vinet ännu. Föreslå dem och vårt team granskar.",
+    "contributeGrapesAction": "Föreslå druvsorter"
   },
 
   "drinkAlerts": {

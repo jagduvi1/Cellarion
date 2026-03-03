@@ -179,14 +179,7 @@ function BottleDetail() {
               )}
             </div>
           ) : (
-            <div className="bd-wine-image-wrap">
-              <div className={`bd-wine-placeholder ${wine?.type}`} />
-              {!editing && (userRole === 'owner' || userRole === 'editor') && (
-                <button className="bd-add-photo-hint" onClick={() => setEditing(true)}>
-                  {t('bottleDetail.addPhoto', 'Add photo')}
-                </button>
-              )}
-            </div>
+            <div className={`bd-wine-placeholder ${wine?.type}`} />
           )}
           <div className="bd-wine-meta">
             <h1 style={cellarColor ? { borderLeft: `4px solid ${cellarColor}`, paddingLeft: '0.75rem' } : {}}>
@@ -235,6 +228,38 @@ function BottleDetail() {
           onConfirm={handleConsumeConfirm}
           onCancel={() => setConsumeOpen(false)}
         />
+      )}
+    </div>
+  );
+}
+
+// ── Dismissible community contribution prompt ──
+function ContributePrompt({ storageKey, icon, title, message, actionLabel, onAction, actionHref }) {
+  const [dismissed, setDismissed] = useState(() => {
+    try { return localStorage.getItem(storageKey) === '1'; } catch { return false; }
+  });
+
+  if (dismissed) return null;
+
+  const dismiss = () => {
+    try { localStorage.setItem(storageKey, '1'); } catch {}
+    setDismissed(true);
+  };
+
+  return (
+    <div className="bd-contribute">
+      <button className="bd-contribute__dismiss" onClick={dismiss} aria-label="Dismiss">×</button>
+      <div className="bd-contribute__body">
+        <span className="bd-contribute__icon">{icon}</span>
+        <div className="bd-contribute__text">
+          <strong className="bd-contribute__title">{title}</strong>
+          <p className="bd-contribute__msg">{message}</p>
+        </div>
+      </div>
+      {actionHref ? (
+        <Link to={actionHref} className="bd-contribute__action">{actionLabel} →</Link>
+      ) : (
+        <button className="bd-contribute__action" onClick={onAction}>{actionLabel} →</button>
       )}
     </div>
   );
@@ -290,6 +315,18 @@ function ViewDetails({ bottle, rackInfo, cellarId, drinkStatus, vintageProfile, 
         )}
       </div>
 
+      {/* Missing photo contribution prompt */}
+      {!hasImage && canEdit && (
+        <ContributePrompt
+          storageKey={`cellarion_contrib_photo_${wine?._id}`}
+          icon="📷"
+          title={t('bottleDetail.contributePhotoTitle', 'Help the community')}
+          message={t('bottleDetail.contributePhotoMsg', 'This wine has no photo yet. Adding one helps other collectors recognise it — it will be reviewed before going public.')}
+          actionLabel={t('bottleDetail.contributePhotoAction', 'Add a photo')}
+          onAction={onEdit}
+        />
+      )}
+
       {/* Grapes */}
       <div className="bd-section">
         <span className="bd-section-label">{t('bottleDetail.grapes', 'Grape Varieties')}</span>
@@ -299,6 +336,15 @@ function ViewDetails({ bottle, rackInfo, cellarId, drinkStatus, vintageProfile, 
               <span key={g._id} className="bd-grape-pill">{g.name}</span>
             ))}
           </div>
+        ) : canEdit ? (
+          <ContributePrompt
+            storageKey={`cellarion_contrib_grapes_${wine?._id}`}
+            icon="🍇"
+            title={t('bottleDetail.contributeGrapesTitle', 'Help the community')}
+            message={t('bottleDetail.contributeGrapesMsg', 'Grape varieties aren\'t listed for this wine yet. Suggest them and our team will review.')}
+            actionLabel={t('bottleDetail.contributeGrapesAction', 'Suggest grapes')}
+            actionHref="/wine-requests"
+          />
         ) : (
           <span className="bd-missing-hint">{t('bottleDetail.noGrapes', 'No grape varieties listed')}</span>
         )}
