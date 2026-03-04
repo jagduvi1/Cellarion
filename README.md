@@ -17,7 +17,8 @@ You can create an account and start using the full hosted service today.
 - **React 19** — Frontend
 - **Node.js 20** — Runtime
 - **Meilisearch** — Fuzzy search
-- **nginx** — Reverse proxy / static file server
+- **nginx** — Serves the React SPA and proxies `/api/` to the backend (internal)
+- **Traefik** — External reverse proxy (bring your own; not included in this Compose file)
 - **Docker Compose** — Containerization
 
 ## Quick Start
@@ -36,11 +37,21 @@ cp .env.example .env
 docker-compose up --build
 ```
 
-The app is served by nginx on port 80:
+The app is routed through Traefik. Make sure the `web` Docker network exists before starting:
+
+```bash
+docker network create web
+```
+
+Then bring up the stack:
+
+```bash
+docker-compose up --build
+```
 
 | URL | Description |
 |-----|-------------|
-| http://localhost | Frontend (React SPA) |
+| http://localhost | Frontend (React SPA) — served via Traefik |
 | http://localhost/api/health | Backend health check |
 
 ### Seed demo data
@@ -131,15 +142,36 @@ Cellarion/
 
 ### Services
 
-All traffic enters through nginx on port 80. Internal services are not exposed on the host.
+All external traffic enters through Traefik (runs on the shared `web` Docker network, external to this Compose file). All services inside this Compose file are internal only.
 
 | Service      | Host port | Description                        |
 |--------------|-----------|------------------------------------|
-| nginx        | **80**    | Serves React SPA + proxies `/api/` |
+| Traefik      | **80**    | External reverse proxy (external)  |
+| nginx        | internal  | Serves React SPA + proxies `/api/` |
 | Backend      | internal  | Express REST API (port 5000)       |
 | MongoDB      | internal  | Database (port 27017)              |
 | Meilisearch  | internal  | Fuzzy search engine (port 7700)    |
 | rembg        | internal  | Background removal (port 5000)     |
+
+### Running behind Traefik
+
+Cellarion is designed to sit behind a Traefik reverse proxy on a shared Docker network called `web`. Traefik handles incoming HTTP on port 80 (SSL termination is handled upstream by Cloudflare or similar).
+
+**Requirements:**
+- A running Traefik instance connected to an external Docker network named `web`
+- The `web` network must exist before starting Cellarion: `docker network create web`
+
+The frontend service declares the following Traefik labels in `docker-compose.yml`:
+
+```yaml
+traefik.enable: "true"
+traefik.docker.network: "web"
+traefik.http.routers.cellarion.rule: "Host(`cellarion.app`)"
+traefik.http.routers.cellarion.entrypoints: "web"
+traefik.http.services.cellarion.loadbalancer.server.port: "80"
+```
+
+Update the `Host(...)` rule to match your own domain.
 
 ---
 

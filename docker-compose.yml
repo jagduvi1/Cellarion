@@ -71,8 +71,17 @@ services:
   frontend:
     build: ./frontend
     container_name: cellarion-frontend
-    ports:
-      - "80:80"
+    expose:
+      - "80"
+    networks:
+      - web
+      - default
+    labels:
+      traefik.enable: "true"
+      traefik.docker.network: "web"
+      traefik.http.routers.cellarion.rule: "Host(`cellarion.app`)"
+      traefik.http.routers.cellarion.entrypoints: "web"
+      traefik.http.services.cellarion.loadbalancer.server.port: "80"
     depends_on:
       backend:
         condition: service_healthy
@@ -81,3 +90,7 @@ volumes:
   mongo-data:
   meili-data:
   image-data:
+
+networks:
+  web:
+    external: true
