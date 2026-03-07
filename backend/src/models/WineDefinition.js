@@ -67,6 +67,11 @@ const wineDefinitionSchema = new mongoose.Schema({
     type: String,
     default: null
   },
+  imageCredit: {
+    type: String,
+    default: null,
+    trim: true
+  },
   // Normalized key for deduplication
   normalizedKey: {
     type: String,

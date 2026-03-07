@@ -300,6 +300,70 @@
   border: 1px solid #5a3a10;
 }
 
+/* ── View toggle ── */
+.bottles-view-toggle {
+  display: flex;
+  gap: 0.35rem;
+  justify-content: flex-end;
+  margin-bottom: 0.75rem;
+}
+
+.view-toggle-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  background: #1c1c1c;
+  border: 1px solid #2a2a2a;
+  border-radius: 6px;
+  cursor: pointer;
+  color: #6a6a6a;
+  transition: border-color 0.15s, color 0.15s;
+}
+
+.view-toggle-btn:hover {
+  border-color: #4a4a4a;
+  color: #9A9484;
+}
+
+.view-toggle-btn.active {
+  border-color: #7B9E88;
+  color: #7B9E88;
+  background: rgba(123, 158, 136, 0.08);
+}
+
+/* ── Image credit tooltip (shared list + card) ── */
+.bottle-img-wrap,
+.bottle-grid-image-wrap {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.img-credit-tooltip {
+  display: none;
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: rgba(0,0,0,0.78);
+  color: #b0a898;
+  font-size: 0.58rem;
+  text-align: center;
+  padding: 2px 3px;
+  border-radius: 0 0 3px 3px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.3;
+  pointer-events: none;
+}
+
+.bottle-img-wrap:hover .img-credit-tooltip,
+.bottle-grid-image-wrap:hover .img-credit-tooltip {
+  display: block;
+}
+
 /* ── Compact bottle list ── */
 .bottles-list {
   display: grid;
@@ -325,16 +389,16 @@
 }
 
 .bottle-wine-image {
-  width: 32px;
-  height: 46px;
+  width: 44px;
+  height: 64px;
   object-fit: contain;
   border-radius: 3px;
-  flex-shrink: 0;
+  display: block;
 }
 
 .bottle-wine-placeholder {
-  width: 32px;
-  height: 46px;
+  width: 44px;
+  height: 64px;
   border-radius: 3px;
   flex-shrink: 0;
 }
@@ -431,6 +495,102 @@
   line-height: 1;
 }
 
+/* ── Card grid view ── */
+.bottles-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 1rem;
+}
+
+.bottle-grid-card {
+  background: #1c1c1c;
+  border: 1px solid #2a2a2a;
+  border-radius: 10px;
+  overflow: hidden;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+  display: flex;
+  flex-direction: column;
+}
+
+.bottle-grid-card:hover {
+  border-color: #7B9E88;
+  background: rgba(123, 158, 136, 0.06);
+}
+
+.bottle-grid-image-wrap {
+  width: 100%;
+  aspect-ratio: 1 / 1.6;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #141414;
+  overflow: hidden;
+}
+
+.bottle-grid-image {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  padding: 0.5rem;
+}
+
+.bottle-grid-placeholder {
+  width: 60%;
+  height: 80%;
+  border-radius: 4px;
+}
+
+.bottle-grid-placeholder.red       { background: #2d1414; }
+.bottle-grid-placeholder.white     { background: #2d2510; }
+.bottle-grid-placeholder.rosé      { background: #2d1420; }
+.bottle-grid-placeholder.sparkling { background: #14202d; }
+.bottle-grid-placeholder.dessert   { background: #1f1430; }
+.bottle-grid-placeholder.fortified { background: #142d18; }
+
+.bottle-grid-info {
+  padding: 0.625rem 0.75rem 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  flex: 1;
+}
+
+.bottle-grid-name {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: #E8DFD0;
+  line-height: 1.3;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.bottle-grid-producer {
+  font-size: 0.77rem;
+  color: #9A9484;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.bottle-grid-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  margin-top: 0.1rem;
+}
+
+.bottle-grid-region {
+  font-size: 0.72rem;
+  color: #6a6a6a;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 /* ── Mobile ── */
 @media (max-width: 768px) {
   .filters-bar,
@@ -459,10 +619,20 @@
   .statistics-grid {
     grid-template-columns: repeat(2, 1fr);
   }
+
+  .bottles-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.75rem;
+  }
 }
 
 @media (max-width: 480px) {
   .statistics-grid {
     grid-template-columns: repeat(2, 1fr);
+  }
+
+  .bottles-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.5rem;
   }
 }

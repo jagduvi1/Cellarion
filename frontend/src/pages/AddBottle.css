@@ -174,19 +174,46 @@
   background: rgba(123, 158, 136, 0.06);
 }
 
+.wine-row-img-wrap {
+  position: relative;
+  flex-shrink: 0;
+}
+
 .wine-row-image {
-  width: 44px;
-  height: 60px;
+  width: 60px;
+  height: 84px;
   object-fit: contain;
+  border-radius: 4px;
+  display: block;
+}
+
+.wine-row-placeholder {
+  width: 60px;
+  height: 84px;
   border-radius: 4px;
   flex-shrink: 0;
 }
 
-.wine-row-placeholder {
-  width: 44px;
-  height: 60px;
-  border-radius: 4px;
-  flex-shrink: 0;
+.wine-row-credit {
+  display: none;
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: rgba(0,0,0,0.78);
+  color: #b0a898;
+  font-size: 0.56rem;
+  text-align: center;
+  padding: 2px 3px;
+  border-radius: 0 0 4px 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+}
+
+.wine-row-img-wrap:hover .wine-row-credit {
+  display: block;
 }
 
 .wine-row-placeholder.red    { background: #2d1414; }
@@ -262,8 +289,8 @@
 }
 
 .selected-wine-image {
-  width: 36px;
-  height: 52px;
+  width: 52px;
+  height: 74px;
   object-fit: contain;
   border-radius: 4px;
   flex-shrink: 0;

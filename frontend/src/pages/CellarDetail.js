@@ -525,65 +525,163 @@ function DeleteCellarModal({ cellar, onDeleted, onClose }) {
   );
 }
 
-// ── Compact bottle list ──
+// ── Bottle list (list or card view) ──
 function BottlesList({ bottles, rackMap, cellarId }) {
   const navigate = useNavigate();
+  const [viewMode, setViewMode] = useState(() => {
+    try { return localStorage.getItem('cellarion_bottle_view') || 'list'; } catch { return 'list'; }
+  });
+
+  const setView = (mode) => {
+    setViewMode(mode);
+    try { localStorage.setItem('cellarion_bottle_view', mode); } catch {}
+  };
 
   return (
-    <div className="bottles-list">
-      {bottles.map(bottle => {
-        const rackInfo = rackMap.get(bottle._id);
-        const drinkStatus = getDrinkStatus(bottle);
+    <>
+      <div className="bottles-view-toggle">
+        <button
+          className={`view-toggle-btn ${viewMode === 'list' ? 'active' : ''}`}
+          onClick={() => setView('list')}
+          title="List view"
+          aria-label="List view"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+        </button>
+        <button
+          className={`view-toggle-btn ${viewMode === 'card' ? 'active' : ''}`}
+          onClick={() => setView('card')}
+          title="Card view"
+          aria-label="Card view"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+        </button>
+      </div>
 
-        return (
-          <div
-            key={bottle._id}
-            className="bottle-card"
-            onClick={() => navigate(`/cellars/${cellarId}/bottles/${bottle._id}`)}
-            role="button"
-            tabIndex={0}
-            onKeyDown={e => e.key === 'Enter' && navigate(`/cellars/${cellarId}/bottles/${bottle._id}`)}
-          >
-            {(bottle.wineDefinition?.image || bottle.pendingImageUrl) ? (
-              <img
-                src={bottle.wineDefinition?.image || bottle.pendingImageUrl}
-                alt={bottle.wineDefinition?.name}
-                className="bottle-wine-image"
-                onError={e => { e.target.style.display = 'none'; }}
-              />
-            ) : (
-              <div className={`bottle-wine-placeholder ${bottle.wineDefinition?.type}`} />
-            )}
+      {viewMode === 'list' ? (
+        <div className="bottles-list">
+          {bottles.map(bottle => {
+            const rackInfo = rackMap.get(bottle._id);
+            const drinkStatus = getDrinkStatus(bottle);
+            const imgSrc = bottle.wineDefinition?.image || bottle.pendingImageUrl;
+            const credit = bottle.wineDefinition?.imageCredit;
 
-            <div className="bottle-info">
-              <div className="bottle-name">{bottle.wineDefinition?.name || 'Unknown Wine'}</div>
-              <div className="bottle-meta">
-                <span className="bottle-producer">{bottle.wineDefinition?.producer}</span>
-                {bottle.vintage && <span className="bottle-vintage">{bottle.vintage}</span>}
-              </div>
-              <div className="bottle-badges">
-                {rackInfo && (
-                  <Link
-                    to={`/cellars/${cellarId}/racks?highlight=${bottle._id}`}
-                    className="rack-badge"
-                    onClick={e => e.stopPropagation()}
-                  >
-                    📍 {rackInfo.rackName}
-                  </Link>
+            return (
+              <div
+                key={bottle._id}
+                className="bottle-card"
+                onClick={() => navigate(`/cellars/${cellarId}/bottles/${bottle._id}`)}
+                role="button"
+                tabIndex={0}
+                onKeyDown={e => e.key === 'Enter' && navigate(`/cellars/${cellarId}/bottles/${bottle._id}`)}
+              >
+                {imgSrc ? (
+                  <div className="bottle-img-wrap">
+                    <img
+                      src={imgSrc}
+                      alt={bottle.wineDefinition?.name}
+                      className="bottle-wine-image"
+                      onError={e => { e.target.style.display = 'none'; }}
+                    />
+                    {credit && <span className="img-credit-tooltip">{credit}</span>}
+                  </div>
+                ) : (
+                  <div className={`bottle-wine-placeholder ${bottle.wineDefinition?.type}`} />
                 )}
-                {drinkStatus && (
-                  <span className={`drink-status-badge badge-sm ${drinkStatus.status}`}>
-                    {drinkStatus.label}
-                  </span>
-                )}
-              </div>
-            </div>
 
-            <span className="bottle-chevron" aria-hidden="true">›</span>
-          </div>
-        );
-      })}
-    </div>
+                <div className="bottle-info">
+                  <div className="bottle-name">{bottle.wineDefinition?.name || 'Unknown Wine'}</div>
+                  <div className="bottle-meta">
+                    <span className="bottle-producer">{bottle.wineDefinition?.producer}</span>
+                    {bottle.vintage && <span className="bottle-vintage">{bottle.vintage}</span>}
+                  </div>
+                  <div className="bottle-badges">
+                    {rackInfo && (
+                      <Link
+                        to={`/cellars/${cellarId}/racks?highlight=${bottle._id}`}
+                        className="rack-badge"
+                        onClick={e => e.stopPropagation()}
+                      >
+                        📍 {rackInfo.rackName}
+                      </Link>
+                    )}
+                    {drinkStatus && (
+                      <span className={`drink-status-badge badge-sm ${drinkStatus.status}`}>
+                        {drinkStatus.label}
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                <span className="bottle-chevron" aria-hidden="true">›</span>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="bottles-grid">
+          {bottles.map(bottle => {
+            const rackInfo = rackMap.get(bottle._id);
+            const drinkStatus = getDrinkStatus(bottle);
+            const imgSrc = bottle.wineDefinition?.image || bottle.pendingImageUrl;
+            const credit = bottle.wineDefinition?.imageCredit;
+
+            return (
+              <div
+                key={bottle._id}
+                className="bottle-grid-card"
+                onClick={() => navigate(`/cellars/${cellarId}/bottles/${bottle._id}`)}
+                role="button"
+                tabIndex={0}
+                onKeyDown={e => e.key === 'Enter' && navigate(`/cellars/${cellarId}/bottles/${bottle._id}`)}
+              >
+                <div className="bottle-grid-image-wrap">
+                  {imgSrc ? (
+                    <>
+                      <img
+                        src={imgSrc}
+                        alt={bottle.wineDefinition?.name}
+                        className="bottle-grid-image"
+                        onError={e => { e.target.style.display = 'none'; }}
+                      />
+                      {credit && <span className="img-credit-tooltip">{credit}</span>}
+                    </>
+                  ) : (
+                    <div className={`bottle-grid-placeholder ${bottle.wineDefinition?.type}`} />
+                  )}
+                </div>
+                <div className="bottle-grid-info">
+                  <div className="bottle-grid-name">{bottle.wineDefinition?.name || 'Unknown Wine'}</div>
+                  <div className="bottle-grid-producer">{bottle.wineDefinition?.producer}</div>
+                  <div className="bottle-grid-meta">
+                    {bottle.vintage && <span className="bottle-vintage">{bottle.vintage}</span>}
+                    {bottle.wineDefinition?.region?.name && (
+                      <span className="bottle-grid-region">{bottle.wineDefinition.region.name}</span>
+                    )}
+                  </div>
+                  <div className="bottle-badges">
+                    {drinkStatus && (
+                      <span className={`drink-status-badge badge-sm ${drinkStatus.status}`}>
+                        {drinkStatus.label}
+                      </span>
+                    )}
+                    {rackInfo && (
+                      <Link
+                        to={`/cellars/${cellarId}/racks?highlight=${bottle._id}`}
+                        className="rack-badge"
+                        onClick={e => e.stopPropagation()}
+                      >
+                        📍 {rackInfo.rackName}
+                      </Link>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </>
   );
 }
 

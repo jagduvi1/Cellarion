@@ -330,12 +330,15 @@ function AddBottle() {
                 {wines.map(wine => (
                   <div key={wine._id} className="wine-row" onClick={() => handleSelectWine(wine)}>
                     {wine.image ? (
-                      <img
-                        src={wine.image}
-                        alt={wine.name}
-                        className="wine-row-image"
-                        onError={(e) => { e.target.style.display = 'none'; }}
-                      />
+                      <div className="wine-row-img-wrap">
+                        <img
+                          src={wine.image}
+                          alt={wine.name}
+                          className="wine-row-image"
+                          onError={(e) => { e.target.style.display = 'none'; }}
+                        />
+                        {wine.imageCredit && <span className="wine-row-credit">{wine.imageCredit}</span>}
+                      </div>
                     ) : (
                       <div className={`wine-row-placeholder ${wine.type}`}></div>
                     )}
