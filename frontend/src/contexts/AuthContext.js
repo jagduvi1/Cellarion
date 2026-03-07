@@ -55,6 +55,18 @@ export const AuthProvider = ({ children }) => {
   };
 
   // ------------------------------------------------------------------
+  // Shared session helper — stores token, sets user, applies language
+  // ------------------------------------------------------------------
+
+  const applySession = (token, userData) => {
+    storeToken(token);
+    setUser(userData);
+    if (userData?.preferences?.language) {
+      i18n.changeLanguage(userData.preferences.language);
+    }
+  };
+
+  // ------------------------------------------------------------------
   // Refresh: called automatically by apiFetch on 401
   // ------------------------------------------------------------------
 
@@ -124,10 +136,7 @@ export const AuthProvider = ({ children }) => {
 
       if (response.ok) {
         const data = await response.json();
-        setUser(data.user);
-        if (data.user?.preferences?.language) {
-          i18n.changeLanguage(data.user.preferences.language);
-        }
+        applySession(authToken, data.user);
       } else if (response.status === 401) {
         // Access token may have expired — try refresh before giving up
         const newToken = await handleRefresh();
@@ -138,10 +147,7 @@ export const AuthProvider = ({ children }) => {
           });
           if (retry.ok) {
             const data = await retry.json();
-            setUser(data.user);
-            if (data.user?.preferences?.language) {
-              i18n.changeLanguage(data.user.preferences.language);
-            }
+            applySession(newToken, data.user);
             return;
           }
         }
@@ -178,11 +184,7 @@ export const AuthProvider = ({ children }) => {
 
       if (data.token) {
         // Verification disabled — logged in immediately
-        storeToken(data.token);
-        setUser(data.user);
-        if (data.user?.preferences?.language) {
-          i18n.changeLanguage(data.user.preferences.language);
-        }
+        applySession(data.token, data.user);
         return { success: true };
       }
 
@@ -210,11 +212,7 @@ export const AuthProvider = ({ children }) => {
         throw err;
       }
 
-      storeToken(data.token);
-      setUser(data.user);
-      if (data.user?.preferences?.language) {
-        i18n.changeLanguage(data.user.preferences.language);
-      }
+      applySession(data.token, data.user);
       return { success: true };
     } catch (error) {
       return { success: false, error: error.message, code: error.code, email: error.email };
@@ -229,11 +227,7 @@ export const AuthProvider = ({ children }) => {
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'Verification failed');
 
-      storeToken(data.token);
-      setUser(data.user);
-      if (data.user?.preferences?.language) {
-        i18n.changeLanguage(data.user.preferences.language);
-      }
+      applySession(data.token, data.user);
       return { success: true };
     } catch (error) {
       return { success: false, error: error.message };

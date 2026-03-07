@@ -6,12 +6,14 @@ const Rack = require('../models/Rack');
 const User = require('../models/User');
 const AuditLog = require('../models/AuditLog');
 const BottleImage = require('../models/BottleImage');
+const WineDefinition = require('../models/WineDefinition');
 const { getCellarRole } = require('../utils/cellarAccess');
 const { logAudit } = require('../services/audit');
-const { getSnapshotsForDates, getOrCreateDailySnapshot } = require('../utils/exchangeRates');
+const { getSnapshotsForDates, getOrCreateDailySnapshot, convertCurrency } = require('../utils/exchangeRates');
 const { createNotification } = require('../services/notifications');
 const { getPlanConfig } = require('../config/plans');
 const { toNormalized } = require('../utils/ratingUtils');
+const { CONSUMED_STATUSES, MS_PER_DAY } = require('../config/constants');
 
 const router = express.Router();
 
@@ -20,9 +22,6 @@ function getUserColor(cellar, userId) {
   const entry = cellar.userColors?.find(uc => uc.user.toString() === userId.toString());
   return entry?.color || null;
 }
-
-// Statuses that mean a bottle has been removed from the active cellar
-const CONSUMED_STATUSES = ['drank', 'gifted', 'sold', 'other'];
 
 // All routes require authentication
 router.use(requireAuth);
@@ -129,16 +128,6 @@ router.get('/:id/statistics', async (req, res) => {
       todaySnapshot = await getOrCreateDailySnapshot();
     }
 
-    // Helper: convert amount from one currency to another using USD-based rates.
-    // Returns null if conversion is not possible.
-    function convertWithRates(amount, from, to, rates) {
-      if (!rates || !from || !to || from === to) return null;
-      const fromRate = rates[from];
-      const toRate = rates[to];
-      if (!fromRate || !toRate) return null;
-      return (amount / fromRate) * toRate;
-    }
-
     // Calculate statistics
     const stats = {
       totalBottles: bottles.length,
@@ -184,7 +173,7 @@ router.get('/:id/statistics', async (req, res) => {
               : null;
             const rates = (dateKey && snapshotMap.get(dateKey))
               || (todaySnapshot ? todaySnapshot.rates : null);
-            const converted = convertWithRates(bottle.price, currency, targetCurrency, rates);
+            const converted = convertCurrency(bottle.price, currency, targetCurrency, rates);
             if (converted !== null) {
               convertedSum += converted;
               convertedCount++;
@@ -231,11 +220,10 @@ router.get('/:id/statistics', async (req, res) => {
     // Drink window summary counts
     const now = new Date();
     now.setHours(0, 0, 0, 0);
-    const msPerDay = 86400000;
     let drinkOverdue = 0, drinkSoon = 0;
     bottles.forEach(bottle => {
       if (!bottle.drinkBefore) return;
-      const daysLeft = Math.round((new Date(bottle.drinkBefore) - now) / msPerDay);
+      const daysLeft = Math.round((new Date(bottle.drinkBefore) - now) / MS_PER_DAY);
       if (daysLeft < 0) drinkOverdue++;
       else if (daysLeft <= 90) drinkSoon++;
     });
@@ -303,12 +291,6 @@ router.get('/:id', async (req, res) => {
       return res.status(404).json({ error: 'Cellar not found' });
     }
 
-    // Base filter: only active bottles
-    const filter = {
-      cellar: req.params.id,
-      status: { $nin: CONSUMED_STATUSES }
-    };
-
     const {
       country,
       region,
@@ -321,39 +303,57 @@ router.get('/:id', async (req, res) => {
       sort = '-createdAt'
     } = req.query;
 
-    // Get all active bottles with wine definitions for filtering
+    // Base MongoDB filter for Bottle (direct fields only)
+    const filter = {
+      cellar: req.params.id,
+      status: { $nin: CONSUMED_STATUSES }
+    };
+
+    // Push vintage directly into the DB query — it's a scalar field on Bottle
+    if (vintage) filter.vintage = vintage;
+
+    // Push taxonomy filters (country, region, grapes) down via a WineDefinition pre-query.
+    // This avoids loading every bottle in the cellar just to discard most of them.
+    const wdFilter = {};
+    if (country) wdFilter.country = country;
+    if (region)  wdFilter.region  = region;
+    if (grapes) {
+      // $all ensures every requested grape is present in the wine's grapes array
+      wdFilter.grapes = { $all: grapes.split(',') };
+    }
+
+    if (Object.keys(wdFilter).length > 0) {
+      const matchingWdIds = await WineDefinition.find(wdFilter).distinct('_id');
+      if (matchingWdIds.length === 0) {
+        // No wines match the taxonomy filter — short-circuit with empty result
+        const cellarObj = cellar.toObject();
+        cellarObj.userRole = role;
+        cellarObj.userColor = getUserColor(cellar, req.user.id);
+        return res.json({ cellar: cellarObj, bottles: { count: 0, items: [] } });
+      }
+      filter.wineDefinition = { $in: matchingWdIds };
+    }
+
+    // Fetch the filtered set from DB (much smaller than fetching everything first)
     let bottles = await Bottle.find(filter).populate({
       path: 'wineDefinition',
       populate: ['country', 'region', 'grapes']
     });
 
-    // Apply filters on populated data
-    if (country) {
-      bottles = bottles.filter(b =>
-        b.wineDefinition && b.wineDefinition.country &&
-        b.wineDefinition.country._id.toString() === country
-      );
-    }
+    // ── In-memory filters for cases that can't be expressed cleanly in Mongo ──
 
-    if (region) {
-      bottles = bottles.filter(b =>
-        b.wineDefinition && b.wineDefinition.region &&
-        b.wineDefinition.region._id.toString() === region
-      );
-    }
-
-    if (grapes) {
-      const grapeIds = grapes.split(',');
+    if (search) {
+      const searchLower = search.toLowerCase();
       bottles = bottles.filter(b => {
-        if (!b.wineDefinition || !b.wineDefinition.grapes) return false;
-        return grapeIds.every(grapeId =>
-          b.wineDefinition.grapes.some(g => g._id.toString() === grapeId)
-        );
+        const wineName = b.wineDefinition?.name?.toLowerCase() || '';
+        const producer = b.wineDefinition?.producer?.toLowerCase() || '';
+        const notes = b.notes?.toLowerCase() || '';
+        const location = b.location?.toLowerCase() || '';
+        return wineName.includes(searchLower) ||
+               producer.includes(searchLower) ||
+               notes.includes(searchLower) ||
+               location.includes(searchLower);
       });
-    }
-
-    if (vintage) {
-      bottles = bottles.filter(b => b.vintage === vintage);
     }
 
     if (minRating) {
@@ -373,31 +373,16 @@ router.get('/:id', async (req, res) => {
       });
     }
 
-    if (search) {
-      const searchLower = search.toLowerCase();
-      bottles = bottles.filter(b => {
-        const wineName = b.wineDefinition?.name?.toLowerCase() || '';
-        const producer = b.wineDefinition?.producer?.toLowerCase() || '';
-        const notes = b.notes?.toLowerCase() || '';
-        const location = b.location?.toLowerCase() || '';
-        return wineName.includes(searchLower) ||
-               producer.includes(searchLower) ||
-               notes.includes(searchLower) ||
-               location.includes(searchLower);
-      });
-    }
-
     // Filter by drink window status
     if (drinkStatus) {
       const now = new Date();
       now.setHours(0, 0, 0, 0);
-      const msPerDay = 86400000;
       bottles = bottles.filter(b => {
         const before = b.drinkBefore ? new Date(b.drinkBefore) : null;
         const from = b.drinkFrom ? new Date(b.drinkFrom) : null;
         if (!before && !from) return false; // no dates set — excluded from all named statuses
         if (before) {
-          const daysLeft = Math.round((before - now) / msPerDay);
+          const daysLeft = Math.round((before - now) / MS_PER_DAY);
           if (daysLeft < 0) return drinkStatus === 'overdue';
           if (daysLeft <= 90) return drinkStatus === 'soon';
         }

@@ -32,11 +32,15 @@ function CellarDetail() {
     sort: '-createdAt'
   });
 
+  // Bottles list re-fetches when filters change; statistics and racks only need to reload when the cellar ID changes
   useEffect(() => {
     fetchCellarData();
+  }, [id, filters]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
     fetchStatistics();
     fetchRacks();
-  }, [id, filters]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
 
 
   const fetchCellarData = async () => {

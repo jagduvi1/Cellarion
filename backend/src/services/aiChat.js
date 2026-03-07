@@ -20,11 +20,16 @@ const vectorStore = require('./vectorStore');
 const Bottle = require('../models/Bottle');
 
 // ── Claude client (reuse the @anthropic-ai/sdk already in package.json) ────
+// Lazily instantiated so the module can load even when ANTHROPIC_API_KEY is not set yet.
 
+let _claudeClient = null;
 function getClaudeClient() {
-  const sdk = require('@anthropic-ai/sdk');
-  const Anthropic = sdk.default ?? sdk;
-  return new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+  if (!_claudeClient) {
+    const sdk = require('@anthropic-ai/sdk');
+    const Anthropic = sdk.default ?? sdk;
+    _claudeClient = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+  }
+  return _claudeClient;
 }
 
 // ── Wine matching ──────────────────────────────────────────────────────────

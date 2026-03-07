@@ -11,9 +11,8 @@ const { logAudit } = require('../services/audit');
 const { getOrCreateDailySnapshot, getSnapshotForDate } = require('../utils/exchangeRates');
 const { isValidRating, VALID_SCALES } = require('../utils/ratingUtils');
 const { embedSinglePair } = require('../services/embeddingJob');
-
-// Strip HTML tags from user-supplied text to prevent XSS in rendered output
-const stripHtml = (str) => (str ? str.replace(/<[^>]*>/g, '').trim() : str);
+const { CONSUMED_STATUSES } = require('../config/constants');
+const { stripHtml, isSafeUrl } = require('../utils/sanitize');
 
 const router = express.Router();
 
@@ -43,6 +42,10 @@ router.post('/', async (req, res) => {
 
     if (!cellar || !wineDefinition) {
       return res.status(400).json({ error: 'Cellar and wine definition are required' });
+    }
+
+    if (purchaseUrl && !isSafeUrl(purchaseUrl)) {
+      return res.status(400).json({ error: 'purchaseUrl must be a valid http or https URL' });
     }
 
     const resolvedRatingScale = ratingScale && VALID_SCALES.includes(ratingScale) ? ratingScale : '5';
@@ -195,6 +198,10 @@ router.put('/:id', async (req, res) => {
       return res.status(403).json({ error: 'Not authorized to edit this bottle' });
     }
 
+    if (req.body.purchaseUrl && !isSafeUrl(req.body.purchaseUrl)) {
+      return res.status(400).json({ error: 'purchaseUrl must be a valid http or https URL' });
+    }
+
     // Update allowed fields — diff old vs new for the audit log
     const updateFields = [
       'vintage', 'price', 'currency', 'bottleSize',
@@ -294,8 +301,7 @@ router.post('/:id/consume', async (req, res) => {
     }
 
     const { reason = 'drank', note, rating, consumedRatingScale } = req.body;
-    const validReasons = ['drank', 'gifted', 'sold', 'other'];
-    if (!validReasons.includes(reason)) {
+    if (!CONSUMED_STATUSES.includes(reason)) {
       return res.status(400).json({ error: 'Invalid reason' });
     }
 

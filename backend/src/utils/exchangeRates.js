@@ -64,4 +64,23 @@ async function getSnapshotsForDates(dates) {
   return new Map(snapshots.map(s => [s.date, s.rates]));
 }
 
-module.exports = { fetchExchangeRates, getOrCreateDailySnapshot, getSnapshotForDate, getSnapshotsForDates };
+/**
+ * Converts an amount from one currency to another using a USD-based rates map.
+ * Returns null if the conversion is not possible (missing rates, same currency is handled as a no-op).
+ *
+ * @param {number} amount
+ * @param {string} from  - ISO currency code of the source amount
+ * @param {string} to    - ISO currency code of the target
+ * @param {object} rates - plain rates map { USD: 1, EUR: 0.92, ... }
+ * @returns {number|null}
+ */
+function convertCurrency(amount, from, to, rates) {
+  if (!amount || !from || !to || !rates) return null;
+  if (from === to) return amount;
+  const fromRate = rates[from];
+  const toRate   = rates[to];
+  if (!fromRate || !toRate) return null;
+  return (amount / fromRate) * toRate;
+}
+
+module.exports = { fetchExchangeRates, getOrCreateDailySnapshot, getSnapshotForDate, getSnapshotsForDates, convertCurrency };

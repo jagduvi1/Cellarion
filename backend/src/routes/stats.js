@@ -4,13 +4,12 @@ const Cellar = require('../models/Cellar');
 const Bottle = require('../models/Bottle');
 const User = require('../models/User');
 const WineVintageProfile = require('../models/WineVintageProfile');
-const { getOrCreateDailySnapshot } = require('../utils/exchangeRates');
+const { getOrCreateDailySnapshot, convertCurrency } = require('../utils/exchangeRates');
 const { toNormalized } = require('../utils/ratingUtils');
+const { CONSUMED_STATUSES, MS_PER_DAY } = require('../config/constants');
 
 const router = express.Router();
 router.use(requireAuth);
-
-const CONSUMED_STATUSES = ['drank', 'gifted', 'sold', 'other'];
 
 /**
  * Effective drink window: user-set per-bottle takes priority,
@@ -37,10 +36,10 @@ function getEffectiveDrinkWindow(bottle, profileMap) {
   return { from: null, before: null, source: 'none' };
 }
 
-function classifyWindow(from, before, now, msPerDay) {
+function classifyWindow(from, before, now) {
   if (!from && !before) return 'noWindow';
   if (before) {
-    const dl = Math.round((before - now) / msPerDay);
+    const dl = Math.round((before - now) / MS_PER_DAY);
     if (dl < 0)   return 'overdue';
     if (dl <= 90)  return 'soon';
     if (!from || now >= from) return 'inWindow';
@@ -114,18 +113,14 @@ router.get('/overview', async (req, res) => {
       todayRates = snap?.rates || null;
     } catch (_) {}
 
+    // Best-effort conversion: falls back to the original amount when rates are unavailable
     function toTarget(amount, fromCurrency) {
       if (!amount || !fromCurrency) return null;
-      if (!todayRates || fromCurrency === targetCurrency) return amount;
-      const from = todayRates[fromCurrency];
-      const to   = todayRates[targetCurrency];
-      if (!from || !to) return amount;
-      return (amount / from) * to;
+      return convertCurrency(amount, fromCurrency, targetCurrency, todayRates) ?? amount;
     }
 
     const now        = new Date();
     now.setHours(0, 0, 0, 0);
-    const msPerDay   = 86400000;
     const currentYear = now.getFullYear();
 
     // ── Active-bottle accumulators ────────────────────────────────────────────
@@ -140,7 +135,7 @@ router.get('/overview', async (req, res) => {
     const byRegion      = {};
     const byGrape       = {};
     const byVintage     = {};
-    const byRating      = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+    const byRating      = { '0-20': 0, '21-40': 0, '41-60': 0, '61-80': 0, '81-100': 0 };
     const byBottleSize  = {};
     const byPurchaseYear = {};
     const byProducer    = {};
@@ -220,7 +215,7 @@ router.get('/overview', async (req, res) => {
 
       // ── Effective drink window ──────────────────────────────────────────────
       const { from, before, source } = getEffectiveDrinkWindow(b, profileMap);
-      const cls = classifyWindow(from, before, now, msPerDay);
+      const cls = classifyWindow(from, before, now);
       drinkWindow[cls]++;
 
       if (source === 'user')      windowCoverage.userSet++;
@@ -253,7 +248,7 @@ router.get('/overview', async (req, res) => {
           vintage:       b.vintage     || 'NV',
           type:          wd?.type      || 'unknown',
           price:         priceCvt != null ? Math.round(priceCvt * 100) / 100 : null,
-          daysRemaining: before ? Math.round((before - now) / msPerDay) : null,
+          daysRemaining: before ? Math.round((before - now) / MS_PER_DAY) : null,
           status:        cls,
           source,
         });
@@ -326,7 +321,7 @@ router.get('/overview', async (req, res) => {
       // Holding time analysis
       const anchor = b.purchaseDate || b.createdAt;
       if (b.consumedAt && anchor) {
-        const daysHeld = (new Date(b.consumedAt) - new Date(anchor)) / msPerDay;
+        const daysHeld = (new Date(b.consumedAt) - new Date(anchor)) / MS_PER_DAY;
         const bucket =
           daysHeld < 365  ? '<1yr'   :
           daysHeld < 730  ? '1–2yr'  :
