@@ -14,7 +14,6 @@ import AdminWines from './pages/AdminWines';
 import AdminImages from './pages/AdminImages';
 import AdminAudit from './pages/AdminAudit';
 import AdminUsers from './pages/AdminUsers';
-import AdminSettings from './pages/AdminSettings';
 import AdminImportWines from './pages/AdminImportWines';
 import CellarAudit from './pages/CellarAudit';
 import CellarRacks from './pages/CellarRacks';
@@ -27,6 +26,7 @@ import Settings from './pages/Settings';
 import Plans from './pages/Plans';
 import Statistics from './pages/Statistics';
 import SuperAdmin from './pages/SuperAdmin';
+import CellarChat from './pages/CellarChat';
 import VerifyEmail from './pages/VerifyEmail';
 import ResetPassword from './pages/ResetPassword';
 import './styles/common.css';
@@ -130,6 +130,14 @@ function AppRoutes() {
           </ProtectedRoute>
         }
       />
+      <Route
+        path="/cellar-chat"
+        element={
+          <ProtectedRoute>
+            <Layout><CellarChat /></Layout>
+          </ProtectedRoute>
+        }
+      />
 
       {/* Sommelier routes */}
       <Route
@@ -222,14 +230,6 @@ function AppRoutes() {
         element={
           <ProtectedRoute requireAdmin>
             <Layout><AdminUsers /></Layout>
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/admin/settings"
-        element={
-          <ProtectedRoute requireAdmin>
-            <Layout><AdminSettings /></Layout>
           </ProtectedRoute>
         }
       />

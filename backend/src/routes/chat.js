@@ -1,58 +1,108 @@
 /**
- * POST /api/chat
+ * Cellar Chat routes.
  *
- * Accepts a natural-language question from the authenticated user and returns
- * an AI-generated wine recommendation drawn exclusively from their cellar.
- *
- * Rate limiting
- * -------------
- * A dedicated per-user limiter (keyed by user ID, not IP) allows 10 questions
- * per hour. This sits on top of the global API limiter in app.js.
+ * POST /api/chat        – ask a question; rate-limited by plan daily quota
+ * GET  /api/chat/usage  – return today's usage + limit for the current user
  */
 
 const express = require('express');
-const rateLimit = require('express-rate-limit');
 const { requireAuth } = require('../middleware/auth');
 const aiChat = require('../services/aiChat');
 const aiConfig = require('../config/aiConfig');
+const ChatUsage = require('../models/ChatUsage');
 
 const router = express.Router();
 
-// 10 requests per hour per authenticated user
-const chatLimiter = rateLimit({
-  windowMs: 60 * 60 * 1000,
-  max: 10,
-  keyGenerator: (req) => req.user?.id || req.ip,
-  standardHeaders: true,
-  legacyHeaders: false,
-  handler: (req, res) => {
-    res.status(429).json({ error: 'Chat rate limit reached — you can ask up to 10 questions per hour.' });
+// Returns today's UTC date string 'YYYY-MM-DD'
+function todayUTC() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+// Returns a Date set to 90 days from now (retained for usage reporting)
+function expiresAt() {
+  return new Date(Date.now() + 90 * 24 * 60 * 60 * 1000);
+}
+
+// Returns the daily limit for a given plan from the current aiConfig
+function limitForPlan(plan) {
+  const limits = aiConfig.get().chatDailyLimits || {};
+  return limits[plan] ?? limits.free ?? 4;
+}
+
+// ---------------------------------------------------------------------------
+// GET /api/chat/usage
+// ---------------------------------------------------------------------------
+router.get('/usage', requireAuth, async (req, res) => {
+  try {
+    const plan = req.user.plan || 'free';
+    const limit = limitForPlan(plan);
+    const date = todayUTC();
+    const usage = await ChatUsage.findOne({ userId: req.user.id, date }).lean();
+    res.json({ used: usage?.count ?? 0, limit, plan });
+  } catch (err) {
+    console.error('[chat] usage error:', err);
+    res.status(500).json({ error: 'Failed to load usage' });
   }
 });
 
+// ---------------------------------------------------------------------------
 // POST /api/chat
-router.post('/', requireAuth, chatLimiter, async (req, res) => {
+// ---------------------------------------------------------------------------
+router.post('/', requireAuth, async (req, res) => {
   const cfg = aiConfig.get();
   if (!cfg.chatEnabled) {
-    return res.status(503).json({ error: 'AI chat is currently disabled.' });
+    return res.status(503).json({ error: 'Cellar Chat is currently disabled.' });
   }
 
   const { message } = req.body;
-  if (!message || typeof message !== 'string') {
+  if (!message || typeof message !== 'string' || !message.trim()) {
     return res.status(400).json({ error: 'message is required' });
   }
-  const trimmed = message.trim();
-  if (!trimmed) {
-    return res.status(400).json({ error: 'message must not be empty' });
-  }
-  if (trimmed.length > 1000) {
+  if (message.trim().length > 1000) {
     return res.status(400).json({ error: 'message must be 1000 characters or fewer' });
   }
 
+  const plan = req.user.plan || 'free';
+  const limit = limitForPlan(plan);
+  const date = todayUTC();
+
+  // Check current usage before proceeding
+  const usageDoc = await ChatUsage.findOne({ userId: req.user.id, date }).lean();
+  const usedBefore = usageDoc?.count ?? 0;
+
+  if (usedBefore >= limit) {
+    return res.status(429).json({
+      error: `You've reached your daily limit of ${limit} question${limit === 1 ? '' : 's'}. Resets at midnight UTC.`,
+      used: usedBefore,
+      limit,
+    });
+  }
+
+  // Pre-debit: increment now to block concurrent requests
+  await ChatUsage.findOneAndUpdate(
+    { userId: req.user.id, date },
+    { $inc: { count: 1 }, $setOnInsert: { expiresAt: expiresAt() } },
+    { upsert: true }
+  );
+
   try {
-    const result = await aiChat.chat(req.user.id, trimmed);
-    res.json(result);
+    const result = await aiChat.chat(req.user.id, message.trim());
+
+    // Persist token usage asynchronously (best-effort — don't fail the request)
+    if (result.usage) {
+      ChatUsage.findOneAndUpdate(
+        { userId: req.user.id, date },
+        { $inc: { inputTokens: result.usage.inputTokens, outputTokens: result.usage.outputTokens } }
+      ).catch(err => console.warn('[chat] token tracking error:', err.message));
+    }
+
+    res.json({ ...result, used: usedBefore + 1, limit });
   } catch (err) {
+    // Refund the debit if the AI call failed (service error, not user error)
+    await ChatUsage.findOneAndUpdate(
+      { userId: req.user.id, date },
+      { $inc: { count: -1 } }
+    );
     const status = err.status || 500;
     if (status === 503) {
       return res.status(503).json({ error: err.message });

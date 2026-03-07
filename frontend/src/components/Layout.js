@@ -80,6 +80,13 @@ function Layout({ children }) {
               {t('nav.myRequests')}
             </Link>
             <Link
+              to="/cellar-chat"
+              className={isActive('/cellar-chat') ? 'active' : ''}
+              onClick={closeMenu}
+            >
+              Cellar Chat
+            </Link>
+            <Link
               to="/plans"
               className={isActive('/plans') ? 'active' : ''}
               onClick={closeMenu}
@@ -172,13 +179,6 @@ function Layout({ children }) {
                   onClick={closeMenu}
                 >
                   Import Wines
-                </Link>
-                <Link
-                  to="/admin/settings"
-                  className={`admin-link ${isActive('/admin/settings') ? 'active' : ''}`}
-                  onClick={closeMenu}
-                >
-                  {t('nav.adminSettings')}
                 </Link>
               </>
             )}

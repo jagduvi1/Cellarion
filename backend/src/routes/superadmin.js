@@ -11,6 +11,7 @@ const BottleImage = require('../models/BottleImage');
 const WineRequest = require('../models/WineRequest');
 const Rack = require('../models/Rack');
 const WineEmbedding = require('../models/WineEmbedding');
+const ChatUsage = require('../models/ChatUsage');
 const embeddingJob = require('../services/embeddingJob');
 const vectorStore = require('../services/vectorStore');
 const aiConfig = require('../config/aiConfig');
@@ -396,6 +397,165 @@ router.get('/ai', async (req, res) => {
   } catch (error) {
     console.error('[superadmin] ai error:', error);
     res.status(500).json({ error: 'Failed to load AI stats' });
+  }
+});
+
+
+// ---------------------------------------------------------------------------
+// PATCH /api/superadmin/ai/chat-limits
+// Update per-plan daily chat limits stored in aiConfig
+// ---------------------------------------------------------------------------
+router.patch('/ai/chat-limits', async (req, res) => {
+  const { free, basic, premium } = req.body;
+  const parse = (v) => parseInt(v, 10);
+  const vals = { free: parse(free), basic: parse(basic), premium: parse(premium) };
+  if (Object.values(vals).some(v => isNaN(v) || v < 0)) {
+    return res.status(400).json({ error: 'Each limit must be a non-negative integer' });
+  }
+  try {
+    const SiteConfig = require('../models/SiteConfig');
+    const current = aiConfig.get();
+    const updated = { ...current, chatDailyLimits: vals };
+    await SiteConfig.findOneAndUpdate(
+      { key: 'aiConfig' },
+      { $set: { value: updated, updatedAt: new Date(), updatedBy: req.user.id } },
+      { upsert: true }
+    );
+    aiConfig.set(updated);
+    res.json({ chatDailyLimits: vals });
+  } catch (error) {
+    console.error('[superadmin] chat-limits error:', error);
+    res.status(500).json({ error: 'Failed to save chat limits' });
+  }
+});
+
+
+// ---------------------------------------------------------------------------
+// PATCH /api/superadmin/ai/system-prompt
+// ---------------------------------------------------------------------------
+router.patch('/ai/system-prompt', async (req, res) => {
+  const { prompt } = req.body;
+  if (typeof prompt !== 'string' || !prompt.trim()) {
+    return res.status(400).json({ error: 'prompt must be a non-empty string' });
+  }
+  if (prompt.length > 4000) {
+    return res.status(400).json({ error: 'prompt must be 4000 characters or fewer' });
+  }
+  try {
+    const SiteConfig = require('../models/SiteConfig');
+    const current = aiConfig.get();
+    const updated = { ...current, chatSystemPrompt: prompt.trim() };
+    await SiteConfig.findOneAndUpdate(
+      { key: 'aiConfig' },
+      { $set: { value: updated, updatedAt: new Date(), updatedBy: req.user.id } },
+      { upsert: true }
+    );
+    aiConfig.set(updated);
+    res.json({ chatSystemPrompt: updated.chatSystemPrompt });
+  } catch (error) {
+    console.error('[superadmin] system-prompt error:', error);
+    res.status(500).json({ error: 'Failed to save system prompt' });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// PATCH /api/superadmin/ai/chat-model
+// ---------------------------------------------------------------------------
+router.patch('/ai/chat-model', async (req, res) => {
+  const { model, fallbackModel } = req.body;
+  const { VALID_CHAT_MODELS } = aiConfig;
+
+  if (!model || !VALID_CHAT_MODELS.includes(model)) {
+    return res.status(400).json({ error: `model must be one of: ${VALID_CHAT_MODELS.join(', ')}` });
+  }
+  if (fallbackModel !== undefined && fallbackModel !== null && !VALID_CHAT_MODELS.includes(fallbackModel)) {
+    return res.status(400).json({ error: `fallbackModel must be one of: ${VALID_CHAT_MODELS.join(', ')} or null` });
+  }
+  if (fallbackModel !== null && fallbackModel === model) {
+    return res.status(400).json({ error: 'fallbackModel must be different from the primary model' });
+  }
+
+  try {
+    const SiteConfig = require('../models/SiteConfig');
+    const current = aiConfig.get();
+    const updated = {
+      ...current,
+      chatModel: model,
+      chatModelFallback: fallbackModel !== undefined ? fallbackModel : current.chatModelFallback,
+    };
+    await SiteConfig.findOneAndUpdate(
+      { key: 'aiConfig' },
+      { $set: { value: updated, updatedAt: new Date(), updatedBy: req.user.id } },
+      { upsert: true }
+    );
+    aiConfig.set(updated);
+    res.json({ chatModel: model, chatModelFallback: updated.chatModelFallback });
+  } catch (error) {
+    console.error('[superadmin] chat-model error:', error);
+    res.status(500).json({ error: 'Failed to save chat model' });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// GET /api/superadmin/chat-usage?days=30&limit=50&offset=0
+// Per-user Cellar Chat usage: question count + token totals
+// ---------------------------------------------------------------------------
+router.get('/chat-usage', async (req, res) => {
+  try {
+    const days   = Math.min(Math.max(parseInt(req.query.days,   10) || 30,  1), 90);
+    const limit  = Math.min(Math.max(parseInt(req.query.limit,  10) || 50,  1), 500);
+    const offset = Math.max(parseInt(req.query.offset, 10) || 0, 0);
+
+    // Compute date range (inclusive)
+    const since = new Date();
+    since.setUTCDate(since.getUTCDate() - (days - 1));
+    const sinceStr = since.toISOString().slice(0, 10);
+
+    // Aggregate usage per user over the requested window
+    const pipeline = [
+      { $match: { date: { $gte: sinceStr } } },
+      {
+        $group: {
+          _id:          '$userId',
+          questions:    { $sum: '$count' },
+          inputTokens:  { $sum: '$inputTokens' },
+          outputTokens: { $sum: '$outputTokens' },
+          lastActive:   { $max: '$date' },
+        },
+      },
+      { $sort: { questions: -1 } },
+    ];
+
+    const allRows = await ChatUsage.aggregate(pipeline);
+    const total = allRows.length;
+    const page  = allRows.slice(offset, offset + limit);
+
+    // Populate user info
+    const userIds = page.map(r => r._id);
+    const users   = await User.find({ _id: { $in: userIds } })
+      .select('username email plan')
+      .lean();
+    const userMap = Object.fromEntries(users.map(u => [String(u._id), u]));
+
+    const rows = page.map(r => {
+      const u = userMap[String(r._id)] || {};
+      return {
+        userId:       r._id,
+        username:     u.username || '(deleted)',
+        email:        u.email    || null,
+        plan:         u.plan     || 'free',
+        questions:    r.questions,
+        inputTokens:  r.inputTokens,
+        outputTokens: r.outputTokens,
+        totalTokens:  r.inputTokens + r.outputTokens,
+        lastActive:   r.lastActive,
+      };
+    });
+
+    res.json({ rows, total, limit, offset, days });
+  } catch (error) {
+    console.error('[superadmin] chat-usage error:', error);
+    res.status(500).json({ error: 'Failed to load chat usage' });
   }
 });
 

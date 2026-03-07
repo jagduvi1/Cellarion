@@ -798,12 +798,502 @@ function TabAudit() {
 // Root component
 // ─────────────────────────────────────────────────────────────────────────────
 
+const CHAT_MODELS = [
+  {
+    id: 'claude-3-5-haiku-20241022',
+    name: 'Claude 3.5 Haiku',
+    description: 'Fast & affordable — recommended for Cellar Chat',
+    inputPrice: '$0.80',
+    outputPrice: '$4.00',
+    tier: 'economy',
+  },
+  {
+    id: 'claude-3-5-sonnet-20241022',
+    name: 'Claude 3.5 Sonnet',
+    description: 'Stronger reasoning, richer wine recommendations',
+    inputPrice: '$3.00',
+    outputPrice: '$15.00',
+    tier: 'standard',
+  },
+  {
+    id: 'claude-sonnet-4-6',
+    name: 'Claude Sonnet 4.6',
+    description: 'Latest Sonnet — high quality at standard price',
+    inputPrice: '$3.00',
+    outputPrice: '$15.00',
+    tier: 'standard',
+  },
+  {
+    id: 'claude-opus-4-6',
+    name: 'Claude Opus 4.6',
+    description: 'Most capable — best for complex palate matching',
+    inputPrice: '$15.00',
+    outputPrice: '$75.00',
+    tier: 'premium',
+  },
+];
+
+function ChatModelPanel({ currentModel, currentFallback, apiFetch }) {
+  const [selected, setSelected]   = useState(currentModel || 'claude-3-5-haiku-20241022');
+  const [fallback, setFallback]   = useState(currentFallback || 'none');
+  const [saving, setSaving]       = useState(false);
+  const [msg, setMsg]             = useState(null);
+
+  const isDirty = selected !== currentModel || (fallback === 'none' ? null : fallback) !== currentFallback;
+
+  const save = async () => {
+    setSaving(true);
+    setMsg(null);
+    try {
+      const res = await apiFetch('/api/superadmin/ai/chat-model', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: selected,
+          fallbackModel: fallback === 'none' ? null : fallback,
+        }),
+      });
+      if (!res.ok) {
+        const d = await res.json();
+        setMsg({ ok: false, text: d.error || 'Save failed' });
+      } else {
+        setMsg({ ok: true, text: 'Saved — takes effect immediately' });
+      }
+    } catch {
+      setMsg({ ok: false, text: 'Network error' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const tierColor = { economy: 'var(--sa-accent)', standard: 'var(--sa-accent2)', premium: '#c9a84c' };
+
+  const modelRow = (m, groupName, checked, onChange, activeMark) => (
+    <label
+      key={m.id}
+      style={{
+        display: 'flex',
+        alignItems: 'flex-start',
+        gap: 10,
+        padding: '8px 12px',
+        borderRadius: 4,
+        border: `1px solid ${checked ? 'var(--sa-accent)' : 'var(--sa-border)'}`,
+        background: checked ? 'rgba(123,158,136,0.06)' : 'transparent',
+        cursor: 'pointer',
+      }}
+    >
+      <input
+        type="radio"
+        name={groupName}
+        value={m.id}
+        checked={checked}
+        onChange={onChange}
+        style={{ marginTop: 2, accentColor: 'var(--sa-accent)', flexShrink: 0 }}
+      />
+      <div style={{ flex: 1 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
+          <span style={{ fontWeight: 600, fontSize: 12, color: 'var(--sa-text)' }}>{m.name}</span>
+          <span style={{ fontSize: 10, color: tierColor[m.tier], border: `1px solid ${tierColor[m.tier]}`, borderRadius: 3, padding: '1px 5px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            {m.tier}
+          </span>
+          {activeMark && <span style={{ fontSize: 10, color: 'var(--sa-accent)', marginLeft: 'auto' }}>● active</span>}
+        </div>
+        <div style={{ fontSize: 11, color: 'var(--sa-text-dim)', marginBottom: 2 }}>{m.description}</div>
+        <div style={{ fontSize: 10, color: 'var(--sa-text-dim)', fontFamily: 'monospace' }}>
+          Input: {m.inputPrice} / M &nbsp;·&nbsp; Output: {m.outputPrice} / M tokens
+        </div>
+      </div>
+    </label>
+  );
+
+  return (
+    <div className="sa-panel" style={{ marginTop: 16 }}>
+      <div className="sa-panel-header">
+        <span className="sa-panel-title">Cellar Chat — AI Model</span>
+        <button className="sa-btn" onClick={save} disabled={saving || !isDirty}>
+          {saving ? 'Saving...' : 'Save'}
+        </button>
+      </div>
+      <div className="sa-panel-body">
+
+        {/* Primary */}
+        <div style={{ fontSize: 10, color: 'var(--sa-text-dim)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>
+          Primary model
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 18 }}>
+          {CHAT_MODELS.map(m => modelRow(
+            m, 'chatModel',
+            selected === m.id,
+            () => { setSelected(m.id); if (fallback === m.id) setFallback('none'); },
+            m.id === currentModel
+          ))}
+        </div>
+
+        {/* Fallback */}
+        <div style={{ fontSize: 10, color: 'var(--sa-text-dim)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>
+          Fallback model <span style={{ textTransform: 'none', letterSpacing: 0 }}>— used automatically on 529 overloaded</span>
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', borderRadius: 4, border: `1px solid ${fallback === 'none' ? 'var(--sa-accent)' : 'var(--sa-border)'}`, background: fallback === 'none' ? 'rgba(123,158,136,0.06)' : 'transparent', cursor: 'pointer' }}>
+            <input type="radio" name="chatFallback" value="none" checked={fallback === 'none'} onChange={() => setFallback('none')} style={{ accentColor: 'var(--sa-accent)' }} />
+            <span style={{ fontSize: 12, color: 'var(--sa-text-dim)' }}>None — no fallback</span>
+          </label>
+          {CHAT_MODELS.filter(m => m.id !== selected).map(m => modelRow(
+            m, 'chatFallback',
+            fallback === m.id,
+            () => setFallback(m.id),
+            m.id === currentFallback
+          ))}
+        </div>
+
+        {msg && (
+          <div style={{ marginTop: 12, fontSize: 11, color: msg.ok ? 'var(--sa-accent)' : 'var(--sa-danger)' }}>{msg.text}</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function SystemPromptPanel({ prompt, apiFetch }) {
+  const { DEFAULT_SYSTEM_PROMPT } = { DEFAULT_SYSTEM_PROMPT: '' }; // fallback
+  const [val, setVal] = useState(prompt || '');
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState(null);
+
+  const save = async () => {
+    setSaving(true);
+    setMsg(null);
+    try {
+      const res = await apiFetch('/api/superadmin/ai/system-prompt', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: val }),
+      });
+      if (!res.ok) {
+        const d = await res.json();
+        setMsg({ ok: false, text: d.error || 'Save failed' });
+      } else {
+        setMsg({ ok: true, text: 'Saved — takes effect immediately' });
+      }
+    } catch {
+      setMsg({ ok: false, text: 'Network error' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="sa-panel" style={{ marginTop: 16 }}>
+      <div className="sa-panel-header">
+        <span className="sa-panel-title">Cellar Chat — System Prompt</span>
+        <button className="sa-btn" onClick={save} disabled={saving || !val.trim()}>{saving ? 'Saving...' : 'Save'}</button>
+      </div>
+      <div className="sa-panel-body">
+        <div style={{ fontSize: 11, color: 'var(--sa-text-dim)', marginBottom: 8 }}>
+          This prompt is sent to Claude before every chat message. Takes effect immediately on save.
+        </div>
+        <textarea
+          value={val}
+          onChange={e => setVal(e.target.value)}
+          rows={10}
+          style={{ width: '100%', background: 'var(--sa-bg)', border: '1px solid var(--sa-border)', color: 'var(--sa-text)', padding: '8px', borderRadius: 3, fontFamily: 'monospace', fontSize: 12, lineHeight: 1.5, resize: 'vertical', boxSizing: 'border-box' }}
+        />
+        <div style={{ marginTop: 6, display: 'flex', gap: 8, alignItems: 'center' }}>
+          <span style={{ fontSize: 11, color: 'var(--sa-text-dim)' }}>{val.length} / 4000 chars</span>
+          {msg && (
+            <span style={{ fontSize: 11, color: msg.ok ? 'var(--sa-accent)' : 'var(--sa-danger)' }}>{msg.text}</span>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function RateLimitsPanel({ apiFetch }) {
+  const LIMITERS = [
+    { key: 'api',   label: 'General API',  hint: 'requests / 15 min per IP' },
+    { key: 'write', label: 'Write actions', hint: 'requests / 15 min per IP' },
+    { key: 'auth',  label: 'Auth / login',  hint: 'requests / 15 min per IP' },
+  ];
+
+  const [form,     setForm]     = useState(null);
+  const [defaults, setDefaults] = useState(null);
+  const [saving,   setSaving]   = useState(false);
+  const [msg,      setMsg]      = useState(null);
+
+  useEffect(() => {
+    apiFetch('/api/admin/settings/rate-limits')
+      .then(r => r.json())
+      .then(d => {
+        setForm({ api: String(d.config.api.max), write: String(d.config.write.max), auth: String(d.config.auth.max) });
+        setDefaults(d.defaults);
+      })
+      .catch(() => setMsg({ ok: false, text: 'Failed to load' }));
+  }, [apiFetch]);
+
+  const save = async () => {
+    setSaving(true);
+    setMsg(null);
+    try {
+      const body = {
+        api:   { max: Number(form.api)   },
+        write: { max: Number(form.write) },
+        auth:  { max: Number(form.auth)  },
+      };
+      const res = await apiFetch('/api/admin/settings/rate-limits', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) {
+        const d = await res.json();
+        setMsg({ ok: false, text: d.error || 'Save failed' });
+      } else {
+        setMsg({ ok: true, text: 'Saved — takes effect immediately' });
+      }
+    } catch {
+      setMsg({ ok: false, text: 'Network error' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (!form) return <div className="sa-loading">Loading rate limits...</div>;
+
+  return (
+    <div className="sa-panel" style={{ marginTop: 16 }}>
+      <div className="sa-panel-header">
+        <span className="sa-panel-title">Rate Limits</span>
+        <button className="sa-btn" onClick={save} disabled={saving}>{saving ? 'Saving...' : 'Save'}</button>
+      </div>
+      <div className="sa-panel-body">
+        <div style={{ fontSize: 11, color: 'var(--sa-text-dim)', marginBottom: 12 }}>
+          Maximum requests per 15-minute window per IP address.
+        </div>
+        <div className="sa-kv">
+          {LIMITERS.map(({ key, label, hint }) => (
+            <div className="sa-kv-row" key={key}>
+              <span className="sa-kv-key">
+                {label}
+                {defaults && (
+                  <span style={{ marginLeft: 6, color: 'var(--sa-text-dim)', fontSize: 10 }}>
+                    (default: {defaults[key].max})
+                  </span>
+                )}
+              </span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <input
+                  type="number"
+                  min="1"
+                  max="10000"
+                  value={form[key]}
+                  onChange={e => setForm(v => ({ ...v, [key]: e.target.value }))}
+                  style={{ width: 80, background: 'var(--sa-bg)', border: '1px solid var(--sa-border)', color: 'var(--sa-text)', padding: '2px 6px', borderRadius: 3, fontFamily: 'monospace', fontSize: 12 }}
+                />
+                <span style={{ fontSize: 10, color: 'var(--sa-text-dim)' }}>{hint}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+        {msg && (
+          <div style={{ marginTop: 10, fontSize: 11, color: msg.ok ? 'var(--sa-accent)' : 'var(--sa-danger)' }}>{msg.text}</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ChatLimitsPanel({ limits, apiFetch }) {
+  const [vals, setVals] = useState({ free: limits.free ?? 4, basic: limits.basic ?? 20, premium: limits.premium ?? 50 });
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState(null);
+
+  const save = async () => {
+    setSaving(true);
+    setMsg(null);
+    try {
+      const res = await apiFetch('/api/superadmin/ai/chat-limits', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(vals),
+      });
+      if (!res.ok) {
+        const d = await res.json();
+        setMsg({ ok: false, text: d.error || 'Save failed' });
+      } else {
+        setMsg({ ok: true, text: 'Saved' });
+      }
+    } catch {
+      setMsg({ ok: false, text: 'Network error' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="sa-panel" style={{ marginTop: 16 }}>
+      <div className="sa-panel-header">
+        <span className="sa-panel-title">Cellar Chat — Daily Limits</span>
+        <button className="sa-btn" onClick={save} disabled={saving}>{saving ? 'Saving...' : 'Save'}</button>
+      </div>
+      <div className="sa-panel-body">
+        <div style={{ fontSize: 11, color: 'var(--sa-text-dim)', marginBottom: 12 }}>
+          Max questions per user per day. Resets at midnight UTC.
+        </div>
+        <div className="sa-kv">
+          {[['free', 'Free plan'], ['basic', 'Basic plan'], ['premium', 'Premium plan']].map(([key, label]) => (
+            <div className="sa-kv-row" key={key}>
+              <span className="sa-kv-key">{label}</span>
+              <input
+                type="number"
+                min="0"
+                max="999"
+                value={vals[key]}
+                onChange={e => setVals(v => ({ ...v, [key]: e.target.value }))}
+                style={{ width: 70, background: 'var(--sa-bg)', border: '1px solid var(--sa-border)', color: 'var(--sa-text)', padding: '2px 6px', borderRadius: 3, fontFamily: 'monospace', fontSize: 12 }}
+              />
+            </div>
+          ))}
+        </div>
+        {msg && (
+          <div style={{ marginTop: 10, fontSize: 11, color: msg.ok ? 'var(--sa-accent)' : 'var(--sa-danger)' }}>{msg.text}</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Tab: Settings
+// ─────────────────────────────────────────────────────────────────────────────
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Chat Usage Panel
+// ─────────────────────────────────────────────────────────────────────────────
+
+function ChatUsagePanel() {
+  const { apiFetch } = useAuth();
+  const [days, setDays] = useState(30);
+  const [rows, setRows] = useState([]);
+  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  const load = useCallback(async (d) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await apiFetch(`/api/superadmin/chat-usage?days=${d}&limit=100`);
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || `HTTP ${res.status}`);
+      }
+      const json = await res.json();
+      setRows(json.rows || []);
+      setTotal(json.total || 0);
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setLoading(false);
+    }
+  }, [apiFetch]);
+
+  useEffect(() => { load(days); }, [load, days]);
+
+  const totals = rows.reduce(
+    (acc, r) => ({ q: acc.q + r.questions, i: acc.i + r.inputTokens, o: acc.o + r.outputTokens }),
+    { q: 0, i: 0, o: 0 }
+  );
+
+  return (
+    <div className="sa-panel" style={{ marginTop: 16 }}>
+      <div className="sa-panel-header">
+        <span className="sa-panel-title">Cellar Chat Usage — Per User</span>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <select
+            className="sa-input"
+            value={days}
+            onChange={e => setDays(Number(e.target.value))}
+            style={{ width: 120 }}
+          >
+            <option value={7}>Last 7 days</option>
+            <option value={14}>Last 14 days</option>
+            <option value={30}>Last 30 days</option>
+            <option value={60}>Last 60 days</option>
+            <option value={90}>Last 90 days</option>
+          </select>
+          <button className="sa-btn" onClick={() => load(days)}>Refresh</button>
+        </div>
+      </div>
+      <div className="sa-panel-body">
+        {error && <div className="sa-error">{error}</div>}
+        {loading ? (
+          <div className="sa-loading">Loading usage data...</div>
+        ) : rows.length === 0 ? (
+          <div style={{ color: 'var(--sa-text-dim)', fontSize: 12, padding: '8px 0' }}>
+            No chat usage data for this period.
+          </div>
+        ) : (
+          <>
+            <div style={{ marginBottom: 12, display: 'flex', gap: 24, fontSize: 12, color: 'var(--sa-text-dim)' }}>
+              <span><strong style={{ color: 'var(--sa-accent)' }}>{num(total)}</strong> active users</span>
+              <span><strong style={{ color: 'var(--sa-text)' }}>{num(totals.q)}</strong> questions</span>
+              <span><strong style={{ color: 'var(--sa-text)' }}>{num(totals.i + totals.o)}</strong> total tokens</span>
+            </div>
+            <div className="sa-table-wrap">
+              <table className="sa-table">
+                <thead>
+                  <tr>
+                    <th>User</th>
+                    <th>Plan</th>
+                    <th>Questions</th>
+                    <th>Input tokens</th>
+                    <th>Output tokens</th>
+                    <th>Total tokens</th>
+                    <th>Last active</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map(r => (
+                    <tr key={r.userId}>
+                      <td>
+                        <div>{r.username}</div>
+                        {r.email && <div style={{ fontSize: 10, color: 'var(--sa-text-dim)' }}>{r.email}</div>}
+                      </td>
+                      <td><PlanBadge plan={r.plan} /></td>
+                      <td style={{ color: 'var(--sa-accent)' }}>{num(r.questions)}</td>
+                      <td>{num(r.inputTokens)}</td>
+                      <td>{num(r.outputTokens)}</td>
+                      <td style={{ fontWeight: 600 }}>{num(r.totalTokens)}</td>
+                      <td style={{ color: 'var(--sa-text-dim)' }}>{r.lastActive || '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function TabSettings() {
+  const { apiFetch } = useAuth();
+  return (
+    <>
+      <RateLimitsPanel apiFetch={apiFetch} />
+    </>
+  );
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Tab: AI & Embeddings
 // ─────────────────────────────────────────────────────────────────────────────
 
 function TabAI() {
   const { data, loading, error, reload } = useApi('/api/superadmin/ai');
+  const { apiFetch } = useAuth();
 
   if (loading) return <div className="sa-loading">Loading AI pipeline stats...</div>;
   if (error)   return <div className="sa-error">Error: {error}</div>;
@@ -863,6 +1353,14 @@ function TabAI() {
               <div className="sa-kv-row">
                 <span className="sa-kv-key">Max results shown</span>
                 <span className="sa-kv-val">{config.chatMaxResults}</span>
+              </div>
+              <div className="sa-kv-row">
+                <span className="sa-kv-key">Chat model</span>
+                <span className="sa-kv-val">{config.chatModel}</span>
+              </div>
+              <div className="sa-kv-row">
+                <span className="sa-kv-key">Fallback model</span>
+                <span className="sa-kv-val">{config.chatModelFallback || '—'}</span>
               </div>
               <div className="sa-kv-row">
                 <span className="sa-kv-key">Embed batch delay</span>
@@ -1008,6 +1506,10 @@ function TabAI() {
           </div>
         </div>
       </div>
+      <ChatModelPanel currentModel={config.chatModel} currentFallback={config.chatModelFallback || null} apiFetch={apiFetch} />
+      <SystemPromptPanel prompt={config.chatSystemPrompt || ''} apiFetch={apiFetch} />
+      <ChatLimitsPanel limits={config.chatDailyLimits || {}} apiFetch={apiFetch} />
+      <ChatUsagePanel />
     </>
   );
 }
@@ -1016,6 +1518,7 @@ const TABS = [
   { id: 'overview',   label: 'Overview' },
   { id: 'services',   label: 'Services' },
   { id: 'database',   label: 'Database' },
+  { id: 'settings',   label: 'Settings' },
   { id: 'ai',         label: 'AI & Embeddings' },
   { id: 'users',      label: 'Users' },
   { id: 'audit',      label: 'Audit Log' },
@@ -1102,6 +1605,7 @@ export default function SuperAdmin() {
         {tab === 'overview'   && <TabOverview />}
         {tab === 'services'   && <TabServices />}
         {tab === 'database'   && <TabDatabase />}
+        {tab === 'settings'   && <TabSettings />}
         {tab === 'ai'         && <TabAI />}
         {tab === 'users'      && <TabUsers />}
         {tab === 'audit'      && <TabAudit />}

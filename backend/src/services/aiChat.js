@@ -91,15 +91,7 @@ async function filterToUserCellar(userId, hits, maxResults) {
 // ── Prompt builder ─────────────────────────────────────────────────────────
 
 function buildSystemPrompt() {
-  return `You are a sommelier assistant for Cellarion, a personal wine cellar app.
-Your job is to recommend wines from the user's own cellar based on their question.
-
-Rules:
-- Recommend ONLY wines from the list provided below the user's question.
-- If none of the listed wines suit the question, say so clearly and briefly.
-- Keep the answer concise: 2–3 sentences per wine, explaining why it matches.
-- Do not invent or mention wines that are not in the list.
-- Use a friendly, knowledgeable tone — as if speaking to the cellar owner.`;
+  return aiConfig.get().chatSystemPrompt;
 }
 
 function formatWineList(matches) {
@@ -119,6 +111,34 @@ function formatWineList(matches) {
   }).join('\n\n');
 }
 
+
+// ── Query expansion ────────────────────────────────────────────────────────
+
+/**
+ * Rewrites the user's question into rich wine-search terminology using Claude
+ * Haiku. This dramatically improves Qdrant embedding matches for vague or
+ * food-focused questions.
+ *
+ * Returns the expanded query string, or the original message if expansion
+ * fails (so the pipeline always continues).
+ */
+async function expandQuery(message) {
+  try {
+    const client = getClaudeClient();
+    const response = await client.messages.create({
+      model: aiConfig.get().chatModel,
+      max_tokens: 120,
+      system: `You are a wine search assistant. Rewrite the user's question into rich wine-search terminology: wine style, body, tannins, acidity, typical grape varieties, regions, and food context. Reply with ONLY the expanded search terms as a single line, no explanation, no labels. Always reply in English regardless of the language the user wrote in.`,
+      messages: [{ role: 'user', content: message }]
+    });
+    const expanded = response.content[0]?.text?.trim();
+    return expanded || message;
+  } catch {
+    // Expansion is best-effort — fall back to original question
+    return message;
+  }
+}
+
 // ── Main entry point ───────────────────────────────────────────────────────
 
 /**
@@ -128,7 +148,7 @@ function formatWineList(matches) {
  * @param {string} message – natural-language question from the user
  * @returns {Promise<{ answer: string, wines: object[] }>}
  */
-async function chat(userId, message) {
+async function chat(userId, message, { useQueryExpansion = true } = {}) {
   const cfg = aiConfig.get();
 
   if (!cfg.chatEnabled) {
@@ -141,8 +161,9 @@ async function chat(userId, message) {
     throw Object.assign(new Error('VOYAGE_API_KEY is not configured'), { status: 503 });
   }
 
-  // 1. Embed the question
-  const queryVector = await embedSingle(message, { model: cfg.embeddingModel });
+  // 1. Optionally expand the query for better embedding, then embed
+  const searchQuery = useQueryExpansion ? await expandQuery(message) : message;
+  const queryVector = await embedSingle(searchQuery, { model: cfg.embeddingModel });
 
   // 2. Vector search
   const hits = await vectorStore.searchSimilar(cfg.vectorIndex, queryVector, cfg.chatTopK);
@@ -157,14 +178,26 @@ async function chat(userId, message) {
 
   const userMessage = `${message}\n\n---\n${wineSection}`;
 
-  // 5. Call Claude
+  // 5. Call Claude (retry with fallback model on 529 overloaded)
   const client = getClaudeClient();
-  const response = await client.messages.create({
-    model: 'claude-haiku-4-5',
+  const callParams = {
     max_tokens: 600,
     system: buildSystemPrompt(),
     messages: [{ role: 'user', content: userMessage }]
-  });
+  };
+
+  let response;
+  try {
+    response = await client.messages.create({ ...callParams, model: cfg.chatModel });
+  } catch (err) {
+    const isOverloaded = err.status === 529 || err.error?.type === 'overloaded_error';
+    if (isOverloaded && cfg.chatModelFallback && cfg.chatModelFallback !== cfg.chatModel) {
+      console.warn(`[aiChat] Primary model overloaded (${cfg.chatModel}), retrying with fallback: ${cfg.chatModelFallback}`);
+      response = await client.messages.create({ ...callParams, model: cfg.chatModelFallback });
+    } else {
+      throw err;
+    }
+  }
 
   const answer = response.content[0]?.text ?? '';
 
@@ -181,7 +214,12 @@ async function chat(userId, message) {
     notes: bottle.notes || null
   }));
 
-  return { answer, wines };
+  const usage = {
+    inputTokens:  response.usage?.input_tokens  ?? 0,
+    outputTokens: response.usage?.output_tokens ?? 0,
+  };
+
+  return { answer, wines, expandedQuery: useQueryExpansion ? searchQuery : null, usage };
 }
 
 module.exports = { chat };
