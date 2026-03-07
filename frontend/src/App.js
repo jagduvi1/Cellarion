@@ -7,7 +7,6 @@ import Login from './pages/Login';
 import Cellars from './pages/Cellars';
 import CellarDetail from './pages/CellarDetail';
 import AddBottle from './pages/AddBottle';
-import Wines from './pages/Wines';
 import WineRequests from './pages/WineRequests';
 import AdminRequests from './pages/AdminRequests';
 import AdminTaxonomy from './pages/AdminTaxonomy';
@@ -119,14 +118,6 @@ function AppRoutes() {
         element={
           <ProtectedRoute>
             <Layout><CellarAudit /></Layout>
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/wines"
-        element={
-          <ProtectedRoute requireAdmin>
-            <Layout><Wines /></Layout>
           </ProtectedRoute>
         }
       />

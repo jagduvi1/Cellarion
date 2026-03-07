@@ -4,7 +4,7 @@ import './ImageUpload.css';
 
 const API_URL = process.env.REACT_APP_API_URL || '';
 
-function ImageUpload({ bottleId, wineDefinitionId, onUploadComplete, onProcessingComplete }) {
+function ImageUpload({ bottleId, wineDefinitionId, credit, onUploadComplete, onProcessingComplete }) {
   const { apiFetch } = useAuth();
   const [uploading, setUploading] = useState(false);
   const [images, setImages] = useState([]);
@@ -85,6 +85,7 @@ function ImageUpload({ bottleId, wineDefinitionId, onUploadComplete, onProcessin
     formData.append('image', file);
     if (bottleId) formData.append('bottleId', bottleId);
     if (wineDefinitionId) formData.append('wineDefinitionId', wineDefinitionId);
+    if (credit && credit.trim()) formData.append('credit', credit.trim());
 
     try {
       const res = await apiFetch('/api/images/upload', { method: 'POST', body: formData });

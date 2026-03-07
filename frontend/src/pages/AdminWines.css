@@ -8,15 +8,46 @@
   margin: 0.25rem 0 0 0;
 }
 
-.wines-search {
+.wines-filter-bar {
   display: flex;
   gap: 0.5rem;
   margin: 1.5rem 0;
+  flex-wrap: wrap;
 }
 
 .wines-search-input {
   flex: 1;
-  min-width: 0;
+  min-width: 200px;
+}
+
+.wines-filter-select {
+  min-width: 130px;
+}
+
+.wine-image-section {
+  border-top: 1px solid #2a2a2a;
+  padding-top: 1rem;
+  margin-top: 0.5rem;
+}
+
+.wine-image-existing {
+  margin-bottom: 1rem;
+}
+
+.image-credit-field {
+  margin-bottom: 0.75rem;
+}
+
+.image-credit-label {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+
+.image-credit-hint {
+  font-size: 0.78rem;
+  color: #6b6458;
+  font-weight: 400;
 }
 
 .wines-meta {
@@ -122,6 +153,14 @@
 }
 
 @media (max-width: 768px) {
+  .wines-filter-bar {
+    flex-direction: column;
+  }
+
+  .wines-filter-select {
+    min-width: unset;
+  }
+
   .wine-form-grid {
     grid-template-columns: 1fr;
   }

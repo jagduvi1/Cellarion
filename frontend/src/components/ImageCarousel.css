@@ -51,6 +51,28 @@
   padding: 2px;
 }
 
+/* Credit overlay — visible on hover */
+.carousel-credit {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 0.35rem 0.6rem;
+  background: rgba(0, 0, 0, 0.55);
+  color: rgba(255, 255, 255, 0.75);
+  font-size: 0.68rem;
+  font-style: italic;
+  letter-spacing: 0.01em;
+  text-align: right;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  pointer-events: none;
+}
+
+.image-carousel:hover .carousel-credit {
+  opacity: 1;
+}
+
 /* Navigation buttons */
 .carousel-btn {
   position: absolute;
@@ -116,5 +138,10 @@
     opacity: 0.7;
     width: 32px;
     height: 32px;
+  }
+
+  /* Always show credit on touch devices since hover doesn't work */
+  .carousel-credit {
+    opacity: 1;
   }
 }

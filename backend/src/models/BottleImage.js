@@ -33,6 +33,11 @@ const bottleImageSchema = new mongoose.Schema({
     default: 'uploaded',
     index: true
   },
+  credit: {
+    type: String,
+    default: null,
+    trim: true
+  },
   reviewedBy: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',

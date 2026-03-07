@@ -62,15 +62,6 @@ function Layout({ children }) {
             >
               {t('nav.myCellars')}
             </Link>
-            {roles.includes('admin') && (
-              <Link
-                to="/wines"
-                className={isActive('/wines') ? 'active' : ''}
-                onClick={closeMenu}
-              >
-                {t('nav.wineRegistry')}
-              </Link>
-            )}
             <Link
               to="/statistics"
               className={isActive('/statistics') ? 'active' : ''}

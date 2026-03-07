@@ -25,37 +25,81 @@ router.use(requireAuth, requireRole('admin'));
 // GET /api/admin/wines - List wine definitions
 router.get('/', async (req, res) => {
   try {
-    const { search, page = 1, limit = 50 } = req.query;
+    const { search, type, sort, page = 1, limit = 50 } = req.query;
+    const parsedLimit = parseInt(limit);
+    const parsedPage = parseInt(page);
+    const skip = (parsedPage - 1) * parsedLimit;
 
-    let query = {};
-    if (search) {
-      const escaped = escapeRegex(search);
-      query = {
-        $or: [
-          { name: new RegExp(escaped, 'i') },
-          { producer: new RegExp(escaped, 'i') }
-        ]
-      };
+    const sortMap = {
+      'name': { name: 1 },
+      '-name': { name: -1 },
+      'producer': { producer: 1 },
+      '-createdAt': { createdAt: -1 }
+    };
+    const sortObj = sortMap[sort] || { name: 1 };
+
+    // Try Meilisearch for text queries (fuzzy, searches name/producer/appellation/region/country/grapes)
+    if (search && searchService.getIsAvailable()) {
+      try {
+        const { ids, estimatedTotalHits } = await searchService.search(search, {
+          type: type || undefined,
+          limit: parsedLimit,
+          offset: skip,
+          sort: sort && sort !== 'name' ? sort : undefined
+        });
+
+        const wines = await WineDefinition.find({ _id: { $in: ids } })
+          .populate('country', 'name')
+          .populate('region', 'name')
+          .populate('grapes', 'name');
+
+        // Preserve Meilisearch relevance order
+        const idOrder = new Map(ids.map((id, i) => [id, i]));
+        wines.sort((a, b) => idOrder.get(a._id.toString()) - idOrder.get(b._id.toString()));
+
+        return res.json({
+          wines,
+          total: estimatedTotalHits,
+          page: parsedPage,
+          pages: Math.ceil(estimatedTotalHits / parsedLimit)
+        });
+      } catch (err) {
+        console.warn('Meilisearch unavailable, falling back to MongoDB:', err.message);
+      }
     }
 
-    const skip = (parseInt(page) - 1) * parseInt(limit);
+    // MongoDB fallback: $text index when searching (name + producer), regex otherwise
+    const conditions = [];
+    if (search) {
+      conditions.push({ $text: { $search: search } });
+    }
+    if (type) {
+      conditions.push({ type });
+    }
+    const query = conditions.length === 0 ? {}
+      : conditions.length === 1 ? conditions[0]
+      : { $and: conditions };
+
+    // When using $text, sort by relevance score first
+    const mongoSort = search ? { score: { $meta: 'textScore' }, ...sortObj } : sortObj;
 
     const [wines, total] = await Promise.all([
       WineDefinition.find(query)
+        .select(search ? { score: { $meta: 'textScore' } } : {})
         .populate('country', 'name')
         .populate('region', 'name')
         .populate('grapes', 'name')
-        .sort({ name: 1 })
+        .sort(mongoSort)
         .skip(skip)
-        .limit(parseInt(limit)),
+        .limit(parsedLimit),
       WineDefinition.countDocuments(query)
     ]);
 
     res.json({
       wines,
       total,
-      page: parseInt(page),
-      pages: Math.ceil(total / parseInt(limit))
+      page: parsedPage,
+      pages: Math.ceil(total / parsedLimit)
     });
   } catch (error) {
     console.error('List wines error:', error);

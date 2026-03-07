@@ -1,0 +1,9 @@
+# Local development overrides — not used in production (Traefik handles routing there).
+# Docker Compose picks this file up automatically alongside docker-compose.yml.
+services:
+  frontend:
+    ports:
+      - "80:80"
+  backend:
+    ports:
+      - "5000:5000"

@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import GrapePicker from '../components/GrapePicker';
+import ImageUpload from '../components/ImageUpload';
+import ImageGallery from '../components/ImageGallery';
 import './AdminWines.css';
 
 const WINE_TYPES = ['red', 'white', 'rosé', 'sparkling', 'dessert', 'fortified'];
@@ -25,16 +27,18 @@ function AdminWines() {
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [pages, setPages] = useState(1);
-  const [search, setSearch] = useState('');
   const [searchInput, setSearchInput] = useState('');
+  const [search, setSearch] = useState('');
+  const [filters, setFilters] = useState({ type: '', sort: 'name' });
   const [loading, setLoading] = useState(true);
 
   const [showForm, setShowForm] = useState(false);
-  const [editWine, setEditWine] = useState(null); // null = create, object = edit
+  const [editWine, setEditWine] = useState(null);
   const [formData, setFormData] = useState(emptyForm);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
   const [formError, setFormError] = useState(null);
+  const [imageCredit, setImageCredit] = useState('');
 
   // Taxonomy
   const [countries, setCountries] = useState([]);
@@ -42,11 +46,28 @@ function AdminWines() {
   const [appellations, setAppellations] = useState([]);
   const [grapes, setGrapes] = useState([]);
 
+  // Debounce search input → search state (only fires when empty or ≥2 chars)
+  useEffect(() => {
+    if (searchInput.length === 1) return;
+    const timer = setTimeout(() => {
+      setSearch(searchInput);
+      setPage(1);
+    }, 600);
+    return () => clearTimeout(timer);
+  }, [searchInput]);
+
+  // Reset page when filters change
+  useEffect(() => {
+    setPage(1);
+  }, [filters]);
+
   const fetchWines = useCallback(async () => {
     setLoading(true);
     try {
       const params = new URLSearchParams({ page, limit: 50 });
       if (search) params.set('search', search);
+      if (filters.type) params.set('type', filters.type);
+      params.set('sort', filters.sort);
       const res = await apiFetch(`/api/admin/wines?${params}`);
       const data = await res.json();
       if (res.ok) {
@@ -59,7 +80,7 @@ function AdminWines() {
     } finally {
       setLoading(false);
     }
-  }, [apiFetch, page, search]);
+  }, [apiFetch, page, search, filters]);
 
   useEffect(() => {
     fetchWines();
@@ -106,24 +127,19 @@ function AdminWines() {
     }
   };
 
-  const handleSearch = (e) => {
-    e.preventDefault();
-    setSearch(searchInput);
-    setPage(1);
-  };
-
   const openCreate = () => {
     setEditWine(null);
     setFormData(emptyForm);
     setRegions([]);
     setAppellations([]);
     setFormError(null);
+    setImageCredit('');
     setShowForm(true);
   };
 
   const openEdit = async (wine) => {
     setFormError(null);
-    // Fetch full wine so we have ObjectId arrays for grapes
+    setImageCredit('');
     try {
       const res = await apiFetch(`/api/admin/wines/${wine._id}`);
       const data = await res.json();
@@ -158,6 +174,7 @@ function AdminWines() {
     setEditWine(null);
     setFormData(emptyForm);
     setFormError(null);
+    setImageCredit('');
   };
 
   const handleSubmit = async (e) => {
@@ -176,9 +193,7 @@ function AdminWines() {
         image: formData.image.trim() || null
       };
 
-      const url = editWine
-        ? `/api/admin/wines/${editWine._id}`
-        : '/api/admin/wines';
+      const url = editWine ? `/api/admin/wines/${editWine._id}` : '/api/admin/wines';
       const method = editWine ? 'PUT' : 'POST';
 
       const res = await apiFetch(url, {
@@ -215,6 +230,14 @@ function AdminWines() {
     }
   };
 
+  const clearFilters = () => {
+    setSearchInput('');
+    setFilters({ type: '', sort: 'name' });
+    setPage(1);
+  };
+
+  const hasActiveFilters = searchInput || filters.type || filters.sort !== 'name';
+
   return (
     <div className="admin-wines-page">
       <div className="page-header">
@@ -227,8 +250,8 @@ function AdminWines() {
         </button>
       </div>
 
-      {/* Search bar */}
-      <form className="wines-search" onSubmit={handleSearch}>
+      {/* Filter bar */}
+      <div className="wines-filter-bar">
         <input
           type="text"
           value={searchInput}
@@ -236,13 +259,32 @@ function AdminWines() {
           placeholder={t('admin.wines.searchPlaceholder')}
           className="wines-search-input"
         />
-        <button type="submit" className="btn btn-secondary">{t('common.search')}</button>
-        {search && (
-          <button type="button" className="btn btn-secondary" onClick={() => { setSearch(''); setSearchInput(''); setPage(1); }}>
+        <select
+          value={filters.type}
+          onChange={(e) => setFilters(f => ({ ...f, type: e.target.value }))}
+          className="wines-filter-select"
+        >
+          <option value="">{t('wines.allTypes')}</option>
+          {WINE_TYPES.map(type => (
+            <option key={type} value={type}>{type}</option>
+          ))}
+        </select>
+        <select
+          value={filters.sort}
+          onChange={(e) => setFilters(f => ({ ...f, sort: e.target.value }))}
+          className="wines-filter-select"
+        >
+          <option value="name">{t('wines.sortNameAZ')}</option>
+          <option value="-name">{t('wines.sortNameZA')}</option>
+          <option value="producer">{t('wines.sortProducerAZ')}</option>
+          <option value="-createdAt">{t('wines.sortRecentlyAdded')}</option>
+        </select>
+        {hasActiveFilters && (
+          <button type="button" className="btn btn-secondary" onClick={clearFilters}>
             {t('common.clear')}
           </button>
         )}
-      </form>
+      </div>
 
       {error && <div className="alert alert-error">{error}</div>}
 
@@ -324,7 +366,6 @@ function AdminWines() {
                   disabled={!formData.country}
                 >
                   <option value="">{t('admin.wines.selectAppellation')}</option>
-                  {/* Show current value even if it isn't in the taxonomy (e.g. from bulk import) */}
                   {formData.appellation && !appellations.some(a => a.name === formData.appellation) && (
                     <option value={formData.appellation}>{formData.appellation}</option>
                   )}
@@ -354,6 +395,34 @@ function AdminWines() {
                     grapes={grapes}
                     selected={formData.grapes}
                     onChange={(ids) => setFormData({ ...formData, grapes: ids })}
+                  />
+                </div>
+              )}
+
+              {/* Image upload — only available when editing an existing wine */}
+              {editWine && (
+                <div className="form-group wine-image-section" style={{ gridColumn: '1 / -1' }}>
+                  <label>Wine Images</label>
+                  <div className="wine-image-existing">
+                    <ImageGallery wineDefinitionId={editWine._id} size="medium" />
+                  </div>
+                  <div className="form-group image-credit-field">
+                    <label className="image-credit-label">
+                      Image credit
+                      <span className="image-credit-hint">Added to all images uploaded below</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={imageCredit}
+                      onChange={(e) => setImageCredit(e.target.value)}
+                      placeholder="e.g. Courtesy of Vinifera Imports"
+                      maxLength={200}
+                    />
+                  </div>
+                  <ImageUpload
+                    wineDefinitionId={editWine._id}
+                    credit={imageCredit}
+                    onUploadComplete={() => {}}
                   />
                 </div>
               )}

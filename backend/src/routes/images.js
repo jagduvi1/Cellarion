@@ -31,7 +31,7 @@ function validateImageMagicBytes(filePath) {
 
 const router = express.Router();
 
-// POST /api/images/upload - Upload image for a bottle
+// POST /api/images/upload - Upload image for a bottle or wine definition
 router.post('/upload', requireAuth, upload.single('image'), async (req, res) => {
   try {
     if (!req.file) {
@@ -44,7 +44,7 @@ router.post('/upload', requireAuth, upload.single('image'), async (req, res) => 
       return res.status(400).json({ error: 'File content does not match a supported image format (JPEG, PNG, or WebP)' });
     }
 
-    const { bottleId, wineDefinitionId } = req.body;
+    const { bottleId, wineDefinitionId, credit } = req.body;
 
     // Verify bottle ownership if bottleId is provided
     if (bottleId) {
@@ -54,12 +54,19 @@ router.post('/upload', requireAuth, upload.single('image'), async (req, res) => 
       }
     }
 
+    // Only admins can set image credits (wine library images)
+    const isAdmin = req.user.roles && req.user.roles.includes('admin');
+    const sanitizedCredit = (isAdmin && credit && typeof credit === 'string')
+      ? credit.trim().slice(0, 200)
+      : null;
+
     const image = new BottleImage({
       bottle: bottleId || null,
       wineDefinition: wineDefinitionId || null,
       uploadedBy: req.user.id,
       originalUrl: `/api/uploads/originals/${req.file.filename}`,
-      status: 'uploaded'
+      status: 'uploaded',
+      credit: sanitizedCredit || null
     });
 
     await image.save();

@@ -32,6 +32,9 @@ function ImageCarousel({ images, size = 'medium' }) {
         {currentImage.status === 'processing' && (
           <div className="carousel-processing">Processing...</div>
         )}
+        {currentImage.credit && (
+          <div className="carousel-credit">© {currentImage.credit}</div>
+        )}
       </div>
 
       {images.length > 1 && (
