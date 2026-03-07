@@ -4,6 +4,7 @@ const helmet = require('helmet');
 const path = require('path');
 const rateLimit = require('express-rate-limit');
 const cookieParser = require('cookie-parser');
+const { requireAuth } = require('./middleware/auth');
 const healthRoute = require('./routes/health');
 const authRoute = require('./routes/auth');
 const usersRoute = require('./routes/users');
@@ -93,8 +94,8 @@ const writeLimiter = rateLimit({
 });
 app.use('/api/', writeLimiter);
 
-// Serve uploaded images (restricted to image file extensions only)
-app.use('/api/uploads', (req, res, next) => {
+// Serve uploaded images (auth required, restricted to image file extensions)
+app.use('/api/uploads', requireAuth, (req, res, next) => {
   const ext = path.extname(req.path).toLowerCase();
   const allowedExts = ['.jpg', '.jpeg', '.png', '.webp'];
   if (!allowedExts.includes(ext)) {
