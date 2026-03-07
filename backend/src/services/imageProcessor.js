@@ -4,6 +4,15 @@ const { PROCESSED_DIR } = require('../config/upload');
 const BottleImage = require('../models/BottleImage');
 
 const REMBG_URL = process.env.REMBG_URL || 'http://rembg:5000';
+const UPLOADS_ROOT = '/app/uploads';
+
+function safeUploadPath(relativePart) {
+  const resolved = path.resolve(UPLOADS_ROOT, relativePart);
+  if (!resolved.startsWith(UPLOADS_ROOT + path.sep) && resolved !== UPLOADS_ROOT) {
+    throw new Error('Path traversal blocked');
+  }
+  return resolved;
+}
 
 async function processImage(imageId) {
   const image = await BottleImage.findById(imageId);
@@ -15,7 +24,7 @@ async function processImage(imageId) {
 
   try {
     // Read original file from disk
-    const originalPath = path.join('/app/uploads', image.originalUrl.replace('/api/uploads/', ''));
+    const originalPath = safeUploadPath(image.originalUrl.replace('/api/uploads/', ''));
     const fileBuffer = fs.readFileSync(originalPath);
 
     // Build multipart form data using Node 20 built-in fetch
@@ -66,7 +75,7 @@ async function reprocessAllImages() {
 
   for (const image of images) {
     try {
-      const originalPath = path.join('/app/uploads', image.originalUrl.replace('/api/uploads/', ''));
+      const originalPath = safeUploadPath(image.originalUrl.replace('/api/uploads/', ''));
       if (!fs.existsSync(originalPath)) {
         console.log(`Skipping ${image._id}: original file not found`);
         continue;

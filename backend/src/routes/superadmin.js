@@ -209,17 +209,11 @@ router.get('/services', async (req, res) => {
   // Anthropic API
   results.anthropic = {
     configured: !!process.env.ANTHROPIC_API_KEY,
-    keyPrefix: process.env.ANTHROPIC_API_KEY
-      ? `${process.env.ANTHROPIC_API_KEY.substring(0, 14)}...`
-      : null,
   };
 
   // Voyage AI (embeddings)
   results.voyageAI = {
     configured: !!process.env.VOYAGE_API_KEY,
-    keyPrefix: process.env.VOYAGE_API_KEY
-      ? `${process.env.VOYAGE_API_KEY.substring(0, 10)}...`
-      : null,
   };
 
   // Qdrant (optional)
@@ -230,9 +224,9 @@ router.get('/services', async (req, res) => {
         signal: AbortSignal.timeout(5000),
       });
       const latencyMs = Date.now() - t0;
-      results.qdrant = { status: qdrantRes.ok ? 'ok' : 'error', latencyMs, url: process.env.QDRANT_URL };
+      results.qdrant = { status: qdrantRes.ok ? 'ok' : 'error', latencyMs };
     } catch (e) {
-      results.qdrant = { status: 'error', error: e.message, url: process.env.QDRANT_URL };
+      results.qdrant = { status: 'error', error: e.message };
     }
   } else {
     results.qdrant = { status: 'not_configured' };

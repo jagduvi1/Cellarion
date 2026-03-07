@@ -7,6 +7,7 @@ const Bottle = require('../models/Bottle');
 const Cellar = require('../models/Cellar');
 const { getCellarRole } = require('../utils/cellarAccess');
 const { processImage } = require('../services/imageProcessor');
+const { stripHtml } = require('../utils/sanitize');
 
 // Validate image file by checking magic bytes (first 12 bytes)
 function validateImageMagicBytes(filePath) {
@@ -57,7 +58,7 @@ router.post('/upload', requireAuth, upload.single('image'), async (req, res) => 
     // Only admins can set image credits (wine library images)
     const isAdmin = req.user.roles && req.user.roles.includes('admin');
     const sanitizedCredit = (isAdmin && credit && typeof credit === 'string')
-      ? credit.trim().slice(0, 200)
+      ? stripHtml(credit).slice(0, 200)
       : null;
 
     const image = new BottleImage({

@@ -1,6 +1,7 @@
 const express = require('express');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
+const bcrypt = require('bcryptjs');
 const rateLimit = require('express-rate-limit');
 const User = require('../models/User');
 const { requireAuth } = require('../middleware/auth');
@@ -161,13 +162,14 @@ router.post('/login', authLimiter, async (req, res) => {
       $or: [{ username: username.toLowerCase() }, { email: username.toLowerCase() }]
     });
 
+    // Always run bcrypt.compare to prevent timing-based user enumeration
+    const DUMMY_HASH = '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy';
+    const isMatch = await bcrypt.compare(password, user ? user.password : DUMMY_HASH);
+
     if (!user) {
       logAudit(req, 'auth.login.failed', {}, { identifier: username });
       return res.status(401).json({ error: 'Invalid credentials' });
     }
-
-    // Check password
-    const isMatch = await user.comparePassword(password);
 
     if (!isMatch) {
       logAudit(req, 'auth.login.failed',
