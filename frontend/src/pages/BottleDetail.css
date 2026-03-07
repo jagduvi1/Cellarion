@@ -24,10 +24,33 @@
 }
 
 .bd-wine-image {
-  width: 70px;
-  height: 100px;
+  width: 100px;
+  height: 145px;
   object-fit: contain;
   border-radius: 4px;
+  display: block;
+}
+
+.bd-wine-image-credit {
+  display: none;
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: rgba(0,0,0,0.78);
+  color: #b0a898;
+  font-size: 0.6rem;
+  text-align: center;
+  padding: 2px 4px;
+  border-radius: 0 0 4px 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+}
+
+.bd-wine-image-wrap:hover .bd-wine-image-credit {
+  display: block;
 }
 
 .bd-pending-badge {
@@ -41,8 +64,8 @@
 }
 
 .bd-wine-placeholder {
-  width: 70px;
-  height: 100px;
+  width: 100px;
+  height: 145px;
   border-radius: 4px;
   flex-shrink: 0;
 }

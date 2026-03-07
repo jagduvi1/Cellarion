@@ -21,7 +21,16 @@ def remove_bg():
     input_bytes = input_file.read()
 
     try:
-        output_bytes = remove(input_bytes)
+        # Check if the image already has a transparent background.
+        # If >5% of pixels are already transparent, skip rembg and use as-is.
+        pre = Image.open(io.BytesIO(input_bytes)).convert("RGBA")
+        pre_alpha = np.array(pre)[:, :, 3]
+        already_transparent = (pre_alpha < 10).mean() > 0.05
+
+        if already_transparent:
+            output_bytes = input_bytes
+        else:
+            output_bytes = remove(input_bytes)
 
         # Auto-crop transparent borders so the bottle fills the image.
         # Use a numpy alpha-threshold (>10) to ignore the near-invisible fringe

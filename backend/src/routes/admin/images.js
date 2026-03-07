@@ -75,7 +75,7 @@ router.put('/:id/approve', async (req, res) => {
         await image.save();
 
         const imageUrl = image.processedUrl || image.originalUrl;
-        await WineDefinition.findByIdAndUpdate(wineDefId, { image: imageUrl });
+        await WineDefinition.findByIdAndUpdate(wineDefId, { image: imageUrl, imageCredit: image.credit || null });
         searchService.indexWine(wineDefId);
       }
     }
@@ -182,7 +182,7 @@ router.put('/:id/assign-to-wine', async (req, res) => {
 
     // Update WineDefinition.image to the processed URL (or original if not processed)
     const imageUrl = image.processedUrl || image.originalUrl;
-    await WineDefinition.findByIdAndUpdate(wineDefId, { image: imageUrl });
+    await WineDefinition.findByIdAndUpdate(wineDefId, { image: imageUrl, imageCredit: image.credit || null });
 
     // Update search index
     searchService.indexWine(wineDefId);

@@ -16,6 +16,10 @@ router.get('/', async (req, res) => {
   try {
     const { search, plan, role, limit = 50, offset = 0 } = req.query;
 
+    // Validate and clamp pagination to prevent DoS via huge queries
+    const limitNum = Math.min(Math.max(parseInt(limit, 10) || 50, 1), 200);
+    const offsetNum = Math.max(parseInt(offset, 10) || 0, 0);
+
     const filter = {};
 
     if (typeof search === 'string' && search) {
@@ -23,20 +27,23 @@ router.get('/', async (req, res) => {
       const re = new RegExp(escaped, 'i');
       filter.$or = [{ username: re }, { email: re }];
     }
-    if (plan && PLAN_NAMES.includes(plan)) {
-      filter.plan = plan;
+    // Derive values from allowlist constants to ensure only safe values reach the query
+    const validPlan = PLAN_NAMES.find(p => p === plan);
+    if (validPlan) {
+      filter.plan = validPlan;
     }
-    if (role && VALID_ROLES.includes(role)) {
+    const validRole = VALID_ROLES.find(r => r === role);
+    if (validRole) {
       // Match users who have this role in their roles array
-      filter.roles = role;
+      filter.roles = validRole;
     }
 
     const [users, total] = await Promise.all([
       User.find(filter)
         .select('username email roles plan planStartedAt planExpiresAt trialEligible createdAt')
         .sort({ createdAt: -1 })
-        .skip(Number(offset))
-        .limit(Number(limit)),
+        .skip(offsetNum)
+        .limit(limitNum),
       User.countDocuments(filter),
     ]);
 

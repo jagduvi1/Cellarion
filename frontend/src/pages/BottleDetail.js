@@ -175,6 +175,7 @@ function BottleDetail() {
                 className="bd-wine-image"
                 onError={e => { e.target.style.display = 'none'; }}
               />
+              {wine?.imageCredit && <span className="bd-wine-image-credit">{wine.imageCredit}</span>}
               {pendingImage && !wine?.image && (
                 <span className="bd-pending-badge">{t('bottleDetail.pendingReview', 'Pending review')}</span>
               )}

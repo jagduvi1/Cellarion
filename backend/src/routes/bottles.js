@@ -10,6 +10,7 @@ const { getCellarRole } = require('../utils/cellarAccess');
 const { logAudit } = require('../services/audit');
 const { getOrCreateDailySnapshot, getSnapshotForDate } = require('../utils/exchangeRates');
 const { isValidRating, VALID_SCALES } = require('../utils/ratingUtils');
+const { embedSinglePair } = require('../services/embeddingJob');
 
 // Strip HTML tags from user-supplied text to prevent XSS in rendered output
 const stripHtml = (str) => (str ? str.replace(/<[^>]*>/g, '').trim() : str);
@@ -118,6 +119,9 @@ router.post('/', async (req, res) => {
       { type: 'bottle', id: bottle._id, cellarId: cellarDoc._id },
       { wineName: bottle.wineDefinition?.name, vintage: bottle.vintage }
     );
+
+    // Fire-and-forget: embed this (wine, vintage) pair for AI chat
+    embedSinglePair(wineDefinition, bottle.vintage).catch(() => {});
 
     res.status(201).json({ bottle });
   } catch (error) {
@@ -259,6 +263,12 @@ router.put('/:id', async (req, res) => {
         { type: 'bottle', id: bottle._id, cellarId: bottle.cellar },
         { changes }
       );
+    }
+
+    // If vintage changed, the old (wine, oldVintage) embedding is still in Qdrant
+    // but won't match this bottle anymore (user changed the year). Embed the new pair.
+    if (changes.vintage) {
+      embedSinglePair(bottle.wineDefinition._id || bottle.wineDefinition, bottle.vintage).catch(() => {});
     }
 
     res.json({ bottle });
