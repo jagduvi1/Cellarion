@@ -315,6 +315,18 @@ function TabServices() {
           </div>
         </div>
 
+        {/* Voyage AI */}
+        <div className="sa-service">
+          <StatusDot status={data.voyageAI?.configured ? 'ok' : 'not_configured'} />
+          <div>
+            <div className="sa-service-name">Voyage AI</div>
+            <div className="sa-service-status">{data.voyageAI?.configured ? 'Configured' : 'Not configured'}</div>
+            {data.voyageAI?.keyPrefix && (
+              <div className="sa-service-latency">{data.voyageAI.keyPrefix}</div>
+            )}
+          </div>
+        </div>
+
         {/* Mailgun */}
         <div className="sa-service">
           <StatusDot status={data.mailgun?.configured ? 'ok' : 'not_configured'} />
@@ -786,12 +798,227 @@ function TabAudit() {
 // Root component
 // ─────────────────────────────────────────────────────────────────────────────
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Tab: AI & Embeddings
+// ─────────────────────────────────────────────────────────────────────────────
+
+function TabAI() {
+  const { data, loading, error, reload } = useApi('/api/superadmin/ai');
+
+  if (loading) return <div className="sa-loading">Loading AI pipeline stats...</div>;
+  if (error)   return <div className="sa-error">Error: {error}</div>;
+  if (!data)   return null;
+
+  const { configured, config, job, collection, embeddings } = data;
+
+  const jobPct = job.total > 0 ? Math.round((job.done / job.total) * 100) : 0;
+  const jobStatusColor =
+    job.status === 'running'  ? 'warn' :
+    job.status === 'done'     ? 'accent' :
+    job.status === 'error'    ? 'danger' : '';
+
+  return (
+    <>
+      {/* API keys configured */}
+      <div className="sa-services-grid" style={{ marginBottom: 16 }}>
+        {[
+          { name: 'Voyage AI (Embeddings)', ok: configured.voyageAI },
+          { name: 'Qdrant (Vector DB)',     ok: configured.qdrant },
+          { name: 'Anthropic (AI Chat)',    ok: configured.anthropic },
+        ].map(s => (
+          <div key={s.name} className="sa-service">
+            <StatusDot status={s.ok ? 'ok' : 'not_configured'} />
+            <div>
+              <div className="sa-service-name">{s.name}</div>
+              <div className="sa-service-status">{s.ok ? 'Configured' : 'Not configured'}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="sa-grid-2">
+        {/* AI Config */}
+        <div className="sa-panel">
+          <div className="sa-panel-header"><span className="sa-panel-title">AI Config</span></div>
+          <div className="sa-panel-body">
+            <div className="sa-kv">
+              <div className="sa-kv-row">
+                <span className="sa-kv-key">Chat enabled</span>
+                <span className={`sa-kv-val ${config.chatEnabled ? 'accent' : 'danger'}`}>
+                  {config.chatEnabled ? 'YES' : 'NO'}
+                </span>
+              </div>
+              <div className="sa-kv-row">
+                <span className="sa-kv-key">Embedding model</span>
+                <span className="sa-kv-val">{config.embeddingModel}</span>
+              </div>
+              <div className="sa-kv-row">
+                <span className="sa-kv-key">Active vector index</span>
+                <span className="sa-kv-val accent">wines_{config.vectorIndex}</span>
+              </div>
+              <div className="sa-kv-row">
+                <span className="sa-kv-key">Chat top-K (Qdrant)</span>
+                <span className="sa-kv-val">{config.chatTopK}</span>
+              </div>
+              <div className="sa-kv-row">
+                <span className="sa-kv-key">Max results shown</span>
+                <span className="sa-kv-val">{config.chatMaxResults}</span>
+              </div>
+              <div className="sa-kv-row">
+                <span className="sa-kv-key">Embed batch delay</span>
+                <span className="sa-kv-val">{config.embeddingBatchDelayMs}ms</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Qdrant collection */}
+        <div className="sa-panel">
+          <div className="sa-panel-header">
+            <span className="sa-panel-title">Qdrant Collection</span>
+            <button className="sa-btn" onClick={reload}>Refresh</button>
+          </div>
+          <div className="sa-panel-body">
+            <div className="sa-kv">
+              <div className="sa-kv-row">
+                <span className="sa-kv-key">Collection</span>
+                <span className="sa-kv-val accent">{collection?.name || '—'}</span>
+              </div>
+              <div className="sa-kv-row">
+                <span className="sa-kv-key">Exists</span>
+                <span className={`sa-kv-val ${collection?.exists ? 'accent' : 'danger'}`}>
+                  {collection?.exists ? 'YES' : 'NO'}
+                </span>
+              </div>
+              <div className="sa-kv-row">
+                <span className="sa-kv-key">Vectors stored</span>
+                <span className="sa-kv-val">{num(collection?.vectorCount)}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="sa-grid-2">
+        {/* Embedding job status */}
+        <div className="sa-panel">
+          <div className="sa-panel-header"><span className="sa-panel-title">Embedding Job</span></div>
+          <div className="sa-panel-body">
+            <div className="sa-kv">
+              <div className="sa-kv-row">
+                <span className="sa-kv-key">Status</span>
+                <span className={`sa-kv-val ${jobStatusColor}`}>{job.status?.toUpperCase()}</span>
+              </div>
+              <div className="sa-kv-row">
+                <span className="sa-kv-key">Mode</span>
+                <span className="sa-kv-val">{job.mode || '—'}</span>
+              </div>
+              <div className="sa-kv-row">
+                <span className="sa-kv-key">Model</span>
+                <span className="sa-kv-val">{job.model || '—'}</span>
+              </div>
+              <div className="sa-kv-row">
+                <span className="sa-kv-key">Progress</span>
+                <span className="sa-kv-val">{job.done}/{job.total}</span>
+              </div>
+              <div className="sa-kv-row">
+                <span className="sa-kv-key">Skipped</span>
+                <span className="sa-kv-val">{num(job.skipped)}</span>
+              </div>
+              <div className="sa-kv-row">
+                <span className="sa-kv-key">Errors</span>
+                <span className={`sa-kv-val ${job.errors > 0 ? 'danger' : ''}`}>{num(job.errors)}</span>
+              </div>
+              <div className="sa-kv-row">
+                <span className="sa-kv-key">Started</span>
+                <span className="sa-kv-val mono">{job.startedAt ? ago(job.startedAt) : '—'}</span>
+              </div>
+              <div className="sa-kv-row">
+                <span className="sa-kv-key">Finished</span>
+                <span className="sa-kv-val mono">{job.finishedAt ? ago(job.finishedAt) : '—'}</span>
+              </div>
+            </div>
+            {job.status === 'running' || job.status === 'stopping' ? (
+              <div style={{ marginTop: 12 }}>
+                <div className="sa-bar-label">
+                  <span>Embedding progress</span>
+                  <span>{jobPct}%</span>
+                </div>
+                <div className="sa-bar-track">
+                  <div className="sa-bar-fill warn" style={{ width: `${jobPct}%` }} />
+                </div>
+              </div>
+            ) : null}
+            {job.lastError && (
+              <div className="sa-error" style={{ marginTop: 10, fontSize: 11 }}>
+                Last error: {job.lastError}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* WineEmbedding MongoDB stats */}
+        <div className="sa-panel">
+          <div className="sa-panel-header"><span className="sa-panel-title">WineEmbeddings (MongoDB)</span></div>
+          <div className="sa-panel-body">
+            <div className="sa-kv">
+              <div className="sa-kv-row">
+                <span className="sa-kv-key">Total records</span>
+                <span className="sa-kv-val accent">{num(embeddings.total)}</span>
+              </div>
+              <div className="sa-kv-row">
+                <span className="sa-kv-key">Status: ok</span>
+                <span className="sa-kv-val">{num(embeddings.byStatus?.ok || 0)}</span>
+              </div>
+              <div className="sa-kv-row">
+                <span className="sa-kv-key">Status: error</span>
+                <span className={`sa-kv-val ${embeddings.byStatus?.error > 0 ? 'danger' : ''}`}>
+                  {num(embeddings.byStatus?.error || 0)}
+                </span>
+              </div>
+              <div className="sa-kv-row">
+                <span className="sa-kv-key">Last embedded</span>
+                <span className="sa-kv-val mono">{embeddings.lastEmbeddedAt ? ago(embeddings.lastEmbeddedAt) : '—'}</span>
+              </div>
+            </div>
+
+            {embeddings.byModel?.length > 0 && (
+              <>
+                <div style={{ marginTop: 12, marginBottom: 6, fontSize: 10, color: 'var(--sa-text-dim)', letterSpacing: 1, textTransform: 'uppercase' }}>
+                  By model / index
+                </div>
+                <div className="sa-table-wrap">
+                  <table className="sa-table">
+                    <thead>
+                      <tr><th>Model</th><th>Index</th><th>Count</th></tr>
+                    </thead>
+                    <tbody>
+                      {embeddings.byModel.map((row, i) => (
+                        <tr key={i}>
+                          <td>{row.model}</td>
+                          <td style={{ color: 'var(--sa-accent)' }}>wines_{row.indexVersion}</td>
+                          <td>{num(row.count)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
+
 const TABS = [
-  { id: 'overview', label: 'Overview' },
-  { id: 'services', label: 'Services' },
-  { id: 'database', label: 'Database' },
-  { id: 'users',    label: 'Users' },
-  { id: 'audit',    label: 'Audit Log' },
+  { id: 'overview',   label: 'Overview' },
+  { id: 'services',   label: 'Services' },
+  { id: 'database',   label: 'Database' },
+  { id: 'ai',         label: 'AI & Embeddings' },
+  { id: 'users',      label: 'Users' },
+  { id: 'audit',      label: 'Audit Log' },
 ];
 
 export default function SuperAdmin() {
@@ -872,11 +1099,12 @@ export default function SuperAdmin() {
 
       {/* Tab content — refreshKey forces remount on manual/auto refresh */}
       <div className="sa-content" key={`${tab}-${refreshKey}`}>
-        {tab === 'overview' && <TabOverview />}
-        {tab === 'services' && <TabServices />}
-        {tab === 'database' && <TabDatabase />}
-        {tab === 'users'    && <TabUsers />}
-        {tab === 'audit'    && <TabAudit />}
+        {tab === 'overview'   && <TabOverview />}
+        {tab === 'services'   && <TabServices />}
+        {tab === 'database'   && <TabDatabase />}
+        {tab === 'ai'         && <TabAI />}
+        {tab === 'users'      && <TabUsers />}
+        {tab === 'audit'      && <TabAudit />}
       </div>
 
       {/* Footer */}

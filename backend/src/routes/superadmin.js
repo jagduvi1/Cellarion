@@ -10,6 +10,10 @@ const AuditLog = require('../models/AuditLog');
 const BottleImage = require('../models/BottleImage');
 const WineRequest = require('../models/WineRequest');
 const Rack = require('../models/Rack');
+const WineEmbedding = require('../models/WineEmbedding');
+const embeddingJob = require('../services/embeddingJob');
+const vectorStore = require('../services/vectorStore');
+const aiConfig = require('../config/aiConfig');
 
 const router = express.Router();
 
@@ -209,6 +213,14 @@ router.get('/services', async (req, res) => {
       : null,
   };
 
+  // Voyage AI (embeddings)
+  results.voyageAI = {
+    configured: !!process.env.VOYAGE_API_KEY,
+    keyPrefix: process.env.VOYAGE_API_KEY
+      ? `${process.env.VOYAGE_API_KEY.substring(0, 10)}...`
+      : null,
+  };
+
   // Qdrant (optional)
   if (process.env.QDRANT_URL) {
     try {
@@ -330,6 +342,60 @@ router.get('/users', async (req, res) => {
   } catch (error) {
     console.error('[superadmin] users error:', error);
     res.status(500).json({ error: 'Failed to load users' });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// GET /api/superadmin/ai
+// AI pipeline status: config, embedding job, Qdrant collection, WineEmbedding stats
+// ---------------------------------------------------------------------------
+router.get('/ai', async (req, res) => {
+  try {
+    const cfg = aiConfig.get();
+    const jobStatus = embeddingJob.getStatus();
+
+    // WineEmbedding stats from MongoDB
+    const [totalEmbeddings, byStatusRaw, byModelRaw, latestEmbedding] = await Promise.all([
+      WineEmbedding.countDocuments(),
+      WineEmbedding.aggregate([{ $group: { _id: '$status', count: { $sum: 1 } } }]),
+      WineEmbedding.aggregate([
+        { $group: { _id: { model: '$model', indexVersion: '$indexVersion' }, count: { $sum: 1 } } },
+        { $sort: { '_id.indexVersion': -1 } },
+      ]),
+      WineEmbedding.findOne().sort({ embeddedAt: -1 }).select('embeddedAt model indexVersion').lean(),
+    ]);
+
+    // Qdrant collection info for the active index
+    let collectionInfo = null;
+    try {
+      collectionInfo = await vectorStore.collectionInfo(cfg.vectorIndex);
+    } catch {
+      collectionInfo = { exists: false, vectorCount: 0, name: `wines_${cfg.vectorIndex}` };
+    }
+
+    res.json({
+      configured: {
+        voyageAI:  !!process.env.VOYAGE_API_KEY,
+        qdrant:    !!process.env.QDRANT_URL,
+        anthropic: !!process.env.ANTHROPIC_API_KEY,
+      },
+      config: cfg,
+      job: jobStatus,
+      collection: collectionInfo,
+      embeddings: {
+        total: totalEmbeddings,
+        byStatus: Object.fromEntries(byStatusRaw.map(d => [d._id || 'unknown', d.count])),
+        byModel: byModelRaw.map(d => ({
+          model: d._id.model,
+          indexVersion: d._id.indexVersion,
+          count: d.count,
+        })),
+        lastEmbeddedAt: latestEmbedding?.embeddedAt || null,
+      },
+    });
+  } catch (error) {
+    console.error('[superadmin] ai error:', error);
+    res.status(500).json({ error: 'Failed to load AI stats' });
   }
 });
 
