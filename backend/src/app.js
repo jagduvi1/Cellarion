@@ -25,6 +25,7 @@ const sommMaturityRoute = require('./routes/somm/maturity');
 const sommPricesRoute  = require('./routes/somm/prices');
 const notificationsRoute = require('./routes/notifications');
 const statsRoute = require('./routes/stats');
+const superAdminRoute = require('./routes/superadmin');
 const rateLimitsConfig = require('./config/rateLimits');
 const { logAudit } = require('./services/audit');
 
@@ -119,6 +120,7 @@ app.use('/api/somm/maturity', sommMaturityRoute);
 app.use('/api/somm/prices',  sommPricesRoute);
 app.use('/api/notifications', notificationsRoute);
 app.use('/api/stats', statsRoute);
+app.use('/api/superadmin', superAdminRoute);
 
 // 404 handler
 app.use((req, res) => {

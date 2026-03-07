@@ -4,6 +4,7 @@ const crypto = require('crypto');
 const rateLimit = require('express-rate-limit');
 const User = require('../models/User');
 const { requireAuth } = require('../middleware/auth');
+const { checkIsSuperAdmin } = require('../middleware/superAdmin');
 const { logAudit } = require('../services/audit');
 const rateLimitsConfig = require('../config/rateLimits');
 const { sendVerificationEmail, sendPasswordResetEmail, EMAIL_VERIFICATION_ENABLED } = require('../services/mailgun');
@@ -336,7 +337,12 @@ router.get('/me', requireAuth, async (req, res) => {
       return res.status(404).json({ error: 'User not found' });
     }
 
-    res.json({ user: user.toJSON() });
+    const userJson = user.toJSON();
+    // Stamp isSuperAdmin: true only when email + IP conditions are both satisfied.
+    // This controls whether the super admin nav link appears in the frontend.
+    userJson.isSuperAdmin = checkIsSuperAdmin(req, user.email);
+
+    res.json({ user: userJson });
   } catch (error) {
     console.error('Get user error:', error);
     res.status(500).json({ error: 'Failed to get user' });

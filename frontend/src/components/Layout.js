@@ -107,6 +107,20 @@ function Layout({ children }) {
               </>
             )}
 
+            {user.isSuperAdmin && (
+              <>
+                <div className="navbar-divider" />
+                <Link
+                  to="/superadmin"
+                  className={`admin-link ${isActive('/superadmin') ? 'active' : ''}`}
+                  onClick={closeMenu}
+                  title="System Monitor"
+                >
+                  System Monitor
+                </Link>
+              </>
+            )}
+
             {roles.includes('admin') && (
               <>
                 <div className="navbar-divider" />

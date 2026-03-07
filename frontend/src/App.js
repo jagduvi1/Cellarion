@@ -26,6 +26,7 @@ import SommPrices from './pages/SommPrices';
 import Settings from './pages/Settings';
 import Plans from './pages/Plans';
 import Statistics from './pages/Statistics';
+import SuperAdmin from './pages/SuperAdmin';
 import VerifyEmail from './pages/VerifyEmail';
 import ResetPassword from './pages/ResetPassword';
 import './styles/common.css';
@@ -237,6 +238,16 @@ function AppRoutes() {
         element={
           <ProtectedRoute requireAdmin>
             <Layout><AdminImportWines /></Layout>
+          </ProtectedRoute>
+        }
+      />
+
+      {/* Super Admin — rendered without Layout (own full-screen shell) */}
+      <Route
+        path="/superadmin"
+        element={
+          <ProtectedRoute requireSuperAdmin>
+            <SuperAdmin />
           </ProtectedRoute>
         }
       />
