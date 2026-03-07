@@ -197,9 +197,12 @@ router.post('/login', authLimiter, async (req, res) => {
       { username: user.username }
     );
 
+    const loginUserJson = user.toJSON();
+    loginUserJson.isSuperAdmin = checkIsSuperAdmin(req, user.email);
+
     res.json({
       token: accessToken,
-      user: user.toJSON()
+      user: loginUserJson
     });
   } catch (error) {
     console.error('Login error:', error);

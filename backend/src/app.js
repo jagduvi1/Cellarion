@@ -34,8 +34,10 @@ const { logAudit } = require('./services/audit');
 
 const app = express();
 
-// Trust first proxy — required for express-rate-limit behind Docker/nginx
-app.set('trust proxy', 1);
+// Trust two proxy hops: Traefik → frontend nginx → backend.
+// With only 1, req.ip resolves to the Docker bridge gateway instead of the
+// real client IP, breaking SUPER_ADMIN_IPS and per-IP rate limiting.
+app.set('trust proxy', 2);
 
 // Security headers — explicit config for production SaaS
 app.use(helmet({
