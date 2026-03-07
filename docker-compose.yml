@@ -24,6 +24,17 @@ services:
       timeout: 5s
       retries: 5
 
+  qdrant:
+    image: qdrant/qdrant:v1.9.0
+    container_name: cellarion-qdrant
+    volumes:
+      - qdrant-data:/qdrant/storage
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:6333/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   backend:
     build: ./backend
     container_name: cellarion-backend
@@ -41,12 +52,16 @@ services:
       - MAILGUN_FROM=${MAILGUN_FROM:-}
       - MAILGUN_API_URL=${MAILGUN_API_URL:-}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - VOYAGE_API_KEY=${VOYAGE_API_KEY:-}
+      - QDRANT_URL=http://qdrant:6333
     volumes:
       - image-data:/app/uploads
     depends_on:
       mongo:
         condition: service_healthy
       meilisearch:
+        condition: service_healthy
+      qdrant:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:5000/api/health"]
@@ -89,6 +104,7 @@ services:
 volumes:
   mongo-data:
   meili-data:
+  qdrant-data:
   image-data:
 
 networks:

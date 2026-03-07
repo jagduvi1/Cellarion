@@ -25,7 +25,10 @@ const sommMaturityRoute = require('./routes/somm/maturity');
 const sommPricesRoute  = require('./routes/somm/prices');
 const notificationsRoute = require('./routes/notifications');
 const statsRoute = require('./routes/stats');
+const chatRoute = require('./routes/chat');
+const adminAiRoute = require('./routes/admin/ai');
 const rateLimitsConfig = require('./config/rateLimits');
+const aiConfig = require('./config/aiConfig');
 const { logAudit } = require('./services/audit');
 
 const app = express();
@@ -119,6 +122,8 @@ app.use('/api/somm/maturity', sommMaturityRoute);
 app.use('/api/somm/prices',  sommPricesRoute);
 app.use('/api/notifications', notificationsRoute);
 app.use('/api/stats', statsRoute);
+app.use('/api/chat', chatRoute);
+app.use('/api/admin/ai', adminAiRoute);
 
 // 404 handler
 app.use((req, res) => {
@@ -128,6 +133,11 @@ app.use((req, res) => {
 // Load rate limit configuration from DB on startup (non-blocking; falls back to defaults)
 rateLimitsConfig.load().catch(err =>
   console.warn('[rateLimits] Startup load failed, using defaults:', err.message)
+);
+
+// Load AI feature-flag configuration from DB on startup
+aiConfig.load().catch(err =>
+  console.warn('[aiConfig] Startup load failed, using defaults:', err.message)
 );
 
 module.exports = app;
