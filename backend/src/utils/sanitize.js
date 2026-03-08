@@ -3,7 +3,13 @@
  * Returns the original value unchanged if it is null/undefined/empty.
  */
 function stripHtml(str) {
-  return str ? str.replace(/<[^>]*>/g, '').trim() : str;
+  if (!str) return str;
+  let prev;
+  do {
+    prev = str;
+    str = str.replace(/<[^>]*>/g, '');
+  } while (str !== prev);
+  return str.trim();
 }
 
 /**
