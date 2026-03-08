@@ -13,7 +13,7 @@ const features = [
   {
     icon: '🗄️',
     title: 'Cellar & Rack Management',
-    desc: 'Organize bottles across multiple cellars and visualize your physical racks on an interactive 8×4 grid. Know exactly where each bottle lives.',
+    desc: 'Organize bottles across multiple cellars and visualize your physical racks on an interactive grid. Know exactly where each bottle lives.',
   },
   {
     icon: '⏰',
