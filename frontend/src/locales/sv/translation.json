@@ -225,7 +225,17 @@
     "bottlePhotos": "Flaskfoton",
     "photosHint": "Ta ett foto eller ladda upp en bild. Bakgrunden tas bort automatiskt.",
     "photosNotice": "Bilder granskas av en administratör innan de läggs till i det delade vinregistret, där de visas för alla Cellarion-användare.",
-    "addBottleBtn": "Lägg till flaska i källaren"
+    "addBottleBtn": "Lägg till flaska i källaren",
+    "dateAdded": "Datum tillagd",
+    "dateAddedHint": "När denna flaska lades till i din källare. Standard är idag.",
+    "addToHistory": "Lägg till i historik",
+    "addToHistoryHint": "Lägg till denna flaska direkt i din historik (redan drucken, bortskänkt eller såld).",
+    "consumedDate": "Datum",
+    "consumedReason": "Anledning",
+    "consumedNote": "Anteckning",
+    "consumedNotePlaceholder": "Smaknoteringar, tillfälle, etc.",
+    "consumedRating": "Betyg vid konsumtion",
+    "addToHistoryBtn": "Lägg till i historik"
   },
 
   "bottleDetail": {

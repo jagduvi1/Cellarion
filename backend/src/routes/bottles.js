@@ -46,7 +46,15 @@ router.post('/', async (req, res) => {
       rating,
       ratingScale,
       drinkFrom,
-      drinkBefore
+      drinkBefore,
+      // Migration helpers — let users backdate bottles or add directly to history
+      dateAdded,
+      addToHistory,
+      consumedAt,
+      consumedReason,
+      consumedNote,
+      consumedRating,
+      consumedRatingScale
     } = req.body;
 
     if (!cellar || !wineDefinition) {
@@ -59,6 +67,16 @@ router.post('/', async (req, res) => {
 
     const { rating: resolvedRating, ratingScale: resolvedRatingScale, error: ratingError } = resolveRating(rating, ratingScale);
     if (ratingError) return res.status(400).json({ error: ratingError });
+
+    // Validate add-to-history fields
+    if (addToHistory) {
+      if (consumedReason && !CONSUMED_STATUSES.includes(consumedReason)) {
+        return res.status(400).json({ error: 'Invalid consumed reason' });
+      }
+    }
+    const { rating: resolvedConsumedRating, ratingScale: resolvedConsumedScale, error: consumeRatingError } =
+      addToHistory ? resolveRating(consumedRating, consumedRatingScale) : { rating: undefined, ratingScale: undefined, error: null };
+    if (consumeRatingError) return res.status(400).json({ error: consumeRatingError });
 
     // Verify user has editor/owner access to this cellar
     const cellarDoc = await Cellar.findById(cellar);
@@ -101,6 +119,22 @@ router.post('/', async (req, res) => {
       drinkBefore
     });
 
+    // Allow backdating the "added" date for cellar migration
+    if (dateAdded) bottle.createdAt = new Date(dateAdded);
+
+    // Allow creating bottles directly as consumed (add to history)
+    if (addToHistory) {
+      const reason = consumedReason || 'drank';
+      bottle.status = reason;
+      bottle.consumedReason = reason;
+      bottle.consumedAt = consumedAt ? new Date(consumedAt) : new Date();
+      if (consumedNote) bottle.consumedNote = stripHtml(consumedNote);
+      if (resolvedConsumedRating !== undefined) {
+        bottle.consumedRating = resolvedConsumedRating;
+        bottle.consumedRatingScale = resolvedConsumedScale;
+      }
+    }
+
     await bottle.save();
     await bottle.populate(WINE_POPULATE);
 
@@ -120,7 +154,7 @@ router.post('/', async (req, res) => {
       }
     }
 
-    logAudit(req, 'bottle.add',
+    logAudit(req, addToHistory ? 'bottle.addToHistory' : 'bottle.add',
       { type: 'bottle', id: bottle._id, cellarId: cellarDoc._id },
       { wineName: bottle.wineDefinition?.name, vintage: bottle.vintage }
     );

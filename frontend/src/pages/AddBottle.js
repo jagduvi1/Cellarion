@@ -33,7 +33,16 @@ function AddBottle() {
     rating: '',
     ratingScale: user?.preferences?.ratingScale || '5',
     drinkFrom: '',
-    drinkBefore: ''
+    drinkBefore: '',
+    dateAdded: ''
+  });
+  const [addToHistory, setAddToHistory] = useState(false);
+  const [historyData, setHistoryData] = useState({
+    consumedAt: '',
+    consumedReason: 'drank',
+    consumedNote: '',
+    consumedRating: '',
+    consumedRatingScale: user?.preferences?.ratingScale || '5'
   });
   const [uploadedImages, setUploadedImages] = useState([]);
 
@@ -178,6 +187,15 @@ function AddBottle() {
         ratingScale: bottleData.ratingScale || '5',
         drinkFrom:   bottleData.drinkFrom   ? `${bottleData.drinkFrom}-01`          : undefined,
         drinkBefore: bottleData.drinkBefore ? monthToLastDay(bottleData.drinkBefore) : undefined,
+        dateAdded: bottleData.dateAdded || undefined,
+        addToHistory: addToHistory || undefined,
+        ...(addToHistory ? {
+          consumedAt: historyData.consumedAt || undefined,
+          consumedReason: historyData.consumedReason,
+          consumedNote: historyData.consumedNote || undefined,
+          consumedRating: historyData.consumedRating ? parseFloat(historyData.consumedRating) : undefined,
+          consumedRatingScale: historyData.consumedRatingScale || '5'
+        } : {})
       };
 
       // Create N individual bottle records
@@ -474,6 +492,16 @@ function AddBottle() {
                   placeholder="https://..."
                 />
               </div>
+
+              <div className="form-group">
+                <label>{t('addBottle.dateAdded')}</label>
+                <input
+                  type="date"
+                  value={bottleData.dateAdded}
+                  onChange={(e) => setBottleData({ ...bottleData, dateAdded: e.target.value })}
+                />
+                <p className="help-text">{t('addBottle.dateAddedHint')}</p>
+              </div>
             </div>
 
             <div className="form-group">
@@ -511,6 +539,67 @@ function AddBottle() {
               </div>
             </div>
 
+            <div className="form-group add-to-history-section">
+              <label className="toggle-label">
+                <input
+                  type="checkbox"
+                  checked={addToHistory}
+                  onChange={(e) => setAddToHistory(e.target.checked)}
+                />
+                <span>{t('addBottle.addToHistory')}</span>
+              </label>
+              <p className="help-text">{t('addBottle.addToHistoryHint')}</p>
+
+              {addToHistory && (
+                <div className="history-fields">
+                  <div className="grid-2">
+                    <div className="form-group">
+                      <label>{t('addBottle.consumedReason')}</label>
+                      <select
+                        value={historyData.consumedReason}
+                        onChange={(e) => setHistoryData({ ...historyData, consumedReason: e.target.value })}
+                      >
+                        <option value="drank">{t('history.reasonDrank')}</option>
+                        <option value="gifted">{t('history.reasonGifted')}</option>
+                        <option value="sold">{t('history.reasonSold')}</option>
+                        <option value="other">{t('history.reasonOther')}</option>
+                      </select>
+                    </div>
+
+                    <div className="form-group">
+                      <label>{t('addBottle.consumedDate')}</label>
+                      <input
+                        type="date"
+                        value={historyData.consumedAt}
+                        onChange={(e) => setHistoryData({ ...historyData, consumedAt: e.target.value })}
+                      />
+                    </div>
+
+                    <div className="form-group">
+                      <label>{t('addBottle.consumedRating')}</label>
+                      <RatingInput
+                        value={historyData.consumedRating}
+                        scale={historyData.consumedRatingScale}
+                        onChange={v => setHistoryData({ ...historyData, consumedRating: v ?? '' })}
+                        onScaleChange={s => setHistoryData({ ...historyData, consumedRatingScale: s, consumedRating: '' })}
+                        allowScaleOverride
+                      />
+                    </div>
+                  </div>
+
+                  <div className="form-group">
+                    <label>{t('addBottle.consumedNote')}</label>
+                    <textarea
+                      value={historyData.consumedNote}
+                      onChange={(e) => setHistoryData({ ...historyData, consumedNote: e.target.value })}
+                      placeholder={t('addBottle.consumedNotePlaceholder')}
+                      rows="3"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+
             <div className="form-group">
               <label>{t('addBottle.bottlePhotos')}</label>
               <p className="help-text">
@@ -530,7 +619,7 @@ function AddBottle() {
 
             <div className="form-actions">
               <button type="submit" className="btn btn-success">
-                {t('addBottle.addBottleBtn')}
+                {addToHistory ? t('addBottle.addToHistoryBtn') : t('addBottle.addBottleBtn')}
               </button>
               <button
                 type="button"

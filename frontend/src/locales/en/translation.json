@@ -225,7 +225,17 @@
     "bottlePhotos": "Bottle Photos",
     "photosHint": "Take a photo or upload an image. Background will be automatically removed.",
     "photosNotice": "Images are reviewed by an admin before being added to the shared wine registry, where they will be visible to all Cellarion users.",
-    "addBottleBtn": "Add Bottle to Cellar"
+    "addBottleBtn": "Add Bottle to Cellar",
+    "dateAdded": "Date Added",
+    "dateAddedHint": "When this bottle was added to your cellar. Defaults to today.",
+    "addToHistory": "Add to History",
+    "addToHistoryHint": "Add this bottle directly to your history (already consumed, gifted, or sold).",
+    "consumedDate": "Date",
+    "consumedReason": "Reason",
+    "consumedNote": "Note",
+    "consumedNotePlaceholder": "Tasting notes, occasion, etc.",
+    "consumedRating": "Rating at Consumption",
+    "addToHistoryBtn": "Add to History"
   },
 
   "bottleDetail": {

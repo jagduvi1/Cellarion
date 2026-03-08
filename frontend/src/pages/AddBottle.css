@@ -330,6 +330,36 @@
   line-height: 1.4;
 }
 
+/* ── Add to History ── */
+.add-to-history-section {
+  background: #1a1a2e;
+  border: 1px solid #2a2a4a;
+  border-radius: 8px;
+  padding: 1rem 1.25rem;
+}
+
+.toggle-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  font-weight: 600;
+  color: #E8DFD0;
+}
+
+.toggle-label input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: #7B9E88;
+  cursor: pointer;
+}
+
+.history-fields {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid #2a2a4a;
+}
+
 /* ── Mobile ── */
 @media (max-width: 768px) {
   .step span {
