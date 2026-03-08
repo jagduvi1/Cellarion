@@ -1503,6 +1503,54 @@ function TabAI() {
           </div>
         </div>
       </div>
+      {/* Chat event log (errors / fallbacks) */}
+      {data.chatEventLog?.length > 0 && (
+        <div className="sa-panel" style={{ marginBottom: 16 }}>
+          <div className="sa-panel-header">
+            <span className="sa-panel-title">Chat Error Log</span>
+            <span style={{ fontSize: 11, color: 'var(--sa-text-dim)' }}>Last {data.chatEventLog.length} events (in-memory, resets on restart)</span>
+          </div>
+          <div className="sa-panel-body">
+            <div className="sa-table-wrap">
+              <table className="sa-table">
+                <thead>
+                  <tr>
+                    <th>Time</th>
+                    <th>Phase</th>
+                    <th>Primary model</th>
+                    <th>Status</th>
+                    <th>Error</th>
+                    <th>Fallback</th>
+                    <th>Result</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.chatEventLog.map((e, i) => (
+                    <tr key={i}>
+                      <td style={{ whiteSpace: 'nowrap' }}>{ago(e.timestamp)}</td>
+                      <td>{e.phase}</td>
+                      <td style={{ fontSize: 11 }}>{e.primaryModel}</td>
+                      <td className={e.status >= 500 ? 'danger' : ''}>{e.status || '—'}</td>
+                      <td style={{ fontSize: 11, maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={e.errorMessage || ''}>
+                        {e.errorType || e.errorMessage || '—'}
+                      </td>
+                      <td style={{ fontSize: 11 }}>
+                        {e.fallbackAttempted ? e.fallbackModel : <span style={{ color: 'var(--sa-text-dim)' }}>none</span>}
+                      </td>
+                      <td>
+                        {e.fallbackResult === 'ok' && <span className="accent">OK</span>}
+                        {e.fallbackResult === 'failed' && <span className="danger">FAILED</span>}
+                        {!e.fallbackAttempted && <span style={{ color: 'var(--sa-text-dim)' }}>no fallback</span>}
+                        {e.fallbackAttempted && !e.fallbackResult && <span style={{ color: 'var(--sa-text-dim)' }}>—</span>}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
       <ChatModelPanel currentModel={config.chatModel} currentFallback={config.chatModelFallback || null} apiFetch={apiFetch} />
       <SystemPromptPanel prompt={config.chatSystemPrompt || ''} apiFetch={apiFetch} />
       <ChatLimitsPanel limits={config.chatDailyLimits || {}} apiFetch={apiFetch} />

@@ -15,6 +15,7 @@ const ChatUsage = require('../models/ChatUsage');
 const embeddingJob = require('../services/embeddingJob');
 const vectorStore = require('../services/vectorStore');
 const aiConfig = require('../config/aiConfig');
+const aiChat = require('../services/aiChat');
 
 const router = express.Router();
 
@@ -387,6 +388,7 @@ router.get('/ai', async (req, res) => {
         })),
         lastEmbeddedAt: latestEmbedding?.embeddedAt || null,
       },
+      chatEventLog: aiChat.getEventLog(),
     });
   } catch (error) {
     console.error('[superadmin] ai error:', error);

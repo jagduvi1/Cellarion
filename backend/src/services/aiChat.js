@@ -32,6 +32,19 @@ function getClaudeClient() {
   return _claudeClient;
 }
 
+// ── In-memory event log (ring buffer, survives until restart) ─────────────
+const MAX_LOG_ENTRIES = 100;
+const _eventLog = [];
+
+function logEvent(entry) {
+  _eventLog.push({ ...entry, timestamp: new Date().toISOString() });
+  if (_eventLog.length > MAX_LOG_ENTRIES) _eventLog.shift();
+}
+
+function getEventLog() {
+  return _eventLog.slice().reverse(); // newest first
+}
+
 // ── Wine matching ──────────────────────────────────────────────────────────
 
 /**
@@ -128,17 +141,44 @@ function formatWineList(matches) {
  * fails (so the pipeline always continues).
  */
 async function expandQuery(message) {
+  const cfg = aiConfig.get();
+  const client = getClaudeClient();
+  const callParams = {
+    max_tokens: 120,
+    system: `You are a wine search assistant. Rewrite the user's question into rich wine-search terminology: wine style, body, tannins, acidity, typical grape varieties, regions, and food context. Reply with ONLY the expanded search terms as a single line, no explanation, no labels. Always reply in English regardless of the language the user wrote in.`,
+    messages: [{ role: 'user', content: message }]
+  };
   try {
-    const client = getClaudeClient();
-    const response = await client.messages.create({
-      model: aiConfig.get().chatModel,
-      max_tokens: 120,
-      system: `You are a wine search assistant. Rewrite the user's question into rich wine-search terminology: wine style, body, tannins, acidity, typical grape varieties, regions, and food context. Reply with ONLY the expanded search terms as a single line, no explanation, no labels. Always reply in English regardless of the language the user wrote in.`,
-      messages: [{ role: 'user', content: message }]
-    });
+    const response = await client.messages.create({ ...callParams, model: cfg.chatModel });
     const expanded = response.content[0]?.text?.trim();
     return expanded || message;
-  } catch {
+  } catch (err) {
+    // If primary failed and a fallback is configured, try the fallback
+    const canFallback = cfg.chatModelFallback && cfg.chatModelFallback !== cfg.chatModel;
+    const isRetryable = [429, 500, 502, 503, 529].includes(err.status)
+      || err.error?.type === 'overloaded_error';
+    logEvent({
+      phase: 'query-expansion',
+      primaryModel: cfg.chatModel,
+      status: err.status || null,
+      errorType: err.error?.type || null,
+      errorMessage: err.message || null,
+      fallbackAttempted: isRetryable && canFallback,
+      fallbackModel: canFallback ? cfg.chatModelFallback : null,
+    });
+    if (isRetryable && canFallback) {
+      try {
+        const response = await client.messages.create({ ...callParams, model: cfg.chatModelFallback });
+        const expanded = response.content[0]?.text?.trim();
+        _eventLog[_eventLog.length - 1].fallbackResult = 'ok';
+        return expanded || message;
+      } catch (fbErr) {
+        _eventLog[_eventLog.length - 1].fallbackResult = 'failed';
+        _eventLog[_eventLog.length - 1].fallbackStatus = fbErr.status || null;
+        _eventLog[_eventLog.length - 1].fallbackError = fbErr.message || null;
+        return message;
+      }
+    }
     // Expansion is best-effort — fall back to original question
     return message;
   }
@@ -183,7 +223,7 @@ async function chat(userId, message, { useQueryExpansion = true } = {}) {
 
   const userMessage = `${message}\n\n---\n${wineSection}`;
 
-  // 5. Call Claude (retry with fallback model on 529 overloaded)
+  // 5. Call Claude (retry with fallback model on transient API errors)
   const client = getClaudeClient();
   const callParams = {
     max_tokens: 600,
@@ -195,10 +235,29 @@ async function chat(userId, message, { useQueryExpansion = true } = {}) {
   try {
     response = await client.messages.create({ ...callParams, model: cfg.chatModel });
   } catch (err) {
-    const isOverloaded = err.status === 529 || err.error?.type === 'overloaded_error';
-    if (isOverloaded && cfg.chatModelFallback && cfg.chatModelFallback !== cfg.chatModel) {
-      console.warn(`[aiChat] Primary model overloaded (${cfg.chatModel}), retrying with fallback: ${cfg.chatModelFallback}`);
-      response = await client.messages.create({ ...callParams, model: cfg.chatModelFallback });
+    const canFallback = cfg.chatModelFallback && cfg.chatModelFallback !== cfg.chatModel;
+    const isRetryable = [429, 500, 502, 503, 529].includes(err.status)
+      || err.error?.type === 'overloaded_error';
+    logEvent({
+      phase: 'chat',
+      primaryModel: cfg.chatModel,
+      status: err.status || null,
+      errorType: err.error?.type || null,
+      errorMessage: err.message || null,
+      fallbackAttempted: isRetryable && canFallback,
+      fallbackModel: canFallback ? cfg.chatModelFallback : null,
+    });
+    if (isRetryable && canFallback) {
+      console.warn(`[aiChat] Primary model failed (${cfg.chatModel}, status ${err.status}), retrying with fallback: ${cfg.chatModelFallback}`);
+      try {
+        response = await client.messages.create({ ...callParams, model: cfg.chatModelFallback });
+        _eventLog[_eventLog.length - 1].fallbackResult = 'ok';
+      } catch (fbErr) {
+        _eventLog[_eventLog.length - 1].fallbackResult = 'failed';
+        _eventLog[_eventLog.length - 1].fallbackStatus = fbErr.status || null;
+        _eventLog[_eventLog.length - 1].fallbackError = fbErr.message || null;
+        throw fbErr;
+      }
     } else {
       throw err;
     }
@@ -227,4 +286,4 @@ async function chat(userId, message, { useQueryExpansion = true } = {}) {
   return { answer, wines, expandedQuery: useQueryExpansion ? searchQuery : null, usage };
 }
 
-module.exports = { chat };
+module.exports = { chat, getEventLog };
