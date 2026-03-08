@@ -3,6 +3,7 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { NotificationProvider } from './contexts/NotificationContext';
 import Layout from './components/Layout';
 import ProtectedRoute from './components/ProtectedRoute';
+import LandingPage from './pages/LandingPage';
 import Login from './pages/Login';
 import Cellars from './pages/Cellars';
 import CellarDetail from './pages/CellarDetail';
@@ -51,14 +52,7 @@ function AppRoutes() {
       <Route path="/reset-password" element={<ResetPassword />} />
 
       {/* Protected routes wrapped in Layout */}
-      <Route
-        path="/"
-        element={
-          <ProtectedRoute>
-            <Layout><Navigate to="/cellars" replace /></Layout>
-          </ProtectedRoute>
-        }
-      />
+      <Route path="/" element={<LandingPage />} />
       <Route
         path="/cellars"
         element={
