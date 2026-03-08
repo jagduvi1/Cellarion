@@ -94,8 +94,8 @@ const writeLimiter = rateLimit({
 });
 app.use('/api/', writeLimiter);
 
-// Serve uploaded images (auth required, restricted to image file extensions)
-app.use('/api/uploads', requireAuth, (req, res, next) => {
+// Serve uploaded images (auth + rate-limit required, restricted to image file extensions)
+app.use('/api/uploads', apiLimiter, requireAuth, (req, res, next) => {
   const ext = path.extname(req.path).toLowerCase();
   const allowedExts = ['.jpg', '.jpeg', '.png', '.webp'];
   if (!allowedExts.includes(ext)) {
