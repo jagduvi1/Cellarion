@@ -3,13 +3,14 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { validateImport, confirmImport } from '../api/bottles';
 import { searchWines } from '../api/wines';
-import { parseAndMap } from '../utils/importMappers';
+import { parseAndMap, parseJSON } from '../utils/importMappers';
 import Modal from '../components/Modal';
 import './ImportBottles.css';
 
 const STEPS = ['upload', 'review', 'importing', 'done'];
 
 const FORMAT_LABELS = {
+  cellarion: 'Cellarion JSON',
   vivino: 'Vivino',
   cellartracker: 'CellarTracker',
   generic: 'CSV'
@@ -77,10 +78,10 @@ function ImportBottles() {
 
     if (!file) return;
 
-    const validExtensions = ['.csv', '.tsv', '.txt'];
+    const validExtensions = ['.csv', '.tsv', '.txt', '.json'];
     const ext = file.name.toLowerCase().slice(file.name.lastIndexOf('.'));
     if (!validExtensions.includes(ext)) {
-      setError('Please upload a CSV, TSV, or TXT file');
+      setError('Please upload a CSV, TSV, TXT, or JSON file');
       return;
     }
 
@@ -89,12 +90,15 @@ function ImportBottles() {
       return;
     }
 
+    const isJson = ext === '.json';
     const reader = new FileReader();
     reader.onload = (e) => {
       try {
-        const { items, format } = parseAndMap(e.target.result);
+        const { items, format } = isJson
+          ? parseJSON(e.target.result)
+          : parseAndMap(e.target.result);
         if (items.length === 0) {
-          setError('No valid rows found in the file. Check that it has headers and data rows.');
+          setError('No valid items found in the file.');
           return;
         }
         setParsedItems(items);
@@ -293,6 +297,10 @@ function ImportBottles() {
         <h3>Supported Formats</h3>
         <div className="format-cards">
           <div className="format-card">
+            <strong>Cellarion JSON</strong>
+            <p>Export from any cellar via &#8943; &rarr; Export Bottles (JSON)</p>
+          </div>
+          <div className="format-card">
             <strong>Vivino</strong>
             <p>Export your collection from Vivino app settings</p>
           </div>
@@ -317,7 +325,7 @@ function ImportBottles() {
         <input
           id="import-file-input"
           type="file"
-          accept=".csv,.tsv,.txt"
+          accept=".csv,.tsv,.txt,.json"
           onChange={handleFileInput}
           style={{ display: 'none' }}
         />
@@ -332,8 +340,8 @@ function ImportBottles() {
         ) : (
           <div className="drop-zone-empty">
             <span className="drop-zone-icon">&#8686;</span>
-            <p>Drop your CSV file here or click to browse</p>
-            <span className="drop-zone-hint">CSV, TSV, or TXT — max 10 MB</span>
+            <p>Drop your file here or click to browse</p>
+            <span className="drop-zone-hint">JSON, CSV, TSV, or TXT — max 10 MB</span>
           </div>
         )}
       </div>

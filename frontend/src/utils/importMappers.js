@@ -291,6 +291,54 @@ function tryParseDate(str) {
 }
 
 /**
+ * Parse a Cellarion JSON export (or plain array) into master import format.
+ *
+ * Accepts:
+ *   - Cellarion export object: { cellarName, exportedAt, bottles: [...] }
+ *   - Plain array of items already in master format
+ *
+ * @param {string} text - Raw JSON text
+ * @returns {{ items: object[], format: string, headers: string[] }}
+ */
+export function parseJSON(text) {
+  const cleaned = text.replace(/^\uFEFF/, '');
+  let parsed;
+  try {
+    parsed = JSON.parse(cleaned);
+  } catch {
+    throw new Error('Invalid JSON file');
+  }
+
+  const raw = Array.isArray(parsed) ? parsed : (Array.isArray(parsed.bottles) ? parsed.bottles : null);
+  if (!raw) throw new Error('JSON must be an array or a Cellarion export object with a "bottles" array');
+
+  const items = [];
+  for (const row of raw) {
+    if (!row.wineName && !row.producer) continue;
+
+    const item = { ...row };
+
+    // Normalise dates
+    if (item.purchaseDate) item.purchaseDate = tryParseDate(item.purchaseDate);
+    if (item.drinkFrom)    item.drinkFrom    = tryParseDate(item.drinkFrom);
+    if (item.drinkBefore)  item.drinkBefore  = tryParseDate(item.drinkBefore);
+    if (item.consumedAt)   item.consumedAt   = tryParseDate(item.consumedAt);
+    if (item.dateAdded)    item.dateAdded    = tryParseDate(item.dateAdded);
+
+    // Expand quantity (if present)
+    const qty = item.quantity || 1;
+    delete item.quantity;
+
+    for (let q = 0; q < qty; q++) {
+      items.push({ ...item });
+    }
+  }
+
+  const headers = items.length > 0 ? Object.keys(items[0]) : [];
+  return { items, format: 'cellarion', headers };
+}
+
+/**
  * Main entry: parse a file and return mapped items in master format.
  *
  * @param {string} text - Raw CSV/TSV text content
