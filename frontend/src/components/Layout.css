@@ -63,6 +63,13 @@
   gap: 0.6rem;
 }
 
+.brand-logo-img {
+  height: 30px;
+  width: auto;
+  border-radius: 4px;
+  display: block;
+}
+
 /* ── Nav links ── */
 .navbar-menu {
   display: flex;
