@@ -16,3 +16,17 @@ export const consumeBottle = (apiFetch, id, data) =>
     headers: JSON_HEADERS,
     body: JSON.stringify(data),
   });
+
+export const validateImport = (apiFetch, data) =>
+  apiFetch('/api/bottles/import/validate', {
+    method: 'POST',
+    headers: JSON_HEADERS,
+    body: JSON.stringify(data),
+  });
+
+export const confirmImport = (apiFetch, data) =>
+  apiFetch('/api/bottles/import/confirm', {
+    method: 'POST',
+    headers: JSON_HEADERS,
+    body: JSON.stringify(data),
+  });

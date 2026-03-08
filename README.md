@@ -114,6 +114,7 @@ Cellarion/
 │   │   │   ├── wines.js          # /api/wines/*
 │   │   │   ├── racks.js          # /api/racks/*
 │   │   │   ├── wineRequests.js   # /api/wine-requests/*
+│   │   │   ├── import.js         # /api/bottles/import/* (bottle import)
 │   │   │   ├── admin/            # /api/admin/* (admin role)
 │   │   │   └── somm/             # /api/somm/* (sommelier features)
 │   │   ├── services/
@@ -133,7 +134,7 @@ Cellarion/
 ├── frontend/
 │   ├── src/
 │   │   ├── api/                  # Typed API client wrappers
-│   │   │   ├── bottles.js        # getBottle, updateBottle, consumeBottle
+│   │   │   ├── bottles.js        # getBottle, updateBottle, consumeBottle, validateImport, confirmImport
 │   │   │   ├── cellars.js        # getCellar, updateCellar, deleteCellar, …
 │   │   │   ├── racks.js          # getRacks, deleteRack, updateSlot, clearSlot
 │   │   │   └── wines.js          # searchWines, getWine, scanLabel
@@ -229,6 +230,8 @@ Update the `Host(...)` rule to match your own domain.
 |--------|------|-------------|
 | POST | `/` | Add bottle to cellar |
 | DELETE | `/:id` | Remove bottle |
+| POST | `/import/validate` | Validate import data and match wines |
+| POST | `/import/confirm` | Create bottles from validated import |
 
 ### Wine Registry — `/api/wines` *(auth required)*
 
@@ -284,6 +287,59 @@ When both `MAILGUN_API_KEY` and `MAILGUN_DOMAIN` are set, email verification is 
 
 ```js
 db.users.updateMany({ emailVerified: { $exists: false } }, { $set: { emailVerified: true } })
+```
+
+---
+
+## Bottle Import
+
+Users can import bottles from other wine cellar apps (Vivino, CellarTracker, or any generic CSV). The import flow:
+
+1. **Upload** — Drop a CSV file; the system auto-detects the source format and maps it to a standard schema
+2. **Validate** — Each item is matched against the wine library using fuzzy search (Meilisearch + MongoDB text search + normalized key lookup) and scored with combined similarity
+3. **Review** — Users see match results: exact matches (auto-selected), fuzzy matches (pick from candidates), and unmatched items (search manually or skip)
+4. **Import** — Confirmed items are created as bottles in the target cellar
+
+Access the import from any cellar's overflow menu (⋯ → Import Bottles). Requires editor or owner access.
+
+### Master Import JSON Format
+
+Bottles can also be imported as JSON. Each item supports:
+
+```json
+{
+  "wineName": "Albe",
+  "producer": "G.D. Vajra",
+  "vintage": "2019",
+  "country": "Italy",
+  "region": "Piedmont",
+  "appellation": "Barolo",
+  "type": "red",
+  "price": 299,
+  "currency": "SEK",
+  "bottleSize": "750ml",
+  "quantity": 2,
+  "purchaseDate": "2024-03-15",
+  "purchaseLocation": "Systembolaget",
+  "notes": "Beautiful nebbiolo",
+  "rating": 4.2,
+  "ratingScale": "5",
+  "addToHistory": false
+}
+```
+
+To import directly into history (already consumed bottles), add:
+
+```json
+{
+  "addToHistory": true,
+  "consumedReason": "drank",
+  "consumedAt": "2025-12-24",
+  "consumedNote": "Opened for Christmas",
+  "consumedRating": 4.5,
+  "consumedRatingScale": "5",
+  "dateAdded": "2024-06-01"
+}
 ```
 
 ---

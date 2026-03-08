@@ -20,6 +20,7 @@ const adminAuditRoute = require('./routes/admin/audit');
 const adminUsersRoute = require('./routes/admin/users');
 const adminSettingsRoute = require('./routes/admin/settings');
 const adminImportRoute = require('./routes/admin/import');
+const importRoute = require('./routes/import');
 const racksRoute = require('./routes/racks');
 const imagesRoute = require('./routes/images');
 const sommMaturityRoute = require('./routes/somm/maturity');
@@ -59,6 +60,7 @@ app.use('/api/images/remove-bg-preview', express.json({ limit: '5mb' }));
 app.use('/api/wine-requests', express.json({ limit: '5mb' }));
 app.use('/api/admin/wine-requests', express.json({ limit: '5mb' }));
 app.use('/api/wines/scan-label', express.json({ limit: '300kb' }));
+app.use('/api/bottles/import', express.json({ limit: '2mb' }));
 app.use(express.json({ limit: '10kb' }));
 app.use(cors({
   origin: process.env.FRONTEND_URL || 'http://localhost:3000',
@@ -120,6 +122,7 @@ app.use('/api/admin/audit', adminAuditRoute);
 app.use('/api/admin/users', adminUsersRoute);
 app.use('/api/admin/settings', adminSettingsRoute);
 app.use('/api/admin/import', adminImportRoute);
+app.use('/api/bottles/import', importRoute);
 app.use('/api/racks', racksRoute);
 app.use('/api/images', imagesRoute);
 app.use('/api/somm/maturity', sommMaturityRoute);

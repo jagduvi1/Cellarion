@@ -188,6 +188,15 @@ function CellarDetail() {
                   >
                     {t('cellarDetail.historyMenuItem')}
                   </Link>
+                  {(cellar.userRole === 'owner' || cellar.userRole === 'editor') && (
+                    <Link
+                      to={`/cellars/${id}/import`}
+                      className="more-menu-item"
+                      onClick={() => setMoreOpen(false)}
+                    >
+                      Import Bottles
+                    </Link>
+                  )}
                   {cellar.userRole === 'owner' && (
                     <Link
                       to={`/cellars/${id}/audit`}
