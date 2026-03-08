@@ -3,9 +3,10 @@ import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import { PLANS } from '../config/plans';
-const LOGO_IMG = process.env.PUBLIC_URL + '/cellarion-logo.jpg';
 import NotificationBell from './NotificationBell';
 import './Layout.css';
+
+const LOGO_IMG = process.env.PUBLIC_URL + '/cellarion-logo.jpg';
 
 function Layout({ children }) {
   const { t } = useTranslation();
