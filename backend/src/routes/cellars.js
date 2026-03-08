@@ -691,6 +691,111 @@ router.delete('/:id/members/:userId', async (req, res) => {
 });
 
 // GET /api/cellars/:id/audit - Per-cellar audit log (owner only)
+// GET /api/cellars/:id/export — owner only, no images, no staff-curated data
+router.get('/:id/export', async (req, res) => {
+  try {
+    const cellar = await Cellar.findOne({ _id: req.params.id, user: req.user.id, deletedAt: null });
+    if (!cellar) return res.status(403).json({ error: 'Not authorized — only the cellar owner can export' });
+
+    const [bottles, racks] = await Promise.all([
+      Bottle.find({ cellar: req.params.id })
+        .populate({
+          path: 'wineDefinition',
+          populate: [
+            { path: 'country', select: 'name' },
+            { path: 'region', select: 'name' }
+          ],
+          select: 'name producer type appellation country region'
+        })
+        .lean(),
+      Rack.find({ cellar: req.params.id, deletedAt: null }).lean()
+    ]);
+
+    // Build map: bottleId → { rackName, rackPosition, rackRow, rackCol }
+    const bottleRackMap = new Map();
+    for (const rack of racks) {
+      for (const slot of rack.slots || []) {
+        const row = Math.ceil(slot.position / rack.cols);
+        const col = ((slot.position - 1) % rack.cols) + 1;
+        bottleRackMap.set(slot.bottle.toString(), {
+          rackName: rack.name,
+          rackPosition: slot.position,
+          rackRow: row,
+          rackCol: col
+        });
+      }
+    }
+
+    const items = bottles.map(b => {
+      const wine = b.wineDefinition || {};
+      const item = {
+        wineName: wine.name || '',
+        producer: wine.producer || '',
+        vintage: b.vintage || 'NV',
+        country: wine.country?.name || '',
+        region: wine.region?.name || '',
+        appellation: wine.appellation || '',
+        type: wine.type || '',
+        bottleSize: b.bottleSize || '750ml',
+        dateAdded: b.createdAt ? b.createdAt.toISOString().slice(0, 10) : undefined,
+      };
+
+      // User-entered pricing
+      if (b.price != null) {
+        item.price = b.price;
+        item.currency = b.currency || 'USD';
+      }
+
+      // User-entered purchase info
+      if (b.purchaseDate) item.purchaseDate = b.purchaseDate.toISOString().slice(0, 10);
+      if (b.purchaseLocation) item.purchaseLocation = b.purchaseLocation;
+      if (b.purchaseUrl) item.purchaseUrl = b.purchaseUrl;
+      if (b.location) item.location = b.location;
+      if (b.notes) item.notes = b.notes;
+
+      // User-entered rating
+      if (b.rating != null) {
+        item.rating = b.rating;
+        item.ratingScale = b.ratingScale || '5';
+      }
+
+      // User-entered drink window (not sommelier-curated WineVintageProfile)
+      if (b.drinkFrom) item.drinkFrom = b.drinkFrom.toISOString().slice(0, 10);
+      if (b.drinkBefore) item.drinkBefore = b.drinkBefore.toISOString().slice(0, 10);
+
+      // Rack placement
+      const rackInfo = bottleRackMap.get(b._id.toString());
+      if (rackInfo) {
+        item.rackName = rackInfo.rackName;
+        item.rackPosition = rackInfo.rackPosition;
+        item.rackRow = rackInfo.rackRow;
+        item.rackCol = rackInfo.rackCol;
+      }
+
+      // Consumed / history bottles
+      if (b.status && b.status !== 'active') {
+        item.addToHistory = true;
+        item.consumedReason = b.consumedReason || b.status;
+        if (b.consumedAt) item.consumedAt = b.consumedAt.toISOString().slice(0, 10);
+        if (b.consumedNote) item.consumedNote = b.consumedNote;
+        if (b.consumedRating != null) {
+          item.consumedRating = b.consumedRating;
+          item.consumedRatingScale = b.consumedRatingScale || '5';
+        }
+      }
+
+      return item;
+    });
+
+    logAudit(req, 'cellar.export', { type: 'cellar', id: cellar._id }, { bottleCount: items.length });
+
+    res.json({ cellarName: cellar.name, exportedAt: new Date().toISOString(), bottles: items });
+  } catch (error) {
+    console.error('Export cellar error:', error);
+    res.status(500).json({ error: 'Export failed' });
+  }
+});
+
 router.get('/:id/audit', async (req, res) => {
   try {
     const cellar = await Cellar.findOne({ _id: req.params.id, user: req.user.id });

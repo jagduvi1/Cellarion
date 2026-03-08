@@ -223,6 +223,7 @@ Update the `Host(...)` rule to match your own domain.
 | PUT | `/:id` | Update cellar |
 | DELETE | `/:id` | Delete cellar |
 | GET | `/:id/statistics` | Aggregated stats |
+| GET | `/:id/export` | Export all bottles as JSON (owner only) |
 
 ### Bottles — `/api/bottles` *(auth required)*
 
@@ -324,6 +325,8 @@ Bottles can also be imported as JSON. Each item supports:
   "notes": "Beautiful nebbiolo",
   "rating": 4.2,
   "ratingScale": "5",
+  "rackName": "Rack A",
+  "rackPosition": 5,
   "addToHistory": false
 }
 ```
@@ -340,6 +343,11 @@ To import directly into history (already consumed bottles), add:
   "consumedRatingScale": "5",
   "dateAdded": "2024-06-01"
 }
+```
+
+### Bottle Export
+
+Cellar owners can export all bottles via the overflow menu (⋯ → Export Bottles). Available in JSON and CSV. The export includes rack placement (`rackName`, `rackPosition`, `rackRow`, `rackCol`) but excludes images and staff-curated data (sommelier drink windows, pricing). The JSON format is directly re-importable.
 ```
 
 ---

@@ -28,3 +28,6 @@ export const updateCellarColor = (apiFetch, id, color) =>
     headers: JSON_HEADERS,
     body: JSON.stringify({ color }),
   });
+
+export const exportCellar = (apiFetch, id) =>
+  apiFetch(`/api/cellars/${id}/export`);

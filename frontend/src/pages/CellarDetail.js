@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
-import { getCellar, getCellarStatistics, updateCellar, deleteCellar, updateCellarColor } from '../api/cellars';
+import { getCellar, getCellarStatistics, updateCellar, deleteCellar, updateCellarColor, exportCellar } from '../api/cellars';
 import { getRacks } from '../api/racks';
 import ShareCellarModal from '../components/ShareCellarModal';
 import CellarColorPicker from '../components/CellarColorPicker';
@@ -196,6 +196,63 @@ function CellarDetail() {
                     >
                       Import Bottles
                     </Link>
+                  )}
+                  {cellar.userRole === 'owner' && (
+                    <button
+                      className="more-menu-item"
+                      onClick={async () => {
+                        setMoreOpen(false);
+                        try {
+                          const res = await exportCellar(apiFetch, id);
+                          const data = await res.json();
+                          if (!res.ok) { alert(data.error || 'Export failed'); return; }
+                          const blob = new Blob([JSON.stringify(data.bottles, null, 2)], { type: 'application/json' });
+                          const url = URL.createObjectURL(blob);
+                          const a = document.createElement('a');
+                          a.href = url;
+                          a.download = `${data.cellarName || 'cellar'}-export.json`;
+                          a.click();
+                          URL.revokeObjectURL(url);
+                        } catch { alert('Export failed'); }
+                      }}
+                    >
+                      Export Bottles (JSON)
+                    </button>
+                  )}
+                  {cellar.userRole === 'owner' && (
+                    <button
+                      className="more-menu-item"
+                      onClick={async () => {
+                        setMoreOpen(false);
+                        try {
+                          const res = await exportCellar(apiFetch, id);
+                          const data = await res.json();
+                          if (!res.ok) { alert(data.error || 'Export failed'); return; }
+                          const bottles = data.bottles;
+                          if (bottles.length === 0) { alert('No bottles to export'); return; }
+                          const cols = ['wineName','producer','vintage','country','region','appellation','type',
+                            'price','currency','bottleSize','purchaseDate','purchaseLocation','location',
+                            'notes','rating','ratingScale','drinkFrom','drinkBefore',
+                            'rackName','rackPosition','rackRow','rackCol','dateAdded',
+                            'addToHistory','consumedReason','consumedAt','consumedNote','consumedRating','consumedRatingScale'];
+                          const escape = v => {
+                            if (v == null || v === '') return '';
+                            const s = String(v);
+                            return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s.replace(/"/g, '""')}"` : s;
+                          };
+                          const csv = [cols.join(','), ...bottles.map(b => cols.map(c => escape(b[c])).join(','))].join('\n');
+                          const blob = new Blob([csv], { type: 'text/csv' });
+                          const url = URL.createObjectURL(blob);
+                          const a = document.createElement('a');
+                          a.href = url;
+                          a.download = `${data.cellarName || 'cellar'}-export.csv`;
+                          a.click();
+                          URL.revokeObjectURL(url);
+                        } catch { alert('Export failed'); }
+                      }}
+                    >
+                      Export Bottles (CSV)
+                    </button>
                   )}
                   {cellar.userRole === 'owner' && (
                     <Link

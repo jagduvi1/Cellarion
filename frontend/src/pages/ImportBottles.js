@@ -260,6 +260,8 @@ function ImportBottles() {
         drinkFrom: r.item.drinkFrom,
         drinkBefore: r.item.drinkBefore,
         dateAdded: r.item.purchaseDate, // Use purchase date as added date if available
+        rackName: r.item.rackName,
+        rackPosition: r.item.rackPosition,
       }));
 
     try {

@@ -2,6 +2,7 @@ const express = require('express');
 const { requireAuth } = require('../middleware/auth');
 const Bottle = require('../models/Bottle');
 const Cellar = require('../models/Cellar');
+const Rack = require('../models/Rack');
 const WineDefinition = require('../models/WineDefinition');
 const WineVintageProfile = require('../models/WineVintageProfile');
 const Country = require('../models/Country');
@@ -11,7 +12,7 @@ const { getOrCreateDailySnapshot } = require('../utils/exchangeRates');
 const { resolveRating } = require('../utils/ratingUtils');
 const { normalizeString, combinedSimilarity } = require('../utils/normalize');
 const searchService = require('../services/search');
-const { CONSUMED_STATUSES, WINE_POPULATE } = require('../config/constants');
+const { CONSUMED_STATUSES } = require('../config/constants');
 const { stripHtml } = require('../utils/sanitize');
 
 const router = express.Router();
@@ -367,6 +368,26 @@ router.post('/confirm', async (req, res) => {
 
         await bottle.save();
         created++;
+
+        // Place bottle in rack if rackName + rackPosition provided (active bottles only)
+        if (item.rackName && item.rackPosition && bottle.status === 'active') {
+          try {
+            const position = parseInt(item.rackPosition, 10);
+            if (!isNaN(position) && position >= 1) {
+              const rack = await Rack.findOne({ cellar: cellarId, name: item.rackName, deletedAt: null });
+              if (rack && position <= rack.rows * rack.cols) {
+                // Only place if slot is empty
+                const occupied = rack.slots.some(s => s.position === position);
+                if (!occupied) {
+                  rack.slots.push({ position, bottle: bottle._id });
+                  await rack.save().catch(() => {});
+                }
+              }
+            }
+          } catch {
+            // Non-fatal: bottle was still created
+          }
+        }
 
         // Auto-create pending WineVintageProfile for numeric vintages
         const vintageYear = parseInt(item.vintage);

@@ -174,6 +174,8 @@ function mapVivinoRow(row) {
     rating: isNaN(rating) ? undefined : rating,
     ratingScale: rating > 5 ? '100' : '5',
     location: get(['Location', 'location', 'Bin', 'bin']),
+    rackName: get(['Rack', 'rack', 'Rack Name', 'rackName']) || undefined,
+    rackPosition: parseInt(get(['Rack Position', 'rackPosition', 'Position', 'Slot']), 10) || undefined,
   };
 }
 
@@ -231,6 +233,8 @@ function mapCellarTrackerRow(row) {
     location: get(['Location', 'location', 'Bin', 'bin']),
     drinkFrom: drinkFrom ? tryParseDate(drinkFrom) : undefined,
     drinkBefore: drinkBefore ? tryParseDate(drinkBefore) : undefined,
+    rackName: get(['Rack', 'rack', 'Rack Name', 'rackName']) || undefined,
+    rackPosition: parseInt(get(['Rack Position', 'rackPosition', 'Position', 'Slot']), 10) || undefined,
   };
 }
 
@@ -269,6 +273,8 @@ function mapGenericRow(row) {
     location: get(['Location', 'location', 'Bin', 'bin']),
     drinkFrom: get(['Drink From', 'DrinkFrom']) || undefined,
     drinkBefore: get(['Drink Before', 'DrinkBefore', 'Drink By']) || undefined,
+    rackName: get(['Rack', 'rack', 'Rack Name', 'rackName']) || undefined,
+    rackPosition: parseInt(get(['Rack Position', 'rackPosition', 'Position', 'Slot']), 10) || undefined,
   };
 }
 
