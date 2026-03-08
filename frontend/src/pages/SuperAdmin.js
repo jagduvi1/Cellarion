@@ -1291,6 +1291,29 @@ function TabSettings() {
 function TabAI() {
   const { data, loading, error, reload } = useApi('/api/superadmin/ai');
   const { apiFetch } = useAuth();
+  const [jobMode, setJobMode] = useState('incremental');
+  const [jobBusy, setJobBusy] = useState(false);
+  const [jobMsg, setJobMsg] = useState(null);
+
+  async function startJob() {
+    setJobBusy(true); setJobMsg(null);
+    try {
+      const res = await apiFetch('/api/admin/ai/embed/start', { method: 'POST', body: JSON.stringify({ mode: jobMode }) });
+      setJobMsg(res.message || 'Job started');
+      reload();
+    } catch (e) { setJobMsg(e.message || 'Error'); }
+    finally { setJobBusy(false); }
+  }
+
+  async function stopJob() {
+    setJobBusy(true); setJobMsg(null);
+    try {
+      const res = await apiFetch('/api/admin/ai/embed/stop', { method: 'POST' });
+      setJobMsg(res.message || 'Stop requested');
+      reload();
+    } catch (e) { setJobMsg(e.message || 'Error'); }
+    finally { setJobBusy(false); }
+  }
 
   if (loading) return <div className="sa-loading">Loading AI pipeline stats...</div>;
   if (error)   return <div className="sa-error">Error: {error}</div>;
@@ -1303,6 +1326,7 @@ function TabAI() {
     job.status === 'running'  ? 'warn' :
     job.status === 'done'     ? 'accent' :
     job.status === 'error'    ? 'danger' : '';
+  const isRunning = job.status === 'running' || job.status === 'stopping';
 
   return (
     <>
@@ -1397,8 +1421,28 @@ function TabAI() {
       <div className="sa-grid-2">
         {/* Embedding job status */}
         <div className="sa-panel">
-          <div className="sa-panel-header"><span className="sa-panel-title">Embedding Job</span></div>
+          <div className="sa-panel-header">
+            <span className="sa-panel-title">Embedding Job</span>
+            <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+              <select
+                value={jobMode}
+                onChange={e => setJobMode(e.target.value)}
+                disabled={isRunning || jobBusy}
+                style={{ fontSize: 11, padding: '2px 4px', background: '#1a1a1a', color: '#ccc', border: '1px solid #444', borderRadius: 3 }}
+              >
+                <option value="incremental">Incremental</option>
+                <option value="full">Full re-embed</option>
+              </select>
+              {!isRunning ? (
+                <button className="sa-btn" onClick={startJob} disabled={jobBusy}>Start</button>
+              ) : (
+                <button className="sa-btn" onClick={stopJob} disabled={jobBusy}>Stop</button>
+              )}
+              <button className="sa-btn" onClick={reload}>Refresh</button>
+            </div>
+          </div>
           <div className="sa-panel-body">
+            {jobMsg && <div className={`sa-error`} style={{ marginBottom: 8, fontSize: 11 }}>{jobMsg}</div>}
             <div className="sa-kv">
               <div className="sa-kv-row">
                 <span className="sa-kv-key">Status</span>
