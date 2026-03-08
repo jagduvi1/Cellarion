@@ -1,4 +1,5 @@
 const express = require('express');
+const mongoose = require('mongoose');
 const { requireAuth } = require('../middleware/auth');
 const Bottle = require('../models/Bottle');
 const Cellar = require('../models/Cellar');
@@ -167,6 +168,9 @@ router.post('/validate', async (req, res) => {
     if (!cellarId) {
       return res.status(400).json({ error: 'cellarId is required' });
     }
+    if (!mongoose.Types.ObjectId.isValid(cellarId)) {
+      return res.status(400).json({ error: 'Invalid cellarId' });
+    }
     if (!Array.isArray(items) || items.length === 0) {
       return res.status(400).json({ error: 'items array is required and must not be empty' });
     }
@@ -263,6 +267,9 @@ router.post('/confirm', async (req, res) => {
     if (!cellarId) {
       return res.status(400).json({ error: 'cellarId is required' });
     }
+    if (!mongoose.Types.ObjectId.isValid(cellarId)) {
+      return res.status(400).json({ error: 'Invalid cellarId' });
+    }
     if (!Array.isArray(items) || items.length === 0) {
       return res.status(400).json({ error: 'items array is required and must not be empty' });
     }
@@ -300,6 +307,10 @@ router.post('/confirm', async (req, res) => {
 
       try {
         // Verify wine definition exists
+        if (!mongoose.Types.ObjectId.isValid(item.wineDefinition)) {
+          errors.push({ index: i, reason: 'Invalid wine definition ID' });
+          continue;
+        }
         const wineDoc = await WineDefinition.findById(item.wineDefinition);
         if (!wineDoc) {
           errors.push({ index: i, reason: 'Wine definition not found' });
@@ -374,7 +385,7 @@ router.post('/confirm', async (req, res) => {
           try {
             const position = parseInt(item.rackPosition, 10);
             if (!isNaN(position) && position >= 1) {
-              const rack = await Rack.findOne({ cellar: cellarId, name: item.rackName, deletedAt: null });
+              const rack = await Rack.findOne({ cellar: cellarId, name: String(item.rackName), deletedAt: null });
               if (rack && position <= rack.rows * rack.cols) {
                 // Only place if slot is empty
                 const occupied = rack.slots.some(s => s.position === position);
@@ -392,9 +403,10 @@ router.post('/confirm', async (req, res) => {
         // Auto-create pending WineVintageProfile for numeric vintages
         const vintageYear = parseInt(item.vintage);
         if (item.vintage && item.vintage !== 'NV' && !isNaN(vintageYear)) {
+          const wineDefId = wineDoc._id;
           WineVintageProfile.findOneAndUpdate(
-            { wineDefinition: item.wineDefinition, vintage: String(vintageYear) },
-            { $setOnInsert: { wineDefinition: item.wineDefinition, vintage: String(vintageYear), status: 'pending' } },
+            { wineDefinition: wineDefId, vintage: String(vintageYear) },
+            { $setOnInsert: { wineDefinition: wineDefId, vintage: String(vintageYear), status: 'pending' } },
             { upsert: true, new: false }
           ).catch(() => {});
         }
