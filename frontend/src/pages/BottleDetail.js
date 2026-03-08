@@ -784,6 +784,7 @@ function ConsumeModal({ wineName, defaultRatingScale, onConfirm, onCancel }) {
 function MaturityPhaseTable({ profile }) {
   const { t } = useTranslation();
   const vintageInt = parseInt(profile.vintage);
+  const CURRENT_YEAR = new Date().getFullYear();
 
   const phases = [
     {
