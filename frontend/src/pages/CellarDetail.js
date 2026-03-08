@@ -2,9 +2,12 @@ import { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
-import { getDrinkStatus } from '../utils/drinkStatus';
+import { getCellar, getCellarStatistics, updateCellar, deleteCellar, updateCellarColor } from '../api/cellars';
+import { getRacks } from '../api/racks';
 import ShareCellarModal from '../components/ShareCellarModal';
 import CellarColorPicker from '../components/CellarColorPicker';
+import Modal from '../components/Modal';
+import BottleCard from '../components/BottleCard';
 import './CellarDetail.css';
 
 function CellarDetail() {
@@ -49,7 +52,7 @@ function CellarDetail() {
       Object.keys(filters).forEach(key => {
         if (filters[key]) params.append(key, filters[key]);
       });
-      const res = await apiFetch(`/api/cellars/${id}?${params}`);
+      const res = await getCellar(apiFetch, id, params);
       const data = await res.json();
       if (res.ok) {
         setCellar(data.cellar);
@@ -66,7 +69,7 @@ function CellarDetail() {
 
   const fetchStatistics = async () => {
     try {
-      const res = await apiFetch(`/api/cellars/${id}/statistics?currency=${userCurrency}`);
+      const res = await getCellarStatistics(apiFetch, id, userCurrency);
       const data = await res.json();
       if (res.ok) setStatistics(data.statistics);
     } catch {}
@@ -74,7 +77,7 @@ function CellarDetail() {
 
   const fetchRacks = async () => {
     try {
-      const res = await apiFetch(`/api/racks?cellar=${id}`);
+      const res = await getRacks(apiFetch, id);
       const data = await res.json();
       if (res.ok) {
         const map = new Map();
@@ -268,9 +271,9 @@ function CellarDetail() {
           className="filter-select"
         >
           <option value="">{t('cellarDetail.allRatings')}</option>
-          <option value="4">{t('cellarDetail.stars4Plus')}</option>
-          <option value="3">{t('cellarDetail.stars3Plus')}</option>
-          <option value="2">{t('cellarDetail.stars2Plus')}</option>
+          <option value="80">{t('cellarDetail.stars4Plus')}</option>
+          <option value="60">{t('cellarDetail.stars3Plus')}</option>
+          <option value="40">{t('cellarDetail.stars2Plus')}</option>
         </select>
         <select
           value={filters.drinkStatus}
@@ -372,11 +375,7 @@ function EditCellarModal({ cellar, onSaved, onClose }) {
     setSaving(true);
     setError(null);
     try {
-      const res = await apiFetch(`/api/cellars/${cellar._id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form)
-      });
+      const res = await updateCellar(apiFetch, cellar._id, form);
       const data = await res.json();
       if (res.ok) {
         onSaved({ ...cellar, ...data.cellar });
@@ -391,37 +390,34 @@ function EditCellarModal({ cellar, onSaved, onClose }) {
   };
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-box" onClick={e => e.stopPropagation()}>
-        <h2>{t('cellarDetail.editCellarTitle')}</h2>
-        {error && <div className="alert alert-error">{error}</div>}
-        <form onSubmit={handleSubmit}>
-          <div className="form-group">
-            <label>{t('common.name')}</label>
-            <input
-              type="text"
-              value={form.name}
-              onChange={e => setForm({ ...form, name: e.target.value })}
-              required
-            />
-          </div>
-          <div className="form-group">
-            <label>{t('common.description')}</label>
-            <textarea
-              value={form.description}
-              onChange={e => setForm({ ...form, description: e.target.value })}
-              rows={3}
-            />
-          </div>
-          <div className="modal-actions">
-            <button type="button" className="btn btn-secondary" onClick={onClose}>{t('common.cancel')}</button>
-            <button type="submit" className="btn btn-primary" disabled={saving}>
-              {saving ? t('common.saving') : t('common.save')}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+    <Modal title={t('cellarDetail.editCellarTitle')} onClose={onClose}>
+      {error && <div className="alert alert-error">{error}</div>}
+      <form onSubmit={handleSubmit}>
+        <div className="form-group">
+          <label>{t('common.name')}</label>
+          <input
+            type="text"
+            value={form.name}
+            onChange={e => setForm({ ...form, name: e.target.value })}
+            required
+          />
+        </div>
+        <div className="form-group">
+          <label>{t('common.description')}</label>
+          <textarea
+            value={form.description}
+            onChange={e => setForm({ ...form, description: e.target.value })}
+            rows={3}
+          />
+        </div>
+        <div className="modal-actions">
+          <button type="button" className="btn btn-secondary" onClick={onClose}>{t('common.cancel')}</button>
+          <button type="submit" className="btn btn-primary" disabled={saving}>
+            {saving ? t('common.saving') : t('common.save')}
+          </button>
+        </div>
+      </form>
+    </Modal>
   );
 }
 
@@ -435,30 +431,23 @@ function ColorPickerModal({ currentColor, cellarId, onSaved, onClose }) {
   const handleSave = async () => {
     setSaving(true);
     try {
-      const res = await apiFetch(`/api/cellars/${cellarId}/color`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ color })
-      });
+      const res = await updateCellarColor(apiFetch, cellarId, color);
       if (res.ok) onSaved(color);
     } catch {}
     setSaving(false);
   };
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-box" onClick={e => e.stopPropagation()}>
-        <h2>{t('cellarDetail.myCellarColor')}</h2>
-        <p className="modal-subtitle">{t('cellarDetail.colorOnlyYou')}</p>
-        <CellarColorPicker value={color} onChange={setColor} />
-        <div className="modal-actions">
-          <button className="btn btn-secondary" onClick={onClose}>{t('common.cancel')}</button>
-          <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
-            {saving ? t('common.saving') : t('common.save')}
-          </button>
-        </div>
+    <Modal title={t('cellarDetail.myCellarColor')} onClose={onClose}>
+      <p className="modal-subtitle">{t('cellarDetail.colorOnlyYou')}</p>
+      <CellarColorPicker value={color} onChange={setColor} />
+      <div className="modal-actions">
+        <button className="btn btn-secondary" onClick={onClose}>{t('common.cancel')}</button>
+        <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
+          {saving ? t('common.saving') : t('common.save')}
+        </button>
       </div>
-    </div>
+    </Modal>
   );
 }
 
@@ -476,9 +465,7 @@ function DeleteCellarModal({ cellar, onDeleted, onClose }) {
     setDeleting(true);
     setError(null);
     try {
-      const res = await apiFetch(`/api/cellars/${cellar._id}`, {
-        method: 'DELETE'
-      });
+      const res = await deleteCellar(apiFetch, cellar._id);
       const data = await res.json();
       if (res.ok) {
         onDeleted();
@@ -493,45 +480,41 @@ function DeleteCellarModal({ cellar, onDeleted, onClose }) {
   };
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-box" onClick={e => e.stopPropagation()}>
-        <h2>{t('cellarDetail.deleteCellarTitle')}</h2>
-        <p className="delete-warning">
-          This will delete <strong>{cellar.name}</strong> and all its racks.<br />
-          {t('cellarDetail.bottlesPreserved')}
-        </p>
-        <p className="delete-recovery">
-          {t('cellarDetail.deleteRecovery')}
-        </p>
-        {error && <div className="alert alert-error">{error}</div>}
-        <div className="form-group">
-          <label>Type <strong>{cellar.name}</strong> to confirm</label>
-          <input
-            type="text"
-            value={typed}
-            onChange={e => setTyped(e.target.value)}
-            placeholder={cellar.name}
-            autoFocus
-          />
-        </div>
-        <div className="modal-actions">
-          <button className="btn btn-secondary" onClick={onClose}>{t('common.cancel')}</button>
-          <button
-            className="btn btn-danger"
-            onClick={handleDelete}
-            disabled={!confirmed || deleting}
-          >
-            {deleting ? t('cellarDetail.deleting') : t('cellarDetail.deleteCellarTitle')}
-          </button>
-        </div>
+    <Modal title={t('cellarDetail.deleteCellarTitle')} onClose={onClose}>
+      <p className="delete-warning">
+        This will delete <strong>{cellar.name}</strong> and all its racks.<br />
+        {t('cellarDetail.bottlesPreserved')}
+      </p>
+      <p className="delete-recovery">
+        {t('cellarDetail.deleteRecovery')}
+      </p>
+      {error && <div className="alert alert-error">{error}</div>}
+      <div className="form-group">
+        <label>Type <strong>{cellar.name}</strong> to confirm</label>
+        <input
+          type="text"
+          value={typed}
+          onChange={e => setTyped(e.target.value)}
+          placeholder={cellar.name}
+          autoFocus
+        />
       </div>
-    </div>
+      <div className="modal-actions">
+        <button className="btn btn-secondary" onClick={onClose}>{t('common.cancel')}</button>
+        <button
+          className="btn btn-danger"
+          onClick={handleDelete}
+          disabled={!confirmed || deleting}
+        >
+          {deleting ? t('cellarDetail.deleting') : t('cellarDetail.deleteCellarTitle')}
+        </button>
+      </div>
+    </Modal>
   );
 }
 
 // ── Bottle list (list or card view) ──
 function BottlesList({ bottles, rackMap, cellarId }) {
-  const navigate = useNavigate();
   const [viewMode, setViewMode] = useState(() => {
     try { return localStorage.getItem('cellarion_bottle_view') || 'list'; } catch { return 'list'; }
   });
@@ -562,129 +545,17 @@ function BottlesList({ bottles, rackMap, cellarId }) {
         </button>
       </div>
 
-      {viewMode === 'list' ? (
-        <div className="bottles-list">
-          {bottles.map(bottle => {
-            const rackInfo = rackMap.get(bottle._id);
-            const drinkStatus = getDrinkStatus(bottle);
-            const imgSrc = bottle.wineDefinition?.image || bottle.pendingImageUrl;
-            const credit = bottle.wineDefinition?.imageCredit;
-
-            return (
-              <div
-                key={bottle._id}
-                className="bottle-card"
-                onClick={() => navigate(`/cellars/${cellarId}/bottles/${bottle._id}`)}
-                role="button"
-                tabIndex={0}
-                onKeyDown={e => e.key === 'Enter' && navigate(`/cellars/${cellarId}/bottles/${bottle._id}`)}
-              >
-                {imgSrc ? (
-                  <div className="bottle-img-wrap">
-                    <img
-                      src={imgSrc}
-                      alt={bottle.wineDefinition?.name}
-                      className="bottle-wine-image"
-                      onError={e => { e.target.style.display = 'none'; }}
-                    />
-                    {credit && <span className="img-credit-tooltip">{credit}</span>}
-                  </div>
-                ) : (
-                  <div className={`bottle-wine-placeholder ${bottle.wineDefinition?.type}`} />
-                )}
-
-                <div className="bottle-info">
-                  <div className="bottle-name">{bottle.wineDefinition?.name || 'Unknown Wine'}</div>
-                  <div className="bottle-meta">
-                    <span className="bottle-producer">{bottle.wineDefinition?.producer}</span>
-                    {bottle.vintage && <span className="bottle-vintage">{bottle.vintage}</span>}
-                  </div>
-                  <div className="bottle-badges">
-                    {rackInfo && (
-                      <Link
-                        to={`/cellars/${cellarId}/racks?highlight=${bottle._id}`}
-                        className="rack-badge"
-                        onClick={e => e.stopPropagation()}
-                      >
-                        📍 {rackInfo.rackName}
-                      </Link>
-                    )}
-                    {drinkStatus && (
-                      <span className={`drink-status-badge badge-sm ${drinkStatus.status}`}>
-                        {drinkStatus.label}
-                      </span>
-                    )}
-                  </div>
-                </div>
-
-                <span className="bottle-chevron" aria-hidden="true">›</span>
-              </div>
-            );
-          })}
-        </div>
-      ) : (
-        <div className="bottles-grid">
-          {bottles.map(bottle => {
-            const rackInfo = rackMap.get(bottle._id);
-            const drinkStatus = getDrinkStatus(bottle);
-            const imgSrc = bottle.wineDefinition?.image || bottle.pendingImageUrl;
-            const credit = bottle.wineDefinition?.imageCredit;
-
-            return (
-              <div
-                key={bottle._id}
-                className="bottle-grid-card"
-                onClick={() => navigate(`/cellars/${cellarId}/bottles/${bottle._id}`)}
-                role="button"
-                tabIndex={0}
-                onKeyDown={e => e.key === 'Enter' && navigate(`/cellars/${cellarId}/bottles/${bottle._id}`)}
-              >
-                <div className="bottle-grid-image-wrap">
-                  {imgSrc ? (
-                    <>
-                      <img
-                        src={imgSrc}
-                        alt={bottle.wineDefinition?.name}
-                        className="bottle-grid-image"
-                        onError={e => { e.target.style.display = 'none'; }}
-                      />
-                      {credit && <span className="img-credit-tooltip">{credit}</span>}
-                    </>
-                  ) : (
-                    <div className={`bottle-grid-placeholder ${bottle.wineDefinition?.type}`} />
-                  )}
-                </div>
-                <div className="bottle-grid-info">
-                  <div className="bottle-grid-name">{bottle.wineDefinition?.name || 'Unknown Wine'}</div>
-                  <div className="bottle-grid-producer">{bottle.wineDefinition?.producer}</div>
-                  <div className="bottle-grid-meta">
-                    {bottle.vintage && <span className="bottle-vintage">{bottle.vintage}</span>}
-                    {bottle.wineDefinition?.region?.name && (
-                      <span className="bottle-grid-region">{bottle.wineDefinition.region.name}</span>
-                    )}
-                  </div>
-                  <div className="bottle-badges">
-                    {drinkStatus && (
-                      <span className={`drink-status-badge badge-sm ${drinkStatus.status}`}>
-                        {drinkStatus.label}
-                      </span>
-                    )}
-                    {rackInfo && (
-                      <Link
-                        to={`/cellars/${cellarId}/racks?highlight=${bottle._id}`}
-                        className="rack-badge"
-                        onClick={e => e.stopPropagation()}
-                      >
-                        📍 {rackInfo.rackName}
-                      </Link>
-                    )}
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
+      <div className={viewMode === 'list' ? 'bottles-list' : 'bottles-grid'}>
+        {bottles.map(bottle => (
+          <BottleCard
+            key={bottle._id}
+            bottle={bottle}
+            rackMap={rackMap}
+            cellarId={cellarId}
+            viewMode={viewMode}
+          />
+        ))}
+      </div>
     </>
   );
 }

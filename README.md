@@ -91,7 +91,9 @@ Cellarion/
 │   │   ├── config/
 │   │   │   ├── db.js             # MongoDB connection
 │   │   │   └── plans.js          # Subscription plan config
-│   │   ├── middleware/auth.js    # JWT + role middleware
+│   │   ├── middleware/
+│   │   │   ├── auth.js           # JWT + role middleware
+│   │   │   └── bottleAccess.js   # requireBottleAccess(minRole) factory
 │   │   ├── models/               # Mongoose schemas
 │   │   │   ├── User.js
 │   │   │   ├── WineDefinition.js # Shared wine registry (vintage-neutral)
@@ -117,22 +119,33 @@ Cellarion/
 │   │   ├── services/
 │   │   │   ├── audit.js          # Audit logging
 │   │   │   ├── imageProcessor.js # Background removal integration
-│   │   │   └── search.js         # Meilisearch integration
+│   │   │   ├── labelScan.js      # Anthropic vision API for label scanning
+│   │   │   ├── search.js         # Meilisearch integration
+│   │   │   └── statsService.js   # Stats computation (extracted from route)
 │   │   ├── utils/
 │   │   │   ├── cellarAccess.js   # Ownership verification
-│   │   │   └── normalize.js      # Wine name dedup & fuzzy matching
+│   │   │   ├── drinkWindow.js    # classifyDrinkWindow() shared helper
+│   │   │   ├── normalize.js      # Wine name dedup & fuzzy matching
+│   │   │   └── ratingUtils.js    # Rating scale conversion + resolveRating()
 │   │   ├── data/                 # Taxonomy reference JSON files
 │   │   └── seed-demo.js          # Demo data seeder
 │   └── Dockerfile
 ├── frontend/
 │   ├── src/
+│   │   ├── api/                  # Typed API client wrappers
+│   │   │   ├── bottles.js        # getBottle, updateBottle, consumeBottle
+│   │   │   ├── cellars.js        # getCellar, updateCellar, deleteCellar, …
+│   │   │   ├── racks.js          # getRacks, deleteRack, updateSlot, clearSlot
+│   │   │   └── wines.js          # searchWines, getWine, scanLabel
 │   │   ├── components/
+│   │   │   ├── BottleCard.js     # Bottle row/card (shared by list + grid view)
 │   │   │   ├── CellarionLogo.js  # Brand SVG logo
 │   │   │   ├── Layout.js         # Persistent navbar
+│   │   │   ├── Modal.js          # Shared modal overlay shell
 │   │   │   ├── ProtectedRoute.js
 │   │   │   └── ErrorBoundary.js
 │   │   ├── contexts/AuthContext.js
-│   │   ├── pages/                # All app screens
+│   │   ├── pages/                # App screens
 │   │   └── styles/common.css
 │   ├── nginx.conf                # nginx config (SPA + /api/ proxy)
 │   └── Dockerfile                # Multi-stage: Node build → nginx:alpine
@@ -297,7 +310,7 @@ Candidates above the threshold (default 0.75) appear as warnings with a "Use Thi
 cd frontend && npm test -- --watchAll=false
 ```
 
-Uses Jest + React Testing Library (bundled with Create React App). Covers drink-window logic, currency conversion, and more.
+Uses Jest + React Testing Library (bundled with Create React App). Covers drink-window logic, currency conversion, and the shared Modal component.
 
 ### Backend
 
@@ -305,7 +318,7 @@ Uses Jest + React Testing Library (bundled with Create React App). Covers drink-
 cd backend && npm test
 ```
 
-Uses Jest. Covers the wine normalisation/similarity algorithms, cellar access control, and auth middleware.
+Uses Jest. Covers auth middleware, cellar access control, wine normalisation/similarity, rating scale conversion, and drink-window classification.
 
 **Run both test suites before opening a pull request. PRs with failing tests will not be merged.**
 

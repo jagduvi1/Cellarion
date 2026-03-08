@@ -1,5 +1,6 @@
 const express = require('express');
 const { requireAuth } = require('../middleware/auth');
+const { requireBottleAccess } = require('../middleware/bottleAccess');
 const Bottle = require('../models/Bottle');
 const Cellar = require('../models/Cellar');
 const Rack = require('../models/Rack');
@@ -9,12 +10,20 @@ const BottleImage = require('../models/BottleImage');
 const { getCellarRole } = require('../utils/cellarAccess');
 const { logAudit } = require('../services/audit');
 const { getOrCreateDailySnapshot, getSnapshotForDate } = require('../utils/exchangeRates');
-const { isValidRating, VALID_SCALES } = require('../utils/ratingUtils');
+const { resolveRating } = require('../utils/ratingUtils');
 const { embedSinglePair } = require('../services/embeddingJob');
-const { CONSUMED_STATUSES } = require('../config/constants');
+const { CONSUMED_STATUSES, WINE_POPULATE } = require('../config/constants');
 const { stripHtml, isSafeUrl } = require('../utils/sanitize');
 
 const router = express.Router();
+
+// Remove a bottle from every rack slot that references it
+async function removeFromRacks(bottleId) {
+  await Rack.updateMany(
+    { 'slots.bottle': bottleId },
+    { $pull: { slots: { bottle: bottleId } } }
+  );
+}
 
 // All routes require authentication
 router.use(requireAuth);
@@ -48,12 +57,8 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ error: 'purchaseUrl must be a valid http or https URL' });
     }
 
-    const resolvedRatingScale = ratingScale && VALID_SCALES.includes(ratingScale) ? ratingScale : '5';
-    if (rating !== undefined && rating !== null && rating !== '') {
-      if (!isValidRating(rating, resolvedRatingScale)) {
-        return res.status(400).json({ error: `Rating is out of range for the ${resolvedRatingScale}-point scale` });
-      }
-    }
+    const { rating: resolvedRating, ratingScale: resolvedRatingScale, error: ratingError } = resolveRating(rating, ratingScale);
+    if (ratingError) return res.status(400).json({ error: ratingError });
 
     // Verify user has editor/owner access to this cellar
     const cellarDoc = await Cellar.findById(cellar);
@@ -90,17 +95,14 @@ router.post('/', async (req, res) => {
       purchaseUrl,
       location: stripHtml(location),
       notes: stripHtml(notes),
-      rating: (rating !== undefined && rating !== null && rating !== '') ? parseFloat(rating) : undefined,
+      rating: resolvedRating,
       ratingScale: resolvedRatingScale,
       drinkFrom,
       drinkBefore
     });
 
     await bottle.save();
-    await bottle.populate({
-      path: 'wineDefinition',
-      populate: ['country', 'region', 'grapes']
-    });
+    await bottle.populate(WINE_POPULATE);
 
     // Auto-create a pending WineVintageProfile if the vintage is a numeric year
     // and one doesn't already exist. The somm queue will pick this up.
@@ -134,23 +136,10 @@ router.post('/', async (req, res) => {
 });
 
 // GET /api/bottles/:id - Get bottle details (owner, editor, or viewer of cellar)
-router.get('/:id', async (req, res) => {
+router.get('/:id', requireBottleAccess('viewer'), async (req, res) => {
   try {
-    const bottle = await Bottle.findById(req.params.id).populate({
-      path: 'wineDefinition',
-      populate: ['country', 'region', 'grapes']
-    });
-
-    if (!bottle) {
-      return res.status(404).json({ error: 'Bottle not found' });
-    }
-
-    // Check cellar access
-    const cellar = await Cellar.findById(bottle.cellar);
-    const role = getCellarRole(cellar, req.user.id);
-    if (!role) {
-      return res.status(404).json({ error: 'Bottle not found' });
-    }
+    const { bottle, cellar, cellarRole: role } = req;
+    await bottle.populate(WINE_POPULATE);
 
     // Join the historical rate snapshot for the date this price was entered.
     // Exposed as priceCurrencyRates so the frontend needs no changes.
@@ -185,18 +174,9 @@ router.get('/:id', async (req, res) => {
 });
 
 // PUT /api/bottles/:id - Update bottle (owner or editor)
-router.put('/:id', async (req, res) => {
+router.put('/:id', requireBottleAccess('editor'), async (req, res) => {
   try {
-    const bottle = await Bottle.findById(req.params.id);
-    if (!bottle) {
-      return res.status(404).json({ error: 'Bottle not found' });
-    }
-
-    const cellar = await Cellar.findById(bottle.cellar);
-    const role = getCellarRole(cellar, req.user.id);
-    if (!role || role === 'viewer') {
-      return res.status(403).json({ error: 'Not authorized to edit this bottle' });
-    }
+    const { bottle } = req;
 
     if (req.body.purchaseUrl && !isSafeUrl(req.body.purchaseUrl)) {
       return res.status(400).json({ error: 'purchaseUrl must be a valid http or https URL' });
@@ -236,16 +216,10 @@ router.put('/:id', async (req, res) => {
 
     // Validate and coerce rating if it was updated
     if ('rating' in req.body) {
-      const scale = bottle.ratingScale || '5';
-      const ratingVal = req.body.rating;
-      if (ratingVal !== undefined && ratingVal !== null && ratingVal !== '') {
-        if (!isValidRating(ratingVal, scale)) {
-          return res.status(400).json({ error: `Rating is out of range for the ${scale}-point scale` });
-        }
-        bottle.rating = parseFloat(ratingVal);
-      } else {
-        bottle.rating = undefined;
-      }
+      const { rating: r, ratingScale: rs, error: ratingError } = resolveRating(req.body.rating, bottle.ratingScale);
+      if (ratingError) return res.status(400).json({ error: ratingError });
+      bottle.rating = r;
+      bottle.ratingScale = rs;
     }
 
     // Re-anchor the price date whenever price or currency is being updated,
@@ -260,10 +234,7 @@ router.put('/:id', async (req, res) => {
     }
 
     await bottle.save();
-    await bottle.populate({
-      path: 'wineDefinition',
-      populate: ['country', 'region', 'grapes']
-    });
+    await bottle.populate(WINE_POPULATE);
 
     if (Object.keys(changes).length > 0) {
       logAudit(req, 'bottle.update',
@@ -289,43 +260,27 @@ router.put('/:id', async (req, res) => {
 });
 
 // POST /api/bottles/:id/consume - Soft-remove bottle (owner or editor)
-router.post('/:id/consume', async (req, res) => {
+router.post('/:id/consume', requireBottleAccess('editor'), async (req, res) => {
   try {
-    const bottle = await Bottle.findById(req.params.id);
-    if (!bottle) return res.status(404).json({ error: 'Bottle not found' });
-
-    const cellar = await Cellar.findById(bottle.cellar);
-    const role = getCellarRole(cellar, req.user.id);
-    if (!role || role === 'viewer') {
-      return res.status(403).json({ error: 'Not authorized to consume this bottle' });
-    }
-
+    const { bottle } = req;
     const { reason = 'drank', note, rating, consumedRatingScale } = req.body;
+
     if (!CONSUMED_STATUSES.includes(reason)) {
       return res.status(400).json({ error: 'Invalid reason' });
     }
 
-    const resolvedConsumedScale = consumedRatingScale && VALID_SCALES.includes(consumedRatingScale)
-      ? consumedRatingScale
-      : '5';
-    if (rating !== undefined && rating !== null && rating !== '') {
-      if (!isValidRating(rating, resolvedConsumedScale)) {
-        return res.status(400).json({ error: `Rating is out of range for the ${resolvedConsumedScale}-point scale` });
-      }
-    }
+    const { rating: resolvedConsumedRating, ratingScale: resolvedConsumedScale, error: consumeRatingError } = resolveRating(rating, consumedRatingScale);
+    if (consumeRatingError) return res.status(400).json({ error: consumeRatingError });
 
     // Remove from any rack slot so the slot is freed up
-    await Rack.updateMany(
-      { 'slots.bottle': bottle._id },
-      { $pull: { slots: { bottle: bottle._id } } }
-    );
+    await removeFromRacks(bottle._id);
 
     bottle.status = reason;
     bottle.consumedAt = new Date();
     bottle.consumedReason = reason;
     if (note) bottle.consumedNote = stripHtml(note);
-    if (rating !== undefined && rating !== null && rating !== '') {
-      bottle.consumedRating = parseFloat(rating);
+    if (resolvedConsumedRating !== undefined) {
+      bottle.consumedRating = resolvedConsumedRating;
       bottle.consumedRatingScale = resolvedConsumedScale;
     }
 
@@ -344,24 +299,12 @@ router.post('/:id/consume', async (req, res) => {
 });
 
 // DELETE /api/bottles/:id - Delete bottle (owner or editor)
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', requireBottleAccess('editor'), async (req, res) => {
   try {
-    const bottle = await Bottle.findById(req.params.id);
-    if (!bottle) {
-      return res.status(404).json({ error: 'Bottle not found' });
-    }
-
-    const cellar = await Cellar.findById(bottle.cellar);
-    const role = getCellarRole(cellar, req.user.id);
-    if (!role || role === 'viewer') {
-      return res.status(403).json({ error: 'Not authorized to delete this bottle' });
-    }
+    const { bottle } = req;
 
     // Remove bottle from any rack slot that references it
-    await Rack.updateMany(
-      { 'slots.bottle': bottle._id },
-      { $pull: { slots: { bottle: bottle._id } } }
-    );
+    await removeFromRacks(bottle._id);
 
     logAudit(req, 'bottle.delete',
       { type: 'bottle', id: bottle._id, cellarId: bottle.cellar },

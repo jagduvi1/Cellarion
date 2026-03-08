@@ -13,7 +13,8 @@ const { getSnapshotsForDates, getOrCreateDailySnapshot, convertCurrency } = requ
 const { createNotification } = require('../services/notifications');
 const { getPlanConfig } = require('../config/plans');
 const { toNormalized } = require('../utils/ratingUtils');
-const { CONSUMED_STATUSES, MS_PER_DAY } = require('../config/constants');
+const { CONSUMED_STATUSES, MS_PER_DAY, WINE_POPULATE } = require('../config/constants');
+const { classifyDrinkWindow } = require('../utils/drinkWindow');
 
 const router = express.Router();
 
@@ -222,10 +223,11 @@ router.get('/:id/statistics', async (req, res) => {
     now.setHours(0, 0, 0, 0);
     let drinkOverdue = 0, drinkSoon = 0;
     bottles.forEach(bottle => {
-      if (!bottle.drinkBefore) return;
-      const daysLeft = Math.round((new Date(bottle.drinkBefore) - now) / MS_PER_DAY);
-      if (daysLeft < 0) drinkOverdue++;
-      else if (daysLeft <= 90) drinkSoon++;
+      const from   = bottle.drinkFrom   ? new Date(bottle.drinkFrom)   : null;
+      const before = bottle.drinkBefore ? new Date(bottle.drinkBefore) : null;
+      const cls = classifyDrinkWindow(from, before, now);
+      if (cls === 'overdue') drinkOverdue++;
+      else if (cls === 'soon') drinkSoon++;
     });
     stats.drinkOverdue = drinkOverdue;
     stats.drinkSoon = drinkSoon;
@@ -254,7 +256,7 @@ router.get('/:id/history', async (req, res) => {
       cellar: req.params.id,
       status: { $in: CONSUMED_STATUSES }
     })
-      .populate({ path: 'wineDefinition', populate: ['country', 'region', 'grapes'] })
+      .populate(WINE_POPULATE)
       .sort({ consumedAt: -1 });
 
     const cellarObj = cellar.toObject();

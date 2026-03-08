@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
+import { adminGetUsers, adminChangeUserPlan, adminResetUserTrial, adminChangeUserRoles } from '../api/admin';
 import { PLAN_NAMES, PLANS } from '../config/plans';
 import './AdminUsers.css';
 
@@ -169,7 +170,7 @@ function AdminUsers() {
       if (filters.plan)   params.set('plan', filters.plan);
       if (filters.role)   params.set('role', filters.role);
 
-      const res = await apiFetch(`/api/admin/users?${params}`);
+      const res = await adminGetUsers(apiFetch, params);
       const data = await res.json();
       if (res.ok) {
         setUsers(data.users);
@@ -202,11 +203,7 @@ function AdminUsers() {
   async function changePlan(userId, newPlan, expiresInDays) {
     setUpdating(prev => ({ ...prev, [userId + '_plan']: true }));
     try {
-      const res = await apiFetch(`/api/admin/users/${userId}/plan`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ plan: newPlan, expiresInDays })
-      });
+      const res = await adminChangeUserPlan(apiFetch, userId, newPlan, expiresInDays);
       const data = await res.json();
       if (res.ok) {
         setUsers(prev => prev.map(u => u._id === userId
@@ -214,10 +211,10 @@ function AdminUsers() {
           : u
         ));
       } else {
-        alert(data.error || 'Failed to change plan');
+        setError(data.error || 'Failed to change plan');
       }
     } catch {
-      alert('Network error');
+      setError('Network error');
     } finally {
       setUpdating(prev => ({ ...prev, [userId + '_plan']: false }));
     }
@@ -226,10 +223,7 @@ function AdminUsers() {
   async function resetTrial(userId) {
     setUpdating(prev => ({ ...prev, [userId + '_trial']: true }));
     try {
-      const res = await apiFetch(`/api/admin/users/${userId}/trial-eligible`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-      });
+      const res = await adminResetUserTrial(apiFetch, userId);
       const data = await res.json();
       if (res.ok) {
         setUsers(prev => prev.map(u => u._id === userId
@@ -237,10 +231,10 @@ function AdminUsers() {
           : u
         ));
       } else {
-        alert(data.error || 'Failed to reset trial');
+        setError(data.error || 'Failed to reset trial');
       }
     } catch {
-      alert('Network error');
+      setError('Network error');
     } finally {
       setUpdating(prev => ({ ...prev, [userId + '_trial']: false }));
     }
@@ -249,19 +243,15 @@ function AdminUsers() {
   async function changeRoles(userId, newRoles) {
     setUpdating(prev => ({ ...prev, [userId + '_roles']: true }));
     try {
-      const res = await apiFetch(`/api/admin/users/${userId}/roles`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ roles: newRoles })
-      });
+      const res = await adminChangeUserRoles(apiFetch, userId, newRoles);
       const data = await res.json();
       if (res.ok) {
         setUsers(prev => prev.map(u => u._id === userId ? { ...u, roles: data.user.roles } : u));
       } else {
-        alert(data.error || 'Failed to change roles');
+        setError(data.error || 'Failed to change roles');
       }
     } catch {
-      alert('Network error');
+      setError('Network error');
     } finally {
       setUpdating(prev => ({ ...prev, [userId + '_roles']: false }));
     }

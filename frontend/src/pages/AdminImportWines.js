@@ -1,5 +1,6 @@
 import { useState, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { adminImportWines } from '../api/admin';
 import './AdminImportWines.css';
 
 function AdminImportWines() {
@@ -42,7 +43,7 @@ function AdminImportWines() {
       const body = new FormData();
       body.append('file', file);
 
-      const res = await apiFetch('/api/admin/import/wines', { method: 'POST', body });
+      const res = await adminImportWines(apiFetch, body);
       const data = await res.json();
 
       if (!res.ok) {

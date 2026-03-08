@@ -2,6 +2,7 @@ const express = require('express');
 const WineDefinition = require('../models/WineDefinition');
 const searchService = require('../services/search');
 const { requireAuth } = require('../middleware/auth');
+const { scanLabel } = require('../services/labelScan');
 
 const router = express.Router();
 
@@ -136,48 +137,12 @@ router.post('/scan-label', requireAuth, async (req, res) => {
     return res.status(400).json({ error: 'Image is required' });
   }
 
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) {
-    return res.status(503).json({ error: 'Label scan is not configured on this server' });
-  }
-
-  const ALLOWED_MEDIA_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
-  if (!ALLOWED_MEDIA_TYPES.includes(mediaType)) {
-    return res.status(400).json({ error: 'Unsupported image type' });
-  }
-
   try {
-    const sdk = require('@anthropic-ai/sdk');
-    const Anthropic = sdk.default ?? sdk;
-    const client = new Anthropic({ apiKey });
-
-    const response = await client.messages.create({
-      model: 'claude-3-5-haiku-20241022',
-      max_tokens: 80,
-      messages: [{
-        role: 'user',
-        content: [
-          {
-            type: 'image',
-            source: { type: 'base64', media_type: mediaType, data: image }
-          },
-          {
-            type: 'text',
-            text: 'Look at this wine bottle label. Extract the wine name and producer. Return ONLY a short search string like "wine name producer" with no explanation, punctuation, or extra words — just the key identifying text from the label.'
-          }
-        ]
-      }]
-    });
-
-    const query = (response.content[0]?.text ?? '').trim();
-    if (!query) {
-      return res.status(422).json({ error: 'Could not read label' });
-    }
-
+    const query = await scanLabel(image, mediaType);
     res.json({ query });
   } catch (err) {
     console.error('Label scan error:', err.message);
-    res.status(500).json({ error: 'Label scan failed' });
+    res.status(err.status || 500).json({ error: err.message || 'Label scan failed' });
   }
 });
 

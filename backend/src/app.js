@@ -135,6 +135,14 @@ app.use((req, res) => {
   res.status(404).json({ error: 'Route not found' });
 });
 
+// Centralized error handler — catches errors passed via next(err)
+// eslint-disable-next-line no-unused-vars
+app.use((err, req, res, next) => {
+  console.error(err);
+  const status = err.status || err.statusCode || 500;
+  res.status(status).json({ error: err.message || 'Internal server error' });
+});
+
 // Load rate limit configuration from DB on startup (non-blocking; falls back to defaults)
 rateLimitsConfig.load().catch(err =>
   console.warn('[rateLimits] Startup load failed, using defaults:', err.message)

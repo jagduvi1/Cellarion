@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
+import { adminGetImages, adminApproveImage, adminRejectImage, adminAssignImageToWine } from '../api/admin';
+import AuthImage from '../components/AuthImage';
 import './AdminImages.css';
 
 const API_URL = process.env.REACT_APP_API_URL || '';
@@ -38,7 +40,7 @@ function AdminImages() {
       const params = new URLSearchParams({ page, limit });
       if (statusFilter) params.append('status', statusFilter);
 
-      const res = await apiFetch(`/api/admin/images?${params}`);
+      const res = await adminGetImages(apiFetch, params);
       const data = await res.json();
       if (res.ok) {
         setImages(data.images);
@@ -56,9 +58,7 @@ function AdminImages() {
     setSubmitting(true);
     setError(null);
     try {
-      const res = await apiFetch(`/api/admin/images/${selected._id}/approve`, {
-        method: 'PUT'
-      });
+      const res = await adminApproveImage(apiFetch, selected._id);
       const data = await res.json();
       if (res.ok) {
         setSelected(data.image);
@@ -78,9 +78,7 @@ function AdminImages() {
     setSubmitting(true);
     setError(null);
     try {
-      const res = await apiFetch(`/api/admin/images/${selected._id}/reject`, {
-        method: 'PUT'
-      });
+      const res = await adminRejectImage(apiFetch, selected._id);
       const data = await res.json();
       if (res.ok) {
         setSelected(data.image);
@@ -105,11 +103,7 @@ function AdminImages() {
     setSubmitting(true);
     setError(null);
     try {
-      const res = await apiFetch(`/api/admin/images/${selected._id}/assign-to-wine`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ wineDefinitionId: wineDefId })
-      });
+      const res = await adminAssignImageToWine(apiFetch, selected._id, { wineDefinitionId: wineDefId });
       const data = await res.json();
       if (res.ok) {
         setSelected(data.image);
@@ -163,7 +157,7 @@ function AdminImages() {
                     onClick={() => { setSelected(img); setError(null); setAssignWineId(''); }}
                   >
                     <div className="image-item-thumb">
-                      <img
+                      <AuthImage
                         src={`${API_URL}${img.processedUrl || img.originalUrl}`}
                         alt="Bottle"
                         onError={(e) => { e.target.style.display = 'none'; }}
@@ -218,7 +212,7 @@ function AdminImages() {
                 <div className="image-comparison">
                   <div className="image-compare-item">
                     <h3>{t('admin.images.original')}</h3>
-                    <img
+                    <AuthImage
                       src={`${API_URL}${selected.originalUrl}`}
                       alt="Original"
                       className="detail-image"
@@ -228,7 +222,7 @@ function AdminImages() {
                     <div className="image-compare-item">
                       <h3>{t('admin.images.backgroundRemoved')}</h3>
                       <div className="processed-image-container">
-                        <img
+                        <AuthImage
                           src={`${API_URL}${selected.processedUrl}`}
                           alt="Processed"
                           className="detail-image"

@@ -1,6 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
+import {
+  adminGetTaxonomy, adminGetCountries, adminGetGrapes, adminGetRegions,
+  adminCreateTaxonomy, adminUpdateTaxonomy, adminDeleteTaxonomy,
+} from '../api/admin';
 import GrapePicker from '../components/GrapePicker';
 import './AdminTaxonomy.css';
 
@@ -35,7 +39,7 @@ function AdminTaxonomy() {
   useEffect(() => {
     const fetchCountries = async () => {
       try {
-        const res = await apiFetch('/api/admin/taxonomy/countries');
+        const res = await adminGetCountries(apiFetch);
         const data = await res.json();
         if (res.ok) setAllCountries(data.countries || []);
       } catch (err) {
@@ -44,7 +48,7 @@ function AdminTaxonomy() {
     };
     const fetchGrapes = async () => {
       try {
-        const res = await apiFetch('/api/admin/taxonomy/grapes');
+        const res = await adminGetGrapes(apiFetch);
         const data = await res.json();
         if (res.ok) setAllGrapes(data.grapes || []);
       } catch (err) {
@@ -59,7 +63,7 @@ function AdminTaxonomy() {
   const fetchRegionsForCountry = async (countryId) => {
     if (!countryId) { setAllRegions([]); return; }
     try {
-      const res = await apiFetch(`/api/admin/taxonomy/regions?country=${countryId}`);
+      const res = await adminGetRegions(apiFetch, countryId);
       const data = await res.json();
       if (res.ok) setAllRegions(data.regions || []);
     } catch (err) {
@@ -71,7 +75,7 @@ function AdminTaxonomy() {
     setLoading(true);
     setError(null);
     try {
-      const res = await apiFetch(endpoints[activeTab]);
+      const res = await adminGetTaxonomy(apiFetch, endpoints[activeTab]);
       const data = await res.json();
       if (res.ok) {
         setItems(data.countries || data.regions || data.grapes || data.appellations || []);
@@ -88,11 +92,7 @@ function AdminTaxonomy() {
     setError(null);
     try {
       const payload = buildPayload(formData);
-      const res = await apiFetch(endpoints[activeTab], {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
+      const res = await adminCreateTaxonomy(apiFetch, endpoints[activeTab], payload);
       const data = await res.json();
       if (res.ok) {
         setShowForm(false);
@@ -100,7 +100,7 @@ function AdminTaxonomy() {
         fetchItems();
         // Refresh grapes list if a grape was added (needed for region forms)
         if (activeTab === 'grapes') {
-          const gRes = await apiFetch('/api/admin/taxonomy/grapes');
+          const gRes = await adminGetGrapes(apiFetch);
           const gData = await gRes.json();
           if (gRes.ok) setAllGrapes(gData.grapes || []);
         }
@@ -117,11 +117,7 @@ function AdminTaxonomy() {
     setError(null);
     try {
       const payload = buildPayload(formData);
-      const res = await apiFetch(`${endpoints[activeTab]}/${editItem._id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
+      const res = await adminUpdateTaxonomy(apiFetch, endpoints[activeTab], editItem._id, payload);
       const data = await res.json();
       if (res.ok) {
         setEditItem(null);
@@ -138,15 +134,15 @@ function AdminTaxonomy() {
   const handleDelete = async (id) => {
     if (!window.confirm('Delete this item?')) return;
     try {
-      const res = await apiFetch(`${endpoints[activeTab]}/${id}`, { method: 'DELETE' });
+      const res = await adminDeleteTaxonomy(apiFetch, endpoints[activeTab], id);
       const data = await res.json();
       if (res.ok) {
         fetchItems();
       } else {
-        alert(data.error || 'Failed to delete');
+        setError(data.error || 'Failed to delete');
       }
     } catch (err) {
-      alert('Network error');
+      setError('Network error');
     }
   };
 

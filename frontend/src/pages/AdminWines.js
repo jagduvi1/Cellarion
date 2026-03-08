@@ -1,12 +1,15 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
+import {
+  adminGetWines, adminGetWine, adminSaveWine, adminDeleteWine,
+  adminGetCountries, adminGetGrapes, adminGetRegions, adminGetAppellations,
+} from '../api/admin';
+import { WINE_TYPES } from '../config/wineTypes';
 import GrapePicker from '../components/GrapePicker';
 import ImageUpload from '../components/ImageUpload';
 import ImageGallery from '../components/ImageGallery';
 import './AdminWines.css';
-
-const WINE_TYPES = ['red', 'white', 'rosé', 'sparkling', 'dessert', 'fortified'];
 
 const emptyForm = {
   name: '',
@@ -68,7 +71,7 @@ function AdminWines() {
       if (search) params.set('search', search);
       if (filters.type) params.set('type', filters.type);
       params.set('sort', filters.sort);
-      const res = await apiFetch(`/api/admin/wines?${params}`);
+      const res = await adminGetWines(apiFetch, params);
       const data = await res.json();
       if (res.ok) {
         setWines(data.wines);
@@ -90,8 +93,8 @@ function AdminWines() {
     const fetchTaxonomy = async () => {
       try {
         const [cRes, gRes] = await Promise.all([
-          apiFetch('/api/admin/taxonomy/countries'),
-          apiFetch('/api/admin/taxonomy/grapes')
+          adminGetCountries(apiFetch),
+          adminGetGrapes(apiFetch)
         ]);
         const [cData, gData] = await Promise.all([cRes.json(), gRes.json()]);
         if (cRes.ok) setCountries(cData.countries || []);
@@ -106,7 +109,7 @@ function AdminWines() {
   const fetchRegions = async (countryId) => {
     if (!countryId) { setRegions([]); setAppellations([]); return; }
     try {
-      const res = await apiFetch(`/api/admin/taxonomy/regions?country=${countryId}`);
+      const res = await adminGetRegions(apiFetch, countryId);
       const data = await res.json();
       if (res.ok) setRegions(data.regions || []);
     } catch (err) {
@@ -119,7 +122,7 @@ function AdminWines() {
     try {
       const params = new URLSearchParams({ country: countryId });
       if (regionId) params.set('region', regionId);
-      const res = await apiFetch(`/api/admin/taxonomy/appellations?${params}`);
+      const res = await adminGetAppellations(apiFetch, params);
       const data = await res.json();
       if (res.ok) setAppellations(data.appellations || []);
     } catch (err) {
@@ -141,7 +144,7 @@ function AdminWines() {
     setFormError(null);
     setImageCredit('');
     try {
-      const res = await apiFetch(`/api/admin/wines/${wine._id}`);
+      const res = await adminGetWine(apiFetch, wine._id);
       const data = await res.json();
       if (res.ok) {
         const w = data.wine;
@@ -193,14 +196,7 @@ function AdminWines() {
         image: formData.image.trim() || null
       };
 
-      const url = editWine ? `/api/admin/wines/${editWine._id}` : '/api/admin/wines';
-      const method = editWine ? 'PUT' : 'POST';
-
-      const res = await apiFetch(url, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
+      const res = await adminSaveWine(apiFetch, payload, editWine?._id);
       const data = await res.json();
       if (res.ok) {
         closeForm();
@@ -218,7 +214,7 @@ function AdminWines() {
   const handleDelete = async (wine) => {
     if (!window.confirm(t('admin.wines.deleteConfirm', { name: wine.name }))) return;
     try {
-      const res = await apiFetch(`/api/admin/wines/${wine._id}`, { method: 'DELETE' });
+      const res = await adminDeleteWine(apiFetch, wine._id);
       const data = await res.json();
       if (res.ok) {
         fetchWines();

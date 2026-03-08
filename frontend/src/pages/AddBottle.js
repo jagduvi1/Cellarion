@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
+import { searchWines } from '../api/wines';
 import { CURRENCIES } from '../config/currencies';
 import { monthToLastDay } from '../utils/drinkStatus';
 import ImageUpload from '../components/ImageUpload';
@@ -144,28 +145,19 @@ function AddBottle() {
     }, 'image/jpeg', 0.55);
   }, [apiFetch, stopLabelCamera]);
 
+  // Debounce search: wait 300ms after the user stops typing before firing
   useEffect(() => {
-    if (search.length > 0) {
-      searchWines();
-    } else {
-      setWines([]);
-    }
-  }, [search]);
-
-  const searchWines = async () => {
-    setLoading(true);
-    try {
-      const res = await apiFetch(`/api/wines?search=${encodeURIComponent(search)}&limit=10`);
-      const data = await res.json();
-      if (res.ok) {
-        setWines(data.wines);
-      }
-    } catch (err) {
-      console.error('Search failed:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
+    if (search.length === 0) { setWines([]); return; }
+    const timer = setTimeout(() => {
+      setLoading(true);
+      searchWines(apiFetch, `search=${encodeURIComponent(search)}&limit=10`)
+        .then(res => res.json())
+        .then(data => { if (data.wines) setWines(data.wines); })
+        .catch(err => console.error('Search failed:', err))
+        .finally(() => setLoading(false));
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [search]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSelectWine = (wine) => {
     setSelectedWine(wine);
@@ -315,8 +307,6 @@ function AddBottle() {
           </div>
 
           {loading && <p>{t('addBottle.searching')}</p>}
-
-          {loading && wines.length === 0 && <p className="loading">{t('common.loading')}</p>}
 
           {!loading && wines.length === 0 && (
             <div className="empty-state">

@@ -1,6 +1,12 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
+import {
+  adminGetWineRequests, adminResolveWineRequest, adminRejectWineRequest,
+  adminGetCountries, adminGetGrapes, adminGetRegions, adminGetAppellations,
+} from '../api/admin';
+import { searchWines } from '../api/wines';
+import { WINE_TYPES } from '../config/wineTypes';
 import GrapePicker from '../components/GrapePicker';
 import './AdminRequests.css';
 
@@ -45,7 +51,7 @@ function AdminRequests() {
     const timer = setTimeout(async () => {
       setLinkSearching(true);
       try {
-        const res = await apiFetch(`/api/wines?search=${encodeURIComponent(linkSearch)}&limit=8`);
+        const res = await searchWines(apiFetch, `search=${encodeURIComponent(linkSearch)}&limit=8`);
         const data = await res.json();
         if (res.ok) setLinkResults(data.wines || []);
       } catch (err) {
@@ -61,7 +67,7 @@ function AdminRequests() {
     setLoading(true);
     try {
       const params = statusFilter ? `?status=${statusFilter}` : '';
-      const res = await apiFetch(`/api/admin/wine-requests${params}`);
+      const res = await adminGetWineRequests(apiFetch, params);
       const data = await res.json();
       if (res.ok) setRequests(data.requests);
     } catch (err) {
@@ -73,7 +79,7 @@ function AdminRequests() {
 
   const fetchCountries = async () => {
     try {
-      const res = await apiFetch('/api/admin/taxonomy/countries');
+      const res = await adminGetCountries(apiFetch);
       const data = await res.json();
       if (res.ok) setCountries(data.countries);
     } catch (err) {
@@ -84,7 +90,7 @@ function AdminRequests() {
   const fetchRegions = async (countryId) => {
     if (!countryId) { setRegions([]); setAppellations([]); return; }
     try {
-      const res = await apiFetch(`/api/admin/taxonomy/regions?country=${countryId}`);
+      const res = await adminGetRegions(apiFetch, countryId);
       const data = await res.json();
       if (res.ok) setRegions(data.regions);
     } catch (err) {
@@ -97,7 +103,7 @@ function AdminRequests() {
     try {
       const params = new URLSearchParams({ country: countryId });
       if (regionId) params.set('region', regionId);
-      const res = await apiFetch(`/api/admin/taxonomy/appellations?${params}`);
+      const res = await adminGetAppellations(apiFetch, params);
       const data = await res.json();
       if (res.ok) setAppellations(data.appellations || []);
     } catch (err) {
@@ -107,7 +113,7 @@ function AdminRequests() {
 
   const fetchGrapes = async () => {
     try {
-      const res = await apiFetch('/api/admin/taxonomy/grapes');
+      const res = await adminGetGrapes(apiFetch);
       const data = await res.json();
       if (res.ok) setGrapes(data.grapes);
     } catch (err) {
@@ -167,11 +173,7 @@ function AdminRequests() {
         body.wineDefinitionId = resolveData.wineDefinitionId;
       }
 
-      const res = await apiFetch(`/api/admin/wine-requests/${selected._id}/resolve`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body)
-      });
+      const res = await adminResolveWineRequest(apiFetch, selected._id, body);
 
       const data = await res.json();
       if (res.ok) {
@@ -196,11 +198,7 @@ function AdminRequests() {
     setSubmitting(true);
     setError(null);
     try {
-      const res = await apiFetch(`/api/admin/wine-requests/${selected._id}/reject`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ adminNotes: notes })
-      });
+      const res = await adminRejectWineRequest(apiFetch, selected._id, { adminNotes: notes });
 
       const data = await res.json();
       if (res.ok) {
@@ -414,7 +412,7 @@ function AdminRequests() {
                               setResolveData({ ...resolveData, wineData });
                             }}
                           >
-                            {['red', 'white', 'rosé', 'sparkling', 'dessert', 'fortified'].map(type => (
+                            {WINE_TYPES.map(type => (
                               <option key={type} value={type}>{type}</option>
                             ))}
                           </select>

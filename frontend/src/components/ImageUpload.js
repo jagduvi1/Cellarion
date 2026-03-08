@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import AuthImage from './AuthImage';
 import './ImageUpload.css';
 
 const API_URL = process.env.REACT_APP_API_URL || '';
@@ -271,7 +272,7 @@ function ImageUpload({ bottleId, wineDefinitionId, credit, onUploadComplete, onP
             <div key={img.id} className="preview-card">
               <div className="preview-image-wrap">
                 {img.status === 'processed' && img.processedSrc ? (
-                  <img
+                  <AuthImage
                     src={img.processedSrc.startsWith('http') ? img.processedSrc : `${API_URL}${img.processedSrc}`}
                     alt="Processed"
                     className="preview-img"

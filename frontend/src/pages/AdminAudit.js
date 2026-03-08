@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
+import { adminGetAudit } from '../api/admin';
 import './AdminAudit.css';
 
 // Color category for each action prefix
@@ -71,7 +72,7 @@ function AdminAudit() {
       if (filters.from)   params.set('from', filters.from);
       if (filters.to)     params.set('to', filters.to);
 
-      const res = await apiFetch(`/api/admin/audit?${params}`);
+      const res = await adminGetAudit(apiFetch, params);
       const data = await res.json();
       if (res.ok) {
         setLogs(data.logs);

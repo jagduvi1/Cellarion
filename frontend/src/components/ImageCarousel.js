@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import './ImageCarousel.css';
+import AuthImage from './AuthImage';
 
 const API_URL = process.env.REACT_APP_API_URL || '';
 
@@ -23,7 +24,7 @@ function ImageCarousel({ images, size = 'medium' }) {
   return (
     <div className={`image-carousel carousel-${size}`}>
       <div className="carousel-viewport">
-        <img
+        <AuthImage
           src={fullSrc}
           alt="Wine bottle"
           className="carousel-image"

@@ -98,4 +98,21 @@ function isValidRating(value, scale) {
   return v >= meta.min && v <= meta.max;
 }
 
-module.exports = { SCALE_META, VALID_SCALES, toNormalized, fromNormalized, convertRating, isValidRating, formatDelta };
+/**
+ * Resolve the rating scale, validate the value, and return { rating, ratingScale }.
+ * Returns { error } if the value is out of range for the resolved scale.
+ * Use this instead of repeating the scale-resolve + isValidRating + parseFloat
+ * pattern across route handlers.
+ */
+function resolveRating(rawRating, rawScale) {
+  const ratingScale = rawScale && VALID_SCALES.includes(rawScale) ? rawScale : '5';
+  if (rawRating === undefined || rawRating === null || rawRating === '') {
+    return { rating: undefined, ratingScale };
+  }
+  if (!isValidRating(rawRating, ratingScale)) {
+    return { error: `Rating is out of range for the ${ratingScale}-point scale`, ratingScale };
+  }
+  return { rating: parseFloat(rawRating), ratingScale };
+}
+
+module.exports = { SCALE_META, VALID_SCALES, toNormalized, fromNormalized, convertRating, isValidRating, formatDelta, resolveRating };

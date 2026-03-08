@@ -2,6 +2,9 @@ import { useState, useEffect, useMemo } from 'react';
 import { useParams, Link, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
+import { getCellar } from '../api/cellars';
+import { getRacks, deleteRack, updateSlot, clearSlot } from '../api/racks';
+import { consumeBottle } from '../api/bottles';
 import RatingInput from '../components/RatingInput';
 import './CellarRacks.css';
 
@@ -72,8 +75,8 @@ function CellarRacks() {
   const fetchAll = async () => {
     try {
       const [cellarRes, racksRes] = await Promise.all([
-        apiFetch(`/api/cellars/${id}`),
-        apiFetch(`/api/racks?cellar=${id}`)
+        getCellar(apiFetch, id),
+        getRacks(apiFetch, id)
       ]);
       const cellarData = await cellarRes.json();
       const racksData  = await racksRes.json();
@@ -120,7 +123,7 @@ function CellarRacks() {
   // --- delete rack ---
   const handleDeleteRack = async (rackId) => {
     if (!window.confirm(t('racks.deleteRackConfirm'))) return;
-    const res = await apiFetch(`/api/racks/${rackId}`, { method: 'DELETE' });
+    const res = await deleteRack(apiFetch, rackId);
     if (res.ok) {
       const remaining = racks.filter(r => r._id !== rackId);
       setRacks(remaining);
@@ -132,11 +135,7 @@ function CellarRacks() {
 
   // --- assign bottle to slot ---
   const handleAssign = async (rackId, position, bottleId) => {
-    const res = await apiFetch(`/api/racks/${rackId}/slots/${position}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ bottleId })
-    });
+    const res = await updateSlot(apiFetch, rackId, position, { bottleId });
     const data = await res.json();
     if (res.ok) {
       setRacks(racks.map(r => r._id === rackId ? data.rack : r));
@@ -148,9 +147,7 @@ function CellarRacks() {
 
   // --- remove bottle from slot (keep bottle in cellar) ---
   const handleRemoveFromRack = async (rackId, position) => {
-    const res = await apiFetch(`/api/racks/${rackId}/slots/${position}`, {
-      method: 'DELETE'
-    });
+    const res = await clearSlot(apiFetch, rackId, position);
     const data = await res.json();
     if (res.ok) {
       setRacks(racks.map(r => r._id === rackId ? data.rack : r));
@@ -161,11 +158,7 @@ function CellarRacks() {
   // --- soft-remove bottle via the shared consume endpoint ---
   const handleConsumeSubmit = async (reason, note, rating, consumedRatingScale) => {
     const { bottleId } = consumeModal;
-    const res = await apiFetch(`/api/bottles/${bottleId}/consume`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ reason, note, rating, consumedRatingScale })
-    });
+    const res = await consumeBottle(apiFetch, bottleId, { reason, note, rating, consumedRatingScale });
     const data = await res.json();
     if (res.ok) {
       // Server already cleared the rack slot; update local racks state

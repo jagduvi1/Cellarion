@@ -9,4 +9,7 @@ const CONSUMED_STATUSES = ['drank', 'gifted', 'sold', 'other'];
 // Milliseconds in a single day — used for drink-window calculations
 const MS_PER_DAY = 86400000;
 
-module.exports = { CONSUMED_STATUSES, MS_PER_DAY };
+// Standard Mongoose populate shape for WineDefinition — used across bottles, cellars, stats
+const WINE_POPULATE = { path: 'wineDefinition', populate: ['country', 'region', 'grapes'] };
+
+module.exports = { CONSUMED_STATUSES, MS_PER_DAY, WINE_POPULATE };

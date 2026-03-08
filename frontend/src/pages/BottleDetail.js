@@ -2,33 +2,16 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth, usePlan } from '../contexts/AuthContext';
-import { getDrinkStatus, formatDrinkDate, toInputDate, toMonthInput, monthToLastDay } from '../utils/drinkStatus';
+import { getBottle, updateBottle, consumeBottle } from '../api/bottles';
+import { getRacks } from '../api/racks';
+import { getDrinkStatus, formatDrinkDate, toInputDate, toMonthInput, monthToLastDay, getMaturityStatus } from '../utils/drinkStatus';
 import { fetchRates, convertAmount, convertAmountHistorical } from '../utils/currency';
 import { CURRENCIES } from '../config/currencies';
 import ImageUpload from '../components/ImageUpload';
+import AuthImage from '../components/AuthImage';
 import RatingInput from '../components/RatingInput';
 import RatingDisplay from '../components/RatingDisplay';
 import './BottleDetail.css';
-
-const CURRENT_YEAR = new Date().getFullYear();
-
-// Derive the current maturity phase from a 3-phase reviewed WineVintageProfile
-function getMaturityStatus(profile) {
-  if (!profile || profile.status !== 'reviewed') return null;
-  const { earlyFrom, earlyUntil, peakFrom, peakUntil, lateFrom, lateUntil } = profile;
-  if (!earlyFrom) return null;
-
-  if (CURRENT_YEAR < earlyFrom)                              return { status: 'not-ready', label: `Not yet mature — from ${earlyFrom}` };
-  if (earlyUntil && CURRENT_YEAR <= earlyUntil)              return { status: 'early',     label: 'Early drinking' };
-  if (peakFrom   && CURRENT_YEAR <  peakFrom)                return { status: 'early',     label: `Early drinking — peak from ${peakFrom}` };
-  if (peakUntil  && CURRENT_YEAR <= peakUntil)               return { status: 'peak',      label: 'Optimal maturity ⭐' };
-  if (lateFrom   && CURRENT_YEAR <  lateFrom)                return { status: 'peak',      label: `Optimal maturity — late phase from ${lateFrom}` };
-  if (lateUntil  && CURRENT_YEAR <= lateUntil)               return { status: 'late',      label: 'Late maturity' };
-  if ((lateUntil && CURRENT_YEAR >  lateUntil) ||
-      (peakUntil && CURRENT_YEAR >  peakUntil && !lateFrom)) return { status: 'declining', label: 'Past prime' };
-  if (peakFrom   && CURRENT_YEAR >= peakFrom)                return { status: 'peak',      label: 'Optimal maturity ⭐' };
-  return { status: 'early', label: 'Early drinking' };
-}
 
 function BottleDetail() {
   const { t } = useTranslation();
@@ -57,7 +40,7 @@ function BottleDetail() {
 
   const fetchBottle = async () => {
     try {
-      const res = await apiFetch(`/api/bottles/${bottleId}`);
+      const res = await getBottle(apiFetch, bottleId);
       const data = await res.json();
       if (res.ok) {
         setBottle(data.bottle);
@@ -115,7 +98,7 @@ function BottleDetail() {
 
   const fetchRackInfo = async () => {
     try {
-      const res = await apiFetch(`/api/racks?cellar=${cellarId}`);
+      const res = await getRacks(apiFetch, cellarId);
       const data = await res.json();
       if (res.ok) {
         for (const rack of data.racks) {
@@ -138,11 +121,7 @@ function BottleDetail() {
 
   const handleConsumeConfirm = async (reason, note, rating, consumedRatingScale) => {
     try {
-      const res = await apiFetch(`/api/bottles/${bottleId}/consume`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ reason, note, rating, consumedRatingScale })
-      });
+      const res = await consumeBottle(apiFetch, bottleId, { reason, note, rating, consumedRatingScale });
       const data = await res.json();
       if (res.ok) {
         navigate(`/cellars/${cellarId}`);
@@ -169,7 +148,7 @@ function BottleDetail() {
         <div className="bd-wine-identity">
           {(pendingImage || wine?.image) ? (
             <div className="bd-wine-image-wrap">
-              <img
+              <AuthImage
                 src={pendingImage || wine.image}
                 alt={wine?.name}
                 className="bd-wine-image"
@@ -521,18 +500,14 @@ function EditForm({ bottle, onSaved, onCancel, onImageUploaded }) {
     setSaving(true);
     setError(null);
     try {
-      const res = await apiFetch(`/api/bottles/${bottle._id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...form,
-          price:  form.price  ? parseFloat(form.price)  : null,
-          rating: form.rating ? parseFloat(form.rating) : null,
-          ratingScale: form.ratingScale || '5',
-          drinkFrom:    form.drinkFrom   ? `${form.drinkFrom}-01`         : null,
-          drinkBefore:  form.drinkBefore ? monthToLastDay(form.drinkBefore) : null,
-          purchaseDate: form.purchaseDate || null,
-        })
+      const res = await updateBottle(apiFetch, bottle._id, {
+        ...form,
+        price:  form.price  ? parseFloat(form.price)  : null,
+        rating: form.rating ? parseFloat(form.rating) : null,
+        ratingScale: form.ratingScale || '5',
+        drinkFrom:    form.drinkFrom   ? `${form.drinkFrom}-01`         : null,
+        drinkBefore:  form.drinkBefore ? monthToLastDay(form.drinkBefore) : null,
+        purchaseDate: form.purchaseDate || null,
       });
       const data = await res.json();
       if (res.ok) onSaved(data.bottle);

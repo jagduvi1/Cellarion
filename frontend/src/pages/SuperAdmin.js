@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { adminGetRateLimits, adminSaveRateLimits } from '../api/admin';
 import './SuperAdmin.css';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1022,7 +1023,7 @@ function RateLimitsPanel({ apiFetch }) {
   const [msg,      setMsg]      = useState(null);
 
   useEffect(() => {
-    apiFetch('/api/admin/settings/rate-limits')
+    adminGetRateLimits(apiFetch)
       .then(r => r.json())
       .then(d => {
         setForm({ api: String(d.config.api.max), write: String(d.config.write.max), auth: String(d.config.auth.max) });
@@ -1040,11 +1041,7 @@ function RateLimitsPanel({ apiFetch }) {
         write: { max: Number(form.write) },
         auth:  { max: Number(form.auth)  },
       };
-      const res = await apiFetch('/api/admin/settings/rate-limits', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
+      const res = await adminSaveRateLimits(apiFetch, body);
       if (!res.ok) {
         const d = await res.json();
         setMsg({ ok: false, text: d.error || 'Save failed' });
