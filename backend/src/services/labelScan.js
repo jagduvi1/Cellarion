@@ -27,7 +27,7 @@ async function scanLabel(image, mediaType = 'image/jpeg') {
   const client = new Anthropic({ apiKey });
 
   const response = await client.messages.create({
-    model: 'claude-3-5-haiku-20241022',
+    model: 'claude-haiku-4-5-20251001',
     max_tokens: 80,
     messages: [{
       role: 'user',

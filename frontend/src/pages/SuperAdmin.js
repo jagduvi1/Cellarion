@@ -801,20 +801,12 @@ function TabAudit() {
 
 const CHAT_MODELS = [
   {
-    id: 'claude-3-5-haiku-20241022',
-    name: 'Claude 3.5 Haiku',
+    id: 'claude-haiku-4-5-20251001',
+    name: 'Claude Haiku 4.5',
     description: 'Fast & affordable — recommended for Cellar Chat',
     inputPrice: '$0.80',
     outputPrice: '$4.00',
     tier: 'economy',
-  },
-  {
-    id: 'claude-3-5-sonnet-20241022',
-    name: 'Claude 3.5 Sonnet',
-    description: 'Stronger reasoning, richer wine recommendations',
-    inputPrice: '$3.00',
-    outputPrice: '$15.00',
-    tier: 'standard',
   },
   {
     id: 'claude-sonnet-4-6',
@@ -835,7 +827,7 @@ const CHAT_MODELS = [
 ];
 
 function ChatModelPanel({ currentModel, currentFallback, apiFetch }) {
-  const [selected, setSelected]   = useState(currentModel || 'claude-3-5-haiku-20241022');
+  const [selected, setSelected]   = useState(currentModel || 'claude-haiku-4-5-20251001');
   const [fallback, setFallback]   = useState(currentFallback || 'none');
   const [saving, setSaving]       = useState(false);
   const [msg, setMsg]             = useState(null);
