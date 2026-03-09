@@ -14,6 +14,7 @@ const { createNotification } = require('../services/notifications');
 const { getPlanConfig } = require('../config/plans');
 const { toNormalized } = require('../utils/ratingUtils');
 const { CONSUMED_STATUSES, MS_PER_DAY, WINE_POPULATE } = require('../config/constants');
+const mongoose = require('mongoose');
 const { classifyDrinkWindow } = require('../utils/drinkWindow');
 
 const router = express.Router();
@@ -311,17 +312,20 @@ router.get('/:id', async (req, res) => {
       status: { $nin: CONSUMED_STATUSES }
     };
 
-    // Push vintage directly into the DB query — it's a scalar field on Bottle
-    if (vintage) filter.vintage = vintage;
+    // Push vintage directly into the DB query — cast to string to prevent NoSQL injection
+    if (vintage) filter.vintage = String(vintage);
 
     // Push taxonomy filters (country, region, grapes) down via a WineDefinition pre-query.
     // This avoids loading every bottle in the cellar just to discard most of them.
+    // Only accept valid ObjectIds to prevent NoSQL injection via operator objects.
+    const { isValidObjectId } = mongoose;
     const wdFilter = {};
-    if (country) wdFilter.country = country;
-    if (region)  wdFilter.region  = region;
+    if (country && isValidObjectId(country)) wdFilter.country = country;
+    if (region  && isValidObjectId(region))  wdFilter.region  = region;
     if (grapes) {
+      const grapeIds = String(grapes).split(',').map(g => g.trim()).filter(isValidObjectId);
       // $all ensures every requested grape is present in the wine's grapes array
-      wdFilter.grapes = { $all: grapes.split(',') };
+      if (grapeIds.length > 0) wdFilter.grapes = { $all: grapeIds };
     }
 
     if (Object.keys(wdFilter).length > 0) {

@@ -1,13 +1,23 @@
 /**
  * Strips all HTML tags from a user-supplied string to prevent XSS in rendered output.
+ * Uses a linear character-by-character scan instead of regex to avoid ReDoS.
  * Returns the original value unchanged if it is null/undefined/empty.
  */
 function stripHtml(str) {
   if (!str) return str;
-  // Single-pass replacement is sufficient — nested tags are handled because
-  // the regex matches each <...> independently left-to-right.
-  // Avoid a loop over user input to prevent ReDoS via crafted inputs.
-  return str.replace(/<[^>]*>/g, '').trim();
+  let result = '';
+  let depth = 0;
+  for (let i = 0; i < str.length; i++) {
+    const ch = str[i];
+    if (ch === '<') {
+      depth++;
+    } else if (ch === '>') {
+      if (depth > 0) depth--;
+    } else if (depth === 0) {
+      result += ch;
+    }
+  }
+  return result.trim();
 }
 
 /**
