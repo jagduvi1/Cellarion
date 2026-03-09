@@ -1,5 +1,90 @@
 /* ── Import Bottles Page ──────────────────────────────────────────────────── */
 
+/* ── Session resume banner (upload step) ──────────────────────────────────── */
+
+.session-resume-banner {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  background: #1a2a20;
+  border: 1px solid #3a5a44;
+  border-radius: 8px;
+  padding: 0.85rem 1rem;
+  margin-bottom: 1.25rem;
+}
+
+.session-resume-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.session-resume-info strong {
+  color: #a8d5b0;
+  font-size: 0.9rem;
+}
+
+.session-resume-meta {
+  color: #888;
+  font-size: 0.8rem;
+}
+
+.session-resume-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+/* ── Save status indicator (review step actions bar) ─────────────────────── */
+
+.save-status {
+  font-size: 0.78rem;
+  margin-left: auto;
+  white-space: nowrap;
+  transition: color 0.2s;
+}
+
+.save-status-idle   { display: none; }
+.save-status-saving { color: #aaa; }
+.save-status-saved  { color: #7B9E88; }
+.save-status-unsaved { color: #aaa; }
+.save-status-error  { color: #c0392b; }
+
+/* ── Refreshed-items notice (review step, above table) ───────────────────── */
+
+.session-refresh-notice {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: #1a2a20;
+  border: 1px solid #3a5a44;
+  border-radius: 6px;
+  padding: 0.65rem 0.9rem;
+  margin-bottom: 0.75rem;
+  font-size: 0.85rem;
+  color: #a8d5b0;
+}
+
+.session-refresh-notice strong {
+  color: #a8d5b0;
+}
+
+.session-refresh-dismiss {
+  margin-left: auto;
+  background: none;
+  border: none;
+  color: #888;
+  font-size: 1.1rem;
+  cursor: pointer;
+  line-height: 1;
+  padding: 0 0.2rem;
+}
+
+.session-refresh-dismiss:hover {
+  color: #ccc;
+}
+
 .import-page {
   max-width: 1200px;
   margin: 0 auto;
@@ -735,6 +820,21 @@
   text-align: center;
   padding: 2rem;
   font-size: 0.85rem;
+}
+
+.search-modal-footer {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid #2a2a2a;
+}
+
+.search-none-right {
+  color: #888;
+  font-size: 0.8rem;
+  margin: 0;
+  flex: 1;
 }
 
 .search-result-item {

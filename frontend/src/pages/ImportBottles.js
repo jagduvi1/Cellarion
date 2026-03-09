@@ -1,9 +1,16 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { validateImport, confirmImport } from '../api/bottles';
 import { searchWines } from '../api/wines';
 import { parseAndMap, parseJSON } from '../utils/importMappers';
+import {
+  listImportSessions,
+  createImportSession,
+  getImportSession,
+  updateImportSession,
+  deleteImportSession
+} from '../api/importSessions';
 import Modal from '../components/Modal';
 import './ImportBottles.css';
 
@@ -72,6 +79,15 @@ function ImportBottles() {
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState(null);
 
+  // Session persistence
+  const [sessionId, setSessionId] = useState(null);
+  const [saveStatus, setSaveStatus] = useState('idle'); // 'idle'|'unsaved'|'saving'|'saved'|'error'
+  const [draftSessions, setDraftSessions] = useState([]); // existing drafts to offer resume
+  const [refreshedItems, setRefreshedItems] = useState({}); // { [index]: match } – newly matched on resume
+  const saveTimerRef = useRef(null);
+  // Ref so the debounced callback always reads current values without needing them in deps
+  const saveDataRef = useRef({});
+
   // Contact email (loaded from public settings)
   const [contactEmail, setContactEmail] = useState(null);
   useEffect(() => {
@@ -80,6 +96,119 @@ function ImportBottles() {
       .then(d => { if (d?.contactEmail) setContactEmail(d.contactEmail); })
       .catch(() => {});
   }, []);
+
+  // Check for existing draft sessions when the page loads
+  useEffect(() => {
+    listImportSessions(apiFetch, cellarId)
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d?.sessions?.length > 0) setDraftSessions(d.sessions); })
+      .catch(() => {});
+  }, [apiFetch, cellarId]);
+
+  // Keep saveDataRef current so the debounced save always uses latest values
+  saveDataRef.current = {
+    apiFetch, cellarId, fileName, detectedFormat,
+    results, selections, manualWines, sessionId
+  };
+
+  // Auto-save whenever selections or manualWines change while in review step
+  useEffect(() => {
+    if (step !== 'review' || results.length === 0) return;
+
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    setSaveStatus('unsaved');
+
+    saveTimerRef.current = setTimeout(async () => {
+      setSaveStatus('saving');
+      const {
+        apiFetch: af, cellarId: cid, fileName: fn, detectedFormat: df,
+        results: rs, selections: sels, manualWines: mw, sessionId: sid
+      } = saveDataRef.current;
+
+      try {
+        if (!sid) {
+          // First save for this review session — create a new session
+          const res = await createImportSession(af, {
+            cellarId: cid, fileName: fn, detectedFormat: df,
+            results: rs, selections: sels, manualWines: mw
+          });
+          const data = await res.json();
+          if (res.ok) {
+            setSessionId(data.sessionId);
+            setSaveStatus('saved');
+            setDraftSessions([]); // hide resume banner once we have a live session
+          } else {
+            setSaveStatus('error');
+          }
+        } else {
+          // Subsequent saves — just update selections/manualWines
+          const res = await updateImportSession(af, sid, { selections: sels, manualWines: mw });
+          setSaveStatus(res.ok ? 'saved' : 'error');
+        }
+      } catch {
+        setSaveStatus('error');
+      }
+    }, 1500);
+
+    return () => clearTimeout(saveTimerRef.current);
+  }, [step, selections, manualWines]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Recompute summary from a results array (used after resume + refresh)
+  const computeSummary = (rs) => ({
+    total: rs.length,
+    exact: rs.filter(r => r.status === 'exact').length,
+    fuzzy: rs.filter(r => r.status === 'fuzzy').length,
+    noMatch: rs.filter(r => r.status === 'no_match').length,
+    errors: rs.filter(r => r.status === 'error').length
+  });
+
+  // Resume a saved draft session
+  const handleResumeSession = async (session) => {
+    try {
+      const res = await getImportSession(apiFetch, session._id);
+      if (!res.ok) return;
+      const { session: s, refreshed } = await res.json();
+
+      // Apply refreshed matches (items that were 'request' but now have an exact wine)
+      let updatedResults = s.results || [];
+      const updatedSelections = { ...(s.selections || {}) };
+
+      if (Object.keys(refreshed).length > 0) {
+        updatedResults = updatedResults.map(r => {
+          const match = refreshed[r.index];
+          if (!match) return r;
+          // Prepend the new match so it appears first
+          return {
+            ...r,
+            status: 'exact',
+            matches: [
+              { wineId: match.wineId, name: match.name, producer: match.producer,
+                country: match.country, region: match.region, appellation: match.appellation,
+                type: match.type, score: match.score },
+              ...r.matches
+            ]
+          };
+        });
+        // Update selections to use the new wineId
+        Object.entries(refreshed).forEach(([idx, match]) => {
+          updatedSelections[Number(idx)] = match.wineId;
+        });
+        setRefreshedItems(refreshed);
+      }
+
+      setResults(updatedResults);
+      setSelections(updatedSelections);
+      setManualWines(s.manualWines || {});
+      setFileName(s.fileName || '');
+      setDetectedFormat(s.detectedFormat || null);
+      setSummary(computeSummary(updatedResults));
+      setSessionId(s._id);
+      setDraftSessions([]);
+      setStep('review');
+    } catch {
+      // If load fails, just stay on upload step
+    }
+  };
 
   // ── File handling ───────────────────────────────────────────────────────
 
@@ -350,6 +479,11 @@ function ImportBottles() {
 
       setImportResult(data);
       setStep('done');
+      // Clean up the saved session after a successful import
+      if (sessionId) {
+        deleteImportSession(apiFetch, sessionId).catch(() => {});
+        setSessionId(null);
+      }
     } catch (err) {
       setError('Network error during import');
       setStep('review');
@@ -362,6 +496,31 @@ function ImportBottles() {
 
   const renderUploadStep = () => (
     <div className="import-upload">
+      {draftSessions.length > 0 && (
+        <div className="session-resume-banner">
+          <div className="session-resume-info">
+            <strong>You have a saved import in progress</strong>
+            <span className="session-resume-meta">
+              {draftSessions[0].fileName && `${draftSessions[0].fileName} · `}
+              Last saved {new Date(draftSessions[0].updatedAt).toLocaleString()}
+            </span>
+          </div>
+          <div className="session-resume-actions">
+            <button
+              className="btn btn-primary btn-sm"
+              onClick={() => handleResumeSession(draftSessions[0])}
+            >
+              Resume
+            </button>
+            <button
+              className="btn btn-secondary btn-sm"
+              onClick={() => setDraftSessions([])}
+            >
+              Dismiss
+            </button>
+          </div>
+        </div>
+      )}
       <div className="import-instructions">
         <h3>Supported Formats</h3>
         <div className="format-cards">
@@ -499,11 +658,43 @@ function ImportBottles() {
           </button>
           <button
             className="btn btn-secondary btn-sm"
-            onClick={() => { setStep('upload'); setResults([]); setSummary(null); setSelections({}); setManualWines({}); }}
+            onClick={() => {
+              setStep('upload');
+              setResults([]);
+              setSummary(null);
+              setSelections({});
+              setManualWines({});
+              setSessionId(null);
+              setSaveStatus('idle');
+              setRefreshedItems({});
+            }}
           >
             Back to upload
           </button>
+          <span className={`save-status save-status-${saveStatus}`}>
+            {saveStatus === 'saving' && 'Saving\u2026'}
+            {saveStatus === 'saved' && 'Progress saved'}
+            {saveStatus === 'unsaved' && 'Unsaved changes'}
+            {saveStatus === 'error' && 'Save failed'}
+          </span>
         </div>
+
+        {/* Notify user about wines matched since last save */}
+        {Object.keys(refreshedItems).length > 0 && (
+          <div className="session-refresh-notice">
+            <strong>
+              {Object.keys(refreshedItems).length} wine{Object.keys(refreshedItems).length !== 1 ? 's' : ''} added to the library
+            </strong>
+            {' '}since your last save — selections updated automatically.
+            <button
+              className="session-refresh-dismiss"
+              onClick={() => setRefreshedItems({})}
+              aria-label="Dismiss"
+            >
+              &times;
+            </button>
+          </div>
+        )}
 
         {/* Results table */}
         <div className="review-table-wrap">
@@ -608,7 +799,7 @@ function ImportBottles() {
                             Search
                           </button>
                         )}
-                        {r.status === 'no_match' && !isSkipped && !isRequested && (
+                        {(r.status === 'no_match' || r.status === 'fuzzy') && !isSkipped && !isRequested && (
                           <button
                             className="btn btn-secondary btn-xs btn-request"
                             onClick={() => requestWine(r.index)}
@@ -834,6 +1025,20 @@ function ImportBottles() {
                 </button>
               ))}
             </div>
+            {searchResults.length > 0 && (
+              <div className="search-modal-footer">
+                <p className="search-none-right">None of these look right?</p>
+                <button
+                  className="btn btn-secondary btn-sm btn-request"
+                  onClick={() => {
+                    requestWine(searchModal.index);
+                    setSearchModal(null);
+                  }}
+                >
+                  Request this wine
+                </button>
+              </div>
+            )}
           </div>
         </Modal>
       )}

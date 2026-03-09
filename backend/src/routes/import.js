@@ -16,6 +16,7 @@ const searchService = require('../services/search');
 const { CONSUMED_STATUSES } = require('../config/constants');
 const { stripHtml } = require('../utils/sanitize');
 const WineRequest = require('../models/WineRequest');
+const ImportSession = require('../models/ImportSession');
 
 const router = express.Router();
 router.use(requireAuth);
@@ -509,6 +510,212 @@ router.post('/confirm', async (req, res) => {
   } catch (error) {
     console.error('Import confirm error:', error);
     res.status(500).json({ error: 'Import failed' });
+  }
+});
+
+// ─── Import Session routes ────────────────────────────────────────────────────
+//
+// POST   /api/bottles/import/sessions         – create (or replace) draft session
+// GET    /api/bottles/import/sessions?cellarId – list draft sessions for a cellar
+// GET    /api/bottles/import/sessions/:id      – load session; refreshes 'request' items
+// PUT    /api/bottles/import/sessions/:id      – update selections/manualWines
+// DELETE /api/bottles/import/sessions/:id      – delete session
+
+/**
+ * POST /api/bottles/import/sessions
+ *
+ * Creates (or replaces) the user's draft session for a cellar.
+ * One draft per user+cellar — the old one is deleted before creating the new one
+ * so stale sessions don't accumulate.
+ */
+router.post('/sessions', async (req, res) => {
+  try {
+    const { cellarId, fileName, detectedFormat, results, selections, manualWines } = req.body;
+
+    if (!cellarId || !mongoose.Types.ObjectId.isValid(cellarId)) {
+      return res.status(400).json({ error: 'Valid cellarId is required' });
+    }
+    if (!Array.isArray(results) || results.length === 0) {
+      return res.status(400).json({ error: 'results array is required' });
+    }
+
+    const cellar = await Cellar.findById(cellarId);
+    if (!cellar || cellar.deletedAt) {
+      return res.status(404).json({ error: 'Cellar not found' });
+    }
+    const role = getCellarRole(cellar, req.user.id);
+    if (!role || role === 'viewer') {
+      return res.status(403).json({ error: 'Not authorized' });
+    }
+
+    // Replace any existing draft for this user+cellar
+    await ImportSession.deleteMany({ cellar: cellarId, user: req.user.id, status: 'draft' });
+
+    const session = new ImportSession({
+      cellar: cellarId,
+      user: req.user.id,
+      fileName,
+      detectedFormat,
+      results,
+      selections: selections || {},
+      manualWines: manualWines || {}
+    });
+    await session.save();
+
+    res.status(201).json({ sessionId: session._id });
+  } catch (err) {
+    console.error('Create import session error:', err);
+    res.status(500).json({ error: 'Failed to save session' });
+  }
+});
+
+/**
+ * GET /api/bottles/import/sessions?cellarId=...
+ *
+ * Lists draft sessions for the authenticated user in a cellar.
+ */
+router.get('/sessions', async (req, res) => {
+  try {
+    const { cellarId } = req.query;
+    if (!cellarId || !mongoose.Types.ObjectId.isValid(cellarId)) {
+      return res.status(400).json({ error: 'Valid cellarId is required' });
+    }
+
+    const cellar = await Cellar.findById(cellarId);
+    if (!cellar || cellar.deletedAt) {
+      return res.status(404).json({ error: 'Cellar not found' });
+    }
+    if (!getCellarRole(cellar, req.user.id)) {
+      return res.status(403).json({ error: 'Not authorized' });
+    }
+
+    const sessions = await ImportSession.find({
+      cellar: cellarId,
+      user: req.user.id,
+      status: 'draft'
+    })
+      .select('fileName detectedFormat createdAt updatedAt')
+      .sort({ updatedAt: -1 })
+      .lean();
+
+    res.json({ sessions });
+  } catch (err) {
+    console.error('List import sessions error:', err);
+    res.status(500).json({ error: 'Failed to list sessions' });
+  }
+});
+
+/**
+ * GET /api/bottles/import/sessions/:id
+ *
+ * Loads a draft session.  For any item whose selection is 'request', re-runs wine
+ * matching — if a wine has since been added to the library (e.g. admin resolved the
+ * request), the new match is returned in `refreshed` so the frontend can update the
+ * selection automatically.
+ */
+router.get('/sessions/:id', async (req, res) => {
+  try {
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+
+    const session = await ImportSession.findById(req.params.id).lean();
+    if (!session || session.status !== 'draft') {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+    if (session.user.toString() !== req.user.id) {
+      return res.status(403).json({ error: 'Not authorized' });
+    }
+
+    // Re-match items that were marked 'request' to detect wines added since last save
+    const refreshed = {}; // { [index]: match object }
+    const requestedIndices = Object.entries(session.selections || {})
+      .filter(([, sel]) => sel === 'request')
+      .map(([idx]) => Number(idx));
+
+    for (const idx of requestedIndices) {
+      const result = (session.results || []).find(r => r.index === idx);
+      if (!result?.item) continue;
+      try {
+        const matches = await findWineMatches(result.item);
+        if (matches.length > 0 && matches[0].score >= EXACT_THRESHOLD) {
+          const m = matches[0];
+          refreshed[idx] = {
+            wineId: m.wine._id,
+            name: m.wine.name,
+            producer: m.wine.producer,
+            country: m.wine.country?.name || null,
+            region: m.wine.region?.name || null,
+            appellation: m.wine.appellation || null,
+            type: m.wine.type,
+            score: Math.round(m.score * 100) / 100
+          };
+        }
+      } catch {
+        // Non-fatal: skip this item
+      }
+    }
+
+    res.json({ session, refreshed });
+  } catch (err) {
+    console.error('Load import session error:', err);
+    res.status(500).json({ error: 'Failed to load session' });
+  }
+});
+
+/**
+ * PUT /api/bottles/import/sessions/:id
+ *
+ * Updates selections and/or manualWines for an existing draft session.
+ */
+router.put('/sessions/:id', async (req, res) => {
+  try {
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+
+    const session = await ImportSession.findById(req.params.id);
+    if (!session || session.status !== 'draft') {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+    if (session.user.toString() !== req.user.id) {
+      return res.status(403).json({ error: 'Not authorized' });
+    }
+
+    const { selections, manualWines } = req.body;
+    if (selections !== undefined) session.selections = selections;
+    if (manualWines !== undefined) session.manualWines = manualWines;
+    await session.save();
+
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('Update import session error:', err);
+    res.status(500).json({ error: 'Failed to update session' });
+  }
+});
+
+/**
+ * DELETE /api/bottles/import/sessions/:id
+ *
+ * Deletes a session (called after a successful import).
+ */
+router.delete('/sessions/:id', async (req, res) => {
+  try {
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+
+    const session = await ImportSession.findById(req.params.id);
+    if (!session) return res.status(404).json({ error: 'Session not found' });
+    if (session.user.toString() !== req.user.id) {
+      return res.status(403).json({ error: 'Not authorized' });
+    }
+
+    await session.deleteOne();
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('Delete import session error:', err);
+    res.status(500).json({ error: 'Failed to delete session' });
   }
 });
 
