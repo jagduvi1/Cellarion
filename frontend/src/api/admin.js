@@ -48,14 +48,14 @@ export const adminGetWineRequests = (apiFetch, params) =>
 
 export const adminResolveWineRequest = (apiFetch, id, data) =>
   apiFetch(`/api/admin/wine-requests/${id}/resolve`, {
-    method: 'POST',
+    method: 'PUT',
     headers: J,
     body: JSON.stringify(data),
   });
 
 export const adminRejectWineRequest = (apiFetch, id, data) =>
   apiFetch(`/api/admin/wine-requests/${id}/reject`, {
-    method: 'POST',
+    method: 'PUT',
     headers: J,
     body: JSON.stringify(data),
   });

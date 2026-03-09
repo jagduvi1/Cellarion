@@ -28,6 +28,27 @@
   margin: 0;
 }
 
+/* ── Beta Notice ─────────────────────────────────────────────────────────── */
+
+.import-beta-notice {
+  background: rgba(123, 158, 136, 0.1);
+  border: 1px solid rgba(123, 158, 136, 0.3);
+  border-radius: 6px;
+  color: #aaa;
+  font-size: 0.82rem;
+  padding: 0.5rem 0.85rem;
+  margin-bottom: 1.5rem;
+}
+
+.import-beta-notice a {
+  color: #7B9E88;
+  text-decoration: none;
+}
+
+.import-beta-notice a:hover {
+  text-decoration: underline;
+}
+
 /* ── Step Indicator ──────────────────────────────────────────────────────── */
 
 .step-indicator {

@@ -144,7 +144,7 @@ function AdminRequests() {
       applyGrapes: [],
       wineData: {
         name: request.wineName,
-        producer: '',
+        producer: request.producer || '',
         country: '',
         region: '',
         type: 'red',
@@ -251,6 +251,9 @@ function AdminRequests() {
                     <strong>{req.wineName}</strong>
                     <span className={`status-badge status-${req.status}`}>{req.status}</span>
                   </div>
+                  {req.producer && (
+                    <div className="request-item-producer">{req.producer}</div>
+                  )}
                   <div className="request-item-meta">
                     <span>By: {req.user?.username}</span>
                     <span>{new Date(req.createdAt).toLocaleDateString()}</span>
@@ -276,6 +279,9 @@ function AdminRequests() {
                     </span>
                   )}
                 </h2>
+                {selected.producer && (
+                  <p><strong>Producer:</strong> {selected.producer}</p>
+                )}
                 <p><strong>{t('admin.requests.requestedBy')}</strong> {selected.user?.username} ({selected.user?.email})</p>
                 <p><strong>{t('admin.requests.date')}</strong> {new Date(selected.createdAt).toLocaleDateString()}</p>
                 {selected.requestType === 'grape_suggestion' ? (

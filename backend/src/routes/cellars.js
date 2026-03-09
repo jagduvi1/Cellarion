@@ -337,10 +337,7 @@ router.get('/:id', async (req, res) => {
     }
 
     // Fetch the filtered set from DB (much smaller than fetching everything first)
-    let bottles = await Bottle.find(filter).populate({
-      path: 'wineDefinition',
-      populate: ['country', 'region', 'grapes']
-    });
+    let bottles = await Bottle.find(filter).populate(WINE_POPULATE);
 
     // ── In-memory filters for cases that can't be expressed cleanly in Mongo ──
 

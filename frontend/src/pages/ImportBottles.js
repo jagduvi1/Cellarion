@@ -748,6 +748,11 @@ function ImportBottles() {
         <h1>Import Bottles</h1>
       </div>
 
+      <div className="import-beta-notice">
+        This feature is in beta. If you run into any issues, contact us at{' '}
+        <a href="mailto:admin@cellarion.app">admin@cellarion.app</a>.
+      </div>
+
       {/* Step indicator */}
       <div className="step-indicator">
         {STEPS.filter(s => s !== 'importing').map((s, i) => (

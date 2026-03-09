@@ -69,6 +69,12 @@
   margin-bottom: 0.5rem;
 }
 
+.request-item-producer {
+  font-size: 0.82rem;
+  color: #b0a898;
+  margin-bottom: 0.35rem;
+}
+
 .request-item-meta {
   font-size: 0.85rem;
   color: #9A9484;

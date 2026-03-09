@@ -146,16 +146,23 @@ router.put('/:id/resolve', async (req, res) => {
     await wineRequest.save();
 
     // Backfill any bottles that were imported while waiting for this wine
+    let backfilledCount = 0;
     if (wineRequest.requestType === 'new_wine') {
-      await Bottle.updateMany(
+      const result = await Bottle.updateMany(
         { pendingWineRequest: wineRequest._id },
         { $set: { wineDefinition: linkedWine._id }, $unset: { pendingWineRequest: '' } }
       );
+      backfilledCount = result.modifiedCount || 0;
     }
 
-    const notifMsg = wineRequest.requestType === 'grape_suggestion'
-      ? `Your grape suggestion for "${wineRequest.wineName}" has been reviewed. Thank you for helping improve the wine registry!`
-      : `Your request for "${wineRequest.wineName}" has been approved. It was added to the registry as "${linkedWine.name}" by ${linkedWine.producer}.`;
+    let notifMsg;
+    if (wineRequest.requestType === 'grape_suggestion') {
+      notifMsg = `Your grape suggestion for "${wineRequest.wineName}" has been reviewed. Thank you for helping improve the wine registry!`;
+    } else if (backfilledCount > 0) {
+      notifMsg = `Your request for "${wineRequest.wineName}" has been approved and added to the registry as "${linkedWine.name}" by ${linkedWine.producer}. Your ${backfilledCount} bottle${backfilledCount !== 1 ? 's' : ''} in the cellar have been updated.`;
+    } else {
+      notifMsg = `Your request for "${wineRequest.wineName}" has been approved. It was added to the registry as "${linkedWine.name}" by ${linkedWine.producer}.`;
+    }
 
     createNotification(
       wineRequest.user,
