@@ -187,19 +187,54 @@ function ImportBottles() {
   };
 
   const selectSearchResult = (wine) => {
-    setSelections(prev => ({ ...prev, [searchModal.index]: wine._id }));
-    setManualWines(prev => ({ ...prev, [searchModal.index]: wine }));
+    const sourceIndex = searchModal.index;
+    setSelections(withPropagation(sourceIndex, wine._id));
+    setManualWines(prev => {
+      const sourceItem = results.find(r => r.index === sourceIndex)?.item;
+      const key = sourceItem ? wineKey(sourceItem) : null;
+      const next = { ...prev, [sourceIndex]: wine };
+      if (key) {
+        results.forEach(r => {
+          if (r.index !== sourceIndex && wineKey(r.item) === key && !selections[r.index]) {
+            next[r.index] = wine;
+          }
+        });
+      }
+      return next;
+    });
     setSearchModal(null);
+  };
+
+  // ── Selection helpers ────────────────────────────────────────────────────
+
+  // Returns a key for grouping duplicate wines: "wineName|producer" (lowercased)
+  const wineKey = (item) =>
+    `${(item?.wineName || '').toLowerCase()}|${(item?.producer || '').toLowerCase()}`;
+
+  // Returns a selections updater that also propagates selValue to unselected
+  // rows that have the same wine name + producer as the source row.
+  const withPropagation = (sourceIndex, selValue) => (prev) => {
+    const sourceItem = results.find(r => r.index === sourceIndex)?.item;
+    const key = sourceItem ? wineKey(sourceItem) : null;
+    const next = { ...prev, [sourceIndex]: selValue };
+    if (key) {
+      results.forEach(r => {
+        if (r.index !== sourceIndex && wineKey(r.item) === key && !prev[r.index]) {
+          next[r.index] = selValue;
+        }
+      });
+    }
+    return next;
   };
 
   // ── Selection handlers ──────────────────────────────────────────────────
 
   const selectWine = (index, wineId) => {
-    setSelections(prev => ({ ...prev, [index]: wineId }));
+    setSelections(withPropagation(index, wineId));
   };
 
   const skipItem = (index) => {
-    setSelections(prev => ({ ...prev, [index]: 'skip' }));
+    setSelections(withPropagation(index, 'skip'));
   };
 
   const unskipItem = (index) => {
@@ -211,7 +246,7 @@ function ImportBottles() {
   };
 
   const requestWine = (index) => {
-    setSelections(prev => ({ ...prev, [index]: 'request' }));
+    setSelections(withPropagation(index, 'request'));
   };
 
   // Bulk actions
