@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { validateImport, confirmImport } from '../api/bottles';
@@ -71,6 +71,15 @@ function ImportBottles() {
   // Import step
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState(null);
+
+  // Contact email (loaded from public settings)
+  const [contactEmail, setContactEmail] = useState(null);
+  useEffect(() => {
+    fetch('/api/settings')
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d?.contactEmail) setContactEmail(d.contactEmail); })
+      .catch(() => {});
+  }, []);
 
   // ── File handling ───────────────────────────────────────────────────────
 
@@ -748,10 +757,12 @@ function ImportBottles() {
         <h1>Import Bottles</h1>
       </div>
 
-      <div className="import-beta-notice">
-        This feature is in beta. If you run into any issues, contact us at{' '}
-        <a href="mailto:admin@cellarion.app">admin@cellarion.app</a>.
-      </div>
+      {contactEmail && (
+        <div className="import-beta-notice">
+          This feature is in beta. If you run into any issues, contact us at{' '}
+          <a href={`mailto:${contactEmail}`}>{contactEmail}</a>.
+        </div>
+      )}
 
       {/* Step indicator */}
       <div className="step-indicator">

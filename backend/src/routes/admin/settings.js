@@ -64,4 +64,40 @@ router.patch('/rate-limits', async (req, res) => {
   }
 });
 
+// GET /api/admin/settings/contact-email
+router.get('/contact-email', async (req, res) => {
+  try {
+    const doc = await SiteConfig.findOne({ key: 'contactEmail' }).lean();
+    res.json({ contactEmail: doc?.value ?? null });
+  } catch (err) {
+    console.error('Admin get contact-email error:', err);
+    res.status(500).json({ error: 'Failed to load contact email setting' });
+  }
+});
+
+// PATCH /api/admin/settings/contact-email
+router.patch('/contact-email', async (req, res) => {
+  try {
+    const { contactEmail } = req.body;
+    if (typeof contactEmail !== 'string' || !contactEmail.trim()) {
+      return res.status(400).json({ error: 'contactEmail must be a non-empty string' });
+    }
+    const trimmed = contactEmail.trim();
+    // Basic email format check
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
+      return res.status(400).json({ error: 'contactEmail must be a valid email address' });
+    }
+    await SiteConfig.findOneAndUpdate(
+      { key: 'contactEmail' },
+      { key: 'contactEmail', value: trimmed, updatedAt: new Date(), updatedBy: req.user.id },
+      { upsert: true, new: true }
+    );
+    logAudit(req, 'admin.settings.contact_email.update', {}, { contactEmail: trimmed });
+    res.json({ contactEmail: trimmed });
+  } catch (err) {
+    console.error('Admin update contact-email error:', err);
+    res.status(500).json({ error: 'Failed to update contact email setting' });
+  }
+});
+
 module.exports = router;

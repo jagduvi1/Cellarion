@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import './LandingPage.css';
@@ -49,6 +50,14 @@ const features = [
 
 export default function LandingPage() {
   const { user } = useAuth();
+  const [contactEmail, setContactEmail] = useState(null);
+
+  useEffect(() => {
+    fetch('/api/settings')
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d?.contactEmail) setContactEmail(d.contactEmail); })
+      .catch(() => {});
+  }, []);
 
   return (
     <div className="landing">
@@ -215,6 +224,9 @@ export default function LandingPage() {
             >
               AGPL-3.0
             </a>
+            {contactEmail && (
+              <a href={`mailto:${contactEmail}`}>{contactEmail}</a>
+            )}
             <Link to="/login">Login</Link>
           </div>
           <span className="landing-footer-copy">
