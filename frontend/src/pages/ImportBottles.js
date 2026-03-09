@@ -208,6 +208,10 @@ function ImportBottles() {
     });
   };
 
+  const requestWine = (index) => {
+    setSelections(prev => ({ ...prev, [index]: 'request' }));
+  };
+
   // Bulk actions
   const selectAllExact = () => {
     const sel = { ...selections };
@@ -224,6 +228,16 @@ function ImportBottles() {
     results.forEach(r => {
       if (r.status === 'no_match' || r.status === 'error') {
         sel[r.index] = 'skip';
+      }
+    });
+    setSelections(sel);
+  };
+
+  const requestAllUnmatched = () => {
+    const sel = { ...selections };
+    results.forEach(r => {
+      if (r.status === 'no_match') {
+        sel[r.index] = 'request';
       }
     });
     setSelections(sel);
@@ -250,7 +264,10 @@ function ImportBottles() {
         return sel && sel !== 'skip';
       })
       .map(r => ({
-        wineDefinition: selections[r.index],
+        wineDefinition: selections[r.index] !== 'request' ? selections[r.index] : undefined,
+        requestWine: selections[r.index] === 'request' ? true : undefined,
+        wineName: r.item.wineName,
+        producer: r.item.producer,
         vintage: r.item.vintage,
         price: r.item.price,
         currency: r.item.currency,
@@ -263,9 +280,15 @@ function ImportBottles() {
         ratingScale: r.item.ratingScale,
         drinkFrom: r.item.drinkFrom,
         drinkBefore: r.item.drinkBefore,
-        dateAdded: r.item.purchaseDate, // Use purchase date as added date if available
+        dateAdded: r.item.dateAdded || r.item.purchaseDate,
         rackName: r.item.rackName,
         rackPosition: r.item.rackPosition,
+        addToHistory: r.item.addToHistory,
+        consumedReason: r.item.consumedReason,
+        consumedAt: r.item.consumedAt,
+        consumedRating: r.item.consumedRating,
+        consumedRatingScale: r.item.consumedRatingScale,
+        consumedNote: r.item.consumedNote,
       }));
 
     try {
@@ -422,6 +445,9 @@ function ImportBottles() {
           <button className="btn btn-secondary btn-sm" onClick={selectAllExact}>
             Accept all matches
           </button>
+          <button className="btn btn-secondary btn-sm" onClick={requestAllUnmatched}>
+            Request all unmatched
+          </button>
           <button className="btn btn-secondary btn-sm" onClick={skipAllUnmatched}>
             Skip all unmatched
           </button>
@@ -449,7 +475,8 @@ function ImportBottles() {
               {results.map((r) => {
                 const sel = selections[r.index];
                 const isSkipped = sel === 'skip';
-                const selectedWine = sel && sel !== 'skip'
+                const isRequested = sel === 'request';
+                const selectedWine = sel && sel !== 'skip' && sel !== 'request'
                   ? r.matches.find(m => m.wineId === sel) || null
                   : null;
                 const isExpanded = expandedRow === r.index;
@@ -457,11 +484,11 @@ function ImportBottles() {
                 return (
                   <tr
                     key={r.index}
-                    className={`review-row ${isSkipped ? 'row-skipped' : ''} ${STATUS_CLASSES[r.status]}`}
+                    className={`review-row ${isSkipped ? 'row-skipped' : ''} ${isRequested ? 'row-requested' : ''} ${STATUS_CLASSES[r.status]}`}
                   >
                     <td className="col-status">
                       <span className={`status-badge ${STATUS_CLASSES[r.status]}`}>
-                        {isSkipped ? 'Skipped' : STATUS_LABELS[r.status]}
+                        {isSkipped ? 'Skipped' : isRequested ? 'Requested' : STATUS_LABELS[r.status]}
                       </span>
                     </td>
                     <td className="col-source">
@@ -477,6 +504,8 @@ function ImportBottles() {
                     <td className="col-match">
                       {isSkipped ? (
                         <span className="match-skipped">Will not import</span>
+                      ) : isRequested ? (
+                        <span className="match-requested">Imported pending admin review</span>
                       ) : selectedWine ? (
                         <div className="match-info">
                           <strong>{selectedWine.producer}</strong>
@@ -503,7 +532,7 @@ function ImportBottles() {
                     </td>
                     <td className="col-actions">
                       <div className="action-buttons">
-                        {r.matches.length > 1 && !isSkipped && (
+                        {r.matches.length > 1 && !isSkipped && !isRequested && (
                           <button
                             className="btn btn-secondary btn-xs"
                             onClick={() => setExpandedRow(isExpanded ? null : r.index)}
@@ -511,7 +540,7 @@ function ImportBottles() {
                             {isExpanded ? 'Hide' : `${r.matches.length} options`}
                           </button>
                         )}
-                        {!isSkipped && (
+                        {!isSkipped && !isRequested && (
                           <button
                             className="btn btn-secondary btn-xs"
                             onClick={() => openSearchModal(r.index)}
@@ -519,12 +548,20 @@ function ImportBottles() {
                             Search
                           </button>
                         )}
-                        {isSkipped ? (
+                        {r.status === 'no_match' && !isSkipped && !isRequested && (
+                          <button
+                            className="btn btn-secondary btn-xs btn-request"
+                            onClick={() => requestWine(r.index)}
+                          >
+                            Request wine
+                          </button>
+                        )}
+                        {isSkipped || isRequested ? (
                           <button
                             className="btn btn-secondary btn-xs"
                             onClick={() => unskipItem(r.index)}
                           >
-                            Unskip
+                            Undo
                           </button>
                         ) : (
                           <button

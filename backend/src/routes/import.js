@@ -15,6 +15,7 @@ const { normalizeString, combinedSimilarity } = require('../utils/normalize');
 const searchService = require('../services/search');
 const { CONSUMED_STATUSES } = require('../config/constants');
 const { stripHtml } = require('../utils/sanitize');
+const WineRequest = require('../models/WineRequest');
 
 const router = express.Router();
 router.use(requireAuth);
@@ -300,18 +301,87 @@ router.post('/confirm', async (req, res) => {
     for (let i = 0; i < items.length; i++) {
       const item = items[i];
 
-      if (!item.wineDefinition) {
+      if (!item.wineDefinition && !item.requestWine) {
         skipped.push({ index: i, reason: 'No wine selected' });
         continue;
       }
 
       try {
+        let wineDoc = null;
+
+        if (item.requestWine) {
+          // No match — create a pending WineRequest and bottle without wineDefinition
+          if (!item.wineName && !item.producer) {
+            errors.push({ index: i, reason: 'Wine name or producer is required' });
+            continue;
+          }
+
+          const wineRequest = new WineRequest({
+            requestType: 'new_wine',
+            wineName: (item.wineName || item.producer || '').trim(),
+            producer: (item.producer || '').trim() || undefined,
+            user: req.user.id,
+            status: 'pending'
+          });
+          await wineRequest.save();
+
+          // Validate consumed rating if adding to history
+          const { rating: resolvedConsumedRating, ratingScale: resolvedConsumedScale, error: consumeRatingError } =
+            item.addToHistory ? resolveRating(item.consumedRating, item.consumedRatingScale) : { rating: undefined, ratingScale: undefined, error: null };
+          if (consumeRatingError) {
+            errors.push({ index: i, reason: consumeRatingError });
+            continue;
+          }
+
+          if (item.addToHistory && item.consumedReason && !CONSUMED_STATUSES.includes(item.consumedReason)) {
+            errors.push({ index: i, reason: 'Invalid consumed reason' });
+            continue;
+          }
+
+          const priceSetAt = (item.price != null && item.price !== '') ? new Date() : undefined;
+
+          const bottle = new Bottle({
+            cellar: cellarId,
+            user: cellar.user,
+            pendingWineRequest: wineRequest._id,
+            vintage: item.vintage || 'NV',
+            price: item.price || undefined,
+            currency: item.currency || 'USD',
+            priceSetAt,
+            bottleSize: item.bottleSize || '750ml',
+            purchaseDate: item.purchaseDate || undefined,
+            purchaseLocation: stripHtml(item.purchaseLocation),
+            location: stripHtml(item.location),
+            notes: stripHtml(item.notes),
+            drinkFrom: item.drinkFrom || undefined,
+            drinkBefore: item.drinkBefore || undefined
+          });
+
+          if (item.dateAdded) bottle.createdAt = new Date(item.dateAdded);
+
+          if (item.addToHistory) {
+            const reason = item.consumedReason || 'drank';
+            bottle.status = reason;
+            bottle.consumedReason = reason;
+            bottle.consumedAt = item.consumedAt ? new Date(item.consumedAt) : new Date();
+            if (item.consumedNote) bottle.consumedNote = stripHtml(item.consumedNote);
+            if (resolvedConsumedRating !== undefined) {
+              bottle.consumedRating = resolvedConsumedRating;
+              bottle.consumedRatingScale = resolvedConsumedScale;
+            }
+          }
+
+          await bottle.save();
+          created++;
+          continue;
+        }
+
         // Verify wine definition exists
         if (!mongoose.Types.ObjectId.isValid(item.wineDefinition)) {
           errors.push({ index: i, reason: 'Invalid wine definition ID' });
           continue;
         }
-        const wineDoc = await WineDefinition.findById(item.wineDefinition);
+        wineDoc = await WineDefinition.findById(item.wineDefinition);
         if (!wineDoc) {
           errors.push({ index: i, reason: 'Wine definition not found' });
           continue;

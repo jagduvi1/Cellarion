@@ -2,6 +2,7 @@ const express = require('express');
 const { requireAuth, requireRole } = require('../../middleware/auth');
 const WineRequest = require('../../models/WineRequest');
 const WineDefinition = require('../../models/WineDefinition');
+const Bottle = require('../../models/Bottle');
 const { generateWineKey } = require('../../utils/normalize');
 const searchService = require('../../services/search');
 const { logAudit } = require('../../services/audit');
@@ -143,6 +144,14 @@ router.put('/:id/resolve', async (req, res) => {
     wineRequest.adminNotes = adminNotes?.trim() || '';
 
     await wineRequest.save();
+
+    // Backfill any bottles that were imported while waiting for this wine
+    if (wineRequest.requestType === 'new_wine') {
+      await Bottle.updateMany(
+        { pendingWineRequest: wineRequest._id },
+        { $set: { wineDefinition: linkedWine._id }, $unset: { pendingWineRequest: '' } }
+      );
+    }
 
     const notifMsg = wineRequest.requestType === 'grape_suggestion'
       ? `Your grape suggestion for "${wineRequest.wineName}" has been reviewed. Thank you for helping improve the wine registry!`

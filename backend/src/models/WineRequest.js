@@ -12,6 +12,10 @@ const wineRequestSchema = new mongoose.Schema({
     required: [true, 'Wine name is required'],
     trim: true
   },
+  producer: {
+    type: String,
+    trim: true
+  },
   sourceUrl: {
     type: String,
     trim: true,

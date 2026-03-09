@@ -16,7 +16,13 @@ const bottleSchema = new mongoose.Schema({
   wineDefinition: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'WineDefinition',
-    required: [true, 'Wine definition is required'],
+    index: true
+  },
+  // Set when the bottle was imported without a matching wine definition.
+  // Cleared (and wineDefinition set) once the admin resolves the request.
+  pendingWineRequest: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'WineRequest',
     index: true
   },
   // Bottle-specific details

@@ -365,6 +365,10 @@
   opacity: 0.5;
 }
 
+.review-row.row-requested {
+  opacity: 0.8;
+}
+
 /* Source info */
 .source-info {
   display: flex;
@@ -420,6 +424,12 @@
   font-style: italic;
 }
 
+.match-requested {
+  color: #C8A87E;
+  font-style: italic;
+  font-size: 0.8rem;
+}
+
 .match-pending {
   color: #C8A87E;
   font-size: 0.8rem;
@@ -455,6 +465,15 @@
 
 .btn-skip:hover {
   background: #2d1414;
+}
+
+.btn-request {
+  color: #C8A87E;
+  border-color: #5a3e20;
+}
+
+.btn-request:hover {
+  background: #2d1e0a;
 }
 
 /* ── Candidates List (expanded) ──────────────────────────────────────────── */
