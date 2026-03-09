@@ -4,12 +4,10 @@
  */
 function stripHtml(str) {
   if (!str) return str;
-  let prev;
-  do {
-    prev = str;
-    str = str.replace(/<[^>]*>/g, '');
-  } while (str !== prev);
-  return str.trim();
+  // Single-pass replacement is sufficient — nested tags are handled because
+  // the regex matches each <...> independently left-to-right.
+  // Avoid a loop over user input to prevent ReDoS via crafted inputs.
+  return str.replace(/<[^>]*>/g, '').trim();
 }
 
 /**
