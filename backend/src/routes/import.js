@@ -297,6 +297,8 @@ router.post('/confirm', async (req, res) => {
     let created = 0;
     const skipped = [];
     const errors = [];
+    // Dedup map: "wineName|producer" -> WineRequest doc created in this batch
+    const pendingRequestCache = new Map();
 
     for (let i = 0; i < items.length; i++) {
       const item = items[i];
@@ -316,14 +318,20 @@ router.post('/confirm', async (req, res) => {
             continue;
           }
 
-          const wineRequest = new WineRequest({
-            requestType: 'new_wine',
-            wineName: (item.wineName || item.producer || '').trim(),
-            producer: (item.producer || '').trim() || undefined,
-            user: req.user.id,
-            status: 'pending'
-          });
-          await wineRequest.save();
+          const requestKey = `${(item.wineName || '').trim().toLowerCase()}|${(item.producer || '').trim().toLowerCase()}`;
+          let wineRequest = pendingRequestCache.get(requestKey);
+
+          if (!wineRequest) {
+            wineRequest = new WineRequest({
+              requestType: 'new_wine',
+              wineName: (item.wineName || item.producer || '').trim(),
+              producer: (item.producer || '').trim() || undefined,
+              user: req.user.id,
+              status: 'pending'
+            });
+            await wineRequest.save();
+            pendingRequestCache.set(requestKey, wineRequest);
+          }
 
           // Validate consumed rating if adding to history
           const { rating: resolvedConsumedRating, ratingScale: resolvedConsumedScale, error: consumeRatingError } =
