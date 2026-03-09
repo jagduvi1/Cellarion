@@ -12,6 +12,9 @@ function BottleCard({ bottle, rackMap, cellarId, viewMode }) {
   const drinkStatus = getDrinkStatus(bottle);
   const imgSrc = bottle.wineDefinition?.image || bottle.pendingImageUrl;
   const credit = bottle.wineDefinition?.imageCredit;
+  const isPending = !bottle.wineDefinition && !!bottle.pendingWineRequest;
+  const displayName = bottle.wineDefinition?.name || bottle.pendingWineRequest?.wineName || 'Unknown Wine';
+  const displayProducer = bottle.wineDefinition?.producer || bottle.pendingWineRequest?.producer;
 
   const handleClick = () => navigate(`/cellars/${cellarId}/bottles/${bottle._id}`);
   const handleKey = e => e.key === 'Enter' && handleClick();
@@ -30,7 +33,7 @@ function BottleCard({ bottle, rackMap, cellarId, viewMode }) {
             <>
               <AuthImage
                 src={imgSrc}
-                alt={bottle.wineDefinition?.name}
+                alt={displayName}
                 className="bottle-grid-image"
                 onError={e => { e.target.style.display = 'none'; }}
               />
@@ -41,8 +44,8 @@ function BottleCard({ bottle, rackMap, cellarId, viewMode }) {
           )}
         </div>
         <div className="bottle-grid-info">
-          <div className="bottle-grid-name">{bottle.wineDefinition?.name || 'Unknown Wine'}</div>
-          <div className="bottle-grid-producer">{bottle.wineDefinition?.producer}</div>
+          <div className="bottle-grid-name">{displayName}</div>
+          <div className="bottle-grid-producer">{displayProducer}</div>
           <div className="bottle-grid-meta">
             {bottle.vintage && <span className="bottle-vintage">{bottle.vintage}</span>}
             {bottle.wineDefinition?.region?.name && (
@@ -50,6 +53,9 @@ function BottleCard({ bottle, rackMap, cellarId, viewMode }) {
             )}
           </div>
           <div className="bottle-badges">
+            {isPending && (
+              <span className="pending-wine-badge">Pending review</span>
+            )}
             {drinkStatus && (
               <span className={`drink-status-badge badge-sm ${drinkStatus.status}`}>
                 {drinkStatus.label}
@@ -83,7 +89,7 @@ function BottleCard({ bottle, rackMap, cellarId, viewMode }) {
         <div className="bottle-img-wrap">
           <AuthImage
             src={imgSrc}
-            alt={bottle.wineDefinition?.name}
+            alt={displayName}
             className="bottle-wine-image"
             onError={e => { e.target.style.display = 'none'; }}
           />
@@ -94,12 +100,15 @@ function BottleCard({ bottle, rackMap, cellarId, viewMode }) {
       )}
 
       <div className="bottle-info">
-        <div className="bottle-name">{bottle.wineDefinition?.name || 'Unknown Wine'}</div>
+        <div className="bottle-name">{displayName}</div>
         <div className="bottle-meta">
-          <span className="bottle-producer">{bottle.wineDefinition?.producer}</span>
+          <span className="bottle-producer">{displayProducer}</span>
           {bottle.vintage && <span className="bottle-vintage">{bottle.vintage}</span>}
         </div>
         <div className="bottle-badges">
+          {isPending && (
+            <span className="pending-wine-badge">Pending review</span>
+          )}
           {rackInfo && (
             <Link
               to={`/cellars/${cellarId}/racks?highlight=${bottle._id}`}

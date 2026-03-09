@@ -487,6 +487,16 @@
   padding: 1px 7px;
 }
 
+.pending-wine-badge {
+  display: inline-block;
+  font-size: 0.7rem;
+  padding: 1px 7px;
+  border-radius: 10px;
+  background: #1e1a2d;
+  color: #a090d0;
+  border: 1px solid #3a3060;
+}
+
 /* ── Chevron ── */
 .bottle-chevron {
   font-size: 1.4rem;
