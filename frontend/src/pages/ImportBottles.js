@@ -66,6 +66,7 @@ function ImportBottles() {
   const [searchResults, setSearchResults] = useState([]);
   const [searching, setSearching] = useState(false);
   const [expandedRow, setExpandedRow] = useState(null);
+  const [manualWines, setManualWines] = useState({}); // index -> wine object from search
 
   // Import step
   const [importing, setImporting] = useState(false);
@@ -185,8 +186,9 @@ function ImportBottles() {
     setSearchResults([]);
   };
 
-  const selectSearchResult = (wineId) => {
-    setSelections(prev => ({ ...prev, [searchModal.index]: wineId }));
+  const selectSearchResult = (wine) => {
+    setSelections(prev => ({ ...prev, [searchModal.index]: wine._id }));
+    setManualWines(prev => ({ ...prev, [searchModal.index]: wine }));
     setSearchModal(null);
   };
 
@@ -453,7 +455,7 @@ function ImportBottles() {
           </button>
           <button
             className="btn btn-secondary btn-sm"
-            onClick={() => { setStep('upload'); setResults([]); setSummary(null); setSelections({}); }}
+            onClick={() => { setStep('upload'); setResults([]); setSummary(null); setSelections({}); setManualWines({}); }}
           >
             Back to upload
           </button>
@@ -476,9 +478,21 @@ function ImportBottles() {
                 const sel = selections[r.index];
                 const isSkipped = sel === 'skip';
                 const isRequested = sel === 'request';
-                const selectedWine = sel && sel !== 'skip' && sel !== 'request'
+                const matchedWine = sel && sel !== 'skip' && sel !== 'request'
                   ? r.matches.find(m => m.wineId === sel) || null
                   : null;
+                const manualWine = !matchedWine && manualWines[r.index]?._id === sel
+                  ? manualWines[r.index]
+                  : null;
+                const selectedWine = matchedWine || (manualWine ? {
+                  wineId: manualWine._id,
+                  name: manualWine.name,
+                  producer: manualWine.producer,
+                  country: manualWine.country?.name || '',
+                  region: manualWine.region?.name || '',
+                  type: manualWine.type,
+                  score: null,
+                } : null);
                 const isExpanded = expandedRow === r.index;
 
                 return (
@@ -515,7 +529,9 @@ function ImportBottles() {
                             {selectedWine.country || ''}
                             {selectedWine.region ? ` · ${selectedWine.region}` : ''}
                           </span>
-                          <span className="match-score">{Math.round(selectedWine.score * 100)}% match</span>
+                          {selectedWine.score != null && (
+                            <span className="match-score">{Math.round(selectedWine.score * 100)}% match</span>
+                          )}
                         </div>
                       ) : r.status === 'error' ? (
                         <span className="match-error">{r.error}</span>
@@ -677,6 +693,7 @@ function ImportBottles() {
             setResults([]);
             setSummary(null);
             setSelections({});
+            setManualWines({});
             setImportResult(null);
             setFileName('');
           }}
@@ -751,7 +768,7 @@ function ImportBottles() {
                 <button
                   key={wine._id}
                   className="search-result-item"
-                  onClick={() => selectSearchResult(wine._id)}
+                  onClick={() => selectSearchResult(wine)}
                 >
                   <div className="search-result-info">
                     <strong>{wine.producer}</strong>
