@@ -116,3 +116,14 @@ export const adminSaveRateLimits = (apiFetch, data) =>
     headers: J,
     body: JSON.stringify(data),
   });
+
+// ── Settings (contact email) ──────────────────────────────────────────────────
+export const adminGetContactEmail = (apiFetch) =>
+  apiFetch('/api/admin/settings/contact-email');
+
+export const adminSaveContactEmail = (apiFetch, contactEmail) =>
+  apiFetch('/api/admin/settings/contact-email', {
+    method: 'PATCH',
+    headers: J,
+    body: JSON.stringify({ contactEmail }),
+  });

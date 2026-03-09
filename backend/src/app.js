@@ -30,6 +30,7 @@ const statsRoute = require('./routes/stats');
 const superAdminRoute = require('./routes/superadmin');
 const chatRoute = require('./routes/chat');
 const adminAiRoute = require('./routes/admin/ai');
+const settingsRoute = require('./routes/settings');
 const rateLimitsConfig = require('./config/rateLimits');
 const aiConfig = require('./config/aiConfig');
 const { logAudit } = require('./services/audit');
@@ -132,6 +133,7 @@ app.use('/api/stats', statsRoute);
 app.use('/api/superadmin', superAdminRoute);
 app.use('/api/chat', chatRoute);
 app.use('/api/admin/ai', adminAiRoute);
+app.use('/api/settings', settingsRoute);
 
 // 404 handler
 app.use((req, res) => {

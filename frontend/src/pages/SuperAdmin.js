@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { adminGetRateLimits, adminSaveRateLimits } from '../api/admin';
+import { adminGetRateLimits, adminSaveRateLimits, adminGetContactEmail, adminSaveContactEmail } from '../api/admin';
 import './SuperAdmin.css';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1267,10 +1267,69 @@ function ChatUsagePanel() {
   );
 }
 
+function ContactEmailPanel({ apiFetch }) {
+  const [value, setValue] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState(null);
+
+  useEffect(() => {
+    adminGetContactEmail(apiFetch)
+      .then(r => r.json())
+      .then(d => setValue(d.contactEmail || ''))
+      .catch(() => setMsg({ ok: false, text: 'Failed to load' }));
+  }, [apiFetch]);
+
+  const save = async () => {
+    setSaving(true);
+    setMsg(null);
+    try {
+      const res = await adminSaveContactEmail(apiFetch, value.trim());
+      if (!res.ok) {
+        const d = await res.json();
+        setMsg({ ok: false, text: d.error || 'Save failed' });
+      } else {
+        setMsg({ ok: true, text: 'Saved' });
+      }
+    } catch {
+      setMsg({ ok: false, text: 'Network error' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="sa-panel" style={{ marginTop: 16 }}>
+      <div className="sa-panel-header">
+        <span className="sa-panel-title">Contact Email</span>
+        <button className="sa-btn" onClick={save} disabled={saving}>{saving ? 'Saving...' : 'Save'}</button>
+      </div>
+      <div className="sa-panel-body">
+        <div style={{ fontSize: 11, color: 'var(--sa-text-dim)', marginBottom: 12 }}>
+          Shown in beta notices and support prompts across the app.
+        </div>
+        <div className="sa-kv">
+          <div className="sa-kv-row">
+            <span className="sa-kv-key">Contact address</span>
+            <input
+              type="email"
+              value={value}
+              onChange={e => setValue(e.target.value)}
+              placeholder="support@example.com"
+              style={{ background: 'var(--sa-bg)', border: '1px solid var(--sa-border)', color: 'var(--sa-text)', padding: '2px 8px', borderRadius: 3, fontFamily: 'monospace', fontSize: 12, width: 240 }}
+            />
+          </div>
+        </div>
+        {msg && <div style={{ marginTop: 8, fontSize: 11, color: msg.ok ? 'var(--sa-green)' : 'var(--sa-red)' }}>{msg.text}</div>}
+      </div>
+    </div>
+  );
+}
+
 function TabSettings() {
   const { apiFetch } = useAuth();
   return (
     <>
+      <ContactEmailPanel apiFetch={apiFetch} />
       <RateLimitsPanel apiFetch={apiFetch} />
     </>
   );

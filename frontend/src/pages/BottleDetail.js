@@ -137,6 +137,9 @@ function BottleDetail() {
   if (error)   return <div className="alert alert-error">{error}</div>;
 
   const wine = bottle.wineDefinition;
+  const isPending = !wine && !!bottle.pendingWineRequest;
+  const displayName = wine?.name || bottle.pendingWineRequest?.wineName;
+  const displayProducer = wine?.producer || bottle.pendingWineRequest?.producer;
   const drinkStatus = getDrinkStatus(bottle);
 
   return (
@@ -150,24 +153,28 @@ function BottleDetail() {
             <div className="bd-wine-image-wrap">
               <AuthImage
                 src={pendingImage || wine.image}
-                alt={wine?.name}
+                alt={displayName}
                 className="bd-wine-image"
                 onError={e => { e.target.style.display = 'none'; }}
               />
               {wine?.imageCredit && <span className="bd-wine-image-credit">{wine.imageCredit}</span>}
-              {pendingImage && !wine?.image && (
+              {(isPending || (pendingImage && !wine?.image)) && (
                 <span className="bd-pending-badge">{t('bottleDetail.pendingReview', 'Pending review')}</span>
               )}
             </div>
           ) : (
-            <div className={`bd-wine-placeholder ${wine?.type}`} />
+            <div className={`bd-wine-placeholder ${wine?.type || ''}`}>
+              {isPending && (
+                <span className="bd-pending-badge">{t('bottleDetail.pendingReview', 'Pending review')}</span>
+              )}
+            </div>
           )}
           <div className="bd-wine-meta">
             <h1 style={cellarColor ? { borderLeft: `4px solid ${cellarColor}`, paddingLeft: '0.75rem' } : {}}>
-              {wine?.name || t('common.unknownWine')}
+              {displayName || t('common.unknownWine')}
             </h1>
             <p className="bd-producer">
-              {wine?.producer}
+              {displayProducer}
               {wine?.country?.name && <span className="bd-country"> · {wine.country.name}</span>}
             </p>
             {wine?.type && (
@@ -205,7 +212,7 @@ function BottleDetail() {
 
       {consumeOpen && (
         <ConsumeModal
-          wineName={wine?.name}
+          wineName={displayName}
           defaultRatingScale={user?.preferences?.ratingScale || '5'}
           onConfirm={handleConsumeConfirm}
           onCancel={() => setConsumeOpen(false)}
