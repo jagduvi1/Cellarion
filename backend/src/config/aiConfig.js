@@ -22,10 +22,9 @@
 // Models that are known to work reliably for text chat.
 // Any value stored in DB that isn't in this list falls back to the default.
 const VALID_CHAT_MODELS = [
-  'claude-3-5-haiku-20241022',
-  'claude-3-5-sonnet-20241022',
-  'claude-opus-4-6',
+  'claude-haiku-4-5-20251001',
   'claude-sonnet-4-6',
+  'claude-opus-4-6',
 ];
 
 const DEFAULT_SYSTEM_PROMPT =
@@ -49,7 +48,7 @@ const defaults = {
   chatMaxResults: 5,
   embeddingBatchDelayMs: 500,
   chatDailyLimits: { free: 4, basic: 20, premium: 50 },
-  chatModel: 'claude-3-5-haiku-20241022',
+  chatModel: 'claude-haiku-4-5-20251001',
   chatModelFallback: null,
   chatSystemPrompt: DEFAULT_SYSTEM_PROMPT,
 };
