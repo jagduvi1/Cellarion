@@ -1,11 +1,11 @@
 const express = require('express');
-const { requireAuth, requireAdmin } = require('../../middleware/auth');
+const { requireAuth, requireRole } = require('../../middleware/auth');
 const Cellar = require('../../models/Cellar');
 const Rack = require('../../models/Rack');
 const { logAudit } = require('../../services/audit');
 
 const router = express.Router();
-router.use(requireAuth, requireAdmin);
+router.use(requireAuth, requireRole('admin'));
 
 const PAGE_SIZE = 50;
 
