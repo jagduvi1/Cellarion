@@ -78,6 +78,7 @@ function ImportBottles() {
   // Import step
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState(null);
+  const [rowImporting, setRowImporting] = useState(null); // index of row being individually imported
 
   // Session persistence
   const [sessionId, setSessionId] = useState(null);
@@ -420,11 +421,64 @@ function ImportBottles() {
 
   // ── Import ──────────────────────────────────────────────────────────────
 
-  const getImportableCount = () => {
-    return results.filter(r => {
-      const sel = selections[r.index];
-      return sel && sel !== 'skip';
-    }).length;
+  // Build the payload object for a single result row
+  const buildImportItem = (r) => {
+    const sel = selections[r.index];
+    return {
+      wineDefinition: sel !== 'request' ? sel : undefined,
+      requestWine: sel === 'request' ? true : undefined,
+      wineName: r.item.wineName,
+      producer: r.item.producer,
+      vintage: r.item.vintage,
+      price: r.item.price,
+      currency: r.item.currency,
+      bottleSize: r.item.bottleSize,
+      purchaseDate: r.item.purchaseDate,
+      purchaseLocation: r.item.purchaseLocation,
+      location: r.item.location,
+      notes: r.item.notes,
+      rating: r.item.rating,
+      ratingScale: r.item.ratingScale,
+      drinkFrom: r.item.drinkFrom,
+      drinkBefore: r.item.drinkBefore,
+      dateAdded: r.item.dateAdded || r.item.purchaseDate,
+      rackName: r.item.rackName,
+      rackPosition: r.item.rackPosition,
+      addToHistory: r.item.addToHistory,
+      consumedReason: r.item.consumedReason,
+      consumedAt: r.item.consumedAt,
+      consumedRating: r.item.consumedRating,
+      consumedRatingScale: r.item.consumedRatingScale,
+      consumedNote: r.item.consumedNote,
+    };
+  };
+
+  // Rows eligible for bulk import: has a real selection, not skipped, not already imported
+  const isImportableRow = (r) => {
+    const sel = selections[r.index];
+    return sel && sel !== 'skip' && sel !== 'imported';
+  };
+
+  const getImportableCount = () => results.filter(isImportableRow).length;
+
+  // Import a single row immediately; marks it 'imported' so it's excluded from the bulk action
+  const handleImportRow = async (r) => {
+    if (rowImporting !== null || importing) return;
+    setRowImporting(r.index);
+    try {
+      const res = await confirmImport(apiFetch, { cellarId, items: [buildImportItem(r)] });
+      const data = await res.json();
+      if (res.ok && data.created > 0) {
+        // Mark as imported — auto-save will persist this to the session
+        setSelections(prev => ({ ...prev, [r.index]: 'imported' }));
+      } else {
+        setError((data.errors?.[0]?.reason) || data.error || 'Import failed');
+      }
+    } catch {
+      setError('Network error');
+    } finally {
+      setRowImporting(null);
+    }
   };
 
   const handleImport = async () => {
@@ -432,39 +486,10 @@ function ImportBottles() {
     setError(null);
     setStep('importing');
 
-    // Build items for confirm endpoint
+    // Build items for confirm endpoint — skip already-imported rows
     const items = results
-      .filter(r => {
-        const sel = selections[r.index];
-        return sel && sel !== 'skip';
-      })
-      .map(r => ({
-        wineDefinition: selections[r.index] !== 'request' ? selections[r.index] : undefined,
-        requestWine: selections[r.index] === 'request' ? true : undefined,
-        wineName: r.item.wineName,
-        producer: r.item.producer,
-        vintage: r.item.vintage,
-        price: r.item.price,
-        currency: r.item.currency,
-        bottleSize: r.item.bottleSize,
-        purchaseDate: r.item.purchaseDate,
-        purchaseLocation: r.item.purchaseLocation,
-        location: r.item.location,
-        notes: r.item.notes,
-        rating: r.item.rating,
-        ratingScale: r.item.ratingScale,
-        drinkFrom: r.item.drinkFrom,
-        drinkBefore: r.item.drinkBefore,
-        dateAdded: r.item.dateAdded || r.item.purchaseDate,
-        rackName: r.item.rackName,
-        rackPosition: r.item.rackPosition,
-        addToHistory: r.item.addToHistory,
-        consumedReason: r.item.consumedReason,
-        consumedAt: r.item.consumedAt,
-        consumedRating: r.item.consumedRating,
-        consumedRatingScale: r.item.consumedRatingScale,
-        consumedNote: r.item.consumedNote,
-      }));
+      .filter(isImportableRow)
+      .map(buildImportItem);
 
     try {
       const res = await confirmImport(apiFetch, { cellarId, items });
@@ -621,6 +646,7 @@ function ImportBottles() {
 
   const renderReviewStep = () => {
     const importable = getImportableCount();
+    const importedCount = results.filter(r => selections[r.index] === 'imported').length;
     const unresolved = results.filter(r => !selections[r.index] && r.status !== 'error').length;
 
     return (
@@ -643,6 +669,12 @@ function ImportBottles() {
             <span className="summary-number summary-importable">{importable}</span>
             <span className="summary-label">Ready</span>
           </div>
+          {importedCount > 0 && (
+            <div className="summary-stat">
+              <span className="summary-number summary-imported">{importedCount}</span>
+              <span className="summary-label">Imported</span>
+            </div>
+          )}
         </div>
 
         {/* Bulk actions */}
@@ -713,7 +745,9 @@ function ImportBottles() {
                 const sel = selections[r.index];
                 const isSkipped = sel === 'skip';
                 const isRequested = sel === 'request';
-                const matchedWine = sel && sel !== 'skip' && sel !== 'request'
+                const isImported = sel === 'imported';
+                const hasReadySel = sel && !isSkipped && !isRequested && !isImported;
+                const matchedWine = hasReadySel
                   ? r.matches.find(m => m.wineId === sel) || null
                   : null;
                 const manualWine = !matchedWine && manualWines[r.index]?._id === sel
@@ -729,15 +763,16 @@ function ImportBottles() {
                   score: null,
                 } : null);
                 const isExpanded = expandedRow === r.index;
+                const isThisRowImporting = rowImporting === r.index;
 
                 return (
                   <tr
                     key={r.index}
-                    className={`review-row ${isSkipped ? 'row-skipped' : ''} ${isRequested ? 'row-requested' : ''} ${STATUS_CLASSES[r.status]}`}
+                    className={`review-row ${isSkipped ? 'row-skipped' : ''} ${isRequested ? 'row-requested' : ''} ${isImported ? 'row-imported' : ''} ${STATUS_CLASSES[r.status]}`}
                   >
                     <td className="col-status">
-                      <span className={`status-badge ${STATUS_CLASSES[r.status]}`}>
-                        {isSkipped ? 'Skipped' : isRequested ? 'Requested' : STATUS_LABELS[r.status]}
+                      <span className={`status-badge ${isImported ? 'status-imported' : STATUS_CLASSES[r.status]}`}>
+                        {isImported ? 'Imported' : isSkipped ? 'Skipped' : isRequested ? 'Requested' : STATUS_LABELS[r.status]}
                       </span>
                     </td>
                     <td className="col-source">
@@ -751,7 +786,9 @@ function ImportBottles() {
                       </div>
                     </td>
                     <td className="col-match">
-                      {isSkipped ? (
+                      {isImported ? (
+                        <span className="match-imported">Added to cellar</span>
+                      ) : isSkipped ? (
                         <span className="match-skipped">Will not import</span>
                       ) : isRequested ? (
                         <span className="match-requested">Imported pending admin review</span>
@@ -782,50 +819,63 @@ function ImportBottles() {
                       )}
                     </td>
                     <td className="col-actions">
-                      <div className="action-buttons">
-                        {r.matches.length > 1 && !isSkipped && !isRequested && (
-                          <button
-                            className="btn btn-secondary btn-xs"
-                            onClick={() => setExpandedRow(isExpanded ? null : r.index)}
-                          >
-                            {isExpanded ? 'Hide' : `${r.matches.length} options`}
-                          </button>
-                        )}
-                        {!isSkipped && !isRequested && (
-                          <button
-                            className="btn btn-secondary btn-xs"
-                            onClick={() => openSearchModal(r.index)}
-                          >
-                            Search
-                          </button>
-                        )}
-                        {(r.status === 'no_match' || r.status === 'fuzzy') && !isSkipped && !isRequested && (
-                          <button
-                            className="btn btn-secondary btn-xs btn-request"
-                            onClick={() => requestWine(r.index)}
-                          >
-                            Request wine
-                          </button>
-                        )}
-                        {isSkipped || isRequested ? (
-                          <button
-                            className="btn btn-secondary btn-xs"
-                            onClick={() => unskipItem(r.index)}
-                          >
-                            Undo
-                          </button>
-                        ) : (
-                          <button
-                            className="btn btn-secondary btn-xs btn-skip"
-                            onClick={() => skipItem(r.index)}
-                          >
-                            Skip
-                          </button>
-                        )}
-                      </div>
+                      {isImported ? null : (
+                        <div className="action-buttons">
+                          {r.matches.length > 1 && !isSkipped && !isRequested && (
+                            <button
+                              className="btn btn-secondary btn-xs"
+                              onClick={() => setExpandedRow(isExpanded ? null : r.index)}
+                            >
+                              {isExpanded ? 'Hide' : `${r.matches.length} options`}
+                            </button>
+                          )}
+                          {!isSkipped && !isRequested && (
+                            <button
+                              className="btn btn-secondary btn-xs"
+                              onClick={() => openSearchModal(r.index)}
+                            >
+                              Search
+                            </button>
+                          )}
+                          {(r.status === 'no_match' || r.status === 'fuzzy') && !isSkipped && !isRequested && (
+                            <button
+                              className="btn btn-secondary btn-xs btn-request"
+                              onClick={() => requestWine(r.index)}
+                            >
+                              Request wine
+                            </button>
+                          )}
+                          {/* Per-row import button — visible once a row has a valid selection */}
+                          {isImportableRow(r) && (
+                            <button
+                              className="btn btn-primary btn-xs btn-import-row"
+                              onClick={() => handleImportRow(r)}
+                              disabled={isThisRowImporting || rowImporting !== null || importing}
+                              title="Import this bottle now"
+                            >
+                              {isThisRowImporting ? '…' : 'Import'}
+                            </button>
+                          )}
+                          {isSkipped || isRequested ? (
+                            <button
+                              className="btn btn-secondary btn-xs"
+                              onClick={() => unskipItem(r.index)}
+                            >
+                              Undo
+                            </button>
+                          ) : (
+                            <button
+                              className="btn btn-secondary btn-xs btn-skip"
+                              onClick={() => skipItem(r.index)}
+                            >
+                              Skip
+                            </button>
+                          )}
+                        </div>
+                      )}
 
                       {/* Expanded candidate list */}
-                      {isExpanded && r.matches.length > 0 && (
+                      {!isImported && isExpanded && r.matches.length > 0 && (
                         <div className="candidates-list">
                           {r.matches.map((m) => (
                             <button

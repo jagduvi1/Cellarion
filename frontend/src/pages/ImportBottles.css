@@ -369,6 +369,7 @@
 .summary-fuzzy { color: #C8A87E; }
 .summary-nomatch { color: #E07060; }
 .summary-importable { color: #7B9E88; }
+.summary-imported   { color: #5a8a68; }
 
 .summary-label {
   font-size: 0.75rem;
@@ -475,6 +476,10 @@
   opacity: 0.8;
 }
 
+.review-row.row-imported {
+  opacity: 0.55;
+}
+
 /* Source info */
 .source-info {
   display: flex;
@@ -534,6 +539,23 @@
   color: #C8A87E;
   font-style: italic;
   font-size: 0.8rem;
+}
+
+.match-imported {
+  color: #7B9E88;
+  font-style: italic;
+  font-size: 0.8rem;
+}
+
+.status-imported {
+  background: rgba(123, 158, 136, 0.15);
+  color: #7B9E88;
+  border-color: rgba(123, 158, 136, 0.3);
+}
+
+.btn-import-row {
+  font-size: 0.72rem;
+  padding: 0.2rem 0.5rem;
 }
 
 .match-pending {
