@@ -3,8 +3,14 @@
  * Uses a linear character-by-character scan instead of regex to avoid ReDoS.
  * Returns the original value unchanged if it is null/undefined/empty.
  */
+const STRIP_HTML_MAX_LEN = 100_000;
+
 function stripHtml(str) {
   if (!str) return str;
+  // Reject excessively long strings to prevent CPU exhaustion (loop bound injection)
+  if (str.length > STRIP_HTML_MAX_LEN) {
+    throw new Error(`Input exceeds maximum allowed length of ${STRIP_HTML_MAX_LEN} characters`);
+  }
   let result = '';
   let depth = 0;
   for (let i = 0; i < str.length; i++) {

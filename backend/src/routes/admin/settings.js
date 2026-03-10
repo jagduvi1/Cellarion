@@ -83,6 +83,10 @@ router.patch('/contact-email', async (req, res) => {
       return res.status(400).json({ error: 'contactEmail must be a non-empty string' });
     }
     const trimmed = contactEmail.trim();
+    // RFC 5321 max email length is 254; guard before regex to prevent ReDoS
+    if (trimmed.length > 254) {
+      return res.status(400).json({ error: 'contactEmail must be a valid email address' });
+    }
     // Basic email format check
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
       return res.status(400).json({ error: 'contactEmail must be a valid email address' });
