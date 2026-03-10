@@ -644,10 +644,34 @@ function ImportBottles() {
     </div>
   );
 
+  // Sort priority: unresolved no-match → unresolved fuzzy → unresolved exact →
+  // error → resolved (matched/requested) → skipped → imported.
+  // Within each group: alphabetical by producer then wine name.
+  const sortResults = (rs) => {
+    const priority = (r) => {
+      const sel = selections[r.index];
+      if (sel === 'imported') return 6;
+      if (sel === 'skip') return 5;
+      if (sel === 'request') return 4;
+      if (sel) return 3; // has a wineId selection
+      if (r.status === 'error') return 2;
+      if (r.status === 'fuzzy') return 1;
+      return 0; // no_match without selection — most urgent
+    };
+    return [...rs].sort((a, b) => {
+      const pd = priority(a) - priority(b);
+      if (pd !== 0) return pd;
+      const nameA = `${a.item.producer || ''} ${a.item.wineName || ''}`.toLowerCase();
+      const nameB = `${b.item.producer || ''} ${b.item.wineName || ''}`.toLowerCase();
+      return nameA.localeCompare(nameB);
+    });
+  };
+
   const renderReviewStep = () => {
     const importable = getImportableCount();
     const importedCount = results.filter(r => selections[r.index] === 'imported').length;
     const unresolved = results.filter(r => !selections[r.index] && r.status !== 'error').length;
+    const sortedResults = sortResults(results);
 
     return (
       <div className="import-review">
@@ -741,7 +765,7 @@ function ImportBottles() {
               </tr>
             </thead>
             <tbody>
-              {results.map((r) => {
+              {sortedResults.map((r) => {
                 const sel = selections[r.index];
                 const isSkipped = sel === 'skip';
                 const isRequested = sel === 'request';
