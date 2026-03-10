@@ -17,6 +17,7 @@ import AdminImages from './pages/AdminImages';
 import AdminAudit from './pages/AdminAudit';
 import AdminUsers from './pages/AdminUsers';
 import AdminImportWines from './pages/AdminImportWines';
+import AdminCellars from './pages/AdminCellars';
 import CellarAudit from './pages/CellarAudit';
 import CellarRacks from './pages/CellarRacks';
 import DrinkAlerts from './pages/DrinkAlerts';
@@ -241,6 +242,14 @@ function AppRoutes() {
         element={
           <ProtectedRoute requireAdmin>
             <Layout><AdminImportWines /></Layout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/cellars"
+        element={
+          <ProtectedRoute requireAdmin>
+            <Layout><AdminCellars /></Layout>
           </ProtectedRoute>
         }
       />

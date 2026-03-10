@@ -57,8 +57,8 @@ const cellarSchema = new mongoose.Schema({
   }
 });
 
-// Compound index: user can't have duplicate cellar names
-cellarSchema.index({ user: 1, name: 1 }, { unique: true });
+// Compound index: user can't have duplicate active cellar names (deleted cellars are excluded)
+cellarSchema.index({ user: 1, name: 1 }, { unique: true, partialFilterExpression: { deletedAt: null } });
 // TTL: auto-purge soft-deleted cellars after 30 days
 cellarSchema.index(
   { deletedAt: 1 },

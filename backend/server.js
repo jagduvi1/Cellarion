@@ -26,6 +26,16 @@ const PORT = process.env.PORT || 5000;
 
 // Connect to MongoDB, initialize search, then start server
 connectDB().then(async () => {
+  // Migration: drop old non-partial cellar name index so Mongoose can create the
+  // updated partial one (user_1_name_1 with partialFilterExpression: {deletedAt: null})
+  try {
+    const mongoose = require('mongoose');
+    await mongoose.connection.collection('cellars').dropIndex('user_1_name_1');
+    console.log('[migration] Dropped old cellar name index — partial index will be created by Mongoose');
+  } catch {
+    // Index doesn't exist (first deploy) or already migrated — nothing to do
+  }
+
   try {
     await searchService.initialize();
   } catch (err) {

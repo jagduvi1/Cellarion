@@ -117,6 +117,13 @@ export const adminSaveRateLimits = (apiFetch, data) =>
     body: JSON.stringify(data),
   });
 
+// ── Cellars (deleted / restore) ───────────────────────────────────────────────
+export const adminGetDeletedCellars = (apiFetch, params) =>
+  apiFetch(`/api/admin/cellars/deleted?${params}`);
+
+export const adminRestoreCellar = (apiFetch, id) =>
+  apiFetch(`/api/admin/cellars/${id}/restore`, { method: 'POST' });
+
 // ── Settings (contact email) ──────────────────────────────────────────────────
 export const adminGetContactEmail = (apiFetch) =>
   apiFetch('/api/admin/settings/contact-email');

@@ -181,6 +181,13 @@ function Layout({ children }) {
                 >
                   Import Wines
                 </Link>
+                <Link
+                  to="/admin/cellars"
+                  className={`admin-link ${isActive('/admin/cellars') ? 'active' : ''}`}
+                  onClick={closeMenu}
+                >
+                  {t('nav.deletedCellars')}
+                </Link>
               </>
             )}
 
