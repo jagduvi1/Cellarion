@@ -56,7 +56,7 @@ router.put('/:id/resolve', async (req, res) => {
 
   report.status = 'resolved';
   report.adminNotes = adminNotes ? adminNotes.trim() : undefined;
-  report.resolvedBy = req.user._id;
+  report.resolvedBy = req.user.id;
   report.resolvedAt = new Date();
   await report.save();
 
@@ -82,7 +82,7 @@ router.put('/:id/dismiss', async (req, res) => {
 
   report.status = 'dismissed';
   report.adminNotes = adminNotes ? adminNotes.trim() : undefined;
-  report.resolvedBy = req.user._id;
+  report.resolvedBy = req.user.id;
   report.resolvedAt = new Date();
   await report.save();
 

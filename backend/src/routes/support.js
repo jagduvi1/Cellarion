@@ -27,7 +27,7 @@ router.post('/', requireAuth, async (req, res) => {
   }
 
   const ticket = await SupportTicket.create({
-    user: req.user._id,
+    user: req.user.id,
     category,
     subject: subject.trim(),
     message: message.trim()
@@ -43,7 +43,7 @@ router.post('/', requireAuth, async (req, res) => {
 
 // GET /api/support/my — list the authenticated user's own tickets
 router.get('/my', requireAuth, async (req, res) => {
-  const tickets = await SupportTicket.find({ user: req.user._id })
+  const tickets = await SupportTicket.find({ user: req.user.id })
     .sort({ createdAt: -1 })
     .populate('respondedBy', 'username')
     .lean();

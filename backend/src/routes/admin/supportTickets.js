@@ -55,7 +55,7 @@ router.put('/:id/respond', async (req, res) => {
   if (!ticket) return res.status(404).json({ error: 'Ticket not found' });
 
   ticket.adminResponse = adminResponse.trim();
-  ticket.respondedBy = req.user._id;
+  ticket.respondedBy = req.user.id;
   ticket.respondedAt = new Date();
   ticket.status = newStatus;
   await ticket.save();

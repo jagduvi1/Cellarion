@@ -28,7 +28,7 @@ router.post('/', requireAuth, async (req, res) => {
 
   // Prevent duplicate reports from the same user for the same wine
   const existing = await WineReport.findOne({
-    user: req.user._id,
+    user: req.user.id,
     wineDefinition: wineDefinitionId,
     status: 'pending'
   });
@@ -37,7 +37,7 @@ router.post('/', requireAuth, async (req, res) => {
   }
 
   const report = await WineReport.create({
-    user: req.user._id,
+    user: req.user.id,
     wineDefinition: wineDefinitionId,
     reason,
     details: details ? details.trim() : undefined,
@@ -54,7 +54,7 @@ router.post('/', requireAuth, async (req, res) => {
 
 // GET /api/wine-reports/my — list the authenticated user's own wine reports
 router.get('/my', requireAuth, async (req, res) => {
-  const reports = await WineReport.find({ user: req.user._id })
+  const reports = await WineReport.find({ user: req.user.id })
     .sort({ createdAt: -1 })
     .populate('wineDefinition', 'name producer')
     .populate('duplicateOf', 'name producer')
