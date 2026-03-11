@@ -11,6 +11,7 @@ import ImageUpload from '../components/ImageUpload';
 import AuthImage from '../components/AuthImage';
 import RatingInput from '../components/RatingInput';
 import RatingDisplay from '../components/RatingDisplay';
+import ReportWineModal from '../components/ReportWineModal';
 import './BottleDetail.css';
 
 function BottleDetail() {
@@ -30,6 +31,7 @@ function BottleDetail() {
   const [editing, setEditing] = useState(false);
   const [consumeOpen, setConsumeOpen] = useState(false);
   const [suggestGrapesOpen, setSuggestGrapesOpen] = useState(false);
+  const [reportWineOpen, setReportWineOpen] = useState(false);
   const [pendingImage, setPendingImage] = useState(null);
 
 
@@ -207,6 +209,7 @@ function BottleDetail() {
           onEdit={() => setEditing(true)}
           onSuggestGrapes={() => setSuggestGrapesOpen(true)}
           onRemove={() => setConsumeOpen(true)}
+          onReportWine={() => setReportWineOpen(true)}
         />
       )}
 
@@ -223,6 +226,13 @@ function BottleDetail() {
         <SuggestGrapesModal
           wine={wine}
           onClose={() => setSuggestGrapesOpen(false)}
+        />
+      )}
+
+      {reportWineOpen && bottle?.wineDefinition && (
+        <ReportWineModal
+          wine={bottle.wineDefinition}
+          onClose={() => setReportWineOpen(false)}
         />
       )}
     </div>
@@ -262,7 +272,7 @@ function ContributePrompt({ storageKey, icon, title, message, actionLabel, onAct
 }
 
 // ── View mode ──
-function ViewDetails({ bottle, rackInfo, cellarId, drinkStatus, vintageProfile, priceHistory, rates, userCurrency, canEdit, hasImage, onEdit, onSuggestGrapes, onRemove }) {
+function ViewDetails({ bottle, rackInfo, cellarId, drinkStatus, vintageProfile, priceHistory, rates, userCurrency, canEdit, hasImage, onEdit, onSuggestGrapes, onRemove, onReportWine }) {
   const { t } = useTranslation();
   const { plan, hasFeature } = usePlan();
   const hasAgingMaturity = hasFeature('agingMaturity');
@@ -467,6 +477,14 @@ function ViewDetails({ bottle, rackInfo, cellarId, drinkStatus, vintageProfile, 
         <div className="bd-actions">
           <button className="btn btn-secondary" onClick={onEdit}>{t('bottleDetail.editDetails')}</button>
           <button className="btn btn-consume" onClick={onRemove}>{t('bottleDetail.removeBottle')}</button>
+        </div>
+      )}
+
+      {bottle.wineDefinition && (
+        <div className="bd-report-wine">
+          <button className="btn-report-wine" onClick={onReportWine}>
+            Report an issue with this wine
+          </button>
         </div>
       )}
     </div>

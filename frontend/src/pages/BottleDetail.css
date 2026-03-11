@@ -483,6 +483,26 @@
   border-top: 1px solid #2a2a2a;
 }
 
+/* Report wine */
+.bd-report-wine {
+  margin-top: 12px;
+  text-align: right;
+}
+
+.btn-report-wine {
+  background: none;
+  border: none;
+  font-size: 0.78rem;
+  color: var(--text-muted, #888);
+  cursor: pointer;
+  padding: 0;
+  text-decoration: underline dotted;
+}
+
+.btn-report-wine:hover {
+  color: var(--danger, #c0392b);
+}
+
 /* Consume button */
 .btn-consume {
   background: #6a3d8a;

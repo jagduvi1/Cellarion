@@ -14,7 +14,8 @@ const notificationSchema = new mongoose.Schema({
       'wine_request_rejected',
       'image_approved',
       'image_rejected',
-      'cellar_shared'
+      'cellar_shared',
+      'support_ticket_response'
     ],
     required: true
   },

@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import { PLANS } from '../config/plans';
 import NotificationBell from './NotificationBell';
+import SupportModal from './SupportModal';
 import './Layout.css';
 
 const LOGO_IMG = process.env.PUBLIC_URL + '/cellarion-logo.jpg';
@@ -14,6 +15,7 @@ function Layout({ children }) {
   const navigate = useNavigate();
   const location = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [supportOpen, setSupportOpen] = useState(false);
 
   const handleLogout = () => {
     logout();
@@ -93,6 +95,13 @@ function Layout({ children }) {
               onClick={closeMenu}
             >
               {t('nav.plans')}
+            </Link>
+            <Link
+              to="/support"
+              className={isActive('/support') ? 'active' : ''}
+              onClick={closeMenu}
+            >
+              Support
             </Link>
 
             {(roles.includes('somm') || roles.includes('admin')) && (
@@ -188,6 +197,20 @@ function Layout({ children }) {
                 >
                   {t('nav.deletedCellars')}
                 </Link>
+                <Link
+                  to="/admin/support"
+                  className={`admin-link ${isActive('/admin/support') ? 'active' : ''}`}
+                  onClick={closeMenu}
+                >
+                  Support Tickets
+                </Link>
+                <Link
+                  to="/admin/wine-reports"
+                  className={`admin-link ${isActive('/admin/wine-reports') ? 'active' : ''}`}
+                  onClick={closeMenu}
+                >
+                  Wine Reports
+                </Link>
               </>
             )}
 
@@ -215,6 +238,10 @@ function Layout({ children }) {
       <main className="main-content">
         {children}
       </main>
+
+      {supportOpen && (
+        <SupportModal onClose={() => setSupportOpen(false)} />
+      )}
     </div>
   );
 }

@@ -124,6 +124,42 @@ export const adminGetDeletedCellars = (apiFetch, params) =>
 export const adminRestoreCellar = (apiFetch, id) =>
   apiFetch(`/api/admin/cellars/${id}/restore`, { method: 'POST' });
 
+// ── Support Tickets (admin) ───────────────────────────────────────────────────
+export const adminGetSupportTickets = (apiFetch, params) =>
+  apiFetch(`/api/admin/support-tickets?${params}`);
+
+export const adminRespondToTicket = (apiFetch, id, data) =>
+  apiFetch(`/api/admin/support-tickets/${id}/respond`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+
+export const adminUpdateTicketStatus = (apiFetch, id, status) =>
+  apiFetch(`/api/admin/support-tickets/${id}/status`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ status }),
+  });
+
+// ── Wine Reports (admin) ──────────────────────────────────────────────────────
+export const adminGetWineReports = (apiFetch, params) =>
+  apiFetch(`/api/admin/wine-reports?${params}`);
+
+export const adminResolveWineReport = (apiFetch, id, data) =>
+  apiFetch(`/api/admin/wine-reports/${id}/resolve`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+
+export const adminDismissWineReport = (apiFetch, id, data) =>
+  apiFetch(`/api/admin/wine-reports/${id}/dismiss`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+
 // ── Settings (contact email) ──────────────────────────────────────────────────
 export const adminGetContactEmail = (apiFetch) =>
   apiFetch('/api/admin/settings/contact-email');

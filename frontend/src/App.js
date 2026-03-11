@@ -18,6 +18,9 @@ import AdminAudit from './pages/AdminAudit';
 import AdminUsers from './pages/AdminUsers';
 import AdminImportWines from './pages/AdminImportWines';
 import AdminCellars from './pages/AdminCellars';
+import AdminSupportTickets from './pages/AdminSupportTickets';
+import AdminWineReports from './pages/AdminWineReports';
+import SupportPage from './pages/SupportPage';
 import CellarAudit from './pages/CellarAudit';
 import CellarRacks from './pages/CellarRacks';
 import DrinkAlerts from './pages/DrinkAlerts';
@@ -250,6 +253,32 @@ function AppRoutes() {
         element={
           <ProtectedRoute requireAdmin>
             <Layout><AdminCellars /></Layout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/support"
+        element={
+          <ProtectedRoute requireAdmin>
+            <Layout><AdminSupportTickets /></Layout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/wine-reports"
+        element={
+          <ProtectedRoute requireAdmin>
+            <Layout><AdminWineReports /></Layout>
+          </ProtectedRoute>
+        }
+      />
+
+      {/* Support page (user-facing) */}
+      <Route
+        path="/support"
+        element={
+          <ProtectedRoute>
+            <Layout><SupportPage /></Layout>
           </ProtectedRoute>
         }
       />

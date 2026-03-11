@@ -1,0 +1,267 @@
+.admin-wine-reports {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 24px 16px;
+}
+
+.admin-wine-reports h1 {
+  margin: 0 0 20px;
+  font-size: 1.6rem;
+}
+
+.awr-filters {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.awr-tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 2px solid var(--border, #ddd);
+}
+
+.awr-tabs button {
+  background: none;
+  border: none;
+  padding: 7px 14px;
+  cursor: pointer;
+  font-size: 0.875rem;
+  color: var(--text-secondary, #666);
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.awr-tabs button.active {
+  color: var(--accent, #7b3f00);
+  border-bottom-color: var(--accent, #7b3f00);
+  font-weight: 600;
+}
+
+.awr-count {
+  font-size: 0.85rem;
+  color: var(--text-muted, #888);
+}
+
+.awr-layout {
+  display: grid;
+  grid-template-columns: 320px 1fr;
+  gap: 16px;
+  align-items: start;
+}
+
+@media (max-width: 768px) {
+  .awr-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+.awr-list {
+  border: 1px solid var(--border, #ddd);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--bg-card, #fff);
+  max-height: calc(100vh - 200px);
+  overflow-y: auto;
+}
+
+.awr-msg,
+.awr-placeholder {
+  padding: 24px;
+  text-align: center;
+  color: var(--text-muted, #888);
+  font-size: 0.9rem;
+}
+
+.awr-item {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border, #eee);
+  cursor: pointer;
+  transition: background 0.1s;
+}
+
+.awr-item:hover,
+.awr-item.selected {
+  background: var(--bg-hover, #f8f6f3);
+}
+
+.awr-item.selected {
+  border-left: 3px solid var(--accent, #7b3f00);
+}
+
+.awr-item-top {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 4px;
+  flex-wrap: wrap;
+}
+
+.awr-item-wine {
+  font-size: 0.875rem;
+  font-weight: 600;
+  margin-bottom: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.awr-item-meta {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.75rem;
+  color: var(--text-muted, #888);
+}
+
+.awr-badge {
+  font-size: 0.68rem;
+  padding: 2px 7px;
+  border-radius: 10px;
+  font-weight: 600;
+}
+
+.awr-badge.reason-wrong_info { background: #fff3cd; color: #856404; }
+.awr-badge.reason-duplicate { background: #e0f0ff; color: #1a5fa3; }
+.awr-badge.reason-inappropriate { background: #fde8e8; color: #9b1c1c; }
+.awr-badge.reason-other { background: #f3ede7; color: #7b3f00; }
+
+.awr-badge.status-pending { background: #e3f0ff; color: #1a5fa3; }
+.awr-badge.status-resolved { background: #d4edda; color: #155724; }
+.awr-badge.status-dismissed { background: #f8f9fa; color: #6c757d; }
+
+.awr-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 12px;
+  border-top: 1px solid var(--border, #eee);
+  font-size: 0.85rem;
+}
+
+.awr-pagination button {
+  padding: 4px 10px;
+  border: 1px solid var(--border, #ddd);
+  border-radius: 4px;
+  background: none;
+  cursor: pointer;
+}
+
+.awr-pagination button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.awr-detail {
+  border: 1px solid var(--border, #ddd);
+  border-radius: 8px;
+  background: var(--bg-card, #fff);
+  padding: 20px;
+}
+
+.awr-detail-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.awr-detail-header h2 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.awr-detail-badges {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.awr-detail-meta {
+  display: flex;
+  gap: 16px;
+  font-size: 0.8rem;
+  color: var(--text-muted, #888);
+  margin-bottom: 16px;
+}
+
+.awr-wine-info,
+.awr-user-details,
+.awr-duplicate-ref,
+.awr-resolved-info {
+  margin-bottom: 16px;
+}
+
+.awr-wine-info h4,
+.awr-user-details h4,
+.awr-duplicate-ref h4,
+.awr-resolved-info h4,
+.awr-actions h4 {
+  margin: 0 0 6px;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted, #999);
+}
+
+.awr-wine-info p,
+.awr-user-details p,
+.awr-duplicate-ref p,
+.awr-resolved-info p {
+  margin: 0;
+  font-size: 0.9rem;
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+
+.awr-actions {
+  border-top: 1px solid var(--border, #eee);
+  padding-top: 16px;
+}
+
+.awr-actions textarea {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid var(--border, #ddd);
+  border-radius: 6px;
+  font-size: 0.9rem;
+  font-family: inherit;
+  resize: vertical;
+  box-sizing: border-box;
+  margin-bottom: 10px;
+}
+
+.awr-action-buttons {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.awr-actions .optional {
+  font-size: 0.75rem;
+  color: var(--text-muted, #999);
+  font-weight: 400;
+  text-transform: none;
+}
+
+.awr-error {
+  color: var(--danger, #c0392b);
+  font-size: 0.85rem;
+  margin: 8px 0 0;
+}
+
+.awr-success {
+  color: var(--success, #155724);
+  font-size: 0.85rem;
+  margin: 8px 0 0;
+}
+
+.awr-resolved-by {
+  font-size: 0.8rem;
+  color: var(--text-muted, #888);
+  margin-top: 6px;
+}

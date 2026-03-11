@@ -1,0 +1,195 @@
+.support-page {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 24px 16px;
+}
+
+.support-page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+
+.support-page-header h1 {
+  margin: 0;
+  font-size: 1.6rem;
+}
+
+.support-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 20px;
+  border-bottom: 2px solid var(--border, #ddd);
+}
+
+.support-tabs button {
+  background: none;
+  border: none;
+  padding: 8px 16px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  color: var(--text-secondary, #666);
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.support-tabs button.active {
+  color: var(--accent, #7b3f00);
+  border-bottom-color: var(--accent, #7b3f00);
+  font-weight: 600;
+}
+
+.support-loading,
+.support-error,
+.support-empty {
+  text-align: center;
+  padding: 32px 0;
+  color: var(--text-muted, #888);
+  font-size: 0.95rem;
+}
+
+.support-error {
+  color: var(--danger, #c0392b);
+}
+
+.support-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.support-card {
+  border: 1px solid var(--border, #ddd);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--bg-card, #fff);
+}
+
+.support-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  cursor: pointer;
+  user-select: none;
+  gap: 12px;
+}
+
+.support-card-header:hover {
+  background: var(--bg-hover, #f8f6f3);
+}
+
+.support-card-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.support-subject {
+  font-size: 0.9rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.support-date {
+  font-size: 0.8rem;
+  color: var(--text-muted, #999);
+  white-space: nowrap;
+}
+
+.support-badge {
+  font-size: 0.7rem;
+  padding: 2px 7px;
+  border-radius: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.support-badge.category {
+  background: var(--bg-tag, #ede8e0);
+  color: var(--text-secondary, #666);
+}
+
+.support-badge.status-open {
+  background: #e3f0ff;
+  color: #1a5fa3;
+}
+
+.support-badge.status-in_progress {
+  background: #fff3cd;
+  color: #856404;
+}
+
+.support-badge.status-closed {
+  background: #d4edda;
+  color: #155724;
+}
+
+.support-badge.status-pending {
+  background: #e3f0ff;
+  color: #1a5fa3;
+}
+
+.support-badge.status-resolved {
+  background: #d4edda;
+  color: #155724;
+}
+
+.support-badge.status-dismissed {
+  background: #f8f9fa;
+  color: #6c757d;
+}
+
+.support-card-body {
+  padding: 16px;
+  border-top: 1px solid var(--border, #eee);
+  background: var(--bg-subtle, #faf9f7);
+}
+
+.support-message,
+.support-response {
+  margin-bottom: 12px;
+}
+
+.support-message h4,
+.support-response h4 {
+  margin: 0 0 6px;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted, #999);
+}
+
+.support-message p,
+.support-response p {
+  margin: 0;
+  font-size: 0.9rem;
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+
+.support-response {
+  background: var(--bg-highlight, #f0f7ff);
+  border-left: 3px solid var(--accent, #7b3f00);
+  padding: 10px 14px;
+  border-radius: 0 6px 6px 0;
+}
+
+.support-response-date {
+  display: block;
+  font-size: 0.75rem;
+  color: var(--text-muted, #999);
+  margin-top: 6px;
+}
+
+.support-awaiting {
+  font-size: 0.85rem;
+  color: var(--text-muted, #aaa);
+  font-style: italic;
+  margin: 0;
+}

@@ -1,0 +1,55 @@
+.report-wine-subtitle {
+  font-size: 0.9rem;
+  color: var(--text-secondary, #555);
+  margin: 0 0 14px;
+}
+
+.report-wine-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.report-wine-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--text-secondary, #555);
+}
+
+.report-wine-form select,
+.report-wine-form textarea {
+  padding: 8px 10px;
+  border: 1px solid var(--border, #ddd);
+  border-radius: 6px;
+  font-size: 0.9rem;
+  font-family: inherit;
+  background: var(--bg-input, #fff);
+  color: var(--text, #222);
+  resize: vertical;
+}
+
+.report-wine-form .optional {
+  font-weight: 400;
+  color: var(--text-muted, #999);
+}
+
+.char-count {
+  font-size: 0.75rem;
+  color: var(--text-muted, #999);
+  text-align: right;
+}
+
+.report-wine-error {
+  color: var(--danger, #c0392b);
+  font-size: 0.875rem;
+  margin: 0;
+}
+
+.report-wine-success {
+  padding: 8px 0 16px;
+  line-height: 1.6;
+  color: var(--text, #222);
+}
