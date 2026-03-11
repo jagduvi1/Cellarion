@@ -124,6 +124,9 @@ export const adminGetDeletedCellars = (apiFetch, params) =>
 export const adminRestoreCellar = (apiFetch, id) =>
   apiFetch(`/api/admin/cellars/${id}/restore`, { method: 'POST' });
 
+export const adminPermanentDeleteCellar = (apiFetch, id) =>
+  apiFetch(`/api/admin/cellars/${id}`, { method: 'DELETE' });
+
 // ── Support Tickets (admin) ───────────────────────────────────────────────────
 export const adminGetSupportTickets = (apiFetch, params) =>
   apiFetch(`/api/admin/support-tickets?${params}`);

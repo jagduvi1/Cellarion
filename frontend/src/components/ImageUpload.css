@@ -253,6 +253,42 @@
   opacity: 0.6;
 }
 
+/* Label scan guide — a rounded rectangle that shows where to aim */
+.label-guide-frame {
+  width: 72%;
+  max-width: 320px;
+  aspect-ratio: 3 / 4;
+  border: 2px solid rgba(255, 255, 255, 0.75);
+  border-radius: 10px;
+  box-shadow: 0 0 0 2000px rgba(0, 0, 0, 0.35);
+  position: relative;
+}
+
+/* Corner accent marks */
+.label-guide-frame::before,
+.label-guide-frame::after {
+  content: '';
+  position: absolute;
+  width: 22px;
+  height: 22px;
+  border-color: #7B9E88;
+  border-style: solid;
+}
+
+.label-guide-frame::before {
+  top: -2px;
+  left: -2px;
+  border-width: 3px 0 0 3px;
+  border-radius: 10px 0 0 0;
+}
+
+.label-guide-frame::after {
+  bottom: -2px;
+  right: -2px;
+  border-width: 0 3px 3px 0;
+  border-radius: 0 0 10px 0;
+}
+
 .overlay-hint {
   position: absolute;
   bottom: 110px;

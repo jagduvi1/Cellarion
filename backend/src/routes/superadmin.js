@@ -455,6 +455,119 @@ router.patch('/ai/system-prompt', async (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
+// PATCH /api/superadmin/ai/label-scan-prompt
+// ---------------------------------------------------------------------------
+router.patch('/ai/label-scan-prompt', async (req, res) => {
+  const { prompt } = req.body;
+  if (typeof prompt !== 'string' || !prompt.trim()) {
+    return res.status(400).json({ error: 'prompt must be a non-empty string' });
+  }
+  if (prompt.length > 6000) {
+    return res.status(400).json({ error: 'prompt must be 6000 characters or fewer' });
+  }
+  try {
+    const SiteConfig = require('../models/SiteConfig');
+    const current = aiConfig.get();
+    const updated = { ...current, labelScanPrompt: prompt.trim() };
+    await SiteConfig.findOneAndUpdate(
+      { key: 'aiConfig' },
+      { $set: { value: updated, updatedAt: new Date(), updatedBy: req.user.id } },
+      { upsert: true }
+    );
+    aiConfig.set(updated);
+    res.json({ labelScanPrompt: updated.labelScanPrompt });
+  } catch (error) {
+    console.error('[superadmin] label-scan-prompt error:', error);
+    res.status(500).json({ error: 'Failed to save label scan prompt' });
+  }
+});
+
+
+// ---------------------------------------------------------------------------
+// PATCH /api/superadmin/ai/import-lookup-prompt
+// ---------------------------------------------------------------------------
+router.patch('/ai/import-lookup-prompt', async (req, res) => {
+  const { prompt } = req.body;
+  if (typeof prompt !== 'string' || !prompt.trim()) {
+    return res.status(400).json({ error: 'prompt must be a non-empty string' });
+  }
+  if (prompt.length > 6000) {
+    return res.status(400).json({ error: 'prompt must be 6000 characters or fewer' });
+  }
+  try {
+    const SiteConfig = require('../models/SiteConfig');
+    const current = aiConfig.get();
+    const updated = { ...current, importLookupPrompt: prompt.trim() };
+    await SiteConfig.findOneAndUpdate(
+      { key: 'aiConfig' },
+      { $set: { value: updated, updatedAt: new Date(), updatedBy: req.user.id } },
+      { upsert: true }
+    );
+    aiConfig.set(updated);
+    res.json({ importLookupPrompt: updated.importLookupPrompt });
+  } catch (error) {
+    console.error('[superadmin] import-lookup-prompt error:', error);
+    res.status(500).json({ error: 'Failed to save import lookup prompt' });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// PATCH /api/superadmin/ai/import-lookup-model
+// ---------------------------------------------------------------------------
+router.patch('/ai/import-lookup-model', async (req, res) => {
+  const { model } = req.body;
+  const { VALID_CHAT_MODELS } = aiConfig;
+
+  if (!model || !VALID_CHAT_MODELS.includes(model)) {
+    return res.status(400).json({ error: `model must be one of: ${VALID_CHAT_MODELS.join(', ')}` });
+  }
+
+  try {
+    const SiteConfig = require('../models/SiteConfig');
+    const current = aiConfig.get();
+    const updated = { ...current, importLookupModel: model };
+    await SiteConfig.findOneAndUpdate(
+      { key: 'aiConfig' },
+      { $set: { value: updated, updatedAt: new Date(), updatedBy: req.user.id } },
+      { upsert: true }
+    );
+    aiConfig.set(updated);
+    res.json({ importLookupModel: model });
+  } catch (error) {
+    console.error('[superadmin] import-lookup-model error:', error);
+    res.status(500).json({ error: 'Failed to save import lookup model' });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// PATCH /api/superadmin/ai/label-scan-model
+// ---------------------------------------------------------------------------
+router.patch('/ai/label-scan-model', async (req, res) => {
+  const { model } = req.body;
+  const { VALID_CHAT_MODELS } = aiConfig;
+
+  if (!model || !VALID_CHAT_MODELS.includes(model)) {
+    return res.status(400).json({ error: `model must be one of: ${VALID_CHAT_MODELS.join(', ')}` });
+  }
+
+  try {
+    const SiteConfig = require('../models/SiteConfig');
+    const current = aiConfig.get();
+    const updated = { ...current, labelScanModel: model };
+    await SiteConfig.findOneAndUpdate(
+      { key: 'aiConfig' },
+      { $set: { value: updated, updatedAt: new Date(), updatedBy: req.user.id } },
+      { upsert: true }
+    );
+    aiConfig.set(updated);
+    res.json({ labelScanModel: model });
+  } catch (error) {
+    console.error('[superadmin] label-scan-model error:', error);
+    res.status(500).json({ error: 'Failed to save label scan model' });
+  }
+});
+
+// ---------------------------------------------------------------------------
 // PATCH /api/superadmin/ai/chat-model
 // ---------------------------------------------------------------------------
 router.patch('/ai/chat-model', async (req, res) => {

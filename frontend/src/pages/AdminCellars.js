@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
-import { adminGetDeletedCellars, adminRestoreCellar } from '../api/admin';
+import { adminGetDeletedCellars, adminRestoreCellar, adminPermanentDeleteCellar } from '../api/admin';
 
 const PAGE_SIZE = 50;
 
@@ -23,6 +23,7 @@ function AdminCellars() {
   const [pendingSearch, setPendingSearch] = useState('');
   const [restoring, setRestoring] = useState({});
   const [restored, setRestored] = useState({});
+  const [deleting, setDeleting] = useState({});
 
   const fetchCellars = useCallback(async () => {
     setLoading(true);
@@ -51,6 +52,26 @@ function AdminCellars() {
     e.preventDefault();
     setOffset(0);
     setSearch(pendingSearch);
+  }
+
+  async function permanentDelete(cellar) {
+    if (!window.confirm(`Permanently delete "${cellar.name}" and ALL its bottles and racks? This cannot be undone.`)) return;
+    setDeleting(prev => ({ ...prev, [cellar._id]: true }));
+    setError(null);
+    try {
+      const res = await adminPermanentDeleteCellar(apiFetch, cellar._id);
+      const data = await res.json();
+      if (res.ok) {
+        setCellars(prev => prev.filter(c => c._id !== cellar._id));
+        setTotal(prev => prev - 1);
+      } else {
+        setError(data.error || t('admin.cellars.errorDelete'));
+      }
+    } catch {
+      setError(t('admin.cellars.errorNetwork'));
+    } finally {
+      setDeleting(prev => ({ ...prev, [cellar._id]: false }));
+    }
   }
 
   async function restore(cellar) {
@@ -144,13 +165,20 @@ function AdminCellars() {
                           {t('admin.cellars.daysLeft', { count: days })}
                         </span>
                       </td>
-                      <td>
+                      <td style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
                         <button
                           className="btn btn-secondary btn-xs"
-                          disabled={restoring[c._id]}
+                          disabled={restoring[c._id] || deleting[c._id]}
                           onClick={() => restore(c)}
                         >
                           {restoring[c._id] ? t('admin.cellars.restoring') : t('admin.cellars.restoreBtn')}
+                        </button>
+                        <button
+                          className="btn btn-danger btn-xs"
+                          disabled={restoring[c._id] || deleting[c._id]}
+                          onClick={() => permanentDelete(c)}
+                        >
+                          {deleting[c._id] ? t('admin.cellars.deleting') : t('admin.cellars.deleteBtn')}
                         </button>
                       </td>
                     </tr>

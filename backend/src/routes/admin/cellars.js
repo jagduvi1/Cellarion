@@ -2,6 +2,7 @@ const express = require('express');
 const { requireAuth, requireRole } = require('../../middleware/auth');
 const Cellar = require('../../models/Cellar');
 const Rack = require('../../models/Rack');
+const Bottle = require('../../models/Bottle');
 const { logAudit } = require('../../services/audit');
 
 const router = express.Router();
@@ -70,6 +71,39 @@ router.post('/:id/restore', async (req, res) => {
     }
     console.error('[admin/cellars] restore error:', error);
     res.status(500).json({ error: 'Failed to restore cellar' });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// DELETE /api/admin/cellars/:id
+// Permanently delete a soft-deleted cellar and all its racks and bottles.
+// Only works on cellars that are already soft-deleted (deletedAt != null).
+// ---------------------------------------------------------------------------
+router.delete('/:id', async (req, res) => {
+  try {
+    const cellar = await Cellar.findOne({ _id: req.params.id, deletedAt: { $ne: null } });
+    if (!cellar) {
+      return res.status(404).json({ error: 'Deleted cellar not found' });
+    }
+
+    const [rackResult, bottleResult] = await Promise.all([
+      Rack.deleteMany({ cellar: cellar._id }),
+      Bottle.deleteMany({ cellar: cellar._id }),
+    ]);
+
+    await cellar.deleteOne();
+
+    logAudit(req, 'cellar.permanent_delete', { cellarId: cellar._id }, {
+      name: cellar.name,
+      owner: cellar.user,
+      racksDeleted: rackResult.deletedCount,
+      bottlesDeleted: bottleResult.deletedCount,
+    });
+
+    res.json({ deleted: true, racksDeleted: rackResult.deletedCount, bottlesDeleted: bottleResult.deletedCount });
+  } catch (error) {
+    console.error('[admin/cellars] permanent delete error:', error);
+    res.status(500).json({ error: 'Failed to permanently delete cellar' });
   }
 });
 

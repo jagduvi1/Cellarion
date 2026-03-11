@@ -13,6 +13,8 @@ const { getOrCreateDailySnapshot } = require('../utils/exchangeRates');
 const { resolveRating } = require('../utils/ratingUtils');
 const { normalizeString, combinedSimilarity } = require('../utils/normalize');
 const searchService = require('../services/search');
+const { identifyWineFromText } = require('../services/labelScan');
+const { findOrCreateWine } = require('../services/findOrCreateWine');
 const { CONSUMED_STATUSES } = require('../config/constants');
 const { stripHtml } = require('../utils/sanitize');
 const WineRequest = require('../models/WineRequest');
@@ -210,19 +212,49 @@ router.post('/validate', async (req, res) => {
       const matches = await findWineMatches(item);
 
       let status;
+      let resultMatches;
+
       if (matches.length === 0) {
-        status = 'no_match';
+        // No library match — try AI identification (non-fatal, falls back to no_match)
+        let aiMatch = null;
+        if (item.wineName && item.producer && process.env.ANTHROPIC_API_KEY) {
+          try {
+            const identified = await identifyWineFromText({
+              name: item.wineName,
+              producer: item.producer,
+              vintage: item.vintage,
+              country: item.country
+            });
+            if (identified && !identified.error && identified.confidence >= 0.4) {
+              const { wine } = await findOrCreateWine(identified, req.user.id);
+              aiMatch = {
+                wineId: wine._id,
+                name: wine.name,
+                producer: wine.producer,
+                country: wine.country?.name || null,
+                region: wine.region?.name || null,
+                appellation: wine.appellation || null,
+                type: wine.type,
+                image: wine.image || null,
+                score: identified.confidence,
+                aiIdentified: true
+              };
+            }
+          } catch {
+            // Non-fatal: fall through to no_match
+          }
+        }
+
+        if (aiMatch) {
+          status = 'ai_match';
+          resultMatches = [aiMatch];
+        } else {
+          status = 'no_match';
+          resultMatches = [];
+        }
       } else if (matches[0].score >= EXACT_THRESHOLD) {
         status = 'exact';
-      } else {
-        status = 'fuzzy';
-      }
-
-      results.push({
-        index: i,
-        item,
-        status,
-        matches: matches.map(m => ({
+        resultMatches = matches.map(m => ({
           wineId: m.wine._id,
           name: m.wine.name,
           producer: m.wine.producer,
@@ -232,8 +264,23 @@ router.post('/validate', async (req, res) => {
           type: m.wine.type,
           image: m.wine.image || null,
           score: Math.round(m.score * 100) / 100
-        }))
-      });
+        }));
+      } else {
+        status = 'fuzzy';
+        resultMatches = matches.map(m => ({
+          wineId: m.wine._id,
+          name: m.wine.name,
+          producer: m.wine.producer,
+          country: m.wine.country?.name || null,
+          region: m.wine.region?.name || null,
+          appellation: m.wine.appellation || null,
+          type: m.wine.type,
+          image: m.wine.image || null,
+          score: Math.round(m.score * 100) / 100
+        }));
+      }
+
+      results.push({ index: i, item, status, matches: resultMatches });
     }
 
     res.json({
@@ -243,6 +290,7 @@ router.post('/validate', async (req, res) => {
         total: results.length,
         exact: results.filter(r => r.status === 'exact').length,
         fuzzy: results.filter(r => r.status === 'fuzzy').length,
+        aiMatch: results.filter(r => r.status === 'ai_match').length,
         noMatch: results.filter(r => r.status === 'no_match').length,
         errors: results.filter(r => r.status === 'error').length
       }

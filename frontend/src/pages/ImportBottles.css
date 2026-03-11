@@ -367,6 +367,7 @@
 
 .summary-exact { color: #6B9E78; }
 .summary-fuzzy { color: #C8A87E; }
+.summary-ai    { color: #7EB3D4; }
 .summary-nomatch { color: #E07060; }
 .summary-importable { color: #7B9E88; }
 .summary-imported   { color: #5a8a68; }
@@ -462,6 +463,11 @@
   color: #E07060;
 }
 
+.status-badge.status-ai {
+  background: #0e2535;
+  color: #7EB3D4;
+}
+
 .status-badge.status-skipped {
   background: #1e1e1e;
   color: #666;
@@ -528,6 +534,18 @@
   color: #7B9E88 !important;
   font-size: 0.72rem !important;
   font-weight: 600;
+}
+
+.match-ai-badge {
+  display: inline-block;
+  background: #0e2535;
+  color: #7EB3D4;
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 1px 5px;
+  border-radius: 3px;
+  border: 1px solid #7EB3D4;
 }
 
 .match-skipped {

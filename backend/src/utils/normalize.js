@@ -194,10 +194,106 @@ const combinedSimilarity = (str1, str2) => {
   return levSim * 0.4 + triSim * 0.3 + tokSim * 0.3;
 };
 
+/**
+ * Map of alternate/regional grape names → canonical English name.
+ * Keys are the output of normalizeString() applied to the alternate name.
+ * Values are the canonical display name to store in the database.
+ *
+ * This prevents the same physical grape from being stored as multiple Grape
+ * records when different labels (or the AI) use regional synonyms.
+ */
+const GRAPE_SYNONYMS = {
+  // Syrah / Shiraz
+  'shiraz':               'Syrah',
+
+  // Grenache family
+  'garnacha':             'Grenache',
+  'garnacha tinta':       'Grenache',
+  'grenache noir':        'Grenache',
+  'grenache blanc':       'Grenache Blanc',
+  'garnacha blanca':      'Grenache Blanc',
+  'grenache gris':        'Grenache Gris',
+
+  // Malbec / Côt
+  'cot':                  'Malbec',
+  'cote':                 'Malbec',
+  'auxerrois':            'Malbec',
+  'malbeck':              'Malbec',
+
+  // Tempranillo synonyms
+  'tinto fino':           'Tempranillo',
+  'tinta del pais':       'Tempranillo',
+  'tinta de toro':        'Tempranillo',
+  'aragonez':             'Tempranillo',
+  'ull de llebre':        'Tempranillo',
+  'cencibel':             'Tempranillo',
+
+  // Pinot Gris / Pinot Grigio
+  'pinot grigio':         'Pinot Gris',
+  'grauburgunder':        'Pinot Gris',
+  'rulander':             'Pinot Gris',
+
+  // Pinot Noir synonyms
+  'spatburgunder':        'Pinot Noir',
+  'blauburgunder':        'Pinot Noir',
+  'clevner':              'Pinot Noir',
+
+  // Pinot Blanc synonyms
+  'pinot bianco':         'Pinot Blanc',
+  'weissburgunder':       'Pinot Blanc',
+
+  // Sangiovese synonyms
+  'brunello':             'Sangiovese',
+  'prugnolo gentile':     'Sangiovese',
+  'morellino':            'Sangiovese',
+
+  // Zinfandel / Primitivo — same DNA, often listed interchangeably
+  'primitivo':            'Zinfandel',
+
+  // Carignan
+  'carignane':            'Carignan',
+  'carinan':              'Carignan',
+  'mazuelo':              'Carignan',
+  'samso':                'Carignan',
+
+  // Mourvèdre
+  'monastrell':           'Mourvèdre',
+  'mataro':               'Mourvèdre',
+  'mourvedre':            'Mourvèdre',
+
+  // Albariño
+  'alvarinho':            'Albariño',
+  'albarino':             'Albariño',
+
+  // Sauvignon Blanc — AI occasionally truncates
+  'sauvignon':            'Sauvignon Blanc',
+
+  // Chardonnay has no real synonyms but handle Morillon (Austria)
+  'morillon':             'Chardonnay',
+
+  // Muscadet (the wine name used as grape name by mistake)
+  'muscadet':             'Melon de Bourgogne',
+};
+
+/**
+ * Resolve a grape name to its canonical English form.
+ * If the name (after normalization) matches a known synonym, the canonical
+ * name is returned. Otherwise the original trimmed name is returned unchanged.
+ *
+ * @param {string} name  Raw grape name from label scan or user input
+ * @returns {string}     Canonical grape name for storage
+ */
+const resolveGrapeName = (name) => {
+  if (!name || !name.trim()) return name;
+  const key = normalizeString(name);
+  return GRAPE_SYNONYMS[key] || name.trim();
+};
+
 module.exports = {
   normalizeString,
   tokenize,
   generateWineKey,
+  resolveGrapeName,
   levenshteinDistance,
   calculateSimilarity,
   isSimilar,

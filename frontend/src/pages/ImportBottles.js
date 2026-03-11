@@ -26,6 +26,7 @@ const FORMAT_LABELS = {
 const STATUS_LABELS = {
   exact: 'Matched',
   fuzzy: 'Review',
+  ai_match: 'AI Match',
   no_match: 'No Match',
   error: 'Error',
   skipped: 'Skipped'
@@ -34,6 +35,7 @@ const STATUS_LABELS = {
 const STATUS_CLASSES = {
   exact: 'status-exact',
   fuzzy: 'status-fuzzy',
+  ai_match: 'status-ai',
   no_match: 'status-nomatch',
   error: 'status-error',
   skipped: 'status-skipped'
@@ -159,6 +161,7 @@ function ImportBottles() {
     total: rs.length,
     exact: rs.filter(r => r.status === 'exact').length,
     fuzzy: rs.filter(r => r.status === 'fuzzy').length,
+    aiMatch: rs.filter(r => r.status === 'ai_match').length,
     noMatch: rs.filter(r => r.status === 'no_match').length,
     errors: rs.filter(r => r.status === 'error').length
   });
@@ -284,10 +287,10 @@ function ImportBottles() {
       setResults(data.results);
       setSummary(data.summary);
 
-      // Auto-select exact matches
+      // Auto-select exact and AI-identified matches
       const autoSelections = {};
       data.results.forEach((r) => {
-        if (r.status === 'exact' && r.matches.length > 0) {
+        if ((r.status === 'exact' || r.status === 'ai_match') && r.matches.length > 0) {
           autoSelections[r.index] = r.matches[0].wineId;
         }
       });
@@ -685,6 +688,12 @@ function ImportBottles() {
             <span className="summary-number summary-fuzzy">{summary?.fuzzy || 0}</span>
             <span className="summary-label">Fuzzy</span>
           </div>
+          {(summary?.aiMatch || 0) > 0 && (
+            <div className="summary-stat">
+              <span className="summary-number summary-ai">{summary.aiMatch}</span>
+              <span className="summary-label">AI Added</span>
+            </div>
+          )}
           <div className="summary-stat">
             <span className="summary-number summary-nomatch">{summary?.noMatch || 0}</span>
             <span className="summary-label">No Match</span>
@@ -825,7 +834,10 @@ function ImportBottles() {
                             {selectedWine.country || ''}
                             {selectedWine.region ? ` · ${selectedWine.region}` : ''}
                           </span>
-                          {selectedWine.score != null && (
+                          {r.status === 'ai_match' && (
+                            <span className="match-ai-badge">AI</span>
+                          )}
+                          {selectedWine.score != null && r.status !== 'ai_match' && (
                             <span className="match-score">{Math.round(selectedWine.score * 100)}% match</span>
                           )}
                         </div>

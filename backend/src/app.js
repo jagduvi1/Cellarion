@@ -66,6 +66,7 @@ app.use('/api/images/remove-bg-preview', express.json({ limit: '5mb' }));
 app.use('/api/wine-requests', express.json({ limit: '5mb' }));
 app.use('/api/admin/wine-requests', express.json({ limit: '5mb' }));
 app.use('/api/wines/scan-label', express.json({ limit: '300kb' }));
+app.use('/api/wines/find-or-create', express.json({ limit: '5mb' }));
 app.use('/api/bottles/import/sessions', express.json({ limit: '5mb' }));
 app.use('/api/bottles/import', express.json({ limit: '2mb' }));
 app.use(express.json({ limit: '10kb' }));

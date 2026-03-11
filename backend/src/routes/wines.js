@@ -1,8 +1,15 @@
+const fs = require('fs');
+const path = require('path');
 const express = require('express');
 const WineDefinition = require('../models/WineDefinition');
 const searchService = require('../services/search');
 const { requireAuth } = require('../middleware/auth');
-const { scanLabel } = require('../services/labelScan');
+const { scanLabelFull } = require('../services/labelScan');
+const { findOrCreateWine } = require('../services/findOrCreateWine');
+const { generateWineKey, combinedSimilarity } = require('../utils/normalize');
+const { PROCESSED_DIR } = require('../config/upload');
+
+const REMBG_URL = process.env.REMBG_URL || 'http://rembg:5000';
 
 const router = express.Router();
 
@@ -127,9 +134,16 @@ router.get('/', requireAuth, async (req, res) => {
   }
 });
 
-// POST /api/wines/scan-label - Extract wine name from a label photo using Claude vision
-// Body: { image: base64String, mediaType?: "image/jpeg" | "image/png" | "image/webp" }
-// Returns: { query: "wine name producer" }
+// POST /api/wines/scan-label
+// Scans a bottle label with Claude vision and returns structured wine data
+// plus any existing registry match (for user confirmation before committing).
+//
+// Body:  { image: base64String, mediaType?: "image/jpeg" | "image/png" | "image/webp" }
+// Returns: {
+//   extracted: { name, producer, vintage, country, region, appellation, type, grapes[] },
+//   match: { wine: WineDefinition, confidence: number } | null,
+//   labelImage: "data:image/png;base64,..." (background-removed label, or original as fallback)
+// }
 router.post('/scan-label', requireAuth, async (req, res) => {
   const { image, mediaType = 'image/jpeg' } = req.body;
 
@@ -138,11 +152,150 @@ router.post('/scan-label', requireAuth, async (req, res) => {
   }
 
   try {
-    const query = await scanLabel(image, mediaType);
-    res.json({ query });
+    // 1. Attempt background removal via rembg (non-fatal — falls back to original)
+    let scanImage = image;
+    let scanMediaType = mediaType;
+    let labelImage = `data:${mediaType};base64,${image}`;
+
+    try {
+      const buf = Buffer.from(image, 'base64');
+      const fd = new FormData();
+      fd.append('image', new Blob([buf], { type: mediaType }), 'label.jpg');
+      const rembgRes = await fetch(`${REMBG_URL}/remove-bg`, {
+        method: 'POST',
+        body: fd,
+        signal: AbortSignal.timeout(30000)
+      });
+      if (rembgRes.ok) {
+        const resultBuf = Buffer.from(await rembgRes.arrayBuffer());
+        const resultB64 = resultBuf.toString('base64');
+        scanImage = resultB64;
+        scanMediaType = 'image/png';
+        labelImage = `data:image/png;base64,${resultB64}`;
+      }
+    } catch (rembgErr) {
+      console.warn('rembg unavailable for label scan, using original:', rembgErr.message);
+    }
+
+    // 2. Extract wine info via Claude
+    const extracted = await scanLabelFull(scanImage, scanMediaType);
+
+    // Try to find an existing match in the registry
+    let match = null;
+
+    if (extracted.name && extracted.producer) {
+      // 1. Exact normalizedKey match
+      const normalizedKey = generateWineKey(extracted.name, extracted.producer, extracted.appellation);
+      let wine = await WineDefinition.findOne({ normalizedKey })
+        .populate(['country', 'region', 'grapes']);
+
+      if (wine) {
+        match = { wine, confidence: 1.0 };
+      } else {
+        // 2. Fuzzy search
+        const searchQuery = `${extracted.name} ${extracted.producer}`.trim();
+        let candidates = [];
+
+        if (searchService.getIsAvailable()) {
+          try {
+            const { ids } = await searchService.search(searchQuery, { limit: 20 });
+            if (ids.length > 0) {
+              candidates = await WineDefinition.find({ _id: { $in: ids } })
+                .populate(['country', 'region', 'grapes']);
+            }
+          } catch (err) {
+            console.warn('Meilisearch unavailable during scan-label match:', err.message);
+          }
+        }
+
+        if (candidates.length === 0) {
+          try {
+            candidates = await WineDefinition.find({ $text: { $search: searchQuery } })
+              .populate(['country', 'region', 'grapes'])
+              .limit(20);
+          } catch {
+            // No text match — no candidates
+          }
+        }
+
+        let bestMatch = null;
+        let bestScore = 0;
+        for (const candidate of candidates) {
+          const nameSim = combinedSimilarity(extracted.name, candidate.name);
+          const prodSim = combinedSimilarity(extracted.producer, candidate.producer);
+          let appSim = 1.0;
+          if (extracted.appellation && candidate.appellation) {
+            appSim = combinedSimilarity(extracted.appellation, candidate.appellation);
+          } else if (extracted.appellation || candidate.appellation) {
+            appSim = 0.5;
+          }
+          const score = nameSim * 0.45 + prodSim * 0.45 + appSim * 0.10;
+          if (score > bestScore) { bestScore = score; bestMatch = candidate; }
+        }
+
+        if (bestScore >= 0.75 && bestMatch) {
+          match = { wine: bestMatch, confidence: Math.round(bestScore * 100) / 100 };
+        }
+      }
+    }
+
+    res.json({ extracted, match, labelImage, _debugRaw: extracted._debugRaw }); // DEBUG — remove before release
   } catch (err) {
     console.error('Label scan error:', err.message);
-    res.status(err.status || 500).json({ error: err.message || 'Label scan failed' });
+    res.status(err.status || 500).json({ error: err.message || 'Label scan failed', _debugRaw: err._debugRaw, labelImage }); // DEBUG — remove before release
+  }
+});
+
+// POST /api/wines/find-or-create
+// Called after the user confirms (and optionally edits) the AI-extracted wine data.
+// Finds an existing matching wine or creates a new one, including any needed
+// taxonomy records (country, region, grapes).
+//
+// Body:  { name, producer, country, region?, appellation?, type?, grapes?: string[],
+//           labelImage?: "data:image/png;base64,..." }
+// Returns: { wine: WineDefinition, created: boolean }
+router.post('/find-or-create', requireAuth, async (req, res) => {
+  const { name, producer, country, region, appellation, type, grapes, labelImage } = req.body;
+
+  if (!name?.trim() || !producer?.trim()) {
+    return res.status(400).json({ error: 'name and producer are required' });
+  }
+  if (!country?.trim()) {
+    return res.status(400).json({ error: 'country is required' });
+  }
+
+  try {
+    const { wine, created } = await findOrCreateWine(
+      { name, producer, country, region, appellation, type, grapes: grapes || [] },
+      req.user.id
+    );
+
+    // Save label image as wine's registry image if:
+    //   - a labelImage was provided, AND
+    //   - the wine has no image yet (don't overwrite an existing one)
+    if (labelImage && !wine.image) {
+      try {
+        // labelImage is a data URL: "data:<type>;base64,<data>"
+        const matches = labelImage.match(/^data:([^;]+);base64,(.+)$/);
+        if (matches) {
+          const ext = matches[1] === 'image/png' ? '.png' : '.jpg';
+          const buf = Buffer.from(matches[2], 'base64');
+          const filename = `wine-label-${wine._id}-${Date.now()}${ext}`;
+          const filepath = path.join(PROCESSED_DIR, filename);
+          fs.writeFileSync(filepath, buf);
+          wine.image = `/api/uploads/processed/${filename}`;
+          await WineDefinition.findByIdAndUpdate(wine._id, { image: wine.image });
+          searchService.indexWine(wine._id); // keep search index in sync
+        }
+      } catch (imgErr) {
+        console.warn('Failed to save wine label image:', imgErr.message);
+      }
+    }
+
+    res.status(created ? 201 : 200).json({ wine, created });
+  } catch (err) {
+    console.error('Find or create wine error:', err);
+    res.status(err.status || 500).json({ error: err.message || 'Failed to find or create wine' });
   }
 });
 

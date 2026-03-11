@@ -2,12 +2,14 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
-import { searchWines } from '../api/wines';
+import { searchWines, findOrCreateWine } from '../api/wines';
 import { CURRENCIES } from '../config/currencies';
 import { monthToLastDay } from '../utils/drinkStatus';
 import ImageUpload from '../components/ImageUpload';
 import RatingInput from '../components/RatingInput';
 import './AddBottle.css';
+
+const WINE_TYPES = ['red', 'white', 'rosé', 'sparkling', 'dessert', 'fortified'];
 
 function AddBottle() {
   const { t } = useTranslation();
@@ -45,6 +47,7 @@ function AddBottle() {
     consumedRatingScale: user?.preferences?.ratingScale || '5'
   });
   const [uploadedImages, setUploadedImages] = useState([]);
+  const [showDetails, setShowDetails] = useState(false);
 
   // ── Label-scan camera ──
   const [labelCam, setLabelCam] = useState({ open: false, error: null });
@@ -53,6 +56,15 @@ function AddBottle() {
   const labelVideoRef = useRef(null);
   const labelCanvasRef = useRef(null);
   const labelStreamRef = useRef(null);
+
+  // ── Scan result state ──
+  const [scanResult, setScanResult] = useState(null);  // { extracted, match, labelImage }
+  const [labelImage, setLabelImage] = useState(null);  // bg-removed data URL for display
+  const [showManualForm, setShowManualForm] = useState(false);
+  const [pendingWineData, setPendingWineData] = useState(null);
+  const [findingWine, setFindingWine] = useState(false);
+  const [debugRaw, setDebugRaw] = useState(null); // DEBUG — remove before release
+  const [debugImage, setDebugImage] = useState(null); // DEBUG — remove before release
 
   const stopLabelCamera = useCallback(() => {
     if (labelStreamRef.current) {
@@ -140,19 +152,133 @@ function AddBottle() {
           body: JSON.stringify({ image: base64, mediaType: 'image/jpeg' })
         });
         const data = await res.json();
-        if (res.ok && data.query) {
-          setSearch(data.query);
+
+        setDebugRaw(data._debugRaw ?? null); // DEBUG — remove before release
+        if (res.ok && data.extracted) {
           stopLabelCamera();
+          setScanResult(data);
+          setLabelImage(data.labelImage || null);
+          setDebugImage(null); // DEBUG — remove before release
+          setShowManualForm(false);
+          setPendingWineData(null);
         } else {
-          setLabelCam({ open: true, error: data.error || 'Could not read label. Try again.' });
+          // DEBUG — close camera so debug info is visible
+          stopLabelCamera();
+          setDebugImage(data.labelImage || `data:image/jpeg;base64,${base64}`); // DEBUG — remove before release
+          setError(data.error || 'Could not read label. Try again.');
         }
       } catch {
-        setLabelCam({ open: true, error: 'Scan failed. Please try again.' });
+        stopLabelCamera();
+        setError('Scan failed. Please try again.');
       } finally {
         setLabelScanning(false);
       }
     }, 'image/jpeg', 0.55);
   }, [apiFetch, stopLabelCamera]);
+
+  // Confirm scan result — find/create the wine, save label image, go to bottle details
+  const handleConfirmScan = useCallback(async () => {
+    const { extracted, match } = scanResult;
+    // If there's a match, use the matched wine's canonical data for the lookup
+    // so the normalizedKey lookup on the backend is instant and correct
+    const wineData = match?.wine
+      ? {
+          name: match.wine.name,
+          producer: match.wine.producer,
+          country: match.wine.country?.name || extracted.country || '',
+          region: match.wine.region?.name || extracted.region || '',
+          appellation: match.wine.appellation || extracted.appellation || '',
+          type: match.wine.type || extracted.type || 'red',
+          grapes: (match.wine.grapes || []).map(g => g.name),
+          labelImage: labelImage || undefined
+        }
+      : {
+          name: extracted.name,
+          producer: extracted.producer,
+          country: extracted.country || '',
+          region: extracted.region || '',
+          appellation: extracted.appellation || '',
+          type: extracted.type || 'red',
+          grapes: extracted.grapes || [],
+          labelImage: labelImage || undefined
+        };
+
+    setError(null);
+    setFindingWine(true);
+    try {
+      const res = await findOrCreateWine(apiFetch, wineData);
+      const data = await res.json();
+      if (!res.ok) { setError(data.error || t('addBottle.scanFailedToSaveWine')); return; }
+      setSelectedWine(data.wine);
+      setBottleData(prev => ({ ...prev, vintage: extracted.vintage || '' }));
+      setScanResult(null);
+      setLabelImage(null);
+      setShowManualForm(false);
+      setPendingWineData(null);
+      setStep(2);
+    } catch {
+      setError(t('addBottle.scanFailedToSaveWine'));
+    } finally {
+      setFindingWine(false);
+    }
+  }, [apiFetch, scanResult, labelImage, t]);
+
+  // Switch to the editable manual form (user says "not the right wine")
+  const handleNotRightWine = useCallback(() => {
+    const { extracted } = scanResult;
+    setPendingWineData({
+      name: extracted.name || '',
+      producer: extracted.producer || '',
+      country: extracted.country || '',
+      region: extracted.region || '',
+      appellation: extracted.appellation || '',
+      type: extracted.type || 'red',
+      grapes: (extracted.grapes || []).join(', ')
+    });
+    setShowManualForm(true);
+  }, [scanResult]);
+
+  // Confirm from the manual edit form
+  const handleConfirmManualWine = useCallback(async () => {
+    if (!pendingWineData?.name?.trim() || !pendingWineData?.producer?.trim() || !pendingWineData?.country?.trim()) {
+      setError(t('addBottle.scanNameProducerCountryRequired'));
+      return;
+    }
+    setError(null);
+    setFindingWine(true);
+    try {
+      const grapes = pendingWineData.grapes
+        ? pendingWineData.grapes.split(',').map(g => g.trim()).filter(Boolean)
+        : [];
+      const res = await findOrCreateWine(apiFetch, {
+        ...pendingWineData,
+        grapes,
+        labelImage: labelImage || undefined
+      });
+      const data = await res.json();
+      if (!res.ok) { setError(data.error || t('addBottle.scanFailedToSaveWine')); return; }
+      setSelectedWine(data.wine);
+      setBottleData(prev => ({ ...prev, vintage: scanResult?.extracted?.vintage || '' }));
+      setScanResult(null);
+      setLabelImage(null);
+      setShowManualForm(false);
+      setPendingWineData(null);
+      setStep(2);
+    } catch {
+      setError(t('addBottle.scanFailedToSaveWine'));
+    } finally {
+      setFindingWine(false);
+    }
+  }, [apiFetch, pendingWineData, scanResult, labelImage, t]);
+
+  // Reset — back to search
+  const handleScanReset = useCallback(() => {
+    setScanResult(null);
+    setLabelImage(null);
+    setShowManualForm(false);
+    setPendingWineData(null);
+    setError(null);
+  }, []);
 
   // Debounce search: wait 300ms after the user stops typing before firing
   useEffect(() => {
@@ -249,12 +375,13 @@ function AddBottle() {
                 {labelScanning ? (
                   <div className="label-scan-overlay">
                     <div className="label-scan-spinner" />
-                    <span>Reading label…</span>
+                    <span>{t('addBottle.scanReading')}</span>
                   </div>
                 ) : (
                   <>
                     <div className="camera-overlay">
-                      <p className="overlay-hint">Point at the wine label</p>
+                      <div className="label-guide-frame" />
+                      <p className="overlay-hint">{t('addBottle.scanHint')}</p>
                     </div>
                     <div className="camera-controls">
                       <button type="button" className="camera-btn camera-btn-close" onClick={stopLabelCamera} title="Close">✕</button>
@@ -271,6 +398,7 @@ function AddBottle() {
           <canvas ref={labelCanvasRef} style={{ display: 'none' }} />
         </div>
       )}
+
       <div className="page-header">
         <div>
           <Link to={`/cellars/${cellarId}`} className="back-link">{t('addBottle.backToCellar')}</Link>
@@ -292,80 +420,209 @@ function AddBottle() {
 
       {error && <div className="alert alert-error">{error}</div>}
 
+      {/* DEBUG — remove before release */}
+      {(debugRaw !== null || debugImage) && (
+        <div style={{ background: '#1a1a1a', border: '1px solid #ff6600', borderRadius: 6, padding: '0.75rem 1rem', marginBottom: '1rem' }}>
+          <strong style={{ color: '#ff6600', fontSize: '0.8rem' }}>DEBUG — Image sent to Claude:</strong>
+          {debugImage && (
+            <div style={{ marginTop: '0.5rem' }}>
+              <img src={debugImage} alt="Sent to Claude" style={{ maxWidth: '200px', maxHeight: '300px', objectFit: 'contain', borderRadius: 4, display: 'block' }} />
+            </div>
+          )}
+          {debugRaw !== null && (
+            <>
+              <strong style={{ color: '#ff6600', fontSize: '0.8rem', display: 'block', marginTop: '0.75rem' }}>DEBUG — Raw Claude response:</strong>
+              <pre style={{ color: '#E8DFD0', fontSize: '0.78rem', whiteSpace: 'pre-wrap', wordBreak: 'break-all', margin: '0.5rem 0 0 0' }}>{debugRaw}</pre>
+            </>
+          )}
+        </div>
+      )}
+
       {step === 1 && (
         <div className="card">
-          <h2>{t('addBottle.searchForWine')}</h2>
-          <div className="search-section">
-            <div className="search-input-wrapper">
-              <input
-                type="text"
-                placeholder={t('addBottle.searchPlaceholder')}
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="search-input-large search-input-with-camera"
-                autoFocus
-              />
-              <button
-                type="button"
-                className="search-camera-btn"
-                onClick={startLabelCamera}
-                disabled={labelCam.open}
-                title="Scan wine label with camera"
-                aria-label="Scan wine label with camera"
-              >
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
-                  <circle cx="12" cy="13" r="4"/>
-                </svg>
-              </button>
-            </div>
-            <p className="help-text">
-              {t('addBottle.cantFindWine')} <Link to="/wine-requests">{t('addBottle.requestNewWine')}</Link>
-            </p>
-          </div>
-
-          {loading && <p>{t('addBottle.searching')}</p>}
-
-          {!loading && wines.length === 0 && (
-            <div className="empty-state">
-              <p>{search.length > 0 ? t('addBottle.noWinesMatched') : t('addBottle.startTyping')}</p>
+          {/* ── Scan result: unified wine card ──────────────────────────── */}
+          {scanResult && !showManualForm && (
+            <div className="scan-wine-card">
+              <div className="scan-wine-image-wrap">
+                {labelImage
+                  ? <img src={labelImage} alt={scanResult.extracted.name} className="scan-wine-label-img" />
+                  : <div className={`wine-row-placeholder scan-wine-placeholder ${scanResult.extracted.type || 'red'}`} />
+                }
+              </div>
+              <div className="scan-wine-body">
+                <h2 className="scan-wine-name">{scanResult.extracted.name}</h2>
+                <p className="scan-wine-producer">{scanResult.extracted.producer}</p>
+                {scanResult.extracted.confidence != null && (
+                  <div style={{ marginBottom: '0.5rem' }}>
+                    <span className="scan-confidence">
+                      {Math.round(scanResult.extracted.confidence * 100)}% confident
+                    </span>
+                  </div>
+                )}
+                <div className="wine-meta" style={{ marginBottom: '0.5rem' }}>
+                  {scanResult.extracted.country && <span>{scanResult.extracted.country}</span>}
+                  {scanResult.extracted.region && <span>• {scanResult.extracted.region}</span>}
+                  {scanResult.extracted.appellation && <span>• {scanResult.extracted.appellation}</span>}
+                  <span className={`wine-type-pill ${scanResult.extracted.type || 'red'}`}>
+                    {scanResult.extracted.type || 'red'}
+                  </span>
+                </div>
+                {scanResult.extracted.grapes?.length > 0 && (
+                  <p className="wine-grapes">{scanResult.extracted.grapes.join(', ')}</p>
+                )}
+                {scanResult.extracted.vintage && (
+                  <p className="scan-vintage-note">
+                    {t('addBottle.scanVintageDetected', { year: scanResult.extracted.vintage })}
+                  </p>
+                )}
+                <div className="scan-wine-actions">
+                  <button
+                    type="button"
+                    className="btn btn-success"
+                    onClick={handleConfirmScan}
+                    disabled={findingWine}
+                  >
+                    {findingWine ? t('addBottle.scanSaving') : t('addBottle.scanConfirmWine')}
+                  </button>
+                  <button type="button" className="btn-not-right" onClick={handleNotRightWine}>
+                    {t('addBottle.scanNotRight')}
+                  </button>
+                </div>
+              </div>
             </div>
           )}
 
-          {wines.length > 0 && (
-            <>
-              <div className="wines-list">
-                {wines.map(wine => (
-                  <div key={wine._id} className="wine-row" onClick={() => handleSelectWine(wine)}>
-                    {wine.image ? (
-                      <div className="wine-row-img-wrap">
-                        <img
-                          src={wine.image}
-                          alt={wine.name}
-                          className="wine-row-image"
-                          onError={(e) => { e.target.style.display = 'none'; }}
-                        />
-                        {wine.imageCredit && <span className="wine-row-credit">{wine.imageCredit}</span>}
-                      </div>
-                    ) : (
-                      <div className={`wine-row-placeholder ${wine.type}`}></div>
-                    )}
-                    <div className="wine-info">
-                      <h3>{wine.name}</h3>
-                      <p className="producer">{wine.producer}</p>
-                      <div className="wine-meta">
-                        <span>{wine.country?.name}</span>
-                        {wine.region && <span>• {wine.region.name}</span>}
-                        <span className={`wine-type-pill ${wine.type}`}>{wine.type}</span>
-                      </div>
-                      {wine.grapes?.length > 0 && (
-                        <p className="wine-grapes">{wine.grapes.map(g => g.name).join(', ')}</p>
-                      )}
-                    </div>
-                    <button className="btn btn-primary btn-small">{t('addBottle.selectBtn')}</button>
-                  </div>
-                ))}
+          {/* ── Scan result: manual edit form (user said "not the right wine") ── */}
+          {scanResult && showManualForm && pendingWineData && (
+            <div className="scan-result-panel">
+              {labelImage && (
+                <div className="scan-manual-image-wrap">
+                  <img src={labelImage} alt="" className="scan-manual-label-img" />
+                </div>
+              )}
+              <div className="grid-2">
+                <div className="form-group">
+                  <label>{t('addBottle.scanWineName')} *</label>
+                  <input type="text" value={pendingWineData.name}
+                    onChange={e => setPendingWineData(p => ({ ...p, name: e.target.value }))} required />
+                </div>
+                <div className="form-group">
+                  <label>{t('addBottle.scanProducer')} *</label>
+                  <input type="text" value={pendingWineData.producer}
+                    onChange={e => setPendingWineData(p => ({ ...p, producer: e.target.value }))} required />
+                </div>
+                <div className="form-group">
+                  <label>{t('addBottle.scanCountry')} *</label>
+                  <input type="text" value={pendingWineData.country}
+                    onChange={e => setPendingWineData(p => ({ ...p, country: e.target.value }))} required />
+                </div>
+                <div className="form-group">
+                  <label>{t('addBottle.scanRegion')}</label>
+                  <input type="text" value={pendingWineData.region}
+                    onChange={e => setPendingWineData(p => ({ ...p, region: e.target.value }))} />
+                </div>
+                <div className="form-group">
+                  <label>{t('addBottle.scanAppellation')}</label>
+                  <input type="text" value={pendingWineData.appellation}
+                    onChange={e => setPendingWineData(p => ({ ...p, appellation: e.target.value }))} />
+                </div>
+                <div className="form-group">
+                  <label>{t('addBottle.scanType')}</label>
+                  <select value={pendingWineData.type}
+                    onChange={e => setPendingWineData(p => ({ ...p, type: e.target.value }))}>
+                    {WINE_TYPES.map(wt => <option key={wt} value={wt}>{wt}</option>)}
+                  </select>
+                </div>
+                <div className="form-group form-group-full">
+                  <label>{t('addBottle.scanGrapes')}</label>
+                  <input type="text" value={pendingWineData.grapes}
+                    onChange={e => setPendingWineData(p => ({ ...p, grapes: e.target.value }))}
+                    placeholder={t('addBottle.scanGrapesPlaceholder')} />
+                </div>
               </div>
+              <div className="scan-result-actions">
+                <button type="button" className="btn btn-success" onClick={handleConfirmManualWine} disabled={findingWine}>
+                  {findingWine ? t('addBottle.scanSaving') : t('addBottle.scanConfirmWine')}
+                </button>
+                <button type="button" className="btn btn-ghost" onClick={handleScanReset}>
+                  {t('addBottle.scanSearchManually')}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* ── Manual search (shown when no scan result) ───────────────── */}
+          {!scanResult && (
+            <>
+              <h2>{t('addBottle.searchForWine')}</h2>
+              <div className="search-section">
+                <div className="search-input-wrapper">
+                  <input
+                    type="text"
+                    placeholder={t('addBottle.searchPlaceholder')}
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    className="search-input-large search-input-with-camera"
+                    autoFocus
+                  />
+                  <button
+                    type="button"
+                    className="search-camera-btn"
+                    onClick={startLabelCamera}
+                    disabled={labelCam.open}
+                    title="Scan wine label with camera"
+                    aria-label="Scan wine label with camera"
+                  >
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+                      <circle cx="12" cy="13" r="4"/>
+                    </svg>
+                  </button>
+                </div>
+              </div>
+
+              {loading && <p>{t('addBottle.searching')}</p>}
+
+              {!loading && wines.length === 0 && (
+                <div className="empty-state">
+                  <p>{search.length > 0 ? t('addBottle.noWinesMatched') : t('addBottle.startTyping')}</p>
+                </div>
+              )}
+
+              {wines.length > 0 && (
+                <div className="wines-list">
+                  {wines.map(wine => (
+                    <div key={wine._id} className="wine-row" onClick={() => handleSelectWine(wine)}>
+                      {wine.image ? (
+                        <div className="wine-row-img-wrap">
+                          <img
+                            src={wine.image}
+                            alt={wine.name}
+                            className="wine-row-image"
+                            onError={(e) => { e.target.style.display = 'none'; }}
+                          />
+                          {wine.imageCredit && <span className="wine-row-credit">{wine.imageCredit}</span>}
+                        </div>
+                      ) : (
+                        <div className={`wine-row-placeholder ${wine.type}`}></div>
+                      )}
+                      <div className="wine-info">
+                        <h3>{wine.name}</h3>
+                        <p className="producer">{wine.producer}</p>
+                        <div className="wine-meta">
+                          <span>{wine.country?.name}</span>
+                          {wine.region && <span>• {wine.region.name}</span>}
+                          <span className={`wine-type-pill ${wine.type}`}>{wine.type}</span>
+                        </div>
+                        {wine.grapes?.length > 0 && (
+                          <p className="wine-grapes">{wine.grapes.map(g => g.name).join(', ')}</p>
+                        )}
+                      </div>
+                      <button className="btn btn-primary btn-small">{t('addBottle.selectBtn')}</button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </>
           )}
         </div>
@@ -373,30 +630,28 @@ function AddBottle() {
 
       {step === 2 && selectedWine && (
         <div className="card">
-          <div className="selected-wine">
-            <h3>{t('addBottle.selectedWine')}</h3>
-            <div className="wine-summary">
-              {selectedWine.image && (
-                <img
-                  src={selectedWine.image}
-                  alt={selectedWine.name}
-                  className="selected-wine-image"
-                  onError={(e) => { e.target.style.display = 'none'; }}
-                />
-              )}
-              <div>
-                <strong>{selectedWine.name}</strong>
-                <span> by {selectedWine.producer}</span>
-              </div>
-              <button onClick={() => setStep(1)} className="btn btn-secondary btn-small">
-                {t('addBottle.changeWine')}
-              </button>
+          {/* Selected wine — compact summary bar */}
+          <div className="selected-wine-bar">
+            {selectedWine.image && (
+              <img
+                src={selectedWine.image}
+                alt={selectedWine.name}
+                className="selected-wine-bar-img"
+                onError={(e) => { e.target.style.display = 'none'; }}
+              />
+            )}
+            <div className="selected-wine-bar-info">
+              <strong className="selected-wine-bar-name">{selectedWine.name}</strong>
+              <span className="selected-wine-bar-producer">{selectedWine.producer}</span>
             </div>
+            <button type="button" onClick={() => setStep(1)} className="btn btn-ghost btn-small">
+              {t('addBottle.changeWine')}
+            </button>
           </div>
 
-          <h2>{t('addBottle.bottleDetails')}</h2>
           <form onSubmit={handleSubmit}>
-            <div className="grid-2">
+            {/* ── Core fields ── */}
+            <div className="grid-2" style={{ marginTop: '1.25rem' }}>
               <div className="form-group">
                 <label>{t('common.vintage')} *</label>
                 <input
@@ -405,6 +660,7 @@ function AddBottle() {
                   onChange={(e) => setBottleData({ ...bottleData, vintage: e.target.value })}
                   placeholder={t('addBottle.vintagePlaceholder')}
                   required
+                  autoFocus
                 />
               </div>
 
@@ -463,142 +719,160 @@ function AddBottle() {
                   allowScaleOverride
                 />
               </div>
-
-              <div className="form-group">
-                <label>{t('addBottle.purchaseDate')}</label>
-                <input
-                  type="date"
-                  value={bottleData.purchaseDate}
-                  onChange={(e) => setBottleData({ ...bottleData, purchaseDate: e.target.value })}
-                />
-              </div>
-
-              <div className="form-group">
-                <label>{t('addBottle.purchaseLocation')}</label>
-                <input
-                  type="text"
-                  value={bottleData.purchaseLocation}
-                  onChange={(e) => setBottleData({ ...bottleData, purchaseLocation: e.target.value })}
-                  placeholder={t('addBottle.purchaseLocationPlaceholder')}
-                />
-              </div>
-
-              <div className="form-group">
-                <label>{t('addBottle.purchaseUrl')}</label>
-                <input
-                  type="url"
-                  value={bottleData.purchaseUrl}
-                  onChange={(e) => setBottleData({ ...bottleData, purchaseUrl: e.target.value })}
-                  placeholder="https://..."
-                />
-              </div>
-
-              <div className="form-group">
-                <label>{t('addBottle.dateAdded')}</label>
-                <input
-                  type="date"
-                  value={bottleData.dateAdded}
-                  onChange={(e) => setBottleData({ ...bottleData, dateAdded: e.target.value })}
-                />
-                <p className="help-text">{t('addBottle.dateAddedHint')}</p>
-              </div>
             </div>
 
-            <div className="form-group">
-              <label>{t('common.notes')}</label>
-              <textarea
-                value={bottleData.notes}
-                onChange={(e) => setBottleData({ ...bottleData, notes: e.target.value })}
-                placeholder={t('addBottle.notesPlaceholder')}
-                rows="4"
-              />
-            </div>
+            {/* ── More details toggle ── */}
+            <button
+              type="button"
+              className={`details-toggle ${showDetails ? 'details-toggle--open' : ''}`}
+              onClick={() => setShowDetails(v => !v)}
+            >
+              <span>{showDetails ? t('addBottle.hideDetails') : t('addBottle.showDetails')}</span>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="details-toggle-chevron">
+                <polyline points="6 9 12 15 18 9" />
+              </svg>
+            </button>
 
-            <div className="form-group drink-window-section">
-              <label>{t('addBottle.drinkWindow')}</label>
-              <p className="help-text">
-                {t('addBottle.drinkWindowHint')}
-              </p>
-              <div className="drink-window-fields">
-                <div>
-                  <label className="sublabel">{t('addBottle.drinkFrom')}</label>
-                  <input
-                    type="month"
-                    value={bottleData.drinkFrom}
-                    onChange={(e) => setBottleData({ ...bottleData, drinkFrom: e.target.value })}
-                  />
-                </div>
-                <div>
-                  <label className="sublabel">{t('addBottle.drinkBefore')}</label>
-                  <input
-                    type="month"
-                    value={bottleData.drinkBefore}
-                    onChange={(e) => setBottleData({ ...bottleData, drinkBefore: e.target.value })}
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div className="form-group add-to-history-section">
-              <label className="toggle-label">
-                <input
-                  type="checkbox"
-                  checked={addToHistory}
-                  onChange={(e) => setAddToHistory(e.target.checked)}
-                />
-                <span>{t('addBottle.addToHistory')}</span>
-              </label>
-              <p className="help-text">{t('addBottle.addToHistoryHint')}</p>
-
-              {addToHistory && (
-                <div className="history-fields">
-                  <div className="grid-2">
-                    <div className="form-group">
-                      <label>{t('addBottle.consumedReason')}</label>
-                      <select
-                        value={historyData.consumedReason}
-                        onChange={(e) => setHistoryData({ ...historyData, consumedReason: e.target.value })}
-                      >
-                        <option value="drank">{t('history.reasonDrank')}</option>
-                        <option value="gifted">{t('history.reasonGifted')}</option>
-                        <option value="sold">{t('history.reasonSold')}</option>
-                        <option value="other">{t('history.reasonOther')}</option>
-                      </select>
-                    </div>
-
-                    <div className="form-group">
-                      <label>{t('addBottle.consumedDate')}</label>
-                      <input
-                        type="date"
-                        value={historyData.consumedAt}
-                        onChange={(e) => setHistoryData({ ...historyData, consumedAt: e.target.value })}
-                      />
-                    </div>
-
-                    <div className="form-group">
-                      <label>{t('addBottle.consumedRating')}</label>
-                      <RatingInput
-                        value={historyData.consumedRating}
-                        scale={historyData.consumedRatingScale}
-                        onChange={v => setHistoryData({ ...historyData, consumedRating: v ?? '' })}
-                        onScaleChange={s => setHistoryData({ ...historyData, consumedRatingScale: s, consumedRating: '' })}
-                        allowScaleOverride
-                      />
-                    </div>
+            {/* ── Collapsible: purchase info, notes, drink window ── */}
+            {showDetails && (
+              <div className="details-panel">
+                <div className="grid-2">
+                  <div className="form-group">
+                    <label>{t('addBottle.purchaseDate')}</label>
+                    <input
+                      type="date"
+                      value={bottleData.purchaseDate}
+                      onChange={(e) => setBottleData({ ...bottleData, purchaseDate: e.target.value })}
+                    />
                   </div>
 
                   <div className="form-group">
-                    <label>{t('addBottle.consumedNote')}</label>
-                    <textarea
-                      value={historyData.consumedNote}
-                      onChange={(e) => setHistoryData({ ...historyData, consumedNote: e.target.value })}
-                      placeholder={t('addBottle.consumedNotePlaceholder')}
-                      rows="3"
+                    <label>{t('addBottle.purchaseLocation')}</label>
+                    <input
+                      type="text"
+                      value={bottleData.purchaseLocation}
+                      onChange={(e) => setBottleData({ ...bottleData, purchaseLocation: e.target.value })}
+                      placeholder={t('addBottle.purchaseLocationPlaceholder')}
                     />
                   </div>
+
+                  <div className="form-group form-group-full">
+                    <label>{t('addBottle.purchaseUrl')}</label>
+                    <input
+                      type="url"
+                      value={bottleData.purchaseUrl}
+                      onChange={(e) => setBottleData({ ...bottleData, purchaseUrl: e.target.value })}
+                      placeholder="https://..."
+                    />
+                  </div>
+
+                  <div className="form-group form-group-full">
+                    <label>{t('addBottle.dateAdded')}</label>
+                    <input
+                      type="date"
+                      value={bottleData.dateAdded}
+                      onChange={(e) => setBottleData({ ...bottleData, dateAdded: e.target.value })}
+                    />
+                    <p className="help-text">{t('addBottle.dateAddedHint')}</p>
+                  </div>
                 </div>
-              )}
-            </div>
+
+                <div className="form-group">
+                  <label>{t('common.notes')}</label>
+                  <textarea
+                    value={bottleData.notes}
+                    onChange={(e) => setBottleData({ ...bottleData, notes: e.target.value })}
+                    placeholder={t('addBottle.notesPlaceholder')}
+                    rows="3"
+                  />
+                </div>
+
+                <div className="drink-window-section">
+                  <label className="form-label">{t('addBottle.drinkWindow')}</label>
+                  <p className="help-text" style={{ marginTop: '0.25rem' }}>{t('addBottle.drinkWindowHint')}</p>
+                  <div className="drink-window-fields">
+                    <div>
+                      <label className="sublabel">{t('addBottle.drinkFrom')}</label>
+                      <input
+                        type="month"
+                        value={bottleData.drinkFrom}
+                        onChange={(e) => setBottleData({ ...bottleData, drinkFrom: e.target.value })}
+                      />
+                    </div>
+                    <div>
+                      <label className="sublabel">{t('addBottle.drinkBefore')}</label>
+                      <input
+                        type="month"
+                        value={bottleData.drinkBefore}
+                        onChange={(e) => setBottleData({ ...bottleData, drinkBefore: e.target.value })}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* ── Add to History ── */}
+                <div className="add-to-history-section">
+                  <label className="toggle-label">
+                    <input
+                      type="checkbox"
+                      checked={addToHistory}
+                      onChange={(e) => setAddToHistory(e.target.checked)}
+                    />
+                    <span>{t('addBottle.addToHistory')}</span>
+                  </label>
+                  <p className="help-text">{t('addBottle.addToHistoryHint')}</p>
+  
+                  {addToHistory && (
+                    <div className="history-fields">
+                      <div className="grid-2">
+                        <div className="form-group">
+                          <label>{t('addBottle.consumedReason')}</label>
+                          <select
+                            value={historyData.consumedReason}
+                            onChange={(e) => setHistoryData({ ...historyData, consumedReason: e.target.value })}
+                          >
+                            <option value="drank">{t('history.reasonDrank')}</option>
+                            <option value="gifted">{t('history.reasonGifted')}</option>
+                            <option value="sold">{t('history.reasonSold')}</option>
+                            <option value="other">{t('history.reasonOther')}</option>
+                          </select>
+                        </div>
+  
+                        <div className="form-group">
+                          <label>{t('addBottle.consumedDate')}</label>
+                          <input
+                            type="date"
+                            value={historyData.consumedAt}
+                            onChange={(e) => setHistoryData({ ...historyData, consumedAt: e.target.value })}
+                          />
+                        </div>
+  
+                        <div className="form-group">
+                          <label>{t('addBottle.consumedRating')}</label>
+                          <RatingInput
+                            value={historyData.consumedRating}
+                            scale={historyData.consumedRatingScale}
+                            onChange={v => setHistoryData({ ...historyData, consumedRating: v ?? '' })}
+                            onScaleChange={s => setHistoryData({ ...historyData, consumedRatingScale: s, consumedRating: '' })}
+                            allowScaleOverride
+                          />
+                        </div>
+                      </div>
+  
+                      <div className="form-group">
+                        <label>{t('addBottle.consumedNote')}</label>
+                        <textarea
+                          value={historyData.consumedNote}
+                          onChange={(e) => setHistoryData({ ...historyData, consumedNote: e.target.value })}
+                          placeholder={t('addBottle.consumedNotePlaceholder')}
+                          rows="3"
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
 
             <div className="form-group">
               <label>{t('addBottle.bottlePhotos')}</label>

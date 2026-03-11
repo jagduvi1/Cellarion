@@ -360,6 +360,252 @@
   border-top: 1px solid #2a2a4a;
 }
 
+/* ── Unified scan wine card ── */
+.scan-wine-card {
+  display: flex;
+  gap: 1.5rem;
+  align-items: flex-start;
+  margin-bottom: 1rem;
+}
+
+.scan-wine-image-wrap {
+  flex-shrink: 0;
+  width: 110px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.scan-wine-label-img {
+  width: 110px;
+  max-height: 220px;
+  object-fit: contain;
+  border-radius: 6px;
+  display: block;
+}
+
+.scan-wine-placeholder {
+  width: 110px;
+  height: 180px;
+  border-radius: 6px;
+}
+
+.scan-wine-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.scan-wine-name {
+  font-size: 1.25rem;
+  font-weight: 700;
+  margin: 0 0 0.25rem 0;
+  color: #E8DFD0;
+}
+
+.scan-wine-producer {
+  font-size: 0.95rem;
+  color: #9A9484;
+  margin: 0 0 0.75rem 0;
+}
+
+.scan-wine-actions {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-top: 1.25rem;
+  flex-wrap: wrap;
+}
+
+/* "Not the right wine?" — minimal text link */
+.btn-not-right {
+  background: none;
+  border: none;
+  padding: 0;
+  color: #9A9484;
+  font-size: 0.82rem;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.btn-not-right:hover {
+  color: #E8DFD0;
+}
+
+/* Manual form: small label image shown above the form for reference */
+.scan-manual-image-wrap {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 1.25rem;
+}
+
+.scan-manual-label-img {
+  width: 80px;
+  max-height: 160px;
+  object-fit: contain;
+  border-radius: 6px;
+  opacity: 0.75;
+}
+
+/* ── Scan result panel ── */
+.scan-result-panel {
+  margin-bottom: 1.5rem;
+}
+
+.scan-result-header {
+  display: flex;
+  align-items: baseline;
+  gap: 1rem;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+}
+
+.scan-result-header h2 {
+  margin: 0;
+}
+
+.scan-confidence {
+  font-size: 0.82rem;
+  color: #7B9E88;
+  font-weight: 600;
+  background: rgba(123, 158, 136, 0.12);
+  padding: 0.15rem 0.5rem;
+  border-radius: 10px;
+}
+
+.wine-row-scan {
+  cursor: default;
+  pointer-events: none;
+  margin-bottom: 1rem;
+}
+
+.scan-vintage-note {
+  font-size: 0.85rem;
+  color: #9A9484;
+  margin: 0.5rem 0 1rem 0;
+  font-style: italic;
+}
+
+.scan-result-actions {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-top: 1rem;
+}
+
+/* Full-width form-group inside the 2-column grid */
+.form-group-full {
+  grid-column: 1 / -1;
+}
+
+/* Ghost button style — low-key tertiary action */
+.btn.btn-ghost {
+  background: transparent;
+  border: 1px solid #2a2a2a;
+  color: #9A9484;
+}
+
+.btn.btn-ghost:hover {
+  border-color: #9A9484;
+  color: #E8DFD0;
+}
+
+/* ── Selected wine bar (step 2 compact header) ── */
+.selected-wine-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.875rem;
+  padding: 0.75rem 0.875rem;
+  background: rgba(123, 158, 136, 0.08);
+  border: 1px solid rgba(123, 158, 136, 0.22);
+  border-radius: 8px;
+}
+
+.selected-wine-bar-img {
+  width: 36px;
+  height: 52px;
+  object-fit: contain;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+.selected-wine-bar-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.selected-wine-bar-name {
+  color: #E8DFD0;
+  font-size: 0.95rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.selected-wine-bar-producer {
+  color: #9A9484;
+  font-size: 0.82rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── More details toggle ── */
+.details-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  width: 100%;
+  margin: 1.25rem 0 0 0;
+  padding: 0.6rem 1rem;
+  background: transparent;
+  border: 1px dashed #2a2a2a;
+  border-radius: 8px;
+  color: #9A9484;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: border-color 0.2s, color 0.2s;
+}
+
+.details-toggle:hover {
+  border-color: #7B9E88;
+  color: #E8DFD0;
+}
+
+.details-toggle-chevron {
+  transition: transform 0.25s ease;
+}
+
+.details-toggle--open .details-toggle-chevron {
+  transform: rotate(180deg);
+}
+
+/* ── Collapsible details panel ── */
+.details-panel {
+  margin-top: 1rem;
+  padding: 1rem 1.125rem;
+  border: 1px solid #2a2a2a;
+  border-radius: 8px;
+  background: #161616;
+}
+
+.details-panel .drink-window-section {
+  margin-top: 0.75rem;
+}
+
+/* form-label: block label outside a form-group wrapper */
+.form-label {
+  display: block;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #c8c0b4;
+  margin-bottom: 0.35rem;
+}
+
 /* ── Mobile ── */
 @media (max-width: 768px) {
   .step span {
