@@ -42,7 +42,7 @@
 }
 
 .brand-logo-img {
-  height: 42px;
+  height: 64px;
   width: auto;
   display: block;
 }
@@ -352,6 +352,10 @@
 
   .navbar-inner {
     padding: 0.5rem 1rem;
+  }
+
+  .brand-logo-img {
+    height: 56px;
   }
 
   .main-content {

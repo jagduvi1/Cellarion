@@ -29,7 +29,7 @@
 }
 
 .landing-nav-logo-img {
-  height: 48px;
+  height: 64px;
   width: auto;
   display: block;
 }
@@ -131,12 +131,12 @@
 }
 
 .landing-hero-logo-img {
-  height: 200px;
+  height: clamp(320px, 50vw, 500px);
   width: auto;
 }
 
 .landing-final-logo-img {
-  height: 100px;
+  height: 140px;
   width: auto;
 }
 
@@ -439,5 +439,13 @@
 
   .landing-nav {
     padding: 0 4%;
+  }
+
+  .landing-nav-logo-img {
+    height: 56px;
+  }
+
+  .landing-final-logo-img {
+    height: 100px;
   }
 }
