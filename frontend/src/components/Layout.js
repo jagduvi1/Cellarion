@@ -8,7 +8,8 @@ import NotificationBell from './NotificationBell';
 import SupportModal from './SupportModal';
 import './Layout.css';
 
-const LOGO_IMG = process.env.PUBLIC_URL + '/cellarion-logo.png';
+const LOGO_LIGHT = process.env.PUBLIC_URL + '/cellarion-logo-light.png';
+const LOGO_DARK  = process.env.PUBLIC_URL + '/cellarion-logo-dark.png';
 
 function Layout({ children }) {
   const { t } = useTranslation();
@@ -40,7 +41,7 @@ function Layout({ children }) {
         <div className="navbar-inner">
           <div className="navbar-brand">
             <Link to="/" onClick={closeMenu} className="brand-link">
-              <img src={LOGO_IMG} alt="Cellarion" className="brand-logo-img" />
+              <img src={theme === 'dark' ? LOGO_DARK : LOGO_LIGHT} alt="Cellarion" className="brand-logo-img" />
             </Link>
           </div>
 

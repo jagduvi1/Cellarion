@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { useTheme } from '../contexts/ThemeContext';
 import './LandingPage.css';
 
-const LOGO_IMG = process.env.PUBLIC_URL + '/cellarion-logo.png';
+const LOGO_LIGHT = process.env.PUBLIC_URL + '/cellarion-logo-light.png';
+const LOGO_DARK  = process.env.PUBLIC_URL + '/cellarion-logo-dark.png';
 
 const features = [
   {
@@ -50,6 +52,7 @@ const features = [
 
 export default function LandingPage() {
   const { user } = useAuth();
+  const { theme } = useTheme();
   const [contactEmail, setContactEmail] = useState(null);
 
   useEffect(() => {
@@ -64,7 +67,7 @@ export default function LandingPage() {
       {/* ── Nav ── */}
       <nav className="landing-nav">
         <div className="landing-nav-brand">
-          <img src={LOGO_IMG} alt="Cellarion" className="landing-nav-logo-img" />
+          <img src={theme === 'dark' ? LOGO_DARK : LOGO_LIGHT} alt="Cellarion" className="landing-nav-logo-img" />
         </div>
         <div className="landing-nav-actions">
           <a
@@ -92,7 +95,7 @@ export default function LandingPage() {
         <div className="landing-hero-glow" aria-hidden="true" />
         <div className="landing-hero-content">
           <div className="landing-logo-wrap">
-            <img src={LOGO_IMG} alt="Cellarion" className="landing-hero-logo-img" />
+            <img src={theme === 'dark' ? LOGO_DARK : LOGO_LIGHT} alt="Cellarion" className="landing-hero-logo-img" />
           </div>
           <h1 className="landing-headline">
             Your wine cellar,<br />
@@ -186,7 +189,7 @@ export default function LandingPage() {
       {/* ── Final CTA ── */}
       <section className="landing-final-cta">
         <div className="landing-section-inner landing-final-inner">
-          <img src={LOGO_IMG} alt="Cellarion" className="landing-final-logo-img" />
+          <img src={theme === 'dark' ? LOGO_DARK : LOGO_LIGHT} alt="Cellarion" className="landing-final-logo-img" />
           <h2 className="landing-final-title">Start managing your cellar today</h2>
           <p className="landing-final-sub">
             Free to use at cellarion.app, or deploy your own instance in minutes.
@@ -207,7 +210,7 @@ export default function LandingPage() {
       <footer className="landing-footer">
         <div className="landing-footer-inner">
           <span className="landing-footer-brand">
-            <img src={LOGO_IMG} alt="" className="landing-footer-logo-img" /> Cellarion
+            <img src={theme === 'dark' ? LOGO_DARK : LOGO_LIGHT} alt="" className="landing-footer-logo-img" /> Cellarion
           </span>
           <div className="landing-footer-links">
             <a
