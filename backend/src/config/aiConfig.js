@@ -53,7 +53,8 @@ Return ONLY a raw JSON object (no markdown, no code fences):
 Rules:
 - Use the wine name and producer exactly as given (correct only obvious typos)
 - Fill in country, region, appellation, type, and grapes from your wine knowledge
-- For any field you are unsure about, use null — do NOT omit the field
+- Country is REQUIRED — always provide a country name; it is never acceptable to return null for country
+- For any other field you are unsure about, use null — do NOT omit the field
 - Grapes: provide an empty array [] if unknown, never null for grapes
 - confidence: 1.0 = well-known wine you are certain about, 0.7 = confident from producer knowledge, 0.5 = reasonably sure
 - IMPORTANT: if you recognise the producer or the wine name, return a result even if some fields are null — partial information is always better than returning unknown
@@ -71,9 +72,10 @@ Return ONLY a raw JSON object (no markdown, no code fences, no extra text):
 Rules:
 - Extract the wine name and producer from the query
 - Fill in country, region, appellation, type, and grapes from your wine knowledge
-- For any unknown field use null; use [] for unknown grapes, never null
+- Country is REQUIRED — always provide a country name; it is never acceptable to return null for country
+- For any other unknown field use null; use [] for unknown grapes, never null
 - confidence: 1.0 = certain, 0.7 = confident, 0.5 = reasonably sure
-- IMPORTANT: if you recognise the producer or wine name, return a result even if some fields are null
+- IMPORTANT: if you recognise the producer or wine name, return a result even if some fields are null — partial information is always better than returning unknown
 - Never invent a wine that does not exist in reality
 - Return {"error":"unknown"} ONLY if the query is completely unrecognisable as a real wine
 - Output ONLY the JSON object. No explanations, no extra text before or after`;

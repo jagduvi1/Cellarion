@@ -315,10 +315,10 @@ function ImportBottles() {
       setResults(allResults);
       setSummary(combinedSummary);
 
-      // Auto-select exact and AI-identified matches
+      // Auto-select exact, fuzzy, and AI-identified matches
       const autoSelections = {};
       allResults.forEach((r) => {
-        if ((r.status === 'exact' || r.status === 'ai_match') && r.matches.length > 0) {
+        if ((r.status === 'exact' || r.status === 'fuzzy' || r.status === 'ai_match') && r.matches.length > 0) {
           autoSelections[r.index] = r.matches[0].wineId;
         }
       });
@@ -445,7 +445,7 @@ function ImportBottles() {
   const selectAllExact = () => {
     const sel = { ...selections };
     results.forEach(r => {
-      if (r.status === 'exact' && r.matches.length > 0) {
+      if ((r.status === 'exact' || r.status === 'fuzzy') && r.matches.length > 0) {
         sel[r.index] = r.matches[0].wineId;
       }
     });
@@ -941,7 +941,15 @@ function ImportBottles() {
                     <td className="col-actions">
                       {isImported ? null : (
                         <div className="action-buttons">
-                          {r.matches.length > 1 && !isSkipped && !isRequested && (
+                          {r.matches.length > 0 && r.status === 'fuzzy' && !isSkipped && !isRequested && (
+                            <button
+                              className="btn btn-secondary btn-xs"
+                              onClick={() => setExpandedRow(isExpanded ? null : r.index)}
+                            >
+                              {isExpanded ? 'Hide' : r.matches.length > 1 ? `${r.matches.length} options` : 'Change'}
+                            </button>
+                          )}
+                          {r.matches.length > 1 && r.status !== 'fuzzy' && !isSkipped && !isRequested && (
                             <button
                               className="btn btn-secondary btn-xs"
                               onClick={() => setExpandedRow(isExpanded ? null : r.index)}

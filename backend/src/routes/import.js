@@ -350,7 +350,9 @@ router.post('/validate', async (req, res) => {
             const aiStatus = pr.aiError || pr.aiDebugReason === 'rate_limit_exceeded' ||
               (pr.aiDebugReason && pr.aiDebugReason.startsWith('exception'))
               ? 'failed' : (pr.aiWineError ? 'create_failed' : 'searched');
-            const aiExplanation = extractAiExplanation(pr.aiDebugRaw);
+            const aiExplanation = aiStatus === 'create_failed' && pr.aiWineError
+              ? pr.aiWineError
+              : extractAiExplanation(pr.aiDebugRaw);
             aiDebug = { aiStatus, ...(aiExplanation && { aiExplanation }) };
           }
         }
