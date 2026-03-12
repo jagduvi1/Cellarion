@@ -82,6 +82,7 @@ function ImportBottles() {
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState(null);
   const [rowImporting, setRowImporting] = useState(null); // index of row being individually imported
+  const [retryingRow, setRetryingRow] = useState(null);  // index of row running AI retry
 
   // Session persistence
   const [sessionId, setSessionId] = useState(null);
@@ -301,6 +302,28 @@ function ImportBottles() {
       setError('Network error during validation');
     } finally {
       setValidating(false);
+    }
+  };
+
+  // ── Per-row AI retry ─────────────────────────────────────────────────────
+
+  const handleRetryAI = async (rowIndex) => {
+    const r = results.find(res => res.index === rowIndex);
+    if (!r) return;
+    setRetryingRow(rowIndex);
+    try {
+      const res = await validateImport(apiFetch, { cellarId, items: [r.item] });
+      const data = await res.json();
+      if (!res.ok || !data.results?.[0]) return;
+      const updated = { ...data.results[0], index: rowIndex };
+      setResults(prev => prev.map(x => x.index === rowIndex ? updated : x));
+      if (updated.status === 'ai_match' && updated.matches.length > 0) {
+        setSelections(prev => ({ ...prev, [rowIndex]: updated.matches[0].wineId }));
+      }
+    } catch {
+      // Non-fatal
+    } finally {
+      setRetryingRow(null);
     }
   };
 
@@ -880,6 +903,16 @@ function ImportBottles() {
                               onClick={() => openSearchModal(r.index)}
                             >
                               Search
+                            </button>
+                          )}
+                          {r.status === 'no_match' && !isSkipped && !isRequested && (
+                            <button
+                              className="btn btn-secondary btn-xs btn-retry-ai"
+                              onClick={() => handleRetryAI(r.index)}
+                              disabled={retryingRow === r.index || rowImporting !== null || importing}
+                              title="Re-run AI identification for this wine"
+                            >
+                              {retryingRow === r.index ? '…' : 'Retry AI'}
                             </button>
                           )}
                           {(r.status === 'no_match' || r.status === 'fuzzy') && !isSkipped && !isRequested && (

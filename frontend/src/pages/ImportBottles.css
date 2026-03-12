@@ -984,3 +984,12 @@
   max-height: 200px;
   overflow-y: auto;
 }
+
+.btn-retry-ai {
+  color: #7EB3D4;
+  border-color: #7EB3D4;
+}
+
+.btn-retry-ai:hover:not(:disabled) {
+  background: #0e2535;
+}
