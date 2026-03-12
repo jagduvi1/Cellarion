@@ -325,17 +325,31 @@ router.post('/validate', async (req, res) => {
         } else {
           status = 'no_match';
           resultMatches = [];
+
+          // Derive a user-friendly AI status shown to everyone
+          let aiStatus;
+          if (!process.env.ANTHROPIC_API_KEY || !pr.item.wineName || !pr.item.producer) {
+            aiStatus = 'skipped';
+          } else if (pr.aiError || pr.aiDebugReason === 'rate_limit_exceeded' || (pr.aiDebugReason && pr.aiDebugReason.startsWith('exception'))) {
+            aiStatus = 'failed';
+          } else if (pr.aiWineError) {
+            aiStatus = 'create_failed';
+          } else {
+            aiStatus = 'searched'; // AI ran but could not identify
+          }
+          if (aiStatus !== 'skipped') aiDebug = { aiStatus };
+
           if (isAdmin) {
             if (!process.env.ANTHROPIC_API_KEY) {
-              aiDebug = { aiSkipped: 'no_api_key' };
+              aiDebug = { aiStatus, aiSkipped: 'no_api_key' };
             } else if (!pr.item.wineName || !pr.item.producer) {
-              aiDebug = { aiSkipped: 'missing_name_or_producer' };
+              aiDebug = { aiStatus, aiSkipped: 'missing_name_or_producer' };
             } else if (pr.aiError) {
-              aiDebug = { aiError: pr.aiError };
+              aiDebug = { aiStatus, aiError: pr.aiError };
             } else if (pr.aiWineError) {
-              aiDebug = { aiResponse: pr.aiIdentified, aiRaw: pr.aiDebugRaw, aiReason: pr.aiDebugReason, aiWineError: pr.aiWineError };
+              aiDebug = { aiStatus, aiResponse: pr.aiIdentified, aiRaw: pr.aiDebugRaw, aiReason: pr.aiDebugReason, aiWineError: pr.aiWineError };
             } else {
-              aiDebug = { aiResponse: pr.aiIdentified ?? null, aiRaw: pr.aiDebugRaw, aiReason: pr.aiDebugReason };
+              aiDebug = { aiStatus, aiResponse: pr.aiIdentified ?? null, aiRaw: pr.aiDebugRaw, aiReason: pr.aiDebugReason };
             }
           }
         }
@@ -368,7 +382,7 @@ router.post('/validate', async (req, res) => {
       }
 
       const result = { index: pr.index, item: pr.item, status, matches: resultMatches };
-      if (isAdmin && aiDebug) result.aiDebug = aiDebug;
+      if (aiDebug) result.aiDebug = aiDebug;
       results.push(result);
     }
 

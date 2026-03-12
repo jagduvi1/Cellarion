@@ -911,6 +911,24 @@ function ImportBottles() {
                       ) : (
                         <>
                           <span className="match-pending">Select a match &rarr;</span>
+                          {r.aiDebug?.aiStatus === 'searched' && (
+                            <details className="ai-info-details">
+                              <summary>Why no match?</summary>
+                              <p>AI searched the wine database but could not identify this wine with enough confidence. You can search for it manually or request it to be added to the registry.</p>
+                            </details>
+                          )}
+                          {r.aiDebug?.aiStatus === 'failed' && (
+                            <details className="ai-info-details ai-info-warn">
+                              <summary>AI lookup failed</summary>
+                              <p>The AI lookup ran into a temporary issue (rate limit or timeout). Try the Retry AI button to run it again.</p>
+                            </details>
+                          )}
+                          {r.aiDebug?.aiStatus === 'create_failed' && (
+                            <details className="ai-info-details ai-info-warn">
+                              <summary>AI found a match but couldn't save it</summary>
+                              <p>The AI identified this wine but encountered an error when saving it to the registry. Try the Retry AI button or search manually.</p>
+                            </details>
+                          )}
                           {isAdmin && r.aiDebug && (
                             <details className="ai-debug-details">
                               <summary>AI debug</summary>

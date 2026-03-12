@@ -988,6 +988,48 @@
 }
 
 /* Admin AI debug panel */
+.ai-info-details {
+  margin-top: 0.4rem;
+  font-size: 0.8rem;
+}
+
+.ai-info-details summary {
+  cursor: pointer;
+  color: #9dbfad;
+  user-select: none;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.ai-info-details summary::before {
+  content: '▸';
+  font-size: 0.65rem;
+  transition: transform 0.15s;
+}
+
+.ai-info-details[open] summary::before {
+  transform: rotate(90deg);
+}
+
+.ai-info-details p {
+  margin: 0.35rem 0 0;
+  padding: 0.5rem 0.6rem;
+  background: #1a2a1e;
+  border-left: 2px solid #9dbfad;
+  border-radius: 0 4px 4px 0;
+  color: #c8ddc0;
+  line-height: 1.4;
+}
+
+.ai-info-details.ai-info-warn summary { color: #d4a76a; }
+.ai-info-details.ai-info-warn p {
+  background: #2a1f10;
+  border-left-color: #d4a76a;
+  color: #e8c890;
+}
+
 .ai-debug-details {
   margin-top: 0.4rem;
   font-size: 0.7rem;
