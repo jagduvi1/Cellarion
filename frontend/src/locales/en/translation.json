@@ -260,7 +260,15 @@
     "scanNameProducerCountryRequired": "Wine name, producer, and country are required.",
     "scanFailedToSaveWine": "Failed to save wine. Please try again.",
     "showDetails": "More details",
-    "hideDetails": "Hide details"
+    "hideDetails": "Hide details",
+    "cantFindAiTitle": "Can't find your wine?",
+    "cantFindAiHint": "Let AI search for it",
+    "aiFoundWine": "AI found a match",
+    "aiUseThisWine": "Use this wine",
+    "aiNotRight": "Not what I'm looking for",
+    "aiCouldNotIdentify": "AI could not identify this wine. You can submit a request instead.",
+    "aiSearching": "AI is searching for your wine…",
+    "submitWineRequest": "Submit a wine request"
   },
 
   "bottleDetail": {

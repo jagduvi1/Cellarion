@@ -260,7 +260,15 @@
     "scanNameProducerCountryRequired": "Vinnamn, producent och land krävs.",
     "scanFailedToSaveWine": "Det gick inte att spara vinet. Försök igen.",
     "showDetails": "Fler detaljer",
-    "hideDetails": "Dölj detaljer"
+    "hideDetails": "Dölj detaljer",
+    "cantFindAiTitle": "Hittar du inte ditt vin?",
+    "cantFindAiHint": "Låt AI söka efter det",
+    "aiFoundWine": "AI hittade en träff",
+    "aiUseThisWine": "Använd detta vin",
+    "aiNotRight": "Inte det jag letar efter",
+    "aiCouldNotIdentify": "AI kunde inte identifiera detta vin. Du kan skicka en förfrågan istället.",
+    "aiSearching": "AI söker efter ditt vin…",
+    "submitWineRequest": "Skicka vinförfrågan"
   },
 
   "bottleDetail": {

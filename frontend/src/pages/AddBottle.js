@@ -24,6 +24,7 @@ function AddBottle() {
   const [showTextSearch, setShowTextSearch] = useState(false);
   const [aiSearching, setAiSearching] = useState(false);
   const [aiSearchError, setAiSearchError] = useState(null);
+  const [aiResult, setAiResult] = useState(null); // AI-found wine awaiting user confirmation
   const [selectedWine, setSelectedWine] = useState(null);
   const [numBottles, setNumBottles] = useState(1);
   const [bottleData, setBottleData] = useState({
@@ -303,17 +304,27 @@ function AddBottle() {
     if (!search.trim()) return;
     setAiSearching(true);
     setAiSearchError(null);
+    setAiResult(null);
     try {
       const res = await identifyWineByText(apiFetch, search.trim());
       const data = await res.json();
       if (!res.ok) { setAiSearchError(data.error || 'AI identification failed'); return; }
-      if (!data.wine) { setAiSearchError('AI could not identify this wine. Try a more specific search.'); return; }
-      handleSelectWine(data.wine);
+      if (!data.wine) { setAiSearchError(t('addBottle.aiCouldNotIdentify')); return; }
+      setAiResult(data.wine);
     } catch {
       setAiSearchError('Network error during AI identification.');
     } finally {
       setAiSearching(false);
     }
+  };
+
+  const handleAcceptAiResult = () => {
+    if (aiResult) handleSelectWine(aiResult);
+  };
+
+  const handleRejectAiResult = () => {
+    setAiResult(null);
+    setAiSearchError(null);
   };
 
   const handleSelectWine = (wine) => {
@@ -614,7 +625,7 @@ function AddBottle() {
                     type="text"
                     placeholder={t('addBottle.searchPlaceholder')}
                     value={search}
-                    onChange={(e) => { setSearch(e.target.value); setWines([]); setAiSearchError(null); }}
+                    onChange={(e) => { setSearch(e.target.value); setWines([]); setAiSearchError(null); setAiResult(null); }}
                     onKeyDown={handleSearchKeyDown}
                     className="search-input-large"
                     autoFocus
@@ -627,29 +638,47 @@ function AddBottle() {
 
               {loading && <p>{t('addBottle.searching')}</p>}
 
-              {!loading && search.trim() && wines.length === 0 && !aiSearching && !aiSearchError && (
-                <div className="empty-state">
-                  <p>{t('addBottle.noWinesMatched')}</p>
-                  <p className="empty-state-sub">{t('addBottle.noMatchAiHint', 'Not in our library? Let AI identify it.')}</p>
-                  <button type="button" className="btn btn-secondary" onClick={handleAiIdentify}>
-                    {t('addBottle.identifyWithAi', 'Identify with AI')}
-                  </button>
+              {/* ── AI result preview card ── */}
+              {aiResult && !aiSearching && (
+                <div className="ai-result-card">
+                  <div className="ai-result-badge">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2a4 4 0 0 1 4 4c0 1.95-1.4 3.58-3.25 3.93L12 22"/><path d="M8 6a4 4 0 0 1 8 0"/><path d="M17 12H7"/></svg>
+                    {t('addBottle.aiFoundWine')}
+                  </div>
+                  <div className="ai-result-wine">
+                    {aiResult.image ? (
+                      <div className="wine-row-img-wrap">
+                        <img src={aiResult.image} alt={aiResult.name} className="wine-row-image" onError={(e) => { e.target.style.display = 'none'; }} />
+                      </div>
+                    ) : (
+                      <div className={`wine-row-placeholder ${aiResult.type}`}></div>
+                    )}
+                    <div className="wine-info">
+                      <h3>{aiResult.name}</h3>
+                      <p className="producer">{aiResult.producer}</p>
+                      <div className="wine-meta">
+                        <span>{aiResult.country?.name}</span>
+                        {aiResult.region && <span>• {aiResult.region.name}</span>}
+                        <span className={`wine-type-pill ${aiResult.type}`}>{aiResult.type}</span>
+                      </div>
+                      {aiResult.grapes?.length > 0 && (
+                        <p className="wine-grapes">{aiResult.grapes.map(g => g.name).join(', ')}</p>
+                      )}
+                    </div>
+                  </div>
+                  <div className="ai-result-actions">
+                    <button type="button" className="btn btn-success" onClick={handleAcceptAiResult}>
+                      {t('addBottle.aiUseThisWine')}
+                    </button>
+                    <button type="button" className="btn btn-ghost" onClick={handleRejectAiResult}>
+                      {t('addBottle.aiNotRight')}
+                    </button>
+                  </div>
                 </div>
               )}
 
-              {aiSearching && (
-                <div className="empty-state">
-                  <p>{t('addBottle.aiSearching', 'AI is identifying the wine…')}</p>
-                </div>
-              )}
-
-              {aiSearchError && (
-                <div className="empty-state">
-                  <p className="error-text">{aiSearchError}</p>
-                </div>
-              )}
-
-              {wines.length > 0 && (
+              {/* ── Search results list ── */}
+              {!aiResult && !aiSearching && wines.length > 0 && (
                 <div className="wines-list">
                   {wines.map(wine => (
                     <div key={wine._id} className="wine-row" onClick={() => handleSelectWine(wine)}>
@@ -676,6 +705,41 @@ function AddBottle() {
                       <button className="btn btn-primary btn-small">{t('addBottle.selectBtn')}</button>
                     </div>
                   ))}
+                </div>
+              )}
+
+              {/* ── "Can't find your wine?" row — appears after search when no AI result is shown ── */}
+              {!loading && search.trim() && !aiResult && !aiSearching && (
+                <div className="ai-search-row" onClick={!aiSearching ? handleAiIdentify : undefined}>
+                  <div className="ai-search-row-icon">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                      <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                      <path d="M11 8a3 3 0 0 1 3 3" opacity="0.5"/>
+                    </svg>
+                  </div>
+                  <div className="ai-search-row-body">
+                    <span className="ai-search-row-title">{t('addBottle.cantFindAiTitle')}</span>
+                    <span className="ai-search-row-hint">{t('addBottle.cantFindAiHint')}</span>
+                  </div>
+                  <svg className="ai-search-row-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+                </div>
+              )}
+
+              {/* ── AI searching spinner ── */}
+              {aiSearching && (
+                <div className="ai-searching-state">
+                  <div className="ai-searching-spinner" />
+                  <p>{t('addBottle.aiSearching')}</p>
+                </div>
+              )}
+
+              {/* ── AI error with request fallback ── */}
+              {aiSearchError && !aiSearching && (
+                <div className="ai-error-state">
+                  <p className="error-text">{aiSearchError}</p>
+                  <Link to="/wine-requests" className="btn btn-secondary btn-small">
+                    {t('addBottle.submitWineRequest')}
+                  </Link>
                 </div>
               )}
             </>

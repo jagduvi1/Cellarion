@@ -382,6 +382,127 @@
 .wine-type-pill.dessert  { background: var(--wine-dessert); color: #b07ad0; }
 .wine-type-pill.fortified { background: var(--wine-fortified); color: var(--color-success); }
 
+/* ── "Can't find your wine?" AI search row ───────────────────────────────── */
+
+.ai-search-row {
+  display: flex;
+  align-items: center;
+  gap: 0.875rem;
+  padding: 0.75rem 1rem;
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all 0.2s;
+  margin-top: 0.5rem;
+  background: var(--color-surface);
+}
+
+.ai-search-row:hover {
+  border-color: var(--color-primary);
+  background: rgba(var(--color-primary-rgb), 0.06);
+}
+
+.ai-search-row-icon {
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: rgba(var(--color-primary-rgb), 0.12);
+  color: var(--color-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ai-search-row-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.ai-search-row-title {
+  font-weight: 600;
+  font-size: 0.92rem;
+  color: var(--color-text);
+}
+
+.ai-search-row-hint {
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+}
+
+.ai-search-row-chevron {
+  flex-shrink: 0;
+  color: var(--color-text-muted);
+}
+
+/* ── AI searching spinner ─────────────────────────────────────────────────── */
+
+.ai-searching-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 2rem 1rem;
+  color: var(--color-text-muted);
+}
+
+.ai-searching-spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid var(--color-border);
+  border-top-color: var(--color-primary);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+/* ── AI result preview card ───────────────────────────────────────────────── */
+
+.ai-result-card {
+  border: 1px solid rgba(var(--color-primary-rgb), 0.35);
+  border-radius: var(--radius-md);
+  background: rgba(var(--color-primary-rgb), 0.04);
+  padding: 1rem;
+  margin-bottom: 0.5rem;
+}
+
+.ai-result-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--color-primary);
+  margin-bottom: 0.75rem;
+}
+
+.ai-result-wine {
+  display: flex;
+  align-items: center;
+  gap: 0.875rem;
+}
+
+.ai-result-actions {
+  display: flex;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+/* ── AI error with request fallback ───────────────────────────────────────── */
+
+.ai-error-state {
+  text-align: center;
+  padding: 1.25rem 1rem;
+}
+
+.ai-error-state .error-text {
+  margin: 0 0 0.75rem;
+}
+
 /* ── Selected wine summary ── */
 .selected-wine {
   background: rgba(var(--color-primary-rgb), 0.1);
