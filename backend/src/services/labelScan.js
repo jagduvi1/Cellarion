@@ -1,6 +1,25 @@
 const ALLOWED_MEDIA_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
 const aiConfig = require('../config/aiConfig');
 
+/**
+ * Extracts the first balanced {...} JSON object from a string.
+ * Handles nested objects/arrays and quoted strings with escape sequences.
+ * Prevents trailing model commentary from breaking JSON.parse.
+ */
+function extractFirstJsonObject(str) {
+  let depth = 0, inStr = false, esc = false;
+  for (let i = 0; i < str.length; i++) {
+    const c = str[i];
+    if (esc)               { esc = false; continue; }
+    if (c === '\\' && inStr) { esc = true; continue; }
+    if (c === '"')           { inStr = !inStr; continue; }
+    if (inStr)               continue;
+    if (c === '{')           { depth++; }
+    if (c === '}')           { if (--depth === 0) return str.slice(0, i + 1); }
+  }
+  return str; // no balanced object found — return as-is and let JSON.parse report the error
+}
+
 function getClient() {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
@@ -190,8 +209,10 @@ async function identifyWineFromText({ name, producer, vintage, country }) {
     try {
       const response = await client.messages.create(apiParams);
       raw = ('{' + (response.content[0]?.text ?? '')).trim();
+      // Strip code fences, then extract only the first balanced {...} so any
+      // trailing explanation text from the model doesn't break JSON.parse.
       const stripped = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
-      const parsed = JSON.parse(stripped);
+      const parsed = JSON.parse(extractFirstJsonObject(stripped));
 
       if (parsed.error) return { data: null, debugRaw: raw, debugReason: `ai_unknown: ${parsed.error}` };
       if (!parsed.name || !parsed.producer) return { data: null, debugRaw: raw, debugReason: 'missing_name_or_producer_in_response' };

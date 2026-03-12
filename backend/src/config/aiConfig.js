@@ -41,7 +41,7 @@ Important rules:
 - Only return {"error":"cannot read label"} if the image contains no wine label at all.`;
 
 const DEFAULT_IMPORT_LOOKUP_PROMPT =
-`You are a master sommelier. Identify the following wine and provide complete details from your knowledge.
+`You are a master sommelier with encyclopedic wine knowledge. Identify the following wine from your knowledge.
 
 The wine details below come from a user's import file:
 Wine: {{name}}
@@ -53,10 +53,13 @@ Return ONLY a raw JSON object (no markdown, no code fences):
 Rules:
 - Use the wine name and producer exactly as given (correct only obvious typos)
 - Fill in country, region, appellation, type, and grapes from your wine knowledge
-- confidence: 1.0 = well-known wine you are certain about, 0.7 = confident from producer/appellation knowledge, 0.4 = uncertain
-- Never invent a wine that does not exist — only identify wines you are confident are real
-- If a field is unknown set it to null rather than guessing
-- Return {"error":"unknown"} if you cannot identify the wine with reasonable confidence`;
+- For any field you are unsure about, use null — do NOT omit the field
+- Grapes: provide an empty array [] if unknown, never null for grapes
+- confidence: 1.0 = well-known wine you are certain about, 0.7 = confident from producer knowledge, 0.5 = reasonably sure
+- IMPORTANT: if you recognise the producer or the wine name, return a result even if some fields are null — partial information is always better than returning unknown
+- Never invent a wine that does not exist in reality
+- Return {"error":"unknown"} ONLY if the wine name and producer together are completely unrecognisable and likely do not exist
+- Output ONLY the JSON object. No explanations, no reasoning, no extra text before or after`;
 
 // Models that are known to work reliably for text chat.
 // Any value stored in DB that isn't in this list falls back to the default.
