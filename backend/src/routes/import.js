@@ -232,11 +232,14 @@ router.post('/validate', async (req, res) => {
     const isAdmin = req.user.roles && req.user.roles.includes('admin');
 
     // Pass 1: library matching for all items (sequential — DB queries)
+    // If item.forceAi === true, skip DB matching and treat as no-match so AI runs.
     const preResults = [];
     for (let i = 0; i < items.length; i++) {
-      const item = items[i];
+      const { forceAi, ...item } = items[i];
       if (!item.wineName && !item.producer) {
         preResults.push({ index: i, item, errorMsg: 'Wine name or producer is required' });
+      } else if (forceAi) {
+        preResults.push({ index: i, item, matches: [] });
       } else {
         const matches = await findWineMatches(item);
         preResults.push({ index: i, item, matches });

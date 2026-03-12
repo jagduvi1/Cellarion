@@ -84,6 +84,7 @@ function ImportBottles() {
   const [importResult, setImportResult] = useState(null);
   const [rowImporting, setRowImporting] = useState(null); // index of row being individually imported
   const [retryingRow, setRetryingRow] = useState(null);  // index of row running AI retry
+  const [aiSearchingRow, setAiSearchingRow] = useState(null); // index of fuzzy row doing forced AI search
 
   // Session persistence
   const [sessionId, setSessionId] = useState(null);
@@ -350,6 +351,35 @@ function ImportBottles() {
       // Non-fatal
     } finally {
       setRetryingRow(null);
+    }
+  };
+
+  // ── Per-row forced AI search (for fuzzy rows) ────────────────────────────
+  // Skips DB matching entirely and asks AI to identify the wine.
+
+  const handleAiSearch = async (rowIndex) => {
+    const r = results.find(res => res.index === rowIndex);
+    if (!r) return;
+    setAiSearchingRow(rowIndex);
+    try {
+      const res = await validateImport(apiFetch, {
+        cellarId,
+        items: [{ ...r.item, forceAi: true }],
+      });
+      const data = await res.json();
+      if (!res.ok || !data.results?.[0]) return;
+      const updated = { ...data.results[0], index: rowIndex };
+      setResults(prev => prev.map(x => x.index === rowIndex ? updated : x));
+      if ((updated.status === 'ai_match' || updated.status === 'exact' || updated.status === 'fuzzy') && updated.matches.length > 0) {
+        setSelections(prev => ({ ...prev, [rowIndex]: updated.matches[0].wineId }));
+      } else {
+        // AI couldn't identify — clear the old fuzzy selection
+        setSelections(prev => { const next = { ...prev }; delete next[rowIndex]; return next; });
+      }
+    } catch {
+      // Non-fatal
+    } finally {
+      setAiSearchingRow(null);
     }
   };
 
@@ -955,6 +985,15 @@ function ImportBottles() {
                               onClick={() => setExpandedRow(isExpanded ? null : r.index)}
                             >
                               {isExpanded ? 'Hide' : `${r.matches.length} options`}
+                            </button>
+                          )}
+                          {r.status === 'fuzzy' && !isSkipped && !isRequested && (
+                            <button
+                              className="btn btn-secondary btn-xs"
+                              onClick={() => handleAiSearch(r.index)}
+                              disabled={aiSearchingRow === r.index}
+                            >
+                              {aiSearchingRow === r.index ? 'Searching…' : 'Try AI'}
                             </button>
                           )}
                           {(r.status === 'no_match' || r.status === 'fuzzy') && !isSkipped && !isRequested && (
