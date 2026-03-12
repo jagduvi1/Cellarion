@@ -70,6 +70,7 @@ function ImportBottles() {
   const [results, setResults] = useState([]);
   const [summary, setSummary] = useState(null);
   const [validating, setValidating] = useState(false);
+  const [validationProgress, setValidationProgress] = useState({ done: 0, total: 0 });
   const [selections, setSelections] = useState({}); // index -> wineId or 'skip'
   const [searchModal, setSearchModal] = useState(null); // { index } or null
   const [searchQuery, setSearchQuery] = useState('');
@@ -269,29 +270,54 @@ function ImportBottles() {
 
   // ── Validation ──────────────────────────────────────────────────────────
 
+  const VALIDATE_BATCH_SIZE = 25;
+
   const handleValidate = async () => {
     setValidating(true);
     setError(null);
 
-    try {
-      const res = await validateImport(apiFetch, {
-        cellarId,
-        items: parsedItems
-      });
-      const data = await res.json();
+    const total = parsedItems.length;
+    setValidationProgress({ done: 0, total });
 
-      if (!res.ok) {
-        setError(data.error || 'Validation failed');
-        setValidating(false);
-        return;
+    const allResults = [];
+    let combinedSummary = null;
+
+    try {
+      for (let offset = 0; offset < total; offset += VALIDATE_BATCH_SIZE) {
+        // Re-index each batch so indices match their position in parsedItems
+        const batch = parsedItems.slice(offset, offset + VALIDATE_BATCH_SIZE);
+
+        const res = await validateImport(apiFetch, { cellarId, items: batch });
+        const data = await res.json();
+
+        if (!res.ok) {
+          setError(data.error || 'Validation failed');
+          setValidating(false);
+          return;
+        }
+
+        // Shift batch-local indices back to global indices
+        const shifted = data.results.map(r => ({ ...r, index: r.index + offset }));
+        allResults.push(...shifted);
+
+        // Merge summaries
+        if (!combinedSummary) {
+          combinedSummary = { ...data.summary };
+        } else {
+          for (const key of Object.keys(data.summary)) {
+            combinedSummary[key] = (combinedSummary[key] || 0) + (data.summary[key] || 0);
+          }
+        }
+
+        setValidationProgress({ done: Math.min(offset + VALIDATE_BATCH_SIZE, total), total });
       }
 
-      setResults(data.results);
-      setSummary(data.summary);
+      setResults(allResults);
+      setSummary(combinedSummary);
 
       // Auto-select exact and AI-identified matches
       const autoSelections = {};
-      data.results.forEach((r) => {
+      allResults.forEach((r) => {
         if ((r.status === 'exact' || r.status === 'ai_match') && r.matches.length > 0) {
           autoSelections[r.index] = r.matches[0].wineId;
         }
@@ -659,13 +685,28 @@ function ImportBottles() {
             </table>
           </div>
 
-          <button
-            className="btn btn-primary btn-validate"
-            onClick={handleValidate}
-            disabled={validating}
-          >
-            {validating ? 'Matching wines...' : `Match ${parsedItems.length} bottles against wine library`}
-          </button>
+          {validating ? (
+            <div className="validate-progress">
+              <div className="progress-spinner" />
+              <p className="validate-progress-label">
+                Matching wines… {validationProgress.done} / {validationProgress.total}
+              </p>
+              <div className="validate-progress-track">
+                <div
+                  className="validate-progress-fill"
+                  style={{ width: validationProgress.total > 0 ? `${Math.round(validationProgress.done / validationProgress.total * 100)}%` : '0%' }}
+                />
+              </div>
+              <p className="progress-hint">AI is identifying unknown wines — this may take a moment for large collections</p>
+            </div>
+          ) : (
+            <button
+              className="btn btn-primary btn-validate"
+              onClick={handleValidate}
+            >
+              {`Match ${parsedItems.length} bottle${parsedItems.length !== 1 ? 's' : ''} against wine library`}
+            </button>
+          )}
         </div>
       )}
     </div>
