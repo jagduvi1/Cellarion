@@ -192,73 +192,95 @@ router.post('/validate', async (req, res) => {
       return res.status(403).json({ error: 'Not authorized to import bottles to this cellar' });
     }
 
-    const results = [];
     const isAdmin = req.user.roles && req.user.roles.includes('admin');
 
+    // Pass 1: library matching for all items (sequential — DB queries)
+    const preResults = [];
     for (let i = 0; i < items.length; i++) {
       const item = items[i];
-
-      // Validate required fields
       if (!item.wineName && !item.producer) {
-        results.push({
-          index: i,
-          item,
-          status: 'error',
-          error: 'Wine name or producer is required',
-          matches: []
-        });
+        preResults.push({ index: i, item, errorMsg: 'Wine name or producer is required' });
+      } else {
+        const matches = await findWineMatches(item);
+        preResults.push({ index: i, item, matches });
+      }
+    }
+
+    // Pass 2: parallel AI identification for all no-match items
+    const needsAI = process.env.ANTHROPIC_API_KEY
+      ? preResults.filter(pr => pr.matches && pr.matches.length === 0 && pr.item.wineName && pr.item.producer)
+      : [];
+
+    const aiSettled = await Promise.allSettled(
+      needsAI.map(pr => identifyWineFromText({
+        name: pr.item.wineName,
+        producer: pr.item.producer,
+        vintage: pr.item.vintage,
+        country: pr.item.country
+      }))
+    );
+
+    // Attach AI identification results back to preResults
+    for (let j = 0; j < needsAI.length; j++) {
+      const pr = needsAI[j];
+      const settled = aiSettled[j];
+      if (settled.status === 'fulfilled') {
+        pr.aiIdentified = settled.value; // null = AI returned unknown
+      } else {
+        pr.aiError = settled.reason?.message;
+      }
+    }
+
+    // Pass 3: create wines for AI-identified items (sequential — DB writes)
+    for (const pr of preResults) {
+      if (pr.aiIdentified) {
+        try {
+          const { wine, created } = await findOrCreateWine(pr.aiIdentified, req.user.id);
+          pr.aiWine = wine;
+          pr.aiWineCreated = created;
+        } catch (err) {
+          pr.aiWineError = err.message;
+        }
+      }
+    }
+
+    // Pass 4: build final results
+    const results = [];
+    for (const pr of preResults) {
+      if (pr.errorMsg) {
+        results.push({ index: pr.index, item: pr.item, status: 'error', error: pr.errorMsg, matches: [] });
         continue;
       }
 
-      const matches = await findWineMatches(item);
-
-      let status;
-      let resultMatches;
-      let aiDebug = null; // populated for admin users only
+      let status, resultMatches, aiDebug = null;
+      const { matches } = pr;
 
       if (matches.length === 0) {
-        // No library match — try AI identification (non-fatal, falls back to no_match)
-        let aiMatch = null;
-        if (item.wineName && item.producer && process.env.ANTHROPIC_API_KEY) {
-          try {
-            const identified = await identifyWineFromText({
-              name: item.wineName,
-              producer: item.producer,
-              vintage: item.vintage,
-              country: item.country
-            });
-            if (isAdmin) aiDebug = { aiResponse: identified };
-            if (identified) {
-              const { wine, created } = await findOrCreateWine(identified, req.user.id);
-              if (isAdmin) aiDebug = { ...aiDebug, wineCreated: created };
-              aiMatch = {
-                wineId: wine._id,
-                name: wine.name,
-                producer: wine.producer,
-                country: wine.country?.name || null,
-                region: wine.region?.name || null,
-                appellation: wine.appellation || null,
-                type: wine.type,
-                image: wine.image || null,
-                score: identified.confidence ?? 1,
-                aiIdentified: true
-              };
-            }
-          } catch (err) {
-            if (isAdmin) aiDebug = { aiError: err.message };
-            // Non-fatal: fall through to no_match
-          }
-        } else if (isAdmin) {
-          if (!process.env.ANTHROPIC_API_KEY) aiDebug = { aiSkipped: 'no_api_key' };
-          else aiDebug = { aiSkipped: 'missing_name_or_producer' };
-        }
-
-        if (aiMatch) {
+        if (pr.aiWine) {
           status = 'ai_match';
-          resultMatches = [aiMatch];
+          resultMatches = [{
+            wineId: pr.aiWine._id,
+            name: pr.aiWine.name,
+            producer: pr.aiWine.producer,
+            country: pr.aiWine.country?.name || null,
+            region: pr.aiWine.region?.name || null,
+            appellation: pr.aiWine.appellation || null,
+            type: pr.aiWine.type,
+            image: pr.aiWine.image || null,
+            score: pr.aiIdentified.confidence ?? 1,
+            aiIdentified: true
+          }];
+          if (isAdmin) aiDebug = { aiResponse: pr.aiIdentified, wineCreated: pr.aiWineCreated };
         } else {
           status = 'no_match';
           resultMatches = [];
+          if (isAdmin) {
+            if (!process.env.ANTHROPIC_API_KEY) aiDebug = { aiSkipped: 'no_api_key' };
+            else if (!pr.item.wineName || !pr.item.producer) aiDebug = { aiSkipped: 'missing_name_or_producer' };
+            else if (pr.aiError) aiDebug = { aiError: pr.aiError };
+            else if (pr.aiWineError) aiDebug = { aiResponse: pr.aiIdentified, aiWineError: pr.aiWineError };
+            else aiDebug = { aiResponse: pr.aiIdentified ?? null };
+          }
         }
       } else if (matches[0].score >= EXACT_THRESHOLD) {
         status = 'exact';
@@ -288,7 +310,7 @@ router.post('/validate', async (req, res) => {
         }));
       }
 
-      const result = { index: i, item, status, matches: resultMatches };
+      const result = { index: pr.index, item: pr.item, status, matches: resultMatches };
       if (isAdmin && aiDebug) result.aiDebug = aiDebug;
       results.push(result);
     }
