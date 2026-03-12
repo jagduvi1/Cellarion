@@ -176,27 +176,37 @@ async function identifyWineFromText({ name, producer, vintage, country }) {
     .replace('{{vintage}}', vintageHint)
     .replace('{{country}}', countryHint);
 
+  const apiParams = {
+    model: aiConfig.get().importLookupModel,
+    max_tokens: 400,
+    messages: [
+      { role: 'user', content: prompt },
+      { role: 'assistant', content: '{' }
+    ]
+  };
+
   let raw = '';
-  try {
-    const response = await client.messages.create({
-      model: aiConfig.get().importLookupModel,
-      max_tokens: 400,
-      messages: [
-        { role: 'user', content: prompt },
-        { role: 'assistant', content: '{' }
-      ]
-    });
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      const response = await client.messages.create(apiParams);
+      raw = ('{' + (response.content[0]?.text ?? '')).trim();
+      const stripped = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
+      const parsed = JSON.parse(stripped);
 
-    raw = ('{' + (response.content[0]?.text ?? '')).trim();
-    const stripped = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
-    const parsed = JSON.parse(stripped);
-
-    if (parsed.error) return { data: null, debugRaw: raw, debugReason: `ai_unknown: ${parsed.error}` };
-    if (!parsed.name || !parsed.producer) return { data: null, debugRaw: raw, debugReason: 'missing_name_or_producer_in_response' };
-    if (!Array.isArray(parsed.grapes)) parsed.grapes = [];
-    return { data: parsed, debugRaw: raw, debugReason: null };
-  } catch (err) {
-    return { data: null, debugRaw: raw || err.message, debugReason: `exception: ${err.message}` };
+      if (parsed.error) return { data: null, debugRaw: raw, debugReason: `ai_unknown: ${parsed.error}` };
+      if (!parsed.name || !parsed.producer) return { data: null, debugRaw: raw, debugReason: 'missing_name_or_producer_in_response' };
+      if (!Array.isArray(parsed.grapes)) parsed.grapes = [];
+      return { data: parsed, debugRaw: raw, debugReason: null };
+    } catch (err) {
+      if (err.status === 429 && attempt === 1) {
+        // Rate limited — wait for retry-after header (or 15 s) then retry once
+        const waitMs = (parseInt(err.headers?.['retry-after'] ?? '15', 10) + 1) * 1000;
+        await new Promise(r => setTimeout(r, waitMs));
+        continue;
+      }
+      const reason = err.status === 429 ? 'rate_limit_exceeded' : `exception: ${err.message}`;
+      return { data: null, debugRaw: raw || err.message, debugReason: reason };
+    }
   }
 }
 

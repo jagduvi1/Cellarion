@@ -23,6 +23,24 @@ const ImportSession = require('../models/ImportSession');
 const router = express.Router();
 router.use(requireAuth);
 
+// Concurrency-limited equivalent of Promise.allSettled.
+// Runs at most `concurrency` tasks simultaneously so we don't blast the AI
+// rate limit (50 req/min for Haiku) when a large import has many no-match wines.
+async function runConcurrent(tasks, concurrency) {
+  const results = new Array(tasks.length);
+  let next = 0;
+  async function worker() {
+    while (next < tasks.length) {
+      const i = next++;
+      try { results[i] = { status: 'fulfilled', value: await tasks[i]() }; }
+      catch (err) { results[i] = { status: 'rejected', reason: err }; }
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(concurrency, tasks.length) }, worker));
+  return results;
+}
+const AI_CONCURRENCY = 5; // stay well under the 50 req/min cap
+
 // Maximum items per import batch
 const MAX_IMPORT_SIZE = 500;
 
@@ -221,15 +239,16 @@ router.post('/validate', async (req, res) => {
       if (!aiKeyMap.has(key)) aiKeyMap.set(key, pr);
     }
 
-    // One AI call per unique wine (parallel)
+    // One AI call per unique wine, throttled to AI_CONCURRENCY at a time
     const uniquePrs = [...aiKeyMap.values()];
-    const aiSettled = await Promise.allSettled(
-      uniquePrs.map(pr => identifyWineFromText({
+    const aiSettled = await runConcurrent(
+      uniquePrs.map(pr => () => identifyWineFromText({
         name: pr.item.wineName,
         producer: pr.item.producer,
         vintage: pr.item.vintage,
         country: pr.item.country
-      }))
+      })),
+      AI_CONCURRENCY
     );
 
     // Build a key -> AI result lookup
