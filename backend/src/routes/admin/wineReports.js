@@ -4,6 +4,9 @@ const WineReport = require('../../models/WineReport');
 const { requireAuth, requireRole } = require('../../middleware/auth');
 const { logAudit } = require('../../services/audit');
 
+const REPORT_STATUSES = ['pending', 'resolved', 'dismissed'];
+const REPORT_REASONS = ['wrong_info', 'duplicate', 'inappropriate', 'other'];
+
 router.use(requireAuth, requireRole('admin'));
 
 // GET /api/admin/wine-reports — list all wine reports
@@ -11,9 +14,12 @@ router.get('/', async (req, res) => {
   const { status, reason, page = 1, limit = 20 } = req.query;
   const skip = (parseInt(page) - 1) * parseInt(limit);
 
+  // Retrieve from static arrays so values in the filter are never user-tainted
+  const statusIdx = REPORT_STATUSES.indexOf(String(status || ''));
+  const reasonIdx = REPORT_REASONS.indexOf(String(reason || ''));
   const filter = {};
-  if (status) filter.status = status;
-  if (reason) filter.reason = reason;
+  if (statusIdx !== -1) filter.status = REPORT_STATUSES[statusIdx];
+  if (reasonIdx !== -1) filter.reason = REPORT_REASONS[reasonIdx];
 
   const [reports, total] = await Promise.all([
     WineReport.find(filter)

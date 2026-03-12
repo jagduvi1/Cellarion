@@ -1,5 +1,6 @@
 const express = require('express');
 const router = express.Router();
+const mongoose = require('mongoose');
 const WineReport = require('../models/WineReport');
 const WineDefinition = require('../models/WineDefinition');
 const { requireAuth } = require('../middleware/auth');
@@ -11,8 +12,8 @@ const VALID_REASONS = ['wrong_info', 'duplicate', 'inappropriate', 'other'];
 router.post('/', requireAuth, async (req, res) => {
   const { wineDefinitionId, reason, details, duplicateOfId } = req.body;
 
-  if (!wineDefinitionId) {
-    return res.status(400).json({ error: 'wineDefinitionId is required' });
+  if (!wineDefinitionId || !mongoose.Types.ObjectId.isValid(wineDefinitionId)) {
+    return res.status(400).json({ error: 'Invalid wineDefinitionId' });
   }
   if (!VALID_REASONS.includes(reason)) {
     return res.status(400).json({ error: 'Invalid reason' });
