@@ -910,29 +910,22 @@ function ImportBottles() {
                         <span className="match-error">{r.error}</span>
                       ) : (
                         <>
-                          <span className="match-pending">Select a match &rarr;</span>
-                          {r.aiDebug?.aiStatus === 'searched' && (
-                            <details className="ai-info-details">
-                              <summary>Why no match?</summary>
-                              <p>AI searched the wine database but could not identify this wine with enough confidence. You can search for it manually or request it to be added to the registry.</p>
-                            </details>
-                          )}
-                          {r.aiDebug?.aiStatus === 'failed' && (
-                            <details className="ai-info-details ai-info-warn">
-                              <summary>AI lookup failed</summary>
-                              <p>The AI lookup ran into a temporary issue (rate limit or timeout). Try the Retry AI button to run it again.</p>
-                            </details>
-                          )}
-                          {r.aiDebug?.aiStatus === 'create_failed' && (
-                            <details className="ai-info-details ai-info-warn">
-                              <summary>AI found a match but couldn't save it</summary>
-                              <p>The AI identified this wine but encountered an error when saving it to the registry. Try the Retry AI button or search manually.</p>
-                            </details>
-                          )}
-                          {isAdmin && r.aiDebug && (
-                            <details className="ai-debug-details">
-                              <summary>AI debug</summary>
-                              <pre className="ai-debug-pre">{JSON.stringify(r.aiDebug, null, 2)}</pre>
+                          <span className="match-pending">No match found</span>
+                          {r.aiDebug && (
+                            <details className={`ai-info-details${r.aiDebug.aiStatus === 'failed' || r.aiDebug.aiStatus === 'create_failed' ? ' ai-info-warn' : ''}`}>
+                              <summary>
+                                {r.aiDebug.aiStatus === 'failed' ? 'AI lookup failed' :
+                                 r.aiDebug.aiStatus === 'create_failed' ? 'AI found a match but couldn\'t save it' :
+                                 'Why no match?'}
+                              </summary>
+                              <p>
+                                {r.aiDebug.aiExplanation ||
+                                 (r.aiDebug.aiStatus === 'failed'
+                                   ? 'The AI lookup encountered a temporary issue. Request the wine to be added manually.'
+                                   : r.aiDebug.aiStatus === 'create_failed'
+                                   ? 'The AI identified this wine but encountered an error saving it. Try requesting it manually.'
+                                   : 'AI searched but could not identify this wine. Request it to be added to the registry.')}
+                              </p>
                             </details>
                           )}
                         </>
@@ -956,41 +949,12 @@ function ImportBottles() {
                               {isExpanded ? 'Hide' : `${r.matches.length} options`}
                             </button>
                           )}
-                          {!isSkipped && !isRequested && (
-                            <button
-                              className="btn btn-secondary btn-xs"
-                              onClick={() => openSearchModal(r.index)}
-                            >
-                              Search
-                            </button>
-                          )}
-                          {r.status === 'no_match' && !isSkipped && !isRequested && (
-                            <button
-                              className="btn btn-secondary btn-xs btn-retry-ai"
-                              onClick={() => handleRetryAI(r.index)}
-                              disabled={retryingRow === r.index || rowImporting !== null || importing}
-                              title="Re-run AI identification for this wine"
-                            >
-                              {retryingRow === r.index ? '…' : 'Retry AI'}
-                            </button>
-                          )}
                           {(r.status === 'no_match' || r.status === 'fuzzy') && !isSkipped && !isRequested && (
                             <button
                               className="btn btn-secondary btn-xs btn-request"
                               onClick={() => requestWine(r.index)}
                             >
                               Request wine
-                            </button>
-                          )}
-                          {/* Per-row import button — visible once a row has a valid selection */}
-                          {isImportableRow(r) && (
-                            <button
-                              className="btn btn-primary btn-xs btn-import-row"
-                              onClick={() => handleImportRow(r)}
-                              disabled={isThisRowImporting || rowImporting !== null || importing}
-                              title="Import this bottle now"
-                            >
-                              {isThisRowImporting ? '…' : 'Import'}
                             </button>
                           )}
                           {isSkipped || isRequested ? (

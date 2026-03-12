@@ -23,6 +23,25 @@ const ImportSession = require('../models/ImportSession');
 const router = express.Router();
 router.use(requireAuth);
 
+// Extracts any plain-text explanation the model appended after its JSON object.
+// Models sometimes add "**Reason**: ..." or similar after the closing brace.
+function extractAiExplanation(raw) {
+  if (!raw) return null;
+  let depth = 0, inStr = false, esc = false;
+  for (let i = 0; i < raw.length; i++) {
+    const c = raw[i];
+    if (esc) { esc = false; continue; }
+    if (c === '\\' && inStr) { esc = true; continue; }
+    if (c === '"') { inStr = !inStr; continue; }
+    if (inStr) continue;
+    if (c === '{') depth++;
+    if (c === '}' && --depth === 0) {
+      return raw.slice(i + 1).replace(/^\s*\*{0,2}Reason\*{0,2}:?\s*/i, '').trim() || null;
+    }
+  }
+  return null;
+}
+
 // Concurrency-limited equivalent of Promise.allSettled.
 // Runs at most `concurrency` tasks simultaneously so we don't blast the AI
 // rate limit (50 req/min for Haiku) when a large import has many no-match wines.
@@ -321,36 +340,18 @@ router.post('/validate', async (req, res) => {
             score: pr.aiIdentified.confidence ?? 1,
             aiIdentified: true
           }];
-          if (isAdmin) aiDebug = { aiResponse: pr.aiIdentified, aiRaw: pr.aiDebugRaw, wineCreated: pr.aiWineCreated };
+          // no aiDebug needed for ai_match — wine was successfully identified
         } else {
           status = 'no_match';
           resultMatches = [];
 
-          // Derive a user-friendly AI status shown to everyone
-          let aiStatus;
-          if (!process.env.ANTHROPIC_API_KEY || !pr.item.wineName || !pr.item.producer) {
-            aiStatus = 'skipped';
-          } else if (pr.aiError || pr.aiDebugReason === 'rate_limit_exceeded' || (pr.aiDebugReason && pr.aiDebugReason.startsWith('exception'))) {
-            aiStatus = 'failed';
-          } else if (pr.aiWineError) {
-            aiStatus = 'create_failed';
-          } else {
-            aiStatus = 'searched'; // AI ran but could not identify
-          }
-          if (aiStatus !== 'skipped') aiDebug = { aiStatus };
-
-          if (isAdmin) {
-            if (!process.env.ANTHROPIC_API_KEY) {
-              aiDebug = { aiStatus, aiSkipped: 'no_api_key' };
-            } else if (!pr.item.wineName || !pr.item.producer) {
-              aiDebug = { aiStatus, aiSkipped: 'missing_name_or_producer' };
-            } else if (pr.aiError) {
-              aiDebug = { aiStatus, aiError: pr.aiError };
-            } else if (pr.aiWineError) {
-              aiDebug = { aiStatus, aiResponse: pr.aiIdentified, aiRaw: pr.aiDebugRaw, aiReason: pr.aiDebugReason, aiWineError: pr.aiWineError };
-            } else {
-              aiDebug = { aiStatus, aiResponse: pr.aiIdentified ?? null, aiRaw: pr.aiDebugRaw, aiReason: pr.aiDebugReason };
-            }
+          // Include AI debug info for all users when AI was attempted
+          if (process.env.ANTHROPIC_API_KEY && (pr.item.wineName || pr.item.producer)) {
+            const aiStatus = pr.aiError || pr.aiDebugReason === 'rate_limit_exceeded' ||
+              (pr.aiDebugReason && pr.aiDebugReason.startsWith('exception'))
+              ? 'failed' : (pr.aiWineError ? 'create_failed' : 'searched');
+            const aiExplanation = extractAiExplanation(pr.aiDebugRaw);
+            aiDebug = { aiStatus, ...(aiExplanation && { aiExplanation }) };
           }
         }
       } else if (matches[0].score >= EXACT_THRESHOLD) {
