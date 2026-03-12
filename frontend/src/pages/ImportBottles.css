@@ -957,3 +957,30 @@
     flex-direction: column;
   }
 }
+
+/* Admin AI debug panel */
+.ai-debug-details {
+  margin-top: 0.4rem;
+  font-size: 0.7rem;
+  color: var(--text-muted, #888);
+}
+
+.ai-debug-details summary {
+  cursor: pointer;
+  color: #7EB3D4;
+  user-select: none;
+}
+
+.ai-debug-pre {
+  margin: 0.3rem 0 0;
+  padding: 0.4rem 0.5rem;
+  background: #0d1a24;
+  border: 1px solid #1e3448;
+  border-radius: 4px;
+  color: #a8c8e0;
+  font-size: 0.68rem;
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 200px;
+  overflow-y: auto;
+}

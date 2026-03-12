@@ -52,8 +52,9 @@ const TYPE_DOTS = {
 
 function ImportBottles() {
   const { id: cellarId } = useParams();
-  const { apiFetch } = useAuth();
+  const { apiFetch, user } = useAuth();
   const navigate = useNavigate();
+  const isAdmin = user?.roles?.includes('admin');
 
   // Step state
   const [step, setStep] = useState('upload');
@@ -844,7 +845,15 @@ function ImportBottles() {
                       ) : r.status === 'error' ? (
                         <span className="match-error">{r.error}</span>
                       ) : (
-                        <span className="match-pending">Select a match &rarr;</span>
+                        <>
+                          <span className="match-pending">Select a match &rarr;</span>
+                          {isAdmin && r.aiDebug && (
+                            <details className="ai-debug-details">
+                              <summary>AI debug</summary>
+                              <pre className="ai-debug-pre">{JSON.stringify(r.aiDebug, null, 2)}</pre>
+                            </details>
+                          )}
+                        </>
                       )}
                     </td>
                     <td className="col-details">

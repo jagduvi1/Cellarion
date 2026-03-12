@@ -193,6 +193,7 @@ router.post('/validate', async (req, res) => {
     }
 
     const results = [];
+    const isAdmin = req.user.roles && req.user.roles.includes('admin');
 
     for (let i = 0; i < items.length; i++) {
       const item = items[i];
@@ -213,6 +214,7 @@ router.post('/validate', async (req, res) => {
 
       let status;
       let resultMatches;
+      let aiDebug = null; // populated for admin users only
 
       if (matches.length === 0) {
         // No library match — try AI identification (non-fatal, falls back to no_match)
@@ -225,8 +227,10 @@ router.post('/validate', async (req, res) => {
               vintage: item.vintage,
               country: item.country
             });
+            if (isAdmin) aiDebug = { aiResponse: identified };
             if (identified) {
-              const { wine } = await findOrCreateWine(identified, req.user.id);
+              const { wine, created } = await findOrCreateWine(identified, req.user.id);
+              if (isAdmin) aiDebug = { ...aiDebug, wineCreated: created };
               aiMatch = {
                 wineId: wine._id,
                 name: wine.name,
@@ -240,9 +244,13 @@ router.post('/validate', async (req, res) => {
                 aiIdentified: true
               };
             }
-          } catch {
+          } catch (err) {
+            if (isAdmin) aiDebug = { aiError: err.message };
             // Non-fatal: fall through to no_match
           }
+        } else if (isAdmin) {
+          if (!process.env.ANTHROPIC_API_KEY) aiDebug = { aiSkipped: 'no_api_key' };
+          else aiDebug = { aiSkipped: 'missing_name_or_producer' };
         }
 
         if (aiMatch) {
@@ -280,7 +288,9 @@ router.post('/validate', async (req, res) => {
         }));
       }
 
-      results.push({ index: i, item, status, matches: resultMatches });
+      const result = { index: i, item, status, matches: resultMatches };
+      if (isAdmin && aiDebug) result.aiDebug = aiDebug;
+      results.push(result);
     }
 
     res.json({
