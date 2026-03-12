@@ -206,13 +206,25 @@ router.post('/validate', async (req, res) => {
       }
     }
 
-    // Pass 2: parallel AI identification for all no-match items
-    const needsAI = process.env.ANTHROPIC_API_KEY
+    // Pass 2: deduplicated parallel AI identification for all no-match items.
+    // Items sharing the same normalized name+producer make only ONE AI call —
+    // the result is shared so duplicates (same wine, different vintages) don't
+    // each trigger a separate Claude request.
+    const noMatchPrs = process.env.ANTHROPIC_API_KEY
       ? preResults.filter(pr => pr.matches && pr.matches.length === 0 && pr.item.wineName && pr.item.producer)
       : [];
 
+    // Build unique wine keys and map them to the first preResult that needs the AI call
+    const aiKeyMap = new Map(); // normalizedKey -> preResult (representative)
+    for (const pr of noMatchPrs) {
+      const key = `${normalizeString(pr.item.wineName)}:${normalizeString(pr.item.producer)}`;
+      if (!aiKeyMap.has(key)) aiKeyMap.set(key, pr);
+    }
+
+    // One AI call per unique wine (parallel)
+    const uniquePrs = [...aiKeyMap.values()];
     const aiSettled = await Promise.allSettled(
-      needsAI.map(pr => identifyWineFromText({
+      uniquePrs.map(pr => identifyWineFromText({
         name: pr.item.wineName,
         producer: pr.item.producer,
         vintage: pr.item.vintage,
@@ -220,10 +232,17 @@ router.post('/validate', async (req, res) => {
       }))
     );
 
-    // Attach AI identification results back to preResults
-    for (let j = 0; j < needsAI.length; j++) {
-      const pr = needsAI[j];
-      const settled = aiSettled[j];
+    // Build a key -> AI result lookup
+    const aiByKey = new Map();
+    for (let j = 0; j < uniquePrs.length; j++) {
+      const key = `${normalizeString(uniquePrs[j].item.wineName)}:${normalizeString(uniquePrs[j].item.producer)}`;
+      aiByKey.set(key, aiSettled[j]);
+    }
+
+    // Attach the shared AI result to every no-match preResult with that key
+    for (const pr of noMatchPrs) {
+      const key = `${normalizeString(pr.item.wineName)}:${normalizeString(pr.item.producer)}`;
+      const settled = aiByKey.get(key);
       if (settled.status === 'fulfilled') {
         pr.aiIdentified = settled.value; // null = AI returned unknown
       } else {
@@ -231,14 +250,24 @@ router.post('/validate', async (req, res) => {
       }
     }
 
-    // Pass 3: create wines for AI-identified items (sequential — DB writes)
+    // Pass 3: create wines for AI-identified items, deduplicated by wine key
+    // so findOrCreateWine is called once per unique wine (not once per bottle).
+    const createdWineCache = new Map(); // normalizedKey -> { wine, created } | { error }
     for (const pr of preResults) {
-      if (pr.aiIdentified) {
+      if (!pr.aiIdentified) continue;
+      const key = `${normalizeString(pr.aiIdentified.name)}:${normalizeString(pr.aiIdentified.producer)}`;
+      if (createdWineCache.has(key)) {
+        const cached = createdWineCache.get(key);
+        if (cached.wine) { pr.aiWine = cached.wine; pr.aiWineCreated = false; }
+        else pr.aiWineError = cached.error;
+      } else {
         try {
           const { wine, created } = await findOrCreateWine(pr.aiIdentified, req.user.id);
+          createdWineCache.set(key, { wine, created });
           pr.aiWine = wine;
           pr.aiWineCreated = created;
         } catch (err) {
+          createdWineCache.set(key, { error: err.message });
           pr.aiWineError = err.message;
         }
       }
