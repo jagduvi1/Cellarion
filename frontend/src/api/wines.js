@@ -28,3 +28,15 @@ export const findOrCreateWine = (apiFetch, wineData) =>
     headers: JSON_HEADERS,
     body: JSON.stringify(wineData),
   });
+
+/**
+ * Identify a wine from a free-text search query using AI, then find or create
+ * it in the registry.
+ * Returns: { wine: WineDefinition | null, created?: boolean, reason?: string }
+ */
+export const identifyWineByText = (apiFetch, query) =>
+  apiFetch('/api/wines/identify-text', {
+    method: 'POST',
+    headers: JSON_HEADERS,
+    body: JSON.stringify({ query }),
+  });

@@ -4,7 +4,7 @@ const express = require('express');
 const WineDefinition = require('../models/WineDefinition');
 const searchService = require('../services/search');
 const { requireAuth } = require('../middleware/auth');
-const { scanLabelFull } = require('../services/labelScan');
+const { scanLabelFull, identifyWineFromQuery } = require('../services/labelScan');
 const { findOrCreateWine } = require('../services/findOrCreateWine');
 const { generateWineKey, combinedSimilarity } = require('../utils/normalize');
 const { PROCESSED_DIR } = require('../config/upload');
@@ -296,6 +296,25 @@ router.post('/find-or-create', requireAuth, async (req, res) => {
   } catch (err) {
     console.error('Find or create wine error:', err);
     res.status(err.status || 500).json({ error: err.message || 'Failed to find or create wine' });
+  }
+});
+
+// POST /api/wines/identify-text — identify a wine from a free-text query using AI,
+// then find or create it in the registry. Used by the AddBottle manual search fallback.
+router.post('/identify-text', requireAuth, async (req, res) => {
+  const query = typeof req.body.query === 'string' ? req.body.query.trim() : '';
+  if (!query) return res.status(400).json({ error: 'query is required' });
+
+  const result = await identifyWineFromQuery(query);
+  if (!result.data) {
+    return res.json({ wine: null, reason: result.debugReason });
+  }
+
+  try {
+    const { wine, created } = await findOrCreateWine(result.data, req.user.id);
+    return res.json({ wine: wine.toObject ? wine.toObject() : wine, created });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
   }
 });
 

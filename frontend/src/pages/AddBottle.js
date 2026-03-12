@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
-import { searchWines, findOrCreateWine } from '../api/wines';
+import { searchWines, findOrCreateWine, identifyWineByText } from '../api/wines';
 import { CURRENCIES } from '../config/currencies';
 import { monthToLastDay } from '../utils/drinkStatus';
 import ImageUpload from '../components/ImageUpload';
@@ -21,6 +21,9 @@ function AddBottle() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [search, setSearch] = useState('');
+  const [showTextSearch, setShowTextSearch] = useState(false);
+  const [aiSearching, setAiSearching] = useState(false);
+  const [aiSearchError, setAiSearchError] = useState(null);
   const [selectedWine, setSelectedWine] = useState(null);
   const [numBottles, setNumBottles] = useState(1);
   const [bottleData, setBottleData] = useState({
@@ -281,18 +284,37 @@ function AddBottle() {
   }, []);
 
   // Debounce search: wait 300ms after the user stops typing before firing
-  useEffect(() => {
-    if (search.length === 0) { setWines([]); return; }
-    const timer = setTimeout(() => {
-      setLoading(true);
-      searchWines(apiFetch, `search=${encodeURIComponent(search)}&limit=10`)
-        .then(res => res.json())
-        .then(data => { if (data.wines) setWines(data.wines); })
-        .catch(err => console.error('Search failed:', err))
-        .finally(() => setLoading(false));
-    }, 300);
-    return () => clearTimeout(timer);
-  }, [search]); // eslint-disable-line react-hooks/exhaustive-deps
+  const handleSearch = useCallback(() => {
+    if (!search.trim()) { setWines([]); return; }
+    setLoading(true);
+    setAiSearchError(null);
+    searchWines(apiFetch, `search=${encodeURIComponent(search.trim())}&limit=10`)
+      .then(res => res.json())
+      .then(data => { if (data.wines) setWines(data.wines); })
+      .catch(err => console.error('Search failed:', err))
+      .finally(() => setLoading(false));
+  }, [search, apiFetch]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleSearchKeyDown = (e) => {
+    if (e.key === 'Enter') handleSearch();
+  };
+
+  const handleAiIdentify = async () => {
+    if (!search.trim()) return;
+    setAiSearching(true);
+    setAiSearchError(null);
+    try {
+      const res = await identifyWineByText(apiFetch, search.trim());
+      const data = await res.json();
+      if (!res.ok) { setAiSearchError(data.error || 'AI identification failed'); return; }
+      if (!data.wine) { setAiSearchError('AI could not identify this wine. Try a more specific search.'); return; }
+      handleSelectWine(data.wine);
+    } catch {
+      setAiSearchError('Network error during AI identification.');
+    } finally {
+      setAiSearching(false);
+    }
+  };
 
   const handleSelectWine = (wine) => {
     setSelectedWine(wine);
@@ -551,41 +573,78 @@ function AddBottle() {
             </div>
           )}
 
-          {/* ── Manual search (shown when no scan result) ───────────────── */}
-          {!scanResult && (
+          {/* ── Camera-first prompt ──────────────────────────────────────── */}
+          {!scanResult && !showTextSearch && !labelCam.open && (
+            <div className="wine-select-default">
+              <div className="camera-prompt-card">
+                <svg className="camera-prompt-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+                  <circle cx="12" cy="13" r="4"/>
+                </svg>
+                <h2>{t('addBottle.scanPromptTitle', 'Scan the wine label')}</h2>
+                <p className="camera-prompt-hint">
+                  {t('addBottle.scanPromptHint', 'Take a photo of the label — AI will identify the wine and add it to the registry if it doesn\'t exist yet.')}
+                </p>
+                <button type="button" className="btn btn-primary" onClick={startLabelCamera}>
+                  {t('addBottle.startCamera', 'Start Camera')}
+                </button>
+              </div>
+              <button type="button" className="wine-select-manual-link" onClick={() => setShowTextSearch(true)}>
+                {t('addBottle.searchManuallyInstead', 'No camera? Search manually instead →')}
+              </button>
+            </div>
+          )}
+
+          {/* ── Manual text search ───────────────────────────────────────── */}
+          {!scanResult && showTextSearch && (
             <>
-              <h2>{t('addBottle.searchForWine')}</h2>
+              <div className="wine-select-manual-header">
+                <h2>{t('addBottle.searchForWine')}</h2>
+                <button type="button" className="btn-link-muted" onClick={() => { setShowTextSearch(false); setSearch(''); setWines([]); setAiSearchError(null); }}>
+                  ← {t('addBottle.useCameraInstead', 'Use camera instead')}
+                </button>
+              </div>
+              <p className="wine-search-hint">
+                {t('addBottle.searchHint', 'Be as specific as possible — include the wine name and producer. We\'ll check our library first; if no match is found, AI will identify and add the wine.')}
+              </p>
               <div className="search-section">
                 <div className="search-input-wrapper">
                   <input
                     type="text"
                     placeholder={t('addBottle.searchPlaceholder')}
                     value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    className="search-input-large search-input-with-camera"
+                    onChange={(e) => { setSearch(e.target.value); setWines([]); setAiSearchError(null); }}
+                    onKeyDown={handleSearchKeyDown}
+                    className="search-input-large"
                     autoFocus
                   />
-                  <button
-                    type="button"
-                    className="search-camera-btn"
-                    onClick={startLabelCamera}
-                    disabled={labelCam.open}
-                    title="Scan wine label with camera"
-                    aria-label="Scan wine label with camera"
-                  >
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                      <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
-                      <circle cx="12" cy="13" r="4"/>
-                    </svg>
+                  <button type="button" className="btn btn-secondary search-submit-btn" onClick={handleSearch} disabled={loading}>
+                    {loading ? '…' : t('addBottle.searchBtn', 'Search')}
                   </button>
                 </div>
               </div>
 
               {loading && <p>{t('addBottle.searching')}</p>}
 
-              {!loading && wines.length === 0 && (
+              {!loading && search.trim() && wines.length === 0 && !aiSearching && !aiSearchError && (
                 <div className="empty-state">
-                  <p>{search.length > 0 ? t('addBottle.noWinesMatched') : t('addBottle.startTyping')}</p>
+                  <p>{t('addBottle.noWinesMatched')}</p>
+                  <p className="empty-state-sub">{t('addBottle.noMatchAiHint', 'Not in our library? Let AI identify it.')}</p>
+                  <button type="button" className="btn btn-secondary" onClick={handleAiIdentify}>
+                    {t('addBottle.identifyWithAi', 'Identify with AI')}
+                  </button>
+                </div>
+              )}
+
+              {aiSearching && (
+                <div className="empty-state">
+                  <p>{t('addBottle.aiSearching', 'AI is identifying the wine…')}</p>
+                </div>
+              )}
+
+              {aiSearchError && (
+                <div className="empty-state">
+                  <p className="error-text">{aiSearchError}</p>
                 </div>
               )}
 
@@ -595,12 +654,7 @@ function AddBottle() {
                     <div key={wine._id} className="wine-row" onClick={() => handleSelectWine(wine)}>
                       {wine.image ? (
                         <div className="wine-row-img-wrap">
-                          <img
-                            src={wine.image}
-                            alt={wine.name}
-                            className="wine-row-image"
-                            onError={(e) => { e.target.style.display = 'none'; }}
-                          />
+                          <img src={wine.image} alt={wine.name} className="wine-row-image" onError={(e) => { e.target.style.display = 'none'; }} />
                           {wine.imageCredit && <span className="wine-row-credit">{wine.imageCredit}</span>}
                         </div>
                       ) : (

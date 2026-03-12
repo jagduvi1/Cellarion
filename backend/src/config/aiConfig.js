@@ -61,6 +61,23 @@ Rules:
 - Return {"error":"unknown"} ONLY if the wine name and producer together are completely unrecognisable and likely do not exist
 - Output ONLY the JSON object. No explanations, no reasoning, no extra text before or after`;
 
+const DEFAULT_TEXT_SEARCH_PROMPT =
+`You are a master sommelier with encyclopedic wine knowledge. The user has typed this search query to find a wine: "{{query}}"
+
+Identify the wine they are looking for and return complete details.
+Return ONLY a raw JSON object (no markdown, no code fences, no extra text):
+{"name":"wine name","producer":"producer name","country":"country","region":"region or null","appellation":"appellation or null","type":"red|white|rosé|sparkling|dessert|fortified","grapes":["grape varieties"],"confidence":0.0}
+
+Rules:
+- Extract the wine name and producer from the query
+- Fill in country, region, appellation, type, and grapes from your wine knowledge
+- For any unknown field use null; use [] for unknown grapes, never null
+- confidence: 1.0 = certain, 0.7 = confident, 0.5 = reasonably sure
+- IMPORTANT: if you recognise the producer or wine name, return a result even if some fields are null
+- Never invent a wine that does not exist in reality
+- Return {"error":"unknown"} ONLY if the query is completely unrecognisable as a real wine
+- Output ONLY the JSON object. No explanations, no extra text before or after`;
+
 // Models that are known to work reliably for text chat.
 // Any value stored in DB that isn't in this list falls back to the default.
 const VALID_CHAT_MODELS = [
@@ -136,4 +153,4 @@ function set(value) {
   cache = { ...defaults, ...value };
 }
 
-module.exports = { load, get, set, defaults, DEFAULT_SYSTEM_PROMPT, DEFAULT_LABEL_SCAN_PROMPT, DEFAULT_IMPORT_LOOKUP_PROMPT, VALID_CHAT_MODELS };
+module.exports = { load, get, set, defaults, DEFAULT_SYSTEM_PROMPT, DEFAULT_LABEL_SCAN_PROMPT, DEFAULT_IMPORT_LOOKUP_PROMPT, DEFAULT_TEXT_SEARCH_PROMPT, VALID_CHAT_MODELS };

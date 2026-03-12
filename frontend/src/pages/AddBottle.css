@@ -48,13 +48,115 @@
 }
 
 /* ── Search ── */
+/* ── Camera-first prompt ─────────────────────────────────────────────────── */
+
+.wine-select-default {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.25rem;
+  padding: 1rem 0 0.5rem;
+}
+
+.camera-prompt-card {
+  width: 100%;
+  max-width: 420px;
+  text-align: center;
+  padding: 2.5rem 2rem;
+  background: #1a1a1a;
+  border: 1px solid #2a2a2a;
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+}
+
+.camera-prompt-icon {
+  width: 56px;
+  height: 56px;
+  color: #7B9E88;
+  opacity: 0.85;
+}
+
+.camera-prompt-card h2 {
+  margin: 0;
+  font-size: 1.2rem;
+  color: #E8DFD0;
+}
+
+.camera-prompt-hint {
+  color: #999;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.wine-select-manual-link {
+  background: none;
+  border: none;
+  color: #888;
+  font-size: 0.85rem;
+  cursor: pointer;
+  padding: 0.25rem;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.wine-select-manual-link:hover { color: #b0b0b0; }
+
+/* ── Manual text search ──────────────────────────────────────────────────── */
+
+.wine-select-manual-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.25rem;
+}
+
+.wine-select-manual-header h2 { margin: 0; }
+
+.btn-link-muted {
+  background: none;
+  border: none;
+  color: #888;
+  font-size: 0.8rem;
+  cursor: pointer;
+  padding: 0;
+  white-space: nowrap;
+}
+
+.btn-link-muted:hover { color: #b0b0b0; }
+
+.wine-search-hint {
+  font-size: 0.82rem;
+  color: #888;
+  margin: 0 0 1rem;
+  line-height: 1.4;
+}
+
+.search-input-wrapper {
+  display: flex;
+  gap: 0.5rem;
+  align-items: stretch;
+}
+
+.search-submit-btn {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.empty-state-sub {
+  color: #888;
+  font-size: 0.85rem;
+  margin: 0.25rem 0 0.75rem;
+}
+
 .search-section {
   margin-bottom: 1.5rem;
 }
 
-.search-input-wrapper {
-  position: relative;
-}
 
 .search-input-large {
   width: 100%;
