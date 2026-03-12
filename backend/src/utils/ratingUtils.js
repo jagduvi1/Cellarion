@@ -6,10 +6,9 @@
  *  '20'  — Davis 20-Point    (1–20,  step 0.1)  UC Davis / Jancis Robinson / UK wine trade
  *  '100' — Parker 100-Point  (50–100, step 1)   Wine Advocate / Wine Spectator / Decanter
  *
- * Normalization maps every scale to a 0–100 float for cross-scale aggregation:
- *   5-star:  normalized = (value / 5)           * 100
- *   20-pt:   normalized = (value / 20)          * 100
- *   100-pt:  normalized = ((value - 50) / 50)   * 100   (floor = 50)
+ * Conversion uses piecewise-linear interpolation based on wine-expert consensus
+ * anchor points (Wine Advocate descriptors, Jancis Robinson, UC Davis).
+ * All scales map to a shared 0–100 normalized range for aggregation.
  */
 
 const SCALE_META = {
@@ -21,18 +20,54 @@ const SCALE_META = {
 const VALID_SCALES = Object.keys(SCALE_META);
 
 /**
+ * Expert-consensus anchor points mapping quality tiers across scales.
+ * Each row: [5-star, 20-point, Parker 100-point, normalized 0–100].
+ * Between anchors we interpolate linearly so the "interesting" ranges of
+ * each scale align: e.g. Parker 82-100 maps to Stars 3.0-5.0, not 3.6-5.0.
+ */
+const ANCHORS = [
+  // star, davis, parker, normalized
+  [1.0,   8.0,   60,     0],
+  [2.0,  12.0,   75,    25],
+  [3.0,  14.5,   82,    50],
+  [3.5,  16.0,   86,    62.5],
+  [4.0,  17.5,   91,    75],
+  [4.5,  19.0,   96,    87.5],
+  [5.0,  20.0,  100,   100],
+];
+
+// Column indices into ANCHORS
+const COL = { '5': 0, '20': 1, '100': 2, norm: 3 };
+
+/**
+ * Piecewise-linear interpolation: given value in column `fromCol`,
+ * return the corresponding value in column `toCol`.
+ */
+function piecewise(value, fromCol, toCol) {
+  // Clamp below first / above last anchor
+  if (value <= ANCHORS[0][fromCol]) return ANCHORS[0][toCol];
+  if (value >= ANCHORS[ANCHORS.length - 1][fromCol]) return ANCHORS[ANCHORS.length - 1][toCol];
+  for (let i = 0; i < ANCHORS.length - 1; i++) {
+    const lo = ANCHORS[i][fromCol];
+    const hi = ANCHORS[i + 1][fromCol];
+    if (value >= lo && value <= hi) {
+      const t = (value - lo) / (hi - lo);
+      return ANCHORS[i][toCol] + t * (ANCHORS[i + 1][toCol] - ANCHORS[i][toCol]);
+    }
+  }
+  return ANCHORS[0][toCol]; // fallback (shouldn't reach)
+}
+
+/**
  * Convert a raw rating value + scale to a 0–100 normalized score.
  * Returns null if value is null/undefined/invalid.
  */
 function toNormalized(value, scale) {
   if (value == null || isNaN(value)) return null;
   const v = Number(value);
-  switch (scale) {
-    case '5':   return (v / 5)          * 100;
-    case '20':  return (v / 20)         * 100;
-    case '100': return ((v - 50) / 50)  * 100;
-    default:    return (v / 5)          * 100; // treat unknown as 5-star
-  }
+  const col = COL[scale];
+  if (col == null) return piecewise(v, COL['5'], COL.norm); // unknown → 5-star
+  return piecewise(v, col, COL.norm);
 }
 
 /**
@@ -42,15 +77,9 @@ function toNormalized(value, scale) {
 function fromNormalized(normalized, targetScale) {
   if (normalized == null || isNaN(normalized)) return null;
   const n = Number(normalized);
-  let raw;
-  switch (targetScale) {
-    case '5':   raw = (n / 100) * 5;           break;
-    case '20':  raw = (n / 100) * 20;          break;
-    case '100': raw = (n / 100) * 50 + 50;     break;
-    default:    raw = (n / 100) * 5;           break;
-  }
+  const col = COL[targetScale];
+  const raw = col != null ? piecewise(n, COL.norm, col) : piecewise(n, COL.norm, COL['5']);
   const meta = SCALE_META[targetScale] || SCALE_META['5'];
-  // Round to 1 decimal for 5 and 20; whole number for 100
   const precision = meta.step < 1 ? 10 : 1;
   return Math.round(raw * precision) / precision;
 }
@@ -66,20 +95,20 @@ function convertRating(value, fromScale, toScale) {
 }
 
 /**
- * Format a normalized rating delta (difference between two normalized 0-100 scores).
- * Unlike fromNormalized, this does NOT apply the floor offset for the 100-pt scale,
- * since a delta is a difference, not a point on the scale.
+ * Format a normalized rating delta (difference between two normalized 0-100 scores)
+ * in the user's preferred scale.
+ *
+ * Because the piecewise mapping is non-linear, we convert a delta by mapping
+ * two points around the midpoint (50) through the curve and taking their difference.
+ * This gives a representative scale-unit size for the delta.
  */
 function formatDelta(normalizedDelta, scale) {
   if (normalizedDelta == null || isNaN(normalizedDelta)) return '—';
   const n = Number(normalizedDelta);
-  let raw;
-  switch (scale) {
-    case '5':   raw = (n / 100) * 5;   break;
-    case '20':  raw = (n / 100) * 20;  break;
-    case '100': raw = (n / 100) * 50;  break; // no +50 floor offset for deltas
-    default:    raw = (n / 100) * 5;   break;
-  }
+  const mid = 50;
+  const hi = fromNormalized(Math.min(100, mid + Math.abs(n) / 2), scale);
+  const lo = fromNormalized(Math.max(0,   mid - Math.abs(n) / 2), scale);
+  const raw = (hi - lo) * Math.sign(n);
   const meta = SCALE_META[scale] || SCALE_META['5'];
   const precision = meta.step < 1 ? 10 : 1;
   const rounded = Math.round(raw * precision) / precision;

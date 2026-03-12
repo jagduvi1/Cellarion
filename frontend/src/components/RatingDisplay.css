@@ -43,6 +43,14 @@
   font-variant-numeric: tabular-nums;
 }
 
+.rating-display__preferred {
+  font-weight: 500;
+  font-size: 0.88rem;
+  color: var(--color-accent);
+  margin-left: 2px;
+  font-variant-numeric: tabular-nums;
+}
+
 /* Secondary scale row */
 .rating-display__all-scales {
   display: flex;

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
+import RatingDisplay from '../components/RatingDisplay';
 import './CellarHistory.css';
 
 const REASON_CONFIG = {
@@ -14,7 +15,7 @@ const REASON_CONFIG = {
 function CellarHistory() {
   const { t } = useTranslation();
   const { id } = useParams();
-  const { apiFetch } = useAuth();
+  const { apiFetch, user } = useAuth();
   const [cellar, setCellar] = useState(null);
   const [grouped, setGrouped] = useState({});
   const [loading, setLoading] = useState(true);
@@ -122,6 +123,7 @@ function CellarHistory() {
 
 function HistoryBottleCard({ bottle }) {
   const { t } = useTranslation();
+  const { user } = useAuth();
   const wine = bottle.wineDefinition;
   const consumedDate = bottle.consumedAt
     ? new Date(bottle.consumedAt).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
@@ -153,7 +155,7 @@ function HistoryBottleCard({ bottle }) {
       <div className="history-bottle-details">
         {bottle.consumedRating && (
           <div className="history-rating">
-            {'⭐'.repeat(bottle.consumedRating)}
+            <RatingDisplay value={bottle.consumedRating} scale={bottle.consumedRatingScale || '5'} preferredScale={user?.preferences?.ratingScale} />
             <span className="rating-label">{t('history.atConsumption')}</span>
           </div>
         )}

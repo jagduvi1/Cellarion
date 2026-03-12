@@ -334,7 +334,7 @@ function ViewDetails({ bottle, rackInfo, cellarId, drinkStatus, vintageProfile, 
           <div className="bd-detail-item">
             <span className="bd-detail-label">{t('bottleDetail.ratingLabel')}</span>
             <span className="bd-detail-value">
-              <RatingDisplay value={bottle.rating} scale={bottle.ratingScale || '5'} />
+              <RatingDisplay value={bottle.rating} scale={bottle.ratingScale || '5'} preferredScale={user?.preferences?.ratingScale} />
             </span>
           </div>
         )}
