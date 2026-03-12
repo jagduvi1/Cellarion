@@ -310,6 +310,7 @@ function ContributePrompt({ storageKey, icon, title, message, actionLabel, onAct
 // ── View mode ──
 function ViewDetails({ bottle, rackInfo, cellarId, drinkStatus, vintageProfile, priceHistory, rates, userCurrency, canEdit, hasImage, onEdit, onSuggestGrapes, onRemove, onReportWine }) {
   const { t } = useTranslation();
+  const { user } = useAuth();
   const { plan, hasFeature } = usePlan();
   const hasAgingMaturity = hasFeature('agingMaturity');
   const hasPriceEvolution = hasFeature('priceEvolution');
