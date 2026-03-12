@@ -244,7 +244,10 @@ router.post('/validate', async (req, res) => {
       const key = `${normalizeString(pr.item.wineName)}:${normalizeString(pr.item.producer)}`;
       const settled = aiByKey.get(key);
       if (settled.status === 'fulfilled') {
-        pr.aiIdentified = settled.value; // null = AI returned unknown
+        // identifyWineFromText now returns { data, debugRaw, debugReason }
+        pr.aiIdentified = settled.value.data;        // null = AI returned unknown
+        pr.aiDebugRaw    = settled.value.debugRaw;
+        pr.aiDebugReason = settled.value.debugReason;
       } else {
         pr.aiError = settled.reason?.message;
       }
@@ -299,16 +302,22 @@ router.post('/validate', async (req, res) => {
             score: pr.aiIdentified.confidence ?? 1,
             aiIdentified: true
           }];
-          if (isAdmin) aiDebug = { aiResponse: pr.aiIdentified, wineCreated: pr.aiWineCreated };
+          if (isAdmin) aiDebug = { aiResponse: pr.aiIdentified, aiRaw: pr.aiDebugRaw, wineCreated: pr.aiWineCreated };
         } else {
           status = 'no_match';
           resultMatches = [];
           if (isAdmin) {
-            if (!process.env.ANTHROPIC_API_KEY) aiDebug = { aiSkipped: 'no_api_key' };
-            else if (!pr.item.wineName || !pr.item.producer) aiDebug = { aiSkipped: 'missing_name_or_producer' };
-            else if (pr.aiError) aiDebug = { aiError: pr.aiError };
-            else if (pr.aiWineError) aiDebug = { aiResponse: pr.aiIdentified, aiWineError: pr.aiWineError };
-            else aiDebug = { aiResponse: pr.aiIdentified ?? null };
+            if (!process.env.ANTHROPIC_API_KEY) {
+              aiDebug = { aiSkipped: 'no_api_key' };
+            } else if (!pr.item.wineName || !pr.item.producer) {
+              aiDebug = { aiSkipped: 'missing_name_or_producer' };
+            } else if (pr.aiError) {
+              aiDebug = { aiError: pr.aiError };
+            } else if (pr.aiWineError) {
+              aiDebug = { aiResponse: pr.aiIdentified, aiRaw: pr.aiDebugRaw, aiReason: pr.aiDebugReason, aiWineError: pr.aiWineError };
+            } else {
+              aiDebug = { aiResponse: pr.aiIdentified ?? null, aiRaw: pr.aiDebugRaw, aiReason: pr.aiDebugReason };
+            }
           }
         }
       } else if (matches[0].score >= EXACT_THRESHOLD) {

@@ -155,11 +155,17 @@ async function scanLabelFull(image, mediaType = 'image/jpeg') {
  * @param {string} [opts.country] Optional country hint from the import data
  * @returns {Promise<Object|null>} Extracted wine data or null
  */
+/**
+ * Returns { data, debugRaw, debugReason } so callers always get full visibility.
+ *   data        – parsed wine object, or null if not identified
+ *   debugRaw    – raw string from the model (or error message)
+ *   debugReason – short explanation when data is null
+ */
 async function identifyWineFromText({ name, producer, vintage, country }) {
-  if (!name || !producer) return null;
+  if (!name || !producer) return { data: null, debugRaw: null, debugReason: 'missing_fields' };
 
   let client;
-  try { client = getClient(); } catch { return null; }
+  try { client = getClient(); } catch { return { data: null, debugRaw: null, debugReason: 'no_api_key' }; }
 
   const vintageHint = vintage && vintage !== 'NV' ? `Vintage: ${vintage}\n` : '';
   const countryHint = country ? `Country hint: ${country}\n` : '';
@@ -170,6 +176,7 @@ async function identifyWineFromText({ name, producer, vintage, country }) {
     .replace('{{vintage}}', vintageHint)
     .replace('{{country}}', countryHint);
 
+  let raw = '';
   try {
     const response = await client.messages.create({
       model: aiConfig.get().importLookupModel,
@@ -180,15 +187,16 @@ async function identifyWineFromText({ name, producer, vintage, country }) {
       ]
     });
 
-    const raw = ('{' + (response.content[0]?.text ?? '')).trim();
+    raw = ('{' + (response.content[0]?.text ?? '')).trim();
     const stripped = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
-    const data = JSON.parse(stripped);
+    const parsed = JSON.parse(stripped);
 
-    if (data.error || !data.name || !data.producer) return null;
-    if (!Array.isArray(data.grapes)) data.grapes = [];
-    return data;
-  } catch {
-    return null;
+    if (parsed.error) return { data: null, debugRaw: raw, debugReason: `ai_unknown: ${parsed.error}` };
+    if (!parsed.name || !parsed.producer) return { data: null, debugRaw: raw, debugReason: 'missing_name_or_producer_in_response' };
+    if (!Array.isArray(parsed.grapes)) parsed.grapes = [];
+    return { data: parsed, debugRaw: raw, debugReason: null };
+  } catch (err) {
+    return { data: null, debugRaw: raw || err.message, debugReason: `exception: ${err.message}` };
   }
 }
 
