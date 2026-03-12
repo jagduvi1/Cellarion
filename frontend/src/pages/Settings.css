@@ -3,8 +3,14 @@
   margin: 0 auto;
 }
 
-.settings-page h1 {
+.settings-header {
   margin-bottom: 1.5rem;
+}
+
+.settings-header h1 {
+  margin: 0;
+  font-family: var(--font-heading);
+  color: var(--color-text);
 }
 
 .settings-card {
@@ -14,15 +20,15 @@
 .settings-section-title {
   font-size: 1rem;
   font-weight: 600;
-  color: #E8DFD0;
+  color: var(--color-text);
   margin: 0 0 1.25rem 0;
   padding-bottom: 0.75rem;
-  border-bottom: 1px solid #2a2a2a;
+  border-bottom: 1px solid var(--color-border);
 }
 
 .settings-hint {
   font-size: 0.82rem;
-  color: #9A9484;
+  color: var(--color-text-muted);
   margin: 0.15rem 0 0.65rem 0;
 }
 
@@ -39,7 +45,7 @@
 
 .settings-saved {
   font-size: 0.85rem;
-  color: #6B9E78;
+  color: var(--color-success);
 }
 
 /* ── Plan card ── */
@@ -66,17 +72,17 @@
   letter-spacing: 0.04em;
 }
 
-.settings-plan-badge--free    { background: rgba(154,148,132,0.15); color: #9A9484; }
-.settings-plan-badge--basic   { background: rgba(200,168,126,0.15); color: #C8A87E; }
-.settings-plan-badge--premium { background: rgba(123,158,136,0.18); color: #7B9E88; }
+.settings-plan-badge--free    { background: rgba(154,148,132,0.15); color: var(--color-text-muted); }
+.settings-plan-badge--basic   { background: rgba(200,168,126,0.15); color: var(--color-accent); }
+.settings-plan-badge--premium { background: rgba(var(--color-primary-rgb),0.18); color: var(--color-primary); }
 
 .settings-plan-desc {
   font-size: 0.85rem;
-  color: #9A9484;
+  color: var(--color-text-muted);
 }
 
 .settings-plan-expired {
-  color: #E07060;
+  color: var(--color-danger);
   font-weight: 600;
 }
 

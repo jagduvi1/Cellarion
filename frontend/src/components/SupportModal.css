@@ -10,19 +10,19 @@
   gap: 4px;
   font-size: 0.875rem;
   font-weight: 500;
-  color: var(--text-secondary, #555);
+  color: var(--color-text-secondary);
 }
 
 .support-modal-form input,
 .support-modal-form select,
 .support-modal-form textarea {
   padding: 8px 10px;
-  border: 1px solid var(--border, #ddd);
-  border-radius: 6px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
   font-size: 0.9rem;
   font-family: inherit;
-  background: var(--bg-input, #fff);
-  color: var(--text, #222);
+  background: var(--color-input-bg);
+  color: var(--color-text);
   resize: vertical;
 }
 
@@ -32,12 +32,12 @@
 
 .char-count {
   font-size: 0.75rem;
-  color: var(--text-muted, #999);
+  color: var(--color-text-muted);
   text-align: right;
 }
 
 .support-modal-error {
-  color: var(--danger, #c0392b);
+  color: var(--color-danger);
   font-size: 0.875rem;
   margin: 0;
 }
@@ -45,7 +45,7 @@
 .support-modal-success {
   padding: 8px 0 16px;
   line-height: 1.6;
-  color: var(--text, #222);
+  color: var(--color-text);
 }
 
 .support-modal-success p {

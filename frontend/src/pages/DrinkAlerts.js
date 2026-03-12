@@ -66,18 +66,19 @@ function DrinkAlerts() {
 
   return (
     <div className="drink-alerts-page">
-      <div className="page-header">
-        <div>
-          <Link to={`/cellars/${id}`} className="back-link">{t('drinkAlerts.backTo', { cellarName: cellar?.name })}</Link>
-          <h1 style={cellar?.userColor ? { borderLeft: `4px solid ${cellar.userColor}`, paddingLeft: '0.75rem' } : {}}>
-            {t('drinkAlerts.title')}
-          </h1>
-          <p className="page-subtitle">
-            {totalAlerts > 0
-              ? t('drinkAlerts.needsAttention', { count: totalAlerts })
-              : t('drinkAlerts.allOnTrack')}
-          </p>
-        </div>
+      <div className="alerts-header">
+        <Link to={`/cellars/${id}`} className="back-link">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+          {t('drinkAlerts.backTo', { cellarName: cellar?.name })}
+        </Link>
+        <h1 style={cellar?.userColor ? { borderLeft: `4px solid ${cellar.userColor}`, paddingLeft: '0.75rem' } : {}}>
+          {t('drinkAlerts.title')}
+        </h1>
+        <p className="page-subtitle">
+          {totalAlerts > 0
+            ? t('drinkAlerts.needsAttention', { count: totalAlerts })
+            : t('drinkAlerts.allOnTrack')}
+        </p>
       </div>
 
       {/* Summary pill row */}

@@ -114,7 +114,7 @@ function Login() {
       <div className="login-page">
         <div className="login-card">
           <div className="login-header">
-            <CellarionLogo size={90} color="#7B9E88" showText />
+            <CellarionLogo size={90} color="var(--color-primary)" showText />
             <p>Reset your password</p>
           </div>
 
@@ -133,7 +133,7 @@ function Login() {
             </>
           ) : (
             <form onSubmit={handleForgot}>
-              <p style={{ color: '#9A9484', fontSize: '0.9rem', marginBottom: '1.25rem' }}>
+              <p style={{ color: 'var(--color-text-secondary)', fontSize: '0.9rem', marginBottom: '1.25rem' }}>
                 Enter your email address and we&apos;ll send you a link to reset your password.
               </p>
               <div className="form-group">
@@ -177,7 +177,7 @@ function Login() {
       <div className="login-page">
         <div className="login-card">
           <div className="login-header">
-            <CellarionLogo size={90} color="#7B9E88" showText />
+            <CellarionLogo size={90} color="var(--color-primary)" showText />
           </div>
           <div className="alert alert-success">
             <strong>Check your email!</strong>
@@ -185,7 +185,7 @@ function Login() {
             We sent a verification link to <strong>{registeredEmail}</strong>.
             Click the link in that email to activate your account.
           </div>
-          <p style={{ color: '#9A9484', fontSize: '0.9rem', textAlign: 'center', marginTop: '1rem' }}>
+          <p style={{ color: 'var(--color-text-secondary)', fontSize: '0.9rem', textAlign: 'center', marginTop: '1rem' }}>
             Didn&apos;t receive it?{' '}
             <button
               className="btn btn-secondary btn-small"
@@ -209,7 +209,7 @@ function Login() {
     <div className="login-page">
       <div className="login-card">
         <div className="login-header">
-          <CellarionLogo size={90} color="#7B9E88" showText />
+          <CellarionLogo size={90} color="var(--color-primary)" showText />
           <p>Your personal wine cellar</p>
         </div>
 
@@ -289,7 +289,7 @@ function Login() {
                 style={{
                   background: 'none',
                   border: 'none',
-                  color: '#7B9E88',
+                  color: 'var(--color-primary)',
                   cursor: 'pointer',
                   fontSize: '0.85rem',
                   padding: 0

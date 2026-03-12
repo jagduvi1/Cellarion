@@ -3,9 +3,15 @@
   margin: 0 auto;
 }
 
-.page-subtitle {
-  color: #9A9484;
-  margin: 0.25rem 0 0 0;
+.alerts-header {
+  margin-bottom: 0.25rem;
+}
+
+.alerts-header h1 {
+  margin: 0.25rem 0 0;
+  font-size: 1.5rem;
+  color: var(--color-text);
+  font-family: var(--font-heading);
 }
 
 /* ── Summary pills ── */
@@ -31,10 +37,10 @@
   opacity: 0.4;
 }
 
-.alert-summary-pill.overdue  { background: #2d1414; color: #E07060;  border-color: #5a2020; }
-.alert-summary-pill.soon     { background: #2d1e10; color: #e0a060;  border-color: #5a3a10; }
-.alert-summary-pill.inWindow { background: #142d1c; color: #6B9E78;  border-color: #1e4a2a; }
-.alert-summary-pill.notReady { background: #14202d; color: #7aade0;  border-color: #1e3a5a; }
+.alert-summary-pill.overdue  { background: var(--drink-overdue-bg); color: var(--drink-overdue-text);  border-color: var(--drink-overdue-border); }
+.alert-summary-pill.soon     { background: var(--drink-soon-bg); color: var(--drink-soon-text);  border-color: var(--drink-soon-border); }
+.alert-summary-pill.inWindow { background: var(--drink-inwindow-bg); color: var(--drink-inwindow-text);  border-color: var(--drink-inwindow-border); }
+.alert-summary-pill.notReady { background: var(--drink-notready-bg); color: var(--drink-notready-text);  border-color: var(--drink-notready-border); }
 
 .pill-count {
   font-size: 1.1rem;
@@ -68,11 +74,11 @@
   opacity: 0.7;
 }
 
-.alert-section.overdue  .alert-section-header { background: #2d1414; color: #E07060; border-color: #e74c3c; }
-.alert-section.soon     .alert-section-header { background: #2d1e10; color: #e0a060; border-color: #e67e22; }
-.alert-section.inWindow .alert-section-header { background: #142d1c; color: #6B9E78; border-color: #27ae60; }
-.alert-section.notReady .alert-section-header { background: #14202d; color: #7aade0; border-color: #3498db; }
-.alert-section.noDates  .alert-section-header { background: #1a1a1a; color: #9A9484; border-color: #3a3a3a; }
+.alert-section.overdue  .alert-section-header { background: var(--drink-overdue-bg); color: var(--drink-overdue-text); border-color: var(--drink-overdue-border); }
+.alert-section.soon     .alert-section-header { background: var(--drink-soon-bg); color: var(--drink-soon-text); border-color: var(--drink-soon-border); }
+.alert-section.inWindow .alert-section-header { background: var(--drink-inwindow-bg); color: var(--drink-inwindow-text); border-color: var(--drink-inwindow-border); }
+.alert-section.notReady .alert-section-header { background: var(--drink-notready-bg); color: var(--drink-notready-text); border-color: var(--drink-notready-border); }
+.alert-section.noDates  .alert-section-header { background: var(--color-surface); color: var(--color-text-muted); border-color: var(--color-border); }
 
 /* ── Bottle cards ── */
 .alert-bottles {
@@ -84,19 +90,19 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background: #1c1c1c;
-  border: 1px solid #2a2a2a;
-  border-radius: 8px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
   padding: 1rem 1.25rem;
   gap: 1rem;
   flex-wrap: wrap;
 }
 
-.alert-bottle-card.overdue  { border-left: 4px solid #e74c3c; }
-.alert-bottle-card.soon     { border-left: 4px solid #e67e22; }
-.alert-bottle-card.inWindow { border-left: 4px solid #27ae60; }
-.alert-bottle-card.notReady { border-left: 4px solid #3498db; }
-.alert-bottle-card.noDates  { border-left: 4px solid #3a3a3a; }
+.alert-bottle-card.overdue  { border-left: 4px solid var(--drink-overdue-border); }
+.alert-bottle-card.soon     { border-left: 4px solid var(--drink-soon-border); }
+.alert-bottle-card.inWindow { border-left: 4px solid var(--drink-inwindow-border); }
+.alert-bottle-card.notReady { border-left: 4px solid var(--drink-notready-border); }
+.alert-bottle-card.noDates  { border-left: 4px solid var(--color-border); }
 
 .alert-bottle-main {
   display: flex;
@@ -115,19 +121,19 @@
 .alert-bottle-info h3 {
   margin: 0 0 0.15rem 0;
   font-size: 0.95rem;
-  color: #E8DFD0;
+  color: var(--color-text);
 }
 
 .alert-producer {
   margin: 0;
   font-size: 0.8rem;
-  color: #9A9484;
+  color: var(--color-text-muted);
 }
 
 .alert-vintage {
   margin: 0;
   font-size: 0.8rem;
-  color: #c8c0b4;
+  color: var(--color-text-secondary);
 }
 
 .alert-bottle-window {
@@ -136,16 +142,16 @@
   align-items: flex-end;
   gap: 0.4rem;
   font-size: 0.82rem;
-  color: #c8c0b4;
+  color: var(--color-text-secondary);
   text-align: right;
 }
 
 .arrow {
-  color: #4a4a4a;
+  color: var(--color-input-placeholder);
 }
 
 .no-dates-text {
-  color: #4a4a4a;
+  color: var(--color-input-placeholder);
   font-style: italic;
 }
 
@@ -157,10 +163,10 @@
   font-weight: 600;
 }
 
-.drink-status-pill.overdue  { background: #2d1414; color: #E07060; }
-.drink-status-pill.soon     { background: #2d1e10; color: #e0a060; }
-.drink-status-pill.inWindow { background: #142d1c; color: #6B9E78; }
-.drink-status-pill.notReady { background: #14202d; color: #7aade0; }
+.drink-status-pill.overdue  { background: var(--drink-overdue-bg); color: var(--drink-overdue-text); }
+.drink-status-pill.soon     { background: var(--drink-soon-bg); color: var(--drink-soon-text); }
+.drink-status-pill.inWindow { background: var(--drink-inwindow-bg); color: var(--drink-inwindow-text); }
+.drink-status-pill.notReady { background: var(--drink-notready-bg); color: var(--drink-notready-text); }
 
 @media (max-width: 600px) {
   .alert-bottle-card {

@@ -6,7 +6,7 @@
 }
 
 .rating-display--empty {
-  color: var(--color-text-muted, #aaa);
+  color: var(--color-text-muted);
 }
 
 .rating-display__original {
@@ -27,7 +27,7 @@
 }
 
 .rating-display__stars-bg {
-  color: var(--color-star-empty, #ddd);
+  color: var(--color-border);
 }
 
 .rating-display__stars-fill {
@@ -36,7 +36,7 @@
   left: 0;
   overflow: hidden;
   white-space: nowrap;
-  color: var(--color-star-filled, #f5a623);
+  color: var(--color-accent);
 }
 
 .rating-display__value {
@@ -48,7 +48,7 @@
   display: flex;
   gap: 8px;
   font-size: 0.78rem;
-  color: var(--color-text-muted, #888);
+  color: var(--color-text-muted);
 }
 
 .rating-display__all-scales span {

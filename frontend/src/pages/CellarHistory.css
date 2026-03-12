@@ -3,9 +3,15 @@
   margin: 0 auto;
 }
 
-.page-subtitle {
-  color: #9A9484;
-  margin: 0.25rem 0 0 0;
+.history-header {
+  margin-bottom: 0.25rem;
+}
+
+.history-header h1 {
+  margin: 0.25rem 0 0;
+  font-size: 1.5rem;
+  color: var(--color-text);
+  font-family: var(--font-heading);
 }
 
 /* ── Summary pills ── */
@@ -30,9 +36,9 @@
 .history-summary-pill.empty { opacity: 0.35; }
 
 .history-summary-pill.drank  { background: #2a142d; color: #c07ad0; border-color: #5a2060; }
-.history-summary-pill.gifted { background: #2d1e10; color: #e0a060; border-color: #5a3a10; }
-.history-summary-pill.sold   { background: #142d1c; color: #6B9E78; border-color: #1e4a2a; }
-.history-summary-pill.other  { background: #1a1a1a; color: #9A9484; border-color: #3a3a3a; }
+.history-summary-pill.gifted { background: var(--color-warning-bg); color: var(--color-warning); border-color: var(--color-warning-border); }
+.history-summary-pill.sold   { background: var(--color-success-bg); color: var(--color-success); border-color: var(--color-success-border); }
+.history-summary-pill.other  { background: var(--color-surface); color: var(--color-text-muted); border-color: var(--color-border); }
 
 .pill-count {
   font-size: 1.1rem;
@@ -66,9 +72,9 @@
 }
 
 .history-section.drank  .history-section-header { background: #2a142d; color: #c07ad0; border-color: #8e44ad; }
-.history-section.gifted .history-section-header { background: #2d1e10; color: #e0a060; border-color: #e67e22; }
-.history-section.sold   .history-section-header { background: #142d1c; color: #6B9E78; border-color: #27ae60; }
-.history-section.other  .history-section-header { background: #1a1a1a; color: #9A9484; border-color: #3a3a3a; }
+.history-section.gifted .history-section-header { background: var(--color-warning-bg); color: var(--color-warning); border-color: #e67e22; }
+.history-section.sold   .history-section-header { background: var(--color-success-bg); color: var(--color-success); border-color: #27ae60; }
+.history-section.other  .history-section-header { background: var(--color-surface); color: var(--color-text-muted); border-color: var(--color-border); }
 
 /* ── Bottle cards ── */
 .history-bottles {
@@ -77,9 +83,9 @@
 }
 
 .history-bottle-card {
-  background: #1c1c1c;
-  border: 1px solid #2a2a2a;
-  border-radius: 8px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
   padding: 1rem 1.25rem;
   border-left: 4px solid transparent;
 }
@@ -87,7 +93,7 @@
 .history-bottle-card.drank  { border-left-color: #8e44ad; }
 .history-bottle-card.gifted { border-left-color: #e67e22; }
 .history-bottle-card.sold   { border-left-color: #27ae60; }
-.history-bottle-card.other  { border-left-color: #3a3a3a; }
+.history-bottle-card.other  { border-left-color: var(--color-border); }
 
 .history-bottle-main {
   display: flex;
@@ -107,20 +113,20 @@
 .history-bottle-info h3 {
   margin: 0 0 0.15rem 0;
   font-size: 0.95rem;
-  color: #E8DFD0;
+  color: var(--color-text);
 }
 
 .history-producer {
   margin: 0 0 0.2rem 0;
   font-size: 0.8rem;
-  color: #9A9484;
+  color: var(--color-text-muted);
 }
 
 .history-meta {
   display: flex;
   gap: 0.5rem;
   font-size: 0.8rem;
-  color: #c8c0b4;
+  color: var(--color-text-secondary);
   flex-wrap: wrap;
 }
 
@@ -131,20 +137,20 @@
 
 .history-rating {
   font-size: 0.85rem;
-  color: #c8c0b4;
+  color: var(--color-text-secondary);
   margin-bottom: 0.25rem;
 }
 
 .rating-label {
   margin-left: 0.4rem;
-  color: #9A9484;
+  color: var(--color-text-muted);
   font-size: 0.78rem;
 }
 
 .history-note {
   margin: 0;
   font-size: 0.85rem;
-  color: #c8c0b4;
+  color: var(--color-text-secondary);
   font-style: italic;
 }
 

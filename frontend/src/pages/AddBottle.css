@@ -3,6 +3,18 @@
   margin: 0 auto;
 }
 
+/* ── Header ── */
+.add-bottle-header {
+  margin-bottom: 0.5rem;
+}
+
+.add-bottle-header h1 {
+  margin: 0.25rem 0 0;
+  font-size: 1.5rem;
+  color: var(--color-text);
+  font-family: var(--font-heading);
+}
+
 /* ── Steps indicator ── */
 .steps-indicator {
   display: flex;
@@ -27,23 +39,23 @@
   width: 40px;
   height: 40px;
   border-radius: 50%;
-  background: #2a2a2a;
+  background: var(--color-border);
   display: flex;
   align-items: center;
   justify-content: center;
   font-weight: bold;
-  color: #9A9484;
+  color: var(--color-text-muted);
 }
 
 .step.active .step-number {
-  background: #7B9E88;
-  color: #0d0d0d;
+  background: var(--color-primary);
+  color: var(--color-bg);
 }
 
 .step-divider {
   width: 80px;
   height: 2px;
-  background: #2a2a2a;
+  background: var(--color-border);
   margin: 0 1rem;
 }
 
@@ -63,8 +75,8 @@
   max-width: 420px;
   text-align: center;
   padding: 2.5rem 2rem;
-  background: #1a1a1a;
-  border: 1px solid #2a2a2a;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
   border-radius: 12px;
   display: flex;
   flex-direction: column;
@@ -75,18 +87,18 @@
 .camera-prompt-icon {
   width: 56px;
   height: 56px;
-  color: #7B9E88;
+  color: var(--color-primary);
   opacity: 0.85;
 }
 
 .camera-prompt-card h2 {
   margin: 0;
   font-size: 1.2rem;
-  color: #E8DFD0;
+  color: var(--color-text);
 }
 
 .camera-prompt-hint {
-  color: #999;
+  color: var(--color-text-muted);
   font-size: 0.9rem;
   line-height: 1.5;
   margin: 0;
@@ -95,7 +107,7 @@
 .wine-select-manual-link {
   background: none;
   border: none;
-  color: #888;
+  color: var(--color-text-muted);
   font-size: 0.85rem;
   cursor: pointer;
   padding: 0.25rem;
@@ -103,7 +115,7 @@
   text-underline-offset: 2px;
 }
 
-.wine-select-manual-link:hover { color: #b0b0b0; }
+.wine-select-manual-link:hover { color: var(--color-text-secondary); }
 
 /* ── Manual text search ──────────────────────────────────────────────────── */
 
@@ -120,18 +132,18 @@
 .btn-link-muted {
   background: none;
   border: none;
-  color: #888;
+  color: var(--color-text-muted);
   font-size: 0.8rem;
   cursor: pointer;
   padding: 0;
   white-space: nowrap;
 }
 
-.btn-link-muted:hover { color: #b0b0b0; }
+.btn-link-muted:hover { color: var(--color-text-secondary); }
 
 .wine-search-hint {
   font-size: 0.82rem;
-  color: #888;
+  color: var(--color-text-muted);
   margin: 0 0 1rem;
   line-height: 1.4;
 }
@@ -148,7 +160,7 @@
 }
 
 .empty-state-sub {
-  color: #888;
+  color: var(--color-text-muted);
   font-size: 0.85rem;
   margin: 0.25rem 0 0.75rem;
 }
@@ -162,11 +174,11 @@
   width: 100%;
   padding: 0.875rem 1rem;
   font-size: 16px;
-  border: 2px solid #2a2a2a;
-  border-radius: 8px;
+  border: 2px solid var(--color-border);
+  border-radius: var(--radius-md);
   min-height: 48px;
-  background: #1c1c1c;
-  color: #E8DFD0;
+  background: var(--color-surface);
+  color: var(--color-text);
 }
 
 .search-input-with-camera {
@@ -175,7 +187,7 @@
 
 .search-input-large:focus {
   outline: none;
-  border-color: #7B9E88;
+  border-color: var(--color-primary);
 }
 
 /* Camera icon button inside the search field */
@@ -187,7 +199,7 @@
   background: none;
   border: none;
   cursor: pointer;
-  color: #9A9484;
+  color: var(--color-text-muted);
   padding: 6px;
   border-radius: 6px;
   display: flex;
@@ -197,8 +209,8 @@
 }
 
 .search-camera-btn:hover {
-  color: #7B9E88;
-  background: rgba(123, 158, 136, 0.12);
+  color: var(--color-primary);
+  background: var(--color-primary-light);
 }
 
 .search-camera-btn:disabled {
@@ -233,13 +245,13 @@
 
 .help-text {
   margin-top: 0.5rem;
-  color: #9A9484;
+  color: var(--color-text-muted);
   font-size: 0.875rem;
 }
 
 .wines-list-label {
   font-size: 0.85rem;
-  color: #9A9484;
+  color: var(--color-text-muted);
   margin: 0 0 0.75rem 0;
 }
 
@@ -257,12 +269,12 @@
   align-items: center;
   gap: 0.875rem;
   padding: 0.75rem 1rem;
-  border: 1px solid #2a2a2a;
-  border-radius: 8px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
   cursor: pointer;
   transition: all 0.2s;
   min-height: 52px;
-  background: #1c1c1c;
+  background: var(--color-surface);
 }
 
 /* Never let the Select button stretch — regardless of global .btn rules */
@@ -272,8 +284,8 @@
 }
 
 .wine-row:hover {
-  border-color: #7B9E88;
-  background: rgba(123, 158, 136, 0.06);
+  border-color: var(--color-primary);
+  background: rgba(var(--color-primary-rgb), 0.06);
 }
 
 .wine-row-img-wrap {
@@ -285,14 +297,14 @@
   width: 60px;
   height: 84px;
   object-fit: contain;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   display: block;
 }
 
 .wine-row-placeholder {
   width: 60px;
   height: 84px;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   flex-shrink: 0;
 }
 
@@ -303,11 +315,11 @@
   left: 0;
   right: 0;
   background: rgba(0,0,0,0.78);
-  color: #b0a898;
+  color: var(--color-text-secondary);
   font-size: 0.56rem;
   text-align: center;
   padding: 2px 3px;
-  border-radius: 0 0 4px 4px;
+  border-radius: 0 0 var(--radius-sm) var(--radius-sm);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -318,12 +330,12 @@
   display: block;
 }
 
-.wine-row-placeholder.red    { background: #2d1414; }
-.wine-row-placeholder.white  { background: #2d2510; }
-.wine-row-placeholder.rosé   { background: #2d1420; }
-.wine-row-placeholder.sparkling { background: #14202d; }
-.wine-row-placeholder.dessert { background: #1f1430; }
-.wine-row-placeholder.fortified { background: #142d18; }
+.wine-row-placeholder.red    { background: var(--wine-red); }
+.wine-row-placeholder.white  { background: var(--wine-white); }
+.wine-row-placeholder.rosé   { background: var(--wine-rose); }
+.wine-row-placeholder.sparkling { background: var(--wine-sparkling); }
+.wine-row-placeholder.dessert { background: var(--wine-dessert); }
+.wine-row-placeholder.fortified { background: var(--wine-fortified); }
 
 .wine-info {
   flex: 1;
@@ -332,7 +344,7 @@
 
 .wine-info h3 {
   margin: 0 0 0.25rem 0;
-  color: #E8DFD0;
+  color: var(--color-text);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -344,13 +356,13 @@
   align-items: center;
   gap: 0.5rem;
   font-size: 0.82rem;
-  color: #9A9484;
+  color: var(--color-text-muted);
   flex-wrap: wrap;
 }
 
 .wine-grapes {
   font-size: 0.78rem;
-  color: #9A9484;
+  color: var(--color-text-muted);
   margin: 0.2rem 0 0 0;
   font-style: italic;
 }
@@ -363,25 +375,25 @@
   text-transform: uppercase;
 }
 
-.wine-type-pill.red      { background: #2d1414; color: #E07060; }
-.wine-type-pill.white    { background: #2d2510; color: #C8A87E; }
-.wine-type-pill.rosé     { background: #2d1420; color: #d06090; }
-.wine-type-pill.sparkling { background: #14202d; color: #7aade0; }
-.wine-type-pill.dessert  { background: #1f1430; color: #b07ad0; }
-.wine-type-pill.fortified { background: #142d18; color: #6B9E78; }
+.wine-type-pill.red      { background: var(--wine-red); color: var(--color-danger); }
+.wine-type-pill.white    { background: var(--wine-white); color: var(--color-accent); }
+.wine-type-pill.rosé     { background: var(--wine-rose); color: #d06090; }
+.wine-type-pill.sparkling { background: var(--wine-sparkling); color: var(--color-info); }
+.wine-type-pill.dessert  { background: var(--wine-dessert); color: #b07ad0; }
+.wine-type-pill.fortified { background: var(--wine-fortified); color: var(--color-success); }
 
 /* ── Selected wine summary ── */
 .selected-wine {
-  background: rgba(123, 158, 136, 0.1);
-  border: 1px solid rgba(123, 158, 136, 0.3);
+  background: rgba(var(--color-primary-rgb), 0.1);
+  border: 1px solid rgba(var(--color-primary-rgb), 0.3);
   padding: 0.875rem;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   margin-bottom: 1.5rem;
 }
 
 .selected-wine h3 {
   margin: 0 0 0.5rem 0;
-  color: #E8DFD0;
+  color: var(--color-text);
 }
 
 .wine-summary {
@@ -394,15 +406,15 @@
   width: 52px;
   height: 74px;
   object-fit: contain;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   flex-shrink: 0;
 }
 
 /* ── Drink window ── */
 .drink-window-section {
-  background: #141e2d;
-  border: 1px solid #1e3a5a;
-  border-radius: 8px;
+  background: var(--color-info-bg);
+  border: 1px solid var(--color-info-border);
+  border-radius: var(--radius-md);
   padding: 1rem 1.25rem;
 }
 
@@ -417,7 +429,7 @@
   display: block;
   font-size: 0.85rem;
   font-weight: 600;
-  color: #c8c0b4;
+  color: var(--color-text-secondary);
   margin-bottom: 0.35rem;
 }
 
@@ -428,15 +440,15 @@
   margin-top: 0.75rem;
   margin-bottom: 0;
   font-size: 0.8rem;
-  color: #9A9484;
+  color: var(--color-text-muted);
   line-height: 1.4;
 }
 
 /* ── Add to History ── */
 .add-to-history-section {
-  background: #1a1a2e;
-  border: 1px solid #2a2a4a;
-  border-radius: 8px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
   padding: 1rem 1.25rem;
 }
 
@@ -446,20 +458,20 @@
   gap: 0.5rem;
   cursor: pointer;
   font-weight: 600;
-  color: #E8DFD0;
+  color: var(--color-text);
 }
 
 .toggle-label input[type="checkbox"] {
   width: 18px;
   height: 18px;
-  accent-color: #7B9E88;
+  accent-color: var(--color-primary);
   cursor: pointer;
 }
 
 .history-fields {
   margin-top: 1rem;
   padding-top: 1rem;
-  border-top: 1px solid #2a2a4a;
+  border-top: 1px solid var(--color-border);
 }
 
 /* ── Unified scan wine card ── */
@@ -501,12 +513,12 @@
   font-size: 1.25rem;
   font-weight: 700;
   margin: 0 0 0.25rem 0;
-  color: #E8DFD0;
+  color: var(--color-text);
 }
 
 .scan-wine-producer {
   font-size: 0.95rem;
-  color: #9A9484;
+  color: var(--color-text-muted);
   margin: 0 0 0.75rem 0;
 }
 
@@ -523,7 +535,7 @@
   background: none;
   border: none;
   padding: 0;
-  color: #9A9484;
+  color: var(--color-text-muted);
   font-size: 0.82rem;
   cursor: pointer;
   text-decoration: underline;
@@ -531,7 +543,7 @@
 }
 
 .btn-not-right:hover {
-  color: #E8DFD0;
+  color: var(--color-text);
 }
 
 /* Manual form: small label image shown above the form for reference */
@@ -568,9 +580,9 @@
 
 .scan-confidence {
   font-size: 0.82rem;
-  color: #7B9E88;
+  color: var(--color-primary);
   font-weight: 600;
-  background: rgba(123, 158, 136, 0.12);
+  background: var(--color-primary-light);
   padding: 0.15rem 0.5rem;
   border-radius: 10px;
 }
@@ -583,7 +595,7 @@
 
 .scan-vintage-note {
   font-size: 0.85rem;
-  color: #9A9484;
+  color: var(--color-text-muted);
   margin: 0.5rem 0 1rem 0;
   font-style: italic;
 }
@@ -603,13 +615,13 @@
 /* Ghost button style — low-key tertiary action */
 .btn.btn-ghost {
   background: transparent;
-  border: 1px solid #2a2a2a;
-  color: #9A9484;
+  border: 1px solid var(--color-border);
+  color: var(--color-text-muted);
 }
 
 .btn.btn-ghost:hover {
-  border-color: #9A9484;
-  color: #E8DFD0;
+  border-color: var(--color-text-muted);
+  color: var(--color-text);
 }
 
 /* ── Selected wine bar (step 2 compact header) ── */
@@ -618,9 +630,9 @@
   align-items: center;
   gap: 0.875rem;
   padding: 0.75rem 0.875rem;
-  background: rgba(123, 158, 136, 0.08);
-  border: 1px solid rgba(123, 158, 136, 0.22);
-  border-radius: 8px;
+  background: rgba(var(--color-primary-rgb), 0.08);
+  border: 1px solid rgba(var(--color-primary-rgb), 0.22);
+  border-radius: var(--radius-md);
 }
 
 .selected-wine-bar-img {
@@ -640,7 +652,7 @@
 }
 
 .selected-wine-bar-name {
-  color: #E8DFD0;
+  color: var(--color-text);
   font-size: 0.95rem;
   white-space: nowrap;
   overflow: hidden;
@@ -648,11 +660,45 @@
 }
 
 .selected-wine-bar-producer {
-  color: #9A9484;
+  color: var(--color-text-muted);
   font-size: 0.82rem;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* ── Photo section ── */
+.photo-section {
+  margin: 1.5rem 0 0;
+  padding: 1rem 1.25rem;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.photo-section-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.photo-section-icon {
+  color: var(--color-text-muted);
+  flex-shrink: 0;
+}
+
+.photo-section-title {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.photo-section-notice {
+  margin: 0.6rem 0 0;
+  font-size: 0.72rem;
+  color: var(--color-text-muted);
+  line-height: 1.4;
 }
 
 /* ── More details toggle ── */
@@ -660,22 +706,22 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 0.5rem;
+  gap: 0.35rem;
   width: 100%;
   margin: 1.25rem 0 0 0;
-  padding: 0.6rem 1rem;
+  padding: 0.75rem 1rem;
   background: transparent;
-  border: 1px dashed #2a2a2a;
-  border-radius: 8px;
-  color: #9A9484;
-  font-size: 0.875rem;
+  border: none;
+  border-top: 1px solid var(--color-border);
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
+  font-family: var(--font-body);
   cursor: pointer;
-  transition: border-color 0.2s, color 0.2s;
+  transition: color 0.2s;
 }
 
 .details-toggle:hover {
-  border-color: #7B9E88;
-  color: #E8DFD0;
+  color: var(--color-primary);
 }
 
 .details-toggle-chevron {
@@ -690,9 +736,9 @@
 .details-panel {
   margin-top: 1rem;
   padding: 1rem 1.125rem;
-  border: 1px solid #2a2a2a;
-  border-radius: 8px;
-  background: #161616;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg);
 }
 
 .details-panel .drink-window-section {
@@ -704,7 +750,7 @@
   display: block;
   font-size: 0.875rem;
   font-weight: 600;
-  color: #c8c0b4;
+  color: var(--color-text-secondary);
   margin-bottom: 0.35rem;
 }
 
@@ -723,5 +769,33 @@
 
   .drink-window-fields {
     grid-template-columns: 1fr;
+  }
+
+  /* Wine search results — compact for mobile */
+  .wine-row .btn {
+    display: none;
+  }
+
+  .wine-row {
+    gap: 0.65rem;
+    padding: 0.65rem 0.75rem;
+  }
+
+  .wine-row-image {
+    width: 44px;
+    height: 62px;
+  }
+
+  .wine-row-placeholder {
+    width: 44px;
+    height: 62px;
+  }
+
+  .wine-info h3 {
+    white-space: normal;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
   }
 }

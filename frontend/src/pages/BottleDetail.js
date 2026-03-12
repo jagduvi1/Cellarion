@@ -144,11 +144,33 @@ function BottleDetail() {
   const displayProducer = wine?.producer || bottle.pendingWineRequest?.producer;
   const drinkStatus = getDrinkStatus(bottle);
 
+  const canEdit = userRole === 'owner' || userRole === 'editor';
+
   return (
     <div className="bottle-detail-page">
-      <Link to={`/cellars/${cellarId}`} className="back-link">{t('bottleDetail.backToCellar')}</Link>
+      {/* ── Clean header ── */}
+      <div className="bd-page-header">
+        <div className="bd-header-top">
+          <Link to={`/cellars/${cellarId}`} className="back-link">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+            {t('bottleDetail.backToCellar')}
+          </Link>
+          {canEdit && !editing && (
+            <div className="bd-header-actions">
+              <button className="btn btn-secondary btn-small" onClick={() => setEditing(true)}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                <span className="bd-btn-label">{t('bottleDetail.editDetails')}</span>
+              </button>
+              <button className="btn btn-consume btn-small" onClick={() => setConsumeOpen(true)}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M8 2h8l4 10H4L8 2z"/><path d="M12 12v6"/><path d="M8 22h8"/></svg>
+                <span className="bd-btn-label">{t('bottleDetail.removeBottle')}</span>
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
 
-      {/* Wine header */}
+      {/* ── Wine hero card ── */}
       <div className="bd-wine-header card">
         <div className="bd-wine-identity">
           {(pendingImage || wine?.image) ? (
@@ -204,13 +226,27 @@ function BottleDetail() {
           priceHistory={priceHistory}
           rates={rates}
           userCurrency={user?.preferences?.currency || 'USD'}
-          canEdit={userRole === 'owner' || userRole === 'editor'}
+          canEdit={canEdit}
           hasImage={!!(pendingImage || bottle.wineDefinition?.image)}
           onEdit={() => setEditing(true)}
           onSuggestGrapes={() => setSuggestGrapesOpen(true)}
           onRemove={() => setConsumeOpen(true)}
           onReportWine={() => setReportWineOpen(true)}
         />
+      )}
+
+      {/* ── Mobile action bar (sticky bottom) ── */}
+      {canEdit && !editing && (
+        <div className="bd-mobile-actions">
+          <button className="bd-mobile-action-btn bd-mobile-action-edit" onClick={() => setEditing(true)}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+            {t('bottleDetail.editDetails')}
+          </button>
+          <button className="bd-mobile-action-btn bd-mobile-action-consume" onClick={() => setConsumeOpen(true)}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M8 2h8l4 10H4L8 2z"/><path d="M12 12v6"/><path d="M8 22h8"/></svg>
+            {t('bottleDetail.removeBottle')}
+          </button>
+        </div>
       )}
 
       {consumeOpen && (
@@ -473,13 +509,6 @@ function ViewDetails({ bottle, rackInfo, cellarId, drinkStatus, vintageProfile, 
         </div>
       )}
 
-      {canEdit && (
-        <div className="bd-actions">
-          <button className="btn btn-secondary" onClick={onEdit}>{t('bottleDetail.editDetails')}</button>
-          <button className="btn btn-consume" onClick={onRemove}>{t('bottleDetail.removeBottle')}</button>
-        </div>
-      )}
-
       {bottle.wineDefinition && (
         <div className="bd-report-wine">
           <button className="btn-report-wine" onClick={onReportWine}>
@@ -703,7 +732,7 @@ function SuggestGrapesModal({ wine, onClose }) {
           <>
             <h2>{t('bottleDetail.suggestGrapesThankYou', 'Thanks for contributing!')}</h2>
             <p className="modal-wine-name">{wine?.name}</p>
-            <p style={{ fontSize: '0.9rem', color: '#9A9484', marginBottom: '1.25rem' }}>
+            <p style={{ fontSize: '0.9rem', color: 'var(--color-text-muted)', marginBottom: '1.25rem' }}>
               {t('bottleDetail.suggestGrapesConfirm', 'Your suggestion has been submitted for review. Our team will add the verified varieties to the wine registry.')}
             </p>
             <div className="modal-actions">

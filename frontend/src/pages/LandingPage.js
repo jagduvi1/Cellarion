@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import './LandingPage.css';
 
-const LOGO_IMG = process.env.PUBLIC_URL + '/cellarion-logo.jpg';
+const LOGO_IMG = process.env.PUBLIC_URL + '/cellarion-logo.png';
 
 const features = [
   {

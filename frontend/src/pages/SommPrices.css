@@ -3,33 +3,33 @@
 
 .sp-count {
   font-size: 0.85rem;
-  color: #9A9484;
+  color: var(--color-text-muted);
   margin: 0 0 1rem 0;
 }
 
 /* ── Last-price chip shown in the card header ── */
 .sp-last-price {
   font-size: 0.82rem;
-  color: #E8DFD0;
+  color: var(--color-text);
   font-weight: 500;
-  background: #111;
-  border: 1px solid #3a3a3a;
-  border-radius: 6px;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
   padding: 0.2rem 0.6rem;
   white-space: nowrap;
 }
 
 .sp-last-age {
-  color: #9A9484;
+  color: var(--color-text-muted);
   font-weight: 400;
 }
 
 .sp-bottle-count {
   font-size: 0.75rem;
-  color: #9A9484;
+  color: var(--color-text-muted);
   background: rgba(154, 148, 132, 0.1);
-  border: 1px solid #2a2a2a;
-  border-radius: 6px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
   padding: 0.15rem 0.5rem;
   white-space: nowrap;
 }
@@ -41,33 +41,33 @@
   gap: 0.4rem;
   flex-wrap: wrap;
   background: rgba(154, 148, 132, 0.06);
-  border: 1px solid #2a2a2a;
-  border-radius: 6px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
   padding: 0.55rem 0.75rem;
   margin-bottom: 0.9rem;
   font-size: 0.85rem;
 }
 
 .sp-previous-label {
-  color: #9A9484;
+  color: var(--color-text-muted);
   flex-shrink: 0;
 }
 
 .sp-previous strong {
-  color: #E8DFD0;
+  color: var(--color-text);
 }
 
 .sp-previous-age {
-  color: #9A9484;
+  color: var(--color-text-muted);
 }
 
 .sp-previous-source {
-  color: #9A9484;
+  color: var(--color-text-muted);
   font-style: italic;
 }
 
 .sp-previous-converted {
-  color: #9A9484;
+  color: var(--color-text-muted);
   font-size: 0.8rem;
 }
 

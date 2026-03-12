@@ -7,7 +7,7 @@
   display: flex;
   gap: 0.5rem;
   margin: 1.5rem 0;
-  border-bottom: 2px solid #2a2a2a;
+  border-bottom: 2px solid var(--color-border);
 }
 
 .tab {
@@ -18,17 +18,17 @@
   font-size: 1rem;
   border-bottom: 2px solid transparent;
   margin-bottom: -2px;
-  color: #9A9484;
+  color: var(--color-text-muted);
   transition: all 0.2s;
 }
 
 .tab:hover {
-  color: #E8DFD0;
+  color: var(--color-text);
 }
 
 .tab.active {
-  color: #7B9E88;
-  border-bottom-color: #7B9E88;
+  color: var(--color-primary);
+  border-bottom-color: var(--color-primary);
   font-weight: 600;
 }
 
@@ -38,9 +38,9 @@
 }
 
 .taxonomy-item {
-  background: #1c1c1c;
-  border: 1px solid #2a2a2a;
-  border-radius: 6px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
   padding: 1rem 1.5rem;
   display: flex;
   justify-content: space-between;
@@ -48,12 +48,12 @@
 }
 
 .taxonomy-item:hover {
-  border-color: #3a3a3a;
+  border-color: var(--color-border);
 }
 
 .taxonomy-item.editing {
-  border-color: #7B9E88;
-  background: rgba(123, 158, 136, 0.04);
+  border-color: var(--color-primary);
+  background: var(--color-primary-light);
 }
 
 .taxonomy-item-content {
@@ -72,15 +72,15 @@
   margin-left: 0.5rem;
   padding: 0.15rem 0.45rem;
   font-size: 0.7rem;
-  border-radius: 10px;
-  background: #2a2a2a;
-  color: #9A9484;
+  border-radius: var(--radius-md);
+  background: var(--color-border);
+  color: var(--color-text-muted);
   vertical-align: middle;
 }
 
 .taxonomy-badge--prestige {
-  background: rgba(200, 168, 126, 0.15);
-  color: #C8A87E;
+  background: var(--color-accent-light);
+  color: var(--color-accent);
 }
 
 .taxonomy-badge--color {
@@ -98,7 +98,7 @@
 }
 
 .taxonomy-synonyms {
-  color: #9A9484;
+  color: var(--color-text-muted);
   font-size: 0.85em;
 }
 

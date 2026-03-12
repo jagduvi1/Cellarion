@@ -88,7 +88,7 @@ function CellarionLogo({ size = 36, color = 'currentColor', showText = false }) 
           fontSize="30"
           fontWeight="bold"
           letterSpacing="5"
-          fill="#C8A87E"
+          fill="var(--color-accent, #D4A373)"
         >
           CELLARION
         </text>

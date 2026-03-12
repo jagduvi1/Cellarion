@@ -9,23 +9,24 @@
 }
 
 .btn-upload {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 0.5rem;
-  padding: 0.75rem 1.25rem;
-  border: 2px dashed #3498db;
-  background: #f0f8ff;
-  color: #3498db;
-  border-radius: 8px;
+  gap: 0.4rem;
+  padding: 0.5rem 1rem;
+  border: 1.5px solid var(--color-primary);
+  background: transparent;
+  color: var(--color-primary);
+  border-radius: 20px;
   cursor: pointer;
-  font-size: 0.9rem;
+  font-size: 0.85rem;
   font-weight: 600;
+  font-family: var(--font-body);
   transition: all 0.2s;
+  min-height: 40px;
 }
 
 .btn-upload:hover {
-  background: #d6eaf8;
-  border-color: #2980b9;
+  background: var(--color-primary-light);
 }
 
 .btn-upload:disabled {
@@ -34,23 +35,18 @@
 }
 
 .btn-upload-secondary {
-  border-color: #bdc3c7;
-  background: #fafafa;
-  color: #555;
+  border-color: var(--color-border);
+  color: var(--color-text-secondary);
 }
 
 .btn-upload-secondary:hover {
-  background: #ecf0f1;
-  border-color: #95a5a6;
-}
-
-.upload-icon {
-  font-size: 1.2rem;
+  background: var(--color-surface-hover);
+  border-color: var(--color-text-muted);
 }
 
 .upload-status {
   margin-top: 0.75rem;
-  color: #3498db;
+  color: var(--color-primary);
   font-size: 0.85rem;
   font-weight: 500;
 }
@@ -58,9 +54,9 @@
 .upload-error {
   margin-top: 0.75rem;
   padding: 0.5rem 0.75rem;
-  background: #ffeef0;
-  color: #c62828;
-  border-radius: 4px;
+  background: var(--color-danger-bg);
+  color: var(--color-danger);
+  border-radius: var(--radius-sm);
   font-size: 0.85rem;
 }
 
@@ -75,21 +71,21 @@
 
 .preview-card {
   width: 180px;
-  border: 2px solid #ddd;
-  border-radius: 8px;
+  border: 2px solid var(--color-border);
+  border-radius: var(--radius-md);
   overflow: hidden;
-  background: white;
+  background: var(--color-surface);
 }
 
 .preview-card:has(.preview-badge-ok) {
-  border-color: #27ae60;
+  border-color: var(--color-success);
 }
 
 .preview-image-wrap {
   position: relative;
   width: 100%;
   height: 220px;
-  background: #f5f5f5;
+  background: var(--color-surface-hover);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -147,7 +143,7 @@
   border: 1px solid white;
   background: transparent;
   color: white;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   cursor: pointer;
   font-size: 0.75rem;
 }
@@ -162,35 +158,35 @@
   align-items: center;
   justify-content: space-between;
   padding: 0.4rem 0.5rem;
-  border-top: 1px solid #eee;
+  border-top: 1px solid var(--color-border);
   gap: 0.25rem;
 }
 
 .preview-badge-ok {
   font-size: 0.7rem;
   font-weight: 600;
-  color: #27ae60;
+  color: var(--color-success);
   text-transform: uppercase;
 }
 
 .preview-badge-processing {
   font-size: 0.7rem;
   font-weight: 600;
-  color: #3498db;
+  color: var(--color-primary);
   text-transform: uppercase;
 }
 
 .preview-badge-failed {
   font-size: 0.7rem;
   font-weight: 600;
-  color: #c0392b;
+  color: var(--color-danger);
   text-transform: uppercase;
 }
 
 .btn-remove {
   border: none;
   background: none;
-  color: #e74c3c;
+  color: var(--color-danger);
   cursor: pointer;
   font-size: 0.75rem;
   font-weight: 500;
@@ -199,7 +195,7 @@
 }
 
 .btn-remove:hover {
-  background: #ffeef0;
+  background: var(--color-danger-bg);
 }
 
 /* ===== Camera Modal ===== */
@@ -259,7 +255,7 @@
   max-width: 320px;
   aspect-ratio: 3 / 4;
   border: 2px solid rgba(255, 255, 255, 0.75);
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   box-shadow: 0 0 0 2000px rgba(0, 0, 0, 0.35);
   position: relative;
 }
@@ -271,7 +267,7 @@
   position: absolute;
   width: 22px;
   height: 22px;
-  border-color: #7B9E88;
+  border-color: var(--color-primary);
   border-style: solid;
 }
 
@@ -279,14 +275,14 @@
   top: -2px;
   left: -2px;
   border-width: 3px 0 0 3px;
-  border-radius: 10px 0 0 0;
+  border-radius: var(--radius-md) 0 0 0;
 }
 
 .label-guide-frame::after {
   bottom: -2px;
   right: -2px;
   border-width: 0 3px 3px 0;
-  border-radius: 0 0 10px 0;
+  border-radius: 0 0 var(--radius-md) 0;
 }
 
 .overlay-hint {
@@ -391,11 +387,11 @@
   .camera-container {
     max-width: 500px;
     max-height: 80vh;
-    border-radius: 12px;
+    border-radius: var(--radius-lg);
     overflow: hidden;
   }
 
   .camera-controls {
-    border-radius: 0 0 12px 12px;
+    border-radius: 0 0 var(--radius-lg) var(--radius-lg);
   }
 }

@@ -185,9 +185,12 @@ function CellarRacks() {
 
   return (
     <div className="cellar-racks-page">
-      <div className="page-header">
+      <div className="cellarracks-header">
         <div>
-          <Link to={`/cellars/${id}`} className="back-link">{t('racks.backToCellar')}</Link>
+          <Link to={`/cellars/${id}`} className="back-link">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+            {t('racks.backToCellar')}
+          </Link>
           <h1 style={cellar?.userColor ? { borderLeft: `4px solid ${cellar.userColor}`, paddingLeft: '0.75rem' } : {}}>
             {cellar?.name}
           </h1>
@@ -339,7 +342,7 @@ function RackGrid({ rack, canEdit, activeRackId, activePosition, highlightPos, o
 
       <div
         className="rack-grid"
-        style={{ gridTemplateColumns: `repeat(${rack.cols}, 44px)` }}
+        style={{ '--rack-cols': rack.cols }}
       >
         {Array.from({ length: total }, (_, i) => {
           const pos  = i + 1;

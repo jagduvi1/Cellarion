@@ -16,7 +16,7 @@
 
 .audit-total {
   font-size: 0.85rem;
-  color: #9A9484;
+  color: var(--color-text-muted);
 }
 
 /* ── Filters ── */
@@ -35,15 +35,15 @@
 }
 
 .date-sep {
-  color: #9A9484;
+  color: var(--color-text-muted);
   font-size: 0.85rem;
 }
 
 /* ── Table ── */
 .audit-table-wrap {
   overflow-x: auto;
-  border: 1px solid #2a2a2a;
-  border-radius: 8px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
 }
 
 .audit-table {
@@ -53,8 +53,8 @@
 }
 
 .audit-table th {
-  background: #141414;
-  color: #9A9484;
+  background: var(--color-bg);
+  color: var(--color-text-muted);
   font-weight: 600;
   font-size: 0.72rem;
   text-transform: uppercase;
@@ -62,12 +62,12 @@
   padding: 0.6rem 0.85rem;
   text-align: left;
   white-space: nowrap;
-  border-bottom: 1px solid #2a2a2a;
+  border-bottom: 1px solid var(--color-border);
 }
 
 .audit-table td {
   padding: 0.55rem 0.85rem;
-  border-bottom: 1px solid #1e1e1e;
+  border-bottom: 1px solid var(--color-border-light);
   vertical-align: top;
 }
 
@@ -82,7 +82,7 @@
 .audit-row--admin   { background: rgba(123, 158, 136, 0.04); }
 .audit-row--system  { background: rgba(180, 100,  60, 0.03); }
 
-.audit-row:hover td { background: rgba(255,255,255,0.03); }
+.audit-row:hover td { background: var(--color-surface-hover); }
 
 /* ── Action badge ── */
 .audit-action-badge {
@@ -90,45 +90,45 @@
   font-size: 0.7rem;
   font-weight: 600;
   padding: 0.15rem 0.5rem;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   white-space: nowrap;
   text-transform: lowercase;
 }
 
-.audit-action-badge--auth   { background: rgba(154,148,132,0.15); color: #9A9484; }
-.audit-action-badge--bottle { background: rgba(107,158,120,0.15); color: #6B9E78; }
-.audit-action-badge--cellar { background: rgba(200,168,126,0.15); color: #C8A87E; }
-.audit-action-badge--admin  { background: rgba(123,158,136,0.15); color: #7B9E88; }
+.audit-action-badge--auth   { background: rgba(154,148,132,0.15); color: var(--color-text-muted); }
+.audit-action-badge--bottle { background: rgba(107,158,120,0.15); color: var(--color-success); }
+.audit-action-badge--cellar { background: rgba(200,168,126,0.15); color: var(--color-accent); }
+.audit-action-badge--admin  { background: rgba(123,158,136,0.15); color: var(--color-primary); }
 .audit-action-badge--system { background: rgba(180,100,60,0.15);  color: #C47840; }
-.audit-action-badge--other  { background: rgba(224,112,96,0.15);  color: #E07060; }
+.audit-action-badge--other  { background: rgba(224,112,96,0.15);  color: var(--color-danger); }
 
 /* ── Cells ── */
 .audit-ts {
   white-space: nowrap;
-  color: #9A9484;
+  color: var(--color-text-muted);
   font-variant-numeric: tabular-nums;
 }
 
 .audit-user strong {
-  color: #E8DFD0;
+  color: var(--color-text);
 }
 
 .audit-email {
   font-size: 0.72rem;
-  color: #9A9484;
+  color: var(--color-text-muted);
 }
 
 .audit-anon {
-  color: #9A9484;
+  color: var(--color-text-muted);
   font-style: italic;
   font-size: 0.8rem;
 }
 
 .audit-resource-type {
   font-size: 0.75rem;
-  color: #9A9484;
-  background: #1a1a1a;
-  border: 1px solid #2a2a2a;
+  color: var(--color-text-muted);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
   border-radius: 3px;
   padding: 0.1rem 0.4rem;
 }
@@ -136,7 +136,7 @@
 .audit-detail pre {
   margin: 0;
   font-size: 0.72rem;
-  color: #9A9484;
+  color: var(--color-text-muted);
   max-width: 260px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -146,7 +146,7 @@
 
 .audit-ip {
   font-size: 0.75rem;
-  color: #9A9484;
+  color: var(--color-text-muted);
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
@@ -162,7 +162,7 @@
 
 .audit-page-info {
   font-size: 0.85rem;
-  color: #9A9484;
+  color: var(--color-text-muted);
 }
 
 /* ── Mobile ── */

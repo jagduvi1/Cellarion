@@ -10,7 +10,7 @@
 }
 
 .image-count {
-  color: #9A9484;
+  color: var(--color-text-muted);
   font-size: 0.9rem;
 }
 
@@ -26,9 +26,9 @@
 .image-item {
   display: flex;
   gap: 1rem;
-  background: #1c1c1c;
-  border: 1px solid #2a2a2a;
-  border-radius: 8px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
   padding: 0.75rem;
   cursor: pointer;
   transition: all 0.2s;
@@ -36,17 +36,17 @@
 
 .image-item:hover,
 .image-item.active {
-  border-color: #7B9E88;
-  background: rgba(123, 158, 136, 0.06);
+  border-color: var(--color-primary);
+  background: var(--color-primary-light);
 }
 
 .image-item-thumb {
   width: 60px;
   height: 60px;
   flex-shrink: 0;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   overflow: hidden;
-  background: #252525;
+  background: var(--color-input-bg);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -76,12 +76,12 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  color: #E8DFD0;
+  color: var(--color-text);
 }
 
 .image-item-meta {
   font-size: 0.8rem;
-  color: #9A9484;
+  color: var(--color-text-muted);
   display: flex;
   justify-content: space-between;
 }
@@ -96,11 +96,11 @@
   text-transform: capitalize;
 }
 
-.status-uploaded   { background: #2d2510; color: #C8A87E; }
-.status-processing { background: #14202d; color: #7aade0; }
+.status-uploaded   { background: var(--color-warning-bg); color: var(--color-accent); }
+.status-processing { background: var(--color-info-bg); color: var(--color-info); }
 .status-processed  { background: #142d2a; color: #5ae0d8; }
-.status-approved   { background: #142d1c; color: #6B9E78; }
-.status-rejected   { background: #2d1414; color: #E07060; }
+.status-approved   { background: var(--color-success-bg); color: var(--color-success); }
+.status-rejected   { background: var(--color-danger-bg); color: var(--color-danger); }
 
 /* Detail panel */
 .image-detail {
@@ -116,7 +116,7 @@
 
 .image-compare-item h3 {
   font-size: 0.85rem;
-  color: #9A9484;
+  color: var(--color-text-muted);
   margin-bottom: 0.5rem;
 }
 
@@ -124,15 +124,15 @@
   width: 100%;
   max-height: 480px;
   object-fit: contain;
-  border: 1px solid #2a2a2a;
-  border-radius: 4px;
-  background: #1a1a1a;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
 }
 
 .processed-image-container {
   background: repeating-conic-gradient(#1e1e1e 0% 25%, #2a2a2a 0% 50%) 50% / 16px 16px;
-  border-radius: 4px;
-  border: 1px solid #2a2a2a;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
 }
 
 .processed-image-container .detail-image {
@@ -150,7 +150,7 @@
 }
 
 .assigned-badge {
-  color: #6B9E78;
+  color: var(--color-success);
   font-weight: 600;
 }
 
@@ -167,7 +167,7 @@
 
 .help-text {
   font-size: 0.85rem;
-  color: #9A9484;
+  color: var(--color-text-muted);
   margin-bottom: 0.75rem;
 }
 
@@ -183,17 +183,17 @@
 
 .pagination button {
   padding: 0.5rem 1rem;
-  border: 1px solid #2a2a2a;
-  background: #1c1c1c;
-  color: #c8c0b4;
-  border-radius: 4px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text-secondary);
+  border-radius: var(--radius-sm);
   cursor: pointer;
   transition: all 0.2s;
 }
 
 .pagination button:hover:not(:disabled) {
-  border-color: #7B9E88;
-  color: #E8DFD0;
+  border-color: var(--color-primary);
+  color: var(--color-text);
 }
 
 .pagination button:disabled {
@@ -203,7 +203,7 @@
 
 .pagination span {
   font-size: 0.85rem;
-  color: #9A9484;
+  color: var(--color-text-muted);
 }
 
 @media (max-width: 1024px) {

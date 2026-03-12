@@ -53,7 +53,7 @@ function VerifyEmail() {
     <div className="login-page">
       <div className="login-card">
         <div className="login-header">
-          <CellarionLogo size={90} color="#7B9E88" showText />
+          <CellarionLogo size={90} color="var(--color-primary)" showText />
           <p>Email Verification</p>
         </div>
 
@@ -70,7 +70,7 @@ function VerifyEmail() {
         {status === 'error' && (
           <>
             <div className="alert alert-error">{errorMessage}</div>
-            <p style={{ color: '#9A9484', fontSize: '0.9rem', marginTop: '1.5rem' }}>
+            <p style={{ color: 'var(--color-text-muted)', fontSize: '0.9rem', marginTop: '1.5rem' }}>
               Enter your email to get a new verification link:
             </p>
             <div className="form-group">

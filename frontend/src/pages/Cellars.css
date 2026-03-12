@@ -3,16 +3,27 @@
   margin: 0 auto;
 }
 
-.page-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 2rem;
+/* ── Header ── */
+.cellars-header {
+  margin-bottom: 1.25rem;
 }
 
-.page-header h1 {
+.cellars-header-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.cellars-header-top h1 {
   margin: 0;
-  color: #E8DFD0;
+  color: var(--color-text);
+  font-family: var(--font-heading);
+}
+
+.cellars-subtitle {
+  margin: 0.25rem 0 0;
+  font-size: 0.88rem;
+  color: var(--color-text-muted);
 }
 
 /* Plan limit notice */
@@ -20,9 +31,9 @@
   display: flex;
   gap: 0.85rem;
   align-items: flex-start;
-  background: rgba(200, 168, 126, 0.08);
-  border: 1px solid rgba(200, 168, 126, 0.25);
-  border-radius: 8px;
+  background: var(--color-accent-light);
+  border: 1px solid rgba(var(--color-accent-rgb), 0.25);
+  border-radius: var(--radius-md);
   padding: 0.9rem 1rem;
   margin-bottom: 1.25rem;
 }
@@ -34,7 +45,7 @@
 }
 
 .plan-limit-notice strong {
-  color: #C8A87E;
+  color: var(--color-accent);
   display: block;
   margin-bottom: 0.2rem;
 }
@@ -42,30 +53,33 @@
 .plan-limit-notice p {
   margin: 0;
   font-size: 0.88rem;
-  color: #9A9484;
+  color: var(--color-text-secondary);
   line-height: 1.5;
 }
 
+/* ── Cellar grid ── */
 .cellars-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 1.5rem;
+  gap: 1rem;
 }
 
 .cellar-card {
-  background: #1c1c1c;
-  border: 1px solid #2a2a2a;
-  border-radius: 8px;
-  padding: 1.5rem;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 1.25rem 1.5rem;
   text-decoration: none;
   color: inherit;
-  transition: all 0.2s;
+  transition: all var(--transition-base);
   cursor: pointer;
+  box-shadow: var(--shadow-card);
+  min-height: 44px;
 }
 
 .cellar-card:hover {
-  border-color: #7B9E88;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  border-color: var(--color-primary);
+  box-shadow: var(--shadow-card-hover);
   transform: translateY(-2px);
 }
 
@@ -78,7 +92,7 @@
 
 .cellar-card-header h3 {
   margin: 0;
-  color: #E8DFD0;
+  color: var(--color-text);
   flex: 1;
 }
 
@@ -94,24 +108,19 @@
 }
 
 .role-badge--editor {
-  background: rgba(200, 168, 126, 0.15);
-  color: #C8A87E;
-  border: 1px solid rgba(200, 168, 126, 0.3);
+  background: var(--color-accent-light);
+  color: var(--color-accent);
+  border: 1px solid rgba(var(--color-accent-rgb), 0.3);
 }
 
 .role-badge--viewer {
-  background: rgba(154, 148, 132, 0.12);
-  color: #9A9484;
-  border: 1px solid rgba(154, 148, 132, 0.25);
-}
-
-.cellar-card h3 {
-  margin: 0 0 0.5rem 0;
-  color: #E8DFD0;
+  background: var(--badge-plan-free-bg);
+  color: var(--color-text-muted);
+  border: 1px solid var(--color-border);
 }
 
 .cellar-card .description {
-  color: #9A9484;
+  color: var(--color-text-secondary);
   margin: 0.5rem 0;
   font-size: 0.9rem;
 }
@@ -119,31 +128,63 @@
 .cellar-footer {
   margin-top: 1rem;
   padding-top: 1rem;
-  border-top: 1px solid #2a2a2a;
+  border-top: 1px solid var(--color-border);
 }
 
 .view-link {
-  color: #7B9E88;
+  color: var(--color-primary);
   font-weight: 500;
 }
 
 .create-form {
-  margin-bottom: 2rem;
+  margin-bottom: 1.5rem;
 }
 
 .empty-state {
   text-align: center;
   padding: 3rem;
-  background: #1c1c1c;
-  border-radius: 8px;
-  color: #9A9484;
+  background: var(--color-surface);
+  border-radius: var(--radius-md);
+  color: var(--color-text-muted);
 }
 
+/* ── FAB (mobile only) ── */
+.cellars-fab {
+  display: none;
+  position: fixed;
+  bottom: calc(var(--bottom-nav-height, 64px) + 16px + env(safe-area-inset-bottom, 0px));
+  right: 16px;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: var(--color-btn-primary-bg);
+  color: var(--color-btn-primary-text);
+  border: none;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+  cursor: pointer;
+  transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.cellars-fab:hover {
+  transform: scale(1.08);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+}
+
+.cellars-fab:active {
+  transform: scale(0.95);
+}
+
+/* ── Mobile ── */
 @media (max-width: 768px) {
-  .page-header {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 1rem;
+  .cellars-desktop-create {
+    display: none;
+  }
+
+  .cellars-fab {
+    display: flex;
   }
 
   .cellars-grid {

@@ -3,20 +3,20 @@
    Desktop-only (min-width enforced via JS redirect)
    ========================================================= */
 
-:root {
-  --sa-bg: #0d0d0d;
-  --sa-surface: #141414;
-  --sa-surface2: #1c1c1c;
-  --sa-border: #2a2a2a;
+.sa-root {
+  --sa-bg: var(--color-bg);
+  --sa-surface: var(--color-surface);
+  --sa-surface2: var(--color-input-bg);
+  --sa-border: var(--color-border);
   --sa-accent: #4ade80;
   --sa-accent2: #60a5fa;
   --sa-warn: #facc15;
-  --sa-danger: #f87171;
-  --sa-muted: #555;
-  --sa-text: #e2e2e2;
-  --sa-text-dim: #888;
+  --sa-danger: var(--color-danger);
+  --sa-muted: var(--color-text-muted);
+  --sa-text: var(--color-text);
+  --sa-text-dim: var(--color-text-secondary);
   --sa-font: 'Courier New', Courier, monospace;
-  --sa-radius: 4px;
+  --sa-radius: var(--radius-sm);
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -196,7 +196,7 @@
   justify-content: space-between;
   align-items: center;
   padding: 3px 0;
-  border-bottom: 1px solid #1e1e1e;
+  border-bottom: 1px solid var(--color-border-light);
 }
 .sa-kv-row:last-child { border-bottom: none; }
 
@@ -292,7 +292,7 @@
 
 .sa-table td {
   padding: 6px 10px;
-  border-bottom: 1px solid #1a1a1a;
+  border-bottom: 1px solid var(--color-border-light);
   vertical-align: middle;
   white-space: nowrap;
 }
@@ -314,10 +314,10 @@
 }
 .sa-badge.admin { background: #3b1f1f; color: var(--sa-danger); }
 .sa-badge.somm  { background: #1f2b3b; color: var(--sa-accent2); }
-.sa-badge.user  { background: #1e1e1e; color: var(--sa-text-dim); }
+.sa-badge.user  { background: var(--color-border-light); color: var(--sa-text-dim); }
 .sa-badge.premium { background: #2b2410; color: var(--sa-warn); }
 .sa-badge.basic   { background: #1a241a; color: #86efac; }
-.sa-badge.free    { background: #1e1e1e; color: var(--sa-text-dim); }
+.sa-badge.free    { background: var(--color-border-light); color: var(--sa-text-dim); }
 .sa-badge.ok      { background: #0d2b16; color: var(--sa-accent); }
 .sa-badge.error   { background: #2b0d0d; color: var(--sa-danger); }
 
@@ -398,7 +398,7 @@
 /* ── Error ── */
 .sa-error {
   padding: 16px;
-  background: #1e0a0a;
+  background: var(--color-danger-bg);
   border: 1px solid var(--sa-danger);
   border-radius: var(--sa-radius);
   color: var(--sa-danger);

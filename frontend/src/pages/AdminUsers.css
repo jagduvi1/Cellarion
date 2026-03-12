@@ -16,7 +16,7 @@
 
 .users-total {
   font-size: 0.85rem;
-  color: #9A9484;
+  color: var(--color-text-muted);
 }
 
 /* ── Filters ── */
@@ -37,8 +37,8 @@
 /* ── Table ── */
 .users-table-wrap {
   overflow-x: auto;
-  border: 1px solid #2a2a2a;
-  border-radius: 8px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
 }
 
 .users-table {
@@ -48,8 +48,8 @@
 }
 
 .users-table th {
-  background: #141414;
-  color: #9A9484;
+  background: var(--color-bg);
+  color: var(--color-text-muted);
   font-weight: 600;
   font-size: 0.72rem;
   text-transform: uppercase;
@@ -57,12 +57,12 @@
   padding: 0.65rem 0.9rem;
   text-align: left;
   white-space: nowrap;
-  border-bottom: 1px solid #2a2a2a;
+  border-bottom: 1px solid var(--color-border);
 }
 
 .users-table td {
   padding: 0.6rem 0.9rem;
-  border-bottom: 1px solid #1e1e1e;
+  border-bottom: 1px solid var(--color-border-light);
   vertical-align: middle;
 }
 
@@ -71,21 +71,21 @@
 }
 
 .users-row:hover td {
-  background: rgba(255, 255, 255, 0.02);
+  background: var(--color-surface-hover);
 }
 
 .users-username {
   font-weight: 500;
-  color: #E8DFD0;
+  color: var(--color-text);
 }
 
 .users-email {
-  color: #9A9484;
+  color: var(--color-text-muted);
   font-size: 0.8rem;
 }
 
 .users-joined {
-  color: #9A9484;
+  color: var(--color-text-muted);
   font-size: 0.8rem;
   white-space: nowrap;
 }
@@ -100,10 +100,10 @@
 .users-inline-select {
   background: transparent;
   border: 1px solid transparent;
-  color: #9A9484;
+  color: var(--color-text-muted);
   font-size: 0.75rem;
   padding: 0.15rem 0.3rem;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   cursor: pointer;
   appearance: auto;
   transition: border-color 0.15s;
@@ -111,9 +111,9 @@
 
 .users-inline-select:hover,
 .users-inline-select:focus {
-  border-color: #2a2a2a;
-  background: #1a1a1a;
-  color: #E8DFD0;
+  border-color: var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text);
   outline: none;
 }
 
@@ -128,21 +128,21 @@
   font-size: 0.68rem;
   font-weight: 600;
   padding: 0.15rem 0.5rem;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   white-space: nowrap;
   text-transform: capitalize;
   letter-spacing: 0.03em;
 }
 
 /* Plan badges */
-.users-badge--free    { background: rgba(154,148,132,0.15); color: #9A9484; }
-.users-badge--basic   { background: rgba(200,168,126,0.15); color: #C8A87E; }
-.users-badge--premium { background: rgba(123,158,136,0.18); color: #7B9E88; }
+.users-badge--free    { background: var(--badge-plan-free-bg); color: var(--badge-plan-free-text); }
+.users-badge--basic   { background: var(--badge-plan-basic-bg); color: var(--badge-plan-basic-text); }
+.users-badge--premium { background: var(--badge-plan-premium-bg); color: var(--badge-plan-premium-text); }
 
 /* Role badges */
-.users-badge--user  { background: rgba(154,148,132,0.12); color: #9A9484; }
-.users-badge--somm  { background: rgba(200,168,126,0.15); color: #C8A87E; }
-.users-badge--admin { background: rgba(224,112,96,0.15);  color: #E07060; }
+.users-badge--user  { background: rgba(154,148,132,0.12); color: var(--color-text-muted); }
+.users-badge--somm  { background: var(--badge-somm-bg); color: var(--badge-somm-text); }
+.users-badge--admin { background: rgba(224,112,96,0.15);  color: var(--color-danger); }
 
 /* ── Role checkboxes ── */
 .users-roles-cell {
@@ -168,13 +168,13 @@
   align-items: center;
   gap: 0.25rem;
   font-size: 0.75rem;
-  color: #9A9484;
+  color: var(--color-text-muted);
   cursor: pointer;
   user-select: none;
 }
 
 .users-role-checkbox-label input[type="checkbox"] {
-  accent-color: #7B9E88;
+  accent-color: var(--color-primary);
   cursor: pointer;
 }
 
@@ -196,14 +196,14 @@
   gap: 0.4rem;
   flex-wrap: wrap;
   padding: 0.35rem 0.5rem;
-  background: #141414;
-  border: 1px solid #2a2a2a;
-  border-radius: 6px;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
 }
 
 .users-duration-label {
   font-size: 0.72rem;
-  color: #9A9484;
+  color: var(--color-text-muted);
   white-space: nowrap;
 }
 
@@ -215,16 +215,16 @@
 /* ── Expiry display ── */
 .users-expiry {
   font-size: 0.78rem;
-  color: #9A9484;
+  color: var(--color-text-muted);
 }
 
 .users-expiry--never {
-  color: #555;
+  color: var(--color-text-muted);
   font-style: italic;
 }
 
 .users-expiry--expired {
-  color: #E07060;
+  color: var(--color-danger);
   font-weight: 600;
 }
 
@@ -234,12 +234,12 @@
 
 .users-trial-badge--available {
   font-size: 0.75rem;
-  color: #7BAF7B;
+  color: var(--color-success);
   font-weight: 500;
 }
 
 .users-expiry--soon {
-  color: #C8A87E;
+  color: var(--color-accent);
 }
 
 /* ── Pagination ── */
@@ -253,7 +253,7 @@
 
 .users-page-info {
   font-size: 0.85rem;
-  color: #9A9484;
+  color: var(--color-text-muted);
 }
 
 /* ── Mobile ── */

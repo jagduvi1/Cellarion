@@ -114,12 +114,16 @@ function WineRequests() {
 
   return (
     <div className="wine-requests-page">
-      <div className="page-header">
+      <div className="winerequest-header">
         <h1>{t('wineRequests.title')}</h1>
-        <button onClick={() => setShowForm(!showForm)} className="btn btn-primary">
+        <button onClick={() => setShowForm(!showForm)} className="btn btn-primary winerequest-desktop-create">
           {showForm ? t('common.cancel') : t('wineRequests.newRequest')}
         </button>
       </div>
+
+      <button className="fab winerequest-fab" onClick={() => setShowForm(!showForm)} aria-label="New Request">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      </button>
 
       {showForm && (
         <div className="card">

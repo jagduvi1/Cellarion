@@ -1,6 +1,81 @@
 .bottle-detail-page {
   max-width: 700px;
   margin: 0 auto;
+  padding-bottom: 80px; /* room for mobile action bar */
+}
+
+/* ── Page header ── */
+.bd-page-header {
+  margin-bottom: 0.5rem;
+}
+
+.bd-header-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.bd-header-actions {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.bd-header-actions .btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+/* ── Mobile action bar ── */
+.bd-mobile-actions {
+  display: none;
+  position: fixed;
+  bottom: calc(var(--bottom-nav-height, 64px) + env(safe-area-inset-bottom, 0px));
+  left: 0;
+  right: 0;
+  z-index: 40;
+  background: var(--color-surface);
+  border-top: 1px solid var(--color-border);
+  padding: 0.5rem 1rem;
+  gap: 0.5rem;
+  box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.bd-mobile-action-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 0.65rem 0.75rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.88rem;
+  font-weight: 500;
+  font-family: var(--font-body);
+  border: none;
+  cursor: pointer;
+  min-height: 44px;
+  transition: background var(--transition-fast);
+}
+
+.bd-mobile-action-edit {
+  background: var(--color-surface-raised);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+}
+
+.bd-mobile-action-edit:hover {
+  background: var(--color-primary-light);
+}
+
+.bd-mobile-action-consume {
+  background: #6a3d8a;
+  color: white;
+}
+
+.bd-mobile-action-consume:hover {
+  background: #7d3c98;
 }
 
 /* ── Wine header card ── */
@@ -27,7 +102,7 @@
   width: 100px;
   height: 145px;
   object-fit: contain;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   display: block;
 }
 
@@ -38,11 +113,11 @@
   left: 0;
   right: 0;
   background: rgba(0,0,0,0.78);
-  color: #b0a898;
+  color: var(--color-text-secondary);
   font-size: 0.6rem;
   text-align: center;
   padding: 2px 4px;
-  border-radius: 0 0 4px 4px;
+  border-radius: 0 0 var(--radius-sm) var(--radius-sm);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -55,7 +130,7 @@
 
 .bd-pending-badge {
   font-size: 0.65rem;
-  color: #9A9484;
+  color: var(--color-text-muted);
   background: rgba(154, 148, 132, 0.12);
   border: 1px solid rgba(154, 148, 132, 0.25);
   border-radius: 3px;
@@ -66,7 +141,7 @@
 .bd-wine-placeholder {
   width: 100px;
   height: 145px;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   flex-shrink: 0;
 }
 
@@ -87,14 +162,14 @@
   right: 0.6rem;
   background: none;
   border: none;
-  color: #4a4a4a;
+  color: var(--color-text-muted);
   font-size: 1.05rem;
   line-height: 1;
   cursor: pointer;
   padding: 0;
   transition: color 0.15s;
 }
-.bd-contribute__dismiss:hover { color: #9A9484; }
+.bd-contribute__dismiss:hover { color: var(--color-text-muted); }
 
 .bd-contribute__body {
   display: flex;
@@ -113,13 +188,13 @@
   display: block;
   font-size: 0.8rem;
   font-weight: 600;
-  color: #C8B99A;
+  color: var(--color-accent);
   margin-bottom: 0.2rem;
 }
 
 .bd-contribute__msg {
   font-size: 0.82rem;
-  color: #7a7268;
+  color: var(--color-text-muted);
   margin: 0;
   line-height: 1.45;
 }
@@ -128,8 +203,8 @@
   display: inline-block;
   background: none;
   border: 1px solid rgba(154, 148, 132, 0.35);
-  border-radius: 4px;
-  color: #9A9484;
+  border-radius: var(--radius-sm);
+  color: var(--color-text-muted);
   font-size: 0.78rem;
   padding: 0.2rem 0.65rem;
   cursor: pointer;
@@ -137,16 +212,16 @@
   transition: color 0.15s, border-color 0.15s;
 }
 .bd-contribute__action:hover {
-  color: #C8B99A;
+  color: var(--color-accent);
   border-color: rgba(200, 185, 154, 0.5);
 }
 
-.bd-wine-placeholder.red      { background: #2d1414; }
-.bd-wine-placeholder.white    { background: #2d2510; }
-.bd-wine-placeholder.rosé     { background: #2d1420; }
-.bd-wine-placeholder.sparkling{ background: #14202d; }
-.bd-wine-placeholder.dessert  { background: #1f1430; }
-.bd-wine-placeholder.fortified{ background: #142d18; }
+.bd-wine-placeholder.red      { background: var(--wine-red); }
+.bd-wine-placeholder.white    { background: var(--wine-white); }
+.bd-wine-placeholder.rosé     { background: var(--wine-rose); }
+.bd-wine-placeholder.sparkling{ background: var(--wine-sparkling); }
+.bd-wine-placeholder.dessert  { background: var(--wine-dessert); }
+.bd-wine-placeholder.fortified{ background: var(--wine-fortified); }
 
 .bd-wine-meta {
   flex: 1;
@@ -156,18 +231,18 @@
 .bd-wine-meta h1 {
   font-size: 1.4rem;
   margin: 0 0 0.35rem 0;
-  color: #E8DFD0;
+  color: var(--color-text);
   line-height: 1.3;
 }
 
 .bd-producer {
-  color: #9A9484;
+  color: var(--color-text-muted);
   font-size: 0.95rem;
   margin: 0 0 0.5rem 0;
 }
 
 .bd-country {
-  color: #9A9484;
+  color: var(--color-text-muted);
 }
 
 /* Wine type pill */
@@ -179,12 +254,12 @@
   font-weight: 600;
   text-transform: uppercase;
 }
-.wine-type-pill.red      { background: #2d1414; color: #E07060; }
-.wine-type-pill.white    { background: #2d2510; color: #C8A87E; }
-.wine-type-pill.rosé     { background: #2d1420; color: #d06090; }
-.wine-type-pill.sparkling{ background: #14202d; color: #7aade0; }
-.wine-type-pill.dessert  { background: #1f1430; color: #b07ad0; }
-.wine-type-pill.fortified{ background: #142d18; color: #6B9E78; }
+.wine-type-pill.red      { background: var(--wine-red); color: var(--color-danger); }
+.wine-type-pill.white    { background: var(--wine-white); color: var(--color-accent); }
+.wine-type-pill.rosé     { background: var(--wine-rose); color: #d06090; }
+.wine-type-pill.sparkling{ background: var(--wine-sparkling); color: var(--color-info); }
+.wine-type-pill.dessert  { background: var(--wine-dessert); color: #b07ad0; }
+.wine-type-pill.fortified{ background: var(--wine-fortified); color: var(--color-success); }
 
 /* ── Details card ── */
 .bd-details {
@@ -197,7 +272,7 @@
   gap: 0.75rem;
   margin-bottom: 1.25rem;
   padding-bottom: 1.25rem;
-  border-bottom: 1px solid #2a2a2a;
+  border-bottom: 1px solid var(--color-border);
 }
 
 .bd-detail-item {
@@ -209,19 +284,19 @@
 .bd-detail-label {
   font-size: 0.75rem;
   font-weight: 600;
-  color: #9A9484;
+  color: var(--color-text-muted);
   text-transform: uppercase;
   letter-spacing: 0.03em;
 }
 
 .bd-detail-value {
   font-size: 1rem;
-  color: #E8DFD0;
+  color: var(--color-text);
 }
 
 .bd-detail-converted {
   font-size: 0.75rem;
-  color: #9A9484;
+  color: var(--color-text-muted);
   font-weight: 400;
   display: block;
   margin-top: 0.1rem;
@@ -231,7 +306,7 @@
 .bd-section {
   margin-bottom: 1rem;
   padding-bottom: 1rem;
-  border-bottom: 1px solid #2a2a2a;
+  border-bottom: 1px solid var(--color-border);
 }
 
 .bd-section:last-of-type {
@@ -244,7 +319,7 @@
   display: block;
   font-size: 0.75rem;
   font-weight: 600;
-  color: #9A9484;
+  color: var(--color-text-muted);
   text-transform: uppercase;
   letter-spacing: 0.03em;
   margin-bottom: 0.4rem;
@@ -259,7 +334,7 @@
 
 .bd-grape-pill {
   font-size: 0.78rem;
-  color: #9A9484;
+  color: var(--color-text-muted);
   background: rgba(154, 148, 132, 0.1);
   border: 1px solid rgba(154, 148, 132, 0.2);
   border-radius: 10px;
@@ -268,7 +343,7 @@
 
 .bd-missing-hint {
   font-size: 0.85rem;
-  color: #4a4a4a;
+  color: var(--color-input-placeholder);
   font-style: italic;
 }
 
@@ -282,12 +357,12 @@
 
 .bd-drink-dates {
   font-size: 0.95rem;
-  color: #E8DFD0;
+  color: var(--color-text);
 }
 
 .bd-no-dates {
   font-size: 0.9rem;
-  color: #4a4a4a;
+  color: var(--color-input-placeholder);
   font-style: italic;
 }
 
@@ -299,14 +374,14 @@
   font-size: 0.75rem;
   font-weight: 600;
 }
-.drink-status-badge.overdue  { background: #2d1414; color: #E07060; border: 1px solid #5a2020; }
-.drink-status-badge.soon     { background: #2d1e10; color: #e0a060; border: 1px solid #5a3a10; }
-.drink-status-badge.inWindow { background: #142d1c; color: #6B9E78; border: 1px solid #1e4a2a; }
-.drink-status-badge.notReady { background: #14202d; color: #7aade0; border: 1px solid #1e3a5a; }
+.drink-status-badge.overdue  { background: var(--drink-overdue-bg); color: var(--drink-overdue-text); border: 1px solid var(--drink-overdue-border); }
+.drink-status-badge.soon     { background: var(--drink-soon-bg); color: var(--drink-soon-text); border: 1px solid var(--drink-soon-border); }
+.drink-status-badge.inWindow { background: var(--drink-inwindow-bg); color: var(--drink-inwindow-text); border: 1px solid var(--drink-inwindow-border); }
+.drink-status-badge.notReady { background: var(--drink-notready-bg); color: var(--drink-notready-text); border: 1px solid var(--drink-notready-border); }
 
 /* ── Rack link ── */
 .bd-rack-link {
-  color: #C8A87E;
+  color: var(--color-accent);
   text-decoration: none;
   font-size: 0.9rem;
   display: inline-flex;
@@ -321,7 +396,7 @@
 /* ── Notes ── */
 .bd-notes {
   margin: 0;
-  color: #c8c0b4;
+  color: var(--color-text-secondary);
   font-style: italic;
   line-height: 1.6;
   font-size: 0.95rem;
@@ -333,11 +408,11 @@
   flex-wrap: wrap;
   gap: 0.5rem 1rem;
   font-size: 0.9rem;
-  color: #c8c0b4;
+  color: var(--color-text-secondary);
 }
 
 .bd-purchase-link {
-  color: #7B9E88;
+  color: var(--color-primary);
   text-decoration: none;
 }
 
@@ -357,7 +432,7 @@
 
 .bd-price-evolution--locked {
   background: rgba(154, 148, 132, 0.06);
-  border: 1px solid #2a2a2a;
+  border: 1px solid var(--color-border);
 }
 
 .bd-price-evolution__icon {
@@ -367,14 +442,14 @@
 }
 
 .bd-price-evolution--locked strong {
-  color: #9A9484;
+  color: var(--color-text-muted);
   display: block;
   margin-bottom: 0.25rem;
 }
 
 .bd-price-evolution--locked p {
   margin: 0;
-  color: #6a6560;
+  color: var(--color-input-placeholder);
   line-height: 1.5;
 }
 
@@ -395,7 +470,7 @@
 .bd-price-latest__amount {
   font-size: 1.35rem;
   font-weight: 600;
-  color: #E8DFD0;
+  color: var(--color-text);
   font-variant-numeric: tabular-nums;
 }
 
@@ -406,28 +481,28 @@
   border-radius: 4px;
 }
 
-.bd-price-change--up   { background: rgba(107,158,120,0.15); color: #6B9E78; }
-.bd-price-change--down { background: rgba(224,112,96,0.15);  color: #E07060; }
+.bd-price-change--up   { background: rgba(107,158,120,0.15); color: var(--color-success); }
+.bd-price-change--down { background: rgba(224,112,96,0.15);  color: var(--color-danger); }
 
 .bd-price-converted {
   font-size: 0.82rem;
-  color: #9A9484;
+  color: var(--color-text-muted);
   font-weight: 400;
 }
 
 .bd-price-latest__meta {
   font-size: 0.8rem;
-  color: #9A9484;
+  color: var(--color-text-muted);
   margin-bottom: 0.65rem;
 }
 
 .bd-price-latest__meta em {
   font-style: normal;
-  color: #c8c0b4;
+  color: var(--color-text-secondary);
 }
 
 .bd-price-timeline {
-  border: 1px solid #2a2a2a;
+  border: 1px solid var(--color-border);
   border-radius: 6px;
   overflow: hidden;
 }
@@ -438,7 +513,7 @@
   gap: 0.65rem;
   flex-wrap: wrap;
   padding: 0.45rem 0.75rem;
-  border-bottom: 1px solid #1e1e1e;
+  border-bottom: 1px solid var(--color-surface);
   font-size: 0.82rem;
 }
 
@@ -448,22 +523,22 @@
 
 .bd-price-entry__price {
   font-weight: 500;
-  color: #c8c0b4;
+  color: var(--color-text-secondary);
   font-variant-numeric: tabular-nums;
 }
 
 .bd-price-entry__converted {
-  color: #9A9484;
+  color: var(--color-text-muted);
   font-size: 0.77rem;
 }
 
 .bd-price-entry__date {
-  color: #9A9484;
+  color: var(--color-text-muted);
   flex: 1;
 }
 
 .bd-price-entry__source {
-  color: #9A9484;
+  color: var(--color-text-muted);
   font-style: italic;
   font-size: 0.77rem;
 }
@@ -472,15 +547,6 @@
   display: flex;
   flex-direction: column;
   gap: 0.3rem;
-}
-
-/* ── Actions ── */
-.bd-actions {
-  display: flex;
-  gap: 0.75rem;
-  margin-top: 1.5rem;
-  padding-top: 1.25rem;
-  border-top: 1px solid #2a2a2a;
 }
 
 /* Report wine */
@@ -493,14 +559,14 @@
   background: none;
   border: none;
   font-size: 0.78rem;
-  color: var(--text-muted, #888);
+  color: var(--color-text-muted);
   cursor: pointer;
   padding: 0;
   text-decoration: underline dotted;
 }
 
 .btn-report-wine:hover {
-  color: var(--danger, #c0392b);
+  color: var(--color-danger);
 }
 
 /* Consume button */
@@ -508,7 +574,7 @@
   background: #6a3d8a;
   color: white;
   border: none;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   padding: 0.75rem 1.5rem;
   cursor: pointer;
   font-size: 1rem;
@@ -541,9 +607,9 @@
 
 /* Drink window section inside edit */
 .drink-window-section {
-  background: #141e2d;
-  border: 1px solid #1e3a5a;
-  border-radius: 8px;
+  background: var(--color-info-bg);
+  border: 1px solid var(--color-info-border);
+  border-radius: var(--radius-md);
   padding: 1rem 1.25rem;
 }
 
@@ -558,7 +624,7 @@
   display: block;
   font-size: 0.85rem;
   font-weight: 600;
-  color: #c8c0b4;
+  color: var(--color-text-secondary);
   margin-bottom: 0.35rem;
 }
 
@@ -575,24 +641,24 @@
 }
 
 .modal-box {
-  background: #1c1c1c;
-  border: 1px solid #2a2a2a;
-  border-radius: 10px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
   padding: 1.5rem;
   width: 100%;
   max-width: 420px;
   max-height: 90vh;
   overflow-y: auto;
-  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.5);
+  box-shadow: var(--shadow-lg);
 }
 
 .modal-box h2 {
   margin: 0 0 0.25rem 0;
-  color: #E8DFD0;
+  color: var(--color-text);
 }
 
 .modal-wine-name {
-  color: #9A9484;
+  color: var(--color-text-muted);
   font-size: 0.9rem;
   margin: 0 0 1.25rem 0;
   font-style: italic;
@@ -613,7 +679,7 @@
 
 .bd-maturity-note {
   font-size: 0.82rem;
-  color: #9A9484;
+  color: var(--color-text-muted);
   font-style: italic;
 }
 
@@ -626,14 +692,14 @@
 .bd-maturity-notes {
   margin: 0;
   font-size: 0.88rem;
-  color: #c8c0b4;
+  color: var(--color-text-secondary);
   font-style: italic;
   line-height: 1.5;
 }
 
 .bd-maturity-attribution {
   font-size: 0.78rem;
-  color: #6a6560;
+  color: var(--color-input-placeholder);
 }
 
 /* Phase table */
@@ -641,8 +707,8 @@
   display: flex;
   flex-direction: column;
   gap: 0;
-  border: 1px solid #2a2a2a;
-  border-radius: 8px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
   overflow: hidden;
 }
 
@@ -651,7 +717,7 @@
   align-items: center;
   gap: 0.6rem;
   padding: 0.55rem 0.85rem;
-  border-bottom: 1px solid #1e1e1e;
+  border-bottom: 1px solid var(--color-surface);
   font-size: 0.85rem;
   opacity: 0.55;
   transition: opacity 0.15s;
@@ -673,24 +739,24 @@
   flex-shrink: 0;
 }
 
-.bd-maturity-phase-dot--early { background: #C8A87E; }
-.bd-maturity-phase-dot--peak  { background: #7B9E88; }
+.bd-maturity-phase-dot--early { background: var(--color-accent); }
+.bd-maturity-phase-dot--peak  { background: var(--color-primary); }
 .bd-maturity-phase-dot--late  { background: #9A8474; }
 
 .bd-maturity-phase-name {
   flex: 1;
-  color: #E8DFD0;
+  color: var(--color-text);
   font-weight: 500;
 }
 
 .bd-maturity-phase-range {
-  color: #c8c0b4;
+  color: var(--color-text-secondary);
   font-size: 0.82rem;
   font-variant-numeric: tabular-nums;
 }
 
 .bd-maturity-phase-yrs {
-  color: #9A9484;
+  color: var(--color-text-muted);
   font-size: 0.75rem;
   min-width: 60px;
   text-align: right;
@@ -705,30 +771,30 @@
   font-weight: 600;
 }
 
-.maturity-badge--not-ready { background: #14202d; color: #7aade0; border: 1px solid #1e3a5a; }
-.maturity-badge--early     { background: #2d2010; color: #C8A87E; border: 1px solid #5a3a10; }
-.maturity-badge--peak      { background: #142d1c; color: #6B9E78; border: 1px solid #1e4a2a; }
+.maturity-badge--not-ready { background: var(--color-info-bg); color: var(--color-info); border: 1px solid var(--color-info-border); }
+.maturity-badge--early     { background: var(--color-warning-bg); color: var(--color-accent); border: 1px solid var(--color-warning-border); }
+.maturity-badge--peak      { background: var(--color-success-bg); color: var(--color-success); border: 1px solid var(--color-success-border); }
 .maturity-badge--late      { background: #1e1814; color: #9A8474; border: 1px solid #3a2a20; }
-.maturity-badge--declining { background: #2d1414; color: #E07060; border: 1px solid #5a2020; }
-.maturity-badge--pending   { background: #1e1e1e; color: #9A9484; border: 1px solid #3a3a3a; }
+.maturity-badge--declining { background: var(--color-danger-bg); color: var(--color-danger); border: 1px solid var(--color-danger-border); }
+.maturity-badge--pending   { background: var(--color-surface-raised); color: var(--color-text-muted); border: 1px solid var(--color-border); }
 
 /* ── Bottle edit image upload ── */
 .bd-image-section {
-  border-top: 1px solid #2a2a2a;
+  border-top: 1px solid var(--color-border);
   padding-top: 1.25rem;
   margin-top: 0.5rem;
 }
 
 .bd-label-optional {
   font-weight: 400;
-  color: #9A9484;
+  color: var(--color-text-muted);
   font-size: 0.85em;
 }
 
 .bd-image-status--done {
   margin-top: 0.5rem;
   font-size: 0.82rem;
-  color: #7B9E88;
+  color: var(--color-primary);
 }
 
 /* Shared image upload styles (also used in WineRequests) */
@@ -750,7 +816,7 @@
   max-width: 220px;
   max-height: 220px;
   object-fit: contain;
-  border: 1px solid #2a2a2a;
+  border: 1px solid var(--color-border);
   border-radius: 6px;
 }
 
@@ -762,8 +828,8 @@
   height: 24px;
   border-radius: 50%;
   border: none;
-  background: #3a1a1a;
-  color: #E07060;
+  background: var(--color-danger-bg);
+  color: var(--color-danger);
   font-size: 1rem;
   line-height: 1;
   cursor: pointer;
@@ -774,7 +840,7 @@
 }
 
 .btn-remove-image:hover {
-  background: #5a2020;
+  background: var(--color-danger-border);
 }
 
 .image-public-notice {
@@ -784,11 +850,25 @@
   margin-top: 0.6rem;
   margin-bottom: 0;
   font-size: 0.8rem;
-  color: #9A9484;
+  color: var(--color-text-muted);
   line-height: 1.4;
 }
 
 /* ── Mobile ── */
+@media (max-width: 768px) {
+  .bd-header-actions {
+    display: none;
+  }
+
+  .bd-mobile-actions {
+    display: flex;
+  }
+
+  .bd-btn-label {
+    display: none;
+  }
+}
+
 @media (max-width: 600px) {
   .bd-detail-grid {
     grid-template-columns: 1fr 1fr;
@@ -800,16 +880,6 @@
 
   .drink-window-fields {
     grid-template-columns: 1fr;
-  }
-
-  .bd-actions {
-    flex-direction: column;
-  }
-
-  .bd-actions .btn,
-  .bd-actions .btn-consume {
-    width: 100%;
-    justify-content: center;
   }
 
   .modal-actions {

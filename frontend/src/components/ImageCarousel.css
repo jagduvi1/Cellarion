@@ -4,8 +4,8 @@
   align-items: center;
   justify-content: center;
   overflow: hidden;
-  background: #f8f8f8;
-  border-radius: 6px;
+  background: var(--color-surface-hover);
+  border-radius: var(--radius-sm);
 }
 
 /* Size variants — all sized for portrait wine bottles */

@@ -99,12 +99,13 @@ function CellarAudit() {
 
   return (
     <div className="cellar-audit-page">
-      <div className="page-header">
-        <div>
-          <Link to={`/cellars/${id}`} className="back-link">{t('cellarAudit.backToCellar')}</Link>
-          <h1 style={h1Style}>{cellarName ? `${cellarName} — ${t('cellarAudit.auditLogTitle')}` : t('cellarAudit.auditLogTitle')}</h1>
-          <p className="cellar-description">{t('cellarAudit.last100Events')}</p>
-        </div>
+      <div className="audit-header">
+        <Link to={`/cellars/${id}`} className="back-link">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+          {t('cellarAudit.backToCellar')}
+        </Link>
+        <h1 style={h1Style}>{cellarName ? `${cellarName} — ${t('cellarAudit.auditLogTitle')}` : t('cellarAudit.auditLogTitle')}</h1>
+        <p className="page-subtitle">{t('cellarAudit.last100Events')}</p>
       </div>
 
       {error && <div className="alert alert-error">{error}</div>}

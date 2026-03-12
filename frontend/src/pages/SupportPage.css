@@ -4,23 +4,24 @@
   padding: 24px 16px;
 }
 
-.support-page-header {
+.support-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   margin-bottom: 20px;
 }
 
-.support-page-header h1 {
+.support-header h1 {
   margin: 0;
-  font-size: 1.6rem;
+  font-family: var(--font-heading);
+  color: var(--color-text);
 }
 
 .support-tabs {
   display: flex;
   gap: 4px;
   margin-bottom: 20px;
-  border-bottom: 2px solid var(--border, #ddd);
+  border-bottom: 2px solid var(--color-border);
 }
 
 .support-tabs button {
@@ -29,15 +30,15 @@
   padding: 8px 16px;
   cursor: pointer;
   font-size: 0.9rem;
-  color: var(--text-secondary, #666);
+  color: var(--color-text-secondary);
   border-bottom: 2px solid transparent;
   margin-bottom: -2px;
   transition: color 0.15s, border-color 0.15s;
 }
 
 .support-tabs button.active {
-  color: var(--accent, #7b3f00);
-  border-bottom-color: var(--accent, #7b3f00);
+  color: var(--color-accent);
+  border-bottom-color: var(--color-accent);
   font-weight: 600;
 }
 
@@ -46,12 +47,12 @@
 .support-empty {
   text-align: center;
   padding: 32px 0;
-  color: var(--text-muted, #888);
+  color: var(--color-text-muted);
   font-size: 0.95rem;
 }
 
 .support-error {
-  color: var(--danger, #c0392b);
+  color: var(--color-danger);
 }
 
 .support-list {
@@ -61,10 +62,10 @@
 }
 
 .support-card {
-  border: 1px solid var(--border, #ddd);
-  border-radius: 8px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
   overflow: hidden;
-  background: var(--bg-card, #fff);
+  background: var(--color-surface);
 }
 
 .support-card-header {
@@ -78,7 +79,7 @@
 }
 
 .support-card-header:hover {
-  background: var(--bg-hover, #f8f6f3);
+  background: var(--color-surface-raised);
 }
 
 .support-card-meta {
@@ -98,7 +99,7 @@
 
 .support-date {
   font-size: 0.8rem;
-  color: var(--text-muted, #999);
+  color: var(--color-text-muted);
   white-space: nowrap;
 }
 
@@ -111,44 +112,44 @@
 }
 
 .support-badge.category {
-  background: var(--bg-tag, #ede8e0);
-  color: var(--text-secondary, #666);
+  background: var(--color-surface-raised);
+  color: var(--color-text-secondary);
 }
 
 .support-badge.status-open {
-  background: #e3f0ff;
-  color: #1a5fa3;
+  background: var(--color-info-bg);
+  color: var(--color-info);
 }
 
 .support-badge.status-in_progress {
-  background: #fff3cd;
-  color: #856404;
+  background: var(--color-warning-bg);
+  color: var(--color-accent);
 }
 
 .support-badge.status-closed {
-  background: #d4edda;
-  color: #155724;
+  background: var(--color-success-bg);
+  color: var(--color-success);
 }
 
 .support-badge.status-pending {
-  background: #e3f0ff;
-  color: #1a5fa3;
+  background: var(--color-info-bg);
+  color: var(--color-info);
 }
 
 .support-badge.status-resolved {
-  background: #d4edda;
-  color: #155724;
+  background: var(--color-success-bg);
+  color: var(--color-success);
 }
 
 .support-badge.status-dismissed {
-  background: #f8f9fa;
-  color: #6c757d;
+  background: var(--color-surface-raised);
+  color: var(--color-text-muted);
 }
 
 .support-card-body {
   padding: 16px;
-  border-top: 1px solid var(--border, #eee);
-  background: var(--bg-subtle, #faf9f7);
+  border-top: 1px solid var(--color-border);
+  background: var(--color-bg);
 }
 
 .support-message,
@@ -162,7 +163,7 @@
   font-size: 0.8rem;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: var(--text-muted, #999);
+  color: var(--color-text-muted);
 }
 
 .support-message p,
@@ -174,8 +175,8 @@
 }
 
 .support-response {
-  background: var(--bg-highlight, #f0f7ff);
-  border-left: 3px solid var(--accent, #7b3f00);
+  background: var(--color-info-bg);
+  border-left: 3px solid var(--color-accent);
   padding: 10px 14px;
   border-radius: 0 6px 6px 0;
 }
@@ -183,13 +184,13 @@
 .support-response-date {
   display: block;
   font-size: 0.75rem;
-  color: var(--text-muted, #999);
+  color: var(--color-text-muted);
   margin-top: 6px;
 }
 
 .support-awaiting {
   font-size: 0.85rem;
-  color: var(--text-muted, #aaa);
+  color: var(--color-text-muted);
   font-style: italic;
   margin: 0;
 }

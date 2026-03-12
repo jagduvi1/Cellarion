@@ -18,15 +18,15 @@ function CellarColorPicker({ value, onChange }) {
           width: 28,
           height: 28,
           borderRadius: '50%',
-          background: '#1c1c1c',
-          border: '1px solid #3a3a3a',
+          background: 'var(--color-surface)',
+          border: '1px solid var(--color-border)',
           cursor: 'pointer',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          color: '#9A9484',
+          color: 'var(--color-text-muted)',
           fontSize: '0.75rem',
-          boxShadow: !value ? '0 0 0 2px #fff' : 'none',
+          boxShadow: !value ? '0 0 0 2px var(--color-primary)' : 'none',
           flexShrink: 0
         }}
       >
@@ -46,7 +46,7 @@ function CellarColorPicker({ value, onChange }) {
             background: color,
             border: 'none',
             cursor: 'pointer',
-            boxShadow: value === color ? '0 0 0 2px #fff' : 'none',
+            boxShadow: value === color ? '0 0 0 2px var(--color-primary)' : 'none',
             flexShrink: 0
           }}
         />

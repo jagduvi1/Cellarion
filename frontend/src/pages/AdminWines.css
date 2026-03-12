@@ -4,7 +4,7 @@
 }
 
 .page-subtitle {
-  color: #9A9484;
+  color: var(--color-text-muted);
   margin: 0.25rem 0 0 0;
 }
 
@@ -25,7 +25,7 @@
 }
 
 .wine-image-section {
-  border-top: 1px solid #2a2a2a;
+  border-top: 1px solid var(--color-border);
   padding-top: 1rem;
   margin-top: 0.5rem;
 }
@@ -46,13 +46,13 @@
 
 .image-credit-hint {
   font-size: 0.78rem;
-  color: #6b6458;
+  color: var(--color-text-muted);
   font-weight: 400;
 }
 
 .wines-meta {
   font-size: 0.85rem;
-  color: #9A9484;
+  color: var(--color-text-muted);
   margin-bottom: 1rem;
 }
 
@@ -70,8 +70,8 @@
 /* Table */
 .wines-table-wrap {
   overflow-x: auto;
-  border: 1px solid #2a2a2a;
-  border-radius: 8px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
 }
 
 .wines-table {
@@ -81,18 +81,18 @@
 }
 
 .wines-table th {
-  background: #1c1c1c;
-  color: #9A9484;
+  background: var(--color-surface);
+  color: var(--color-text-muted);
   font-weight: 600;
   text-align: left;
   padding: 0.75rem 1rem;
-  border-bottom: 1px solid #2a2a2a;
+  border-bottom: 1px solid var(--color-border);
   white-space: nowrap;
 }
 
 .wines-table td {
   padding: 0.75rem 1rem;
-  border-bottom: 1px solid #1c1c1c;
+  border-bottom: 1px solid var(--color-surface);
   vertical-align: middle;
 }
 
@@ -101,20 +101,20 @@
 }
 
 .wines-table tr:hover td {
-  background: rgba(255, 255, 255, 0.02);
+  background: var(--color-surface-hover);
 }
 
 .wines-table tr.row-editing td {
-  background: rgba(123, 158, 136, 0.06);
+  background: var(--color-primary-light);
 }
 
 .wine-name {
   font-weight: 600;
-  color: #E8DFD0;
+  color: var(--color-text);
 }
 
 .grapes-cell {
-  color: #9A9484;
+  color: var(--color-text-muted);
   font-size: 0.85rem;
   max-width: 200px;
 }
@@ -129,7 +129,7 @@
 .type-badge {
   display: inline-block;
   padding: 0.15rem 0.5rem;
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   font-size: 0.75rem;
   font-weight: 600;
   text-transform: capitalize;
@@ -139,7 +139,7 @@
 .type-white  { background: rgba(220,200,140,0.2); color: #ddd09a; }
 .type-rosé   { background: rgba(200,120,140,0.2); color: #d99aaa; }
 .type-sparkling { background: rgba(140,180,220,0.2); color: #9abedd; }
-.type-dessert { background: rgba(200,168,126,0.2); color: #C8A87E; }
+.type-dessert { background: rgba(200,168,126,0.2); color: var(--color-accent); }
 .type-fortified { background: rgba(140,100,60,0.2); color: #b88a5a; }
 
 /* Pagination */
@@ -149,7 +149,7 @@
   justify-content: center;
   gap: 1rem;
   margin-top: 1.5rem;
-  color: #9A9484;
+  color: var(--color-text-muted);
 }
 
 @media (max-width: 768px) {

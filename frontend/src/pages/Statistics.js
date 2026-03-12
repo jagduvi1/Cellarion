@@ -24,16 +24,16 @@ const TYPE_LABELS = {
 };
 
 const REASON_COLORS = {
-  drank:  '#7B9E88',
-  gifted: '#7aade0',
-  sold:   '#D4A070',
-  other:  '#9A9484',
+  drank:  '#7A1E2D',
+  gifted: '#5B8DB8',
+  sold:   '#D4A373',
+  other:  '#8A8580',
 };
 
 const COUNTRY_COLORS = [
-  '#7B9E88', '#6B8E7B', '#5B7E6B', '#4B6E5B', '#3B5E4B',
-  '#6EC6C6', '#5EB6B6', '#4EA6A6', '#3E9696', '#2E8686',
-  '#D4C87A', '#C4B86A', '#B4A85A', '#A4984A', '#94883A',
+  '#7A1E2D', '#8C2A3A', '#A03648', '#621826', '#4D1220',
+  '#D4A373', '#C49363', '#B48353', '#A47343', '#946333',
+  '#5B8DB8', '#4B7DA8', '#3B6D98', '#2B5D88', '#1B4D78',
 ];
 
 const GRAPE_COLORS = [
@@ -42,7 +42,7 @@ const GRAPE_COLORS = [
   '#8B6A9A', '#7B5A8A', '#6B4A7A', '#5B3A6A', '#4B2A5A',
 ];
 
-const GRADE_COLORS = { A: '#7B9E88', B: '#D4C87A', C: '#D4A070', D: '#C0504D', F: '#9A2020' };
+const GRADE_COLORS = { A: '#2D7A45', B: '#D4C87A', C: '#D4A373', D: '#C0504D', F: '#9A2020' };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function fmt(n) {
@@ -162,8 +162,8 @@ function HBarChart({ data, colors, maxItems = 12 }) {
             <div className="hbar-fill" style={{
               width: `${(d.count / maxVal) * 100}%`,
               background: Array.isArray(colors)
-                ? (colors[i % colors.length] || '#7B9E88')
-                : (colors || '#7B9E88'),
+                ? (colors[i % colors.length] || '#7A1E2D')
+                : (colors || '#7A1E2D'),
             }} />
           </div>
           <span className="hbar-count">{d.count}</span>
@@ -213,7 +213,7 @@ function VintageBarChart({ data }) {
 // ── Rating Distribution ───────────────────────────────────────────────────────
 // Bands are normalized 0-100 keys; labels show descriptive quality tier
 const RATING_BANDS = [
-  { key: '81-100', label: 'Excellent', color: '#7B9E88' },
+  { key: '81-100', label: 'Excellent', color: '#7A1E2D' },
   { key: '61-80',  label: 'Very Good', color: '#D4C87A' },
   { key: '41-60',  label: 'Good',      color: '#D4A070' },
   { key: '21-40',  label: 'Fair',      color: '#C08050' },
@@ -254,9 +254,9 @@ function RatingChart({ byRating, avg, targetScale }) {
 // ── Drink Window Visualization ────────────────────────────────────────────────
 function DrinkWindowViz({ drinkWindow, windowCoverage, total }) {
   const segments = [
-    { key: 'overdue',  label: 'Past Drink Window',    color: '#E07060', icon: '⚠' },
+    { key: 'overdue',  label: 'Past Drink Window',    color: '#C94040', icon: '⚠' },
     { key: 'soon',     label: 'Drink Soon (≤90 days)', color: '#D4A070', icon: '⏱' },
-    { key: 'inWindow', label: 'In Optimal Window',    color: '#7B9E88', icon: '✓' },
+    { key: 'inWindow', label: 'In Optimal Window',    color: '#7A1E2D', icon: '✓' },
     { key: 'notReady', label: 'Not Ready Yet',         color: '#7aade0', icon: '◷' },
     { key: 'noWindow', label: 'No Dates Set',          color: '#3a3a3a', icon: '—' },
   ];
@@ -309,7 +309,7 @@ function DrinkWindowViz({ drinkWindow, windowCoverage, total }) {
 // ── Cellar Health Score ───────────────────────────────────────────────────────
 function HealthScoreCard({ healthScore, healthGrade, drinkWindow }) {
   const score    = healthScore ?? 0;
-  const gradeColor = healthGrade ? (GRADE_COLORS[healthGrade] || '#7B9E88') : '#555';
+  const gradeColor = healthGrade ? (GRADE_COLORS[healthGrade] || '#7A1E2D') : '#555';
   const withWindow = drinkWindow.overdue + drinkWindow.soon + drinkWindow.inWindow + drinkWindow.notReady;
 
   return (
@@ -328,7 +328,7 @@ function HealthScoreCard({ healthScore, healthGrade, drinkWindow }) {
       </div>
       <div className="health-breakdown">
         <div className="health-row">
-          <span className="health-dot" style={{ background: '#7B9E88' }} />
+          <span className="health-dot" style={{ background: '#7A1E2D' }} />
           <span className="health-label">In optimal window</span>
           <span className="health-val">{drinkWindow.inWindow}</span>
         </div>
@@ -343,7 +343,7 @@ function HealthScoreCard({ healthScore, healthGrade, drinkWindow }) {
           <span className="health-val">{drinkWindow.soon}</span>
         </div>
         <div className="health-row">
-          <span className="health-dot" style={{ background: '#E07060' }} />
+          <span className="health-dot" style={{ background: '#C94040' }} />
           <span className="health-label">Past window</span>
           <span className="health-val">{drinkWindow.overdue}</span>
         </div>
@@ -372,10 +372,10 @@ function RegretIndexCard({ regretIndex, overdueCount, total }) {
   };
 
   const levelColors = {
-    critical: '#E07060',
+    critical: '#C94040',
     warning:  '#D4A070',
     mild:     '#D4C87A',
-    great:    '#7B9E88',
+    great:    '#7A1E2D',
   };
 
   const color = levelColors[level];
@@ -444,12 +444,12 @@ function UrgencyLadder({ bottles, currency }) {
     <ol className="urgency-list">
       {bottles.map((b, i) => {
         const isOverdue = b.status === 'overdue';
-        const color     = isOverdue ? '#E07060' : '#D4A070';
+        const color     = isOverdue ? '#C94040' : '#D4A070';
         return (
           <li key={i} className="urgency-item">
             <span className="urgency-rank" style={{ color }}>{i + 1}</span>
             <span className="urgency-type-dot"
-              style={{ background: TYPE_COLORS[b.type] || '#7B9E88' }}
+              style={{ background: TYPE_COLORS[b.type] || '#7A1E2D' }}
               title={TYPE_LABELS[b.type] || b.type} />
             <div className="urgency-info">
               <div className="urgency-name" title={b.name}>{b.name}</div>
@@ -530,13 +530,13 @@ function JoyPerDollarChart({ data, currency, targetScale }) {
         {data.map((d, i) => (
           <div key={i} className="jpd-row">
             <span className="jpd-dot"
-              style={{ background: TYPE_COLORS[d.type] || '#7B9E88' }} />
+              style={{ background: TYPE_COLORS[d.type] || '#7A1E2D' }} />
             <span className="jpd-label">{TYPE_LABELS[d.type] || d.type}</span>
             <div className="jpd-track">
               <div className="jpd-fill"
                 style={{
                   width:      `${(d.score / maxScore) * 100}%`,
-                  background: TYPE_COLORS[d.type] || '#7B9E88',
+                  background: TYPE_COLORS[d.type] || '#7A1E2D',
                 }} />
             </div>
             <div className="jpd-stats">
@@ -568,7 +568,7 @@ function RegretSignalCard({ regretSignal, targetScale }) {
     <div className="regret-signal">
       {avgDelta !== null && (
         <div className="regret-signal-avg">
-          Avg delta: <strong style={{ color: avgDelta >= 0 ? '#7B9E88' : '#E07060' }}>
+          Avg delta: <strong style={{ color: avgDelta >= 0 ? '#7A1E2D' : '#C94040' }}>
             {avgDelta >= 0 ? '+' : ''}{fmtDelta(Math.abs(avgDelta), targetScale)}
           </strong> across {count} bottle{count !== 1 ? 's' : ''}
         </div>
@@ -582,7 +582,7 @@ function RegretSignalCard({ regretSignal, targetScale }) {
             ? <p className="stats-empty" style={{ margin: '0.5rem 0' }}>None yet</p>
             : surprises.map((b, i) => (
               <div key={i} className="regret-signal-item">
-                <span className="rs-dot" style={{ background: TYPE_COLORS[b.type] || '#7B9E88' }} />
+                <span className="rs-dot" style={{ background: TYPE_COLORS[b.type] || '#7A1E2D' }} />
                 <div className="rs-info">
                   <div className="rs-name">{b.name}</div>
                   <div className="rs-vintage">{b.vintage}</div>
@@ -600,7 +600,7 @@ function RegretSignalCard({ regretSignal, targetScale }) {
             ? <p className="stats-empty" style={{ margin: '0.5rem 0' }}>None yet</p>
             : disappointments.map((b, i) => (
               <div key={i} className="regret-signal-item">
-                <span className="rs-dot" style={{ background: TYPE_COLORS[b.type] || '#7B9E88' }} />
+                <span className="rs-dot" style={{ background: TYPE_COLORS[b.type] || '#7A1E2D' }} />
                 <div className="rs-info">
                   <div className="rs-name">{b.name}</div>
                   <div className="rs-vintage">{b.vintage}</div>
@@ -621,7 +621,7 @@ function PaceCard({ pace, totalBottles }) {
   const isGrowing    = netPerYear > 0;
   const isShrinking  = netPerYear < 0;
   const isBalanced   = netPerYear === 0;
-  const netColor     = isGrowing ? '#7aade0' : isShrinking ? '#E07060' : '#9A9484';
+  const netColor     = isGrowing ? '#7aade0' : isShrinking ? '#C94040' : '#9A9484';
   const netLabel     = isGrowing ? 'Growing' : isShrinking ? 'Shrinking' : 'Balanced';
 
   return (
@@ -759,7 +759,7 @@ function TopValueList({ bottles, currency }) {
         <li key={i} className="top-bottle-item">
           <span className="top-bottle-rank" data-rank={i + 1}>#{i + 1}</span>
           <span className="top-bottle-type-dot"
-            style={{ background: TYPE_COLORS[b.type] || '#7B9E88' }}
+            style={{ background: TYPE_COLORS[b.type] || '#7A1E2D' }}
             title={TYPE_LABELS[b.type] || b.type} />
           <div className="top-bottle-info">
             <div className="top-bottle-name" title={b.name}>{b.name}</div>
@@ -767,7 +767,7 @@ function TopValueList({ bottles, currency }) {
               {b.producer}{b.producer && b.vintage ? ' · ' : ''}{b.vintage}
             </div>
           </div>
-          <span className="top-bottle-price" style={{ color: TYPE_COLORS[b.type] || '#7B9E88' }}>
+          <span className="top-bottle-price" style={{ color: TYPE_COLORS[b.type] || '#7A1E2D' }}>
             {fmtCurrency(b.price, currency)}
           </span>
         </li>
@@ -810,7 +810,7 @@ function BottleSizeChart({ byBottleSize }) {
   const entries = Object.entries(byBottleSize).sort((a, b) => b[1] - a[1]);
   if (entries.length <= 1) return null;
   const total      = entries.reduce((s, [, v]) => s + v, 0);
-  const sizeColors = ['#7B9E88', '#6EC6C6', '#D4C87A', '#D4A070', '#8B6A9A'];
+  const sizeColors = ['#7A1E2D', '#6EC6C6', '#D4C87A', '#D4A070', '#8B6A9A'];
 
   return (
     <div className="hbar-chart">
@@ -1105,15 +1105,13 @@ function Statistics() {
 
       {/* ── Header ── */}
       <div className="stats-header">
-        <div>
-          <h1 className="stats-title">Collection Analytics</h1>
-          <p className="stats-subtitle">
-            {isBasic
-              ? `Complete insights across ${overview.totalCellars} cellar${overview.totalCellars !== 1 ? 's' : ''}${overview.totalCountries > 0 ? ` · ${overview.totalCountries} countries · ${overview.totalGrapes} grape varieties` : ''}`
-              : 'Your collection at a glance'
-            }
-          </p>
-        </div>
+        <h1 className="stats-title">Collection Analytics</h1>
+        <p className="stats-subtitle">
+          {isBasic
+            ? `Complete insights across ${overview.totalCellars} cellar${overview.totalCellars !== 1 ? 's' : ''}${overview.totalCountries > 0 ? ` · ${overview.totalCountries} countries · ${overview.totalGrapes} grape varieties` : ''}`
+            : 'Your collection at a glance'
+          }
+        </p>
         {isPremium
           ? <span className="stats-plan-badge stats-plan-badge--premium">★ Premium</span>
           : isBasic
@@ -1125,7 +1123,7 @@ function Statistics() {
       {/* ── Primary KPIs ── */}
       <div className={`kpi-grid${isPremium ? '' : isBasic ? ' kpi-grid--5' : ' kpi-grid--3'}`}>
         <KPICard icon="🍾" label="Active Bottles" value={fmt(total)}
-          sub={`${fmt(overview.uniqueWines)} unique wines`} accentColor="#7B9E88" />
+          sub={`${fmt(overview.uniqueWines)} unique wines`} accentColor="#7A1E2D" />
         <KPICard icon="🌍" label="Countries" value={fmt(overview.totalCountries)}
           sub={`${fmt(overview.totalGrapes)} grape varieties`} accentColor="#6EC6C6" />
         <KPICard icon="⭐" label="Avg Rating"
@@ -1144,7 +1142,7 @@ function Statistics() {
             sub={drinkWindow.overdue > 0
               ? `${drinkWindow.overdue} past window`
               : `${drinkWindow.inWindow} in window`}
-            accentColor={drinkWindow.overdue > 0 ? '#E07060' : '#7B9E88'} />
+            accentColor={drinkWindow.overdue > 0 ? '#C94040' : '#7A1E2D'} />
         )}
         {isPremium && (
           <KPICard icon="💰" label="Est. Collection Value"

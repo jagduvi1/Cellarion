@@ -67,7 +67,7 @@ function SupportPage() {
 
   return (
     <div className="support-page">
-      <div className="support-page-header">
+      <div className="support-header">
         <h1>Support</h1>
         <button className="btn-primary" onClick={() => setShowModal(true)}>
           + New Support Ticket

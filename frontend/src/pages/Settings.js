@@ -48,7 +48,9 @@ function Settings() {
 
   return (
     <div className="settings-page">
-      <h1>{t('settings.title')}</h1>
+      <div className="settings-header">
+        <h1>{t('settings.title')}</h1>
+      </div>
 
       {/* ── Your Plan card ── */}
       <div className="card settings-card settings-plan-card">

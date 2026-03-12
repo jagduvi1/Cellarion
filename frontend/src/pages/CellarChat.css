@@ -20,7 +20,8 @@
 .cellar-chat__title {
   font-size: 1.5rem;
   font-weight: 700;
-  color: #E8DFD0;
+  color: var(--color-text);
+  font-family: var(--font-heading);
   margin: 0;
 }
 
@@ -36,29 +37,29 @@
   align-items: center;
   gap: 0.4rem;
   font-size: 0.8rem;
-  color: #777;
+  color: var(--color-text-muted);
   cursor: pointer;
   user-select: none;
 }
 
 .cellar-chat__expansion-toggle input[type="checkbox"] {
-  accent-color: #7B9E88;
+  accent-color: var(--color-primary);
   width: 14px;
   height: 14px;
   cursor: pointer;
 }
 
 .cellar-chat__expansion-toggle:hover {
-  color: #aaa;
+  color: var(--color-text-secondary);
 }
 
 .cellar-chat__usage {
   font-size: 0.8rem;
-  color: #666;
+  color: var(--color-text-muted);
 }
 
 .cellar-chat__usage.at-limit {
-  color: #E07060;
+  color: var(--color-danger);
 }
 
 /* ── Message list ── */
@@ -74,7 +75,7 @@
 
 .cellar-chat__messages::-webkit-scrollbar { width: 4px; }
 .cellar-chat__messages::-webkit-scrollbar-track { background: transparent; }
-.cellar-chat__messages::-webkit-scrollbar-thumb { background: #333; border-radius: 2px; }
+.cellar-chat__messages::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: 2px; }
 
 /* ── Empty / starter state ── */
 
@@ -88,7 +89,7 @@
 
 .cellar-chat__starters-title {
   font-size: 0.85rem;
-  color: #666;
+  color: var(--color-text-muted);
   text-transform: uppercase;
   letter-spacing: 0.08em;
 }
@@ -106,9 +107,9 @@
 }
 
 .cellar-chat__starter-cat-btn {
-  background: #1e1e1e;
-  border: 1px solid #333;
-  color: #c8c0b4;
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-secondary);
   padding: 0.4rem 0.9rem;
   border-radius: 20px;
   font-size: 0.82rem;
@@ -118,9 +119,9 @@
 
 .cellar-chat__starter-cat-btn:hover,
 .cellar-chat__starter-cat-btn.open {
-  border-color: #7B9E88;
-  background: #1a2a20;
-  color: #E8DFD0;
+  border-color: var(--color-primary);
+  background: rgba(var(--color-primary-rgb), 0.08);
+  color: var(--color-text);
 }
 
 .cellar-chat__starter-prompts {
@@ -131,9 +132,9 @@
 }
 
 .cellar-chat__prompt-chip {
-  background: #161616;
-  border: 1px solid #2a2a2a;
-  color: #999;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-muted);
   padding: 0.4rem 0.75rem;
   border-radius: 6px;
   font-size: 0.8rem;
@@ -143,25 +144,25 @@
 }
 
 .cellar-chat__prompt-chip:hover:not(:disabled) {
-  border-color: #7B9E88;
-  color: #E8DFD0;
+  border-color: var(--color-primary);
+  color: var(--color-text);
 }
 
 .cellar-chat__tip {
   font-size: 0.8rem;
-  color: #555;
+  color: var(--color-input-placeholder);
   line-height: 1.6;
-  border-left: 2px solid #2a2a2a;
+  border-left: 2px solid var(--color-border);
   padding-left: 0.75rem;
   max-width: 480px;
 }
 
 .cellar-chat__tip strong {
-  color: #777;
+  color: var(--color-text-muted);
 }
 
 .cellar-chat__tip em {
-  color: #888;
+  color: var(--color-text-muted);
   font-style: normal;
   font-family: monospace;
 }
@@ -192,20 +193,20 @@
 }
 
 .cellar-chat__msg--user .cellar-chat__bubble {
-  background: #2a3d31;
-  color: #E8DFD0;
+  background: rgba(var(--color-primary-rgb), 0.15);
+  color: var(--color-text);
   border-bottom-right-radius: 4px;
 }
 
 .cellar-chat__msg--assistant .cellar-chat__bubble {
-  background: #1e1e1e;
-  border: 1px solid #2a2a2a;
-  color: #c8c0b4;
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-secondary);
   border-bottom-left-radius: 4px;
 }
 
 .cellar-chat__bubble--thinking {
-  color: #555;
+  color: var(--color-input-placeholder);
   font-style: italic;
 }
 
@@ -216,7 +217,7 @@
   align-items: baseline;
   gap: 0.4rem;
   font-size: 0.73rem;
-  color: #555;
+  color: var(--color-input-placeholder);
   max-width: 85%;
   padding: 0 0.25rem;
   line-height: 1.4;
@@ -224,14 +225,14 @@
 
 .cellar-chat__expanded-query-label {
   flex-shrink: 0;
-  color: #444;
+  color: var(--color-input-placeholder);
   font-size: 0.7rem;
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
 
 .cellar-chat__expanded-query-text {
-  color: #555;
+  color: var(--color-input-placeholder);
   font-style: italic;
   overflow: hidden;
   display: -webkit-box;
@@ -249,19 +250,19 @@
 }
 
 .cellar-chat__wine-card {
-  background: #161616;
-  border: 1px solid #2a2a2a;
-  border-radius: 8px;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
   padding: 0.5rem 0.75rem;
   font-size: 0.78rem;
-  color: #999;
+  color: var(--color-text-muted);
   min-width: 140px;
   max-width: 200px;
 }
 
 .cellar-chat__wine-card-name {
   font-weight: 600;
-  color: #c8c0b4;
+  color: var(--color-text-secondary);
   margin-bottom: 2px;
   white-space: nowrap;
   overflow: hidden;
@@ -269,7 +270,7 @@
 }
 
 .cellar-chat__wine-card-meta {
-  color: #666;
+  color: var(--color-text-muted);
   font-size: 0.73rem;
 }
 
@@ -281,15 +282,15 @@
   gap: 0.5rem;
   margin-top: 1rem;
   padding-top: 0.75rem;
-  border-top: 1px solid #1e1e1e;
+  border-top: 1px solid var(--color-surface);
 }
 
 .cellar-chat__input {
   flex: 1;
-  background: #161616;
-  border: 1px solid #2e2e2e;
-  color: #E8DFD0;
-  border-radius: 8px;
+  background: var(--color-bg);
+  border: 1px solid var(--color-surface-raised);
+  color: var(--color-text);
+  border-radius: var(--radius-md);
   padding: 0.65rem 1rem;
   font-size: 0.92rem;
   resize: none;
@@ -302,7 +303,7 @@
 
 .cellar-chat__input:focus {
   outline: none;
-  border-color: #7B9E88;
+  border-color: var(--color-primary);
 }
 
 .cellar-chat__input:disabled {
@@ -310,10 +311,10 @@
 }
 
 .cellar-chat__send {
-  background: #7B9E88;
-  color: #0d0d0d;
+  background: var(--color-primary);
+  color: var(--color-bg);
   border: none;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   padding: 0 1.1rem;
   font-size: 1rem;
   font-weight: 700;
@@ -324,8 +325,8 @@
 }
 
 .cellar-chat__send:hover:not(:disabled) {
-  background: #5f8470;
-  color: #fff;
+  background: var(--color-primary-hover);
+  color: var(--color-bg);
 }
 
 .cellar-chat__send:disabled {
@@ -335,7 +336,7 @@
 
 .cellar-chat__error {
   font-size: 0.82rem;
-  color: #E07060;
+  color: var(--color-danger);
   margin-top: 0.35rem;
   padding-left: 0.25rem;
 }

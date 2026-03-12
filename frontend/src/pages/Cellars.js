@@ -80,17 +80,24 @@ function Cellars() {
 
   return (
     <div className="cellars-page">
-      <div className="page-header">
-        <h1>{t('cellars.title')}</h1>
-        <button
-          onClick={() => {
-            setLimitError(null);
-            setShowCreateForm(!showCreateForm);
-          }}
-          className="btn btn-primary"
-        >
-          {showCreateForm ? t('common.cancel') : t('cellars.newCellar')}
-        </button>
+      <div className="cellars-header">
+        <div className="cellars-header-top">
+          <h1>{t('cellars.title')}</h1>
+          <button
+            onClick={() => {
+              setLimitError(null);
+              setShowCreateForm(!showCreateForm);
+            }}
+            className="btn btn-primary btn-small cellars-desktop-create"
+          >
+            {showCreateForm ? t('common.cancel') : `+ ${t('cellars.newCellar')}`}
+          </button>
+        </div>
+        {cellars.length > 0 && (
+          <p className="cellars-subtitle">
+            {ownedCellars.length} owned{cellars.length > ownedCellars.length ? `, ${cellars.length - ownedCellars.length} shared` : ''}
+          </p>
+        )}
       </div>
 
       {/* Plan limit upgrade prompt — only after the button is clicked */}
@@ -186,6 +193,19 @@ function Cellars() {
           ))}
         </div>
       )}
+
+      {/* FAB: New Cellar (mobile only) */}
+      <button
+        className="fab cellars-fab"
+        onClick={() => {
+          setLimitError(null);
+          setShowCreateForm(!showCreateForm);
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        }}
+        aria-label={t('cellars.newCellar')}
+      >
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      </button>
     </div>
   );
 }

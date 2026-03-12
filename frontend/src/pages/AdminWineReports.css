@@ -21,7 +21,7 @@
 .awr-tabs {
   display: flex;
   gap: 4px;
-  border-bottom: 2px solid var(--border, #ddd);
+  border-bottom: 2px solid var(--color-border);
 }
 
 .awr-tabs button {
@@ -30,21 +30,21 @@
   padding: 7px 14px;
   cursor: pointer;
   font-size: 0.875rem;
-  color: var(--text-secondary, #666);
+  color: var(--color-text-secondary);
   border-bottom: 2px solid transparent;
   margin-bottom: -2px;
   transition: color 0.15s, border-color 0.15s;
 }
 
 .awr-tabs button.active {
-  color: var(--accent, #7b3f00);
-  border-bottom-color: var(--accent, #7b3f00);
+  color: var(--color-accent);
+  border-bottom-color: var(--color-accent);
   font-weight: 600;
 }
 
 .awr-count {
   font-size: 0.85rem;
-  color: var(--text-muted, #888);
+  color: var(--color-text-muted);
 }
 
 .awr-layout {
@@ -61,10 +61,10 @@
 }
 
 .awr-list {
-  border: 1px solid var(--border, #ddd);
-  border-radius: 8px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
   overflow: hidden;
-  background: var(--bg-card, #fff);
+  background: var(--color-surface);
   max-height: calc(100vh - 200px);
   overflow-y: auto;
 }
@@ -73,24 +73,24 @@
 .awr-placeholder {
   padding: 24px;
   text-align: center;
-  color: var(--text-muted, #888);
+  color: var(--color-text-muted);
   font-size: 0.9rem;
 }
 
 .awr-item {
   padding: 12px 14px;
-  border-bottom: 1px solid var(--border, #eee);
+  border-bottom: 1px solid var(--color-border);
   cursor: pointer;
   transition: background 0.1s;
 }
 
 .awr-item:hover,
 .awr-item.selected {
-  background: var(--bg-hover, #f8f6f3);
+  background: var(--color-surface-hover);
 }
 
 .awr-item.selected {
-  border-left: 3px solid var(--accent, #7b3f00);
+  border-left: 3px solid var(--color-accent);
 }
 
 .awr-item-top {
@@ -113,24 +113,24 @@
   display: flex;
   justify-content: space-between;
   font-size: 0.75rem;
-  color: var(--text-muted, #888);
+  color: var(--color-text-muted);
 }
 
 .awr-badge {
   font-size: 0.68rem;
   padding: 2px 7px;
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   font-weight: 600;
 }
 
-.awr-badge.reason-wrong_info { background: #fff3cd; color: #856404; }
-.awr-badge.reason-duplicate { background: #e0f0ff; color: #1a5fa3; }
-.awr-badge.reason-inappropriate { background: #fde8e8; color: #9b1c1c; }
-.awr-badge.reason-other { background: #f3ede7; color: #7b3f00; }
+.awr-badge.reason-wrong_info { background: var(--color-warning-bg); color: var(--color-warning); }
+.awr-badge.reason-duplicate { background: var(--color-info-bg); color: var(--color-info); }
+.awr-badge.reason-inappropriate { background: var(--color-danger-bg); color: var(--color-danger); }
+.awr-badge.reason-other { background: var(--color-accent-light); color: var(--color-accent); }
 
-.awr-badge.status-pending { background: #e3f0ff; color: #1a5fa3; }
-.awr-badge.status-resolved { background: #d4edda; color: #155724; }
-.awr-badge.status-dismissed { background: #f8f9fa; color: #6c757d; }
+.awr-badge.status-pending { background: var(--color-info-bg); color: var(--color-info); }
+.awr-badge.status-resolved { background: var(--color-success-bg); color: var(--color-success); }
+.awr-badge.status-dismissed { background: var(--color-surface-hover); color: var(--color-text-muted); }
 
 .awr-pagination {
   display: flex;
@@ -138,14 +138,14 @@
   justify-content: center;
   gap: 12px;
   padding: 12px;
-  border-top: 1px solid var(--border, #eee);
+  border-top: 1px solid var(--color-border);
   font-size: 0.85rem;
 }
 
 .awr-pagination button {
   padding: 4px 10px;
-  border: 1px solid var(--border, #ddd);
-  border-radius: 4px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
   background: none;
   cursor: pointer;
 }
@@ -156,9 +156,9 @@
 }
 
 .awr-detail {
-  border: 1px solid var(--border, #ddd);
-  border-radius: 8px;
-  background: var(--bg-card, #fff);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
   padding: 20px;
 }
 
@@ -185,7 +185,7 @@
   display: flex;
   gap: 16px;
   font-size: 0.8rem;
-  color: var(--text-muted, #888);
+  color: var(--color-text-muted);
   margin-bottom: 16px;
 }
 
@@ -205,7 +205,7 @@
   font-size: 0.75rem;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  color: var(--text-muted, #999);
+  color: var(--color-text-muted);
 }
 
 .awr-wine-info p,
@@ -219,15 +219,15 @@
 }
 
 .awr-actions {
-  border-top: 1px solid var(--border, #eee);
+  border-top: 1px solid var(--color-border);
   padding-top: 16px;
 }
 
 .awr-actions textarea {
   width: 100%;
   padding: 10px;
-  border: 1px solid var(--border, #ddd);
-  border-radius: 6px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
   font-size: 0.9rem;
   font-family: inherit;
   resize: vertical;
@@ -243,25 +243,25 @@
 
 .awr-actions .optional {
   font-size: 0.75rem;
-  color: var(--text-muted, #999);
+  color: var(--color-text-muted);
   font-weight: 400;
   text-transform: none;
 }
 
 .awr-error {
-  color: var(--danger, #c0392b);
+  color: var(--color-danger);
   font-size: 0.85rem;
   margin: 8px 0 0;
 }
 
 .awr-success {
-  color: var(--success, #155724);
+  color: var(--color-success);
   font-size: 0.85rem;
   margin: 8px 0 0;
 }
 
 .awr-resolved-by {
   font-size: 0.8rem;
-  color: var(--text-muted, #888);
+  color: var(--color-text-muted);
   margin-top: 6px;
 }

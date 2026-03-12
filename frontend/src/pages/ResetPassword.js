@@ -47,7 +47,7 @@ function ResetPassword() {
       <div className="login-page">
         <div className="login-card">
           <div className="login-header">
-            <CellarionLogo size={90} color="#7B9E88" showText />
+            <CellarionLogo size={90} color="var(--color-primary)" showText />
             <p>Reset Password</p>
           </div>
           <div className="alert alert-error">No reset token found in the URL.</div>
@@ -67,7 +67,7 @@ function ResetPassword() {
     <div className="login-page">
       <div className="login-card">
         <div className="login-header">
-          <CellarionLogo size={90} color="#7B9E88" showText />
+          <CellarionLogo size={90} color="var(--color-primary)" showText />
           <p>Set a new password</p>
         </div>
 
@@ -97,7 +97,7 @@ function ResetPassword() {
                 required
               />
             </div>
-            <p style={{ color: '#9A9484', fontSize: '0.8rem', marginBottom: '1rem' }}>
+            <p style={{ color: 'var(--color-text-muted)', fontSize: '0.8rem', marginBottom: '1rem' }}>
               Must be at least 12 characters with uppercase, lowercase, number, and special character.
             </p>
             <button

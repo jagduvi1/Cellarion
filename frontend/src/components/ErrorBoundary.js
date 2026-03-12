@@ -30,20 +30,20 @@ class ErrorBoundary extends Component {
           padding: '2rem',
           textAlign: 'center'
         }}>
-          <h1 style={{ fontSize: '1.5rem', color: '#c0392b', marginBottom: '1rem' }}>
+          <h1 style={{ fontSize: '1.5rem', color: 'var(--color-danger)', marginBottom: '1rem' }}>
             Something went wrong
           </h1>
-          <p style={{ color: '#7f8c8d', marginBottom: '1.5rem' }}>
+          <p style={{ color: 'var(--color-text-muted)', marginBottom: '1.5rem' }}>
             An unexpected error occurred. Please refresh the page to try again.
           </p>
           <button
             onClick={() => window.location.reload()}
             style={{
               padding: '0.75rem 1.5rem',
-              background: '#3498db',
-              color: 'white',
+              background: 'var(--color-primary)',
+              color: 'var(--color-text-inverse)',
               border: 'none',
-              borderRadius: '6px',
+              borderRadius: 'var(--radius-sm)',
               cursor: 'pointer',
               fontSize: '1rem'
             }}
@@ -54,14 +54,14 @@ class ErrorBoundary extends Component {
             <pre style={{
               marginTop: '2rem',
               padding: '1rem',
-              background: '#f8f8f8',
-              border: '1px solid #ddd',
-              borderRadius: '4px',
+              background: 'var(--color-surface)',
+              border: '1px solid var(--color-border)',
+              borderRadius: 'var(--radius-sm)',
               textAlign: 'left',
               fontSize: '0.8rem',
               maxWidth: '600px',
               overflow: 'auto',
-              color: '#c0392b'
+              color: 'var(--color-danger)'
             }}>
               {this.state.error.toString()}
             </pre>

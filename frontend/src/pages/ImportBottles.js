@@ -1142,7 +1142,10 @@ function ImportBottles() {
   return (
     <div className="import-page">
       <div className="import-header">
-        <Link to={`/cellars/${cellarId}`} className="back-link">&larr; Back to Cellar</Link>
+        <Link to={`/cellars/${cellarId}`} className="back-link">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+          Back to Cellar
+        </Link>
         <h1>Import Bottles</h1>
       </div>
 

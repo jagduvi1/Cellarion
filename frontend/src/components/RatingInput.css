@@ -14,21 +14,21 @@
 .rating-input__number {
   width: 80px;
   padding: 6px 8px;
-  border: 1px solid var(--color-border, #ccc);
-  border-radius: 4px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
   font-size: 0.95rem;
-  background: var(--color-input-bg, #fff);
-  color: var(--color-text, #333);
+  background: var(--color-input-bg);
+  color: var(--color-text);
 }
 
 .rating-input__number:focus {
-  outline: 2px solid var(--color-accent, #7B9E88);
+  outline: 2px solid var(--color-primary);
   border-color: transparent;
 }
 
 .rating-input__suffix {
   font-size: 0.9rem;
-  color: var(--color-text-muted, #888);
+  color: var(--color-text-muted);
   min-width: 28px;
 }
 
@@ -42,7 +42,7 @@
 }
 
 .rating-stars-preview__bg {
-  color: var(--color-star-empty, #ddd);
+  color: var(--color-border);
 }
 
 .rating-stars-preview__fill {
@@ -51,26 +51,26 @@
   left: 0;
   overflow: hidden;
   white-space: nowrap;
-  color: var(--color-star-filled, #f5a623);
+  color: var(--color-accent);
 }
 
 /* Scale selector */
 .rating-input__scale-select {
   padding: 5px 8px;
-  border: 1px solid var(--color-border, #ccc);
-  border-radius: 4px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
   font-size: 0.85rem;
-  background: var(--color-input-bg, #fff);
-  color: var(--color-text, #333);
+  background: var(--color-input-bg);
+  color: var(--color-text);
   cursor: pointer;
 }
 
 .rating-input__scale-select:focus {
-  outline: 2px solid var(--color-accent, #7B9E88);
+  outline: 2px solid var(--color-primary);
   border-color: transparent;
 }
 
 .rating-input__hint {
   font-size: 0.78rem;
-  color: var(--color-text-muted, #888);
+  color: var(--color-text-muted);
 }
