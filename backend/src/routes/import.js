@@ -225,7 +225,7 @@ router.post('/validate', async (req, res) => {
               vintage: item.vintage,
               country: item.country
             });
-            if (identified && !identified.error && identified.confidence >= 0.4) {
+            if (identified) {
               const { wine } = await findOrCreateWine(identified, req.user.id);
               aiMatch = {
                 wineId: wine._id,
@@ -236,7 +236,7 @@ router.post('/validate', async (req, res) => {
                 appellation: wine.appellation || null,
                 type: wine.type,
                 image: wine.image || null,
-                score: identified.confidence,
+                score: identified.confidence ?? 1,
                 aiIdentified: true
               };
             }
