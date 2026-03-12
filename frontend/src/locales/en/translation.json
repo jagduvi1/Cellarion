@@ -265,7 +265,7 @@
     "cantFindAiHint": "Let AI search for it",
     "aiFoundWine": "AI found a match",
     "aiUseThisWine": "Use this wine",
-    "aiNotRight": "Not what I'm looking for",
+    "requestWineInstead": "Request a wine",
     "aiCouldNotIdentify": "AI could not identify this wine. You can submit a request instead.",
     "aiSearching": "AI is searching for your wine…",
     "submitWineRequest": "Submit a wine request"

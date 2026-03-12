@@ -265,7 +265,7 @@
     "cantFindAiHint": "Låt AI söka efter det",
     "aiFoundWine": "AI hittade en träff",
     "aiUseThisWine": "Använd detta vin",
-    "aiNotRight": "Inte det jag letar efter",
+    "requestWineInstead": "Begär ett vin",
     "aiCouldNotIdentify": "AI kunde inte identifiera detta vin. Du kan skicka en förfrågan istället.",
     "aiSearching": "AI söker efter ditt vin…",
     "submitWineRequest": "Skicka vinförfrågan"

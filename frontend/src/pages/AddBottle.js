@@ -322,11 +322,6 @@ function AddBottle() {
     if (aiResult) handleSelectWine(aiResult);
   };
 
-  const handleRejectAiResult = () => {
-    setAiResult(null);
-    setAiSearchError(null);
-  };
-
   const handleSelectWine = (wine) => {
     setSelectedWine(wine);
     setStep(2);
@@ -670,9 +665,9 @@ function AddBottle() {
                     <button type="button" className="btn btn-success" onClick={handleAcceptAiResult}>
                       {t('addBottle.aiUseThisWine')}
                     </button>
-                    <button type="button" className="btn btn-ghost" onClick={handleRejectAiResult}>
-                      {t('addBottle.aiNotRight')}
-                    </button>
+                    <Link to="/wine-requests" className="btn btn-ghost">
+                      {t('addBottle.requestWineInstead')}
+                    </Link>
                   </div>
                 </div>
               )}
