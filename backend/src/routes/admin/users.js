@@ -3,6 +3,7 @@ const { requireAuth, requireRole } = require('../../middleware/auth');
 const User = require('../../models/User');
 const { PLAN_NAMES } = require('../../config/plans');
 const { logAudit } = require('../../services/audit');
+const { parsePagination } = require('../../utils/pagination');
 
 const router = express.Router();
 
@@ -14,11 +15,8 @@ router.use(requireAuth, requireRole('admin'));
 // GET /api/admin/users - List all users with optional filters and pagination
 router.get('/', async (req, res) => {
   try {
-    const { search, plan, role, limit = 50, offset = 0 } = req.query;
-
-    // Validate and clamp pagination to prevent DoS via huge queries
-    const limitNum = Math.min(Math.max(parseInt(limit, 10) || 50, 1), 200);
-    const offsetNum = Math.max(parseInt(offset, 10) || 0, 0);
+    const { search, plan, role } = req.query;
+    const { limit, offset } = parsePagination(req.query, { limit: 50, maxLimit: 200 });
 
     const filter = {};
 
@@ -42,8 +40,8 @@ router.get('/', async (req, res) => {
       User.find(filter)
         .select('username email roles plan planStartedAt planExpiresAt trialEligible createdAt')
         .sort({ createdAt: -1 })
-        .skip(offsetNum)
-        .limit(limitNum),
+        .skip(offset)
+        .limit(limit),
       User.countDocuments(filter),
     ]);
 

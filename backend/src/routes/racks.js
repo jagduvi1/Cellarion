@@ -1,5 +1,6 @@
 const express = require('express');
 const { requireAuth } = require('../middleware/auth');
+const { requireCellarAccess } = require('../middleware/cellarAccess');
 const Rack = require('../models/Rack');
 const Cellar = require('../models/Cellar');
 const Bottle = require('../models/Bottle');
@@ -9,16 +10,9 @@ const router = express.Router();
 router.use(requireAuth);
 
 // GET /api/racks?cellar=:id  — list racks for a cellar (owner, editor, viewer)
-router.get('/', async (req, res) => {
+router.get('/', requireCellarAccess('viewer'), async (req, res) => {
   try {
-    const { cellar } = req.query;
-    if (!cellar) return res.status(400).json({ error: 'cellar query param required' });
-
-    const cellarDoc = await Cellar.findById(cellar);
-    const role = getCellarRole(cellarDoc, req.user.id);
-    if (!role) return res.status(404).json({ error: 'Cellar not found' });
-
-    const racks = await Rack.find({ cellar, deletedAt: null })
+    const racks = await Rack.find({ cellar: req.cellar._id, deletedAt: null })
       .populate({
         path: 'slots.bottle',
         populate: { path: 'wineDefinition', populate: ['country', 'region', 'grapes'] }
@@ -32,21 +26,15 @@ router.get('/', async (req, res) => {
 });
 
 // POST /api/racks  — create a rack (owner or editor)
-router.post('/', async (req, res) => {
+router.post('/', requireCellarAccess('editor'), async (req, res) => {
   try {
-    const { cellar, name, rows, cols } = req.body;
-    if (!cellar || !name) return res.status(400).json({ error: 'cellar and name are required' });
-
-    const cellarDoc = await Cellar.findById(cellar);
-    const role = getCellarRole(cellarDoc, req.user.id);
-    if (!role || role === 'viewer') {
-      return res.status(403).json({ error: 'Not authorized to create racks in this cellar' });
-    }
+    const { name, rows, cols } = req.body;
+    if (!name) return res.status(400).json({ error: 'cellar and name are required' });
 
     // Racks are owned by the cellar owner
     const rack = new Rack({
-      cellar,
-      user: cellarDoc.user,
+      cellar: req.cellar._id,
+      user: req.cellar.user,
       name,
       rows: rows || 4,
       cols: cols || 8

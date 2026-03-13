@@ -16,6 +16,9 @@ const embeddingJob = require('../services/embeddingJob');
 const vectorStore = require('../services/vectorStore');
 const aiConfig = require('../config/aiConfig');
 const aiChat = require('../services/aiChat');
+const { updateSiteConfig } = require('../utils/siteConfig');
+const { parsePagination } = require('../utils/pagination');
+const { SYSTEM_PROMPT_MAX_LENGTH, SCAN_PROMPT_MAX_LENGTH } = require('../config/constants');
 
 const router = express.Router();
 
@@ -283,8 +286,7 @@ router.get('/process', (req, res) => {
 // ---------------------------------------------------------------------------
 router.get('/audit', async (req, res) => {
   try {
-    const limit = Math.min(parseInt(req.query.limit, 10) || 100, 500);
-    const offset = Math.max(parseInt(req.query.offset, 10) || 0, 0);
+    const { limit, offset } = parsePagination(req.query, { limit: 100, maxLimit: 500 });
     const filter = {};
     if (req.query.action) {
       const escaped = req.query.action.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -314,8 +316,7 @@ router.get('/audit', async (req, res) => {
 // ---------------------------------------------------------------------------
 router.get('/users', async (req, res) => {
   try {
-    const limit = Math.min(parseInt(req.query.limit, 10) || 100, 500);
-    const offset = Math.max(parseInt(req.query.offset, 10) || 0, 0);
+    const { limit, offset } = parsePagination(req.query, { limit: 100, maxLimit: 500 });
     const filter = {};
 
     if (req.query.search) {
@@ -409,14 +410,9 @@ router.patch('/ai/chat-limits', async (req, res) => {
     return res.status(400).json({ error: 'Each limit must be a non-negative integer' });
   }
   try {
-    const SiteConfig = require('../models/SiteConfig');
     const current = aiConfig.get();
     const updated = { ...current, chatDailyLimits: vals };
-    await SiteConfig.findOneAndUpdate(
-      { key: 'aiConfig' },
-      { $set: { value: updated, updatedAt: new Date(), updatedBy: req.user.id } },
-      { upsert: true }
-    );
+    await updateSiteConfig('aiConfig', updated, req.user.id);
     aiConfig.set(updated);
     res.json({ chatDailyLimits: vals });
   } catch (error) {
@@ -434,18 +430,13 @@ router.patch('/ai/system-prompt', async (req, res) => {
   if (typeof prompt !== 'string' || !prompt.trim()) {
     return res.status(400).json({ error: 'prompt must be a non-empty string' });
   }
-  if (prompt.length > 4000) {
-    return res.status(400).json({ error: 'prompt must be 4000 characters or fewer' });
+  if (prompt.length > SYSTEM_PROMPT_MAX_LENGTH) {
+    return res.status(400).json({ error: `prompt must be ${SYSTEM_PROMPT_MAX_LENGTH} characters or fewer` });
   }
   try {
-    const SiteConfig = require('../models/SiteConfig');
     const current = aiConfig.get();
     const updated = { ...current, chatSystemPrompt: prompt.trim() };
-    await SiteConfig.findOneAndUpdate(
-      { key: 'aiConfig' },
-      { $set: { value: updated, updatedAt: new Date(), updatedBy: req.user.id } },
-      { upsert: true }
-    );
+    await updateSiteConfig('aiConfig', updated, req.user.id);
     aiConfig.set(updated);
     res.json({ chatSystemPrompt: updated.chatSystemPrompt });
   } catch (error) {
@@ -462,18 +453,13 @@ router.patch('/ai/label-scan-prompt', async (req, res) => {
   if (typeof prompt !== 'string' || !prompt.trim()) {
     return res.status(400).json({ error: 'prompt must be a non-empty string' });
   }
-  if (prompt.length > 6000) {
-    return res.status(400).json({ error: 'prompt must be 6000 characters or fewer' });
+  if (prompt.length > SCAN_PROMPT_MAX_LENGTH) {
+    return res.status(400).json({ error: `prompt must be ${SCAN_PROMPT_MAX_LENGTH} characters or fewer` });
   }
   try {
-    const SiteConfig = require('../models/SiteConfig');
     const current = aiConfig.get();
     const updated = { ...current, labelScanPrompt: prompt.trim() };
-    await SiteConfig.findOneAndUpdate(
-      { key: 'aiConfig' },
-      { $set: { value: updated, updatedAt: new Date(), updatedBy: req.user.id } },
-      { upsert: true }
-    );
+    await updateSiteConfig('aiConfig', updated, req.user.id);
     aiConfig.set(updated);
     res.json({ labelScanPrompt: updated.labelScanPrompt });
   } catch (error) {
@@ -491,18 +477,13 @@ router.patch('/ai/import-lookup-prompt', async (req, res) => {
   if (typeof prompt !== 'string' || !prompt.trim()) {
     return res.status(400).json({ error: 'prompt must be a non-empty string' });
   }
-  if (prompt.length > 6000) {
-    return res.status(400).json({ error: 'prompt must be 6000 characters or fewer' });
+  if (prompt.length > SCAN_PROMPT_MAX_LENGTH) {
+    return res.status(400).json({ error: `prompt must be ${SCAN_PROMPT_MAX_LENGTH} characters or fewer` });
   }
   try {
-    const SiteConfig = require('../models/SiteConfig');
     const current = aiConfig.get();
     const updated = { ...current, importLookupPrompt: prompt.trim() };
-    await SiteConfig.findOneAndUpdate(
-      { key: 'aiConfig' },
-      { $set: { value: updated, updatedAt: new Date(), updatedBy: req.user.id } },
-      { upsert: true }
-    );
+    await updateSiteConfig('aiConfig', updated, req.user.id);
     aiConfig.set(updated);
     res.json({ importLookupPrompt: updated.importLookupPrompt });
   } catch (error) {
@@ -523,14 +504,9 @@ router.patch('/ai/import-lookup-model', async (req, res) => {
   }
 
   try {
-    const SiteConfig = require('../models/SiteConfig');
     const current = aiConfig.get();
     const updated = { ...current, importLookupModel: model };
-    await SiteConfig.findOneAndUpdate(
-      { key: 'aiConfig' },
-      { $set: { value: updated, updatedAt: new Date(), updatedBy: req.user.id } },
-      { upsert: true }
-    );
+    await updateSiteConfig('aiConfig', updated, req.user.id);
     aiConfig.set(updated);
     res.json({ importLookupModel: model });
   } catch (error) {
@@ -551,14 +527,9 @@ router.patch('/ai/label-scan-model', async (req, res) => {
   }
 
   try {
-    const SiteConfig = require('../models/SiteConfig');
     const current = aiConfig.get();
     const updated = { ...current, labelScanModel: model };
-    await SiteConfig.findOneAndUpdate(
-      { key: 'aiConfig' },
-      { $set: { value: updated, updatedAt: new Date(), updatedBy: req.user.id } },
-      { upsert: true }
-    );
+    await updateSiteConfig('aiConfig', updated, req.user.id);
     aiConfig.set(updated);
     res.json({ labelScanModel: model });
   } catch (error) {
@@ -585,18 +556,13 @@ router.patch('/ai/chat-model', async (req, res) => {
   }
 
   try {
-    const SiteConfig = require('../models/SiteConfig');
     const current = aiConfig.get();
     const updated = {
       ...current,
       chatModel: model,
       chatModelFallback: fallbackModel !== undefined ? fallbackModel : current.chatModelFallback,
     };
-    await SiteConfig.findOneAndUpdate(
-      { key: 'aiConfig' },
-      { $set: { value: updated, updatedAt: new Date(), updatedBy: req.user.id } },
-      { upsert: true }
-    );
+    await updateSiteConfig('aiConfig', updated, req.user.id);
     aiConfig.set(updated);
     res.json({ chatModel: model, chatModelFallback: updated.chatModelFallback });
   } catch (error) {
@@ -611,9 +577,8 @@ router.patch('/ai/chat-model', async (req, res) => {
 // ---------------------------------------------------------------------------
 router.get('/chat-usage', async (req, res) => {
   try {
-    const days   = Math.min(Math.max(parseInt(req.query.days,   10) || 30,  1), 90);
-    const limit  = Math.min(Math.max(parseInt(req.query.limit,  10) || 50,  1), 500);
-    const offset = Math.max(parseInt(req.query.offset, 10) || 0, 0);
+    const days = Math.min(Math.max(parseInt(req.query.days, 10) || 30, 1), 90);
+    const { limit, offset } = parsePagination(req.query, { limit: 50, maxLimit: 500 });
 
     // Compute date range (inclusive)
     const since = new Date();

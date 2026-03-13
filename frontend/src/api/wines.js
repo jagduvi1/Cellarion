@@ -1,4 +1,4 @@
-const JSON_HEADERS = { 'Content-Type': 'application/json' };
+import { JSON_HEADERS } from './apiConstants';
 
 export const searchWines = (apiFetch, params) =>
   apiFetch(`/api/wines?${params}`);

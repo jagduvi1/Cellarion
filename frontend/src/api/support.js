@@ -1,4 +1,4 @@
-const J = { 'Content-Type': 'application/json' };
+import { JSON_HEADERS as J } from './apiConstants';
 
 // ── Support Tickets (user-facing) ─────────────────────────────────────────────
 export const submitSupportTicket = (apiFetch, data) =>

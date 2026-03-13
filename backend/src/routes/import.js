@@ -11,81 +11,41 @@ const { getCellarRole } = require('../utils/cellarAccess');
 const { logAudit } = require('../services/audit');
 const { getOrCreateDailySnapshot } = require('../utils/exchangeRates');
 const { resolveRating } = require('../utils/ratingUtils');
-const { normalizeString, combinedSimilarity } = require('../utils/normalize');
+const { normalizeString } = require('../utils/normalize');
 const searchService = require('../services/search');
 const { identifyWineFromText } = require('../services/labelScan');
 const { findOrCreateWine } = require('../services/findOrCreateWine');
-const { CONSUMED_STATUSES } = require('../config/constants');
+const { scoreWineMatch } = require('../services/wineMatching');
+const {
+  CONSUMED_STATUSES,
+  IMPORT_EXACT_THRESHOLD,
+  IMPORT_FUZZY_THRESHOLD,
+  MAX_IMPORT_SIZE,
+  AI_CONCURRENCY,
+} = require('../config/constants');
 const { stripHtml } = require('../utils/sanitize');
+const { extractAiExplanation } = require('../utils/jsonExtract');
+const { runConcurrent } = require('../utils/concurrency');
 const WineRequest = require('../models/WineRequest');
 const ImportSession = require('../models/ImportSession');
 
 const router = express.Router();
 router.use(requireAuth);
 
-// Extracts any plain-text explanation the model appended after its JSON object.
-// Models sometimes add "**Reason**: ..." or similar after the closing brace.
-function extractAiExplanation(raw) {
-  if (!raw) return null;
-  let depth = 0, inStr = false, esc = false;
-  for (let i = 0; i < raw.length; i++) {
-    const c = raw[i];
-    if (esc) { esc = false; continue; }
-    if (c === '\\' && inStr) { esc = true; continue; }
-    if (c === '"') { inStr = !inStr; continue; }
-    if (inStr) continue;
-    if (c === '{') depth++;
-    if (c === '}' && --depth === 0) {
-      return raw.slice(i + 1).replace(/^\s*\*{0,2}Reason\*{0,2}:?\s*/i, '').trim() || null;
-    }
-  }
-  return null;
-}
-
-// Concurrency-limited equivalent of Promise.allSettled.
-// Runs at most `concurrency` tasks simultaneously so we don't blast the AI
-// rate limit (50 req/min for Haiku) when a large import has many no-match wines.
-async function runConcurrent(tasks, concurrency) {
-  const results = new Array(tasks.length);
-  let next = 0;
-  async function worker() {
-    while (next < tasks.length) {
-      const i = next++;
-      try { results[i] = { status: 'fulfilled', value: await tasks[i]() }; }
-      catch (err) { results[i] = { status: 'rejected', reason: err }; }
-    }
-  }
-  await Promise.all(Array.from({ length: Math.min(concurrency, tasks.length) }, worker));
-  return results;
-}
-const AI_CONCURRENCY = 5; // stay well under the 50 req/min cap
-
-// Maximum items per import batch
-const MAX_IMPORT_SIZE = 500;
-
-// Similarity thresholds
-const EXACT_THRESHOLD = 0.95;
-const FUZZY_THRESHOLD = 0.65;
+// Aliases for readability (imported from config/constants.js)
+const EXACT_THRESHOLD = IMPORT_EXACT_THRESHOLD;
+const FUZZY_THRESHOLD = IMPORT_FUZZY_THRESHOLD;
 
 /**
  * Score a WineDefinition candidate against an import item.
- * Returns a composite score (0–1) using name + producer weighted matching.
+ * Delegates to the shared wineMatching service.
  */
 function scoreCandidate(candidate, item) {
-  const nameScore = combinedSimilarity(candidate.name, item.wineName);
-  const producerScore = combinedSimilarity(candidate.producer, item.producer);
-
-  // Weighted: name 0.45, producer 0.45, appellation bonus 0.10
-  let score = nameScore * 0.45 + producerScore * 0.45;
-
-  if (item.appellation && candidate.appellation) {
-    score += combinedSimilarity(candidate.appellation, item.appellation) * 0.10;
-  } else {
-    // Redistribute appellation weight to name+producer when not available
-    score += (nameScore * 0.05 + producerScore * 0.05);
-  }
-
-  return score;
+  return scoreWineMatch(candidate, {
+    name: item.wineName,
+    producer: item.producer,
+    appellation: item.appellation
+  });
 }
 
 /**
@@ -125,8 +85,8 @@ async function findWineMatches(item) {
           }
         }
       }
-    } catch {
-      // Meilisearch unavailable, fall through to MongoDB
+    } catch (err) {
+      console.error('Meilisearch search failed during import, falling back to MongoDB:', err.message);
     }
   }
 
@@ -154,8 +114,8 @@ async function findWineMatches(item) {
           }
         }
       }
-    } catch {
-      // Text index may not exist, continue
+    } catch (err) {
+      console.error('MongoDB text search failed during import (text index may not exist):', err.message);
     }
   }
 
@@ -449,7 +409,7 @@ router.post('/confirm', async (req, res) => {
     // Ensure exchange rate snapshot exists if any items have prices
     const hasPrice = items.some(i => i.price != null && i.price !== '');
     if (hasPrice) {
-      await getOrCreateDailySnapshot().catch(() => {});
+      await getOrCreateDailySnapshot().catch(err => console.error('Failed to fetch daily exchange rate snapshot:', err.message));
     }
 
     let created = 0;
@@ -627,12 +587,12 @@ router.post('/confirm', async (req, res) => {
                 const occupied = rack.slots.some(s => s.position === position);
                 if (!occupied) {
                   rack.slots.push({ position, bottle: bottle._id });
-                  await rack.save().catch(() => {});
+                  await rack.save().catch(err => console.error('Failed to save rack slot during import:', err.message));
                 }
               }
             }
-          } catch {
-            // Non-fatal: bottle was still created
+          } catch (err) {
+            console.error('Failed to place bottle in rack during import (non-fatal):', err.message);
           }
         }
 
@@ -644,7 +604,7 @@ router.post('/confirm', async (req, res) => {
             { wineDefinition: wineDefId, vintage: String(vintageYear) },
             { $setOnInsert: { wineDefinition: wineDefId, vintage: String(vintageYear), status: 'pending' } },
             { upsert: true, new: false }
-          ).catch(() => {});
+          ).catch(err => console.error('Failed to upsert WineVintageProfile during import:', err.message));
         }
       } catch (err) {
         errors.push({ index: i, reason: err.message });
@@ -808,8 +768,8 @@ router.get('/sessions/:id', async (req, res) => {
             score: Math.round(m.score * 100) / 100
           };
         }
-      } catch {
-        // Non-fatal: skip this item
+      } catch (err) {
+        console.error('Failed to re-match import session item (non-fatal):', err.message);
       }
     }
 

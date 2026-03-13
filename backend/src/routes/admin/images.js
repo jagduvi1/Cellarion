@@ -6,6 +6,7 @@ const searchService = require('../../services/search');
 const { reprocessAllImages } = require('../../services/imageProcessor');
 const { logAudit } = require('../../services/audit');
 const { createNotification } = require('../../services/notifications');
+const { parsePagination } = require('../../utils/pagination');
 
 const router = express.Router();
 
@@ -15,13 +16,16 @@ router.use(requireAuth, requireRole('admin'));
 // GET /api/admin/images - List images with optional status filter
 router.get('/', async (req, res) => {
   try {
-    const { status, page = 1, limit = 20 } = req.query;
+    const { status } = req.query;
+    const { limit, offset, page } = parsePagination(req.query, { limit: 20, maxLimit: 100 });
     const filter = {};
-    if (status) filter.status = status;
-
-    const parsedPage = parseInt(page) || 1;
-    const parsedLimit = Math.min(Math.max(parseInt(limit) || 20, 1), 100);
-    const skip = (parsedPage - 1) * parsedLimit;
+    const validStatuses = ['uploaded', 'processing', 'processed', 'approved', 'rejected'];
+    if (status) {
+      if (!validStatuses.includes(status)) {
+        return res.status(400).json({ error: `Invalid status filter. Must be one of: ${validStatuses.join(', ')}` });
+      }
+      filter.status = status;
+    }
 
     const [images, total] = await Promise.all([
       BottleImage.find(filter)
@@ -33,12 +37,12 @@ router.get('/', async (req, res) => {
         .populate('uploadedBy', 'username')
         .populate('reviewedBy', 'username')
         .sort({ createdAt: -1 })
-        .skip(skip)
-        .limit(parsedLimit),
+        .skip(offset)
+        .limit(limit),
       BottleImage.countDocuments(filter)
     ]);
 
-    res.json({ images, total, page: parsedPage, limit: parsedLimit });
+    res.json({ images, total, page, limit });
   } catch (error) {
     console.error('Get admin images error:', error);
     res.status(500).json({ error: 'Failed to get images' });

@@ -160,7 +160,7 @@ router.post('/', async (req, res) => {
     );
 
     // Fire-and-forget: embed this (wine, vintage) pair for AI chat
-    embedSinglePair(wineDefinition, bottle.vintage).catch(() => {});
+    embedSinglePair(wineDefinition, bottle.vintage).catch(err => console.error('Failed to embed wine-vintage pair after bottle creation:', err.message));
 
     res.status(201).json({ bottle });
   } catch (error) {
@@ -280,7 +280,7 @@ router.put('/:id', requireBottleAccess('editor'), async (req, res) => {
     // If vintage changed, the old (wine, oldVintage) embedding is still in Qdrant
     // but won't match this bottle anymore (user changed the year). Embed the new pair.
     if (changes.vintage) {
-      embedSinglePair(bottle.wineDefinition._id || bottle.wineDefinition, bottle.vintage).catch(() => {});
+      embedSinglePair(bottle.wineDefinition._id || bottle.wineDefinition, bottle.vintage).catch(err => console.error('Failed to embed wine-vintage pair after vintage update:', err.message));
     }
 
     res.json({ bottle });

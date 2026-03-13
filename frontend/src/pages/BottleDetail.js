@@ -6,12 +6,16 @@ import { getBottle, updateBottle, consumeBottle } from '../api/bottles';
 import { getRacks } from '../api/racks';
 import { getDrinkStatus, formatDrinkDate, toInputDate, toMonthInput, monthToLastDay, getMaturityStatus } from '../utils/drinkStatus';
 import { fetchRates, convertAmount, convertAmountHistorical } from '../utils/currency';
+import { calculatePriceChange } from '../utils/priceHistoryUtils';
+import { getMaturityPhases, isPhaseActive } from '../utils/maturityUtils';
 import { CURRENCIES } from '../config/currencies';
 import ImageUpload from '../components/ImageUpload';
 import AuthImage from '../components/AuthImage';
 import RatingInput from '../components/RatingInput';
 import RatingDisplay from '../components/RatingDisplay';
 import ReportWineModal from '../components/ReportWineModal';
+import { ConsumeModal } from '../components/ConsumeModal';
+import { SuggestGrapesModal } from '../components/SuggestGrapesModal';
 import './BottleDetail.css';
 
 function BottleDetail() {
@@ -194,7 +198,7 @@ function BottleDetail() {
             </div>
           )}
           <div className="bd-wine-meta">
-            <h1 style={cellarColor ? { borderLeft: `4px solid ${cellarColor}`, paddingLeft: '0.75rem' } : {}}>
+            <h1 className={cellarColor ? 'cellar-accent-border' : ''} style={cellarColor ? { '--cellar-color': cellarColor } : undefined}>
               {displayName || t('common.unknownWine')}
             </h1>
             <p className="bd-producer">
@@ -691,193 +695,29 @@ function EditForm({ bottle, onSaved, onCancel, onImageUploaded }) {
   );
 }
 
-// ── Suggest grapes modal ──
-function SuggestGrapesModal({ wine, onClose }) {
-  const { t } = useTranslation();
-  const { apiFetch } = useAuth();
-  const [grapes, setGrapes] = useState('');
-  const [submitting, setSubmitting] = useState(false);
-  const [submitted, setSubmitted] = useState(false);
-  const [error, setError] = useState(null);
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    const suggestedGrapes = grapes.split(',').map(g => g.trim()).filter(Boolean);
-    if (!suggestedGrapes.length) return;
-    setSubmitting(true);
-    setError(null);
-    try {
-      const res = await apiFetch('/api/wine-requests', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          requestType: 'grape_suggestion',
-          linkedWineDefinition: wine._id,
-          suggestedGrapes
-        })
-      });
-      const data = await res.json();
-      if (res.ok) setSubmitted(true);
-      else setError(data.error || t('common.error', 'An error occurred'));
-    } catch {
-      setError(t('common.networkError', 'Network error'));
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-box" onClick={e => e.stopPropagation()}>
-        {submitted ? (
-          <>
-            <h2>{t('bottleDetail.suggestGrapesThankYou', 'Thanks for contributing!')}</h2>
-            <p className="modal-wine-name">{wine?.name}</p>
-            <p style={{ fontSize: '0.9rem', color: 'var(--color-text-muted)', marginBottom: '1.25rem' }}>
-              {t('bottleDetail.suggestGrapesConfirm', 'Your suggestion has been submitted for review. Our team will add the verified varieties to the wine registry.')}
-            </p>
-            <div className="modal-actions">
-              <button className="btn btn-secondary" onClick={onClose}>{t('common.close', 'Close')}</button>
-            </div>
-          </>
-        ) : (
-          <>
-            <h2>{t('bottleDetail.suggestGrapesTitle', 'Suggest Grape Varieties')}</h2>
-            <p className="modal-wine-name">{wine?.name}</p>
-            <form onSubmit={handleSubmit}>
-              <div className="form-group">
-                <label>{t('bottleDetail.suggestGrapesLabel', 'Grape varieties')}</label>
-                <input
-                  type="text"
-                  value={grapes}
-                  onChange={e => setGrapes(e.target.value)}
-                  placeholder={t('bottleDetail.suggestGrapesPlaceholder', 'e.g. Cabernet Sauvignon, Merlot')}
-                  autoFocus
-                />
-                <small className="form-hint">{t('bottleDetail.suggestGrapesHint', 'Separate multiple varieties with commas')}</small>
-              </div>
-              {error && <div className="alert alert-error">{error}</div>}
-              <div className="modal-actions">
-                <button type="button" className="btn btn-secondary" onClick={onClose}>{t('common.cancel')}</button>
-                <button type="submit" className="btn btn-primary" disabled={submitting || !grapes.trim()}>
-                  {submitting ? t('common.saving') : t('bottleDetail.suggestGrapesSubmit', 'Submit suggestion')}
-                </button>
-              </div>
-            </form>
-          </>
-        )}
-      </div>
-    </div>
-  );
-}
-
-// ── Consume modal ──
-function ConsumeModal({ wineName, defaultRatingScale, onConfirm, onCancel }) {
-  const { t } = useTranslation();
-  const [reason,       setReason]      = useState('drank');
-  const [note,         setNote]        = useState('');
-  const [rating,       setRating]      = useState('');
-  const [ratingScale,  setRatingScale] = useState(defaultRatingScale || '5');
-  const [saving,       setSaving]      = useState(false);
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setSaving(true);
-    await onConfirm(reason, note || undefined, rating || undefined, ratingScale);
-    setSaving(false);
-  };
-
-  return (
-    <div className="modal-overlay" onClick={onCancel}>
-      <div className="modal-box" onClick={e => e.stopPropagation()}>
-        <h2>{t('bottleDetail.removeBottleTitle')}</h2>
-        {wineName && <p className="modal-wine-name">{wineName}</p>}
-        <form onSubmit={handleSubmit}>
-          <div className="form-group">
-            <label>{t('common.reason')}</label>
-            <select value={reason} onChange={e => setReason(e.target.value)}>
-              <option value="drank">{t('bottleDetail.drinkReason')}</option>
-              <option value="gifted">{t('bottleDetail.giftedReason')}</option>
-              <option value="sold">{t('bottleDetail.soldReason')}</option>
-              <option value="other">{t('bottleDetail.otherReason')}</option>
-            </select>
-          </div>
-          {reason === 'drank' && (
-            <div className="form-group">
-              <label>{t('bottleDetail.ratingOptional')}</label>
-              <RatingInput
-                value={rating}
-                scale={ratingScale}
-                onChange={v => setRating(v ?? '')}
-                onScaleChange={s => { setRatingScale(s); setRating(''); }}
-                allowScaleOverride
-              />
-            </div>
-          )}
-          <div className="form-group">
-            <label>{t('bottleDetail.noteOptional')}</label>
-            <textarea
-              value={note}
-              onChange={e => setNote(e.target.value)}
-              rows={3}
-              placeholder={t('bottleDetail.notePlaceholder')}
-            />
-          </div>
-          <div className="modal-actions">
-            <button type="button" className="btn btn-secondary" onClick={onCancel}>{t('common.cancel')}</button>
-            <button type="submit" className="btn btn-consume" disabled={saving}>
-              {saving ? t('common.saving') : t('common.confirm')}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
-}
-
 // ── 3-phase maturity table shown on bottle detail ──
 function MaturityPhaseTable({ profile }) {
   const { t } = useTranslation();
-  const vintageInt = parseInt(profile.vintage);
   const CURRENT_YEAR = new Date().getFullYear();
 
-  const phases = [
-    {
-      label: t('bottleDetail.maturityPhaseEarly'),
-      cls:   'early',
-      from:  profile.earlyFrom,
-      until: profile.earlyUntil,
-    },
-    {
-      label: t('bottleDetail.maturityPhasePeak'),
-      cls:   'peak',
-      from:  profile.peakFrom,
-      until: profile.peakUntil,
-    },
-    {
-      label: t('bottleDetail.maturityPhaseLate'),
-      cls:   'late',
-      from:  profile.lateFrom,
-      until: profile.lateUntil,
-    },
-  ].filter(p => p.from || p.until);
+  const phases = getMaturityPhases(profile, {
+    early: t('bottleDetail.maturityPhaseEarly'),
+    peak:  t('bottleDetail.maturityPhasePeak'),
+    late:  t('bottleDetail.maturityPhaseLate'),
+  });
 
   if (phases.length === 0) return null;
 
   return (
     <div className="bd-maturity-table">
       {phases.map(p => {
-        const isActive = p.from && p.until
-          ? CURRENT_YEAR >= p.from && CURRENT_YEAR <= p.until
-          : p.from
-            ? CURRENT_YEAR >= p.from
-            : false;
+        const active = isPhaseActive(p, CURRENT_YEAR);
 
-        const yrsFrom  = p.from  && !isNaN(vintageInt) ? p.from  - vintageInt : null;
-        const yrsUntil = p.until && !isNaN(vintageInt) ? p.until - vintageInt : null;
+        const yrsFrom  = p.from  && !isNaN(p.vintageInt) ? p.from  - p.vintageInt : null;
+        const yrsUntil = p.until && !isNaN(p.vintageInt) ? p.until - p.vintageInt : null;
 
         return (
-          <div key={p.cls} className={`bd-maturity-row ${isActive ? 'bd-maturity-row--active' : ''}`}>
+          <div key={p.cls} className={`bd-maturity-row ${active ? 'bd-maturity-row--active' : ''}`}>
             <div className={`bd-maturity-phase-dot bd-maturity-phase-dot--${p.cls}`} />
             <span className="bd-maturity-phase-name">{p.label}</span>
             <span className="bd-maturity-phase-range">
@@ -924,12 +764,7 @@ function PriceHistoryTimeline({ history, rates, userCurrency }) {
 
   const latest = history[0];
   const previous = history.length > 1 ? history[1] : null;
-  let change = null;
-  if (previous && previous.price !== 0) {
-    const diff = latest.price - previous.price;
-    const pct = ((diff / previous.price) * 100).toFixed(1);
-    change = { diff, pct, up: diff >= 0 };
-  }
+  const change = calculatePriceChange(latest, previous);
 
   // Convert latest price using historically-anchored rates (rate at time of recording)
   const latestConverted = convertAmountHistorical(latest.price, latest.currency, userCurrency, latest.exchangeRates, rates);
