@@ -175,9 +175,10 @@ router.get('/services', async (req, res) => {
   // Meilisearch health
   try {
     const meiliUrl = process.env.MEILI_URL || 'http://meilisearch:7700';
+    const meiliKey = process.env.MEILI_SEARCH_KEY || process.env.MEILI_MASTER_KEY;
     const t0 = Date.now();
     const meiliRes = await fetch(`${meiliUrl}/health`, {
-      headers: { Authorization: `Bearer ${process.env.MEILI_MASTER_KEY}` },
+      headers: { Authorization: `Bearer ${meiliKey}` },
       signal: AbortSignal.timeout(5000),
     });
     const latencyMs = Date.now() - t0;
@@ -190,8 +191,9 @@ router.get('/services', async (req, res) => {
   // Meilisearch stats (index info)
   try {
     const meiliUrl = process.env.MEILI_URL || 'http://meilisearch:7700';
+    const meiliKey = process.env.MEILI_SEARCH_KEY || process.env.MEILI_MASTER_KEY;
     const statsRes = await fetch(`${meiliUrl}/stats`, {
-      headers: { Authorization: `Bearer ${process.env.MEILI_MASTER_KEY}` },
+      headers: { Authorization: `Bearer ${meiliKey}` },
       signal: AbortSignal.timeout(5000),
     });
     const stats = await statsRes.json();

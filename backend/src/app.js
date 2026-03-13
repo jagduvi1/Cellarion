@@ -70,8 +70,12 @@ app.use('/api/wines/find-or-create', express.json({ limit: '5mb' }));
 app.use('/api/bottles/import/sessions', express.json({ limit: '5mb' }));
 app.use('/api/bottles/import', express.json({ limit: '2mb' }));
 app.use(express.json({ limit: '10kb' }));
+const corsOrigin = process.env.FRONTEND_URL || (process.env.NODE_ENV === 'production' ? undefined : 'http://localhost:3000');
+if (process.env.NODE_ENV === 'production' && !process.env.FRONTEND_URL) {
+  console.warn('[security] FRONTEND_URL is not set — CORS will reject all cross-origin requests in production');
+}
 app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+  origin: corsOrigin,
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
   allowedHeaders: ['Content-Type', 'Authorization']
@@ -157,7 +161,11 @@ app.use((req, res) => {
 app.use((err, req, res, next) => {
   console.error(err);
   const status = err.status || err.statusCode || 500;
-  res.status(status).json({ error: err.message || 'Internal server error' });
+  // In production, never leak internal error messages to the client
+  const message = process.env.NODE_ENV === 'production' && status >= 500
+    ? 'Internal server error'
+    : (err.message || 'Internal server error');
+  res.status(status).json({ error: message });
 });
 
 // Load rate limit configuration from DB on startup (non-blocking; falls back to defaults)

@@ -63,6 +63,9 @@ router.get('/', requireAuth, async (req, res) => {
     if (!isPrivileged && !search) {
       return res.status(400).json({ error: 'A search term is required' });
     }
+    if (search && search.length > 200) {
+      return res.status(400).json({ error: 'Search query is too long (max 200 characters)' });
+    }
 
     const paginationOpts = isPrivileged
       ? { limit: 50, maxLimit: 10000 }

@@ -73,4 +73,9 @@ const checkIsSuperAdmin = (req, userEmail) => {
   return true;
 };
 
+// Log a warning at startup if SUPER_ADMIN_IPS is empty (any IP allowed)
+if (process.env.SUPER_ADMIN_EMAIL && !(process.env.SUPER_ADMIN_IPS || '').trim()) {
+  console.warn('[security] SUPER_ADMIN_IPS is empty — super admin access is allowed from any IP address. Set SUPER_ADMIN_IPS in production.');
+}
+
 module.exports = { requireSuperAdmin, checkIsSuperAdmin };

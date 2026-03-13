@@ -2,6 +2,8 @@ const Bottle = require('../models/Bottle');
 const Cellar = require('../models/Cellar');
 const { getCellarRole } = require('../utils/cellarAccess');
 
+const ROLE_LEVELS = { viewer: 1, editor: 2, owner: 3 };
+
 /**
  * Middleware factory that loads the bottle (by req.params.id), resolves the
  * user's role on its cellar, and gates access by minimum required role.
@@ -23,7 +25,7 @@ function requireBottleAccess(minRole = 'viewer') {
 
       if (!role) return res.status(404).json({ error: 'Bottle not found' });
 
-      if (minRole === 'editor' && role === 'viewer') {
+      if ((ROLE_LEVELS[role] || 0) < (ROLE_LEVELS[minRole] || 0)) {
         return res.status(403).json({ error: 'Not authorized to modify this bottle' });
       }
 
