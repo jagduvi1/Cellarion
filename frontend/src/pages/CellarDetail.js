@@ -2,11 +2,12 @@ import { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
-import { getCellar, getCellarStatistics, updateCellar, deleteCellar, updateCellarColor, exportCellar } from '../api/cellars';
+import { getCellar, getCellarStatistics, exportCellar } from '../api/cellars';
 import { getRacks } from '../api/racks';
 import ShareCellarModal from '../components/ShareCellarModal';
-import CellarColorPicker from '../components/CellarColorPicker';
-import Modal from '../components/Modal';
+import { EditCellarModal } from '../components/EditCellarModal';
+import { ColorPickerModal } from '../components/ColorPickerModal';
+import { DeleteCellarModal } from '../components/DeleteCellarModal';
 import BottleCard from '../components/BottleCard';
 import './CellarDetail.css';
 
@@ -99,8 +100,9 @@ function CellarDetail() {
   if (error)   return <div className="alert alert-error">{error}</div>;
 
   const h1Style = cellar.userColor
-    ? { borderLeft: `4px solid ${cellar.userColor}`, paddingLeft: '0.75rem' }
+    ? { '--cellar-color': cellar.userColor }
     : {};
+  const h1Class = cellar.userColor ? 'cellar-accent-border' : '';
 
   return (
     <div className="cellar-detail-page">
@@ -261,7 +263,7 @@ function CellarDetail() {
           </div>
         </div>
 
-        <h1 style={h1Style}>{cellar.name}</h1>
+        <h1 className={h1Class} style={h1Style}>{cellar.name}</h1>
         {cellar.description && <p className="cellar-description">{cellar.description}</p>}
         {cellar.userRole && cellar.userRole !== 'owner' && (
           <p className="shared-by-label">
@@ -485,160 +487,6 @@ function CellarDetail() {
         />
       )}
     </div>
-  );
-}
-
-// ── Edit cellar modal (owner only — name & description) ──
-function EditCellarModal({ cellar, onSaved, onClose }) {
-  const { t } = useTranslation();
-  const { apiFetch } = useAuth();
-  const [form, setForm] = useState({
-    name: cellar.name,
-    description: cellar.description || '',
-  });
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState(null);
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setSaving(true);
-    setError(null);
-    try {
-      const res = await updateCellar(apiFetch, cellar._id, form);
-      const data = await res.json();
-      if (res.ok) {
-        onSaved({ ...cellar, ...data.cellar });
-      } else {
-        setError(data.error || 'Failed to save');
-      }
-    } catch {
-      setError('Network error');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <Modal title={t('cellarDetail.editCellarTitle')} onClose={onClose}>
-      {error && <div className="alert alert-error">{error}</div>}
-      <form onSubmit={handleSubmit}>
-        <div className="form-group">
-          <label>{t('common.name')}</label>
-          <input
-            type="text"
-            value={form.name}
-            onChange={e => setForm({ ...form, name: e.target.value })}
-            required
-          />
-        </div>
-        <div className="form-group">
-          <label>{t('common.description')}</label>
-          <textarea
-            value={form.description}
-            onChange={e => setForm({ ...form, description: e.target.value })}
-            rows={3}
-          />
-        </div>
-        <div className="modal-actions">
-          <button type="button" className="btn btn-secondary" onClick={onClose}>{t('common.cancel')}</button>
-          <button type="submit" className="btn btn-primary" disabled={saving}>
-            {saving ? t('common.saving') : t('common.save')}
-          </button>
-        </div>
-      </form>
-    </Modal>
-  );
-}
-
-// ── Personal color picker modal (any user) ──
-function ColorPickerModal({ currentColor, cellarId, onSaved, onClose }) {
-  const { t } = useTranslation();
-  const { apiFetch } = useAuth();
-  const [color, setColor] = useState(currentColor || null);
-  const [saving, setSaving] = useState(false);
-
-  const handleSave = async () => {
-    setSaving(true);
-    try {
-      const res = await updateCellarColor(apiFetch, cellarId, color);
-      if (res.ok) onSaved(color);
-    } catch {}
-    setSaving(false);
-  };
-
-  return (
-    <Modal title={t('cellarDetail.myCellarColor')} onClose={onClose}>
-      <p className="modal-subtitle">{t('cellarDetail.colorOnlyYou')}</p>
-      <CellarColorPicker value={color} onChange={setColor} />
-      <div className="modal-actions">
-        <button className="btn btn-secondary" onClick={onClose}>{t('common.cancel')}</button>
-        <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
-          {saving ? t('common.saving') : t('common.save')}
-        </button>
-      </div>
-    </Modal>
-  );
-}
-
-// ── Delete cellar modal (owner only — requires typing cellar name to confirm) ──
-function DeleteCellarModal({ cellar, onDeleted, onClose }) {
-  const { t } = useTranslation();
-  const { apiFetch } = useAuth();
-  const [typed, setTyped]   = useState('');
-  const [deleting, setDeleting] = useState(false);
-  const [error, setError]   = useState(null);
-
-  const confirmed = typed === cellar.name;
-
-  const handleDelete = async () => {
-    setDeleting(true);
-    setError(null);
-    try {
-      const res = await deleteCellar(apiFetch, cellar._id);
-      const data = await res.json();
-      if (res.ok) {
-        onDeleted();
-      } else {
-        setError(data.error || 'Failed to delete cellar');
-        setDeleting(false);
-      }
-    } catch {
-      setError('Network error');
-      setDeleting(false);
-    }
-  };
-
-  return (
-    <Modal title={t('cellarDetail.deleteCellarTitle')} onClose={onClose}>
-      <p className="delete-warning">
-        This will delete <strong>{cellar.name}</strong> and all its racks.<br />
-        {t('cellarDetail.bottlesPreserved')}
-      </p>
-      <p className="delete-recovery">
-        {t('cellarDetail.deleteRecovery')}
-      </p>
-      {error && <div className="alert alert-error">{error}</div>}
-      <div className="form-group">
-        <label>Type <strong>{cellar.name}</strong> to confirm</label>
-        <input
-          type="text"
-          value={typed}
-          onChange={e => setTyped(e.target.value)}
-          placeholder={cellar.name}
-          autoFocus
-        />
-      </div>
-      <div className="modal-actions">
-        <button className="btn btn-secondary" onClick={onClose}>{t('common.cancel')}</button>
-        <button
-          className="btn btn-danger"
-          onClick={handleDelete}
-          disabled={!confirmed || deleting}
-        >
-          {deleting ? t('cellarDetail.deleting') : t('cellarDetail.deleteCellarTitle')}
-        </button>
-      </div>
-    </Modal>
   );
 }
 

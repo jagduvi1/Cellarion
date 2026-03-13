@@ -1,4 +1,4 @@
-const JSON_HEADERS = { 'Content-Type': 'application/json' };
+import { JSON_HEADERS } from './apiConstants';
 
 export const getRacks = (apiFetch, cellarId) =>
   apiFetch(`/api/racks?cellar=${cellarId}`);

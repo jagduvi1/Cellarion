@@ -67,8 +67,6 @@ function AddBottle() {
   const [showManualForm, setShowManualForm] = useState(false);
   const [pendingWineData, setPendingWineData] = useState(null);
   const [findingWine, setFindingWine] = useState(false);
-  const [debugRaw, setDebugRaw] = useState(null); // DEBUG — remove before release
-  const [debugImage, setDebugImage] = useState(null); // DEBUG — remove before release
 
   const stopLabelCamera = useCallback(() => {
     if (labelStreamRef.current) {
@@ -157,18 +155,14 @@ function AddBottle() {
         });
         const data = await res.json();
 
-        setDebugRaw(data._debugRaw ?? null); // DEBUG — remove before release
         if (res.ok && data.extracted) {
           stopLabelCamera();
           setScanResult(data);
           setLabelImage(data.labelImage || null);
-          setDebugImage(null); // DEBUG — remove before release
           setShowManualForm(false);
           setPendingWineData(null);
         } else {
-          // DEBUG — close camera so debug info is visible
           stopLabelCamera();
-          setDebugImage(data.labelImage || `data:image/jpeg;base64,${base64}`); // DEBUG — remove before release
           setError(data.error || 'Could not read label. Try again.');
         }
       } catch {
@@ -448,24 +442,6 @@ function AddBottle() {
       </div>
 
       {error && <div className="alert alert-error">{error}</div>}
-
-      {/* DEBUG — remove before release */}
-      {(debugRaw !== null || debugImage) && (
-        <div style={{ background: '#1a1a1a', border: '1px solid #ff6600', borderRadius: 6, padding: '0.75rem 1rem', marginBottom: '1rem' }}>
-          <strong style={{ color: '#ff6600', fontSize: '0.8rem' }}>DEBUG — Image sent to Claude:</strong>
-          {debugImage && (
-            <div style={{ marginTop: '0.5rem' }}>
-              <img src={debugImage} alt="Sent to Claude" style={{ maxWidth: '200px', maxHeight: '300px', objectFit: 'contain', borderRadius: 4, display: 'block' }} />
-            </div>
-          )}
-          {debugRaw !== null && (
-            <>
-              <strong style={{ color: '#ff6600', fontSize: '0.8rem', display: 'block', marginTop: '0.75rem' }}>DEBUG — Raw Claude response:</strong>
-              <pre style={{ color: 'var(--color-text)', fontSize: '0.78rem', whiteSpace: 'pre-wrap', wordBreak: 'break-all', margin: '0.5rem 0 0 0' }}>{debugRaw}</pre>
-            </>
-          )}
-        </div>
-      )}
 
       {step === 1 && (
         <div className="card">

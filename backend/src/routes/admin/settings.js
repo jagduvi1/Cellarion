@@ -3,6 +3,7 @@ const { requireAuth, requireRole } = require('../../middleware/auth');
 const SiteConfig = require('../../models/SiteConfig');
 const rateLimitsConfig = require('../../config/rateLimits');
 const { logAudit } = require('../../services/audit');
+const { updateSiteConfig } = require('../../utils/siteConfig');
 
 const router = express.Router();
 
@@ -47,11 +48,7 @@ router.patch('/rate-limits', async (req, res) => {
       auth:  { max: auth?.max  ?? previous.auth.max  }
     };
 
-    await SiteConfig.findOneAndUpdate(
-      { key: 'rateLimits' },
-      { key: 'rateLimits', value: updated, updatedAt: new Date(), updatedBy: req.user.id },
-      { upsert: true, new: true }
-    );
+    await updateSiteConfig('rateLimits', updated, req.user.id);
 
     rateLimitsConfig.set(updated);
 
@@ -91,11 +88,7 @@ router.patch('/contact-email', async (req, res) => {
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
       return res.status(400).json({ error: 'contactEmail must be a valid email address' });
     }
-    await SiteConfig.findOneAndUpdate(
-      { key: 'contactEmail' },
-      { key: 'contactEmail', value: trimmed, updatedAt: new Date(), updatedBy: req.user.id },
-      { upsert: true, new: true }
-    );
+    await updateSiteConfig('contactEmail', trimmed, req.user.id);
     logAudit(req, 'admin.settings.contact_email.update', {}, { contactEmail: trimmed });
     res.json({ contactEmail: trimmed });
   } catch (err) {

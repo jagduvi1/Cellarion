@@ -8,6 +8,7 @@ const { scanLabelFull, identifyWineFromQuery } = require('../services/labelScan'
 const { findOrCreateWine } = require('../services/findOrCreateWine');
 const { generateWineKey, combinedSimilarity } = require('../utils/normalize');
 const { PROCESSED_DIR } = require('../config/upload');
+const { parsePagination } = require('../utils/pagination');
 
 const REMBG_URL = process.env.REMBG_URL || 'http://rembg:5000';
 
@@ -57,25 +58,16 @@ router.get('/', requireAuth, async (req, res) => {
   try {
     const isPrivileged = req.user.roles.includes('admin') || req.user.roles.includes('somm');
 
-    const {
-      country,
-      region,
-      grapes,
-      type,
-      search,
-      limit = isPrivileged ? 50 : USER_SEARCH_LIMIT,
-      offset = 0,
-      sort = 'name'
-    } = req.query;
+    const { country, region, grapes, type, search, sort = 'name' } = req.query;
 
     if (!isPrivileged && !search) {
       return res.status(400).json({ error: 'A search term is required' });
     }
 
-    const parsedLimit = isPrivileged
-      ? parseInt(limit, 10)
-      : Math.min(parseInt(limit, 10) || USER_SEARCH_LIMIT, USER_SEARCH_LIMIT);
-    const parsedOffset = parseInt(offset, 10);
+    const paginationOpts = isPrivileged
+      ? { limit: 50, maxLimit: 10000 }
+      : { limit: USER_SEARCH_LIMIT, maxLimit: USER_SEARCH_LIMIT };
+    const { limit: parsedLimit, offset: parsedOffset } = parsePagination(req.query, paginationOpts);
     const grapeIds = grapes ? grapes.split(',') : [];
 
     // Build MongoDB filter (used for non-search queries and as fallback)

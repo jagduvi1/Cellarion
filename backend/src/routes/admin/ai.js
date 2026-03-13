@@ -10,11 +10,11 @@
 
 const express = require('express');
 const { requireAuth, requireRole } = require('../../middleware/auth');
-const SiteConfig = require('../../models/SiteConfig');
 const aiConfig = require('../../config/aiConfig');
 const embeddingJob = require('../../services/embeddingJob');
 const vectorStore = require('../../services/vectorStore');
 const { logAudit } = require('../../services/audit');
+const { updateSiteConfig } = require('../../utils/siteConfig');
 
 const router = express.Router();
 
@@ -58,11 +58,7 @@ router.patch('/config', async (req, res) => {
     const previous = aiConfig.get();
     const updated = { ...previous, ...incoming };
 
-    await SiteConfig.findOneAndUpdate(
-      { key: 'aiConfig' },
-      { key: 'aiConfig', value: updated, updatedAt: new Date(), updatedBy: req.user.id },
-      { upsert: true, new: true }
-    );
+    await updateSiteConfig('aiConfig', updated, req.user.id);
     aiConfig.set(updated);
 
     logAudit(req, 'admin.ai.config.update', {}, { from: previous, to: updated });

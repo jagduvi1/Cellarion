@@ -5,6 +5,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { getCellar } from '../api/cellars';
 import { getRacks, deleteRack, updateSlot, clearSlot } from '../api/racks';
 import { consumeBottle } from '../api/bottles';
+import { getPlacedBottleIds, getAvailableBottles } from '../utils/rackUtils';
 import RatingInput from '../components/RatingInput';
 import './CellarRacks.css';
 
@@ -57,17 +58,11 @@ function CellarRacks() {
   }, [highlightBottleId, racks]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Compute set of bottle IDs already placed in any rack
-  const placedBottleIds = useMemo(() => {
-    const ids = new Set();
-    racks.forEach(rack => rack.slots.forEach(s => {
-      if (s.bottle?._id) ids.add(s.bottle._id);
-    }));
-    return ids;
-  }, [racks]);
+  const placedBottleIds = useMemo(() => getPlacedBottleIds(racks), [racks]);
 
   // Bottles available for placement (not in any rack)
   const availableBottles = useMemo(
-    () => bottles.filter(b => !placedBottleIds.has(b._id)),
+    () => getAvailableBottles(bottles, placedBottleIds),
     [bottles, placedBottleIds]
   );
 

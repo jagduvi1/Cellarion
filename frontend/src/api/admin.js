@@ -1,4 +1,4 @@
-const J = { 'Content-Type': 'application/json' };
+import { JSON_HEADERS as J } from './apiConstants';
 
 // ── Wines ────────────────────────────────────────────────────────────────────
 export const adminGetWines = (apiFetch, params) =>

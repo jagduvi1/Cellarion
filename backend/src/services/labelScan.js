@@ -1,24 +1,6 @@
 const ALLOWED_MEDIA_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
 const aiConfig = require('../config/aiConfig');
-
-/**
- * Extracts the first balanced {...} JSON object from a string.
- * Handles nested objects/arrays and quoted strings with escape sequences.
- * Prevents trailing model commentary from breaking JSON.parse.
- */
-function extractFirstJsonObject(str) {
-  let depth = 0, inStr = false, esc = false;
-  for (let i = 0; i < str.length; i++) {
-    const c = str[i];
-    if (esc)               { esc = false; continue; }
-    if (c === '\\' && inStr) { esc = true; continue; }
-    if (c === '"')           { inStr = !inStr; continue; }
-    if (inStr)               continue;
-    if (c === '{')           { depth++; }
-    if (c === '}')           { if (--depth === 0) return str.slice(0, i + 1); }
-  }
-  return str; // no balanced object found — return as-is and let JSON.parse report the error
-}
+const { extractFirstJsonObject } = require('../utils/jsonExtract');
 
 function getClient() {
   const apiKey = process.env.ANTHROPIC_API_KEY;

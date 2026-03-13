@@ -4,11 +4,10 @@ const Cellar = require('../../models/Cellar');
 const Rack = require('../../models/Rack');
 const Bottle = require('../../models/Bottle');
 const { logAudit } = require('../../services/audit');
+const { parsePagination } = require('../../utils/pagination');
 
 const router = express.Router();
 router.use(requireAuth, requireRole('admin'));
-
-const PAGE_SIZE = 50;
 
 // ---------------------------------------------------------------------------
 // GET /api/admin/cellars/deleted?limit=50&offset=0&search=
@@ -16,8 +15,7 @@ const PAGE_SIZE = 50;
 // ---------------------------------------------------------------------------
 router.get('/deleted', async (req, res) => {
   try {
-    const limit = Math.min(parseInt(req.query.limit, 10) || PAGE_SIZE, 200);
-    const offset = Math.max(parseInt(req.query.offset, 10) || 0, 0);
+    const { limit, offset } = parsePagination(req.query, { limit: 50, maxLimit: 200 });
 
     const filter = { deletedAt: { $ne: null } };
     if (req.query.search) {

@@ -281,6 +281,19 @@
   }
 }
 
+/* ── Cellar-colored header accent ── */
+.cellar-accent-border {
+  border-left: 4px solid var(--cellar-color, transparent);
+  padding-left: 0.75rem;
+}
+
+/* ── Muted helper text ── */
+.text-muted-sm {
+  font-size: 0.9rem;
+  color: var(--color-text-muted);
+  margin-bottom: 1.25rem;
+}
+
 .grape-count {
   font-weight: 400;
   font-size: 0.82rem;

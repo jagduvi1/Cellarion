@@ -15,7 +15,8 @@ const Country = require('../models/Country');
 const Region = require('../models/Region');
 const Grape = require('../models/Grape');
 const searchService = require('./search');
-const { generateWineKey, normalizeString, resolveGrapeName, combinedSimilarity } = require('../utils/normalize');
+const { generateWineKey, normalizeString, resolveGrapeName } = require('../utils/normalize');
+const { findBestMatch } = require('./wineMatching');
 
 const SIMILARITY_THRESHOLD = 0.75;
 const POPULATE = ['country', 'region', 'grapes'];
@@ -63,34 +64,6 @@ async function findOrCreateGrapes(names, userId) {
   return ids;
 }
 
-// ── Similarity scoring ───────────────────────────────────────────────────────
-
-function scoreCandidates(name, producer, appellation, candidates) {
-  let bestMatch = null;
-  let bestScore = 0;
-
-  for (const candidate of candidates) {
-    const nameSim = combinedSimilarity(name, candidate.name);
-    const prodSim = combinedSimilarity(producer, candidate.producer);
-
-    let appSim = 1.0;
-    if (appellation && candidate.appellation) {
-      appSim = combinedSimilarity(appellation, candidate.appellation);
-    } else if (appellation || candidate.appellation) {
-      // One side has appellation, other doesn't — slight penalty
-      appSim = 0.5;
-    }
-
-    const score = nameSim * 0.45 + prodSim * 0.45 + appSim * 0.10;
-    if (score > bestScore) {
-      bestScore = score;
-      bestMatch = candidate;
-    }
-  }
-
-  return { bestMatch, bestScore };
-}
-
 // ── Main find-or-create ──────────────────────────────────────────────────────
 
 /**
@@ -136,7 +109,11 @@ async function findOrCreateWine({ name, producer, country, region, appellation, 
   }
 
   if (candidates.length > 0) {
-    const { bestMatch, bestScore } = scoreCandidates(trimmedName, trimmedProducer, appellation, candidates);
+    const { bestMatch, bestScore } = findBestMatch(
+      { name: trimmedName, producer: trimmedProducer, appellation },
+      candidates,
+      { redistribute: false }
+    );
     if (bestScore >= SIMILARITY_THRESHOLD && bestMatch) {
       return { wine: bestMatch, created: false };
     }
