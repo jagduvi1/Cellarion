@@ -227,6 +227,8 @@
   padding-bottom: calc(1.5rem + env(safe-area-inset-bottom));
   padding-left: calc(2rem + env(safe-area-inset-left));
   padding-right: calc(2rem + env(safe-area-inset-right));
+  overflow-x: hidden;
+  box-sizing: border-box;
 }
 
 /* ── Hamburger (mobile only) ── */
