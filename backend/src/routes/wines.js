@@ -60,8 +60,14 @@ router.get('/', requireAuth, async (req, res) => {
 
     const { country, region, grapes, type, search, sort = 'name' } = req.query;
 
-    if (!isPrivileged && !search) {
+    // Coerce search to string (query params can be arrays if repeated)
+    const searchTerm = Array.isArray(search) ? search[0] : search;
+
+    if (!isPrivileged && !searchTerm) {
       return res.status(400).json({ error: 'A search term is required' });
+    }
+    if (searchTerm && searchTerm.length > 200) {
+      return res.status(400).json({ error: 'Search query is too long (max 200 characters)' });
     }
 
     const paginationOpts = isPrivileged
@@ -78,9 +84,9 @@ router.get('/', requireAuth, async (req, res) => {
     if (grapeIds.length > 0) filter.grapes = { $in: grapeIds };
 
     // Try Meilisearch for text queries
-    if (search && searchService.getIsAvailable()) {
+    if (searchTerm && searchService.getIsAvailable()) {
       try {
-        const { ids, estimatedTotalHits } = await searchService.search(search, {
+        const { ids, estimatedTotalHits } = await searchService.search(searchTerm, {
           countryId: country,
           regionId: region,
           type,
@@ -111,7 +117,7 @@ router.get('/', requireAuth, async (req, res) => {
     }
 
     // MongoDB path: no search term, or Meilisearch unavailable/failed
-    const { wines, total } = await mongoSearch(filter, sort, parsedLimit, parsedOffset, search);
+    const { wines, total } = await mongoSearch(filter, sort, parsedLimit, parsedOffset, searchTerm);
 
     res.json({
       count: wines.length,

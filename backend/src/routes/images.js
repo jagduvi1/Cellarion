@@ -1,13 +1,45 @@
+const path = require('path');
 const express = require('express');
 const fs = require('fs');
+const mongoose = require('mongoose');
+const rateLimit = require('express-rate-limit');
 const { requireAuth } = require('../middleware/auth');
-const { upload } = require('../config/upload');
+const { upload, ORIGINALS_DIR } = require('../config/upload');
 const BottleImage = require('../models/BottleImage');
 const Bottle = require('../models/Bottle');
 const Cellar = require('../models/Cellar');
 const { getCellarRole } = require('../utils/cellarAccess');
 const { processImage } = require('../services/imageProcessor');
 const { stripHtml } = require('../utils/sanitize');
+
+/**
+ * Safely remove an uploaded file, but only if it resides within the expected
+ * upload directory.  This prevents path-traversal attacks where a crafted
+ * filename could trick the server into deleting arbitrary files.
+ */
+function safeUnlink(filePath) {
+  const resolved = path.resolve(filePath);
+  const originalsPrefix = path.resolve(ORIGINALS_DIR) + path.sep;
+  if (!resolved.startsWith(originalsPrefix)) {
+    console.error('Refusing to delete file outside upload directory:', resolved);
+    return;
+  }
+  fs.unlinkSync(resolved);
+}
+
+const MAX_IMAGES_PER_BOTTLE = 20;
+
+// Rate limiter for background removal preview — 5 requests per minute per user
+const bgRemovalLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 5,
+  keyGenerator: (req) => req.user?.id || req.ip,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: (req, res) => {
+    res.status(429).json({ error: 'Too many background removal requests, please try again later' });
+  }
+});
 
 // Validate image file by checking magic bytes (first 12 bytes)
 function validateImageMagicBytes(filePath) {
@@ -41,17 +73,27 @@ router.post('/upload', requireAuth, upload.single('image'), async (req, res) => 
 
     // Validate magic bytes to confirm the file is actually an image
     if (!validateImageMagicBytes(req.file.path)) {
-      fs.unlinkSync(req.file.path);
+      safeUnlink(req.file.path);
       return res.status(400).json({ error: 'File content does not match a supported image format (JPEG, PNG, or WebP)' });
     }
 
     const { bottleId, wineDefinitionId, credit } = req.body;
 
-    // Verify bottle ownership if bottleId is provided
+    // Verify bottle ownership and image count if bottleId is provided
     if (bottleId) {
+      if (!mongoose.Types.ObjectId.isValid(bottleId)) {
+        safeUnlink(req.file.path);
+        return res.status(400).json({ error: 'Invalid bottleId' });
+      }
       const bottle = await Bottle.findOne({ _id: bottleId, user: req.user.id });
       if (!bottle) {
+        safeUnlink(req.file.path);
         return res.status(404).json({ error: 'Bottle not found' });
+      }
+      const imageCount = await BottleImage.countDocuments({ bottle: bottleId });
+      if (imageCount >= MAX_IMAGES_PER_BOTTLE) {
+        safeUnlink(req.file.path);
+        return res.status(400).json({ error: `Maximum of ${MAX_IMAGES_PER_BOTTLE} images per bottle reached` });
       }
     }
 
@@ -166,14 +208,18 @@ router.get('/:id', requireAuth, async (req, res) => {
 });
 
 // POST /api/images/remove-bg-preview - Remove background from a base64 image (no DB storage)
-router.post('/remove-bg-preview', requireAuth, async (req, res) => {
+router.post('/remove-bg-preview', requireAuth, bgRemovalLimiter, async (req, res) => {
   try {
     const { image } = req.body;
     if (!image || typeof image !== 'string') {
       return res.status(400).json({ error: 'image (base64 data URL) is required' });
     }
 
-    // Strip data URL prefix and decode
+    // Strip data URL prefix and decode — only allow known image MIME types
+    const mimeMatch = image.match(/^data:image\/(jpeg|png|webp);base64,/);
+    if (!mimeMatch) {
+      return res.status(400).json({ error: 'image must be a base64 data URL with MIME type image/jpeg, image/png, or image/webp' });
+    }
     const base64Data = image.replace(/^data:image\/\w+;base64,/, '');
     const buffer = Buffer.from(base64Data, 'base64');
 

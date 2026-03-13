@@ -61,9 +61,13 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ error: 'Cellar and wine definition are required' });
     }
 
-    if (purchaseUrl && !isSafeUrl(purchaseUrl)) {
-      return res.status(400).json({ error: 'purchaseUrl must be a valid http or https URL' });
+    if (purchaseUrl) {
+      if (purchaseUrl.length > 2048) return res.status(400).json({ error: 'purchaseUrl is too long (max 2048 characters)' });
+      if (!isSafeUrl(purchaseUrl)) return res.status(400).json({ error: 'purchaseUrl must be a valid http or https URL' });
     }
+    if (notes && notes.length > 5000) return res.status(400).json({ error: 'Notes are too long (max 5000 characters)' });
+    if (location && location.length > 500) return res.status(400).json({ error: 'Location is too long (max 500 characters)' });
+    if (purchaseLocation && purchaseLocation.length > 500) return res.status(400).json({ error: 'Purchase location is too long (max 500 characters)' });
 
     const { rating: resolvedRating, ratingScale: resolvedRatingScale, error: ratingError } = resolveRating(rating, ratingScale);
     if (ratingError) return res.status(400).json({ error: ratingError });
@@ -212,9 +216,13 @@ router.put('/:id', requireBottleAccess('editor'), async (req, res) => {
   try {
     const { bottle } = req;
 
-    if (req.body.purchaseUrl && !isSafeUrl(req.body.purchaseUrl)) {
-      return res.status(400).json({ error: 'purchaseUrl must be a valid http or https URL' });
+    if (req.body.purchaseUrl) {
+      if (req.body.purchaseUrl.length > 2048) return res.status(400).json({ error: 'purchaseUrl is too long (max 2048 characters)' });
+      if (!isSafeUrl(req.body.purchaseUrl)) return res.status(400).json({ error: 'purchaseUrl must be a valid http or https URL' });
     }
+    if (req.body.notes && req.body.notes.length > 5000) return res.status(400).json({ error: 'Notes are too long (max 5000 characters)' });
+    if (req.body.location && req.body.location.length > 500) return res.status(400).json({ error: 'Location is too long (max 500 characters)' });
+    if (req.body.purchaseLocation && req.body.purchaseLocation.length > 500) return res.status(400).json({ error: 'Purchase location is too long (max 500 characters)' });
 
     // Update allowed fields — diff old vs new for the audit log
     const updateFields = [

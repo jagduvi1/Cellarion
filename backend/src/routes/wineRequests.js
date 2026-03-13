@@ -84,7 +84,11 @@ router.get('/', async (req, res) => {
     const { status } = req.query;
     const filter = { user: req.user.id };
 
+    const validStatuses = ['pending', 'approved', 'rejected'];
     if (status) {
+      if (!validStatuses.includes(status)) {
+        return res.status(400).json({ error: `Invalid status filter. Must be one of: ${validStatuses.join(', ')}` });
+      }
       filter.status = status;
     }
 

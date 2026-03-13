@@ -3,7 +3,7 @@
  * Uses a linear character-by-character scan instead of regex to avoid ReDoS.
  * Returns the original value unchanged if it is null/undefined/empty.
  */
-const STRIP_HTML_MAX_LEN = 100_000;
+const STRIP_HTML_MAX_LEN = 10_000;
 
 function stripHtml(str) {
   if (!str) return str;
