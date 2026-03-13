@@ -370,12 +370,12 @@ a:hover {
 
 .filters-bar input {
   flex: 1;
-  min-width: 160px;
+  min-width: 0;
 }
 
 .search-input {
   flex: 2;
-  min-width: 160px;
+  min-width: 0;
   padding: 0.75rem;
   border: 1px solid var(--color-input-border);
   border-radius: var(--radius-sm);

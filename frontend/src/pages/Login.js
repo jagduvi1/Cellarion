@@ -13,6 +13,7 @@ function Login() {
   const [registeredEmail, setRegisteredEmail] = useState('');
   const [pendingVerificationEmail, setPendingVerificationEmail] = useState(null);
   const [resendStatus, setResendStatus] = useState(null); // null | 'sending' | 'sent' | 'error'
+  const [rememberMe, setRememberMe] = useState(true);
   const [forgotEmail, setForgotEmail] = useState('');
   const [forgotStatus, setForgotStatus] = useState(null); // null | 'sending' | 'sent' | 'error'
 
@@ -28,7 +29,7 @@ function Login() {
 
     let result;
     if (mode === 'login') {
-      result = await login(formData.username, formData.password);
+      result = await login(formData.username, formData.password, rememberMe);
     } else {
       result = await register(formData.username, formData.email, formData.password);
     }
@@ -282,18 +283,19 @@ function Login() {
             />
           </div>
           {mode === 'login' && (
-            <div style={{ textAlign: 'right', marginTop: '-0.75rem', marginBottom: '1rem' }}>
+            <div className="login-options">
+              <label className="remember-me">
+                <input
+                  type="checkbox"
+                  checked={rememberMe}
+                  onChange={(e) => setRememberMe(e.target.checked)}
+                />
+                <span>Remember me</span>
+              </label>
               <button
                 type="button"
                 onClick={() => switchMode('forgot')}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  color: 'var(--color-primary)',
-                  cursor: 'pointer',
-                  fontSize: '0.85rem',
-                  padding: 0
-                }}
+                className="forgot-link"
               >
                 Forgot password?
               </button>

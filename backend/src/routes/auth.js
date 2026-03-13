@@ -60,20 +60,31 @@ const generateAccessToken = (user) => {
 const generateRefreshToken = () => crypto.randomBytes(64).toString('hex');
 
 // Cookie options for the httpOnly refresh token
-const refreshCookieOptions = {
+const refreshCookieBase = {
   httpOnly: true,
   secure: process.env.NODE_ENV === 'production',
-  sameSite: 'strict',
-  maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days in ms
+  sameSite: 'strict'
+};
+
+// Backward-compatible default (7-day persistent cookie)
+const refreshCookieOptions = { ...refreshCookieBase, maxAge: 7 * 24 * 60 * 60 * 1000 };
+
+// Build cookie options based on rememberMe preference
+const buildCookieOptions = (rememberMe) => {
+  if (rememberMe === false) {
+    // Session cookie — no maxAge means it expires when the browser closes
+    return { ...refreshCookieBase };
+  }
+  return refreshCookieOptions;
 };
 
 // Issue both tokens: access token in body, refresh token in httpOnly cookie
-const issueTokens = async (user, res) => {
+const issueTokens = async (user, res, { rememberMe } = {}) => {
   const accessToken = generateAccessToken(user);
   const refreshToken = generateRefreshToken();
   user.setRefreshToken(refreshToken);
   await user.save();
-  res.cookie('refreshToken', refreshToken, refreshCookieOptions);
+  res.cookie('refreshToken', refreshToken, buildCookieOptions(rememberMe));
   return accessToken;
 };
 
@@ -150,7 +161,7 @@ router.post('/register', authLimiter, async (req, res) => {
 // POST /api/auth/login - Login user
 router.post('/login', authLimiter, async (req, res) => {
   try {
-    const { username, password } = req.body;
+    const { username, password, rememberMe } = req.body;
 
     // Validate input
     if (!username || !password) {
@@ -192,7 +203,7 @@ router.post('/login', authLimiter, async (req, res) => {
       });
     }
 
-    const accessToken = await issueTokens(user, res);
+    const accessToken = await issueTokens(user, res, { rememberMe: rememberMe !== false });
 
     logAudit(req, 'auth.login.success',
       { type: 'user', id: user._id },

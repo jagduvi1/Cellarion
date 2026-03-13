@@ -545,6 +545,8 @@
   cursor: pointer;
   transition: border-color var(--transition-fast), background var(--transition-fast), box-shadow var(--transition-fast);
   min-height: 68px;
+  min-width: 0;
+  overflow: hidden;
   box-shadow: var(--shadow-sm);
 }
 
@@ -795,8 +797,14 @@
   .search-input,
   .filter-input,
   .filter-select {
-    min-width: unset;
+    min-width: 0;
     max-width: unset;
+    width: 100%;
+  }
+
+  .filters-bar input,
+  .filters-bar select {
+    min-width: 0;
     width: 100%;
   }
 

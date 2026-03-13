@@ -157,8 +157,10 @@
     flex-direction: column;
   }
 
+  .wines-search-input,
   .wines-filter-select {
-    min-width: unset;
+    min-width: 0;
+    width: 100%;
   }
 
   .wine-form-grid {
