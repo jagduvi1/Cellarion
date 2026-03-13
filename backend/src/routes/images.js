@@ -1,5 +1,6 @@
 const express = require('express');
 const fs = require('fs');
+const mongoose = require('mongoose');
 const rateLimit = require('express-rate-limit');
 const { requireAuth } = require('../middleware/auth');
 const { upload } = require('../config/upload');
@@ -64,8 +65,13 @@ router.post('/upload', requireAuth, upload.single('image'), async (req, res) => 
 
     // Verify bottle ownership and image count if bottleId is provided
     if (bottleId) {
+      if (!mongoose.Types.ObjectId.isValid(bottleId)) {
+        fs.unlinkSync(req.file.path);
+        return res.status(400).json({ error: 'Invalid bottleId' });
+      }
       const bottle = await Bottle.findOne({ _id: bottleId, user: req.user.id });
       if (!bottle) {
+        fs.unlinkSync(req.file.path);
         return res.status(404).json({ error: 'Bottle not found' });
       }
       const imageCount = await BottleImage.countDocuments({ bottle: bottleId });
