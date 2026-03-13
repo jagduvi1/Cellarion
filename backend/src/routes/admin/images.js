@@ -19,7 +19,13 @@ router.get('/', async (req, res) => {
     const { status } = req.query;
     const { limit, offset, page } = parsePagination(req.query, { limit: 20, maxLimit: 100 });
     const filter = {};
-    if (status) filter.status = status;
+    const validStatuses = ['uploaded', 'processing', 'processed', 'approved', 'rejected'];
+    if (status) {
+      if (!validStatuses.includes(status)) {
+        return res.status(400).json({ error: `Invalid status filter. Must be one of: ${validStatuses.join(', ')}` });
+      }
+      filter.status = status;
+    }
 
     const [images, total] = await Promise.all([
       BottleImage.find(filter)

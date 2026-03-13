@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const Cellar = require('../models/Cellar');
 const { getCellarRole } = require('../utils/cellarAccess');
 
@@ -26,7 +27,7 @@ function requireCellarAccess(minRole = 'viewer') {
         req.body.cellar ||
         req.body.cellarId;
 
-      if (!cellarId) {
+      if (!cellarId || !mongoose.Types.ObjectId.isValid(cellarId)) {
         return res.status(400).json({ error: 'Cellar ID is required' });
       }
 

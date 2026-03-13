@@ -1,4 +1,5 @@
 const express = require('express');
+const mongoose = require('mongoose');
 const { requireAuth, requireRole } = require('../../middleware/auth');
 const AuditLog = require('../../models/AuditLog');
 const { parsePagination } = require('../../utils/pagination');
@@ -16,8 +17,18 @@ router.get('/', async (req, res) => {
 
     const filter = {};
 
-    if (action) filter.action = action;
-    if (userId) filter['actor.userId'] = userId;
+    if (action) {
+      if (typeof action !== 'string' || !/^[\w.]+$/.test(action)) {
+        return res.status(400).json({ error: 'Invalid action filter' });
+      }
+      filter.action = action;
+    }
+    if (userId) {
+      if (!mongoose.Types.ObjectId.isValid(userId)) {
+        return res.status(400).json({ error: 'Invalid userId filter' });
+      }
+      filter['actor.userId'] = userId;
+    }
 
     if (from || to) {
       filter.timestamp = {};
