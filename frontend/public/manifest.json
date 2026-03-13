@@ -1,11 +1,24 @@
 {
   "short_name": "Cellarion",
-  "name": "Cellarion",
+  "name": "Cellarion — Wine Cellar Management",
+  "description": "Track bottles, visualise racks, get drink-window alerts, and share cellars.",
   "icons": [
     {
       "src": "favicon.ico",
       "sizes": "64x64 32x32 24x24 16x16",
       "type": "image/x-icon"
+    },
+    {
+      "src": "logo192.png",
+      "type": "image/png",
+      "sizes": "192x192",
+      "purpose": "any"
+    },
+    {
+      "src": "logo512.png",
+      "type": "image/png",
+      "sizes": "512x512",
+      "purpose": "any"
     },
     {
       "src": "cellarion-logo.jpg",
@@ -15,6 +28,8 @@
   ],
   "start_url": ".",
   "display": "standalone",
+  "orientation": "portrait",
   "theme_color": "#0d0d0d",
-  "background_color": "#111111"
+  "background_color": "#111111",
+  "categories": ["food", "lifestyle"]
 }

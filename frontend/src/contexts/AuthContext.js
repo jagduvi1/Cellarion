@@ -39,17 +39,22 @@ export const AuthProvider = ({ children }) => {
   useEffect(() => { tokenRef.current = token; }, [token]);
 
   // ------------------------------------------------------------------
-  // Token helpers
+  // Token helpers — storage depends on "Remember Me" preference
   // ------------------------------------------------------------------
 
+  const getStorage = () =>
+    sessionStorage.getItem('sessionOnly') ? sessionStorage : localStorage;
+
   const storeToken = (newToken) => {
-    localStorage.setItem('token', newToken);
+    getStorage().setItem('token', newToken);
     setToken(newToken);
     tokenRef.current = newToken;
   };
 
   const clearToken = () => {
     localStorage.removeItem('token');
+    sessionStorage.removeItem('token');
+    sessionStorage.removeItem('sessionOnly');
     setToken(null);
     tokenRef.current = null;
   };
@@ -117,7 +122,7 @@ export const AuthProvider = ({ children }) => {
   // ------------------------------------------------------------------
 
   useEffect(() => {
-    const storedToken = localStorage.getItem('token');
+    const storedToken = localStorage.getItem('token') || sessionStorage.getItem('token');
     if (storedToken) {
       storeToken(storedToken);
       fetchUserProfile(storedToken);
@@ -195,13 +200,20 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const login = async (username, password) => {
+  const login = async (username, password, rememberMe = true) => {
     try {
+      // Set storage preference before storing the token
+      if (!rememberMe) {
+        sessionStorage.setItem('sessionOnly', '1');
+      } else {
+        sessionStorage.removeItem('sessionOnly');
+      }
+
       const response = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ username, password })
+        body: JSON.stringify({ username, password, rememberMe })
       });
 
       const data = await response.json();

@@ -5,6 +5,7 @@ import './i18n';
 import App from './App';
 import ErrorBoundary from './components/ErrorBoundary';
 import reportWebVitals from './reportWebVitals';
+import * as serviceWorkerRegistration from './serviceWorkerRegistration';
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(
@@ -14,6 +15,9 @@ root.render(
     </ErrorBoundary>
   </React.StrictMode>
 );
+
+// Register the service worker for PWA support (offline caching + installability)
+serviceWorkerRegistration.register();
 
 // If you want to start measuring performance in your app, pass a function
 // to log results (for example: reportWebVitals(console.log))
