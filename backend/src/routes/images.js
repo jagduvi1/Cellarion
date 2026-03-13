@@ -1,15 +1,31 @@
+const path = require('path');
 const express = require('express');
 const fs = require('fs');
 const mongoose = require('mongoose');
 const rateLimit = require('express-rate-limit');
 const { requireAuth } = require('../middleware/auth');
-const { upload } = require('../config/upload');
+const { upload, ORIGINALS_DIR } = require('../config/upload');
 const BottleImage = require('../models/BottleImage');
 const Bottle = require('../models/Bottle');
 const Cellar = require('../models/Cellar');
 const { getCellarRole } = require('../utils/cellarAccess');
 const { processImage } = require('../services/imageProcessor');
 const { stripHtml } = require('../utils/sanitize');
+
+/**
+ * Safely remove an uploaded file, but only if it resides within the expected
+ * upload directory.  This prevents path-traversal attacks where a crafted
+ * filename could trick the server into deleting arbitrary files.
+ */
+function safeUnlink(filePath) {
+  const resolved = path.resolve(filePath);
+  const originalsPrefix = path.resolve(ORIGINALS_DIR) + path.sep;
+  if (!resolved.startsWith(originalsPrefix)) {
+    console.error('Refusing to delete file outside upload directory:', resolved);
+    return;
+  }
+  fs.unlinkSync(resolved);
+}
 
 const MAX_IMAGES_PER_BOTTLE = 20;
 
@@ -57,7 +73,7 @@ router.post('/upload', requireAuth, upload.single('image'), async (req, res) => 
 
     // Validate magic bytes to confirm the file is actually an image
     if (!validateImageMagicBytes(req.file.path)) {
-      fs.unlinkSync(req.file.path);
+      safeUnlink(req.file.path);
       return res.status(400).json({ error: 'File content does not match a supported image format (JPEG, PNG, or WebP)' });
     }
 
@@ -66,17 +82,17 @@ router.post('/upload', requireAuth, upload.single('image'), async (req, res) => 
     // Verify bottle ownership and image count if bottleId is provided
     if (bottleId) {
       if (!mongoose.Types.ObjectId.isValid(bottleId)) {
-        fs.unlinkSync(req.file.path);
+        safeUnlink(req.file.path);
         return res.status(400).json({ error: 'Invalid bottleId' });
       }
       const bottle = await Bottle.findOne({ _id: bottleId, user: req.user.id });
       if (!bottle) {
-        fs.unlinkSync(req.file.path);
+        safeUnlink(req.file.path);
         return res.status(404).json({ error: 'Bottle not found' });
       }
       const imageCount = await BottleImage.countDocuments({ bottle: bottleId });
       if (imageCount >= MAX_IMAGES_PER_BOTTLE) {
-        fs.unlinkSync(req.file.path);
+        safeUnlink(req.file.path);
         return res.status(400).json({ error: `Maximum of ${MAX_IMAGES_PER_BOTTLE} images per bottle reached` });
       }
     }
