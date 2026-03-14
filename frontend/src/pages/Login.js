@@ -107,6 +107,9 @@ function Login() {
         Need help with your account?{' '}
         <a href="mailto:support@cellarion.app">Contact support</a>.
       </p>
+      {process.env.REACT_APP_VERSION && (
+        <p className="login-version">v{process.env.REACT_APP_VERSION}</p>
+      )}
     </footer>
   );
 

@@ -87,7 +87,10 @@ services:
           memory: 2G
 
   frontend:
-    build: ./frontend
+    build:
+      context: ./frontend
+      args:
+        APP_VERSION: ${APP_VERSION:-dev}
     container_name: cellarion-frontend
     expose:
       - "80"

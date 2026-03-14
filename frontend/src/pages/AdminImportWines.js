@@ -87,7 +87,7 @@ function AdminImportWines() {
           <input
             ref={inputRef}
             type="file"
-            accept=".csv"
+            accept=".csv,text/csv,text/plain,application/vnd.ms-excel"
             className="drop-zone-input"
             onChange={onInputChange}
           />

@@ -136,6 +136,10 @@ function Settings() {
           </div>
         </form>
       </div>
+
+      {process.env.REACT_APP_VERSION && (
+        <p className="settings-version">Cellarion v{process.env.REACT_APP_VERSION}</p>
+      )}
     </div>
   );
 }

@@ -91,3 +91,11 @@
   margin-top: 0.5rem;
   font-size: 0.82rem;
 }
+
+.settings-version {
+  text-align: center;
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+  margin-top: 2rem;
+  opacity: 0.6;
+}
