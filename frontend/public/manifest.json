@@ -21,15 +21,16 @@
       "purpose": "any"
     },
     {
-      "src": "cellarion-logo.jpg",
-      "type": "image/jpeg",
-      "sizes": "1024x1024"
+      "src": "logo512.png",
+      "type": "image/png",
+      "sizes": "512x512",
+      "purpose": "maskable"
     }
   ],
   "start_url": ".",
   "display": "standalone",
   "orientation": "portrait",
   "theme_color": "#0d0d0d",
-  "background_color": "#111111",
+  "background_color": "#ffffff",
   "categories": ["food", "lifestyle"]
 }
