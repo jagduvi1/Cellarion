@@ -5,6 +5,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { CURRENCIES } from '../config/currencies';
 import { PLANS } from '../config/plans';
 import { SCALE_META, VALID_SCALES } from '../utils/ratingUtils';
+import pkg from '../../package.json';
 import './Settings.css';
 
 function Settings() {
@@ -136,6 +137,8 @@ function Settings() {
           </div>
         </form>
       </div>
+
+      <p className="settings-version">Cellarion v{pkg.version}</p>
     </div>
   );
 }

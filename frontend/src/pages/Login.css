@@ -155,6 +155,12 @@
   text-decoration: underline;
 }
 
+.login-version {
+  opacity: 0.5;
+  font-size: 0.72rem;
+  margin-top: 0.5rem;
+}
+
 @media (max-width: 480px) {
   .login-page {
     padding: 1rem;
