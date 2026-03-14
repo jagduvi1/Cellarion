@@ -193,7 +193,7 @@ function CellarRacks() {
         </div>
         {canEdit && (
           <button className="btn btn-primary" onClick={() => setShowNewRack(v => !v)}>
-            {showNewRack ? t('common.cancel') : t('racks.newRack')}
+            {showNewRack ? t('common.cancel') : `+ ${t('racks.newRack')}`}
           </button>
         )}
       </div>
