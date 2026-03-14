@@ -6,6 +6,7 @@ import { useTheme } from '../contexts/ThemeContext';
 import { PLANS } from '../config/plans';
 import NotificationBell from './NotificationBell';
 import SupportModal from './SupportModal';
+import InstallPrompt from './InstallPrompt';
 import './Layout.css';
 
 const LOGO_LIGHT = process.env.PUBLIC_URL + '/cellarion-logo-light.png';
@@ -36,6 +37,7 @@ function Layout({ children }) {
 
   return (
     <div className="layout">
+      <InstallPrompt />
       {/* ── Top navbar ── */}
       <nav className="navbar">
         <div className="navbar-inner">

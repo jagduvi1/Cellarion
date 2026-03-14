@@ -418,3 +418,56 @@
     flex-shrink: 0;
   }
 }
+
+/* ── PWA Install Prompt ── */
+.install-prompt {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  padding: 0.6rem 1.25rem;
+  background: var(--color-primary);
+  color: #fff;
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+.install-prompt-text {
+  flex: 0 1 auto;
+}
+
+.install-prompt-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.install-prompt .btn-sm {
+  padding: 0.35rem 0.9rem;
+  min-height: auto;
+  font-size: 0.85rem;
+  background: #fff;
+  color: var(--color-primary);
+  border: none;
+  border-radius: var(--radius-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.install-prompt .btn-sm:hover {
+  opacity: 0.9;
+}
+
+.install-prompt-dismiss {
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 1.3rem;
+  cursor: pointer;
+  padding: 0 0.25rem;
+  line-height: 1;
+}
+
+.install-prompt-dismiss:hover {
+  color: #fff;
+}
