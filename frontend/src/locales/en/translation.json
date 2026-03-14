@@ -113,7 +113,7 @@
 
   "cellars": {
     "title": "My Cellars",
-    "newCellar": "+ New Cellar",
+    "newCellar": "New Cellar",
     "createTitle": "Create New Cellar",
     "cellarName": "Cellar Name *",
     "cellarNamePlaceholder": "e.g., Main Cellar",
@@ -354,7 +354,7 @@
   "racks": {
     "title": "Storage Racks",
     "backToCellar": "← Back to Cellar",
-    "newRack": "+ New Rack",
+    "newRack": "New Rack",
     "newRackTitle": "New Rack",
     "nameLabel": "Name",
     "namePlaceholder": "e.g. Rack A",
@@ -402,7 +402,7 @@
 
   "wineRequests": {
     "title": "My Wine Requests",
-    "newRequest": "+ New Request",
+    "newRequest": "New Request",
     "requestTitle": "Request a New Wine",
     "wineNameLabel": "Wine Name *",
     "wineNamePlaceholder": "Full wine name",

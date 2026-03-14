@@ -113,7 +113,7 @@
 
   "cellars": {
     "title": "Mina källare",
-    "newCellar": "+ Ny källare",
+    "newCellar": "Ny källare",
     "createTitle": "Skapa ny källare",
     "cellarName": "Källarnamn *",
     "cellarNamePlaceholder": "t.ex. Huvudkällaren",
@@ -354,7 +354,7 @@
   "racks": {
     "title": "Förvaringshyllor",
     "backToCellar": "← Tillbaka till källare",
-    "newRack": "+ Ny hylla",
+    "newRack": "Ny hylla",
     "newRackTitle": "Ny hylla",
     "nameLabel": "Namn",
     "namePlaceholder": "t.ex. Hylla A",
@@ -402,7 +402,7 @@
 
   "wineRequests": {
     "title": "Mina vinförfrågningar",
-    "newRequest": "+ Ny förfrågan",
+    "newRequest": "Ny förfrågan",
     "requestTitle": "Begär ett nytt vin",
     "wineNameLabel": "Vinnamn *",
     "wineNamePlaceholder": "Fullt vinnamn",
