@@ -661,7 +661,7 @@ function ImportBottles() {
         <input
           id="import-file-input"
           type="file"
-          accept=".csv,.tsv,.txt,.json"
+          accept=".csv,.tsv,.txt,.json,text/csv,text/plain,text/tab-separated-values,application/json,application/vnd.ms-excel"
           onChange={handleFileInput}
           style={{ display: 'none' }}
         />
