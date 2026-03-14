@@ -29,9 +29,6 @@ Thumbs.db
 backend/dist/
 frontend/build/
 
-# Docker
-*.dockerignore
-
 # Misc
 .cache/
 
