@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import CellarionLogo from '../components/CellarionLogo';
-import pkg from '../../package.json';
 import './Login.css';
 
 function Login() {
@@ -108,7 +107,9 @@ function Login() {
         Need help with your account?{' '}
         <a href="mailto:support@cellarion.app">Contact support</a>.
       </p>
-      <p className="login-version">v{pkg.version}</p>
+      {process.env.REACT_APP_VERSION && (
+        <p className="login-version">v{process.env.REACT_APP_VERSION}</p>
+      )}
     </footer>
   );
 

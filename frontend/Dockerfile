@@ -6,6 +6,9 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm install --legacy-peer-deps
 
+ARG APP_VERSION=dev
+ENV REACT_APP_VERSION=$APP_VERSION
+
 COPY . .
 RUN npm run build
 
