@@ -9,17 +9,19 @@ import TabAudit from './TabAudit';
 import TabSettings from './TabSettings';
 import TabAI from './TabAI';
 import TabCellars from './TabCellars';
+import TabImport from './TabImport';
 import '../SuperAdmin.css';
 
 const TABS = [
   { id: 'overview',   label: 'Overview' },
   { id: 'services',   label: 'Services' },
   { id: 'database',   label: 'Database' },
-  { id: 'settings',   label: 'Settings' },
-  { id: 'ai',         label: 'AI & Embeddings' },
   { id: 'users',      label: 'Users' },
   { id: 'audit',      label: 'Audit Log' },
   { id: 'cellars',    label: 'Deleted Cellars' },
+  { id: 'import',     label: 'Import Wines' },
+  { id: 'ai',         label: 'AI & Embeddings' },
+  { id: 'settings',   label: 'Settings' },
 ];
 
 export default function SuperAdmin() {
@@ -103,11 +105,12 @@ export default function SuperAdmin() {
         {tab === 'overview'   && <TabOverview />}
         {tab === 'services'   && <TabServices />}
         {tab === 'database'   && <TabDatabase />}
-        {tab === 'settings'   && <TabSettings />}
-        {tab === 'ai'         && <TabAI />}
         {tab === 'users'      && <TabUsers />}
         {tab === 'audit'      && <TabAudit />}
         {tab === 'cellars'    && <TabCellars />}
+        {tab === 'import'     && <TabImport />}
+        {tab === 'ai'         && <TabAI />}
+        {tab === 'settings'   && <TabSettings />}
       </div>
 
       {/* Footer */}

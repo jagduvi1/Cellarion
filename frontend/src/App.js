@@ -15,10 +15,6 @@ import AdminRequests from './pages/AdminRequests';
 import AdminTaxonomy from './pages/AdminTaxonomy';
 import AdminWines from './pages/AdminWines';
 import AdminImages from './pages/AdminImages';
-import AdminAudit from './pages/AdminAudit';
-import AdminUsers from './pages/AdminUsers';
-import AdminImportWines from './pages/AdminImportWines';
-import AdminCellars from './pages/AdminCellars';
 import AdminSupportTickets from './pages/AdminSupportTickets';
 import AdminWineReports from './pages/AdminWineReports';
 import SupportPage from './pages/SupportPage';
@@ -222,38 +218,6 @@ function AppRoutes() {
         element={
           <ProtectedRoute requireAdmin>
             <Layout><AdminImages /></Layout>
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/admin/audit"
-        element={
-          <ProtectedRoute requireAdmin>
-            <Layout><AdminAudit /></Layout>
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/admin/users"
-        element={
-          <ProtectedRoute requireAdmin>
-            <Layout><AdminUsers /></Layout>
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/admin/import"
-        element={
-          <ProtectedRoute requireAdmin>
-            <Layout><AdminImportWines /></Layout>
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/admin/cellars"
-        element={
-          <ProtectedRoute requireAdmin>
-            <Layout><AdminCellars /></Layout>
           </ProtectedRoute>
         }
       />
