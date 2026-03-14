@@ -349,7 +349,7 @@
   }
 
   .hamburger {
-    display: flex;
+    display: none;
   }
 
   .navbar-inner {
