@@ -203,8 +203,17 @@ router.get('/:id', requireBottleAccess('viewer'), async (req, res) => {
       ? (pendingImg.processedUrl || pendingImg.originalUrl)
       : null;
 
+    // Resolve user's chosen default bottle image to a URL
+    let defaultImageUrl = null;
+    if (bottle.defaultImage) {
+      const defaultImg = await BottleImage.findById(bottle.defaultImage).lean();
+      if (defaultImg) {
+        defaultImageUrl = defaultImg.processedUrl || defaultImg.originalUrl;
+      }
+    }
+
     const ucEntry = cellar.userColors?.find(uc => uc.user.toString() === req.user.id.toString());
-    res.json({ bottle: bottleObj, userRole: role, cellarColor: ucEntry?.color || null, pendingImageUrl });
+    res.json({ bottle: bottleObj, userRole: role, cellarColor: ucEntry?.color || null, pendingImageUrl, defaultImageUrl });
   } catch (error) {
     console.error('Get bottle error:', error);
     res.status(500).json({ error: 'Failed to get bottle' });
@@ -298,6 +307,43 @@ router.put('/:id', requireBottleAccess('editor'), async (req, res) => {
     }
     console.error('Update bottle error:', error);
     res.status(500).json({ error: 'Failed to update bottle' });
+  }
+});
+
+// PUT /api/bottles/:id/default-image - Set the user's preferred default image for this bottle
+router.put('/:id/default-image', requireBottleAccess('editor'), async (req, res) => {
+  try {
+    const { bottle } = req;
+    const { imageId } = req.body;
+
+    if (!imageId) {
+      // Clear default image
+      bottle.defaultImage = null;
+      await bottle.save();
+      return res.json({ bottle });
+    }
+
+    // Verify the image exists and belongs to this bottle or its wine definition
+    const image = await BottleImage.findOne({
+      _id: imageId,
+      $or: [
+        { bottle: bottle._id },
+        { wineDefinition: bottle.wineDefinition, status: 'approved' }
+      ]
+    });
+
+    if (!image) {
+      return res.status(404).json({ error: 'Image not found or not associated with this bottle' });
+    }
+
+    bottle.defaultImage = image._id;
+    await bottle.save();
+    await bottle.populate(WINE_POPULATE);
+
+    res.json({ bottle });
+  } catch (error) {
+    console.error('Set default image error:', error);
+    res.status(500).json({ error: 'Failed to set default image' });
   }
 });
 

@@ -2,9 +2,10 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import ImageCarousel from './ImageCarousel';
 
-function ImageGallery({ bottleId, wineDefinitionId, size = 'medium', onEmpty }) {
+function ImageGallery({ bottleId, wineDefinitionId, size = 'medium', onEmpty, defaultImageId: externalDefaultId, onSetDefault }) {
   const { apiFetch } = useAuth();
   const [images, setImages] = useState([]);
+  const [defaultImageId, setDefaultImageId] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -13,7 +14,7 @@ function ImageGallery({ bottleId, wineDefinitionId, size = 'medium', onEmpty }) 
       return;
     }
     fetchImages();
-  }, [bottleId, wineDefinitionId]);
+  }, [bottleId, wineDefinitionId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const fetchImages = async () => {
     try {
@@ -25,6 +26,8 @@ function ImageGallery({ bottleId, wineDefinitionId, size = 'medium', onEmpty }) 
       const data = await res.json();
       if (res.ok) {
         setImages(data.images);
+        // For bottle images, the API returns defaultImageId
+        if (data.defaultImageId) setDefaultImageId(data.defaultImageId);
         if (data.images.length === 0 && onEmpty) onEmpty();
       } else if (onEmpty) {
         onEmpty();
@@ -40,7 +43,18 @@ function ImageGallery({ bottleId, wineDefinitionId, size = 'medium', onEmpty }) 
   if (loading) return null;
   if (images.length === 0) return null;
 
-  return <ImageCarousel images={images} size={size} />;
+  // For wine galleries, the "default" is the one with assignedToWine=true
+  const resolvedDefaultId = externalDefaultId || defaultImageId ||
+    (wineDefinitionId ? images.find(img => img.assignedToWine)?._id : null) || null;
+
+  return (
+    <ImageCarousel
+      images={images}
+      size={size}
+      defaultImageId={resolvedDefaultId}
+      onSetDefault={onSetDefault}
+    />
+  );
 }
 
 export default ImageGallery;

@@ -18,6 +18,12 @@ const bottleSchema = new mongoose.Schema({
     ref: 'WineDefinition',
     index: true
   },
+  // User-chosen default image — shown first in the bottle's image carousel
+  defaultImage: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'BottleImage',
+    default: null
+  },
   // Set when the bottle was imported without a matching wine definition.
   // Cleared (and wineDefinition set) once the admin resolves the request.
   pendingWineRequest: {

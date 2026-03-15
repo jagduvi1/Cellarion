@@ -17,6 +17,13 @@ export const consumeBottle = (apiFetch, id, data) =>
     body: JSON.stringify(data),
   });
 
+export const setBottleDefaultImage = (apiFetch, id, imageId) =>
+  apiFetch(`/api/bottles/${id}/default-image`, {
+    method: 'PUT',
+    headers: JSON_HEADERS,
+    body: JSON.stringify({ imageId }),
+  });
+
 export const validateImport = (apiFetch, data) =>
   apiFetch('/api/bottles/import/validate', {
     method: 'POST',

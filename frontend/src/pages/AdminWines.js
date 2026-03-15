@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import {
   adminGetWines, adminGetWine, adminSaveWine, adminDeleteWine,
   adminGetCountries, adminGetGrapes, adminGetRegions, adminGetAppellations,
+  adminAssignImageToWine,
 } from '../api/admin';
 import { WINE_TYPES } from '../config/wineTypes';
 import GrapePicker from '../components/GrapePicker';
@@ -399,8 +400,20 @@ function AdminWines() {
               {editWine && (
                 <div className="form-group wine-image-section" style={{ gridColumn: '1 / -1' }}>
                   <label>Wine Images</label>
+                  <p className="wine-image-hint">{t('admin.wines.defaultImageHint', 'Click the star to set the default image for this wine.')}</p>
                   <div className="wine-image-existing">
-                    <ImageGallery wineDefinitionId={editWine._id} size="medium" />
+                    <ImageGallery
+                      wineDefinitionId={editWine._id}
+                      size="medium"
+                      onSetDefault={async (imageId) => {
+                        if (!imageId) return;
+                        try {
+                          await adminAssignImageToWine(apiFetch, imageId, { wineDefinitionId: editWine._id });
+                        } catch (err) {
+                          console.error('Failed to assign image:', err);
+                        }
+                      }}
+                    />
                   </div>
                   <div className="form-group image-credit-field">
                     <label className="image-credit-label">

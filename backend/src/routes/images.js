@@ -140,7 +140,17 @@ router.get('/bottle/:bottleId', requireAuth, async (req, res) => {
       status: { $ne: 'rejected' }
     }).sort({ createdAt: -1 });
 
-    res.json({ images });
+    // Sort default image first if the bottle has one set
+    if (bottle.defaultImage) {
+      const defaultId = bottle.defaultImage.toString();
+      images.sort((a, b) => {
+        const aIsDefault = a._id.toString() === defaultId ? -1 : 0;
+        const bIsDefault = b._id.toString() === defaultId ? -1 : 0;
+        return aIsDefault - bIsDefault;
+      });
+    }
+
+    res.json({ images, defaultImageId: bottle.defaultImage || null });
   } catch (error) {
     console.error('Get bottle images error:', error);
     res.status(500).json({ error: 'Failed to get images' });

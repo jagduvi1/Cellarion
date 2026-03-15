@@ -81,28 +81,30 @@
 /* ── Wine header card ── */
 .bd-wine-header {
   margin-bottom: 1rem;
+  overflow: hidden;
 }
 
 .bd-wine-identity {
   display: flex;
-  gap: 1.25rem;
-  align-items: flex-start;
+  flex-direction: column;
 }
 
 .bd-wine-image-wrap {
   position: relative;
-  flex-shrink: 0;
-  display: inline-flex;
-  flex-direction: column;
+  display: flex;
   align-items: center;
-  gap: 0.3rem;
+  justify-content: center;
+  background: var(--color-surface-hover);
+  border-radius: var(--radius-sm);
+  min-height: 280px;
+  max-height: 400px;
+  overflow: hidden;
 }
 
 .bd-wine-image {
-  width: 100px;
-  height: 145px;
+  width: 100%;
+  height: 320px;
   object-fit: contain;
-  border-radius: var(--radius-sm);
   display: block;
 }
 
@@ -139,10 +141,9 @@
 }
 
 .bd-wine-placeholder {
-  width: 100px;
-  height: 145px;
+  width: 100%;
+  height: 160px;
   border-radius: var(--radius-sm);
-  flex-shrink: 0;
 }
 
 /* ── Contribution prompt ── */
@@ -224,8 +225,7 @@
 .bd-wine-placeholder.fortified{ background: var(--wine-fortified); }
 
 .bd-wine-meta {
-  flex: 1;
-  min-width: 0;
+  padding: 1rem 0.25rem 0;
 }
 
 .bd-wine-meta h1 {
@@ -789,6 +789,12 @@
   font-weight: 400;
   color: var(--color-text-muted);
   font-size: 0.85em;
+}
+
+.bd-image-default-hint {
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+  margin: 0 0 0.5rem;
 }
 
 .bd-image-status--done {

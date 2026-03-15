@@ -34,6 +34,12 @@
   margin-bottom: 1rem;
 }
 
+.wine-image-hint {
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+  margin: 0 0 0.5rem;
+}
+
 .image-credit-field {
   margin-bottom: 0.75rem;
 }
