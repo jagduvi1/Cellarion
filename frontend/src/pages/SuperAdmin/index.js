@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
+import useVersion from '../../hooks/useVersion';
 import TabOverview from './TabOverview';
 import TabServices from './TabServices';
 import TabDatabase from './TabDatabase';
@@ -27,6 +28,7 @@ const TABS = [
 export default function SuperAdmin() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const appVersion = useVersion();
   const [tab, setTab] = useState('overview');
   const [autoRefresh, setAutoRefresh] = useState(false);
   const [lastRefresh, setLastRefresh] = useState(new Date());
@@ -71,7 +73,7 @@ export default function SuperAdmin() {
       <div className="sa-topbar">
         <div className="sa-topbar-title">
           CELLARION SYSTEM MONITOR
-          <span>v{process.env.REACT_APP_VERSION || '—'} · {user.email}</span>
+          <span>v{appVersion || '—'} · {user.email}</span>
         </div>
         <div className="sa-topbar-meta">
           <span>Last refresh: {lastRefresh.toLocaleTimeString()}</span>

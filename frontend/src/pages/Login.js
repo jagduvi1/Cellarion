@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import useVersion from '../hooks/useVersion';
 import CellarionLogo from '../components/CellarionLogo';
 import './Login.css';
 
@@ -19,6 +20,7 @@ function Login() {
 
   const { login, register } = useAuth();
   const navigate = useNavigate();
+  const appVersion = useVersion();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -107,8 +109,8 @@ function Login() {
         Need help with your account?{' '}
         <a href="mailto:support@cellarion.app">Contact support</a>.
       </p>
-      {process.env.REACT_APP_VERSION && (
-        <p className="login-version">v{process.env.REACT_APP_VERSION}</p>
+      {appVersion && (
+        <p className="login-version">v{appVersion}</p>
       )}
     </footer>
   );
