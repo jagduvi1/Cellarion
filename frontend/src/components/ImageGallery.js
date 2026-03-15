@@ -47,12 +47,31 @@ function ImageGallery({ bottleId, wineDefinitionId, size = 'medium', onEmpty, de
   const resolvedDefaultId = externalDefaultId || defaultImageId ||
     (wineDefinitionId ? images.find(img => img.assignedToWine)?._id : null) || null;
 
+  // Wrap onSetDefault to update local state optimistically
+  const handleSetDefault = onSetDefault ? async (imageId) => {
+    await onSetDefault(imageId);
+    // Optimistically update local state
+    if (imageId) {
+      setDefaultImageId(imageId);
+      setImages(prev => prev.map(img => ({
+        ...img,
+        assignedToWine: img._id === imageId
+      })));
+    } else {
+      setDefaultImageId(null);
+      setImages(prev => prev.map(img => ({
+        ...img,
+        assignedToWine: false
+      })));
+    }
+  } : undefined;
+
   return (
     <ImageCarousel
       images={images}
       size={size}
       defaultImageId={resolvedDefaultId}
-      onSetDefault={onSetDefault}
+      onSetDefault={handleSetDefault}
     />
   );
 }
