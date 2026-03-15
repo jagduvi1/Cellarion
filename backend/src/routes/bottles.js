@@ -45,8 +45,6 @@ router.post('/', async (req, res) => {
       notes,
       rating,
       ratingScale,
-      drinkFrom,
-      drinkBefore,
       // Migration helpers — let users backdate bottles or add directly to history
       dateAdded,
       addToHistory,
@@ -118,9 +116,7 @@ router.post('/', async (req, res) => {
       location: stripHtml(location),
       notes: stripHtml(notes),
       rating: resolvedRating,
-      ratingScale: resolvedRatingScale,
-      drinkFrom,
-      drinkBefore
+      ratingScale: resolvedRatingScale
     });
 
     // Allow backdating the "added" date for cellar migration
@@ -237,8 +233,7 @@ router.put('/:id', requireBottleAccess('editor'), async (req, res) => {
     const updateFields = [
       'vintage', 'price', 'currency', 'bottleSize',
       'purchaseDate', 'purchaseLocation', 'purchaseUrl',
-      'location', 'notes', 'rating', 'ratingScale',
-      'drinkFrom', 'drinkBefore'
+      'location', 'notes', 'rating', 'ratingScale'
     ];
 
     // Normalize a value to a comparable string (handles Date objects vs ISO strings)

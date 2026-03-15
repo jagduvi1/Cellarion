@@ -1,5 +1,4 @@
 import { useNavigate, Link } from 'react-router-dom';
-import { getDrinkStatus } from '../utils/drinkStatus';
 import AuthImage from './AuthImage';
 
 /**
@@ -9,7 +8,6 @@ import AuthImage from './AuthImage';
 function BottleCard({ bottle, rackMap, cellarId, viewMode }) {
   const navigate = useNavigate();
   const rackInfo = rackMap.get(bottle._id);
-  const drinkStatus = getDrinkStatus(bottle);
   const imgSrc = bottle.wineDefinition?.image || bottle.pendingImageUrl;
   const credit = bottle.wineDefinition?.imageCredit;
   const isPending = !bottle.wineDefinition && !!bottle.pendingWineRequest;
@@ -55,11 +53,6 @@ function BottleCard({ bottle, rackMap, cellarId, viewMode }) {
           <div className="bottle-badges">
             {isPending && (
               <span className="pending-wine-badge">Pending review</span>
-            )}
-            {drinkStatus && (
-              <span className={`drink-status-badge badge-sm ${drinkStatus.status}`}>
-                {drinkStatus.label}
-              </span>
             )}
             {rackInfo && (
               <Link
@@ -117,11 +110,6 @@ function BottleCard({ bottle, rackMap, cellarId, viewMode }) {
             >
               📍 {rackInfo.rackName}
             </Link>
-          )}
-          {drinkStatus && (
-            <span className={`drink-status-badge badge-sm ${drinkStatus.status}`}>
-              {drinkStatus.label}
-            </span>
           )}
         </div>
       </div>

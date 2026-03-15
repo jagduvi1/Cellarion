@@ -15,7 +15,6 @@ const { getPlanConfig } = require('../config/plans');
 const { toNormalized } = require('../utils/ratingUtils');
 const { CONSUMED_STATUSES, MS_PER_DAY, WINE_POPULATE } = require('../config/constants');
 const mongoose = require('mongoose');
-const { classifyDrinkWindow } = require('../utils/drinkWindow');
 
 const router = express.Router();
 
@@ -219,20 +218,6 @@ router.get('/:id/statistics', async (req, res) => {
     stats.oldestVintage = oldestYear !== Infinity ? oldestYear : null;
     stats.newestVintage = newestYear !== -Infinity ? newestYear : null;
 
-    // Drink window summary counts
-    const now = new Date();
-    now.setHours(0, 0, 0, 0);
-    let drinkOverdue = 0, drinkSoon = 0;
-    bottles.forEach(bottle => {
-      const from   = bottle.drinkFrom   ? new Date(bottle.drinkFrom)   : null;
-      const before = bottle.drinkBefore ? new Date(bottle.drinkBefore) : null;
-      const cls = classifyDrinkWindow(from, before, now);
-      if (cls === 'overdue') drinkOverdue++;
-      else if (cls === 'soon') drinkSoon++;
-    });
-    stats.drinkOverdue = drinkOverdue;
-    stats.drinkSoon = drinkSoon;
-
     // Round values
     stats.totalValue = Math.round(stats.totalValue * 100) / 100;
     stats.averagePrice = Math.round(stats.averagePrice * 100) / 100;
@@ -302,7 +287,6 @@ router.get('/:id', async (req, res) => {
       minRating,
       maxRating,
       search,
-      drinkStatus,
       sort = '-createdAt'
     } = req.query;
 
@@ -373,24 +357,6 @@ router.get('/:id', async (req, res) => {
       bottles = bottles.filter(b => {
         if (!b.rating) return false;
         return toNormalized(b.rating, b.ratingScale || '5') <= max;
-      });
-    }
-
-    // Filter by drink window status
-    if (drinkStatus) {
-      const now = new Date();
-      now.setHours(0, 0, 0, 0);
-      bottles = bottles.filter(b => {
-        const before = b.drinkBefore ? new Date(b.drinkBefore) : null;
-        const from = b.drinkFrom ? new Date(b.drinkFrom) : null;
-        if (!before && !from) return false; // no dates set — excluded from all named statuses
-        if (before) {
-          const daysLeft = Math.round((before - now) / MS_PER_DAY);
-          if (daysLeft < 0) return drinkStatus === 'overdue';
-          if (daysLeft <= 90) return drinkStatus === 'soon';
-        }
-        if (from && now < from) return drinkStatus === 'notReady';
-        return drinkStatus === 'inWindow';
       });
     }
 
@@ -759,10 +725,6 @@ router.get('/:id/export', async (req, res) => {
         item.rating = b.rating;
         item.ratingScale = b.ratingScale || '5';
       }
-
-      // User-entered drink window (not sommelier-curated WineVintageProfile)
-      if (b.drinkFrom) item.drinkFrom = b.drinkFrom.toISOString().slice(0, 10);
-      if (b.drinkBefore) item.drinkBefore = b.drinkBefore.toISOString().slice(0, 10);
 
       // Rack placement
       const rackInfo = bottleRackMap.get(b._id.toString());

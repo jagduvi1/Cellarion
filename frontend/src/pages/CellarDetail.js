@@ -33,7 +33,6 @@ function CellarDetail() {
     search: '',
     vintage: '',
     minRating: '',
-    drinkStatus: '',
     sort: '-createdAt'
   });
 
@@ -93,7 +92,6 @@ function CellarDetail() {
     } catch {}
   };
 
-  const hasAlerts = statistics && (statistics.drinkOverdue > 0 || statistics.drinkSoon > 0);
   const canEdit = cellar?.userRole === 'owner' || cellar?.userRole === 'editor';
 
   if (loading) return <div className="loading">{t('cellarDetail.loadingCellar')}</div>;
@@ -292,26 +290,12 @@ function CellarDetail() {
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
           Overview
-          {hasAlerts && <span className="tab-alert-dot" />}
         </button>
       </div>
 
       {/* ── Overview tab ── */}
       {activeTab === 'overview' && (
         <div className="cellar-tab-content">
-          {hasAlerts && (
-            <div className="drink-alert-strip">
-              <span className="drink-strip-label">{t('cellarDetail.drinkAlerts')}</span>
-              {statistics.drinkOverdue > 0 && (
-                <span className="drink-badge overdue">{t('cellarDetail.overdue', { count: statistics.drinkOverdue })}</span>
-              )}
-              {statistics.drinkSoon > 0 && (
-                <span className="drink-badge soon">{t('cellarDetail.drinkSoon', { count: statistics.drinkSoon })}</span>
-              )}
-              <Link to={`/cellars/${id}/drink-alerts`} className="drink-strip-link">{t('cellarDetail.viewAll')}</Link>
-            </div>
-          )}
-
           {statistics && (
             <div className="statistics-grid">
               <div className="stat-card">
@@ -351,16 +335,6 @@ function CellarDetail() {
               </div>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
             </Link>
-            {hasAlerts && (
-              <Link to={`/cellars/${id}/drink-alerts`} className="overview-link-card">
-                <span className="overview-link-icon">⏰</span>
-                <div>
-                  <strong>Drink Alerts</strong>
-                  <span>{statistics.drinkOverdue + statistics.drinkSoon} bottles need attention</span>
-                </div>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
-              </Link>
-            )}
           </div>
         </div>
       )}
@@ -368,7 +342,7 @@ function CellarDetail() {
       {/* ── Bottles tab ── */}
       {activeTab === 'bottles' && (
         <div className="cellar-tab-content">
-          <div className="filters-bar filters-bar-5">
+          <div className="filters-bar filters-bar-4">
             <input
               type="text"
               placeholder={t('cellarDetail.searchPlaceholder')}
@@ -394,17 +368,6 @@ function CellarDetail() {
               <option value="40">{t('cellarDetail.stars2Plus')}</option>
             </select>
             <select
-              value={filters.drinkStatus}
-              onChange={e => setFilters({ ...filters, drinkStatus: e.target.value })}
-              className="filter-select"
-            >
-              <option value="">{t('cellarDetail.allDrinkWindows')}</option>
-              <option value="overdue">{t('cellarDetail.filterOverdue')}</option>
-              <option value="soon">{t('cellarDetail.filterSoon')}</option>
-              <option value="inWindow">{t('cellarDetail.filterInWindow')}</option>
-              <option value="notReady">{t('cellarDetail.filterNotReady')}</option>
-            </select>
-            <select
               value={filters.sort}
               onChange={e => setFilters({ ...filters, sort: e.target.value })}
               className="filter-select"
@@ -422,11 +385,7 @@ function CellarDetail() {
 
           {bottles.length === 0 ? (
             <div className="empty-state">
-              <p>
-                {filters.drinkStatus
-                  ? t('cellarDetail.noDrinkWindowFilter')
-                  : t('cellarDetail.noBottles')}
-              </p>
+              <p>{t('cellarDetail.noBottles')}</p>
               {canEdit && (
                 <Link to={`/cellars/${id}/add-bottle`} className="btn btn-primary">
                   {t('cellarDetail.addFirstBottle')}

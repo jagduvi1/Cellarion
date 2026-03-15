@@ -478,9 +478,7 @@ router.post('/confirm', async (req, res) => {
             purchaseDate: item.purchaseDate || undefined,
             purchaseLocation: stripHtml(item.purchaseLocation),
             location: stripHtml(item.location),
-            notes: stripHtml(item.notes),
-            drinkFrom: item.drinkFrom || undefined,
-            drinkBefore: item.drinkBefore || undefined
+            notes: stripHtml(item.notes)
           });
 
           if (item.dateAdded) bottle.createdAt = new Date(item.dateAdded);
@@ -552,9 +550,7 @@ router.post('/confirm', async (req, res) => {
           location: stripHtml(item.location),
           notes: stripHtml(item.notes),
           rating: resolvedRating,
-          ratingScale: resolvedScale,
-          drinkFrom: item.drinkFrom || undefined,
-          drinkBefore: item.drinkBefore || undefined
+          ratingScale: resolvedScale
         });
 
         // Allow backdating

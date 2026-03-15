@@ -21,8 +21,6 @@
  *   notes         - Tasting notes / comments
  *   rating        - Numeric rating
  *   ratingScale   - '5' | '20' | '100'
- *   drinkFrom     - ISO date string
- *   drinkBefore   - ISO date string
  *   location      - Physical location in cellar
  */
 
@@ -213,10 +211,6 @@ function mapCellarTrackerRow(row) {
   const qty = parseInt(get(['Quantity', 'quantity', 'Qty', 'Count']), 10);
   const ctRating = parseFloat(get(['MyCTRating', 'CT Rating', 'My Rating', 'Rating']));
 
-  // CellarTracker drink dates: "Begin" and "End"
-  const drinkFrom = get(['BeginConsume', 'Begin', 'Drink From', 'DrinkFrom']);
-  const drinkBefore = get(['EndConsume', 'End', 'Drink Before', 'DrinkBefore']);
-
   return {
     wineName: get(['Wine', 'wine', 'WineName']),
     producer: producer || get(['Producer', 'producer']),
@@ -235,8 +229,6 @@ function mapCellarTrackerRow(row) {
     rating: isNaN(ctRating) ? undefined : ctRating,
     ratingScale: ctRating > 20 ? '100' : ctRating > 5 ? '20' : '5',
     location: get(['Location', 'location', 'Bin', 'bin']),
-    drinkFrom: drinkFrom ? tryParseDate(drinkFrom) : undefined,
-    drinkBefore: drinkBefore ? tryParseDate(drinkBefore) : undefined,
     rackName: get(['Rack', 'rack', 'Rack Name', 'rackName']) || undefined,
     rackPosition: parseInt(get(['Rack Position', 'rackPosition', 'Position', 'Slot']), 10) || undefined,
   };
@@ -275,8 +267,6 @@ function mapGenericRow(row) {
     rating: isNaN(rating) ? undefined : rating,
     ratingScale: rating > 20 ? '100' : rating > 5 ? '20' : '5',
     location: get(['Location', 'location', 'Bin', 'bin']),
-    drinkFrom: get(['Drink From', 'DrinkFrom']) || undefined,
-    drinkBefore: get(['Drink Before', 'DrinkBefore', 'Drink By']) || undefined,
     rackName: get(['Rack', 'rack', 'Rack Name', 'rackName']) || undefined,
     rackPosition: parseInt(get(['Rack Position', 'rackPosition', 'Position', 'Slot']), 10) || undefined,
   };
@@ -311,8 +301,6 @@ function mapCellarionRow(row) {
     notes: str('notes'),
     rating: num('rating'),
     ratingScale: str('ratingScale') || undefined,
-    drinkFrom: str('drinkFrom') || undefined,
-    drinkBefore: str('drinkBefore') || undefined,
     rackName: str('rackName') || undefined,
     rackPosition: int('rackPosition'),
     dateAdded: str('dateAdded') || undefined,
@@ -367,8 +355,6 @@ export function parseJSON(text) {
 
     // Normalise dates
     if (item.purchaseDate) item.purchaseDate = tryParseDate(item.purchaseDate);
-    if (item.drinkFrom)    item.drinkFrom    = tryParseDate(item.drinkFrom);
-    if (item.drinkBefore)  item.drinkBefore  = tryParseDate(item.drinkBefore);
     if (item.consumedAt)   item.consumedAt   = tryParseDate(item.consumedAt);
     if (item.dateAdded)    item.dateAdded    = tryParseDate(item.dateAdded);
 
@@ -421,8 +407,6 @@ export function parseAndMap(text, forceFormat) {
 
     // Fix dates
     if (mapped.purchaseDate) mapped.purchaseDate = tryParseDate(mapped.purchaseDate);
-    if (mapped.drinkFrom) mapped.drinkFrom = tryParseDate(mapped.drinkFrom);
-    if (mapped.drinkBefore) mapped.drinkBefore = tryParseDate(mapped.drinkBefore);
 
     // Skip rows with no wine name and no producer
     if (!mapped.wineName && !mapped.producer) continue;

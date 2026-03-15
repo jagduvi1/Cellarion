@@ -74,13 +74,6 @@ const bottleSchema = new mongoose.Schema({
     trim: true,
     maxlength: [500, 'Purchase URL too long']
   },
-  // Drink window — optional per-bottle dates set by the user
-  drinkFrom: {
-    type: Date
-  },
-  drinkBefore: {
-    type: Date
-  },
   // Cellar management
   location: {
     type: String,
@@ -143,7 +136,6 @@ bottleSchema.index({ wineDefinition: 1 }); // For reverse lookup
 bottleSchema.index({ cellar: 1, vintage: 1 }); // For filtering by vintage
 bottleSchema.index({ cellar: 1, rating: 1 }); // For filtering by rating
 bottleSchema.index({ user: 1, vintage: 1 }); // For user-wide vintage queries
-bottleSchema.index({ cellar: 1, drinkBefore: 1 }); // For drink window queries
 bottleSchema.index({ cellar: 1, status: 1 });       // For active/history filtering
 
 // Update timestamp on save

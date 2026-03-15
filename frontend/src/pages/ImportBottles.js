@@ -522,8 +522,6 @@ function ImportBottles() {
       notes: r.item.notes,
       rating: r.item.rating,
       ratingScale: r.item.ratingScale,
-      drinkFrom: r.item.drinkFrom,
-      drinkBefore: r.item.drinkBefore,
       dateAdded: r.item.dateAdded || r.item.purchaseDate,
       rackName: r.item.rackName,
       rackPosition: r.item.rackPosition,

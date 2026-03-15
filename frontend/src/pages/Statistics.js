@@ -251,23 +251,24 @@ function RatingChart({ byRating, avg, targetScale }) {
   );
 }
 
-// ── Drink Window Visualization ────────────────────────────────────────────────
-function DrinkWindowViz({ drinkWindow, windowCoverage, total }) {
+// ── Maturity Visualization ────────────────────────────────────────────────────
+function MaturityViz({ maturity, maturityCoverage, total }) {
   const segments = [
-    { key: 'overdue',  label: 'Past Drink Window',    color: '#C94040', icon: '⚠' },
-    { key: 'soon',     label: 'Drink Soon (≤90 days)', color: '#D4A070', icon: '⏱' },
-    { key: 'inWindow', label: 'In Optimal Window',    color: '#7A1E2D', icon: '✓' },
-    { key: 'notReady', label: 'Not Ready Yet',         color: '#7aade0', icon: '◷' },
-    { key: 'noWindow', label: 'No Dates Set',          color: '#3a3a3a', icon: '—' },
+    { key: 'declining',  label: 'Past Prime',          color: '#C94040', icon: '⚠' },
+    { key: 'late',       label: 'Late Maturity',       color: '#D4A070', icon: '⏱' },
+    { key: 'peak',       label: 'Optimal Maturity',    color: '#7A1E2D', icon: '✓' },
+    { key: 'early',      label: 'Early Drinking',      color: '#7aade0', icon: '◷' },
+    { key: 'notReady',   label: 'Not Ready Yet',       color: '#5B8DB8', icon: '⏳' },
+    { key: 'noProfile',  label: 'No Profile',          color: '#3a3a3a', icon: '—' },
   ];
 
-  const hasCoverage = windowCoverage && (windowCoverage.userSet + windowCoverage.sommSet) > 0;
+  const hasCoverage = maturityCoverage && maturityCoverage.sommSet > 0;
 
   return (
     <div className="drink-window">
       <div className="drink-bar">
         {total > 0 ? segments.map(seg => {
-          const count = drinkWindow[seg.key] || 0;
+          const count = maturity[seg.key] || 0;
           const pct   = (count / total) * 100;
           if (pct === 0) return null;
           return (
@@ -281,14 +282,14 @@ function DrinkWindowViz({ drinkWindow, windowCoverage, total }) {
       </div>
       <div className="drink-legend">
         {segments.map(seg => {
-          const count = drinkWindow[seg.key] || 0;
+          const count = maturity[seg.key] || 0;
           return (
             <div key={seg.key} className="drink-legend-item">
               <span className="drink-legend-dot" style={{ background: seg.color }} />
               <span className="drink-legend-icon">{seg.icon}</span>
               <span className="drink-legend-label">{seg.label}</span>
               <span className="drink-legend-count"
-                style={{ color: count > 0 && seg.key !== 'noWindow' ? seg.color : undefined }}>
+                style={{ color: count > 0 && seg.key !== 'noProfile' ? seg.color : undefined }}>
                 {count}
               </span>
             </div>
@@ -297,9 +298,8 @@ function DrinkWindowViz({ drinkWindow, windowCoverage, total }) {
       </div>
       {hasCoverage && (
         <div className="drink-coverage-note">
-          Window source: {windowCoverage.userSet} set by you
-          {windowCoverage.sommSet > 0 && ` · ${windowCoverage.sommSet} from sommelier profiles`}
-          {windowCoverage.none > 0 && ` · ${windowCoverage.none} without data`}
+          {maturityCoverage.sommSet} with sommelier profiles
+          {maturityCoverage.none > 0 && ` · ${maturityCoverage.none} without data`}
         </div>
       )}
     </div>
@@ -307,10 +307,10 @@ function DrinkWindowViz({ drinkWindow, windowCoverage, total }) {
 }
 
 // ── Cellar Health Score ───────────────────────────────────────────────────────
-function HealthScoreCard({ healthScore, healthGrade, drinkWindow }) {
+function HealthScoreCard({ healthScore, healthGrade, maturity }) {
   const score    = healthScore ?? 0;
   const gradeColor = healthGrade ? (GRADE_COLORS[healthGrade] || '#7A1E2D') : '#555';
-  const withWindow = drinkWindow.overdue + drinkWindow.soon + drinkWindow.inWindow + drinkWindow.notReady;
+  const withProfile = maturity.declining + maturity.late + maturity.peak + maturity.early + maturity.notReady;
 
   return (
     <div className="health-card">
@@ -329,27 +329,27 @@ function HealthScoreCard({ healthScore, healthGrade, drinkWindow }) {
       <div className="health-breakdown">
         <div className="health-row">
           <span className="health-dot" style={{ background: '#7A1E2D' }} />
-          <span className="health-label">In optimal window</span>
-          <span className="health-val">{drinkWindow.inWindow}</span>
+          <span className="health-label">Optimal maturity</span>
+          <span className="health-val">{maturity.peak}</span>
         </div>
         <div className="health-row">
           <span className="health-dot" style={{ background: '#7aade0' }} />
-          <span className="health-label">Ageing nicely</span>
-          <span className="health-val">{drinkWindow.notReady}</span>
+          <span className="health-label">Early drinking</span>
+          <span className="health-val">{maturity.early}</span>
         </div>
         <div className="health-row">
           <span className="health-dot" style={{ background: '#D4A070' }} />
-          <span className="health-label">Drink soon</span>
-          <span className="health-val">{drinkWindow.soon}</span>
+          <span className="health-label">Late maturity</span>
+          <span className="health-val">{maturity.late}</span>
         </div>
         <div className="health-row">
           <span className="health-dot" style={{ background: '#C94040' }} />
-          <span className="health-label">Past window</span>
-          <span className="health-val">{drinkWindow.overdue}</span>
+          <span className="health-label">Past prime</span>
+          <span className="health-val">{maturity.declining}</span>
         </div>
-        {withWindow === 0 && (
+        {withProfile === 0 && (
           <p className="stats-empty" style={{ margin: '0.5rem 0 0' }}>
-            Add drink window dates to see your score
+            Sommelier maturity profiles needed to see your score
           </p>
         )}
       </div>
@@ -358,7 +358,7 @@ function HealthScoreCard({ healthScore, healthGrade, drinkWindow }) {
 }
 
 // ── Regret Index ──────────────────────────────────────────────────────────────
-function RegretIndexCard({ regretIndex, overdueCount, total }) {
+function RegretIndexCard({ regretIndex, decliningCount, total }) {
   const level =
     regretIndex >= 30 ? 'critical' :
     regretIndex >= 15 ? 'warning'  :
@@ -387,7 +387,7 @@ function RegretIndexCard({ regretIndex, overdueCount, total }) {
       </div>
       <div className="regret-label">Regret Index</div>
       <div className="regret-desc">
-        {overdueCount} bottle{overdueCount !== 1 ? 's' : ''} past their optimal drinking window,
+        {decliningCount} bottle{decliningCount !== 1 ? 's' : ''} past their prime,
         still unopened.
       </div>
       <div className="regret-message" style={{ borderLeftColor: color, color: '#E8DFD0' }}>
@@ -401,15 +401,15 @@ function RegretIndexCard({ regretIndex, overdueCount, total }) {
               style={{ width: `${Math.min(100, regretIndex)}%`, background: color }}
             />
           </div>
-          <span className="regret-bar-label">of windowed bottles</span>
+          <span className="regret-bar-label">of profiled bottles</span>
         </div>
       )}
     </div>
   );
 }
 
-// ── Drink Window Forecast ─────────────────────────────────────────────────────
-function DrinkForecastChart({ forecast }) {
+// ── Maturity Forecast ─────────────────────────────────────────────────────────
+function MaturityForecastChart({ forecast }) {
   if (!forecast || forecast.length === 0) return <p className="stats-empty">No forecast data</p>;
   const maxCount = Math.max(...forecast.map(d => d.count), 1);
   const BAR_H    = 120;
@@ -443,8 +443,8 @@ function UrgencyLadder({ bottles, currency }) {
   return (
     <ol className="urgency-list">
       {bottles.map((b, i) => {
-        const isOverdue = b.status === 'overdue';
-        const color     = isOverdue ? '#C94040' : '#D4A070';
+        const isDeclining = b.status === 'declining';
+        const color       = isDeclining ? '#C94040' : '#D4A070';
         return (
           <li key={i} className="urgency-item">
             <span className="urgency-rank" style={{ color }}>{i + 1}</span>
@@ -460,7 +460,7 @@ function UrgencyLadder({ bottles, currency }) {
             </div>
             <div className="urgency-right">
               <span className="urgency-days" style={{ color }}>
-                {isOverdue
+                {isDeclining
                   ? `${Math.abs(b.daysRemaining || 0)}d ago`
                   : fmtDays(b.daysRemaining)}
               </span>
@@ -947,14 +947,14 @@ function PremiumGate() {
       <h1>Collection Analytics</h1>
       <p className="premium-gate-sub">
         Deep insights into your entire wine collection — types, origins, vintages,
-        value, drinking windows, consumption history, and more. The most comprehensive
+        value, maturity profiles, consumption history, and more. The most comprehensive
         wine analytics dashboard available.
       </p>
       <div className="premium-gate-features">
         <div className="pgf-item"><span>🍷</span> Wine type &amp; origin breakdown</div>
         <div className="pgf-item"><span>📅</span> Vintage distribution by year</div>
         <div className="pgf-item"><span>💰</span> Collection value analysis</div>
-        <div className="pgf-item"><span>⏱</span> Drinking window forecast</div>
+        <div className="pgf-item"><span>⏱</span> Maturity forecast</div>
         <div className="pgf-item"><span>🎯</span> Cellar health score</div>
         <div className="pgf-item"><span>😬</span> Regret Index — bottles past their prime</div>
         <div className="pgf-item"><span>🚨</span> Urgency ladder — drink these now</div>
@@ -1061,9 +1061,9 @@ function Statistics() {
   const {
     overview, byType, byCountry, byRegion, byGrape,
     byVintage, byRating, byBottleSize, byPurchaseYear,
-    drinkWindow, windowCoverage, topValueBottles,
+    maturity, maturityCoverage, topValueBottles,
     consumptionByYear, consumptionByReason, cellarBreakdown,
-    drinkWindowForecast, urgencyLadder, holdingTime,
+    maturityForecast, urgencyLadder, holdingTime,
     joyPerDollar, regretSignal, pace, topProducers,
   } = stats;
 
@@ -1086,14 +1086,14 @@ function Statistics() {
   const hasMultipleSizes = Object.keys(byBottleSize).length > 1;
   const hasPurchaseDates = byPurchaseYear && byPurchaseYear.length > 0;
   const hasUrgency     = urgencyLadder && urgencyLadder.length > 0;
-  const hasForecast    = drinkWindowForecast && drinkWindowForecast.some(d => d.count > 0);
+  const hasForecast    = maturityForecast && maturityForecast.some(d => d.count > 0);
   const hasProducers   = topProducers && topProducers.length > 0;
 
   const PREMIUM_FEATURES = [
     '🎯 Cellar health score & grade',
     '😬 Regret Index — bottles past prime',
     '🚨 Urgency ladder — drink these now',
-    '🔭 Drink window forecast by year',
+    '🔭 Maturity forecast by year',
     '⏳ Patience Payoff — does aging reward you?',
     '💎 Joy Per Dollar — best value wines',
     '🤯 Expectation vs Reality',
@@ -1137,12 +1137,12 @@ function Statistics() {
             accentColor="#8B6A9A" />
         )}
         {isBasic && (
-          <KPICard icon="⏱" label="Drink Soon / Overdue"
-            value={`${drinkWindow.soon + drinkWindow.overdue}`}
-            sub={drinkWindow.overdue > 0
-              ? `${drinkWindow.overdue} past window`
-              : `${drinkWindow.inWindow} in window`}
-            accentColor={drinkWindow.overdue > 0 ? '#C94040' : '#7A1E2D'} />
+          <KPICard icon="⏱" label="Declining / Late"
+            value={`${(maturity.declining || 0) + (maturity.late || 0)}`}
+            sub={maturity.declining > 0
+              ? `${maturity.declining} past prime`
+              : `${maturity.peak || 0} at peak`}
+            accentColor={maturity.declining > 0 ? '#C94040' : '#7A1E2D'} />
         )}
         {isPremium && (
           <KPICard icon="💰" label="Est. Collection Value"
@@ -1178,7 +1178,7 @@ function Statistics() {
             <HealthScoreCard
               healthScore={overview.healthScore}
               healthGrade={overview.healthGrade}
-              drinkWindow={drinkWindow}
+              maturity={maturity}
             />
           </div>
           <div className={`stats-card stats-card--regret${overview.regretIndex >= 15 ? ' stats-card--regret-alert' : ''}`}>
@@ -1188,7 +1188,7 @@ function Statistics() {
             </h2>
             <RegretIndexCard
               regretIndex={overview.regretIndex}
-              overdueCount={drinkWindow.overdue}
+              decliningCount={maturity.declining}
               total={total}
             />
           </div>
@@ -1225,8 +1225,8 @@ function Statistics() {
         {/* Drinking Windows (basic+) or Top 5 Origins (free) */}
         {isBasic ? (
           <div className="stats-card">
-            <h2 className="stats-card-title">Drinking Windows</h2>
-            <DrinkWindowViz drinkWindow={drinkWindow} windowCoverage={windowCoverage} total={total} />
+            <h2 className="stats-card-title">Maturity Status</h2>
+            <MaturityViz maturity={maturity} maturityCoverage={maturityCoverage} total={total} />
           </div>
         ) : (
           <div className="stats-card">
@@ -1261,7 +1261,7 @@ function Statistics() {
               '🗺️ World origins map',
               '🍇 Top grapes & regions',
               '⭐ Rating breakdown',
-              '⏱ Drinking window status',
+              '⏱ Maturity status',
               '📈 Consumption history',
               '🏃 Cellar pace tracker',
               '🏠 Cellar breakdown',
@@ -1363,14 +1363,14 @@ function Statistics() {
               <UpgradeCard plan="premium" fullWidth features={PREMIUM_FEATURES} />
             ) : (
               <>
-                {/* Drink Window Forecast — PREMIUM */}
+                {/* Maturity Forecast — PREMIUM */}
                 {hasForecast && (
                   <div className="stats-card stats-card--full">
                     <h2 className="stats-card-title">
-                      Drink Window Forecast
+                      Maturity Forecast
                       <span className="stats-card-title-note">Bottles in window by year</span>
                     </h2>
-                    <DrinkForecastChart forecast={drinkWindowForecast} />
+                    <MaturityForecastChart forecast={maturityForecast} />
                   </div>
                 )}
 
@@ -1429,7 +1429,7 @@ function Statistics() {
       <p className="stats-footnote">
         Active bottles only ·{' '}
         {isPremium && `Prices converted using today's exchange rates to ${currency} · `}
-        Drink windows use your personal dates where set, falling back to sommelier profiles ·
+        Maturity data from sommelier profiles ·
         Only your owned cellars are included
       </p>
     </div>
