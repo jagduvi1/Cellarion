@@ -47,10 +47,13 @@ function ImageGallery({ bottleId, wineDefinitionId, size = 'medium', onEmpty, de
   const resolvedDefaultId = externalDefaultId || defaultImageId ||
     (wineDefinitionId ? images.find(img => img.assignedToWine)?._id : null) || null;
 
-  // Wrap onSetDefault to update local state optimistically
+  // Wrap onSetDefault to update local state optimistically before the API call
   const handleSetDefault = onSetDefault ? async (imageId) => {
-    await onSetDefault(imageId);
-    // Optimistically update local state
+    // Save previous state so we can revert on failure
+    const prevDefaultId = defaultImageId;
+    const prevImages = images;
+
+    // Optimistic update — immediate visual feedback
     if (imageId) {
       setDefaultImageId(imageId);
       setImages(prev => prev.map(img => ({
@@ -63,6 +66,14 @@ function ImageGallery({ bottleId, wineDefinitionId, size = 'medium', onEmpty, de
         ...img,
         assignedToWine: false
       })));
+    }
+
+    try {
+      await onSetDefault(imageId);
+    } catch {
+      // Revert on failure
+      setDefaultImageId(prevDefaultId);
+      setImages(prevImages);
     }
   } : undefined;
 

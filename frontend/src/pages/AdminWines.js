@@ -407,10 +407,10 @@ function AdminWines() {
                       size="medium"
                       onSetDefault={async (imageId) => {
                         if (!imageId) return;
-                        try {
-                          await adminAssignImageToWine(apiFetch, imageId, { wineDefinitionId: editWine._id });
-                        } catch (err) {
-                          console.error('Failed to assign image:', err);
+                        const res = await adminAssignImageToWine(apiFetch, imageId, { wineDefinitionId: editWine._id });
+                        if (!res.ok) {
+                          const data = await res.json().catch(() => ({}));
+                          throw new Error(data.error || 'Failed to assign image');
                         }
                       }}
                     />

@@ -713,10 +713,10 @@ function EditForm({ bottle, onSaved, onCancel, onImageUploaded }) {
           bottleId={bottle._id}
           size="medium"
           onSetDefault={async (imageId) => {
-            try {
-              await setBottleDefaultImage(apiFetch, bottle._id, imageId);
-            } catch (err) {
-              console.error('Failed to set default image:', err);
+            const res = await setBottleDefaultImage(apiFetch, bottle._id, imageId);
+            if (!res.ok) {
+              const data = await res.json().catch(() => ({}));
+              throw new Error(data.error || 'Failed to set default image');
             }
           }}
         />
