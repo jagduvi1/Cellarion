@@ -6,11 +6,10 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm install --legacy-peer-deps
 
-ARG APP_VERSION=dev
-ENV REACT_APP_VERSION=$APP_VERSION
-
 COPY . .
-RUN npm run build
+
+ARG APP_VERSION=
+RUN export REACT_APP_VERSION="${APP_VERSION:-$(node -p "require('./package.json').version")}" && npm run build
 
 # ── Stage 2: serve with nginx ─────────────────────────────────────────────────
 FROM nginx:alpine
