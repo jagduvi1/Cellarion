@@ -5,6 +5,8 @@ const Bottle = require('../../models/Bottle');
 const WineDefinition = require('../../models/WineDefinition');
 const { getOrCreateDailySnapshot, getSnapshotsForDates } = require('../../utils/exchangeRates');
 
+const { suggestPrice } = require('../../services/labelScan');
+
 const router = express.Router();
 
 router.use(requireAuth);
@@ -146,6 +148,53 @@ router.get('/lookup', async (req, res) => {
   } catch (error) {
     console.error('Price lookup error:', error);
     res.status(500).json({ error: 'Failed to load price history' });
+  }
+});
+
+/**
+ * POST /api/somm/prices/ai-suggest
+ * Ask AI to suggest a market price for a wine+vintage. Somm/admin only.
+ * Body: { wineDefinition, vintage }
+ * Returns suggested values for the form (not saved until the user confirms).
+ */
+router.post('/ai-suggest', requireSommOrAdmin, async (req, res) => {
+  try {
+    const { wineDefinition: wineId, vintage } = req.body;
+    if (!wineId || !vintage) {
+      return res.status(400).json({ error: 'wineDefinition and vintage are required' });
+    }
+
+    const wine = await WineDefinition.findById(wineId)
+      .populate('country', 'name')
+      .populate('region', 'name')
+      .populate('grapes', 'name');
+
+    if (!wine) {
+      return res.status(404).json({ error: 'Wine definition not found' });
+    }
+
+    const result = await suggestPrice({
+      name: wine.name,
+      producer: wine.producer,
+      vintage,
+      country: wine.country?.name,
+      region: wine.region?.name,
+      appellation: wine.appellation,
+      type: wine.type,
+      grapes: wine.grapes?.map(g => g.name)
+    });
+
+    if (!result.data) {
+      return res.status(422).json({
+        error: 'AI could not suggest a price for this wine',
+        reason: result.debugReason
+      });
+    }
+
+    res.json({ suggestion: result.data });
+  } catch (error) {
+    console.error('AI price suggest error:', error);
+    res.status(500).json({ error: 'Failed to get AI suggestion' });
   }
 });
 

@@ -175,8 +175,16 @@
 .somm-form-hint {
   font-size: 0.85rem;
   color: var(--color-text-muted);
-  margin: 0 0 1rem 0;
+  margin: 0;
   line-height: 1.5;
+}
+
+.somm-form-hint-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
 }
 
 .somm-year-hint {
@@ -319,6 +327,63 @@
   gap: 0.75rem;
   flex-wrap: wrap;
   margin-top: 1rem;
+}
+
+/* ── AI suggestion ── */
+.btn-ai {
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 0.4rem 0.9rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: opacity 0.15s;
+  flex-shrink: 0;
+}
+
+.btn-ai:hover {
+  opacity: 0.88;
+}
+
+.btn-ai:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.somm-ai-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.somm-ai-msg {
+  font-size: 0.82rem;
+  padding: 0.4rem 0.7rem;
+  border-radius: var(--radius-sm);
+  line-height: 1.4;
+}
+
+.somm-ai-msg--ok {
+  background: var(--color-success-bg);
+  color: var(--color-success);
+  border: 1px solid var(--color-success-border);
+}
+
+.somm-ai-msg--err {
+  background: var(--color-danger-bg);
+  color: var(--color-danger);
+  border: 1px solid var(--color-danger-border);
+}
+
+.somm-ai-reasoning {
+  margin-top: 0.3rem;
+  font-size: 0.78rem;
+  color: var(--color-text-muted);
+  font-style: italic;
 }
 
 /* ── Mobile ── */

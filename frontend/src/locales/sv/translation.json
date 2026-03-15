@@ -721,7 +721,11 @@
       "statusPending": "Väntande",
       "statusReviewed": "Granskad",
       "statusToday": "Status idag ({{year}}):",
-      "vintageLabel": "Årgång:"
+      "vintageLabel": "Årgång:",
+      "aiSuggest": "Fråga AI",
+      "aiSuggesting": "Frågar AI…",
+      "aiSuggestError": "AI kunde inte föreslå ett drickfönster",
+      "aiSuggestFilled": "AI-förslag tillämpat — granska och spara"
     },
     "prices": {
       "title": "Priskö",
@@ -742,7 +746,13 @@
       "sourceOptional": "(valfritt)",
       "sourcePlaceholder": "Vivino, Wine-Searcher…",
       "savePrice": "Spara pris",
-      "priceRequired": "Pris krävs"
+      "priceRequired": "Pris krävs",
+      "aiSuggest": "Fråga AI",
+      "aiSuggesting": "Frågar AI…",
+      "aiSuggestError": "AI kunde inte föreslå ett pris",
+      "aiSuggestFilled": "AI-förslag tillämpat — granska och spara",
+      "aiNoValue": "AI bedömer att detta vin inte har något betydande marknadsvärde",
+      "aiReasoning": "AI-resonemang:"
     }
   }
 }

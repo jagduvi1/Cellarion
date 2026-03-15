@@ -80,6 +80,62 @@ Rules:
 - Return {"error":"unknown"} ONLY if the query is completely unrecognisable as a real wine
 - Output ONLY the JSON object. No explanations, no extra text before or after`;
 
+const DEFAULT_MATURITY_SUGGEST_PROMPT =
+`You are a master sommelier with deep knowledge of wine aging potential. Given the wine details below, suggest the optimal drinking window phases (early drinking, peak maturity, late maturity) as calendar years.
+
+Wine: {{name}}
+Producer: {{producer}}
+Vintage: {{vintage}}
+Country: {{country}}
+Region: {{region}}
+Appellation: {{appellation}}
+Type: {{type}}
+Grapes: {{grapes}}
+
+Consider:
+- The wine's appellation and classification — grand cru ages differently from village wine
+- The grape varieties and their aging potential
+- The vintage quality and its effect on aging
+- The producer's style (traditional long-aging vs modern early-drinking)
+- Regional norms for aging (e.g. Barolo needs more time than Beaujolais)
+
+Return ONLY a raw JSON object (no markdown, no code fences, no extra text):
+{"earlyFrom":YYYY,"earlyUntil":YYYY,"peakFrom":YYYY,"peakUntil":YYYY,"lateFrom":YYYY,"lateUntil":YYYY,"sommNotes":"brief explanation of your reasoning","confidence":0.0}
+
+Rules:
+- All values are calendar years (e.g. 2028, not "5 years")
+- earlyFrom should be the first year the wine becomes enjoyable
+- Phases must not overlap: earlyUntil < peakFrom, peakUntil < lateFrom
+- For wines meant to drink young (e.g. Beaujolais Nouveau, most rosé, simple whites), set a short window with only early and peak phases, leave late phase null
+- If a phase does not apply, set both its from and until to null
+- sommNotes: 1-2 sentences explaining your reasoning (aging potential, what to expect)
+- confidence: 1.0 = well-known wine with established aging curves, 0.7 = confident from appellation/grape knowledge, 0.4 = rough estimate
+- Never invent aging data — if you truly cannot estimate, return {"error":"unknown"}`;
+
+const DEFAULT_PRICE_SUGGEST_PROMPT =
+`You are a wine market expert with comprehensive knowledge of wine pricing and investment value. Given the wine details below, suggest the current market price.
+
+Wine: {{name}}
+Producer: {{producer}}
+Vintage: {{vintage}}
+Country: {{country}}
+Region: {{region}}
+Appellation: {{appellation}}
+Type: {{type}}
+Grapes: {{grapes}}
+
+Return ONLY a raw JSON object (no markdown, no code fences, no extra text):
+{"price":NUMBER_OR_NULL,"currency":"USD","source":"AI estimate based on market knowledge","reasoning":"brief explanation","confidence":0.0}
+
+Rules:
+- price is the estimated current retail/market value per bottle in USD
+- If this wine has NO meaningful cellar/collectible value (e.g. everyday table wine, bulk-produced wine, wine that does not appreciate with age, or wine you cannot reliably price), set price to null and explain in reasoning
+- For wines that LOSE value over time (past their prime, not age-worthy), set price to null with reasoning like "past optimal drinking window" or "does not appreciate with cellaring"
+- Only provide a price if you are reasonably confident it reflects real market value
+- confidence: 1.0 = well-known traded wine with reliable auction/retail data, 0.7 = confident estimate from similar wines, 0.4 = rough guess
+- Never invent a price — if uncertain, return null for price
+- Return {"error":"unknown"} ONLY if the wine is completely unrecognisable`;
+
 // Models that are known to work reliably for text chat.
 // Any value stored in DB that isn't in this list falls back to the default.
 const VALID_CHAT_MODELS = [
@@ -116,6 +172,10 @@ const defaults = {
   labelScanModel: 'claude-haiku-4-5-20251001',
   importLookupPrompt: DEFAULT_IMPORT_LOOKUP_PROMPT,
   importLookupModel: 'claude-haiku-4-5-20251001',
+  maturitySuggestPrompt: DEFAULT_MATURITY_SUGGEST_PROMPT,
+  maturitySuggestModel: 'claude-haiku-4-5-20251001',
+  priceSuggestPrompt: DEFAULT_PRICE_SUGGEST_PROMPT,
+  priceSuggestModel: 'claude-haiku-4-5-20251001',
 };
 
 let cache = { ...defaults };
@@ -140,6 +200,10 @@ async function load() {
         labelScanModel:        VALID_CHAT_MODELS.includes(doc.value.labelScanModel) ? doc.value.labelScanModel : defaults.labelScanModel,
         importLookupPrompt:    doc.value.importLookupPrompt   ?? defaults.importLookupPrompt,
         importLookupModel:     VALID_CHAT_MODELS.includes(doc.value.importLookupModel) ? doc.value.importLookupModel : defaults.importLookupModel,
+        maturitySuggestPrompt: doc.value.maturitySuggestPrompt ?? defaults.maturitySuggestPrompt,
+        maturitySuggestModel:  VALID_CHAT_MODELS.includes(doc.value.maturitySuggestModel) ? doc.value.maturitySuggestModel : defaults.maturitySuggestModel,
+        priceSuggestPrompt:    doc.value.priceSuggestPrompt   ?? defaults.priceSuggestPrompt,
+        priceSuggestModel:     VALID_CHAT_MODELS.includes(doc.value.priceSuggestModel) ? doc.value.priceSuggestModel : defaults.priceSuggestModel,
       };
     }
   } catch (err) {
@@ -155,4 +219,4 @@ function set(value) {
   cache = { ...defaults, ...value };
 }
 
-module.exports = { load, get, set, defaults, DEFAULT_SYSTEM_PROMPT, DEFAULT_LABEL_SCAN_PROMPT, DEFAULT_IMPORT_LOOKUP_PROMPT, DEFAULT_TEXT_SEARCH_PROMPT, VALID_CHAT_MODELS };
+module.exports = { load, get, set, defaults, DEFAULT_SYSTEM_PROMPT, DEFAULT_LABEL_SCAN_PROMPT, DEFAULT_IMPORT_LOOKUP_PROMPT, DEFAULT_TEXT_SEARCH_PROMPT, DEFAULT_MATURITY_SUGGEST_PROMPT, DEFAULT_PRICE_SUGGEST_PROMPT, VALID_CHAT_MODELS };

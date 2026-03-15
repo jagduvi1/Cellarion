@@ -495,6 +495,288 @@ function ImportLookupPromptPanel({ prompt, apiFetch }) {
   );
 }
 
+function MaturitySuggestModelPanel({ currentModel, apiFetch }) {
+  const [selected, setSelected] = useState(currentModel || 'claude-haiku-4-5-20251001');
+  const [saving, setSaving]     = useState(false);
+  const [msg, setMsg]           = useState(null);
+
+  const isDirty = selected !== currentModel;
+
+  const save = async () => {
+    setSaving(true);
+    setMsg(null);
+    try {
+      const res = await apiFetch('/api/superadmin/ai/maturity-suggest-model', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model: selected }),
+      });
+      if (!res.ok) {
+        const d = await res.json();
+        setMsg({ ok: false, text: d.error || 'Save failed' });
+      } else {
+        setMsg({ ok: true, text: 'Saved — takes effect immediately' });
+      }
+    } catch {
+      setMsg({ ok: false, text: 'Network error' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const tierColor = { economy: 'var(--sa-accent)', standard: 'var(--sa-accent2)', premium: '#c9a84c' };
+
+  return (
+    <div className="sa-panel" style={{ marginTop: 16 }}>
+      <div className="sa-panel-header">
+        <span className="sa-panel-title">Maturity Suggest — AI Model</span>
+        <button className="sa-btn" onClick={save} disabled={saving || !isDirty}>
+          {saving ? 'Saving...' : 'Save'}
+        </button>
+      </div>
+      <div className="sa-panel-body">
+        <div style={{ fontSize: 11, color: 'var(--sa-text-dim)', marginBottom: 12 }}>
+          Model used when sommeliers click "Ask AI" on the maturity queue to suggest drink window phases.
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {CHAT_MODELS.map(m => (
+            <label
+              key={m.id}
+              style={{
+                display: 'flex', alignItems: 'flex-start', gap: 10,
+                padding: '8px 12px', borderRadius: 4,
+                border: `1px solid ${selected === m.id ? 'var(--sa-accent)' : 'var(--sa-border)'}`,
+                background: selected === m.id ? 'rgba(123,158,136,0.06)' : 'transparent',
+                cursor: 'pointer',
+              }}
+            >
+              <input
+                type="radio"
+                name="maturitySuggestModel"
+                value={m.id}
+                checked={selected === m.id}
+                onChange={() => setSelected(m.id)}
+                style={{ marginTop: 2, accentColor: 'var(--sa-accent)', flexShrink: 0 }}
+              />
+              <div style={{ flex: 1 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
+                  <span style={{ fontWeight: 600, fontSize: 12, color: 'var(--sa-text)' }}>{m.name}</span>
+                  <span style={{ fontSize: 10, color: tierColor[m.tier], border: `1px solid ${tierColor[m.tier]}`, borderRadius: 3, padding: '1px 5px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    {m.tier}
+                  </span>
+                  {m.id === currentModel && <span style={{ fontSize: 10, color: 'var(--sa-accent)', marginLeft: 'auto' }}>● active</span>}
+                </div>
+                <div style={{ fontSize: 11, color: 'var(--sa-text-dim)', marginBottom: 2 }}>{m.description}</div>
+                <div style={{ fontSize: 10, color: 'var(--sa-text-dim)', fontFamily: 'monospace' }}>
+                  Input: {m.inputPrice} / M &nbsp;·&nbsp; Output: {m.outputPrice} / M tokens
+                </div>
+              </div>
+            </label>
+          ))}
+        </div>
+        {msg && (
+          <div style={{ marginTop: 12, fontSize: 11, color: msg.ok ? 'var(--sa-accent)' : 'var(--sa-danger)' }}>{msg.text}</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function MaturitySuggestPromptPanel({ prompt, apiFetch }) {
+  const [val, setVal] = useState(prompt || '');
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState(null);
+
+  const save = async () => {
+    setSaving(true);
+    setMsg(null);
+    try {
+      const res = await apiFetch('/api/superadmin/ai/maturity-suggest-prompt', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: val }),
+      });
+      if (!res.ok) {
+        const d = await res.json();
+        setMsg({ ok: false, text: d.error || 'Save failed' });
+      } else {
+        setMsg({ ok: true, text: 'Saved — takes effect immediately' });
+      }
+    } catch {
+      setMsg({ ok: false, text: 'Network error' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="sa-panel" style={{ marginTop: 16 }}>
+      <div className="sa-panel-header">
+        <span className="sa-panel-title">Maturity Suggest — AI Prompt</span>
+        <button className="sa-btn" onClick={save} disabled={saving || !val.trim()}>{saving ? 'Saving...' : 'Save'}</button>
+      </div>
+      <div className="sa-panel-body">
+        <div style={{ fontSize: 11, color: 'var(--sa-text-dim)', marginBottom: 8 }}>
+          Prompt sent to Claude when a sommelier asks AI to suggest drink window phases. Use <code style={{ background: 'var(--sa-bg)', padding: '1px 4px', borderRadius: 2 }}>{'{{name}}'}</code>, <code style={{ background: 'var(--sa-bg)', padding: '1px 4px', borderRadius: 2 }}>{'{{producer}}'}</code>, <code style={{ background: 'var(--sa-bg)', padding: '1px 4px', borderRadius: 2 }}>{'{{vintage}}'}</code>, <code style={{ background: 'var(--sa-bg)', padding: '1px 4px', borderRadius: 2 }}>{'{{country}}'}</code>, <code style={{ background: 'var(--sa-bg)', padding: '1px 4px', borderRadius: 2 }}>{'{{region}}'}</code>, <code style={{ background: 'var(--sa-bg)', padding: '1px 4px', borderRadius: 2 }}>{'{{appellation}}'}</code>, <code style={{ background: 'var(--sa-bg)', padding: '1px 4px', borderRadius: 2 }}>{'{{type}}'}</code>, <code style={{ background: 'var(--sa-bg)', padding: '1px 4px', borderRadius: 2 }}>{'{{grapes}}'}</code> placeholders.
+        </div>
+        <textarea
+          value={val}
+          onChange={e => setVal(e.target.value)}
+          rows={14}
+          style={{ width: '100%', background: 'var(--sa-bg)', border: '1px solid var(--sa-border)', color: 'var(--sa-text)', padding: '8px', borderRadius: 3, fontFamily: 'monospace', fontSize: 12, lineHeight: 1.5, resize: 'vertical', boxSizing: 'border-box' }}
+        />
+        <div style={{ marginTop: 6, display: 'flex', gap: 8, alignItems: 'center' }}>
+          <span style={{ fontSize: 11, color: 'var(--sa-text-dim)' }}>{val.length} / 6000 chars</span>
+          {msg && (
+            <span style={{ fontSize: 11, color: msg.ok ? 'var(--sa-accent)' : 'var(--sa-danger)' }}>{msg.text}</span>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PriceSuggestModelPanel({ currentModel, apiFetch }) {
+  const [selected, setSelected] = useState(currentModel || 'claude-haiku-4-5-20251001');
+  const [saving, setSaving]     = useState(false);
+  const [msg, setMsg]           = useState(null);
+
+  const isDirty = selected !== currentModel;
+
+  const save = async () => {
+    setSaving(true);
+    setMsg(null);
+    try {
+      const res = await apiFetch('/api/superadmin/ai/price-suggest-model', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model: selected }),
+      });
+      if (!res.ok) {
+        const d = await res.json();
+        setMsg({ ok: false, text: d.error || 'Save failed' });
+      } else {
+        setMsg({ ok: true, text: 'Saved — takes effect immediately' });
+      }
+    } catch {
+      setMsg({ ok: false, text: 'Network error' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const tierColor = { economy: 'var(--sa-accent)', standard: 'var(--sa-accent2)', premium: '#c9a84c' };
+
+  return (
+    <div className="sa-panel" style={{ marginTop: 16 }}>
+      <div className="sa-panel-header">
+        <span className="sa-panel-title">Price Suggest — AI Model</span>
+        <button className="sa-btn" onClick={save} disabled={saving || !isDirty}>
+          {saving ? 'Saving...' : 'Save'}
+        </button>
+      </div>
+      <div className="sa-panel-body">
+        <div style={{ fontSize: 11, color: 'var(--sa-text-dim)', marginBottom: 12 }}>
+          Model used when sommeliers click "Ask AI" on the price queue to suggest market prices.
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {CHAT_MODELS.map(m => (
+            <label
+              key={m.id}
+              style={{
+                display: 'flex', alignItems: 'flex-start', gap: 10,
+                padding: '8px 12px', borderRadius: 4,
+                border: `1px solid ${selected === m.id ? 'var(--sa-accent)' : 'var(--sa-border)'}`,
+                background: selected === m.id ? 'rgba(123,158,136,0.06)' : 'transparent',
+                cursor: 'pointer',
+              }}
+            >
+              <input
+                type="radio"
+                name="priceSuggestModel"
+                value={m.id}
+                checked={selected === m.id}
+                onChange={() => setSelected(m.id)}
+                style={{ marginTop: 2, accentColor: 'var(--sa-accent)', flexShrink: 0 }}
+              />
+              <div style={{ flex: 1 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
+                  <span style={{ fontWeight: 600, fontSize: 12, color: 'var(--sa-text)' }}>{m.name}</span>
+                  <span style={{ fontSize: 10, color: tierColor[m.tier], border: `1px solid ${tierColor[m.tier]}`, borderRadius: 3, padding: '1px 5px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    {m.tier}
+                  </span>
+                  {m.id === currentModel && <span style={{ fontSize: 10, color: 'var(--sa-accent)', marginLeft: 'auto' }}>● active</span>}
+                </div>
+                <div style={{ fontSize: 11, color: 'var(--sa-text-dim)', marginBottom: 2 }}>{m.description}</div>
+                <div style={{ fontSize: 10, color: 'var(--sa-text-dim)', fontFamily: 'monospace' }}>
+                  Input: {m.inputPrice} / M &nbsp;·&nbsp; Output: {m.outputPrice} / M tokens
+                </div>
+              </div>
+            </label>
+          ))}
+        </div>
+        {msg && (
+          <div style={{ marginTop: 12, fontSize: 11, color: msg.ok ? 'var(--sa-accent)' : 'var(--sa-danger)' }}>{msg.text}</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function PriceSuggestPromptPanel({ prompt, apiFetch }) {
+  const [val, setVal] = useState(prompt || '');
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState(null);
+
+  const save = async () => {
+    setSaving(true);
+    setMsg(null);
+    try {
+      const res = await apiFetch('/api/superadmin/ai/price-suggest-prompt', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: val }),
+      });
+      if (!res.ok) {
+        const d = await res.json();
+        setMsg({ ok: false, text: d.error || 'Save failed' });
+      } else {
+        setMsg({ ok: true, text: 'Saved — takes effect immediately' });
+      }
+    } catch {
+      setMsg({ ok: false, text: 'Network error' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="sa-panel" style={{ marginTop: 16 }}>
+      <div className="sa-panel-header">
+        <span className="sa-panel-title">Price Suggest — AI Prompt</span>
+        <button className="sa-btn" onClick={save} disabled={saving || !val.trim()}>{saving ? 'Saving...' : 'Save'}</button>
+      </div>
+      <div className="sa-panel-body">
+        <div style={{ fontSize: 11, color: 'var(--sa-text-dim)', marginBottom: 8 }}>
+          Prompt sent to Claude when a sommelier asks AI to suggest a market price. Use <code style={{ background: 'var(--sa-bg)', padding: '1px 4px', borderRadius: 2 }}>{'{{name}}'}</code>, <code style={{ background: 'var(--sa-bg)', padding: '1px 4px', borderRadius: 2 }}>{'{{producer}}'}</code>, <code style={{ background: 'var(--sa-bg)', padding: '1px 4px', borderRadius: 2 }}>{'{{vintage}}'}</code>, <code style={{ background: 'var(--sa-bg)', padding: '1px 4px', borderRadius: 2 }}>{'{{country}}'}</code>, <code style={{ background: 'var(--sa-bg)', padding: '1px 4px', borderRadius: 2 }}>{'{{region}}'}</code>, <code style={{ background: 'var(--sa-bg)', padding: '1px 4px', borderRadius: 2 }}>{'{{appellation}}'}</code>, <code style={{ background: 'var(--sa-bg)', padding: '1px 4px', borderRadius: 2 }}>{'{{type}}'}</code>, <code style={{ background: 'var(--sa-bg)', padding: '1px 4px', borderRadius: 2 }}>{'{{grapes}}'}</code> placeholders. If a wine has no cellar value, AI should return null for price.
+        </div>
+        <textarea
+          value={val}
+          onChange={e => setVal(e.target.value)}
+          rows={14}
+          style={{ width: '100%', background: 'var(--sa-bg)', border: '1px solid var(--sa-border)', color: 'var(--sa-text)', padding: '8px', borderRadius: 3, fontFamily: 'monospace', fontSize: 12, lineHeight: 1.5, resize: 'vertical', boxSizing: 'border-box' }}
+        />
+        <div style={{ marginTop: 6, display: 'flex', gap: 8, alignItems: 'center' }}>
+          <span style={{ fontSize: 11, color: 'var(--sa-text-dim)' }}>{val.length} / 6000 chars</span>
+          {msg && (
+            <span style={{ fontSize: 11, color: msg.ok ? 'var(--sa-accent)' : 'var(--sa-danger)' }}>{msg.text}</span>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ChatLimitsPanel({ limits, apiFetch }) {
   const [vals, setVals] = useState({ free: limits.free ?? 4, basic: limits.basic ?? 20, premium: limits.premium ?? 50 });
   const [saving, setSaving] = useState(false);
@@ -762,6 +1044,14 @@ export default function TabAI() {
                 <span className="sa-kv-val">{config.chatModelFallback || '—'}</span>
               </div>
               <div className="sa-kv-row">
+                <span className="sa-kv-key">Maturity suggest model</span>
+                <span className="sa-kv-val">{config.maturitySuggestModel}</span>
+              </div>
+              <div className="sa-kv-row">
+                <span className="sa-kv-key">Price suggest model</span>
+                <span className="sa-kv-val">{config.priceSuggestModel}</span>
+              </div>
+              <div className="sa-kv-row">
                 <span className="sa-kv-key">Embed batch delay</span>
                 <span className="sa-kv-val">{config.embeddingBatchDelayMs}ms</span>
               </div>
@@ -979,6 +1269,10 @@ export default function TabAI() {
       <LabelScanPromptPanel prompt={config.labelScanPrompt || ''} apiFetch={apiFetch} />
       <ImportLookupModelPanel currentModel={config.importLookupModel || 'claude-haiku-4-5-20251001'} apiFetch={apiFetch} />
       <ImportLookupPromptPanel prompt={config.importLookupPrompt || ''} apiFetch={apiFetch} />
+      <MaturitySuggestModelPanel currentModel={config.maturitySuggestModel || 'claude-haiku-4-5-20251001'} apiFetch={apiFetch} />
+      <MaturitySuggestPromptPanel prompt={config.maturitySuggestPrompt || ''} apiFetch={apiFetch} />
+      <PriceSuggestModelPanel currentModel={config.priceSuggestModel || 'claude-haiku-4-5-20251001'} apiFetch={apiFetch} />
+      <PriceSuggestPromptPanel prompt={config.priceSuggestPrompt || ''} apiFetch={apiFetch} />
       <ChatLimitsPanel limits={config.chatDailyLimits || {}} apiFetch={apiFetch} />
       <ChatUsagePanel />
     </>

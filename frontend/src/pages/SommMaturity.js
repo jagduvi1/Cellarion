@@ -118,6 +118,8 @@ function ProfileCard({ profile, isPending, onSaved, onReset }) {
   const [expanded,  setExpanded]  = useState(isPending);
   const [saving,    setSaving]    = useState(false);
   const [resetting, setResetting] = useState(false);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiMsg,     setAiMsg]     = useState(null);
   const [err,       setErr]       = useState(null);
 
   const [form, setForm] = useState({
@@ -174,6 +176,39 @@ function ProfileCard({ profile, isPending, onSaved, onReset }) {
     }
   };
 
+  const handleAiSuggest = async () => {
+    setAiLoading(true);
+    setAiMsg(null);
+    setErr(null);
+    try {
+      const res = await apiFetch(`/api/somm/maturity/${profile._id}/ai-suggest`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      const data = await res.json();
+      if (res.ok && data.suggestion) {
+        const s = data.suggestion;
+        setForm(f => ({
+          ...f,
+          earlyFrom:  s.earlyFrom  ?? f.earlyFrom,
+          earlyUntil: s.earlyUntil ?? f.earlyUntil,
+          peakFrom:   s.peakFrom   ?? f.peakFrom,
+          peakUntil:  s.peakUntil  ?? f.peakUntil,
+          lateFrom:   s.lateFrom   ?? f.lateFrom,
+          lateUntil:  s.lateUntil  ?? f.lateUntil,
+          sommNotes:  s.sommNotes  || f.sommNotes
+        }));
+        setAiMsg({ ok: true, text: t('somm.maturity.aiSuggestFilled') });
+      } else {
+        setAiMsg({ ok: false, text: data.error || t('somm.maturity.aiSuggestError') });
+      }
+    } catch {
+      setAiMsg({ ok: false, text: t('somm.maturity.aiSuggestError') });
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
   const phase = getMaturityPhase(profile);
 
   return (
@@ -213,10 +248,25 @@ function ProfileCard({ profile, isPending, onSaved, onReset }) {
         <form className="somm-form" onSubmit={handleSave}>
           {err && <div className="alert alert-error">{err}</div>}
 
-          <p className="somm-form-hint">
-            {t('somm.maturity.phaseHint')}
-            {!isNaN(vintageInt) && ` (${t('somm.maturity.vintageLabel')} ${vintageInt})`}
-          </p>
+          <div className="somm-form-hint-row">
+            <p className="somm-form-hint">
+              {t('somm.maturity.phaseHint')}
+              {!isNaN(vintageInt) && ` (${t('somm.maturity.vintageLabel')} ${vintageInt})`}
+            </p>
+            <button
+              type="button"
+              className="btn btn-ai"
+              onClick={handleAiSuggest}
+              disabled={aiLoading}
+            >
+              {aiLoading ? t('somm.maturity.aiSuggesting') : t('somm.maturity.aiSuggest')}
+            </button>
+          </div>
+          {aiMsg && (
+            <div className={`somm-ai-msg ${aiMsg.ok ? 'somm-ai-msg--ok' : 'somm-ai-msg--err'}`}>
+              {aiMsg.text}
+            </div>
+          )}
 
           {/* ── Phase rows ── */}
           <div className="somm-phases">
