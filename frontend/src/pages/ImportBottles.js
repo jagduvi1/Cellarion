@@ -17,7 +17,7 @@ import './ImportBottles.css';
 const STEPS = ['upload', 'review', 'importing', 'done'];
 
 const FORMAT_LABELS = {
-  cellarion: 'Cellarion JSON',
+  cellarion: 'Cellarion',
   vivino: 'Vivino',
   cellartracker: 'CellarTracker',
   generic: 'CSV'
