@@ -231,7 +231,7 @@ function RatingChart({ byRating, avg, targetScale }) {
         const pct   = total > 0 ? (count / total) * 100 : 0;
         return (
           <div key={band.key} className="rating-row" title={bandSub(band.key, targetScale)}>
-            <span className="rating-stars" style={{ color: band.color, minWidth: 70, fontSize: '0.8rem' }}>{band.label}</span>
+            <span className="rating-stars" style={{ color: band.color }}>{band.label}</span>
             <div className="rating-track">
               <div className="rating-fill" style={{ width: `${(count / maxVal) * 100}%`, background: band.color }} />
             </div>
