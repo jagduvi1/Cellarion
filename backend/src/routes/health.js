@@ -2,6 +2,8 @@ const express = require('express');
 const mongoose = require('mongoose');
 const router = express.Router();
 
+const { version } = require('../../package.json');
+
 // GET /api/health - Health check endpoint
 router.get('/', (req, res) => {
   const mongoStatus = mongoose.connection.readyState === 1 ? 'connected' : 'disconnected';
@@ -10,6 +12,7 @@ router.get('/', (req, res) => {
   res.status(statusCode).json({
     status: mongoStatus === 'connected' ? 'ok' : 'degraded',
     mongo: mongoStatus,
+    version,
   });
 });
 

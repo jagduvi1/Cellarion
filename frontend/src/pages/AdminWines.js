@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import {
   adminGetWines, adminGetWine, adminSaveWine, adminDeleteWine,
   adminGetCountries, adminGetGrapes, adminGetRegions, adminGetAppellations,
+  adminAssignImageToWine,
 } from '../api/admin';
 import { WINE_TYPES } from '../config/wineTypes';
 import GrapePicker from '../components/GrapePicker';
@@ -19,7 +20,6 @@ const emptyForm = {
   type: 'red',
   appellation: '',
   grapes: [],
-  image: ''
 };
 
 function AdminWines() {
@@ -162,7 +162,6 @@ function AdminWines() {
           type: w.type || 'red',
           appellation: w.appellation || '',
           grapes: (w.grapes || []).map(g => g._id || g),
-          image: w.image || ''
         });
         setEditWine(w);
         setShowForm(true);
@@ -193,7 +192,6 @@ function AdminWines() {
         type: formData.type,
         appellation: formData.appellation.trim() || null,
         grapes: formData.grapes,
-        image: formData.image.trim() || null
       };
 
       const res = await adminSaveWine(apiFetch, payload, editWine?._id);
@@ -370,15 +368,6 @@ function AdminWines() {
                   ))}
                 </select>
               </div>
-              <div className="form-group" style={{ gridColumn: '1 / -1' }}>
-                <label>{t('admin.wines.imageUrlLabel')}</label>
-                <input
-                  type="url"
-                  value={formData.image}
-                  onChange={(e) => setFormData({ ...formData, image: e.target.value })}
-                  placeholder="https://..."
-                />
-              </div>
               {grapes.length > 0 && (
                 <div className="form-group" style={{ gridColumn: '1 / -1' }}>
                   <label>
@@ -399,8 +388,20 @@ function AdminWines() {
               {editWine && (
                 <div className="form-group wine-image-section" style={{ gridColumn: '1 / -1' }}>
                   <label>Wine Images</label>
+                  <p className="wine-image-hint">{t('admin.wines.defaultImageHint', 'Click the star to set the default image for this wine.')}</p>
                   <div className="wine-image-existing">
-                    <ImageGallery wineDefinitionId={editWine._id} size="medium" />
+                    <ImageGallery
+                      wineDefinitionId={editWine._id}
+                      size="medium"
+                      onSetDefault={async (imageId) => {
+                        if (!imageId) return;
+                        const res = await adminAssignImageToWine(apiFetch, imageId, { wineDefinitionId: editWine._id });
+                        if (!res.ok) {
+                          const data = await res.json().catch(() => ({}));
+                          throw new Error(data.error || 'Failed to assign image');
+                        }
+                      }}
+                    />
                   </div>
                   <div className="form-group image-credit-field">
                     <label className="image-credit-label">

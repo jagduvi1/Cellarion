@@ -132,6 +132,48 @@
   background: white;
 }
 
+/* Default image button (star) */
+.carousel-default-btn {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(0, 0, 0, 0.45);
+  color: rgba(255, 255, 255, 0.8);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.2s, color 0.2s, background 0.2s;
+  z-index: 3;
+}
+
+.image-carousel:hover .carousel-default-btn {
+  opacity: 1;
+}
+
+.carousel-default-btn:hover {
+  background: rgba(0, 0, 0, 0.7);
+}
+
+.carousel-default-btn.is-default {
+  color: #f5c518;
+  opacity: 1;
+}
+
+.carousel-default-btn.is-default:hover {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+/* Highlight default dot */
+.carousel-dot.is-default {
+  background: #f5c518;
+}
+
 /* Touch-friendly on mobile */
 @media (max-width: 768px) {
   .carousel-btn {
@@ -140,8 +182,12 @@
     height: 32px;
   }
 
-  /* Always show credit on touch devices since hover doesn't work */
+  /* Always show credit and default star on touch devices since hover doesn't work */
   .carousel-credit {
+    opacity: 1;
+  }
+
+  .carousel-default-btn {
     opacity: 1;
   }
 }

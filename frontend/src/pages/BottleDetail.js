@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth, usePlan } from '../contexts/AuthContext';
-import { getBottle, updateBottle, consumeBottle } from '../api/bottles';
+import { getBottle, updateBottle, consumeBottle, setBottleDefaultImage } from '../api/bottles';
 import { getRacks } from '../api/racks';
 import { getDrinkStatus, formatDrinkDate, toInputDate, toMonthInput, monthToLastDay, getMaturityStatus } from '../utils/drinkStatus';
 import { fetchRates, convertAmount, convertAmountHistorical } from '../utils/currency';
@@ -10,6 +10,7 @@ import { calculatePriceChange } from '../utils/priceHistoryUtils';
 import { getMaturityPhases, isPhaseActive } from '../utils/maturityUtils';
 import { CURRENCIES } from '../config/currencies';
 import ImageUpload from '../components/ImageUpload';
+import ImageGallery from '../components/ImageGallery';
 import AuthImage from '../components/AuthImage';
 import RatingInput from '../components/RatingInput';
 import RatingDisplay from '../components/RatingDisplay';
@@ -37,7 +38,7 @@ function BottleDetail() {
   const [suggestGrapesOpen, setSuggestGrapesOpen] = useState(false);
   const [reportWineOpen, setReportWineOpen] = useState(false);
   const [pendingImage, setPendingImage] = useState(null);
-
+  const [defaultImage, setDefaultImage] = useState(null);
 
   useEffect(() => {
     fetchBottle();
@@ -58,6 +59,13 @@ function BottleDetail() {
             ? data.pendingImageUrl
             : `${API_URL}${data.pendingImageUrl}`;
           setPendingImage(url);
+        }
+        if (data.defaultImageUrl) {
+          const API_URL = process.env.REACT_APP_API_URL || '';
+          const url = data.defaultImageUrl.startsWith('http')
+            ? data.defaultImageUrl
+            : `${API_URL}${data.defaultImageUrl}`;
+          setDefaultImage(url);
         }
         // Fetch the sommelier maturity profile for this wine+vintage
         const wine = data.bottle?.wineDefinition;
@@ -177,26 +185,14 @@ function BottleDetail() {
       {/* ── Wine hero card ── */}
       <div className="bd-wine-header card">
         <div className="bd-wine-identity">
-          {(pendingImage || wine?.image) ? (
-            <div className="bd-wine-image-wrap">
-              <AuthImage
-                src={pendingImage || wine.image}
-                alt={displayName}
-                className="bd-wine-image"
-                onError={e => { e.target.style.display = 'none'; }}
-              />
-              {wine?.imageCredit && <span className="bd-wine-image-credit">{wine.imageCredit}</span>}
-              {(isPending || (pendingImage && !wine?.image)) && (
-                <span className="bd-pending-badge">{t('bottleDetail.pendingReview', 'Pending review')}</span>
-              )}
-            </div>
-          ) : (
-            <div className={`bd-wine-placeholder ${wine?.type || ''}`}>
-              {isPending && (
-                <span className="bd-pending-badge">{t('bottleDetail.pendingReview', 'Pending review')}</span>
-              )}
-            </div>
-          )}
+          <HeroImage
+            bottle={bottle}
+            wine={wine}
+            defaultImage={defaultImage}
+            pendingImage={pendingImage}
+            isPending={isPending}
+            displayName={displayName}
+          />
           <div className="bd-wine-meta">
             <h1 className={cellarColor ? 'cellar-accent-border' : ''} style={cellarColor ? { '--cellar-color': cellarColor } : undefined}>
               {displayName || t('common.unknownWine')}
@@ -231,7 +227,7 @@ function BottleDetail() {
           rates={rates}
           userCurrency={user?.preferences?.currency || 'USD'}
           canEdit={canEdit}
-          hasImage={!!(pendingImage || bottle.wineDefinition?.image)}
+          hasImage={!!(defaultImage || pendingImage || bottle.wineDefinition?.image)}
           onEdit={() => setEditing(true)}
           onSuggestGrapes={() => setSuggestGrapesOpen(true)}
           onRemove={() => setConsumeOpen(true)}
@@ -274,6 +270,56 @@ function BottleDetail() {
           wine={bottle.wineDefinition}
           onClose={() => setReportWineOpen(false)}
         />
+      )}
+    </div>
+  );
+}
+
+// ── Hero image: shows carousel from wine gallery or single fallback image ──
+function HeroImage({ bottle, wine, defaultImage, pendingImage, isPending, displayName }) {
+  const { t } = useTranslation();
+  const [galleryEmpty, setGalleryEmpty] = useState(false);
+  const hasGallerySource = !!(wine?._id);
+
+  // If the wine has approved images in the gallery, show the carousel
+  if (hasGallerySource && !galleryEmpty) {
+    return (
+      <div className="bd-wine-image-wrap">
+        <ImageGallery
+          wineDefinitionId={wine._id}
+          size="large"
+          onEmpty={() => setGalleryEmpty(true)}
+        />
+        {isPending && (
+          <span className="bd-pending-badge">{t('bottleDetail.pendingReview', 'Pending review')}</span>
+        )}
+      </div>
+    );
+  }
+
+  // Fallback: single image (default, pending, or wine.image)
+  if (defaultImage || pendingImage || wine?.image) {
+    return (
+      <div className="bd-wine-image-wrap">
+        <AuthImage
+          src={defaultImage || pendingImage || wine.image}
+          alt={displayName}
+          className="bd-wine-image"
+          onError={e => { e.target.style.display = 'none'; }}
+        />
+        {wine?.imageCredit && !defaultImage && <span className="bd-wine-image-credit">{wine.imageCredit}</span>}
+        {(isPending || (pendingImage && !wine?.image && !defaultImage)) && (
+          <span className="bd-pending-badge">{t('bottleDetail.pendingReview', 'Pending review')}</span>
+        )}
+      </div>
+    );
+  }
+
+  // No image at all
+  return (
+    <div className={`bd-wine-placeholder ${wine?.type || ''}`}>
+      {isPending && (
+        <span className="bd-pending-badge">{t('bottleDetail.pendingReview', 'Pending review')}</span>
       )}
     </div>
   );
@@ -657,33 +703,47 @@ function EditForm({ bottle, onSaved, onCancel, onImageUploaded }) {
         <input type="url" value={form.purchaseUrl} onChange={set('purchaseUrl')} placeholder="https://…" />
       </div>
 
-      {!hasWineImage && (
-        <div className="form-group bd-image-section">
-          <label>
-            {t('bottleDetail.addWineImage', 'Wine Photo')}
-            <span className="bd-label-optional"> ({t('common.optional', 'optional')})</span>
-          </label>
-          <ImageUpload
-            bottleId={bottle._id}
-            wineDefinitionId={bottle.wineDefinition?._id}
-            onUploadComplete={(img) => {
-              if (onImageUploaded && img?.originalUrl) {
-                const url = img.originalUrl.startsWith('http')
-                  ? img.originalUrl
-                  : `${API_URL}${img.originalUrl}`;
-                onImageUploaded(url);
-              }
-            }}
-            onProcessingComplete={(url) => onImageUploaded?.(url)}
-          />
-          <p className="image-public-notice">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flexShrink: 0, marginTop: '1px' }}>
-              <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
-            </svg>
-            {t('bottleDetail.imageNotice', 'Images are reviewed by an admin before being added to the shared wine registry, where they will be visible to all Cellarion users.')}
-          </p>
-        </div>
-      )}
+      <div className="form-group bd-image-section">
+        <label>
+          {t('bottleDetail.addWineImage', 'Wine Photo')}
+          <span className="bd-label-optional"> ({t('common.optional', 'optional')})</span>
+        </label>
+        <p className="bd-image-default-hint">{t('bottleDetail.defaultImageHint', 'Click the star to choose which image is shown first.')}</p>
+        <ImageGallery
+          bottleId={bottle._id}
+          size="medium"
+          onSetDefault={async (imageId) => {
+            const res = await setBottleDefaultImage(apiFetch, bottle._id, imageId);
+            if (!res.ok) {
+              const data = await res.json().catch(() => ({}));
+              throw new Error(data.error || 'Failed to set default image');
+            }
+          }}
+        />
+        {!hasWineImage && (
+          <>
+            <ImageUpload
+              bottleId={bottle._id}
+              wineDefinitionId={bottle.wineDefinition?._id}
+              onUploadComplete={(img) => {
+                if (onImageUploaded && img?.originalUrl) {
+                  const url = img.originalUrl.startsWith('http')
+                    ? img.originalUrl
+                    : `${API_URL}${img.originalUrl}`;
+                  onImageUploaded(url);
+                }
+              }}
+              onProcessingComplete={(url) => onImageUploaded?.(url)}
+            />
+            <p className="image-public-notice">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flexShrink: 0, marginTop: '1px' }}>
+                <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+              </svg>
+              {t('bottleDetail.imageNotice', 'Images are reviewed by an admin before being added to the shared wine registry, where they will be visible to all Cellarion users.')}
+            </p>
+          </>
+        )}
+      </div>
 
       <div className="form-actions">
         <button type="submit" className="btn btn-primary" disabled={saving}>

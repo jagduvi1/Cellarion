@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
+import useVersion from '../hooks/useVersion';
 import { CURRENCIES } from '../config/currencies';
 import { PLANS } from '../config/plans';
 import { SCALE_META, VALID_SCALES } from '../utils/ratingUtils';
@@ -10,6 +11,7 @@ import './Settings.css';
 function Settings() {
   const { t, i18n } = useTranslation();
   const { user, updatePreferences } = useAuth();
+  const appVersion = useVersion();
   const [currency, setCurrency] = useState(user?.preferences?.currency || 'USD');
   const [language, setLanguage] = useState(user?.preferences?.language || i18n.language?.split('-')[0] || 'en');
   const [ratingScale, setRatingScale] = useState(user?.preferences?.ratingScale || '5');
@@ -137,8 +139,8 @@ function Settings() {
         </form>
       </div>
 
-      {process.env.REACT_APP_VERSION && (
-        <p className="settings-version">Cellarion v{process.env.REACT_APP_VERSION}</p>
+      {appVersion && (
+        <p className="settings-version">Cellarion v{appVersion}</p>
       )}
     </div>
   );
