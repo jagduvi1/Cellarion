@@ -104,6 +104,10 @@ export function parseCSV(text, delimiter = ',') {
  */
 export function detectFormat(headers) {
   const h = new Set(headers.map(s => s.toLowerCase().trim()));
+  const raw = new Set(headers.map(s => s.trim()));
+
+  // Cellarion's own CSV export uses camelCase headers
+  if (raw.has('wineName') && raw.has('producer') && raw.has('vintage')) return 'cellarion';
 
   // Vivino export headers
   if (h.has('wine name') || h.has('winery')) return 'vivino';
@@ -278,6 +282,49 @@ function mapGenericRow(row) {
   };
 }
 
+// ── Cellarion CSV Mapper ─────────────────────────────────────────────────────
+
+/**
+ * Map a row from Cellarion's own CSV export.
+ * Headers are already in master format (camelCase), so pass through directly.
+ */
+function mapCellarionRow(row) {
+  const str = (key) => (row[key] || '').trim();
+  const num = (key) => { const n = parseFloat(row[key]); return isNaN(n) ? undefined : n; };
+  const int = (key) => { const n = parseInt(row[key], 10); return isNaN(n) ? undefined : n; };
+
+  return {
+    wineName: str('wineName'),
+    producer: str('producer'),
+    vintage: str('vintage') || 'NV',
+    country: str('country'),
+    region: str('region'),
+    appellation: str('appellation'),
+    type: mapWineType(str('type')),
+    price: num('price'),
+    currency: str('currency') || undefined,
+    bottleSize: str('bottleSize') || '750ml',
+    purchaseDate: str('purchaseDate'),
+    purchaseLocation: str('purchaseLocation'),
+    purchaseUrl: str('purchaseUrl') || undefined,
+    location: str('location'),
+    notes: str('notes'),
+    rating: num('rating'),
+    ratingScale: str('ratingScale') || undefined,
+    drinkFrom: str('drinkFrom') || undefined,
+    drinkBefore: str('drinkBefore') || undefined,
+    rackName: str('rackName') || undefined,
+    rackPosition: int('rackPosition'),
+    dateAdded: str('dateAdded') || undefined,
+    addToHistory: str('addToHistory') || undefined,
+    consumedReason: str('consumedReason') || undefined,
+    consumedAt: str('consumedAt') || undefined,
+    consumedNote: str('consumedNote') || undefined,
+    consumedRating: num('consumedRating'),
+    consumedRatingScale: str('consumedRatingScale') || undefined,
+  };
+}
+
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
 function tryParseDate(str) {
@@ -359,11 +406,13 @@ export function parseAndMap(text, forceFormat) {
   const headers = Object.keys(rows[0]);
   const format = forceFormat || detectFormat(headers);
 
-  const mapper = format === 'vivino'
-    ? mapVivinoRow
-    : format === 'cellartracker'
-      ? mapCellarTrackerRow
-      : mapGenericRow;
+  const mapper = format === 'cellarion'
+    ? mapCellarionRow
+    : format === 'vivino'
+      ? mapVivinoRow
+      : format === 'cellartracker'
+        ? mapCellarTrackerRow
+        : mapGenericRow;
 
   // Map rows and expand quantity > 1 into individual items
   const items = [];
