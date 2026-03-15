@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
+import { adminPermanentDeleteCellar } from '../../api/admin';
 import { fmtDate } from './helpers';
 
 function daysUntilPurge(deletedAt) {
@@ -15,6 +16,7 @@ export default function TabCellars() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [restoring, setRestoring] = useState({});
+  const [deleting, setDeleting] = useState({});
   const [notices, setNotices] = useState([]);
   const PAGE_SIZE = 50;
 
@@ -45,6 +47,10 @@ export default function TabCellars() {
     load(search, 0);
   };
 
+  function removeFromList(id) {
+    setData(prev => prev ? { ...prev, cellars: prev.cellars.filter(c => c._id !== id), total: prev.total - 1 } : prev);
+  }
+
   async function restore(cellar) {
     setRestoring(prev => ({ ...prev, [cellar._id]: true }));
     setError(null);
@@ -52,8 +58,8 @@ export default function TabCellars() {
       const res = await apiFetch(`/api/admin/cellars/${cellar._id}/restore`, { method: 'POST' });
       const body = await res.json();
       if (res.ok) {
-        setNotices(prev => [...prev, `Restored as "${body.cellar.name}"`]);
-        setData(prev => prev ? { ...prev, cellars: prev.cellars.filter(c => c._id !== cellar._id), total: prev.total - 1 } : prev);
+        setNotices(prev => [...prev, `Restored "${body.cellar.name}"`]);
+        removeFromList(cellar._id);
       } else {
         setError(body.error || 'Failed to restore');
       }
@@ -61,6 +67,26 @@ export default function TabCellars() {
       setError('Network error');
     } finally {
       setRestoring(prev => ({ ...prev, [cellar._id]: false }));
+    }
+  }
+
+  async function permanentDelete(cellar) {
+    if (!window.confirm(`Permanently delete "${cellar.name}" and ALL its bottles and racks? This cannot be undone.`)) return;
+    setDeleting(prev => ({ ...prev, [cellar._id]: true }));
+    setError(null);
+    try {
+      const res = await adminPermanentDeleteCellar(apiFetch, cellar._id);
+      const body = await res.json();
+      if (res.ok) {
+        setNotices(prev => [...prev, `Permanently deleted "${cellar.name}"`]);
+        removeFromList(cellar._id);
+      } else {
+        setError(body.error || 'Failed to delete');
+      }
+    } catch {
+      setError('Network error');
+    } finally {
+      setDeleting(prev => ({ ...prev, [cellar._id]: false }));
     }
   }
 
@@ -101,12 +127,13 @@ export default function TabCellars() {
                     <th>Owner</th>
                     <th>Deleted</th>
                     <th>Purges In</th>
-                    <th>Action</th>
+                    <th>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {(data?.cellars || []).map(c => {
                     const days = daysUntilPurge(c.deletedAt);
+                    const busy = restoring[c._id] || deleting[c._id];
                     return (
                       <tr key={c._id}>
                         <td><strong>{c.name}</strong></td>
@@ -121,13 +148,22 @@ export default function TabCellars() {
                           </span>
                         </td>
                         <td>
-                          <button
-                            className="sa-btn"
-                            disabled={restoring[c._id]}
-                            onClick={() => restore(c)}
-                          >
-                            {restoring[c._id] ? 'Restoring…' : 'Restore'}
-                          </button>
+                          <div style={{ display: 'flex', gap: 4 }}>
+                            <button
+                              className="sa-btn"
+                              disabled={busy}
+                              onClick={() => restore(c)}
+                            >
+                              {restoring[c._id] ? 'Restoring...' : 'Restore'}
+                            </button>
+                            <button
+                              className="sa-btn sa-btn-danger"
+                              disabled={busy}
+                              onClick={() => permanentDelete(c)}
+                            >
+                              {deleting[c._id] ? 'Deleting...' : 'Delete'}
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     );

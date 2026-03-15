@@ -2,22 +2,39 @@ import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { fmtDate, actionClass, RoleBadge } from './helpers';
 
+const PAGE_SIZE = 100;
+
+const ACTION_OPTIONS = [
+  'auth.register', 'auth.login.success', 'auth.login.failed',
+  'bottle.add', 'bottle.update', 'bottle.consume', 'bottle.delete',
+  'cellar.share.add', 'cellar.share.update', 'cellar.share.remove',
+  'admin.wine.create', 'admin.wine.update', 'admin.wine.delete',
+  'admin.request.resolve', 'admin.request.reject',
+  'admin.taxonomy.create', 'admin.taxonomy.delete',
+  'admin.image.approve', 'admin.image.reject', 'admin.image.assign',
+  'system.rate_limit_exceeded',
+  'superadmin.access',
+];
+
 export default function TabAudit() {
   const { apiFetch } = useAuth();
   const [actionFilter, setActionFilter] = useState('');
+  const [fromDate, setFromDate] = useState('');
+  const [toDate, setToDate] = useState('');
   const [page, setPage] = useState(0);
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const PAGE_SIZE = 100;
 
-  const load = useCallback(async (action, p) => {
+  const load = useCallback(async (action, from, to, p) => {
     setLoading(true);
     setError(null);
     try {
       const params = new URLSearchParams({ limit: PAGE_SIZE, offset: p * PAGE_SIZE });
       if (action) params.set('action', action);
-      const res = await apiFetch(`/api/superadmin/audit?${params}`);
+      if (from)   params.set('from', from);
+      if (to)     params.set('to', to);
+      const res = await apiFetch(`/api/admin/audit?${params}`);
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         throw new Error(body.error || `HTTP ${res.status}`);
@@ -30,27 +47,59 @@ export default function TabAudit() {
     }
   }, [apiFetch]);
 
-  useEffect(() => { load(actionFilter, page); }, [page]); // eslint-disable-line
+  useEffect(() => { load(actionFilter, fromDate, toDate, page); }, [page]); // eslint-disable-line
 
   const handleSearch = (e) => {
     e.preventDefault();
     setPage(0);
-    load(actionFilter, 0);
+    load(actionFilter, fromDate, toDate, 0);
   };
+
+  const clearFilters = () => {
+    setActionFilter('');
+    setFromDate('');
+    setToDate('');
+    setPage(0);
+    load('', '', '', 0);
+  };
+
+  const hasFilters = actionFilter || fromDate || toDate;
 
   return (
     <>
       <form className="sa-filter-row" onSubmit={handleSearch}>
-        <input
+        <select
           className="sa-input"
-          placeholder="Filter by action (e.g. auth, admin, bottle)..."
+          style={{ width: 'auto' }}
           value={actionFilter}
           onChange={e => setActionFilter(e.target.value)}
+        >
+          <option value="">All actions</option>
+          {ACTION_OPTIONS.map(a => (
+            <option key={a} value={a}>{a}</option>
+          ))}
+        </select>
+        <input
+          className="sa-input"
+          type="datetime-local"
+          value={fromDate}
+          onChange={e => setFromDate(e.target.value)}
+          title="From date"
+          style={{ width: 'auto' }}
+        />
+        <span style={{ color: 'var(--sa-text-dim)', alignSelf: 'center' }}>&ndash;</span>
+        <input
+          className="sa-input"
+          type="datetime-local"
+          value={toDate}
+          onChange={e => setToDate(e.target.value)}
+          title="To date"
+          style={{ width: 'auto' }}
         />
         <button type="submit" className="sa-btn">Filter</button>
-        <button type="button" className="sa-btn" onClick={() => { setActionFilter(''); setPage(0); load('', 0); }}>
-          Clear
-        </button>
+        {hasFilters && (
+          <button type="button" className="sa-btn" onClick={clearFilters}>Clear</button>
+        )}
       </form>
 
       {error && <div className="sa-error">Error: {error}</div>}
@@ -58,7 +107,7 @@ export default function TabAudit() {
       <div className="sa-panel">
         <div className="sa-panel-header">
           <span className="sa-panel-title">Audit Log</span>
-          <span style={{ fontSize: 10, color: 'var(--sa-text-dim)' }}>{data ? `${data.total.toLocaleString()} total entries` : ''}</span>
+          <span style={{ fontSize: 10, color: 'var(--sa-text-dim)' }}>{data ? `${(data.total || 0).toLocaleString()} total entries` : ''}</span>
         </div>
         <div className="sa-panel-body">
           {loading ? (

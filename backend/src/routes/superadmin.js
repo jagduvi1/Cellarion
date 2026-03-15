@@ -326,6 +326,12 @@ router.get('/users', async (req, res) => {
       const re = new RegExp(escaped, 'i');
       filter.$or = [{ username: re }, { email: re }];
     }
+    if (req.query.plan) {
+      filter.plan = req.query.plan;
+    }
+    if (req.query.role) {
+      filter.roles = req.query.role;
+    }
 
     const [users, total] = await Promise.all([
       User.find(filter)

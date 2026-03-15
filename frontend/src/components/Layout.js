@@ -129,10 +129,6 @@ function Layout({ children }) {
                     <Link to="/admin/requests" className={`nav-link nav-link--admin ${isActive('/admin/requests') ? 'active' : ''}`}>{t('nav.adminRequests')}</Link>
                     <Link to="/admin/taxonomy" className={`nav-link nav-link--admin ${isActive('/admin/taxonomy') ? 'active' : ''}`}>{t('nav.taxonomy')}</Link>
                     <Link to="/admin/images" className={`nav-link nav-link--admin ${isActive('/admin/images') ? 'active' : ''}`}>{t('nav.imageReview')}</Link>
-                    <Link to="/admin/audit" className={`nav-link nav-link--admin ${isActive('/admin/audit') ? 'active' : ''}`}>{t('nav.auditLog')}</Link>
-                    <Link to="/admin/users" className={`nav-link nav-link--admin ${isActive('/admin/users') ? 'active' : ''}`}>{t('nav.users')}</Link>
-                    <Link to="/admin/import" className={`nav-link nav-link--admin ${isActive('/admin/import') ? 'active' : ''}`}>Import Wines</Link>
-                    <Link to="/admin/cellars" className={`nav-link nav-link--admin ${isActive('/admin/cellars') ? 'active' : ''}`}>{t('nav.deletedCellars')}</Link>
                     <Link to="/admin/support" className={`nav-link nav-link--admin ${isActive('/admin/support') ? 'active' : ''}`}>Support Tickets</Link>
                     <Link to="/admin/wine-reports" className={`nav-link nav-link--admin ${isActive('/admin/wine-reports') ? 'active' : ''}`}>Wine Reports</Link>
                   </>
@@ -208,10 +204,6 @@ function Layout({ children }) {
                 <Link to="/admin/requests" className={`mobile-menu-link ${isActive('/admin/requests') ? 'active' : ''}`} onClick={closeMenu}>{t('nav.adminRequests')}</Link>
                 <Link to="/admin/taxonomy" className={`mobile-menu-link ${isActive('/admin/taxonomy') ? 'active' : ''}`} onClick={closeMenu}>{t('nav.taxonomy')}</Link>
                 <Link to="/admin/images" className={`mobile-menu-link ${isActive('/admin/images') ? 'active' : ''}`} onClick={closeMenu}>{t('nav.imageReview')}</Link>
-                <Link to="/admin/audit" className={`mobile-menu-link ${isActive('/admin/audit') ? 'active' : ''}`} onClick={closeMenu}>{t('nav.auditLog')}</Link>
-                <Link to="/admin/users" className={`mobile-menu-link ${isActive('/admin/users') ? 'active' : ''}`} onClick={closeMenu}>{t('nav.users')}</Link>
-                <Link to="/admin/import" className={`mobile-menu-link ${isActive('/admin/import') ? 'active' : ''}`} onClick={closeMenu}>Import Wines</Link>
-                <Link to="/admin/cellars" className={`mobile-menu-link ${isActive('/admin/cellars') ? 'active' : ''}`} onClick={closeMenu}>{t('nav.deletedCellars')}</Link>
                 <Link to="/admin/support" className={`mobile-menu-link ${isActive('/admin/support') ? 'active' : ''}`} onClick={closeMenu}>Support Tickets</Link>
                 <Link to="/admin/wine-reports" className={`mobile-menu-link ${isActive('/admin/wine-reports') ? 'active' : ''}`} onClick={closeMenu}>Wine Reports</Link>
               </div>
