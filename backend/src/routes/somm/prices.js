@@ -24,7 +24,7 @@ router.get('/queue', requireSommOrAdmin, async (req, res) => {
 
     // Step 1: unique (wineDefinition, vintage) pairs with at least one active bottle
     const rawPairs = await Bottle.aggregate([
-      { $match: { status: 'active', vintage: { $nin: ['NV', '', null] } } },
+      { $match: { status: 'active', wineDefinition: { $ne: null }, vintage: { $nin: ['NV', '', null] } } },
       {
         $group: {
           _id: { wineDefinition: '$wineDefinition', vintage: '$vintage' },
