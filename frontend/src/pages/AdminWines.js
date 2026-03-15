@@ -20,7 +20,6 @@ const emptyForm = {
   type: 'red',
   appellation: '',
   grapes: [],
-  image: ''
 };
 
 function AdminWines() {
@@ -163,7 +162,6 @@ function AdminWines() {
           type: w.type || 'red',
           appellation: w.appellation || '',
           grapes: (w.grapes || []).map(g => g._id || g),
-          image: w.image || ''
         });
         setEditWine(w);
         setShowForm(true);
@@ -194,7 +192,6 @@ function AdminWines() {
         type: formData.type,
         appellation: formData.appellation.trim() || null,
         grapes: formData.grapes,
-        image: formData.image.trim() || null
       };
 
       const res = await adminSaveWine(apiFetch, payload, editWine?._id);
@@ -370,15 +367,6 @@ function AdminWines() {
                     <option key={a._id} value={a.name}>{a.name}</option>
                   ))}
                 </select>
-              </div>
-              <div className="form-group" style={{ gridColumn: '1 / -1' }}>
-                <label>{t('admin.wines.imageUrlLabel')}</label>
-                <input
-                  type="url"
-                  value={formData.image}
-                  onChange={(e) => setFormData({ ...formData, image: e.target.value })}
-                  placeholder="https://..."
-                />
               </div>
               {grapes.length > 0 && (
                 <div className="form-group" style={{ gridColumn: '1 / -1' }}>
