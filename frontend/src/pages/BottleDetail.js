@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { useAuth, usePlan } from '../contexts/AuthContext';
 import { getBottle, updateBottle, consumeBottle, setBottleDefaultImage } from '../api/bottles';
 import { getRacks } from '../api/racks';
-import { getDrinkStatus, formatDrinkDate, toInputDate, toMonthInput, monthToLastDay, getMaturityStatus } from '../utils/drinkStatus';
+import { toInputDate, getMaturityStatus } from '../utils/drinkStatus';
 import { fetchRates, convertAmount, convertAmountHistorical } from '../utils/currency';
 import { calculatePriceChange } from '../utils/priceHistoryUtils';
 import { getMaturityPhases, isPhaseActive } from '../utils/maturityUtils';
@@ -154,8 +154,6 @@ function BottleDetail() {
   const isPending = !wine && !!bottle.pendingWineRequest;
   const displayName = wine?.name || bottle.pendingWineRequest?.wineName;
   const displayProducer = wine?.producer || bottle.pendingWineRequest?.producer;
-  const drinkStatus = getDrinkStatus(bottle);
-
   const canEdit = userRole === 'owner' || userRole === 'editor';
 
   return (
@@ -221,7 +219,6 @@ function BottleDetail() {
           bottle={bottle}
           rackInfo={rackInfo}
           cellarId={cellarId}
-          drinkStatus={drinkStatus}
           vintageProfile={vintageProfile}
           priceHistory={priceHistory}
           rates={rates}
@@ -358,7 +355,7 @@ function ContributePrompt({ storageKey, icon, title, message, actionLabel, onAct
 }
 
 // ── View mode ──
-function ViewDetails({ bottle, rackInfo, cellarId, drinkStatus, vintageProfile, priceHistory, rates, userCurrency, canEdit, hasImage, onEdit, onSuggestGrapes, onRemove, onReportWine }) {
+function ViewDetails({ bottle, rackInfo, cellarId, vintageProfile, priceHistory, rates, userCurrency, canEdit, hasImage, onEdit, onSuggestGrapes, onRemove, onReportWine }) {
   const { t } = useTranslation();
   const { user } = useAuth();
   const { plan, hasFeature } = usePlan();
@@ -482,27 +479,6 @@ function ViewDetails({ bottle, rackInfo, cellarId, drinkStatus, vintageProfile, 
         </div>
       )}
 
-      {/* Drink window */}
-      <div className="bd-section">
-        <span className="bd-section-label">{t('bottleDetail.drinkWindow')}</span>
-        <div className="bd-drink-window">
-          {(bottle.drinkFrom || bottle.drinkBefore) ? (
-            <span className="bd-drink-dates">
-              {formatDrinkDate(bottle.drinkFrom)}
-              {bottle.drinkFrom && bottle.drinkBefore && ' — '}
-              {formatDrinkDate(bottle.drinkBefore)}
-            </span>
-          ) : (
-            <span className="bd-no-dates">{t('bottleDetail.notSet')}</span>
-          )}
-          {drinkStatus && (
-            <span className={`drink-status-badge ${drinkStatus.status}`}>
-              {drinkStatus.label}
-            </span>
-          )}
-        </div>
-      </div>
-
       {/* Rack location */}
       {rackInfo && (
         <div className="bd-section">
@@ -581,8 +557,6 @@ function EditForm({ bottle, onSaved, onCancel, onImageUploaded }) {
     vintage:          bottle.vintage     || '',
     rating:           bottle.rating      || '',
     ratingScale:      bottle.ratingScale || '5',
-    drinkFrom:        toMonthInput(bottle.drinkFrom),
-    drinkBefore:      toMonthInput(bottle.drinkBefore),
     notes:            bottle.notes   || '',
     price:            bottle.price   || '',
     // If bottle has a price, keep stored currency (price and currency must stay in sync).
@@ -610,8 +584,6 @@ function EditForm({ bottle, onSaved, onCancel, onImageUploaded }) {
         price:  form.price  ? parseFloat(form.price)  : null,
         rating: form.rating ? parseFloat(form.rating) : null,
         ratingScale: form.ratingScale || '5',
-        drinkFrom:    form.drinkFrom   ? `${form.drinkFrom}-01`         : null,
-        drinkBefore:  form.drinkBefore ? monthToLastDay(form.drinkBefore) : null,
         purchaseDate: form.purchaseDate || null,
       });
       const data = await res.json();
@@ -671,20 +643,6 @@ function EditForm({ bottle, onSaved, onCancel, onImageUploaded }) {
         <div className="form-group">
           <label>{t('addBottle.purchaseDate')}</label>
           <input type="date" value={form.purchaseDate} onChange={set('purchaseDate')} />
-        </div>
-      </div>
-
-      <div className="form-group drink-window-section">
-        <label>{t('bottleDetail.drinkWindow')}</label>
-        <div className="drink-window-fields">
-          <div>
-            <label className="sublabel">{t('addBottle.drinkFrom')}</label>
-            <input type="month" value={form.drinkFrom} onChange={set('drinkFrom')} />
-          </div>
-          <div>
-            <label className="sublabel">{t('addBottle.drinkBefore')}</label>
-            <input type="month" value={form.drinkBefore} onChange={set('drinkBefore')} />
-          </div>
         </div>
       </div>
 

@@ -4,7 +4,6 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import { searchWines, findOrCreateWine, identifyWineByText } from '../api/wines';
 import { CURRENCIES } from '../config/currencies';
-import { monthToLastDay } from '../utils/drinkStatus';
 import ImageUpload from '../components/ImageUpload';
 import RatingInput from '../components/RatingInput';
 import './AddBottle.css';
@@ -38,8 +37,6 @@ function AddBottle() {
     notes: '',
     rating: '',
     ratingScale: user?.preferences?.ratingScale || '5',
-    drinkFrom: '',
-    drinkBefore: '',
     dateAdded: ''
   });
   const [addToHistory, setAddToHistory] = useState(false);
@@ -333,8 +330,6 @@ function AddBottle() {
         price: bottleData.price ? parseFloat(bottleData.price) : undefined,
         rating: bottleData.rating ? parseFloat(bottleData.rating) : undefined,
         ratingScale: bottleData.ratingScale || '5',
-        drinkFrom:   bottleData.drinkFrom   ? `${bottleData.drinkFrom}-01`          : undefined,
-        drinkBefore: bottleData.drinkBefore ? monthToLastDay(bottleData.drinkBefore) : undefined,
         dateAdded: bottleData.dateAdded || undefined,
         addToHistory: addToHistory || undefined,
         ...(addToHistory ? {
@@ -891,29 +886,6 @@ function AddBottle() {
                     placeholder={t('addBottle.notesPlaceholder')}
                     rows="3"
                   />
-                </div>
-
-                <div className="drink-window-section">
-                  <label className="form-label">{t('addBottle.drinkWindow')}</label>
-                  <p className="help-text" style={{ marginTop: '0.25rem' }}>{t('addBottle.drinkWindowHint')}</p>
-                  <div className="drink-window-fields">
-                    <div>
-                      <label className="sublabel">{t('addBottle.drinkFrom')}</label>
-                      <input
-                        type="month"
-                        value={bottleData.drinkFrom}
-                        onChange={(e) => setBottleData({ ...bottleData, drinkFrom: e.target.value })}
-                      />
-                    </div>
-                    <div>
-                      <label className="sublabel">{t('addBottle.drinkBefore')}</label>
-                      <input
-                        type="month"
-                        value={bottleData.drinkBefore}
-                        onChange={(e) => setBottleData({ ...bottleData, drinkBefore: e.target.value })}
-                      />
-                    </div>
-                  </div>
                 </div>
 
                 {/* ── Add to History ── */}

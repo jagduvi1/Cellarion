@@ -1,34 +1,36 @@
 const WineVintageProfile = require('../models/WineVintageProfile');
 const { getOrCreateDailySnapshot, convertCurrency } = require('../utils/exchangeRates');
 const { toNormalized } = require('../utils/ratingUtils');
-const { MS_PER_DAY } = require('../config/constants');
-const { classifyDrinkWindow } = require('../utils/drinkWindow');
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 /**
- * Effective drink window: user-set per-bottle takes priority,
- * sommelier WineVintageProfile (peakFrom/peakUntil years) used as fallback.
+ * Classify a bottle's maturity status using the sommelier WineVintageProfile.
+ * Returns one of: 'declining', 'late', 'peak', 'early', 'not-ready', or null.
  */
-function getEffectiveDrinkWindow(bottle, profileMap) {
-  if (bottle.drinkFrom || bottle.drinkBefore) {
-    return {
-      from:   bottle.drinkFrom   ? new Date(bottle.drinkFrom)   : null,
-      before: bottle.drinkBefore ? new Date(bottle.drinkBefore) : null,
-      source: 'user',
-    };
-  }
+function classifyMaturity(bottle, profileMap) {
   const wdId    = bottle.wineDefinition?._id?.toString() || bottle.wineDefinition?.toString();
   const vintage = bottle.vintage;
-  if (wdId && vintage && vintage !== 'NV') {
-    const profile = profileMap.get(`${wdId}:${vintage}`);
-    if (profile && profile.status === 'reviewed') {
-      const from   = profile.peakFrom  ? new Date(profile.peakFrom,  0, 1)   : null;
-      const before = profile.peakUntil ? new Date(profile.peakUntil, 11, 31) : null;
-      if (from || before) return { from, before, source: 'somm' };
-    }
-  }
-  return { from: null, before: null, source: 'none' };
+  if (!wdId || !vintage || vintage === 'NV') return null;
+
+  const profile = profileMap.get(`${wdId}:${vintage}`);
+  if (!profile || profile.status !== 'reviewed') return null;
+
+  const { earlyFrom, earlyUntil, peakFrom, peakUntil, lateFrom, lateUntil } = profile;
+  if (!earlyFrom) return null;
+
+  const currentYear = new Date().getFullYear();
+
+  if (currentYear < earlyFrom) return 'not-ready';
+  if (earlyUntil && currentYear <= earlyUntil) return 'early';
+  if (peakFrom && currentYear < peakFrom) return 'early';
+  if (peakUntil && currentYear <= peakUntil) return 'peak';
+  if (lateFrom && currentYear < lateFrom) return 'peak';
+  if (lateUntil && currentYear <= lateUntil) return 'late';
+  if ((lateUntil && currentYear > lateUntil) ||
+      (peakUntil && currentYear > peakUntil && !lateFrom)) return 'declining';
+  if (peakFrom && currentYear >= peakFrom) return 'peak';
+  return 'early';
 }
 
 /** Build and return a WineVintageProfile lookup map for a set of active bottles. */
@@ -103,13 +105,13 @@ async function computeOverview({ activeBottles, consumedBottles, cellars, target
   const byBottleSize  = {};
   const byPurchaseYear = {};
   const byProducer    = {};
-  const drinkWindow   = { overdue: 0, soon: 0, inWindow: 0, notReady: 0, noWindow: 0 };
-  const windowCoverage = { userSet: 0, sommSet: 0, none: 0 };
+  const maturity      = { declining: 0, late: 0, peak: 0, early: 0, notReady: 0, noProfile: 0 };
+  const maturityCoverage = { sommSet: 0, none: 0 };
   const cellarMap     = {};
   const topValueArr   = [];
   const urgencyArr    = [];
 
-  const HEALTH_SCORES = { inWindow: 100, notReady: 85, soon: 60, overdue: 0 };
+  const HEALTH_SCORES = { peak: 100, early: 85, 'not-ready': 85, late: 70, declining: 0 };
   let healthScoreSum = 0, healthScoreCount = 0;
 
   const forecastYears  = Array.from({ length: 11 }, (_, i) => currentYear + i);
@@ -165,37 +167,40 @@ async function computeOverview({ activeBottles, consumedBottles, cellars, target
       byPurchaseYear[py] = (byPurchaseYear[py] || 0) + 1;
     }
 
-    const { from, before, source } = getEffectiveDrinkWindow(b, profileMap);
-    const cls = classifyDrinkWindow(from, before, now);
-    drinkWindow[cls]++;
-
-    if (source === 'user')      windowCoverage.userSet++;
-    else if (source === 'somm') windowCoverage.sommSet++;
-    else                        windowCoverage.none++;
-
-    if (cls !== 'noWindow') {
-      healthScoreSum += HEALTH_SCORES[cls] ?? 0;
+    // Maturity classification from sommelier profiles
+    const maturityStatus = classifyMaturity(b, profileMap);
+    if (maturityStatus) {
+      const key = maturityStatus === 'not-ready' ? 'notReady' : maturityStatus;
+      maturity[key]++;
+      maturityCoverage.sommSet++;
+      healthScoreSum += HEALTH_SCORES[maturityStatus] ?? 0;
       healthScoreCount++;
+    } else {
+      maturity.noProfile++;
+      maturityCoverage.none++;
     }
 
-    if (from || before) {
-      const fromYear   = from   ? from.getFullYear()   : null;
-      const beforeYear = before ? before.getFullYear() : null;
-      for (const fy of forecastYears) {
-        if ((!fromYear || fy >= fromYear) && (!beforeYear || fy <= beforeYear)) forecastCounts[fy]++;
+    // Forecast: for bottles with a reviewed profile, count peak years
+    if (maturityStatus) {
+      const wdId = wd?._id?.toString() || b.wineDefinition?.toString();
+      const profile = profileMap.get(`${wdId}:${b.vintage}`);
+      if (profile) {
+        const pFrom = profile.peakFrom || profile.earlyFrom;
+        const pUntil = profile.lateUntil || profile.peakUntil || profile.earlyUntil;
+        for (const fy of forecastYears) {
+          if ((!pFrom || fy >= pFrom) && (!pUntil || fy <= pUntil)) forecastCounts[fy]++;
+        }
       }
     }
 
-    if (cls === 'overdue' || cls === 'soon') {
+    if (maturityStatus === 'declining' || maturityStatus === 'late') {
       urgencyArr.push({
         name:          wd?.name      || 'Unknown',
         producer:      wd?.producer  || '',
         vintage:       b.vintage     || 'NV',
         type:          wd?.type      || 'unknown',
         price:         b.price ? Math.round((toTarget(b.price, b.currency || 'USD') ?? 0) * 100) / 100 : null,
-        daysRemaining: before ? Math.round((before - now) / MS_PER_DAY) : null,
-        status:        cls,
-        source,
+        status:        maturityStatus,
       });
     }
 
@@ -227,6 +232,7 @@ async function computeOverview({ activeBottles, consumedBottles, cellars, target
   const holdingBuckets = Object.fromEntries(HOLD_BUCKETS.map(b => [b, { count: 0, ratingSum: 0, ratingCount: 0 }]));
   const jpdByType = {};
   const regretItems = [];
+  const MS_PER_DAY = 86400000;
 
   for (const b of consumedBottles) {
     const reason = b.consumedReason || 'other';
@@ -286,15 +292,13 @@ async function computeOverview({ activeBottles, consumedBottles, cellars, target
   const healthScore = healthScoreCount > 0 ? Math.round(healthScoreSum / healthScoreCount) : null;
   const healthGrade = healthScore === null ? null : healthScore >= 85 ? 'A' : healthScore >= 70 ? 'B' : healthScore >= 55 ? 'C' : healthScore >= 40 ? 'D' : 'F';
 
-  const bottlesWithWindow = drinkWindow.overdue + drinkWindow.soon + drinkWindow.inWindow + drinkWindow.notReady;
-  const regretIndex = bottlesWithWindow > 0 ? Math.round((drinkWindow.overdue / bottlesWithWindow) * 100) : 0;
+  const bottlesWithProfile = maturity.declining + maturity.late + maturity.peak + maturity.early + maturity.notReady;
+  const regretIndex = bottlesWithProfile > 0 ? Math.round((maturity.declining / bottlesWithProfile) * 100) : 0;
 
-  const drinkWindowForecast = forecastYears.map(y => ({ year: y, count: forecastCounts[y] || 0, isCurrent: y === currentYear }));
+  const maturityForecast = forecastYears.map(y => ({ year: y, count: forecastCounts[y] || 0, isCurrent: y === currentYear }));
 
   urgencyArr.sort((a, b) => {
-    if (a.status !== b.status) return a.status === 'overdue' ? -1 : 1;
-    const aDays = a.daysRemaining ?? Infinity, bDays = b.daysRemaining ?? Infinity;
-    if (aDays !== bDays) return aDays - bDays;
+    if (a.status !== b.status) return a.status === 'declining' ? -1 : 1;
     return (b.price || 0) - (a.price || 0);
   });
 
@@ -371,13 +375,13 @@ async function computeOverview({ activeBottles, consumedBottles, cellars, target
     byRating,
     byBottleSize,
     byPurchaseYear: Object.entries(byPurchaseYear).sort((a, b) => parseInt(a[0], 10) - parseInt(b[0], 10)).map(([year, count]) => ({ year, count })),
-    drinkWindow,
-    windowCoverage,
+    maturity,
+    maturityCoverage,
     topValueBottles:  topValueArr.sort((a, b) => b.price - a.price).slice(0, 10),
     consumptionByYear: Object.entries(consumptionByYear).sort((a, b) => parseInt(a[0], 10) - parseInt(b[0], 10)).map(([year, d]) => ({ year, ...d })),
     consumptionByReason,
     cellarBreakdown: Object.values(cellarMap).map(c => ({ name: c.name, bottleCount: c.count, value: Math.round(c.value * 100) / 100, uniqueWines: c.wines.size })).sort((a, b) => b.bottleCount - a.bottleCount),
-    drinkWindowForecast,
+    maturityForecast,
     urgencyLadder: urgencyArr.slice(0, 10),
     holdingTime,
     joyPerDollar,
@@ -400,12 +404,12 @@ function buildEmptyStats(currency) {
     byType: {}, byCountry: [], byRegion: [], byGrape: [],
     byVintage: [], byRating: { '0-20': 0, '21-40': 0, '41-60': 0, '61-80': 0, '81-100': 0 },
     byBottleSize: {}, byPurchaseYear: [],
-    drinkWindow:   { overdue: 0, soon: 0, inWindow: 0, notReady: 0, noWindow: 0 },
-    windowCoverage: { userSet: 0, sommSet: 0, none: 0 },
+    maturity:   { declining: 0, late: 0, peak: 0, early: 0, notReady: 0, noProfile: 0 },
+    maturityCoverage: { sommSet: 0, none: 0 },
     topValueBottles: [], consumptionByYear: [],
     consumptionByReason: { drank: 0, gifted: 0, sold: 0, other: 0 },
     cellarBreakdown: [],
-    drinkWindowForecast: [], urgencyLadder: [], holdingTime: [],
+    maturityForecast: [], urgencyLadder: [], holdingTime: [],
     joyPerDollar: [],
     regretSignal: { surprises: [], disappointments: [], avgDelta: null, count: 0 },
     pace: { avgIntakePerYear: 0, avgOutputPerYear: 0, netPerYear: 0, runway: null },

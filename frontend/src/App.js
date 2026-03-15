@@ -20,7 +20,6 @@ import AdminWineReports from './pages/AdminWineReports';
 import SupportPage from './pages/SupportPage';
 import CellarAudit from './pages/CellarAudit';
 import CellarRacks from './pages/CellarRacks';
-import DrinkAlerts from './pages/DrinkAlerts';
 import CellarHistory from './pages/CellarHistory';
 import BottleDetail from './pages/BottleDetail';
 import SommMaturity from './pages/SommMaturity';
@@ -102,15 +101,7 @@ function AppRoutes() {
           </ProtectedRoute>
         }
       />
-      <Route
-        path="/cellars/:id/drink-alerts"
-        element={
-          <ProtectedRoute>
-            <Layout><DrinkAlerts /></Layout>
-          </ProtectedRoute>
-        }
-      />
-      <Route
+<Route
         path="/cellars/:id/history"
         element={
           <ProtectedRoute>
