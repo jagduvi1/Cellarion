@@ -98,9 +98,11 @@ function PriceCard({ item, defaultCurrency, userCurrency, rates, onSaved }) {
   const wine  = item.wineDefinition;
   const isNew = !item.latestPrice;
 
-  const [expanded, setExpanded] = useState(isNew); // auto-expand no-history cards
-  const [saving,   setSaving]   = useState(false);
-  const [err,      setErr]      = useState(null);
+  const [expanded,  setExpanded]  = useState(isNew); // auto-expand no-history cards
+  const [saving,    setSaving]    = useState(false);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiMsg,     setAiMsg]     = useState(null);
+  const [err,       setErr]       = useState(null);
 
   const [form, setForm] = useState({
     price:    '',
@@ -109,6 +111,43 @@ function PriceCard({ item, defaultCurrency, userCurrency, rates, onSaved }) {
   });
 
   const set = (field) => (e) => setForm(f => ({ ...f, [field]: e.target.value }));
+
+  const handleAiSuggest = async () => {
+    setAiLoading(true);
+    setAiMsg(null);
+    setErr(null);
+    try {
+      const res = await apiFetch('/api/somm/prices/ai-suggest', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          wineDefinition: wine?._id,
+          vintage: item.vintage
+        })
+      });
+      const data = await res.json();
+      if (res.ok && data.suggestion) {
+        const s = data.suggestion;
+        if (s.price != null) {
+          setForm(f => ({
+            ...f,
+            price:    String(s.price),
+            currency: s.currency || f.currency,
+            source:   s.source   || f.source
+          }));
+          setAiMsg({ ok: true, text: t('somm.prices.aiSuggestFilled'), reasoning: s.reasoning });
+        } else {
+          setAiMsg({ ok: false, text: t('somm.prices.aiNoValue'), reasoning: s.reasoning });
+        }
+      } else {
+        setAiMsg({ ok: false, text: data.error || t('somm.prices.aiSuggestError') });
+      }
+    } catch {
+      setAiMsg({ ok: false, text: t('somm.prices.aiSuggestError') });
+    } finally {
+      setAiLoading(false);
+    }
+  };
 
   const handleSave = async (e) => {
     e.preventDefault();
@@ -180,6 +219,27 @@ function PriceCard({ item, defaultCurrency, userCurrency, rates, onSaved }) {
       {expanded && (
         <form className="somm-form" onSubmit={handleSave}>
           {err && <div className="alert alert-error">{err}</div>}
+
+          <div className="somm-ai-row">
+            <button
+              type="button"
+              className="btn btn-ai"
+              onClick={handleAiSuggest}
+              disabled={aiLoading}
+            >
+              {aiLoading ? t('somm.prices.aiSuggesting') : t('somm.prices.aiSuggest')}
+            </button>
+            {aiMsg && (
+              <div className={`somm-ai-msg ${aiMsg.ok ? 'somm-ai-msg--ok' : 'somm-ai-msg--err'}`}>
+                {aiMsg.text}
+                {aiMsg.reasoning && (
+                  <div className="somm-ai-reasoning">
+                    {t('somm.prices.aiReasoning')} {aiMsg.reasoning}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
 
           {item.latestPrice && (() => {
             const prev = item.latestPrice;

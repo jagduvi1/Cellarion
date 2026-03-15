@@ -259,4 +259,108 @@ async function identifyWineFromQuery(query) {
   }
 }
 
-module.exports = { scanLabel, scanLabelFull, identifyWineFromText, identifyWineFromQuery };
+/**
+ * Suggest drink window / maturity phases for a wine+vintage using AI.
+ * Returns { data, debugRaw, debugReason } — same shape as identifyWineFromText.
+ *   data — { earlyFrom, earlyUntil, peakFrom, peakUntil, lateFrom, lateUntil, sommNotes, confidence }
+ */
+async function suggestDrinkWindow({ name, producer, vintage, country, region, appellation, type, grapes }) {
+  if (!name || !vintage) return { data: null, debugRaw: null, debugReason: 'missing_fields' };
+
+  let client;
+  try { client = getClient(); } catch { return { data: null, debugRaw: null, debugReason: 'no_api_key' }; }
+
+  const prompt = aiConfig.get().maturitySuggestPrompt
+    .replace('{{name}}', name || '')
+    .replace('{{producer}}', producer || '')
+    .replace('{{vintage}}', vintage || '')
+    .replace('{{country}}', country || '')
+    .replace('{{region}}', region || '')
+    .replace('{{appellation}}', appellation || '')
+    .replace('{{type}}', type || '')
+    .replace('{{grapes}}', Array.isArray(grapes) ? grapes.join(', ') : (grapes || ''));
+
+  const apiParams = {
+    model: aiConfig.get().maturitySuggestModel,
+    max_tokens: 500,
+    messages: [
+      { role: 'user', content: prompt },
+      { role: 'assistant', content: '{' }
+    ]
+  };
+
+  let raw = '';
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      const response = await client.messages.create(apiParams);
+      raw = ('{' + (response.content[0]?.text ?? '')).trim();
+      const stripped = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
+      const parsed = JSON.parse(extractFirstJsonObject(stripped));
+
+      if (parsed.error) return { data: null, debugRaw: raw, debugReason: `ai_unknown: ${parsed.error}` };
+      return { data: parsed, debugRaw: raw, debugReason: null };
+    } catch (err) {
+      if (err.status === 429 && attempt === 1) {
+        const waitMs = (parseInt(err.headers?.['retry-after'] ?? '15', 10) + 1) * 1000;
+        await new Promise(r => setTimeout(r, waitMs));
+        continue;
+      }
+      const reason = err.status === 429 ? 'rate_limit_exceeded' : `exception: ${err.message}`;
+      return { data: null, debugRaw: raw || err.message, debugReason: reason };
+    }
+  }
+}
+
+/**
+ * Suggest market price for a wine+vintage using AI.
+ * Returns { data, debugRaw, debugReason }.
+ *   data — { price (number|null), currency, source, reasoning, confidence }
+ */
+async function suggestPrice({ name, producer, vintage, country, region, appellation, type, grapes }) {
+  if (!name || !vintage) return { data: null, debugRaw: null, debugReason: 'missing_fields' };
+
+  let client;
+  try { client = getClient(); } catch { return { data: null, debugRaw: null, debugReason: 'no_api_key' }; }
+
+  const prompt = aiConfig.get().priceSuggestPrompt
+    .replace('{{name}}', name || '')
+    .replace('{{producer}}', producer || '')
+    .replace('{{vintage}}', vintage || '')
+    .replace('{{country}}', country || '')
+    .replace('{{region}}', region || '')
+    .replace('{{appellation}}', appellation || '')
+    .replace('{{type}}', type || '')
+    .replace('{{grapes}}', Array.isArray(grapes) ? grapes.join(', ') : (grapes || ''));
+
+  const apiParams = {
+    model: aiConfig.get().priceSuggestModel,
+    max_tokens: 400,
+    messages: [
+      { role: 'user', content: prompt },
+      { role: 'assistant', content: '{' }
+    ]
+  };
+
+  let raw = '';
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      const response = await client.messages.create(apiParams);
+      raw = ('{' + (response.content[0]?.text ?? '')).trim();
+      const stripped = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
+      const parsed = JSON.parse(extractFirstJsonObject(stripped));
+
+      if (parsed.error) return { data: null, debugRaw: raw, debugReason: `ai_unknown: ${parsed.error}` };
+      return { data: parsed, debugRaw: raw, debugReason: null };
+    } catch (err) {
+      if (err.status === 429 && attempt === 1) {
+        const waitMs = (parseInt(err.headers?.['retry-after'] ?? '15', 10) + 1) * 1000;
+        await new Promise(r => setTimeout(r, waitMs));
+        continue;
+      }
+      const reason = err.status === 429 ? 'rate_limit_exceeded' : `exception: ${err.message}`;
+      return { data: null, debugRaw: raw || err.message, debugReason: reason };
+    }
+  }
+}
+
+module.exports = { scanLabel, scanLabelFull, identifyWineFromText, identifyWineFromQuery, suggestDrinkWindow, suggestPrice };

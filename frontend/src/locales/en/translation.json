@@ -721,7 +721,11 @@
       "statusPending": "Pending",
       "statusReviewed": "Reviewed",
       "statusToday": "Status today ({{year}}):",
-      "vintageLabel": "Vintage:"
+      "vintageLabel": "Vintage:",
+      "aiSuggest": "Ask AI",
+      "aiSuggesting": "Asking AI…",
+      "aiSuggestError": "AI could not suggest a drink window",
+      "aiSuggestFilled": "AI suggestion applied — review and save"
     },
     "prices": {
       "title": "Price Queue",
@@ -742,7 +746,13 @@
       "sourceOptional": "(optional)",
       "sourcePlaceholder": "Vivino, Wine-Searcher…",
       "savePrice": "Save price",
-      "priceRequired": "Price is required"
+      "priceRequired": "Price is required",
+      "aiSuggest": "Ask AI",
+      "aiSuggesting": "Asking AI…",
+      "aiSuggestError": "AI could not suggest a price",
+      "aiSuggestFilled": "AI suggestion applied — review and save",
+      "aiNoValue": "AI suggests this wine has no significant market value",
+      "aiReasoning": "AI reasoning:"
     }
   }
 }

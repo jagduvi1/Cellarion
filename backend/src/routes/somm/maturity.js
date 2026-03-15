@@ -2,6 +2,8 @@ const express = require('express');
 const { requireAuth, requireSommOrAdmin } = require('../../middleware/auth');
 const WineVintageProfile = require('../../models/WineVintageProfile');
 
+const { suggestDrinkWindow } = require('../../services/labelScan');
+
 const router = express.Router();
 
 // All routes require authentication
@@ -145,6 +147,53 @@ router.put('/:id', requireSommOrAdmin, async (req, res) => {
   } catch (error) {
     console.error('Update maturity profile error:', error);
     res.status(500).json({ error: 'Failed to update profile' });
+  }
+});
+
+/**
+ * POST /api/somm/maturity/:id/ai-suggest
+ * Ask AI to suggest drink window phases for this wine+vintage. Somm/admin only.
+ * Returns suggested values for the form (not saved until the user confirms).
+ */
+router.post('/:id/ai-suggest', requireSommOrAdmin, async (req, res) => {
+  try {
+    const profile = await WineVintageProfile.findById(req.params.id)
+      .populate({
+        path: 'wineDefinition',
+        select: 'name producer type country region appellation grapes',
+        populate: [
+          { path: 'country', select: 'name' },
+          { path: 'region', select: 'name' },
+          { path: 'grapes', select: 'name' }
+        ]
+      });
+    if (!profile) {
+      return res.status(404).json({ error: 'Profile not found' });
+    }
+
+    const wine = profile.wineDefinition;
+    const result = await suggestDrinkWindow({
+      name: wine?.name,
+      producer: wine?.producer,
+      vintage: profile.vintage,
+      country: wine?.country?.name,
+      region: wine?.region?.name,
+      appellation: wine?.appellation,
+      type: wine?.type,
+      grapes: wine?.grapes?.map(g => g.name)
+    });
+
+    if (!result.data) {
+      return res.status(422).json({
+        error: 'AI could not suggest a drink window for this wine',
+        reason: result.debugReason
+      });
+    }
+
+    res.json({ suggestion: result.data });
+  } catch (error) {
+    console.error('AI maturity suggest error:', error);
+    res.status(500).json({ error: 'Failed to get AI suggestion' });
   }
 });
 

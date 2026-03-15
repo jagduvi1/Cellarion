@@ -541,6 +541,98 @@ router.patch('/ai/label-scan-model', async (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
+// PATCH /api/superadmin/ai/maturity-suggest-prompt
+// ---------------------------------------------------------------------------
+router.patch('/ai/maturity-suggest-prompt', async (req, res) => {
+  const { prompt } = req.body;
+  if (typeof prompt !== 'string' || !prompt.trim()) {
+    return res.status(400).json({ error: 'prompt must be a non-empty string' });
+  }
+  if (prompt.length > SCAN_PROMPT_MAX_LENGTH) {
+    return res.status(400).json({ error: `prompt must be ${SCAN_PROMPT_MAX_LENGTH} characters or fewer` });
+  }
+  try {
+    const current = aiConfig.get();
+    const updated = { ...current, maturitySuggestPrompt: prompt.trim() };
+    await updateSiteConfig('aiConfig', updated, req.user.id);
+    aiConfig.set(updated);
+    res.json({ maturitySuggestPrompt: updated.maturitySuggestPrompt });
+  } catch (error) {
+    console.error('[superadmin] maturity-suggest-prompt error:', error);
+    res.status(500).json({ error: 'Failed to save maturity suggest prompt' });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// PATCH /api/superadmin/ai/maturity-suggest-model
+// ---------------------------------------------------------------------------
+router.patch('/ai/maturity-suggest-model', async (req, res) => {
+  const { model } = req.body;
+  const { VALID_CHAT_MODELS } = aiConfig;
+
+  if (!model || !VALID_CHAT_MODELS.includes(model)) {
+    return res.status(400).json({ error: `model must be one of: ${VALID_CHAT_MODELS.join(', ')}` });
+  }
+
+  try {
+    const current = aiConfig.get();
+    const updated = { ...current, maturitySuggestModel: model };
+    await updateSiteConfig('aiConfig', updated, req.user.id);
+    aiConfig.set(updated);
+    res.json({ maturitySuggestModel: model });
+  } catch (error) {
+    console.error('[superadmin] maturity-suggest-model error:', error);
+    res.status(500).json({ error: 'Failed to save maturity suggest model' });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// PATCH /api/superadmin/ai/price-suggest-prompt
+// ---------------------------------------------------------------------------
+router.patch('/ai/price-suggest-prompt', async (req, res) => {
+  const { prompt } = req.body;
+  if (typeof prompt !== 'string' || !prompt.trim()) {
+    return res.status(400).json({ error: 'prompt must be a non-empty string' });
+  }
+  if (prompt.length > SCAN_PROMPT_MAX_LENGTH) {
+    return res.status(400).json({ error: `prompt must be ${SCAN_PROMPT_MAX_LENGTH} characters or fewer` });
+  }
+  try {
+    const current = aiConfig.get();
+    const updated = { ...current, priceSuggestPrompt: prompt.trim() };
+    await updateSiteConfig('aiConfig', updated, req.user.id);
+    aiConfig.set(updated);
+    res.json({ priceSuggestPrompt: updated.priceSuggestPrompt });
+  } catch (error) {
+    console.error('[superadmin] price-suggest-prompt error:', error);
+    res.status(500).json({ error: 'Failed to save price suggest prompt' });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// PATCH /api/superadmin/ai/price-suggest-model
+// ---------------------------------------------------------------------------
+router.patch('/ai/price-suggest-model', async (req, res) => {
+  const { model } = req.body;
+  const { VALID_CHAT_MODELS } = aiConfig;
+
+  if (!model || !VALID_CHAT_MODELS.includes(model)) {
+    return res.status(400).json({ error: `model must be one of: ${VALID_CHAT_MODELS.join(', ')}` });
+  }
+
+  try {
+    const current = aiConfig.get();
+    const updated = { ...current, priceSuggestModel: model };
+    await updateSiteConfig('aiConfig', updated, req.user.id);
+    aiConfig.set(updated);
+    res.json({ priceSuggestModel: model });
+  } catch (error) {
+    console.error('[superadmin] price-suggest-model error:', error);
+    res.status(500).json({ error: 'Failed to save price suggest model' });
+  }
+});
+
+// ---------------------------------------------------------------------------
 // PATCH /api/superadmin/ai/chat-model
 // ---------------------------------------------------------------------------
 router.patch('/ai/chat-model', async (req, res) => {
