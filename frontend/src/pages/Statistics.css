@@ -4,6 +4,7 @@
   padding: 1.5rem 2rem;
   max-width: 1400px;
   margin: 0 auto;
+  overflow-x: hidden;
 }
 
 /* Loading */
@@ -218,6 +219,8 @@
   display: block;
   flex-shrink: 0;
   overflow: visible;
+  width: 180px;
+  height: 180px;
 }
 
 .donut-layout {
@@ -997,8 +1000,15 @@
   }
   .donut-layout {
     flex-direction: column;
-    align-items: flex-start;
+    align-items: center;
     gap: 1.25rem;
+  }
+  .donut-svg {
+    width: 150px;
+    height: 150px;
+  }
+  .donut-legend {
+    width: 100%;
   }
   .premium-gate-features {
     grid-template-columns: 1fr;
@@ -1006,24 +1016,249 @@
   .stats-header {
     margin-bottom: 1.25rem;
   }
+  .stats-card {
+    padding: 1.1rem;
+  }
+
+  /* Horizontal bar charts: narrower labels, hide % to save space */
   .hbar-label {
-    width: 80px;
+    width: 72px;
+    font-size: 0.72rem;
+  }
+  .hbar-pct {
+    display: none;
+  }
+
+  /* Vintage / Purchase bar charts: bigger count labels on bars */
+  .vintage-bar-count {
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: var(--color-text);
+  }
+  .vintage-bar-label {
+    font-size: 0.62rem;
+  }
+
+  /* Forecast chart: bigger count labels */
+  .forecast-count {
+    font-size: 0.72rem;
+    font-weight: 600;
+  }
+  .forecast-col {
+    min-width: 28px;
+  }
+
+  /* Rating chart: narrower label, hide % */
+  .rating-stars {
+    width: 58px;
+    font-size: 0.72rem;
+  }
+  .rating-pct {
+    display: none;
+  }
+
+  /* Holding time: narrower bucket label */
+  .holding-bucket {
+    width: 48px;
+    font-size: 0.72rem;
+  }
+
+  /* Joy Per Dollar: narrower label */
+  .jpd-label {
+    width: 56px;
+    font-size: 0.72rem;
+  }
+
+  /* Regret Signal: hide the ratings column on mobile, keep delta */
+  .rs-ratings {
+    display: none;
+  }
+
+  /* Urgency: tighter padding, smaller text */
+  .urgency-item {
+    padding: 0.5rem 0.65rem;
+    gap: 0.5rem;
+  }
+  .urgency-name {
+    font-size: 0.8rem;
+  }
+
+  /* Consumption chart: bigger year labels */
+  .consumption-year-label {
+    font-size: 0.62rem;
+  }
+
+  /* Regret number: smaller on mobile */
+  .regret-number {
+    font-size: 2.5rem;
   }
 }
 
 @media (max-width: 480px) {
+  .stats-page {
+    padding: 0.75rem;
+  }
   .kpi-grid,
   .kpi-grid--secondary {
     grid-template-columns: repeat(2, 1fr);
+    gap: 0.5rem;
   }
   .kpi-card {
-    padding: 0.875rem 0.625rem;
+    padding: 0.75rem 0.5rem;
   }
   .kpi-icon {
     font-size: 1.15rem;
   }
   .kpi-value {
-    font-size: 1.05rem;
+    font-size: 1rem;
+  }
+  .kpi-label {
+    font-size: 0.62rem;
+  }
+  .kpi-sub {
+    font-size: 0.6rem;
+  }
+  .stats-card {
+    padding: 0.875rem;
+  }
+  .stats-title {
+    font-size: 1.35rem;
+  }
+
+  /* Horizontal bar charts: even narrower */
+  .hbar-label {
+    width: 56px;
+    font-size: 0.68rem;
+  }
+
+  /* Vintage bars: tighter */
+  .vintage-bar-wrap {
+    width: 22px;
+  }
+  .vintage-bar {
+    width: 16px;
+  }
+  .vintage-bars {
+    height: 170px;
+    gap: 2px;
+  }
+
+  /* Forecast: tighter */
+  .forecast-col {
+    min-width: 24px;
+  }
+  .forecast-year {
+    font-size: 0.56rem;
+  }
+
+  /* Rating: even narrower */
+  .rating-stars {
+    width: 50px;
+    font-size: 0.68rem;
+  }
+
+  /* Holding: narrower */
+  .holding-bucket {
+    width: 40px;
+    font-size: 0.68rem;
+  }
+  .holding-rating {
+    min-width: 32px;
+    font-size: 0.68rem;
+  }
+
+  /* Joy Per Dollar: narrower */
+  .jpd-label {
+    width: 48px;
+    font-size: 0.68rem;
+  }
+
+  /* Donut chart: smaller on small screens */
+  .donut-legend-item {
+    font-size: 0.78rem;
+  }
+
+  /* Urgency: smaller padding */
+  .urgency-item {
+    padding: 0.45rem 0.5rem;
+    gap: 0.4rem;
+  }
+  .urgency-name {
+    font-size: 0.75rem;
+  }
+  .urgency-meta {
+    font-size: 0.65rem;
+  }
+  .urgency-days {
+    font-size: 0.72rem;
+  }
+  .urgency-price {
+    font-size: 0.65rem;
+  }
+
+  /* Top bottles: tighter */
+  .top-bottle-item {
+    padding: 0.5rem 0.5rem;
+    gap: 0.4rem;
+  }
+  .top-bottle-name {
+    font-size: 0.78rem;
+  }
+  .top-bottle-price {
+    font-size: 0.8rem;
+  }
+
+  /* Consumption: tighter */
+  .consumption-year-col {
+    min-width: 24px;
+  }
+  .consumption-bar-stack {
+    width: 16px;
+  }
+  .consumption-legend {
+    gap: 0.5rem;
+  }
+  .consumption-legend-item {
+    font-size: 0.72rem;
+  }
+
+  /* Health gauge: smaller */
+  .health-gauge {
+    width: 90px;
+    height: 90px;
+  }
+  .health-grade {
+    font-size: 1.5rem;
+  }
+
+  /* Pace stat values smaller */
+  .pace-stat-value {
+    font-size: 1.3rem;
+  }
+  .pace-runway-num {
+    font-size: 1.6rem;
+  }
+
+  /* Drink legend */
+  .drink-legend-item {
+    font-size: 0.78rem;
+  }
+
+  /* Maturity status legend: hide icon on small screens */
+  .drink-legend-icon {
+    display: none;
+  }
+
+  /* Regret */
+  .regret-number {
+    font-size: 2rem;
+  }
+  .regret-desc {
+    font-size: 0.78rem;
+  }
+  .regret-message {
+    font-size: 0.78rem;
+    padding: 0.4rem 0.65rem;
   }
 }
 
@@ -1326,6 +1561,9 @@
   display: flex;
   align-items: center;
   gap: 0.4rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .urgency-source-badge {
@@ -1743,6 +1981,9 @@
   .health-gauge-wrap {
     align-self: center;
   }
+  .health-breakdown {
+    width: 100%;
+  }
   .pace-stats {
     flex-direction: column;
   }
@@ -1757,5 +1998,15 @@
   }
   .forecast-chart {
     gap: 3px;
+  }
+
+  /* World map legend: stack on mobile */
+  .worldmap-legend {
+    gap: 0.5rem;
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .worldmap-info-hint {
+    font-size: 0.72rem;
   }
 }

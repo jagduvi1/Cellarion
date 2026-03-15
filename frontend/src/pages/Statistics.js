@@ -107,7 +107,8 @@ function fmtDays(days) {
 }
 
 // ── SVG Donut Chart ───────────────────────────────────────────────────────────
-function DonutChart({ segments, total, size = 180 }) {
+function DonutChart({ segments, total }) {
+  const size = 180;
   const R  = size * 0.355;
   const C  = 2 * Math.PI * R;
   const cx = size / 2;
@@ -117,7 +118,6 @@ function DonutChart({ segments, total, size = 180 }) {
 
   return (
     <svg
-      width={size} height={size}
       viewBox={`0 0 ${size} ${size}`}
       className="donut-svg"
       role="img"
@@ -1203,7 +1203,7 @@ function Statistics() {
           <h2 className="stats-card-title">Wine Types</h2>
           {total > 0 ? (
             <div className="donut-layout">
-              <DonutChart segments={typeSegments} total={total} size={180} />
+              <DonutChart segments={typeSegments} total={total} />
               <div className="donut-legend">
                 {typeSegments.map(seg => (
                   <div key={seg.type} className="donut-legend-item">
