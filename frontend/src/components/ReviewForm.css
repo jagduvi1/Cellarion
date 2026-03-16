@@ -1,0 +1,29 @@
+.review-form {
+  margin-top: 0.5rem;
+}
+
+.review-form__details {
+  margin-bottom: 1.25rem;
+}
+
+.review-form__details summary {
+  cursor: pointer;
+  color: var(--color-primary);
+  font-weight: 500;
+  font-size: 0.9rem;
+  padding: 0.5rem 0;
+  user-select: none;
+}
+
+.review-form__details summary:hover {
+  text-decoration: underline;
+}
+
+.review-form__tasting-fields {
+  margin-top: 0.75rem;
+}
+
+.review-form textarea.input {
+  resize: vertical;
+  min-height: 60px;
+}

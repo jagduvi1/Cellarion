@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import useVersion from '../hooks/useVersion';
+import { updateProfile } from '../api/profiles';
 import { CURRENCIES } from '../config/currencies';
 import { PLANS } from '../config/plans';
 import { SCALE_META, VALID_SCALES } from '../utils/ratingUtils';
@@ -10,7 +11,7 @@ import './Settings.css';
 
 function Settings() {
   const { t, i18n } = useTranslation();
-  const { user, updatePreferences } = useAuth();
+  const { user, apiFetch, updatePreferences, setUser } = useAuth();
   const appVersion = useVersion();
   const [currency, setCurrency] = useState(user?.preferences?.currency || 'USD');
   const [language, setLanguage] = useState(user?.preferences?.language || i18n.language?.split('-')[0] || 'en');
@@ -18,6 +19,36 @@ function Settings() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState(null);
+
+  // Profile state
+  const [displayName, setDisplayName] = useState(user?.displayName || '');
+  const [bio, setBio] = useState(user?.bio || '');
+  const [profileVisibility, setProfileVisibility] = useState(user?.profileVisibility || 'public');
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [profileSaved, setProfileSaved] = useState(false);
+  const [profileError, setProfileError] = useState(null);
+
+  const handleProfileSave = async (e) => {
+    e.preventDefault();
+    setProfileSaving(true);
+    setProfileError(null);
+    setProfileSaved(false);
+    try {
+      const res = await updateProfile(apiFetch, { displayName: displayName || null, bio: bio || null, profileVisibility });
+      const data = await res.json();
+      if (res.ok) {
+        setUser(data.user);
+        setProfileSaved(true);
+        setTimeout(() => setProfileSaved(false), 3000);
+      } else {
+        setProfileError(data.error || 'Failed to update profile');
+      }
+    } catch {
+      setProfileError('Failed to update profile');
+    } finally {
+      setProfileSaving(false);
+    }
+  };
 
   const handleSave = async (e) => {
     e.preventDefault();
@@ -52,6 +83,68 @@ function Settings() {
     <div className="settings-page">
       <div className="settings-header">
         <h1>{t('settings.title')}</h1>
+      </div>
+
+      {/* ── Profile card ── */}
+      <div className="card settings-card">
+        <h2 className="settings-section-title">Profile</h2>
+        <form onSubmit={handleProfileSave}>
+          <div className="form-group">
+            <label htmlFor="display-name-input">Display Name</label>
+            <p className="settings-hint">
+              How your name appears to other users. Leave blank to use your username.
+            </p>
+            <input
+              id="display-name-input"
+              type="text"
+              className="input"
+              value={displayName}
+              onChange={e => setDisplayName(e.target.value)}
+              placeholder={user?.username || 'Display name'}
+              maxLength={50}
+            />
+          </div>
+          <div className="form-group">
+            <label htmlFor="bio-input">Bio</label>
+            <p className="settings-hint">
+              A short description visible on your public profile.
+            </p>
+            <textarea
+              id="bio-input"
+              className="input"
+              value={bio}
+              onChange={e => setBio(e.target.value)}
+              placeholder="Tell others about your wine journey..."
+              maxLength={500}
+              rows={3}
+            />
+          </div>
+
+          <div className="form-group">
+            <label htmlFor="visibility-select">Profile Visibility</label>
+            <p className="settings-hint">
+              Public profiles appear in search results and the Discover feed. Private profiles are hidden from other users.
+            </p>
+            <select
+              id="visibility-select"
+              className="input settings-select"
+              value={profileVisibility}
+              onChange={e => setProfileVisibility(e.target.value)}
+            >
+              <option value="public">Public</option>
+              <option value="private">Private</option>
+            </select>
+          </div>
+
+          {profileError && <div className="alert alert-error">{profileError}</div>}
+
+          <div className="settings-actions">
+            <button type="submit" className="btn btn-primary" disabled={profileSaving}>
+              {profileSaving ? t('settings.savingBtn') : t('settings.saveBtn')}
+            </button>
+            {profileSaved && <span className="settings-saved">{t('settings.savedMsg')}</span>}
+          </div>
+        </form>
       </div>
 
       {/* ── Your Plan card ── */}

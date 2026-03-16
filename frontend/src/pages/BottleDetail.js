@@ -15,8 +15,12 @@ import AuthImage from '../components/AuthImage';
 import RatingInput from '../components/RatingInput';
 import RatingDisplay from '../components/RatingDisplay';
 import ReportWineModal from '../components/ReportWineModal';
+import ReviewCard from '../components/ReviewCard';
+import ReviewForm from '../components/ReviewForm';
 import { ConsumeModal } from '../components/ConsumeModal';
 import { SuggestGrapesModal } from '../components/SuggestGrapesModal';
+import { getWineReviews } from '../api/reviews';
+import { fromNormalized } from '../utils/ratingUtils';
 import './BottleDetail.css';
 
 function BottleDetail() {
@@ -37,6 +41,9 @@ function BottleDetail() {
   const [consumeOpen, setConsumeOpen] = useState(false);
   const [suggestGrapesOpen, setSuggestGrapesOpen] = useState(false);
   const [reportWineOpen, setReportWineOpen] = useState(false);
+  const [reviewFormOpen, setReviewFormOpen] = useState(false);
+  const [wineReviews, setWineReviews] = useState([]);
+  const [communityRating, setCommunityRating] = useState(null);
   const [pendingImage, setPendingImage] = useState(null);
   const [defaultImage, setDefaultImage] = useState(null);
 
@@ -67,6 +74,14 @@ function BottleDetail() {
             : `${API_URL}${data.defaultImageUrl}`;
           setDefaultImage(url);
         }
+        // Fetch community reviews for this wine
+        const wineObj = data.bottle?.wineDefinition;
+        if (wineObj?._id) {
+          fetchWineReviews(wineObj._id);
+          if (wineObj.communityRating?.reviewCount > 0) {
+            setCommunityRating(wineObj.communityRating);
+          }
+        }
         // Fetch the sommelier maturity profile for this wine+vintage
         const wine = data.bottle?.wineDefinition;
         const vintage = data.bottle?.vintage;
@@ -82,6 +97,16 @@ function BottleDetail() {
       setError('Network error');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchWineReviews = async (wineId) => {
+    try {
+      const res = await getWineReviews(apiFetch, wineId, 'limit=3');
+      const data = await res.json();
+      if (res.ok) setWineReviews(data.reviews || []);
+    } catch {
+      // Non-critical
     }
   };
 
@@ -229,6 +254,47 @@ function BottleDetail() {
           onSuggestGrapes={() => setSuggestGrapesOpen(true)}
           onRemove={() => setConsumeOpen(true)}
           onReportWine={() => setReportWineOpen(true)}
+        />
+      )}
+
+      {/* ── Community Reviews section ── */}
+      {wine && (
+        <div className="bd-reviews card">
+          <div className="bd-reviews__header">
+            <h2>Community Reviews</h2>
+            {communityRating && communityRating.reviewCount > 0 && (
+              <span className="bd-reviews__avg">
+                {fromNormalized(communityRating.averageNormalized, user?.preferences?.ratingScale || '5').toFixed(1)}
+                {user?.preferences?.ratingScale === '100' ? 'pts' : user?.preferences?.ratingScale === '20' ? '/20' : '★'}
+                <span className="bd-reviews__count">({communityRating.reviewCount})</span>
+              </span>
+            )}
+          </div>
+          {wineReviews.length > 0 ? (
+            wineReviews.map(review => (
+              <ReviewCard key={review._id} review={review} showWine={false} />
+            ))
+          ) : (
+            <p className="bd-reviews__empty">No reviews yet. Be the first to review this wine!</p>
+          )}
+          <button
+            className="btn btn-primary btn-small"
+            onClick={() => setReviewFormOpen(true)}
+          >
+            Write a Review
+          </button>
+        </div>
+      )}
+
+      {reviewFormOpen && wine && (
+        <ReviewForm
+          wineDefinition={wine._id}
+          wineName={wine.name}
+          onClose={() => setReviewFormOpen(false)}
+          onSaved={(review) => {
+            setWineReviews(prev => [review, ...prev.filter(r => r._id !== review._id)]);
+            setCommunityRating(null); // will be recalculated on next fetch
+          }}
         />
       )}
 

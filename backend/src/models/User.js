@@ -95,6 +95,35 @@ const userSchema = new mongoose.Schema({
     type: Date,
     default: null
   },
+  displayName: {
+    type: String,
+    trim: true,
+    maxlength: [50, 'Display name too long'],
+    default: null
+  },
+  bio: {
+    type: String,
+    trim: true,
+    maxlength: [500, 'Bio too long'],
+    default: null
+  },
+  followersCount: {
+    type: Number,
+    default: 0
+  },
+  followingCount: {
+    type: Number,
+    default: 0
+  },
+  reviewCount: {
+    type: Number,
+    default: 0
+  },
+  profileVisibility: {
+    type: String,
+    enum: ['public', 'private'],
+    default: 'public'
+  },
   createdAt: {
     type: Date,
     default: Date.now

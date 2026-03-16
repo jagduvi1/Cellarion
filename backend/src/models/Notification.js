@@ -15,7 +15,8 @@ const notificationSchema = new mongoose.Schema({
       'image_approved',
       'image_rejected',
       'cellar_shared',
-      'support_ticket_response'
+      'support_ticket_response',
+      'new_follower'
     ],
     required: true
   },

@@ -1,7 +1,9 @@
 const express = require('express');
 const User = require('../models/User');
+const Follow = require('../models/Follow');
 const { requireAuth, requireRole } = require('../middleware/auth');
 const { logAudit } = require('../services/audit');
+const { stripHtml } = require('../utils/sanitize');
 
 const router = express.Router();
 
@@ -100,6 +102,127 @@ router.post('/trial', requireAuth, async (req, res) => {
   } catch (error) {
     console.error('Start trial error:', error);
     res.status(500).json({ error: 'Failed to start trial' });
+  }
+});
+
+// PATCH /api/users/profile - Update display name, bio, and visibility
+router.patch('/profile', requireAuth, async (req, res) => {
+  try {
+    const { displayName, bio, profileVisibility } = req.body;
+    const update = {};
+
+    if (displayName !== undefined) {
+      const cleaned = stripHtml(displayName);
+      if (cleaned && cleaned.length > 50) {
+        return res.status(400).json({ error: 'Display name too long (max 50 characters)' });
+      }
+      update.displayName = cleaned || null;
+    }
+
+    if (bio !== undefined) {
+      const cleaned = stripHtml(bio);
+      if (cleaned && cleaned.length > 500) {
+        return res.status(400).json({ error: 'Bio too long (max 500 characters)' });
+      }
+      update.bio = cleaned || null;
+    }
+
+    if (profileVisibility !== undefined) {
+      if (!['public', 'private'].includes(profileVisibility)) {
+        return res.status(400).json({ error: 'Invalid visibility. Allowed: public, private' });
+      }
+      update.profileVisibility = profileVisibility;
+    }
+
+    if (Object.keys(update).length === 0) {
+      return res.status(400).json({ error: 'No valid fields provided' });
+    }
+
+    const user = await User.findByIdAndUpdate(
+      req.user.id,
+      { $set: update },
+      { new: true }
+    );
+
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    logAudit(req, 'user.profile.update', { type: 'user', id: user._id });
+
+    res.json({ user: user.toJSON() });
+  } catch (error) {
+    console.error('Update profile error:', error);
+    res.status(500).json({ error: 'Failed to update profile' });
+  }
+});
+
+// GET /api/users/search - Search for public users by username or display name
+router.get('/search', requireAuth, async (req, res) => {
+  try {
+    const q = (req.query.q || '').trim();
+    if (!q || q.length < 2) {
+      return res.status(400).json({ error: 'Search query must be at least 2 characters' });
+    }
+
+    const regex = new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+    const users = await User.find({
+      profileVisibility: 'public',
+      $or: [{ username: regex }, { displayName: regex }]
+    })
+      .select('username displayName bio reviewCount')
+      .limit(20);
+
+    // Check which the current user follows
+    const userIds = users.map(u => u._id);
+    const myFollows = await Follow.find({ follower: req.user.id, following: { $in: userIds } }).select('following');
+    const followingSet = new Set(myFollows.map(f => f.following.toString()));
+
+    const results = users.map(u => ({
+      _id: u._id,
+      username: u.username,
+      displayName: u.displayName,
+      bio: u.bio,
+      reviewCount: u.reviewCount,
+      isFollowing: followingSet.has(u._id.toString())
+    }));
+
+    res.json({ users: results });
+  } catch (error) {
+    console.error('Search users error:', error);
+    res.status(500).json({ error: 'Failed to search users' });
+  }
+});
+
+// GET /api/users/public/:userId - Get public profile
+router.get('/public/:userId', requireAuth, async (req, res) => {
+  try {
+    const user = await User.findById(req.params.userId)
+      .select('username displayName bio followersCount followingCount reviewCount profileVisibility createdAt preferences.ratingScale');
+
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    // Check if current user follows this user
+    const isFollowing = req.user.id !== req.params.userId
+      ? !!(await Follow.findOne({ follower: req.user.id, following: req.params.userId }))
+      : false;
+
+    res.json({
+      user: {
+        _id: user._id,
+        username: user.username,
+        displayName: user.displayName,
+        bio: user.bio,
+        followersCount: user.followersCount,
+        followingCount: user.followingCount,
+        reviewCount: user.reviewCount,
+        profileVisibility: user.profileVisibility,
+        ratingScale: user.preferences?.ratingScale || '5',
+        createdAt: user.createdAt,
+        isFollowing
+      }
+    });
+  } catch (error) {
+    console.error('Get public profile error:', error);
+    res.status(500).json({ error: 'Failed to get profile' });
   }
 });
 

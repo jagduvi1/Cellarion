@@ -897,3 +897,39 @@
   }
 }
 
+/* ── Community Reviews ── */
+.bd-reviews {
+  margin-top: 1rem;
+}
+
+.bd-reviews__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+}
+
+.bd-reviews__header h2 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.bd-reviews__avg {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.bd-reviews__count {
+  font-size: 0.85rem;
+  font-weight: 400;
+  color: var(--color-text-secondary);
+  margin-left: 0.25rem;
+}
+
+.bd-reviews__empty {
+  color: var(--color-text-secondary);
+  margin: 0 0 1rem;
+  font-size: 0.9rem;
+}
+

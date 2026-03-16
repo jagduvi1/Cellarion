@@ -29,6 +29,8 @@ import Plans from './pages/Plans';
 import Statistics from './pages/Statistics';
 import SuperAdmin from './pages/SuperAdmin';
 import CellarChat from './pages/CellarChat';
+import ReviewFeed from './pages/ReviewFeed';
+import UserProfile from './pages/UserProfile';
 import VerifyEmail from './pages/VerifyEmail';
 import ResetPassword from './pages/ResetPassword';
 import './styles/common.css';
@@ -130,6 +132,24 @@ function AppRoutes() {
         element={
           <ProtectedRoute>
             <Layout><CellarChat /></Layout>
+          </ProtectedRoute>
+        }
+      />
+
+      {/* Community routes */}
+      <Route
+        path="/community"
+        element={
+          <ProtectedRoute>
+            <Layout><ReviewFeed /></Layout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/users/:userId"
+        element={
+          <ProtectedRoute>
+            <Layout><UserProfile /></Layout>
           </ProtectedRoute>
         }
       />

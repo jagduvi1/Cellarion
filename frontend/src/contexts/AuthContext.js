@@ -288,7 +288,8 @@ export const AuthProvider = ({ children }) => {
     verifyEmail,
     updatePreferences,
     startTrial,
-    apiFetch
+    apiFetch,
+    setUser
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

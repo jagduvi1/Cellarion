@@ -1,0 +1,13 @@
+.follow-btn {
+  min-width: 90px;
+  transition: all var(--transition-fast);
+}
+
+.follow-btn--following:hover {
+  border-color: var(--color-danger) !important;
+  color: var(--color-danger) !important;
+}
+
+.follow-btn--following:hover::after {
+  content: '';
+}

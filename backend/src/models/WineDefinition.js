@@ -72,6 +72,16 @@ const wineDefinitionSchema = new mongoose.Schema({
     default: null,
     trim: true
   },
+  communityRating: {
+    averageNormalized: {
+      type: Number,
+      default: null
+    },
+    reviewCount: {
+      type: Number,
+      default: 0
+    }
+  },
   // Normalized key for deduplication
   normalizedKey: {
     type: String,
