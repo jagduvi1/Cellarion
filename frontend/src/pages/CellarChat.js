@@ -5,7 +5,6 @@ import './CellarChat.css';
 
 // ── Session storage keys ─────────────────────────────────────────────────────
 
-const EXPANSION_KEY = 'cellarChat.useQueryExpansion';
 const SESSION_MESSAGES_KEY = 'cellarChat.messages';
 const SESSION_CONTEXT_KEY = 'cellarChat.wineContext';
 
@@ -183,9 +182,6 @@ export default function CellarChat() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [usage, setUsage] = useState(null);
-  const [useExpansion, setUseExpansion] = useState(() => {
-    try { return localStorage.getItem(EXPANSION_KEY) !== 'false'; } catch { return true; }
-  });
   const bottomRef = useRef(null);
 
   // Persist conversation to sessionStorage
@@ -207,13 +203,6 @@ export default function CellarChat() {
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
-
-  const toggleExpansion = () => {
-    setUseExpansion(v => {
-      try { localStorage.setItem(EXPANSION_KEY, String(!v)); } catch {}
-      return !v;
-    });
-  };
 
   const atLimit = usage && usage.used >= usage.limit;
 
@@ -239,7 +228,7 @@ export default function CellarChat() {
 
     const thinkingText = hasHistory && wineContext
       ? 'Thinking…'
-      : useExpansion ? 'Expanding your question…' : 'Searching your cellar…';
+      : 'Searching your cellar…';
     setMessages(prev => [...prev, { role: 'assistant', text: thinkingText, thinking: true }]);
 
     try {
@@ -248,7 +237,7 @@ export default function CellarChat() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           message: trimmed,
-          useQueryExpansion: useExpansion,
+          useQueryExpansion: true,
           history,
           previousWines: wineContext,
         }),
@@ -399,14 +388,6 @@ export default function CellarChat() {
               New chat
             </button>
           )}
-          <label className="cellar-chat__expansion-toggle" title="Smart query expansion rewrites your question into wine terminology before searching, improving matches for food or occasion questions.">
-            <input
-              type="checkbox"
-              checked={useExpansion}
-              onChange={toggleExpansion}
-            />
-            <span>Smart search</span>
-          </label>
           {usageLabel && (
             <span className={`cellar-chat__usage${atLimit ? ' at-limit' : ''}`}>
               {usageLabel}

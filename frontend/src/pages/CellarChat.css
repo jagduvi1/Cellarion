@@ -32,26 +32,6 @@
   margin-left: auto;
 }
 
-.cellar-chat__expansion-toggle {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  font-size: 0.8rem;
-  color: var(--color-text-muted);
-  cursor: pointer;
-  user-select: none;
-}
-
-.cellar-chat__expansion-toggle input[type="checkbox"] {
-  accent-color: var(--color-primary);
-  width: 14px;
-  height: 14px;
-  cursor: pointer;
-}
-
-.cellar-chat__expansion-toggle:hover {
-  color: var(--color-text-secondary);
-}
 
 .cellar-chat__new-chat {
   background: none;
