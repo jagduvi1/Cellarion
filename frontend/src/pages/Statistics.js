@@ -685,6 +685,7 @@ function ConsumptionChart({ consumptionByYear, consumptionByReason }) {
           const yearTotal = reasons.reduce((s, r) => s + (d[r] || 0), 0);
           return (
             <div key={i} className="consumption-year-col">
+              <div className="consumption-bar-count">{yearTotal > 0 ? yearTotal : ''}</div>
               <div className="consumption-bar-stack" style={{ height: `${BAR_H}px` }}
                 title={`${d.year}: ${yearTotal} bottle${yearTotal !== 1 ? 's' : ''}`}>
                 {reasons.map(r => {
@@ -1273,8 +1274,8 @@ function Statistics() {
         {/* ── BASIC+ sections ── */}
         {isBasic && (
           <>
-            {/* World Map — BASIC */}
-            <div className="stats-card stats-card--full">
+            {/* World Map — BASIC (desktop only, hover-based) */}
+            <div className="stats-card stats-card--full stats-card--desktop-only">
               <h2 className="stats-card-title">
                 Collection Origins
                 <span className="stats-card-title-note">Darker = more bottles</span>
@@ -1326,9 +1327,9 @@ function Statistics() {
               </div>
             )}
 
-            {/* Purchase History — BASIC */}
+            {/* Purchase History — BASIC (desktop only, scrolling bar chart) */}
             {hasPurchaseDates && (
-              <div className="stats-card">
+              <div className="stats-card stats-card--desktop-only">
                 <h2 className="stats-card-title">Purchases by Year</h2>
                 <PurchaseHistoryChart byPurchaseYear={byPurchaseYear} />
               </div>
@@ -1363,9 +1364,9 @@ function Statistics() {
               <UpgradeCard plan="premium" fullWidth features={PREMIUM_FEATURES} />
             ) : (
               <>
-                {/* Maturity Forecast — PREMIUM */}
+                {/* Maturity Forecast — PREMIUM (desktop only, many columns) */}
                 {hasForecast && (
-                  <div className="stats-card stats-card--full">
+                  <div className="stats-card stats-card--full stats-card--desktop-only">
                     <h2 className="stats-card-title">
                       Maturity Forecast
                       <span className="stats-card-title-note">Bottles in window by year</span>
@@ -1403,9 +1404,9 @@ function Statistics() {
                   <JoyPerDollarChart data={joyPerDollar} currency={currency} targetScale={targetScale} />
                 </div>
 
-                {/* Regret Signal — PREMIUM */}
+                {/* Regret Signal — PREMIUM (desktop only, complex two-column layout) */}
                 {hasConsumption && (
-                  <div className="stats-card stats-card--full">
+                  <div className="stats-card stats-card--full stats-card--desktop-only">
                     <h2 className="stats-card-title">
                       Expectation vs Reality
                       <span className="stats-card-title-note">When wines surprised or disappointed you</span>

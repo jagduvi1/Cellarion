@@ -528,7 +528,7 @@
   display: flex;
   align-items: flex-end;
   gap: 4px;
-  height: 152px;
+  height: 164px;
   padding-bottom: 24px;
   overflow-x: auto;
   position: relative;
@@ -559,6 +559,13 @@
   width: 100%;
   flex-shrink: 0;
   min-height: 1px;
+}
+
+.consumption-bar-count {
+  font-size: 0.6rem;
+  color: var(--color-text-muted);
+  min-height: 12px;
+  text-align: center;
 }
 
 .consumption-year-label {
@@ -1022,6 +1029,11 @@
     padding: 1.1rem;
   }
 
+  /* Hide desktop-only charts on mobile */
+  .stats-card--desktop-only {
+    display: none;
+  }
+
   /* Horizontal bar charts: narrower labels, hide % to save space */
   .hbar-label {
     width: 80px;
@@ -1033,14 +1045,33 @@
     display: none;
   }
 
-  /* Vintage / Purchase bar charts: bigger count labels on bars */
+  /* Consumption stacked bars: show count above bars */
+  .consumption-bar-count {
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: var(--color-text);
+  }
+
+  /* Horizontal bar chart counts: bolder for readability */
+  .hbar-count {
+    font-weight: 600;
+    color: var(--color-text);
+  }
+
+  /* Vintage / Purchase bar charts: bigger count labels, rotated year labels */
   .vintage-bar-count {
     font-size: 0.72rem;
     font-weight: 600;
     color: var(--color-text);
   }
+  .vintage-bars {
+    padding-bottom: 36px;
+  }
   .vintage-bar-label {
     font-size: 0.62rem;
+    transform: rotate(-45deg);
+    transform-origin: top center;
+    bottom: -2px;
   }
 
   /* Forecast chart: bigger count labels */
@@ -1145,6 +1176,10 @@
   .vintage-bars {
     height: 170px;
     gap: 2px;
+    padding-bottom: 40px;
+  }
+  .vintage-bar-label {
+    font-size: 0.56rem;
   }
 
   /* Forecast: tighter */
@@ -1218,6 +1253,9 @@
   }
   .consumption-bar-stack {
     width: 16px;
+  }
+  .consumption-bar-count {
+    font-size: 0.62rem;
   }
   .consumption-legend {
     gap: 0.5rem;
