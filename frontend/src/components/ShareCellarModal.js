@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
-import { usePlan } from '../contexts/AuthContext';
+import { useAuth, usePlan } from '../contexts/AuthContext';
 import { formatLimit } from '../config/plans';
 import './ShareCellarModal.css';
 
-function ShareCellarModal({ cellarId, cellarName, token, onClose }) {
+function ShareCellarModal({ cellarId, cellarName, onClose }) {
+  const { apiFetch } = useAuth();
   const { plan, config } = usePlan();
   const [members, setMembers] = useState([]);
   const [email, setEmail] = useState('');
@@ -13,15 +14,13 @@ function ShareCellarModal({ cellarId, cellarName, token, onClose }) {
   const [limitError, setLimitError] = useState(null);
   const [success, setSuccess] = useState(null);
 
-  const auth = () => ({ 'Authorization': `Bearer ${token}` });
-
   useEffect(() => {
     fetchMembers();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const fetchMembers = async () => {
     try {
-      const res = await fetch(`/api/cellars/${cellarId}/members`, { headers: auth() });
+      const res = await apiFetch(`/api/cellars/${cellarId}/members`);
       const data = await res.json();
       if (res.ok) setMembers(data.members);
     } catch {}
@@ -37,9 +36,9 @@ function ShareCellarModal({ cellarId, cellarName, token, onClose }) {
     setSuccess(null);
 
     try {
-      const res = await fetch(`/api/cellars/${cellarId}/members`, {
+      const res = await apiFetch(`/api/cellars/${cellarId}/members`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...auth() },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: email.trim(), role })
       });
       const data = await res.json();
@@ -62,9 +61,9 @@ function ShareCellarModal({ cellarId, cellarName, token, onClose }) {
   const handleRoleChange = async (userId, newRole) => {
     setError(null);
     try {
-      const res = await fetch(`/api/cellars/${cellarId}/members/${userId}`, {
+      const res = await apiFetch(`/api/cellars/${cellarId}/members/${userId}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json', ...auth() },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ role: newRole })
       });
       const data = await res.json();
@@ -78,9 +77,8 @@ function ShareCellarModal({ cellarId, cellarName, token, onClose }) {
   const handleRemove = async (userId) => {
     setError(null);
     try {
-      const res = await fetch(`/api/cellars/${cellarId}/members/${userId}`, {
-        method: 'DELETE',
-        headers: auth()
+      const res = await apiFetch(`/api/cellars/${cellarId}/members/${userId}`, {
+        method: 'DELETE'
       });
       if (res.ok) {
         setMembers(prev => prev.filter(m => m.user._id !== userId));
