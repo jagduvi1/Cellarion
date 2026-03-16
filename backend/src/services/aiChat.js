@@ -126,7 +126,7 @@ function formatWineList(matches, { profileMap, countMap, priceMap } = {}) {
 
     // Enrichment: bottle count
     const count = countMap?.get(key);
-    const countStr = count && count > 1 ? `   Bottles: ${count}` : null;
+    const countStr = count ? `   Bottles: ${count}` : null;
 
     // Enrichment: maturity status
     const profile = profileMap?.get(key);
