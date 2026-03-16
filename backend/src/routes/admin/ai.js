@@ -35,7 +35,7 @@ router.get('/config', async (req, res) => {
 // PATCH /api/admin/ai/config
 router.patch('/config', async (req, res) => {
   try {
-    const allowed = ['chatEnabled', 'embeddingModel', 'vectorIndex', 'chatTopK', 'chatMaxResults', 'embeddingBatchDelayMs'];
+    const allowed = ['chatEnabled', 'embeddingModel', 'vectorIndex', 'chatTopK', 'chatMaxResults', 'chatMaxTokens', 'chatMaxHistoryTurns', 'embeddingBatchDelayMs'];
     const incoming = {};
     for (const key of allowed) {
       if (req.body[key] !== undefined) incoming[key] = req.body[key];
@@ -50,6 +50,12 @@ router.patch('/config', async (req, res) => {
     }
     if (incoming.chatMaxResults !== undefined && (!Number.isInteger(incoming.chatMaxResults) || incoming.chatMaxResults < 1 || incoming.chatMaxResults > 20)) {
       return res.status(400).json({ error: 'chatMaxResults must be an integer 1–20' });
+    }
+    if (incoming.chatMaxTokens !== undefined && (!Number.isInteger(incoming.chatMaxTokens) || incoming.chatMaxTokens < 200 || incoming.chatMaxTokens > 4096)) {
+      return res.status(400).json({ error: 'chatMaxTokens must be an integer 200–4096' });
+    }
+    if (incoming.chatMaxHistoryTurns !== undefined && (!Number.isInteger(incoming.chatMaxHistoryTurns) || incoming.chatMaxHistoryTurns < 0 || incoming.chatMaxHistoryTurns > 50)) {
+      return res.status(400).json({ error: 'chatMaxHistoryTurns must be an integer 0–50' });
     }
     if (incoming.embeddingBatchDelayMs !== undefined && (!Number.isInteger(incoming.embeddingBatchDelayMs) || incoming.embeddingBatchDelayMs < 0)) {
       return res.status(400).json({ error: 'embeddingBatchDelayMs must be a non-negative integer' });

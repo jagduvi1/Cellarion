@@ -91,26 +91,39 @@ Region: {{region}}
 Appellation: {{appellation}}
 Type: {{type}}
 Grapes: {{grapes}}
+QualityTier: {{qualityTier}}
+# (one of: unclassified, entry-level, mid-tier, prestige)
 
 Consider:
-- The wine's appellation and classification — grand cru ages differently from village wine
-- The grape varieties and their aging potential
-- The vintage quality and its effect on aging
-- The producer's style (traditional long-aging vs modern early-drinking)
-- Regional norms for aging (e.g. Barolo needs more time than Beaujolais)
+- The wine's appellation AND explicit classification — absence of classification implies limited aging
+- The grape varieties and their realistic aging potential in this style
+- The vintage quality and its effect on aging (structure vs approachability)
+- The producer's known style ONLY if the producer is well-established
+- Regional norms, but do NOT assume prestige based on region alone
+
+Critical rules:
+- If the wine is NOT explicitly classified (e.g. Grand Cru, Premier Cru, Cru Classé, Cru Bourgeois officially recognized), assume conservative aging potential and bias strongly toward early drinking.
+- Unclassified or entry-level wines rarely exceed 8–10 years total aging.
+- Do NOT infer Cru Bourgeois, Médoc structure, or long-aging capability unless explicitly stated.
+- If total estimated aging exceeds 15 years, sommNotes MUST explicitly justify why this wine qualifies (classification, producer reputation, structure).
+- If you cannot confidently estimate without making assumptions, return {"error":"unknown"}.
 
 Return ONLY a raw JSON object (no markdown, no code fences, no extra text):
 {"earlyFrom":YYYY,"earlyUntil":YYYY,"peakFrom":YYYY,"peakUntil":YYYY,"lateFrom":YYYY,"lateUntil":YYYY,"sommNotes":"brief explanation of your reasoning","confidence":0.0}
 
 Rules:
 - All values are calendar years (e.g. 2028, not "5 years")
-- earlyFrom should be the first year the wine becomes enjoyable
+- earlyFrom is the first year the wine becomes enjoyable
 - Phases must not overlap: earlyUntil < peakFrom, peakUntil < lateFrom
-- For wines meant to drink young (e.g. Beaujolais Nouveau, most rosé, simple whites), set a short window with only early and peak phases, leave late phase null
+- For wines meant to drink young, use short windows and set late phase to null
 - If a phase does not apply, set both its from and until to null
-- sommNotes: 1-2 sentences explaining your reasoning (aging potential, what to expect)
-- confidence: 1.0 = well-known wine with established aging curves, 0.7 = confident from appellation/grape knowledge, 0.4 = rough estimate
-- Never invent aging data — if you truly cannot estimate, return {"error":"unknown"}`;
+- sommNotes: 1–2 sentences, factual and conservative
+- confidence:
+  - 1.0 = well-known wine with established aging history
+  - 0.7 = known producer + known style
+  - 0.5 = appellation/grape knowledge only
+  - 0.4 = rough estimate
+- Never invent aging data`;
 
 const DEFAULT_PRICE_SUGGEST_PROMPT =
 `You are a wine market expert with comprehensive knowledge of wine pricing and investment value. Given the wine details below, suggest the current market price.
@@ -145,17 +158,24 @@ const VALID_CHAT_MODELS = [
 ];
 
 const DEFAULT_SYSTEM_PROMPT =
-`You are a sommelier assistant for Cellarion, a personal wine cellar app.
-Your job is to recommend wines from the user's own cellar based on their question.
+`You are Cellarion's personal sommelier — a warm, knowledgeable wine expert who knows the user's cellar intimately.
+
+Your personality:
+- Enthusiastic about wine but never pretentious — speak naturally, as if chatting with a friend who loves wine.
+- Share interesting details about wines when relevant (terroir, winemaking, food science behind pairings).
+- Be opinionated — don't just list options. Recommend your top pick and explain why it's the one to open.
 
 Rules:
-- Recommend ONLY wines from the list provided below the user's question.
-- If none of the listed wines suit the question, say so clearly and briefly.
-- Keep the answer concise: 2–3 sentences per wine, explaining why it matches.
-- Do not invent or mention wines that are not in the list.
-- Use a friendly, knowledgeable tone — as if speaking to the cellar owner.
-- If the question is not about wine, food pairing, or the user's cellar, politely decline and redirect to cellar-related topics.
-- Always reply in the same language the user wrote in.`;
+- Recommend ONLY wines from the list provided below the user's question. Never invent wines.
+- If none suit the question, say so honestly and briefly suggest what kind of wine they might look for next time.
+- Pay attention to maturity status — prioritize wines at peak, warn about declining ones, note if something isn't ready yet.
+- Consider the user's purchase price and market value when relevant (e.g. "everyday vs. special occasion").
+- Reference the user's own notes and ratings when available — it shows you know their palate.
+- When the user refines a request (e.g. "cheaper", "for more people", "white instead"), adjust naturally without repeating yourself.
+- If asked about a wine you previously recommended, elaborate with more detail.
+- Keep individual wine descriptions to 2–3 sentences, but be thorough in your reasoning.
+- Always reply in the same language the user wrote in.
+- If the question is unrelated to wine, food pairing, or the cellar, politely redirect.`;
 
 const defaults = {
   chatEnabled: true,
@@ -163,6 +183,8 @@ const defaults = {
   vectorIndex: 'v1',
   chatTopK: 50,
   chatMaxResults: 5,
+  chatMaxTokens: 800,
+  chatMaxHistoryTurns: 10,
   embeddingBatchDelayMs: 500,
   chatDailyLimits: { free: 4, basic: 20, premium: 50 },
   chatModel: 'claude-haiku-4-5-20251001',
@@ -191,6 +213,8 @@ async function load() {
         vectorIndex:           doc.value.vectorIndex          ?? defaults.vectorIndex,
         chatTopK:              doc.value.chatTopK             ?? defaults.chatTopK,
         chatMaxResults:        doc.value.chatMaxResults       ?? defaults.chatMaxResults,
+        chatMaxTokens:         doc.value.chatMaxTokens        ?? defaults.chatMaxTokens,
+        chatMaxHistoryTurns:   doc.value.chatMaxHistoryTurns  ?? defaults.chatMaxHistoryTurns,
         embeddingBatchDelayMs: doc.value.embeddingBatchDelayMs ?? defaults.embeddingBatchDelayMs,
         chatDailyLimits:       doc.value.chatDailyLimits      ?? defaults.chatDailyLimits,
         chatModel:             VALID_CHAT_MODELS.includes(doc.value.chatModel) ? doc.value.chatModel : defaults.chatModel,

@@ -160,7 +160,7 @@ router.post('/:id/ai-suggest', requireSommOrAdmin, async (req, res) => {
     const profile = await WineVintageProfile.findById(req.params.id)
       .populate({
         path: 'wineDefinition',
-        select: 'name producer type country region appellation grapes',
+        select: 'name producer type country region appellation grapes classification',
         populate: [
           { path: 'country', select: 'name' },
           { path: 'region', select: 'name' },
@@ -180,7 +180,8 @@ router.post('/:id/ai-suggest', requireSommOrAdmin, async (req, res) => {
       region: wine?.region?.name,
       appellation: wine?.appellation,
       type: wine?.type,
-      grapes: wine?.grapes?.map(g => g.name)
+      grapes: wine?.grapes?.map(g => g.name),
+      classification: wine?.classification
     });
 
     if (!result.data) {

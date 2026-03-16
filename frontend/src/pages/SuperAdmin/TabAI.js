@@ -1036,6 +1036,14 @@ export default function TabAI() {
                 <span className="sa-kv-val">{config.chatMaxResults}</span>
               </div>
               <div className="sa-kv-row">
+                <span className="sa-kv-key">Max response tokens</span>
+                <span className="sa-kv-val">{config.chatMaxTokens || 800}</span>
+              </div>
+              <div className="sa-kv-row">
+                <span className="sa-kv-key">Max history turns</span>
+                <span className="sa-kv-val">{config.chatMaxHistoryTurns || 10}</span>
+              </div>
+              <div className="sa-kv-row">
                 <span className="sa-kv-key">Chat model</span>
                 <span className="sa-kv-val">{config.chatModel}</span>
               </div>

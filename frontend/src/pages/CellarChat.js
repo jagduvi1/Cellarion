@@ -1,6 +1,13 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
+import ReactMarkdown from 'react-markdown';
 import { useAuth } from '../contexts/AuthContext';
 import './CellarChat.css';
+
+// ── Session storage keys ─────────────────────────────────────────────────────
+
+const EXPANSION_KEY = 'cellarChat.useQueryExpansion';
+const SESSION_MESSAGES_KEY = 'cellarChat.messages';
+const SESSION_CONTEXT_KEY = 'cellarChat.wineContext';
 
 // ── Starter prompts by category ──────────────────────────────────────────────
 
@@ -43,6 +50,29 @@ const PROMPT_CATEGORIES = [
   },
 ];
 
+// ── SSE parser ───────────────────────────────────────────────────────────────
+
+function parseSSEChunk(buffer) {
+  const events = [];
+  const lines = buffer.split('\n');
+  let eventType = null;
+
+  for (const line of lines) {
+    if (line.startsWith('event: ')) {
+      eventType = line.slice(7);
+    } else if (line.startsWith('data: ') && eventType) {
+      try {
+        events.push({ type: eventType, data: JSON.parse(line.slice(6)) });
+      } catch { /* skip malformed */ }
+      eventType = null;
+    } else if (line === '') {
+      eventType = null;
+    }
+  }
+
+  return events;
+}
+
 // ── Sub-components ────────────────────────────────────────────────────────────
 
 function WineCard({ wine }) {
@@ -73,7 +103,10 @@ function Message({ msg }) {
   return (
     <div className={`cellar-chat__msg cellar-chat__msg--${isUser ? 'user' : 'assistant'}`}>
       <div className={`cellar-chat__bubble${msg.thinking ? ' cellar-chat__bubble--thinking' : ''}`}>
-        {msg.text}
+        {isUser || msg.thinking
+          ? msg.text
+          : <ReactMarkdown>{msg.text}</ReactMarkdown>
+        }
       </div>
       {msg.expandedQuery && <ExpandedQueryHint text={msg.expandedQuery} />}
       {msg.wines?.length > 0 && (
@@ -130,11 +163,22 @@ function StarterPrompts({ onSelect, disabled }) {
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 
-const EXPANSION_KEY = 'cellarChat.useQueryExpansion';
-
 export default function CellarChat() {
   const { apiFetch, user } = useAuth();
-  const [messages, setMessages] = useState([]);
+
+  // Restore from sessionStorage on mount
+  const [messages, setMessages] = useState(() => {
+    try {
+      const saved = sessionStorage.getItem(SESSION_MESSAGES_KEY);
+      return saved ? JSON.parse(saved) : [];
+    } catch { return []; }
+  });
+  const [wineContext, setWineContext] = useState(() => {
+    try {
+      return sessionStorage.getItem(SESSION_CONTEXT_KEY) || null;
+    } catch { return null; }
+  });
+
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -143,6 +187,15 @@ export default function CellarChat() {
     try { return localStorage.getItem(EXPANSION_KEY) !== 'false'; } catch { return true; }
   });
   const bottomRef = useRef(null);
+
+  // Persist conversation to sessionStorage
+  useEffect(() => {
+    try {
+      const toSave = messages.filter(m => !m.thinking);
+      sessionStorage.setItem(SESSION_MESSAGES_KEY, JSON.stringify(toSave));
+      sessionStorage.setItem(SESSION_CONTEXT_KEY, wineContext || '');
+    } catch { /* quota exceeded or private mode */ }
+  }, [messages, wineContext]);
 
   useEffect(() => {
     apiFetch('/api/chat/usage')
@@ -164,26 +217,45 @@ export default function CellarChat() {
 
   const atLimit = usage && usage.used >= usage.limit;
 
+  // Build conversation history from messages state (text only, no wine cards / thinking)
+  const buildHistory = useCallback(() =>
+    messages
+      .filter(m => !m.thinking)
+      .map(m => ({ role: m.role, content: m.text })),
+    [messages]
+  );
+
   const send = async (text) => {
     const trimmed = text.trim();
     if (!trimmed || loading || atLimit) return;
+
+    const history = buildHistory();
+    const hasHistory = history.length > 0;
 
     setError(null);
     setMessages(prev => [...prev, { role: 'user', text: trimmed }]);
     setInput('');
     setLoading(true);
-    setMessages(prev => [...prev, { role: 'assistant', text: useExpansion ? 'Expanding your question…' : 'Searching your cellar…', thinking: true }]);
+
+    const thinkingText = hasHistory && wineContext
+      ? 'Thinking…'
+      : useExpansion ? 'Expanding your question…' : 'Searching your cellar…';
+    setMessages(prev => [...prev, { role: 'assistant', text: thinkingText, thinking: true }]);
 
     try {
-      const res = await apiFetch('/api/chat', {
+      const res = await apiFetch('/api/chat/stream', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: trimmed, useQueryExpansion: useExpansion }),
+        body: JSON.stringify({
+          message: trimmed,
+          useQueryExpansion: useExpansion,
+          history,
+          previousWines: wineContext,
+        }),
       });
 
-      const data = await res.json();
-
       if (!res.ok) {
+        const data = await res.json();
         setMessages(prev => prev.filter(m => !m.thinking));
         setError(data.error || 'Something went wrong.');
         if (res.status === 429) {
@@ -192,19 +264,98 @@ export default function CellarChat() {
         return;
       }
 
+      // Replace thinking bubble with empty streaming bubble
       setMessages(prev => [
         ...prev.filter(m => !m.thinking),
-        {
-          role: 'assistant',
-          text: data.answer,
-          wines: data.wines || [],
-          expandedQuery: data.expandedQuery || null,
-        },
+        { role: 'assistant', text: '', wines: [], expandedQuery: null },
       ]);
-      setUsage(prev => prev
-        ? { ...prev, used: data.used }
-        : { used: data.used, limit: data.limit, plan: user?.plan || 'free' }
-      );
+
+      // Read SSE stream
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let fullText = '';
+      let pendingUpdate = false;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+
+        // Split on double newlines (SSE event boundary)
+        const parts = buffer.split('\n\n');
+        buffer = parts.pop(); // keep incomplete last part
+
+        for (const part of parts) {
+          const events = parseSSEChunk(part + '\n\n');
+          for (const evt of events) {
+            if (evt.type === 'usage') {
+              setUsage(prev => prev
+                ? { ...prev, used: evt.data.used }
+                : { used: evt.data.used, limit: evt.data.limit, plan: user?.plan || 'free' }
+              );
+            } else if (evt.type === 'meta') {
+              if (evt.data.wineContext) setWineContext(evt.data.wineContext);
+              setMessages(prev => {
+                const updated = [...prev];
+                const last = updated[updated.length - 1];
+                if (last?.role === 'assistant') {
+                  updated[updated.length - 1] = {
+                    ...last,
+                    wines: evt.data.wines || [],
+                    expandedQuery: evt.data.expandedQuery || null,
+                  };
+                }
+                return updated;
+              });
+            } else if (evt.type === 'delta') {
+              fullText += evt.data.text;
+              // Batch UI updates with requestAnimationFrame
+              if (!pendingUpdate) {
+                pendingUpdate = true;
+                const textSnapshot = fullText;
+                requestAnimationFrame(() => {
+                  setMessages(prev => {
+                    const updated = [...prev];
+                    const last = updated[updated.length - 1];
+                    if (last?.role === 'assistant') {
+                      updated[updated.length - 1] = { ...last, text: textSnapshot };
+                    }
+                    return updated;
+                  });
+                  pendingUpdate = false;
+                });
+              }
+            } else if (evt.type === 'done') {
+              // Final update with complete text
+              const finalText = fullText;
+              setMessages(prev => {
+                const updated = [...prev];
+                const last = updated[updated.length - 1];
+                if (last?.role === 'assistant') {
+                  updated[updated.length - 1] = { ...last, text: finalText };
+                }
+                return updated;
+              });
+            } else if (evt.type === 'error') {
+              setError(evt.data.error || 'Something went wrong.');
+            }
+          }
+        }
+      }
+
+      // Ensure final text is set (in case rAF hasn't fired yet)
+      if (fullText) {
+        setMessages(prev => {
+          const updated = [...prev];
+          const last = updated[updated.length - 1];
+          if (last?.role === 'assistant' && last.text !== fullText) {
+            updated[updated.length - 1] = { ...last, text: fullText };
+          }
+          return updated;
+        });
+      }
     } catch {
       setMessages(prev => prev.filter(m => !m.thinking));
       setError('Network error — please try again.');
@@ -225,6 +376,12 @@ export default function CellarChat() {
     }
   };
 
+  const startNewChat = () => {
+    setMessages([]);
+    setWineContext(null);
+    setError(null);
+  };
+
   const usageLabel = usage ? `${usage.used} / ${usage.limit} today` : null;
 
   return (
@@ -232,6 +389,16 @@ export default function CellarChat() {
       <div className="cellar-chat__header">
         <h1 className="cellar-chat__title">Cellar Chat</h1>
         <div className="cellar-chat__header-controls">
+          {messages.length > 0 && (
+            <button
+              className="cellar-chat__new-chat"
+              onClick={startNewChat}
+              disabled={loading}
+              title="Start a new conversation"
+            >
+              New chat
+            </button>
+          )}
           <label className="cellar-chat__expansion-toggle" title="Smart query expansion rewrites your question into wine terminology before searching, improving matches for food or occasion questions.">
             <input
               type="checkbox"
