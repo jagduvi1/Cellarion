@@ -17,6 +17,9 @@ const router = express.Router();
 // All routes require authentication
 router.use(requireAuth);
 
+// Helper: validate MongoDB ObjectId
+const isValidId = (id) => typeof id === 'string' && mongoose.isValidObjectId(id);
+
 // Helper: parse pagination params
 function parsePagination(query) {
   const page = Math.max(1, parseInt(query.page, 10) || 1);
@@ -45,8 +48,11 @@ router.post('/', async (req, res) => {
   try {
     const { wineDefinition, bottle, vintage, rating, ratingScale, tasting } = req.body;
 
-    if (!wineDefinition) {
-      return res.status(400).json({ error: 'Wine definition is required' });
+    if (!wineDefinition || !isValidId(wineDefinition)) {
+      return res.status(400).json({ error: 'Valid wine definition ID is required' });
+    }
+    if (bottle && !isValidId(bottle)) {
+      return res.status(400).json({ error: 'Invalid bottle ID' });
     }
 
     // Validate wine exists
@@ -101,6 +107,7 @@ router.post('/', async (req, res) => {
 // GET /api/reviews/wine/:wineId - Reviews for a wine
 router.get('/wine/:wineId', async (req, res) => {
   try {
+    if (!isValidId(req.params.wineId)) return res.status(400).json({ error: 'Invalid wine ID' });
     const { page, limit, skip } = parsePagination(req.query);
 
     const [reviews, total] = await Promise.all([
@@ -132,6 +139,7 @@ router.get('/wine/:wineId', async (req, res) => {
 // GET /api/reviews/user/:userId - Reviews by a user
 router.get('/user/:userId', async (req, res) => {
   try {
+    if (!isValidId(req.params.userId)) return res.status(400).json({ error: 'Invalid user ID' });
     const { page, limit, skip } = parsePagination(req.query);
 
     const [reviews, total] = await Promise.all([
@@ -238,6 +246,7 @@ router.get('/discover', async (req, res) => {
 // GET /api/reviews/:id - Single review
 router.get('/:id', async (req, res) => {
   try {
+    if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid review ID' });
     const review = await Review.findById(req.params.id)
       .populate('author', 'username displayName')
       .populate({ path: 'wineDefinition', select: 'name producer type', populate: { path: 'country', select: 'name' } });
@@ -256,6 +265,7 @@ router.get('/:id', async (req, res) => {
 // PUT /api/reviews/:id - Update own review
 router.put('/:id', async (req, res) => {
   try {
+    if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid review ID' });
     const review = await Review.findById(req.params.id);
     if (!review) return res.status(404).json({ error: 'Review not found' });
     if (review.author.toString() !== req.user.id) {
@@ -304,6 +314,7 @@ router.put('/:id', async (req, res) => {
 // DELETE /api/reviews/:id - Delete own review (or admin)
 router.delete('/:id', async (req, res) => {
   try {
+    if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid review ID' });
     const review = await Review.findById(req.params.id);
     if (!review) return res.status(404).json({ error: 'Review not found' });
 
@@ -335,6 +346,7 @@ router.delete('/:id', async (req, res) => {
 // POST /api/reviews/:id/like - Toggle like
 router.post('/:id/like', async (req, res) => {
   try {
+    if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid review ID' });
     const review = await Review.findById(req.params.id);
     if (!review) return res.status(404).json({ error: 'Review not found' });
 

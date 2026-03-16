@@ -1,4 +1,5 @@
 const express = require('express');
+const mongoose = require('mongoose');
 const { requireAuth } = require('../middleware/auth');
 const Follow = require('../models/Follow');
 const User = require('../models/User');
@@ -10,10 +11,13 @@ const router = express.Router();
 // All routes require authentication
 router.use(requireAuth);
 
+const isValidId = (id) => typeof id === 'string' && mongoose.isValidObjectId(id);
+
 // POST /api/follows/:userId - Follow a user
 router.post('/:userId', async (req, res) => {
   try {
     const targetId = req.params.userId;
+    if (!isValidId(targetId)) return res.status(400).json({ error: 'Invalid user ID' });
 
     if (targetId === req.user.id) {
       return res.status(400).json({ error: 'You cannot follow yourself' });
@@ -56,6 +60,7 @@ router.post('/:userId', async (req, res) => {
 // DELETE /api/follows/:userId - Unfollow a user
 router.delete('/:userId', async (req, res) => {
   try {
+    if (!isValidId(req.params.userId)) return res.status(400).json({ error: 'Invalid user ID' });
     const result = await Follow.deleteOne({ follower: req.user.id, following: req.params.userId });
     if (result.deletedCount === 0) {
       return res.status(404).json({ error: 'Not following this user' });
@@ -77,6 +82,7 @@ router.delete('/:userId', async (req, res) => {
 // GET /api/follows/:userId/followers - List followers
 router.get('/:userId/followers', async (req, res) => {
   try {
+    if (!isValidId(req.params.userId)) return res.status(400).json({ error: 'Invalid user ID' });
     const page = Math.max(1, parseInt(req.query.page, 10) || 1);
     const limit = Math.min(50, Math.max(1, parseInt(req.query.limit, 10) || 20));
     const skip = (page - 1) * limit;
@@ -112,6 +118,7 @@ router.get('/:userId/followers', async (req, res) => {
 // GET /api/follows/:userId/following - List following
 router.get('/:userId/following', async (req, res) => {
   try {
+    if (!isValidId(req.params.userId)) return res.status(400).json({ error: 'Invalid user ID' });
     const page = Math.max(1, parseInt(req.query.page, 10) || 1);
     const limit = Math.min(50, Math.max(1, parseInt(req.query.limit, 10) || 20));
     const skip = (page - 1) * limit;
