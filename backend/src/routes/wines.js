@@ -316,6 +316,20 @@ router.post('/identify-text', requireAuth, async (req, res) => {
   }
 });
 
+// POST /api/wines/ai-info — query AI for wine info without creating anything in DB.
+// Returns raw AI-identified data (country/region/grapes as name strings, not IDs).
+// Used by the AdminRequests page to pre-fill the Create New Wine form.
+router.post('/ai-info', requireAuth, async (req, res) => {
+  const query = typeof req.body.query === 'string' ? req.body.query.trim() : '';
+  if (!query) return res.status(400).json({ error: 'query is required' });
+
+  const result = await identifyWineFromQuery(query);
+  if (!result.data) {
+    return res.json({ wine: null, reason: result.debugReason });
+  }
+  return res.json({ wine: result.data });
+});
+
 // GET /api/wines/:id - Get single wine definition (auth required)
 router.get('/:id', requireAuth, async (req, res) => {
   try {

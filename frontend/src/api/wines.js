@@ -40,3 +40,15 @@ export const identifyWineByText = (apiFetch, query) =>
     headers: JSON_HEADERS,
     body: JSON.stringify({ query }),
   });
+
+/**
+ * Ask AI for wine info without creating anything in the DB.
+ * Returns: { wine: { name, producer, country, region, appellation, type, grapes[] } | null }
+ * country/region/grapes are plain name strings, not DB IDs.
+ */
+export const getAiWineInfo = (apiFetch, query) =>
+  apiFetch('/api/wines/ai-info', {
+    method: 'POST',
+    headers: JSON_HEADERS,
+    body: JSON.stringify({ query }),
+  });

@@ -5,7 +5,7 @@ import {
   adminGetWineRequests, adminResolveWineRequest, adminRejectWineRequest,
   adminGetCountries, adminGetGrapes, adminGetRegions, adminGetAppellations,
 } from '../api/admin';
-import { searchWines } from '../api/wines';
+import { searchWines, getAiWineInfo } from '../api/wines';
 import { WINE_TYPES } from '../config/wineTypes';
 import GrapePicker from '../components/GrapePicker';
 import './AdminRequests.css';
@@ -33,6 +33,7 @@ function AdminRequests() {
   const [linkSearch, setLinkSearch] = useState('');
   const [linkResults, setLinkResults] = useState([]);
   const [linkSearching, setLinkSearching] = useState(false);
+  const [aiLookup, setAiLookup] = useState({ loading: false, error: null });
 
   useEffect(() => {
     fetchRequests();
@@ -157,6 +158,57 @@ function AdminRequests() {
     setError(null);
     setLinkSearch('');
     setLinkResults([]);
+    setAiLookup({ loading: false, error: null });
+  };
+
+  const handleAiLookup = async () => {
+    const query = [selected.wineName, selected.producer].filter(Boolean).join(' ');
+    setAiLookup({ loading: true, error: null });
+    try {
+      const res = await getAiWineInfo(apiFetch, query);
+      const data = await res.json();
+      if (!res.ok || !data.wine) {
+        setAiLookup({ loading: false, error: 'AI could not identify this wine' });
+        return;
+      }
+      const wine = data.wine;
+      const newWineData = {
+        ...resolveData.wineData,
+        type: wine.type || resolveData.wineData.type,
+        appellation: wine.appellation || '',
+        region: '',
+      };
+
+      const country = countries.find(c => c.name.toLowerCase() === wine.country?.toLowerCase());
+      if (country) {
+        newWineData.country = country._id;
+        const regRes = await adminGetRegions(apiFetch, country._id);
+        const regData = await regRes.json();
+        if (regRes.ok) {
+          setRegions(regData.regions);
+          const region = regData.regions.find(r => r.name.toLowerCase() === wine.region?.toLowerCase());
+          if (region) newWineData.region = region._id;
+          const appParams = new URLSearchParams({ country: country._id });
+          if (region) appParams.set('region', region._id);
+          const appRes = await adminGetAppellations(apiFetch, appParams);
+          const appData = await appRes.json();
+          if (appRes.ok) setAppellations(appData.appellations || []);
+        }
+      }
+
+      if (wine.grapes?.length > 0) {
+        newWineData.grapes = wine.grapes
+          .map(gName => grapes.find(g => g.name.toLowerCase() === gName.toLowerCase()))
+          .filter(Boolean)
+          .map(g => g._id);
+      }
+
+      setResolveData(prev => ({ ...prev, mode: 'create', wineData: newWineData }));
+      checkDuplicates(newWineData.name, newWineData.producer);
+      setAiLookup({ loading: false, error: null });
+    } catch {
+      setAiLookup({ loading: false, error: 'Network error during AI lookup' });
+    }
   };
 
   const handleResolve = async () => {
@@ -301,6 +353,30 @@ function AdminRequests() {
                 )}
                 {selected.image && (
                   <img src={selected.image} alt="Wine" className="wine-image-preview" />
+                )}
+                {selected.requestType !== 'grape_suggestion' && selected.status === 'pending' && (
+                  <div className="ai-lookup-row">
+                    <button
+                      className="btn btn-secondary btn-small ai-lookup-btn"
+                      onClick={handleAiLookup}
+                      disabled={aiLookup.loading}
+                    >
+                      {aiLookup.loading ? (
+                        <>
+                          <span className="ai-lookup-spinner" />
+                          Asking AI…
+                        </>
+                      ) : (
+                        <>
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                            <path d="M12 2L9 9L2 12L9 15L12 22L15 15L22 12L15 9Z" />
+                          </svg>
+                          Ask AI
+                        </>
+                      )}
+                    </button>
+                    {aiLookup.error && <span className="ai-lookup-error">{aiLookup.error}</span>}
+                  </div>
                 )}
               </div>
 
