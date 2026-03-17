@@ -50,7 +50,6 @@ function CellarHistory() {
     }
   };
 
-  if (loading) return <div className="loading">{t('history.loadingHistory')}</div>;
   if (error) return <div className="alert alert-error">{error}</div>;
 
   const REASON_LABEL_KEYS = {
@@ -65,17 +64,27 @@ function CellarHistory() {
       <div className="history-header">
         <Link to={`/cellars/${id}`} className="back-link">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
-          {t('history.backTo', { cellarName: cellar?.name })}
+          {t('history.backTo', { cellarName: cellar?.name || '…' })}
         </Link>
-        <h1 className={cellar?.userColor ? 'cellar-accent-border' : ''} style={cellar?.userColor ? { '--cellar-color': cellar.userColor } : undefined}>
-          {t('history.title')}
-        </h1>
-        <p className="page-subtitle">
-          {total === 0
-            ? t('history.noHistory')
-            : t('history.bottleCount', { count: total })}
-        </p>
+        {loading ? (
+          <div className="skeleton-h1" />
+        ) : (
+          <>
+            <h1 className={cellar?.userColor ? 'cellar-accent-border' : ''} style={cellar?.userColor ? { '--cellar-color': cellar.userColor } : undefined}>
+              {t('history.title')}
+            </h1>
+            <p className="page-subtitle">
+              {total === 0
+                ? t('history.noHistory')
+                : t('history.bottleCount', { count: total })}
+            </p>
+          </>
+        )}
       </div>
+
+      {loading ? (
+        <div className="loading">{t('history.loadingHistory')}</div>
+      ) : <>
 
       {/* Summary row */}
       {total > 0 && (
@@ -117,6 +126,8 @@ function CellarHistory() {
           </section>
         );
       })}
+
+      </>}
     </div>
   );
 }

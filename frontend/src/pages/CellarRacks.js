@@ -172,8 +172,7 @@ function CellarRacks() {
     }
   };
 
-  if (loading) return <div className="loading">{t('racks.loadingRacks')}</div>;
-  if (error)   return <div className="alert alert-error">{error}</div>;
+  if (error) return <div className="alert alert-error">{error}</div>;
 
   const rack = racks.find(r => r._id === selectedRackId) || racks[0];
   const canEdit = cellar?.userRole !== 'viewer';
@@ -186,17 +185,27 @@ function CellarRacks() {
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="15 18 9 12 15 6"/></svg>
             {t('racks.backToCellar')}
           </Link>
-          <h1 style={cellar?.userColor ? { borderLeft: `4px solid ${cellar.userColor}`, paddingLeft: '0.75rem' } : {}}>
-            {cellar?.name}
-          </h1>
-          <p className="cellar-description">{t('racks.title')}</p>
+          {loading ? (
+            <div className="skeleton-h1" />
+          ) : (
+            <>
+              <h1 style={cellar?.userColor ? { borderLeft: `4px solid ${cellar.userColor}`, paddingLeft: '0.75rem' } : {}}>
+                {cellar?.name}
+              </h1>
+              <p className="cellar-description">{t('racks.title')}</p>
+            </>
+          )}
         </div>
-        {canEdit && (
+        {!loading && canEdit && (
           <button className="btn btn-primary" onClick={() => setShowNewRack(v => !v)}>
             {showNewRack ? t('common.cancel') : `+ ${t('racks.newRack')}`}
           </button>
         )}
       </div>
+
+      {loading ? (
+        <div className="loading">{t('racks.loadingRacks')}</div>
+      ) : <>
 
       {canEdit && showNewRack && (
         <form className="card new-rack-form" onSubmit={handleCreateRack}>
@@ -274,6 +283,8 @@ function CellarRacks() {
           />
         </>
       )}
+
+      </>}
 
       {/* Page-level fixed slot modal */}
       {activePopup && (
