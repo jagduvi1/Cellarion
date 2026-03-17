@@ -2,6 +2,13 @@ const ALLOWED_MEDIA_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif
 const aiConfig = require('../config/aiConfig');
 const { extractFirstJsonObject } = require('../utils/jsonExtract');
 
+// Claude 3.x models do NOT include the prefilled '{' in their response text;
+// Claude 4.x models DO. Normalise so the join works correctly for both.
+function joinPrefill(text) {
+  const t = text ?? '';
+  return t.trimStart().startsWith('{') ? t.trim() : ('{' + t).trim();
+}
+
 function getClient() {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
@@ -121,7 +128,7 @@ async function scanLabelFull(image, mediaType = 'image/jpeg') {
   });
 
   // The model continues from the '{' prefill — prepend it back
-  const raw = ('{' + (response.content[0]?.text ?? '')).trim();
+  const raw = joinPrefill(response.content[0]?.text);
 
   // Strip any accidental markdown fences just in case
   const stripped = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
@@ -206,7 +213,7 @@ async function identifyWineFromText({ name, producer, vintage, country }) {
   for (let attempt = 1; attempt <= 2; attempt++) {
     try {
       const response = await client.messages.create(apiParams);
-      raw = ('{' + (response.content[0]?.text ?? '')).trim();
+      raw = joinPrefill(response.content[0]?.text);
       // Strip code fences, then extract only the first balanced {...} so any
       // trailing explanation text from the model doesn't break JSON.parse.
       const stripped = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
@@ -255,7 +262,7 @@ async function identifyWineFromQuery(query) {
   for (let attempt = 1; attempt <= 2; attempt++) {
     try {
       const response = await client.messages.create(apiParams);
-      raw = ('{' + (response.content[0]?.text ?? '')).trim();
+      raw = joinPrefill(response.content[0]?.text);
       const stripped = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
       const parsed = JSON.parse(extractFirstJsonObject(stripped));
 
@@ -312,7 +319,7 @@ async function suggestDrinkWindow({ name, producer, vintage, country, region, ap
   for (let attempt = 1; attempt <= 2; attempt++) {
     try {
       const response = await client.messages.create(apiParams);
-      raw = ('{' + (response.content[0]?.text ?? '')).trim();
+      raw = joinPrefill(response.content[0]?.text);
       const stripped = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
       const parsed = JSON.parse(extractFirstJsonObject(stripped));
 
@@ -364,7 +371,7 @@ async function suggestPrice({ name, producer, vintage, country, region, appellat
   for (let attempt = 1; attempt <= 2; attempt++) {
     try {
       const response = await client.messages.create(apiParams);
-      raw = ('{' + (response.content[0]?.text ?? '')).trim();
+      raw = joinPrefill(response.content[0]?.text);
       const stripped = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
       const parsed = JSON.parse(extractFirstJsonObject(stripped));
 
