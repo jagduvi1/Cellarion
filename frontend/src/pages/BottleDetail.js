@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, lazy, Suspense } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth, usePlan } from '../contexts/AuthContext';
@@ -9,19 +9,21 @@ import { fetchRates, convertAmount, convertAmountHistorical } from '../utils/cur
 import { calculatePriceChange } from '../utils/priceHistoryUtils';
 import { getMaturityPhases, isPhaseActive } from '../utils/maturityUtils';
 import { CURRENCIES } from '../config/currencies';
-import ImageUpload from '../components/ImageUpload';
-import ImageGallery from '../components/ImageGallery';
 import AuthImage from '../components/AuthImage';
 import RatingInput from '../components/RatingInput';
 import RatingDisplay from '../components/RatingDisplay';
-import ReportWineModal from '../components/ReportWineModal';
 import ReviewCard from '../components/ReviewCard';
-import ReviewForm from '../components/ReviewForm';
-import { ConsumeModal } from '../components/ConsumeModal';
-import { SuggestGrapesModal } from '../components/SuggestGrapesModal';
 import { getWineReviews } from '../api/reviews';
 import { fromNormalized } from '../utils/ratingUtils';
 import './BottleDetail.css';
+
+// Lazy-load heavy components only needed on user interaction
+const ImageUpload = lazy(() => import('../components/ImageUpload'));
+const ImageGallery = lazy(() => import('../components/ImageGallery'));
+const ReportWineModal = lazy(() => import('../components/ReportWineModal'));
+const ReviewForm = lazy(() => import('../components/ReviewForm'));
+const ConsumeModal = lazy(() => import('../components/ConsumeModal').then(m => ({ default: m.ConsumeModal })));
+const SuggestGrapesModal = lazy(() => import('../components/SuggestGrapesModal').then(m => ({ default: m.SuggestGrapesModal })));
 
 function BottleDetail() {
   const { t } = useTranslation();
@@ -286,17 +288,19 @@ function BottleDetail() {
         </div>
       )}
 
-      {reviewFormOpen && wine && (
-        <ReviewForm
-          wineDefinition={wine._id}
-          wineName={wine.name}
-          onClose={() => setReviewFormOpen(false)}
-          onSaved={(review) => {
-            setWineReviews(prev => [review, ...prev.filter(r => r._id !== review._id)]);
-            setCommunityRating(null); // will be recalculated on next fetch
-          }}
-        />
-      )}
+      <Suspense fallback={null}>
+        {reviewFormOpen && wine && (
+          <ReviewForm
+            wineDefinition={wine._id}
+            wineName={wine.name}
+            onClose={() => setReviewFormOpen(false)}
+            onSaved={(review) => {
+              setWineReviews(prev => [review, ...prev.filter(r => r._id !== review._id)]);
+              setCommunityRating(null); // will be recalculated on next fetch
+            }}
+          />
+        )}
+      </Suspense>
 
       {/* ── Mobile action bar (sticky bottom) ── */}
       {canEdit && !editing && (
@@ -312,28 +316,30 @@ function BottleDetail() {
         </div>
       )}
 
-      {consumeOpen && (
-        <ConsumeModal
-          wineName={displayName}
-          defaultRatingScale={user?.preferences?.ratingScale || '5'}
-          onConfirm={handleConsumeConfirm}
-          onCancel={() => setConsumeOpen(false)}
-        />
-      )}
+      <Suspense fallback={null}>
+        {consumeOpen && (
+          <ConsumeModal
+            wineName={displayName}
+            defaultRatingScale={user?.preferences?.ratingScale || '5'}
+            onConfirm={handleConsumeConfirm}
+            onCancel={() => setConsumeOpen(false)}
+          />
+        )}
 
-      {suggestGrapesOpen && (
-        <SuggestGrapesModal
-          wine={wine}
-          onClose={() => setSuggestGrapesOpen(false)}
-        />
-      )}
+        {suggestGrapesOpen && (
+          <SuggestGrapesModal
+            wine={wine}
+            onClose={() => setSuggestGrapesOpen(false)}
+          />
+        )}
 
-      {reportWineOpen && bottle?.wineDefinition && (
-        <ReportWineModal
-          wine={bottle.wineDefinition}
-          onClose={() => setReportWineOpen(false)}
-        />
-      )}
+        {reportWineOpen && bottle?.wineDefinition && (
+          <ReportWineModal
+            wine={bottle.wineDefinition}
+            onClose={() => setReportWineOpen(false)}
+          />
+        )}
+      </Suspense>
     </div>
   );
 }
@@ -348,11 +354,13 @@ function HeroImage({ bottle, wine, defaultImage, pendingImage, isPending, displa
   if (hasGallerySource && !galleryEmpty) {
     return (
       <div className="bd-wine-image-wrap">
-        <ImageGallery
-          wineDefinitionId={wine._id}
-          size="large"
-          onEmpty={() => setGalleryEmpty(true)}
-        />
+        <Suspense fallback={null}>
+          <ImageGallery
+            wineDefinitionId={wine._id}
+            size="large"
+            onEmpty={() => setGalleryEmpty(true)}
+          />
+        </Suspense>
         {isPending && (
           <span className="bd-pending-badge">{t('bottleDetail.pendingReview', 'Pending review')}</span>
         )}
@@ -733,32 +741,36 @@ function EditForm({ bottle, onSaved, onCancel, onImageUploaded }) {
           <span className="bd-label-optional"> ({t('common.optional', 'optional')})</span>
         </label>
         <p className="bd-image-default-hint">{t('bottleDetail.defaultImageHint', 'Click the star to choose which image is shown first.')}</p>
-        <ImageGallery
-          bottleId={bottle._id}
-          size="medium"
-          onSetDefault={async (imageId) => {
-            const res = await setBottleDefaultImage(apiFetch, bottle._id, imageId);
-            if (!res.ok) {
-              const data = await res.json().catch(() => ({}));
-              throw new Error(data.error || 'Failed to set default image');
-            }
-          }}
-        />
+        <Suspense fallback={null}>
+          <ImageGallery
+            bottleId={bottle._id}
+            size="medium"
+            onSetDefault={async (imageId) => {
+              const res = await setBottleDefaultImage(apiFetch, bottle._id, imageId);
+              if (!res.ok) {
+                const data = await res.json().catch(() => ({}));
+                throw new Error(data.error || 'Failed to set default image');
+              }
+            }}
+          />
+        </Suspense>
         {!hasWineImage && (
           <>
-            <ImageUpload
-              bottleId={bottle._id}
-              wineDefinitionId={bottle.wineDefinition?._id}
-              onUploadComplete={(img) => {
-                if (onImageUploaded && img?.originalUrl) {
-                  const url = img.originalUrl.startsWith('http')
-                    ? img.originalUrl
-                    : `${API_URL}${img.originalUrl}`;
-                  onImageUploaded(url);
-                }
-              }}
-              onProcessingComplete={(url) => onImageUploaded?.(url)}
-            />
+            <Suspense fallback={null}>
+              <ImageUpload
+                bottleId={bottle._id}
+                wineDefinitionId={bottle.wineDefinition?._id}
+                onUploadComplete={(img) => {
+                  if (onImageUploaded && img?.originalUrl) {
+                    const url = img.originalUrl.startsWith('http')
+                      ? img.originalUrl
+                      : `${API_URL}${img.originalUrl}`;
+                    onImageUploaded(url);
+                  }
+                }}
+                onProcessingComplete={(url) => onImageUploaded?.(url)}
+              />
+            </Suspense>
             <p className="image-public-notice">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flexShrink: 0, marginTop: '1px' }}>
                 <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>

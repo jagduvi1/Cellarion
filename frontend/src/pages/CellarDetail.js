@@ -1,15 +1,17 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, lazy, Suspense } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import { getCellar, getCellarStatistics, exportCellar } from '../api/cellars';
 import { getRacks } from '../api/racks';
-import ShareCellarModal from '../components/ShareCellarModal';
-import { EditCellarModal } from '../components/EditCellarModal';
-import { ColorPickerModal } from '../components/ColorPickerModal';
-import { DeleteCellarModal } from '../components/DeleteCellarModal';
 import BottleCard from '../components/BottleCard';
 import './CellarDetail.css';
+
+// Lazy-load modals — they are heavy and only needed on user interaction
+const ShareCellarModal = lazy(() => import('../components/ShareCellarModal'));
+const EditCellarModal = lazy(() => import('../components/EditCellarModal').then(m => ({ default: m.EditCellarModal })));
+const ColorPickerModal = lazy(() => import('../components/ColorPickerModal').then(m => ({ default: m.ColorPickerModal })));
+const DeleteCellarModal = lazy(() => import('../components/DeleteCellarModal').then(m => ({ default: m.DeleteCellarModal })));
 
 function CellarDetail() {
   const { t } = useTranslation();
@@ -417,38 +419,40 @@ function CellarDetail() {
         </Link>
       )}
 
-      {showShareModal && (
-        <ShareCellarModal
-          cellarId={id}
-          cellarName={cellar.name}
-          onClose={() => setShowShareModal(false)}
-        />
-      )}
+      <Suspense fallback={null}>
+        {showShareModal && (
+          <ShareCellarModal
+            cellarId={id}
+            cellarName={cellar.name}
+            onClose={() => setShowShareModal(false)}
+          />
+        )}
 
-      {showEditModal && (
-        <EditCellarModal
-          cellar={cellar}
-          onSaved={updated => { setCellar(updated); setShowEditModal(false); }}
-          onClose={() => setShowEditModal(false)}
-        />
-      )}
+        {showEditModal && (
+          <EditCellarModal
+            cellar={cellar}
+            onSaved={updated => { setCellar(updated); setShowEditModal(false); }}
+            onClose={() => setShowEditModal(false)}
+          />
+        )}
 
-      {showColorPicker && (
-        <ColorPickerModal
-          currentColor={cellar.userColor}
-          cellarId={id}
-          onSaved={userColor => { setCellar(c => ({ ...c, userColor })); setShowColorPicker(false); }}
-          onClose={() => setShowColorPicker(false)}
-        />
-      )}
+        {showColorPicker && (
+          <ColorPickerModal
+            currentColor={cellar.userColor}
+            cellarId={id}
+            onSaved={userColor => { setCellar(c => ({ ...c, userColor })); setShowColorPicker(false); }}
+            onClose={() => setShowColorPicker(false)}
+          />
+        )}
 
-      {showDeleteModal && (
-        <DeleteCellarModal
-          cellar={cellar}
-          onDeleted={() => navigate('/cellars')}
-          onClose={() => setShowDeleteModal(false)}
-        />
-      )}
+        {showDeleteModal && (
+          <DeleteCellarModal
+            cellar={cellar}
+            onDeleted={() => navigate('/cellars')}
+            onClose={() => setShowDeleteModal(false)}
+          />
+        )}
+      </Suspense>
     </div>
   );
 }

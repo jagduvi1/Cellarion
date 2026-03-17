@@ -3,10 +3,15 @@ import { useAuth } from '../contexts/AuthContext';
 
 /**
  * Renders an image whose URL may require a Bearer token.
- * Paths under /api/uploads are fetched via apiFetch (which sends the auth header)
- * and rendered as a blob: URL. External http(s) URLs are passed through unchanged.
+ *
+ * - Paths under /api/uploads are passed through as plain <img src> (no auth
+ *   needed — filenames are random UUIDs). This lets the browser cache them
+ *   normally and avoids the fetch→blob→objectURL overhead.
+ * - Other internal /api/ paths are still fetched via apiFetch with the auth
+ *   header and rendered as blob: URLs.
+ * - External http(s)/data:/blob: URLs pass through unchanged.
  */
-function AuthImage({ src, alt, className, onError, style }) {
+function AuthImage({ src, alt, className, onError, style, loading }) {
   const { apiFetch } = useAuth();
   const [displaySrc, setDisplaySrc] = useState(null);
   const blobUrlRef = useRef(null);
@@ -17,13 +22,19 @@ function AuthImage({ src, alt, className, onError, style }) {
       return;
     }
 
-    // External or data URLs — no auth header needed
+    // External, data, or blob URLs — no auth needed
     if (src.startsWith('http') || src.startsWith('data:') || src.startsWith('blob:')) {
       setDisplaySrc(src);
       return;
     }
 
-    // Internal upload path — fetch with auth header
+    // Upload paths — served without auth, use direct src for browser caching
+    if (src.startsWith('/api/uploads')) {
+      setDisplaySrc(src);
+      return;
+    }
+
+    // Other internal paths — fetch with auth header
     let cancelled = false;
     apiFetch(src)
       .then(res => {
@@ -57,6 +68,7 @@ function AuthImage({ src, alt, className, onError, style }) {
       alt={alt}
       className={className}
       style={style}
+      loading={loading}
       onError={onError}
     />
   );

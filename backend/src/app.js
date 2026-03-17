@@ -1,4 +1,5 @@
 const express = require('express');
+const compression = require('compression');
 const cors = require('cors');
 const helmet = require('helmet');
 const path = require('path');
@@ -62,6 +63,7 @@ app.use(helmet({
 }));
 
 // Middleware
+app.use(compression());
 app.use(cookieParser());
 // Routes that accept base64 images need a larger body limit
 app.use('/api/images/remove-bg-preview', express.json({ limit: '5mb' }));
@@ -110,13 +112,15 @@ const writeLimiter = rateLimit({
 });
 app.use('/api/', writeLimiter);
 
-// Serve uploaded images (auth + rate-limit required, restricted to image file extensions)
-app.use('/api/uploads', apiLimiter, requireAuth, (req, res, next) => {
+// Serve uploaded images — no auth required (filenames are random UUIDs).
+// Long cache: images are immutable once uploaded.
+app.use('/api/uploads', (req, res, next) => {
   const ext = path.extname(req.path).toLowerCase();
   const allowedExts = ['.jpg', '.jpeg', '.png', '.webp'];
   if (!allowedExts.includes(ext)) {
     return res.status(403).json({ error: 'File type not allowed' });
   }
+  res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
   next();
 }, express.static('/app/uploads'));
 

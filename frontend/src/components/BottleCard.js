@@ -33,6 +33,7 @@ function BottleCard({ bottle, rackMap, cellarId, viewMode }) {
                 src={imgSrc}
                 alt={displayName}
                 className="bottle-grid-image"
+                loading="lazy"
                 onError={e => { e.target.style.display = 'none'; }}
               />
               {credit && <span className="img-credit-tooltip">{credit}</span>}
@@ -84,6 +85,7 @@ function BottleCard({ bottle, rackMap, cellarId, viewMode }) {
             src={imgSrc}
             alt={displayName}
             className="bottle-wine-image"
+            loading="lazy"
             onError={e => { e.target.style.display = 'none'; }}
           />
           {credit && <span className="img-credit-tooltip">{credit}</span>}
