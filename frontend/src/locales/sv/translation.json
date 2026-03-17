@@ -127,6 +127,8 @@
     "emptyCellars": "Du har inga källare ännu.",
     "emptyCallToAction": "Skapa din första källare för att börja spåra din vinsamling!",
     "viewCellar": "Visa källare →",
+    "setDefault": "Ange som standardkällare",
+    "removeDefault": "Ta bort som standardkällare",
     "editRole": "Redigera",
     "viewRole": "Visa"
   },

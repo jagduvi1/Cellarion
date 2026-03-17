@@ -96,6 +96,29 @@
   flex: 1;
 }
 
+/* Default-cellar star toggle */
+.cellar-default-btn {
+  background: none;
+  border: none;
+  padding: 0.25rem;
+  cursor: pointer;
+  color: var(--color-text-muted);
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: color var(--transition-fast);
+}
+
+.cellar-default-btn:hover {
+  color: var(--color-accent);
+}
+
+.cellar-default-btn--active {
+  color: var(--color-accent);
+}
+
 .role-badge {
   font-size: 0.7rem;
   font-weight: 600;

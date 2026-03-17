@@ -69,6 +69,11 @@ const userSchema = new mongoose.Schema({
       type: String,
       enum: ['5', '20', '100'],
       default: '5'
+    },
+    defaultCellarId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Cellar',
+      default: null
     }
   },
   refreshTokenHash: {

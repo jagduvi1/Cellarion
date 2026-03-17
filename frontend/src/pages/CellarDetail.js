@@ -109,7 +109,7 @@ function CellarDetail() {
       {/* ── Clean header ── */}
       <div className="cellar-header">
         <div className="cellar-header-top">
-          <Link to="/cellars" className="back-link">
+          <Link to="/cellars?all=1" className="back-link">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="15 18 9 12 15 6"/></svg>
             {t('cellarDetail.backToCellars')}
           </Link>

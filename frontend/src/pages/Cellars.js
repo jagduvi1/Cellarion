@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { useState, useEffect, useCallback } from 'react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import { usePlan } from '../contexts/AuthContext';
@@ -9,8 +9,10 @@ import './Cellars.css';
 
 function Cellars() {
   const { t } = useTranslation();
-  const { apiFetch } = useAuth();
+  const { user, apiFetch, updatePreferences } = useAuth();
   const { plan, config } = usePlan();
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [cellars, setCellars] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -18,6 +20,9 @@ function Cellars() {
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [newCellar, setNewCellar] = useState({ name: '', description: '', color: null });
   const [creating, setCreating] = useState(false);
+
+  const showAll = searchParams.get('all') === '1';
+  const defaultCellarId = user?.preferences?.defaultCellarId || null;
 
   useEffect(() => {
     fetchCellars();
@@ -38,6 +43,27 @@ function Cellars() {
       setLoading(false);
     }
   };
+
+  // Auto-redirect: single cellar or default cellar set
+  useEffect(() => {
+    if (loading || showAll || cellars.length === 0) return;
+
+    if (cellars.length === 1) {
+      navigate(`/cellars/${cellars[0]._id}`, { replace: true });
+      return;
+    }
+
+    if (defaultCellarId && cellars.some(c => c._id === defaultCellarId)) {
+      navigate(`/cellars/${defaultCellarId}`, { replace: true });
+    }
+  }, [loading, cellars, defaultCellarId, showAll, navigate]);
+
+  const toggleDefault = useCallback(async (e, cellarId) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const newId = defaultCellarId === cellarId ? null : cellarId;
+    await updatePreferences({ defaultCellarId: newId });
+  }, [defaultCellarId, updatePreferences]);
 
   // Number of owned cellars (not shared ones)
   const ownedCellars = cellars.filter(c => c.userRole === 'owner');
@@ -179,6 +205,18 @@ function Cellars() {
             >
               <div className="cellar-card-header">
                 <h3>{cellar.name}</h3>
+                {cellars.length > 1 && (
+                  <button
+                    className={`cellar-default-btn${defaultCellarId === cellar._id ? ' cellar-default-btn--active' : ''}`}
+                    onClick={(e) => toggleDefault(e, cellar._id)}
+                    title={defaultCellarId === cellar._id ? t('cellars.removeDefault') : t('cellars.setDefault')}
+                    aria-label={defaultCellarId === cellar._id ? t('cellars.removeDefault') : t('cellars.setDefault')}
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill={defaultCellarId === cellar._id ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+                    </svg>
+                  </button>
+                )}
                 {cellar.userRole && cellar.userRole !== 'owner' && (
                   <span className={`role-badge role-badge--${cellar.userRole}`}>
                     {cellar.userRole === 'editor' ? t('cellars.editRole') : t('cellars.viewRole')}

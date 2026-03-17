@@ -1,5 +1,7 @@
 const express = require('express');
+const mongoose = require('mongoose');
 const User = require('../models/User');
+const Cellar = require('../models/Cellar');
 const Follow = require('../models/Follow');
 const { requireAuth, requireRole } = require('../middleware/auth');
 const { logAudit } = require('../services/audit');
@@ -30,7 +32,7 @@ const ALLOWED_RATING_SCALES = ['5', '20', '100'];
 
 router.patch('/preferences', requireAuth, async (req, res) => {
   try {
-    const { currency, language, ratingScale } = req.body;
+    const { currency, language, ratingScale, defaultCellarId } = req.body;
     const update = {};
 
     if (currency !== undefined) {
@@ -52,6 +54,25 @@ router.patch('/preferences', requireAuth, async (req, res) => {
         return res.status(400).json({ error: `Invalid rating scale. Allowed: ${ALLOWED_RATING_SCALES.join(', ')}` });
       }
       update['preferences.ratingScale'] = String(ratingScale);
+    }
+
+    if (defaultCellarId !== undefined) {
+      if (defaultCellarId === null) {
+        update['preferences.defaultCellarId'] = null;
+      } else {
+        if (!mongoose.Types.ObjectId.isValid(defaultCellarId)) {
+          return res.status(400).json({ error: 'Invalid cellar ID' });
+        }
+        const cellar = await Cellar.findOne({
+          _id: defaultCellarId,
+          deletedAt: null,
+          $or: [{ user: req.user.id }, { 'members.user': req.user.id }]
+        });
+        if (!cellar) {
+          return res.status(400).json({ error: 'Cellar not found or not accessible' });
+        }
+        update['preferences.defaultCellarId'] = defaultCellarId;
+      }
     }
 
     if (Object.keys(update).length === 0) {

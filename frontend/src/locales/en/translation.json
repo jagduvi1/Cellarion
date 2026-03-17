@@ -127,6 +127,8 @@
     "emptyCellars": "You don't have any cellars yet.",
     "emptyCallToAction": "Create your first cellar to start tracking your wine collection!",
     "viewCellar": "View Cellar →",
+    "setDefault": "Set as default cellar",
+    "removeDefault": "Remove as default cellar",
     "editRole": "Edit",
     "viewRole": "View"
   },
