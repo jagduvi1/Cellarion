@@ -9,9 +9,9 @@
     <meta name="description" content="Cellarion — the open-source wine cellar manager. Track bottles, visualise racks, get drink-window alerts, and share cellars. Self-hosted or use cellarion.app." />
     <meta name="keywords" content="wine cellar management, wine tracking, bottle tracker, wine collection, open source wine app, self-hosted wine cellar, drink window, wine rack" />
 
-    <!-- Preload LCP logo so the browser discovers it before React renders -->
-    <link rel="preload" as="image" href="%PUBLIC_URL%/cellarion-logo-light.png" media="(prefers-color-scheme: light)" fetchpriority="high" />
-    <link rel="preload" as="image" href="%PUBLIC_URL%/cellarion-logo-dark.png"  media="(prefers-color-scheme: dark)"  fetchpriority="high" />
+    <!-- Preload LCP logo (WebP with PNG fallback) so browser discovers it before React renders -->
+    <link rel="preload" as="image" href="%PUBLIC_URL%/cellarion-logo-light.webp" type="image/webp" media="(prefers-color-scheme: light)" fetchpriority="high" />
+    <link rel="preload" as="image" href="%PUBLIC_URL%/cellarion-logo-dark.webp"  type="image/webp" media="(prefers-color-scheme: dark)"  fetchpriority="high" />
 
     <!-- Fonts: Playfair Display (headings) + Inter (body) — loaded async to avoid render-blocking -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -42,6 +42,20 @@
   </head>
   <body>
     <noscript>You need to enable JavaScript to run this app.</noscript>
+    <!--
+      Static LCP logo: paints immediately before React boots.
+      Removed by React in index.js after first render.
+    -->
+    <style>#preboot-logo{display:flex;padding:12px 16px}</style>
+    <div id="preboot-logo" aria-hidden="true">
+      <picture>
+        <source srcset="%PUBLIC_URL%/cellarion-logo-light.webp" type="image/webp" media="(prefers-color-scheme: light)" />
+        <source srcset="%PUBLIC_URL%/cellarion-logo-dark.webp"  type="image/webp" media="(prefers-color-scheme: dark)" />
+        <source srcset="%PUBLIC_URL%/cellarion-logo-light.png" media="(prefers-color-scheme: light)" />
+        <source srcset="%PUBLIC_URL%/cellarion-logo-dark.png"  media="(prefers-color-scheme: dark)" />
+        <img src="%PUBLIC_URL%/cellarion-logo-light.webp" alt="" width="159" height="128" fetchpriority="high" style="height:64px;width:auto" />
+      </picture>
+    </div>
     <div id="root"></div>
   </body>
 </html>

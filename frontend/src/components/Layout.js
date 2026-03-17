@@ -9,8 +9,10 @@ import SupportModal from './SupportModal';
 import InstallPrompt from './InstallPrompt';
 import './Layout.css';
 
-const LOGO_LIGHT = process.env.PUBLIC_URL + '/cellarion-logo-light.png';
-const LOGO_DARK  = process.env.PUBLIC_URL + '/cellarion-logo-dark.png';
+const LOGO_LIGHT_WEBP = process.env.PUBLIC_URL + '/cellarion-logo-light.webp';
+const LOGO_DARK_WEBP  = process.env.PUBLIC_URL + '/cellarion-logo-dark.webp';
+const LOGO_LIGHT_PNG  = process.env.PUBLIC_URL + '/cellarion-logo-light.png';
+const LOGO_DARK_PNG   = process.env.PUBLIC_URL + '/cellarion-logo-dark.png';
 
 function Layout({ children }) {
   const { t } = useTranslation();
@@ -43,7 +45,10 @@ function Layout({ children }) {
         <div className="navbar-inner">
           <div className="navbar-brand">
             <Link to="/" onClick={closeMenu} className="brand-link">
-              <img src={theme === 'dark' ? LOGO_DARK : LOGO_LIGHT} alt="Cellarion" className="brand-logo-img" fetchPriority="high" />
+              <picture>
+                <source srcSet={theme === 'dark' ? LOGO_DARK_WEBP : LOGO_LIGHT_WEBP} type="image/webp" />
+                <img src={theme === 'dark' ? LOGO_DARK_PNG : LOGO_LIGHT_PNG} alt="Cellarion" className="brand-logo-img" width="159" height="128" fetchPriority="high" />
+              </picture>
             </Link>
           </div>
 
