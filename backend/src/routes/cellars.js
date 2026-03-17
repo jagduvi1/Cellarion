@@ -273,7 +273,7 @@ router.get('/:id/members', async (req, res) => {
 router.get('/:id', async (req, res) => {
   try {
     // Populate owner username so shared users can display "Shared by X"
-    const cellar = await Cellar.findById(req.params.id).populate('user', 'username');
+    const cellar = await Cellar.findById(req.params.id).populate('user', 'username').lean();
     const role = getCellarRole(cellar, req.user.id);
     if (!role || cellar.deletedAt) {
       return res.status(404).json({ error: 'Cellar not found' });
@@ -316,16 +316,24 @@ router.get('/:id', async (req, res) => {
       const matchingWdIds = await WineDefinition.find(wdFilter).distinct('_id');
       if (matchingWdIds.length === 0) {
         // No wines match the taxonomy filter — short-circuit with empty result
-        const cellarObj = cellar.toObject();
-        cellarObj.userRole = role;
-        cellarObj.userColor = getUserColor(cellar, req.user.id);
-        return res.json({ cellar: cellarObj, bottles: { count: 0, items: [] } });
+        return res.json({
+          cellar: { ...cellar, userRole: role, userColor: getUserColor(cellar, req.user.id) },
+          bottles: { count: 0, items: [] }
+        });
       }
       filter.wineDefinition = { $in: matchingWdIds };
     }
 
-    // Fetch the filtered set from DB (much smaller than fetching everything first)
-    let bottles = await Bottle.find(filter).populate(WINE_POPULATE);
+    // Push sort to MongoDB for direct Bottle fields (faster than JS sort)
+    const sortField = sort.startsWith('-') ? sort.substring(1) : sort;
+    const sortDir = sort.startsWith('-') ? -1 : 1;
+    const directSortFields = ['createdAt', 'vintage', 'price', 'rating'];
+    const canSortInDb = directSortFields.includes(sortField);
+
+    // Fetch the filtered set from DB — .lean() skips Mongoose document hydration (3-5× faster)
+    let query = Bottle.find(filter).populate(WINE_POPULATE);
+    if (canSortInDb) query = query.sort({ [sortField]: sortDir });
+    let bottles = await query.lean();
 
     // ── In-memory filters for cases that can't be expressed cleanly in Mongo ──
 
@@ -360,35 +368,24 @@ router.get('/:id', async (req, res) => {
       });
     }
 
-    // Apply sorting
-    const sortField = sort.startsWith('-') ? sort.substring(1) : sort;
-    const sortDir = sort.startsWith('-') ? -1 : 1;
+    // In-memory sort only for fields that require populated data (e.g. 'name')
+    if (!canSortInDb) {
+      bottles.sort((a, b) => {
+        let aVal, bVal;
 
-    bottles.sort((a, b) => {
-      let aVal, bVal;
+        if (sortField === 'name') {
+          aVal = a.wineDefinition?.name || '';
+          bVal = b.wineDefinition?.name || '';
+        } else {
+          aVal = a.createdAt;
+          bVal = b.createdAt;
+        }
 
-      if (sortField === 'vintage') {
-        aVal = a.vintage === 'NV' ? '0' : a.vintage;
-        bVal = b.vintage === 'NV' ? '0' : b.vintage;
-      } else if (sortField === 'rating') {
-        aVal = a.rating || 0;
-        bVal = b.rating || 0;
-      } else if (sortField === 'price') {
-        aVal = a.price || 0;
-        bVal = b.price || 0;
-      } else if (sortField === 'name') {
-        aVal = a.wineDefinition?.name || '';
-        bVal = b.wineDefinition?.name || '';
-      } else {
-        // Default to createdAt
-        aVal = a.createdAt;
-        bVal = b.createdAt;
-      }
-
-      if (aVal < bVal) return -sortDir;
-      if (aVal > bVal) return sortDir;
-      return 0;
-    });
+        if (aVal < bVal) return -sortDir;
+        if (aVal > bVal) return sortDir;
+        return 0;
+      });
+    }
 
     // Attach the uploader's own pending image to each bottle (visible before admin approval)
     const bottleIds = bottles.map(b => b._id);
@@ -407,18 +404,13 @@ router.get('/:id', async (req, res) => {
       }
     }
 
-    const bottleItems = bottles.map(b => {
-      const obj = b.toObject();
-      obj.pendingImageUrl = pendingByBottle[b._id.toString()] || null;
-      return obj;
-    });
-
-    const cellarObj = cellar.toObject();
-    cellarObj.userRole = role;
-    cellarObj.userColor = getUserColor(cellar, req.user.id);
+    const bottleItems = bottles.map(b => ({
+      ...b,
+      pendingImageUrl: pendingByBottle[b._id.toString()] || null
+    }));
 
     res.json({
-      cellar: cellarObj,
+      cellar: { ...cellar, userRole: role, userColor: getUserColor(cellar, req.user.id) },
       bottles: {
         count: bottleItems.length,
         items: bottleItems
