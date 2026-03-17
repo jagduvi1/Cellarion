@@ -9,6 +9,10 @@
     <meta name="description" content="Cellarion — the open-source wine cellar manager. Track bottles, visualise racks, get drink-window alerts, and share cellars. Self-hosted or use cellarion.app." />
     <meta name="keywords" content="wine cellar management, wine tracking, bottle tracker, wine collection, open source wine app, self-hosted wine cellar, drink window, wine rack" />
 
+    <!-- Preload LCP logo so the browser discovers it before React renders -->
+    <link rel="preload" as="image" href="%PUBLIC_URL%/cellarion-logo-light.png" media="(prefers-color-scheme: light)" fetchpriority="high" />
+    <link rel="preload" as="image" href="%PUBLIC_URL%/cellarion-logo-dark.png"  media="(prefers-color-scheme: dark)"  fetchpriority="high" />
+
     <!-- Fonts: Playfair Display (headings) + Inter (body) — loaded async to avoid render-blocking -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />

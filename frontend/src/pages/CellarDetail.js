@@ -13,6 +13,8 @@ const EditCellarModal = lazy(() => import('../components/EditCellarModal').then(
 const ColorPickerModal = lazy(() => import('../components/ColorPickerModal').then(m => ({ default: m.ColorPickerModal })));
 const DeleteCellarModal = lazy(() => import('../components/DeleteCellarModal').then(m => ({ default: m.DeleteCellarModal })));
 
+const BOTTLES_PER_PAGE = 30;
+
 function CellarDetail() {
   const { t } = useTranslation();
   const { id } = useParams();
@@ -21,9 +23,11 @@ function CellarDetail() {
   const navigate = useNavigate();
   const [cellar, setCellar] = useState(null);
   const [bottles, setBottles] = useState([]);
+  const [bottlesTotal, setBottlesTotal] = useState(0);
   const [statistics, setStatistics] = useState(null);
   const [rackMap, setRackMap] = useState(new Map());
   const [loading, setLoading] = useState(true);
+  const [bottlesLoading, setBottlesLoading] = useState(false);
   const [error, setError] = useState(null);
   const [showShareModal, setShowShareModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -39,7 +43,7 @@ function CellarDetail() {
   });
 
   useEffect(() => {
-    fetchCellarData();
+    fetchCellarData(0);
   }, [id, filters]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
@@ -48,17 +52,25 @@ function CellarDetail() {
   }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
 
 
-  const fetchCellarData = async () => {
+  const fetchCellarData = async (skip) => {
     try {
+      if (skip > 0) setBottlesLoading(true);
       const params = new URLSearchParams();
       Object.keys(filters).forEach(key => {
         if (filters[key]) params.append(key, filters[key]);
       });
+      params.set('limit', BOTTLES_PER_PAGE);
+      params.set('skip', skip);
       const res = await getCellar(apiFetch, id, params);
       const data = await res.json();
       if (res.ok) {
         setCellar(data.cellar);
-        setBottles(data.bottles.items);
+        setBottlesTotal(data.bottles.total);
+        if (skip === 0) {
+          setBottles(data.bottles.items);
+        } else {
+          setBottles(prev => [...prev, ...data.bottles.items]);
+        }
       } else {
         setError(data.error || 'Failed to load cellar');
       }
@@ -66,8 +78,11 @@ function CellarDetail() {
       setError('Network error');
     } finally {
       setLoading(false);
+      setBottlesLoading(false);
     }
   };
+
+  const loadMore = () => fetchCellarData(bottles.length);
 
   const fetchStatistics = async () => {
     try {
@@ -389,7 +404,7 @@ function CellarDetail() {
             </select>
           </div>
 
-          {bottles.length === 0 ? (
+          {bottles.length === 0 && !bottlesLoading ? (
             <div className="empty-state">
               <p>{t('cellarDetail.noBottles')}</p>
               {canEdit && (
@@ -403,6 +418,9 @@ function CellarDetail() {
               bottles={bottles}
               rackMap={rackMap}
               cellarId={id}
+              hasMore={bottles.length < bottlesTotal}
+              loadingMore={bottlesLoading}
+              onLoadMore={loadMore}
             />
           )}
         </div>
@@ -458,7 +476,8 @@ function CellarDetail() {
 }
 
 // ── Bottle list (list or card view) ──
-function BottlesList({ bottles, rackMap, cellarId }) {
+function BottlesList({ bottles, rackMap, cellarId, hasMore, loadingMore, onLoadMore }) {
+  const { t } = useTranslation();
   const [viewMode, setViewMode] = useState(() => {
     try { return localStorage.getItem('cellarion_bottle_view') || 'list'; } catch { return 'list'; }
   });
@@ -500,6 +519,18 @@ function BottlesList({ bottles, rackMap, cellarId }) {
           />
         ))}
       </div>
+
+      {hasMore && (
+        <div className="load-more-wrap">
+          <button
+            className="btn btn-secondary"
+            onClick={onLoadMore}
+            disabled={loadingMore}
+          >
+            {loadingMore ? t('common.loading') : t('cellarDetail.loadMore')}
+          </button>
+        </div>
+      )}
     </>
   );
 }

@@ -287,8 +287,14 @@ router.get('/:id', async (req, res) => {
       minRating,
       maxRating,
       search,
-      sort = '-createdAt'
+      sort = '-createdAt',
+      limit: rawLimit,
+      skip: rawSkip
     } = req.query;
+
+    // Pagination — default 30, max 200; skip defaults to 0
+    const limit = Math.min(Math.max(parseInt(rawLimit, 10) || 30, 1), 200);
+    const skip  = Math.max(parseInt(rawSkip, 10)  || 0, 0);
 
     // Base MongoDB filter for Bottle (direct fields only)
     const filter = {
@@ -330,10 +336,23 @@ router.get('/:id', async (req, res) => {
     const directSortFields = ['createdAt', 'vintage', 'price', 'rating'];
     const canSortInDb = directSortFields.includes(sortField);
 
+    // Whether we need in-memory post-processing (prevents DB-level pagination)
+    const needsInMemoryFilter = !!(search || minRating || maxRating);
+    const needsInMemorySort = !canSortInDb;
+    const canPaginateInDb = !needsInMemoryFilter && !needsInMemorySort;
+
     // Fetch the filtered set from DB — .lean() skips Mongoose document hydration (3-5× faster)
     let query = Bottle.find(filter).populate(WINE_POPULATE);
     if (canSortInDb) query = query.sort({ [sortField]: sortDir });
+    // When no in-memory work is needed, paginate directly in DB for speed
+    if (canPaginateInDb) query = query.skip(skip).limit(limit);
     let bottles = await query.lean();
+
+    // Total count: use countDocuments for DB-paginated, array length otherwise
+    let totalCount;
+    if (canPaginateInDb) {
+      totalCount = await Bottle.countDocuments(filter);
+    }
 
     // ── In-memory filters for cases that can't be expressed cleanly in Mongo ──
 
@@ -369,7 +388,7 @@ router.get('/:id', async (req, res) => {
     }
 
     // In-memory sort only for fields that require populated data (e.g. 'name')
-    if (!canSortInDb) {
+    if (needsInMemorySort) {
       bottles.sort((a, b) => {
         let aVal, bVal;
 
@@ -385,6 +404,12 @@ router.get('/:id', async (req, res) => {
         if (aVal > bVal) return sortDir;
         return 0;
       });
+    }
+
+    // For in-memory paths, capture total then slice
+    if (!canPaginateInDb) {
+      totalCount = bottles.length;
+      bottles = bottles.slice(skip, skip + limit);
     }
 
     // Attach the uploader's own pending image to each bottle (visible before admin approval)
@@ -412,7 +437,10 @@ router.get('/:id', async (req, res) => {
     res.json({
       cellar: { ...cellar, userRole: role, userColor: getUserColor(cellar, req.user.id) },
       bottles: {
+        total: totalCount,
         count: bottleItems.length,
+        limit,
+        skip,
         items: bottleItems
       }
     });

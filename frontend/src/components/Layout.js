@@ -43,7 +43,7 @@ function Layout({ children }) {
         <div className="navbar-inner">
           <div className="navbar-brand">
             <Link to="/" onClick={closeMenu} className="brand-link">
-              <img src={theme === 'dark' ? LOGO_DARK : LOGO_LIGHT} alt="Cellarion" className="brand-logo-img" />
+              <img src={theme === 'dark' ? LOGO_DARK : LOGO_LIGHT} alt="Cellarion" className="brand-logo-img" fetchPriority="high" />
             </Link>
           </div>
 

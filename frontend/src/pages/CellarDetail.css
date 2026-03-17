@@ -680,6 +680,13 @@
   gap: 1rem;
 }
 
+/* Load more */
+.load-more-wrap {
+  display: flex;
+  justify-content: center;
+  padding: 1.5rem 0;
+}
+
 .bottle-grid-card {
   background: var(--color-surface);
   border: 1px solid var(--color-border);
