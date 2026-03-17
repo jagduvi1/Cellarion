@@ -78,8 +78,8 @@
   position: absolute;
   top: 50%;
   transform: translateY(-50%);
-  width: 28px;
-  height: 28px;
+  width: 36px;
+  height: 36px;
   border-radius: 50%;
   border: none;
   background: rgba(0,0,0,0.4);
@@ -118,13 +118,14 @@
 }
 
 .carousel-dot {
-  width: 6px;
-  height: 6px;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
   border: none;
   background: rgba(255,255,255,0.5);
   cursor: pointer;
-  padding: 0;
+  padding: 8px;
+  background-clip: content-box;
   transition: background 0.2s;
 }
 
@@ -178,8 +179,8 @@
 @media (max-width: 768px) {
   .carousel-btn {
     opacity: 0.7;
-    width: 32px;
-    height: 32px;
+    width: 36px;
+    height: 36px;
   }
 
   /* Always show credit and default star on touch devices since hover doesn't work */

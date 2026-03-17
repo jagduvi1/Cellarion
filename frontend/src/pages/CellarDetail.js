@@ -108,7 +108,7 @@ function CellarDetail() {
       <div className="cellar-header">
         <div className="cellar-header-top">
           <Link to="/cellars" className="back-link">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="15 18 9 12 15 6"/></svg>
             {t('cellarDetail.backToCellars')}
           </Link>
           {/* Desktop-only add bottle button */}
@@ -122,28 +122,28 @@ function CellarDetail() {
               <button
                 className="btn btn-secondary btn-small btn-more"
                 onClick={() => setMoreOpen(o => !o)}
-                title="More actions"
-                aria-haspopup="true"
+                aria-label="More actions"
+                aria-haspopup="menu"
                 aria-expanded={moreOpen}
               >
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="12" cy="19" r="1"/></svg>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><circle cx="12" cy="12" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="12" cy="19" r="1"/></svg>
               </button>
               {moreOpen && (
                 <>
-                  <div className="more-menu-backdrop" onClick={() => setMoreOpen(false)} />
-                  <div className="more-menu-dropdown">
+                  <div className="more-menu-backdrop" onClick={() => setMoreOpen(false)} aria-hidden="true" />
+                  <div className="more-menu-dropdown" role="menu">
                     <button
                       className="more-menu-item"
                       onClick={() => setShowColorPicker(true) || setMoreOpen(false)}
                     >
-                      🎨 {t('cellarDetail.setColor')}
+                      <span aria-hidden="true">🎨</span> {t('cellarDetail.setColor')}
                     </button>
                     {cellar.userRole === 'owner' && (
                       <button
                         className="more-menu-item"
                         onClick={() => { setShowEditModal(true); setMoreOpen(false); }}
                       >
-                        ✏️ {t('cellarDetail.editCellar')}
+                        <span aria-hidden="true">✏️</span> {t('cellarDetail.editCellar')}
                       </button>
                     )}
                     {cellar.userRole === 'owner' && (
@@ -151,7 +151,7 @@ function CellarDetail() {
                         className="more-menu-item"
                         onClick={() => { setShowShareModal(true); setMoreOpen(false); }}
                       >
-                        🔗 {t('cellarDetail.share')}
+                        <span aria-hidden="true">🔗</span> {t('cellarDetail.share')}
                       </button>
                     )}
                     <Link
@@ -159,14 +159,14 @@ function CellarDetail() {
                       className="more-menu-item"
                       onClick={() => setMoreOpen(false)}
                     >
-                      🗄️ {t('cellarDetail.racks')}
+                      <span aria-hidden="true">🗄️</span> {t('cellarDetail.racks')}
                     </Link>
                     <Link
                       to={`/cellars/${id}/history`}
                       className="more-menu-item"
                       onClick={() => setMoreOpen(false)}
                     >
-                      📖 {t('cellarDetail.historyMenuItem')}
+                      <span aria-hidden="true">📖</span> {t('cellarDetail.historyMenuItem')}
                     </Link>
                     {canEdit && (
                       <Link
@@ -174,7 +174,7 @@ function CellarDetail() {
                         className="more-menu-item"
                         onClick={() => setMoreOpen(false)}
                       >
-                        📥 Import Bottles
+                        <span aria-hidden="true">📥</span> Import Bottles
                       </Link>
                     )}
                     {cellar.userRole === 'owner' && (
@@ -196,7 +196,7 @@ function CellarDetail() {
                           } catch { alert('Export failed'); }
                         }}
                       >
-                        📤 Export (JSON)
+                        <span aria-hidden="true">📤</span> Export (JSON)
                       </button>
                     )}
                     {cellar.userRole === 'owner' && (
@@ -231,7 +231,7 @@ function CellarDetail() {
                           } catch { alert('Export failed'); }
                         }}
                       >
-                        📄 Export (CSV)
+                        <span aria-hidden="true">📄</span> Export (CSV)
                       </button>
                     )}
                     {cellar.userRole === 'owner' && (
@@ -240,7 +240,7 @@ function CellarDetail() {
                         className="more-menu-item"
                         onClick={() => setMoreOpen(false)}
                       >
-                        📋 {t('cellarDetail.auditLog')}
+                        <span aria-hidden="true">📋</span> {t('cellarDetail.auditLog')}
                       </Link>
                     )}
                     {cellar.userRole === 'owner' && (
@@ -250,7 +250,7 @@ function CellarDetail() {
                           className="more-menu-item more-menu-item--danger"
                           onClick={() => { setShowDeleteModal(true); setMoreOpen(false); }}
                         >
-                          🗑️ {t('cellarDetail.deleteCellar')}
+                          <span aria-hidden="true">🗑️</span> {t('cellarDetail.deleteCellar')}
                         </button>
                       </>
                     )}
@@ -280,7 +280,7 @@ function CellarDetail() {
           className={`cellar-tab ${activeTab === 'bottles' ? 'active' : ''}`}
           onClick={() => setActiveTab('bottles')}
         >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
           Bottles
           {statistics && <span className="tab-count">{statistics.totalBottles}</span>}
         </button>
@@ -288,7 +288,7 @@ function CellarDetail() {
           className={`cellar-tab ${activeTab === 'overview' ? 'active' : ''}`}
           onClick={() => setActiveTab('overview')}
         >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
           Overview
         </button>
       </div>
@@ -299,19 +299,19 @@ function CellarDetail() {
           {statistics && (
             <div className="statistics-grid">
               <div className="stat-card">
-                <h3>{statistics.totalBottles}</h3>
+                <h2>{statistics.totalBottles}</h2>
                 <p>{t('cellarDetail.totalBottles')}</p>
               </div>
               <div className="stat-card">
-                <h3>{statistics.uniqueWines}</h3>
+                <h2>{statistics.uniqueWines}</h2>
                 <p>{t('cellarDetail.uniqueWines')}</p>
               </div>
               <div className="stat-card">
-                <h3>{statistics.convertedTotal.toFixed(2)} {userCurrency}</h3>
+                <h2>{statistics.convertedTotal.toFixed(2)} {userCurrency}</h2>
                 <p>{t('cellarDetail.totalValue')}</p>
               </div>
               <div className="stat-card">
-                <h3>{statistics.convertedAverage.toFixed(2)} {userCurrency}</h3>
+                <h2>{statistics.convertedAverage.toFixed(2)} {userCurrency}</h2>
                 <p>{t('cellarDetail.avgPrice')}</p>
               </div>
             </div>
@@ -320,20 +320,20 @@ function CellarDetail() {
           {/* Quick links */}
           <div className="overview-links">
             <Link to={`/cellars/${id}/racks`} className="overview-link-card">
-              <span className="overview-link-icon">🗄️</span>
+              <span className="overview-link-icon" aria-hidden="true">🗄️</span>
               <div>
                 <strong>{t('cellarDetail.racks')}</strong>
                 <span>View rack layout</span>
               </div>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="9 18 15 12 9 6"/></svg>
             </Link>
             <Link to={`/cellars/${id}/history`} className="overview-link-card">
-              <span className="overview-link-icon">📖</span>
+              <span className="overview-link-icon" aria-hidden="true">📖</span>
               <div>
                 <strong>{t('cellarDetail.history')}</strong>
                 <span>Consumed bottles</span>
               </div>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="9 18 15 12 9 6"/></svg>
             </Link>
           </div>
         </div>
@@ -349,6 +349,7 @@ function CellarDetail() {
               value={filters.search}
               onChange={e => setFilters({ ...filters, search: e.target.value })}
               className="search-input"
+              aria-label={t('cellarDetail.searchPlaceholder')}
             />
             <input
               type="text"
@@ -356,11 +357,13 @@ function CellarDetail() {
               value={filters.vintage}
               onChange={e => setFilters({ ...filters, vintage: e.target.value })}
               className="filter-input"
+              aria-label={t('cellarDetail.vintagePlaceholder')}
             />
             <select
               value={filters.minRating}
               onChange={e => setFilters({ ...filters, minRating: e.target.value })}
               className="filter-select"
+              aria-label="Filter by rating"
             >
               <option value="">{t('cellarDetail.allRatings')}</option>
               <option value="80">{t('cellarDetail.stars4Plus')}</option>
@@ -371,6 +374,7 @@ function CellarDetail() {
               value={filters.sort}
               onChange={e => setFilters({ ...filters, sort: e.target.value })}
               className="filter-select"
+              aria-label="Sort bottles"
             >
               <option value="-createdAt">{t('cellarDetail.sortNewest')}</option>
               <option value="createdAt">{t('cellarDetail.sortOldest')}</option>
@@ -409,7 +413,7 @@ function CellarDetail() {
           className="fab"
           aria-label={t('cellarDetail.addBottle')}
         >
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
         </Link>
       )}
 
@@ -466,18 +470,18 @@ function BottlesList({ bottles, rackMap, cellarId }) {
         <button
           className={`view-toggle-btn ${viewMode === 'list' ? 'active' : ''}`}
           onClick={() => setView('list')}
-          title="List view"
           aria-label="List view"
+          aria-pressed={viewMode === 'list'}
         >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
         </button>
         <button
           className={`view-toggle-btn ${viewMode === 'card' ? 'active' : ''}`}
           onClick={() => setView('card')}
-          title="Card view"
           aria-label="Card view"
+          aria-pressed={viewMode === 'card'}
         >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
         </button>
       </div>
 

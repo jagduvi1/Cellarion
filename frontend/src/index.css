@@ -27,7 +27,7 @@
   /* Text */
   --color-text: #2B2B2B;
   --color-text-secondary: #5A5A5A;
-  --color-text-muted: #8A8580;
+  --color-text-muted: #736E69;
   --color-text-inverse: #FFFFFF;
 
   /* Borders */
@@ -39,7 +39,7 @@
   --color-input-bg: #FFFFFF;
   --color-input-border: #E4E0DC;
   --color-input-focus-bg: #FFFFFF;
-  --color-input-placeholder: #B0AAA4;
+  --color-input-placeholder: #8A8580;
 
   /* Buttons */
   --color-btn-primary-bg: #7A1E2D;

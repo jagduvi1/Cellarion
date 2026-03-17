@@ -367,7 +367,7 @@
   box-shadow: var(--shadow-card);
 }
 
-.stat-card h3 {
+.stat-card h2 {
   margin: 0;
   color: var(--color-primary);
   font-size: 1.75rem;

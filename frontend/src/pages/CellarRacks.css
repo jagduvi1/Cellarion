@@ -208,7 +208,7 @@
 
 .slot-num {
   font-size: 0.55rem;
-  color: #6b5040;
+  color: #c9a96e;
   user-select: none;
   font-weight: 600;
 }
@@ -282,10 +282,10 @@
   font-size: 1.4rem;
   color: var(--color-text-muted);
   cursor: pointer;
-  padding: 0 0.25rem;
+  padding: 0.5rem;
   line-height: 1;
-  min-height: 36px;
-  min-width: 36px;
+  min-height: 44px;
+  min-width: 44px;
   display: flex;
   align-items: center;
   justify-content: center;

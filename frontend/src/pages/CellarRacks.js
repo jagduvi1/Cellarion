@@ -183,7 +183,7 @@ function CellarRacks() {
       <div className="cellarracks-header">
         <div>
           <Link to={`/cellars/${id}`} className="back-link">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="15 18 9 12 15 6"/></svg>
             {t('racks.backToCellar')}
           </Link>
           <h1 style={cellar?.userColor ? { borderLeft: `4px solid ${cellar.userColor}`, paddingLeft: '0.75rem' } : {}}>
@@ -277,7 +277,7 @@ function CellarRacks() {
 
       {/* Page-level fixed slot modal */}
       {activePopup && (
-        <div className="slot-modal-overlay" onClick={() => setActivePopup(null)}>
+        <div className="slot-modal-overlay" onClick={() => setActivePopup(null)} role="dialog" aria-modal="true">
           <div className="slot-modal" onClick={e => e.stopPropagation()}>
             {activePopup.slot ? (
               <FilledSlotContent
@@ -352,9 +352,12 @@ function RackGrid({ rack, canEdit, activeRackId, activePosition, highlightPos, o
               key={pos}
               className={`rack-slot ${slot ? `filled type-${wineType}` : 'empty'} ${isOpen ? 'active' : ''} ${isHighlighted ? 'highlighted' : ''}`}
               onClick={() => onSlotClick(pos, slot || null)}
-              title={slot ? `${wine?.name || '?'} (${slot.bottle?.vintage || ''})` : `Empty slot ${pos}`}
+              onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && onSlotClick(pos, slot || null)}
+              role="button"
+              tabIndex={0}
+              aria-label={slot ? `${wine?.name || '?'} (${slot.bottle?.vintage || ''})` : `Empty slot ${pos}`}
             >
-              {!slot && <span className="slot-num">{pos}</span>}
+              {!slot && <span className="slot-num" aria-hidden="true">{pos}</span>}
             </div>
           );
         })}
@@ -380,7 +383,7 @@ function EmptySlotContent({ position, bottles, onAssign, onClose }) {
     <>
       <div className="slot-popup-header">
         <span className="slot-popup-title">{t('racks.slotPlaceBottle', { position })}</span>
-        <button className="slot-popup-close" onClick={onClose}>&times;</button>
+        <button className="slot-popup-close" onClick={onClose} aria-label="Close">&times;</button>
       </div>
       <input
         type="text"
@@ -388,6 +391,7 @@ function EmptySlotContent({ position, bottles, onAssign, onClose }) {
         placeholder={t('racks.searchWines')}
         value={search}
         onChange={e => setSearch(e.target.value)}
+        aria-label={t('racks.searchWines')}
         autoFocus
       />
       <div className="slot-bottle-list">
@@ -399,8 +403,11 @@ function EmptySlotContent({ position, bottles, onAssign, onClose }) {
               key={b._id}
               className="slot-bottle-item"
               onClick={() => onAssign(position, b._id)}
+              onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && onAssign(position, b._id)}
+              role="button"
+              tabIndex={0}
             >
-              <span className={`slot-bottle-type-dot type-${b.wineDefinition?.type || 'red'}`} />
+              <span className={`slot-bottle-type-dot type-${b.wineDefinition?.type || 'red'}`} aria-hidden="true" />
               <div className="slot-bottle-info">
                 <strong>{b.wineDefinition?.name || 'Unknown'}</strong>
                 <span className="slot-bottle-meta">
@@ -426,7 +433,7 @@ function FilledSlotContent({ position, slot, canEdit, onRemoveFromRack, onConsum
     <>
       <div className="slot-popup-header">
         <span className="slot-popup-title">{t('racks.slotTitle', { position })}</span>
-        <button className="slot-popup-close" onClick={onClose}>&times;</button>
+        <button className="slot-popup-close" onClick={onClose} aria-label="Close">&times;</button>
       </div>
 
       <div className="slot-bottle-detail">
@@ -484,7 +491,7 @@ function ConsumeModal({ defaultRatingScale, onSubmit, onCancel }) {
       <div className="slot-modal consume-modal-box" onClick={e => e.stopPropagation()}>
         <div className="slot-popup-header">
           <span className="slot-popup-title">{t('bottleDetail.removeBottleTitle')}</span>
-          <button className="slot-popup-close" onClick={onCancel}>&times;</button>
+          <button className="slot-popup-close" onClick={onCancel} aria-label="Close">&times;</button>
         </div>
         <form onSubmit={handleSubmit} className="consume-modal-form">
           <div className="form-group">
