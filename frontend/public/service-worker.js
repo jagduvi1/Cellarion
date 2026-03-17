@@ -44,10 +44,16 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   const { request } = event;
 
-  // Only intercept GET requests
-  if (request.method !== 'GET') return;
-
   const url = new URL(request.url);
+
+  // Any non-GET request to a cached API path means data changed (add/remove/update bottle, etc.)
+  // — wipe the API cache so the next page load fetches fresh data instead of showing stale content.
+  if (request.method !== 'GET') {
+    if (url.pathname.startsWith('/api/')) {
+      caches.delete(API_CACHE_NAME);
+    }
+    return;
+  }
 
   // ── Cacheable API requests: stale-while-revalidate ──
   // Serve the cached response instantly (eliminates the API wait on repeat visits),
