@@ -46,6 +46,7 @@ export default function RatingInput({ value, scale, onChange, onScaleChange, all
           value={numVal != null ? numVal : ''}
           onChange={handleChange}
           placeholder={`${meta.min}–${meta.max}`}
+          aria-label={`Rating (${meta.min}–${meta.max})`}
         />
         {resolvedScale === '5' && (
           <div className="rating-stars-preview" aria-hidden="true">
@@ -62,7 +63,7 @@ export default function RatingInput({ value, scale, onChange, onScaleChange, all
             className="rating-input__scale-select"
             value={resolvedScale}
             onChange={handleScaleChange}
-            title="Change rating scale"
+            aria-label="Change rating scale"
           >
             {VALID_SCALES.map(s => (
               <option key={s} value={s}>{SCALE_META[s].label}</option>

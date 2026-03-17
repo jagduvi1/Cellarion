@@ -301,7 +301,7 @@ function ImageUpload({ bottleId, wineDefinitionId, credit, onUploadComplete, onP
                 {img.status === 'processed' && <span className="preview-badge-ok">Ready</span>}
                 {img.status === 'processing' && <span className="preview-badge-processing">Processing</span>}
                 {img.status === 'failed' && <span className="preview-badge-failed">Failed</span>}
-                <button type="button" className="btn-remove" onClick={() => removeImage(img.id)} title="Remove this image">✕ Remove</button>
+                <button type="button" className="btn-remove" onClick={() => removeImage(img.id)} aria-label="Remove this image">✕ Remove</button>
               </div>
             </div>
           ))}

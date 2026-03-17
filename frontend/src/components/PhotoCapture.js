@@ -125,15 +125,15 @@ function PhotoCapture({ onCapture, onRemove, processedUrl, processing }) {
               <>
                 <video ref={videoRef} autoPlay playsInline muted className="camera-video" />
                 <div className="camera-overlay">
-                  <img src="/bottle-overlay.png" alt="" className="bottle-guide" />
+                  <img src="/bottle-overlay.png" alt="" className="bottle-guide" aria-hidden="true" />
                   <p className="overlay-hint">Place bottle in the center</p>
                 </div>
                 <div className="camera-controls">
-                  <button type="button" className="camera-btn camera-btn-close" onClick={stopCamera} title="Close">✕</button>
-                  <button type="button" className="camera-btn camera-btn-capture" onClick={capturePhoto} title="Take Photo">
-                    <span className="capture-ring"></span>
+                  <button type="button" className="camera-btn camera-btn-close" onClick={stopCamera} aria-label="Close camera">✕</button>
+                  <button type="button" className="camera-btn camera-btn-capture" onClick={capturePhoto} aria-label="Take photo">
+                    <span className="capture-ring" aria-hidden="true"></span>
                   </button>
-                  <button type="button" className="camera-btn camera-btn-switch" onClick={switchCamera} title="Switch Camera">⟲</button>
+                  <button type="button" className="camera-btn camera-btn-switch" onClick={switchCamera} aria-label="Switch camera">⟲</button>
                 </div>
               </>
             )}
@@ -160,7 +160,7 @@ function PhotoCapture({ onCapture, onRemove, processedUrl, processing }) {
       ) : (
         <div className="upload-buttons">
           <button type="button" className="btn btn-upload" onClick={startCamera} disabled={cameraOpen}>
-            <span className="upload-icon">📷</span>
+            <span className="upload-icon" aria-hidden="true">📷</span>
             Take Photo
           </button>
           <input
@@ -171,7 +171,7 @@ function PhotoCapture({ onCapture, onRemove, processedUrl, processing }) {
             style={{ display: 'none' }}
           />
           <button type="button" className="btn btn-upload btn-upload-secondary" onClick={() => fileInputRef.current?.click()}>
-            <span className="upload-icon">📁</span>
+            <span className="upload-icon" aria-hidden="true">📁</span>
             Choose File
           </button>
         </div>

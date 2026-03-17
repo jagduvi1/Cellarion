@@ -401,11 +401,11 @@ function AddBottle() {
                       <p className="overlay-hint">{t('addBottle.scanHint')}</p>
                     </div>
                     <div className="camera-controls">
-                      <button type="button" className="camera-btn camera-btn-close" onClick={stopLabelCamera} title="Close">✕</button>
-                      <button type="button" className="camera-btn camera-btn-capture" onClick={captureLabelPhoto} title="Scan Label">
-                        <span className="capture-ring"></span>
+                      <button type="button" className="camera-btn camera-btn-close" onClick={stopLabelCamera} aria-label="Close camera">✕</button>
+                      <button type="button" className="camera-btn camera-btn-capture" onClick={captureLabelPhoto} aria-label="Scan label">
+                        <span className="capture-ring" aria-hidden="true"></span>
                       </button>
-                      <button type="button" className="camera-btn camera-btn-switch" onClick={() => setLabelFacing(f => f === 'environment' ? 'user' : 'environment')} title="Switch Camera">⟲</button>
+                      <button type="button" className="camera-btn camera-btn-switch" onClick={() => setLabelFacing(f => f === 'environment' ? 'user' : 'environment')} aria-label="Switch camera">⟲</button>
                     </div>
                   </>
                 )}
@@ -418,7 +418,7 @@ function AddBottle() {
 
       <div className="add-bottle-header">
         <Link to={`/cellars/${cellarId}`} className="back-link">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="15 18 9 12 15 6"/></svg>
           {t('addBottle.backToCellar')}
         </Link>
         <h1>{t('addBottle.title')}</h1>

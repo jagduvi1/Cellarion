@@ -12,7 +12,7 @@ function CellarColorPicker({ value, onChange }) {
       {/* None option */}
       <button
         type="button"
-        title="No color"
+        aria-label="No color"
         onClick={() => onChange(null)}
         style={{
           width: 28,
@@ -37,7 +37,7 @@ function CellarColorPicker({ value, onChange }) {
         <button
           key={color}
           type="button"
-          title={color}
+          aria-label={`Color ${color}`}
           onClick={() => onChange(color)}
           style={{
             width: 28,

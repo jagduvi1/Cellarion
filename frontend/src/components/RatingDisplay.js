@@ -39,7 +39,7 @@ export default function RatingDisplay({ value, scale, preferredScale }) {
 
   return (
     <span className="rating-display">
-      <span className="rating-display__original" title={`Recorded as ${meta.label}`}>
+      <span className="rating-display__original" aria-label={`Recorded as ${meta.label}`}>
         {resolvedScale === '5' && (
           <span className="rating-display__stars" aria-hidden="true">
             <span className="rating-display__stars-bg">★★★★★</span>
@@ -48,15 +48,15 @@ export default function RatingDisplay({ value, scale, preferredScale }) {
         )}
         <span className="rating-display__value">{originalFormatted}</span>
         {showPreferred && (
-          <span className="rating-display__preferred" title={`Your scale: ${SCALE_META[prefScale].label}`}>
+          <span className="rating-display__preferred" aria-label={`Your scale: ${SCALE_META[prefScale].label}`}>
             ({preferredFormatted})
           </span>
         )}
       </span>
       <span className="rating-display__all-scales">
-        {resolvedScale !== '5'   && <span title="Star Rating">{scales.star}</span>}
-        {resolvedScale !== '20'  && <span title="Davis 20-Point">{scales.davis}</span>}
-        {resolvedScale !== '100' && <span title="Parker 100-Point">{scales.parker}</span>}
+        {resolvedScale !== '5'   && <span aria-label="Star Rating">{scales.star}</span>}
+        {resolvedScale !== '20'  && <span aria-label="Davis 20-Point">{scales.davis}</span>}
+        {resolvedScale !== '100' && <span aria-label="Parker 100-Point">{scales.parker}</span>}
       </span>
     </span>
   );

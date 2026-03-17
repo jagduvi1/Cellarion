@@ -60,7 +60,7 @@ function BottleCard({ bottle, rackMap, cellarId, viewMode }) {
                 className="rack-badge"
                 onClick={e => e.stopPropagation()}
               >
-                📍 {rackInfo.rackName}
+                <span aria-hidden="true">📍</span> {rackInfo.rackName}
               </Link>
             )}
           </div>

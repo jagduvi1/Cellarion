@@ -76,7 +76,7 @@ function parseSSEChunk(buffer) {
 
 function WineCard({ wine }) {
   return (
-    <div className="cellar-chat__wine-card" title={wine.grapes?.join(', ')}>
+    <div className="cellar-chat__wine-card" aria-label={wine.grapes?.join(', ')}>
       <div className="cellar-chat__wine-card-name">{wine.name}</div>
       <div className="cellar-chat__wine-card-meta">
         {wine.vintage} · {wine.producer}
@@ -383,7 +383,7 @@ export default function CellarChat() {
               className="cellar-chat__new-chat"
               onClick={startNewChat}
               disabled={loading}
-              title="Start a new conversation"
+              aria-label="Start a new conversation"
             >
               New chat
             </button>
