@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import useVersion from '../hooks/useVersion';
@@ -11,7 +11,8 @@ import './Settings.css';
 
 function Settings() {
   const { t, i18n } = useTranslation();
-  const { user, apiFetch, updatePreferences, setUser } = useAuth();
+  const { user, apiFetch, updatePreferences, setUser, logout } = useAuth();
+  const navigate = useNavigate();
   const appVersion = useVersion();
   const [currency, setCurrency] = useState(user?.preferences?.currency || 'USD');
   const [language, setLanguage] = useState(user?.preferences?.language || i18n.language?.split('-')[0] || 'en');
@@ -27,6 +28,12 @@ function Settings() {
   const [profileSaving, setProfileSaving] = useState(false);
   const [profileSaved, setProfileSaved] = useState(false);
   const [profileError, setProfileError] = useState(null);
+
+  // Delete account state
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState(null);
 
   const handleProfileSave = async (e) => {
     e.preventDefault();
@@ -63,6 +70,26 @@ function Settings() {
       setTimeout(() => setSaved(false), 3000);
     } else {
       setError(result.error);
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    if (deleteConfirmText !== 'DELETE') return;
+    setDeleting(true);
+    setDeleteError(null);
+    try {
+      const res = await apiFetch('/api/users/me', { method: 'DELETE' });
+      if (res.ok) {
+        logout();
+        navigate('/login');
+      } else {
+        const data = await res.json();
+        setDeleteError(data.error || 'Failed to delete account');
+        setDeleting(false);
+      }
+    } catch {
+      setDeleteError('Failed to delete account');
+      setDeleting(false);
     }
   };
 
@@ -230,6 +257,45 @@ function Settings() {
             {saved && <span className="settings-saved">{t('settings.savedMsg')}</span>}
           </div>
         </form>
+      </div>
+
+      {/* ── Danger zone ── */}
+      <div className="card settings-card settings-danger-card">
+        <h2 className="settings-section-title settings-danger-title">Danger zone</h2>
+        <p className="settings-hint">
+          Permanently delete your account and all associated data — cellars, bottles, reviews, and settings.
+          This action cannot be undone.
+        </p>
+        {!showDeleteConfirm ? (
+          <button className="btn btn-danger" onClick={() => setShowDeleteConfirm(true)}>
+            Delete my account
+          </button>
+        ) : (
+          <div className="settings-delete-confirm">
+            <p>Type <strong>DELETE</strong> to confirm:</p>
+            <input
+              type="text"
+              className="input"
+              value={deleteConfirmText}
+              onChange={e => setDeleteConfirmText(e.target.value)}
+              placeholder="DELETE"
+              autoFocus
+            />
+            {deleteError && <div className="alert alert-error">{deleteError}</div>}
+            <div className="settings-actions">
+              <button
+                className="btn btn-danger"
+                onClick={handleDeleteAccount}
+                disabled={deleteConfirmText !== 'DELETE' || deleting}
+              >
+                {deleting ? 'Deleting…' : 'Permanently delete account'}
+              </button>
+              <button className="btn btn-secondary" onClick={() => { setShowDeleteConfirm(false); setDeleteConfirmText(''); }}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {appVersion && (

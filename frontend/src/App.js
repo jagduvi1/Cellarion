@@ -13,6 +13,7 @@ const LandingPage     = lazy(() => import('./pages/LandingPage'));
 const Login           = lazy(() => import('./pages/Login'));
 const VerifyEmail     = lazy(() => import('./pages/VerifyEmail'));
 const ResetPassword   = lazy(() => import('./pages/ResetPassword'));
+const PrivacyPolicy   = lazy(() => import('./pages/PrivacyPolicy'));
 const Cellars         = lazy(() => import('./pages/Cellars'));
 const CellarDetail    = lazy(() => import('./pages/CellarDetail'));
 const AddBottle       = lazy(() => import('./pages/AddBottle'));
@@ -57,6 +58,7 @@ function AppRoutes() {
         <Route path="/login" element={user ? <Navigate to="/cellars" replace /> : <Login />} />
         <Route path="/verify-email" element={<VerifyEmail />} />
         <Route path="/reset-password" element={<ResetPassword />} />
+        <Route path="/privacy" element={<PrivacyPolicy />} />
 
         {/* Protected routes wrapped in Layout */}
         <Route path="/" element={<LandingPage />} />

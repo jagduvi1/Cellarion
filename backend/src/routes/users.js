@@ -2,6 +2,13 @@ const express = require('express');
 const mongoose = require('mongoose');
 const User = require('../models/User');
 const Cellar = require('../models/Cellar');
+const Bottle = require('../models/Bottle');
+const Rack = require('../models/Rack');
+const WineRequest = require('../models/WineRequest');
+const Review = require('../models/Review');
+const ReviewVote = require('../models/ReviewVote');
+const Notification = require('../models/Notification');
+const AuditLog = require('../models/AuditLog');
 const Follow = require('../models/Follow');
 const { requireAuth, requireRole } = require('../middleware/auth');
 const { logAudit } = require('../services/audit');
@@ -259,6 +266,40 @@ router.get('/all', requireAuth, requireRole('admin'), async (req, res) => {
   } catch (error) {
     console.error('Get all users error:', error);
     res.status(500).json({ error: 'Failed to get users' });
+  }
+});
+
+// DELETE /api/users/me — permanently delete account and all associated data
+router.delete('/me', requireAuth, async (req, res) => {
+  const userId = req.user.id;
+  try {
+    // Delete all user-owned data in parallel
+    const ownedCellarIds = await Cellar.distinct('_id', { user: userId });
+
+    await Promise.all([
+      // Cellar data
+      Bottle.deleteMany({ user: userId }),
+      Rack.deleteMany({ cellar: { $in: ownedCellarIds } }),
+      Cellar.deleteMany({ user: userId }),
+      // Remove user from shared cellars they are a member of
+      Cellar.updateMany({ 'members.user': userId }, { $pull: { members: { user: userId } } }),
+      // Social / activity
+      WineRequest.deleteMany({ user: userId }),
+      Review.deleteMany({ user: userId }),
+      ReviewVote.deleteMany({ user: userId }),
+      Follow.deleteMany({ $or: [{ follower: userId }, { following: userId }] }),
+      Notification.deleteMany({ $or: [{ user: userId }, { actor: userId }] }),
+      AuditLog.deleteMany({ user: userId }),
+    ]);
+
+    // Finally delete the user itself
+    await User.findByIdAndDelete(userId);
+
+    logAudit(req, 'user.account_deleted', { userId });
+    res.json({ message: 'Account deleted' });
+  } catch (error) {
+    console.error('Delete account error:', error);
+    res.status(500).json({ error: 'Failed to delete account' });
   }
 });
 
