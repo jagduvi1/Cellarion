@@ -15,6 +15,21 @@
   font-family: var(--font-heading);
 }
 
+/* Skeleton placeholder while cellar data loads */
+.skeleton-h1 {
+  height: 1.5rem;
+  width: 40%;
+  margin: 0.25rem 0 0;
+  background: var(--color-border);
+  border-radius: var(--radius-sm);
+  animation: skeleton-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes skeleton-pulse {
+  0%, 100% { opacity: 0.4; }
+  50%      { opacity: 0.8; }
+}
+
 .cellar-header-top {
   display: flex;
   align-items: center;

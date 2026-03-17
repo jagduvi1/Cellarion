@@ -111,17 +111,16 @@ function CellarDetail() {
 
   const canEdit = cellar?.userRole === 'owner' || cellar?.userRole === 'editor';
 
-  if (loading) return <div className="loading">{t('cellarDetail.loadingCellar')}</div>;
-  if (error)   return <div className="alert alert-error">{error}</div>;
+  if (error) return <div className="alert alert-error">{error}</div>;
 
-  const h1Style = cellar.userColor
+  const h1Style = cellar?.userColor
     ? { '--cellar-color': cellar.userColor }
     : {};
-  const h1Class = cellar.userColor ? 'cellar-accent-border' : '';
+  const h1Class = cellar?.userColor ? 'cellar-accent-border' : '';
 
   return (
     <div className="cellar-detail-page">
-      {/* ── Clean header ── */}
+      {/* ── Header — shell renders immediately, details fill in after load ── */}
       <div className="cellar-header">
         <div className="cellar-header-top">
           <Link to="/cellars?all=1" className="back-link">
@@ -129,165 +128,173 @@ function CellarDetail() {
             {t('cellarDetail.backToCellars')}
           </Link>
           {/* Desktop-only add bottle button */}
-          <div className="cellar-header-desktop-actions">
-            {canEdit && (
-              <Link to={`/cellars/${id}/add-bottle`} className="btn btn-primary btn-small">
-                + {t('cellarDetail.addBottle')}
-              </Link>
-            )}
-            <div className="more-menu-wrap">
-              <button
-                className="btn btn-secondary btn-small btn-more"
-                onClick={() => setMoreOpen(o => !o)}
-                aria-label="More actions"
-                aria-haspopup="menu"
-                aria-expanded={moreOpen}
-              >
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><circle cx="12" cy="12" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="12" cy="19" r="1"/></svg>
-              </button>
-              {moreOpen && (
-                <>
-                  <div className="more-menu-backdrop" onClick={() => setMoreOpen(false)} aria-hidden="true" />
-                  <div className="more-menu-dropdown" role="menu">
-                    <button
-                      className="more-menu-item"
-                      onClick={() => setShowColorPicker(true) || setMoreOpen(false)}
-                    >
-                      <span aria-hidden="true">🎨</span> {t('cellarDetail.setColor')}
-                    </button>
-                    {cellar.userRole === 'owner' && (
-                      <button
-                        className="more-menu-item"
-                        onClick={() => { setShowEditModal(true); setMoreOpen(false); }}
-                      >
-                        <span aria-hidden="true">✏️</span> {t('cellarDetail.editCellar')}
-                      </button>
-                    )}
-                    {cellar.userRole === 'owner' && (
-                      <button
-                        className="more-menu-item"
-                        onClick={() => { setShowShareModal(true); setMoreOpen(false); }}
-                      >
-                        <span aria-hidden="true">🔗</span> {t('cellarDetail.share')}
-                      </button>
-                    )}
-                    <Link
-                      to={`/cellars/${id}/racks`}
-                      className="more-menu-item"
-                      onClick={() => setMoreOpen(false)}
-                    >
-                      <span aria-hidden="true">🗄️</span> {t('cellarDetail.racks')}
-                    </Link>
-                    <Link
-                      to={`/cellars/${id}/history`}
-                      className="more-menu-item"
-                      onClick={() => setMoreOpen(false)}
-                    >
-                      <span aria-hidden="true">📖</span> {t('cellarDetail.historyMenuItem')}
-                    </Link>
-                    {canEdit && (
-                      <Link
-                        to={`/cellars/${id}/import`}
-                        className="more-menu-item"
-                        onClick={() => setMoreOpen(false)}
-                      >
-                        <span aria-hidden="true">📥</span> Import Bottles
-                      </Link>
-                    )}
-                    {cellar.userRole === 'owner' && (
-                      <button
-                        className="more-menu-item"
-                        onClick={async () => {
-                          setMoreOpen(false);
-                          try {
-                            const res = await exportCellar(apiFetch, id);
-                            const data = await res.json();
-                            if (!res.ok) { alert(data.error || 'Export failed'); return; }
-                            const blob = new Blob([JSON.stringify(data.bottles, null, 2)], { type: 'application/json' });
-                            const url = URL.createObjectURL(blob);
-                            const a = document.createElement('a');
-                            a.href = url;
-                            a.download = `${data.cellarName || 'cellar'}-export.json`;
-                            a.click();
-                            URL.revokeObjectURL(url);
-                          } catch { alert('Export failed'); }
-                        }}
-                      >
-                        <span aria-hidden="true">📤</span> Export (JSON)
-                      </button>
-                    )}
-                    {cellar.userRole === 'owner' && (
-                      <button
-                        className="more-menu-item"
-                        onClick={async () => {
-                          setMoreOpen(false);
-                          try {
-                            const res = await exportCellar(apiFetch, id);
-                            const data = await res.json();
-                            if (!res.ok) { alert(data.error || 'Export failed'); return; }
-                            const bottles = data.bottles;
-                            if (bottles.length === 0) { alert('No bottles to export'); return; }
-                            const cols = ['wineName','producer','vintage','country','region','appellation','type',
-                              'price','currency','bottleSize','purchaseDate','purchaseLocation','location',
-                              'notes','rating','ratingScale','drinkFrom','drinkBefore',
-                              'rackName','rackPosition','rackRow','rackCol','dateAdded',
-                              'addToHistory','consumedReason','consumedAt','consumedNote','consumedRating','consumedRatingScale'];
-                            const escape = v => {
-                              if (v == null || v === '') return '';
-                              const s = String(v);
-                              return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s.replace(/"/g, '""')}"` : s;
-                            };
-                            const csv = [cols.join(','), ...bottles.map(b => cols.map(c => escape(b[c])).join(','))].join('\n');
-                            const blob = new Blob([csv], { type: 'text/csv' });
-                            const url = URL.createObjectURL(blob);
-                            const a = document.createElement('a');
-                            a.href = url;
-                            a.download = `${data.cellarName || 'cellar'}-export.csv`;
-                            a.click();
-                            URL.revokeObjectURL(url);
-                          } catch { alert('Export failed'); }
-                        }}
-                      >
-                        <span aria-hidden="true">📄</span> Export (CSV)
-                      </button>
-                    )}
-                    {cellar.userRole === 'owner' && (
-                      <Link
-                        to={`/cellars/${id}/audit`}
-                        className="more-menu-item"
-                        onClick={() => setMoreOpen(false)}
-                      >
-                        <span aria-hidden="true">📋</span> {t('cellarDetail.auditLog')}
-                      </Link>
-                    )}
-                    {cellar.userRole === 'owner' && (
-                      <>
-                        <div className="more-menu-divider" />
-                        <button
-                          className="more-menu-item more-menu-item--danger"
-                          onClick={() => { setShowDeleteModal(true); setMoreOpen(false); }}
-                        >
-                          <span aria-hidden="true">🗑️</span> {t('cellarDetail.deleteCellar')}
-                        </button>
-                      </>
-                    )}
-                  </div>
-                </>
+          {!loading && (
+            <div className="cellar-header-desktop-actions">
+              {canEdit && (
+                <Link to={`/cellars/${id}/add-bottle`} className="btn btn-primary btn-small">
+                  + {t('cellarDetail.addBottle')}
+                </Link>
               )}
+              <div className="more-menu-wrap">
+                <button
+                  className="btn btn-secondary btn-small btn-more"
+                  onClick={() => setMoreOpen(o => !o)}
+                  aria-label="More actions"
+                  aria-haspopup="menu"
+                  aria-expanded={moreOpen}
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><circle cx="12" cy="12" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="12" cy="19" r="1"/></svg>
+                </button>
+                {moreOpen && (
+                  <>
+                    <div className="more-menu-backdrop" onClick={() => setMoreOpen(false)} aria-hidden="true" />
+                    <div className="more-menu-dropdown" role="menu">
+                      <button
+                        className="more-menu-item"
+                        onClick={() => setShowColorPicker(true) || setMoreOpen(false)}
+                      >
+                        <span aria-hidden="true">🎨</span> {t('cellarDetail.setColor')}
+                      </button>
+                      {cellar.userRole === 'owner' && (
+                        <button
+                          className="more-menu-item"
+                          onClick={() => { setShowEditModal(true); setMoreOpen(false); }}
+                        >
+                          <span aria-hidden="true">✏️</span> {t('cellarDetail.editCellar')}
+                        </button>
+                      )}
+                      {cellar.userRole === 'owner' && (
+                        <button
+                          className="more-menu-item"
+                          onClick={() => { setShowShareModal(true); setMoreOpen(false); }}
+                        >
+                          <span aria-hidden="true">🔗</span> {t('cellarDetail.share')}
+                        </button>
+                      )}
+                      <Link
+                        to={`/cellars/${id}/racks`}
+                        className="more-menu-item"
+                        onClick={() => setMoreOpen(false)}
+                      >
+                        <span aria-hidden="true">🗄️</span> {t('cellarDetail.racks')}
+                      </Link>
+                      <Link
+                        to={`/cellars/${id}/history`}
+                        className="more-menu-item"
+                        onClick={() => setMoreOpen(false)}
+                      >
+                        <span aria-hidden="true">📖</span> {t('cellarDetail.historyMenuItem')}
+                      </Link>
+                      {canEdit && (
+                        <Link
+                          to={`/cellars/${id}/import`}
+                          className="more-menu-item"
+                          onClick={() => setMoreOpen(false)}
+                        >
+                          <span aria-hidden="true">📥</span> Import Bottles
+                        </Link>
+                      )}
+                      {cellar.userRole === 'owner' && (
+                        <button
+                          className="more-menu-item"
+                          onClick={async () => {
+                            setMoreOpen(false);
+                            try {
+                              const res = await exportCellar(apiFetch, id);
+                              const data = await res.json();
+                              if (!res.ok) { alert(data.error || 'Export failed'); return; }
+                              const blob = new Blob([JSON.stringify(data.bottles, null, 2)], { type: 'application/json' });
+                              const url = URL.createObjectURL(blob);
+                              const a = document.createElement('a');
+                              a.href = url;
+                              a.download = `${data.cellarName || 'cellar'}-export.json`;
+                              a.click();
+                              URL.revokeObjectURL(url);
+                            } catch { alert('Export failed'); }
+                          }}
+                        >
+                          <span aria-hidden="true">📤</span> Export (JSON)
+                        </button>
+                      )}
+                      {cellar.userRole === 'owner' && (
+                        <button
+                          className="more-menu-item"
+                          onClick={async () => {
+                            setMoreOpen(false);
+                            try {
+                              const res = await exportCellar(apiFetch, id);
+                              const data = await res.json();
+                              if (!res.ok) { alert(data.error || 'Export failed'); return; }
+                              const bottles = data.bottles;
+                              if (bottles.length === 0) { alert('No bottles to export'); return; }
+                              const cols = ['wineName','producer','vintage','country','region','appellation','type',
+                                'price','currency','bottleSize','purchaseDate','purchaseLocation','location',
+                                'notes','rating','ratingScale','drinkFrom','drinkBefore',
+                                'rackName','rackPosition','rackRow','rackCol','dateAdded',
+                                'addToHistory','consumedReason','consumedAt','consumedNote','consumedRating','consumedRatingScale'];
+                              const escape = v => {
+                                if (v == null || v === '') return '';
+                                const s = String(v);
+                                return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s.replace(/"/g, '""')}"` : s;
+                              };
+                              const csv = [cols.join(','), ...bottles.map(b => cols.map(c => escape(b[c])).join(','))].join('\n');
+                              const blob = new Blob([csv], { type: 'text/csv' });
+                              const url = URL.createObjectURL(blob);
+                              const a = document.createElement('a');
+                              a.href = url;
+                              a.download = `${data.cellarName || 'cellar'}-export.csv`;
+                              a.click();
+                              URL.revokeObjectURL(url);
+                            } catch { alert('Export failed'); }
+                          }}
+                        >
+                          <span aria-hidden="true">📄</span> Export (CSV)
+                        </button>
+                      )}
+                      {cellar.userRole === 'owner' && (
+                        <Link
+                          to={`/cellars/${id}/audit`}
+                          className="more-menu-item"
+                          onClick={() => setMoreOpen(false)}
+                        >
+                          <span aria-hidden="true">📋</span> {t('cellarDetail.auditLog')}
+                        </Link>
+                      )}
+                      {cellar.userRole === 'owner' && (
+                        <>
+                          <div className="more-menu-divider" />
+                          <button
+                            className="more-menu-item more-menu-item--danger"
+                            onClick={() => { setShowDeleteModal(true); setMoreOpen(false); }}
+                          >
+                            <span aria-hidden="true">🗑️</span> {t('cellarDetail.deleteCellar')}
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
-          </div>
+          )}
         </div>
 
-        <h1 className={h1Class} style={h1Style}>{cellar.name}</h1>
-        {cellar.description && <p className="cellar-description">{cellar.description}</p>}
-        {cellar.userRole && cellar.userRole !== 'owner' && (
-          <p className="shared-by-label">
-            {t('cellarDetail.sharedBy')} <strong>{cellar.user?.username}</strong>
-            {' · '}
-            <span className={`shared-role-tag shared-role-tag--${cellar.userRole}`}>
-              {cellar.userRole === 'editor' ? t('cellarDetail.editAccess') : t('cellarDetail.viewAccess')}
-            </span>
-          </p>
+        {loading ? (
+          <div className="skeleton-h1" />
+        ) : (
+          <>
+            <h1 className={h1Class} style={h1Style}>{cellar.name}</h1>
+            {cellar.description && <p className="cellar-description">{cellar.description}</p>}
+            {cellar.userRole && cellar.userRole !== 'owner' && (
+              <p className="shared-by-label">
+                {t('cellarDetail.sharedBy')} <strong>{cellar.user?.username}</strong>
+                {' · '}
+                <span className={`shared-role-tag shared-role-tag--${cellar.userRole}`}>
+                  {cellar.userRole === 'editor' ? t('cellarDetail.editAccess') : t('cellarDetail.viewAccess')}
+                </span>
+              </p>
+            )}
+          </>
         )}
       </div>
 
@@ -311,7 +318,7 @@ function CellarDetail() {
       </div>
 
       {/* ── Overview tab ── */}
-      {activeTab === 'overview' && (
+      {activeTab === 'overview' && !loading && (
         <div className="cellar-tab-content">
           {statistics && (
             <div className="statistics-grid">
@@ -356,7 +363,7 @@ function CellarDetail() {
         </div>
       )}
 
-      {/* ── Bottles tab ── */}
+      {/* ── Bottles tab — search bar renders immediately for fast LCP ── */}
       {activeTab === 'bottles' && (
         <div className="cellar-tab-content">
           <div className="filters-bar filters-bar-4">
@@ -404,7 +411,9 @@ function CellarDetail() {
             </select>
           </div>
 
-          {bottles.length === 0 && !bottlesLoading ? (
+          {loading ? (
+            <div className="loading">{t('cellarDetail.loadingCellar')}</div>
+          ) : bottles.length === 0 && !bottlesLoading ? (
             <div className="empty-state">
               <p>{t('cellarDetail.noBottles')}</p>
               {canEdit && (
@@ -427,7 +436,7 @@ function CellarDetail() {
       )}
 
       {/* ── FAB: Add Bottle (mobile only) ── */}
-      {canEdit && (
+      {!loading && canEdit && (
         <Link
           to={`/cellars/${id}/add-bottle`}
           className="fab"
