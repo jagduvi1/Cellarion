@@ -1,11 +1,12 @@
 /* eslint-disable no-restricted-globals */
 
-const CACHE_NAME = 'cellarion-v1';
+const CACHE_NAME = 'cellarion-v2';
 
 // App shell files to pre-cache on install
 const PRECACHE_URLS = [
   '/',
   '/index.html',
+  '/offline.html',
   '/manifest.json'
 ];
 
@@ -38,6 +39,23 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
+  // Navigation requests (HTML pages): network-first with offline fallback
+  if (request.mode === 'navigate') {
+    event.respondWith(
+      fetch(request)
+        .then((response) => {
+          if (response.ok) {
+            const clone = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
+          }
+          return response;
+        })
+        .catch(() => caches.match('/offline.html'))
+    );
+    return;
+  }
+
+  // Static assets: stale-while-revalidate
   event.respondWith(
     caches.match(request).then((cached) => {
       const networkFetch = fetch(request).then((response) => {
