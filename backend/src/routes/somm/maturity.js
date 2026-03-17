@@ -185,6 +185,7 @@ router.post('/:id/ai-suggest', requireSommOrAdmin, async (req, res) => {
     });
 
     if (!result.data) {
+      console.error('[ai-suggest] failed — reason:', result.debugReason, '| raw:', result.debugRaw);
       return res.status(422).json({
         error: 'AI could not suggest a drink window for this wine',
         reason: result.debugReason
