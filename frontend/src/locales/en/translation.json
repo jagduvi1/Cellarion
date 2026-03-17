@@ -713,5 +713,266 @@
       "aiNoValue": "AI suggests this wine has no significant market value",
       "aiReasoning": "AI reasoning:"
     }
+  },
+
+  "statistics": {
+    "title": "Collection Analytics",
+    "subtitleFull": "Complete insights across {{cellars}} cellar · {{countries}} countries · {{grapes}} grape varieties",
+    "subtitleFull_other": "Complete insights across {{cellars}} cellars · {{countries}} countries · {{grapes}} grape varieties",
+    "subtitleFree": "Your collection at a glance",
+    "loading": "Analysing your collection…",
+    "emptyTitle": "Your cellar is empty",
+    "emptyDesc": "Add bottles to your cellars to see your analytics.",
+    "emptyBtn": "Go to My Cellars",
+    "noDataYet": "No data yet",
+    "noVintageData": "No vintage data yet",
+    "noForecast": "No forecast data",
+    "noPurchaseData": "No purchase date data",
+    "noBottlesYet": "No bottles yet",
+    "noCellars": "No cellars found",
+    "noRatedBottles": "No rated bottles yet",
+    "noneYet": "None yet",
+
+    "typeLabels": {
+      "red": "Red",
+      "white": "White",
+      "rosé": "Rosé",
+      "sparkling": "Sparkling",
+      "dessert": "Dessert",
+      "fortified": "Fortified",
+      "unknown": "Unknown"
+    },
+
+    "ratingBands": {
+      "excellent": "Excellent",
+      "veryGood": "Very Good",
+      "good": "Good",
+      "fair": "Fair",
+      "poor": "Poor"
+    },
+
+    "maturityPhases": {
+      "declining": "Past Prime",
+      "late": "Late Maturity",
+      "peak": "Optimal Maturity",
+      "early": "Early Drinking",
+      "notReady": "Not Ready Yet",
+      "noProfile": "No Profile"
+    },
+
+    "days": {
+      "overdue": "{{count}}d overdue",
+      "today": "Today",
+      "left": "{{count}}d left",
+      "ago": "{{count}}d ago"
+    },
+
+    "donut": {
+      "ariaLabel": "Donut chart: {{count}} total bottles",
+      "bottles": "bottles"
+    },
+
+    "rating": {
+      "average": "Average:",
+      "acrossBottles_one": "across {{count}} rated bottle",
+      "acrossBottles_other": "across {{count}} rated bottles"
+    },
+
+    "maturity": {
+      "withProfiles": "{{count}} with sommelier profiles",
+      "withoutData": "{{count}} without data",
+      "profilesNeeded": "Sommelier maturity profiles needed to see your score"
+    },
+
+    "regret": {
+      "pastPrime_one": "{{count}} bottle past their prime, still unopened.",
+      "pastPrime_other": "{{count}} bottles past their prime, still unopened.",
+      "ofProfiled": "of profiled bottles",
+      "critical": "Many bottles past their prime. Open them — time is running out.",
+      "warning": "Some bottles need attention. Plan a tasting soon.",
+      "mild": "A few bottles slipping by. Stay on top of your cellar.",
+      "great": "Excellent! Your cellar is well managed."
+    },
+
+    "forecast": {
+      "inWindow_one": "{{year}}: {{count}} bottle in window",
+      "inWindow_other": "{{year}}: {{count}} bottles in window",
+      "now": "now"
+    },
+
+    "urgency": {
+      "noUrgent": "No bottles need urgent attention — your cellar is well timed!"
+    },
+
+    "holdingTime": {
+      "empty": "Mark bottles as consumed to see your patience profile.",
+      "note": "Higher ratings at longer holding times suggest aging is rewarding for your cellar."
+    },
+
+    "joyPerDollar": {
+      "empty": "Rate your consumed bottles to see which type gives you the most joy per {{currency}}.",
+      "count_one": "{{count}} bottle",
+      "count_other": "{{count}} bottles",
+      "avg": "avg {{price}}",
+      "note": "Score = enjoyment rating per {{currency}}1,000 spent. Higher = better value."
+    },
+
+    "regretSignal": {
+      "empty": "Rate bottles before and after drinking to track expectation vs reality.",
+      "avgDelta": "Avg delta:",
+      "acrossBottles_one": "across {{count}} bottle",
+      "acrossBottles_other": "across {{count}} bottles",
+      "surprises": "Surprises",
+      "disappointments": "Disappointments"
+    },
+
+    "pace": {
+      "bottlesIn": "bottles in / year",
+      "bottlesOut": "bottles out / year",
+      "growing": "Growing",
+      "shrinking": "Shrinking",
+      "balanced": "Balanced",
+      "runway_one": "year of wine at current consumption",
+      "runway_other": "years of wine at current consumption",
+      "consumeToSee": "Consume bottles to see your cellar trajectory."
+    },
+
+    "consumption": {
+      "empty": "No consumption history yet — mark bottles as drank, gifted, or sold to see your history.",
+      "drank": "Drank",
+      "gifted": "Gifted",
+      "sold": "Sold",
+      "other": "Other",
+      "totalConsumed_one": "{{count}} total bottle consumed",
+      "totalConsumed_other": "{{count}} total bottles consumed"
+    },
+
+    "topValue": {
+      "empty": "Add prices to your bottles to see your most valuable wines."
+    },
+
+    "cellarBreakdown": {
+      "bottle_one": "{{count}} bottle",
+      "bottle_other": "{{count}} bottles",
+      "uniqueWine_one": "{{count}} unique wine",
+      "uniqueWine_other": "{{count}} unique wines"
+    },
+
+    "worldMap": {
+      "bottle_one": "{{count}} bottle",
+      "bottle_other": "{{count}} bottles",
+      "hoverHint": "Hover a country to see details",
+      "legendUnit": "bottles",
+      "unmapped_one": "{{count}} country without ISO code hidden",
+      "unmapped_other": "{{count}} countries without ISO code hidden"
+    },
+
+    "premiumGate": {
+      "desc": "Deep insights into your entire wine collection — types, origins, vintages, value, maturity profiles, consumption history, and more. The most comprehensive wine analytics dashboard available.",
+      "feat1": "Wine type & origin breakdown",
+      "feat2": "Vintage distribution by year",
+      "feat3": "Collection value analysis",
+      "feat4": "Maturity forecast",
+      "feat5": "Cellar health score",
+      "feat6": "Regret Index — bottles past their prime",
+      "feat7": "Urgency ladder — drink these now",
+      "feat8": "Joy Per Dollar — best bang for your buck",
+      "upgradeBtn": "Upgrade to Premium",
+      "notSure": "Not sure yet?",
+      "startTrial": "Start a free 30-day trial"
+    },
+
+    "upgrade": {
+      "unlockWith": "Unlock with {{plan}}",
+      "upgradeTo": "Upgrade to {{plan}}"
+    },
+
+    "sections": {
+      "wineTypes": "Wine Types",
+      "maturityStatus": "Maturity Status",
+      "topOrigins": "Top Origins",
+      "top5": "Top 5",
+      "vintageDistribution": "Vintage Distribution",
+      "collectionOrigins": "Collection Origins",
+      "darkerMoreBottles": "Darker = more bottles",
+      "topGrapeVarieties": "Top Grape Varieties",
+      "topRegions": "Top Regions",
+      "topProducers": "Top Producers",
+      "ratingDistribution": "Rating Distribution",
+      "bottleSizes": "Bottle Sizes",
+      "purchasesByYear": "Purchases by Year",
+      "cellarPace": "Cellar Pace & Trajectory",
+      "intakeVsConsumption": "Intake vs consumption rate",
+      "consumptionHistory": "Consumption History",
+      "cellarBreakdown": "Cellar Breakdown",
+      "healthScore": "Cellar Health Score",
+      "healthScoreNote": "How well-timed is your collection?",
+      "regretIndex": "Regret Index",
+      "regretIndexNote": "Bottles past their prime, still unopened",
+      "maturityForecast": "Maturity Forecast",
+      "forecastNote": "Bottles in window by year",
+      "drinkTheseNow": "Drink These Now",
+      "orderedByUrgency": "Ordered by urgency",
+      "patiencePayoff": "Patience Payoff",
+      "doesAgingReward": "Does aging reward you?",
+      "joyPer": "Joy Per {{currency}}",
+      "ratingVsPrice": "Rating vs price by type",
+      "expectationVsReality": "Expectation vs Reality",
+      "surprisedOrDisappointed": "When wines surprised or disappointed you",
+      "mostValuableBottles": "Most Valuable Bottles"
+    },
+
+    "kpi": {
+      "activeBottles": "Active Bottles",
+      "uniqueWines": "{{count}} unique wines",
+      "countries": "Countries",
+      "grapeVarieties": "{{count}} grape varieties",
+      "avgRating": "Avg Rating",
+      "avgVintageAge": "Avg Vintage Age",
+      "yrs": "yrs",
+      "decliningLate": "Declining / Late",
+      "pastPrime": "{{count}} past prime",
+      "atPeak": "{{count}} at peak",
+      "estValue": "Est. Collection Value",
+      "avgPerBottle": "avg {{price}} / bottle",
+      "totalConsumed": "Total Consumed",
+      "bottlesDrunk": "Bottles Drunk",
+      "gifted": "Gifted",
+      "sold": "Sold",
+      "avgConsumedRating": "Avg Consumed Rating"
+    },
+
+    "upgradeFeatures": {
+      "basic1": "📅 Vintage distribution chart",
+      "basic2": "🗺️ World origins map",
+      "basic3": "🍇 Top grapes & regions",
+      "basic4": "⭐ Rating breakdown",
+      "basic5": "⏱ Maturity status",
+      "basic6": "📈 Consumption history",
+      "basic7": "🏃 Cellar pace tracker",
+      "basic8": "🏠 Cellar breakdown",
+      "premium1": "🎯 Cellar health score & grade",
+      "premium2": "😬 Regret Index — bottles past prime",
+      "premium3": "🚨 Urgency ladder — drink these now",
+      "premium4": "🔭 Maturity forecast by year",
+      "premium5": "⏳ Patience Payoff — does aging reward you?",
+      "premium6": "💎 Joy Per Dollar — best value wines",
+      "premium7": "🤯 Expectation vs Reality",
+      "premium8": "💰 Collection value & most valuable bottles"
+    },
+
+    "footnote": {
+      "activeOnly": "Active bottles only",
+      "pricesConverted": "Prices converted using today's exchange rates to {{currency}}",
+      "maturityData": "Maturity data from sommelier profiles",
+      "ownedOnly": "Only your owned cellars are included"
+    },
+
+    "bottle_one": "{{count}} bottle",
+    "bottle_other": "{{count}} bottles",
+    "vintageBottle_one": "{{vintage}}: {{count}} bottle",
+    "vintageBottle_other": "{{vintage}}: {{count}} bottles",
+    "purchased_one": "{{year}}: {{count}} bottle purchased",
+    "purchased_other": "{{year}}: {{count}} bottles purchased"
   }
 }

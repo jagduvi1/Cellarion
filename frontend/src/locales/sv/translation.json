@@ -713,5 +713,266 @@
       "aiNoValue": "AI bedömer att detta vin inte har något betydande marknadsvärde",
       "aiReasoning": "AI-resonemang:"
     }
+  },
+
+  "statistics": {
+    "title": "Samlingsanalys",
+    "subtitleFull": "Fullständig överblick över {{cellars}} källare · {{countries}} länder · {{grapes}} druvsorter",
+    "subtitleFull_other": "Fullständig överblick över {{cellars}} källare · {{countries}} länder · {{grapes}} druvsorter",
+    "subtitleFree": "Din samling i överblick",
+    "loading": "Analyserar din samling…",
+    "emptyTitle": "Din källare är tom",
+    "emptyDesc": "Lägg till flaskor i dina källare för att se din analys.",
+    "emptyBtn": "Gå till Mina källare",
+    "noDataYet": "Ingen data ännu",
+    "noVintageData": "Ingen årgångsdata ännu",
+    "noForecast": "Ingen prognosdata",
+    "noPurchaseData": "Ingen inköpsdata",
+    "noBottlesYet": "Inga flaskor ännu",
+    "noCellars": "Inga källare hittades",
+    "noRatedBottles": "Inga betygsatta flaskor ännu",
+    "noneYet": "Inga ännu",
+
+    "typeLabels": {
+      "red": "Rött",
+      "white": "Vitt",
+      "rosé": "Rosé",
+      "sparkling": "Mousserande",
+      "dessert": "Dessertvin",
+      "fortified": "Starkvin",
+      "unknown": "Okänt"
+    },
+
+    "ratingBands": {
+      "excellent": "Utmärkt",
+      "veryGood": "Mycket bra",
+      "good": "Bra",
+      "fair": "Godkänt",
+      "poor": "Svagt"
+    },
+
+    "maturityPhases": {
+      "declining": "Förbi bäst-före",
+      "late": "Sen mognad",
+      "peak": "Optimal mognad",
+      "early": "Tidig drickning",
+      "notReady": "Inte redo ännu",
+      "noProfile": "Ingen profil"
+    },
+
+    "days": {
+      "overdue": "{{count}}d försenad",
+      "today": "Idag",
+      "left": "{{count}}d kvar",
+      "ago": "{{count}}d sedan"
+    },
+
+    "donut": {
+      "ariaLabel": "Munkdiagram: {{count}} flaskor totalt",
+      "bottles": "flaskor"
+    },
+
+    "rating": {
+      "average": "Genomsnitt:",
+      "acrossBottles_one": "baserat på {{count}} betygsatt flaska",
+      "acrossBottles_other": "baserat på {{count}} betygsatta flaskor"
+    },
+
+    "maturity": {
+      "withProfiles": "{{count}} med sommelierprofiler",
+      "withoutData": "{{count}} utan data",
+      "profilesNeeded": "Sommelierprofiler för mognad krävs för att se ditt betyg"
+    },
+
+    "regret": {
+      "pastPrime_one": "{{count}} flaska förbi sin bästa tid, fortfarande oöppnad.",
+      "pastPrime_other": "{{count}} flaskor förbi sin bästa tid, fortfarande oöppnade.",
+      "ofProfiled": "av profilerade flaskor",
+      "critical": "Många flaskor förbi sin bästa tid. Öppna dem — tiden rinner ut.",
+      "warning": "Vissa flaskor behöver uppmärksamhet. Planera en provning snart.",
+      "mild": "Några flaskor börjar passera sin topp. Håll koll på din källare.",
+      "great": "Utmärkt! Din källare är välskött."
+    },
+
+    "forecast": {
+      "inWindow_one": "{{year}}: {{count}} flaska i fönstret",
+      "inWindow_other": "{{year}}: {{count}} flaskor i fönstret",
+      "now": "nu"
+    },
+
+    "urgency": {
+      "noUrgent": "Inga flaskor kräver brådskande uppmärksamhet — din källare är väl tajmad!"
+    },
+
+    "holdingTime": {
+      "empty": "Markera flaskor som konsumerade för att se din tålamodsprofil.",
+      "note": "Högre betyg vid längre lagringstid tyder på att lagring lönar sig för din källare."
+    },
+
+    "joyPerDollar": {
+      "empty": "Betygsätt dina konsumerade flaskor för att se vilken typ som ger mest glädje per {{currency}}.",
+      "count_one": "{{count}} flaska",
+      "count_other": "{{count}} flaskor",
+      "avg": "snitt {{price}}",
+      "note": "Poäng = nöjesbetyg per {{currency}} 1 000 spenderat. Högre = bättre värde."
+    },
+
+    "regretSignal": {
+      "empty": "Betygsätt flaskor före och efter drickning för att spåra förväntning vs verklighet.",
+      "avgDelta": "Snittdelta:",
+      "acrossBottles_one": "baserat på {{count}} flaska",
+      "acrossBottles_other": "baserat på {{count}} flaskor",
+      "surprises": "Överraskningar",
+      "disappointments": "Besvikelser"
+    },
+
+    "pace": {
+      "bottlesIn": "flaskor in / år",
+      "bottlesOut": "flaskor ut / år",
+      "growing": "Växande",
+      "shrinking": "Krympande",
+      "balanced": "Balanserad",
+      "runway_one": "år av vin vid nuvarande konsumtion",
+      "runway_other": "år av vin vid nuvarande konsumtion",
+      "consumeToSee": "Konsumera flaskor för att se din källares bana."
+    },
+
+    "consumption": {
+      "empty": "Ingen konsumtionshistorik ännu — markera flaskor som druckna, bortgivna eller sålda för att se din historik.",
+      "drank": "Drucken",
+      "gifted": "Bortgiven",
+      "sold": "Såld",
+      "other": "Övrigt",
+      "totalConsumed_one": "{{count}} flaska konsumerad totalt",
+      "totalConsumed_other": "{{count}} flaskor konsumerade totalt"
+    },
+
+    "topValue": {
+      "empty": "Lägg till priser på dina flaskor för att se dina mest värdefulla viner."
+    },
+
+    "cellarBreakdown": {
+      "bottle_one": "{{count}} flaska",
+      "bottle_other": "{{count}} flaskor",
+      "uniqueWine_one": "{{count}} unikt vin",
+      "uniqueWine_other": "{{count}} unika viner"
+    },
+
+    "worldMap": {
+      "bottle_one": "{{count}} flaska",
+      "bottle_other": "{{count}} flaskor",
+      "hoverHint": "Hovra över ett land för att se detaljer",
+      "legendUnit": "flaskor",
+      "unmapped_one": "{{count}} land utan ISO-kod dolt",
+      "unmapped_other": "{{count}} länder utan ISO-kod dolda"
+    },
+
+    "premiumGate": {
+      "desc": "Djupgående insikter i hela din vinsamling — typer, ursprung, årgångar, värde, mognadsprofiler, konsumtionshistorik och mer. Den mest omfattande vinanalysen tillgänglig.",
+      "feat1": "Vintyp- och ursprungsfördelning",
+      "feat2": "Årgångsfördelning per år",
+      "feat3": "Analys av samlingens värde",
+      "feat4": "Mognadsprognos",
+      "feat5": "Källarhälsobetyg",
+      "feat6": "Ångerindex — flaskor förbi sin bästa tid",
+      "feat7": "Brådskande stege — drick dessa nu",
+      "feat8": "Glädje per krona — bäst valuta för pengarna",
+      "upgradeBtn": "Uppgradera till Premium",
+      "notSure": "Inte säker ännu?",
+      "startTrial": "Starta en gratis 30-dagars provperiod"
+    },
+
+    "upgrade": {
+      "unlockWith": "Lås upp med {{plan}}",
+      "upgradeTo": "Uppgradera till {{plan}}"
+    },
+
+    "sections": {
+      "wineTypes": "Vintyper",
+      "maturityStatus": "Mognadsstatus",
+      "topOrigins": "Toppursprung",
+      "top5": "Topp 5",
+      "vintageDistribution": "Årgångsfördelning",
+      "collectionOrigins": "Samlingens ursprung",
+      "darkerMoreBottles": "Mörkare = fler flaskor",
+      "topGrapeVarieties": "Toppdruvsorter",
+      "topRegions": "Toppregioner",
+      "topProducers": "Toppproducenter",
+      "ratingDistribution": "Betygsfördelning",
+      "bottleSizes": "Flaskstorlekar",
+      "purchasesByYear": "Inköp per år",
+      "cellarPace": "Källartempo & bana",
+      "intakeVsConsumption": "Intag kontra konsumtionstakt",
+      "consumptionHistory": "Konsumtionshistorik",
+      "cellarBreakdown": "Källarfördelning",
+      "healthScore": "Källarhälsobetyg",
+      "healthScoreNote": "Hur väl tajmad är din samling?",
+      "regretIndex": "Ångerindex",
+      "regretIndexNote": "Flaskor förbi sin bästa tid, fortfarande oöppnade",
+      "maturityForecast": "Mognadsprognos",
+      "forecastNote": "Flaskor i fönstret per år",
+      "drinkTheseNow": "Drick dessa nu",
+      "orderedByUrgency": "Ordnade efter brådska",
+      "patiencePayoff": "Tålamodsutdelning",
+      "doesAgingReward": "Lönar sig lagring?",
+      "joyPer": "Glädje per {{currency}}",
+      "ratingVsPrice": "Betyg kontra pris per typ",
+      "expectationVsReality": "Förväntning kontra verklighet",
+      "surprisedOrDisappointed": "När viner överraskade eller besvikade dig",
+      "mostValuableBottles": "Mest värdefulla flaskor"
+    },
+
+    "kpi": {
+      "activeBottles": "Aktiva flaskor",
+      "uniqueWines": "{{count}} unika viner",
+      "countries": "Länder",
+      "grapeVarieties": "{{count}} druvsorter",
+      "avgRating": "Medelbetyg",
+      "avgVintageAge": "Medelårgångsålder",
+      "yrs": "år",
+      "decliningLate": "Avtagande / Sen",
+      "pastPrime": "{{count}} förbi toppen",
+      "atPeak": "{{count}} vid topp",
+      "estValue": "Uppskattat samlingsvärde",
+      "avgPerBottle": "snitt {{price}} / flaska",
+      "totalConsumed": "Totalt konsumerade",
+      "bottlesDrunk": "Druckna flaskor",
+      "gifted": "Bortgivna",
+      "sold": "Sålda",
+      "avgConsumedRating": "Snittbetyg vid konsumtion"
+    },
+
+    "upgradeFeatures": {
+      "basic1": "📅 Årgångsfördelning",
+      "basic2": "🗺️ Världskarta över ursprung",
+      "basic3": "🍇 Toppdruvor & regioner",
+      "basic4": "⭐ Betygsfördelning",
+      "basic5": "⏱ Mognadsstatus",
+      "basic6": "📈 Konsumtionshistorik",
+      "basic7": "🏃 Källartempomätare",
+      "basic8": "🏠 Källarfördelning",
+      "premium1": "🎯 Källarhälsobetyg & grad",
+      "premium2": "😬 Ångerindex — flaskor förbi toppen",
+      "premium3": "🚨 Brådskande stege — drick dessa nu",
+      "premium4": "🔭 Mognadsprognos per år",
+      "premium5": "⏳ Tålamodsutdelning — lönar sig lagring?",
+      "premium6": "💎 Glädje per krona — bäst värde",
+      "premium7": "🤯 Förväntning kontra verklighet",
+      "premium8": "💰 Samlingsvärde & mest värdefulla flaskor"
+    },
+
+    "footnote": {
+      "activeOnly": "Endast aktiva flaskor",
+      "pricesConverted": "Priser omräknade med dagens växelkurser till {{currency}}",
+      "maturityData": "Mognadsdata från sommelierprofiler",
+      "ownedOnly": "Endast dina egna källare inkluderas"
+    },
+
+    "bottle_one": "{{count}} flaska",
+    "bottle_other": "{{count}} flaskor",
+    "vintageBottle_one": "{{vintage}}: {{count}} flaska",
+    "vintageBottle_other": "{{vintage}}: {{count}} flaskor",
+    "purchased_one": "{{year}}: {{count}} flaska inköpt",
+    "purchased_other": "{{year}}: {{count}} flaskor inköpta"
   }
 }
