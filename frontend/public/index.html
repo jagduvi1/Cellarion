@@ -13,12 +13,12 @@
     <link rel="preload" as="image" href="%PUBLIC_URL%/cellarion-logo-light.webp" type="image/webp" media="(prefers-color-scheme: light)" fetchpriority="high" />
     <link rel="preload" as="image" href="%PUBLIC_URL%/cellarion-logo-dark.webp"  type="image/webp" media="(prefers-color-scheme: dark)"  fetchpriority="high" />
 
-    <!-- Fonts: Playfair Display (headings) + Inter (body) — loaded async to avoid render-blocking -->
+    <!-- Fonts: Playfair Display (headings) + Inter (body) -->
+    <!-- preload downloads the CSS early; the stylesheet link is non-blocking because it hits cache immediately -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:wght@500;600;700&display=swap" />
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:wght@500;600;700&display=swap" rel="stylesheet" media="print" onload="this.media='all'" />
-    <noscript><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:wght@500;600;700&display=swap" rel="stylesheet" /></noscript>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:wght@500;600;700&display=swap" rel="stylesheet" />
 
     <!-- Open Graph / Social sharing -->
     <meta property="og:type" content="website" />
