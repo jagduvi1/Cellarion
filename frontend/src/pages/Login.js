@@ -223,7 +223,10 @@ function Login() {
     <div className="login-page">
       <div className="login-card">
         <div className="login-header">
-          <CellarionLogo size={90} color="var(--color-primary)" showText />
+          <picture>
+            <source srcSet={LOGO_WEBP} type="image/webp" />
+            <img src={LOGO_PNG} alt="Cellarion" className="login-logo" />
+          </picture>
           <p>Your personal wine cellar</p>
         </div>
 
