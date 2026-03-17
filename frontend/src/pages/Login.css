@@ -28,8 +28,10 @@
   gap: 0.75rem;
 }
 
-.login-header svg {
-  filter: drop-shadow(0 0 18px rgba(var(--color-primary-rgb), 0.2));
+.login-logo {
+  height: 80px;
+  width: auto;
+  display: block;
 }
 
 .login-header p {

@@ -2,8 +2,10 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import useVersion from '../hooks/useVersion';
-import CellarionLogo from '../components/CellarionLogo';
 import './Login.css';
+
+const LOGO_WEBP = process.env.PUBLIC_URL + '/cellarion-logo-light.webp';
+const LOGO_PNG  = process.env.PUBLIC_URL + '/cellarion-logo-light.png';
 
 function Login() {
   const [mode, setMode] = useState('login');
@@ -120,7 +122,10 @@ function Login() {
       <div className="login-page">
         <div className="login-card">
           <div className="login-header">
-            <CellarionLogo size={90} color="var(--color-primary)" showText />
+            <picture>
+              <source srcSet={LOGO_WEBP} type="image/webp" />
+              <img src={LOGO_PNG} alt="Cellarion" className="login-logo" width="159" height="128" />
+            </picture>
             <p>Reset your password</p>
           </div>
 
@@ -183,7 +188,10 @@ function Login() {
       <div className="login-page">
         <div className="login-card">
           <div className="login-header">
-            <CellarionLogo size={90} color="var(--color-primary)" showText />
+            <picture>
+              <source srcSet={LOGO_WEBP} type="image/webp" />
+              <img src={LOGO_PNG} alt="Cellarion" className="login-logo" width="159" height="128" />
+            </picture>
           </div>
           <div className="alert alert-success">
             <strong>Check your email!</strong>
