@@ -44,3 +44,6 @@ backend/src/data/wine_cellar_wines_no_multipack_box.json
 
 # User-uploaded images
 backend/uploads/
+
+# TWA Android build tools and output (run locally, never commit keystore or AAB)
+twa/
