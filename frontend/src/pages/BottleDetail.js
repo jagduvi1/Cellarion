@@ -440,6 +440,7 @@ function ViewDetails({ bottle, rackInfo, cellarId, vintageProfile, priceHistory,
   const hasAgingMaturity = hasFeature('agingMaturity');
   const hasPriceEvolution = hasFeature('priceEvolution');
   const maturityStatus = getMaturityStatus(vintageProfile);
+  const [showSommNotes, setShowSommNotes] = useState(false);
   const wine = bottle.wineDefinition;
   const grapes = wine?.grapes || [];
 
@@ -541,7 +542,19 @@ function ViewDetails({ bottle, rackInfo, cellarId, vintageProfile, priceHistory,
                 )}
                 <MaturityPhaseTable profile={vintageProfile} />
                 {vintageProfile.sommNotes && (
-                  <p className="bd-maturity-notes">{vintageProfile.sommNotes}</p>
+                  <div className="bd-somm-notes-toggle">
+                    <button
+                      className="bd-somm-notes-btn"
+                      onClick={() => setShowSommNotes(v => !v)}
+                      aria-expanded={showSommNotes}
+                    >
+                      {t('bottleDetail.sommNotes')}
+                      <span className={`bd-somm-notes-chevron${showSommNotes ? ' bd-somm-notes-chevron--open' : ''}`}>›</span>
+                    </button>
+                    {showSommNotes && (
+                      <p className="bd-maturity-notes">{vintageProfile.sommNotes}</p>
+                    )}
+                  </div>
                 )}
               </div>
             )

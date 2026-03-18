@@ -689,6 +689,40 @@
   gap: 0.65rem;
 }
 
+.bd-somm-notes-toggle {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.bd-somm-notes-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  font-size: 0.82rem;
+  color: var(--color-text-muted);
+  font-family: inherit;
+}
+
+.bd-somm-notes-btn:hover {
+  color: var(--color-text-secondary);
+}
+
+.bd-somm-notes-chevron {
+  display: inline-block;
+  font-style: normal;
+  transition: transform 0.2s;
+  transform: rotate(0deg);
+}
+
+.bd-somm-notes-chevron--open {
+  transform: rotate(90deg);
+}
+
 .bd-maturity-notes {
   margin: 0;
   font-size: 0.88rem;
