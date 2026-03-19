@@ -93,9 +93,24 @@ const requireSommOrAdmin = (req, res, next) => {
   next();
 };
 
+/**
+ * Middleware that allows moderator and admin roles.
+ * Used to protect discussion moderation routes.
+ */
+const requireModeratorOrAdmin = (req, res, next) => {
+  if (!req.user) {
+    return res.status(401).json({ error: 'Authentication required' });
+  }
+  if (!req.user.roles.includes('moderator') && !req.user.roles.includes('admin')) {
+    return res.status(403).json({ error: 'Access denied. Moderator or admin role required.' });
+  }
+  next();
+};
+
 module.exports = {
   requireAuth,
   requireRole,
   requireFeature,
   requireSommOrAdmin,
+  requireModeratorOrAdmin,
 };

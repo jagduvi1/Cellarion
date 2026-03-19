@@ -149,6 +149,11 @@
   color: var(--badge-somm-text);
 }
 
+.badge--mod {
+  background: #d1fae5;
+  color: #065f46;
+}
+
 .badge--plan { font-weight: 600; }
 .badge--plan-free    { background: var(--badge-plan-free-bg); color: var(--badge-plan-free-text); }
 .badge--plan-basic   { background: var(--badge-plan-basic-bg); color: var(--badge-plan-basic-text); }

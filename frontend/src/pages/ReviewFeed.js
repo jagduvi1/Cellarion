@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { getReviewFeed, getDiscoverFeed } from '../api/reviews';
 import { searchUsers } from '../api/profiles';
@@ -9,6 +9,7 @@ import './ReviewFeed.css';
 
 function ReviewFeed() {
   const { apiFetch, user } = useAuth();
+  const location = useLocation();
   const [tab, setTab] = useState('discover'); // 'discover' | 'following'
   const [reviews, setReviews] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -80,6 +81,20 @@ function ReviewFeed() {
     <div className="review-feed-page">
       <div className="review-feed__header">
         <h1>Community</h1>
+        <div className="review-feed__section-tabs">
+          <Link
+            to="/community"
+            className={`review-feed__section-tab ${location.pathname === '/community' ? 'active' : ''}`}
+          >
+            Reviews
+          </Link>
+          <Link
+            to="/community/discussions"
+            className={`review-feed__section-tab ${location.pathname.startsWith('/community/discussions') ? 'active' : ''}`}
+          >
+            Discussions
+          </Link>
+        </div>
       </div>
 
       {/* User search */}

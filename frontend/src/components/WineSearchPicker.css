@@ -1,0 +1,183 @@
+.wine-search-picker {
+  position: relative;
+}
+
+.wine-search-picker__input {
+  width: 100%;
+  padding-right: 2.2rem;
+}
+
+.wine-search-picker__spinner {
+  position: absolute;
+  right: 0.6rem;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--color-border);
+  border-top-color: var(--color-primary);
+  border-radius: 50%;
+  animation: wsp-spin 0.6s linear infinite;
+}
+
+@keyframes wsp-spin {
+  to { transform: translateY(-50%) rotate(360deg); }
+}
+
+.wine-search-picker__dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  margin: 0;
+  padding: 0.25rem 0;
+  list-style: none;
+  background: var(--color-bg, #fff);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  max-height: 320px;
+  overflow-y: auto;
+  z-index: 50;
+}
+
+.wine-search-picker__option {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.55rem 0.75rem;
+  cursor: pointer;
+  transition: background 0.1s;
+}
+
+.wine-search-picker__option:hover {
+  background: var(--color-bg-secondary, #f5f5f5);
+}
+
+.wine-search-picker__option-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: var(--color-text-secondary);
+}
+
+.wine-search-picker__option-dot.red       { background: #c0392b; }
+.wine-search-picker__option-dot.white     { background: #d4ac0d; }
+.wine-search-picker__option-dot.rosé      { background: #e91e8c; }
+.wine-search-picker__option-dot.sparkling { background: #f39c12; }
+.wine-search-picker__option-dot.dessert   { background: #8e44ad; }
+.wine-search-picker__option-dot.fortified { background: #27ae60; }
+
+.wine-search-picker__option-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+
+.wine-search-picker__option-name {
+  font-weight: 600;
+  font-size: 0.88rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--color-text);
+}
+
+.wine-search-picker__option-sub {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.78rem;
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.wine-search-picker__option-sub span + span::before {
+  content: '·';
+  margin-right: 0.35rem;
+}
+
+.wine-search-picker__option-type {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  font-weight: 600;
+  padding: 0.1rem 0.35rem;
+  border-radius: 3px;
+  flex-shrink: 0;
+  color: #fff;
+  background: var(--color-text-secondary);
+}
+
+.wine-search-picker__option-type.red       { background: #c0392b; }
+.wine-search-picker__option-type.white     { background: #b8960a; }
+.wine-search-picker__option-type.rosé      { background: #d4177a; }
+.wine-search-picker__option-type.sparkling { background: #d4860f; }
+.wine-search-picker__option-type.dessert   { background: #8e44ad; }
+.wine-search-picker__option-type.fortified { background: #27ae60; }
+
+.wine-search-picker__no-results {
+  padding: 0.75rem;
+  text-align: center;
+  font-size: 0.84rem;
+  color: var(--color-text-secondary);
+}
+
+/* ── Selected wine chip ── */
+.wine-search-picker__selected {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.45rem 0.65rem;
+  background: var(--color-bg-secondary, #f5f5f5);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  font-size: 0.88rem;
+}
+
+.wine-search-picker__type-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: var(--color-text-secondary);
+}
+
+.wine-search-picker__type-dot.red       { background: #c0392b; }
+.wine-search-picker__type-dot.white     { background: #d4ac0d; }
+.wine-search-picker__type-dot.rosé      { background: #e91e8c; }
+.wine-search-picker__type-dot.sparkling { background: #f39c12; }
+.wine-search-picker__type-dot.dessert   { background: #8e44ad; }
+.wine-search-picker__type-dot.fortified { background: #27ae60; }
+
+.wine-search-picker__selected-name {
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.wine-search-picker__selected-producer {
+  color: var(--color-text-secondary);
+  font-weight: 400;
+}
+
+.wine-search-picker__clear {
+  margin-left: auto;
+  background: none;
+  border: none;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  font-size: 1.1rem;
+  padding: 0 0.2rem;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.wine-search-picker__clear:hover {
+  color: var(--color-primary);
+}

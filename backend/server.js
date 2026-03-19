@@ -42,6 +42,11 @@ connectDB().then(async () => {
     console.warn('Meilisearch initialization failed, continuing with MongoDB search:', err.message);
   }
 
+  // Purge expired soft-deleted reply texts on startup and every 24h
+  const DiscussionReply = require('./src/models/DiscussionReply');
+  DiscussionReply.purgeExpiredDeletes().catch(() => {});
+  setInterval(() => DiscussionReply.purgeExpiredDeletes().catch(() => {}), 24 * 60 * 60 * 1000);
+
   app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
   });

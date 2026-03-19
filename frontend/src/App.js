@@ -39,6 +39,8 @@ const AdminSupportTickets = lazy(() => import('./pages/AdminSupportTickets'));
 const AdminWineReports    = lazy(() => import('./pages/AdminWineReports'));
 const SupportPage     = lazy(() => import('./pages/SupportPage'));
 const SuperAdmin      = lazy(() => import('./pages/SuperAdmin'));
+const CommunityDiscussions = lazy(() => import('./pages/CommunityDiscussions'));
+const DiscussionDetail     = lazy(() => import('./pages/DiscussionDetail'));
 
 function AppRoutes() {
   const { user, loading } = useAuth();
@@ -149,6 +151,22 @@ function AppRoutes() {
           element={
             <ProtectedRoute>
               <Layout><ReviewFeed /></Layout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/community/discussions"
+          element={
+            <ProtectedRoute>
+              <Layout><CommunityDiscussions /></Layout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/community/discussions/:id"
+          element={
+            <ProtectedRoute>
+              <Layout><DiscussionDetail /></Layout>
             </ProtectedRoute>
           }
         />

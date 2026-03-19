@@ -1,0 +1,203 @@
+.discussion-detail {
+  max-width: 700px;
+  margin: 0 auto;
+  padding: 1.5rem 1rem;
+}
+
+.discussion-detail__back {
+  display: inline-block;
+  color: var(--color-text-secondary);
+  text-decoration: none;
+  font-size: 0.88rem;
+  margin-bottom: 1rem;
+}
+
+.discussion-detail__back:hover {
+  color: var(--color-primary);
+}
+
+.discussion-detail__loading {
+  text-align: center;
+  color: var(--color-text-secondary);
+  padding: 2rem 0;
+}
+
+/* ── Header card ── */
+.discussion-detail__header {
+  padding: 1.25rem;
+  margin-bottom: 1.25rem;
+}
+
+.discussion-detail__meta {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.discussion-detail__title {
+  margin: 0 0 0.75rem;
+  font-size: 1.3rem;
+  line-height: 1.3;
+}
+
+.discussion-detail__author-line {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+  font-size: 0.85rem;
+  color: var(--color-text-secondary);
+}
+
+.discussion-detail__author-link {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  text-decoration: none;
+  color: inherit;
+  font-weight: 500;
+}
+
+.discussion-detail__author-link:hover {
+  color: var(--color-primary);
+}
+
+.discussion-detail__time {
+  color: var(--color-text-secondary);
+}
+
+.discussion-detail__reply-count {
+  color: var(--color-text-secondary);
+}
+
+.discussion-detail__body {
+  font-size: 0.95rem;
+  line-height: 1.65;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.discussion-detail__actions {
+  display: flex;
+  gap: 0.75rem;
+  margin-top: 1rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--color-border);
+}
+
+/* ── Replies section ── */
+.discussion-detail__replies {
+  margin-bottom: 1.25rem;
+}
+
+.discussion-detail__section-title {
+  font-size: 1rem;
+  margin: 0 0 0.75rem;
+}
+
+.discussion-detail__no-replies {
+  color: var(--color-text-secondary);
+  font-size: 0.9rem;
+  padding: 1rem 0;
+}
+
+/* ── Reply form ── */
+.discussion-detail__reply-form {
+  padding: 1rem 1.25rem;
+}
+
+.discussion-detail__reply-textarea {
+  resize: vertical;
+  min-height: 80px;
+  width: 100%;
+}
+
+.discussion-detail__reply-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 0.5rem;
+}
+
+/* ── Quote preview above textarea ── */
+.discussion-detail__quote-preview {
+  border-left: 3px solid var(--color-primary, #6366f1);
+  background: var(--color-bg-secondary, #f9fafb);
+  padding: 0.5rem 0.75rem;
+  margin-bottom: 0.75rem;
+  border-radius: 0 4px 4px 0;
+  font-size: 0.85rem;
+}
+
+.discussion-detail__quote-preview-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.25rem;
+  color: var(--color-text-secondary);
+  font-size: 0.8rem;
+}
+
+.discussion-detail__quote-remove {
+  background: none;
+  border: none;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  font-size: 1.1rem;
+  padding: 0 0.25rem;
+  line-height: 1;
+}
+
+.discussion-detail__quote-remove:hover {
+  color: var(--color-primary);
+}
+
+.discussion-detail__quote-preview-body {
+  color: var(--color-text-secondary);
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.45;
+  max-height: 4.5em;
+  overflow: hidden;
+}
+
+/* ── Wine picker in reply form ── */
+.discussion-detail__wine-picker-toggle {
+  margin-top: 0.4rem;
+}
+
+.discussion-detail__wine-picker-toggle summary {
+  list-style: none;
+  cursor: pointer;
+  display: inline-block;
+}
+
+.discussion-detail__wine-picker-toggle summary::-webkit-details-marker {
+  display: none;
+}
+
+.discussion-detail__wine-picker {
+  margin-top: 0.4rem;
+}
+
+.discussion-detail__reply-wine {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 0.4rem;
+}
+
+.discussion-detail__reply-wine .wine-ref-card {
+  flex: 1;
+  margin: 0;
+}
+
+.discussion-detail__locked-notice {
+  padding: 1rem 1.25rem;
+  color: var(--color-text-secondary);
+  text-align: center;
+  font-size: 0.9rem;
+}

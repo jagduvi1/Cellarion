@@ -49,6 +49,17 @@ const REVIEWS_MAX_PER_PAGE = 50;
 // Maximum character lengths for review tasting note fields
 const REVIEW_MAX_LENGTHS = { aroma: 1000, palate: 1000, finish: 1000, overall: 2000 };
 
+// ─── Community / Discussions ────────────────────────────────────────────────
+
+// Default number of discussions per page
+const DISCUSSIONS_PER_PAGE = 20;
+
+// Maximum discussions a client can request per page
+const DISCUSSIONS_MAX_PER_PAGE = 50;
+
+// Maximum character lengths for discussion fields
+const DISCUSSION_MAX_LENGTHS = { title: 200, body: 5000, replyBody: 3000 };
+
 module.exports = {
   CONSUMED_STATUSES,
   MS_PER_DAY,
@@ -62,4 +73,7 @@ module.exports = {
   REVIEWS_PER_PAGE,
   REVIEWS_MAX_PER_PAGE,
   REVIEW_MAX_LENGTHS,
+  DISCUSSIONS_PER_PAGE,
+  DISCUSSIONS_MAX_PER_PAGE,
+  DISCUSSION_MAX_LENGTHS,
 };

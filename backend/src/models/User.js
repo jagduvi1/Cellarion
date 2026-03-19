@@ -29,7 +29,7 @@ const userSchema = new mongoose.Schema({
   },
   roles: {
     type: [String],
-    enum: ['user', 'somm', 'admin'],
+    enum: ['user', 'somm', 'admin', 'moderator'],
     default: ['user'],
     validate: {
       validator: (arr) => arr.length > 0,
@@ -129,6 +129,14 @@ const userSchema = new mongoose.Schema({
     enum: ['public', 'private'],
     default: 'public'
   },
+  // Discussion ban: blocks posting in discussions
+  discussionBan: {
+    active: { type: Boolean, default: false },
+    reason: { type: String, default: null },
+    bannedAt: { type: Date, default: null },
+    expiresAt: { type: Date, default: null }, // null = permanent
+    bannedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null }
+  },
   createdAt: {
     type: Date,
     default: Date.now
@@ -202,6 +210,14 @@ userSchema.methods.validatePasswordResetToken = function(candidateToken) {
   if (Date.now() > this.passwordResetExpiresAt.getTime()) return false;
   const hash = crypto.createHash('sha256').update(candidateToken).digest('hex');
   return crypto.timingSafeEqual(Buffer.from(hash), Buffer.from(this.passwordResetTokenHash));
+};
+
+// Check if user is currently banned from discussions
+userSchema.methods.isDiscussionBanned = function() {
+  if (!this.discussionBan || !this.discussionBan.active) return false;
+  // If expiresAt is set and in the past, ban has expired
+  if (this.discussionBan.expiresAt && this.discussionBan.expiresAt < new Date()) return false;
+  return true;
 };
 
 // Remove sensitive fields from JSON responses

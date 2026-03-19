@@ -165,6 +165,7 @@ function Layout({ children }) {
                   {user.username}
                   {roles.includes('admin') && <span className="badge badge--admin">{t('nav.badge.admin')}</span>}
                   {roles.includes('somm')  && <span className="badge badge--somm">{t('nav.badge.somm')}</span>}
+                  {roles.includes('moderator') && <span className="badge badge--mod">Mod</span>}
                   <span className={`badge badge--plan badge--plan-${user.plan || 'free'}`}>{planLabel}</span>
                 </span>
                 <Link to="/settings" className={`btn-icon-nav ${isActive('/settings') ? 'active' : ''}`} aria-label={t('nav.settings')}>
@@ -227,6 +228,7 @@ function Layout({ children }) {
                   {user.username}
                   {roles.includes('admin') && <span className="badge badge--admin">{t('nav.badge.admin')}</span>}
                   {roles.includes('somm')  && <span className="badge badge--somm">{t('nav.badge.somm')}</span>}
+                  {roles.includes('moderator') && <span className="badge badge--mod">Mod</span>}
                   <span className={`badge badge--plan badge--plan-${user.plan || 'free'}`}>{planLabel}</span>
                 </span>
               </div>

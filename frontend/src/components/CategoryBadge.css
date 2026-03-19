@@ -1,0 +1,44 @@
+.category-badge {
+  display: inline-block;
+  padding: 0.15rem 0.5rem;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  line-height: 1.4;
+  border: none;
+  cursor: default;
+  white-space: nowrap;
+}
+
+button.category-badge {
+  cursor: pointer;
+}
+
+button.category-badge:hover {
+  opacity: 0.85;
+}
+
+.category-badge--tasting-notes {
+  background: var(--color-wine-light, #f3e8ff);
+  color: var(--color-wine, #7c3aed);
+}
+
+.category-badge--food-pairing {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.category-badge--recommendations {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.category-badge--cellar-tips {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.category-badge--general {
+  background: var(--color-bg-secondary, #f3f4f6);
+  color: var(--color-text-secondary, #6b7280);
+}

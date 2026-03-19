@@ -16,7 +16,9 @@ const notificationSchema = new mongoose.Schema({
       'image_rejected',
       'cellar_shared',
       'support_ticket_response',
-      'new_follower'
+      'new_follower',
+      'discussion_reply',
+      'discussion_mention'
     ],
     required: true
   },

@@ -39,6 +39,7 @@ const adminAiRoute = require('./routes/admin/ai');
 const settingsRoute = require('./routes/settings');
 const reviewsRoute = require('./routes/reviews');
 const followsRoute = require('./routes/follows');
+const discussionsRoute = require('./routes/discussions');
 const rateLimitsConfig = require('./config/rateLimits');
 const aiConfig = require('./config/aiConfig');
 const { logAudit } = require('./services/audit');
@@ -158,6 +159,7 @@ app.use('/api/admin/ai', adminAiRoute);
 app.use('/api/settings', settingsRoute);
 app.use('/api/reviews', reviewsRoute);
 app.use('/api/follows', followsRoute);
+app.use('/api/discussions', discussionsRoute);
 
 // 404 handler
 app.use((req, res) => {
