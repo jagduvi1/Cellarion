@@ -326,7 +326,8 @@ router.delete('/:id', async (req, res) => {
     const bottleCount = await Bottle.countDocuments({ wineDefinition: req.params.id });
     if (bottleCount > 0) {
       return res.status(400).json({
-        error: `Cannot delete wine. ${bottleCount} bottle(s) reference it.`
+        error: `Cannot delete wine. ${bottleCount} bottle(s) reference it.`,
+        bottleCount
       });
     }
 
@@ -344,6 +345,112 @@ router.delete('/:id', async (req, res) => {
   } catch (error) {
     console.error('Delete wine error:', error);
     res.status(500).json({ error: 'Failed to delete wine' });
+  }
+});
+
+// POST /api/admin/wines/:id/merge - Merge source wine into target, reassign all references, then delete source
+router.post('/:id/merge', async (req, res) => {
+  const mongoose = require('mongoose');
+  try {
+    const { targetId } = req.body;
+    const sourceId = req.params.id;
+
+    if (!targetId) {
+      return res.status(400).json({ error: 'targetId is required' });
+    }
+    if (sourceId === targetId) {
+      return res.status(400).json({ error: 'Cannot merge a wine into itself' });
+    }
+
+    const [source, target] = await Promise.all([
+      WineDefinition.findById(sourceId),
+      WineDefinition.findById(targetId),
+    ]);
+    if (!source) return res.status(404).json({ error: 'Source wine not found' });
+    if (!target) return res.status(404).json({ error: 'Target wine not found' });
+
+    // Reassign all references from source to target
+    const BottleImage = mongoose.model('BottleImage');
+    const WineVintageProfile = mongoose.model('WineVintageProfile');
+    const WineVintagePrice = mongoose.model('WineVintagePrice');
+    const WineReport = mongoose.model('WineReport');
+    const Review = mongoose.model('Review');
+
+    const results = await Promise.all([
+      Bottle.updateMany(
+        { wineDefinition: sourceId },
+        { $set: { wineDefinition: targetId } }
+      ),
+      BottleImage.updateMany(
+        { wineDefinition: sourceId },
+        { $set: { wineDefinition: targetId } }
+      ),
+      WineVintageProfile.updateMany(
+        { wineDefinition: sourceId },
+        { $set: { wineDefinition: targetId } }
+      ),
+      WineVintagePrice.updateMany(
+        { wineDefinition: sourceId },
+        { $set: { wineDefinition: targetId } }
+      ),
+      WineReport.updateMany(
+        { wineDefinition: sourceId },
+        { $set: { wineDefinition: targetId } }
+      ),
+      // Reviews have a unique index on (author, wineDefinition) — skip duplicates
+      Review.updateMany(
+        { wineDefinition: sourceId },
+        { $set: { wineDefinition: targetId } }
+      ).catch(() => {
+        // If unique constraint conflicts, delete the source reviews instead
+        return Review.deleteMany({ wineDefinition: sourceId });
+      }),
+    ]);
+
+    // Also update Discussion / DiscussionReply if models exist
+    try {
+      const Discussion = mongoose.model('Discussion');
+      await Discussion.updateMany(
+        { wineDefinition: sourceId },
+        { $set: { wineDefinition: targetId } }
+      );
+    } catch { /* model may not exist */ }
+    try {
+      const DiscussionReply = mongoose.model('DiscussionReply');
+      await DiscussionReply.updateMany(
+        { wineDefinition: sourceId },
+        { $set: { wineDefinition: targetId } }
+      );
+    } catch { /* model may not exist */ }
+    try {
+      const WineEmbedding = mongoose.model('WineEmbedding');
+      await WineEmbedding.deleteMany({ wineDefinition: sourceId });
+    } catch { /* model may not exist */ }
+
+    const bottlesMoved = results[0].modifiedCount || 0;
+
+    logAudit(req, 'admin.wine.merge',
+      { type: 'wine', id: source._id },
+      {
+        sourceName: source.name,
+        sourceProducer: source.producer,
+        targetId: target._id,
+        targetName: target.name,
+        targetProducer: target.producer,
+        bottlesMoved,
+      }
+    );
+
+    await source.deleteOne();
+    searchService.removeWine(sourceId);
+
+    res.json({
+      message: 'Wines merged successfully',
+      bottlesMoved,
+    });
+  } catch (error) {
+    console.error('Merge wine error:', error);
+    res.status(500).json({ error: 'Failed to merge wines' });
   }
 });
 

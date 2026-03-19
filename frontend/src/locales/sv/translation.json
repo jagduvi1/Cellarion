@@ -524,7 +524,13 @@
       "wineDefinitions": "vindefinitioner",
       "createBtn": "Skapa vin",
       "saveBtn": "Spara ändringar",
-      "deleteConfirm": "Ta bort \"{{name}}\"? Detta kan inte ångras om inga flaskor refererar till det."
+      "deleteTitle": "Ta bort vin",
+      "deleteConfirm": "Ta bort \"{{name}}\"? Detta kan inte ångras om inga flaskor refererar till det.",
+      "mergeTitle": "Slå ihop vindefinition",
+      "mergeInfo": "\"{{name}}\" har {{count}} flaska/flaskor som refererar till det. Välj ett annat vin att flytta dem till innan borttagning.",
+      "mergeSearchLabel": "Sök efter målvin",
+      "mergeTarget": "Flytta flaskor till:",
+      "mergeBtn": "Slå ihop & ta bort"
     },
     "images": {
       "title": "Admin: Bildgranskning",

@@ -3,9 +3,11 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import {
   adminGetWines, adminGetWine, adminSaveWine, adminDeleteWine,
+  adminMergeWine,
   adminGetCountries, adminGetGrapes, adminGetRegions, adminGetAppellations,
   adminAssignImageToWine,
 } from '../api/admin';
+import Modal from '../components/Modal';
 import { WINE_TYPES } from '../config/wineTypes';
 import GrapePicker from '../components/GrapePicker';
 import ImageUpload from '../components/ImageUpload';
@@ -43,6 +45,19 @@ function AdminWines() {
   const [formError, setFormError] = useState(null);
   const [imageCredit, setImageCredit] = useState('');
   const galleryRef = useRef(null);
+
+  // Delete confirmation modal
+  const [deleteCandidate, setDeleteCandidate] = useState(null);
+  const [deleting, setDeleting] = useState(false);
+
+  // Merge modal
+  const [mergeSource, setMergeSource] = useState(null); // wine being deleted
+  const [mergeBottleCount, setMergeBottleCount] = useState(0);
+  const [mergeSearch, setMergeSearch] = useState('');
+  const [mergeResults, setMergeResults] = useState([]);
+  const [mergeTarget, setMergeTarget] = useState(null);
+  const [merging, setMerging] = useState(false);
+  const [mergeError, setMergeError] = useState(null);
 
   // Taxonomy
   const [countries, setCountries] = useState([]);
@@ -210,18 +225,85 @@ function AdminWines() {
     }
   };
 
-  const handleDelete = async (wine) => {
-    if (!window.confirm(t('admin.wines.deleteConfirm', { name: wine.name }))) return;
+  const handleDelete = (wine) => {
+    setDeleteCandidate(wine);
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteCandidate) return;
+    setDeleting(true);
     try {
-      const res = await adminDeleteWine(apiFetch, wine._id);
+      const res = await adminDeleteWine(apiFetch, deleteCandidate._id);
       const data = await res.json();
       if (res.ok) {
+        setDeleteCandidate(null);
         fetchWines();
+      } else if (data.bottleCount) {
+        // Has bottles — switch to merge modal
+        setMergeSource(deleteCandidate);
+        setMergeBottleCount(data.bottleCount);
+        setMergeSearch('');
+        setMergeResults([]);
+        setMergeTarget(null);
+        setMergeError(null);
+        setDeleteCandidate(null);
       } else {
+        setDeleteCandidate(null);
         setError(data.error || 'Failed to delete');
       }
     } catch (err) {
+      setDeleteCandidate(null);
       setError('Network error');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const closeMergeModal = () => {
+    setMergeSource(null);
+    setMergeTarget(null);
+    setMergeSearch('');
+    setMergeResults([]);
+    setMergeError(null);
+  };
+
+  // Search for target wine in merge modal
+  useEffect(() => {
+    if (!mergeSource || mergeSearch.length < 2) {
+      setMergeResults([]);
+      return;
+    }
+    const timer = setTimeout(async () => {
+      try {
+        const params = new URLSearchParams({ search: mergeSearch, limit: 10 });
+        const res = await adminGetWines(apiFetch, params);
+        const data = await res.json();
+        if (res.ok) {
+          // Exclude the source wine from results
+          setMergeResults((data.wines || []).filter(w => w._id !== mergeSource._id));
+        }
+      } catch { /* ignore */ }
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [mergeSearch, mergeSource, apiFetch]);
+
+  const handleMerge = async () => {
+    if (!mergeSource || !mergeTarget) return;
+    setMerging(true);
+    setMergeError(null);
+    try {
+      const res = await adminMergeWine(apiFetch, mergeSource._id, mergeTarget._id);
+      const data = await res.json();
+      if (res.ok) {
+        closeMergeModal();
+        fetchWines();
+      } else {
+        setMergeError(data.error || 'Failed to merge');
+      }
+    } catch {
+      setMergeError('Network error');
+    } finally {
+      setMerging(false);
     }
   };
 
@@ -519,6 +601,101 @@ function AdminWines() {
             {t('common.next')}
           </button>
         </div>
+      )}
+      {/* Delete confirmation modal */}
+      {deleteCandidate && (
+        <Modal title={t('admin.wines.deleteTitle')} onClose={() => setDeleteCandidate(null)}>
+          <p>{t('admin.wines.deleteConfirm', { name: deleteCandidate.name })}</p>
+          <div className="modal-actions">
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={() => setDeleteCandidate(null)}
+            >
+              {t('common.cancel')}
+            </button>
+            <button
+              type="button"
+              className="btn btn-danger"
+              disabled={deleting}
+              onClick={confirmDelete}
+            >
+              {deleting ? t('common.saving') : t('common.delete')}
+            </button>
+          </div>
+        </Modal>
+      )}
+
+      {/* Merge modal */}
+      {mergeSource && (
+        <Modal title={t('admin.wines.mergeTitle')} onClose={closeMergeModal}>
+          <p className="merge-info">
+            {t('admin.wines.mergeInfo', {
+              name: mergeSource.name,
+              count: mergeBottleCount,
+            })}
+          </p>
+
+          {mergeError && <div className="alert alert-error">{mergeError}</div>}
+
+          <div className="form-group">
+            <label>{t('admin.wines.mergeSearchLabel')}</label>
+            <input
+              type="text"
+              value={mergeSearch}
+              onChange={(e) => { setMergeSearch(e.target.value); setMergeTarget(null); }}
+              placeholder={t('admin.wines.searchPlaceholder')}
+              autoFocus
+            />
+          </div>
+
+          {mergeResults.length > 0 && !mergeTarget && (
+            <ul className="merge-results">
+              {mergeResults.map(w => (
+                <li key={w._id} className="merge-result-item" onClick={() => setMergeTarget(w)}>
+                  <span className="merge-result-name">{w.name}</span>
+                  <span className="merge-result-producer">{w.producer}</span>
+                  <span className={`type-badge type-${w.type}`}>{w.type}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          {mergeTarget && (
+            <div className="merge-target-selected">
+              <p className="merge-target-label">{t('admin.wines.mergeTarget')}</p>
+              <div className="merge-target-card">
+                <strong>{mergeTarget.name}</strong> — {mergeTarget.producer}
+                <span className={`type-badge type-${mergeTarget.type}`}>{mergeTarget.type}</span>
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-small"
+                  onClick={() => setMergeTarget(null)}
+                >
+                  {t('common.clear')}
+                </button>
+              </div>
+            </div>
+          )}
+
+          <div className="modal-actions">
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={closeMergeModal}
+            >
+              {t('common.cancel')}
+            </button>
+            <button
+              type="button"
+              className="btn btn-danger"
+              disabled={!mergeTarget || merging}
+              onClick={handleMerge}
+            >
+              {merging ? t('common.saving') : t('admin.wines.mergeBtn')}
+            </button>
+          </div>
+        </Modal>
       )}
     </div>
   );

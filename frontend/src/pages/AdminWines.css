@@ -158,6 +158,68 @@
   color: var(--color-text-muted);
 }
 
+/* Merge modal */
+.merge-info {
+  margin: 0 0 1rem;
+  line-height: 1.5;
+}
+
+.merge-results {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 1rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.merge-result-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.6rem 0.75rem;
+  cursor: pointer;
+  border-bottom: 1px solid var(--color-surface);
+}
+
+.merge-result-item:last-child {
+  border-bottom: none;
+}
+
+.merge-result-item:hover {
+  background: var(--color-surface-hover);
+}
+
+.merge-result-name {
+  font-weight: 600;
+}
+
+.merge-result-producer {
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
+  flex: 1;
+}
+
+.merge-target-selected {
+  margin-bottom: 1rem;
+}
+
+.merge-target-label {
+  font-weight: 600;
+  margin: 0 0 0.4rem;
+}
+
+.merge-target-card {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.6rem 0.75rem;
+  background: var(--color-surface);
+  border-radius: var(--radius-md);
+  flex-wrap: wrap;
+}
+
 @media (max-width: 768px) {
   .wines-filter-bar {
     flex-direction: column;

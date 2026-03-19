@@ -17,6 +17,13 @@ export const adminSaveWine = (apiFetch, data, id = null) =>
 export const adminDeleteWine = (apiFetch, id) =>
   apiFetch(`/api/admin/wines/${id}`, { method: 'DELETE' });
 
+export const adminMergeWine = (apiFetch, sourceId, targetId) =>
+  apiFetch(`/api/admin/wines/${sourceId}/merge`, {
+    method: 'POST',
+    headers: J,
+    body: JSON.stringify({ targetId }),
+  });
+
 // ── Taxonomy ─────────────────────────────────────────────────────────────────
 export const adminGetTaxonomy = (apiFetch, endpoint) =>
   apiFetch(endpoint);

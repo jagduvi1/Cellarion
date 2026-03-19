@@ -524,7 +524,13 @@
       "wineDefinitions": "wine definitions",
       "createBtn": "Create Wine",
       "saveBtn": "Save Changes",
-      "deleteConfirm": "Delete \"{{name}}\"? This cannot be undone if no bottles reference it."
+      "deleteTitle": "Delete Wine",
+      "deleteConfirm": "Delete \"{{name}}\"? This cannot be undone if no bottles reference it.",
+      "mergeTitle": "Merge Wine Definition",
+      "mergeInfo": "\"{{name}}\" has {{count}} bottle(s) referencing it. Choose another wine to reassign them to before deleting.",
+      "mergeSearchLabel": "Search for target wine",
+      "mergeTarget": "Reassign bottles to:",
+      "mergeBtn": "Merge & Delete"
     },
     "images": {
       "title": "Admin: Image Review",
