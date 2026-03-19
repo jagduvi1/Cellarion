@@ -429,9 +429,22 @@ router.get('/:id', async (req, res) => {
       }
     }
 
+    // Resolve user-chosen default images for bottles that have one set
+    const defaultImageIds = bottles
+      .filter(b => b.defaultImage)
+      .map(b => b.defaultImage);
+    const defaultImages = defaultImageIds.length > 0
+      ? await BottleImage.find({ _id: { $in: defaultImageIds } }).lean()
+      : [];
+    const defaultImageMap = {};
+    for (const img of defaultImages) {
+      defaultImageMap[img._id.toString()] = img.processedUrl || img.originalUrl;
+    }
+
     const bottleItems = bottles.map(b => ({
       ...b,
-      pendingImageUrl: pendingByBottle[b._id.toString()] || null
+      pendingImageUrl: pendingByBottle[b._id.toString()] || null,
+      defaultImageUrl: b.defaultImage ? (defaultImageMap[b.defaultImage.toString()] || null) : null
     }));
 
     res.json({

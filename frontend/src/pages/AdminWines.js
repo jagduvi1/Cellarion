@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import {
@@ -42,6 +42,7 @@ function AdminWines() {
   const [error, setError] = useState(null);
   const [formError, setFormError] = useState(null);
   const [imageCredit, setImageCredit] = useState('');
+  const galleryRef = useRef(null);
 
   // Taxonomy
   const [countries, setCountries] = useState([]);
@@ -391,8 +392,10 @@ function AdminWines() {
                   <p className="wine-image-hint">{t('admin.wines.defaultImageHint', 'Click the star to set the default image for this wine.')}</p>
                   <div className="wine-image-existing">
                     <ImageGallery
+                      ref={galleryRef}
                       wineDefinitionId={editWine._id}
                       size="medium"
+                      showAll
                       onSetDefault={async (imageId) => {
                         if (!imageId) return;
                         const res = await adminAssignImageToWine(apiFetch, imageId, { wineDefinitionId: editWine._id });
@@ -419,7 +422,7 @@ function AdminWines() {
                   <ImageUpload
                     wineDefinitionId={editWine._id}
                     credit={imageCredit}
-                    onUploadComplete={() => {}}
+                    onUploadComplete={() => galleryRef.current?.refresh()}
                   />
                 </div>
               )}

@@ -1,4 +1,4 @@
-import { useState, useEffect, lazy, Suspense } from 'react';
+import { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth, usePlan } from '../contexts/AuthContext';
@@ -219,6 +219,14 @@ function BottleDetail() {
             pendingImage={pendingImage}
             isPending={isPending}
             displayName={displayName}
+            canEdit={canEdit}
+            onSetDefault={async (imageId) => {
+              const res = await setBottleDefaultImage(apiFetch, bottle._id, imageId);
+              if (!res.ok) {
+                const data = await res.json().catch(() => ({}));
+                throw new Error(data.error || 'Failed to set default image');
+              }
+            }}
           />
           <div className="bd-wine-meta">
             <h1 className={cellarColor ? 'cellar-accent-border' : ''} style={cellarColor ? { '--cellar-color': cellarColor } : undefined}>
@@ -348,21 +356,22 @@ function BottleDetail() {
   );
 }
 
-// ── Hero image: shows carousel from wine gallery or single fallback image ──
-function HeroImage({ bottle, wine, defaultImage, pendingImage, isPending, displayName }) {
+// ── Hero image: shows carousel from bottle gallery (includes wine images) ──
+function HeroImage({ bottle, wine, defaultImage, pendingImage, isPending, displayName, canEdit, onSetDefault }) {
   const { t } = useTranslation();
   const [galleryEmpty, setGalleryEmpty] = useState(false);
-  const hasGallerySource = !!(wine?._id);
 
-  // If the wine has approved images in the gallery, show the carousel
-  if (hasGallerySource && !galleryEmpty) {
+  // Show carousel using bottleId — the API now returns both bottle-specific
+  // and approved wine-level images, so the user can pick any as their default
+  if (bottle?._id && !galleryEmpty) {
     return (
       <div className="bd-wine-image-wrap">
         <Suspense fallback={null}>
           <ImageGallery
-            wineDefinitionId={wine._id}
+            bottleId={bottle._id}
             size="large"
             onEmpty={() => setGalleryEmpty(true)}
+            onSetDefault={canEdit ? onSetDefault : undefined}
           />
         </Suspense>
         {isPending && (
@@ -644,6 +653,7 @@ const API_URL = process.env.REACT_APP_API_URL || '';
 function EditForm({ bottle, onSaved, onCancel, onImageUploaded }) {
   const { t } = useTranslation();
   const { apiFetch, user } = useAuth();
+  const galleryRef = useRef(null);
   const [form, setForm] = useState({
     vintage:          bottle.vintage     || '',
     rating:           bottle.rating      || '',
@@ -760,6 +770,7 @@ function EditForm({ bottle, onSaved, onCancel, onImageUploaded }) {
         <p className="bd-image-default-hint">{t('bottleDetail.defaultImageHint', 'Click the star to choose which image is shown first.')}</p>
         <Suspense fallback={null}>
           <ImageGallery
+            ref={galleryRef}
             bottleId={bottle._id}
             size="medium"
             onSetDefault={async (imageId) => {
@@ -784,8 +795,12 @@ function EditForm({ bottle, onSaved, onCancel, onImageUploaded }) {
                       : `${API_URL}${img.originalUrl}`;
                     onImageUploaded(url);
                   }
+                  galleryRef.current?.refresh();
                 }}
-                onProcessingComplete={(url) => onImageUploaded?.(url)}
+                onProcessingComplete={(url) => {
+                  onImageUploaded?.(url);
+                  galleryRef.current?.refresh();
+                }}
               />
             </Suspense>
             <p className="image-public-notice">

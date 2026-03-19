@@ -8,8 +8,8 @@ import AuthImage from './AuthImage';
 function BottleCard({ bottle, rackMap, cellarId, viewMode }) {
   const navigate = useNavigate();
   const rackInfo = rackMap.get(bottle._id);
-  const imgSrc = bottle.wineDefinition?.image || bottle.pendingImageUrl;
-  const credit = bottle.wineDefinition?.imageCredit;
+  const imgSrc = bottle.defaultImageUrl || bottle.wineDefinition?.image || bottle.pendingImageUrl;
+  const credit = bottle.defaultImageUrl ? null : bottle.wineDefinition?.imageCredit;
   const isPending = !bottle.wineDefinition && !!bottle.pendingWineRequest;
   const displayName = bottle.wineDefinition?.name || bottle.pendingWineRequest?.wineName || 'Unknown Wine';
   const displayProducer = bottle.wineDefinition?.producer || bottle.pendingWineRequest?.producer;

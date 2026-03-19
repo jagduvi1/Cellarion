@@ -135,10 +135,25 @@ router.get('/bottle/:bottleId', requireAuth, async (req, res) => {
       return res.status(404).json({ error: 'Bottle not found' });
     }
 
-    const images = await BottleImage.find({
+    // Fetch bottle-specific images (all non-rejected statuses)
+    const bottleImages = await BottleImage.find({
       bottle: req.params.bottleId,
       status: { $ne: 'rejected' }
     }).sort({ createdAt: -1 });
+
+    // Also fetch approved wine-level images so the user can pick any as default
+    let wineImages = [];
+    if (bottle.wineDefinition) {
+      const bottleImageIds = new Set(bottleImages.map(img => img._id.toString()));
+      wineImages = await BottleImage.find({
+        wineDefinition: bottle.wineDefinition,
+        status: 'approved'
+      }).sort({ assignedToWine: -1, createdAt: -1 });
+      // Exclude any that are already in the bottle-specific list
+      wineImages = wineImages.filter(img => !bottleImageIds.has(img._id.toString()));
+    }
+
+    const images = [...bottleImages, ...wineImages];
 
     // Sort default image first if the bottle has one set
     if (bottle.defaultImage) {
@@ -158,12 +173,19 @@ router.get('/bottle/:bottleId', requireAuth, async (req, res) => {
 });
 
 // GET /api/images/wine/:wineDefinitionId - Get images for a wine definition
+// ?all=true (admin only) includes all non-rejected images
 router.get('/wine/:wineDefinitionId', requireAuth, async (req, res) => {
   try {
-    const images = await BottleImage.find({
+    const isAdmin = req.user.roles && req.user.roles.includes('admin');
+    const showAll = req.query.all === 'true' && isAdmin;
+
+    const filter = {
       wineDefinition: req.params.wineDefinitionId,
-      status: 'approved'
-    }).sort({ assignedToWine: -1, createdAt: -1 });
+      status: showAll ? { $ne: 'rejected' } : 'approved'
+    };
+
+    const images = await BottleImage.find(filter)
+      .sort({ assignedToWine: -1, createdAt: -1 });
 
     res.json({ images });
   } catch (error) {
