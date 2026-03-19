@@ -1,4 +1,5 @@
 const express = require('express');
+const mongoose = require('mongoose');
 const { requireAuth, requireRole } = require('../../middleware/auth');
 const {
   generateWineKey,
@@ -9,6 +10,14 @@ const {
 } = require('../../utils/normalize');
 const WineDefinition = require('../../models/WineDefinition');
 const Bottle = require('../../models/Bottle');
+const BottleImage = require('../../models/BottleImage');
+const WineVintageProfile = require('../../models/WineVintageProfile');
+const WineVintagePrice = require('../../models/WineVintagePrice');
+const WineReport = require('../../models/WineReport');
+const Review = require('../../models/Review');
+const Discussion = require('../../models/Discussion');
+const DiscussionReply = require('../../models/DiscussionReply');
+const WineEmbedding = require('../../models/WineEmbedding');
 const searchService = require('../../services/search');
 const { logAudit } = require('../../services/audit');
 
@@ -350,7 +359,6 @@ router.delete('/:id', async (req, res) => {
 
 // POST /api/admin/wines/:id/merge - Merge source wine into target, reassign all references, then delete source
 router.post('/:id/merge', async (req, res) => {
-  const mongoose = require('mongoose');
   try {
     const { targetId } = req.body;
     const sourceId = req.params.id;
@@ -370,11 +378,6 @@ router.post('/:id/merge', async (req, res) => {
     if (!target) return res.status(404).json({ error: 'Target wine not found' });
 
     // Reassign all references from source to target
-    const BottleImage = mongoose.model('BottleImage');
-    const WineVintageProfile = mongoose.model('WineVintageProfile');
-    const WineVintagePrice = mongoose.model('WineVintagePrice');
-    const WineReport = mongoose.model('WineReport');
-    const Review = mongoose.model('Review');
 
     const results = await Promise.all([
       Bottle.updateMany(
@@ -407,25 +410,17 @@ router.post('/:id/merge', async (req, res) => {
       }),
     ]);
 
-    // Also update Discussion / DiscussionReply if models exist
-    try {
-      const Discussion = mongoose.model('Discussion');
-      await Discussion.updateMany(
+    await Promise.all([
+      Discussion.updateMany(
         { wineDefinition: sourceId },
         { $set: { wineDefinition: targetId } }
-      );
-    } catch { /* model may not exist */ }
-    try {
-      const DiscussionReply = mongoose.model('DiscussionReply');
-      await DiscussionReply.updateMany(
+      ),
+      DiscussionReply.updateMany(
         { wineDefinition: sourceId },
         { $set: { wineDefinition: targetId } }
-      );
-    } catch { /* model may not exist */ }
-    try {
-      const WineEmbedding = mongoose.model('WineEmbedding');
-      await WineEmbedding.deleteMany({ wineDefinition: sourceId });
-    } catch { /* model may not exist */ }
+      ),
+      WineEmbedding.deleteMany({ wineDefinition: sourceId }),
+    ]);
 
     const bottlesMoved = results[0].modifiedCount || 0;
 
