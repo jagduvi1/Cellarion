@@ -355,8 +355,8 @@ router.post('/:id/merge', async (req, res) => {
     const { targetId } = req.body;
     const sourceId = req.params.id;
 
-    if (!targetId) {
-      return res.status(400).json({ error: 'targetId is required' });
+    if (!targetId || !mongoose.Types.ObjectId.isValid(targetId)) {
+      return res.status(400).json({ error: 'A valid targetId is required' });
     }
     if (sourceId === targetId) {
       return res.status(400).json({ error: 'Cannot merge a wine into itself' });
