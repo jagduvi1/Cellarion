@@ -40,6 +40,38 @@ self.addEventListener('activate', (event) => {
   self.clients.claim();
 });
 
+// ── Push Notifications ──────────────────────────────────────────────────────
+self.addEventListener('push', (event) => {
+  const data = event.data ? event.data.json() : {};
+  const title = data.title || 'Cellarion';
+  const options = {
+    body: data.message || '',
+    icon: '/logo192.png',
+    badge: '/logo192.png',
+    data: { link: data.link },
+    tag: data.tag || 'cellarion-notification',
+  };
+  event.waitUntil(self.registration.showNotification(title, options));
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const link = event.notification.data?.link;
+  if (link) {
+    event.waitUntil(
+      self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {
+        for (const client of clients) {
+          if (new URL(client.url).origin === self.location.origin) {
+            client.navigate(link);
+            return client.focus();
+          }
+        }
+        return self.clients.openWindow(link);
+      })
+    );
+  }
+});
+
 // Fetch handler
 self.addEventListener('fetch', (event) => {
   const { request } = event;

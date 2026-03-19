@@ -2052,3 +2052,46 @@
     font-size: 0.72rem;
   }
 }
+
+/* ── Value Over Time Chart ─────────────────────────────────────────────── */
+.value-chart-container {
+  margin-top: 0.5rem;
+}
+
+.value-chart-tooltip {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: 0.6rem 0.75rem;
+  font-size: 0.78rem;
+  color: var(--color-text);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+}
+
+.value-chart-tooltip-date {
+  margin: 0 0 0.3rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+
+.value-chart-tooltip-row {
+  margin: 0.15rem 0;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.value-chart-tooltip-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.value-chart-seed-msg {
+  text-align: center;
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
+  padding: 2rem 1rem;
+  line-height: 1.5;
+}

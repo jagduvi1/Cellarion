@@ -120,6 +120,9 @@ const bottleSchema = new mongoose.Schema({
     enum: ['5', '20', '100'],
     default: '5'
   },
+  // Drink-window notification tracking — set by the daily notifier job
+  drinkWindowNotifiedStatus: { type: String, default: null },
+  drinkWindowNotifiedAt:     { type: Date,   default: null },
   createdAt: {
     type: Date,
     default: Date.now

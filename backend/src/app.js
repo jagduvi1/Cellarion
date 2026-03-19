@@ -40,6 +40,7 @@ const settingsRoute = require('./routes/settings');
 const reviewsRoute = require('./routes/reviews');
 const followsRoute = require('./routes/follows');
 const discussionsRoute = require('./routes/discussions');
+const pushSubscriptionsRoute = require('./routes/pushSubscriptions');
 const rateLimitsConfig = require('./config/rateLimits');
 const aiConfig = require('./config/aiConfig');
 const { logAudit } = require('./services/audit');
@@ -160,6 +161,7 @@ app.use('/api/settings', settingsRoute);
 app.use('/api/reviews', reviewsRoute);
 app.use('/api/follows', followsRoute);
 app.use('/api/discussions', discussionsRoute);
+app.use('/api/push-subscriptions', pushSubscriptionsRoute);
 
 // 404 handler
 app.use((req, res) => {

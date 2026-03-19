@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
@@ -7,6 +7,7 @@ import { updateProfile } from '../api/profiles';
 import { CURRENCIES } from '../config/currencies';
 import { PLANS } from '../config/plans';
 import { SCALE_META, VALID_SCALES } from '../utils/ratingUtils';
+import { isPushSupported, getPushPermissionState, subscribeToPush, unsubscribeFromPush } from '../utils/pushSubscription';
 import './Settings.css';
 
 function Settings() {
@@ -28,6 +29,59 @@ function Settings() {
   const [profileSaving, setProfileSaving] = useState(false);
   const [profileSaved, setProfileSaved] = useState(false);
   const [profileError, setProfileError] = useState(null);
+
+  // Notification preferences state
+  const notifPrefs = user?.preferences?.notifications || {};
+  const [drinkWindow, setDrinkWindow] = useState(notifPrefs.drinkWindow !== false);
+  const [emailNotif, setEmailNotif] = useState(notifPrefs.email === true);
+  const [pushNotif, setPushNotif] = useState(notifPrefs.push === true);
+  const [notifSaving, setNotifSaving] = useState(false);
+  const [notifSaved, setNotifSaved] = useState(false);
+  const [notifError, setNotifError] = useState(null);
+  const [vapidKey, setVapidKey] = useState(null);
+  const pushSupported = isPushSupported();
+  const pushDenied = getPushPermissionState() === 'denied';
+
+  // Fetch VAPID key for push subscription
+  const fetchVapidKey = useCallback(async () => {
+    try {
+      const res = await apiFetch('/api/settings');
+      const data = await res.json();
+      if (data.vapidPublicKey) setVapidKey(data.vapidPublicKey);
+    } catch {}
+  }, [apiFetch]);
+
+  useEffect(() => { fetchVapidKey(); }, [fetchVapidKey]);
+
+  const handleNotifSave = async () => {
+    setNotifSaving(true);
+    setNotifError(null);
+    setNotifSaved(false);
+
+    // Handle push subscription/unsubscription
+    if (pushNotif && !notifPrefs.push) {
+      const result = await subscribeToPush(apiFetch, vapidKey);
+      if (!result.success) {
+        setNotifError(result.error);
+        setPushNotif(false);
+        setNotifSaving(false);
+        return;
+      }
+    } else if (!pushNotif && notifPrefs.push) {
+      await unsubscribeFromPush(apiFetch);
+    }
+
+    const result = await updatePreferences({
+      notifications: { drinkWindow, email: emailNotif, push: pushNotif }
+    });
+    setNotifSaving(false);
+    if (result.success) {
+      setNotifSaved(true);
+      setTimeout(() => setNotifSaved(false), 3000);
+    } else {
+      setNotifError(result.error);
+    }
+  };
 
   // Delete account state
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -190,6 +244,69 @@ function Settings() {
         <Link to="/plans" className="btn btn-secondary settings-plan-link">
           {t('settings.plan.comparePlans')}
         </Link>
+      </div>
+
+      {/* ── Notifications card ── */}
+      <div className="card settings-card">
+        <h2 className="settings-section-title">Notifications</h2>
+
+        <div className="form-group">
+          <label className="settings-toggle-row">
+            <input
+              type="checkbox"
+              checked={drinkWindow}
+              onChange={e => setDrinkWindow(e.target.checked)}
+            />
+            <span>Drink window alerts</span>
+          </label>
+          <p className="settings-hint">
+            Get notified when bottles enter their peak, are nearing the end, or have passed their window.
+          </p>
+        </div>
+
+        <div className="form-group">
+          <label className="settings-toggle-row">
+            <input
+              type="checkbox"
+              checked={emailNotif}
+              onChange={e => setEmailNotif(e.target.checked)}
+            />
+            <span>Email notifications</span>
+          </label>
+          <p className="settings-hint">
+            Receive a digest email when your bottles have drink-window updates.
+          </p>
+        </div>
+
+        <div className="form-group">
+          <label className="settings-toggle-row">
+            <input
+              type="checkbox"
+              checked={pushNotif}
+              onChange={e => setPushNotif(e.target.checked)}
+              disabled={!pushSupported || (!vapidKey && !pushNotif) || pushDenied}
+            />
+            <span>Push notifications</span>
+          </label>
+          <p className="settings-hint">
+            {!pushSupported
+              ? 'Push notifications are not supported in this browser.'
+              : pushDenied
+                ? 'Push notifications are blocked. Please enable them in your browser settings.'
+                : !vapidKey
+                  ? 'Push notifications are not configured on this server.'
+                  : 'Receive browser push notifications for all alerts — even when Cellarion is closed.'}
+          </p>
+        </div>
+
+        {notifError && <div className="alert alert-error">{notifError}</div>}
+
+        <div className="settings-actions">
+          <button className="btn btn-primary" onClick={handleNotifSave} disabled={notifSaving}>
+            {notifSaving ? t('settings.savingBtn') : t('settings.saveBtn')}
+          </button>
+          {notifSaved && <span className="settings-saved">{t('settings.savedMsg')}</span>}
+        </div>
       </div>
 
       <div className="card settings-card">

@@ -113,4 +113,79 @@ async function sendPasswordResetEmail(toEmail, username, token) {
   });
 }
 
-module.exports = { sendVerificationEmail, sendPasswordResetEmail, EMAIL_VERIFICATION_ENABLED };
+/**
+ * Send a drink-window digest email summarising bottles that need attention.
+ * @param {string} toEmail
+ * @param {string} username
+ * @param {Array<{name:string, vintage:string, status:string}>} bottles
+ */
+async function sendDrinkWindowDigest(toEmail, username, bottles) {
+  if (!EMAIL_VERIFICATION_ENABLED || !bottles.length) return;
+
+  const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+
+  const statusLabel = (s) =>
+    s === 'peak'      ? 'Entered peak — drink now'
+    : s === 'ending'  ? 'Peak ending soon — don\'t miss it'
+    : 'Past its window — drink immediately';
+
+  const statusColor = (s) =>
+    s === 'peak' ? '#2D7A45' : s === 'ending' ? '#D4A373' : '#C0504D';
+
+  const rows = bottles.map(b => `
+    <tr>
+      <td style="padding:8px 12px;border-bottom:1px solid #eee;">${b.name} ${b.vintage}</td>
+      <td style="padding:8px 12px;border-bottom:1px solid #eee;color:${statusColor(b.status)};font-weight:600;">
+        ${statusLabel(b.status)}
+      </td>
+    </tr>
+  `).join('');
+
+  const textLines = bottles.map(b => `- ${b.name} ${b.vintage}: ${statusLabel(b.status)}`);
+
+  await mg.messages.create(DOMAIN, {
+    from: FROM,
+    to: [toEmail],
+    subject: `Cellarion: ${bottles.length} bottle${bottles.length > 1 ? 's' : ''} need${bottles.length === 1 ? 's' : ''} your attention`,
+    text: [
+      `Hello ${username},`,
+      '',
+      'Some bottles in your cellar have drink-window updates:',
+      '',
+      ...textLines,
+      '',
+      `View your cellar: ${frontendUrl}/cellars`,
+      '',
+      'You can manage these alerts in Settings > Notifications.'
+    ].join('\n'),
+    html: `
+      <div style="font-family:sans-serif;max-width:520px;margin:0 auto;color:#2a2a2a;">
+        <p>Hello <strong>${username}</strong>,</p>
+        <p>Some bottles in your cellar have drink-window updates:</p>
+        <table style="width:100%;border-collapse:collapse;margin:1rem 0;">
+          <thead>
+            <tr style="background:#f5f5f5;">
+              <th style="padding:8px 12px;text-align:left;font-size:0.85em;">Wine</th>
+              <th style="padding:8px 12px;text-align:left;font-size:0.85em;">Status</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+        <p style="margin:2rem 0;">
+          <a href="${frontendUrl}/cellars"
+             style="background:#7B9E88;color:#0d0d0d;padding:12px 28px;
+                    border-radius:4px;text-decoration:none;font-weight:600;
+                    display:inline-block;">
+            View your cellar
+          </a>
+        </p>
+        <hr style="border:none;border-top:1px solid #ddd;margin:2rem 0;" />
+        <p style="color:#9A9484;font-size:0.85em;">
+          You can manage these alerts in Settings &gt; Notifications.
+        </p>
+      </div>
+    `
+  });
+}
+
+module.exports = { sendVerificationEmail, sendPasswordResetEmail, sendDrinkWindowDigest, EMAIL_VERIFICATION_ENABLED };

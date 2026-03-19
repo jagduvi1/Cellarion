@@ -18,7 +18,10 @@ const notificationSchema = new mongoose.Schema({
       'support_ticket_response',
       'new_follower',
       'discussion_reply',
-      'discussion_mention'
+      'discussion_mention',
+      'drink_window_peak',
+      'drink_window_ending',
+      'drink_window_past'
     ],
     required: true
   },

@@ -10,6 +10,8 @@ const ReviewVote = require('../models/ReviewVote');
 const Notification = require('../models/Notification');
 const AuditLog = require('../models/AuditLog');
 const Follow = require('../models/Follow');
+const PushSubscription = require('../models/PushSubscription');
+const CellarValueSnapshot = require('../models/CellarValueSnapshot');
 const { requireAuth, requireRole } = require('../middleware/auth');
 const { logAudit } = require('../services/audit');
 const { stripHtml } = require('../utils/sanitize');
@@ -39,8 +41,20 @@ const ALLOWED_RATING_SCALES = ['5', '20', '100'];
 
 router.patch('/preferences', requireAuth, async (req, res) => {
   try {
-    const { currency, language, ratingScale, defaultCellarId } = req.body;
+    const { currency, language, ratingScale, defaultCellarId, notifications } = req.body;
     const update = {};
+
+    if (notifications !== undefined && typeof notifications === 'object') {
+      if (notifications.drinkWindow !== undefined) {
+        update['preferences.notifications.drinkWindow'] = !!notifications.drinkWindow;
+      }
+      if (notifications.email !== undefined) {
+        update['preferences.notifications.email'] = !!notifications.email;
+      }
+      if (notifications.push !== undefined) {
+        update['preferences.notifications.push'] = !!notifications.push;
+      }
+    }
 
     if (currency !== undefined) {
       if (!ALLOWED_CURRENCIES.includes(currency.toUpperCase())) {
@@ -290,6 +304,8 @@ router.delete('/me', requireAuth, async (req, res) => {
       Follow.deleteMany({ $or: [{ follower: userId }, { following: userId }] }),
       Notification.deleteMany({ $or: [{ user: userId }, { actor: userId }] }),
       AuditLog.deleteMany({ user: userId }),
+      PushSubscription.deleteMany({ user: userId }),
+      CellarValueSnapshot.deleteMany({ user: userId }),
     ]);
 
     // Finally delete the user itself

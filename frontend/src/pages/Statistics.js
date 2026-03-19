@@ -6,6 +6,8 @@ import worldData from 'world-atlas/countries-110m.json';
 import { useAuth } from '../contexts/AuthContext';
 import { NUM_TO_A2 } from '../utils/isoCountryCodes';
 import { fromNormalized, formatRating, formatDelta, SCALE_META } from '../utils/ratingUtils';
+import { getValueHistory } from '../api/stats';
+import ValueOverTimeChart from '../components/ValueOverTimeChart';
 import './Statistics.css';
 
 // ── Color palette ─────────────────────────────────────────────────────────────
@@ -1037,6 +1039,7 @@ function Statistics() {
   const [stats, setStats]  = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError]  = useState(null);
+  const [valueHistory, setValueHistory] = useState(null);
 
   const planExpired   = user?.planExpiresAt && Date.now() > new Date(user.planExpiresAt).getTime();
   const effectivePlan = planExpired ? 'free' : (user?.plan || 'free');
@@ -1056,7 +1059,18 @@ function Statistics() {
     }
   }, [apiFetch]);
 
+  // Fetch value history for premium users (parallel with overview)
+  const loadValueHistory = useCallback(async () => {
+    if (!isPremium) return;
+    try {
+      const res = await getValueHistory(apiFetch);
+      const data = await res.json();
+      if (res.ok && data.valueHistory) setValueHistory(data.valueHistory);
+    } catch {}
+  }, [apiFetch, isPremium]);
+
   useEffect(() => { load(); }, [load]);
+  useEffect(() => { loadValueHistory(); }, [loadValueHistory]);
 
   if (loading) {
     return (
@@ -1215,6 +1229,42 @@ function Statistics() {
               decliningCount={maturity.declining}
               total={total}
             />
+          </div>
+        </div>
+      )}
+
+      {/* ── Collection Value Over Time — premium only ── */}
+      {isPremium && valueHistory && valueHistory.snapshots.length > 1 && (
+        <div className="stats-grid">
+          <div className="stats-card stats-card--full">
+            <h2 className="stats-card-title">
+              {t('statistics.sections.valueOverTime', 'Collection Value Over Time')}
+              {valueHistory.changePercent !== 0 && (
+                <span className="stats-card-title-note" style={{
+                  color: valueHistory.changePercent >= 0 ? '#2D7A45' : '#C0504D'
+                }}>
+                  {valueHistory.changePercent >= 0 ? '+' : ''}{valueHistory.changePercent}%
+                </span>
+              )}
+            </h2>
+            <ValueOverTimeChart
+              snapshots={valueHistory.snapshots}
+              currency={valueHistory.currency}
+            />
+          </div>
+        </div>
+      )}
+      {isPremium && valueHistory && valueHistory.snapshots.length <= 1 && (
+        <div className="stats-grid">
+          <div className="stats-card stats-card--full">
+            <h2 className="stats-card-title">
+              {t('statistics.sections.valueOverTime', 'Collection Value Over Time')}
+            </h2>
+            <p className="value-chart-seed-msg">
+              {valueHistory.snapshots.length === 0
+                ? 'Value tracking has started. Your first data point will appear after the weekly snapshot runs.'
+                : 'Your first snapshot is recorded. Trend data will appear after next week\'s snapshot.'}
+            </p>
           </div>
         </div>
       )}

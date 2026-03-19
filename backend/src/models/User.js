@@ -74,6 +74,11 @@ const userSchema = new mongoose.Schema({
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Cellar',
       default: null
+    },
+    notifications: {
+      drinkWindow: { type: Boolean, default: true },
+      email:       { type: Boolean, default: false },
+      push:        { type: Boolean, default: false }
     }
   },
   refreshTokenHash: {

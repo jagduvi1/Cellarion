@@ -57,6 +57,9 @@ services:
       - QDRANT_URL=http://qdrant:6333
       - SUPER_ADMIN_EMAIL=${SUPER_ADMIN_EMAIL:-}
       - SUPER_ADMIN_IPS=${SUPER_ADMIN_IPS:-}
+      - VAPID_PUBLIC_KEY=${VAPID_PUBLIC_KEY:-}
+      - VAPID_PRIVATE_KEY=${VAPID_PRIVATE_KEY:-}
+      - VAPID_EMAIL=${VAPID_EMAIL:-}
     volumes:
       - image-data:/app/uploads
     depends_on:
