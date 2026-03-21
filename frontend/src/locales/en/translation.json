@@ -253,12 +253,12 @@
     "showDetails": "More details",
     "hideDetails": "Hide details",
     "cantFindAiTitle": "Can't find your wine?",
-    "cantFindAiHint": "Let AI search for it",
-    "aiFoundWine": "AI found a match",
+    "cantFindAiHint": "Look it up",
+    "aiFoundWine": "Match found",
     "aiUseThisWine": "Use this wine",
     "requestWineInstead": "Request a wine",
-    "aiCouldNotIdentify": "AI could not identify this wine. You can submit a request instead.",
-    "aiSearching": "AI is searching for your wine…",
+    "aiCouldNotIdentify": "Could not identify this wine. You can submit a request instead.",
+    "aiSearching": "Searching for your wine…",
     "submitWineRequest": "Submit a wine request"
   },
 
@@ -751,10 +751,10 @@
       "statusReviewed": "Reviewed",
       "statusToday": "Status today ({{year}}):",
       "vintageLabel": "Vintage:",
-      "aiSuggest": "Ask AI",
-      "aiSuggesting": "Asking AI…",
-      "aiSuggestError": "AI could not suggest a drink window",
-      "aiSuggestFilled": "AI suggestion applied — review and save"
+      "aiSuggest": "Suggest",
+      "aiSuggesting": "Suggesting…",
+      "aiSuggestError": "Could not suggest a drink window",
+      "aiSuggestFilled": "Suggestion applied — review and save"
     },
     "prices": {
       "title": "Price Queue",
@@ -776,12 +776,12 @@
       "sourcePlaceholder": "Vivino, Wine-Searcher…",
       "savePrice": "Save price",
       "priceRequired": "Price is required",
-      "aiSuggest": "Ask AI",
-      "aiSuggesting": "Asking AI…",
-      "aiSuggestError": "AI could not suggest a price",
-      "aiSuggestFilled": "AI suggestion applied — review and save",
-      "aiNoValue": "AI suggests this wine has no significant market value",
-      "aiReasoning": "AI reasoning:"
+      "aiSuggest": "Suggest",
+      "aiSuggesting": "Suggesting…",
+      "aiSuggestError": "Could not suggest a price",
+      "aiSuggestFilled": "Suggestion applied — review and save",
+      "aiNoValue": "This wine has no significant market value",
+      "aiReasoning": "Reasoning:"
     }
   },
 

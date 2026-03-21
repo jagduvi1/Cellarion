@@ -536,7 +536,7 @@ function MaturitySuggestModelPanel({ currentModel, apiFetch }) {
       </div>
       <div className="sa-panel-body">
         <div style={{ fontSize: 11, color: 'var(--sa-text-dim)', marginBottom: 12 }}>
-          Model used when sommeliers click "Ask AI" on the maturity queue to suggest drink window phases.
+          Model used when sommeliers click "Suggest" on the maturity queue to suggest drink window phases.
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           {CHAT_MODELS.map(m => (
@@ -677,7 +677,7 @@ function PriceSuggestModelPanel({ currentModel, apiFetch }) {
       </div>
       <div className="sa-panel-body">
         <div style={{ fontSize: 11, color: 'var(--sa-text-dim)', marginBottom: 12 }}>
-          Model used when sommeliers click "Ask AI" on the price queue to suggest market prices.
+          Model used when sommeliers click "Suggest" on the price queue to suggest market prices.
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           {CHAT_MODELS.map(m => (

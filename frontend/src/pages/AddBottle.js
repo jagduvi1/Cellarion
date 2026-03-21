@@ -315,11 +315,11 @@ function AddBottle() {
     try {
       const res = await identifyWineByText(apiFetch, search.trim());
       const data = await res.json();
-      if (!res.ok) { setAiSearchError(data.error || 'AI identification failed'); return; }
+      if (!res.ok) { setAiSearchError(data.error || 'Identification failed'); return; }
       if (!data.wine) { setAiSearchError(t('addBottle.aiCouldNotIdentify')); return; }
       setAiResult(data.wine);
     } catch {
-      setAiSearchError('Network error during AI identification.');
+      setAiSearchError('Network error during identification.');
     } finally {
       setAiSearching(false);
     }
@@ -577,7 +577,7 @@ function AddBottle() {
                 </svg>
                 <h2>{t('addBottle.scanPromptTitle', 'Scan the wine label')}</h2>
                 <p className="camera-prompt-hint">
-                  {t('addBottle.scanPromptHint', 'Take a photo of the label — AI will identify the wine and add it to the registry if it doesn\'t exist yet.')}
+                  {t('addBottle.scanPromptHint', 'Take a photo of the label — we\'ll identify the wine and add it to the registry if it doesn\'t exist yet.')}
                 </p>
                 <button type="button" className="btn btn-primary" onClick={startLabelCamera}>
                   {t('addBottle.startCamera', 'Start Camera')}
@@ -599,7 +599,7 @@ function AddBottle() {
                 </button>
               </div>
               <p className="wine-search-hint">
-                {t('addBottle.searchHint', 'Be as specific as possible — include the wine name and producer. We\'ll check our library first; if no match is found, AI will identify and add the wine.')}
+                {t('addBottle.searchHint', 'Be as specific as possible — include the wine name and producer. We\'ll check our library first; if no match is found, we\'ll identify and add the wine.')}
               </p>
               <div className="search-section">
                 <div className="search-input-wrapper">

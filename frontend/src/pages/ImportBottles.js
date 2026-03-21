@@ -26,7 +26,7 @@ const FORMAT_LABELS = {
 const STATUS_LABELS = {
   exact: 'Matched',
   fuzzy: 'Review',
-  ai_match: 'AI Match',
+  ai_match: 'Auto Match',
   no_match: 'No Match',
   error: 'Error',
   skipped: 'Skipped'
@@ -725,7 +725,7 @@ function ImportBottles() {
                   style={{ width: validationProgress.total > 0 ? `${Math.round(validationProgress.done / validationProgress.total * 100)}%` : '0%' }}
                 />
               </div>
-              <p className="progress-hint">AI is identifying unknown wines — this may take a moment for large collections</p>
+              <p className="progress-hint">Identifying unknown wines — this may take a moment for large collections</p>
             </div>
           ) : (
             <button
@@ -784,7 +784,7 @@ function ImportBottles() {
           {(summary?.aiMatch || 0) > 0 && (
             <div className="summary-stat">
               <span className="summary-number summary-ai">{summary.aiMatch}</span>
-              <span className="summary-label">AI Added</span>
+              <span className="summary-label">Auto Added</span>
             </div>
           )}
           <div className="summary-stat">
@@ -928,7 +928,7 @@ function ImportBottles() {
                             {selectedWine.region ? ` · ${selectedWine.region}` : ''}
                           </span>
                           {r.status === 'ai_match' && (
-                            <span className="match-ai-badge">AI</span>
+                            <span className="match-ai-badge">Auto</span>
                           )}
                           {selectedWine.score != null && r.status !== 'ai_match' && (
                             <span className="match-score">{Math.round(selectedWine.score * 100)}% match</span>
@@ -942,17 +942,17 @@ function ImportBottles() {
                           {r.aiDebug && (
                             <details className={`ai-info-details${r.aiDebug.aiStatus === 'failed' || r.aiDebug.aiStatus === 'create_failed' ? ' ai-info-warn' : ''}`}>
                               <summary>
-                                {r.aiDebug.aiStatus === 'failed' ? 'AI lookup failed' :
-                                 r.aiDebug.aiStatus === 'create_failed' ? 'AI found a match but couldn\'t save it' :
+                                {r.aiDebug.aiStatus === 'failed' ? 'Lookup failed' :
+                                 r.aiDebug.aiStatus === 'create_failed' ? 'Found a match but couldn\'t save it' :
                                  'Why no match?'}
                               </summary>
                               <p>
                                 {r.aiDebug.aiExplanation ||
                                  (r.aiDebug.aiStatus === 'failed'
-                                   ? 'The AI lookup encountered a temporary issue. Request the wine to be added manually.'
+                                   ? 'The lookup encountered a temporary issue. Request the wine to be added manually.'
                                    : r.aiDebug.aiStatus === 'create_failed'
-                                   ? 'The AI identified this wine but encountered an error saving it. Try requesting it manually.'
-                                   : 'AI searched but could not identify this wine. Request it to be added to the registry.')}
+                                   ? 'We identified this wine but encountered an error saving it. Try requesting it manually.'
+                                   : 'Could not identify this wine. Request it to be added to the registry.')}
                               </p>
                             </details>
                           )}
@@ -991,7 +991,7 @@ function ImportBottles() {
                               onClick={() => handleAiSearch(r.index)}
                               disabled={aiSearchingRow === r.index}
                             >
-                              {aiSearchingRow === r.index ? 'Searching…' : 'Try AI'}
+                              {aiSearchingRow === r.index ? 'Searching…' : 'Look up'}
                             </button>
                           )}
                           {(r.status === 'no_match' || r.status === 'fuzzy') && !isSkipped && !isRequested && (

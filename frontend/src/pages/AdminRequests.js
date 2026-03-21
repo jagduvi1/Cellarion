@@ -168,7 +168,7 @@ function AdminRequests() {
       const res = await getAiWineInfo(apiFetch, query);
       const data = await res.json();
       if (!res.ok || !data.wine) {
-        setAiLookup({ loading: false, error: 'AI could not identify this wine' });
+        setAiLookup({ loading: false, error: 'Could not identify this wine' });
         return;
       }
       const wine = data.wine;
@@ -207,7 +207,7 @@ function AdminRequests() {
       checkDuplicates(newWineData.name, newWineData.producer);
       setAiLookup({ loading: false, error: null });
     } catch {
-      setAiLookup({ loading: false, error: 'Network error during AI lookup' });
+      setAiLookup({ loading: false, error: 'Network error during lookup' });
     }
   };
 
@@ -364,14 +364,14 @@ function AdminRequests() {
                       {aiLookup.loading ? (
                         <>
                           <span className="ai-lookup-spinner" />
-                          Asking AI…
+                          Looking up…
                         </>
                       ) : (
                         <>
                           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                             <path d="M12 2L9 9L2 12L9 15L12 22L15 15L22 12L15 9Z" />
                           </svg>
-                          Ask AI
+                          Look up
                         </>
                       )}
                     </button>

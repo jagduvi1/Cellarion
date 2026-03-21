@@ -253,12 +253,12 @@
     "showDetails": "Fler detaljer",
     "hideDetails": "Dölj detaljer",
     "cantFindAiTitle": "Hittar du inte ditt vin?",
-    "cantFindAiHint": "Låt AI söka efter det",
-    "aiFoundWine": "AI hittade en träff",
+    "cantFindAiHint": "Slå upp det",
+    "aiFoundWine": "Träff hittad",
     "aiUseThisWine": "Använd detta vin",
     "requestWineInstead": "Begär ett vin",
-    "aiCouldNotIdentify": "AI kunde inte identifiera detta vin. Du kan skicka en förfrågan istället.",
-    "aiSearching": "AI söker efter ditt vin…",
+    "aiCouldNotIdentify": "Kunde inte identifiera detta vin. Du kan skicka en förfrågan istället.",
+    "aiSearching": "Söker efter ditt vin…",
     "submitWineRequest": "Skicka vinförfrågan"
   },
 
@@ -751,10 +751,10 @@
       "statusReviewed": "Granskad",
       "statusToday": "Status idag ({{year}}):",
       "vintageLabel": "Årgång:",
-      "aiSuggest": "Fråga AI",
-      "aiSuggesting": "Frågar AI…",
-      "aiSuggestError": "AI kunde inte föreslå ett drickfönster",
-      "aiSuggestFilled": "AI-förslag tillämpat — granska och spara"
+      "aiSuggest": "Föreslå",
+      "aiSuggesting": "Föreslår…",
+      "aiSuggestError": "Kunde inte föreslå ett drickfönster",
+      "aiSuggestFilled": "Förslag tillämpat — granska och spara"
     },
     "prices": {
       "title": "Priskö",
@@ -776,12 +776,12 @@
       "sourcePlaceholder": "Vivino, Wine-Searcher…",
       "savePrice": "Spara pris",
       "priceRequired": "Pris krävs",
-      "aiSuggest": "Fråga AI",
-      "aiSuggesting": "Frågar AI…",
-      "aiSuggestError": "AI kunde inte föreslå ett pris",
-      "aiSuggestFilled": "AI-förslag tillämpat — granska och spara",
-      "aiNoValue": "AI bedömer att detta vin inte har något betydande marknadsvärde",
-      "aiReasoning": "AI-resonemang:"
+      "aiSuggest": "Föreslå",
+      "aiSuggesting": "Föreslår…",
+      "aiSuggestError": "Kunde inte föreslå ett pris",
+      "aiSuggestFilled": "Förslag tillämpat — granska och spara",
+      "aiNoValue": "Detta vin har inget betydande marknadsvärde",
+      "aiReasoning": "Resonemang:"
     }
   },
 
