@@ -1,16 +1,24 @@
 # https://www.robotstxt.org/robotstxt.html
 User-agent: *
-Disallow: /api/
-Allow: /api/sitemap.xml
 Disallow: /admin/
 Disallow: /superadmin
 Disallow: /settings
 Disallow: /cellars/
 Disallow: /users/
+Disallow: /api/auth/
+Disallow: /api/bottles/
+Disallow: /api/cellars/
+Disallow: /api/users/
+Disallow: /api/admin/
+Disallow: /api/chat/
+Disallow: /api/notifications/
+Disallow: /api/settings/
 
 Allow: /
 Allow: /blog
 Allow: /blog/*
 Allow: /privacy
+Allow: /api/sitemap.xml
+Allow: /api/blog
 
 Sitemap: https://cellarion.app/api/sitemap.xml
