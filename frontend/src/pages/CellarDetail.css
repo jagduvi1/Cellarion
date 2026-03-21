@@ -205,6 +205,19 @@
   color: var(--color-text-muted);
 }
 
+.overview-beta-badge {
+  font-size: 0.6rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 0.1rem 0.4rem;
+  border-radius: 4px;
+  background: var(--color-primary, #6366f1);
+  color: #fff;
+  vertical-align: middle;
+  margin-left: 0.3rem;
+}
+
 /* ── FAB (Floating Action Button) — mobile only ── */
 .fab {
   display: none;

@@ -41,6 +41,7 @@ const SupportPage     = lazy(() => import('./pages/SupportPage'));
 const SuperAdmin      = lazy(() => import('./pages/SuperAdmin'));
 const CommunityDiscussions = lazy(() => import('./pages/CommunityDiscussions'));
 const DiscussionDetail     = lazy(() => import('./pages/DiscussionDetail'));
+const CellarRoom           = lazy(() => import('./pages/CellarRoom'));
 
 function AppRoutes() {
   const { user, loading } = useAuth();
@@ -101,6 +102,14 @@ function AppRoutes() {
           element={
             <ProtectedRoute>
               <Layout><CellarRacks /></Layout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/cellars/:id/room"
+          element={
+            <ProtectedRoute>
+              <Layout><CellarRoom /></Layout>
             </ProtectedRoute>
           }
         />
