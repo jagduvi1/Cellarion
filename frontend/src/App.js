@@ -237,23 +237,9 @@ function AppRoutes() {
           }
         />
 
-        {/* Blog routes */}
-        <Route
-          path="/blog"
-          element={
-            <ProtectedRoute>
-              <Layout><Blog /></Layout>
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/blog/:slug"
-          element={
-            <ProtectedRoute>
-              <Layout><BlogPost /></Layout>
-            </ProtectedRoute>
-          }
-        />
+        {/* Blog routes — public, no auth required */}
+        <Route path="/blog" element={<Layout><Blog /></Layout>} />
+        <Route path="/blog/:slug" element={<Layout><BlogPost /></Layout>} />
 
         {/* Admin routes */}
         <Route

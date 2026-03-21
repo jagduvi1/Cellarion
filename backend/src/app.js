@@ -93,6 +93,7 @@ app.use(cors({
 
 // Sitemap — before rate limiter so crawlers are never blocked
 app.use('/sitemap.xml', sitemapRoute);
+app.use('/api/sitemap.xml', sitemapRoute);
 
 // Global API rate limiter — default 200 requests per 15 min per IP (admin-configurable)
 const apiLimiter = rateLimit({
