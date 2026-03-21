@@ -12,6 +12,7 @@ const rackPlacementSchema = new mongoose.Schema({
   group:          { type: String, default: null, maxlength: 50 },
   widthOverride:  { type: Number, min: 0.1, max: 5 },  // metres, optional physical width
   depthOverride:  { type: Number, min: 0.1, max: 2 },  // metres, optional physical depth
+  scaleOverride:  { type: Number, min: 0.5, max: 5 },  // uniform scale factor (x-rack)
 }, { _id: false });
 
 const cellarLayoutSchema = new mongoose.Schema({

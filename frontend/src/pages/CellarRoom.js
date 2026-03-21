@@ -4,8 +4,10 @@ import { useTranslation } from 'react-i18next';
 import { Canvas } from '@react-three/fiber';
 import { useAuth } from '../contexts/AuthContext';
 import { getCellar } from '../api/cellars';
-import { getRacks } from '../api/racks';
+import { getRacks, updateSlot, clearSlot } from '../api/racks';
+import { consumeBottle } from '../api/bottles';
 import { getCellarLayout, saveCellarLayout } from '../api/cellarLayout';
+import { getPlacedBottleIds, getAvailableBottles } from '../utils/rackUtils';
 import RoomScene from '../components/room/RoomScene';
 import { getRackHeight } from '../utils/roomConstants';
 import './CellarRoom.css';
@@ -19,6 +21,7 @@ export default function CellarRoom() {
 
   const [cellar, setCellar] = useState(null);
   const [racks, setRacks] = useState([]);
+  const [bottles, setBottles] = useState([]);
   const [layout, setLayout] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -27,8 +30,15 @@ export default function CellarRoom() {
   const [selectedRackIds, setSelectedRackIds] = useState([]);
   const [showSettings, setShowSettings] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [showStackPicker, setShowStackPicker] = useState(false);
-  const [showLinkPicker, setShowLinkPicker] = useState(false);
+  const [saveError, setSaveError] = useState(null);
+  const [interactionMode, setInteractionMode] = useState(null); // 'stack' | 'link' | null
+  const [showAddRackPicker, setShowAddRackPicker] = useState(false);
+
+  // Bottle interaction state
+  const [selectedBottle, setSelectedBottle] = useState(null); // { rackId, slot }
+  const [emptySlotTarget, setEmptySlotTarget] = useState(null); // { rackId, position }
+  const [slotSearch, setSlotSearch] = useState('');
+  const [consumeModal, setConsumeModal] = useState(null); // { bottleId }
 
   // Derived: first selected rack for single-rack operations (backward compat)
   const selectedRackId = selectedRackIds[0] || null;
@@ -52,9 +62,18 @@ export default function CellarRoom() {
       if (!cellarRes.ok) { setError(cellarData.error); return; }
       setCellar(cellarData.cellar);
       setRacks(racksData.racks || []);
+      setBottles(cellarData.bottles?.items || []);
 
       if (layoutData.layout) {
-        setLayout(layoutData.layout);
+        // Filter out placements for racks that no longer exist (e.g. deleted)
+        const validRackIds = new Set((racksData.racks || []).map(r => r._id));
+        const filtered = {
+          ...layoutData.layout,
+          rackPlacements: (layoutData.layout.rackPlacements || []).filter(
+            rp => validRackIds.has(rp.rack?._id || rp.rack)
+          ),
+        };
+        setLayout(filtered);
       } else {
         // Auto-populate: place all racks in a line
         const autoPlace = (racksData.racks || []).map((r, i) => ({
@@ -80,17 +99,48 @@ export default function CellarRoom() {
   const handleSave = useCallback(async () => {
     if (!layout) return;
     setSaving(true);
+    setSaveError(null);
     try {
+      // Sanitize placements: ensure rack is a plain ID string, strip unknown fields
+      const cleanPlacements = layout.rackPlacements.map(rp => {
+        const clean = {
+          rack: rp.rack?._id || rp.rack,
+          position: {
+            x: Number(rp.position?.x) || 0,
+            y: Number(rp.position?.y) || 0,
+            z: Number(rp.position?.z) || 0,
+          },
+          rotation: rp.rotation || 0,
+          wall: rp.wall || 'none',
+        };
+        if (rp.group) clean.group = rp.group;
+        if (rp.widthOverride) clean.widthOverride = Number(rp.widthOverride);
+        if (rp.depthOverride) clean.depthOverride = Number(rp.depthOverride);
+        if (rp.scaleOverride) clean.scaleOverride = Number(rp.scaleOverride);
+        return clean;
+      });
+
+      const cleanDims = {
+        width: Number(layout.roomDimensions?.width) || 10,
+        depth: Number(layout.roomDimensions?.depth) || 10,
+        height: Number(layout.roomDimensions?.height) || 3,
+      };
+
       const res = await saveCellarLayout(apiFetch, {
         cellar: id,
-        roomDimensions: layout.roomDimensions,
-        rackPlacements: layout.rackPlacements,
+        roomDimensions: cleanDims,
+        rackPlacements: cleanPlacements,
       });
       if (res.ok) {
         const data = await res.json();
         setLayout(data.layout);
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        setSaveError(errData.error || `Save failed (${res.status})`);
+        console.error('Save layout failed:', errData.error || res.status);
       }
     } catch (err) {
+      setSaveError(err.message);
       console.error('Save layout error:', err);
     } finally {
       setSaving(false);
@@ -195,85 +245,88 @@ export default function CellarRoom() {
     });
   }, [selectedRackIds]);
 
-  // Add racks that aren't yet placed in the room
-  const handleAddUnplacedRacks = useCallback(() => {
+  // Add a single rack to the room (placed at center)
+  const handleAddRack = useCallback((rackId) => {
     setLayout(prev => {
-      const placedIds = new Set(prev.rackPlacements.map(rp => rp.rack?._id || rp.rack));
-      const unplaced = racks.filter(r => !placedIds.has(r._id));
-      if (unplaced.length === 0) return prev;
-
-      const newPlacements = unplaced.map((r, i) => ({
-        rack: r._id,
-        position: { x: i * 1.5, y: 0, z: 0 },
-        rotation: 0,
-        wall: 'none',
-      }));
+      const alreadyPlaced = prev.rackPlacements.some(
+        rp => (rp.rack?._id || rp.rack) === rackId
+      );
+      if (alreadyPlaced) return prev;
       return {
         ...prev,
-        rackPlacements: [...prev.rackPlacements, ...newPlacements],
+        rackPlacements: [
+          ...prev.rackPlacements,
+          { rack: rackId, position: { x: 0, y: 0, z: 0 }, rotation: 0, wall: 'none' },
+        ],
       };
     });
-  }, [racks]);
+  }, []);
 
-  // Stack a rack on top of the currently selected rack
-  const handleStackRack = useCallback((stackRackId) => {
-    if (!selectedRackId || !layout) return;
+  // Compute unplaced racks
+  const unplacedRacks = useMemo(() => {
+    const placedIds = new Set(
+      (layout?.rackPlacements || []).map(rp => rp.rack?._id || rp.rack)
+    );
+    return racks.filter(r => !placedIds.has(r._id));
+  }, [racks, layout?.rackPlacements]);
+
+  // Stack: place the selected rack on top of the target rack (click-to-stack)
+  // If the selected rack is in a group, move all group members together.
+  const handleStackOnTarget = useCallback((targetRackId) => {
+    if (!selectedRackId || !layout || targetRackId === selectedRackId) return;
+
+    const targetPlacement = layout.rackPlacements.find(
+      rp => (rp.rack === targetRackId || rp.rack?._id === targetRackId)
+    );
+    if (!targetPlacement) return;
+
+    const targetRackObj = racks.find(r => r._id === targetRackId);
+    if (!targetRackObj) return;
+
     const selectedPlacement = layout.rackPlacements.find(
       rp => (rp.rack === selectedRackId || rp.rack?._id === selectedRackId)
     );
     if (!selectedPlacement) return;
 
-    const selectedRackObj = racks.find(r => r._id === selectedRackId);
-    if (!selectedRackObj) return;
+    const targetY = (targetPlacement.position?.y || 0) + getRackHeight(targetRackObj);
+    const targetX = targetPlacement.position?.x || 0;
+    const targetZ = targetPlacement.position?.z || 0;
 
-    const baseY = selectedPlacement.position?.y || 0;
-    const baseHeight = getRackHeight(selectedRackObj);
-    const stackY = baseY + baseHeight;
+    // Compute offset from selected rack's current position
+    const dx = targetX - (selectedPlacement.position?.x || 0);
+    const dz = targetZ - (selectedPlacement.position?.z || 0);
+    const dy = targetY - (selectedPlacement.position?.y || 0);
 
-    setLayout(prev => {
-      const alreadyPlaced = prev.rackPlacements.some(
-        rp => (rp.rack === stackRackId || rp.rack?._id === stackRackId)
-      );
+    const group = selectedPlacement.group;
 
-      if (alreadyPlaced) {
-        // Move existing placement on top of selected rack
-        return {
-          ...prev,
-          rackPlacements: prev.rackPlacements.map(rp =>
-            (rp.rack === stackRackId || rp.rack?._id === stackRackId)
-              ? {
-                  ...rp,
-                  position: {
-                    x: selectedPlacement.position?.x || 0,
-                    y: stackY,
-                    z: selectedPlacement.position?.z || 0,
-                  },
-                  rotation: selectedPlacement.rotation || 0,
-                }
-              : rp
-          ),
-        };
-      } else {
-        // Add new placement on top
-        return {
-          ...prev,
-          rackPlacements: [
-            ...prev.rackPlacements,
-            {
-              rack: stackRackId,
-              position: {
-                x: selectedPlacement.position?.x || 0,
-                y: stackY,
-                z: selectedPlacement.position?.z || 0,
-              },
-              rotation: selectedPlacement.rotation || 0,
-              wall: 'none',
+    setLayout(prev => ({
+      ...prev,
+      rackPlacements: prev.rackPlacements.map(rp => {
+        const rpId = rp.rack?._id || rp.rack;
+        if (rpId === selectedRackId) {
+          return {
+            ...rp,
+            position: { x: targetX, y: targetY, z: targetZ },
+            rotation: targetPlacement.rotation || 0,
+          };
+        }
+        // Move group members by the same offset
+        if (group && rp.group === group) {
+          return {
+            ...rp,
+            position: {
+              x: (rp.position?.x || 0) + dx,
+              y: (rp.position?.y || 0) + dy,
+              z: (rp.position?.z || 0) + dz,
             },
-          ],
-        };
-      }
-    });
-    setShowStackPicker(false);
+          };
+        }
+        return rp;
+      }),
+    }));
+
+    setInteractionMode(null);
+    setSelectedRackIds([selectedRackId]);
   }, [selectedRackId, layout, racks]);
 
   // Unstack the selected rack (move it back to floor level)
@@ -291,8 +344,9 @@ export default function CellarRoom() {
     }));
   }, [selectedRackId]);
 
-  // Link racks into a group (move together)
-  const handleLinkRack = useCallback((targetRackId) => {
+  // Link: click-to-link — link the selected rack to a target rack
+  const handleLinkToTarget = useCallback((targetRackId) => {
+    if (!selectedRackId || targetRackId === selectedRackId) return;
     setLayout(prev => {
       const selectedPlacement = prev.rackPlacements.find(
         rp => (rp.rack === selectedRackId || rp.rack?._id === selectedRackId)
@@ -313,14 +367,13 @@ export default function CellarRoom() {
           if (rpId === selectedRackId || rpId === targetRackId) {
             return { ...rp, group: groupId };
           }
-          // Merge existing groups
           if (oldGroupA && rp.group === oldGroupA) return { ...rp, group: groupId };
           if (oldGroupB && rp.group === oldGroupB) return { ...rp, group: groupId };
           return rp;
         }),
       };
     });
-    setShowLinkPicker(false);
+    setInteractionMode(null);
   }, [selectedRackId]);
 
   // Unlink a rack from its group
@@ -336,6 +389,20 @@ export default function CellarRoom() {
       }),
     }));
   }, [selectedRackId]);
+
+  // Remove rack from the room layout (does not delete the rack itself)
+  const handleRemoveFromRoom = useCallback(() => {
+    if (selectedRackIds.length === 0) return;
+    const removeSet = new Set(selectedRackIds);
+    setLayout(prev => ({
+      ...prev,
+      rackPlacements: prev.rackPlacements.filter(
+        rp => !removeSet.has(rp.rack?._id || rp.rack)
+      ),
+    }));
+    setSelectedRackIds([]);
+    setInteractionMode(null);
+  }, [selectedRackIds]);
 
   // Update a placement field for the selected rack (e.g. widthOverride, depthOverride)
   const handlePlacementField = useCallback((field, value) => {
@@ -363,6 +430,10 @@ export default function CellarRoom() {
     if (!isEditMode || selectedRackIds.length === 0) return;
     const STEP = 0.05;
     const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        setInteractionMode(null);
+        return;
+      }
       let dx = 0, dz = 0;
       switch (e.key) {
         case 'ArrowLeft':  dx = -STEP; break;
@@ -448,6 +519,83 @@ export default function CellarRoom() {
   const dims = layout?.roomDimensions || DEFAULT_DIMENSIONS;
   const placements = layout?.rackPlacements || [];
 
+  // Available bottles (not in any rack slot)
+  const placedBottleIds = useMemo(() => getPlacedBottleIds(racks), [racks]);
+  const availableBottles = useMemo(
+    () => getAvailableBottles(bottles, placedBottleIds),
+    [bottles, placedBottleIds]
+  );
+
+  // Bottle click — show detail panel
+  const handleBottleClick = useCallback((rackId, slot) => {
+    setEmptySlotTarget(null);
+    setSelectedBottle({ rackId, slot });
+  }, []);
+
+  // Empty slot click — show bottle picker
+  const handleEmptySlotClick = useCallback((rackId, position) => {
+    if (!canEdit) return;
+    setSelectedBottle(null);
+    setEmptySlotTarget({ rackId, position });
+    setSlotSearch('');
+  }, [canEdit]);
+
+  // Assign bottle to slot
+  const handleAssignBottle = useCallback(async (bottleId) => {
+    if (!emptySlotTarget) return;
+    const { rackId, position } = emptySlotTarget;
+    const res = await updateSlot(apiFetch, rackId, position, { bottleId });
+    const data = await res.json();
+    if (res.ok) {
+      setRacks(prev => prev.map(r => r._id === rackId ? data.rack : r));
+      setEmptySlotTarget(null);
+    }
+  }, [emptySlotTarget, apiFetch]);
+
+  // Remove bottle from rack slot
+  const handleRemoveFromRack = useCallback(async () => {
+    if (!selectedBottle) return;
+    const { rackId, slot } = selectedBottle;
+    const res = await clearSlot(apiFetch, rackId, slot.position);
+    const data = await res.json();
+    if (res.ok) {
+      setRacks(prev => prev.map(r => r._id === rackId ? data.rack : r));
+      setSelectedBottle(null);
+    }
+  }, [selectedBottle, apiFetch]);
+
+  // Consume bottle
+  const handleConsumeSubmit = useCallback(async (reason, note, rating, ratingScale) => {
+    if (!consumeModal) return;
+    const res = await consumeBottle(apiFetch, consumeModal.bottleId, {
+      reason, note, rating, consumedRatingScale: ratingScale,
+    });
+    const data = await res.json();
+    if (res.ok) {
+      setRacks(prev => prev.map(r => ({
+        ...r,
+        slots: r.slots.filter(s => {
+          const bid = s.bottle?._id || s.bottle;
+          return bid?.toString() !== consumeModal.bottleId;
+        }),
+      })));
+      setBottles(prev => prev.filter(b => b._id !== consumeModal.bottleId));
+      setConsumeModal(null);
+      setSelectedBottle(null);
+    }
+  }, [consumeModal, apiFetch]);
+
+  // Filtered bottles for slot picker
+  const filteredAvailable = useMemo(() => {
+    if (!slotSearch) return availableBottles;
+    const term = slotSearch.toLowerCase();
+    return availableBottles.filter(b => {
+      const name = (b.wineDefinition?.name || '').toLowerCase();
+      const producer = (b.wineDefinition?.producer || '').toLowerCase();
+      return name.includes(term) || producer.includes(term);
+    });
+  }, [availableBottles, slotSearch]);
+
   if (error) return <div className="alert alert-error">{error}</div>;
 
   return (
@@ -480,9 +628,14 @@ export default function CellarRoom() {
             </button>
             {isEditMode && (
               <>
-                <button className="btn btn-secondary btn-small" onClick={handleAddUnplacedRacks}>
-                  {t('room.addAllRacks', 'Add Racks')}
+                <button
+                  className={`btn btn-small ${showAddRackPicker ? 'btn-primary' : 'btn-secondary'}`}
+                  onClick={() => setShowAddRackPicker(p => !p)}
+                  disabled={unplacedRacks.length === 0}
+                >
+                  {t('room.addRack', 'Add Rack')} {unplacedRacks.length > 0 && `(${unplacedRacks.length})`}
                 </button>
+                {saveError && <span style={{ color: 'var(--color-danger)', fontSize: '0.75rem' }}>{saveError}</span>}
                 <button className="btn btn-primary btn-small" onClick={handleSave} disabled={saving}>
                   {saving ? t('common.saving', 'Saving...') : t('room.saveLayout', 'Save')}
                 </button>
@@ -521,6 +674,19 @@ export default function CellarRoom() {
                 selectedRackIds={selectedRackIds}
                 groupColorMap={groupColorMap}
                 onRackClick={(rackId, shiftKey) => {
+                  // Handle click-to-stack / click-to-link modes
+                  if (interactionMode === 'stack' && selectedRackId && rackId !== selectedRackId) {
+                    handleStackOnTarget(rackId);
+                    return;
+                  }
+                  if (interactionMode === 'link' && selectedRackId && rackId !== selectedRackId) {
+                    handleLinkToTarget(rackId);
+                    return;
+                  }
+
+                  setInteractionMode(null);
+                  setSelectedBottle(null);
+                  setEmptySlotTarget(null);
                   if (shiftKey) {
                     setSelectedRackIds(prev =>
                       prev.includes(rackId) ? prev.filter(id => id !== rackId) : [...prev, rackId]
@@ -528,10 +694,10 @@ export default function CellarRoom() {
                   } else {
                     setSelectedRackIds([rackId]);
                   }
-                  setShowStackPicker(false);
-                  setShowLinkPicker(false);
                 }}
                 onRackDragEnd={handleRackDragEnd}
+                onBottleClick={handleBottleClick}
+                onEmptySlotClick={handleEmptySlotClick}
               />
             </Suspense>
           </Canvas>
@@ -567,6 +733,152 @@ export default function CellarRoom() {
             </div>
           )}
 
+          {/* Add rack picker */}
+          {showAddRackPicker && isEditMode && (
+            <div className="room-add-rack-panel">
+              <h3>{t('room.addRack', 'Add Rack')}</h3>
+              {unplacedRacks.length === 0 ? (
+                <p className="room-add-rack-empty">{t('room.allRacksPlaced', 'All racks are placed.')}</p>
+              ) : (
+                <div className="room-add-rack-list">
+                  {unplacedRacks.map(r => (
+                    <button
+                      key={r._id}
+                      className="room-add-rack-item"
+                      onClick={() => {
+                        handleAddRack(r._id);
+                        setSelectedRackIds([r._id]);
+                      }}
+                    >
+                      <span className="room-add-rack-name">{r.name}</span>
+                      <span className="room-add-rack-info">
+                        {r.isModular ? 'modular' : r.type || 'grid'}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Bottle detail panel (left side) */}
+          {selectedBottle && (() => {
+            const bottle = selectedBottle.slot?.bottle;
+            const wine = bottle?.wineDefinition;
+            const rackObj = racks.find(r => r._id === selectedBottle.rackId);
+            return (
+              <div className="room-bottle-panel">
+                <div className="room-bottle-panel-header">
+                  <h3>{wine?.name || t('common.unknown', 'Unknown')}</h3>
+                  <button className="room-bottle-panel-close" onClick={() => setSelectedBottle(null)} aria-label="Close">&times;</button>
+                </div>
+                {wine?.image && (
+                  <img
+                    src={wine.image}
+                    alt={wine.name}
+                    className="room-bottle-panel-img"
+                    onError={e => { e.target.style.display = 'none'; }}
+                  />
+                )}
+                <div className="room-bottle-panel-info">
+                  {wine?.producer && <p className="room-bottle-producer">{wine.producer}</p>}
+                  <div className="room-bottle-meta">
+                    {wine?.type && <span className={`room-bottle-type type-${wine.type}`}>{wine.type}</span>}
+                    {bottle?.vintage && <span>{bottle.vintage}</span>}
+                  </div>
+                  {wine?.country?.name && (
+                    <p className="room-bottle-region">
+                      {wine.country.name}{wine?.region?.name ? `, ${wine.region.name}` : ''}
+                    </p>
+                  )}
+                  {wine?.appellation && <p className="room-bottle-region">{wine.appellation}</p>}
+                  {bottle?.notes && <p className="room-bottle-notes">{bottle.notes}</p>}
+                  {rackObj && (
+                    <p className="room-bottle-rack">
+                      {t('room.inRack', 'In rack')}: {rackObj.name} ({t('room.slot', 'slot')} {selectedBottle.slot.position})
+                    </p>
+                  )}
+                </div>
+                {canEdit && (
+                  <div className="room-bottle-panel-actions">
+                    <button className="btn btn-secondary btn-small" onClick={handleRemoveFromRack}>
+                      {t('racks.removeFromRack', 'Remove from Rack')}
+                    </button>
+                    <button
+                      className="btn btn-consume btn-small"
+                      onClick={() => {
+                        setConsumeModal({ bottleId: bottle._id });
+                      }}
+                    >
+                      {t('racks.remove', 'Remove')}
+                    </button>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+
+          {/* Empty slot picker (left side) */}
+          {emptySlotTarget && canEdit && (() => {
+            const rackObj = racks.find(r => r._id === emptySlotTarget.rackId);
+            return (
+              <div className="room-bottle-panel">
+                <div className="room-bottle-panel-header">
+                  <h3>{t('racks.slotPlaceBottle', { position: emptySlotTarget.position })}</h3>
+                  <button className="room-bottle-panel-close" onClick={() => setEmptySlotTarget(null)} aria-label="Close">&times;</button>
+                </div>
+                {rackObj && (
+                  <p className="room-bottle-rack" style={{ margin: '0 0 0.5rem' }}>
+                    {rackObj.name} &middot; {t('room.slot', 'slot')} {emptySlotTarget.position}
+                  </p>
+                )}
+                <input
+                  type="text"
+                  className="room-slot-search"
+                  placeholder={t('racks.searchWines', 'Search wines...')}
+                  value={slotSearch}
+                  onChange={e => setSlotSearch(e.target.value)}
+                  autoFocus
+                />
+                <div className="room-slot-bottle-list">
+                  {filteredAvailable.length === 0 ? (
+                    <p className="room-slot-empty">{t('racks.noUnplacedBottles', 'No available bottles')}</p>
+                  ) : (
+                    filteredAvailable.map(b => (
+                      <button
+                        key={b._id}
+                        className="room-slot-bottle-item"
+                        onClick={() => handleAssignBottle(b._id)}
+                      >
+                        <span className={`room-slot-type-dot type-${b.wineDefinition?.type || 'red'}`} />
+                        <div className="room-slot-bottle-info">
+                          <strong>{b.wineDefinition?.name || 'Unknown'}</strong>
+                          <span>
+                            {b.wineDefinition?.producer}{b.vintage ? ` \u00B7 ${b.vintage}` : ''}
+                            {b.wineDefinition?.country?.name ? ` \u00B7 ${b.wineDefinition.country.name}` : ''}
+                          </span>
+                        </div>
+                      </button>
+                    ))
+                  )}
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* Consume modal */}
+          {consumeModal && (
+            <div className="room-consume-overlay" onClick={() => setConsumeModal(null)}>
+              <div className="room-consume-modal" onClick={e => e.stopPropagation()}>
+                <RoomConsumeForm
+                  onSubmit={handleConsumeSubmit}
+                  onCancel={() => setConsumeModal(null)}
+                  t={t}
+                />
+              </div>
+            </div>
+          )}
+
           {/* Multi-select detail panel */}
           {selectedRackIds.length > 1 && isEditMode && (
             <div className="room-rack-detail">
@@ -588,6 +900,9 @@ export default function CellarRoom() {
                   onClick={() => setSelectedRackIds([])}
                 >
                   {t('room.clearSelection', 'Clear')}
+                </button>
+                <button className="btn btn-danger btn-small" onClick={handleRemoveFromRoom}>
+                  {t('room.removeFromRoom', 'Remove')}
                 </button>
               </div>
             </div>
@@ -619,23 +934,52 @@ export default function CellarRoom() {
                 {isEditMode && (
                   <div className="room-rack-size-controls">
                     <div className="form-group form-group-inline">
-                      <label>{t('room.rackWidth', 'Width (m)')}</label>
+                      <label>{t('room.rackScale', 'Scale')}</label>
                       <input
-                        type="number" min={0.1} max={5} step={0.01}
-                        value={selectedPlacement?.widthOverride || ''}
-                        placeholder="auto"
-                        onChange={(e) => handlePlacementField('widthOverride', e.target.value || null)}
+                        type="number" min={0.5} max={5} step={0.1}
+                        value={selectedPlacement?.scaleOverride || ''}
+                        placeholder="1.0"
+                        onChange={(e) => handlePlacementField('scaleOverride', e.target.value || null)}
                       />
                     </div>
-                    <div className="form-group form-group-inline">
-                      <label>{t('room.rackDepth', 'Depth (m)')}</label>
-                      <input
-                        type="number" min={0.1} max={2} step={0.01}
-                        value={selectedPlacement?.depthOverride || ''}
-                        placeholder="auto"
-                        onChange={(e) => handlePlacementField('depthOverride', e.target.value || null)}
-                      />
-                    </div>
+                    {selectedRack.type !== 'x-rack' && (
+                      <>
+                        <div className="form-group form-group-inline">
+                          <label>{t('room.rackWidth', 'Width (m)')}</label>
+                          <input
+                            type="number" min={0.1} max={5} step={0.01}
+                            value={selectedPlacement?.widthOverride || ''}
+                            placeholder="auto"
+                            onChange={(e) => handlePlacementField('widthOverride', e.target.value || null)}
+                          />
+                        </div>
+                        <div className="form-group form-group-inline">
+                          <label>{t('room.rackDepth', 'Depth (m)')}</label>
+                          <input
+                            type="number" min={0.1} max={2} step={0.01}
+                            value={selectedPlacement?.depthOverride || ''}
+                            placeholder="auto"
+                            onChange={(e) => handlePlacementField('depthOverride', e.target.value || null)}
+                          />
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
+                {/* Interaction mode hint */}
+                {interactionMode && (
+                  <div className="room-interaction-hint">
+                    <p>
+                      {interactionMode === 'stack'
+                        ? t('room.clickToStack', 'Click a rack to stack on top of it')
+                        : t('room.clickToLink', 'Click a rack to link with')}
+                    </p>
+                    <button
+                      className="btn btn-secondary btn-small"
+                      onClick={() => setInteractionMode(null)}
+                    >
+                      {t('common.cancel', 'Cancel')}
+                    </button>
                   </div>
                 )}
                 <div className="room-rack-detail-actions">
@@ -652,14 +996,14 @@ export default function CellarRoom() {
                         {t('room.rotateRack', 'Rotate')}
                       </button>
                       <button
-                        className="btn btn-secondary btn-small"
-                        onClick={() => { setShowStackPicker(p => !p); setShowLinkPicker(false); }}
+                        className={`btn btn-small ${interactionMode === 'stack' ? 'btn-primary' : 'btn-secondary'}`}
+                        onClick={() => setInteractionMode(m => m === 'stack' ? null : 'stack')}
                       >
                         {t('room.stackRack', 'Stack')}
                       </button>
                       <button
-                        className="btn btn-secondary btn-small"
-                        onClick={() => { setShowLinkPicker(p => !p); setShowStackPicker(false); }}
+                        className={`btn btn-small ${interactionMode === 'link' ? 'btn-primary' : 'btn-secondary'}`}
+                        onClick={() => setInteractionMode(m => m === 'link' ? null : 'link')}
                       >
                         {t('room.linkRack', 'Link')}
                       </button>
@@ -679,75 +1023,86 @@ export default function CellarRoom() {
                           {t('room.unstackRack', 'Unstack')}
                         </button>
                       )}
+                      <button
+                        className="btn btn-danger btn-small"
+                        onClick={handleRemoveFromRoom}
+                      >
+                        {t('room.removeFromRoom', 'Remove')}
+                      </button>
                     </>
                   )}
                 </div>
-                {showStackPicker && isEditMode && (
-                  <div className="room-stack-picker">
-                    <p className="room-stack-picker-label">
-                      {t('room.stackOnTop', 'Place a rack on top:')}
-                    </p>
-                    {racks.filter(r => r._id !== selectedRackId).length === 0 ? (
-                      <p className="room-stack-picker-empty">
-                        {t('room.noOtherRacks', 'No other racks available.')}
-                      </p>
-                    ) : (
-                      <div className="room-stack-picker-list">
-                        {racks.filter(r => r._id !== selectedRackId).map(r => (
-                          <button
-                            key={r._id}
-                            className="room-stack-picker-item"
-                            onClick={() => handleStackRack(r._id)}
-                          >
-                            <span className="room-stack-picker-name">{r.name}</span>
-                            <span className="room-stack-picker-info">
-                              {r.isModular ? 'modular' : r.type || 'grid'}
-                            </span>
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
-                {showLinkPicker && isEditMode && (
-                  <div className="room-stack-picker">
-                    <p className="room-stack-picker-label">
-                      {t('room.linkToRack', 'Link to a rack (move together):')}
-                    </p>
-                    {racks.filter(r => r._id !== selectedRackId).length === 0 ? (
-                      <p className="room-stack-picker-empty">
-                        {t('room.noOtherRacksToLink', 'No other racks to link.')}
-                      </p>
-                    ) : (
-                      <div className="room-stack-picker-list">
-                        {racks.filter(r => r._id !== selectedRackId).map(r => {
-                          const rPlacement = placements.find(
-                            rp => (rp.rack === r._id || rp.rack?._id === r._id)
-                          );
-                          const alreadyLinked = isInGroup && rPlacement?.group === selectedPlacement?.group;
-                          return (
-                            <button
-                              key={r._id}
-                              className={`room-stack-picker-item ${alreadyLinked ? 'already-linked' : ''}`}
-                              onClick={() => !alreadyLinked && handleLinkRack(r._id)}
-                              disabled={alreadyLinked}
-                            >
-                              <span className="room-stack-picker-name">{r.name}</span>
-                              <span className="room-stack-picker-info">
-                                {alreadyLinked ? t('room.linked', 'Linked') : (r.isModular ? 'modular' : r.type || 'grid')}
-                              </span>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-                )}
               </div>
             );
           })()}
         </div>
       )}
     </div>
+  );
+}
+
+function RoomConsumeForm({ onSubmit, onCancel, t }) {
+  const [reason, setReason] = useState('drank');
+  const [note, setNote] = useState('');
+  const [rating, setRating] = useState('');
+  const [ratingScale, setRatingScale] = useState('5');
+  const [saving, setSaving] = useState(false);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setSaving(true);
+    await onSubmit(reason, note || undefined, rating || undefined, ratingScale);
+    setSaving(false);
+  };
+
+  return (
+    <form onSubmit={handleSubmit}>
+      <h3>{t('bottleDetail.removeBottleTitle', 'Remove Bottle')}</h3>
+      <div className="form-group">
+        <label>{t('common.reason', 'Reason')}</label>
+        <select value={reason} onChange={e => setReason(e.target.value)}>
+          <option value="drank">{t('bottleDetail.drinkReason', 'Drank')}</option>
+          <option value="gifted">{t('bottleDetail.giftedReason', 'Gifted')}</option>
+          <option value="sold">{t('bottleDetail.soldReason', 'Sold')}</option>
+          <option value="other">{t('bottleDetail.otherReason', 'Other')}</option>
+        </select>
+      </div>
+      {reason === 'drank' && (
+        <div className="form-group">
+          <label>{t('common.rating', 'Rating')}</label>
+          <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+            <input
+              type="number"
+              min={0}
+              max={Number(ratingScale)}
+              step={0.5}
+              value={rating}
+              onChange={e => setRating(e.target.value)}
+              placeholder="—"
+              style={{ width: '70px' }}
+            />
+            <span>/ </span>
+            <select value={ratingScale} onChange={e => setRatingScale(e.target.value)} style={{ width: '60px' }}>
+              <option value="5">5</option>
+              <option value="10">10</option>
+              <option value="20">20</option>
+              <option value="100">100</option>
+            </select>
+          </div>
+        </div>
+      )}
+      <div className="form-group">
+        <label>{t('common.notes', 'Notes')}</label>
+        <textarea value={note} onChange={e => setNote(e.target.value)} rows={2} />
+      </div>
+      <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.75rem' }}>
+        <button type="button" className="btn btn-secondary btn-small" onClick={onCancel}>
+          {t('common.cancel', 'Cancel')}
+        </button>
+        <button type="submit" className="btn btn-consume btn-small" disabled={saving}>
+          {saving ? t('common.saving', 'Saving...') : t('common.confirm', 'Confirm')}
+        </button>
+      </div>
+    </form>
   );
 }

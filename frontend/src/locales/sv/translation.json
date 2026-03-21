@@ -378,20 +378,21 @@
     "depth": "Djup (m)",
     "height": "Höjd (m)",
     "noLayout": "Inga hyllor placerade ännu. Byt till redigeringsläge för att arrangera din källare.",
-    "addAllRacks": "Lägg till hyllor",
+    "addRack": "Lägg till hylla",
+    "allRacksPlaced": "Alla hyllor är placerade.",
     "viewRack": "Visa hylla",
     "stackRack": "Stapla",
-    "stackOnTop": "Placera en hylla ovanpå:",
-    "noOtherRacks": "Inga andra hyllor tillgängliga.",
+    "clickToStack": "Klicka på en hylla att stapla ovanpå",
     "linkRack": "Länka",
     "unlinkRack": "Avlänka",
-    "linkToRack": "Länka till en hylla (flytta tillsammans):",
+    "clickToLink": "Klicka på en hylla att länka med",
     "linked": "Länkad",
-    "noOtherRacksToLink": "Inga andra hyllor att länka.",
     "unstackRack": "Avståpla",
     "rotateRack": "Rotera",
     "rackWidth": "Bredd (m)",
-    "rackDepth": "Djup (m)"
+    "rackDepth": "Djup (m)",
+    "rackScale": "Skala",
+    "removeFromRoom": "Ta bort"
   },
 
   "wines": {

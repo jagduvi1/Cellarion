@@ -19,6 +19,8 @@ export default function RoomScene({
   groupColorMap,
   onRackClick,
   onRackDragEnd,
+  onBottleClick,
+  onEmptySlotClick,
 }) {
   const { width: rw, depth: rd, height: rh } = roomDimensions;
   const halfW = rw / 2;
@@ -314,7 +316,8 @@ export default function RoomScene({
         const rack = rackMap[rp.rack] || rackMap[rp.rack?._id];
         if (!rack) return null;
         const pos = rp.position || { x: 0, y: 0, z: 0 };
-        const rackHeight = getRackHeight(rack);
+        const rackScale = rp.scaleOverride || 1;
+        const rackHeight = getRackHeight(rack) * rackScale;
 
         return (
           <RackMesh
@@ -324,6 +327,7 @@ export default function RoomScene({
             rotation={rp.rotation || 0}
             widthOverride={rp.widthOverride}
             depthOverride={rp.depthOverride}
+            scaleOverride={rp.scaleOverride}
             isEditMode={isEditMode}
             isSelected={selectedRackIds.includes(rack._id)}
             groupColor={rp.group ? groupColorMap?.[rp.group] : null}
@@ -333,6 +337,8 @@ export default function RoomScene({
             onDragStart={handleDragStart}
             onDragEnd={(newPos) => handleDragEnd(rack._id, newPos, rp)}
             onSnapPosition={(px, pz) => computeSnapPosition(rack._id, px, pz)}
+            onBottleClick={(slot) => onBottleClick?.(rack._id, slot)}
+            onEmptySlotClick={(slotPos) => onEmptySlotClick?.(rack._id, slotPos)}
           />
         );
       })}

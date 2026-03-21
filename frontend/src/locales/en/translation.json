@@ -378,20 +378,21 @@
     "depth": "Depth (m)",
     "height": "Height (m)",
     "noLayout": "No racks placed yet. Switch to Edit mode to arrange your cellar.",
-    "addAllRacks": "Add Racks",
+    "addRack": "Add Rack",
+    "allRacksPlaced": "All racks are placed.",
     "viewRack": "View Rack",
     "stackRack": "Stack",
-    "stackOnTop": "Place a rack on top:",
-    "noOtherRacks": "No other racks available.",
+    "clickToStack": "Click a rack to stack on top of it",
     "linkRack": "Link",
     "unlinkRack": "Unlink",
-    "linkToRack": "Link to a rack (move together):",
+    "clickToLink": "Click a rack to link with",
     "linked": "Linked",
-    "noOtherRacksToLink": "No other racks to link.",
     "unstackRack": "Unstack",
     "rotateRack": "Rotate",
     "rackWidth": "Width (m)",
-    "rackDepth": "Depth (m)"
+    "rackDepth": "Depth (m)",
+    "rackScale": "Scale",
+    "removeFromRoom": "Remove"
   },
 
   "wines": {

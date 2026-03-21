@@ -195,40 +195,66 @@
   margin-top: 0.5rem;
 }
 
-/* ── Stack picker ─────────────────────────────────── */
-.room-stack-picker {
-  margin-top: 0.5rem;
-  border-top: 1px solid var(--color-border);
-  padding-top: 0.5rem;
+/* ── Interaction hint (stack/link mode) ───────────── */
+.room-interaction-hint {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.4rem;
+  padding: 0.4rem 0.6rem;
+  background: var(--color-warning-bg);
+  border: 1px solid var(--color-warning-border);
+  border-radius: var(--radius-sm);
 }
 
-.room-stack-picker-label {
+.room-interaction-hint p {
+  flex: 1;
   font-size: 0.75rem;
   font-weight: 600;
-  color: var(--color-text-secondary);
-  margin: 0 0 0.35rem 0;
+  color: var(--color-warning);
+  margin: 0;
 }
 
-.room-stack-picker-empty {
-  font-size: 0.75rem;
+/* ── Add rack picker panel ───────────────────────── */
+.room-add-rack-panel {
+  position: absolute;
+  top: 1rem;
+  left: 1rem;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  padding: 0.75rem 1rem;
+  min-width: 200px;
+  max-width: 260px;
+  z-index: 10;
+}
+
+.room-add-rack-panel h3 {
+  margin: 0 0 0.5rem 0;
+  font-size: 0.9rem;
+}
+
+.room-add-rack-empty {
+  font-size: 0.8rem;
   color: var(--color-text-muted);
   font-style: italic;
 }
 
-.room-stack-picker-list {
+.room-add-rack-list {
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
-  max-height: 160px;
+  max-height: 240px;
   overflow-y: auto;
 }
 
-.room-stack-picker-item {
+.room-add-rack-item {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 0.5rem;
-  padding: 0.35rem 0.5rem;
+  padding: 0.4rem 0.6rem;
   background: var(--color-bg);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
@@ -237,17 +263,17 @@
   transition: background 0.15s, border-color 0.15s;
 }
 
-.room-stack-picker-item:hover {
+.room-add-rack-item:hover {
   background: var(--color-surface);
   border-color: var(--color-accent, #D4A373);
 }
 
-.room-stack-picker-name {
+.room-add-rack-name {
   font-weight: 500;
   color: var(--color-text);
 }
 
-.room-stack-picker-info {
+.room-add-rack-info {
   font-size: 0.7rem;
   color: var(--color-text-muted);
   text-transform: capitalize;
@@ -277,6 +303,235 @@
   color: var(--color-text-muted);
 }
 
+/* ── Bottle detail / slot picker panel (left side) ──── */
+.room-bottle-panel {
+  position: absolute;
+  top: 1rem;
+  left: 1rem;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  padding: 1rem;
+  width: 280px;
+  max-height: calc(100% - 2rem);
+  overflow-y: auto;
+  z-index: 10;
+}
+
+.room-bottle-panel-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.room-bottle-panel-header h3 {
+  margin: 0;
+  font-size: 1rem;
+  font-family: var(--font-heading);
+  line-height: 1.3;
+}
+
+.room-bottle-panel-close {
+  background: none;
+  border: none;
+  font-size: 1.3rem;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.room-bottle-panel-close:hover {
+  color: var(--color-text);
+}
+
+.room-bottle-panel-img {
+  width: 100%;
+  max-height: 160px;
+  object-fit: contain;
+  border-radius: var(--radius-sm);
+  margin-bottom: 0.5rem;
+  background: var(--color-bg);
+}
+
+.room-bottle-panel-info {
+  font-size: 0.85rem;
+}
+
+.room-bottle-producer {
+  margin: 0 0 0.25rem;
+  color: var(--color-text-secondary);
+  font-size: 0.85rem;
+}
+
+.room-bottle-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.25rem;
+}
+
+.room-bottle-type {
+  text-transform: capitalize;
+  font-weight: 600;
+  font-size: 0.8rem;
+  padding: 0.1rem 0.4rem;
+  border-radius: 4px;
+}
+
+.room-bottle-type.type-red { background: #f8e8e8; color: #9a2020; }
+.room-bottle-type.type-white { background: #f8f4e0; color: #7a7020; }
+.room-bottle-type.type-rosé { background: #fce8f0; color: #a04060; }
+.room-bottle-type.type-sparkling { background: #e8f8f0; color: #508040; }
+.room-bottle-type.type-dessert { background: #f8f0e0; color: #8a5020; }
+.room-bottle-type.type-fortified { background: #f0e8e0; color: #7a4020; }
+
+.room-bottle-region {
+  margin: 0.15rem 0;
+  color: var(--color-text-muted);
+  font-size: 0.8rem;
+}
+
+.room-bottle-notes {
+  margin: 0.4rem 0 0;
+  font-size: 0.8rem;
+  font-style: italic;
+  color: var(--color-text-secondary);
+}
+
+.room-bottle-rack {
+  margin: 0.4rem 0 0;
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+}
+
+.room-bottle-panel-actions {
+  display: flex;
+  gap: 0.4rem;
+  margin-top: 0.75rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--color-border);
+}
+
+/* ── Slot picker (search + bottle list) ────────────── */
+.room-slot-search {
+  width: 100%;
+  padding: 0.4rem 0.5rem;
+  font-size: 0.85rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  margin-bottom: 0.5rem;
+}
+
+.room-slot-bottle-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.room-slot-bottle-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.5rem;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: 0.8rem;
+  text-align: left;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.room-slot-bottle-item:hover {
+  background: var(--color-surface);
+  border-color: var(--color-accent, #D4A373);
+}
+
+.room-slot-bottle-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.room-slot-bottle-info strong {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.room-slot-bottle-info span {
+  font-size: 0.7rem;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.room-slot-type-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.room-slot-type-dot.type-red { background: #8A1028; }
+.room-slot-type-dot.type-white { background: #C8B840; }
+.room-slot-type-dot.type-rosé { background: #D06888; }
+.room-slot-type-dot.type-sparkling { background: #88A848; }
+.room-slot-type-dot.type-dessert { background: #A06020; }
+.room-slot-type-dot.type-fortified { background: #7A3810; }
+
+.room-slot-empty {
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+  font-style: italic;
+  margin: 0;
+}
+
+/* ── Consume modal overlay ─────────────────────────── */
+.room-consume-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 20;
+}
+
+.room-consume-modal {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  padding: 1.25rem;
+  min-width: 300px;
+  max-width: 380px;
+}
+
+.room-consume-modal h3 {
+  margin: 0 0 0.75rem;
+  font-size: 1rem;
+}
+
+.room-consume-modal .form-group {
+  margin-bottom: 0.5rem;
+}
+
+.room-consume-modal select,
+.room-consume-modal input,
+.room-consume-modal textarea {
+  width: 100%;
+  font-size: 0.85rem;
+}
+
 @media (max-width: 768px) {
   .cellar-room-header {
     padding: 0.5rem 0.75rem;
@@ -286,5 +541,11 @@
     top: 0.5rem;
     right: 0.5rem;
     min-width: 180px;
+  }
+
+  .room-bottle-panel {
+    width: 220px;
+    top: 0.5rem;
+    left: 0.5rem;
   }
 }

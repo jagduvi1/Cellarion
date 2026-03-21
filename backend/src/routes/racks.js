@@ -5,6 +5,7 @@ const Rack = require('../models/Rack');
 const { RACK_TYPES } = require('../models/Rack');
 const Cellar = require('../models/Cellar');
 const Bottle = require('../models/Bottle');
+const CellarLayout = require('../models/CellarLayout');
 const { getCellarRole } = require('../utils/cellarAccess');
 const { getMaxPosition } = require('../utils/rackGeometry');
 
@@ -163,6 +164,13 @@ router.delete('/:id', async (req, res) => {
 
     rack.deletedAt = new Date();
     await rack.save();
+
+    // Remove this rack from the cellar room layout (if present)
+    await CellarLayout.updateOne(
+      { cellar: rack.cellar },
+      { $pull: { rackPlacements: { rack: rack._id } } }
+    );
+
     res.json({ message: 'Rack deleted' });
   } catch (err) {
     console.error('Delete rack error:', err);

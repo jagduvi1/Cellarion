@@ -100,27 +100,19 @@ function getBottleGeometry() {
   return _bottleProfiles.geo;
 }
 
-// ── Clickable bottle with info popup ─────────────────────
+// ── Clickable bottle (no inline popup — info shown in side panel) ────
 // Rotation [PI/2, 0, 0] maps local Y→Z so bottle points into rack
 // with neck/foil sticking out the front (+Z).
 function Bottle({ position, wineType, slot, onBottleClick }) {
-  const [showInfo, setShowInfo] = useState(false);
   const glassColor = GLASS_COLORS[wineType] || GLASS_COLORS.red;
   const wineColor = WINE_COLORS[wineType] || WINE_COLORS.red;
   const foilColor = FOIL_COLORS[wineType] || FOIL_COLORS.red;
   const emissive = EMISSIVE_COLORS[wineType] || EMISSIVE_COLORS.red;
   const bottleGeo = useMemo(() => getBottleGeometry(), []);
 
-  const bottle = slot?.bottle;
-  const wine = bottle?.wineDefinition;
-  const hasInfo = !!(wine?.name || bottle?.vintage);
-
   const handleClick = (e) => {
     e.stopPropagation();
-    if (hasInfo) {
-      setShowInfo(prev => !prev);
-      onBottleClick?.(slot);
-    }
+    onBottleClick?.(slot);
   };
 
   return (
@@ -130,7 +122,7 @@ function Bottle({ position, wineType, slot, onBottleClick }) {
         geometry={bottleGeo}
         castShadow
         onClick={handleClick}
-        onPointerOver={(e) => { e.stopPropagation(); document.body.style.cursor = hasInfo ? 'pointer' : ''; }}
+        onPointerOver={(e) => { e.stopPropagation(); document.body.style.cursor = 'pointer'; }}
         onPointerOut={() => { document.body.style.cursor = ''; }}
       >
         <meshPhysicalMaterial
@@ -167,65 +159,19 @@ function Bottle({ position, wineType, slot, onBottleClick }) {
         <cylinderGeometry args={[BOTTLE_RADIUS + 0.001, BOTTLE_RADIUS + 0.001, 0.06, 8]} />
         <meshStandardMaterial color="#F0E8D8" roughness={0.85} metalness={0} />
       </mesh>
-
-      {/* Info popup — local [0, 0.22, -0.08] maps to world [0, +0.08, +0.22] */}
-      {showInfo && hasInfo && (
-        <Html
-          position={[0, 0.22, -0.08]}
-          center
-          distanceFactor={3}
-          style={{ pointerEvents: 'auto', userSelect: 'none' }}
-        >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            style={{
-              background: 'rgba(30, 20, 10, 0.95)',
-              color: '#F0E8D8',
-              padding: '8px 12px',
-              borderRadius: '8px',
-              fontSize: '12px',
-              fontFamily: 'system-ui, -apple-system, sans-serif',
-              border: '1px solid rgba(200, 160, 100, 0.4)',
-              boxShadow: '0 4px 16px rgba(0,0,0,0.5)',
-              maxWidth: '200px',
-              whiteSpace: 'nowrap',
-              lineHeight: 1.5,
-            }}
-          >
-            {wine?.name && (
-              <div style={{ fontWeight: 700, fontSize: '13px' }}>{typeof wine.name === 'object' ? wine.name.name : wine.name}</div>
-            )}
-            {wine?.producer && (
-              <div style={{ opacity: 0.7, fontSize: '11px' }}>{typeof wine.producer === 'object' ? wine.producer.name : wine.producer}</div>
-            )}
-            <div style={{ display: 'flex', gap: '8px', marginTop: '2px', fontSize: '11px', opacity: 0.8 }}>
-              {bottle?.vintage && <span>{bottle.vintage}</span>}
-              {wine?.type && <span style={{ textTransform: 'capitalize' }}>{typeof wine.type === 'object' ? wine.type.name : wine.type}</span>}
-              {wine?.country && <span>{typeof wine.country === 'object' ? wine.country.name : wine.country}</span>}
-            </div>
-            <div
-              style={{
-                marginTop: '4px',
-                fontSize: '10px',
-                opacity: 0.5,
-                cursor: 'pointer',
-                textAlign: 'right',
-              }}
-              onClick={(e) => { e.stopPropagation(); setShowInfo(false); }}
-            >
-              close
-            </div>
-          </div>
-        </Html>
-      )}
     </group>
   );
 }
 
-// ── Empty slot (ring at cubby opening) ───────────────────
-function EmptySlot({ position }) {
+// ── Empty slot (ring at cubby opening, clickable) ────────
+function EmptySlot({ position, slotPosition, onClick }) {
   return (
-    <mesh position={[position[0], position[1], RACK_DEPTH / 2 - 0.005]}>
+    <mesh
+      position={[position[0], position[1], RACK_DEPTH / 2 - 0.005]}
+      onClick={(e) => { e.stopPropagation(); onClick?.(slotPosition); }}
+      onPointerOver={(e) => { if (onClick) { e.stopPropagation(); document.body.style.cursor = 'pointer'; } }}
+      onPointerOut={() => { document.body.style.cursor = ''; }}
+    >
       <torusGeometry args={[BOTTLE_RADIUS - 0.005, 0.003, 6, 16]} />
       <meshStandardMaterial color="#9A8A70" transparent opacity={0.3} />
     </mesh>
@@ -251,15 +197,23 @@ function computeSlotPositions(rows, cols, width, height) {
   return positions;
 }
 
-// X-Rack: 4 triangular sections, bottles arranged in rows from wall to center
+// X-Rack: 4 triangular sections — mirrors the SVG rackLayouts algorithm exactly
 function computeXRackSlotPositions(bps, width, height) {
-  const total = 4 * bps;
-  // Number of rows per section
   let k = 1;
   while (k * (k + 1) / 2 < bps) k++;
 
+  // SVG layout constants (from rackLayouts.js) for proportional mapping
+  const CELL_SVG = 48; // SLOT_R*2 + SLOT_GAP = 20*2+8
+  const SLOT_R_SVG = 20;
+  const rowStepSVG = CELL_SVG * 0.78;
+  const colStepSVG = CELL_SVG * 0.82;
+  const centerGapSVG = CELL_SVG * 0.35;
+  const halfSideSVG = k * rowStepSVG + centerGapSVG + SLOT_R_SVG;
+
+  // Scale from SVG space to 3D inner dimensions
   const halfW = width / 2;
-  const halfH = height / 2;
+  const scale = halfW / halfSideSVG;
+
   const positions = [];
   let pos = 1;
 
@@ -267,19 +221,17 @@ function computeXRackSlotPositions(bps, width, height) {
     let placed = 0;
     for (let row = 0; row < k && placed < bps; row++) {
       const bottlesInRow = Math.min(k - row, bps - placed);
-      // Fraction: 0 = at wall, 1 = at center
-      const frac = (row + 0.5) / (k + 0.3);
-      const distFromCenter = halfW * (1 - frac) * 0.85;
-      const colStep = width / (k + 1) * 0.82;
+      const distFromCenter = (halfSideSVG - SLOT_R_SVG - row * rowStepSVG) * scale;
 
       for (let col = 0; col < bottlesInRow; col++) {
-        const lateral = (col - (bottlesInRow - 1) / 2) * colStep;
+        const lateral = (col - (bottlesInRow - 1) / 2) * colStepSVG * scale;
         let x, y;
+        // Mirror SVG sections but flip y-axis (SVG y-down → 3D y-up)
         switch (section) {
-          case 0: x = lateral; y = distFromCenter; break;
-          case 1: x = distFromCenter; y = lateral; break;
-          case 2: x = -lateral; y = -distFromCenter; break;
-          case 3: x = -distFromCenter; y = -lateral; break;
+          case 0: x = lateral;          y = distFromCenter; break;   // top
+          case 1: x = distFromCenter;   y = -lateral; break;         // right
+          case 2: x = -lateral;         y = -distFromCenter; break;  // bottom
+          case 3: x = -distFromCenter;  y = lateral; break;          // left
           default: x = 0; y = 0;
         }
         positions.push({ position: pos++, x, y, z: 0 });
@@ -357,6 +309,7 @@ export default function RackMesh({
   rotation = 0,
   widthOverride,
   depthOverride,
+  scaleOverride,
   isEditMode,
   isSelected,
   groupColor,
@@ -366,6 +319,7 @@ export default function RackMesh({
   onDragStart,
   onDragEnd,
   onBottleClick,
+  onEmptySlotClick,
   onSnapPosition,
 }) {
   const groupRef = useRef();
@@ -385,6 +339,8 @@ export default function RackMesh({
   const { displayRows, displayCols } = getDisplayDims(rack);
 
   // Default computed size; overrides allow matching real-world dimensions
+  // scaleOverride applies uniform scaling via a Three.js group transform
+  const rackScale = scaleOverride || 1;
   const defaultWidth = displayCols * CELL_W + PANEL_THICK * 2;
   const width = widthOverride || defaultWidth;
   const depth = depthOverride || RACK_DEPTH;
@@ -431,11 +387,12 @@ export default function RackMesh({
   }, [rackType, rack.rows, rack.cols, displayRows, displayCols, innerW, innerH]);
 
   const edgesGeom = useMemo(() => {
-    const box = new THREE.BoxGeometry(width + 0.02, height + 0.02, depth + 0.02);
+    const sw = width * rackScale, sh = height * rackScale, sd = depth * rackScale;
+    const box = new THREE.BoxGeometry(sw + 0.02, sh + 0.02, sd + 0.02);
     const edges = new THREE.EdgesGeometry(box);
     box.dispose();
     return edges;
-  }, [width, height, depth]);
+  }, [width, height, depth, rackScale]);
 
   // ── Drag logic ─────────────────────────────────────────
   const floorPlane = useMemo(() => new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), []);
@@ -513,6 +470,7 @@ export default function RackMesh({
 
   return (
     <group ref={groupRef} position={position} rotation={[0, rotRad, 0]}>
+    <group scale={[rackScale, rackScale, rackScale]}>
 
       {/* ── Side panels (full height, open depth) ──── */}
       <mesh position={[-width / 2 + PANEL_THICK / 2, 0, -depth * 0.05]} castShadow>
@@ -640,7 +598,7 @@ export default function RackMesh({
             onBottleClick={onBottleClick}
           />
         ) : (
-          <EmptySlot key={pos} position={[x, y, 0]} />
+          <EmptySlot key={pos} position={[x, y, 0]} slotPosition={pos} onClick={onEmptySlotClick} />
         );
       })}
 
@@ -656,10 +614,12 @@ export default function RackMesh({
         <meshBasicMaterial transparent opacity={0} side={THREE.DoubleSide} />
       </mesh>
 
-      {/* ── Floating label (only when selected or hovered) ── */}
+    </group>{/* close scale group */}
+
+      {/* ── Floating label (outside scale group for readability) ── */}
       {(isSelected || hovered) && (
         <Html
-          position={[0, height / 2 + 0.07, 0]}
+          position={[0, height * rackScale / 2 + 0.07, 0]}
           center
           distanceFactor={5}
           style={{ pointerEvents: 'none', userSelect: 'none' }}
@@ -686,8 +646,8 @@ export default function RackMesh({
 
       {/* ── Group link indicator ring ───────────────────── */}
       {groupColor && (
-        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -height / 2 + 0.003, 0]}>
-          <ringGeometry args={[Math.max(width, depth) * 0.55, Math.max(width, depth) * 0.63, 32]} />
+        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -height * rackScale / 2 + 0.003, 0]}>
+          <ringGeometry args={[Math.max(width, depth) * rackScale * 0.55, Math.max(width, depth) * rackScale * 0.63, 32]} />
           <meshBasicMaterial color={groupColor} transparent opacity={0.45} side={THREE.DoubleSide} />
         </mesh>
       )}
@@ -701,8 +661,8 @@ export default function RackMesh({
 
       {/* ── Edit-mode glow ring ───────────────────────── */}
       {isEditMode && isSelected && (
-        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -height / 2 + 0.005, 0]}>
-          <ringGeometry args={[Math.max(width, depth) * 0.6, Math.max(width, depth) * 0.7, 32]} />
+        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -height * rackScale / 2 + 0.005, 0]}>
+          <ringGeometry args={[Math.max(width, depth) * rackScale * 0.6, Math.max(width, depth) * rackScale * 0.7, 32]} />
           <meshBasicMaterial color="#f1c40f" transparent opacity={0.25} side={THREE.DoubleSide} />
         </mesh>
       )}

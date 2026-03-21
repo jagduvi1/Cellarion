@@ -34,7 +34,7 @@ router.put('/', requireCellarAccess('editor'), async (req, res) => {
         return res.status(400).json({ error: `Maximum ${MAX_RACK_PLACEMENTS} rack placements allowed` });
       }
       // Validate that referenced racks belong to this cellar
-      const rackIds = rackPlacements.map(rp => rp.rack).filter(Boolean);
+      const rackIds = [...new Set(rackPlacements.map(rp => rp.rack).filter(Boolean))];
       if (rackIds.length > 0) {
         const validCount = await Rack.countDocuments({
           _id: { $in: rackIds },
@@ -59,8 +59,11 @@ router.put('/', requireCellarAccess('editor'), async (req, res) => {
 
     res.json({ layout });
   } catch (err) {
-    console.error('Save cellar layout error:', err);
-    res.status(500).json({ error: 'Failed to save cellar layout' });
+    console.error('Save cellar layout error:', err.message, err.errors ? JSON.stringify(err.errors) : '');
+    const msg = err.name === 'ValidationError'
+      ? `Validation: ${Object.values(err.errors || {}).map(e => e.message).join(', ')}`
+      : 'Failed to save cellar layout';
+    res.status(500).json({ error: msg });
   }
 });
 
