@@ -191,32 +191,28 @@ router.post('/validate', async (req, res) => {
 
     const isAdmin = req.user.roles && req.user.roles.includes('admin');
 
-    // Pass 1: library matching for all items (sequential — DB queries)
-    // If item.forceAi === true, skip DB matching and treat as no-match so AI runs.
+    // Build preResults array and validate required fields
     const preResults = [];
     for (let i = 0; i < items.length; i++) {
       const { forceAi, ...item } = items[i];
       if (!item.wineName && !item.producer) {
         preResults.push({ index: i, item, errorMsg: 'Wine name or producer is required' });
-      } else if (forceAi) {
-        preResults.push({ index: i, item, matches: [] });
       } else {
-        const matches = await findWineMatches(item);
-        preResults.push({ index: i, item, matches });
+        preResults.push({ index: i, item, matches: [] });
       }
     }
 
-    // Pass 2: deduplicated parallel AI identification for all no-match items.
-    // Items sharing the same normalized name+producer make only ONE AI call —
-    // the result is shared so duplicates (same wine, different vintages) don't
-    // each trigger a separate Claude request.
-    const noMatchPrs = process.env.ANTHROPIC_API_KEY
-      ? preResults.filter(pr => pr.matches && pr.matches.length === 0 && pr.item.wineName && pr.item.producer)
+    // Pass 1: AI identification FIRST for all valid items (deduplicated).
+    // AI is better at distinguishing similar wines (e.g. single vineyard vs
+    // generic Barolo) so it runs before fuzzy matching to produce accurate
+    // wine identity data that the DB match can then use.
+    const aiEligible = process.env.ANTHROPIC_API_KEY
+      ? preResults.filter(pr => !pr.errorMsg && pr.item.wineName && pr.item.producer)
       : [];
 
-    // Build unique wine keys and map them to the first preResult that needs the AI call
+    // Build unique wine keys — one AI call per unique wine, not per bottle
     const aiKeyMap = new Map(); // normalizedKey -> preResult (representative)
-    for (const pr of noMatchPrs) {
+    for (const pr of aiEligible) {
       const key = `${normalizeString(pr.item.wineName)}:${normalizeString(pr.item.producer)}`;
       if (!aiKeyMap.has(key)) aiKeyMap.set(key, pr);
     }
@@ -240,13 +236,12 @@ router.post('/validate', async (req, res) => {
       aiByKey.set(key, aiSettled[j]);
     }
 
-    // Attach the shared AI result to every no-match preResult with that key
-    for (const pr of noMatchPrs) {
+    // Attach the shared AI result to every eligible preResult with that key
+    for (const pr of aiEligible) {
       const key = `${normalizeString(pr.item.wineName)}:${normalizeString(pr.item.producer)}`;
       const settled = aiByKey.get(key);
       if (settled.status === 'fulfilled') {
-        // identifyWineFromText now returns { data, debugRaw, debugReason }
-        pr.aiIdentified = settled.value.data;        // null = AI returned unknown
+        pr.aiIdentified = settled.value.data;
         pr.aiDebugRaw    = settled.value.debugRaw;
         pr.aiDebugReason = settled.value.debugReason;
       } else {
@@ -254,8 +249,9 @@ router.post('/validate', async (req, res) => {
       }
     }
 
-    // Pass 3: create wines for AI-identified items, deduplicated by wine key
-    // so findOrCreateWine is called once per unique wine (not once per bottle).
+    // Pass 2: create/find wines for AI-identified items, deduplicated by wine key.
+    // findOrCreateWine internally does fuzzy matching using the AI-refined
+    // name/producer, which is more accurate than matching raw import data.
     const createdWineCache = new Map(); // normalizedKey -> { wine, created } | { error }
     for (const pr of preResults) {
       if (!pr.aiIdentified) continue;
@@ -277,6 +273,14 @@ router.post('/validate', async (req, res) => {
       }
     }
 
+    // Pass 3: fuzzy matching fallback for items without AI results
+    // (API key not set, AI failed, or missing name/producer for AI)
+    for (const pr of preResults) {
+      if (pr.errorMsg || pr.aiWine) continue; // skip errors and AI-matched items
+      const matches = await findWineMatches(pr.item);
+      pr.matches = matches;
+    }
+
     // Pass 4: build final results
     const results = [];
     for (const pr of preResults) {
@@ -286,41 +290,30 @@ router.post('/validate', async (req, res) => {
       }
 
       let status, resultMatches, aiDebug = null;
-      const { matches } = pr;
 
-      if (matches.length === 0) {
-        if (pr.aiWine) {
-          status = 'ai_match';
-          resultMatches = [{
-            wineId: pr.aiWine._id,
-            name: pr.aiWine.name,
-            producer: pr.aiWine.producer,
-            country: pr.aiWine.country?.name || null,
-            region: pr.aiWine.region?.name || null,
-            appellation: pr.aiWine.appellation || null,
-            type: pr.aiWine.type,
-            image: pr.aiWine.image || null,
-            score: pr.aiIdentified.confidence ?? 1,
-            aiIdentified: true
-          }];
-          // no aiDebug needed for ai_match — wine was successfully identified
+      if (pr.aiWine) {
+        // AI successfully identified and found/created the wine
+        status = 'ai_match';
+        resultMatches = [{
+          wineId: pr.aiWine._id,
+          name: pr.aiWine.name,
+          producer: pr.aiWine.producer,
+          country: pr.aiWine.country?.name || null,
+          region: pr.aiWine.region?.name || null,
+          appellation: pr.aiWine.appellation || null,
+          type: pr.aiWine.type,
+          image: pr.aiWine.image || null,
+          score: pr.aiIdentified.confidence ?? 1,
+          aiIdentified: true
+        }];
+      } else if (pr.matches.length > 0) {
+        // AI failed or unavailable, but fuzzy matching found candidates
+        const { matches } = pr;
+        if (matches[0].score >= EXACT_THRESHOLD) {
+          status = 'exact';
         } else {
-          status = 'no_match';
-          resultMatches = [];
-
-          // Include AI debug info for all users when AI was attempted
-          if (process.env.ANTHROPIC_API_KEY && (pr.item.wineName || pr.item.producer)) {
-            const aiStatus = pr.aiError || pr.aiDebugReason === 'rate_limit_exceeded' ||
-              (pr.aiDebugReason && pr.aiDebugReason.startsWith('exception'))
-              ? 'failed' : (pr.aiWineError ? 'create_failed' : 'searched');
-            const aiExplanation = aiStatus === 'create_failed' && pr.aiWineError
-              ? pr.aiWineError
-              : extractAiExplanation(pr.aiDebugRaw);
-            aiDebug = { aiStatus, ...(aiExplanation && { aiExplanation }) };
-          }
+          status = 'fuzzy';
         }
-      } else if (matches[0].score >= EXACT_THRESHOLD) {
-        status = 'exact';
         resultMatches = matches.map(m => ({
           wineId: m.wine._id,
           name: m.wine.name,
@@ -333,18 +326,20 @@ router.post('/validate', async (req, res) => {
           score: Math.round(m.score * 100) / 100
         }));
       } else {
-        status = 'fuzzy';
-        resultMatches = matches.map(m => ({
-          wineId: m.wine._id,
-          name: m.wine.name,
-          producer: m.wine.producer,
-          country: m.wine.country?.name || null,
-          region: m.wine.region?.name || null,
-          appellation: m.wine.appellation || null,
-          type: m.wine.type,
-          image: m.wine.image || null,
-          score: Math.round(m.score * 100) / 100
-        }));
+        // No match from either AI or fuzzy
+        status = 'no_match';
+        resultMatches = [];
+
+        // Include AI debug info when AI was attempted but failed
+        if (process.env.ANTHROPIC_API_KEY && (pr.item.wineName || pr.item.producer)) {
+          const aiStatus = pr.aiError || pr.aiDebugReason === 'rate_limit_exceeded' ||
+            (pr.aiDebugReason && pr.aiDebugReason.startsWith('exception'))
+            ? 'failed' : (pr.aiWineError ? 'create_failed' : 'searched');
+          const aiExplanation = aiStatus === 'create_failed' && pr.aiWineError
+            ? pr.aiWineError
+            : extractAiExplanation(pr.aiDebugRaw);
+          aiDebug = { aiStatus, ...(aiExplanation && { aiExplanation }) };
+        }
       }
 
       const result = { index: pr.index, item: pr.item, status, matches: resultMatches };

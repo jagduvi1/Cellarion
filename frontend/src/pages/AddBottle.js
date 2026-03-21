@@ -275,16 +275,32 @@ function AddBottle() {
     setError(null);
   }, []);
 
-  // Debounce search: wait 300ms after the user stops typing before firing
+  // Debounce search: wait 300ms after the user stops typing before firing.
+  // Runs both fuzzy search and AI identification in parallel so the AI can
+  // correctly distinguish similar wines (e.g. single vineyard vs generic).
   const handleSearch = useCallback(() => {
     if (!search.trim()) { setWines([]); return; }
+    const query = search.trim();
     setLoading(true);
     setAiSearchError(null);
-    searchWines(apiFetch, `search=${encodeURIComponent(search.trim())}&limit=10`)
+    setAiSearching(true);
+    setAiResult(null);
+
+    // Fuzzy search (fast)
+    searchWines(apiFetch, `search=${encodeURIComponent(query)}&limit=10`)
       .then(res => res.json())
       .then(data => { if (data.wines) setWines(data.wines); })
       .catch(err => console.error('Search failed:', err))
       .finally(() => setLoading(false));
+
+    // AI identification in parallel (slower but more accurate)
+    identifyWineByText(apiFetch, query)
+      .then(res => res.json())
+      .then(data => {
+        if (data.wine) setAiResult(data.wine);
+      })
+      .catch(() => { /* AI failure is non-fatal — fuzzy results still available */ })
+      .finally(() => setAiSearching(false));
   }, [search, apiFetch]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSearchKeyDown = (e) => {
