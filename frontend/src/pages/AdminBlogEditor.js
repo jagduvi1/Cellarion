@@ -277,9 +277,15 @@ function AdminBlogEditor() {
               onChange={e => setCoverImage(e.target.value)}
               placeholder="https://..."
             />
-            {coverImage && /^https?:\/\//i.test(coverImage) && (
-              <img src={coverImage} alt="Cover preview" className="blog-editor-cover-preview" />
-            )}
+            {coverImage && (() => {
+              try {
+                const parsed = new URL(coverImage);
+                if (parsed.protocol === 'https:' || parsed.protocol === 'http:') {
+                  return <img src={parsed.href} alt="Cover preview" className="blog-editor-cover-preview" />;
+                }
+              } catch { /* invalid URL */ }
+              return null;
+            })()}
           </div>
 
           <div className="blog-editor-field">
