@@ -50,7 +50,7 @@ export default function CellarRoom() {
   const fetchData = async () => {
     try {
       const [cellarRes, racksRes, layoutRes] = await Promise.all([
-        getCellar(apiFetch, id),
+        getCellar(apiFetch, id, 'limit=200'),
         getRacks(apiFetch, id),
         getCellarLayout(apiFetch, id),
       ]);

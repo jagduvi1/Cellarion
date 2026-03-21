@@ -88,7 +88,7 @@ function CellarRacks() {
   const fetchAll = async () => {
     try {
       const [cellarRes, racksRes] = await Promise.all([
-        getCellar(apiFetch, id),
+        getCellar(apiFetch, id, 'limit=200'),
         getRacks(apiFetch, id)
       ]);
       const cellarData = await cellarRes.json();
