@@ -1,0 +1,99 @@
+/* ── Rack SVG Container ────────────────────────────────────── */
+.rack-svg-wrapper {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  border-radius: 8px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08), inset 0 1px 3px rgba(0, 0, 0, 0.06);
+  border: 1px solid rgba(180, 150, 100, 0.3);
+}
+
+.rack-svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 70vh;
+}
+
+/* ── Slot interactions ────────────────────────────────────── */
+.rack-slot-g {
+  transition: transform 0.15s ease;
+}
+
+.rack-slot-g:hover circle:first-child {
+  filter: brightness(1.1);
+}
+
+.rack-slot-g.filled:hover circle:first-child {
+  filter: brightness(1.2);
+}
+
+.rack-slot-g.active circle:first-child {
+  filter: brightness(1.15);
+}
+
+.rack-slot-g.empty:hover circle:first-child {
+  fill: #B89868;
+}
+
+/* Position number text */
+.slot-number {
+  fill: rgba(100, 70, 40, 0.4);
+  font-size: 11px;
+  font-family: system-ui, -apple-system, sans-serif;
+  font-weight: 500;
+  user-select: none;
+}
+
+/* Highlight animation */
+.highlight-ring {
+  animation: svg-rack-pulse 1.4s ease-in-out 4;
+}
+
+@keyframes svg-rack-pulse {
+  0%, 100% {
+    opacity: 0.3;
+    stroke-width: 2;
+  }
+  50% {
+    opacity: 1;
+    stroke-width: 4;
+  }
+}
+
+/* ── Rack header ──────────────────────────────────────────── */
+.rack-container {
+  margin-bottom: 1rem;
+}
+
+.rack-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.75rem;
+  gap: 1rem;
+}
+
+.rack-header h2 {
+  margin: 0;
+  font-size: 1.15rem;
+}
+
+.rack-dims {
+  color: var(--color-text-secondary, #888);
+  font-size: 0.85rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.rack-type-badge {
+  display: inline-block;
+  background: rgba(180, 150, 100, 0.15);
+  color: var(--color-text, #333);
+  padding: 0.1rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  text-transform: capitalize;
+  font-weight: 500;
+  border: 1px solid rgba(180, 150, 100, 0.3);
+}

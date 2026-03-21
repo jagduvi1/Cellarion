@@ -142,89 +142,22 @@
   color: var(--color-text-muted);
 }
 
-/* ---- Rack grid (keep dark wood aesthetic) ---- */
-.rack-grid {
-  display: grid;
-  grid-template-columns: repeat(var(--rack-cols), 1fr);
-  gap: min(10px, 2vw);
-  max-width: calc(var(--rack-cols) * 54px + 22px);
-  padding: min(16px, 3vw);
-  background: #5c3d1e;
-  border-radius: 10px;
-  box-shadow: inset 0 2px 8px rgba(0,0,0,0.4), 0 4px 12px rgba(0,0,0,0.2);
+/* ---- Create mode toggle ---- */
+.new-rack-section {
+  margin-bottom: 1.5rem;
 }
 
-.rack-slot {
-  position: relative;
-  width: 100%;
-  aspect-ratio: 1;
-  min-width: 24px;
-  border-radius: 50%;
-  border: 2px solid #a07850;
-  cursor: pointer;
+.create-mode-toggle {
   display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: border-color 0.15s, background 0.15s, box-shadow 0.15s, transform 0.1s;
-  background: #3a2410;
-  box-shadow: inset 0 2px 5px rgba(0,0,0,0.5);
+  gap: 0.25rem;
+  margin-bottom: 1rem;
 }
 
-.rack-slot.empty:hover {
-  border-color: #c9a96e;
-  background: #4a3218;
-  box-shadow: inset 0 2px 5px rgba(0,0,0,0.4), 0 0 0 2px rgba(201,169,110,0.4);
-  transform: scale(1.08);
-}
-
-/* Wine-type solid colors for filled slots */
-.rack-slot.filled.type-red        { background: #c0392b; border-color: #922b21; }
-.rack-slot.filled.type-white      { background: #d4ac0d; border-color: #9a7d0a; }
-.rack-slot.filled.type-rosé       { background: #e91e8c; border-color: #ad1457; }
-.rack-slot.filled.type-sparkling  { background: #27ae60; border-color: #1e8449; }
-.rack-slot.filled.type-dessert    { background: #8e44ad; border-color: #6c3483; }
-.rack-slot.filled.type-fortified  { background: #d35400; border-color: #a04000; }
-
-/* Bottle opening highlight */
-.rack-slot.filled::after {
-  content: '';
-  position: absolute;
-  width: 50%;
-  height: 50%;
-  border-radius: 50%;
-  background: rgba(0,0,0,0.25);
-  box-shadow: inset 0 1px 3px rgba(0,0,0,0.6);
-  pointer-events: none;
-}
-
-.rack-slot.filled:hover {
-  box-shadow: inset 0 2px 5px rgba(0,0,0,0.4), 0 0 0 3px rgba(255,255,255,0.25);
-  transform: scale(1.08);
-}
-
-.rack-slot.active {
-  box-shadow: inset 0 2px 5px rgba(0,0,0,0.4), 0 0 0 3px rgba(255,255,255,0.5);
-  transform: scale(1.08);
-  z-index: 100;
-}
-
-/* Highlighted slot */
-@keyframes rack-pulse {
-  0%   { box-shadow: inset 0 2px 5px rgba(0,0,0,0.4), 0 0 0 3px #f1c40f, 0 0 12px 4px rgba(241,196,15,0.6); }
-  50%  { box-shadow: inset 0 2px 5px rgba(0,0,0,0.4), 0 0 0 5px #f1c40f, 0 0 20px 8px rgba(241,196,15,0.3); }
-  100% { box-shadow: inset 0 2px 5px rgba(0,0,0,0.4), 0 0 0 3px #f1c40f, 0 0 12px 4px rgba(241,196,15,0.6); }
-}
-
-.rack-slot.highlighted {
-  animation: rack-pulse 1.4s ease-in-out 4;
-  z-index: 100;
-}
-
-.slot-num {
-  font-size: 0.55rem;
-  color: #c9a96e;
-  user-select: none;
-  font-weight: 600;
+/* ---- New rack form preview hint ---- */
+.new-rack-preview-hint {
+  margin-top: 0.75rem;
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
 }
 
 /* ---- Slot modal overlay ---- */

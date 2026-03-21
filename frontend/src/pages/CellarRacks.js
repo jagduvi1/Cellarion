@@ -3,9 +3,12 @@ import { useParams, Link, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import { getCellar } from '../api/cellars';
-import { getRacks, deleteRack, updateSlot, clearSlot } from '../api/racks';
+import { getRacks, deleteRack, updateSlot, clearSlot, createRack } from '../api/racks';
 import { consumeBottle } from '../api/bottles';
 import { getPlacedBottleIds, getAvailableBottles } from '../utils/rackUtils';
+import { getTotalSlots, getModularTotalSlots } from '../utils/rackLayouts';
+import RackRenderer from '../components/racks/RackRenderer';
+import RackTypeSelector, { TYPE_DIMENSIONS } from '../components/racks/RackTypeSelector';
 import RatingInput from '../components/RatingInput';
 import './CellarRacks.css';
 
@@ -25,9 +28,8 @@ function CellarRacks() {
 
   // "new rack" form
   const [showNewRack, setShowNewRack] = useState(false);
-  const [newRack, setNewRack]         = useState({ name: '', rows: 4, cols: 8 });
+  const [newRack, setNewRack]         = useState({ name: '', type: 'grid', rows: 4, cols: 8, typeConfig: {} });
   const [saving, setSaving]           = useState(false);
-
   // which rack tab is selected
   const [selectedRackId, setSelectedRackId] = useState(null);
 
@@ -40,6 +42,8 @@ function CellarRacks() {
   useEffect(() => {
     fetchAll();
   }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const focusRackId = searchParams.get('rack');
 
   // When racks load and a highlight param is set, find and select that slot
   useEffect(() => {
@@ -56,6 +60,20 @@ function CellarRacks() {
       }
     }
   }, [highlightBottleId, racks]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Auto-select rack when navigating from room view with ?rack=<id>
+  useEffect(() => {
+    if (!focusRackId || racks.length === 0) return;
+    const found = racks.find(r => r._id === focusRackId);
+    if (found) {
+      setSelectedRackId(found._id);
+      // Scroll to the rack after a short delay for rendering
+      setTimeout(() => {
+        const el = document.getElementById(`rack-${found._id}`);
+        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 100);
+    }
+  }, [focusRackId, racks]);
 
   // Compute set of bottle IDs already placed in any rack
   const placedBottleIds = useMemo(() => getPlacedBottleIds(racks), [racks]);
@@ -96,16 +114,22 @@ function CellarRacks() {
     e.preventDefault();
     setSaving(true);
     try {
-      const res = await apiFetch('/api/racks', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ cellar: id, ...newRack })
-      });
+      const payload = {
+        cellar: id,
+        name: newRack.name,
+        type: newRack.type,
+        rows: newRack.rows,
+        cols: newRack.cols,
+      };
+      if (newRack.typeConfig && Object.keys(newRack.typeConfig).length > 0) {
+        payload.typeConfig = newRack.typeConfig;
+      }
+      const res = await createRack(apiFetch, payload);
       const data = await res.json();
       if (res.ok) {
         setRacks([...racks, data.rack]);
         setSelectedRackId(data.rack._id);
-        setNewRack({ name: '', rows: 4, cols: 8 });
+        setNewRack({ name: '', type: 'grid', rows: 4, cols: 8, typeConfig: {} });
         setShowNewRack(false);
       } else {
         alert(data.error || 'Failed to create rack');
@@ -113,6 +137,20 @@ function CellarRacks() {
     } finally {
       setSaving(false);
     }
+  };
+
+  // When rack type changes, reset dimensions to sensible defaults
+  const handleTypeChange = (type) => {
+    const dims = TYPE_DIMENSIONS[type] || TYPE_DIMENSIONS.grid;
+    setNewRack(prev => ({
+      ...prev,
+      type,
+      rows: dims.defaultRows,
+      cols: dims.defaultCols,
+      typeConfig: type === 'cube'
+        ? { moduleRows: 2, moduleCols: 2 }
+        : (type === 'diamond' || type === 'shelf') ? { bottlesPerCell: 1 } : {},
+    }));
   };
 
   // --- delete rack ---
@@ -196,10 +234,17 @@ function CellarRacks() {
             </>
           )}
         </div>
-        {!loading && canEdit && (
-          <button className="btn btn-primary" onClick={() => setShowNewRack(v => !v)}>
-            {showNewRack ? t('common.cancel') : `+ ${t('racks.newRack')}`}
-          </button>
+        {!loading && (
+          <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+            <Link to={`/cellars/${id}/room`} className="btn btn-secondary btn-small">
+              {t('room.title', 'Room View')}
+            </Link>
+            {canEdit && (
+              <button className="btn btn-primary" onClick={() => setShowNewRack(v => !v)}>
+                {showNewRack ? t('common.cancel') : `+ ${t('racks.newRack')}`}
+              </button>
+            )}
+          </div>
         )}
       </div>
 
@@ -208,42 +253,15 @@ function CellarRacks() {
       ) : <>
 
       {canEdit && showNewRack && (
-        <form className="card new-rack-form" onSubmit={handleCreateRack}>
-          <h3>{t('racks.newRackTitle')}</h3>
-          <div className="new-rack-fields">
-            <div className="form-group">
-              <label>{t('racks.nameLabel')}</label>
-              <input
-                type="text"
-                value={newRack.name}
-                onChange={e => setNewRack({ ...newRack, name: e.target.value })}
-                placeholder={t('racks.namePlaceholder')}
-                required
-              />
-            </div>
-            <div className="form-group">
-              <label>{t('racks.rowsLabel')}</label>
-              <input
-                type="number"
-                min={1} max={20}
-                value={newRack.rows}
-                onChange={e => setNewRack({ ...newRack, rows: parseInt(e.target.value) || 4 })}
-              />
-            </div>
-            <div className="form-group">
-              <label>{t('racks.colsLabel')}</label>
-              <input
-                type="number"
-                min={1} max={20}
-                value={newRack.cols}
-                onChange={e => setNewRack({ ...newRack, cols: parseInt(e.target.value) || 8 })}
-              />
-            </div>
-            <button type="submit" className="btn btn-primary" disabled={saving}>
-              {saving ? t('racks.creating') : t('racks.createRack')}
-            </button>
-          </div>
-        </form>
+        <div className="new-rack-section">
+          <NewRackForm
+            newRack={newRack}
+            setNewRack={setNewRack}
+            onTypeChange={handleTypeChange}
+            onSubmit={handleCreateRack}
+            saving={saving}
+          />
+        </div>
       )}
 
       {racks.length === 0 ? (
@@ -260,11 +278,16 @@ function CellarRacks() {
                 onClick={() => { setSelectedRackId(r._id); setActivePopup(null); }}
               >
                 {r.name}
-                <span className="rack-tab-count">{r.slots.length}/{r.rows * r.cols}</span>
+                <span className="rack-tab-count">
+                  {r.slots.length}/{r.isModular && r.modules?.length > 0
+                    ? getModularTotalSlots(r.modules)
+                    : getTotalSlots(r.type || 'grid', r.rows, r.cols, r.typeConfig)}
+                </span>
               </button>
             ))}
           </div>
-          <RackGrid
+          <div id={`rack-${rack._id}`}>
+          <RackRenderer
             rack={rack}
             canEdit={canEdit}
             activeRackId={activePopup?.rackId}
@@ -281,6 +304,7 @@ function CellarRacks() {
             }}
             onDelete={() => handleDeleteRack(rack._id)}
           />
+          </div>
         </>
       )}
 
@@ -326,54 +350,106 @@ function CellarRacks() {
   );
 }
 
-// ---- Sub-component: rack grid (no popup rendering, just slots) ----
-function RackGrid({ rack, canEdit, activeRackId, activePosition, highlightPos, onSlotClick, onDelete }) {
+// ---- New rack creation form with type selector ----
+function NewRackForm({ newRack, setNewRack, onTypeChange, onSubmit, saving }) {
   const { t } = useTranslation();
-  const total = rack.rows * rack.cols;
-
-  const slotMap = {};
-  rack.slots.forEach(s => { slotMap[s.position] = s; });
-
-  const activePos = activeRackId === rack._id ? activePosition : null;
+  const dims = TYPE_DIMENSIONS[newRack.type] || TYPE_DIMENSIONS.grid;
 
   return (
-    <div className="rack-container card">
-      <div className="rack-header">
-        <div>
-          <h2>{rack.name}</h2>
-          <span className="rack-dims">{rack.rows} rows &times; {rack.cols} cols &mdash; {rack.slots.length}/{total} filled</span>
+    <form className="card new-rack-form" onSubmit={onSubmit}>
+      <h3>{t('racks.newRackTitle')}</h3>
+
+      <RackTypeSelector value={newRack.type} onChange={onTypeChange} />
+
+      <div className="new-rack-fields">
+        <div className="form-group">
+          <label>{t('racks.nameLabel')}</label>
+          <input
+            type="text"
+            value={newRack.name}
+            onChange={e => setNewRack({ ...newRack, name: e.target.value })}
+            placeholder={t('racks.namePlaceholder')}
+            required
+          />
         </div>
-        {canEdit && <button className="btn btn-danger btn-small" onClick={onDelete}>{t('racks.deleteRack')}</button>}
-      </div>
 
-      <div
-        className="rack-grid"
-        style={{ '--rack-cols': rack.cols }}
-      >
-        {Array.from({ length: total }, (_, i) => {
-          const pos  = i + 1;
-          const slot = slotMap[pos];
-          const wine = slot?.bottle?.wineDefinition;
-          const wineType = wine?.type || 'red';
-          const isOpen = activePos === pos;
-          const isHighlighted = highlightPos === pos;
+        {dims.showRows && (
+          <div className="form-group">
+            <label>{t(dims.rowLabel || 'racks.rowsLabel')}</label>
+            <input
+              type="number"
+              min={1} max={20}
+              value={newRack.rows}
+              onChange={e => setNewRack({ ...newRack, rows: parseInt(e.target.value) || dims.defaultRows })}
+            />
+          </div>
+        )}
 
-          return (
-            <div
-              key={pos}
-              className={`rack-slot ${slot ? `filled type-${wineType}` : 'empty'} ${isOpen ? 'active' : ''} ${isHighlighted ? 'highlighted' : ''}`}
-              onClick={() => onSlotClick(pos, slot || null)}
-              onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && onSlotClick(pos, slot || null)}
-              role="button"
-              tabIndex={0}
-              aria-label={slot ? `${wine?.name || '?'} (${slot.bottle?.vintage || ''})` : `Empty slot ${pos}`}
-            >
-              {!slot && <span className="slot-num" aria-hidden="true">{pos}</span>}
+        {dims.showCols && (
+          <div className="form-group">
+            <label>{t(dims.colLabel || 'racks.colsLabel')}</label>
+            <input
+              type="number"
+              min={1} max={20}
+              value={newRack.cols}
+              onChange={e => setNewRack({ ...newRack, cols: parseInt(e.target.value) || dims.defaultCols })}
+            />
+          </div>
+        )}
+
+        {dims.showModule && (
+          <>
+            <div className="form-group">
+              <label>{t('racks.moduleRowsLabel')}</label>
+              <input
+                type="number"
+                min={1} max={10}
+                value={newRack.typeConfig?.moduleRows || 2}
+                onChange={e => setNewRack({
+                  ...newRack,
+                  typeConfig: { ...newRack.typeConfig, moduleRows: parseInt(e.target.value) || 2 }
+                })}
+              />
             </div>
-          );
-        })}
+            <div className="form-group">
+              <label>{t('racks.moduleColsLabel')}</label>
+              <input
+                type="number"
+                min={1} max={10}
+                value={newRack.typeConfig?.moduleCols || 2}
+                onChange={e => setNewRack({
+                  ...newRack,
+                  typeConfig: { ...newRack.typeConfig, moduleCols: parseInt(e.target.value) || 2 }
+                })}
+              />
+            </div>
+          </>
+        )}
+
+        {dims.showBottlesPerCell && (
+          <div className="form-group">
+            <label>{t('racks.bottlesPerCellLabel', 'Bottles per cell')}</label>
+            <input
+              type="number"
+              min={1} max={20}
+              value={newRack.typeConfig?.bottlesPerCell || 1}
+              onChange={e => setNewRack({
+                ...newRack,
+                typeConfig: { ...newRack.typeConfig, bottlesPerCell: parseInt(e.target.value) || 1 }
+              })}
+            />
+          </div>
+        )}
+
+        <button type="submit" className="btn btn-primary" disabled={saving}>
+          {saving ? t('racks.creating') : t('racks.createRack')}
+        </button>
       </div>
-    </div>
+
+      <div className="new-rack-preview-hint">
+        {t('racks.totalSlots')}: {getTotalSlots(newRack.type, newRack.rows, newRack.cols, newRack.typeConfig)}
+      </div>
+    </form>
   );
 }
 

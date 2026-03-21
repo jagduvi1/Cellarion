@@ -15,3 +15,17 @@ export const updateSlot = (apiFetch, rackId, position, data) =>
 
 export const clearSlot = (apiFetch, rackId, position) =>
   apiFetch(`/api/racks/${rackId}/slots/${position}`, { method: 'DELETE' });
+
+export const createRack = (apiFetch, data) =>
+  apiFetch('/api/racks', {
+    method: 'POST',
+    headers: JSON_HEADERS,
+    body: JSON.stringify(data),
+  });
+
+export const updateRack = (apiFetch, rackId, data) =>
+  apiFetch(`/api/racks/${rackId}`, {
+    method: 'PUT',
+    headers: JSON_HEADERS,
+    body: JSON.stringify(data),
+  });
