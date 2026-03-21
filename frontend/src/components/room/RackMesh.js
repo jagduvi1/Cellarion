@@ -103,7 +103,7 @@ function getBottleGeometry() {
 // ── Clickable bottle (no inline popup — info shown in side panel) ────
 // Rotation [PI/2, 0, 0] maps local Y→Z so bottle points into rack
 // with neck/foil sticking out the front (+Z).
-function Bottle({ position, wineType, slot, onBottleClick }) {
+function Bottle({ position, wineType, slot, onBottleClick, highlighted }) {
   const glassColor = GLASS_COLORS[wineType] || GLASS_COLORS.red;
   const wineColor = WINE_COLORS[wineType] || WINE_COLORS.red;
   const foilColor = FOIL_COLORS[wineType] || FOIL_COLORS.red;
@@ -117,6 +117,19 @@ function Bottle({ position, wineType, slot, onBottleClick }) {
 
   return (
     <group position={position} rotation={[Math.PI / 2, 0, 0]}>
+      {/* Highlight glow ring behind the bottle */}
+      {highlighted && (
+        <mesh position={[0, -0.01, 0]}>
+          <torusGeometry args={[BOTTLE_RADIUS + 0.008, 0.006, 8, 24]} />
+          <meshStandardMaterial
+            color="#FFD700"
+            emissive="#FFD700"
+            emissiveIntensity={2}
+            transparent
+            opacity={0.9}
+          />
+        </mesh>
+      )}
       {/* Glass bottle */}
       <mesh
         geometry={bottleGeo}
@@ -126,12 +139,12 @@ function Bottle({ position, wineType, slot, onBottleClick }) {
         onPointerOut={() => { document.body.style.cursor = ''; }}
       >
         <meshPhysicalMaterial
-          color={glassColor}
-          emissive={emissive}
-          emissiveIntensity={0.3}
+          color={highlighted ? '#FFE060' : glassColor}
+          emissive={highlighted ? '#FFD700' : emissive}
+          emissiveIntensity={highlighted ? 1.2 : 0.3}
           roughness={0.15}
           metalness={0.05}
-          transmission={0.12}
+          transmission={highlighted ? 0 : 0.12}
           thickness={0.5}
           clearcoat={0.5}
           clearcoatRoughness={0.1}
@@ -163,18 +176,25 @@ function Bottle({ position, wineType, slot, onBottleClick }) {
   );
 }
 
-// ── Empty slot (ring at cubby opening, clickable) ────────
+// ── Empty slot (ring + invisible click disc at cubby opening) ────────
 function EmptySlot({ position, slotPosition, onClick }) {
   return (
-    <mesh
-      position={[position[0], position[1], RACK_DEPTH / 2 - 0.005]}
-      onClick={(e) => { e.stopPropagation(); onClick?.(slotPosition); }}
-      onPointerOver={(e) => { if (onClick) { e.stopPropagation(); document.body.style.cursor = 'pointer'; } }}
-      onPointerOut={() => { document.body.style.cursor = ''; }}
-    >
-      <torusGeometry args={[BOTTLE_RADIUS - 0.005, 0.003, 6, 16]} />
-      <meshStandardMaterial color="#9A8A70" transparent opacity={0.3} />
-    </mesh>
+    <group position={[position[0], position[1], RACK_DEPTH / 2 - 0.005]}>
+      {/* Visible ring */}
+      <mesh>
+        <torusGeometry args={[BOTTLE_RADIUS - 0.005, 0.003, 6, 16]} />
+        <meshStandardMaterial color="#9A8A70" transparent opacity={0.3} />
+      </mesh>
+      {/* Larger invisible click target covering the full cell area */}
+      <mesh
+        onClick={(e) => { e.stopPropagation(); onClick?.(slotPosition); }}
+        onPointerOver={(e) => { if (onClick) { e.stopPropagation(); document.body.style.cursor = 'pointer'; } }}
+        onPointerOut={() => { document.body.style.cursor = ''; }}
+      >
+        <circleGeometry args={[CELL_W / 2, 16]} />
+        <meshBasicMaterial transparent opacity={0} />
+      </mesh>
+    </group>
   );
 }
 
@@ -321,6 +341,7 @@ export default function RackMesh({
   onBottleClick,
   onEmptySlotClick,
   onSnapPosition,
+  highlightBottleId,
 }) {
   const groupRef = useRef();
   const [hovered, setHovered] = useState(false);
@@ -596,6 +617,7 @@ export default function RackMesh({
             wineType={wineType}
             slot={slot}
             onBottleClick={onBottleClick}
+            highlighted={highlightBottleId && (slot.bottle?._id || slot.bottle) === highlightBottleId}
           />
         ) : (
           <EmptySlot key={pos} position={[x, y, 0]} slotPosition={pos} onClick={onEmptySlotClick} />

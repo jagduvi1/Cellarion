@@ -1,8 +1,47 @@
-import { useRef, useMemo, useState, useCallback } from 'react';
+import { useRef, useMemo, useState, useCallback, useEffect } from 'react';
 import { OrbitControls } from '@react-three/drei';
+import { useThree, useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import RackMesh from './RackMesh';
 import { getRackWorldDims, getRackHeight, CELL_H, PANEL_THICK } from '../../utils/roomConstants';
+
+// ── Camera auto-focus helper (animates camera to a target position) ──
+function CameraFocus({ target, controlsRef }) {
+  const { camera } = useThree();
+  const animating = useRef(true);
+  const frameCount = useRef(0);
+
+  useEffect(() => {
+    animating.current = true;
+    frameCount.current = 0;
+  }, [target]);
+
+  useFrame(() => {
+    if (!target || !animating.current) return;
+    frameCount.current++;
+
+    // Position camera in front of the rack, slightly above and offset on Z
+    const goalPos = new THREE.Vector3(target.x, target.y + 0.8, target.z + 2.5);
+    const goalTarget = new THREE.Vector3(target.x, target.y, target.z);
+
+    const lerpFactor = 0.06;
+    camera.position.lerp(goalPos, lerpFactor);
+
+    if (controlsRef.current) {
+      const ctrl = controlsRef.current;
+      const currentTarget = ctrl.target;
+      currentTarget.lerp(goalTarget, lerpFactor);
+      ctrl.update();
+    }
+
+    // Stop animating after convergence or max frames
+    if (frameCount.current > 120 || camera.position.distanceTo(goalPos) < 0.05) {
+      animating.current = false;
+    }
+  });
+
+  return null;
+}
 
 // ── Modern cellar palette ────────────────────────────────
 const FLOOR_COLOR = '#C8B8A0';
@@ -21,6 +60,8 @@ export default function RoomScene({
   onRackDragEnd,
   onBottleClick,
   onEmptySlotClick,
+  focusTarget,
+  highlightBottleId,
 }) {
   const { width: rw, depth: rd, height: rh } = roomDimensions;
   const halfW = rw / 2;
@@ -244,6 +285,9 @@ export default function RoomScene({
         enabled={!isDragging}
       />
 
+      {/* ── Camera focus animation (when navigating from bottle detail) ── */}
+      {focusTarget && <CameraFocus target={focusTarget} controlsRef={controlsRef} />}
+
       {/* ── Floor (light oak) ─────────────────────────── */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]} receiveShadow>
         <planeGeometry args={[rw, rd]} />
@@ -339,6 +383,7 @@ export default function RoomScene({
             onSnapPosition={(px, pz) => computeSnapPosition(rack._id, px, pz)}
             onBottleClick={(slot) => onBottleClick?.(rack._id, slot)}
             onEmptySlotClick={(slotPos) => onEmptySlotClick?.(rack._id, slotPos)}
+            highlightBottleId={highlightBottleId}
           />
         );
       })}

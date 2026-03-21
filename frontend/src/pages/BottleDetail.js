@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { useAuth, usePlan } from '../contexts/AuthContext';
 import { getBottle, updateBottle, consumeBottle, setBottleDefaultImage } from '../api/bottles';
 import { getRacks } from '../api/racks';
+import { getCellarLayout } from '../api/cellarLayout';
 import { toInputDate, getMaturityStatus } from '../utils/drinkStatus';
 import { fetchRates, convertAmount, convertAmountHistorical } from '../utils/currency';
 import { calculatePriceChange } from '../utils/priceHistoryUtils';
@@ -139,14 +140,23 @@ function BottleDetail() {
 
   const fetchRackInfo = async () => {
     try {
-      const res = await getRacks(apiFetch, cellarId);
-      const data = await res.json();
-      if (res.ok) {
-        for (const rack of data.racks) {
+      const [racksRes, layoutRes] = await Promise.all([
+        getRacks(apiFetch, cellarId),
+        getCellarLayout(apiFetch, cellarId),
+      ]);
+      const racksData = await racksRes.json();
+      const layoutData = await layoutRes.json();
+      if (racksRes.ok) {
+        for (const rack of racksData.racks) {
           for (const slot of rack.slots) {
             const bid = slot.bottle?._id || slot.bottle;
             if (bid && bid.toString() === bottleId) {
-              setRackInfo({ rackId: rack._id, rackName: rack.name, position: slot.position });
+              // Check if this rack is placed in the 3D room layout
+              const placements = layoutData.layout?.rackPlacements || [];
+              const inRoom = placements.some(
+                rp => (rp.rack?._id || rp.rack) === rack._id
+              );
+              setRackInfo({ rackId: rack._id, rackName: rack.name, position: slot.position, inRoom });
               return;
             }
           }
@@ -584,7 +594,9 @@ function ViewDetails({ bottle, rackInfo, cellarId, vintageProfile, priceHistory,
         <div className="bd-section">
           <span className="bd-section-label">{t('bottleDetail.rackLocation')}</span>
           <Link
-            to={`/cellars/${cellarId}/racks?highlight=${bottle._id}`}
+            to={rackInfo.inRoom
+              ? `/cellars/${cellarId}/room?focusRack=${rackInfo.rackId}&highlight=${bottle._id}`
+              : `/cellars/${cellarId}/racks?highlight=${bottle._id}`}
             className="bd-rack-link"
           >
             <span aria-hidden="true">📍</span> {rackInfo.rackName} · {t('bottleDetail.rackSlot')} {rackInfo.position}

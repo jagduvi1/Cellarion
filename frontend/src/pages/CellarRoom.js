@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef, Suspense } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, useSearchParams, Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Canvas } from '@react-three/fiber';
 import { useAuth } from '../contexts/AuthContext';
@@ -17,7 +17,10 @@ const DEFAULT_DIMENSIONS = { width: 10, depth: 10, height: 3 };
 export default function CellarRoom() {
   const { t } = useTranslation();
   const { id } = useParams();
+  const [searchParams] = useSearchParams();
   const { apiFetch } = useAuth();
+  const focusRackId = searchParams.get('focusRack');
+  const highlightBottleId = searchParams.get('highlight');
 
   const [cellar, setCellar] = useState(null);
   const [racks, setRacks] = useState([]);
@@ -45,9 +48,42 @@ export default function CellarRoom() {
   // Derived: first selected rack for single-rack operations (backward compat)
   const selectedRackId = selectedRackIds[0] || null;
 
+  // Track whether we've already applied the focus-on-load (one-shot)
+  const focusAppliedRef = useRef(false);
+
   useEffect(() => {
     fetchData();
   }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Auto-select highlighted bottle after data loads
+  useEffect(() => {
+    if (focusAppliedRef.current || loading || !highlightBottleId || !racks.length) return;
+    for (const rack of racks) {
+      for (const slot of rack.slots) {
+        const bid = slot.bottle?._id || slot.bottle;
+        if (bid && bid.toString() === highlightBottleId) {
+          setSelectedBottle({ rackId: rack._id, slot });
+          focusAppliedRef.current = true;
+          return;
+        }
+      }
+    }
+  }, [loading, highlightBottleId, racks]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Compute focus target position from layout for camera animation
+  const focusTarget = useMemo(() => {
+    if (!focusRackId || !layout) return null;
+    const placements = layout.rackPlacements || [];
+    const rp = placements.find(p => (p.rack?._id || p.rack) === focusRackId);
+    if (!rp) return null;
+    const rack = racks.find(r => r._id === focusRackId);
+    const rackHeight = rack ? getRackHeight(rack) * (rp.scaleOverride || 1) : 1;
+    return {
+      x: rp.position?.x || 0,
+      y: rackHeight / 2 + (rp.position?.y || 0),
+      z: rp.position?.z || 0,
+    };
+  }, [focusRackId, layout, racks]);
 
   const fetchData = async () => {
     try {
@@ -712,6 +748,8 @@ export default function CellarRoom() {
                 onRackDragEnd={handleRackDragEnd}
                 onBottleClick={handleBottleClick}
                 onEmptySlotClick={handleEmptySlotClick}
+                focusTarget={focusTarget}
+                highlightBottleId={highlightBottleId}
               />
             </Suspense>
           </Canvas>
