@@ -132,6 +132,22 @@
   gap: 0.5rem;
 }
 
+.room-rack-detail-close {
+  margin-left: auto;
+  background: none;
+  border: none;
+  font-size: 1.25rem;
+  line-height: 1;
+  cursor: pointer;
+  color: #666;
+  padding: 0.1rem 0.3rem;
+  border-radius: 4px;
+}
+.room-rack-detail-close:hover {
+  color: #333;
+  background: rgba(0, 0, 0, 0.08);
+}
+
 .room-rack-detail h4 {
   margin: 0 0 0.25rem 0;
   font-size: 0.9rem;

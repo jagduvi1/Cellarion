@@ -558,16 +558,18 @@ export default function CellarRoom() {
 
   const placedBottleIds = useMemo(() => getPlacedBottleIds(racks), [racks]);
 
-  // Bottle click — show detail panel
+  // Bottle click — show detail panel (dismiss rack info)
   const handleBottleClick = useCallback((rackId, slot) => {
     setEmptySlotTarget(null);
+    setSelectedRackIds([]);
     setSelectedBottle({ rackId, slot });
   }, []);
 
-  // Empty slot click — show bottle picker
+  // Empty slot click — show bottle picker (dismiss rack info)
   const handleEmptySlotClick = useCallback((rackId, position) => {
     if (!canEdit) return;
     setSelectedBottle(null);
+    setSelectedRackIds([]);
     setEmptySlotTarget({ rackId, position });
     setSlotSearch('');
   }, [canEdit]);
@@ -979,6 +981,13 @@ export default function CellarRoom() {
                       {t('room.linked', 'Linked')}
                     </span>
                   )}
+                  <button
+                    className="room-rack-detail-close"
+                    onClick={() => setSelectedRackIds([])}
+                    aria-label={t('common.close', 'Close')}
+                  >
+                    ×
+                  </button>
                 </div>
                 <p>
                   {selectedRack.slots?.length || 0} bottles
