@@ -645,7 +645,7 @@ export default function RackMesh({
       )}
 
       {/* ── Group link indicator ring ───────────────────── */}
-      {groupColor && (
+      {isEditMode && groupColor && (
         <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -height * rackScale / 2 + 0.003, 0]}>
           <ringGeometry args={[Math.max(width, depth) * rackScale * 0.55, Math.max(width, depth) * rackScale * 0.63, 32]} />
           <meshBasicMaterial color={groupColor} transparent opacity={0.45} side={THREE.DoubleSide} />
