@@ -43,6 +43,7 @@ const followsRoute = require('./routes/follows');
 const discussionsRoute = require('./routes/discussions');
 const pushSubscriptionsRoute = require('./routes/pushSubscriptions');
 const blogRoute = require('./routes/blog');
+const sitemapRoute = require('./routes/sitemap');
 const rateLimitsConfig = require('./config/rateLimits');
 const aiConfig = require('./config/aiConfig');
 const { logAudit } = require('./services/audit');
@@ -89,6 +90,9 @@ app.use(cors({
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
+
+// Sitemap — before rate limiter so crawlers are never blocked
+app.use('/sitemap.xml', sitemapRoute);
 
 // Global API rate limiter — default 200 requests per 15 min per IP (admin-configurable)
 const apiLimiter = rateLimit({
