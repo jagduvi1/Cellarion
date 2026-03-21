@@ -29,3 +29,6 @@ export const updateRack = (apiFetch, rackId, data) =>
     headers: JSON_HEADERS,
     body: JSON.stringify(data),
   });
+
+export const resolveNfcRack = (apiFetch, rackId) =>
+  apiFetch(`/api/racks/nfc/${rackId}`);

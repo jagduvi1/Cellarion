@@ -3,7 +3,7 @@ import { useParams, Link, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import { getCellar } from '../api/cellars';
-import { getRacks, deleteRack, updateSlot, clearSlot, createRack } from '../api/racks';
+import { getRacks, deleteRack, updateSlot, clearSlot, createRack, updateRack } from '../api/racks';
 import { consumeBottle } from '../api/bottles';
 import { getPlacedBottleIds } from '../utils/rackUtils';
 import { getTotalSlots, getModularTotalSlots } from '../utils/rackLayouts';
@@ -37,6 +37,9 @@ function CellarRacks() {
 
   // consume modal: { bottleId } or null
   const [consumeModal, setConsumeModal] = useState(null);
+
+  // NFC modal: { rackId } or null
+  const [nfcModal, setNfcModal] = useState(null);
 
   useEffect(() => {
     fetchAll();
@@ -200,6 +203,16 @@ function CellarRacks() {
     }
   };
 
+  // --- NFC: save or clear rfidTag on rack ---
+  const handleNfcSave = async (rackId, rfidTag) => {
+    const res = await updateRack(apiFetch, rackId, { rfidTag });
+    const data = await res.json();
+    if (res.ok) {
+      setRacks(racks.map(r => r._id === rackId ? { ...r, rfidTag: data.rack.rfidTag } : r));
+    }
+    setNfcModal(null);
+  };
+
   if (error) return <div className="alert alert-error">{error}</div>;
 
   const rack = racks.find(r => r._id === selectedRackId) || racks[0];
@@ -293,6 +306,7 @@ function CellarRacks() {
               }
             }}
             onDelete={() => handleDeleteRack(rack._id)}
+            onNfcLink={() => setNfcModal({ rackId: rack._id })}
           />
           </div>
         </>
@@ -336,6 +350,15 @@ function CellarRacks() {
           defaultRatingScale={user?.preferences?.ratingScale || '5'}
           onSubmit={handleConsumeSubmit}
           onCancel={() => setConsumeModal(null)}
+        />
+      )}
+
+      {/* NFC link modal */}
+      {nfcModal && (
+        <NfcLinkModal
+          rack={racks.find(r => r._id === nfcModal.rackId)}
+          onSave={(rfidTag) => handleNfcSave(nfcModal.rackId, rfidTag)}
+          onCancel={() => setNfcModal(null)}
         />
       )}
     </div>
@@ -651,6 +674,105 @@ function ConsumeModal({ defaultRatingScale, onSubmit, onCancel }) {
             </button>
           </div>
         </form>
+      </div>
+    </div>
+  );
+}
+
+// ---- NFC link modal ----
+function NfcLinkModal({ rack, onSave, onCancel }) {
+  const { t } = useTranslation();
+  const [status, setStatus] = useState('idle'); // idle | writing | success | error
+  const [errorMsg, setErrorMsg] = useState('');
+  const supportsNfc = typeof window !== 'undefined' && 'NDEFReader' in window;
+
+  const nfcUrl = `${window.location.origin}/nfc/rack/${rack?._id}`;
+
+  const handleWrite = async () => {
+    if (!supportsNfc) return;
+    setStatus('writing');
+    setErrorMsg('');
+    try {
+      const reader = new window.NDEFReader();
+      await reader.write({
+        records: [{ recordType: 'url', data: nfcUrl }]
+      });
+      setStatus('success');
+      // Save rfidTag marker on the rack
+      onSave(rack._id);
+    } catch (err) {
+      setStatus('error');
+      setErrorMsg(err.message || t('nfc.writeFailed'));
+    }
+  };
+
+  const handleUnlink = () => {
+    onSave('');
+  };
+
+  return (
+    <div className="slot-modal-overlay" onClick={onCancel} role="dialog" aria-modal="true">
+      <div className="slot-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 400 }}>
+        <div className="slot-popup-header">
+          <span className="slot-popup-title">{t('nfc.linkTitle')}</span>
+          <button className="slot-popup-close" onClick={onCancel} aria-label="Close">&times;</button>
+        </div>
+        <div style={{ padding: '1rem' }}>
+          <p style={{ fontSize: '0.85rem', color: 'var(--color-text-muted)', margin: '0 0 1rem' }}>
+            {t('nfc.linkDescription')}
+          </p>
+
+          {rack?.rfidTag && (
+            <div style={{ padding: '0.5rem 0.75rem', background: 'rgba(var(--color-primary-rgb), 0.08)', borderRadius: 'var(--radius-sm)', marginBottom: '1rem', fontSize: '0.85rem' }}>
+              {t('nfc.currentlyLinked')}
+            </div>
+          )}
+
+          <div style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)', wordBreak: 'break-all', marginBottom: '1rem', padding: '0.5rem', background: 'var(--color-surface-raised)', borderRadius: 'var(--radius-sm)' }}>
+            <strong>URL:</strong> {nfcUrl}
+          </div>
+
+          {supportsNfc ? (
+            <>
+              <button
+                className="btn btn-primary"
+                onClick={handleWrite}
+                disabled={status === 'writing'}
+                style={{ width: '100%', marginBottom: '0.5rem' }}
+              >
+                {status === 'writing' ? t('nfc.writing') : t('nfc.writeToTag')}
+              </button>
+              {status === 'success' && (
+                <p style={{ color: 'var(--color-success)', fontSize: '0.85rem', margin: '0.5rem 0 0' }}>
+                  {t('nfc.writeSuccess')}
+                </p>
+              )}
+              {status === 'error' && (
+                <p style={{ color: 'var(--color-error)', fontSize: '0.85rem', margin: '0.5rem 0 0' }}>
+                  {errorMsg}
+                </p>
+              )}
+            </>
+          ) : (
+            <div style={{ fontSize: '0.85rem', color: 'var(--color-text-muted)' }}>
+              <p style={{ margin: '0 0 0.5rem', fontWeight: 600 }}>{t('nfc.notSupported')}</p>
+              <p style={{ margin: 0 }}>{t('nfc.manualInstructions')}</p>
+            </div>
+          )}
+
+          <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1rem', justifyContent: 'flex-end' }}>
+            {rack?.rfidTag && (
+              <button className="btn btn-danger btn-small" onClick={handleUnlink}>
+                {t('nfc.unlink')}
+              </button>
+            )}
+            {!supportsNfc && !rack?.rfidTag && (
+              <button className="btn btn-primary btn-small" onClick={() => onSave(rack._id)}>
+                {t('nfc.markAsLinked')}
+              </button>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );

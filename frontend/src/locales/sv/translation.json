@@ -365,7 +365,27 @@
     "rackName": "Hyllnamn",
     "rackNamePlaceholder": "Min egna hylla",
     "saveRack": "Spara hylla",
-    "overlapWarning": "Modulerna överlappar. Flytta isär dem innan du sparar."
+    "overlapWarning": "Modulerna överlappar. Flytta isär dem innan du sparar.",
+    "nfcLink": "NFC-tagg",
+    "nfcLinked": "NFC kopplad"
+  },
+
+  "nfc": {
+    "linkTitle": "Koppla NFC-tagg",
+    "linkDescription": "Skriv hyllans URL till en NFC-klisterlapp. När någon håller telefonen mot lappen öppnas hyllan direkt.",
+    "currentlyLinked": "Den här hyllan har redan en NFC-tagg kopplad.",
+    "writeToTag": "Skriv till NFC-tagg",
+    "writing": "Håll taggen mot telefonen…",
+    "writeSuccess": "Taggen skrevs!",
+    "writeFailed": "Kunde inte skriva till taggen. Se till att taggen är nära telefonen.",
+    "notSupported": "NFC-skrivning stöds inte i den här webbläsaren.",
+    "manualInstructions": "Använd en gratis NFC-skrivarapp (t.ex. \"NFC Tools\") för att skriva URL:en ovan till din NTAG213-klisterlapp. När du sedan håller telefonen mot lappen öppnas hyllan automatiskt.",
+    "unlink": "Koppla bort tagg",
+    "markAsLinked": "Markera som kopplad",
+    "redirecting": "Öppnar hylla…",
+    "rackNotFound": "Hyllan hittades inte. Den kan ha raderats.",
+    "networkError": "Nätverksfel. Försök igen.",
+    "goToCellars": "Gå till vinförråd"
   },
 
   "room": {

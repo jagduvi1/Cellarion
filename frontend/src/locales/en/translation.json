@@ -365,7 +365,27 @@
     "rackName": "Rack Name",
     "rackNamePlaceholder": "My Custom Rack",
     "saveRack": "Save Rack",
-    "overlapWarning": "Modules are overlapping. Move them apart before saving."
+    "overlapWarning": "Modules are overlapping. Move them apart before saving.",
+    "nfcLink": "NFC Tag",
+    "nfcLinked": "NFC Linked"
+  },
+
+  "nfc": {
+    "linkTitle": "Link NFC Tag",
+    "linkDescription": "Write this rack's URL to an NFC sticker. When someone taps the sticker with their phone, it will open directly to this rack.",
+    "currentlyLinked": "This rack already has an NFC tag linked.",
+    "writeToTag": "Write to NFC Tag",
+    "writing": "Hold tag to phone…",
+    "writeSuccess": "Tag written successfully!",
+    "writeFailed": "Failed to write to tag. Make sure the tag is close to your phone.",
+    "notSupported": "NFC writing is not available in this browser.",
+    "manualInstructions": "Use a free NFC writer app (e.g. \"NFC Tools\") to write the URL shown above to your NTAG213 sticker. Tapping the sticker will then open this rack automatically.",
+    "unlink": "Unlink Tag",
+    "markAsLinked": "Mark as Linked",
+    "redirecting": "Opening rack…",
+    "rackNotFound": "This rack was not found. It may have been deleted.",
+    "networkError": "Network error. Please try again.",
+    "goToCellars": "Go to Cellars"
   },
 
   "room": {

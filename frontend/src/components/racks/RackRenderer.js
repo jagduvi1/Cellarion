@@ -60,6 +60,7 @@ export default function RackRenderer({
   highlightPos,
   onSlotClick,
   onDelete,
+  onNfcLink,
 }) {
   const { t } = useTranslation();
   const isModular = rack.isModular && rack.modules?.length > 0;
@@ -94,11 +95,18 @@ export default function RackRenderer({
             {(rack.slots || []).length}/{layout.totalSlots} {t('racks.filled')}
           </span>
         </div>
-        {canEdit && (
-          <button className="btn btn-danger btn-small" onClick={onDelete}>
-            {t('racks.deleteRack')}
-          </button>
-        )}
+        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+          {canEdit && onNfcLink && (
+            <button className={`btn btn-small ${rack.rfidTag ? 'btn-secondary' : 'btn-outline'}`} onClick={onNfcLink}>
+              {rack.rfidTag ? t('racks.nfcLinked') : t('racks.nfcLink')}
+            </button>
+          )}
+          {canEdit && (
+            <button className="btn btn-danger btn-small" onClick={onDelete}>
+              {t('racks.deleteRack')}
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="rack-svg-wrapper">

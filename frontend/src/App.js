@@ -47,6 +47,7 @@ const Blog                 = lazy(() => import('./pages/Blog'));
 const BlogPost             = lazy(() => import('./pages/BlogPost'));
 const AdminBlog            = lazy(() => import('./pages/AdminBlog'));
 const AdminBlogEditor      = lazy(() => import('./pages/AdminBlogEditor'));
+const NfcRedirect          = lazy(() => import('./pages/NfcRedirect'));
 
 function AppRoutes() {
   const { user, loading } = useAuth();
@@ -233,6 +234,16 @@ function AppRoutes() {
           element={
             <ProtectedRoute>
               <Layout><Statistics /></Layout>
+            </ProtectedRoute>
+          }
+        />
+
+        {/* NFC tag redirect — resolves rack ID to cellar and navigates */}
+        <Route
+          path="/nfc/rack/:rackId"
+          element={
+            <ProtectedRoute>
+              <Layout><NfcRedirect /></Layout>
             </ProtectedRoute>
           }
         />

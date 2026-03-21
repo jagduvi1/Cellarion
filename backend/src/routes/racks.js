@@ -10,9 +10,23 @@ const { getCellarRole } = require('../utils/cellarAccess');
 const { getMaxPosition } = require('../utils/rackGeometry');
 
 const router = express.Router();
-router.use(requireAuth);
 
 const MAX_MODULES = 50;
+
+// GET /api/racks/nfc/:id  — resolve a rack ID to its cellar (for NFC tag redirect)
+// Requires auth so only logged-in users can follow NFC links.
+router.get('/nfc/:id', requireAuth, async (req, res) => {
+  try {
+    const rack = await Rack.findOne({ _id: req.params.id, deletedAt: null }).select('cellar');
+    if (!rack) return res.status(404).json({ error: 'Rack not found' });
+    res.json({ cellarId: rack.cellar, rackId: rack._id });
+  } catch (err) {
+    console.error('NFC rack lookup error:', err);
+    res.status(500).json({ error: 'Failed to look up rack' });
+  }
+});
+
+router.use(requireAuth);
 
 // GET /api/racks?cellar=:id  — list racks for a cellar (owner, editor, viewer)
 router.get('/', requireCellarAccess('viewer'), async (req, res) => {
@@ -93,7 +107,7 @@ router.put('/:id', async (req, res) => {
       return res.status(403).json({ error: 'Not authorized to modify this rack' });
     }
 
-    const { name, type, rows, cols, typeConfig, isModular, modules } = req.body;
+    const { name, type, rows, cols, typeConfig, isModular, modules, rfidTag } = req.body;
 
     // Validate modular modules if provided
     if (isModular && modules) {
@@ -119,6 +133,7 @@ router.put('/:id', async (req, res) => {
     if (rows !== undefined) rack.rows = rows;
     if (cols !== undefined) rack.cols = cols;
     if (typeConfig !== undefined) rack.typeConfig = typeConfig;
+    if (rfidTag !== undefined) rack.rfidTag = rfidTag || null;
 
     // Validate that existing slots still fit within new dimensions
     const newMax = getMaxPosition(rack);
