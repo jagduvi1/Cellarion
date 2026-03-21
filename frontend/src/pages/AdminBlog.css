@@ -1,0 +1,140 @@
+/* ── Admin blog list ── */
+.admin-blog-page {
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: 2rem 1rem;
+}
+
+.admin-blog-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+}
+
+.admin-blog-header h1 {
+  font-family: 'Playfair Display', serif;
+  font-size: 1.8rem;
+  margin: 0;
+}
+
+.admin-blog-filters {
+  margin-bottom: 1rem;
+}
+
+.admin-blog-filters select {
+  padding: 0.4rem 0.75rem;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  color: var(--text-primary);
+  font-size: 0.9rem;
+}
+
+.admin-blog-table-wrap {
+  overflow-x: auto;
+}
+
+.admin-blog-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.admin-blog-table th,
+.admin-blog-table td {
+  padding: 0.75rem 0.5rem;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.9rem;
+}
+
+.admin-blog-table th {
+  font-weight: 600;
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.admin-blog-title-cell {
+  max-width: 300px;
+}
+
+.admin-blog-post-title {
+  display: block;
+  font-weight: 500;
+}
+
+.admin-blog-slug {
+  display: block;
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  opacity: 0.7;
+}
+
+.admin-blog-status {
+  display: inline-block;
+  padding: 0.2rem 0.6rem;
+  border-radius: 12px;
+  font-size: 0.78rem;
+  font-weight: 500;
+}
+
+.admin-blog-status--draft {
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+}
+
+.admin-blog-status--published {
+  background: #e6f4ea;
+  color: #1a7f37;
+}
+
+[data-theme="dark"] .admin-blog-status--published {
+  background: rgba(26, 127, 55, 0.15);
+  color: #3fb950;
+}
+
+.admin-blog-actions {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.btn-sm {
+  padding: 0.3rem 0.6rem;
+  font-size: 0.8rem;
+}
+
+.btn-danger {
+  background: #dc3545;
+  color: #fff;
+  border: none;
+  cursor: pointer;
+  border-radius: 6px;
+}
+
+.btn-danger:hover {
+  background: #c82333;
+}
+
+.modal-actions {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: flex-end;
+  margin-top: 1.5rem;
+}
+
+@media (max-width: 700px) {
+  .admin-blog-header {
+    flex-direction: column;
+    gap: 1rem;
+    align-items: flex-start;
+  }
+
+  .admin-blog-table th:nth-child(3),
+  .admin-blog-table td:nth-child(3),
+  .admin-blog-table th:nth-child(4),
+  .admin-blog-table td:nth-child(4) {
+    display: none;
+  }
+}

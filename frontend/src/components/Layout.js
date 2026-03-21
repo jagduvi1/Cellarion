@@ -90,6 +90,12 @@ function Layout({ children }) {
                   Cellar Chat
                 </Link>
                 <Link
+                  to="/blog"
+                  className={`nav-link ${isActive('/blog') ? 'active' : ''}`}
+                >
+                  {t('nav.blog')}
+                </Link>
+                <Link
                   to="/plans"
                   className={`nav-link ${isActive('/plans') ? 'active' : ''}`}
                 >
@@ -142,6 +148,7 @@ function Layout({ children }) {
                     <Link to="/admin/images" className={`nav-link nav-link--admin ${isActive('/admin/images') ? 'active' : ''}`}>{t('nav.imageReview')}</Link>
                     <Link to="/admin/support" className={`nav-link nav-link--admin ${isActive('/admin/support') ? 'active' : ''}`}>Support Tickets</Link>
                     <Link to="/admin/wine-reports" className={`nav-link nav-link--admin ${isActive('/admin/wine-reports') ? 'active' : ''}`}>Wine Reports</Link>
+                    <Link to="/admin/blog" className={`nav-link nav-link--admin ${isActive('/admin/blog') ? 'active' : ''}`}>{t('nav.blogAdmin')}</Link>
                   </>
                 )}
               </div>
@@ -198,6 +205,7 @@ function Layout({ children }) {
               <Link to="/community" className={`mobile-menu-link ${isActive('/community') ? 'active' : ''}`} onClick={closeMenu}>Community</Link>
               <Link to="/wine-requests" className={`mobile-menu-link ${isActive('/wine-requests') ? 'active' : ''}`} onClick={closeMenu}>{t('nav.myRequests')}</Link>
               <Link to="/cellar-chat" className={`mobile-menu-link ${isActive('/cellar-chat') ? 'active' : ''}`} onClick={closeMenu}>Cellar Chat</Link>
+              <Link to="/blog" className={`mobile-menu-link ${isActive('/blog') ? 'active' : ''}`} onClick={closeMenu}>{t('nav.blog')}</Link>
               <Link to="/plans" className={`mobile-menu-link ${isActive('/plans') ? 'active' : ''}`} onClick={closeMenu}>{t('nav.plans')}</Link>
               <Link to="/support" className={`mobile-menu-link ${isActive('/support') ? 'active' : ''}`} onClick={closeMenu}>Support</Link>
             </div>
@@ -219,6 +227,7 @@ function Layout({ children }) {
                 <Link to="/admin/images" className={`mobile-menu-link ${isActive('/admin/images') ? 'active' : ''}`} onClick={closeMenu}>{t('nav.imageReview')}</Link>
                 <Link to="/admin/support" className={`mobile-menu-link ${isActive('/admin/support') ? 'active' : ''}`} onClick={closeMenu}>Support Tickets</Link>
                 <Link to="/admin/wine-reports" className={`mobile-menu-link ${isActive('/admin/wine-reports') ? 'active' : ''}`} onClick={closeMenu}>Wine Reports</Link>
+                <Link to="/admin/blog" className={`mobile-menu-link ${isActive('/admin/blog') ? 'active' : ''}`} onClick={closeMenu}>{t('nav.blogAdmin')}</Link>
               </div>
             )}
 

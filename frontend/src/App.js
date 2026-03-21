@@ -1,5 +1,6 @@
 import { lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { HelmetProvider } from 'react-helmet-async';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { NotificationProvider } from './contexts/NotificationContext';
 import { ThemeProvider } from './contexts/ThemeContext';
@@ -42,6 +43,10 @@ const SuperAdmin      = lazy(() => import('./pages/SuperAdmin'));
 const CommunityDiscussions = lazy(() => import('./pages/CommunityDiscussions'));
 const DiscussionDetail     = lazy(() => import('./pages/DiscussionDetail'));
 const CellarRoom           = lazy(() => import('./pages/CellarRoom'));
+const Blog                 = lazy(() => import('./pages/Blog'));
+const BlogPost             = lazy(() => import('./pages/BlogPost'));
+const AdminBlog            = lazy(() => import('./pages/AdminBlog'));
+const AdminBlogEditor      = lazy(() => import('./pages/AdminBlogEditor'));
 
 function AppRoutes() {
   const { user, loading } = useAuth();
@@ -232,6 +237,24 @@ function AppRoutes() {
           }
         />
 
+        {/* Blog routes */}
+        <Route
+          path="/blog"
+          element={
+            <ProtectedRoute>
+              <Layout><Blog /></Layout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/blog/:slug"
+          element={
+            <ProtectedRoute>
+              <Layout><BlogPost /></Layout>
+            </ProtectedRoute>
+          }
+        />
+
         {/* Admin routes */}
         <Route
           path="/admin/wines"
@@ -281,6 +304,30 @@ function AppRoutes() {
             </ProtectedRoute>
           }
         />
+        <Route
+          path="/admin/blog"
+          element={
+            <ProtectedRoute requireAdmin>
+              <Layout><AdminBlog /></Layout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/blog/new"
+          element={
+            <ProtectedRoute requireAdmin>
+              <Layout><AdminBlogEditor /></Layout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/blog/:id"
+          element={
+            <ProtectedRoute requireAdmin>
+              <Layout><AdminBlogEditor /></Layout>
+            </ProtectedRoute>
+          }
+        />
 
         {/* Support page (user-facing) */}
         <Route
@@ -311,15 +358,17 @@ function AppRoutes() {
 
 function App() {
   return (
-    <ThemeProvider>
-      <BrowserRouter>
-        <AuthProvider>
-          <NotificationProvider>
-            <AppRoutes />
-          </NotificationProvider>
-        </AuthProvider>
-      </BrowserRouter>
-    </ThemeProvider>
+    <HelmetProvider>
+      <ThemeProvider>
+        <BrowserRouter>
+          <AuthProvider>
+            <NotificationProvider>
+              <AppRoutes />
+            </NotificationProvider>
+          </AuthProvider>
+        </BrowserRouter>
+      </ThemeProvider>
+    </HelmetProvider>
   );
 }
 

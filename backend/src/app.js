@@ -42,6 +42,7 @@ const reviewsRoute = require('./routes/reviews');
 const followsRoute = require('./routes/follows');
 const discussionsRoute = require('./routes/discussions');
 const pushSubscriptionsRoute = require('./routes/pushSubscriptions');
+const blogRoute = require('./routes/blog');
 const rateLimitsConfig = require('./config/rateLimits');
 const aiConfig = require('./config/aiConfig');
 const { logAudit } = require('./services/audit');
@@ -76,6 +77,7 @@ app.use('/api/wines/scan-label', express.json({ limit: '300kb' }));
 app.use('/api/wines/find-or-create', express.json({ limit: '5mb' }));
 app.use('/api/bottles/import/sessions', express.json({ limit: '5mb' }));
 app.use('/api/bottles/import', express.json({ limit: '2mb' }));
+app.use('/api/blog/admin/posts', express.json({ limit: '2mb' }));
 app.use(express.json({ limit: '10kb' }));
 const corsOrigin = process.env.FRONTEND_URL || (process.env.NODE_ENV === 'production' ? undefined : 'http://localhost:3000');
 if (process.env.NODE_ENV === 'production' && !process.env.FRONTEND_URL) {
@@ -164,6 +166,7 @@ app.use('/api/reviews', reviewsRoute);
 app.use('/api/follows', followsRoute);
 app.use('/api/discussions', discussionsRoute);
 app.use('/api/push-subscriptions', pushSubscriptionsRoute);
+app.use('/api/blog', blogRoute);
 
 // 404 handler
 app.use((req, res) => {
