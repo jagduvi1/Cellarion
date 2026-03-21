@@ -9,13 +9,16 @@ router.use(requireAuth);
 router.post('/', async (req, res) => {
   try {
     const { endpoint, keys } = req.body;
-    if (!endpoint || !keys?.p256dh || !keys?.auth) {
+    if (!endpoint || typeof endpoint !== 'string' || !keys?.p256dh || !keys?.auth) {
       return res.status(400).json({ error: 'Invalid push subscription: endpoint and keys required' });
     }
 
+    const safeEndpoint = String(endpoint);
+    const safeKeys = { p256dh: String(keys.p256dh), auth: String(keys.auth) };
+
     await PushSubscription.findOneAndUpdate(
-      { endpoint },
-      { $set: { user: req.user.id, endpoint, keys } },
+      { endpoint: safeEndpoint },
+      { $set: { user: req.user.id, endpoint: safeEndpoint, keys: safeKeys } },
       { upsert: true, new: true }
     );
 
@@ -30,11 +33,11 @@ router.post('/', async (req, res) => {
 router.delete('/', async (req, res) => {
   try {
     const { endpoint } = req.body;
-    if (!endpoint) {
+    if (!endpoint || typeof endpoint !== 'string') {
       return res.status(400).json({ error: 'Endpoint is required' });
     }
 
-    await PushSubscription.deleteOne({ user: req.user.id, endpoint });
+    await PushSubscription.deleteOne({ user: req.user.id, endpoint: String(endpoint) });
     res.json({ ok: true });
   } catch (err) {
     console.error('Delete push subscription error:', err);
