@@ -149,7 +149,8 @@ function CellarRacks() {
       cols: dims.defaultCols,
       typeConfig: type === 'cube'
         ? { moduleRows: 2, moduleCols: 2 }
-        : (type === 'diamond' || type === 'shelf') ? { bottlesPerCell: 1 } : {},
+        : type === 'x-rack' ? { bottlesPerSection: 10 }
+        : type === 'shelf' ? { bottlesPerCell: 1 } : {},
     }));
   };
 
@@ -436,6 +437,21 @@ function NewRackForm({ newRack, setNewRack, onTypeChange, onSubmit, saving }) {
               onChange={e => setNewRack({
                 ...newRack,
                 typeConfig: { ...newRack.typeConfig, bottlesPerCell: parseInt(e.target.value) || 1 }
+              })}
+            />
+          </div>
+        )}
+
+        {dims.showBottlesPerSection && (
+          <div className="form-group">
+            <label>{t('racks.bottlesPerSectionLabel', 'Bottles per section')}</label>
+            <input
+              type="number"
+              min={1} max={30}
+              value={newRack.typeConfig?.bottlesPerSection || 10}
+              onChange={e => setNewRack({
+                ...newRack,
+                typeConfig: { ...newRack.typeConfig, bottlesPerSection: parseInt(e.target.value) || 10 }
               })}
             />
           </div>

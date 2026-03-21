@@ -5,7 +5,7 @@ import './RackTypeSelector.css';
 
 const RACK_TYPES = [
   { key: 'grid',     preview: { rows: 3, cols: 4 } },
-  { key: 'diamond',  preview: { rows: 3, cols: 1 } },
+  { key: 'x-rack',   preview: { rows: 1, cols: 1, typeConfig: { bottlesPerSection: 6 } } },
   { key: 'hex',      preview: { rows: 3, cols: 4 } },
   { key: 'triangle', preview: { rows: 1, cols: 4 } },
   { key: 'stack',    preview: { rows: 5, cols: 1 } },
@@ -16,7 +16,7 @@ const RACK_TYPES = [
 /** Dimension config: which inputs to show per type, with sensible defaults */
 export const TYPE_DIMENSIONS = {
   grid:     { showRows: true,  showCols: true,  defaultRows: 4, defaultCols: 8 },
-  diamond:  { showRows: true,  showCols: false, defaultRows: 3, defaultCols: 1, rowLabel: 'racks.radiusLabel', showBottlesPerCell: true },
+  'x-rack': { showRows: false, showCols: false, defaultRows: 1, defaultCols: 1, showBottlesPerSection: true },
   hex:      { showRows: true,  showCols: true,  defaultRows: 4, defaultCols: 5 },
   triangle: { showRows: false, showCols: true,  defaultRows: 1, defaultCols: 5, colLabel: 'racks.baseWidthLabel' },
   stack:    { showRows: true,  showCols: false, defaultRows: 8, defaultCols: 1, rowLabel: 'racks.heightLabel' },
@@ -60,7 +60,7 @@ function MiniRackPreview({ type, rows, cols, typeConfig }) {
   const half = CELL_SIZE / 2;
   const PAD = SLOT_RADIUS; // matches rackLayouts PADDING
 
-  // Deduplicate positions for multi-bottle cells (diamond/shelf)
+  // Deduplicate positions for multi-bottle cells (shelf)
   const uniqueSlots = useMemo(() => {
     const seen = new Set();
     return layout.slots.filter(s => {
@@ -85,38 +85,15 @@ function MiniRackPreview({ type, rows, cols, typeConfig }) {
         fill="#C8AD82"
       />
 
-      {/* Diamond: X-cross lattice beams + grid lines */}
-      {type === 'diamond' && (() => {
-        const n = Math.max(1, rows);
-        const size = 2 * n - 1;
-        const els = [];
-        // Grid boundary lines (horizontal + vertical)
-        for (let i = 0; i <= size; i++) {
-          const offset = PAD + SLOT_RADIUS + i * CELL_SIZE - half;
-          els.push(
-            <line key={`dh-${i}`} x1={2} y1={offset} x2={layout.viewBox.width - 2} y2={offset}
-              stroke="#9A7E58" strokeWidth={1.5} opacity={0.5} />
-          );
-          els.push(
-            <line key={`dv-${i}`} x1={offset} y1={2} x2={offset} y2={layout.viewBox.height - 2}
-              stroke="#9A7E58" strokeWidth={1.5} opacity={0.5} />
-          );
-        }
-        // X-cross diagonals in each cell
-        for (let gr = 0; gr < size; gr++) {
-          for (let gc = 0; gc < size; gc++) {
-            const cx = PAD + SLOT_RADIUS + gc * CELL_SIZE;
-            const cy = PAD + SLOT_RADIUS + gr * CELL_SIZE;
-            els.push(
-              <line key={`xa-${gr}-${gc}`} x1={cx - half} y1={cy - half} x2={cx + half} y2={cy + half}
-                stroke="#9A7E58" strokeWidth={1.8} opacity={0.6} />,
-              <line key={`xb-${gr}-${gc}`} x1={cx + half} y1={cy - half} x2={cx - half} y2={cy + half}
-                stroke="#9A7E58" strokeWidth={1.8} opacity={0.6} />
-            );
-          }
-        }
-        return <>{els}</>;
-      })()}
+      {/* X-Rack: two diagonal dividers forming an X */}
+      {type === 'x-rack' && (
+        <>
+          <line x1={4} y1={4} x2={layout.viewBox.width - 4} y2={layout.viewBox.height - 4}
+            stroke="#9A7E58" strokeWidth={3} opacity={0.7} />
+          <line x1={layout.viewBox.width - 4} y1={4} x2={4} y2={layout.viewBox.height - 4}
+            stroke="#9A7E58" strokeWidth={3} opacity={0.7} />
+        </>
+      )}
 
       {/* Shelf: horizontal plank lines between rows */}
       {type === 'shelf' && (() => {

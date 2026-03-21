@@ -20,21 +20,23 @@ describe('computeLayout', () => {
     });
   });
 
-  describe('diamond', () => {
-    it('radius 1 → 1 slot', () => {
-      expect(computeLayout('diamond', 1, 1).totalSlots).toBe(1);
+  describe('x-rack', () => {
+    it('default bottlesPerSection (10) → 40 slots', () => {
+      expect(computeLayout('x-rack', 1, 1).totalSlots).toBe(40);
     });
 
-    it('radius 2 → 5 slots', () => {
-      expect(computeLayout('diamond', 2, 1).totalSlots).toBe(5);
+    it('bottlesPerSection 6 → 24 slots', () => {
+      expect(computeLayout('x-rack', 1, 1, { bottlesPerSection: 6 }).totalSlots).toBe(24);
     });
 
-    it('radius 3 → 13 slots', () => {
-      expect(computeLayout('diamond', 3, 1).totalSlots).toBe(13);
+    it('bottlesPerSection 1 → 4 slots', () => {
+      expect(computeLayout('x-rack', 1, 1, { bottlesPerSection: 1 }).totalSlots).toBe(4);
     });
 
-    it('radius 4 → 25 slots', () => {
-      expect(computeLayout('diamond', 4, 1).totalSlots).toBe(25);
+    it('has contiguous positions', () => {
+      const layout = computeLayout('x-rack', 1, 1, { bottlesPerSection: 6 });
+      const positions = layout.slots.map(s => s.position).sort((a, b) => a - b);
+      expect(positions).toEqual(Array.from({ length: 24 }, (_, i) => i + 1));
     });
   });
 
@@ -105,14 +107,6 @@ describe('computeLayout', () => {
     });
   });
 
-  describe('diamond with bottlesPerCell', () => {
-    it('radius 2, bpc=2 → 10 slots', () => {
-      const layout = computeLayout('diamond', 2, 1, { bottlesPerCell: 2 });
-      expect(layout.totalSlots).toBe(10);
-      expect(layout.bottlesPerCell).toBe(2);
-    });
-  });
-
   describe('unknown type falls back to grid', () => {
     it('returns rows × cols', () => {
       expect(computeLayout('nonexistent', 3, 5).totalSlots).toBe(15);
@@ -122,7 +116,7 @@ describe('computeLayout', () => {
   describe('all types have valid coordinates', () => {
     const cases = [
       ['grid', 4, 8, undefined],
-      ['diamond', 3, 1, undefined],
+      ['x-rack', 1, 1, { bottlesPerSection: 6 }],
       ['hex', 4, 5, undefined],
       ['triangle', 1, 5, undefined],
       ['stack', 8, 1, undefined],
@@ -207,13 +201,13 @@ describe('computeModularLayout', () => {
   it('moduleLayouts has correct metadata', () => {
     const layout = computeModularLayout([
       { type: 'grid', rows: 2, cols: 3, x: 0, y: 0 },
-      { type: 'diamond', rows: 2, cols: 1, x: 5, y: 0 },
+      { type: 'hex', rows: 2, cols: 3, x: 5, y: 0 },
     ]);
     expect(layout.moduleLayouts).toHaveLength(2);
     expect(layout.moduleLayouts[0].moduleIndex).toBe(0);
     expect(layout.moduleLayouts[0].slotCount).toBe(6);
     expect(layout.moduleLayouts[1].moduleIndex).toBe(1);
-    expect(layout.moduleLayouts[1].slotCount).toBe(5);
+    expect(layout.moduleLayouts[1].slotCount).toBe(5); // hex 2×3 = 2+2=5 (alternating)
   });
 
   it('slots include moduleIndex', () => {
@@ -231,10 +225,10 @@ describe('computeModularLayout', () => {
   it('mixed module types sum correctly', () => {
     const layout = computeModularLayout([
       { type: 'grid', rows: 3, cols: 4 },       // 12
-      { type: 'diamond', rows: 2, cols: 1 },     // 5
+      { type: 'hex', rows: 3, cols: 4 },         // 11
       { type: 'stack', rows: 6, cols: 1 },        // 6
     ]);
-    expect(layout.totalSlots).toBe(23);
+    expect(layout.totalSlots).toBe(29);
   });
 });
 
@@ -255,12 +249,12 @@ describe('getModularTotalSlots', () => {
   });
 
   it('sums mixed types correctly', () => {
-    // grid 3×4 = 12, diamond r2 = 5, stack 6 = 6 → 23
+    // grid 3×4 = 12, hex 3×4 = 11, stack 6 = 6 → 29
     expect(getModularTotalSlots([
       { type: 'grid', rows: 3, cols: 4 },
-      { type: 'diamond', rows: 2, cols: 1 },
+      { type: 'hex', rows: 3, cols: 4 },
       { type: 'stack', rows: 6, cols: 1 },
-    ])).toBe(23);
+    ])).toBe(29);
   });
 });
 
@@ -273,14 +267,14 @@ describe('getTotalSlots', () => {
     expect(getTotalSlots('shelf', 2, 3, { bottlesPerCell: 4 })).toBe(24);
   });
 
-  it('diamond with bpc=2', () => {
-    expect(getTotalSlots('diamond', 2, 1, { bottlesPerCell: 2 })).toBe(10);
+  it('x-rack with bottlesPerSection=6', () => {
+    expect(getTotalSlots('x-rack', 1, 1, { bottlesPerSection: 6 })).toBe(24);
   });
 
   it('matches computeLayout for all types', () => {
     const cases = [
       ['grid', 4, 8, undefined],
-      ['diamond', 3, 1, undefined],
+      ['x-rack', 1, 1, { bottlesPerSection: 6 }],
       ['hex', 4, 5, undefined],
       ['triangle', 1, 5, undefined],
       ['stack', 8, 1, undefined],

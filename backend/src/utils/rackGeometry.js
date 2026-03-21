@@ -3,7 +3,7 @@
  *
  * Each rack type interprets `rows` and `cols` differently:
  *   grid     — rows × cols rectangular grid
- *   diamond  — diamond shape; `rows` = radius (layers around centre)
+ *   x-rack   — square with X dividers; 4 triangular sections, each holds bottlesPerSection bottles
  *   hex      — hex honeycomb; alternating row widths (cols, cols-1, …)
  *   triangle — A-frame; base width = cols, each row shrinks by 1
  *   stack    — single vertical column; height = rows
@@ -19,13 +19,11 @@ function totalSlots(type, rows, cols, typeConfig) {
     case 'grid':
       return rows * cols;
 
-    case 'diamond': {
-      // Diamond with `rows` layers (radius). For radius n: cells = 2n² - 2n + 1
-      // Each cell holds bottlesPerCell bottles (default 1).
-      const n = Math.max(1, rows);
-      const cells = 2 * n * n - 2 * n + 1;
-      const bpc = typeConfig?.bottlesPerCell || 1;
-      return cells * bpc;
+    case 'x-rack': {
+      // Square with X dividers creating 4 triangular sections.
+      // Each section holds bottlesPerSection bottles (default 10).
+      const bps = typeConfig?.bottlesPerSection || 10;
+      return 4 * bps;
     }
 
     case 'hex': {

@@ -1,6 +1,6 @@
 const mongoose = require('mongoose');
 
-const RACK_TYPES = ['grid', 'diamond', 'hex', 'triangle', 'stack', 'cube', 'shelf'];
+const RACK_TYPES = ['grid', 'x-rack', 'hex', 'triangle', 'stack', 'cube', 'shelf'];
 
 const slotSchema = new mongoose.Schema({
   position: { type: Number, required: true },
@@ -15,7 +15,8 @@ const rackModuleSchema = new mongoose.Schema({
   typeConfig: {
     moduleRows: { type: Number, min: 1, max: 10 },
     moduleCols: { type: Number, min: 1, max: 10 },
-    bottlesPerCell: { type: Number, min: 1, max: 20 }
+    bottlesPerCell: { type: Number, min: 1, max: 20 },
+    bottlesPerSection: { type: Number, min: 1, max: 30 }
   },
   x:          { type: Number, default: 0 },
   y:          { type: Number, default: 0 },
@@ -32,7 +33,8 @@ const rackSchema = new mongoose.Schema({
   typeConfig: {
     moduleRows: { type: Number, min: 1, max: 10 },
     moduleCols: { type: Number, min: 1, max: 10 },
-    bottlesPerCell: { type: Number, min: 1, max: 20 }
+    bottlesPerCell: { type: Number, min: 1, max: 20 },
+    bottlesPerSection: { type: Number, min: 1, max: 30 }
   },
   // Modular rack fields (used when isModular is true)
   isModular: { type: Boolean, default: false },

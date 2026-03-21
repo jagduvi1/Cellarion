@@ -34,37 +34,75 @@ function gridLayout(rows, cols) {
   };
 }
 
-// ── Diamond ──────────────────────────────────────────────────────────
-// Diamond with radius n: centre + concentric diamond rings.
-// Positions laid out row-by-row top to bottom.
-// When bottlesPerCell > 1, each visual cell maps to multiple positions.
-function diamondLayout(rows, typeConfig) {
-  const n = Math.max(1, rows);
-  const size = 2 * n - 1;          // grid dimension
-  const centre = n - 1;            // centre index (0-based)
-  const bpc = typeConfig?.bottlesPerCell || 1;
+// ── X-Rack ──────────────────────────────────────────────────────────
+// Square with X-shaped dividers creating 4 triangular sections.
+// Each section holds bottlesPerSection bottles arranged in triangular rows.
+// Sections: 0=top, 1=right, 2=bottom, 3=left
+function xRackLayout(typeConfig) {
+  const bps = typeConfig?.bottlesPerSection || 10;
+  const total = 4 * bps;
+
+  // Number of rows per section for triangular stacking: k*(k+1)/2 >= bps
+  let k = 1;
+  while (k * (k + 1) / 2 < bps) k++;
+
+  // Spacing between bottles within the triangular sections
+  const rowStep = CELL * 0.78;
+  const colStep = CELL * 0.82;
+  const centerGap = CELL * 0.35;
+
+  // Half-side: from center to edge, must fit k rows of bottles
+  const halfSide = k * rowStep + centerGap + SLOT_R;
+  const fullSize = halfSide * 2;
+  const cx = PADDING + halfSide;
+  const cy = PADDING + halfSide;
+
   const slots = [];
   let pos = 1;
 
-  for (let r = 0; r < size; r++) {
-    const dist = Math.abs(r - centre);
-    const width = size - 2 * dist;  // how many cells in this row
-    const startCol = dist;           // first column offset
-    for (let c = 0; c < width; c++) {
-      const cx = PADDING + SLOT_R + (startCol + c) * CELL;
-      const cy = PADDING + SLOT_R + r * CELL;
-      for (let b = 0; b < bpc; b++) {
-        slots.push({ position: pos++, cx, cy, cellIndex: pos - b - 1 });
+  for (let section = 0; section < 4; section++) {
+    let placed = 0;
+    for (let row = 0; row < k && placed < bps; row++) {
+      const bottlesInRow = Math.min(k - row, bps - placed);
+      // Distance from center: row 0 = outermost (near wall), row k-1 = innermost (near center)
+      const distFromCenter = halfSide - SLOT_R - row * rowStep;
+
+      for (let col = 0; col < bottlesInRow; col++) {
+        const lateral = (col - (bottlesInRow - 1) / 2) * colStep;
+        let sx, sy;
+        switch (section) {
+          case 0: // top: base at top edge
+            sx = cx + lateral;
+            sy = cy - distFromCenter;
+            break;
+          case 1: // right: base at right edge
+            sx = cx + distFromCenter;
+            sy = cy + lateral;
+            break;
+          case 2: // bottom: base at bottom edge
+            sx = cx - lateral;
+            sy = cy + distFromCenter;
+            break;
+          case 3: // left: base at left edge
+            sx = cx - distFromCenter;
+            sy = cy - lateral;
+            break;
+          default:
+            sx = cx;
+            sy = cy;
+        }
+        slots.push({ position: pos++, cx: sx, cy: sy });
+        placed++;
       }
     }
   }
 
   return {
-    totalSlots: slots.length,
-    bottlesPerCell: bpc,
+    totalSlots: total,
+    isXRack: true,
     viewBox: {
-      width:  PADDING * 2 + size * CELL - SLOT_GAP,
-      height: PADDING * 2 + size * CELL - SLOT_GAP,
+      width:  PADDING * 2 + fullSize,
+      height: PADDING * 2 + fullSize,
     },
     slots,
   };
@@ -221,7 +259,7 @@ function shelfLayout(rows, cols, typeConfig) {
 
 /**
  * Compute the layout for a given rack type.
- * @param {string} type - one of: grid, diamond, hex, triangle, stack, cube
+ * @param {string} type - one of: grid, x-rack, hex, triangle, stack, cube, shelf
  * @param {number} rows
  * @param {number} cols
  * @param {object} [typeConfig] - extra config (e.g. moduleRows/moduleCols for cube)
@@ -229,7 +267,7 @@ function shelfLayout(rows, cols, typeConfig) {
  */
 export function computeLayout(type, rows, cols, typeConfig) {
   switch (type) {
-    case 'diamond':  return diamondLayout(rows, typeConfig);
+    case 'x-rack':   return xRackLayout(typeConfig);
     case 'hex':      return hexLayout(rows, cols);
     case 'triangle': return triangleLayout(rows, cols);
     case 'stack':    return stackLayout(rows);
@@ -318,11 +356,9 @@ export function getModularTotalSlots(modules) {
  */
 export function getTotalSlots(type, rows, cols, typeConfig) {
   switch (type) {
-    case 'diamond': {
-      const n = Math.max(1, rows);
-      const cells = 2 * n * n - 2 * n + 1;
-      const bpc = typeConfig?.bottlesPerCell || 1;
-      return cells * bpc;
+    case 'x-rack': {
+      const bps = typeConfig?.bottlesPerSection || 10;
+      return 4 * bps;
     }
     case 'hex': {
       let total = 0;

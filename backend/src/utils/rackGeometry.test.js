@@ -9,18 +9,18 @@ describe('rackGeometry', () => {
     });
   });
 
-  describe('totalSlots — diamond', () => {
-    it('radius 1 → 1 slot (centre only)', () => {
-      expect(totalSlots('diamond', 1, 1)).toBe(1);
+  describe('totalSlots — x-rack', () => {
+    it('default bottlesPerSection (10) → 40 slots', () => {
+      expect(totalSlots('x-rack', 1, 1)).toBe(40);
     });
-    it('radius 2 → 5 slots', () => {
-      expect(totalSlots('diamond', 2, 1)).toBe(5);
+    it('bottlesPerSection 6 → 24 slots', () => {
+      expect(totalSlots('x-rack', 1, 1, { bottlesPerSection: 6 })).toBe(24);
     });
-    it('radius 3 → 13 slots', () => {
-      expect(totalSlots('diamond', 3, 1)).toBe(13);
+    it('bottlesPerSection 1 → 4 slots', () => {
+      expect(totalSlots('x-rack', 1, 1, { bottlesPerSection: 1 })).toBe(4);
     });
-    it('radius 4 → 25 slots', () => {
-      expect(totalSlots('diamond', 4, 1)).toBe(25);
+    it('bottlesPerSection 15 → 60 slots', () => {
+      expect(totalSlots('x-rack', 1, 1, { bottlesPerSection: 15 })).toBe(60);
     });
   });
 
@@ -86,15 +86,6 @@ describe('rackGeometry', () => {
     });
   });
 
-  describe('totalSlots — diamond with bottlesPerCell', () => {
-    it('radius 2, bpc=2 → 10', () => {
-      expect(totalSlots('diamond', 2, 1, { bottlesPerCell: 2 })).toBe(10);
-    });
-    it('radius 3, bpc=3 → 39', () => {
-      expect(totalSlots('diamond', 3, 1, { bottlesPerCell: 3 })).toBe(39);
-    });
-  });
-
   describe('totalSlots — unknown type falls back to grid', () => {
     it('returns rows × cols', () => {
       expect(totalSlots('unknown', 3, 5)).toBe(15);
@@ -115,10 +106,10 @@ describe('rackGeometry', () => {
     it('sums mixed module types', () => {
       const modules = [
         { type: 'grid', rows: 3, cols: 4 },     // 12
-        { type: 'diamond', rows: 2, cols: 1 },   // 5
+        { type: 'hex', rows: 3, cols: 4 },       // 11
         { type: 'stack', rows: 6, cols: 1 },      // 6
       ];
-      expect(modularTotalSlots(modules)).toBe(23);
+      expect(modularTotalSlots(modules)).toBe(29);
     });
     it('sums triangle + hex', () => {
       const modules = [
@@ -138,6 +129,9 @@ describe('rackGeometry', () => {
     });
     it('passes typeConfig for cube', () => {
       expect(getMaxPosition({ type: 'cube', rows: 2, cols: 2, typeConfig: { moduleRows: 3, moduleCols: 3 } })).toBe(36);
+    });
+    it('x-rack uses bottlesPerSection', () => {
+      expect(getMaxPosition({ type: 'x-rack', rows: 1, cols: 1, typeConfig: { bottlesPerSection: 6 } })).toBe(24);
     });
     it('uses modules when isModular is true', () => {
       const rack = {

@@ -23,9 +23,11 @@ export function getDisplayDims(rack) {
     };
   }
   switch (rackType) {
-    case 'diamond': {
-      const n = Math.max(1, rack.rows || 1);
-      const size = 2 * n - 1;
+    case 'x-rack': {
+      const bps = rack.typeConfig?.bottlesPerSection || 10;
+      let k = 1;
+      while (k * (k + 1) / 2 < bps) k++;
+      const size = 2 * k + 1;
       return { displayRows: size, displayCols: size };
     }
     case 'triangle': {

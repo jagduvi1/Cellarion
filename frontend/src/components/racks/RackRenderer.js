@@ -142,6 +142,16 @@ export default function RackRenderer({
           {/* Module separators for cube type */}
           {!isModular && rack.type === 'cube' && <CubeModuleLines rack={rack} layout={layout} />}
 
+          {/* X-Rack: two diagonal dividers forming an X */}
+          {!isModular && rack.type === 'x-rack' && (
+            <>
+              <line x1={6} y1={6} x2={layout.viewBox.width - 6} y2={layout.viewBox.height - 6}
+                stroke={WOOD_FRAME} strokeWidth={3} opacity={0.6} />
+              <line x1={layout.viewBox.width - 6} y1={6} x2={6} y2={layout.viewBox.height - 6}
+                stroke={WOOD_FRAME} strokeWidth={3} opacity={0.6} />
+            </>
+          )}
+
           {/* Module boundaries for modular racks */}
           {isModular && layout.moduleLayouts?.map(ml => (
             <rect

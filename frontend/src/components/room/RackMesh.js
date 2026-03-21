@@ -251,26 +251,40 @@ function computeSlotPositions(rows, cols, width, height) {
   return positions;
 }
 
-// Diamond: centre + concentric diamond rings, matches rackLayouts.js
-function computeDiamondSlotPositions(radius, width, height) {
-  const n = Math.max(1, radius);
-  const size = 2 * n - 1;
-  const centre = n - 1;
-  const cW = width / size;
-  const cH = height / size;
+// X-Rack: 4 triangular sections, bottles arranged in rows from wall to center
+function computeXRackSlotPositions(bps, width, height) {
+  const total = 4 * bps;
+  // Number of rows per section
+  let k = 1;
+  while (k * (k + 1) / 2 < bps) k++;
+
+  const halfW = width / 2;
+  const halfH = height / 2;
   const positions = [];
   let pos = 1;
-  for (let r = 0; r < size; r++) {
-    const dist = Math.abs(r - centre);
-    const rowWidth = size - 2 * dist;
-    const startCol = dist;
-    for (let c = 0; c < rowWidth; c++) {
-      positions.push({
-        position: pos++,
-        x: -width / 2 + cW / 2 + (startCol + c) * cW,
-        y: height / 2 - cH / 2 - r * cH,
-        z: 0,
-      });
+
+  for (let section = 0; section < 4; section++) {
+    let placed = 0;
+    for (let row = 0; row < k && placed < bps; row++) {
+      const bottlesInRow = Math.min(k - row, bps - placed);
+      // Fraction: 0 = at wall, 1 = at center
+      const frac = (row + 0.5) / (k + 0.3);
+      const distFromCenter = halfW * (1 - frac) * 0.85;
+      const colStep = width / (k + 1) * 0.82;
+
+      for (let col = 0; col < bottlesInRow; col++) {
+        const lateral = (col - (bottlesInRow - 1) / 2) * colStep;
+        let x, y;
+        switch (section) {
+          case 0: x = lateral; y = distFromCenter; break;
+          case 1: x = distFromCenter; y = lateral; break;
+          case 2: x = -lateral; y = -distFromCenter; break;
+          case 3: x = -distFromCenter; y = -lateral; break;
+          default: x = 0; y = 0;
+        }
+        positions.push({ position: pos++, x, y, z: 0 });
+        placed++;
+      }
     }
   }
   return positions;
@@ -395,7 +409,7 @@ export default function RackMesh({
       return (rack.modules || []).reduce((sum, m) => sum + (m.rows || 1) * (m.cols || 1), 0);
     }
     switch (rackType) {
-      case 'diamond': { const n = Math.max(1, rack.rows || 1); return (2 * n * n - 2 * n + 1) * bpc; }
+      case 'x-rack': { return 4 * (rack.typeConfig?.bottlesPerSection || 10); }
       case 'hex': {
         let t = 0;
         for (let r = 0; r < (rack.rows || 4); r++) t += (r % 2 === 0) ? (rack.cols || 4) : Math.max(1, (rack.cols || 4) - 1);
@@ -409,7 +423,7 @@ export default function RackMesh({
   }, [rack.isModular, rack.modules, rack.typeConfig, rackType, rack.rows, rack.cols, displayRows, displayCols]);
 
   const slotPositions = useMemo(() => {
-    if (rackType === 'diamond') return computeDiamondSlotPositions(rack.rows || 1, innerW, innerH);
+    if (rackType === 'x-rack') return computeXRackSlotPositions(rack.typeConfig?.bottlesPerSection || 10, innerW, innerH);
     if (rackType === 'hex') return computeHexSlotPositions(rack.rows || 4, rack.cols || 4, innerW, innerH);
     if (rackType === 'triangle') return computeTriangleSlotPositions(rack.cols || 1, innerW, innerH);
     if (rackType === 'stack') return computeStackSlotPositions(rack.rows || 4, innerH);
@@ -525,7 +539,7 @@ export default function RackMesh({
       {/* ── Type-specific internal structure ─────────── */}
 
       {/* Grid / hex / cube / stack / triangle: shelves + scallops + rails */}
-      {rackType !== 'diamond' && rackType !== 'shelf' && (
+      {rackType !== 'x-rack' && rackType !== 'shelf' && (
         <>
           {/* Shelves between rows (thin planks) */}
           {Array.from({ length: Math.max(displayRows - 1, 0) }).map((_, i) => {
@@ -589,58 +603,27 @@ export default function RackMesh({
         </>
       )}
 
-      {/* Diamond X-cross: diagonal beams creating diamond lattice */}
-      {rackType === 'diamond' && (() => {
-        const diagLen = Math.sqrt(effectiveCellW * effectiveCellW + CELL_H * CELL_H);
-        const diagAngle = Math.atan2(CELL_H, effectiveCellW);
-        const beamW = WOOD_THICK * 0.8;
-        const beamDepth = shelfDepth * 0.4;
-        const elements = [];
+      {/* X-Rack: two diagonal beams forming an X */}
+      {rackType === 'x-rack' && (() => {
+        const diagLen = Math.sqrt(innerW * innerW + innerH * innerH);
+        const diagAngle = Math.atan2(innerH, innerW);
+        const beamW = WOOD_THICK * 1.2;
+        const beamDepth = shelfDepth * 0.5;
 
-        for (let r = 0; r < displayRows; r++) {
-          for (let c = 0; c < displayCols; c++) {
-            const cx = -innerW / 2 + effectiveCellW / 2 + c * effectiveCellW;
-            const cy = height / 2 - PANEL_THICK - CELL_H / 2 - r * CELL_H;
-            // Beam 1: top-left to bottom-right
-            elements.push(
-              <mesh key={`xA-${r}-${c}`} position={[cx, cy, -depth * 0.05]} rotation={[0, 0, -diagAngle]}>
-                <boxGeometry args={[beamW, diagLen, beamDepth]} />
-                <meshStandardMaterial map={woodTex} color={shelfColor} roughness={0.7} />
-              </mesh>
-            );
-            // Beam 2: top-right to bottom-left
-            elements.push(
-              <mesh key={`xB-${r}-${c}`} position={[cx, cy, -depth * 0.05]} rotation={[0, 0, diagAngle]}>
-                <boxGeometry args={[beamW, diagLen, beamDepth]} />
-                <meshStandardMaterial map={woodTex} color={shelfColor} roughness={0.7} />
-              </mesh>
-            );
-          }
-        }
-
-        // Horizontal rails at each row boundary
-        for (let r = 0; r <= displayRows; r++) {
-          const ry = height / 2 - PANEL_THICK - r * CELL_H;
-          elements.push(
-            <mesh key={`xH-${r}`} position={[0, ry, -depth * 0.05]}>
-              <boxGeometry args={[innerW, WOOD_THICK * 0.6, beamDepth]} />
-              <meshStandardMaterial map={woodTex} color={frameColor} roughness={0.7} />
+        return (
+          <>
+            {/* Beam 1: top-left to bottom-right */}
+            <mesh position={[0, 0, -depth * 0.05]} rotation={[0, 0, -diagAngle]}>
+              <boxGeometry args={[beamW, diagLen, beamDepth]} />
+              <meshStandardMaterial map={woodTex} color={shelfColor} roughness={0.7} />
             </mesh>
-          );
-        }
-
-        // Vertical rails at each column boundary
-        for (let c = 0; c <= displayCols; c++) {
-          const cx = -innerW / 2 + c * effectiveCellW;
-          elements.push(
-            <mesh key={`xV-${c}`} position={[cx, 0, -depth * 0.05]}>
-              <boxGeometry args={[WOOD_THICK * 0.6, innerH, beamDepth]} />
-              <meshStandardMaterial map={woodTex} color={frameColor} roughness={0.7} />
+            {/* Beam 2: top-right to bottom-left */}
+            <mesh position={[0, 0, -depth * 0.05]} rotation={[0, 0, diagAngle]}>
+              <boxGeometry args={[beamW, diagLen, beamDepth]} />
+              <meshStandardMaterial map={woodTex} color={shelfColor} roughness={0.7} />
             </mesh>
-          );
-        }
-
-        return <>{elements}</>;
+          </>
+        );
       })()}
 
       {/* ── Bottles / empty slots ─────────────────── */}
