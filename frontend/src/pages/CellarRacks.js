@@ -1,11 +1,11 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useParams, Link, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import { getCellar } from '../api/cellars';
 import { getRacks, deleteRack, updateSlot, clearSlot, createRack } from '../api/racks';
 import { consumeBottle } from '../api/bottles';
-import { getPlacedBottleIds, getAvailableBottles } from '../utils/rackUtils';
+import { getPlacedBottleIds } from '../utils/rackUtils';
 import { getTotalSlots, getModularTotalSlots } from '../utils/rackLayouts';
 import RackRenderer from '../components/racks/RackRenderer';
 import RackTypeSelector, { TYPE_DIMENSIONS } from '../components/racks/RackTypeSelector';
@@ -22,7 +22,6 @@ function CellarRacks() {
 
   const [cellar, setCellar]   = useState(null);
   const [racks, setRacks]     = useState([]);
-  const [bottles, setBottles] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState(null);
 
@@ -78,17 +77,10 @@ function CellarRacks() {
   // Compute set of bottle IDs already placed in any rack
   const placedBottleIds = useMemo(() => getPlacedBottleIds(racks), [racks]);
 
-  // Bottles available for placement (not in any rack)
-  const availableBottles = useMemo(
-    () => getAvailableBottles(bottles, placedBottleIds),
-    [bottles, placedBottleIds]
-  );
-
-
   const fetchAll = async () => {
     try {
       const [cellarRes, racksRes] = await Promise.all([
-        getCellar(apiFetch, id, 'limit=200'),
+        getCellar(apiFetch, id),
         getRacks(apiFetch, id)
       ]);
       const cellarData = await cellarRes.json();
@@ -100,7 +92,6 @@ function CellarRacks() {
       setCellar(cellarData.cellar);
       const loadedRacks = racksData.racks || [];
       setRacks(loadedRacks);
-      setBottles(cellarData.bottles?.items || []);
       if (loadedRacks.length > 0) setSelectedRackId(r => r || loadedRacks[0]._id);
     } catch {
       setError('Network error');
@@ -203,8 +194,6 @@ function CellarRacks() {
           return bid?.toString() !== bottleId;
         })
       })));
-      // Remove from available bottles list
-      setBottles(prev => prev.filter(b => b._id !== bottleId));
       setConsumeModal(null);
     } else {
       alert(data.error || 'Failed to remove bottle');
@@ -330,7 +319,9 @@ function CellarRacks() {
             ) : (
               <EmptySlotContent
                 position={activePopup.position}
-                bottles={availableBottles}
+                apiFetch={apiFetch}
+                cellarId={id}
+                placedBottleIds={placedBottleIds}
                 onAssign={(pos, bottleId) => handleAssign(activePopup.rackId, pos, bottleId)}
                 onClose={() => setActivePopup(null)}
               />
@@ -470,17 +461,41 @@ function NewRackForm({ newRack, setNewRack, onTypeChange, onSubmit, saving }) {
 }
 
 // ---- Content for empty slot: pick a bottle to place ----
-function EmptySlotContent({ position, bottles, onAssign, onClose }) {
+function EmptySlotContent({ position, apiFetch, cellarId, placedBottleIds, onAssign, onClose }) {
   const { t } = useTranslation();
   const [search, setSearch] = useState('');
+  const [results, setResults] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const timerRef = useRef(null);
 
-  const filtered = bottles.filter(b => {
-    if (!search) return true;
-    const term = search.toLowerCase();
-    const name = (b.wineDefinition?.name || '').toLowerCase();
-    const producer = (b.wineDefinition?.producer || '').toLowerCase();
-    return name.includes(term) || producer.includes(term);
-  });
+  // Fetch bottles from backend, filtering out placed ones client-side
+  const fetchBottles = useCallback(async (term) => {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams({ limit: '30' });
+      if (term) params.set('search', term);
+      const res = await getCellar(apiFetch, cellarId, params.toString());
+      const data = await res.json();
+      if (res.ok) {
+        const items = (data.bottles?.items || []).filter(b => !placedBottleIds.has(b._id));
+        setResults(items);
+      }
+    } catch { /* ignore */ }
+    setLoading(false);
+  }, [apiFetch, cellarId, placedBottleIds]);
+
+  // Load initial results on mount
+  useEffect(() => { fetchBottles(''); }, [fetchBottles]);
+
+  // Debounced search (300ms)
+  const handleSearch = (value) => {
+    setSearch(value);
+    clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(() => fetchBottles(value), 300);
+  };
+
+  // Cleanup timer on unmount
+  useEffect(() => () => clearTimeout(timerRef.current), []);
 
   return (
     <>
@@ -493,15 +508,17 @@ function EmptySlotContent({ position, bottles, onAssign, onClose }) {
         className="slot-search"
         placeholder={t('racks.searchWines')}
         value={search}
-        onChange={e => setSearch(e.target.value)}
+        onChange={e => handleSearch(e.target.value)}
         aria-label={t('racks.searchWines')}
         autoFocus
       />
       <div className="slot-bottle-list">
-        {filtered.length === 0 ? (
+        {loading ? (
+          <p className="slot-empty-msg">…</p>
+        ) : results.length === 0 ? (
           <p className="slot-empty-msg">{t('racks.noUnplacedBottles')}</p>
         ) : (
-          filtered.map(b => (
+          results.map(b => (
             <div
               key={b._id}
               className="slot-bottle-item"

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo, Suspense } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef, Suspense } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Canvas } from '@react-three/fiber';
@@ -7,7 +7,7 @@ import { getCellar } from '../api/cellars';
 import { getRacks, updateSlot, clearSlot } from '../api/racks';
 import { consumeBottle } from '../api/bottles';
 import { getCellarLayout, saveCellarLayout } from '../api/cellarLayout';
-import { getPlacedBottleIds, getAvailableBottles } from '../utils/rackUtils';
+import { getPlacedBottleIds } from '../utils/rackUtils';
 import RoomScene from '../components/room/RoomScene';
 import { getRackHeight } from '../utils/roomConstants';
 import './CellarRoom.css';
@@ -21,7 +21,6 @@ export default function CellarRoom() {
 
   const [cellar, setCellar] = useState(null);
   const [racks, setRacks] = useState([]);
-  const [bottles, setBottles] = useState([]);
   const [layout, setLayout] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -38,6 +37,9 @@ export default function CellarRoom() {
   const [selectedBottle, setSelectedBottle] = useState(null); // { rackId, slot }
   const [emptySlotTarget, setEmptySlotTarget] = useState(null); // { rackId, position }
   const [slotSearch, setSlotSearch] = useState('');
+  const [slotResults, setSlotResults] = useState([]);
+  const [slotLoading, setSlotLoading] = useState(false);
+  const slotTimerRef = useRef(null);
   const [consumeModal, setConsumeModal] = useState(null); // { bottleId }
 
   // Derived: first selected rack for single-rack operations (backward compat)
@@ -50,7 +52,7 @@ export default function CellarRoom() {
   const fetchData = async () => {
     try {
       const [cellarRes, racksRes, layoutRes] = await Promise.all([
-        getCellar(apiFetch, id, 'limit=200'),
+        getCellar(apiFetch, id),
         getRacks(apiFetch, id),
         getCellarLayout(apiFetch, id),
       ]);
@@ -62,7 +64,6 @@ export default function CellarRoom() {
       if (!cellarRes.ok) { setError(cellarData.error); return; }
       setCellar(cellarData.cellar);
       setRacks(racksData.racks || []);
-      setBottles(cellarData.bottles?.items || []);
 
       if (layoutData.layout) {
         // Filter out placements for racks that no longer exist (e.g. deleted)
@@ -519,12 +520,7 @@ export default function CellarRoom() {
   const dims = layout?.roomDimensions || DEFAULT_DIMENSIONS;
   const placements = layout?.rackPlacements || [];
 
-  // Available bottles (not in any rack slot)
   const placedBottleIds = useMemo(() => getPlacedBottleIds(racks), [racks]);
-  const availableBottles = useMemo(
-    () => getAvailableBottles(bottles, placedBottleIds),
-    [bottles, placedBottleIds]
-  );
 
   // Bottle click — show detail panel
   const handleBottleClick = useCallback((rackId, slot) => {
@@ -579,22 +575,40 @@ export default function CellarRoom() {
           return bid?.toString() !== consumeModal.bottleId;
         }),
       })));
-      setBottles(prev => prev.filter(b => b._id !== consumeModal.bottleId));
       setConsumeModal(null);
       setSelectedBottle(null);
     }
   }, [consumeModal, apiFetch]);
 
-  // Filtered bottles for slot picker
-  const filteredAvailable = useMemo(() => {
-    if (!slotSearch) return availableBottles;
-    const term = slotSearch.toLowerCase();
-    return availableBottles.filter(b => {
-      const name = (b.wineDefinition?.name || '').toLowerCase();
-      const producer = (b.wineDefinition?.producer || '').toLowerCase();
-      return name.includes(term) || producer.includes(term);
-    });
-  }, [availableBottles, slotSearch]);
+  // Backend search for slot picker
+  const fetchSlotBottles = useCallback(async (term) => {
+    setSlotLoading(true);
+    try {
+      const params = new URLSearchParams({ limit: '30' });
+      if (term) params.set('search', term);
+      const res = await getCellar(apiFetch, id, params.toString());
+      const data = await res.json();
+      if (res.ok) {
+        setSlotResults((data.bottles?.items || []).filter(b => !placedBottleIds.has(b._id)));
+      }
+    } catch { /* ignore */ }
+    setSlotLoading(false);
+  }, [apiFetch, id, placedBottleIds]);
+
+  // Fetch initial results when slot picker opens
+  useEffect(() => {
+    if (emptySlotTarget) fetchSlotBottles('');
+  }, [emptySlotTarget, fetchSlotBottles]);
+
+  // Debounced slot search
+  const handleSlotSearch = useCallback((value) => {
+    setSlotSearch(value);
+    clearTimeout(slotTimerRef.current);
+    slotTimerRef.current = setTimeout(() => fetchSlotBottles(value), 300);
+  }, [fetchSlotBottles]);
+
+  // Cleanup timer
+  useEffect(() => () => clearTimeout(slotTimerRef.current), []);
 
   if (error) return <div className="alert alert-error">{error}</div>;
 
@@ -837,14 +851,16 @@ export default function CellarRoom() {
                   className="room-slot-search"
                   placeholder={t('racks.searchWines', 'Search wines...')}
                   value={slotSearch}
-                  onChange={e => setSlotSearch(e.target.value)}
+                  onChange={e => handleSlotSearch(e.target.value)}
                   autoFocus
                 />
                 <div className="room-slot-bottle-list">
-                  {filteredAvailable.length === 0 ? (
+                  {slotLoading ? (
+                    <p className="room-slot-empty">…</p>
+                  ) : slotResults.length === 0 ? (
                     <p className="room-slot-empty">{t('racks.noUnplacedBottles', 'No available bottles')}</p>
                   ) : (
-                    filteredAvailable.map(b => (
+                    slotResults.map(b => (
                       <button
                         key={b._id}
                         className="room-slot-bottle-item"
