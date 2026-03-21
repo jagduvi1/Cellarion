@@ -1,12 +1,20 @@
 const express = require('express');
+const rateLimit = require('express-rate-limit');
 const BlogPost = require('../models/BlogPost');
 
 const router = express.Router();
 
 const SITE_URL = process.env.FRONTEND_URL || 'https://cellarion.app';
 
+const sitemapLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false
+});
+
 // GET /sitemap.xml — Dynamic XML sitemap for search engines
-router.get('/', async (req, res) => {
+router.get('/', sitemapLimiter, async (req, res) => {
   try {
     const posts = await BlogPost.find({ status: 'published' })
       .sort({ publishedAt: -1 })

@@ -28,8 +28,8 @@ router.get('/', async (req, res) => {
     const skip = (page - 1) * limit;
 
     const filter = { status: 'published' };
-    if (req.query.tag) {
-      filter.tags = req.query.tag.toLowerCase();
+    if (typeof req.query.tag === 'string' && req.query.tag.trim()) {
+      filter.tags = String(req.query.tag).toLowerCase();
     }
 
     const [posts, total] = await Promise.all([
@@ -83,8 +83,9 @@ router.get('/admin/posts', requireAuth, requireRole('admin'), async (req, res) =
     const skip = (page - 1) * limit;
 
     const filter = {};
-    if (req.query.status && ['draft', 'published'].includes(req.query.status)) {
-      filter.status = req.query.status;
+    const statusParam = typeof req.query.status === 'string' ? req.query.status : '';
+    if (['draft', 'published'].includes(statusParam)) {
+      filter.status = statusParam;
     }
 
     const [posts, total] = await Promise.all([

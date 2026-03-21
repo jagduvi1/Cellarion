@@ -277,7 +277,7 @@ function AdminBlogEditor() {
               onChange={e => setCoverImage(e.target.value)}
               placeholder="https://..."
             />
-            {coverImage && (
+            {coverImage && /^https?:\/\//i.test(coverImage) && (
               <img src={coverImage} alt="Cover preview" className="blog-editor-cover-preview" />
             )}
           </div>
