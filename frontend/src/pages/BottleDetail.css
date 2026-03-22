@@ -996,3 +996,49 @@
   color: var(--color-text-secondary);
 }
 
+/* ── Consumed details (history bottles) ── */
+.bd-consumed {
+  border-left: 4px solid var(--color-border);
+}
+.bd-consumed--drank  { border-left-color: #8e44ad; }
+.bd-consumed--gifted { border-left-color: #e67e22; }
+.bd-consumed--sold   { border-left-color: #27ae60; }
+.bd-consumed--other  { border-left-color: var(--color-border); }
+
+.bd-consumed__header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.bd-consumed__icon {
+  font-size: 1.25rem;
+}
+
+.bd-consumed__reason {
+  font-weight: 600;
+  font-size: 1rem;
+  color: var(--color-text);
+}
+
+.bd-consumed__date {
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+  margin-left: auto;
+}
+
+.bd-consumed__rating {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.bd-consumed__note {
+  margin: 0.75rem 0 0;
+  font-style: italic;
+  color: var(--color-text-secondary);
+  font-size: 0.9rem;
+}
+

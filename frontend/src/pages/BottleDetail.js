@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, lazy, Suspense } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams, useNavigate, Link, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth, usePlan } from '../contexts/AuthContext';
 import { getBottle, updateBottle, consumeBottle, setBottleDefaultImage } from '../api/bottles';
@@ -31,6 +31,8 @@ function BottleDetail() {
   const { id: cellarId, bottleId } = useParams();
   const { apiFetch, user } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  const fromHistory = location.state?.fromHistory === true;
   const [bottle, setBottle] = useState(null);
   const [userRole, setUserRole] = useState(null);
   const [cellarColor, setCellarColor] = useState(null);
@@ -57,7 +59,6 @@ function BottleDetail() {
 
   useEffect(() => {
     fetchBottle();
-    fetchRackInfo();
   }, [bottleId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Re-fetch reviews when audience or vintage filter changes
@@ -74,6 +75,8 @@ function BottleDetail() {
         setBottle(data.bottle);
         setUserRole(data.userRole);
         setCellarColor(data.cellarColor || null);
+        // Only fetch rack info for active bottles
+        if (data.bottle.status === 'active') fetchRackInfo();
         if (data.pendingImageUrl) {
           const API_URL = process.env.REACT_APP_API_URL || '';
           const url = data.pendingImageUrl.startsWith('http')
@@ -221,16 +224,17 @@ function BottleDetail() {
   const isPending = !wine && !!bottle?.pendingWineRequest;
   const displayName = wine?.name || bottle?.pendingWineRequest?.wineName;
   const displayProducer = wine?.producer || bottle?.pendingWineRequest?.producer;
-  const canEdit = userRole === 'owner' || userRole === 'editor';
+  const isConsumed = bottle?.status && bottle.status !== 'active';
+  const canEdit = !isConsumed && (userRole === 'owner' || userRole === 'editor');
 
   return (
     <div className="bottle-detail-page">
       {/* ── Clean header ── */}
       <div className="bd-page-header">
         <div className="bd-header-top">
-          <Link to={`/cellars/${cellarId}`} className="back-link">
+          <Link to={isConsumed || fromHistory ? `/cellars/${cellarId}/history` : `/cellars/${cellarId}`} className="back-link">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="15 18 9 12 15 6"/></svg>
-            {t('bottleDetail.backToCellar')}
+            {isConsumed || fromHistory ? t('bottleDetail.backToHistory', 'Back to history') : t('bottleDetail.backToCellar')}
           </Link>
           {!loading && canEdit && !editing && (
             <div className="bd-header-actions">
@@ -283,6 +287,11 @@ function BottleDetail() {
           </div>
         </div>
       </div>
+
+      {/* ── Consumption details (history bottles only) ── */}
+      {isConsumed && (
+        <ConsumedDetails bottle={bottle} />
+      )}
 
       {/* Bottle details or edit form */}
       {editing ? (
@@ -432,6 +441,40 @@ function BottleDetail() {
           />
         )}
       </Suspense>
+    </div>
+  );
+}
+
+// ── Consumption details for history bottles ──
+const CONSUMED_REASON_ICONS = { drank: '🍷', gifted: '🎁', sold: '💰', other: '📦' };
+
+function ConsumedDetails({ bottle }) {
+  const { t } = useTranslation();
+  const { user } = useAuth();
+  const reason = bottle.consumedReason || bottle.status;
+  const icon = CONSUMED_REASON_ICONS[reason] || '📦';
+  const consumedDate = bottle.consumedAt
+    ? new Date(bottle.consumedAt).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })
+    : null;
+
+  return (
+    <div className={`bd-consumed card bd-consumed--${reason}`}>
+      <div className="bd-consumed__header">
+        <span className="bd-consumed__icon">{icon}</span>
+        <span className="bd-consumed__reason">
+          {t(`history.reason_${reason}`, reason.charAt(0).toUpperCase() + reason.slice(1))}
+        </span>
+        {consumedDate && <span className="bd-consumed__date">{consumedDate}</span>}
+      </div>
+      {bottle.consumedRating && (
+        <div className="bd-consumed__rating">
+          <span className="bd-detail-label">{t('history.atConsumption', 'Rating at consumption')}</span>
+          <RatingDisplay value={bottle.consumedRating} scale={bottle.consumedRatingScale || '5'} preferredScale={user?.preferences?.ratingScale} />
+        </div>
+      )}
+      {bottle.consumedNote && (
+        <p className="bd-consumed__note">"{bottle.consumedNote}"</p>
+      )}
     </div>
   );
 }

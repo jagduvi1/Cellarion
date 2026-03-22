@@ -97,11 +97,21 @@
 }
 
 .history-bottle-card {
+  display: block;
+  text-decoration: none;
+  color: inherit;
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   padding: 1rem 1.25rem;
   border-left: 4px solid transparent;
+  cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.history-bottle-card:hover {
+  border-color: var(--color-text-muted);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
 }
 
 .history-bottle-card.drank  { border-left-color: #8e44ad; }
@@ -114,6 +124,17 @@
   align-items: center;
   gap: 0.75rem;
   margin-bottom: 0.5rem;
+}
+
+.history-bottle-chevron {
+  margin-left: auto;
+  flex-shrink: 0;
+  color: var(--color-text-muted);
+  opacity: 0.5;
+}
+
+.history-bottle-card:hover .history-bottle-chevron {
+  opacity: 1;
 }
 
 .history-bottle-image {

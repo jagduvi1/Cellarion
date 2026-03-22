@@ -120,7 +120,7 @@ function CellarHistory() {
             </div>
             <div className="history-bottles">
               {items.map(bottle => (
-                <HistoryBottleCard key={bottle._id} bottle={bottle} />
+                <HistoryBottleCard key={bottle._id} bottle={bottle} cellarId={id} />
               ))}
             </div>
           </section>
@@ -132,7 +132,7 @@ function CellarHistory() {
   );
 }
 
-function HistoryBottleCard({ bottle }) {
+function HistoryBottleCard({ bottle, cellarId }) {
   const { t } = useTranslation();
   const { user } = useAuth();
   const wine = bottle.wineDefinition;
@@ -141,7 +141,11 @@ function HistoryBottleCard({ bottle }) {
     : null;
 
   return (
-    <div className={`history-bottle-card ${bottle.consumedReason || bottle.status}`}>
+    <Link
+      to={`/cellars/${cellarId}/bottles/${bottle._id}`}
+      state={{ fromHistory: true }}
+      className={`history-bottle-card ${bottle.consumedReason || bottle.status}`}
+    >
       <div className="history-bottle-main">
         {wine?.image && (
           <img
@@ -160,6 +164,7 @@ function HistoryBottleCard({ bottle }) {
             {bottle.price && <span>· {t('history.paidLabel')} {bottle.price} {bottle.currency}</span>}
           </div>
         </div>
+        <svg className="history-bottle-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
       </div>
 
       {/* Consumption details */}
@@ -174,7 +179,7 @@ function HistoryBottleCard({ bottle }) {
           <p className="history-note">"{bottle.consumedNote}"</p>
         )}
       </div>
-    </div>
+    </Link>
   );
 }
 
