@@ -682,35 +682,45 @@ export default function CellarRoom() {
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, [hasUnsavedChanges]);
 
-  // Block in-app navigation with unsaved changes
+  // Block ALL in-app navigation with unsaved changes
   const navigate = useNavigate();
   const [pendingNavPath, setPendingNavPath] = useState(null);
 
-  // Use a ref so the popstate handler always reads the latest value
+  // Use a ref so interceptors always read the latest value
   const hasUnsavedRef = useRef(false);
   useEffect(() => { hasUnsavedRef.current = hasUnsavedChanges; }, [hasUnsavedChanges]);
 
-  const guardedNavigate = useCallback((path, e) => {
-    if (hasUnsavedRef.current) {
-      e?.preventDefault();
-      setPendingNavPath(path);
-    }
-  }, []);
-
-  // Intercept browser back/forward when there are unsaved changes
+  // Intercept pushState/replaceState (covers all React Router Link clicks,
+  // navigate() calls, etc.) and browser back/forward via popstate.
   useEffect(() => {
     if (!hasUnsavedChanges) return;
-    // Push a duplicate entry so pressing back stays on the same page
+
+    const currentPath = window.location.pathname + window.location.search;
+
+    // Monkey-patch pushState to intercept all client-side navigation
+    const origPushState = window.history.pushState.bind(window.history);
+    window.history.pushState = function (state, title, url) {
+      if (hasUnsavedRef.current && url && url !== currentPath) {
+        setPendingNavPath(url);
+        return; // Block the navigation
+      }
+      origPushState(state, title, url);
+    };
+
+    // Intercept browser back/forward
     window.history.pushState(null, '', window.location.href);
     const handlePopState = () => {
       if (hasUnsavedRef.current) {
-        // Re-push to keep the user on this page and show the dialog
         window.history.pushState(null, '', window.location.href);
         setPendingNavPath('__back__');
       }
     };
     window.addEventListener('popstate', handlePopState);
-    return () => window.removeEventListener('popstate', handlePopState);
+
+    return () => {
+      window.history.pushState = origPushState;
+      window.removeEventListener('popstate', handlePopState);
+    };
   }, [hasUnsavedChanges]);
 
   // Link all selected racks into one group
@@ -854,7 +864,7 @@ export default function CellarRoom() {
     <div className="cellar-room-page">
       <div className="cellar-room-header">
         <div className="cellar-room-header-left">
-          <Link to={`/cellars/${id}/racks`} className="back-link" onClick={(e) => guardedNavigate(`/cellars/${id}/racks`, e)}>
+          <Link to={`/cellars/${id}/racks`} className="back-link">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="15 18 9 12 15 6"/></svg>
             {t('room.backToRacks', 'Racks')}
           </Link>
@@ -1285,7 +1295,7 @@ export default function CellarRoom() {
                   </div>
                 )}
                 <div className="room-rack-detail-actions">
-                  <Link to={`/cellars/${id}/racks?rack=${selectedRackId}`} className="btn btn-secondary btn-small" onClick={(e) => guardedNavigate(`/cellars/${id}/racks?rack=${selectedRackId}`, e)}>
+                  <Link to={`/cellars/${id}/racks?rack=${selectedRackId}`} className="btn btn-secondary btn-small">
                     {t('room.viewRack', 'View Rack')}
                   </Link>
                   {isEditMode && (
@@ -1352,7 +1362,8 @@ export default function CellarRoom() {
               </button>
               <button className="btn btn-danger" onClick={() => {
                 const path = pendingNavPath;
-                // Clear unsaved state so the guard doesn't re-trigger
+                // Disable the guard so navigation goes through
+                hasUnsavedRef.current = false;
                 savedLayoutRef.current = JSON.stringify(layout);
                 setPendingNavPath(null);
                 if (path === '__back__') {
