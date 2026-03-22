@@ -27,3 +27,37 @@
   resize: vertical;
   min-height: 60px;
 }
+
+/* Visibility toggle */
+.review-form__visibility-toggle {
+  display: inline-flex;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.review-form__vis-btn {
+  padding: 0.35rem 0.75rem;
+  font-size: 0.85rem;
+  border: none;
+  background: var(--color-bg);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.review-form__vis-btn + .review-form__vis-btn {
+  border-left: 1px solid var(--color-border);
+}
+
+.review-form__vis-btn.active {
+  background: var(--color-primary);
+  color: #fff;
+}
+
+.review-form__vis-hint {
+  display: block;
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+  margin-top: 0.25rem;
+}

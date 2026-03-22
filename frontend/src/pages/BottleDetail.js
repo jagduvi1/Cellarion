@@ -47,6 +47,11 @@ function BottleDetail() {
   const [reviewFormOpen, setReviewFormOpen] = useState(false);
   const [wineReviews, setWineReviews] = useState([]);
   const [communityRating, setCommunityRating] = useState(null);
+  const [reviewAudience, setReviewAudience] = useState('all');
+  const [reviewVintage, setReviewVintage] = useState('this');
+  const [reviewPage, setReviewPage] = useState(1);
+  const [reviewTotal, setReviewTotal] = useState(0);
+  const [reviewPages, setReviewPages] = useState(0);
   const [pendingImage, setPendingImage] = useState(null);
   const [defaultImage, setDefaultImage] = useState(null);
 
@@ -54,6 +59,12 @@ function BottleDetail() {
     fetchBottle();
     fetchRackInfo();
   }, [bottleId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Re-fetch reviews when audience or vintage filter changes
+  useEffect(() => {
+    const wineId = bottle?.wineDefinition?._id;
+    if (wineId) fetchWineReviews(wineId, { audience: reviewAudience, vintage: reviewVintage, page: 1 });
+  }, [reviewAudience, reviewVintage]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const fetchBottle = async () => {
     try {
@@ -103,11 +114,31 @@ function BottleDetail() {
     }
   };
 
-  const fetchWineReviews = async (wineId) => {
+  const fetchWineReviews = async (wineId, opts = {}) => {
     try {
-      const res = await getWineReviews(apiFetch, wineId, 'limit=3');
+      const audience = opts.audience ?? reviewAudience;
+      const vintageFilter = opts.vintage ?? reviewVintage;
+      const page = opts.page ?? 1;
+
+      const params = new URLSearchParams();
+      params.set('limit', '10');
+      params.set('page', String(page));
+      params.set('audience', audience);
+
+      if (vintageFilter === 'this' && bottle?.vintage) {
+        params.set('vintage', bottle.vintage);
+      } else if (vintageFilter !== 'all' && vintageFilter !== 'this') {
+        params.set('vintage', vintageFilter);
+      }
+
+      const res = await getWineReviews(apiFetch, wineId, params.toString());
       const data = await res.json();
-      if (res.ok) setWineReviews(data.reviews || []);
+      if (res.ok) {
+        setWineReviews(data.reviews || []);
+        setReviewTotal(data.total || 0);
+        setReviewPages(data.pages || 0);
+        setReviewPage(page);
+      }
     } catch {
       // Non-critical
     }
@@ -279,11 +310,11 @@ function BottleDetail() {
         />
       )}
 
-      {/* ── Community Reviews section ── */}
+      {/* ── Reviews section ── */}
       {wine && (
         <div className="bd-reviews card">
           <div className="bd-reviews__header">
-            <h2>Community Reviews</h2>
+            <h2>{t('reviews.communityReviews', 'Reviews')}</h2>
             {communityRating && communityRating.reviewCount > 0 && (
               <span className="bd-reviews__avg">
                 {fromNormalized(communityRating.averageNormalized, user?.preferences?.ratingScale || '5').toFixed(1)}
@@ -292,18 +323,56 @@ function BottleDetail() {
               </span>
             )}
           </div>
+          <div className="bd-reviews__filters">
+            <select
+              value={reviewAudience}
+              onChange={e => setReviewAudience(e.target.value)}
+              className="bd-reviews__filter-select"
+            >
+              <option value="all">{t('reviews.audienceAll', 'All')}</option>
+              <option value="mine">{t('reviews.audienceMine', 'My Reviews')}</option>
+              <option value="following">{t('reviews.audienceFollowing', 'Following')}</option>
+            </select>
+            <select
+              value={reviewVintage}
+              onChange={e => setReviewVintage(e.target.value)}
+              className="bd-reviews__filter-select"
+            >
+              <option value="this">{t('reviews.vintageThis', 'This vintage')}</option>
+              <option value="all">{t('reviews.vintageAll', 'All vintages')}</option>
+            </select>
+          </div>
           {wineReviews.length > 0 ? (
             wineReviews.map(review => (
               <ReviewCard key={review._id} review={review} showWine={false} />
             ))
           ) : (
-            <p className="bd-reviews__empty">No reviews yet. Be the first to review this wine!</p>
+            <p className="bd-reviews__empty">{t('reviews.noReviews', 'No reviews yet. Be the first to review this wine!')}</p>
+          )}
+          {reviewPages > 1 && (
+            <div className="bd-reviews__pagination">
+              <button
+                className="btn btn-secondary btn-small"
+                disabled={reviewPage <= 1}
+                onClick={() => fetchWineReviews(wine._id, { page: reviewPage - 1 })}
+              >
+                {t('common.previous', 'Previous')}
+              </button>
+              <span className="bd-reviews__page-info">{reviewPage} / {reviewPages}</span>
+              <button
+                className="btn btn-secondary btn-small"
+                disabled={reviewPage >= reviewPages}
+                onClick={() => fetchWineReviews(wine._id, { page: reviewPage + 1 })}
+              >
+                {t('common.next', 'Next')}
+              </button>
+            </div>
           )}
           <button
             className="btn btn-primary btn-small"
             onClick={() => setReviewFormOpen(true)}
           >
-            Write a Review
+            {t('reviews.writeReview', 'Write a Review')}
           </button>
         </div>
       )}
@@ -313,10 +382,11 @@ function BottleDetail() {
           <ReviewForm
             wineDefinition={wine._id}
             wineName={wine.name}
+            defaultVintage={bottle?.vintage !== 'NV' ? bottle?.vintage : ''}
             onClose={() => setReviewFormOpen(false)}
-            onSaved={(review) => {
-              setWineReviews(prev => [review, ...prev.filter(r => r._id !== review._id)]);
-              setCommunityRating(null); // will be recalculated on next fetch
+            onSaved={() => {
+              fetchWineReviews(wine._id);
+              setCommunityRating(null);
             }}
           />
         )}

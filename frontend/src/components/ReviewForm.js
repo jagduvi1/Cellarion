@@ -1,11 +1,13 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import Modal from './Modal';
 import RatingInput from './RatingInput';
 import { createReview, updateReview } from '../api/reviews';
 import './ReviewForm.css';
 
-export default function ReviewForm({ wineDefinition, wineName, existingReview, onClose, onSaved }) {
+export default function ReviewForm({ wineDefinition, wineName, existingReview, defaultVintage, onClose, onSaved }) {
+  const { t } = useTranslation();
   const { apiFetch, user } = useAuth();
   const isEdit = !!existingReview;
 
@@ -17,7 +19,8 @@ export default function ReviewForm({ wineDefinition, wineName, existingReview, o
   const [palate, setPalate] = useState(existingReview?.tasting?.palate || '');
   const [finish, setFinish] = useState(existingReview?.tasting?.finish || '');
   const [overall, setOverall] = useState(existingReview?.tasting?.overall || '');
-  const [vintage, setVintage] = useState(existingReview?.vintage || '');
+  const [vintage, setVintage] = useState(existingReview?.vintage || defaultVintage || '');
+  const [visibility, setVisibility] = useState(existingReview?.visibility || 'public');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
 
@@ -35,7 +38,8 @@ export default function ReviewForm({ wineDefinition, wineName, existingReview, o
       rating,
       ratingScale,
       vintage: vintage || null,
-      tasting: { aroma, palate, finish, overall }
+      tasting: { aroma, palate, finish, overall },
+      visibility
     };
 
     try {
@@ -89,7 +93,32 @@ export default function ReviewForm({ wineDefinition, wineName, existingReview, o
         </div>
 
         <div className="form-group">
-          <label htmlFor="review-overall">Overall Impression</label>
+          <label>{t('reviews.visibility', 'Visibility')}</label>
+          <div className="review-form__visibility-toggle">
+            <button
+              type="button"
+              className={`review-form__vis-btn ${visibility === 'public' ? 'active' : ''}`}
+              onClick={() => setVisibility('public')}
+            >
+              {t('reviews.visibilityPublic', 'Public')}
+            </button>
+            <button
+              type="button"
+              className={`review-form__vis-btn ${visibility === 'private' ? 'active' : ''}`}
+              onClick={() => setVisibility('private')}
+            >
+              {t('reviews.visibilityPrivate', 'Private')}
+            </button>
+          </div>
+          <span className="review-form__vis-hint">
+            {visibility === 'private'
+              ? t('reviews.visibilityPrivateHint', 'Only you can see this review')
+              : t('reviews.visibilityPublicHint', 'Visible to all users')}
+          </span>
+        </div>
+
+        <div className="form-group">
+          <label htmlFor="review-overall">{t('reviews.overallImpression', 'Overall Impression')}</label>
           <textarea
             id="review-overall"
             className="input"

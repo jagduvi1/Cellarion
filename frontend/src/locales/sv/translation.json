@@ -1126,5 +1126,22 @@
       "enterImageUrl": "Ange bild-URL:",
       "enterVideoUrl": "Ange YouTube-URL:"
     }
+  },
+  "reviews": {
+    "communityReviews": "Omdömen",
+    "audienceAll": "Alla",
+    "audienceMine": "Mina omdömen",
+    "audienceFollowing": "Följer",
+    "vintageThis": "Denna årgång",
+    "vintageAll": "Alla årgångar",
+    "noReviews": "Inga omdömen ännu. Bli den första att recensera detta vin!",
+    "writeReview": "Skriv ett omdöme",
+    "visibility": "Synlighet",
+    "visibilityPublic": "Offentlig",
+    "visibilityPrivate": "Privat",
+    "visibilityPublicHint": "Synlig för alla användare",
+    "visibilityPrivateHint": "Bara du kan se detta omdöme",
+    "overallImpression": "Helhetsintryck",
+    "privateBadge": "Privat"
   }
 }

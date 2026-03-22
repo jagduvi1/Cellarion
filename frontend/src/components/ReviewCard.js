@@ -64,7 +64,12 @@ export default function ReviewCard({ review, showWine = true, onUpdate }) {
           {review.vintage && (
             <span className="review-card__vintage">{review.vintage}</span>
           )}
-          <span className="review-card__time">{timeAgo(review.createdAt)}</span>
+          {review.visibility === 'private' && (
+            <span className="review-card__private-badge">Private</span>
+          )}
+          <span className="review-card__time" title={new Date(review.createdAt).toLocaleDateString()}>
+            {timeAgo(review.createdAt)}
+          </span>
         </div>
         <div className="review-card__rating">
           <RatingDisplay

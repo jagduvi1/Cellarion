@@ -8,7 +8,7 @@ const WineDefinition = require('../models/WineDefinition');
 async function updateWineCommunityRating(wineDefinitionId) {
   try {
     const result = await Review.aggregate([
-      { $match: { wineDefinition: wineDefinitionId } },
+      { $match: { wineDefinition: wineDefinitionId, visibility: { $ne: 'private' } } },
       { $group: { _id: null, avg: { $avg: '$normalizedRating' }, count: { $sum: 1 } } }
     ]);
     const avg = result[0]?.avg ?? null;

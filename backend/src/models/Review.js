@@ -62,15 +62,22 @@ const reviewSchema = new mongoose.Schema({
   likesCount: {
     type: Number,
     default: 0
+  },
+  visibility: {
+    type: String,
+    enum: ['public', 'private'],
+    default: 'public'
   }
 }, { timestamps: true });
 
-// One review per wine per user
-reviewSchema.index({ author: 1, wineDefinition: 1 }, { unique: true });
+// User's reviews for a specific wine (multiple allowed)
+reviewSchema.index({ author: 1, wineDefinition: 1, createdAt: -1 });
 // User's reviews feed
 reviewSchema.index({ author: 1, createdAt: -1 });
-// Wine's reviews
-reviewSchema.index({ wineDefinition: 1, createdAt: -1 });
+// Wine's reviews with visibility filter
+reviewSchema.index({ wineDefinition: 1, visibility: 1, createdAt: -1 });
+// Wine's reviews by vintage
+reviewSchema.index({ wineDefinition: 1, vintage: 1, createdAt: -1 });
 // Global feed
 reviewSchema.index({ createdAt: -1 });
 

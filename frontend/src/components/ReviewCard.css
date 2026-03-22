@@ -146,3 +146,12 @@
   cursor: default;
   opacity: 0.5;
 }
+
+.review-card__private-badge {
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+  background: var(--color-bg);
+  padding: 0.1rem 0.4rem;
+  border-radius: var(--radius-sm);
+  font-weight: 500;
+}

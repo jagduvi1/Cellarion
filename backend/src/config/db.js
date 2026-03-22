@@ -11,6 +11,10 @@ const connectDB = async () => {
     Rack.syncIndexes().catch(err =>
       console.warn('[db] Rack.syncIndexes failed:', err.message)
     );
+    const Review = require('../models/Review');
+    Review.syncIndexes().catch(err =>
+      console.warn('[db] Review.syncIndexes failed:', err.message)
+    );
   } catch (error) {
     console.error('MongoDB Connection Error');
     process.exit(1);

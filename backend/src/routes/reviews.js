@@ -46,7 +46,7 @@ function sanitizeTasting(tasting) {
 // POST /api/reviews - Create a review
 router.post('/', async (req, res) => {
   try {
-    const { wineDefinition, bottle, vintage, rating, ratingScale, tasting } = req.body;
+    const { wineDefinition, bottle, vintage, rating, ratingScale, tasting, visibility } = req.body;
 
     if (!wineDefinition || !isValidId(wineDefinition)) {
       return res.status(400).json({ error: 'Valid wine definition ID is required' });
@@ -66,6 +66,9 @@ router.post('/', async (req, res) => {
     if (ratingError) return res.status(400).json({ error: ratingError });
     if (resolvedRating == null) return res.status(400).json({ error: 'Rating is required' });
 
+    // Validate visibility
+    const resolvedVisibility = visibility === 'private' ? 'private' : 'public';
+
     // Sanitize tasting notes
     const cleanTasting = sanitizeTasting(tasting);
     if (cleanTasting.error) return res.status(400).json({ error: cleanTasting.error });
@@ -77,7 +80,8 @@ router.post('/', async (req, res) => {
       vintage: vintage || null,
       rating: resolvedRating,
       ratingScale: resolvedScale,
-      tasting: cleanTasting
+      tasting: cleanTasting,
+      visibility: resolvedVisibility
     });
 
     await review.save();
@@ -96,27 +100,54 @@ router.post('/', async (req, res) => {
 
     res.status(201).json({ review });
   } catch (err) {
-    if (err.code === 11000) {
-      return res.status(409).json({ error: 'You have already reviewed this wine. Edit your existing review instead.' });
-    }
     console.error('Create review error:', err);
     res.status(500).json({ error: 'Failed to create review' });
   }
 });
 
 // GET /api/reviews/wine/:wineId - Reviews for a wine
+// Query params: audience (all|mine|following), vintage (string), page, limit
 router.get('/wine/:wineId', async (req, res) => {
   try {
     if (!isValidId(req.params.wineId)) return res.status(400).json({ error: 'Invalid wine ID' });
     const { page, limit, skip } = parsePagination(req.query);
+    const { audience, vintage } = req.query;
+
+    const filter = { wineDefinition: new mongoose.Types.ObjectId(req.params.wineId) };
+    const userId = new mongoose.Types.ObjectId(req.user.id);
+
+    if (audience === 'mine') {
+      filter.author = userId;
+      // Show all own reviews (including private)
+    } else if (audience === 'following') {
+      const follows = await Follow.find({ follower: req.user.id }).select('following');
+      const followingIds = follows.map(f => f.following);
+      followingIds.push(userId);
+      filter.author = { $in: followingIds };
+      // Show own reviews (any visibility) + followed users' public reviews
+      filter.$or = [
+        { author: userId },
+        { visibility: 'public' }
+      ];
+    } else {
+      // audience=all (default): own reviews (any visibility) + everyone's public
+      filter.$or = [
+        { author: userId },
+        { visibility: 'public' }
+      ];
+    }
+
+    if (vintage) {
+      filter.vintage = vintage;
+    }
 
     const [reviews, total] = await Promise.all([
-      Review.find({ wineDefinition: req.params.wineId })
+      Review.find(filter)
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit)
         .populate('author', 'username displayName'),
-      Review.countDocuments({ wineDefinition: req.params.wineId })
+      Review.countDocuments(filter)
     ]);
 
     // Check which reviews the current user has liked
@@ -142,13 +173,19 @@ router.get('/user/:userId', async (req, res) => {
     if (!isValidId(req.params.userId)) return res.status(400).json({ error: 'Invalid user ID' });
     const { page, limit, skip } = parsePagination(req.query);
 
+    // If viewing own profile, show all reviews; otherwise only public
+    const filter = { author: req.params.userId };
+    if (req.params.userId !== req.user.id) {
+      filter.visibility = 'public';
+    }
+
     const [reviews, total] = await Promise.all([
-      Review.find({ author: req.params.userId })
+      Review.find(filter)
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit)
         .populate({ path: 'wineDefinition', select: 'name producer type', populate: { path: 'country', select: 'name' } }),
-      Review.countDocuments({ author: req.params.userId })
+      Review.countDocuments(filter)
     ]);
 
     // Check which reviews the current user has liked
@@ -178,16 +215,25 @@ router.get('/feed', async (req, res) => {
     const followingIds = follows.map(f => f.following);
 
     // Include own reviews in feed
-    followingIds.push(new mongoose.Types.ObjectId(req.user.id));
+    const userId = new mongoose.Types.ObjectId(req.user.id);
+    followingIds.push(userId);
+
+    const feedFilter = {
+      author: { $in: followingIds },
+      $or: [
+        { author: userId },
+        { visibility: 'public' }
+      ]
+    };
 
     const [reviews, total] = await Promise.all([
-      Review.find({ author: { $in: followingIds } })
+      Review.find(feedFilter)
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit)
         .populate('author', 'username displayName')
         .populate({ path: 'wineDefinition', select: 'name producer type', populate: { path: 'country', select: 'name' } }),
-      Review.countDocuments({ author: { $in: followingIds } })
+      Review.countDocuments(feedFilter)
     ]);
 
     // Check which reviews the current user has liked
@@ -216,14 +262,15 @@ router.get('/discover', async (req, res) => {
     const publicUsers = await User.find({ profileVisibility: 'public' }).select('_id');
     const publicIds = publicUsers.map(u => u._id);
 
+    const discoverFilter = { author: { $in: publicIds }, visibility: 'public' };
     const [reviews, total] = await Promise.all([
-      Review.find({ author: { $in: publicIds } })
+      Review.find(discoverFilter)
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit)
         .populate('author', 'username displayName')
         .populate({ path: 'wineDefinition', select: 'name producer type', populate: { path: 'country', select: 'name' } }),
-      Review.countDocuments({ author: { $in: publicIds } })
+      Review.countDocuments(discoverFilter)
     ]);
 
     // Check which reviews the current user has liked
@@ -253,6 +300,11 @@ router.get('/:id', async (req, res) => {
 
     if (!review) return res.status(404).json({ error: 'Review not found' });
 
+    // Private reviews only visible to author
+    if (review.visibility === 'private' && review.author._id.toString() !== req.user.id) {
+      return res.status(404).json({ error: 'Review not found' });
+    }
+
     const vote = await ReviewVote.findOne({ user: req.user.id, review: review._id });
 
     res.json({ review: { ...review.toObject(), liked: !!vote } });
@@ -272,7 +324,7 @@ router.put('/:id', async (req, res) => {
       return res.status(403).json({ error: 'You can only edit your own reviews' });
     }
 
-    const { rating, ratingScale, tasting, vintage } = req.body;
+    const { rating, ratingScale, tasting, vintage, visibility } = req.body;
 
     // Validate rating if provided
     if (rating !== undefined) {
@@ -291,6 +343,9 @@ router.put('/:id', async (req, res) => {
     }
 
     if (vintage !== undefined) review.vintage = vintage;
+    if (visibility !== undefined) {
+      review.visibility = visibility === 'private' ? 'private' : 'public';
+    }
 
     await review.save();
 
@@ -349,6 +404,11 @@ router.post('/:id/like', async (req, res) => {
     if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid review ID' });
     const review = await Review.findById(req.params.id);
     if (!review) return res.status(404).json({ error: 'Review not found' });
+
+    // Cannot like private reviews that aren't yours
+    if (review.visibility === 'private' && review.author.toString() !== req.user.id) {
+      return res.status(404).json({ error: 'Review not found' });
+    }
 
     const existing = await ReviewVote.findOne({ user: req.user.id, review: review._id });
 

@@ -1126,5 +1126,22 @@
       "enterImageUrl": "Enter image URL:",
       "enterVideoUrl": "Enter YouTube URL:"
     }
+  },
+  "reviews": {
+    "communityReviews": "Reviews",
+    "audienceAll": "All",
+    "audienceMine": "My Reviews",
+    "audienceFollowing": "Following",
+    "vintageThis": "This vintage",
+    "vintageAll": "All vintages",
+    "noReviews": "No reviews yet. Be the first to review this wine!",
+    "writeReview": "Write a Review",
+    "visibility": "Visibility",
+    "visibilityPublic": "Public",
+    "visibilityPrivate": "Private",
+    "visibilityPublicHint": "Visible to all users",
+    "visibilityPrivateHint": "Only you can see this review",
+    "overallImpression": "Overall Impression",
+    "privateBadge": "Private"
   }
 }
