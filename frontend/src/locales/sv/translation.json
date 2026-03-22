@@ -643,7 +643,8 @@
       "wineDefIdPlaceholder": "Klistra in vindefinitions-ID",
       "assigning": "Tilldelar...",
       "assignBtn": "Tilldela som officiell bild",
-      "enterWineId": "Ange ett vindefinitions-ID"
+      "enterWineId": "Ange ett vindefinitions-ID",
+      "unapprove": "Ångra godkännande"
     },
     "audit": {
       "title": "Aktivitetslogg",

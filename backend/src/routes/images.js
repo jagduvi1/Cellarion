@@ -146,10 +146,13 @@ router.get('/bottle/:bottleId', requireAuth, async (req, res) => {
       return res.status(404).json({ error: 'Bottle not found' });
     }
 
-    // Fetch bottle-specific images (all non-rejected statuses)
+    // Fetch bottle-specific images: approved for everyone, non-approved only for the uploader
     const bottleImages = await BottleImage.find({
       bottle: req.params.bottleId,
-      status: { $ne: 'rejected' }
+      $or: [
+        { status: 'approved' },
+        { uploadedBy: req.user.id }
+      ]
     }).sort({ createdAt: -1 });
 
     // Also fetch approved wine-level images so the user can pick any as default

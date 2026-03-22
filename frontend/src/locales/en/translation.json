@@ -643,7 +643,8 @@
       "wineDefIdPlaceholder": "Paste wine definition ID",
       "assigning": "Assigning...",
       "assignBtn": "Assign as Official Image",
-      "enterWineId": "Please enter a wine definition ID"
+      "enterWineId": "Please enter a wine definition ID",
+      "unapprove": "Unapprove"
     },
     "audit": {
       "title": "Audit Log",

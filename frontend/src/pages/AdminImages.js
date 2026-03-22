@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
-import { adminGetImages, adminApproveImage, adminRejectImage, adminAssignImageToWine } from '../api/admin';
+import { adminGetImages, adminApproveImage, adminUnapproveImage, adminAssignImageToWine } from '../api/admin';
 import AuthImage from '../components/AuthImage';
 import './AdminImages.css';
 
@@ -26,7 +26,6 @@ function AdminImages() {
     { value: 'processed', label: t('admin.images.filterReady') },
     { value: 'uploaded',  label: t('admin.images.filterUploading') },
     { value: 'approved',  label: t('admin.images.filterApproved') },
-    { value: 'rejected',  label: t('admin.images.filterRejected') },
     { value: '',          label: t('admin.images.filterAll') }
   ];
 
@@ -73,12 +72,12 @@ function AdminImages() {
     }
   };
 
-  const handleReject = async () => {
+  const handleUnapprove = async () => {
     if (!selected) return;
     setSubmitting(true);
     setError(null);
     try {
-      const res = await adminRejectImage(apiFetch, selected._id);
+      const res = await adminUnapproveImage(apiFetch, selected._id);
       const data = await res.json();
       if (res.ok) {
         setSelected(data.image);
@@ -262,12 +261,21 @@ function AdminImages() {
                     >
                       {submitting ? t('admin.images.processing') : t('admin.images.approve')}
                     </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Unapprove for approved images */}
+              {selected.status === 'approved' && (
+                <div className="review-actions card">
+                  <h3>{t('admin.images.reviewActions')}</h3>
+                  <div className="form-actions">
                     <button
-                      onClick={handleReject}
-                      className="btn btn-danger"
+                      onClick={handleUnapprove}
+                      className="btn btn-warning"
                       disabled={submitting}
                     >
-                      {t('admin.requests.reject')}
+                      {submitting ? t('admin.images.processing') : t('admin.images.unapprove')}
                     </button>
                   </div>
                 </div>

@@ -157,6 +157,56 @@ router.put('/:id/reject', async (req, res) => {
   }
 });
 
+// PUT /api/admin/images/:id/unapprove - Revert approved image back to processed
+router.put('/:id/unapprove', async (req, res) => {
+  try {
+    const image = await BottleImage.findById(req.params.id);
+    if (!image) {
+      return res.status(404).json({ error: 'Image not found' });
+    }
+    if (image.status !== 'approved') {
+      return res.status(400).json({ error: 'Only approved images can be unapproved' });
+    }
+
+    // If image was assigned to a wine, remove the assignment
+    if (image.assignedToWine && image.wineDefinition) {
+      const wineDefId = image.wineDefinition;
+      image.assignedToWine = false;
+
+      // Clear the wine definition's image if it matches this image
+      const imageUrl = image.processedUrl || image.originalUrl;
+      const wine = await WineDefinition.findById(wineDefId);
+      if (wine && wine.image === imageUrl) {
+        wine.image = null;
+        wine.imageCredit = null;
+        await wine.save();
+        searchService.indexWine(wineDefId);
+      }
+    }
+
+    image.status = image.processedUrl ? 'processed' : 'uploaded';
+    image.reviewedBy = req.user.id;
+    image.reviewedAt = new Date();
+    await image.save();
+
+    await image.populate([
+      { path: 'uploadedBy', select: 'username' },
+      { path: 'reviewedBy', select: 'username' },
+      { path: 'wineDefinition', select: 'name producer type' }
+    ]);
+
+    logAudit(req, 'admin.image.unapprove',
+      { type: 'image', id: image._id },
+      { wineDefinitionId: image.wineDefinition }
+    );
+
+    res.json({ image });
+  } catch (error) {
+    console.error('Unapprove image error:', error);
+    res.status(500).json({ error: 'Failed to unapprove image' });
+  }
+});
+
 // PUT /api/admin/images/:id/assign-to-wine - Set as official wine image
 router.put('/:id/assign-to-wine', async (req, res) => {
   try {

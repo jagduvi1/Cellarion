@@ -75,6 +75,22 @@
   cursor: not-allowed;
 }
 
+.btn-warning {
+  background: transparent;
+  color: var(--color-warning, #e67e22);
+  border: 1px solid var(--color-warning, #e67e22);
+}
+
+.btn-warning:hover:not(:disabled) {
+  background: var(--color-warning, #e67e22);
+  color: #fff;
+}
+
+.btn-warning:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
 .btn-small {
   padding: 0.4rem 0.9rem;
   font-size: 0.875rem;

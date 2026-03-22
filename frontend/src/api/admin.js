@@ -102,6 +102,9 @@ export const adminApproveImage = (apiFetch, id) =>
 export const adminRejectImage = (apiFetch, id) =>
   apiFetch(`/api/admin/images/${id}/reject`, { method: 'PUT' });
 
+export const adminUnapproveImage = (apiFetch, id) =>
+  apiFetch(`/api/admin/images/${id}/unapprove`, { method: 'PUT' });
+
 export const adminAssignImageToWine = (apiFetch, id, data) =>
   apiFetch(`/api/admin/images/${id}/assign-to-wine`, {
     method: 'PUT',
