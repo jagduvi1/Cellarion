@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef, Suspense } from 'react';
-import { useParams, useSearchParams, Link, useBlocker } from 'react-router-dom';
+import { useParams, useSearchParams, Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Canvas } from '@react-three/fiber';
 import { useAuth } from '../contexts/AuthContext';
@@ -682,8 +682,16 @@ export default function CellarRoom() {
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, [hasUnsavedChanges]);
 
-  // Block React Router navigation with unsaved changes
-  const blocker = useBlocker(hasUnsavedChanges);
+  // Block in-app navigation with unsaved changes
+  const navigate = useNavigate();
+  const [pendingNavPath, setPendingNavPath] = useState(null);
+
+  const guardedNavigate = useCallback((path, e) => {
+    if (hasUnsavedChanges) {
+      e?.preventDefault();
+      setPendingNavPath(path);
+    }
+  }, [hasUnsavedChanges]);
 
   // Link all selected racks into one group
   const handleLinkSelected = useCallback(() => {
@@ -826,7 +834,7 @@ export default function CellarRoom() {
     <div className="cellar-room-page">
       <div className="cellar-room-header">
         <div className="cellar-room-header-left">
-          <Link to={`/cellars/${id}/racks`} className="back-link">
+          <Link to={`/cellars/${id}/racks`} className="back-link" onClick={(e) => guardedNavigate(`/cellars/${id}/racks`, e)}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="15 18 9 12 15 6"/></svg>
             {t('room.backToRacks', 'Racks')}
           </Link>
@@ -1257,7 +1265,7 @@ export default function CellarRoom() {
                   </div>
                 )}
                 <div className="room-rack-detail-actions">
-                  <Link to={`/cellars/${id}/racks?rack=${selectedRackId}`} className="btn btn-secondary btn-small">
+                  <Link to={`/cellars/${id}/racks?rack=${selectedRackId}`} className="btn btn-secondary btn-small" onClick={(e) => guardedNavigate(`/cellars/${id}/racks?rack=${selectedRackId}`, e)}>
                     {t('room.viewRack', 'View Rack')}
                   </Link>
                   {isEditMode && (
@@ -1313,16 +1321,16 @@ export default function CellarRoom() {
       )}
 
       {/* Unsaved changes navigation blocker */}
-      {blocker.state === 'blocked' && (
-        <div className="room-consume-overlay" onClick={() => blocker.reset()}>
+      {pendingNavPath && (
+        <div className="room-consume-overlay" onClick={() => setPendingNavPath(null)}>
           <div className="room-consume-modal" onClick={e => e.stopPropagation()}>
             <h3>{t('room.unsavedChangesTitle', 'Unsaved Changes')}</h3>
             <p>{t('room.unsavedChangesMessage', 'You have unsaved changes to the room layout. Are you sure you want to leave?')}</p>
             <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end', marginTop: '1rem' }}>
-              <button className="btn btn-secondary" onClick={() => blocker.reset()}>
+              <button className="btn btn-secondary" onClick={() => setPendingNavPath(null)}>
                 {t('room.stayOnPage', 'Stay')}
               </button>
-              <button className="btn btn-danger" onClick={() => blocker.proceed()}>
+              <button className="btn btn-danger" onClick={() => { setPendingNavPath(null); navigate(pendingNavPath); }}>
                 {t('room.leaveWithoutSaving', 'Leave')}
               </button>
             </div>
