@@ -26,7 +26,7 @@ async function computeOverview({ activeBottles, consumedBottles, cellars, target
 
   const toTarget = (amount, fromCurrency) => {
     if (!amount || !fromCurrency) return null;
-    return convertCurrency(amount, fromCurrency, targetCurrency, todayRates) ?? amount;
+    return convertCurrency(amount, fromCurrency, targetCurrency, todayRates);
   };
 
   const now = new Date();

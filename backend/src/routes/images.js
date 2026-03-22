@@ -85,10 +85,16 @@ router.post('/upload', requireAuth, upload.single('image'), async (req, res) => 
         safeUnlink(req.file.path);
         return res.status(400).json({ error: 'Invalid bottleId' });
       }
-      const bottle = await Bottle.findOne({ _id: bottleId, user: req.user.id });
+      const bottle = await Bottle.findById(bottleId);
       if (!bottle) {
         safeUnlink(req.file.path);
         return res.status(404).json({ error: 'Bottle not found' });
+      }
+      const cellar = await Cellar.findById(bottle.cellar);
+      const cellarRole = cellar ? getCellarRole(cellar, req.user.id) : null;
+      if (!cellarRole || cellarRole === 'viewer') {
+        safeUnlink(req.file.path);
+        return res.status(403).json({ error: 'Not authorized to upload images for this bottle' });
       }
       const imageCount = await BottleImage.countDocuments({ bottle: bottleId });
       if (imageCount >= MAX_IMAGES_PER_BOTTLE) {
@@ -129,9 +135,14 @@ router.post('/upload', requireAuth, upload.single('image'), async (req, res) => 
 // GET /api/images/bottle/:bottleId - Get images for a bottle
 router.get('/bottle/:bottleId', requireAuth, async (req, res) => {
   try {
-    // Verify bottle ownership
-    const bottle = await Bottle.findOne({ _id: req.params.bottleId, user: req.user.id });
+    // Verify bottle access (owner or shared cellar viewer+)
+    const bottle = await Bottle.findById(req.params.bottleId);
     if (!bottle) {
+      return res.status(404).json({ error: 'Bottle not found' });
+    }
+    const cellar = await Cellar.findById(bottle.cellar);
+    const cellarRole = cellar ? getCellarRole(cellar, req.user.id) : null;
+    if (!cellarRole) {
       return res.status(404).json({ error: 'Bottle not found' });
     }
 

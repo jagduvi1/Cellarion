@@ -22,7 +22,7 @@ router.get('/overview', async (req, res) => {
     const cellarIds = cellars.map(c => c._id);
 
     const targetCurrency    = dbUser.preferences?.currency       || 'USD';
-    const targetRatingScale = req.user?.preferences?.ratingScale  || '5';
+    const targetRatingScale = dbUser?.preferences?.ratingScale  || '5';
 
     if (cellarIds.length === 0) {
       return res.json({ stats: buildEmptyStats(targetCurrency) });

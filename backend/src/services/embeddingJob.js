@@ -181,6 +181,12 @@ async function runJob(cfg) {
         // Embed
         const vector = await embedSingle(text, { model });
 
+        // Before creating new point, delete old one if it exists
+        const existingEmb = await WineEmbedding.findOne({ wineDefinition: wineDefId, vintage, model, indexVersion: vectorIndex });
+        if (existingEmb?.qdrantPointId) {
+          await vectorStore.deletePoints(vectorIndex, [existingEmb.qdrantPointId]).catch(() => {});
+        }
+
         // Upsert into Qdrant
         const pointId = randomUUID();
         await vectorStore.upsertPoints(vectorIndex, [{
@@ -301,6 +307,11 @@ async function embedSinglePair(wineDefId, vintage) {
     if (existing && existing.textHash === textHash && existing.status === 'ok') return;
 
     await vectorStore.ensureCollection(vectorIndex);
+
+    // Before creating new point, delete old one if it exists
+    if (existing?.qdrantPointId) {
+      await vectorStore.deletePoints(vectorIndex, [existing.qdrantPointId]).catch(() => {});
+    }
 
     const vector = await embedSingle(text, { model });
     const pointId = randomUUID();

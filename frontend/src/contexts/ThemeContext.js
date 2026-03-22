@@ -37,7 +37,7 @@ export const ThemeProvider = ({ children }) => {
     const mql = window.matchMedia('(prefers-color-scheme: dark)');
     const handler = (e) => {
       // Only auto-switch if user hasn't manually chosen
-      if (!localStorage.getItem('cellarion-theme')) {
+      if (!localStorage.getItem('cellarion-theme-manual')) {
         setTheme(e.matches ? 'dark' : 'light');
       }
     };
@@ -46,6 +46,7 @@ export const ThemeProvider = ({ children }) => {
   }, []);
 
   const toggleTheme = () => {
+    localStorage.setItem('cellarion-theme-manual', 'true');
     setTheme(prev => prev === 'light' ? 'dark' : 'light');
   };
 

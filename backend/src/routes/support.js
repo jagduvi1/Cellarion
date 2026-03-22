@@ -43,12 +43,17 @@ router.post('/', requireAuth, async (req, res) => {
 
 // GET /api/support/my — list the authenticated user's own tickets
 router.get('/my', requireAuth, async (req, res) => {
-  const tickets = await SupportTicket.find({ user: req.user.id })
-    .sort({ createdAt: -1 })
-    .populate('respondedBy', 'username')
-    .lean();
+  try {
+    const tickets = await SupportTicket.find({ user: req.user.id })
+      .sort({ createdAt: -1 })
+      .populate('respondedBy', 'username')
+      .lean();
 
-  res.json({ tickets });
+    res.json({ tickets });
+  } catch (err) {
+    console.error('Get my support tickets error:', err);
+    res.status(500).json({ error: 'Failed to get support tickets' });
+  }
 });
 
 module.exports = router;

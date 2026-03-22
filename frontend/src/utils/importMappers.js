@@ -174,7 +174,7 @@ function mapVivinoRow(row) {
     purchaseLocation: get(['Store name', 'Store', 'store', 'Purchase Location']),
     notes: get(['Note', 'Notes', 'note', 'notes', 'Tasting Note', 'Review']),
     rating: isNaN(rating) ? undefined : rating,
-    ratingScale: rating > 5 ? '100' : '5',
+    ratingScale: rating > 20 ? '100' : rating > 5 ? '20' : '5',
     location: get(['Location', 'location', 'Bin', 'bin']),
     rackName: get(['Rack', 'rack', 'Rack Name', 'rackName']) || undefined,
     rackPosition: parseInt(get(['Rack Position', 'rackPosition', 'Position', 'Slot']), 10) || undefined,

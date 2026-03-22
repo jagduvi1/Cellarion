@@ -237,10 +237,10 @@ router.post('/scan-label', requireAuth, async (req, res) => {
       }
     }
 
-    res.json({ extracted, match, labelImage, _debugRaw: extracted._debugRaw }); // DEBUG — remove before release
+    res.json({ extracted, match, labelImage });
   } catch (err) {
     console.error('Label scan error:', err.message);
-    res.status(err.status || 500).json({ error: err.message || 'Label scan failed', _debugRaw: err._debugRaw, labelImage }); // DEBUG — remove before release
+    res.status(err.status || 500).json({ error: err.message || 'Label scan failed' });
   }
 });
 
@@ -303,16 +303,17 @@ router.post('/identify-text', requireAuth, async (req, res) => {
   const query = typeof req.body.query === 'string' ? req.body.query.trim() : '';
   if (!query) return res.status(400).json({ error: 'query is required' });
 
-  const result = await identifyWineFromQuery(query);
-  if (!result.data) {
-    return res.json({ wine: null, reason: result.debugReason });
-  }
-
   try {
+    const result = await identifyWineFromQuery(query);
+    if (!result.data) {
+      return res.json({ wine: null, reason: result.debugReason });
+    }
+
     const { wine, created } = await findOrCreateWine(result.data, req.user.id);
     return res.json({ wine: wine.toObject ? wine.toObject() : wine, created });
   } catch (err) {
-    return res.status(500).json({ error: err.message });
+    console.error('Identify text error:', err);
+    return res.status(500).json({ error: err.message || 'Failed to identify wine' });
   }
 });
 
@@ -323,11 +324,16 @@ router.post('/ai-info', requireAuth, async (req, res) => {
   const query = typeof req.body.query === 'string' ? req.body.query.trim() : '';
   if (!query) return res.status(400).json({ error: 'query is required' });
 
-  const result = await identifyWineFromQuery(query);
-  if (!result.data) {
-    return res.json({ wine: null, reason: result.debugReason });
+  try {
+    const result = await identifyWineFromQuery(query);
+    if (!result.data) {
+      return res.json({ wine: null, reason: result.debugReason });
+    }
+    return res.json({ wine: result.data });
+  } catch (err) {
+    console.error('AI info error:', err);
+    return res.status(500).json({ error: err.message || 'Failed to get AI wine info' });
   }
-  return res.json({ wine: result.data });
 });
 
 // GET /api/wines/:id - Get single wine definition (auth required)

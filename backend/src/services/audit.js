@@ -21,7 +21,7 @@ function logAudit(req, action, resource = {}, detail = {}) {
   const entry = {
     actor: {
       userId:    req.user?.id    || null,
-      role:      req.user?.role  || 'anonymous',
+      role:      req.user?.roles?.[0]  || 'anonymous',
       ipAddress: req.ip
     },
     action,

@@ -70,6 +70,10 @@ router.delete('/:userId', async (req, res) => {
     User.updateOne({ _id: req.user.id }, { $inc: { followingCount: -1 } }).catch(() => {});
     User.updateOne({ _id: req.params.userId }, { $inc: { followersCount: -1 } }).catch(() => {});
 
+    // Prevent negative counts
+    User.updateOne({ _id: req.user.id, followingCount: { $lt: 0 } }, { $set: { followingCount: 0 } }).catch(() => {});
+    User.updateOne({ _id: req.params.userId, followersCount: { $lt: 0 } }, { $set: { followersCount: 0 } }).catch(() => {});
+
     logAudit(req, 'user.unfollow', { type: 'user', id: req.params.userId });
 
     res.json({ following: false });

@@ -25,6 +25,7 @@ const {
 } = require('../config/constants');
 const { stripHtml } = require('../utils/sanitize');
 const { extractAiExplanation } = require('../utils/jsonExtract');
+const { getMaxPosition } = require('../utils/rackGeometry');
 const { runConcurrent } = require('../utils/concurrency');
 const WineRequest = require('../models/WineRequest');
 const ImportSession = require('../models/ImportSession');
@@ -573,7 +574,7 @@ router.post('/confirm', async (req, res) => {
             const position = parseInt(item.rackPosition, 10);
             if (!isNaN(position) && position >= 1) {
               const rack = await Rack.findOne({ cellar: cellarId, name: String(item.rackName), deletedAt: null });
-              if (rack && position <= rack.rows * rack.cols) {
+              if (rack && position <= getMaxPosition(rack)) {
                 // Only place if slot is empty
                 const occupied = rack.slots.some(s => s.position === position);
                 if (!occupied) {

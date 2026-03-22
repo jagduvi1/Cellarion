@@ -175,6 +175,7 @@ router.put('/admin/posts/:id', requireAuth, requireRole('admin'), async (req, re
 
     const { title, content, excerpt, coverImage, tags, status, metaTitle, metaDescription } = req.body;
 
+    const oldTitle = post.title;
     if (title !== undefined) post.title = title;
     if (content !== undefined) post.content = content;
     if (excerpt !== undefined) post.excerpt = excerpt;
@@ -194,7 +195,7 @@ router.put('/admin/posts/:id', requireAuth, requireRole('admin'), async (req, re
     }
 
     // Regenerate slug if title changed
-    if (title && title !== post.title) {
+    if (title && title !== oldTitle) {
       let newSlug = generateSlug(title);
       const existing = await BlogPost.findOne({ slug: newSlug, _id: { $ne: post._id } });
       if (existing) newSlug = `${newSlug}-${Date.now().toString(36)}`;

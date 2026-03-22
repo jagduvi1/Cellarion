@@ -201,7 +201,7 @@ function VintageBarChart({ data }) {
             <div className="vintage-bar"
               style={{ height: `${Math.max(4, (d.count / maxCount) * BAR_HEIGHT)}px` }} />
             <div className="vintage-bar-label">
-              {numeric.length > 20 ? d.year.slice(-2) : d.year}
+              {numeric.length > 20 ? String(d.year).slice(-2) : d.year}
             </div>
           </div>
         ))}
@@ -315,7 +315,7 @@ function HealthScoreCard({ healthScore, healthGrade, maturity }) {
   const { t } = useTranslation();
   const score    = healthScore ?? 0;
   const gradeColor = healthGrade ? (GRADE_COLORS[healthGrade] || '#7A1E2D') : '#555';
-  const withProfile = maturity.declining + maturity.late + maturity.peak + maturity.early + maturity.notReady;
+  const withProfile = (maturity.declining || 0) + (maturity.late || 0) + (maturity.peak || 0) + (maturity.early || 0) + (maturity.notReady || 0);
 
   return (
     <div className="health-card">
@@ -557,6 +557,7 @@ function JoyPerDollarChart({ data, currency, targetScale }) {
 // ── Regret Signal (expectation vs reality) ────────────────────────────────────
 function RegretSignalCard({ regretSignal, targetScale }) {
   const { t } = useTranslation();
+  if (!regretSignal) return null;
   const { surprises, disappointments, avgDelta, count } = regretSignal;
 
   if (count === 0) {
@@ -572,7 +573,7 @@ function RegretSignalCard({ regretSignal, targetScale }) {
       {avgDelta !== null && (
         <div className="regret-signal-avg">
           {t('statistics.regretSignal.avgDelta')} <strong style={{ color: avgDelta >= 0 ? '#7A1E2D' : '#C94040' }}>
-            {avgDelta >= 0 ? '+' : ''}{fmtDelta(Math.abs(avgDelta), targetScale)}
+            {avgDelta >= 0 ? '+' : '\u2212'}{fmtDelta(Math.abs(avgDelta), targetScale)}
           </strong> {t('statistics.regretSignal.acrossBottles', { count })}
         </div>
       )}
@@ -754,7 +755,7 @@ function PurchaseHistoryChart({ byPurchaseYear }) {
                 background: 'linear-gradient(to top, #5f7a8a, #7aade0)',
               }} />
             <div className="vintage-bar-label">
-              {byPurchaseYear.length > 15 ? d.year.slice(-2) : d.year}
+              {byPurchaseYear.length > 15 ? String(d.year).slice(-2) : d.year}
             </div>
           </div>
         ))}

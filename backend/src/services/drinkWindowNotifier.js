@@ -141,7 +141,7 @@ async function processUser(user, isFirstRun) {
   }
 
   // Send email digest if opted in
-  if (user.preferences?.notifications?.email && EMAIL_VERIFICATION_ENABLED) {
+  if (user.preferences?.notifications?.email && EMAIL_VERIFICATION_ENABLED && user.emailVerified) {
     try {
       await sendDrinkWindowDigest(
         user.email,
