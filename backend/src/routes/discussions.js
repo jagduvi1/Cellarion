@@ -91,7 +91,8 @@ router.get('/', async (req, res) => {
 router.get('/moderation/reports', requireModeratorOrAdmin, async (req, res) => {
   try {
     const { page, limit, skip } = parsePagination(req.query);
-    const status = req.query.status || 'pending';
+    const VALID_STATUSES = ['pending', 'resolved', 'dismissed'];
+    const status = VALID_STATUSES.includes(req.query.status) ? req.query.status : 'pending';
 
     const [reports, total] = await Promise.all([
       DiscussionReport.find({ status })

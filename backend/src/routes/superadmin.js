@@ -327,10 +327,10 @@ router.get('/users', async (req, res) => {
       filter.$or = [{ username: re }, { email: re }];
     }
     if (req.query.plan) {
-      filter.plan = req.query.plan;
+      filter.plan = String(req.query.plan);
     }
     if (req.query.role) {
-      filter.roles = req.query.role;
+      filter.roles = String(req.query.role);
     }
 
     const [users, total] = await Promise.all([
