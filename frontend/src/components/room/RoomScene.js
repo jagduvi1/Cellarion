@@ -153,15 +153,20 @@ export default function RoomScene({
   // Ref map for group-aware dragging (rackId → Three.js Group)
   const rackRefsMap = useRef({});
 
+  // Keep a ref to selectedRackIds so drag handlers always read current value
+  const selectedRackIdsRef = useRef(selectedRackIds);
+  useEffect(() => { selectedRackIdsRef.current = selectedRackIds; }, [selectedRackIds]);
+
   const handleDragMove = useCallback((rackId, dx, dz) => {
     const placement = rackPlacements.find(rp => (rp.rack?._id || rp.rack) === rackId);
     const group = placement?.group;
+    const currentSelected = selectedRackIdsRef.current;
 
     rackPlacements.forEach(rp => {
       const rpId = rp.rack?._id || rp.rack;
       if (rpId === rackId) return;
       const isGroupMember = group && rp.group === group;
-      const isAlsoSelected = selectedRackIds.includes(rpId);
+      const isAlsoSelected = currentSelected.includes(rpId);
       if (isGroupMember || isAlsoSelected) {
         const ref = rackRefsMap.current[rpId];
         if (ref) {
@@ -170,17 +175,25 @@ export default function RoomScene({
         }
       }
     });
-  }, [rackPlacements, selectedRackIds]);
+  }, [rackPlacements]);
 
   const handleDragStart = useCallback(() => {
     setIsDragging(true);
     if (controlsRef.current) controlsRef.current.enabled = false;
   }, []);
 
-  const handleDragEnd = useCallback((rackId, newPos, rp) => {
+  // Keep a ref to rackPlacements so drag-end reads current positions
+  const rackPlacementsRef = useRef(rackPlacements);
+  useEffect(() => { rackPlacementsRef.current = rackPlacements; }, [rackPlacements]);
+
+  const handleDragEnd = useCallback((rackId, newPos) => {
     setIsDragging(false);
     if (controlsRef.current) controlsRef.current.enabled = true;
-    onRackDragEnd?.(rackId, { x: newPos[0], y: rp.position?.y || 0, z: newPos[2] });
+    // Read current placement from ref to avoid stale y-position (Bug 8 fix)
+    const currentRp = rackPlacementsRef.current.find(
+      rp => (rp.rack?._id || rp.rack) === rackId
+    );
+    onRackDragEnd?.(rackId, { x: newPos[0], y: currentRp?.position?.y || 0, z: newPos[2] });
   }, [onRackDragEnd]);
 
   // Edge-snap for stacked racks: snap edges to align with racks below
@@ -379,7 +392,7 @@ export default function RoomScene({
             onDragMove={(dx, dz) => handleDragMove(rack._id, dx, dz)}
             onClick={(shiftKey) => onRackClick?.(rack._id, shiftKey)}
             onDragStart={handleDragStart}
-            onDragEnd={(newPos) => handleDragEnd(rack._id, newPos, rp)}
+            onDragEnd={(newPos) => handleDragEnd(rack._id, newPos)}
             onSnapPosition={(px, pz) => computeSnapPosition(rack._id, px, pz)}
             onBottleClick={(slot) => onBottleClick?.(rack._id, slot)}
             onEmptySlotClick={(slotPos) => onEmptySlotClick?.(rack._id, slotPos)}

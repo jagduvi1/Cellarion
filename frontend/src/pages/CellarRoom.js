@@ -30,6 +30,9 @@ export default function CellarRoom() {
 
   const [isEditMode, setIsEditMode] = useState(false);
   const [selectedRackIds, setSelectedRackIds] = useState([]);
+  // Ref mirrors selectedRackIds so callbacks always read current value
+  const selectedRackIdsRef = useRef([]);
+  useEffect(() => { selectedRackIdsRef.current = selectedRackIds; }, [selectedRackIds]);
   const [showSettings, setShowSettings] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState(null);
@@ -185,6 +188,8 @@ export default function CellarRoom() {
   }, [layout, id, apiFetch]);
 
   const handleRackDragEnd = useCallback((rackId, newPosition) => {
+    // Read current selection from ref to avoid stale closures
+    const currentSelected = selectedRackIdsRef.current;
     setLayout(prev => {
       const draggedPlacement = prev.rackPlacements.find(
         rp => (rp.rack === rackId || rp.rack?._id === rackId)
@@ -205,7 +210,7 @@ export default function CellarRoom() {
             return { ...rp, position: newPosition };
           }
           const isGroupMember = group && rp.group === group;
-          const isAlsoSelected = selectedRackIds.includes(rpId);
+          const isAlsoSelected = currentSelected.includes(rpId);
           if (isGroupMember || isAlsoSelected) {
             return {
               ...rp,
@@ -220,7 +225,7 @@ export default function CellarRoom() {
         }),
       };
     });
-  }, [selectedRackIds]);
+  }, []);
 
   const handleDimensionChange = useCallback((field, value) => {
     setLayout(prev => ({
@@ -325,7 +330,8 @@ export default function CellarRoom() {
     );
     if (!selectedPlacement) return;
 
-    const targetY = (targetPlacement.position?.y || 0) + getRackHeight(targetRackObj);
+    const targetScale = targetPlacement.scaleOverride || 1;
+    const targetY = (targetPlacement.position?.y || 0) + getRackHeight(targetRackObj) * targetScale;
     const targetX = targetPlacement.position?.x || 0;
     const targetZ = targetPlacement.position?.z || 0;
 
@@ -366,19 +372,36 @@ export default function CellarRoom() {
     setSelectedRackIds([selectedRackId]);
   }, [selectedRackId, layout, racks]);
 
-  // Unstack the selected rack (move it back to floor level)
+  // Unstack the selected rack (move it back to floor level).
+  // If the rack is in a group, move all group members at the same y-level together.
   const handleUnstackRack = useCallback(() => {
     if (!selectedRackId) return;
-    setLayout(prev => ({
-      ...prev,
-      rackPlacements: prev.rackPlacements.map(rp => {
-        const rpId = rp.rack?._id || rp.rack;
-        if (rpId === selectedRackId) {
-          return { ...rp, position: { ...rp.position, y: 0 } };
-        }
-        return rp;
-      }),
-    }));
+    setLayout(prev => {
+      const selectedPlacement = prev.rackPlacements.find(
+        rp => (rp.rack?._id || rp.rack) === selectedRackId
+      );
+      if (!selectedPlacement) return prev;
+      const oldY = selectedPlacement.position?.y || 0;
+      if (oldY === 0) return prev; // already on floor
+      const group = selectedPlacement.group;
+
+      return {
+        ...prev,
+        rackPlacements: prev.rackPlacements.map(rp => {
+          const rpId = rp.rack?._id || rp.rack;
+          const rpY = rp.position?.y || 0;
+          // Move the selected rack to floor
+          if (rpId === selectedRackId) {
+            return { ...rp, position: { ...rp.position, y: 0 } };
+          }
+          // Move group members at the same elevation by the same offset
+          if (group && rp.group === group && Math.abs(rpY - oldY) < 0.001) {
+            return { ...rp, position: { ...rp.position, y: 0 } };
+          }
+          return rp;
+        }),
+      };
+    });
   }, [selectedRackId]);
 
   // Link: click-to-link — link the selected rack to a target rack
@@ -442,11 +465,13 @@ export default function CellarRoom() {
   }, [selectedRackIds]);
 
   // Update a placement field for the selected rack (e.g. widthOverride, depthOverride)
+  // When scaleOverride changes, reposition racks stacked directly on top so they
+  // don't float in the air or clip into the resized rack.
   const handlePlacementField = useCallback((field, value) => {
     if (!selectedRackId) return;
-    setLayout(prev => ({
-      ...prev,
-      rackPlacements: prev.rackPlacements.map(rp => {
+    setLayout(prev => {
+      // First, apply the field change
+      const updatedPlacements = prev.rackPlacements.map(rp => {
         const rpId = rp.rack?._id || rp.rack;
         if (rpId === selectedRackId) {
           const updated = { ...rp };
@@ -458,9 +483,47 @@ export default function CellarRoom() {
           return updated;
         }
         return rp;
-      }),
-    }));
-  }, [selectedRackId]);
+      });
+
+      // If scaleOverride changed, reposition any racks stacked on top
+      if (field === 'scaleOverride') {
+        const changedRp = updatedPlacements.find(
+          rp => (rp.rack?._id || rp.rack) === selectedRackId
+        );
+        if (changedRp) {
+          const rackObj = racks.find(r => r._id === selectedRackId);
+          if (rackObj) {
+            const oldScale = prev.rackPlacements.find(
+              rp => (rp.rack?._id || rp.rack) === selectedRackId
+            )?.scaleOverride || 1;
+            const newScale = changedRp.scaleOverride || 1;
+            const oldTop = (changedRp.position?.y || 0) + getRackHeight(rackObj) * oldScale;
+            const newTop = (changedRp.position?.y || 0) + getRackHeight(rackObj) * newScale;
+            const dy = newTop - oldTop;
+
+            if (dy !== 0) {
+              // Shift every rack whose base y matches the old top of this rack
+              const EPSILON = 0.001;
+              for (let i = 0; i < updatedPlacements.length; i++) {
+                const rp = updatedPlacements[i];
+                const rpId = rp.rack?._id || rp.rack;
+                if (rpId === selectedRackId) continue;
+                const rpY = rp.position?.y || 0;
+                if (Math.abs(rpY - oldTop) < EPSILON) {
+                  updatedPlacements[i] = {
+                    ...rp,
+                    position: { ...rp.position, y: rpY + dy },
+                  };
+                }
+              }
+            }
+          }
+        }
+      }
+
+      return { ...prev, rackPlacements: updatedPlacements };
+    });
+  }, [selectedRackId, racks]);
 
   // Arrow key movement for selected rack(s) in edit mode
   useEffect(() => {

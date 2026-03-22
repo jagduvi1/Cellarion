@@ -348,11 +348,25 @@ export default function RackMesh({
   const [isDragging, setIsDragging] = useState(false);
   const { camera, raycaster, gl } = useThree();
   const lastDragPos = useRef({ x: 0, z: 0 });
+  // Store active drag listeners for cleanup on unmount (declared early so cleanup effect can use it)
+  const dragListenersRef = useRef(null);
 
-  // Register ref for group-aware dragging
+  // Register ref for group-aware dragging (only re-run when rack identity changes)
   useEffect(() => {
     if (groupRef.current && onSetRef) onSetRef(groupRef.current);
-  });
+  }, [rack._id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Cleanup drag listeners if component unmounts during an active drag
+  useEffect(() => {
+    const domEl = gl.domElement;
+    return () => {
+      if (dragListenersRef.current) {
+        domEl.removeEventListener('pointermove', dragListenersRef.current.onMove);
+        domEl.removeEventListener('pointerup', dragListenersRef.current.onUp);
+        dragListenersRef.current = null;
+      }
+    };
+  }, [gl.domElement]);
 
   const rackType = rack.type || 'grid';
 
@@ -416,7 +430,9 @@ export default function RackMesh({
   }, [width, height, depth, rackScale]);
 
   // ── Drag logic ─────────────────────────────────────────
-  const floorPlane = useMemo(() => new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), []);
+  // Use a ref for the drag plane so it can be set to the rack's y-elevation
+  // at drag start (fixes incorrect projection for stacked/elevated racks)
+  const floorPlane = useRef(new THREE.Plane(new THREE.Vector3(0, 1, 0), 0));
   const dragOffset = useRef(new THREE.Vector3());
 
   const handlePointerDown = (e) => {
@@ -424,8 +440,13 @@ export default function RackMesh({
     e.stopPropagation();
     onClick?.(e.shiftKey);
 
+    // Set drag plane to the rack's current y-elevation (fixes Bug 4:
+    // stacked racks no longer project to y=0)
+    const rackY = position[1];
+    floorPlane.current.set(new THREE.Vector3(0, 1, 0), -rackY);
+
     const intersection = new THREE.Vector3();
-    raycaster.ray.intersectPlane(floorPlane, intersection);
+    raycaster.ray.intersectPlane(floorPlane.current, intersection);
     if (!intersection) return;
 
     dragOffset.current.set(
@@ -444,7 +465,7 @@ export default function RackMesh({
       );
       raycaster.setFromCamera(mouse, camera);
       const point = new THREE.Vector3();
-      raycaster.ray.intersectPlane(floorPlane, point);
+      raycaster.ray.intersectPlane(floorPlane.current, point);
       if (!point) return;
       let nx = Math.round((point.x - dragOffset.current.x) * 20) / 20;
       let nz = Math.round((point.z - dragOffset.current.z) * 20) / 20;
@@ -476,7 +497,15 @@ export default function RackMesh({
       }
       gl.domElement.removeEventListener('pointermove', onMove);
       gl.domElement.removeEventListener('pointerup', onUp);
+      dragListenersRef.current = null;
     };
+
+    // Remove any stale listeners before adding new ones
+    if (dragListenersRef.current) {
+      gl.domElement.removeEventListener('pointermove', dragListenersRef.current.onMove);
+      gl.domElement.removeEventListener('pointerup', dragListenersRef.current.onUp);
+    }
+    dragListenersRef.current = { onMove, onUp };
 
     gl.domElement.addEventListener('pointermove', onMove);
     gl.domElement.addEventListener('pointerup', onUp);
