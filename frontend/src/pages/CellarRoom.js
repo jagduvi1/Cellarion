@@ -686,11 +686,31 @@ export default function CellarRoom() {
   const navigate = useNavigate();
   const [pendingNavPath, setPendingNavPath] = useState(null);
 
+  // Use a ref so the popstate handler always reads the latest value
+  const hasUnsavedRef = useRef(false);
+  useEffect(() => { hasUnsavedRef.current = hasUnsavedChanges; }, [hasUnsavedChanges]);
+
   const guardedNavigate = useCallback((path, e) => {
-    if (hasUnsavedChanges) {
+    if (hasUnsavedRef.current) {
       e?.preventDefault();
       setPendingNavPath(path);
     }
+  }, []);
+
+  // Intercept browser back/forward when there are unsaved changes
+  useEffect(() => {
+    if (!hasUnsavedChanges) return;
+    // Push a duplicate entry so pressing back stays on the same page
+    window.history.pushState(null, '', window.location.href);
+    const handlePopState = () => {
+      if (hasUnsavedRef.current) {
+        // Re-push to keep the user on this page and show the dialog
+        window.history.pushState(null, '', window.location.href);
+        setPendingNavPath('__back__');
+      }
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
   }, [hasUnsavedChanges]);
 
   // Link all selected racks into one group
@@ -1330,7 +1350,17 @@ export default function CellarRoom() {
               <button className="btn btn-secondary" onClick={() => setPendingNavPath(null)}>
                 {t('room.stayOnPage', 'Stay')}
               </button>
-              <button className="btn btn-danger" onClick={() => { setPendingNavPath(null); navigate(pendingNavPath); }}>
+              <button className="btn btn-danger" onClick={() => {
+                const path = pendingNavPath;
+                // Clear unsaved state so the guard doesn't re-trigger
+                savedLayoutRef.current = JSON.stringify(layout);
+                setPendingNavPath(null);
+                if (path === '__back__') {
+                  window.history.back();
+                } else {
+                  navigate(path);
+                }
+              }}>
                 {t('room.leaveWithoutSaving', 'Leave')}
               </button>
             </div>
