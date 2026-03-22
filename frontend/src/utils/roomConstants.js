@@ -58,10 +58,26 @@ export function getRackWorldDims(rack, placement) {
   const defaultW = displayCols * CELL_W + PANEL_THICK * 2;
   const w = placement.widthOverride || defaultW;
   const d = placement.depthOverride || RACK_DEPTH;
+  const scale = placement.scaleOverride || 1;
   const rot = (placement.rotation || 0) % 360;
   const isRotated = rot === 90 || rot === 270;
   return {
-    halfW: (isRotated ? d : w) / 2,
-    halfD: (isRotated ? w : d) / 2,
+    halfW: ((isRotated ? d : w) * scale) / 2,
+    halfD: ((isRotated ? w : d) * scale) / 2,
+  };
+}
+
+/**
+ * Clamp a rack position so the rack stays within the room walls.
+ * roomDims: { width, depth }  — full room dimensions (room centered at origin)
+ * Returns clamped { x, z }.
+ */
+export function clampToRoom(x, z, rack, placement, roomDims) {
+  const { halfW, halfD } = getRackWorldDims(rack, placement);
+  const roomHalfW = roomDims.width / 2;
+  const roomHalfD = roomDims.depth / 2;
+  return {
+    x: Math.max(-roomHalfW + halfW, Math.min(roomHalfW - halfW, x)),
+    z: Math.max(-roomHalfD + halfD, Math.min(roomHalfD - halfD, z)),
   };
 }

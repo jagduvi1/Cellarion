@@ -3,7 +3,7 @@ import { OrbitControls } from '@react-three/drei';
 import { useThree, useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import RackMesh from './RackMesh';
-import { getRackWorldDims, getRackHeight, CELL_H, PANEL_THICK } from '../../utils/roomConstants';
+import { getRackWorldDims, getRackHeight, clampToRoom, CELL_H, PANEL_THICK } from '../../utils/roomConstants';
 
 // ── Camera auto-focus helper (animates camera to a target position) ──
 function CameraFocus({ target, controlsRef }) {
@@ -196,37 +196,39 @@ export default function RoomScene({
     onRackDragEnd?.(rackId, { x: newPos[0], y: currentRp?.position?.y || 0, z: newPos[2] });
   }, [onRackDragEnd]);
 
-  // Edge-snap for stacked racks: snap edges to align with racks below
+  // Edge-snap for stacked racks + room boundary clamping
   const computeSnapPosition = useCallback((rackId, px, pz) => {
     const rp = rackPlacements.find(p => (p.rack?._id || p.rack) === rackId);
-    if (!rp || (rp.position?.y || 0) <= 0) return { x: px, z: pz };
     const rack = rackMap[rackId];
-    if (!rack) return { x: px, z: pz };
-    const self = getRackWorldDims(rack, rp);
-    let snapX = px, snapZ = pz;
-    const SNAP_T = 0.04;
+    if (!rp || !rack) return { x: px, z: pz };
 
-    for (const otherRp of rackPlacements) {
-      const otherId = otherRp.rack?._id || otherRp.rack;
-      if (otherId === rackId) continue;
-      if ((otherRp.position?.y || 0) >= (rp.position?.y || 0)) continue;
-      const otherRack = rackMap[otherId];
-      if (!otherRack) continue;
-      const other = getRackWorldDims(otherRack, otherRp);
-      const ox = otherRp.position?.x || 0;
-      const oz = otherRp.position?.z || 0;
-      // Snap left edges
-      if (Math.abs((px - self.halfW) - (ox - other.halfW)) < SNAP_T) snapX = ox - other.halfW + self.halfW;
-      // Snap right edges
-      if (Math.abs((px + self.halfW) - (ox + other.halfW)) < SNAP_T) snapX = ox + other.halfW - self.halfW;
-      // Snap back edges
-      if (Math.abs((pz - self.halfD) - (oz - other.halfD)) < SNAP_T) snapZ = oz - other.halfD + self.halfD;
-      // Snap front edges
-      if (Math.abs((pz + self.halfD) - (oz + other.halfD)) < SNAP_T) snapZ = oz + other.halfD - self.halfD;
+    let snapX = px, snapZ = pz;
+
+    // Edge-snap for stacked racks: snap edges to align with racks below
+    if ((rp.position?.y || 0) > 0) {
+      const self = getRackWorldDims(rack, rp);
+      const SNAP_T = 0.04;
+
+      for (const otherRp of rackPlacements) {
+        const otherId = otherRp.rack?._id || otherRp.rack;
+        if (otherId === rackId) continue;
+        if ((otherRp.position?.y || 0) >= (rp.position?.y || 0)) continue;
+        const otherRack = rackMap[otherId];
+        if (!otherRack) continue;
+        const other = getRackWorldDims(otherRack, otherRp);
+        const ox = otherRp.position?.x || 0;
+        const oz = otherRp.position?.z || 0;
+        if (Math.abs((px - self.halfW) - (ox - other.halfW)) < SNAP_T) snapX = ox - other.halfW + self.halfW;
+        if (Math.abs((px + self.halfW) - (ox + other.halfW)) < SNAP_T) snapX = ox + other.halfW - self.halfW;
+        if (Math.abs((pz - self.halfD) - (oz - other.halfD)) < SNAP_T) snapZ = oz - other.halfD + self.halfD;
+        if (Math.abs((pz + self.halfD) - (oz + other.halfD)) < SNAP_T) snapZ = oz + other.halfD - self.halfD;
+      }
     }
 
-    return { x: snapX, z: snapZ };
-  }, [rackPlacements, rackMap]);
+    // Clamp to room walls
+    const clamped = clampToRoom(snapX, snapZ, rack, rp, roomDimensions);
+    return clamped;
+  }, [rackPlacements, rackMap, roomDimensions]);
 
   // Texture repeats — memoized to avoid cloning on every render
   const { wallTexN, wallTexS, wallTexW, wallTexE, floorTex, ceilTex } = useMemo(() => {

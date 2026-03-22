@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef, Suspense } from 'react';
-import { useParams, useSearchParams, Link } from 'react-router-dom';
+import { useParams, useSearchParams, Link, useBlocker } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Canvas } from '@react-three/fiber';
 import { useAuth } from '../contexts/AuthContext';
@@ -9,7 +9,7 @@ import { consumeBottle } from '../api/bottles';
 import { getCellarLayout, saveCellarLayout } from '../api/cellarLayout';
 import { getPlacedBottleIds } from '../utils/rackUtils';
 import RoomScene from '../components/room/RoomScene';
-import { getRackHeight } from '../utils/roomConstants';
+import { getRackHeight, clampToRoom } from '../utils/roomConstants';
 import './CellarRoom.css';
 
 const DEFAULT_DIMENSIONS = { width: 10, depth: 10, height: 3 };
@@ -47,6 +47,25 @@ export default function CellarRoom() {
   const [slotLoading, setSlotLoading] = useState(false);
   const slotTimerRef = useRef(null);
   const [consumeModal, setConsumeModal] = useState(null); // { bottleId }
+
+  // Undo / redo history for layout changes (edit mode)
+  const undoStackRef = useRef([]);
+  const redoStackRef = useRef([]);
+  const MAX_UNDO = 50;
+
+  // Ref to the last-saved layout for unsaved-changes detection
+  const savedLayoutRef = useRef(null);
+
+  // Wrapper: push current layout onto undo stack before mutating
+  const setLayoutWithHistory = useCallback((updater) => {
+    setLayout(prev => {
+      const next = typeof updater === 'function' ? updater(prev) : updater;
+      if (next === prev) return prev; // no change — skip history
+      undoStackRef.current = [...undoStackRef.current.slice(-(MAX_UNDO - 1)), prev];
+      redoStackRef.current = [];
+      return next;
+    });
+  }, []);
 
   // Derived: first selected rack for single-rack operations (backward compat)
   const selectedRackId = selectedRackIds[0] || null;
@@ -114,6 +133,7 @@ export default function CellarRoom() {
           ),
         };
         setLayout(filtered);
+        savedLayoutRef.current = JSON.stringify(filtered);
       } else {
         // Auto-populate: place all racks in a line
         const autoPlace = (racksData.racks || []).map((r, i) => ({
@@ -122,11 +142,13 @@ export default function CellarRoom() {
           rotation: 0,
           wall: 'north',
         }));
-        setLayout({
+        const autoLayout = {
           cellar: id,
           roomDimensions: DEFAULT_DIMENSIONS,
           rackPlacements: autoPlace,
-        });
+        };
+        setLayout(autoLayout);
+        savedLayoutRef.current = JSON.stringify(autoLayout);
       }
     } catch (err) {
       console.error('Room data load error:', err);
@@ -174,6 +196,9 @@ export default function CellarRoom() {
       if (res.ok) {
         const data = await res.json();
         setLayout(data.layout);
+        savedLayoutRef.current = JSON.stringify(data.layout);
+        undoStackRef.current = [];
+        redoStackRef.current = [];
       } else {
         const errData = await res.json().catch(() => ({}));
         setSaveError(errData.error || `Save failed (${res.status})`);
@@ -190,7 +215,7 @@ export default function CellarRoom() {
   const handleRackDragEnd = useCallback((rackId, newPosition) => {
     // Read current selection from ref to avoid stale closures
     const currentSelected = selectedRackIdsRef.current;
-    setLayout(prev => {
+    setLayoutWithHistory(prev => {
       const draggedPlacement = prev.rackPlacements.find(
         rp => (rp.rack === rackId || rp.rack?._id === rackId)
       );
@@ -201,6 +226,7 @@ export default function CellarRoom() {
       const oldZ = draggedPlacement.position?.z || 0;
       const dx = newPosition.x - oldX;
       const dz = newPosition.z - oldZ;
+      const dims = prev.roomDimensions || DEFAULT_DIMENSIONS;
 
       return {
         ...prev,
@@ -212,34 +238,47 @@ export default function CellarRoom() {
           const isGroupMember = group && rp.group === group;
           const isAlsoSelected = currentSelected.includes(rpId);
           if (isGroupMember || isAlsoSelected) {
+            let nx = (rp.position?.x || 0) + dx;
+            let nz = (rp.position?.z || 0) + dz;
+            const rack = racks.find(r => r._id === rpId);
+            if (rack) {
+              const clamped = clampToRoom(nx, nz, rack, rp, dims);
+              nx = clamped.x;
+              nz = clamped.z;
+            }
             return {
               ...rp,
-              position: {
-                x: (rp.position?.x || 0) + dx,
-                y: rp.position?.y || 0,
-                z: (rp.position?.z || 0) + dz,
-              },
+              position: { x: nx, y: rp.position?.y || 0, z: nz },
             };
           }
           return rp;
         }),
       };
     });
-  }, []);
+  }, [racks, setLayoutWithHistory]);
 
   const handleDimensionChange = useCallback((field, value) => {
-    setLayout(prev => ({
-      ...prev,
-      roomDimensions: { ...prev.roomDimensions, [field]: Math.max(2, Math.min(50, Number(value) || 2)) },
-    }));
-  }, []);
+    setLayoutWithHistory(prev => {
+      const newDims = { ...prev.roomDimensions, [field]: Math.max(2, Math.min(50, Number(value) || 2)) };
+      // Clamp all racks that would end up outside the new room boundaries
+      const clampedPlacements = prev.rackPlacements.map(rp => {
+        const rpId = rp.rack?._id || rp.rack;
+        const rack = racks.find(r => r._id === rpId);
+        if (!rack) return rp;
+        const clamped = clampToRoom(rp.position?.x || 0, rp.position?.z || 0, rack, rp, newDims);
+        if (clamped.x === (rp.position?.x || 0) && clamped.z === (rp.position?.z || 0)) return rp;
+        return { ...rp, position: { ...rp.position, x: clamped.x, z: clamped.z } };
+      });
+      return { ...prev, roomDimensions: newDims, rackPlacements: clampedPlacements };
+    });
+  }, [racks, setLayoutWithHistory]);
 
   // Rotate selected rack(s) by 90 degrees
   // Single select: group members orbit around the pivot rack
   // Multi-select: each selected rack rotates in place
   const handleRotateRack = useCallback(() => {
     if (selectedRackIds.length === 0) return;
-    setLayout(prev => {
+    setLayoutWithHistory(prev => {
       if (selectedRackIds.length === 1) {
         // Single selection: existing behavior with group orbital rotation
         const sid = selectedRackIds[0];
@@ -289,7 +328,7 @@ export default function CellarRoom() {
 
   // Add a single rack to the room (placed at center)
   const handleAddRack = useCallback((rackId) => {
-    setLayout(prev => {
+    setLayoutWithHistory(prev => {
       const alreadyPlaced = prev.rackPlacements.some(
         rp => (rp.rack?._id || rp.rack) === rackId
       );
@@ -342,7 +381,7 @@ export default function CellarRoom() {
 
     const group = selectedPlacement.group;
 
-    setLayout(prev => ({
+    setLayoutWithHistory(prev => ({
       ...prev,
       rackPlacements: prev.rackPlacements.map(rp => {
         const rpId = rp.rack?._id || rp.rack;
@@ -376,7 +415,7 @@ export default function CellarRoom() {
   // If the rack is in a group, move all group members at the same y-level together.
   const handleUnstackRack = useCallback(() => {
     if (!selectedRackId) return;
-    setLayout(prev => {
+    setLayoutWithHistory(prev => {
       const selectedPlacement = prev.rackPlacements.find(
         rp => (rp.rack?._id || rp.rack) === selectedRackId
       );
@@ -407,7 +446,7 @@ export default function CellarRoom() {
   // Link: click-to-link — link the selected rack to a target rack
   const handleLinkToTarget = useCallback((targetRackId) => {
     if (!selectedRackId || targetRackId === selectedRackId) return;
-    setLayout(prev => {
+    setLayoutWithHistory(prev => {
       const selectedPlacement = prev.rackPlacements.find(
         rp => (rp.rack === selectedRackId || rp.rack?._id === selectedRackId)
       );
@@ -438,7 +477,7 @@ export default function CellarRoom() {
 
   // Unlink a rack from its group
   const handleUnlinkRack = useCallback(() => {
-    setLayout(prev => ({
+    setLayoutWithHistory(prev => ({
       ...prev,
       rackPlacements: prev.rackPlacements.map(rp => {
         const rpId = rp.rack?._id || rp.rack;
@@ -448,13 +487,13 @@ export default function CellarRoom() {
         return rp;
       }),
     }));
-  }, [selectedRackId]);
+  }, [selectedRackId, setLayoutWithHistory]);
 
   // Remove rack from the room layout (does not delete the rack itself)
   const handleRemoveFromRoom = useCallback(() => {
     if (selectedRackIds.length === 0) return;
     const removeSet = new Set(selectedRackIds);
-    setLayout(prev => ({
+    setLayoutWithHistory(prev => ({
       ...prev,
       rackPlacements: prev.rackPlacements.filter(
         rp => !removeSet.has(rp.rack?._id || rp.rack)
@@ -469,7 +508,7 @@ export default function CellarRoom() {
   // don't float in the air or clip into the resized rack.
   const handlePlacementField = useCallback((field, value) => {
     if (!selectedRackId) return;
-    setLayout(prev => {
+    setLayoutWithHistory(prev => {
       // First, apply the field change
       const updatedPlacements = prev.rackPlacements.map(rp => {
         const rpId = rp.rack?._id || rp.rack;
@@ -521,9 +560,24 @@ export default function CellarRoom() {
         }
       }
 
+      // Clamp the changed rack if scale/width/depth change pushed it out of bounds
+      if (['scaleOverride', 'widthOverride', 'depthOverride'].includes(field)) {
+        const dims = prev.roomDimensions || DEFAULT_DIMENSIONS;
+        for (let i = 0; i < updatedPlacements.length; i++) {
+          const rp = updatedPlacements[i];
+          const rpId = rp.rack?._id || rp.rack;
+          const rack = racks.find(r => r._id === rpId);
+          if (!rack) continue;
+          const clamped = clampToRoom(rp.position?.x || 0, rp.position?.z || 0, rack, rp, dims);
+          if (clamped.x !== (rp.position?.x || 0) || clamped.z !== (rp.position?.z || 0)) {
+            updatedPlacements[i] = { ...rp, position: { ...rp.position, x: clamped.x, z: clamped.z } };
+          }
+        }
+      }
+
       return { ...prev, rackPlacements: updatedPlacements };
     });
-  }, [selectedRackId, racks]);
+  }, [selectedRackId, racks, setLayoutWithHistory]);
 
   // Arrow key movement for selected rack(s) in edit mode
   useEffect(() => {
@@ -543,7 +597,7 @@ export default function CellarRoom() {
         default: return;
       }
       e.preventDefault();
-      setLayout(prev => {
+      setLayoutWithHistory(prev => {
         // Collect all IDs to move: selected + their group members
         const moveIds = new Set(selectedRackIds);
         selectedRackIds.forEach(id => {
@@ -554,18 +608,23 @@ export default function CellarRoom() {
             });
           }
         });
+        const dims = prev.roomDimensions || DEFAULT_DIMENSIONS;
         return {
           ...prev,
           rackPlacements: prev.rackPlacements.map(rp => {
             const rpId = rp.rack?._id || rp.rack;
             if (moveIds.has(rpId)) {
+              const rack = racks.find(r => r._id === rpId);
+              let nx = Math.round(((rp.position?.x || 0) + dx) * 20) / 20;
+              let nz = Math.round(((rp.position?.z || 0) + dz) * 20) / 20;
+              if (rack) {
+                const clamped = clampToRoom(nx, nz, rack, rp, dims);
+                nx = clamped.x;
+                nz = clamped.z;
+              }
               return {
                 ...rp,
-                position: {
-                  x: Math.round(((rp.position?.x || 0) + dx) * 20) / 20,
-                  y: rp.position?.y || 0,
-                  z: Math.round(((rp.position?.z || 0) + dz) * 20) / 20,
-                },
+                position: { x: nx, y: rp.position?.y || 0, z: nz },
               };
             }
             return rp;
@@ -577,10 +636,59 @@ export default function CellarRoom() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isEditMode, selectedRackIds]);
 
+  // Undo (Ctrl+Z) / Redo (Ctrl+Y or Ctrl+Shift+Z)
+  useEffect(() => {
+    const handleUndoRedo = (e) => {
+      if (!isEditMode) return;
+      const isUndo = (e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey;
+      const isRedo = (e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey));
+      if (!isUndo && !isRedo) return;
+      e.preventDefault();
+
+      if (isUndo && undoStackRef.current.length > 0) {
+        setLayout(prev => {
+          redoStackRef.current = [...redoStackRef.current, prev];
+          const restored = undoStackRef.current[undoStackRef.current.length - 1];
+          undoStackRef.current = undoStackRef.current.slice(0, -1);
+          return restored;
+        });
+      } else if (isRedo && redoStackRef.current.length > 0) {
+        setLayout(prev => {
+          undoStackRef.current = [...undoStackRef.current, prev];
+          const restored = redoStackRef.current[redoStackRef.current.length - 1];
+          redoStackRef.current = redoStackRef.current.slice(0, -1);
+          return restored;
+        });
+      }
+    };
+    window.addEventListener('keydown', handleUndoRedo);
+    return () => window.removeEventListener('keydown', handleUndoRedo);
+  }, [isEditMode]);
+
+  // Unsaved changes detection
+  const hasUnsavedChanges = useMemo(() => {
+    if (!layout || !savedLayoutRef.current) return false;
+    return JSON.stringify(layout) !== savedLayoutRef.current;
+  }, [layout]);
+
+  // Warn before browser close/refresh with unsaved changes
+  useEffect(() => {
+    if (!hasUnsavedChanges) return;
+    const handleBeforeUnload = (e) => {
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [hasUnsavedChanges]);
+
+  // Block React Router navigation with unsaved changes
+  const blocker = useBlocker(hasUnsavedChanges);
+
   // Link all selected racks into one group
   const handleLinkSelected = useCallback(() => {
     if (selectedRackIds.length < 2) return;
-    setLayout(prev => {
+    setLayoutWithHistory(prev => {
       const existingGroups = new Set();
       selectedRackIds.forEach(id => {
         const rp = prev.rackPlacements.find(p => (p.rack?._id || p.rack) === id);
@@ -621,21 +729,22 @@ export default function CellarRoom() {
 
   const placedBottleIds = useMemo(() => getPlacedBottleIds(racks), [racks]);
 
-  // Bottle click — show detail panel (dismiss rack info)
+  // Bottle click — show detail panel (dismiss rack info); disabled in edit mode
   const handleBottleClick = useCallback((rackId, slot) => {
+    if (isEditMode) return;
     setEmptySlotTarget(null);
     setSelectedRackIds([]);
     setSelectedBottle({ rackId, slot });
-  }, []);
+  }, [isEditMode]);
 
-  // Empty slot click — show bottle picker (dismiss rack info)
+  // Empty slot click — show bottle picker (dismiss rack info); disabled in edit mode
   const handleEmptySlotClick = useCallback((rackId, position) => {
-    if (!canEdit) return;
+    if (!canEdit || isEditMode) return;
     setSelectedBottle(null);
     setSelectedRackIds([]);
     setEmptySlotTarget({ rackId, position });
     setSlotSearch('');
-  }, [canEdit]);
+  }, [canEdit, isEditMode]);
 
   // Assign bottle to slot
   const handleAssignBottle = useCallback(async (bottleId) => {
@@ -737,7 +846,12 @@ export default function CellarRoom() {
             </button>
             <button
               className={`btn btn-small ${isEditMode ? 'btn-secondary' : 'btn-primary'}`}
-              onClick={() => setIsEditMode(m => !m)}
+              onClick={() => {
+                setIsEditMode(m => {
+                  if (!m) { setSelectedBottle(null); setEmptySlotTarget(null); }
+                  return !m;
+                });
+              }}
             >
               {isEditMode ? t('room.viewMode', 'View') : t('room.editMode', 'Edit')}
             </button>
@@ -749,6 +863,40 @@ export default function CellarRoom() {
                   disabled={unplacedRacks.length === 0}
                 >
                   {t('room.addRack', 'Add Rack')} {unplacedRacks.length > 0 && `(${unplacedRacks.length})`}
+                </button>
+                <button
+                  className="btn btn-secondary btn-small"
+                  onClick={() => {
+                    if (undoStackRef.current.length > 0) {
+                      setLayout(prev => {
+                        redoStackRef.current = [...redoStackRef.current, prev];
+                        const restored = undoStackRef.current[undoStackRef.current.length - 1];
+                        undoStackRef.current = undoStackRef.current.slice(0, -1);
+                        return restored;
+                      });
+                    }
+                  }}
+                  disabled={undoStackRef.current.length === 0}
+                  title={t('room.undo', 'Undo (Ctrl+Z)')}
+                >
+                  {t('room.undo', 'Undo')}
+                </button>
+                <button
+                  className="btn btn-secondary btn-small"
+                  onClick={() => {
+                    if (redoStackRef.current.length > 0) {
+                      setLayout(prev => {
+                        undoStackRef.current = [...undoStackRef.current, prev];
+                        const restored = redoStackRef.current[redoStackRef.current.length - 1];
+                        redoStackRef.current = redoStackRef.current.slice(0, -1);
+                        return restored;
+                      });
+                    }
+                  }}
+                  disabled={redoStackRef.current.length === 0}
+                  title={t('room.redo', 'Redo (Ctrl+Y)')}
+                >
+                  {t('room.redo', 'Redo')}
                 </button>
                 {saveError && <span style={{ color: 'var(--color-danger)', fontSize: '0.75rem' }}>{saveError}</span>}
                 <button className="btn btn-primary btn-small" onClick={handleSave} disabled={saving}>
@@ -1161,6 +1309,24 @@ export default function CellarRoom() {
               </div>
             );
           })()}
+        </div>
+      )}
+
+      {/* Unsaved changes navigation blocker */}
+      {blocker.state === 'blocked' && (
+        <div className="room-consume-overlay" onClick={() => blocker.reset()}>
+          <div className="room-consume-modal" onClick={e => e.stopPropagation()}>
+            <h3>{t('room.unsavedChangesTitle', 'Unsaved Changes')}</h3>
+            <p>{t('room.unsavedChangesMessage', 'You have unsaved changes to the room layout. Are you sure you want to leave?')}</p>
+            <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end', marginTop: '1rem' }}>
+              <button className="btn btn-secondary" onClick={() => blocker.reset()}>
+                {t('room.stayOnPage', 'Stay')}
+              </button>
+              <button className="btn btn-danger" onClick={() => blocker.proceed()}>
+                {t('room.leaveWithoutSaving', 'Leave')}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
