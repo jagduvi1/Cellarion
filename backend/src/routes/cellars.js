@@ -289,7 +289,8 @@ router.get('/:id', async (req, res) => {
       search,
       sort = '-createdAt',
       limit: rawLimit,
-      skip: rawSkip
+      skip: rawSkip,
+      exclude
     } = req.query;
 
     // Pagination — default 30, max 200; skip defaults to 0
@@ -301,6 +302,14 @@ router.get('/:id', async (req, res) => {
       cellar: req.params.id,
       status: { $nin: CONSUMED_STATUSES }
     };
+
+    // Exclude specific bottle IDs (used by rack slot picker to skip already-placed bottles)
+    if (exclude) {
+      const excludeIds = String(exclude).split(',').filter(mongoose.isValidObjectId);
+      if (excludeIds.length > 0) {
+        filter._id = { $nin: excludeIds };
+      }
+    }
 
     // Push vintage directly into the DB query — cast to string to prevent NoSQL injection
     if (vintage) filter.vintage = String(vintage);

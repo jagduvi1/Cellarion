@@ -834,10 +834,13 @@ export default function CellarRoom() {
     try {
       const params = new URLSearchParams({ limit: '30' });
       if (term) params.set('search', term);
+      // Tell backend to exclude placed bottles so the limit applies to unplaced ones
+      const excludeIds = [...placedBottleIds].join(',');
+      if (excludeIds) params.set('exclude', excludeIds);
       const res = await getCellar(apiFetch, id, params.toString());
       const data = await res.json();
       if (res.ok) {
-        setSlotResults((data.bottles?.items || []).filter(b => !placedBottleIds.has(b._id)));
+        setSlotResults(data.bottles?.items || []);
       }
     } catch { /* ignore */ }
     setSlotLoading(false);

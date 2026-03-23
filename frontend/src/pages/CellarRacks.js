@@ -491,17 +491,19 @@ function EmptySlotContent({ position, apiFetch, cellarId, placedBottleIds, onAss
   const [loading, setLoading] = useState(true);
   const timerRef = useRef(null);
 
-  // Fetch bottles from backend, filtering out placed ones client-side
+  // Fetch bottles from backend, excluding already-placed bottles server-side
   const fetchBottles = useCallback(async (term) => {
     setLoading(true);
     try {
       const params = new URLSearchParams({ limit: '30' });
       if (term) params.set('search', term);
+      // Tell backend to exclude placed bottles so the limit applies to unplaced ones
+      const excludeIds = [...placedBottleIds].join(',');
+      if (excludeIds) params.set('exclude', excludeIds);
       const res = await getCellar(apiFetch, cellarId, params.toString());
       const data = await res.json();
       if (res.ok) {
-        const items = (data.bottles?.items || []).filter(b => !placedBottleIds.has(b._id));
-        setResults(items);
+        setResults(data.bottles?.items || []);
       }
     } catch { /* ignore */ }
     setLoading(false);
