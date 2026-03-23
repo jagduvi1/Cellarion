@@ -281,8 +281,8 @@ export default function CellarChat() {
           for (const evt of events) {
             if (evt.type === 'usage') {
               setUsage(prev => prev
-                ? { ...prev, used: evt.data.used }
-                : { used: evt.data.used, limit: evt.data.limit, plan: user?.plan || 'free' }
+                ? { ...prev, used: evt.data.used, period: evt.data.period || prev.period }
+                : { used: evt.data.used, limit: evt.data.limit, plan: user?.plan || 'free', period: evt.data.period || 'daily' }
               );
             } else if (evt.type === 'meta') {
               if (evt.data.wineContext) setWineContext(evt.data.wineContext);
@@ -371,7 +371,8 @@ export default function CellarChat() {
     setError(null);
   };
 
-  const usageLabel = usage ? `${usage.used} / ${usage.limit} today` : null;
+  const usagePeriodLabel = usage?.period === 'weekly' ? 'this week' : 'today';
+  const usageLabel = usage ? `${usage.used} / ${usage.limit} ${usagePeriodLabel}` : null;
 
   return (
     <div className="cellar-chat">
@@ -410,7 +411,9 @@ export default function CellarChat() {
       <form className="cellar-chat__form" onSubmit={handleSubmit}>
         <textarea
           className="cellar-chat__input"
-          placeholder={atLimit ? 'Daily limit reached — resets at midnight UTC' : 'Ask about your cellar… (Enter to send, Shift+Enter for new line)'}
+          placeholder={atLimit
+            ? (usage?.period === 'weekly' ? 'Weekly limit reached — try again in a few days' : 'Daily limit reached — resets at midnight UTC')
+            : 'Ask about your cellar… (Enter to send, Shift+Enter for new line)'}
           value={input}
           onChange={e => setInput(e.target.value)}
           onKeyDown={handleKey}

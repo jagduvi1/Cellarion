@@ -23,7 +23,8 @@ const PLANS = {
       'Drink-window alerts',
       'Rack management',
       'Wine requests',
-      'Basic collection stats (types, origins, rating)',
+      'Basic stats: wine types, maturity status, rating distribution',
+      'Cellar Chat (5 questions / week)',
     ],
   },
   basic: {
@@ -40,6 +41,7 @@ const PLANS = {
       'Everything in Free',
       'Full analytics: vintage charts, world map, regions, producers',
       'Consumption history & cellar pace',
+      'Cellar Chat (20 questions / day)',
     ],
   },
   premium: {
@@ -60,6 +62,7 @@ const PLANS = {
       'Urgency ladder, drink window forecast',
       'Joy Per Dollar, Patience Payoff, Expectation vs Reality',
       'Collection value & most valuable bottles',
+      'Cellar Chat (50 questions / day)',
     ],
   },
 };

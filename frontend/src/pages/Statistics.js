@@ -1160,7 +1160,7 @@ function Statistics() {
       </div>
 
       {/* ── Primary KPIs ── */}
-      <div className={`kpi-grid${isPremium ? '' : isBasic ? ' kpi-grid--5' : ' kpi-grid--3'}`}>
+      <div className={`kpi-grid${isPremium ? '' : isBasic ? ' kpi-grid--5' : ' kpi-grid--5'}`}>
         <KPICard icon="🍾" label={t('statistics.kpi.activeBottles')} value={fmt(total)}
           sub={t('statistics.kpi.uniqueWines', { count: overview.uniqueWines })} accentColor="#7A1E2D" />
         <KPICard icon="🌍" label={t('statistics.kpi.countries')} value={fmt(overview.totalCountries)}
@@ -1168,21 +1168,17 @@ function Statistics() {
         <KPICard icon="⭐" label={t('statistics.kpi.avgRating')}
           value={overview.avgRating != null ? fmtRating(overview.avgRating, targetScale) : '—'}
           accentColor="#D4C87A" />
-        {isBasic && (
-          <KPICard icon="📅" label={t('statistics.kpi.avgVintageAge')}
-            value={overview.avgVintageAge ? `${overview.avgVintageAge} ${t('statistics.kpi.yrs')}` : '—'}
-            sub={overview.oldestVintage
-              ? `${overview.oldestVintage} → ${overview.newestVintage}` : undefined}
-            accentColor="#8B6A9A" />
-        )}
-        {isBasic && (
-          <KPICard icon="⏱" label={t('statistics.kpi.decliningLate')}
-            value={`${(maturity.declining || 0) + (maturity.late || 0)}`}
-            sub={maturity.declining > 0
-              ? t('statistics.kpi.pastPrime', { count: maturity.declining })
-              : t('statistics.kpi.atPeak', { count: maturity.peak || 0 })}
-            accentColor={maturity.declining > 0 ? '#C94040' : '#7A1E2D'} />
-        )}
+        <KPICard icon="📅" label={t('statistics.kpi.avgVintageAge')}
+          value={overview.avgVintageAge ? `${overview.avgVintageAge} ${t('statistics.kpi.yrs')}` : '—'}
+          sub={overview.oldestVintage
+            ? `${overview.oldestVintage} → ${overview.newestVintage}` : undefined}
+          accentColor="#8B6A9A" />
+        <KPICard icon="⏱" label={t('statistics.kpi.decliningLate')}
+          value={`${(maturity.declining || 0) + (maturity.late || 0)}`}
+          sub={maturity.declining > 0
+            ? t('statistics.kpi.pastPrime', { count: maturity.declining })
+            : t('statistics.kpi.atPeak', { count: maturity.peak || 0 })}
+          accentColor={maturity.declining > 0 ? '#C94040' : '#7A1E2D'} />
         {isPremium && (
           <KPICard icon="💰" label={t('statistics.kpi.estValue')}
             value={overview.totalValue > 0 ? fmtCurrency(overview.totalValue, currency) : '—'}
@@ -1297,21 +1293,11 @@ function Statistics() {
           )}
         </div>
 
-        {/* Drinking Windows (basic+) or Top 5 Origins (free) */}
-        {isBasic ? (
-          <div className="stats-card">
-            <h2 className="stats-card-title">{t('statistics.sections.maturityStatus')}</h2>
-            <MaturityViz maturity={maturity} maturityCoverage={maturityCoverage} total={total} />
-          </div>
-        ) : (
-          <div className="stats-card">
-            <h2 className="stats-card-title">
-              {t('statistics.sections.topOrigins')}
-              <span className="stats-card-title-note">{t('statistics.sections.top5')}</span>
-            </h2>
-            <HBarChart data={byCountry} colors={COUNTRY_COLORS} maxItems={5} />
-          </div>
-        )}
+        {/* Drinking Windows — FREE+ */}
+        <div className="stats-card">
+          <h2 className="stats-card-title">{t('statistics.sections.maturityStatus')}</h2>
+          <MaturityViz maturity={maturity} maturityCoverage={maturityCoverage} total={total} />
+        </div>
 
         {/* Vintage Distribution — BASIC+ */}
         {isBasic && (
@@ -1325,6 +1311,25 @@ function Statistics() {
               )}
             </h2>
             <VintageBarChart data={byVintage} />
+          </div>
+        )}
+
+        {/* Rating Distribution — FREE+ */}
+        {!isBasic && (
+          <div className="stats-card">
+            <h2 className="stats-card-title">{t('statistics.sections.ratingDistribution')}</h2>
+            <RatingChart byRating={byRating} avg={overview.avgRating} targetScale={targetScale} />
+          </div>
+        )}
+
+        {/* Top 5 Origins — FREE only */}
+        {!isBasic && (
+          <div className="stats-card">
+            <h2 className="stats-card-title">
+              {t('statistics.sections.topOrigins')}
+              <span className="stats-card-title-note">{t('statistics.sections.top5')}</span>
+            </h2>
+            <HBarChart data={byCountry} colors={COUNTRY_COLORS} maxItems={5} />
           </div>
         )}
 

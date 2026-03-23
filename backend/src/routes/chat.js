@@ -1,9 +1,12 @@
 /**
  * Cellar Chat routes.
  *
- * POST /api/chat         – ask a question (non-streaming); rate-limited by plan daily quota
+ * POST /api/chat         – ask a question (non-streaming); rate-limited by plan quota
  * POST /api/chat/stream  – ask a question (streaming SSE); same rate limiting
- * GET  /api/chat/usage   – return today's usage + limit for the current user
+ * GET  /api/chat/usage   – return current usage + limit for the current user
+ *
+ * Free plan: 5 questions per rolling 7-day window
+ * Basic/Premium: daily limits (configurable via aiConfig)
  */
 
 const express = require('express');
@@ -14,9 +17,18 @@ const ChatUsage = require('../models/ChatUsage');
 
 const router = express.Router();
 
+const FREE_WEEKLY_LIMIT = 5;
+
 // Returns today's UTC date string 'YYYY-MM-DD'
 function todayUTC() {
   return new Date().toISOString().slice(0, 10);
+}
+
+// Returns the UTC date string for N days ago
+function daysAgoUTC(n) {
+  const d = new Date();
+  d.setUTCDate(d.getUTCDate() - n);
+  return d.toISOString().slice(0, 10);
 }
 
 // Returns a Date set to 90 days from now (retained for usage reporting)
@@ -25,9 +37,28 @@ function expiresAt() {
 }
 
 // Returns the daily limit for a given plan from the current aiConfig
-function limitForPlan(plan) {
+function dailyLimitForPlan(plan) {
   const limits = aiConfig.get().chatDailyLimits || {};
   return limits[plan] ?? limits.free ?? 4;
+}
+
+/**
+ * Returns { limit, used, period } for the given plan.
+ * Free plan uses a rolling 7-day window; others use daily.
+ */
+async function getUsageForPlan(userId, plan) {
+  if (plan === 'free') {
+    const startDate = daysAgoUTC(6); // today minus 6 = 7-day window
+    const docs = await ChatUsage.find({
+      userId,
+      date: { $gte: startDate },
+    }).lean();
+    const used = docs.reduce((sum, d) => sum + (d.count || 0), 0);
+    return { limit: FREE_WEEKLY_LIMIT, used, period: 'weekly' };
+  }
+  const date = todayUTC();
+  const doc = await ChatUsage.findOne({ userId, date }).lean();
+  return { limit: dailyLimitForPlan(plan), used: doc?.count ?? 0, period: 'daily' };
 }
 
 /**
@@ -68,17 +99,19 @@ async function validateAndCheckLimit(req, res) {
     : null;
 
   const plan = req.user.plan || 'free';
-  const limit = limitForPlan(plan);
   const date = todayUTC();
 
-  const usageDoc = await ChatUsage.findOne({ userId: req.user.id, date }).lean();
-  const usedBefore = usageDoc?.count ?? 0;
+  const { limit, used: usedBefore, period } = await getUsageForPlan(req.user.id, plan);
 
   if (usedBefore >= limit) {
+    const resetMsg = period === 'weekly'
+      ? 'Try again in a few days.'
+      : 'Resets at midnight UTC.';
     res.status(429).json({
-      error: `You've reached your daily limit of ${limit} question${limit === 1 ? '' : 's'}. Resets at midnight UTC.`,
+      error: `You've reached your ${period} limit of ${limit} question${limit === 1 ? '' : 's'}. ${resetMsg}`,
       used: usedBefore,
       limit,
+      period,
     });
     return null;
   }
@@ -97,6 +130,7 @@ async function validateAndCheckLimit(req, res) {
     previousWines,
     plan,
     limit,
+    period,
     date,
     usedBefore,
   };
@@ -108,10 +142,8 @@ async function validateAndCheckLimit(req, res) {
 router.get('/usage', requireAuth, async (req, res) => {
   try {
     const plan = req.user.plan || 'free';
-    const limit = limitForPlan(plan);
-    const date = todayUTC();
-    const usage = await ChatUsage.findOne({ userId: req.user.id, date }).lean();
-    res.json({ used: usage?.count ?? 0, limit, plan });
+    const { limit, used, period } = await getUsageForPlan(req.user.id, plan);
+    res.json({ used, limit, plan, period });
   } catch (err) {
     console.error('[chat] usage error:', err);
     res.status(500).json({ error: 'Failed to load usage' });
@@ -125,7 +157,7 @@ router.post('/', requireAuth, async (req, res) => {
   const validated = await validateAndCheckLimit(req, res);
   if (!validated) return;
 
-  const { message, useQueryExpansion, history, previousWines, date, usedBefore, limit } = validated;
+  const { message, useQueryExpansion, history, previousWines, date, usedBefore, limit, period } = validated;
 
   try {
     const result = await aiChat.chat(req.user.id, message, {
@@ -141,7 +173,7 @@ router.post('/', requireAuth, async (req, res) => {
       ).catch(err => console.warn('[chat] token tracking error:', err.message));
     }
 
-    res.json({ ...result, used: usedBefore + 1, limit });
+    res.json({ ...result, used: usedBefore + 1, limit, period });
   } catch (err) {
     await ChatUsage.findOneAndUpdate(
       { userId: req.user.id, date },
@@ -161,7 +193,7 @@ router.post('/stream', requireAuth, async (req, res) => {
   const validated = await validateAndCheckLimit(req, res);
   if (!validated) return;
 
-  const { message, useQueryExpansion, history, previousWines, date, usedBefore, limit } = validated;
+  const { message, useQueryExpansion, history, previousWines, date, usedBefore, limit, period } = validated;
 
   // Set SSE headers
   res.setHeader('Content-Type', 'text/event-stream');
@@ -171,7 +203,7 @@ router.post('/stream', requireAuth, async (req, res) => {
   res.flushHeaders();
 
   // Send usage info as the first event so frontend has it immediately
-  res.write(`event: usage\ndata: ${JSON.stringify({ used: usedBefore + 1, limit })}\n\n`);
+  res.write(`event: usage\ndata: ${JSON.stringify({ used: usedBefore + 1, limit, period })}\n\n`);
 
   try {
     const result = await aiChat.chatStream(req.user.id, message, {
