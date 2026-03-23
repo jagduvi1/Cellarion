@@ -19,7 +19,12 @@ router.get('/nfc/:id', requireAuth, async (req, res) => {
   try {
     const rack = await Rack.findOne({ _id: req.params.id, deletedAt: null }).select('cellar');
     if (!rack) return res.status(404).json({ error: 'Rack not found' });
-    res.json({ cellarId: rack.cellar, rackId: rack._id });
+    // Check if rack is placed in the 3D room layout
+    const layout = await CellarLayout.findOne({ cellar: rack.cellar }).lean();
+    const inRoom = layout?.rackPlacements?.some(
+      rp => rp.rack.toString() === rack._id.toString()
+    ) || false;
+    res.json({ cellarId: rack.cellar, rackId: rack._id, inRoom });
   } catch (err) {
     console.error('NFC rack lookup error:', err);
     res.status(500).json({ error: 'Failed to look up rack' });

@@ -18,6 +18,7 @@ function Settings() {
   const [currency, setCurrency] = useState(user?.preferences?.currency || 'USD');
   const [language, setLanguage] = useState(user?.preferences?.language || i18n.language?.split('-')[0] || 'en');
   const [ratingScale, setRatingScale] = useState(user?.preferences?.ratingScale || '5');
+  const [rackNavigation, setRackNavigation] = useState(user?.preferences?.rackNavigation || 'auto');
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState(null);
@@ -116,7 +117,7 @@ function Settings() {
     setSaving(true);
     setError(null);
     setSaved(false);
-    const result = await updatePreferences({ currency, language, ratingScale });
+    const result = await updatePreferences({ currency, language, ratingScale, rackNavigation });
     setSaving(false);
     if (result.success) {
       i18n.changeLanguage(language);
@@ -362,6 +363,23 @@ function Settings() {
                   {SCALE_META[s].label} ({SCALE_META[s].min}–{SCALE_META[s].max}{SCALE_META[s].suffix})
                 </option>
               ))}
+            </select>
+          </div>
+
+          <div className="form-group">
+            <label htmlFor="rack-nav-select">{t('settings.rackNavigation', 'Rack Navigation')}</label>
+            <p className="settings-hint">
+              {t('settings.rackNavigationHint', 'Choose where rack links take you. Auto uses 3D room on large screens and flat rack view on mobile.')}
+            </p>
+            <select
+              id="rack-nav-select"
+              className="input settings-select"
+              value={rackNavigation}
+              onChange={e => setRackNavigation(e.target.value)}
+            >
+              <option value="auto">{t('settings.rackNavAuto', 'Auto (desktop: 3D room, mobile: rack)')}</option>
+              <option value="room">{t('settings.rackNavRoom', 'Always 3D room')}</option>
+              <option value="rack">{t('settings.rackNavRack', 'Always flat rack')}</option>
             </select>
           </div>
 

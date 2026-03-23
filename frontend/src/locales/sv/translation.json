@@ -93,6 +93,11 @@
     "saveBtn": "Spara",
     "savingBtn": "Sparar…",
     "savedMsg": "Sparat",
+    "rackNavigation": "Hyllnavigering",
+    "rackNavigationHint": "Välj vart hylllänkar tar dig. Auto använder 3D-rum på stora skärmar och platt hyllvy på mobil.",
+    "rackNavAuto": "Auto (dator: 3D-rum, mobil: hylla)",
+    "rackNavRoom": "Alltid 3D-rum",
+    "rackNavRack": "Alltid platt hylla",
     "plan": {
       "title": "Ditt abonnemang",
       "expires": "Giltigt till:",

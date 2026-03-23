@@ -38,10 +38,11 @@ router.get('/profile', requireAuth, async (req, res) => {
 const ALLOWED_CURRENCIES = ['USD', 'EUR', 'GBP', 'SEK', 'NOK', 'DKK', 'CHF', 'CAD', 'AUD'];
 const ALLOWED_LANGUAGES = ['en', 'sv'];
 const ALLOWED_RATING_SCALES = ['5', '20', '100'];
+const ALLOWED_RACK_NAV = ['auto', 'room', 'rack'];
 
 router.patch('/preferences', requireAuth, async (req, res) => {
   try {
-    const { currency, language, ratingScale, defaultCellarId, notifications } = req.body;
+    const { currency, language, ratingScale, rackNavigation, defaultCellarId, notifications } = req.body;
     const update = {};
 
     if (notifications !== undefined && typeof notifications === 'object') {
@@ -75,6 +76,13 @@ router.patch('/preferences', requireAuth, async (req, res) => {
         return res.status(400).json({ error: `Invalid rating scale. Allowed: ${ALLOWED_RATING_SCALES.join(', ')}` });
       }
       update['preferences.ratingScale'] = String(ratingScale);
+    }
+
+    if (rackNavigation !== undefined) {
+      if (!ALLOWED_RACK_NAV.includes(rackNavigation)) {
+        return res.status(400).json({ error: `Invalid rack navigation. Allowed: ${ALLOWED_RACK_NAV.join(', ')}` });
+      }
+      update['preferences.rackNavigation'] = rackNavigation;
     }
 
     if (defaultCellarId !== undefined) {

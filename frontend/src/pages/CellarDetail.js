@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import { getCellar, getCellarStatistics, exportCellar } from '../api/cellars';
 import { getRacks } from '../api/racks';
+import { getCellarLayout } from '../api/cellarLayout';
 import BottleCard from '../components/BottleCard';
 import './CellarDetail.css';
 
@@ -94,14 +95,21 @@ function CellarDetail() {
 
   const fetchRacks = async () => {
     try {
-      const res = await getRacks(apiFetch, id);
-      const data = await res.json();
-      if (res.ok) {
+      const [racksRes, layoutRes] = await Promise.all([
+        getRacks(apiFetch, id),
+        getCellarLayout(apiFetch, id),
+      ]);
+      const racksData = await racksRes.json();
+      const layoutData = await layoutRes.json();
+      if (racksRes.ok) {
+        const placements = layoutData.layout?.rackPlacements || [];
+        const placedRackIds = new Set(placements.map(rp => (rp.rack?._id || rp.rack).toString()));
         const map = new Map();
-        data.racks.forEach(rack => {
+        racksData.racks.forEach(rack => {
+          const inRoom = placedRackIds.has(rack._id.toString());
           rack.slots.forEach(slot => {
             const bid = slot.bottle?._id || slot.bottle;
-            if (bid) map.set(bid.toString(), { rackId: rack._id, rackName: rack.name, position: slot.position });
+            if (bid) map.set(bid.toString(), { rackId: rack._id, rackName: rack.name, position: slot.position, inRoom });
           });
         });
         setRackMap(map);

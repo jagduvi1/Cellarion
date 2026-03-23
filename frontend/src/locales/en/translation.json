@@ -93,6 +93,11 @@
     "saveBtn": "Save",
     "savingBtn": "Saving…",
     "savedMsg": "Saved",
+    "rackNavigation": "Rack Navigation",
+    "rackNavigationHint": "Choose where rack links take you. Auto uses 3D room on large screens and flat rack view on mobile.",
+    "rackNavAuto": "Auto (desktop: 3D room, mobile: rack)",
+    "rackNavRoom": "Always 3D room",
+    "rackNavRack": "Always flat rack",
     "plan": {
       "title": "Your Plan",
       "expires": "Valid until:",

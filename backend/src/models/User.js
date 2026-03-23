@@ -75,6 +75,11 @@ const userSchema = new mongoose.Schema({
       ref: 'Cellar',
       default: null
     },
+    rackNavigation: {
+      type: String,
+      enum: ['auto', 'room', 'rack'],
+      default: 'auto'
+    },
     notifications: {
       drinkWindow: { type: Boolean, default: true },
       email:       { type: Boolean, default: false },

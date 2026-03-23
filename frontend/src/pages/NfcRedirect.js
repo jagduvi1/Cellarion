@@ -3,13 +3,15 @@ import { useParams, useNavigate, Navigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import { resolveNfcRack } from '../api/racks';
+import { buildRackUrl } from '../utils/rackNavigation';
 
 function NfcRedirect() {
   const { t } = useTranslation();
   const { rackId } = useParams();
-  const { apiFetch } = useAuth();
+  const { apiFetch, user } = useAuth();
   const navigate = useNavigate();
   const [error, setError] = useState(null);
+  const rackNavPref = user?.preferences?.rackNavigation || 'auto';
 
   useEffect(() => {
     let cancelled = false;
@@ -22,14 +24,19 @@ function NfcRedirect() {
           return;
         }
         if (!cancelled) {
-          navigate(`/cellars/${data.cellarId}/racks?rack=${data.rackId}`, { replace: true });
+          const url = buildRackUrl(data.cellarId, {
+            rackId: data.rackId,
+            inRoom: data.inRoom,
+            preference: rackNavPref,
+          });
+          navigate(url, { replace: true });
         }
       } catch {
         if (!cancelled) setError(t('nfc.networkError'));
       }
     })();
     return () => { cancelled = true; };
-  }, [rackId, apiFetch, navigate, t]);
+  }, [rackId, apiFetch, navigate, t, rackNavPref]);
 
   if (error) {
     return (

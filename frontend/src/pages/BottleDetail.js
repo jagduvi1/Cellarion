@@ -5,6 +5,7 @@ import { useAuth, usePlan } from '../contexts/AuthContext';
 import { getBottle, updateBottle, consumeBottle, setBottleDefaultImage } from '../api/bottles';
 import { getRacks } from '../api/racks';
 import { getCellarLayout } from '../api/cellarLayout';
+import { buildRackUrl } from '../utils/rackNavigation';
 import { toInputDate, getMaturityStatus } from '../utils/drinkStatus';
 import { fetchRates, convertAmount, convertAmountHistorical } from '../utils/currency';
 import { calculatePriceChange } from '../utils/priceHistoryUtils';
@@ -707,9 +708,7 @@ function ViewDetails({ bottle, rackInfo, cellarId, vintageProfile, priceHistory,
         <div className="bd-section">
           <span className="bd-section-label">{t('bottleDetail.rackLocation')}</span>
           <Link
-            to={rackInfo.inRoom
-              ? `/cellars/${cellarId}/room?focusRack=${rackInfo.rackId}&highlight=${bottle._id}`
-              : `/cellars/${cellarId}/racks?highlight=${bottle._id}`}
+            to={buildRackUrl(cellarId, { rackId: rackInfo.rackId, bottleId: bottle._id, inRoom: rackInfo.inRoom, preference: user?.preferences?.rackNavigation || 'auto' })}
             className="bd-rack-link"
           >
             <span aria-hidden="true">📍</span> {rackInfo.rackName} · {t('bottleDetail.rackSlot')} {rackInfo.position}

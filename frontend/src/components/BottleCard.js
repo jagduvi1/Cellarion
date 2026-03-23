@@ -1,4 +1,6 @@
 import { useNavigate, Link } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
+import { buildRackUrl } from '../utils/rackNavigation';
 import AuthImage from './AuthImage';
 
 /**
@@ -7,7 +9,9 @@ import AuthImage from './AuthImage';
  */
 function BottleCard({ bottle, rackMap, cellarId, viewMode }) {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const rackInfo = rackMap.get(bottle._id);
+  const rackNavPref = user?.preferences?.rackNavigation || 'auto';
   const imgSrc = bottle.defaultImageUrl || bottle.wineDefinition?.image || bottle.pendingImageUrl;
   const credit = bottle.defaultImageUrl ? null : bottle.wineDefinition?.imageCredit;
   const isPending = !bottle.wineDefinition && !!bottle.pendingWineRequest;
@@ -57,7 +61,7 @@ function BottleCard({ bottle, rackMap, cellarId, viewMode }) {
             )}
             {rackInfo && (
               <Link
-                to={`/cellars/${cellarId}/racks?highlight=${bottle._id}`}
+                to={buildRackUrl(cellarId, { rackId: rackInfo.rackId, bottleId: bottle._id, inRoom: rackInfo.inRoom, preference: rackNavPref })}
                 className="rack-badge"
                 onClick={e => e.stopPropagation()}
               >
@@ -106,7 +110,7 @@ function BottleCard({ bottle, rackMap, cellarId, viewMode }) {
           )}
           {rackInfo && (
             <Link
-              to={`/cellars/${cellarId}/racks?highlight=${bottle._id}`}
+              to={buildRackUrl(cellarId, { rackId: rackInfo.rackId, bottleId: bottle._id, inRoom: rackInfo.inRoom, preference: rackNavPref })}
               className="rack-badge"
               onClick={e => e.stopPropagation()}
             >
