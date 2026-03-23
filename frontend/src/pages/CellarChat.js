@@ -49,29 +49,6 @@ const PROMPT_CATEGORIES = [
   },
 ];
 
-// ── SSE parser ───────────────────────────────────────────────────────────────
-
-function parseSSEChunk(buffer) {
-  const events = [];
-  const lines = buffer.split('\n');
-  let eventType = null;
-
-  for (const line of lines) {
-    if (line.startsWith('event: ')) {
-      eventType = line.slice(7);
-    } else if (line.startsWith('data: ') && eventType) {
-      try {
-        events.push({ type: eventType, data: JSON.parse(line.slice(6)) });
-      } catch { /* skip malformed */ }
-      eventType = null;
-    } else if (line === '') {
-      eventType = null;
-    }
-  }
-
-  return events;
-}
-
 // ── Sub-components ────────────────────────────────────────────────────────────
 
 function WineCard({ wine }) {
@@ -232,7 +209,7 @@ export default function CellarChat() {
     setMessages(prev => [...prev, { role: 'assistant', text: thinkingText, thinking: true }]);
 
     try {
-      const res = await apiFetch('/api/chat/stream', {
+      const res = await apiFetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -243,8 +220,9 @@ export default function CellarChat() {
         }),
       });
 
+      const data = await res.json();
+
       if (!res.ok) {
-        const data = await res.json();
         setMessages(prev => prev.filter(m => !m.thinking));
         setError(data.error || 'Something went wrong.');
         if (res.status === 429) {
@@ -253,98 +231,22 @@ export default function CellarChat() {
         return;
       }
 
-      // Replace thinking bubble with empty streaming bubble
+      // Update usage
+      if (data.used != null) {
+        setUsage(prev => prev
+          ? { ...prev, used: data.used, period: data.period || prev.period }
+          : { used: data.used, limit: data.limit, plan: user?.plan || 'free', period: data.period || 'daily' }
+        );
+      }
+
+      // Save wine context for follow-ups
+      if (data.wineContext) setWineContext(data.wineContext);
+
+      // Replace thinking bubble with final answer
       setMessages(prev => [
         ...prev.filter(m => !m.thinking),
-        { role: 'assistant', text: '', wines: [], expandedQuery: null },
+        { role: 'assistant', text: data.answer || '', wines: data.wines || [], expandedQuery: data.expandedQuery || null },
       ]);
-
-      // Read SSE stream
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = '';
-      let fullText = '';
-      let pendingUpdate = false;
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-
-        // Split on double newlines (SSE event boundary)
-        const parts = buffer.split('\n\n');
-        buffer = parts.pop(); // keep incomplete last part
-
-        for (const part of parts) {
-          const events = parseSSEChunk(part + '\n\n');
-          for (const evt of events) {
-            if (evt.type === 'usage') {
-              setUsage(prev => prev
-                ? { ...prev, used: evt.data.used, period: evt.data.period || prev.period }
-                : { used: evt.data.used, limit: evt.data.limit, plan: user?.plan || 'free', period: evt.data.period || 'daily' }
-              );
-            } else if (evt.type === 'meta') {
-              if (evt.data.wineContext) setWineContext(evt.data.wineContext);
-              setMessages(prev => {
-                const updated = [...prev];
-                const last = updated[updated.length - 1];
-                if (last?.role === 'assistant') {
-                  updated[updated.length - 1] = {
-                    ...last,
-                    wines: evt.data.wines || [],
-                    expandedQuery: evt.data.expandedQuery || null,
-                  };
-                }
-                return updated;
-              });
-            } else if (evt.type === 'delta') {
-              fullText += evt.data.text;
-              // Batch UI updates with requestAnimationFrame
-              if (!pendingUpdate) {
-                pendingUpdate = true;
-                const textSnapshot = fullText;
-                requestAnimationFrame(() => {
-                  setMessages(prev => {
-                    const updated = [...prev];
-                    const last = updated[updated.length - 1];
-                    if (last?.role === 'assistant') {
-                      updated[updated.length - 1] = { ...last, text: textSnapshot };
-                    }
-                    return updated;
-                  });
-                  pendingUpdate = false;
-                });
-              }
-            } else if (evt.type === 'done') {
-              // Final update with complete text
-              const finalText = fullText;
-              setMessages(prev => {
-                const updated = [...prev];
-                const last = updated[updated.length - 1];
-                if (last?.role === 'assistant') {
-                  updated[updated.length - 1] = { ...last, text: finalText };
-                }
-                return updated;
-              });
-            } else if (evt.type === 'error') {
-              setError(evt.data.error || 'Something went wrong.');
-            }
-          }
-        }
-      }
-
-      // Ensure final text is set (in case rAF hasn't fired yet)
-      if (fullText) {
-        setMessages(prev => {
-          const updated = [...prev];
-          const last = updated[updated.length - 1];
-          if (last?.role === 'assistant' && last.text !== fullText) {
-            updated[updated.length - 1] = { ...last, text: fullText };
-          }
-          return updated;
-        });
-      }
     } catch {
       setMessages(prev => prev.filter(m => !m.thinking));
       setError('Network error — please try again.');
