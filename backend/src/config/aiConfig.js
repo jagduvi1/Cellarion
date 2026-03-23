@@ -95,17 +95,19 @@ QualityTier: {{qualityTier}}
 # (one of: unclassified, entry-level, mid-tier, prestige)
 
 Consider:
-- The wine's appellation AND explicit classification — absence of classification implies limited aging
+- The wine's appellation and quality tier — unclassified implies limited aging
+- If the wine name indicates a single vineyard (e.g. a named vineyard, "Vigna", "Clos", "Lieu-dit"), this typically signals better selection, more structure, and greater aging potential than a generic cuvée from the same appellation
 - The grape varieties and their realistic aging potential in this style
 - The vintage quality and its effect on aging (structure vs approachability)
 - The producer's known style ONLY if the producer is well-established
 - Regional norms, but do NOT assume prestige based on region alone
 
 Critical rules:
-- If the wine is NOT explicitly classified (e.g. Grand Cru, Premier Cru, Cru Classé, Cru Bourgeois officially recognized), assume conservative aging potential and bias strongly toward early drinking.
+- If the wine is NOT explicitly classified (e.g. Grand Cru, Premier Cru, Cru Classé, Cru Bourgeois officially recognized) AND is not a single-vineyard bottling, assume conservative aging potential and bias strongly toward early drinking.
 - Unclassified or entry-level wines rarely exceed 8–10 years total aging.
+- Single-vineyard wines may justify moderately longer aging (10–15 years) even without a formal classification.
 - Do NOT infer Cru Bourgeois, Médoc structure, or long-aging capability unless explicitly stated.
-- If total estimated aging exceeds 15 years, sommNotes MUST explicitly justify why this wine qualifies (classification, producer reputation, structure).
+- If total estimated aging exceeds 15 years, sommNotes MUST explicitly justify why this wine qualifies (quality tier, single vineyard, producer reputation, structure).
 - If you cannot confidently estimate without making assumptions, return {"error":"unknown"}.
 
 Return ONLY a raw JSON object (no markdown, no code fences, no extra text):

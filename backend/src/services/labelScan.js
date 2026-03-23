@@ -15,18 +15,19 @@ function getClient() {
 }
 
 /**
- * Map a WineDefinition.classification string to one of the quality tiers
- * used by the maturity suggest prompt.
+ * Derive a quality tier from the wine name and appellation.
+ * Used by the maturity suggest prompt to give the AI a baseline signal.
  */
 const PRESTIGE_KEYWORDS = /grand\s*cru|1er\s*cru|premier\s*cru|cru\s*class[eé]|gran\s*reserva|riserva|grosses?\s*gew[aä]chs|erste\s*lage/i;
 const MID_TIER_KEYWORDS = /cru\s*bourgeois|village|communale?|reserva|classico|sup[eé]rieur|old\s*vine/i;
 const ENTRY_KEYWORDS = /g[eé]n[eé]rique|vin\s*de\s*(pays|france|table)|igp|igt|landwein|tafelwein|joven|crianza/i;
 
-function classifyQualityTier(classification) {
-  if (!classification) return 'unclassified';
-  if (PRESTIGE_KEYWORDS.test(classification)) return 'prestige';
-  if (MID_TIER_KEYWORDS.test(classification)) return 'mid-tier';
-  if (ENTRY_KEYWORDS.test(classification)) return 'entry-level';
+function classifyQualityTier({ name, appellation } = {}) {
+  const combined = [name, appellation].filter(Boolean).join(' ');
+  if (!combined) return 'unclassified';
+  if (PRESTIGE_KEYWORDS.test(combined)) return 'prestige';
+  if (MID_TIER_KEYWORDS.test(combined)) return 'mid-tier';
+  if (ENTRY_KEYWORDS.test(combined)) return 'entry-level';
   return 'unclassified';
 }
 
@@ -272,13 +273,13 @@ async function identifyWineFromQuery(query) {
  * Returns { data, debugRaw, debugReason } — same shape as identifyWineFromText.
  *   data — { earlyFrom, earlyUntil, peakFrom, peakUntil, lateFrom, lateUntil, sommNotes, confidence }
  */
-async function suggestDrinkWindow({ name, producer, vintage, country, region, appellation, type, grapes, classification }) {
+async function suggestDrinkWindow({ name, producer, vintage, country, region, appellation, type, grapes }) {
   if (!name || !vintage) return { data: null, debugRaw: null, debugReason: 'missing_fields' };
 
   let client;
   try { client = getClient(); } catch { return { data: null, debugRaw: null, debugReason: 'no_api_key' }; }
 
-  const qualityTier = classifyQualityTier(classification);
+  const qualityTier = classifyQualityTier({ name, appellation });
 
   const prompt = aiConfig.get().maturitySuggestPrompt
     .replace('{{name}}', name || '')
