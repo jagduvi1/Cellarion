@@ -2,6 +2,8 @@ const express = require('express');
 const mongoose = require('mongoose');
 const { requireAuth } = require('../middleware/auth');
 const JournalEntry = require('../models/JournalEntry');
+const Bottle = require('../models/Bottle');
+const WineDefinition = require('../models/WineDefinition');
 const { logAudit } = require('../services/audit');
 const { createNotification } = require('../services/notifications');
 const User = require('../models/User');
@@ -57,6 +59,44 @@ function sanitizeEntry(body) {
 
   return clean;
 }
+
+// GET /api/journal/wine-search — search user's bottles + wine register for the pairing picker
+router.get('/wine-search', async (req, res) => {
+  try {
+    const q = (req.query.q || '').trim();
+    if (!q || q.length < 2) return res.json({ bottles: [], wines: [] });
+
+    const regex = new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+
+    // Search user's bottles (via wine definition name)
+    const bottles = await Bottle.find({ user: req.user.id, status: 'active' })
+      .populate({ path: 'wineDefinition', match: { $or: [{ name: regex }, { producer: regex }] }, select: 'name producer type' })
+      .select('vintage wineDefinition')
+      .lean();
+
+    const matchedBottles = bottles
+      .filter(b => b.wineDefinition)
+      .slice(0, 10)
+      .map(b => ({
+        _id: b._id,
+        vintage: b.vintage,
+        wine: b.wineDefinition
+      }));
+
+    // Search wine register
+    const wines = await WineDefinition.find({
+      $or: [{ name: regex }, { producer: regex }]
+    })
+      .select('name producer type')
+      .limit(10)
+      .lean();
+
+    res.json({ bottles: matchedBottles, wines });
+  } catch (err) {
+    console.error('Journal wine search error:', err);
+    res.status(500).json({ error: 'Search failed' });
+  }
+});
 
 const POPULATE_PAIRINGS = [
   { path: 'pairings.bottle', select: 'vintage wineDefinition', populate: { path: 'wineDefinition', select: 'name producer type' } },

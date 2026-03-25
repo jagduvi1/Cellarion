@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { createJournalEntry, updateJournalEntry } from '../api/journal';
 import { searchFriends } from '../api/recommendations';
 import Modal from './Modal';
+import WinePicker from './WinePicker';
 import './JournalEntryForm.css';
 
 const OCCASIONS = ['dinner', 'tasting', 'celebration', 'casual', 'gift', 'travel', 'other'];
@@ -202,13 +203,12 @@ export default function JournalEntryForm({ existing, onClose, onSaved, prefilled
                 placeholder={t('journal.dishPlaceholder', 'Dish (e.g. Osso buco)')}
                 maxLength={200}
               />
-              <input
-                type="text"
-                className="input"
-                value={p.wineName}
-                onChange={e => updatePairing(i, 'wineName', e.target.value)}
-                placeholder={t('journal.winePlaceholder', 'Wine name')}
-                maxLength={200}
+              <WinePicker
+                value={{ bottle: p.bottle, wine: p.wine, wineName: p.wineName }}
+                onChange={(update) => {
+                  setPairings(prev => prev.map((pr, idx) => idx === i ? { ...pr, ...update } : pr));
+                }}
+                placeholder={t('journal.winePlaceholder', 'Search wine...')}
               />
               <textarea
                 className="input"

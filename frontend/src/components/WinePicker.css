@@ -1,0 +1,113 @@
+.wine-picker {
+  position: relative;
+}
+
+.wine-picker__input-row {
+  display: flex;
+  align-items: center;
+  position: relative;
+}
+
+.wine-picker__input {
+  flex: 1;
+  padding-right: 2rem;
+}
+
+.wine-picker__clear {
+  position: absolute;
+  right: 0.5rem;
+  background: none;
+  border: none;
+  font-size: 1.1rem;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  padding: 0.2rem;
+  line-height: 1;
+}
+
+.wine-picker__clear:hover {
+  color: var(--color-danger, #c0504d);
+}
+
+.wine-picker__dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 50;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md, 8px);
+  box-shadow: var(--shadow-lg, 0 8px 24px rgba(0,0,0,.12));
+  max-height: 280px;
+  overflow-y: auto;
+  margin-top: 2px;
+}
+
+.wine-picker__section-label {
+  padding: 0.4rem 0.75rem 0.2rem;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-text-secondary);
+  font-weight: 600;
+}
+
+.wine-picker__option {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  background: none;
+  border: none;
+  text-align: left;
+  cursor: pointer;
+  font-size: 0.85rem;
+  color: var(--color-text);
+  transition: background 0.12s;
+}
+
+.wine-picker__option:hover {
+  background: var(--color-hover, rgba(0,0,0,.04));
+}
+
+.wine-picker__option-icon {
+  font-size: 1rem;
+  flex-shrink: 0;
+}
+
+.wine-picker__option-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wine-picker__vintage {
+  color: var(--color-text-secondary);
+  font-size: 0.8rem;
+}
+
+.wine-picker__producer {
+  color: var(--color-text-secondary);
+  font-size: 0.8rem;
+}
+
+.wine-picker__no-results {
+  padding: 0.75rem;
+  text-align: center;
+}
+
+.wine-picker__no-results p {
+  margin: 0 0 0.5rem;
+  font-size: 0.85rem;
+  color: var(--color-text-secondary);
+}
+
+.wine-picker__searching {
+  padding: 0.6rem 0.75rem;
+  font-size: 0.8rem;
+  color: var(--color-text-secondary);
+  text-align: center;
+}
