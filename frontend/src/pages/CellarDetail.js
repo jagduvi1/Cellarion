@@ -1,5 +1,5 @@
 import { useState, useEffect, lazy, Suspense } from 'react';
-import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useParams, Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import { getCellar, getCellarStatistics, exportCellar } from '../api/cellars';
@@ -22,6 +22,7 @@ function CellarDetail() {
   const { apiFetch, user } = useAuth();
   const userCurrency = user?.preferences?.currency || 'USD';
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [cellar, setCellar] = useState(null);
   const [bottles, setBottles] = useState([]);
   const [bottlesTotal, setBottlesTotal] = useState(0);
@@ -36,12 +37,19 @@ function CellarDetail() {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
   const [activeTab, setActiveTab] = useState('bottles');
-  const [filters, setFilters] = useState({
-    search: '',
-    vintage: '',
-    minRating: '',
-    sort: '-createdAt'
-  });
+  const [filters, setFilters] = useState(() => ({
+    search: searchParams.get('search') || '',
+    vintage: searchParams.get('vintage') || '',
+    minRating: searchParams.get('minRating') || '',
+    sort: searchParams.get('sort') || '-createdAt'
+  }));
+
+  // Clear URL search params after they've been read into filter state
+  useEffect(() => {
+    if (searchParams.has('search') || searchParams.has('vintage') || searchParams.has('minRating') || searchParams.has('sort')) {
+      setSearchParams({}, { replace: true });
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     fetchCellarData(0);

@@ -124,7 +124,7 @@ async function processUser(user, isFirstRun) {
     const wineName = bottle.wineDefinition?.name || 'Unknown wine';
     const vintage  = bottle.vintage;
 
-    alerts.push({ bottleId: bottle._id, name: wineName, vintage, status: notifType });
+    alerts.push({ bottleId: bottle._id, cellarId: bottle.cellar, name: wineName, vintage, status: notifType });
 
     await Bottle.updateOne(
       { _id: bottle._id },
@@ -137,7 +137,8 @@ async function processUser(user, isFirstRun) {
   // Create in-app notifications (also triggers push via the notification service)
   for (const alert of alerts) {
     const { title, message, type } = buildNotification(alert);
-    await createNotification(user._id, type, title, message, '/cellars');
+    const link = `/cellars/${alert.cellarId}?search=${encodeURIComponent(alert.name)}`;
+    await createNotification(user._id, type, title, message, link);
   }
 
   // Send email digest if opted in
