@@ -23,7 +23,7 @@ router.get('/', async (req, res) => {
   try {
     const { status, sort = 'newest', search, limit: rawLimit, skip: rawSkip } = req.query;
 
-    const filter = { user: req.user.id };
+    const filter = { user: new mongoose.Types.ObjectId(req.user.id) };
     if (status && status !== 'all') {
       if (!['wanted', 'bought'].includes(status)) {
         return res.status(400).json({ error: 'Invalid status filter' });
