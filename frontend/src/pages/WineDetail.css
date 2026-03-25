@@ -140,13 +140,14 @@
   background: #f0f0f0;
 }
 
-.wd-cta .btn-secondary {
+.wd-cta .btn.btn-secondary {
   color: #fff;
   border-color: rgba(255,255,255,0.5);
+  background: rgba(255,255,255,0.1);
 }
 
-.wd-cta .btn-secondary:hover {
-  background: rgba(255,255,255,0.15);
+.wd-cta .btn.btn-secondary:hover {
+  background: rgba(255,255,255,0.25);
 }
 
 /* Actions for logged-in users */
