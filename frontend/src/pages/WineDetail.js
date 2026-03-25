@@ -56,7 +56,10 @@ export default function WineDetail() {
   ].filter(Boolean).join(' · ');
   const metaDescription = `${pageTitle}. ${description}. Discover, track, and manage your wine cellar with Cellarion.`;
   const pageUrl = `${SITE_URL}/wines/${wine._id}`;
-  const imageUrl = wine.image ? `${API_URL}/api/uploads/${wine.image}` : `${SITE_URL}/cellarion-logo.jpg`;
+  const wineImageSrc = wine.image
+    ? (wine.image.startsWith('/api/') || wine.image.startsWith('http') ? `${API_URL}${wine.image}` : `${API_URL}/api/uploads/${wine.image}`)
+    : null;
+  const imageUrl = wineImageSrc || `${SITE_URL}/cellarion-logo.jpg`;
   const grapeNames = wine.grapes?.map(g => g.name).filter(Boolean) || [];
 
   const ratingScale = user?.preferences?.ratingScale || '5';
@@ -106,7 +109,7 @@ export default function WineDetail() {
         {wine.image && (
           <div className="wd-image-wrap">
             <img
-              src={`${API_URL}/api/uploads/${wine.image}`}
+              src={wine.image.startsWith('/api/') || wine.image.startsWith('http') ? `${API_URL}${wine.image}` : `${API_URL}/api/uploads/${wine.image}`}
               alt={wine.name}
               className="wd-image"
               onError={(e) => { e.target.closest('.wd-image-wrap').style.display = 'none'; }}

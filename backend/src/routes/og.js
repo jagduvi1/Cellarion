@@ -29,7 +29,7 @@ router.get('/wines/:id', async (req, res) => {
     const description = `${pageTitle}. ${details}. Discover, track, and manage your wine cellar with Cellarion.`;
     const pageUrl = `${SITE_URL}/wines/${wine._id}`;
     const imageUrl = wine.image
-      ? `${API_URL}/api/uploads/${wine.image}`
+      ? (wine.image.startsWith('/api/') || wine.image.startsWith('http') ? `${API_URL}${wine.image}` : `${API_URL}/api/uploads/${wine.image}`)
       : `${SITE_URL}/cellarion-logo.jpg`;
 
     // Minimal HTML — crawlers only read the <head>
