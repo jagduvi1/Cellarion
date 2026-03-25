@@ -337,6 +337,25 @@ router.post('/ai-info', requireAuth, async (req, res) => {
 });
 
 // GET /api/wines/:id - Get single wine definition (auth required)
+// GET /api/wines/:id/public — Public wine detail (no auth required)
+// Used for shared links and social media previews.
+router.get('/:id/public', async (req, res) => {
+  try {
+    const wine = await WineDefinition.findById(req.params.id)
+      .populate(['country', 'region', 'grapes'])
+      .select('name producer country region appellation grapes type image communityRating classification');
+
+    if (!wine) {
+      return res.status(404).json({ error: 'Wine not found' });
+    }
+
+    res.json({ wine });
+  } catch (error) {
+    console.error('Get public wine error:', error);
+    res.status(500).json({ error: 'Failed to get wine' });
+  }
+});
+
 router.get('/:id', requireAuth, async (req, res) => {
   try {
     const wine = await WineDefinition.findById(req.params.id)

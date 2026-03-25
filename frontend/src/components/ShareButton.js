@@ -14,6 +14,7 @@ import './ShareButton.css';
 export default function ShareButton({ title, text, url, onRecommend }) {
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [igCopied, setIgCopied] = useState(false);
   const [message, setMessage] = useState('');
   const ref = useRef(null);
 
@@ -147,6 +148,26 @@ export default function ShareButton({ title, text, url, onRecommend }) {
           >
             Share on WhatsApp
           </a>
+          <button
+            className="share-dropdown__item"
+            onClick={async () => {
+              const igText = [message.trim(), title, shareUrl].filter(Boolean).join('\n\n');
+              try {
+                await navigator.clipboard.writeText(igText);
+              } catch {
+                const ta = document.createElement('textarea');
+                ta.value = igText;
+                document.body.appendChild(ta);
+                ta.select();
+                document.execCommand('copy');
+                document.body.removeChild(ta);
+              }
+              setIgCopied(true);
+              setTimeout(() => setIgCopied(false), 2000);
+            }}
+          >
+            {igCopied ? 'Copied for Instagram!' : 'Copy for Instagram'}
+          </button>
           {onRecommend && (
             <>
               <div className="share-dropdown__divider" />
