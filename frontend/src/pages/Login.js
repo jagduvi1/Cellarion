@@ -16,6 +16,7 @@ function Login() {
   const [registeredEmail, setRegisteredEmail] = useState('');
   const [pendingVerificationEmail, setPendingVerificationEmail] = useState(null);
   const [resendStatus, setResendStatus] = useState(null); // null | 'sending' | 'sent' | 'error'
+  const [consentAccepted, setConsentAccepted] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
   const [forgotEmail, setForgotEmail] = useState('');
   const [forgotStatus, setForgotStatus] = useState(null); // null | 'sending' | 'sent' | 'error'
@@ -35,7 +36,7 @@ function Login() {
     if (mode === 'login') {
       result = await login(formData.username, formData.password, rememberMe);
     } else {
-      result = await register(formData.username, formData.email, formData.password);
+      result = await register(formData.username, formData.email, formData.password, consentAccepted);
     }
 
     setLoading(false);
@@ -298,6 +299,23 @@ function Login() {
               required
             />
           </div>
+          {mode === 'register' && (
+            <div className="form-group consent-group">
+              <label className="consent-label">
+                <input
+                  type="checkbox"
+                  checked={consentAccepted}
+                  onChange={(e) => setConsentAccepted(e.target.checked)}
+                  required
+                />
+                <span>
+                  I agree to the{' '}
+                  <a href="/privacy" target="_blank" rel="noopener noreferrer">Privacy Policy</a>
+                  {' '}and consent to the processing of my personal data as described therein.
+                </span>
+              </label>
+            </div>
+          )}
           {mode === 'login' && (
             <div className="login-options">
               <label className="remember-me">
@@ -317,7 +335,7 @@ function Login() {
               </button>
             </div>
           )}
-          <button type="submit" className="btn btn-primary btn-full" disabled={loading}>
+          <button type="submit" className="btn btn-primary btn-full" disabled={loading || (mode === 'register' && !consentAccepted)}>
             {loading ? 'Loading...' : mode === 'login' ? 'Login' : 'Create Account'}
           </button>
         </form>

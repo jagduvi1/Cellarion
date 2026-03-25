@@ -48,6 +48,7 @@ const BlogPost             = lazy(() => import('./pages/BlogPost'));
 const AdminBlog            = lazy(() => import('./pages/AdminBlog'));
 const AdminBlogEditor      = lazy(() => import('./pages/AdminBlogEditor'));
 const NfcRedirect          = lazy(() => import('./pages/NfcRedirect'));
+const Unsubscribed         = lazy(() => import('./pages/Unsubscribed'));
 
 function AppRoutes() {
   const { user, loading } = useAuth();
@@ -68,6 +69,7 @@ function AppRoutes() {
         <Route path="/verify-email" element={<VerifyEmail />} />
         <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="/privacy" element={<PrivacyPolicy />} />
+        <Route path="/unsubscribed" element={<Unsubscribed />} />
 
         {/* Protected routes wrapped in Layout */}
         <Route path="/" element={<LandingPage />} />

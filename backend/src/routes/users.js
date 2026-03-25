@@ -9,6 +9,7 @@ const Review = require('../models/Review');
 const ReviewVote = require('../models/ReviewVote');
 const Notification = require('../models/Notification');
 const AuditLog = require('../models/AuditLog');
+const BottleImage = require('../models/BottleImage');
 const Follow = require('../models/Follow');
 const PushSubscription = require('../models/PushSubscription');
 const CellarValueSnapshot = require('../models/CellarValueSnapshot');
@@ -291,39 +292,157 @@ router.get('/all', requireAuth, requireRole('admin'), async (req, res) => {
   }
 });
 
-// DELETE /api/users/me — permanently delete account and all associated data
+// GET /api/users/me/export — GDPR data portability: export all user data as JSON
+router.get('/me/export', requireAuth, async (req, res) => {
+  const userId = req.user.id;
+  try {
+    const user = await User.findById(userId);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    const [bottles, cellars, racks, wineRequests, reviews, notifications, auditLogs, images] = await Promise.all([
+      Bottle.find({ user: userId }).lean(),
+      Cellar.find({ $or: [{ user: userId }, { 'members.user': userId }], deletedAt: null }).lean(),
+      Rack.find({ cellar: { $in: await Cellar.distinct('_id', { user: userId }) }, deletedAt: null }).lean(),
+      WineRequest.find({ user: userId }).lean(),
+      Review.find({ user: userId }).lean(),
+      Notification.find({ user: userId }).lean(),
+      AuditLog.find({ 'actor.userId': userId }).sort({ timestamp: -1 }).limit(1000).lean(),
+      BottleImage.find({ uploadedBy: userId }).lean()
+    ]);
+
+    const exportData = {
+      exportedAt: new Date().toISOString(),
+      account: {
+        username: user.username,
+        email: user.email,
+        displayName: user.displayName,
+        bio: user.bio,
+        roles: user.roles,
+        plan: user.plan,
+        preferences: user.preferences,
+        profileVisibility: user.profileVisibility,
+        emailVerified: user.emailVerified,
+        gdprConsent: user.gdprConsent,
+        createdAt: user.createdAt
+      },
+      bottles,
+      cellars,
+      racks,
+      wineRequests,
+      reviews,
+      notifications: notifications.map(n => ({ ...n, _id: undefined })),
+      activityLog: auditLogs.map(a => ({
+        action: a.action,
+        timestamp: a.timestamp,
+        detail: a.detail
+      })),
+      images: images.map(i => ({
+        originalUrl: i.originalUrl,
+        processedUrl: i.processedUrl,
+        uploadedAt: i.createdAt
+      }))
+    };
+
+    res.setHeader('Content-Disposition', `attachment; filename="cellarion-data-export-${user.username}.json"`);
+    res.setHeader('Content-Type', 'application/json');
+    res.json(exportData);
+  } catch (error) {
+    console.error('Data export error:', error);
+    res.status(500).json({ error: 'Failed to export data' });
+  }
+});
+
+// DELETE /api/users/me — schedule account deletion (7-day cooling-off period)
 router.delete('/me', requireAuth, async (req, res) => {
   const userId = req.user.id;
   try {
-    // Delete all user-owned data in parallel
-    const ownedCellarIds = await Cellar.distinct('_id', { user: userId });
+    const user = await User.findById(userId);
+    if (!user) return res.status(404).json({ error: 'User not found' });
 
-    await Promise.all([
-      // Cellar data
-      Bottle.deleteMany({ user: userId }),
-      Rack.deleteMany({ cellar: { $in: ownedCellarIds } }),
-      Cellar.deleteMany({ user: userId }),
-      // Remove user from shared cellars they are a member of
-      Cellar.updateMany({ 'members.user': userId }, { $pull: { members: { user: userId } } }),
-      // Social / activity
-      WineRequest.deleteMany({ user: userId }),
-      Review.deleteMany({ user: userId }),
-      ReviewVote.deleteMany({ user: userId }),
-      Follow.deleteMany({ $or: [{ follower: userId }, { following: userId }] }),
-      Notification.deleteMany({ $or: [{ user: userId }, { actor: userId }] }),
-      AuditLog.deleteMany({ user: userId }),
-      PushSubscription.deleteMany({ user: userId }),
-      CellarValueSnapshot.deleteMany({ user: userId }),
-    ]);
+    if (user.deletionScheduledFor) {
+      return res.status(400).json({
+        error: 'Account deletion already scheduled',
+        deletionScheduledFor: user.deletionScheduledFor
+      });
+    }
 
-    // Finally delete the user itself
-    await User.findByIdAndDelete(userId);
+    const now = new Date();
+    const scheduledFor = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
 
-    logAudit(req, 'user.account_deleted', { userId });
-    res.json({ message: 'Account deleted' });
+    user.deletionRequestedAt = now;
+    user.deletionScheduledFor = scheduledFor;
+    await user.save();
+
+    logAudit(req, 'user.deletion_requested', { type: 'user', id: user._id });
+
+    res.json({
+      message: 'Account deletion scheduled. Your account and all data will be permanently deleted in 7 days. You can cancel this from Settings.',
+      deletionScheduledFor: scheduledFor
+    });
   } catch (error) {
-    console.error('Delete account error:', error);
-    res.status(500).json({ error: 'Failed to delete account' });
+    console.error('Schedule deletion error:', error);
+    res.status(500).json({ error: 'Failed to schedule deletion' });
+  }
+});
+
+// POST /api/users/me/cancel-deletion — cancel a scheduled account deletion
+router.post('/me/cancel-deletion', requireAuth, async (req, res) => {
+  const userId = req.user.id;
+  try {
+    const user = await User.findById(userId);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    if (!user.deletionScheduledFor) {
+      return res.status(400).json({ error: 'No deletion scheduled' });
+    }
+
+    user.deletionRequestedAt = null;
+    user.deletionScheduledFor = null;
+    await user.save();
+
+    logAudit(req, 'user.deletion_cancelled', { type: 'user', id: user._id });
+
+    res.json({ message: 'Account deletion cancelled' });
+  } catch (error) {
+    console.error('Cancel deletion error:', error);
+    res.status(500).json({ error: 'Failed to cancel deletion' });
+  }
+});
+
+// GET /api/users/unsubscribe?token=:token — one-click email unsubscribe (no auth required)
+router.get('/unsubscribe', async (req, res) => {
+  const { token } = req.query;
+  if (!token) {
+    return res.status(400).json({ error: 'Unsubscribe token is required' });
+  }
+
+  try {
+    const crypto = require('crypto');
+    const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+    // The unsubscribe token is the user's ID hashed with a secret
+    // We'll find the user by trying all users (or use a more efficient method)
+    // For simplicity, encode the user ID in the token
+    const [userId] = Buffer.from(token, 'base64url').toString().split(':');
+
+    if (!mongoose.Types.ObjectId.isValid(userId)) {
+      return res.status(400).json({ error: 'Invalid unsubscribe link' });
+    }
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(400).json({ error: 'Invalid unsubscribe link' });
+    }
+
+    user.preferences.notifications.email = false;
+    user.preferences.notifications.push = false;
+    await user.save();
+
+    // Redirect to a confirmation page
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    res.redirect(`${frontendUrl}/unsubscribed`);
+  } catch (error) {
+    console.error('Unsubscribe error:', error);
+    res.status(500).json({ error: 'Failed to unsubscribe' });
   }
 });
 

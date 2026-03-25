@@ -163,6 +163,30 @@
   margin-top: 0.5rem;
 }
 
+.consent-group {
+  margin-top: 0.5rem;
+}
+
+.consent-label {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  line-height: 1.4;
+}
+
+.consent-label input[type="checkbox"] {
+  margin-top: 0.2rem;
+  flex-shrink: 0;
+}
+
+.consent-label a {
+  color: var(--color-accent);
+  text-decoration: underline;
+}
+
 @media (max-width: 480px) {
   .login-page {
     padding: 1rem;
