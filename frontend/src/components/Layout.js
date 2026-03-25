@@ -72,6 +72,12 @@ function Layout({ children }) {
                   )}
                 </Link>
                 <Link
+                  to="/wishlist"
+                  className={`nav-link ${isActive('/wishlist') ? 'active' : ''}`}
+                >
+                  Wishlist
+                </Link>
+                <Link
                   to="/wine-requests"
                   className={`nav-link ${isActive('/wine-requests') ? 'active' : ''}`}
                 >
@@ -203,6 +209,7 @@ function Layout({ children }) {
           <div className="mobile-menu">
             <div className="mobile-menu-section">
               <Link to="/community" className={`mobile-menu-link ${isActive('/community') ? 'active' : ''}`} onClick={closeMenu}>Community</Link>
+              <Link to="/wishlist" className={`mobile-menu-link ${isActive('/wishlist') ? 'active' : ''}`} onClick={closeMenu}>Wishlist</Link>
               <Link to="/wine-requests" className={`mobile-menu-link ${isActive('/wine-requests') ? 'active' : ''}`} onClick={closeMenu}>{t('nav.myRequests')}</Link>
               <Link to="/cellar-chat" className={`mobile-menu-link ${isActive('/cellar-chat') ? 'active' : ''}`} onClick={closeMenu}>Cellar Chat</Link>
               <Link to="/blog" className={`mobile-menu-link ${isActive('/blog') ? 'active' : ''}`} onClick={closeMenu}>{t('nav.blog')}</Link>

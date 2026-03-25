@@ -1,0 +1,18 @@
+/* AddToWishlist shares camera/scan/search styles with AddBottle.
+   Only page-specific overrides here. */
+
+.add-wishlist-page {
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.add-wishlist-header {
+  margin-bottom: 0.5rem;
+}
+
+.add-wishlist-header h1 {
+  margin: 0.25rem 0 0;
+  font-size: 1.5rem;
+  color: var(--color-text);
+  font-family: var(--font-heading);
+}

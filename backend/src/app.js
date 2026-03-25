@@ -43,6 +43,7 @@ const followsRoute = require('./routes/follows');
 const discussionsRoute = require('./routes/discussions');
 const pushSubscriptionsRoute = require('./routes/pushSubscriptions');
 const blogRoute = require('./routes/blog');
+const wishlistRoute = require('./routes/wishlist');
 const sitemapRoute = require('./routes/sitemap');
 const rateLimitsConfig = require('./config/rateLimits');
 const aiConfig = require('./config/aiConfig');
@@ -172,6 +173,7 @@ app.use('/api/follows', followsRoute);
 app.use('/api/discussions', discussionsRoute);
 app.use('/api/push-subscriptions', pushSubscriptionsRoute);
 app.use('/api/blog', blogRoute);
+app.use('/api/wishlist', wishlistRoute);
 
 // 404 handler
 app.use((req, res) => {

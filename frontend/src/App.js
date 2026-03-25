@@ -48,6 +48,8 @@ const BlogPost             = lazy(() => import('./pages/BlogPost'));
 const AdminBlog            = lazy(() => import('./pages/AdminBlog'));
 const AdminBlogEditor      = lazy(() => import('./pages/AdminBlogEditor'));
 const NfcRedirect          = lazy(() => import('./pages/NfcRedirect'));
+const Wishlist             = lazy(() => import('./pages/Wishlist'));
+const AddToWishlist        = lazy(() => import('./pages/AddToWishlist'));
 
 function AppRoutes() {
   const { user, loading } = useAuth();
@@ -148,6 +150,22 @@ function AppRoutes() {
           element={
             <ProtectedRoute>
               <Layout><WineRequests /></Layout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/wishlist"
+          element={
+            <ProtectedRoute>
+              <Layout><Wishlist /></Layout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/wishlist/add"
+          element={
+            <ProtectedRoute>
+              <Layout><AddToWishlist /></Layout>
             </ProtectedRoute>
           }
         />
