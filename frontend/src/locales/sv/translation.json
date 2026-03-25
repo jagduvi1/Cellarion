@@ -1322,6 +1322,11 @@
     "consumeRate": "~{{rate}}/månad",
     "monthsSupply": "~{{months}} månaders förråd",
     "outOfStock": "Slut i lager",
-    "noConsumption": "Ingen konsumtionsdata för denna kategori ännu."
+    "noConsumption": "Ingen konsumtionsdata för denna kategori ännu.",
+    "aiAlerts": "Påfyllningsförslag",
+    "alertMessage": "Inga liknande viner kvar i din källare. Överväg att fylla på.",
+    "addToWishlist": "Lägg till i önskelistan",
+    "dismiss": "Avfärda",
+    "hideCategory": "Dölj denna kategori"
   }
 }

@@ -13,6 +13,7 @@ const BottleImage = require('../models/BottleImage');
 const Follow = require('../models/Follow');
 const Recommendation = require('../models/Recommendation');
 const JournalEntry = require('../models/JournalEntry');
+const RestockAlert = require('../models/RestockAlert');
 const PushSubscription = require('../models/PushSubscription');
 const CellarValueSnapshot = require('../models/CellarValueSnapshot');
 const { requireAuth, requireRole } = require('../middleware/auth');
@@ -308,7 +309,7 @@ router.get('/me/export', requireAuth, async (req, res) => {
     const user = await User.findById(userId);
     if (!user) return res.status(404).json({ error: 'User not found' });
 
-    const [bottles, cellars, racks, wineRequests, reviews, notifications, auditLogs, images, recommendationsSent, recommendationsReceived, journalEntries] = await Promise.all([
+    const [bottles, cellars, racks, wineRequests, reviews, notifications, auditLogs, images, recommendationsSent, recommendationsReceived, journalEntries, restockAlerts] = await Promise.all([
       Bottle.find({ user: userId }).lean(),
       Cellar.find({ $or: [{ user: userId }, { 'members.user': userId }], deletedAt: null }).lean(),
       Rack.find({ cellar: { $in: await Cellar.distinct('_id', { user: userId }) }, deletedAt: null }).lean(),
@@ -319,7 +320,8 @@ router.get('/me/export', requireAuth, async (req, res) => {
       BottleImage.find({ uploadedBy: userId }).lean(),
       Recommendation.find({ sender: userId }).populate('wine', 'name producer').lean(),
       Recommendation.find({ recipient: userId }).populate('wine', 'name producer').populate('sender', 'username').lean(),
-      JournalEntry.find({ user: userId }).lean()
+      JournalEntry.find({ user: userId }).lean(),
+      RestockAlert.find({ user: userId }).lean()
     ]);
 
     const exportData = {
@@ -385,6 +387,12 @@ router.get('/me/export', requireAuth, async (req, res) => {
         notes: j.notes,
         visibility: j.visibility,
         createdAt: j.createdAt
+      })),
+      restockAlerts: restockAlerts.map(a => ({
+        wineName: a.wineName,
+        wineProducer: a.wineProducer,
+        status: a.status,
+        createdAt: a.createdAt
       }))
     };
 

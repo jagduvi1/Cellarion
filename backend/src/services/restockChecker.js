@@ -1,6 +1,7 @@
 const Bottle = require('../models/Bottle');
 const WineDefinition = require('../models/WineDefinition');
 const WineEmbedding = require('../models/WineEmbedding');
+const RestockAlert = require('../models/RestockAlert');
 const User = require('../models/User');
 const { planHasFeature } = require('../config/plans');
 const { createNotification } = require('./notifications');
@@ -112,15 +113,35 @@ async function checkRestockGap(userId, bottleId, cellarId) {
 
     if (activeCount > 0) return; // User still has similar wines — no alert needed
 
-    // No similar wines left — send restock notification
-    const wineName = wine.name || 'a wine';
-    const producer = wine.producer ? ` by ${wine.producer}` : '';
+    // Check if there's already an active alert for this wine
+    const existingAlert = await RestockAlert.findOne({
+      user: userId,
+      wine: wine._id,
+      status: 'active'
+    });
+    if (existingAlert) return; // Don't duplicate
 
+    // Persist the restock alert
+    const wineName = wine.name || 'a wine';
+    const producer = wine.producer || '';
+
+    await RestockAlert.create({
+      user: userId,
+      wine: wine._id,
+      wineName,
+      wineProducer: producer,
+      wineType: wine.type || '',
+      vintage: vintage,
+      similarWineIds
+    });
+
+    // Also send a notification pointing to the restock page
+    const producerSuffix = producer ? ` by ${producer}` : '';
     createNotification(
       userId,
       'restock_alert',
       'Restock Suggestion',
-      `You just finished your last bottle similar to ${wineName}${producer}. Time to restock?`,
+      `You just finished your last bottle similar to ${wineName}${producerSuffix}. Time to restock?`,
       '/restock'
     );
 
@@ -129,4 +150,35 @@ async function checkRestockGap(userId, bottleId, cellarId) {
   }
 }
 
-module.exports = { checkRestockGap };
+/**
+ * Called when a new bottle is added to a cellar.
+ * Checks if any active restock alerts should be auto-resolved because
+ * the new wine is similar to what was flagged.
+ */
+async function resolveRestockAlerts(userId, wineDefinitionId, bottleId) {
+  try {
+    // Find active alerts where the new wine is in the similarWineIds list
+    // OR where the new wine is the exact wine that triggered the alert
+    const alerts = await RestockAlert.find({
+      user: userId,
+      status: 'active',
+      $or: [
+        { similarWineIds: wineDefinitionId },
+        { wine: wineDefinitionId }
+      ]
+    });
+
+    if (alerts.length === 0) return;
+
+    for (const alert of alerts) {
+      alert.status = 'resolved';
+      alert.resolvedAt = new Date();
+      alert.resolvedByBottle = bottleId;
+      await alert.save();
+    }
+  } catch (err) {
+    console.error('[restockChecker] resolveRestockAlerts error:', err.message);
+  }
+}
+
+module.exports = { checkRestockGap, resolveRestockAlerts };

@@ -13,7 +13,7 @@ const { getOrCreateDailySnapshot, getSnapshotForDate } = require('../utils/excha
 const { resolveRating } = require('../utils/ratingUtils');
 const { embedSinglePair } = require('../services/embeddingJob');
 const { CONSUMED_STATUSES, WINE_POPULATE } = require('../config/constants');
-const { checkRestockGap } = require('../services/restockChecker');
+const { checkRestockGap, resolveRestockAlerts } = require('../services/restockChecker');
 const { stripHtml, isSafeUrl } = require('../utils/sanitize');
 
 const router = express.Router();
@@ -162,6 +162,9 @@ router.post('/', async (req, res) => {
 
     // Fire-and-forget: embed this (wine, vintage) pair for AI chat
     embedSinglePair(wineDefinition, bottle.vintage).catch(err => console.error('Failed to embed wine-vintage pair after bottle creation:', err.message));
+
+    // Fire-and-forget: auto-resolve any restock alerts for this wine
+    resolveRestockAlerts(req.user.id, wineDefinition, bottle._id).catch(() => {});
 
     res.status(201).json({ bottle });
   } catch (error) {

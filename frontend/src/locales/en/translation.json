@@ -1322,6 +1322,11 @@
     "consumeRate": "~{{rate}}/month",
     "monthsSupply": "~{{months}} months supply",
     "outOfStock": "Out of stock",
-    "noConsumption": "No consumption data for this category yet."
+    "noConsumption": "No consumption data for this category yet.",
+    "aiAlerts": "Restock Suggestions",
+    "alertMessage": "No similar wines left in your cellar. Consider restocking.",
+    "addToWishlist": "Add to Wishlist",
+    "dismiss": "Dismiss",
+    "hideCategory": "Hide this category"
   }
 }

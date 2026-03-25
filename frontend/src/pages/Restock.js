@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import { getStatsOverview } from '../api/stats';
+import { getRestockAlerts, dismissRestockAlert } from '../api/restockAlerts';
 import './Restock.css';
 
 function computeRestock(stats) {
@@ -133,25 +134,71 @@ export default function Restock() {
   const { t } = useTranslation();
   const { apiFetch } = useAuth();
   const [stats, setStats] = useState(null);
+  const [alerts, setAlerts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState('type');
 
   useEffect(() => {
-    const fetch = async () => {
+    const fetchAll = async () => {
       try {
-        const res = await getStatsOverview(apiFetch);
-        if (res.ok) {
-          const data = await res.json();
+        const [statsRes, alertsRes] = await Promise.all([
+          getStatsOverview(apiFetch),
+          getRestockAlerts(apiFetch)
+        ]);
+        if (statsRes.ok) {
+          const data = await statsRes.json();
           setStats(data.stats);
+        }
+        if (alertsRes.ok) {
+          const data = await alertsRes.json();
+          setAlerts(data.alerts || []);
         }
       } catch { /* ignore */ }
       setLoading(false);
     };
-    fetch();
+    fetchAll();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const handleDismiss = async (id) => {
+    const res = await dismissRestockAlert(apiFetch, id);
+    if (res.ok) {
+      setAlerts(prev => prev.filter(a => a._id !== id));
+    }
+  };
+
   const allCategories = computeRestock(stats);
-  const filtered = allCategories.filter(c => c.category === view);
+
+  // Dismissed categories stored in localStorage. Key format: "category:name"
+  // Dismissed entries store the stock count at time of dismiss — if stock later
+  // increases (user bought more), the dismiss auto-clears.
+  const getDismissed = () => {
+    try { return JSON.parse(localStorage.getItem('cellarion_restock_dismissed') || '{}'); } catch { return {}; }
+  };
+  const [dismissed, setDismissed] = useState(getDismissed);
+
+  const handleDismissCategory = (category, name) => {
+    const key = `${category}:${name}`;
+    const item = allCategories.find(c => c.category === category && c.name === name);
+    const updated = { ...dismissed, [key]: item?.stock || 0 };
+    setDismissed(updated);
+    localStorage.setItem('cellarion_restock_dismissed', JSON.stringify(updated));
+  };
+
+  const isItemDismissed = (item) => {
+    const key = `${item.category}:${item.name}`;
+    if (!(key in dismissed)) return false;
+    // Auto-clear dismiss if stock increased (user bought more)
+    if (item.stock > dismissed[key]) {
+      const updated = { ...dismissed };
+      delete updated[key];
+      setDismissed(updated);
+      localStorage.setItem('cellarion_restock_dismissed', JSON.stringify(updated));
+      return false;
+    }
+    return true;
+  };
+
+  const filtered = allCategories.filter(c => c.category === view && !isItemDismissed(c));
   const urgent = filtered.filter(c => c.status === 'urgent');
   const low = filtered.filter(c => c.status === 'low');
   const healthy = filtered.filter(c => c.status === 'healthy');
@@ -205,6 +252,36 @@ export default function Restock() {
         </div>
       )}
 
+      {/* AI Restock Alerts */}
+      {alerts.length > 0 && (
+        <div className="restock-alerts">
+          <h2 className="restock-alerts__title">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+            {t('restock.aiAlerts', 'Restock Suggestions')}
+          </h2>
+          {alerts.map(alert => (
+            <div key={alert._id} className="restock-alert-card">
+              <div className="restock-alert-card__content">
+                <strong>{alert.wineName}</strong>
+                {alert.wineProducer && <span className="restock-alert-card__producer"> · {alert.wineProducer}</span>}
+                {alert.vintage && alert.vintage !== 'NV' && <span className="restock-alert-card__vintage"> {alert.vintage}</span>}
+                <p className="restock-alert-card__message">
+                  {t('restock.alertMessage', 'No similar wines left in your cellar. Consider restocking.')}
+                </p>
+              </div>
+              <div className="restock-alert-card__actions">
+                <Link to="/wishlist/add" className="btn btn-small btn-primary">
+                  {t('restock.addToWishlist', 'Add to Wishlist')}
+                </Link>
+                <button className="btn btn-small btn-secondary" onClick={() => handleDismiss(alert._id)}>
+                  {t('restock.dismiss', 'Dismiss')}
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* View tabs */}
       <div className="restock-tabs">
         <button className={`restock-tab ${view === 'type' ? 'active' : ''}`} onClick={() => setView('type')}>
@@ -230,7 +307,7 @@ export default function Restock() {
           <h2 className="restock-section__title restock-section__title--urgent">
             {t('restock.runningLow', 'Running Low')}
           </h2>
-          {urgent.map(c => <RestockCard key={c.name} item={c} t={t} />)}
+          {urgent.map(c => <RestockCard key={c.name} item={c} t={t} onDismiss={handleDismissCategory} />)}
         </div>
       )}
 
@@ -240,7 +317,7 @@ export default function Restock() {
           <h2 className="restock-section__title restock-section__title--low">
             {t('restock.gettingLow', 'Getting Low')}
           </h2>
-          {low.map(c => <RestockCard key={c.name} item={c} t={t} />)}
+          {low.map(c => <RestockCard key={c.name} item={c} t={t} onDismiss={handleDismissCategory} />)}
         </div>
       )}
 
@@ -261,7 +338,7 @@ export default function Restock() {
   );
 }
 
-function RestockCard({ item, t }) {
+function RestockCard({ item, t, onDismiss }) {
   const maxMonths = 12;
   const barWidth = Math.min(item.monthsRemaining / maxMonths, 1) * 100;
 
@@ -273,6 +350,15 @@ function RestockCard({ item, t }) {
         <span className="restock-card__stock">
           {item.stock} {t('restock.inStock', 'in stock')}
         </span>
+        {item.status !== 'healthy' && onDismiss && (
+          <button
+            className="restock-card__dismiss"
+            onClick={() => onDismiss(item.category, item.name)}
+            title={t('restock.hideCategory', 'Hide this category')}
+          >
+            ×
+          </button>
+        )}
       </div>
       <div className="restock-card__bar-bg">
         <div className={`restock-card__bar restock-card__bar--${item.status}`} style={{ width: `${barWidth}%` }} />
