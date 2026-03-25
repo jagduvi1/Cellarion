@@ -15,12 +15,14 @@ const PLANS = {
     features: {
       agingMaturity: true,
       priceEvolution: false,
+      restockAlerts: true,
     },
     featureList: [
       '1 cellar',
       '1 shared member per cellar',
       'Bottle tracking (vintages, ratings, notes)',
       'Aging & maturity profiles',
+      'Smart restock alerts',
       'Drink-window alerts',
       'Rack management',
       'Wine requests',

@@ -152,10 +152,25 @@ async function collectionInfo(indexVersion) {
   }
 }
 
+/**
+ * Retrieve points by IDs, including their vectors.
+ * Returns array of { id, vector, payload }.
+ */
+async function getPoints(indexVersion, ids) {
+  const name = collectionName(indexVersion);
+  const res = await qdrantRequest('POST', `/collections/${name}/points`, {
+    ids,
+    with_vector: true,
+    with_payload: true
+  });
+  return res.result || [];
+}
+
 module.exports = {
   ensureCollection,
   upsertPoints,
   searchSimilar,
+  getPoints,
   deletePoints,
   dropCollection,
   collectionInfo,

@@ -111,8 +111,8 @@ describe('planHasFeature', () => {
     expect(planHasFeature('basic', 'priceEvolution')).toBe(false);
   });
 
-  it('returns false for free restockAlerts', () => {
-    expect(planHasFeature('free', 'restockAlerts')).toBe(false);
+  it('returns true for free restockAlerts', () => {
+    expect(planHasFeature('free', 'restockAlerts')).toBe(true);
   });
 
   it('returns true for basic restockAlerts', () => {

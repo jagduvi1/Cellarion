@@ -51,7 +51,11 @@ async function checkRestockGap(userId, bottleId) {
     const wine = bottle.wineDefinition;
     const vintage = bottle.vintage || 'NV';
 
-    // Check if this wine has an embedding
+    const aiConfig = require('../config/aiConfig');
+    const cfg = aiConfig.get();
+    const indexVersion = cfg.vectorIndex || 'v1';
+
+    // Try to reuse existing embedding vector from Qdrant (no API call needed)
     const existingEmb = await WineEmbedding.findOne({
       wineDefinition: wine._id,
       vintage,
@@ -61,26 +65,24 @@ async function checkRestockGap(userId, bottleId) {
     let queryVector;
 
     if (existingEmb?.qdrantPointId) {
-      // Use existing embedding — search Qdrant for similar wines
-      const aiConfig = require('../config/aiConfig');
-      const cfg = aiConfig.get();
-      const indexVersion = cfg.vectorIndex || 'v1';
+      // Retrieve stored vector from Qdrant — free, no Voyage AI call
+      try {
+        const points = await vectorStore.getPoints(indexVersion, [existingEmb.qdrantPointId]);
+        if (points.length > 0 && points[0].vector) {
+          queryVector = points[0].vector;
+        }
+      } catch {
+        // Qdrant retrieval failed — fall through to Voyage AI
+      }
+    }
 
-      // Get the vector from Qdrant
-      const searchText = embedding.buildEmbeddingText(wine, vintage);
-      queryVector = await embedding.embedSingle(searchText);
-    } else {
-      // Create embedding on the fly
+    if (!queryVector) {
+      // No cached vector — call Voyage AI to create one
       const searchText = embedding.buildEmbeddingText(wine, vintage);
       queryVector = await embedding.embedSingle(searchText);
     }
 
     if (!queryVector) return;
-
-    // Search Qdrant for similar wines
-    const aiConfig = require('../config/aiConfig');
-    const cfg = aiConfig.get();
-    const indexVersion = cfg.vectorIndex || 'v1';
 
     const hits = await vectorStore.searchSimilar(indexVersion, queryVector, TOP_K);
     if (!hits || hits.length === 0) return;
