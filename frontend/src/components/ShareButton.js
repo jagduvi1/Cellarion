@@ -142,7 +142,7 @@ export default function ShareButton({ title, text, url, onRecommend }) {
           </a>
           <a
             className="share-dropdown__item"
-            href={`https://twitter.com/intent/tweet?text=${encodedText}&url=${encodedUrl}`}
+            href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText + '\n\n' + shareUrl)}`}
             target="_blank"
             rel="noopener noreferrer"
             onClick={() => setOpen(false)}
