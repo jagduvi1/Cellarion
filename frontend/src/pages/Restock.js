@@ -8,7 +8,7 @@ import './Restock.css';
 function computeRestock(stats) {
   if (!stats) return [];
 
-  const { overview, byType, byRegion, byCountry, consumedByType, consumedByRegion, consumedByCountry, pace } = stats;
+  const { overview, byType, byRegion, byCountry, byGrape, allProducers, consumedByType, consumedByRegion, consumedByCountry, consumedByGrape, consumedByProducer, pace } = stats;
 
   // Estimate months of consumption data (from pace or fallback to 12)
   const consumptionMonths = pace?.avgOutputPerYear > 0
@@ -70,6 +70,50 @@ function computeRestock(stats) {
       const months = stock > 0 ? stock / rate : 0;
       categories.push({
         category: 'country',
+        name,
+        stock,
+        consumed,
+        rate: Math.round(rate * 10) / 10,
+        monthsRemaining: Math.round(months),
+        status: months < 2 ? 'urgent' : months < 4 ? 'low' : 'healthy'
+      });
+    }
+  }
+
+  // By grape
+  if (byGrape && consumedByGrape) {
+    const grapeStock = {};
+    for (const g of byGrape) grapeStock[g.name] = g.count;
+
+    for (const [name, consumed] of Object.entries(consumedByGrape)) {
+      const stock = grapeStock[name] || 0;
+      if (consumed === 0) continue;
+      const rate = consumed / consumptionMonths;
+      const months = stock > 0 ? stock / rate : 0;
+      categories.push({
+        category: 'grape',
+        name,
+        stock,
+        consumed,
+        rate: Math.round(rate * 10) / 10,
+        monthsRemaining: Math.round(months),
+        status: months < 2 ? 'urgent' : months < 4 ? 'low' : 'healthy'
+      });
+    }
+  }
+
+  // By producer
+  if (allProducers && consumedByProducer) {
+    const producerStock = {};
+    for (const p of allProducers) producerStock[p.name] = p.count;
+
+    for (const [name, consumed] of Object.entries(consumedByProducer)) {
+      const stock = producerStock[name] || 0;
+      if (consumed === 0) continue;
+      const rate = consumed / consumptionMonths;
+      const months = stock > 0 ? stock / rate : 0;
+      categories.push({
+        category: 'producer',
         name,
         stock,
         consumed,
@@ -166,11 +210,17 @@ export default function Restock() {
         <button className={`restock-tab ${view === 'type' ? 'active' : ''}`} onClick={() => setView('type')}>
           {t('restock.byType', 'By Type')}
         </button>
+        <button className={`restock-tab ${view === 'grape' ? 'active' : ''}`} onClick={() => setView('grape')}>
+          {t('restock.byGrape', 'By Grape')}
+        </button>
         <button className={`restock-tab ${view === 'region' ? 'active' : ''}`} onClick={() => setView('region')}>
           {t('restock.byRegion', 'By Region')}
         </button>
         <button className={`restock-tab ${view === 'country' ? 'active' : ''}`} onClick={() => setView('country')}>
           {t('restock.byCountry', 'By Country')}
+        </button>
+        <button className={`restock-tab ${view === 'producer' ? 'active' : ''}`} onClick={() => setView('producer')}>
+          {t('restock.byProducer', 'By Producer')}
         </button>
       </div>
 

@@ -172,6 +172,8 @@ async function computeOverview({ activeBottles, consumedBottles, cellars, target
   const consumedByType      = {};
   const consumedByRegion    = {};
   const consumedByCountry   = {};
+  const consumedByGrape     = {};
+  const consumedByProducer  = {};
   let cRatingSum = 0, cRatingCount = 0;
   const outputByYear = {};
 
@@ -189,6 +191,13 @@ async function computeOverview({ activeBottles, consumedBottles, cellars, target
     if (cwd?.type) consumedByType[cwd.type] = (consumedByType[cwd.type] || 0) + 1;
     if (cwd?.region?.name) consumedByRegion[cwd.region.name] = (consumedByRegion[cwd.region.name] || 0) + 1;
     if (cwd?.country?.name) consumedByCountry[cwd.country.name] = (consumedByCountry[cwd.country.name] || 0) + 1;
+    if (cwd?.producer) consumedByProducer[cwd.producer] = (consumedByProducer[cwd.producer] || 0) + 1;
+    if (cwd?.grapes) {
+      for (const g of cwd.grapes) {
+        const gName = g?.name || g;
+        if (gName && typeof gName === 'string') consumedByGrape[gName] = (consumedByGrape[gName] || 0) + 1;
+      }
+    }
 
     const consumedYear = b.consumedAt ? new Date(b.consumedAt).getFullYear().toString() : null;
     if (consumedYear) {
@@ -335,6 +344,8 @@ async function computeOverview({ activeBottles, consumedBottles, cellars, target
     consumedByType,
     consumedByRegion,
     consumedByCountry,
+    consumedByGrape,
+    consumedByProducer,
     cellarBreakdown: Object.values(cellarMap).map(c => ({ name: c.name, bottleCount: c.count, value: Math.round(c.value * 100) / 100, uniqueWines: c.wines.size })).sort((a, b) => b.bottleCount - a.bottleCount),
     maturityForecast,
     urgencyLadder: urgencyArr.slice(0, 10),
@@ -343,6 +354,7 @@ async function computeOverview({ activeBottles, consumedBottles, cellars, target
     regretSignal,
     pace,
     topProducers: Object.entries(byProducer).sort((a, b) => b[1] - a[1]).slice(0, 10).map(([name, count]) => ({ name, count })),
+    allProducers: Object.entries(byProducer).sort((a, b) => b[1] - a[1]).map(([name, count]) => ({ name, count })),
   };
 }
 
