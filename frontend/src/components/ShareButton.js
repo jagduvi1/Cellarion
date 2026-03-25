@@ -55,9 +55,10 @@ export default function ShareButton({ title, text, url, onRecommend }) {
     setOpen((prev) => !prev);
   };
 
-  // Build share text: user message + default text, or just default
+  // Build share text: user message + default text, or just default.
+  // For X/Twitter the URL is passed separately, so keep text clean.
   const shareText = message.trim()
-    ? `${message.trim()} — ${text || title || ''}`
+    ? `${message.trim()}\n\n${text || title || ''}`
     : (text || title || '');
 
   const handleCopy = async () => {
