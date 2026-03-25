@@ -81,7 +81,15 @@
 /* ── Wine header card ── */
 .bd-wine-header {
   margin-bottom: 1rem;
-  overflow: hidden;
+  overflow: visible;
+  position: relative;
+}
+
+.bd-share-icon {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  z-index: 10;
 }
 
 .bd-wine-identity {

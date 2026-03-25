@@ -13,6 +13,28 @@
   flex-shrink: 0;
 }
 
+/* Icon-only variant */
+.share-icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: none;
+  background: var(--color-surface, #fff);
+  color: var(--color-text-secondary, #666);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, box-shadow 0.15s;
+  box-shadow: 0 1px 4px rgba(0,0,0,.1);
+}
+
+.share-icon-btn:hover {
+  background: var(--color-hover, #f0f0f0);
+  color: var(--color-primary);
+  box-shadow: 0 2px 8px rgba(0,0,0,.15);
+}
+
 .share-dropdown {
   position: absolute;
   top: calc(100% + 6px);
