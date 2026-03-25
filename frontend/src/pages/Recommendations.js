@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import { getRecommendations, getSentRecommendations, updateRecommendationStatus } from '../api/recommendations';
 import { addToWishlist } from '../api/wishlist';
@@ -20,6 +21,7 @@ function timeAgo(dateStr) {
 }
 
 export default function Recommendations() {
+  const { t } = useTranslation();
   const { apiFetch } = useAuth();
   const [tab, setTab] = useState('received');
   const [items, setItems] = useState([]);
@@ -63,31 +65,31 @@ export default function Recommendations() {
 
   return (
     <div className="recommendations-page">
-      <h1>Recommendations</h1>
+      <h1>{t('recommendations.title')}</h1>
 
       <div className="rec-tabs">
         <button
           className={`rec-tab ${tab === 'received' ? 'active' : ''}`}
           onClick={() => setTab('received')}
         >
-          Received {tab === 'received' && total > 0 ? `(${total})` : ''}
+          {t('recommendations.received')} {tab === 'received' && total > 0 ? `(${total})` : ''}
         </button>
         <button
           className={`rec-tab ${tab === 'sent' ? 'active' : ''}`}
           onClick={() => setTab('sent')}
         >
-          Sent {tab === 'sent' && total > 0 ? `(${total})` : ''}
+          {t('recommendations.sent')} {tab === 'sent' && total > 0 ? `(${total})` : ''}
         </button>
       </div>
 
       {loading ? (
-        <p className="rec-loading">Loading...</p>
+        <p className="rec-loading">{t('recommendations.loading')}</p>
       ) : items.length === 0 ? (
         <div className="rec-empty">
           <p>
             {tab === 'received'
-              ? 'No recommendations yet. When someone recommends a wine to you, it will appear here.'
-              : 'You haven\'t recommended any wines yet. Use the share button on any wine to recommend it.'}
+              ? t('recommendations.emptyReceived')
+              : t('recommendations.emptySent')}
           </p>
         </div>
       ) : (
@@ -116,13 +118,13 @@ export default function Recommendations() {
               <div className="rec-card__meta">
                 {tab === 'received' ? (
                   <span>
-                    From <Link to={`/users/${rec.sender?._id}`} className="rec-card__user">
+                    {t('recommendations.from')} <Link to={`/users/${rec.sender?._id}`} className="rec-card__user">
                       {rec.sender?.displayName || rec.sender?.username || 'Unknown'}
                     </Link>
                   </span>
                 ) : (
                   <span>
-                    To {rec.recipient
+                    {t('recommendations.to')} {rec.recipient
                       ? <Link to={`/users/${rec.recipient._id}`} className="rec-card__user">
                           {rec.recipient.displayName || rec.recipient.username}
                         </Link>
@@ -144,7 +146,7 @@ export default function Recommendations() {
                       className="btn btn-small btn-secondary"
                       onClick={() => handleMarkSeen(rec._id)}
                     >
-                      Mark as seen
+                      {t('recommendations.markSeen')}
                     </button>
                   )}
                   {rec.status !== 'added-to-wishlist' && (
@@ -152,11 +154,11 @@ export default function Recommendations() {
                       className="btn btn-small btn-primary"
                       onClick={() => handleAddToWishlist(rec)}
                     >
-                      Add to Wishlist
+                      {t('recommendations.addToWishlist')}
                     </button>
                   )}
                   {rec.status === 'added-to-wishlist' && (
-                    <span className="rec-card__badge">Added to wishlist</span>
+                    <span className="rec-card__badge">{t('recommendations.addedToWishlist')}</span>
                   )}
                 </div>
               )}
@@ -164,7 +166,7 @@ export default function Recommendations() {
               {tab === 'sent' && (
                 <div className="rec-card__status">
                   <span className={`rec-status rec-status--${rec.status}`}>
-                    {rec.status === 'pending' ? 'Pending' : rec.status === 'seen' ? 'Seen' : 'Added to wishlist'}
+                    {rec.status === 'pending' ? t('recommendations.statusPending') : rec.status === 'seen' ? t('recommendations.statusSeen') : t('recommendations.statusAddedToWishlist')}
                   </span>
                 </div>
               )}

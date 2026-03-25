@@ -1,14 +1,17 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import { fromNormalized } from '../utils/ratingUtils';
+import Layout from '../components/Layout';
 import './WineDetail.css';
 
 const API_URL = process.env.REACT_APP_API_URL || '';
 const SITE_URL = process.env.REACT_APP_SITE_URL || 'https://cellarion.app';
 
 export default function WineDetail() {
+  const { t } = useTranslation();
   const { id } = useParams();
   const { user } = useAuth();
   const [wine, setWine] = useState(null);
@@ -23,23 +26,26 @@ export default function WineDetail() {
           const data = await res.json();
           setWine(data.wine);
         } else {
-          setError('Wine not found');
+          setError(t('wineDetail.wineNotFound'));
         }
       } catch {
-        setError('Failed to load wine');
+        setError(t('wineDetail.wineNotFound'));
       }
       setLoading(false);
     };
     fetchWine();
-  }, [id]);
+  }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (loading) return <div className="wd-loading">Loading...</div>;
-  if (error || !wine) return (
-    <div className="wd-error">
-      <p>{error || 'Wine not found'}</p>
-      <Link to="/" className="btn btn-secondary">Go to Cellarion</Link>
-    </div>
-  );
+  if (error || !wine) {
+    const content = (
+      <div className="wd-error">
+        <p>{error || t('wineDetail.wineNotFound')}</p>
+        <Link to="/" className="btn btn-secondary">{t('wineDetail.goToCellarion')}</Link>
+      </div>
+    );
+    return user ? <Layout>{content}</Layout> : content;
+  }
 
   const pageTitle = `${wine.name} — ${wine.producer}`;
   const description = [
@@ -55,6 +61,7 @@ export default function WineDetail() {
 
   const ratingScale = user?.preferences?.ratingScale || '5';
   const hasRating = wine.communityRating?.reviewCount > 0;
+  const reviewCount = wine.communityRating?.reviewCount || 0;
 
   // JSON-LD structured data
   const jsonLd = {
@@ -72,11 +79,11 @@ export default function WineDetail() {
       '@type': 'AggregateRating',
       ratingValue: fromNormalized(wine.communityRating.averageNormalized, '5').toFixed(1),
       bestRating: '5',
-      reviewCount: wine.communityRating.reviewCount
+      reviewCount
     };
   }
 
-  return (
+  const page = (
     <div className="wine-detail-page">
       <Helmet>
         <title>{pageTitle} — Cellarion</title>
@@ -117,31 +124,31 @@ export default function WineDetail() {
           <div className="wd-details">
             {wine.appellation && (
               <div className="wd-detail">
-                <span className="wd-detail-label">Appellation</span>
+                <span className="wd-detail-label">{t('wineDetail.appellation')}</span>
                 <span className="wd-detail-value">{wine.appellation}</span>
               </div>
             )}
             {wine.classification && (
               <div className="wd-detail">
-                <span className="wd-detail-label">Classification</span>
+                <span className="wd-detail-label">{t('wineDetail.classification')}</span>
                 <span className="wd-detail-value">{wine.classification}</span>
               </div>
             )}
             {wine.region?.name && (
               <div className="wd-detail">
-                <span className="wd-detail-label">Region</span>
+                <span className="wd-detail-label">{t('wineDetail.region')}</span>
                 <span className="wd-detail-value">{wine.region.name}</span>
               </div>
             )}
             {wine.country?.name && (
               <div className="wd-detail">
-                <span className="wd-detail-label">Country</span>
+                <span className="wd-detail-label">{t('wineDetail.country')}</span>
                 <span className="wd-detail-value">{wine.country.name}</span>
               </div>
             )}
             {grapeNames.length > 0 && (
               <div className="wd-detail">
-                <span className="wd-detail-label">Grapes</span>
+                <span className="wd-detail-label">{t('wineDetail.grapes')}</span>
                 <span className="wd-detail-value">{grapeNames.join(', ')}</span>
               </div>
             )}
@@ -154,40 +161,40 @@ export default function WineDetail() {
                 {ratingScale === '100' ? 'pts' : ratingScale === '20' ? '/20' : '★'}
               </span>
               <span className="wd-rating-count">
-                {wine.communityRating.reviewCount} review{wine.communityRating.reviewCount !== 1 ? 's' : ''}
+                {reviewCount} {reviewCount !== 1 ? t('wineDetail.reviews') : t('wineDetail.review')}
               </span>
             </div>
           )}
         </div>
       </div>
 
-      {/* CTA banner — subtle promotion for non-authenticated visitors */}
+      {/* CTA banner for non-authenticated visitors */}
       {!user && (
         <div className="wd-cta">
           <div className="wd-cta-content">
-            <h2 className="wd-cta-title">Track your wine collection</h2>
-            <p className="wd-cta-text">
-              Save this wine to your wishlist, manage your cellar, get drink-window alerts, and more.
-            </p>
+            <h2 className="wd-cta-title">{t('wineDetail.ctaTitle')}</h2>
+            <p className="wd-cta-text">{t('wineDetail.ctaText')}</p>
             <div className="wd-cta-actions">
-              <Link to="/login" className="btn btn-primary">Sign up free</Link>
-              <Link to="/" className="btn btn-secondary">Learn more</Link>
+              <Link to="/login" className="btn btn-primary">{t('wineDetail.signUp')}</Link>
+              <Link to="/" className="btn btn-secondary">{t('wineDetail.learnMore')}</Link>
             </div>
           </div>
         </div>
       )}
 
-      {/* If user is logged in, show action to add to wishlist */}
       {user && (
         <div className="wd-actions">
           <Link to={`/wishlist/add?wine=${wine._id}`} className="btn btn-primary">
-            Add to Wishlist
+            {t('wineDetail.addToWishlist')}
           </Link>
           <Link to="/cellars" className="btn btn-secondary">
-            Back to Cellars
+            {t('wineDetail.backToCellars')}
           </Link>
         </div>
       )}
     </div>
   );
+
+  // Wrap in Layout for logged-in users so they get the navbar
+  return user ? <Layout>{page}</Layout> : page;
 }

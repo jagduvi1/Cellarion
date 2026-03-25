@@ -1,22 +1,15 @@
 import { useState, useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import { sendRecommendation, searchFriends } from '../api/recommendations';
 import Modal from './Modal';
 import './RecommendWineModal.css';
 
-/**
- * Modal for recommending a wine to a friend (in-app user or external email).
- *
- * Props:
- *  - wineId:   WineDefinition _id
- *  - wineName: display name for the header
- *  - onClose:  close callback
- *  - onSent:   optional callback after successful send
- */
 export default function RecommendWineModal({ wineId, wineName, onClose, onSent }) {
+  const { t } = useTranslation();
   const { apiFetch } = useAuth();
 
-  const [mode, setMode] = useState('friend'); // 'friend' | 'email'
+  const [mode, setMode] = useState('friend');
   const [query, setQuery] = useState('');
   const [friends, setFriends] = useState([]);
   const [selectedFriend, setSelectedFriend] = useState(null);
@@ -27,7 +20,6 @@ export default function RecommendWineModal({ wineId, wineName, onClose, onSent }
   const [success, setSuccess] = useState(false);
   const debounceRef = useRef(null);
 
-  // Search friends as user types
   useEffect(() => {
     if (mode !== 'friend') return;
     if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -50,11 +42,11 @@ export default function RecommendWineModal({ wineId, wineName, onClose, onSent }
     setError(null);
 
     if (mode === 'friend' && !selectedFriend) {
-      setError('Please select a friend');
+      setError(t('recommend.selectFriend'));
       return;
     }
     if (mode === 'email' && !email.trim()) {
-      setError('Please enter an email address');
+      setError(t('recommend.enterEmail'));
       return;
     }
 
@@ -84,51 +76,50 @@ export default function RecommendWineModal({ wineId, wineName, onClose, onSent }
     }
   };
 
+  const recipientName = mode === 'friend' && selectedFriend
+    ? selectedFriend.displayName || selectedFriend.username
+    : email;
+
   if (success) {
     return (
-      <Modal title="Recommendation Sent" onClose={onClose}>
+      <Modal title={t('recommend.sent')} onClose={onClose}>
         <p className="recommend-success-msg">
-          Your recommendation for <strong>{wineName}</strong> has been sent
-          {mode === 'friend' && selectedFriend
-            ? ` to ${selectedFriend.displayName || selectedFriend.username}`
-            : ` to ${email}`
-          }.
+          {t('recommend.sentMessage', { wine: wineName, recipient: recipientName })}
         </p>
         <div className="modal-actions">
-          <button className="btn btn-primary" onClick={onClose}>Done</button>
+          <button className="btn btn-primary" onClick={onClose}>{t('recommend.done')}</button>
         </div>
       </Modal>
     );
   }
 
   return (
-    <Modal title={`Recommend: ${wineName || 'Wine'}`} onClose={onClose}>
+    <Modal title={t('recommend.title', { wine: wineName || 'Wine' })} onClose={onClose}>
       <form onSubmit={handleSend} className="recommend-form">
-        {/* Mode toggle */}
         <div className="recommend-mode-toggle">
           <button
             type="button"
             className={`recommend-mode-btn ${mode === 'friend' ? 'active' : ''}`}
             onClick={() => { setMode('friend'); setError(null); }}
           >
-            Cellarion User
+            {t('recommend.cellarionUser')}
           </button>
           <button
             type="button"
             className={`recommend-mode-btn ${mode === 'email' ? 'active' : ''}`}
             onClick={() => { setMode('email'); setError(null); }}
           >
-            Email
+            {t('recommend.email')}
           </button>
         </div>
 
         {mode === 'friend' ? (
           <div className="form-group">
-            <label>Search your following list</label>
+            <label>{t('recommend.searchFollowing')}</label>
             <input
               type="text"
               className="input"
-              placeholder="Search by username..."
+              placeholder={t('recommend.searchPlaceholder')}
               value={query}
               onChange={(e) => { setQuery(e.target.value); setSelectedFriend(null); }}
             />
@@ -152,43 +143,41 @@ export default function RecommendWineModal({ wineId, wineName, onClose, onSent }
             )}
             {selectedFriend && (
               <div className="recommend-selected">
-                Sending to: <strong>{selectedFriend.displayName || selectedFriend.username}</strong>
+                {t('recommend.sendingTo')} <strong>{selectedFriend.displayName || selectedFriend.username}</strong>
                 <button
                   type="button"
                   className="recommend-clear"
                   onClick={() => { setSelectedFriend(null); setQuery(''); }}
                 >
-                  Change
+                  {t('recommend.change')}
                 </button>
               </div>
             )}
           </div>
         ) : (
           <div className="form-group">
-            <label htmlFor="recommend-email">Recipient email</label>
+            <label htmlFor="recommend-email">{t('recommend.recipientEmail')}</label>
             <input
               id="recommend-email"
               type="email"
               className="input"
-              placeholder="friend@example.com"
+              placeholder={t('recommend.emailPlaceholder')}
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
             />
-            <p className="recommend-email-hint">
-              They'll receive an email with a link to this wine on Cellarion.
-            </p>
+            <p className="recommend-email-hint">{t('recommend.emailHint')}</p>
           </div>
         )}
 
         <div className="form-group">
-          <label htmlFor="recommend-note">Personal note (optional)</label>
+          <label htmlFor="recommend-note">{t('recommend.personalNote')}</label>
           <textarea
             id="recommend-note"
             className="input"
             value={note}
             onChange={(e) => setNote(e.target.value)}
-            placeholder="You should try this one..."
+            placeholder={t('recommend.notePlaceholder')}
             rows={3}
             maxLength={500}
           />
@@ -199,10 +188,10 @@ export default function RecommendWineModal({ wineId, wineName, onClose, onSent }
 
         <div className="modal-actions">
           <button type="button" className="btn btn-secondary" onClick={onClose} disabled={sending}>
-            Cancel
+            {t('recommend.cancel')}
           </button>
           <button type="submit" className="btn btn-primary" disabled={sending}>
-            {sending ? 'Sending...' : 'Send Recommendation'}
+            {sending ? t('recommend.sending') : t('recommend.send')}
           </button>
         </div>
       </form>

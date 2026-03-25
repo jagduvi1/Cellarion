@@ -255,12 +255,22 @@ function BottleDetail() {
                 </>
               )}
               {wine && (
-                <ShareButton
-                  title={displayName}
-                  text={`Check out ${displayName}${displayProducer ? ` by ${displayProducer}` : ''} on Cellarion`}
-                  url={`${window.location.origin}/wines/${wine._id}`}
-                  onRecommend={() => setRecommendOpen(true)}
-                />
+                <>
+                  <ShareButton
+                    title={displayName}
+                    text={`Check out ${displayName}${displayProducer ? ` by ${displayProducer}` : ''} on Cellarion`}
+                    url={`${window.location.origin}/wines/${wine._id}`}
+                    onRecommend={() => setRecommendOpen(true)}
+                  />
+                  <button
+                    className="btn btn-small btn-secondary"
+                    onClick={() => setRecommendOpen(true)}
+                    aria-label={t('share.recommendToFriend', 'Recommend')}
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+                    <span className="bd-btn-label">{t('share.recommendToFriend', 'Recommend')}</span>
+                  </button>
+                </>
               )}
             </div>
           )}

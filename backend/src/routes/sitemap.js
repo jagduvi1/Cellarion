@@ -1,6 +1,7 @@
 const express = require('express');
 const rateLimit = require('express-rate-limit');
 const BlogPost = require('../models/BlogPost');
+const WineDefinition = require('../models/WineDefinition');
 
 const router = express.Router();
 
@@ -45,6 +46,23 @@ router.get('/', sitemapLimiter, async (req, res) => {
       xml += `    <lastmod>${lastmod}</lastmod>\n`;
       xml += '    <changefreq>monthly</changefreq>\n';
       xml += '    <priority>0.7</priority>\n';
+      xml += '  </url>\n';
+    }
+
+    // Wine pages — public wine detail pages
+    const wines = await WineDefinition.find()
+      .sort({ updatedAt: -1 })
+      .select('_id updatedAt')
+      .limit(5000)
+      .lean();
+
+    for (const wine of wines) {
+      const lastmod = (wine.updatedAt || wine._id.getTimestamp()).toISOString().split('T')[0];
+      xml += '  <url>\n';
+      xml += `    <loc>${SITE_URL}/wines/${wine._id}</loc>\n`;
+      xml += `    <lastmod>${lastmod}</lastmod>\n`;
+      xml += '    <changefreq>monthly</changefreq>\n';
+      xml += '    <priority>0.5</priority>\n';
       xml += '  </url>\n';
     }
 
