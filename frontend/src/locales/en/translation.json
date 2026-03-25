@@ -98,6 +98,10 @@
     "rackNavAuto": "Auto (desktop: 3D room, mobile: rack)",
     "rackNavRoom": "Always 3D room",
     "rackNavRack": "Always flat rack",
+    "restockScope": "Restock Alert Scope",
+    "restockScopeHint": "When checking if you have similar wines after consuming a bottle, should we check all your cellars or only the one the bottle came from?",
+    "restockScopeAll": "All cellars (default)",
+    "restockScopeCellar": "Same cellar only",
     "plan": {
       "title": "Your Plan",
       "expires": "Valid until:",

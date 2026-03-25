@@ -98,6 +98,10 @@
     "rackNavAuto": "Auto (dator: 3D-rum, mobil: hylla)",
     "rackNavRoom": "Alltid 3D-rum",
     "rackNavRack": "Alltid platt hylla",
+    "restockScope": "Påfyllningsavisering",
+    "restockScopeHint": "När vi kontrollerar om du har liknande viner efter att du konsumerat en flaska, ska vi kolla alla dina källare eller bara den som flaskan kom från?",
+    "restockScopeAll": "Alla källare (standard)",
+    "restockScopeCellar": "Samma källare",
     "plan": {
       "title": "Ditt abonnemang",
       "expires": "Giltigt till:",

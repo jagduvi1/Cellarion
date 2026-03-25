@@ -19,6 +19,7 @@ function Settings() {
   const [language, setLanguage] = useState(user?.preferences?.language || i18n.language?.split('-')[0] || 'en');
   const [ratingScale, setRatingScale] = useState(user?.preferences?.ratingScale || '5');
   const [rackNavigation, setRackNavigation] = useState(user?.preferences?.rackNavigation || 'auto');
+  const [restockScope, setRestockScope] = useState(user?.preferences?.restockScope || 'all');
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState(null);
@@ -125,7 +126,7 @@ function Settings() {
     setSaving(true);
     setError(null);
     setSaved(false);
-    const result = await updatePreferences({ currency, language, ratingScale, rackNavigation });
+    const result = await updatePreferences({ currency, language, ratingScale, rackNavigation, restockScope });
     setSaving(false);
     if (result.success) {
       i18n.changeLanguage(language);
@@ -428,6 +429,22 @@ function Settings() {
               <option value="auto">{t('settings.rackNavAuto', 'Auto (desktop: 3D room, mobile: rack)')}</option>
               <option value="room">{t('settings.rackNavRoom', 'Always 3D room')}</option>
               <option value="rack">{t('settings.rackNavRack', 'Always flat rack')}</option>
+            </select>
+          </div>
+
+          <div className="form-group">
+            <label htmlFor="restock-scope-select">{t('settings.restockScope', 'Restock Alert Scope')}</label>
+            <p className="settings-hint">
+              {t('settings.restockScopeHint', 'When checking if you have similar wines after consuming a bottle, should we check all your cellars or only the one the bottle came from?')}
+            </p>
+            <select
+              id="restock-scope-select"
+              className="input settings-select"
+              value={restockScope}
+              onChange={e => setRestockScope(e.target.value)}
+            >
+              <option value="all">{t('settings.restockScopeAll', 'All cellars (default)')}</option>
+              <option value="cellar">{t('settings.restockScopeCellar', 'Same cellar only')}</option>
             </select>
           </div>
 

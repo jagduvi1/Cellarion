@@ -45,7 +45,7 @@ const ALLOWED_RACK_NAV = ['auto', 'room', 'rack'];
 
 router.patch('/preferences', requireAuth, async (req, res) => {
   try {
-    const { currency, language, ratingScale, rackNavigation, defaultCellarId, notifications } = req.body;
+    const { currency, language, ratingScale, rackNavigation, restockScope, defaultCellarId, notifications } = req.body;
     const update = {};
 
     if (notifications !== undefined && typeof notifications === 'object') {
@@ -86,6 +86,13 @@ router.patch('/preferences', requireAuth, async (req, res) => {
         return res.status(400).json({ error: `Invalid rack navigation. Allowed: ${ALLOWED_RACK_NAV.join(', ')}` });
       }
       update['preferences.rackNavigation'] = rackNavigation;
+    }
+
+    if (restockScope !== undefined) {
+      if (!['all', 'cellar'].includes(restockScope)) {
+        return res.status(400).json({ error: 'Invalid restock scope. Allowed: all, cellar' });
+      }
+      update['preferences.restockScope'] = restockScope;
     }
 
     if (defaultCellarId !== undefined) {

@@ -84,6 +84,11 @@ const userSchema = new mongoose.Schema({
       drinkWindow: { type: Boolean, default: true },
       email:       { type: Boolean, default: false },
       push:        { type: Boolean, default: false }
+    },
+    restockScope: {
+      type: String,
+      enum: ['all', 'cellar'],
+      default: 'all'
     }
   },
   refreshTokenHash: {

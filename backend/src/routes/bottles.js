@@ -377,7 +377,7 @@ router.post('/:id/consume', requireBottleAccess('editor'), async (req, res) => {
 
     // Fire-and-forget: check if user needs a restock alert (paid plans only)
     if (reason === 'drank') {
-      checkRestockGap(req.user.id, bottle._id).catch(() => {});
+      checkRestockGap(req.user.id, bottle._id, bottle.cellar).catch(() => {});
     }
 
     res.json({ bottle });

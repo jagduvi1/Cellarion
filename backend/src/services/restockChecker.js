@@ -27,14 +27,14 @@ const TOP_K = 10;
  *
  * Fire-and-forget — errors are caught and logged, never thrown.
  */
-async function checkRestockGap(userId, bottleId) {
+async function checkRestockGap(userId, bottleId, cellarId) {
   try {
     // Check if embedding infra is available
     if (!embedding || !vectorStore) return;
     if (!process.env.VOYAGE_API_KEY) return;
 
-    // Check user plan
-    const user = await User.findById(userId).select('plan planExpiresAt username displayName').lean();
+    // Check user plan and preferences
+    const user = await User.findById(userId).select('plan planExpiresAt username displayName preferences.restockScope').lean();
     if (!user) return;
 
     const planExpired = user.planExpiresAt && Date.now() > new Date(user.planExpiresAt).getTime();
@@ -95,12 +95,20 @@ async function checkRestockGap(userId, bottleId) {
 
     if (similarWineIds.length === 0) return;
 
-    // Check if user still has active bottles of any similar wine
-    const activeCount = await Bottle.countDocuments({
+    // Check if user still has active bottles of any similar wine.
+    // Scope: 'cellar' = only check the cellar the bottle came from;
+    //        'all' (default) = check across all user's cellars.
+    const scope = user.preferences?.restockScope || 'all';
+    const activeQuery = {
       user: userId,
       wineDefinition: { $in: similarWineIds },
       status: { $nin: CONSUMED_STATUSES }
-    });
+    };
+    if (scope === 'cellar' && cellarId) {
+      activeQuery.cellar = cellarId;
+    }
+
+    const activeCount = await Bottle.countDocuments(activeQuery);
 
     if (activeCount > 0) return; // User still has similar wines — no alert needed
 
