@@ -90,6 +90,14 @@ function Settings() {
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState(null);
 
+  // Data export state
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState(null);
+
+  // Deletion scheduled state
+  const isDeletionScheduled = !!user?.deletionScheduledFor;
+  const [cancelling, setCancelling] = useState(false);
+
   const handleProfileSave = async (e) => {
     e.preventDefault();
     setProfileSaving(true);
@@ -134,17 +142,57 @@ function Settings() {
     setDeleteError(null);
     try {
       const res = await apiFetch('/api/users/me', { method: 'DELETE' });
+      const data = await res.json();
       if (res.ok) {
-        logout();
-        navigate('/login');
+        setUser({ ...user, deletionScheduledFor: data.deletionScheduledFor });
+        setShowDeleteConfirm(false);
+        setDeleteConfirmText('');
       } else {
-        const data = await res.json();
-        setDeleteError(data.error || 'Failed to delete account');
-        setDeleting(false);
+        setDeleteError(data.error || 'Failed to schedule deletion');
       }
     } catch {
-      setDeleteError('Failed to delete account');
+      setDeleteError('Failed to schedule deletion');
+    } finally {
       setDeleting(false);
+    }
+  };
+
+  const handleExportData = async () => {
+    setExporting(true);
+    setExportError(null);
+    try {
+      const res = await apiFetch('/api/users/me/export');
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Export failed');
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `cellarion-data-export-${user?.username || 'user'}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setExportError(err.message);
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const handleCancelDeletion = async () => {
+    setCancelling(true);
+    try {
+      const res = await apiFetch('/api/users/me/cancel-deletion', { method: 'POST' });
+      if (res.ok) {
+        setUser({ ...user, deletionScheduledFor: null, deletionRequestedAt: null });
+      }
+    } catch {
+      // silent fail
+    } finally {
+      setCancelling(false);
     }
   };
 
@@ -394,42 +442,81 @@ function Settings() {
         </form>
       </div>
 
+      {/* ── Your Data (GDPR) ── */}
+      <div className="card settings-card">
+        <h2 className="settings-section-title">Your Data</h2>
+        <p className="settings-hint">
+          Download a complete copy of all your personal data stored in Cellarion, including
+          your profile, bottles, cellars, reviews, and activity log.
+        </p>
+        <button
+          className="btn btn-secondary"
+          onClick={handleExportData}
+          disabled={exporting}
+        >
+          {exporting ? 'Exporting...' : 'Export my data'}
+        </button>
+        {exportError && <div className="alert alert-error" style={{ marginTop: '0.75rem' }}>{exportError}</div>}
+        <p className="settings-hint" style={{ marginTop: '1rem' }}>
+          Read our <a href="/privacy">Privacy Policy</a> to learn how your data is processed and what rights you have.
+        </p>
+      </div>
+
       {/* ── Danger zone ── */}
       <div className="card settings-card settings-danger-card">
         <h2 className="settings-section-title settings-danger-title">Danger zone</h2>
-        <p className="settings-hint">
-          Permanently delete your account and all associated data — cellars, bottles, reviews, and settings.
-          This action cannot be undone.
-        </p>
-        {!showDeleteConfirm ? (
-          <button className="btn btn-danger" onClick={() => setShowDeleteConfirm(true)}>
-            Delete my account
-          </button>
-        ) : (
-          <div className="settings-delete-confirm">
-            <p>Type <strong>DELETE</strong> to confirm:</p>
-            <input
-              type="text"
-              className="input"
-              value={deleteConfirmText}
-              onChange={e => setDeleteConfirmText(e.target.value)}
-              placeholder="DELETE"
-              autoFocus
-            />
-            {deleteError && <div className="alert alert-error">{deleteError}</div>}
-            <div className="settings-actions">
-              <button
-                className="btn btn-danger"
-                onClick={handleDeleteAccount}
-                disabled={deleteConfirmText !== 'DELETE' || deleting}
-              >
-                {deleting ? 'Deleting…' : 'Permanently delete account'}
-              </button>
-              <button className="btn btn-secondary" onClick={() => { setShowDeleteConfirm(false); setDeleteConfirmText(''); }}>
-                Cancel
-              </button>
+        {isDeletionScheduled ? (
+          <div>
+            <div className="alert alert-error" style={{ marginBottom: '1rem' }}>
+              Account deletion is scheduled for{' '}
+              <strong>{new Date(user.deletionScheduledFor).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })}</strong>.
+              All your data will be permanently removed after this date.
             </div>
+            <button
+              className="btn btn-secondary"
+              onClick={handleCancelDeletion}
+              disabled={cancelling}
+            >
+              {cancelling ? 'Cancelling...' : 'Cancel deletion'}
+            </button>
           </div>
+        ) : (
+          <>
+            <p className="settings-hint">
+              Permanently delete your account and all associated data — cellars, bottles, reviews, and settings.
+              After requesting deletion, you have 7 days to change your mind before the deletion is permanent.
+            </p>
+            {!showDeleteConfirm ? (
+              <button className="btn btn-danger" onClick={() => setShowDeleteConfirm(true)}>
+                Delete my account
+              </button>
+            ) : (
+              <div className="settings-delete-confirm">
+                <p>Type <strong>DELETE</strong> to confirm:</p>
+                <input
+                  type="text"
+                  className="input"
+                  value={deleteConfirmText}
+                  onChange={e => setDeleteConfirmText(e.target.value)}
+                  placeholder="DELETE"
+                  autoFocus
+                />
+                {deleteError && <div className="alert alert-error">{deleteError}</div>}
+                <div className="settings-actions">
+                  <button
+                    className="btn btn-danger"
+                    onClick={handleDeleteAccount}
+                    disabled={deleteConfirmText !== 'DELETE' || deleting}
+                  >
+                    {deleting ? 'Scheduling...' : 'Schedule account deletion'}
+                  </button>
+                  <button className="btn btn-secondary" onClick={() => { setShowDeleteConfirm(false); setDeleteConfirmText(''); }}>
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+          </>
         )}
       </div>
 

@@ -150,6 +150,27 @@ const userSchema = new mongoose.Schema({
   createdAt: {
     type: Date,
     default: Date.now
+  },
+  // GDPR consent tracking
+  gdprConsent: {
+    privacyPolicy: {
+      accepted: { type: Boolean, default: false },
+      acceptedAt: { type: Date, default: null },
+      version: { type: String, default: null }  // e.g. '2026-03'
+    },
+    dataProcessing: {
+      accepted: { type: Boolean, default: false },
+      acceptedAt: { type: Date, default: null }
+    }
+  },
+  // Scheduled deletion (GDPR right to erasure with cooling-off)
+  deletionRequestedAt: {
+    type: Date,
+    default: null
+  },
+  deletionScheduledFor: {
+    type: Date,
+    default: null
   }
 });
 

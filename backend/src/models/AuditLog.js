@@ -1,6 +1,6 @@
 const mongoose = require('mongoose');
 
-const ttlDays = parseInt(process.env.AUDIT_TTL_DAYS || '0', 10); // 0 = keep forever
+const ttlDays = parseInt(process.env.AUDIT_TTL_DAYS || '90', 10); // default 90 days (GDPR)
 
 const auditLogSchema = new mongoose.Schema({
   timestamp: {

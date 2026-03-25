@@ -91,11 +91,15 @@ const issueTokens = async (user, res, { rememberMe } = {}) => {
 // POST /api/auth/register - Register new user
 router.post('/register', authLimiter, async (req, res) => {
   try {
-    const { username, email, password } = req.body;
+    const { username, email, password, consentPrivacyPolicy, consentDataProcessing } = req.body;
 
     // Validate input
     if (!username || !email || !password) {
       return res.status(400).json({ error: 'Username, email, and password are required' });
+    }
+
+    if (!consentPrivacyPolicy || !consentDataProcessing) {
+      return res.status(400).json({ error: 'You must accept the privacy policy and consent to data processing to register' });
     }
 
     // Check if user already exists
@@ -112,7 +116,11 @@ router.post('/register', authLimiter, async (req, res) => {
       username,
       email,
       password,
-      roles: ['user']
+      roles: ['user'],
+      gdprConsent: {
+        privacyPolicy: { accepted: true, acceptedAt: new Date(), version: '2026-03' },
+        dataProcessing: { accepted: true, acceptedAt: new Date() }
+      }
     });
 
     if (EMAIL_VERIFICATION_ENABLED) {

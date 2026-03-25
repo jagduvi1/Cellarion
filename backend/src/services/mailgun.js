@@ -119,10 +119,12 @@ async function sendPasswordResetEmail(toEmail, username, token) {
  * @param {string} username
  * @param {Array<{name:string, vintage:string, status:string}>} bottles
  */
-async function sendDrinkWindowDigest(toEmail, username, bottles) {
+async function sendDrinkWindowDigest(toEmail, username, bottles, userId) {
   if (!EMAIL_VERIFICATION_ENABLED || !bottles.length) return;
 
   const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+  const unsubToken = Buffer.from(`${userId}:${Date.now()}`).toString('base64url');
+  const unsubLink = `${process.env.BACKEND_URL || 'http://localhost:5000'}/api/users/unsubscribe?token=${unsubToken}`;
 
   const statusLabel = (s) =>
     s === 'peak'      ? 'Entered peak — drink now'
@@ -156,7 +158,7 @@ async function sendDrinkWindowDigest(toEmail, username, bottles) {
       '',
       `View your cellar: ${frontendUrl}/cellars`,
       '',
-      'You can manage these alerts in Settings > Notifications.'
+      `You can manage these alerts in Settings > Notifications, or unsubscribe here: ${unsubLink}`
     ].join('\n'),
     html: `
       <div style="font-family:sans-serif;max-width:520px;margin:0 auto;color:#2a2a2a;">
@@ -182,6 +184,7 @@ async function sendDrinkWindowDigest(toEmail, username, bottles) {
         <hr style="border:none;border-top:1px solid #ddd;margin:2rem 0;" />
         <p style="color:#9A9484;font-size:0.85em;">
           You can manage these alerts in Settings &gt; Notifications.
+          <br /><a href="${unsubLink}" style="color:#9A9484;">Unsubscribe from all emails</a>
         </p>
       </div>
     `
