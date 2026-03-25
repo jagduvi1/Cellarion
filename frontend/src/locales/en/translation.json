@@ -1295,5 +1295,27 @@
     "yesAddEntry": "Yes, add journal entry",
     "notNow": "Not now",
     "dontAskAgain": "Don't ask again"
+  },
+  "restock": {
+    "title": "Smart Restock",
+    "subtitle": "Based on your consumption patterns and current inventory.",
+    "loading": "Analyzing your cellar...",
+    "noData": "Not enough data yet. Consume some bottles so we can analyze your drinking patterns.",
+    "goToCellars": "Go to Cellars",
+    "bottlesPerYear": "bottles/year",
+    "purchased": "purchased/year",
+    "netPerYear": "net/year",
+    "yearsRunway": "years runway",
+    "byType": "By Type",
+    "byRegion": "By Region",
+    "byCountry": "By Country",
+    "runningLow": "Running Low",
+    "gettingLow": "Getting Low",
+    "wellStocked": "Well Stocked",
+    "inStock": "in stock",
+    "consumeRate": "~{{rate}}/month",
+    "monthsSupply": "~{{months}} months supply",
+    "outOfStock": "Out of stock",
+    "noConsumption": "No consumption data for this category yet."
   }
 }

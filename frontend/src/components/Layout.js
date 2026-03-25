@@ -72,6 +72,12 @@ function Layout({ children }) {
                   )}
                 </Link>
                 <Link
+                  to="/restock"
+                  className={`nav-link ${isActive('/restock') ? 'active' : ''}`}
+                >
+                  Restock
+                </Link>
+                <Link
                   to="/wishlist"
                   className={`nav-link ${isActive('/wishlist') ? 'active' : ''}`}
                 >
@@ -224,6 +230,7 @@ function Layout({ children }) {
               <Link to="/wishlist" className={`mobile-menu-link ${isActive('/wishlist') ? 'active' : ''}`} onClick={closeMenu}>Wishlist</Link>
               <Link to="/recommendations" className={`mobile-menu-link ${isActive('/recommendations') ? 'active' : ''}`} onClick={closeMenu}>Recommendations</Link>
               <Link to="/journal" className={`mobile-menu-link ${isActive('/journal') ? 'active' : ''}`} onClick={closeMenu}>Journal</Link>
+              <Link to="/restock" className={`mobile-menu-link ${isActive('/restock') ? 'active' : ''}`} onClick={closeMenu}>Restock</Link>
               <Link to="/wine-requests" className={`mobile-menu-link ${isActive('/wine-requests') ? 'active' : ''}`} onClick={closeMenu}>{t('nav.myRequests')}</Link>
               <Link to="/cellar-chat" className={`mobile-menu-link ${isActive('/cellar-chat') ? 'active' : ''}`} onClick={closeMenu}>Cellar Chat</Link>
               <Link to="/blog" className={`mobile-menu-link ${isActive('/blog') ? 'active' : ''}`} onClick={closeMenu}>{t('nav.blog')}</Link>

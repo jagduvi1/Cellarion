@@ -54,6 +54,7 @@ const AddToWishlist        = lazy(() => import('./pages/AddToWishlist'));
 const Unsubscribed         = lazy(() => import('./pages/Unsubscribed'));
 const Recommendations      = lazy(() => import('./pages/Recommendations'));
 const Journal              = lazy(() => import('./pages/Journal'));
+const Restock              = lazy(() => import('./pages/Restock'));
 const WineDetail           = lazy(() => import('./pages/WineDetail'));
 
 function AppRoutes() {
@@ -188,6 +189,14 @@ function AppRoutes() {
           element={
             <ProtectedRoute>
               <Layout><Journal /></Layout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/restock"
+          element={
+            <ProtectedRoute>
+              <Layout><Restock /></Layout>
             </ProtectedRoute>
           }
         />

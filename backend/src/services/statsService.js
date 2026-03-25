@@ -169,6 +169,9 @@ async function computeOverview({ activeBottles, consumedBottles, cellars, target
   // ── Consumption-bottle accumulators ───────────────────────────────────────
   const consumptionByYear   = {};
   const consumptionByReason = { drank: 0, gifted: 0, sold: 0, other: 0 };
+  const consumedByType      = {};
+  const consumedByRegion    = {};
+  const consumedByCountry   = {};
   let cRatingSum = 0, cRatingCount = 0;
   const outputByYear = {};
 
@@ -181,6 +184,11 @@ async function computeOverview({ activeBottles, consumedBottles, cellars, target
   for (const b of consumedBottles) {
     const reason = b.consumedReason || 'other';
     consumptionByReason[reason] = (consumptionByReason[reason] || 0) + 1;
+
+    const cwd = b.wineDefinition;
+    if (cwd?.type) consumedByType[cwd.type] = (consumedByType[cwd.type] || 0) + 1;
+    if (cwd?.region?.name) consumedByRegion[cwd.region.name] = (consumedByRegion[cwd.region.name] || 0) + 1;
+    if (cwd?.country?.name) consumedByCountry[cwd.country.name] = (consumedByCountry[cwd.country.name] || 0) + 1;
 
     const consumedYear = b.consumedAt ? new Date(b.consumedAt).getFullYear().toString() : null;
     if (consumedYear) {
@@ -324,6 +332,9 @@ async function computeOverview({ activeBottles, consumedBottles, cellars, target
     topValueBottles:  topValueArr.sort((a, b) => b.price - a.price).slice(0, 10),
     consumptionByYear: Object.entries(consumptionByYear).sort((a, b) => parseInt(a[0], 10) - parseInt(b[0], 10)).map(([year, d]) => ({ year, ...d })),
     consumptionByReason,
+    consumedByType,
+    consumedByRegion,
+    consumedByCountry,
     cellarBreakdown: Object.values(cellarMap).map(c => ({ name: c.name, bottleCount: c.count, value: Math.round(c.value * 100) / 100, uniqueWines: c.wines.size })).sort((a, b) => b.bottleCount - a.bottleCount),
     maturityForecast,
     urgencyLadder: urgencyArr.slice(0, 10),

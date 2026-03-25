@@ -1295,5 +1295,27 @@
     "yesAddEntry": "Ja, lägg till anteckning",
     "notNow": "Inte nu",
     "dontAskAgain": "Fråga inte igen"
+  },
+  "restock": {
+    "title": "Smart påfyllning",
+    "subtitle": "Baserat på dina konsumtionsmönster och nuvarande lager.",
+    "loading": "Analyserar din källare...",
+    "noData": "Inte tillräckligt med data ännu. Konsumera några flaskor så att vi kan analysera dina dryckesmönster.",
+    "goToCellars": "Gå till källare",
+    "bottlesPerYear": "flaskor/år",
+    "purchased": "köpta/år",
+    "netPerYear": "netto/år",
+    "yearsRunway": "års förråd",
+    "byType": "Per typ",
+    "byRegion": "Per region",
+    "byCountry": "Per land",
+    "runningLow": "Håller på att ta slut",
+    "gettingLow": "Börjar bli lågt",
+    "wellStocked": "Välfyllt",
+    "inStock": "i lager",
+    "consumeRate": "~{{rate}}/månad",
+    "monthsSupply": "~{{months}} månaders förråd",
+    "outOfStock": "Slut i lager",
+    "noConsumption": "Ingen konsumtionsdata för denna kategori ännu."
   }
 }
