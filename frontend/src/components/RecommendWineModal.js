@@ -84,7 +84,7 @@ export default function RecommendWineModal({ wineId, wineName, onClose, onSent }
     return (
       <Modal title={t('recommend.sent')} onClose={onClose}>
         <p className="recommend-success-msg">
-          {t('recommend.sentMessage', { wine: wineName, recipient: recipientName })}
+          {t('recommend.sentMessagePrefix', 'Your recommendation for')} <strong>{wineName}</strong> {t('recommend.sentMessageSuffix', 'has been sent to')} {recipientName}.
         </p>
         <div className="modal-actions">
           <button className="btn btn-primary" onClick={onClose}>{t('recommend.done')}</button>

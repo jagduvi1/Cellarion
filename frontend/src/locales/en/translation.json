@@ -1165,7 +1165,8 @@
   "recommend": {
     "title": "Recommend: {{wine}}",
     "sent": "Recommendation Sent",
-    "sentMessage": "Your recommendation for <strong>{{wine}}</strong> has been sent to {{recipient}}.",
+    "sentMessagePrefix": "Your recommendation for",
+    "sentMessageSuffix": "has been sent to",
     "done": "Done",
     "cellarionUser": "Cellarion User",
     "email": "Email",

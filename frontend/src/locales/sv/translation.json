@@ -1165,7 +1165,8 @@
   "recommend": {
     "title": "Rekommendera: {{wine}}",
     "sent": "Rekommendation skickad",
-    "sentMessage": "Din rekommendation för <strong>{{wine}}</strong> har skickats till {{recipient}}.",
+    "sentMessagePrefix": "Din rekommendation för",
+    "sentMessageSuffix": "har skickats till",
     "done": "Klar",
     "cellarionUser": "Cellarion-användare",
     "email": "E-post",
