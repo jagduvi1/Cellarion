@@ -29,7 +29,7 @@ describe('getPlanConfig', () => {
     expect(config.label).toBe('Free');
     expect(config.maxCellars).toBe(1);
     expect(config.maxSharesPerCellar).toBe(1);
-    expect(config.features.agingMaturity).toBe(false);
+    expect(config.features.agingMaturity).toBe(true);
     expect(config.features.priceEvolution).toBe(false);
   });
 
@@ -38,7 +38,7 @@ describe('getPlanConfig', () => {
     expect(config.label).toBe('Basic');
     expect(config.maxCellars).toBe(5);
     expect(config.maxSharesPerCellar).toBe(1);
-    expect(config.features.agingMaturity).toBe(false);
+    expect(config.features.agingMaturity).toBe(true);
     expect(config.features.priceEvolution).toBe(false);
   });
 
@@ -95,16 +95,16 @@ describe('planHasFeature', () => {
     expect(planHasFeature('premium', 'priceEvolution')).toBe(true);
   });
 
-  it('returns false for free agingMaturity', () => {
-    expect(planHasFeature('free', 'agingMaturity')).toBe(false);
+  it('returns true for free agingMaturity', () => {
+    expect(planHasFeature('free', 'agingMaturity')).toBe(true);
   });
 
   it('returns false for free priceEvolution', () => {
     expect(planHasFeature('free', 'priceEvolution')).toBe(false);
   });
 
-  it('returns false for basic agingMaturity', () => {
-    expect(planHasFeature('basic', 'agingMaturity')).toBe(false);
+  it('returns true for basic agingMaturity', () => {
+    expect(planHasFeature('basic', 'agingMaturity')).toBe(true);
   });
 
   it('returns false for basic priceEvolution', () => {
@@ -116,8 +116,8 @@ describe('planHasFeature', () => {
   });
 
   it('falls back to free plan for unknown plan name', () => {
-    // Unknown plan -> free config -> agingMaturity is false
-    expect(planHasFeature('nonexistent', 'agingMaturity')).toBe(false);
+    // Unknown plan -> free config -> agingMaturity is now true
+    expect(planHasFeature('nonexistent', 'agingMaturity')).toBe(true);
   });
 });
 

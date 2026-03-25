@@ -10,13 +10,14 @@ export const PLANS = {
     maxCellars: 1,
     maxSharesPerCellar: 1,
     features: {
-      agingMaturity: false,
+      agingMaturity: true,
       priceEvolution: false,
     },
     featureList: [
       '1 cellar',
       '1 shared member per cellar',
       'Bottle tracking (vintages, ratings, notes)',
+      'Aging & maturity profiles',
       'Drink-window alerts',
       'Rack management',
       'Wine requests',
@@ -30,7 +31,7 @@ export const PLANS = {
     maxCellars: 5,
     maxSharesPerCellar: 1,
     features: {
-      agingMaturity: false,
+      agingMaturity: true,
       priceEvolution: false,
     },
     featureList: [
@@ -54,7 +55,6 @@ export const PLANS = {
     featureList: [
       'Unlimited cellars',
       'Unlimited shared members per cellar',
-      'Aging & maturity profiles',
       'Price evolution tracking',
       'Everything in Basic',
       'Cellar health score & Regret Index',
