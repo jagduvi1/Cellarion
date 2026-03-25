@@ -22,7 +22,8 @@ const notificationSchema = new mongoose.Schema({
       'drink_window_peak',
       'drink_window_ending',
       'drink_window_past',
-      'wine_recommendation'
+      'wine_recommendation',
+      'journal_mention'
     ],
     required: true
   },

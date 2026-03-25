@@ -12,6 +12,7 @@ const AuditLog = require('../models/AuditLog');
 const BottleImage = require('../models/BottleImage');
 const Follow = require('../models/Follow');
 const Recommendation = require('../models/Recommendation');
+const JournalEntry = require('../models/JournalEntry');
 const PushSubscription = require('../models/PushSubscription');
 const CellarValueSnapshot = require('../models/CellarValueSnapshot');
 const { requireAuth, requireRole } = require('../middleware/auth');
@@ -300,7 +301,7 @@ router.get('/me/export', requireAuth, async (req, res) => {
     const user = await User.findById(userId);
     if (!user) return res.status(404).json({ error: 'User not found' });
 
-    const [bottles, cellars, racks, wineRequests, reviews, notifications, auditLogs, images, recommendationsSent, recommendationsReceived] = await Promise.all([
+    const [bottles, cellars, racks, wineRequests, reviews, notifications, auditLogs, images, recommendationsSent, recommendationsReceived, journalEntries] = await Promise.all([
       Bottle.find({ user: userId }).lean(),
       Cellar.find({ $or: [{ user: userId }, { 'members.user': userId }], deletedAt: null }).lean(),
       Rack.find({ cellar: { $in: await Cellar.distinct('_id', { user: userId }) }, deletedAt: null }).lean(),
@@ -310,7 +311,8 @@ router.get('/me/export', requireAuth, async (req, res) => {
       AuditLog.find({ 'actor.userId': userId }).sort({ timestamp: -1 }).limit(1000).lean(),
       BottleImage.find({ uploadedBy: userId }).lean(),
       Recommendation.find({ sender: userId }).populate('wine', 'name producer').lean(),
-      Recommendation.find({ recipient: userId }).populate('wine', 'name producer').populate('sender', 'username').lean()
+      Recommendation.find({ recipient: userId }).populate('wine', 'name producer').populate('sender', 'username').lean(),
+      JournalEntry.find({ user: userId }).lean()
     ]);
 
     const exportData = {
@@ -361,7 +363,22 @@ router.get('/me/export', requireAuth, async (req, res) => {
           status: r.status,
           createdAt: r.createdAt
         }))
-      }
+      },
+      journal: journalEntries.map(j => ({
+        date: j.date,
+        title: j.title,
+        occasion: j.occasion,
+        people: j.people?.map(p => p.name),
+        pairings: j.pairings?.map(p => ({
+          dish: p.dish,
+          wineName: p.wineName,
+          notes: p.notes
+        })),
+        mood: j.mood,
+        notes: j.notes,
+        visibility: j.visibility,
+        createdAt: j.createdAt
+      }))
     };
 
     res.setHeader('Content-Disposition', `attachment; filename="cellarion-data-export-${user.username}.json"`);

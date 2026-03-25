@@ -45,6 +45,7 @@ const pushSubscriptionsRoute = require('./routes/pushSubscriptions');
 const blogRoute = require('./routes/blog');
 const wishlistRoute = require('./routes/wishlist');
 const recommendationsRoute = require('./routes/recommendations');
+const journalRoute = require('./routes/journal');
 const sitemapRoute = require('./routes/sitemap');
 const ogRoute = require('./routes/og');
 const rateLimitsConfig = require('./config/rateLimits');
@@ -178,6 +179,7 @@ app.use('/api/push-subscriptions', pushSubscriptionsRoute);
 app.use('/api/blog', blogRoute);
 app.use('/api/wishlist', wishlistRoute);
 app.use('/api/recommendations', recommendationsRoute);
+app.use('/api/journal', journalRoute);
 
 // 404 handler
 app.use((req, res) => {

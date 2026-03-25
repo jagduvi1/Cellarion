@@ -1,0 +1,185 @@
+.journal-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.journal-form__row {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.journal-form__date { flex: 1; }
+.journal-form__occasion { flex: 1; }
+
+/* People tags */
+.journal-form__people-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-bottom: 0.4rem;
+}
+
+.journal-form__person-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.25rem 0.5rem;
+  background: var(--color-primary-light, rgba(123, 158, 136, 0.12));
+  border-radius: 999px;
+  font-size: 0.8rem;
+  color: var(--color-text);
+}
+
+.journal-form__person-linked {
+  color: var(--color-primary);
+  font-weight: 600;
+  font-size: 0.7rem;
+}
+
+.journal-form__person-remove {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--color-text-secondary);
+  font-size: 0.9rem;
+  line-height: 1;
+  padding: 0 0.1rem;
+}
+
+.journal-form__person-input-wrap {
+  position: relative;
+}
+
+.journal-form__friend-suggestions {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  list-style: none;
+  padding: 0;
+  margin: 2px 0 0;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md, 8px);
+  box-shadow: var(--shadow-md, 0 4px 12px rgba(0,0,0,.1));
+  z-index: 50;
+  max-height: 160px;
+  overflow-y: auto;
+}
+
+.journal-form__friend-suggestions button {
+  display: block;
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  background: none;
+  border: none;
+  text-align: left;
+  font-size: 0.875rem;
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.journal-form__friend-suggestions button:hover {
+  background: var(--color-hover, rgba(0,0,0,.05));
+}
+
+.journal-form__friend-username {
+  color: var(--color-text-secondary);
+  font-size: 0.8rem;
+}
+
+/* Pairings */
+.journal-form__pairing {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding: 0.75rem;
+  background: var(--color-surface-alt, #fafafa);
+  border-radius: var(--radius-md, 8px);
+  border: 1px solid var(--color-border);
+  margin-bottom: 0.5rem;
+}
+
+.journal-form__pairing-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.journal-form__pairing-num {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+.journal-form__pairing-remove {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--color-text-secondary);
+  font-size: 1.1rem;
+  padding: 0 0.2rem;
+}
+
+.journal-form__pairing-remove:hover {
+  color: var(--color-danger, #c0504d);
+}
+
+/* Mood stars */
+.journal-form__mood {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.journal-form__mood-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text-secondary);
+  font-size: 1.1rem;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.journal-form__mood-btn.active {
+  background: var(--color-primary);
+  color: #fff;
+  border-color: var(--color-primary);
+}
+
+.journal-form__mood-btn:hover:not(.active) {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
+/* Visibility toggle */
+.journal-form__visibility {
+  display: inline-flex;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md, 8px);
+  overflow: hidden;
+}
+
+.journal-form__vis-btn {
+  padding: 0.4rem 1rem;
+  border: none;
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  font-size: 0.85rem;
+  transition: background 0.15s, color 0.15s;
+}
+
+.journal-form__vis-btn.active {
+  background: var(--color-primary);
+  color: var(--color-on-primary, #fff);
+}
+
+@media (max-width: 768px) {
+  .journal-form__row {
+    flex-direction: column;
+  }
+}
