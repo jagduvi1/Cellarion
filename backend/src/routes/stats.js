@@ -33,7 +33,7 @@ router.get('/overview', async (req, res) => {
         .populate(WINE_POPULATE)
         .lean(),
       Bottle.find({ user: req.user.id, cellar: { $in: cellarIds }, status: { $in: CONSUMED_STATUSES } })
-        .populate({ path: 'wineDefinition', select: 'name producer type' })
+        .populate(WINE_POPULATE)
         .lean(),
     ]);
 

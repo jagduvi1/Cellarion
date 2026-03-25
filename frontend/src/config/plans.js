@@ -33,11 +33,13 @@ export const PLANS = {
     features: {
       agingMaturity: true,
       priceEvolution: false,
+      restockAlerts: true,
     },
     featureList: [
       '5 cellars',
       '1 shared member per cellar',
       'Everything in Free',
+      'Smart restock alerts (AI-powered)',
       'Full analytics: vintage charts, world map, regions, producers',
       'Consumption history & cellar pace',
       'Cellar Chat (20 questions / day)',
@@ -51,6 +53,7 @@ export const PLANS = {
     features: {
       agingMaturity: true,
       priceEvolution: true,
+      restockAlerts: true,
     },
     featureList: [
       'Unlimited cellars',

@@ -23,7 +23,8 @@ const notificationSchema = new mongoose.Schema({
       'drink_window_ending',
       'drink_window_past',
       'wine_recommendation',
-      'journal_mention'
+      'journal_mention',
+      'restock_alert'
     ],
     required: true
   },

@@ -13,6 +13,7 @@ const { getOrCreateDailySnapshot, getSnapshotForDate } = require('../utils/excha
 const { resolveRating } = require('../utils/ratingUtils');
 const { embedSinglePair } = require('../services/embeddingJob');
 const { CONSUMED_STATUSES, WINE_POPULATE } = require('../config/constants');
+const { checkRestockGap } = require('../services/restockChecker');
 const { stripHtml, isSafeUrl } = require('../utils/sanitize');
 
 const router = express.Router();
@@ -373,6 +374,11 @@ router.post('/:id/consume', requireBottleAccess('editor'), async (req, res) => {
       { type: 'bottle', id: bottle._id, cellarId: bottle.cellar },
       { reason }
     );
+
+    // Fire-and-forget: check if user needs a restock alert (paid plans only)
+    if (reason === 'drank') {
+      checkRestockGap(req.user.id, bottle._id).catch(() => {});
+    }
 
     res.json({ bottle });
   } catch (error) {

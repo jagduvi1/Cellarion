@@ -111,6 +111,18 @@ describe('planHasFeature', () => {
     expect(planHasFeature('basic', 'priceEvolution')).toBe(false);
   });
 
+  it('returns false for free restockAlerts', () => {
+    expect(planHasFeature('free', 'restockAlerts')).toBe(false);
+  });
+
+  it('returns true for basic restockAlerts', () => {
+    expect(planHasFeature('basic', 'restockAlerts')).toBe(true);
+  });
+
+  it('returns true for premium restockAlerts', () => {
+    expect(planHasFeature('premium', 'restockAlerts')).toBe(true);
+  });
+
   it('returns false for unknown feature on any plan', () => {
     expect(planHasFeature('premium', 'nonexistentFeature')).toBe(false);
   });
