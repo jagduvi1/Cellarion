@@ -1259,6 +1259,8 @@
     "titlePlaceholder": "Anniversary dinner at...",
     "people": "People",
     "addPerson": "Type a name and press Enter",
+    "addPersonPlaceholder": "Name (anyone, not just Cellarion users)",
+    "add": "Add",
     "pairings": "Pairings",
     "dishPlaceholder": "Dish (e.g. Osso buco)",
     "winePlaceholder": "Wine name",

@@ -1259,6 +1259,8 @@
     "titlePlaceholder": "Jubileumsmiddag på...",
     "people": "Personer",
     "addPerson": "Skriv ett namn och tryck Enter",
+    "addPersonPlaceholder": "Namn (vem som helst, inte bara Cellarion-användare)",
+    "add": "Lägg till",
     "pairings": "Kombinationer",
     "dishPlaceholder": "Rätt (t.ex. Osso buco)",
     "winePlaceholder": "Vinnamn",

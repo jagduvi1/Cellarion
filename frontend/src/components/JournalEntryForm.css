@@ -51,6 +51,15 @@
   position: relative;
 }
 
+.journal-form__person-input-row {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.journal-form__person-input-row .input {
+  flex: 1;
+}
+
 .journal-form__friend-suggestions {
   position: absolute;
   top: 100%;

@@ -155,14 +155,19 @@ export default function JournalEntryForm({ existing, onClose, onSaved, prefilled
             ))}
           </div>
           <div className="journal-form__person-input-wrap">
-            <input
-              type="text"
-              className="input"
-              value={personName}
-              onChange={e => setPersonName(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addPerson(personName); } }}
-              placeholder={t('journal.addPerson', 'Type a name and press Enter')}
-            />
+            <div className="journal-form__person-input-row">
+              <input
+                type="text"
+                className="input"
+                value={personName}
+                onChange={e => setPersonName(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addPerson(personName); } }}
+                placeholder={t('journal.addPersonPlaceholder', 'Name (anyone, not just Cellarion users)')}
+              />
+              <button type="button" className="btn btn-small btn-secondary" onClick={() => addPerson(personName)} disabled={!personName.trim()}>
+                {t('journal.add', 'Add')}
+              </button>
+            </div>
             {friendSuggestions.length > 0 && (
               <ul className="journal-form__friend-suggestions">
                 {friendSuggestions.map(f => (

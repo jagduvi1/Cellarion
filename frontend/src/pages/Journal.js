@@ -143,41 +143,62 @@ export default function Journal() {
                         {entry.title && <h3 className="journal-card__title">{entry.title}</h3>}
                       </div>
                       {entry.mood && (
-                        <span className="journal-card__mood">{'★'.repeat(entry.mood)}</span>
+                        <div className="journal-card__mood">
+                          {[1, 2, 3, 4, 5].map(n => (
+                            <span key={n} className={`journal-card__mood-dot ${n > entry.mood ? 'journal-card__mood-dot--empty' : ''}`} />
+                          ))}
+                        </div>
                       )}
                     </div>
 
-                    {/* People */}
+                    {/* People as badges with initials */}
                     {entry.people?.length > 0 && (
                       <div className="journal-card__people">
-                        {t('journal.with', 'With')} {entry.people.map((p, i) => (
-                          <span key={i}>
-                            {p.user ? (
-                              <Link to={`/users/${p.user._id || p.user}`} className="journal-card__person-link">{p.name}</Link>
-                            ) : (
-                              <span>{p.name}</span>
-                            )}
-                            {i < entry.people.length - 1 ? ', ' : ''}
-                          </span>
-                        ))}
+                        <span className="journal-card__people-label">{t('journal.with', 'With')}</span>
+                        {entry.people.map((p, i) => {
+                          const initial = (p.name || '?')[0].toUpperCase();
+                          const isLinked = !!(p.user?._id || p.user);
+                          return isLinked ? (
+                            <Link key={i} to={`/users/${p.user._id || p.user}`} className="journal-card__person-badge journal-card__person-badge--linked">
+                              <span className="journal-card__person-initial">{initial}</span>
+                              {p.name}
+                            </Link>
+                          ) : (
+                            <span key={i} className="journal-card__person-badge">
+                              <span className="journal-card__person-initial">{initial}</span>
+                              {p.name}
+                            </span>
+                          );
+                        })}
                       </div>
                     )}
 
-                    {/* Pairings */}
+                    {/* Pairings as two-column cards */}
                     {entry.pairings?.length > 0 && (
                       <div className="journal-card__pairings">
-                        {entry.pairings.map((p, i) => (
-                          <div key={i} className="journal-card__pairing">
-                            {p.dish && <span className="journal-card__dish">🍽 {p.dish}</span>}
-                            {(p.wineName || p.wine?.name || p.bottle?.wineDefinition?.name) && (
-                              <span className="journal-card__wine">
-                                🍷 {p.wineName || p.wine?.name || p.bottle?.wineDefinition?.name}
-                                {p.bottle?.vintage ? ` ${p.bottle.vintage}` : ''}
-                              </span>
-                            )}
-                            {p.notes && <span className="journal-card__pairing-notes">"{p.notes}"</span>}
-                          </div>
-                        ))}
+                        {entry.pairings.map((p, i) => {
+                          const wineName = p.wineName || p.wine?.name || p.bottle?.wineDefinition?.name;
+                          const vintage = p.bottle?.vintage;
+                          return (
+                            <div key={i}>
+                              <div className="journal-card__pairing">
+                                <div className="journal-card__pairing-dish">
+                                  <span className="journal-card__pairing-icon">Dish</span>
+                                  <span className="journal-card__pairing-text">{p.dish || '—'}</span>
+                                </div>
+                                <div className="journal-card__pairing-wine">
+                                  <span className="journal-card__pairing-icon">Wine</span>
+                                  <span className="journal-card__pairing-text">
+                                    {wineName || '—'}{vintage ? ` ${vintage}` : ''}
+                                  </span>
+                                </div>
+                              </div>
+                              {p.notes && (
+                                <div className="journal-card__pairing-notes">"{p.notes}"</div>
+                              )}
+                            </div>
+                          );
+                        })}
                       </div>
                     )}
 
@@ -186,11 +207,15 @@ export default function Journal() {
                       <p className="journal-card__notes">{entry.notes}</p>
                     )}
 
-                    {/* Actions */}
-                    <div className="journal-card__actions">
+                    {/* Footer with actions */}
+                    <div className="journal-card__footer">
                       {entry.visibility === 'private' && (
-                        <span className="journal-card__badge">🔒 {t('journal.private', 'Private')}</span>
+                        <span className="journal-card__badge">
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                          {t('journal.private', 'Private')}
+                        </span>
                       )}
+                      <span className="journal-card__footer-spacer" />
                       <button className="journal-card__action" onClick={() => { setEditEntry(entry); setFormOpen(true); }}>
                         {t('journal.edit', 'Edit')}
                       </button>
