@@ -37,6 +37,20 @@
   margin-bottom: 1.75rem;
 }
 
+.stats-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.stats-card-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  white-space: nowrap;
+}
+
 .stats-title {
   font-size: 1.7rem;
   font-weight: 700;

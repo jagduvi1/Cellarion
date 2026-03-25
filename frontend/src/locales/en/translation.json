@@ -1218,5 +1218,27 @@
     "backToCellars": "Back to Cellars",
     "wineNotFound": "Wine not found",
     "goToCellarion": "Go to Cellarion"
+  },
+  "statsCard": {
+    "title": "Your Cellar Card",
+    "subtitle": "A snapshot of your wine collection — download or share it.",
+    "createCard": "Share Card",
+    "loading": "Loading stats...",
+    "noData": "No stats available yet. Add some bottles to your cellar first.",
+    "showValue": "Show cellar value",
+    "download": "Download image",
+    "share": "Share",
+    "exporting": "Exporting...",
+    "shareTitle": "My Cellarion Stats",
+    "bottles": "bottles in cellar",
+    "uniqueWines": "unique wines",
+    "countries": "countries",
+    "avgRating": "avg rating",
+    "oldestVintage": "oldest vintage",
+    "cellarValue": "cellar value",
+    "topCountry": "Top country",
+    "topProducer": "Top producer",
+    "favoriteType": "Favorite type",
+    "bottlesEnjoyed": "Bottles enjoyed"
   }
 }

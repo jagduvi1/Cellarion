@@ -1,0 +1,84 @@
+.stats-card-page {
+  max-width: 540px;
+  margin: 0 auto;
+  padding: 1.5rem 1rem;
+}
+
+.stats-card-page h1 {
+  margin: 0 0 0.25rem;
+  color: var(--color-text);
+}
+
+.stats-card-subtitle {
+  color: var(--color-text-secondary, #666);
+  font-size: 0.9rem;
+  margin: 0 0 1.5rem;
+}
+
+.stats-card-loading,
+.stats-card-empty {
+  text-align: center;
+  padding: 4rem 1rem;
+  color: var(--color-text-secondary);
+}
+
+/* Controls */
+.stats-card-controls {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+  flex-wrap: wrap;
+}
+
+.stats-card-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+  color: var(--color-text);
+  cursor: pointer;
+  user-select: none;
+}
+
+.stats-card-toggle input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--color-primary, #7B9E88);
+  cursor: pointer;
+}
+
+/* Preview */
+.stats-card-preview {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 1.5rem;
+}
+
+/* Actions */
+.stats-card-actions {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.stats-card-actions .btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+@media (max-width: 440px) {
+  .stats-card-page {
+    padding: 1rem;
+  }
+
+  .stats-card-actions {
+    flex-direction: column;
+  }
+
+  .stats-card-actions .btn {
+    width: 100%;
+    justify-content: center;
+  }
+}

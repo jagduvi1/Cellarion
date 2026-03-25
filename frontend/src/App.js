@@ -32,6 +32,7 @@ const SommPrices      = lazy(() => import('./pages/SommPrices'));
 const Settings        = lazy(() => import('./pages/Settings'));
 const Plans           = lazy(() => import('./pages/Plans'));
 const Statistics      = lazy(() => import('./pages/Statistics'));
+const StatsCard       = lazy(() => import('./pages/StatsCard'));
 const AdminWines      = lazy(() => import('./pages/AdminWines'));
 const AdminRequests   = lazy(() => import('./pages/AdminRequests'));
 const AdminTaxonomy   = lazy(() => import('./pages/AdminTaxonomy'));
@@ -264,6 +265,14 @@ function AppRoutes() {
           element={
             <ProtectedRoute>
               <Layout><Statistics /></Layout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/statistics/card"
+          element={
+            <ProtectedRoute>
+              <Layout><StatsCard /></Layout>
             </ProtectedRoute>
           }
         />

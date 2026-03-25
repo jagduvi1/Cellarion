@@ -1218,5 +1218,27 @@
     "backToCellars": "Tillbaka till källare",
     "wineNotFound": "Vin hittades inte",
     "goToCellarion": "Gå till Cellarion"
+  },
+  "statsCard": {
+    "title": "Ditt källarkort",
+    "subtitle": "En ögonblicksbild av din vinsamling — ladda ner eller dela den.",
+    "createCard": "Dela kort",
+    "loading": "Laddar statistik...",
+    "noData": "Ingen statistik tillgänglig ännu. Lägg till flaskor i din källare först.",
+    "showValue": "Visa källarvärde",
+    "download": "Ladda ner bild",
+    "share": "Dela",
+    "exporting": "Exporterar...",
+    "shareTitle": "Min Cellarion-statistik",
+    "bottles": "flaskor i källaren",
+    "uniqueWines": "unika viner",
+    "countries": "länder",
+    "avgRating": "medelbetyg",
+    "oldestVintage": "äldsta årgång",
+    "cellarValue": "källarvärde",
+    "topCountry": "Toppland",
+    "topProducer": "Toppproducent",
+    "favoriteType": "Favorittyp",
+    "bottlesEnjoyed": "Avnjutna flaskor"
   }
 }
