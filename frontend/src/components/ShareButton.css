@@ -56,6 +56,35 @@
   margin: 0.35rem 0;
 }
 
+.share-dropdown__message {
+  padding: 0.5rem 0.75rem 0.25rem;
+}
+
+.share-dropdown__textarea {
+  width: 100%;
+  min-height: 48px;
+  padding: 0.5rem 0.6rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm, 6px);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: 0.85rem;
+  font-family: inherit;
+  resize: vertical;
+  line-height: 1.4;
+  box-sizing: border-box;
+}
+
+.share-dropdown__textarea:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 2px rgba(123, 158, 136, 0.2);
+}
+
+.share-dropdown__textarea::placeholder {
+  color: var(--color-text-secondary, #999);
+}
+
 .share-dropdown__item--recommend {
   color: var(--color-primary);
   font-weight: 600;

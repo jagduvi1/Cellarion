@@ -2,19 +2,19 @@ import { useState, useRef, useEffect } from 'react';
 import './ShareButton.css';
 
 /**
- * Renders a share button that uses the native Web Share API on supported
- * devices (mobile) and falls back to a dropdown with copy-link + social
- * intent URLs on desktop.
+ * Renders a share button with a dropdown that lets users add a personal
+ * message before sharing via social media, email, or copying the link.
  *
  * Props:
  *  - title:  share title (e.g. wine name)
- *  - text:   share body text
+ *  - text:   default share body text
  *  - url:    the URL to share (defaults to current page)
  *  - onRecommend: callback when "Recommend to a friend" is clicked
  */
 export default function ShareButton({ title, text, url, onRecommend }) {
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [message, setMessage] = useState('');
   const ref = useRef(null);
 
   const shareUrl = url || window.location.href;
@@ -23,6 +23,11 @@ export default function ShareButton({ title, text, url, onRecommend }) {
   // navigator.share on desktop which gives a clunky OS dialog instead of
   // our custom dropdown with the recommend option.
   const isMobile = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+
+  // Reset message when dropdown opens
+  useEffect(() => {
+    if (open) setMessage('');
+  }, [open]);
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -47,15 +52,22 @@ export default function ShareButton({ title, text, url, onRecommend }) {
     setOpen((prev) => !prev);
   };
 
+  // Build share text: user message + default text, or just default
+  const shareText = message.trim()
+    ? `${message.trim()} — ${text || title || ''}`
+    : (text || title || '');
+
   const handleCopy = async () => {
+    const copyText = message.trim()
+      ? `${message.trim()}\n\n${shareUrl}`
+      : shareUrl;
     try {
-      await navigator.clipboard.writeText(shareUrl);
+      await navigator.clipboard.writeText(copyText);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
-      // Fallback for older browsers
-      const input = document.createElement('input');
-      input.value = shareUrl;
+      const input = document.createElement('textarea');
+      input.value = copyText;
       document.body.appendChild(input);
       input.select();
       document.execCommand('copy');
@@ -66,7 +78,7 @@ export default function ShareButton({ title, text, url, onRecommend }) {
   };
 
   const encodedUrl = encodeURIComponent(shareUrl);
-  const encodedText = encodeURIComponent(text || title || '');
+  const encodedText = encodeURIComponent(shareText);
 
   return (
     <div className="share-btn-wrap" ref={ref}>
@@ -85,9 +97,29 @@ export default function ShareButton({ title, text, url, onRecommend }) {
 
       {open && (
         <div className="share-dropdown">
+          <div className="share-dropdown__message">
+            <textarea
+              className="share-dropdown__textarea"
+              placeholder="Add a comment..."
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              rows={2}
+              maxLength={280}
+            />
+          </div>
+
+          <div className="share-dropdown__divider" />
+
           <button className="share-dropdown__item" onClick={handleCopy}>
             {copied ? 'Copied!' : 'Copy link'}
           </button>
+          <a
+            className="share-dropdown__item"
+            href={`mailto:?subject=${encodeURIComponent(title || '')}&body=${encodedText}%0A%0A${encodedUrl}`}
+            onClick={() => setOpen(false)}
+          >
+            Send via Email
+          </a>
           <a
             className="share-dropdown__item"
             href={`https://twitter.com/intent/tweet?text=${encodedText}&url=${encodedUrl}`}
