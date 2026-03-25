@@ -81,7 +81,7 @@
 /* ── Wine header card ── */
 .bd-wine-header {
   margin-bottom: 1rem;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .bd-wine-name-row {
