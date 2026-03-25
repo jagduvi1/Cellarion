@@ -105,7 +105,7 @@ router.post('/', async (req, res) => {
     } else if (recipientEmail) {
       // Check if the email belongs to an existing user
       const emailTrimmed = recipientEmail.trim().toLowerCase();
-      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailTrimmed)) {
+      if (!/^[^\s@]+@[^\s@.]+(?:\.[^\s@.]+)+$/.test(emailTrimmed)) {
         return res.status(400).json({ error: 'Invalid email address' });
       }
       recipientUser = await User.findOne({ email: emailTrimmed }).select('username displayName email');

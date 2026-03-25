@@ -138,7 +138,7 @@ router.get('/wine/:wineId', async (req, res) => {
     }
 
     if (vintage) {
-      filter.vintage = vintage;
+      filter.vintage = String(vintage);
     }
 
     const [reviews, total] = await Promise.all([
