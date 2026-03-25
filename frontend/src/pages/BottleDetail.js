@@ -264,16 +264,6 @@ function BottleDetail() {
       ) : <>
       {/* ── Wine hero card ── */}
       <div className="bd-wine-header card">
-        {wine && (
-          <ShareButton
-            title={displayName}
-            text={`Check out ${displayName}${displayProducer ? ` by ${displayProducer}` : ''} on Cellarion`}
-            url={`${process.env.REACT_APP_SITE_URL || 'https://cellarion.app'}/wines/${wine._id}`}
-            onRecommend={() => setRecommendOpen(true)}
-            variant="icon"
-            className="bd-share-icon"
-          />
-        )}
         <div className="bd-wine-identity">
           <HeroImage
             bottle={bottle}
@@ -292,9 +282,20 @@ function BottleDetail() {
             }}
           />
           <div className="bd-wine-meta">
-            <h1 className={cellarColor ? 'cellar-accent-border' : ''} style={cellarColor ? { '--cellar-color': cellarColor } : undefined}>
-              {displayName || t('common.unknownWine')}
-            </h1>
+            <div className="bd-wine-name-row">
+              <h1 className={cellarColor ? 'cellar-accent-border' : ''} style={cellarColor ? { '--cellar-color': cellarColor } : undefined}>
+                {displayName || t('common.unknownWine')}
+              </h1>
+              {wine && (
+                <ShareButton
+                  title={displayName}
+                  text={`Check out ${displayName}${displayProducer ? ` by ${displayProducer}` : ''} on Cellarion`}
+                  url={`${process.env.REACT_APP_SITE_URL || 'https://cellarion.app'}/wines/${wine._id}`}
+                  onRecommend={() => setRecommendOpen(true)}
+                  variant="icon"
+                />
+              )}
+            </div>
             <p className="bd-producer">
               {displayProducer}
               {wine?.country?.name && <span className="bd-country"> · {wine.country.name}</span>}

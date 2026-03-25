@@ -81,15 +81,18 @@
 /* ── Wine header card ── */
 .bd-wine-header {
   margin-bottom: 1rem;
-  overflow: visible;
-  position: relative;
+  overflow: hidden;
 }
 
-.bd-share-icon {
-  position: absolute;
-  top: 1.75rem;
-  right: 1rem;
-  z-index: 10;
+.bd-wine-name-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.bd-wine-name-row h1 {
+  flex: 1;
+  min-width: 0;
 }
 
 .bd-wine-identity {
