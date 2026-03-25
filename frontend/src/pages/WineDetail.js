@@ -109,7 +109,7 @@ export default function WineDetail() {
               src={`${API_URL}/api/uploads/${wine.image}`}
               alt={wine.name}
               className="wd-image"
-              onError={(e) => { e.target.style.display = 'none'; }}
+              onError={(e) => { e.target.closest('.wd-image-wrap').style.display = 'none'; }}
             />
           </div>
         )}
