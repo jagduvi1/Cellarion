@@ -19,6 +19,11 @@ export default function ShareButton({ title, text, url, onRecommend }) {
 
   const shareUrl = url || window.location.href;
 
+  // Only use native share on mobile (touch devices) — Windows 11 exposes
+  // navigator.share on desktop which gives a clunky OS dialog instead of
+  // our custom dropdown with the recommend option.
+  const isMobile = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+
   // Close dropdown on outside click
   useEffect(() => {
     if (!open) return;
@@ -30,8 +35,8 @@ export default function ShareButton({ title, text, url, onRecommend }) {
   }, [open]);
 
   const handleClick = async () => {
-    // Try native share on supported devices
-    if (navigator.share) {
+    // Use native share only on mobile devices
+    if (isMobile && navigator.share) {
       try {
         await navigator.share({ title, text, url: shareUrl });
         return;
