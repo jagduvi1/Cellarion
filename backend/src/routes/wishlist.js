@@ -167,14 +167,17 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ error: 'Valid wineDefinitionId is required' });
     }
 
+    // Sanitise vintage: must be a string (prevents NoSQL injection via objects)
+    const safeVintage = vintage != null ? String(vintage) : '';
+
     // Prevent duplicates: same user + same wine + same vintage (or both null)
     const dupFilter = {
       user: req.user.id,
       wineDefinition: wineDefinitionId,
       status: 'wanted'
     };
-    if (vintage) {
-      dupFilter.vintage = vintage;
+    if (safeVintage) {
+      dupFilter.vintage = safeVintage;
     } else {
       dupFilter.$or = [{ vintage: null }, { vintage: { $exists: false } }, { vintage: '' }];
     }
@@ -192,14 +195,14 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ error: 'Priority must be low, medium, or high' });
     }
     // Validate vintage length
-    if (vintage && vintage.length > 20) {
+    if (safeVintage && safeVintage.length > 20) {
       return res.status(400).json({ error: 'Vintage must be 20 characters or less' });
     }
 
     const item = await WishlistItem.create({
       user: req.user.id,
       wineDefinition: wineDefinitionId,
-      vintage: vintage || undefined,
+      vintage: safeVintage || undefined,
       notes: notes || undefined,
       priority: priority || 'medium'
     });
@@ -263,8 +266,9 @@ router.put('/:id', async (req, res) => {
       item.status = status;
     }
     if (vintage !== undefined) {
-      if (vintage.length > 20) return res.status(400).json({ error: 'Vintage too long' });
-      item.vintage = vintage;
+      const safeVin = String(vintage);
+      if (safeVin.length > 20) return res.status(400).json({ error: 'Vintage too long' });
+      item.vintage = safeVin;
     }
 
     await item.save();
