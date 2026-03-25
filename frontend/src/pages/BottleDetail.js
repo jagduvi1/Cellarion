@@ -17,6 +17,7 @@ import RatingDisplay from '../components/RatingDisplay';
 import ReviewCard from '../components/ReviewCard';
 import { getWineReviews } from '../api/reviews';
 import { fromNormalized } from '../utils/ratingUtils';
+import ShareButton from '../components/ShareButton';
 import './BottleDetail.css';
 
 // Lazy-load heavy components only needed on user interaction
@@ -26,6 +27,7 @@ const ReportWineModal = lazy(() => import('../components/ReportWineModal'));
 const ReviewForm = lazy(() => import('../components/ReviewForm'));
 const ConsumeModal = lazy(() => import('../components/ConsumeModal').then(m => ({ default: m.ConsumeModal })));
 const SuggestGrapesModal = lazy(() => import('../components/SuggestGrapesModal').then(m => ({ default: m.SuggestGrapesModal })));
+const RecommendWineModal = lazy(() => import('../components/RecommendWineModal'));
 
 function BottleDetail() {
   const { t } = useTranslation();
@@ -47,6 +49,7 @@ function BottleDetail() {
   const [consumeOpen, setConsumeOpen] = useState(false);
   const [suggestGrapesOpen, setSuggestGrapesOpen] = useState(false);
   const [reportWineOpen, setReportWineOpen] = useState(false);
+  const [recommendOpen, setRecommendOpen] = useState(false);
   const [reviewFormOpen, setReviewFormOpen] = useState(false);
   const [wineReviews, setWineReviews] = useState([]);
   const [communityRating, setCommunityRating] = useState(null);
@@ -237,16 +240,27 @@ function BottleDetail() {
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="15 18 9 12 15 6"/></svg>
             {isConsumed || fromHistory ? t('bottleDetail.backToHistory', 'Back to history') : t('bottleDetail.backToCellar')}
           </Link>
-          {!loading && canEdit && !editing && (
+          {!loading && !editing && (
             <div className="bd-header-actions">
-              <button className="btn btn-secondary btn-small" onClick={() => setEditing(true)}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-                <span className="bd-btn-label">{t('bottleDetail.editDetails')}</span>
-              </button>
-              <button className="btn btn-consume btn-small" onClick={() => setConsumeOpen(true)}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M8 2h8l4 10H4L8 2z"/><path d="M12 12v6"/><path d="M8 22h8"/></svg>
-                <span className="bd-btn-label">{t('bottleDetail.removeBottle')}</span>
-              </button>
+              {canEdit && (
+                <>
+                  <button className="btn btn-secondary btn-small" onClick={() => setEditing(true)}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                    <span className="bd-btn-label">{t('bottleDetail.editDetails')}</span>
+                  </button>
+                  <button className="btn btn-consume btn-small" onClick={() => setConsumeOpen(true)}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M8 2h8l4 10H4L8 2z"/><path d="M12 12v6"/><path d="M8 22h8"/></svg>
+                    <span className="bd-btn-label">{t('bottleDetail.removeBottle')}</span>
+                  </button>
+                </>
+              )}
+              {wine && (
+                <ShareButton
+                  title={displayName}
+                  text={`Check out ${displayName}${displayProducer ? ` by ${displayProducer}` : ''} on Cellarion`}
+                  onRecommend={() => setRecommendOpen(true)}
+                />
+              )}
             </div>
           )}
         </div>
@@ -439,6 +453,14 @@ function BottleDetail() {
           <ReportWineModal
             wine={bottle.wineDefinition}
             onClose={() => setReportWineOpen(false)}
+          />
+        )}
+
+        {recommendOpen && wine && (
+          <RecommendWineModal
+            wineId={wine._id}
+            wineName={displayName}
+            onClose={() => setRecommendOpen(false)}
           />
         )}
       </Suspense>

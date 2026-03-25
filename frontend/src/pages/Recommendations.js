@@ -1,0 +1,177 @@
+import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
+import { getRecommendations, getSentRecommendations, updateRecommendationStatus } from '../api/recommendations';
+import { addToWishlist } from '../api/wishlist';
+import './Recommendations.css';
+
+const API_URL = process.env.REACT_APP_API_URL || '';
+
+function timeAgo(dateStr) {
+  const seconds = Math.floor((Date.now() - new Date(dateStr)) / 1000);
+  if (seconds < 60) return 'just now';
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 30) return `${days}d ago`;
+  return new Date(dateStr).toLocaleDateString();
+}
+
+export default function Recommendations() {
+  const { apiFetch } = useAuth();
+  const [tab, setTab] = useState('received');
+  const [items, setItems] = useState([]);
+  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchItems();
+  }, [tab]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const fetchItems = async () => {
+    setLoading(true);
+    try {
+      const fetcher = tab === 'received' ? getRecommendations : getSentRecommendations;
+      const res = await fetcher(apiFetch);
+      if (res.ok) {
+        const data = await res.json();
+        setItems(data.items || []);
+        setTotal(data.total || 0);
+      }
+    } catch { /* ignore */ }
+    setLoading(false);
+  };
+
+  const handleMarkSeen = async (id) => {
+    const res = await updateRecommendationStatus(apiFetch, id, 'seen');
+    if (res.ok) {
+      setItems((prev) => prev.map((r) => r._id === id ? { ...r, status: 'seen' } : r));
+    }
+  };
+
+  const handleAddToWishlist = async (rec) => {
+    try {
+      const res = await addToWishlist(apiFetch, { wineDefinitionId: rec.wine._id });
+      if (res.ok) {
+        await updateRecommendationStatus(apiFetch, rec._id, 'added-to-wishlist');
+        setItems((prev) => prev.map((r) => r._id === rec._id ? { ...r, status: 'added-to-wishlist' } : r));
+      }
+    } catch { /* ignore */ }
+  };
+
+  return (
+    <div className="recommendations-page">
+      <h1>Recommendations</h1>
+
+      <div className="rec-tabs">
+        <button
+          className={`rec-tab ${tab === 'received' ? 'active' : ''}`}
+          onClick={() => setTab('received')}
+        >
+          Received {tab === 'received' && total > 0 ? `(${total})` : ''}
+        </button>
+        <button
+          className={`rec-tab ${tab === 'sent' ? 'active' : ''}`}
+          onClick={() => setTab('sent')}
+        >
+          Sent {tab === 'sent' && total > 0 ? `(${total})` : ''}
+        </button>
+      </div>
+
+      {loading ? (
+        <p className="rec-loading">Loading...</p>
+      ) : items.length === 0 ? (
+        <div className="rec-empty">
+          <p>
+            {tab === 'received'
+              ? 'No recommendations yet. When someone recommends a wine to you, it will appear here.'
+              : 'You haven\'t recommended any wines yet. Use the share button on any wine to recommend it.'}
+          </p>
+        </div>
+      ) : (
+        <ul className="rec-list">
+          {items.map((rec) => (
+            <li key={rec._id} className={`rec-card ${rec.status === 'pending' && tab === 'received' ? 'rec-card--unread' : ''}`}>
+              <div className="rec-card__wine">
+                {rec.wine?.image && (
+                  <img
+                    src={`${API_URL}/api/uploads/${rec.wine.image}`}
+                    alt=""
+                    className="rec-card__img"
+                  />
+                )}
+                <div className="rec-card__info">
+                  <strong className="rec-card__name">{rec.wine?.name || 'Unknown wine'}</strong>
+                  {rec.wine?.producer && (
+                    <span className="rec-card__producer">{rec.wine.producer}</span>
+                  )}
+                  {rec.wine?.appellation && (
+                    <span className="rec-card__appellation">{rec.wine.appellation}</span>
+                  )}
+                </div>
+              </div>
+
+              <div className="rec-card__meta">
+                {tab === 'received' ? (
+                  <span>
+                    From <Link to={`/users/${rec.sender?._id}`} className="rec-card__user">
+                      {rec.sender?.displayName || rec.sender?.username || 'Unknown'}
+                    </Link>
+                  </span>
+                ) : (
+                  <span>
+                    To {rec.recipient
+                      ? <Link to={`/users/${rec.recipient._id}`} className="rec-card__user">
+                          {rec.recipient.displayName || rec.recipient.username}
+                        </Link>
+                      : <span>{rec.recipientEmail}</span>
+                    }
+                  </span>
+                )}
+                <span className="rec-card__time">{timeAgo(rec.createdAt)}</span>
+              </div>
+
+              {rec.note && (
+                <p className="rec-card__note">"{rec.note}"</p>
+              )}
+
+              {tab === 'received' && (
+                <div className="rec-card__actions">
+                  {rec.status === 'pending' && (
+                    <button
+                      className="btn btn-small btn-secondary"
+                      onClick={() => handleMarkSeen(rec._id)}
+                    >
+                      Mark as seen
+                    </button>
+                  )}
+                  {rec.status !== 'added-to-wishlist' && (
+                    <button
+                      className="btn btn-small btn-primary"
+                      onClick={() => handleAddToWishlist(rec)}
+                    >
+                      Add to Wishlist
+                    </button>
+                  )}
+                  {rec.status === 'added-to-wishlist' && (
+                    <span className="rec-card__badge">Added to wishlist</span>
+                  )}
+                </div>
+              )}
+
+              {tab === 'sent' && (
+                <div className="rec-card__status">
+                  <span className={`rec-status rec-status--${rec.status}`}>
+                    {rec.status === 'pending' ? 'Pending' : rec.status === 'seen' ? 'Seen' : 'Added to wishlist'}
+                  </span>
+                </div>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}

@@ -191,4 +191,58 @@ async function sendDrinkWindowDigest(toEmail, username, bottles, userId) {
   });
 }
 
-module.exports = { sendVerificationEmail, sendPasswordResetEmail, sendDrinkWindowDigest, EMAIL_VERIFICATION_ENABLED };
+/**
+ * Send a wine recommendation email to someone who is not yet a Cellarion user.
+ * @param {string} toEmail     - Recipient email address
+ * @param {string} senderName  - Display name of the sender
+ * @param {object} wine        - Wine object with name, producer, appellation
+ * @param {string} note        - Personal note from the sender
+ */
+async function sendRecommendationEmail(toEmail, senderName, wine, note) {
+  if (!EMAIL_VERIFICATION_ENABLED) return;
+
+  const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+  const wineLink = `${frontendUrl}/wines/${wine._id}`;
+  const wineName = wine.name || 'a wine';
+  const producer = wine.producer ? ` by ${wine.producer}` : '';
+
+  await mg.messages.create(DOMAIN, {
+    from: FROM,
+    to: [toEmail],
+    subject: `${senderName} recommends a wine on Cellarion`,
+    text: [
+      `Hello,`,
+      '',
+      `${senderName} thinks you'd enjoy ${wineName}${producer}.`,
+      ...(note ? ['', `"${note}"`] : []),
+      '',
+      `View this wine on Cellarion: ${wineLink}`,
+      '',
+      'Cellarion is a wine cellar management app. Sign up to save this wine to your wishlist!',
+      `${frontendUrl}`
+    ].join('\n'),
+    html: `
+      <div style="font-family:sans-serif;max-width:480px;margin:0 auto;color:#2a2a2a;">
+        <p>Hello,</p>
+        <p><strong>${senderName}</strong> thinks you'd enjoy
+           <strong>${wineName}</strong>${producer}.</p>
+        ${note ? `<blockquote style="border-left:3px solid #7B9E88;padding:8px 16px;margin:1rem 0;color:#555;font-style:italic;">"${note}"</blockquote>` : ''}
+        <p style="margin:2rem 0;">
+          <a href="${wineLink}"
+             style="background:#7B9E88;color:#0d0d0d;padding:12px 28px;
+                    border-radius:4px;text-decoration:none;font-weight:600;
+                    display:inline-block;">
+            View Wine
+          </a>
+        </p>
+        <hr style="border:none;border-top:1px solid #ddd;margin:2rem 0;" />
+        <p style="color:#9A9484;font-size:0.85em;">
+          <a href="${frontendUrl}" style="color:#9A9484;">Cellarion</a> is a wine cellar management app.
+          Sign up to save this wine to your wishlist!
+        </p>
+      </div>
+    `
+  });
+}
+
+module.exports = { sendVerificationEmail, sendPasswordResetEmail, sendDrinkWindowDigest, sendRecommendationEmail, EMAIL_VERIFICATION_ENABLED };

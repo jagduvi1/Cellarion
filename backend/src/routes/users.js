@@ -11,6 +11,7 @@ const Notification = require('../models/Notification');
 const AuditLog = require('../models/AuditLog');
 const BottleImage = require('../models/BottleImage');
 const Follow = require('../models/Follow');
+const Recommendation = require('../models/Recommendation');
 const PushSubscription = require('../models/PushSubscription');
 const CellarValueSnapshot = require('../models/CellarValueSnapshot');
 const { requireAuth, requireRole } = require('../middleware/auth');
@@ -299,7 +300,7 @@ router.get('/me/export', requireAuth, async (req, res) => {
     const user = await User.findById(userId);
     if (!user) return res.status(404).json({ error: 'User not found' });
 
-    const [bottles, cellars, racks, wineRequests, reviews, notifications, auditLogs, images] = await Promise.all([
+    const [bottles, cellars, racks, wineRequests, reviews, notifications, auditLogs, images, recommendationsSent, recommendationsReceived] = await Promise.all([
       Bottle.find({ user: userId }).lean(),
       Cellar.find({ $or: [{ user: userId }, { 'members.user': userId }], deletedAt: null }).lean(),
       Rack.find({ cellar: { $in: await Cellar.distinct('_id', { user: userId }) }, deletedAt: null }).lean(),
@@ -307,7 +308,9 @@ router.get('/me/export', requireAuth, async (req, res) => {
       Review.find({ user: userId }).lean(),
       Notification.find({ user: userId }).lean(),
       AuditLog.find({ 'actor.userId': userId }).sort({ timestamp: -1 }).limit(1000).lean(),
-      BottleImage.find({ uploadedBy: userId }).lean()
+      BottleImage.find({ uploadedBy: userId }).lean(),
+      Recommendation.find({ sender: userId }).populate('wine', 'name producer').lean(),
+      Recommendation.find({ recipient: userId }).populate('wine', 'name producer').populate('sender', 'username').lean()
     ]);
 
     const exportData = {
@@ -340,7 +343,25 @@ router.get('/me/export', requireAuth, async (req, res) => {
         originalUrl: i.originalUrl,
         processedUrl: i.processedUrl,
         uploadedAt: i.createdAt
-      }))
+      })),
+      recommendations: {
+        sent: recommendationsSent.map(r => ({
+          wine: r.wine?.name,
+          producer: r.wine?.producer,
+          recipientEmail: r.recipientEmail,
+          note: r.note,
+          status: r.status,
+          createdAt: r.createdAt
+        })),
+        received: recommendationsReceived.map(r => ({
+          wine: r.wine?.name,
+          producer: r.wine?.producer,
+          from: r.sender?.username,
+          note: r.note,
+          status: r.status,
+          createdAt: r.createdAt
+        }))
+      }
     };
 
     res.setHeader('Content-Disposition', `attachment; filename="cellarion-data-export-${user.username}.json"`);

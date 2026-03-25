@@ -44,6 +44,7 @@ const discussionsRoute = require('./routes/discussions');
 const pushSubscriptionsRoute = require('./routes/pushSubscriptions');
 const blogRoute = require('./routes/blog');
 const wishlistRoute = require('./routes/wishlist');
+const recommendationsRoute = require('./routes/recommendations');
 const sitemapRoute = require('./routes/sitemap');
 const rateLimitsConfig = require('./config/rateLimits');
 const aiConfig = require('./config/aiConfig');
@@ -174,6 +175,7 @@ app.use('/api/discussions', discussionsRoute);
 app.use('/api/push-subscriptions', pushSubscriptionsRoute);
 app.use('/api/blog', blogRoute);
 app.use('/api/wishlist', wishlistRoute);
+app.use('/api/recommendations', recommendationsRoute);
 
 // 404 handler
 app.use((req, res) => {

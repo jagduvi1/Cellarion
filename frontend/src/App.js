@@ -51,6 +51,7 @@ const NfcRedirect          = lazy(() => import('./pages/NfcRedirect'));
 const Wishlist             = lazy(() => import('./pages/Wishlist'));
 const AddToWishlist        = lazy(() => import('./pages/AddToWishlist'));
 const Unsubscribed         = lazy(() => import('./pages/Unsubscribed'));
+const Recommendations      = lazy(() => import('./pages/Recommendations'));
 
 function AppRoutes() {
   const { user, loading } = useAuth();
@@ -168,6 +169,14 @@ function AppRoutes() {
           element={
             <ProtectedRoute>
               <Layout><AddToWishlist /></Layout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/recommendations"
+          element={
+            <ProtectedRoute>
+              <Layout><Recommendations /></Layout>
             </ProtectedRoute>
           }
         />
