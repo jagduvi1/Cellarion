@@ -147,7 +147,7 @@ function CellarDetail() {
           {!loading && (
             <div className="cellar-header-desktop-actions">
               {canEdit && (
-                <Link to={`/cellars/${id}/add-bottle`} className="btn btn-primary btn-small">
+                <Link to={`/cellars/${id}/add-bottle`} className="btn btn-primary btn-small" data-guide="add-bottle">
                   + {t('cellarDetail.addBottle')}
                 </Link>
               )}
@@ -182,6 +182,7 @@ function CellarDetail() {
                       {cellar.userRole === 'owner' && (
                         <button
                           className="more-menu-item"
+                          data-guide="share-cellar"
                           onClick={() => { setShowShareModal(true); setMoreOpen(false); }}
                         >
                           <span aria-hidden="true">🔗</span> {t('cellarDetail.share')}
@@ -190,6 +191,7 @@ function CellarDetail() {
                       <Link
                         to={`/cellars/${id}/racks`}
                         className="more-menu-item"
+                        data-guide="rack-view"
                         onClick={() => setMoreOpen(false)}
                       >
                         <span aria-hidden="true">🗄️</span> {t('cellarDetail.racks')}

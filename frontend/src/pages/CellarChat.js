@@ -313,6 +313,7 @@ export default function CellarChat() {
       <form className="cellar-chat__form" onSubmit={handleSubmit}>
         <textarea
           className="cellar-chat__input"
+          data-guide="chat-input"
           placeholder={atLimit
             ? (usage?.period === 'weekly' ? 'Weekly limit reached — try again in a few days' : 'Daily limit reached — resets at midnight UTC')
             : 'Ask about your cellar… (Enter to send, Shift+Enter for new line)'}

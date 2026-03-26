@@ -95,7 +95,7 @@ export default function Journal() {
     <div className="journal-page">
       <div className="journal-header">
         <h1>{t('journal.title', 'Wine Journal')}</h1>
-        <button className="btn btn-primary" onClick={() => { setEditEntry(null); setFormOpen(true); }}>
+        <button className="btn btn-primary" data-guide="add-journal" onClick={() => { setEditEntry(null); setFormOpen(true); }}>
           + {t('journal.newEntry', 'New Entry')}
         </button>
       </div>

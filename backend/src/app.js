@@ -47,6 +47,7 @@ const wishlistRoute = require('./routes/wishlist');
 const recommendationsRoute = require('./routes/recommendations');
 const journalRoute = require('./routes/journal');
 const restockAlertsRoute = require('./routes/restockAlerts');
+const guideRoute = require('./routes/guide');
 const sitemapRoute = require('./routes/sitemap');
 const ogRoute = require('./routes/og');
 const rateLimitsConfig = require('./config/rateLimits');
@@ -182,6 +183,7 @@ app.use('/api/wishlist', wishlistRoute);
 app.use('/api/recommendations', recommendationsRoute);
 app.use('/api/journal', journalRoute);
 app.use('/api/restock-alerts', restockAlertsRoute);
+app.use('/api/guide', guideRoute);
 
 // 404 handler
 app.use((req, res) => {

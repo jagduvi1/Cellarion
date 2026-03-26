@@ -579,7 +579,7 @@ function AddBottle() {
                 <p className="camera-prompt-hint">
                   {t('addBottle.scanPromptHint', 'Take a photo of the label — we\'ll identify the wine and add it to the registry if it doesn\'t exist yet.')}
                 </p>
-                <button type="button" className="btn btn-primary" onClick={startLabelCamera}>
+                <button type="button" className="btn btn-primary" data-guide="scan-label" onClick={startLabelCamera}>
                   {t('addBottle.startCamera', 'Start Camera')}
                 </button>
               </div>
