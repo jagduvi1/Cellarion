@@ -195,6 +195,32 @@ router.put('/:id/status', async (req, res) => {
   }
 });
 
+// DELETE /api/recommendations/:id — delete a received recommendation
+router.delete('/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!isValidId(id)) return res.status(400).json({ error: 'Invalid recommendation ID' });
+
+    const rec = await Recommendation.findOneAndDelete({
+      _id: id,
+      recipient: req.user.id
+    });
+
+    if (!rec) return res.status(404).json({ error: 'Recommendation not found' });
+
+    logAudit(req, 'recommendation.delete', {
+      type: 'recommendation',
+      id: rec._id,
+      wineId: rec.wine
+    });
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Delete recommendation error:', err);
+    res.status(500).json({ error: 'Failed to delete recommendation' });
+  }
+});
+
 // GET /api/recommendations/friends — search following list for friend picker
 router.get('/friends', async (req, res) => {
   try {

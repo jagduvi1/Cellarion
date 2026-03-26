@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
-import { getRecommendations, getSentRecommendations, updateRecommendationStatus } from '../api/recommendations';
+import { getRecommendations, getSentRecommendations, updateRecommendationStatus, deleteRecommendation } from '../api/recommendations';
 import { addToWishlist } from '../api/wishlist';
 import './Recommendations.css';
 
@@ -51,6 +51,17 @@ export default function Recommendations() {
     if (res.ok) {
       setItems((prev) => prev.map((r) => r._id === id ? { ...r, status: 'seen' } : r));
     }
+  };
+
+  const handleDelete = async (id) => {
+    if (!window.confirm(t('recommendations.confirmDelete', 'Delete this recommendation?'))) return;
+    try {
+      const res = await deleteRecommendation(apiFetch, id);
+      if (res.ok) {
+        setItems(prev => prev.filter(r => r._id !== id));
+        setTotal(prev => prev - 1);
+      }
+    } catch { /* ignore */ }
   };
 
   const handleAddToWishlist = async (rec) => {
@@ -160,6 +171,12 @@ export default function Recommendations() {
                   {rec.status === 'added-to-wishlist' && (
                     <span className="rec-card__badge">{t('recommendations.addedToWishlist')}</span>
                   )}
+                  <button
+                    className="btn btn-small btn-danger"
+                    onClick={() => handleDelete(rec._id)}
+                  >
+                    {t('recommendations.delete', 'Delete')}
+                  </button>
                 </div>
               )}
 

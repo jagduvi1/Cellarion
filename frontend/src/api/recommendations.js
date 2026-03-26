@@ -20,5 +20,8 @@ export const updateRecommendationStatus = (apiFetch, id, status) =>
     body: JSON.stringify({ status }),
   });
 
+export const deleteRecommendation = (apiFetch, id) =>
+  apiFetch(`/api/recommendations/${id}`, { method: 'DELETE' });
+
 export const searchFriends = (apiFetch, q = '') =>
   apiFetch(`/api/recommendations/friends${q ? `?q=${encodeURIComponent(q)}` : ''}`);

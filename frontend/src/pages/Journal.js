@@ -78,14 +78,9 @@ export default function Journal() {
     }
   };
 
-  const handleSaved = (entry) => {
-    if (editEntry) {
-      setEntries(prev => prev.map(e => e._id === entry._id ? entry : e));
-    } else {
-      setEntries(prev => [entry, ...prev]);
-      setTotal(prev => prev + 1);
-    }
+  const handleSaved = () => {
     setEditEntry(null);
+    fetchEntries();
   };
 
   // Group entries by month
