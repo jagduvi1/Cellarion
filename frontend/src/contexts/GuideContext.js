@@ -55,8 +55,9 @@ export function GuideProvider({ children }) {
   // Tour state
   const [activeTour, setActiveTour] = useState(null);
   const [tourStepIndex, setTourStepIndex] = useState(0);
-  const [tourStartOffset, setTourStartOffset] = useState(0); // for relative step numbering
+  const [tourStartOffset, setTourStartOffset] = useState(0);
   const tourRef = useRef(null);
+  const lastAdvanceRef = useRef(0); // debounce guard
 
   // Keep tourRef in sync
   useEffect(() => {
@@ -154,6 +155,11 @@ export function GuideProvider({ children }) {
 
   const advanceTour = useCallback(() => {
     if (!activeTour) return;
+    // Debounce: ignore rapid duplicate calls (e.g. click handler + auto-advance)
+    const now = Date.now();
+    if (now - lastAdvanceRef.current < 400) return;
+    lastAdvanceRef.current = now;
+
     const nextIndex = tourStepIndex + 1;
     if (nextIndex >= activeTour.steps.length) {
       // Tour complete

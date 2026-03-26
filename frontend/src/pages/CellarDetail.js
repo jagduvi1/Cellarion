@@ -154,6 +154,7 @@ function CellarDetail() {
               <div className="more-menu-wrap">
                 <button
                   className="btn btn-secondary btn-small btn-more"
+                  data-guide="more-menu-btn"
                   onClick={() => setMoreOpen(o => !o)}
                   aria-label="More actions"
                   aria-haspopup="menu"

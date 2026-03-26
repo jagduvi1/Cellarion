@@ -44,12 +44,9 @@ function TourOverlay() {
 
     let retryCount = 0;
     let clickCleanup = null;
-    // Only auto-skip for mid-tour navigation steps (not the last step).
-    // If it's the last step or a non-navigation step, keep retrying forever
-    // and let the user interact or end the tour via the chat.
     const isLastStep = tourStepIndex === activeTour.steps.length - 1;
     const canAutoSkip = currentStep.navigateTo && !isLastStep;
-    const MAX_RETRIES = canAutoSkip ? 20 : Infinity; // 4s or never
+    const MAX_RETRIES = canAutoSkip ? 20 : Infinity;
 
     const findTarget = () => {
       const el = document.querySelector(currentStep.element);
