@@ -52,6 +52,13 @@ function Layout({ children }) {
             </Link>
           </div>
 
+          {/* Mobile notification bell — visible only on mobile, positioned in top navbar */}
+          {user && (
+            <div className="mobile-notif-bell">
+              <NotificationBell />
+            </div>
+          )}
+
           {user && (
             <>
               {/* Desktop navigation links */}

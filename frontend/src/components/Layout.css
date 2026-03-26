@@ -351,6 +351,11 @@
   min-height: 44px;
 }
 
+/* ── Mobile notification bell (hidden on desktop) ── */
+.mobile-notif-bell {
+  display: none;
+}
+
 /* ── Bottom Navigation (hidden on desktop) ── */
 .bottom-nav {
   display: none;
@@ -367,6 +372,11 @@
 
   .hamburger {
     display: none;
+  }
+
+  .mobile-notif-bell {
+    display: flex;
+    margin-left: auto;
   }
 
   .navbar-inner {
