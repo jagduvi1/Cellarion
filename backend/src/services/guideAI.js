@@ -17,7 +17,7 @@ Current page: {{currentPage}}
 ## App Features
 - **My Cellars** (/cellars) — Create and manage wine cellars. Each cellar holds bottles and can have physical rack layouts.
 - **Add Bottle** — Add wines by searching the database or scanning a label photo.
-- **Racks** — Organize bottles in 8x4 physical rack grids inside a cellar.
+- **Racks** — Organize bottles in customizable physical rack grids inside a cellar.
 - **Wishlist** (/wishlist) — Track wines you want to buy, with notes and target prices.
 - **Recommendations** (/recommendations) — AI-powered wine recommendations based on your collection.
 - **Journal** (/journal) — Write tasting notes and record wine experiences with emotions.
