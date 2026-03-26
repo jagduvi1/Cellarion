@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import { getStatsOverview } from '../api/stats';
 import CellarStatsCard from '../components/CellarStatsCard';
-import html2canvas from 'html2canvas';
+import { toPng, toBlob } from 'html-to-image';
 import './StatsCard.css';
 
 export default function StatsCard() {
@@ -29,18 +29,19 @@ export default function StatsCard() {
     fetch();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const exportOptions = {
+    pixelRatio: 2,
+    cacheBust: true,
+  };
+
   const handleDownload = async () => {
     if (!cardRef.current) return;
     setExporting(true);
     try {
-      const canvas = await html2canvas(cardRef.current, {
-        scale: 2,
-        backgroundColor: null,
-        useCORS: true,
-      });
+      const dataUrl = await toPng(cardRef.current, exportOptions);
       const link = document.createElement('a');
       link.download = `cellarion-stats-${user?.username || 'card'}.png`;
-      link.href = canvas.toDataURL('image/png');
+      link.href = dataUrl;
       link.click();
     } catch (err) {
       console.error('Export failed:', err);
@@ -52,12 +53,7 @@ export default function StatsCard() {
     if (!cardRef.current || !navigator.share) return;
     setExporting(true);
     try {
-      const canvas = await html2canvas(cardRef.current, {
-        scale: 2,
-        backgroundColor: null,
-        useCORS: true,
-      });
-      const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+      const blob = await toBlob(cardRef.current, exportOptions);
       const file = new File([blob], 'cellarion-stats.png', { type: 'image/png' });
       await navigator.share({
         title: t('statsCard.shareTitle', 'My Cellarion Stats'),
