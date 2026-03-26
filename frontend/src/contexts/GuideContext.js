@@ -55,7 +55,7 @@ export function GuideProvider({ children }) {
   // Tour state
   const [activeTour, setActiveTour] = useState(null);
   const [tourStepIndex, setTourStepIndex] = useState(0);
-  const tourRef = useRef(null); // Ref for stable access in event handlers
+  const tourRef = useRef(null);
 
   // Keep tourRef in sync
   useEffect(() => {
@@ -65,12 +65,28 @@ export function GuideProvider({ children }) {
   // Get suggestions for current page
   const suggestions = getSuggestionsForPage(location.pathname);
 
+  // ─── Helpers ───
+
+  /** Build a chat message for a tour step. */
+  function stepMessage(tour, index) {
+    const step = tour.steps[index];
+    const total = tour.steps.length;
+    return {
+      role: 'assistant',
+      isTourStep: true,
+      stepLabel: `Step ${index + 1} of ${total}`,
+      text: step.description,
+      clickHint: step.clickAdvance
+        ? 'Click the highlighted element to continue.'
+        : null,
+    };
+  }
+
   // ─── Chat ───
 
   const sendMessage = useCallback(async (question) => {
     if (!question.trim()) return;
 
-    // Add user message
     setMessages(prev => [...prev, { role: 'user', text: question }]);
     setLoading(true);
 
@@ -79,7 +95,6 @@ export function GuideProvider({ children }) {
       const data = await res.json();
 
       if (data.fallback) {
-        // AI unavailable — use local FAQ
         const faq = findFaqMatch(question);
         setMessages(prev => [...prev, {
           role: 'assistant',
@@ -96,7 +111,6 @@ export function GuideProvider({ children }) {
         }]);
       }
     } catch {
-      // Network error — use local FAQ
       const faq = findFaqMatch(question);
       setMessages(prev => [...prev, {
         role: 'assistant',
@@ -115,11 +129,18 @@ export function GuideProvider({ children }) {
     const tour = TOURS[tourId];
     if (!tour) return;
 
-    // Smart start: skip steps the user has already navigated past
     const bestStart = findBestStartStep(tour, location.pathname);
 
     setActiveTour(tour);
     setTourStepIndex(bestStart);
+
+    // Open chat and narrate the first step
+    setIsOpen(true);
+    setMessages(prev => [
+      ...prev,
+      { role: 'assistant', text: `Let me walk you through: **${tour.title}**` },
+      stepMessage(tour, bestStart),
+    ]);
 
     // Auto-navigate if the chosen step requires it
     const step = tour.steps[bestStart];
@@ -137,13 +158,16 @@ export function GuideProvider({ children }) {
       setTourStepIndex(0);
       setMessages(prev => [...prev, {
         role: 'assistant',
-        text: 'Tour complete! You\'re all set. Is there anything else I can help you with?',
+        text: 'All done! You\'re all set. Is there anything else I can help with?',
         suggestions: getSuggestionsForPage(location.pathname),
       }]);
       return;
     }
 
     setTourStepIndex(nextIndex);
+
+    // Narrate the next step in chat
+    setMessages(prev => [...prev, stepMessage(activeTour, nextIndex)]);
 
     // Auto-navigate if next step requires it
     const nextStep = activeTour.steps[nextIndex];
@@ -153,9 +177,16 @@ export function GuideProvider({ children }) {
   }, [activeTour, tourStepIndex, location.pathname, navigate]);
 
   const endTour = useCallback(() => {
+    if (activeTour) {
+      setMessages(prev => [...prev, {
+        role: 'assistant',
+        text: 'Tour ended. Feel free to ask me anything else!',
+        suggestions: getSuggestionsForPage(location.pathname),
+      }]);
+    }
     setActiveTour(null);
     setTourStepIndex(0);
-  }, []);
+  }, [activeTour, location.pathname]);
 
   // Check if the current page matches the current step's waitForPage
   const currentStep = activeTour?.steps[tourStepIndex] ?? null;

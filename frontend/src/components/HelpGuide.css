@@ -456,137 +456,60 @@
   }
 }
 
-/* ─── Tour Popover ─── */
+/* ─── Tour step messages in chat ─── */
 
-.guide-tour-popover {
-  width: 300px;
-  max-width: calc(100vw - 32px);
-  background: var(--color-surface, #fff);
-  border-radius: 14px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
-  padding: 16px;
-  pointer-events: auto;
-  z-index: 10001;
-  animation: guide-popover-entrance 0.25s ease-out;
+.guide-msg--tour-step .guide-msg-text {
+  background: var(--color-primary-light, rgba(122, 30, 45, 0.06));
+  border-left: 3px solid var(--color-primary, #7A1E2D);
 }
 
-@keyframes guide-popover-entrance {
-  from {
-    opacity: 0;
-    transform: translateX(-50%) translateY(8px);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(-50%) translateY(0);
-  }
-}
-
-.guide-tour-popover-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 8px;
-}
-
-.guide-tour-step-badge {
-  display: inline-flex;
-  align-items: center;
-  padding: 2px 10px;
-  border-radius: 10px;
+.guide-msg-step-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 8px;
   background: var(--color-primary, #7A1E2D);
   color: #fff;
-  font-size: 0.72rem;
+  font-size: 0.68rem;
   font-weight: 600;
   letter-spacing: 0.02em;
+  margin-bottom: 4px;
 }
 
-.guide-tour-close {
-  background: none;
-  border: none;
-  cursor: pointer;
-  padding: 4px;
-  border-radius: 6px;
-  color: var(--color-text-tertiary, #999);
-  display: flex;
-  align-items: center;
-  transition: color 0.15s, background 0.15s;
-}
-
-.guide-tour-close:hover {
-  color: var(--color-text, #333);
-  background: var(--color-bg-secondary, #f5f0ec);
-}
-
-.guide-tour-title {
-  margin: 0 0 6px;
-  font-size: 0.95rem;
-  font-weight: 600;
-  color: var(--color-text, #333);
-}
-
-.guide-tour-desc {
-  margin: 0 0 14px;
-  font-size: 0.82rem;
-  line-height: 1.55;
-  color: var(--color-text-secondary, #666);
-}
-
-.guide-tour-actions {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
-
-.guide-tour-btn-skip {
-  padding: 6px 14px;
-  border-radius: 8px;
-  border: 1px solid var(--color-border, #e0d6d0);
-  background: transparent;
-  color: var(--color-text-secondary, #666);
-  font-size: 0.8rem;
-  cursor: pointer;
-  transition: background 0.15s;
-}
-
-.guide-tour-btn-skip:hover {
-  background: var(--color-bg-secondary, #f5f0ec);
-}
-
-.guide-tour-btn-next {
-  padding: 6px 18px;
-  border-radius: 8px;
-  border: none;
-  background: var(--color-primary, #7A1E2D);
-  color: #fff;
-  font-size: 0.8rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: transform 0.1s, box-shadow 0.15s;
-}
-
-.guide-tour-btn-next:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 2px 8px rgba(122, 30, 45, 0.3);
-}
-
-.guide-tour-btn-next:active {
-  transform: translateY(0);
-}
-
-.guide-tour-click-hint {
+.guide-msg-click-hint {
+  display: block;
+  margin-top: 6px;
   font-size: 0.75rem;
   color: var(--color-text-tertiary, #999);
   font-style: italic;
 }
 
-/* ─── Responsive adjustments ─── */
+/* "End tour" button in header */
+.guide-panel-end-tour {
+  padding: 4px 12px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  background: transparent;
+  color: #fff;
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: background 0.15s;
+}
 
-@media (max-width: 440px) {
-  .guide-tour-popover {
-    width: calc(100vw - 24px);
-    left: 12px !important;
-    right: 12px !important;
-    transform: none !important;
+.guide-panel-end-tour:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+/* During a tour, make the chat panel narrower and less intrusive */
+.guide-panel--touring {
+  width: 320px;
+  max-height: min(420px, calc(100vh - 48px));
+}
+
+/* ─── Responsive: touring panel on mobile ─── */
+
+@media (max-width: 768px) {
+  .guide-panel--touring {
+    width: 100%;
+    max-height: 50vh;
   }
 }
