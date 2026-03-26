@@ -4,6 +4,36 @@ import { useAuth } from './AuthContext';
 import { askGuide as askGuideApi } from '../api/guide';
 import TOURS, { getSuggestionsForPage, findFaqMatch } from '../utils/guideTours';
 
+/**
+ * Match a pathname against a waitForPage pattern.
+ *   - Trailing slash → prefix match  ('/cellars/' matches '/cellars/123')
+ *   - No trailing slash → exact match ('/cellars' matches only '/cellars')
+ *     OR suffix match ('/add-bottle' matches '/cellars/123/add-bottle')
+ */
+function matchesPage(pattern, pathname) {
+  if (!pattern) return true;
+  if (pattern.endsWith('/')) {
+    return pathname.startsWith(pattern);
+  }
+  return pathname === pattern || pathname.endsWith(pattern);
+}
+
+/**
+ * Find the best starting step for a tour based on the user's current page.
+ * Scans backwards from the last step and returns the index of the latest
+ * step whose waitForPage matches — so we skip steps the user has already
+ * navigated past.
+ */
+function findBestStartStep(tour, pathname) {
+  for (let i = tour.steps.length - 1; i > 0; i--) {
+    const step = tour.steps[i];
+    if (step.waitForPage && matchesPage(step.waitForPage, pathname)) {
+      return i;
+    }
+  }
+  return 0;
+}
+
 const GuideContext = createContext(null);
 
 export function useGuide() {
@@ -85,13 +115,16 @@ export function GuideProvider({ children }) {
     const tour = TOURS[tourId];
     if (!tour) return;
 
-    setActiveTour(tour);
-    setTourStepIndex(0);
+    // Smart start: skip steps the user has already navigated past
+    const bestStart = findBestStartStep(tour, location.pathname);
 
-    // Auto-navigate if first step has navigateTo
-    const firstStep = tour.steps[0];
-    if (firstStep.navigateTo && !location.pathname.startsWith(firstStep.navigateTo)) {
-      navigate(firstStep.navigateTo);
+    setActiveTour(tour);
+    setTourStepIndex(bestStart);
+
+    // Auto-navigate if the chosen step requires it
+    const step = tour.steps[bestStart];
+    if (step.navigateTo && !location.pathname.startsWith(step.navigateTo)) {
+      navigate(step.navigateTo);
     }
   }, [location.pathname, navigate]);
 
@@ -127,7 +160,7 @@ export function GuideProvider({ children }) {
   // Check if the current page matches the current step's waitForPage
   const currentStep = activeTour?.steps[tourStepIndex] ?? null;
   const isStepPageMatch = !currentStep?.waitForPage ||
-    location.pathname.includes(currentStep.waitForPage);
+    matchesPage(currentStep.waitForPage, location.pathname);
 
   const toggleOpen = useCallback(() => {
     setIsOpen(prev => !prev);

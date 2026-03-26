@@ -41,10 +41,18 @@ function TourOverlay() {
       return;
     }
 
+    let retryCount = 0;
+    const MAX_RETRIES = 8; // ~1.6s before auto-advancing
+
     const findTarget = () => {
       const el = document.querySelector(currentStep.element);
       if (!el) {
-        // Retry — element might not be rendered yet after navigation
+        retryCount++;
+        if (retryCount >= MAX_RETRIES) {
+          // Element not on this page — auto-advance to next step
+          advanceTour();
+          return;
+        }
         retryRef.current = setTimeout(findTarget, 200);
         return;
       }
