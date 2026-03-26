@@ -270,7 +270,7 @@ export default function Restock() {
                 </p>
               </div>
               <div className="restock-alert-card__actions">
-                <Link to="/wishlist/add" className="btn btn-small btn-primary">
+                <Link to="/wishlist/add" state={{ fromRestock: { wineId: alert.wine, wineName: alert.wineName, wineProducer: alert.wineProducer, wineType: alert.wineType, vintage: alert.vintage } }} className="btn btn-small btn-primary">
                   {t('restock.addToWishlist', 'Add to Wishlist')}
                 </Link>
                 <button className="btn btn-small btn-secondary" onClick={() => handleDismiss(alert._id)}>

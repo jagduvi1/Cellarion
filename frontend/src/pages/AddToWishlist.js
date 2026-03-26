@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { searchWines, findOrCreateWine, identifyWineByText } from '../api/wines';
+import { searchWines, getWine, findOrCreateWine, identifyWineByText } from '../api/wines';
 import { addToWishlist } from '../api/wishlist';
 import '../components/ImageUpload.css';
 import './AddBottle.css';
@@ -12,6 +12,7 @@ const WINE_TYPES = ['red', 'white', 'rosé', 'sparkling', 'dessert', 'fortified'
 function AddToWishlist() {
   const { apiFetch } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
 
@@ -54,6 +55,25 @@ function AddToWishlist() {
     }
     setLabelCam({ open: false, error: null });
   }, []);
+
+  // Pre-select wine when navigating from restock suggestions
+  useEffect(() => {
+    const restock = location.state?.fromRestock;
+    if (!restock?.wineId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const wine = await getWine(apiFetch, restock.wineId);
+        if (!cancelled && wine) {
+          setSelectedWine(wine);
+          if (restock.vintage) setVintage(restock.vintage);
+        }
+      } catch {
+        // Wine definition not found — fall back to normal flow
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const startLabelCamera = useCallback(async () => {
     setLabelCam({ open: true, error: null });
