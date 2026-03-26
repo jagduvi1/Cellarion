@@ -63,7 +63,7 @@ function sanitizeEntry(body) {
 // GET /api/journal/wine-search — search user's bottles + wine register for the pairing picker
 router.get('/wine-search', async (req, res) => {
   try {
-    const q = (req.query.q || '').trim();
+    const q = String(req.query.q || '').trim();
     if (!q || q.length < 2) return res.json({ bottles: [], wines: [] });
 
     const regex = new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
@@ -109,7 +109,7 @@ router.get('/', async (req, res) => {
   try {
     const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 20, 1), 50);
     const skip = Math.max(parseInt(req.query.skip, 10) || 0, 0);
-    const search = (req.query.q || '').trim();
+    const search = String(req.query.q || '').trim();
     const occasion = req.query.occasion;
 
     const query = { user: new mongoose.Types.ObjectId(req.user.id) };

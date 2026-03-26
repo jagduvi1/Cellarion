@@ -9,10 +9,12 @@ router.use(requireAuth);
 // GET /api/restock-alerts — list active restock alerts for the current user
 router.get('/', async (req, res) => {
   try {
-    const status = req.query.status || 'active';
+    const VALID_STATUSES = ['active', 'dismissed', 'resolved'];
+    const requestedStatus = String(req.query.status || 'active');
     const query = { user: req.user.id };
-    if (['active', 'dismissed', 'resolved'].includes(status)) {
-      query.status = status;
+    const validStatus = VALID_STATUSES.find(s => s === requestedStatus);
+    if (validStatus) {
+      query.status = validStatus;
     }
 
     const alerts = await RestockAlert.find(query)
