@@ -43,13 +43,19 @@ function TourOverlay() {
     }
 
     let retryCount = 0;
-    const MAX_RETRIES = currentStep.navigateTo ? 15 : 50;
+    let clickCleanup = null;
+    // Only auto-skip for mid-tour navigation steps (not the last step).
+    // If it's the last step or a non-navigation step, keep retrying forever
+    // and let the user interact or end the tour via the chat.
+    const isLastStep = tourStepIndex === activeTour.steps.length - 1;
+    const canAutoSkip = currentStep.navigateTo && !isLastStep;
+    const MAX_RETRIES = canAutoSkip ? 20 : Infinity; // 4s or never
 
     const findTarget = () => {
       const el = document.querySelector(currentStep.element);
       if (!el) {
         retryCount++;
-        if (retryCount >= MAX_RETRIES && currentStep.navigateTo) {
+        if (retryCount >= MAX_RETRIES) {
           advanceTour();
           return;
         }
@@ -75,7 +81,7 @@ function TourOverlay() {
       if (currentStep.clickAdvance) {
         const handler = () => advanceTour();
         el.addEventListener('click', handler, { once: true });
-        return () => el.removeEventListener('click', handler);
+        clickCleanup = () => el.removeEventListener('click', handler);
       }
     };
 
@@ -102,6 +108,7 @@ function TourOverlay() {
 
     return () => {
       clearTimeout(retryRef.current);
+      if (clickCleanup) clickCleanup();
       window.removeEventListener('scroll', updateRect, true);
       window.removeEventListener('resize', updateRect);
     };
