@@ -115,6 +115,49 @@
   cursor: not-allowed;
 }
 
+/* ── Push device management ── */
+.settings-push-devices {
+  margin-top: 0.5rem;
+  padding: 0.75rem;
+  background: var(--color-bg-muted, rgba(0,0,0,0.03));
+  border-radius: var(--radius);
+}
+
+.settings-push-device-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.settings-push-device-status {
+  font-size: 0.82rem;
+  color: var(--color-text-muted);
+}
+
+.settings-push-device-status--active {
+  color: var(--color-success);
+  font-weight: 500;
+}
+
+.settings-push-test-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+}
+
+.settings-push-test-error {
+  font-size: 0.82rem;
+  color: var(--color-danger, #c0392b);
+}
+
+.btn-sm {
+  padding: 0.3rem 0.75rem;
+  font-size: 0.78rem;
+}
+
 .settings-version {
   text-align: center;
   font-size: 0.75rem;

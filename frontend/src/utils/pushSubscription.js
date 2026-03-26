@@ -77,7 +77,7 @@ export async function subscribeToPush(apiFetch, vapidPublicKey) {
 }
 
 /**
- * Unsubscribe from push notifications.
+ * Unsubscribe from push notifications on this device.
  *
  * @param {Function} apiFetch - Authenticated fetch from useAuth()
  * @returns {Promise<{success: boolean, error?: string}>}
@@ -101,5 +101,55 @@ export async function unsubscribeFromPush(apiFetch) {
     return { success: true };
   } catch (err) {
     return { success: false, error: err.message || 'Failed to unsubscribe' };
+  }
+}
+
+/**
+ * Get the current browser's push subscription endpoint (if any).
+ * Returns null if no active subscription.
+ */
+export async function getCurrentEndpoint() {
+  if (!isPushSupported()) return null;
+  try {
+    const registration = await navigator.serviceWorker.ready;
+    const subscription = await registration.pushManager.getSubscription();
+    return subscription?.endpoint || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Fetch device status from the backend — total registered devices
+ * and whether the current device is registered.
+ */
+export async function getDeviceStatus(apiFetch, endpoint) {
+  try {
+    const query = endpoint ? `?endpoint=${encodeURIComponent(endpoint)}` : '';
+    const res = await apiFetch(`/api/push-subscriptions/status${query}`);
+    if (!res.ok) return { totalDevices: 0, thisDeviceRegistered: false };
+    return await res.json();
+  } catch {
+    return { totalDevices: 0, thisDeviceRegistered: false };
+  }
+}
+
+/**
+ * Send a test push notification to the current device.
+ */
+export async function sendTestPush(apiFetch, endpoint) {
+  try {
+    const res = await apiFetch('/api/push-subscriptions/test', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ endpoint })
+    });
+    if (!res.ok) {
+      const data = await res.json();
+      return { success: false, error: data.error || 'Failed to send test notification' };
+    }
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err.message || 'Failed to send test notification' };
   }
 }

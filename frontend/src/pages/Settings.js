@@ -7,7 +7,7 @@ import { updateProfile } from '../api/profiles';
 import { CURRENCIES } from '../config/currencies';
 import { PLANS } from '../config/plans';
 import { SCALE_META, VALID_SCALES } from '../utils/ratingUtils';
-import { isPushSupported, getPushPermissionState, subscribeToPush, unsubscribeFromPush } from '../utils/pushSubscription';
+import { isPushSupported, getPushPermissionState, subscribeToPush, unsubscribeFromPush, getCurrentEndpoint, getDeviceStatus, sendTestPush } from '../utils/pushSubscription';
 import './Settings.css';
 
 function Settings() {
@@ -44,6 +44,13 @@ function Settings() {
   const pushSupported = isPushSupported();
   const pushDenied = getPushPermissionState() === 'denied';
 
+  // Per-device push state
+  const [currentEndpoint, setCurrentEndpoint] = useState(null);
+  const [deviceStatus, setDeviceStatus] = useState({ totalDevices: 0, thisDeviceRegistered: false });
+  const [deviceLoading, setDeviceLoading] = useState(false);
+  const [testSending, setTestSending] = useState(false);
+  const [testResult, setTestResult] = useState(null);
+
   // Fetch VAPID key for push subscription
   const fetchVapidKey = useCallback(async () => {
     try {
@@ -53,25 +60,64 @@ function Settings() {
     } catch {}
   }, [apiFetch]);
 
+  // Fetch current device push status
+  const refreshDeviceStatus = useCallback(async () => {
+    const ep = await getCurrentEndpoint();
+    setCurrentEndpoint(ep);
+    const status = await getDeviceStatus(apiFetch, ep);
+    setDeviceStatus(status);
+  }, [apiFetch]);
+
   useEffect(() => { fetchVapidKey(); }, [fetchVapidKey]);
+  useEffect(() => { if (pushSupported) refreshDeviceStatus(); }, [pushSupported, refreshDeviceStatus]);
+
+  const handleRegisterDevice = async () => {
+    setDeviceLoading(true);
+    setNotifError(null);
+    const result = await subscribeToPush(apiFetch, vapidKey);
+    if (!result.success) {
+      setNotifError(result.error);
+    } else {
+      // Also enable master push toggle if it wasn't on
+      if (!pushNotif) {
+        setPushNotif(true);
+        await updatePreferences({ notifications: { drinkWindow, email: emailNotif, push: true } });
+      }
+    }
+    await refreshDeviceStatus();
+    setDeviceLoading(false);
+  };
+
+  const handleRemoveDevice = async () => {
+    setDeviceLoading(true);
+    setNotifError(null);
+    await unsubscribeFromPush(apiFetch);
+    await refreshDeviceStatus();
+    setDeviceLoading(false);
+  };
+
+  const handleTestPush = async () => {
+    setTestSending(true);
+    setTestResult(null);
+    const ep = await getCurrentEndpoint();
+    if (!ep) {
+      setTestResult({ success: false, error: 'This device is not registered' });
+      setTestSending(false);
+      return;
+    }
+    const result = await sendTestPush(apiFetch, ep);
+    setTestResult(result);
+    if (!result.success && result.error?.includes('expired')) {
+      await refreshDeviceStatus();
+    }
+    setTestSending(false);
+    if (result.success) setTimeout(() => setTestResult(null), 5000);
+  };
 
   const handleNotifSave = async () => {
     setNotifSaving(true);
     setNotifError(null);
     setNotifSaved(false);
-
-    // Handle push subscription/unsubscription
-    if (pushNotif && !notifPrefs.push) {
-      const result = await subscribeToPush(apiFetch, vapidKey);
-      if (!result.success) {
-        setNotifError(result.error);
-        setPushNotif(false);
-        setNotifSaving(false);
-        return;
-      }
-    } else if (!pushNotif && notifPrefs.push) {
-      await unsubscribeFromPush(apiFetch);
-    }
 
     const result = await updatePreferences({
       notifications: { drinkWindow, email: emailNotif, push: pushNotif }
@@ -348,6 +394,55 @@ function Settings() {
                   : 'Receive browser push notifications for all alerts — even when Cellarion is closed.'}
           </p>
         </div>
+
+        {/* ── Per-device push management ── */}
+        {pushSupported && vapidKey && !pushDenied && (
+          <div className="settings-push-devices">
+            <div className="settings-push-device-row">
+              <span className={`settings-push-device-status ${deviceStatus.thisDeviceRegistered ? 'settings-push-device-status--active' : ''}`}>
+                {deviceStatus.thisDeviceRegistered ? 'This device is registered' : 'This device is not registered'}
+              </span>
+              {deviceStatus.thisDeviceRegistered ? (
+                <button
+                  className="btn btn-secondary btn-sm"
+                  onClick={handleRemoveDevice}
+                  disabled={deviceLoading}
+                >
+                  {deviceLoading ? 'Removing...' : 'Remove this device'}
+                </button>
+              ) : (
+                <button
+                  className="btn btn-primary btn-sm"
+                  onClick={handleRegisterDevice}
+                  disabled={deviceLoading}
+                >
+                  {deviceLoading ? 'Registering...' : 'Register this device'}
+                </button>
+              )}
+            </div>
+            {deviceStatus.totalDevices > 0 && (
+              <p className="settings-hint" style={{ marginTop: '0.25rem' }}>
+                {deviceStatus.totalDevices} {deviceStatus.totalDevices === 1 ? 'device' : 'devices'} registered for push notifications.
+              </p>
+            )}
+            {deviceStatus.thisDeviceRegistered && (
+              <div className="settings-push-test-row">
+                <button
+                  className="btn btn-secondary btn-sm"
+                  onClick={handleTestPush}
+                  disabled={testSending}
+                >
+                  {testSending ? 'Sending...' : 'Send test notification'}
+                </button>
+                {testResult && (
+                  <span className={testResult.success ? 'settings-saved' : 'settings-push-test-error'}>
+                    {testResult.success ? 'Test sent!' : testResult.error}
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
+        )}
 
         {notifError && <div className="alert alert-error">{notifError}</div>}
 
