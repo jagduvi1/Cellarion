@@ -112,12 +112,14 @@ function Layout({ children }) {
                 <Link
                   to="/wine-requests"
                   className={`nav-link ${isActive('/wine-requests') ? 'active' : ''}`}
+                  data-guide="nav-wine-requests"
                 >
                   {t('nav.myRequests')}
                 </Link>
                 <Link
                   to="/community"
                   className={`nav-link ${isActive('/community') ? 'active' : ''}`}
+                  data-guide="nav-community"
                 >
                   Community
                 </Link>

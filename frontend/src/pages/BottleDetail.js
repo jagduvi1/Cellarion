@@ -258,7 +258,7 @@ function BottleDetail() {
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
                     <span className="bd-btn-label">{t('bottleDetail.editDetails')}</span>
                   </button>
-                  <button className="btn btn-consume btn-small" onClick={() => setConsumeOpen(true)}>
+                  <button className="btn btn-consume btn-small" data-guide="bottle-consume" onClick={() => setConsumeOpen(true)}>
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M8 2h8l4 10H4L8 2z"/><path d="M12 12v6"/><path d="M8 22h8"/></svg>
                     <span className="bd-btn-label">{t('bottleDetail.removeBottle')}</span>
                   </button>
@@ -408,6 +408,7 @@ function BottleDetail() {
           )}
           <button
             className="btn btn-primary btn-small"
+            data-guide="bottle-write-review"
             onClick={() => setReviewFormOpen(true)}
           >
             {t('reviews.writeReview', 'Write a Review')}

@@ -42,14 +42,17 @@ function TourOverlay() {
     }
 
     let retryCount = 0;
-    const MAX_RETRIES = 8; // ~1.6s before auto-advancing
+    // Only auto-advance for steps that navigated here (element should exist).
+    // For steps without navigateTo, the element might be in a menu/modal —
+    // keep retrying longer and let the user click Skip if stuck.
+    const MAX_RETRIES = currentStep.navigateTo ? 15 : 50; // 3s vs 10s
 
     const findTarget = () => {
       const el = document.querySelector(currentStep.element);
       if (!el) {
         retryCount++;
-        if (retryCount >= MAX_RETRIES) {
-          // Element not on this page — auto-advance to next step
+        if (retryCount >= MAX_RETRIES && currentStep.navigateTo) {
+          // Element truly missing after navigation — skip this step
           advanceTour();
           return;
         }

@@ -279,6 +279,201 @@ const TOURS = {
       },
     ],
   },
+
+  'build-3d-room': {
+    title: 'Build a 3D Cellar Room',
+    steps: [
+      {
+        element: '[data-guide="nav-cellars"]',
+        title: 'Open Your Cellars',
+        description: 'Start by going to your cellars.',
+        placement: 'bottom',
+        navigateTo: '/cellars',
+        clickAdvance: true,
+      },
+      {
+        element: '[data-guide="cellar-card"]',
+        title: 'Select a Cellar',
+        description: 'Choose the cellar you want to build a 3D room for.',
+        placement: 'bottom',
+        waitForPage: '/cellars',
+        clickAdvance: true,
+      },
+      {
+        element: '[data-guide="cellar-room"]',
+        title: 'Open Room View',
+        description: 'Click "Room View" to enter the 3D room builder. Here you can place your racks in a virtual room that mirrors your real cellar!',
+        placement: 'bottom',
+        waitForPage: '/cellars/',
+        clickAdvance: true,
+      },
+      {
+        element: '[data-guide="room-edit-mode"]',
+        title: 'Enter Edit Mode',
+        description: 'Click "Edit" to start arranging your room. In edit mode you can drag racks, rotate them, and position everything to match your physical cellar.',
+        placement: 'bottom',
+        waitForPage: '/room',
+      },
+      {
+        element: '[data-guide="room-add-rack"]',
+        title: 'Add Racks to the Room',
+        description: 'Click "Add Rack" to place your racks into the 3D room. You can drag them around and rotate them to match your real layout.',
+        placement: 'bottom',
+        waitForPage: '/room',
+      },
+      {
+        element: '[data-guide="room-save"]',
+        title: 'Save Your Layout',
+        description: 'When you\'re happy with the arrangement, click "Save" to keep your room layout. You can come back and edit it anytime!',
+        placement: 'bottom',
+        waitForPage: '/room',
+      },
+    ],
+  },
+
+  'import-bottles': {
+    title: 'Import Bottles from a File',
+    steps: [
+      {
+        element: '[data-guide="nav-cellars"]',
+        title: 'Open Your Cellars',
+        description: 'Start by going to your cellars.',
+        placement: 'bottom',
+        navigateTo: '/cellars',
+        clickAdvance: true,
+      },
+      {
+        element: '[data-guide="cellar-card"]',
+        title: 'Select a Cellar',
+        description: 'Choose the cellar where you want to import bottles.',
+        placement: 'bottom',
+        waitForPage: '/cellars',
+        clickAdvance: true,
+      },
+      {
+        element: '[data-guide="cellar-import"]',
+        title: 'Open Import',
+        description: 'Click "Import Bottles" to open the bulk import tool. You can upload a CSV or JSON file with your wine collection!',
+        placement: 'left',
+        waitForPage: '/cellars/',
+        clickAdvance: true,
+      },
+    ],
+  },
+
+  'consume-bottle': {
+    title: 'Mark a Bottle as Consumed',
+    steps: [
+      {
+        element: '[data-guide="nav-cellars"]',
+        title: 'Open Your Cellars',
+        description: 'Go to your cellars to find the bottle you drank.',
+        placement: 'bottom',
+        navigateTo: '/cellars',
+        clickAdvance: true,
+      },
+      {
+        element: '[data-guide="cellar-card"]',
+        title: 'Select a Cellar',
+        description: 'Choose the cellar that has the bottle.',
+        placement: 'bottom',
+        waitForPage: '/cellars',
+        clickAdvance: true,
+      },
+      {
+        element: '[data-guide="bottle-consume"]',
+        title: 'Consume the Bottle',
+        description: 'Click this button to mark the bottle as consumed. You can add a consumption date and tasting notes. The bottle moves to your cellar history!',
+        placement: 'bottom',
+        waitForPage: '/bottles/',
+      },
+    ],
+  },
+
+  'write-review': {
+    title: 'Write a Wine Review',
+    steps: [
+      {
+        element: '[data-guide="nav-cellars"]',
+        title: 'Find a Bottle',
+        description: 'To write a review, first navigate to a bottle in one of your cellars.',
+        placement: 'bottom',
+        navigateTo: '/cellars',
+        clickAdvance: true,
+      },
+      {
+        element: '[data-guide="bottle-write-review"]',
+        title: 'Write Your Review',
+        description: 'Click "Write a Review" to share your thoughts with the community. Your review will appear on the wine\'s page and in the community feed!',
+        placement: 'bottom',
+        waitForPage: '/bottles/',
+      },
+    ],
+  },
+
+  'suggest-wine': {
+    title: 'Suggest a Wine for the Database',
+    steps: [
+      {
+        element: '[data-guide="wine-request-create"]',
+        title: 'Create a Wine Request',
+        description: 'Click here to suggest a wine that\'s missing from our database. An admin will review it and add it so everyone can use it!',
+        placement: 'bottom',
+        navigateTo: '/wine-requests',
+      },
+    ],
+  },
+
+  'start-discussion': {
+    title: 'Start a Community Discussion',
+    steps: [
+      {
+        element: '[data-guide="nav-community"]',
+        title: 'Open Community',
+        description: 'Click here to go to the community section.',
+        placement: 'bottom',
+        navigateTo: '/community',
+        clickAdvance: true,
+      },
+      {
+        element: '[data-guide="discussion-create"]',
+        title: 'New Discussion',
+        description: 'Click "New Discussion" to start a conversation with other wine lovers. Share discoveries, ask questions, or discuss pairings!',
+        placement: 'bottom',
+        waitForPage: '/community/discussions',
+      },
+    ],
+  },
+
+  'view-history': {
+    title: 'View Consumed Bottles',
+    steps: [
+      {
+        element: '[data-guide="nav-cellars"]',
+        title: 'Open Your Cellars',
+        description: 'Go to your cellars first.',
+        placement: 'bottom',
+        navigateTo: '/cellars',
+        clickAdvance: true,
+      },
+      {
+        element: '[data-guide="cellar-card"]',
+        title: 'Select a Cellar',
+        description: 'Choose the cellar whose history you want to see.',
+        placement: 'bottom',
+        waitForPage: '/cellars',
+        clickAdvance: true,
+      },
+      {
+        element: '[data-guide="cellar-history"]',
+        title: 'Open History',
+        description: 'Click "History" to see all bottles you\'ve consumed from this cellar, with dates and tasting notes.',
+        placement: 'left',
+        waitForPage: '/cellars/',
+        clickAdvance: true,
+      },
+    ],
+  },
 };
 
 /**
@@ -296,10 +491,25 @@ const PAGE_SUGGESTIONS = {
     'How do I place a bottle in a slot?',
     'Can I print NFC tags for racks?',
   ],
+  '/cellars/:id/room': [
+    'How do I build my 3D room?',
+    'How do I add racks to the room?',
+    'How do I save my room layout?',
+  ],
+  '/cellars/:id/history': [
+    'What is cellar history?',
+    'How do I mark a bottle as consumed?',
+    'Can I undo a consumption?',
+  ],
+  '/cellars/:id/import': [
+    'What file formats are supported?',
+    'How do I format my CSV?',
+    'Can I import from Vivino or CellarTracker?',
+  ],
   '/cellars/:id': [
     'How do I add a bottle?',
+    'How do I build a 3D cellar room?',
     'How do I share this cellar?',
-    'How do I organize bottles in racks?',
   ],
   '/cellars': [
     'How do I create a cellar?',
@@ -370,9 +580,15 @@ const FAQ_ENTRIES = [
   { keywords: ['settings', 'config', 'currency', 'language', 'notification', 'preference'], tourId: 'configure-settings', message: 'You can customize your experience in Settings. Let me show you!' },
   { keywords: ['restock', 'low', 'stock', 'running out', 'alert'], tourId: 'use-restock', message: 'Restock tracking helps you know when your favorites are running low. Let me show you!' },
   { keywords: ['recommendation', 'suggest', 'discover', 'new wine'], tourId: 'get-recommendations', message: 'Get AI-powered wine recommendations based on your collection! Let me show you.' },
-  { keywords: ['import', 'csv', 'bulk', 'spreadsheet'], tourId: null, message: 'You can import bottles in bulk from a CSV file! Open a cellar, then look for the "Import" option. It supports wine names, vintages, prices, and more.' },
+  { keywords: ['import', 'csv', 'bulk', 'spreadsheet', 'upload'], tourId: 'import-bottles', message: 'You can import bottles in bulk from a CSV or JSON file! Let me show you how.' },
+  { keywords: ['3d', 'room', 'virtual', 'build', 'layout', 'arrange'], tourId: 'build-3d-room', message: 'You can build a 3D virtual room that mirrors your real cellar! Place and arrange your racks visually. Let me show you.' },
+  { keywords: ['consume', 'drank', 'drunk', 'opened', 'finished', 'remove'], tourId: 'consume-bottle', message: 'You can mark a bottle as consumed and keep a record of when you drank it. Let me show you!' },
+  { keywords: ['review', 'rate', 'opinion', 'community review'], tourId: 'write-review', message: 'You can write reviews that other users see in the community feed! Let me show you how.' },
+  { keywords: ['request', 'missing', 'database', 'not found', 'suggest wine'], tourId: 'suggest-wine', message: 'If a wine is missing from our database, you can suggest it! An admin will review and add it.' },
+  { keywords: ['discussion', 'forum', 'thread', 'conversation', 'post'], tourId: 'start-discussion', message: 'Start a discussion with other wine lovers in the community! Let me show you.' },
+  { keywords: ['history', 'consumed', 'past', 'drank before'], tourId: 'view-history', message: 'Your cellar history shows every bottle you\'ve consumed. Let me show you where to find it!' },
   { keywords: ['nfc', 'tag'], tourId: null, message: 'You can attach NFC tags to your racks! When scanned with a phone, they open the rack view directly. Set this up in the Rack view of a cellar.' },
-  { keywords: ['help', 'how', 'what', 'feature', 'can'], tourId: null, message: 'Cellarion helps you manage your wine collection! You can create cellars, add bottles (even by scanning labels), organize with racks, get AI recommendations, track your wishlist, write tasting notes, and much more. What would you like to know about?' },
+  { keywords: ['help', 'how', 'what', 'feature', 'can'], tourId: null, message: 'Cellarion helps you manage your wine collection! You can create cellars, add bottles (even by scanning labels), organize with racks, build a 3D room, get AI recommendations, track your wishlist, write tasting notes, and much more. What would you like to know about?' },
 ];
 
 /**

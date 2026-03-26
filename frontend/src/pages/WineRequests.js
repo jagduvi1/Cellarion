@@ -116,7 +116,7 @@ function WineRequests() {
     <div className="wine-requests-page">
       <div className="winerequest-header">
         <h1>{t('wineRequests.title')}</h1>
-        <button onClick={() => setShowForm(!showForm)} className="btn btn-primary winerequest-desktop-create">
+        <button onClick={() => setShowForm(!showForm)} className="btn btn-primary winerequest-desktop-create" data-guide="wine-request-create">
           {showForm ? t('common.cancel') : `+ ${t('wineRequests.newRequest')}`}
         </button>
       </div>

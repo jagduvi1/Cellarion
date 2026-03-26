@@ -130,7 +130,7 @@ function Discussions() {
             ))}
           </select>
         </div>
-        <button className="btn btn-primary" onClick={() => setShowCreate(true)}>
+        <button className="btn btn-primary" data-guide="discussion-create" onClick={() => setShowCreate(true)}>
           New Discussion
         </button>
       </div>

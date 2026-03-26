@@ -887,6 +887,7 @@ export default function CellarRoom() {
             </button>
             <button
               className={`btn btn-small ${isEditMode ? 'btn-secondary' : 'btn-primary'}`}
+              data-guide="room-edit-mode"
               onClick={() => {
                 setIsEditMode(m => {
                   if (!m) { setSelectedBottle(null); setEmptySlotTarget(null); }
@@ -900,6 +901,7 @@ export default function CellarRoom() {
               <>
                 <button
                   className={`btn btn-small ${showAddRackPicker ? 'btn-primary' : 'btn-secondary'}`}
+                  data-guide="room-add-rack"
                   onClick={() => setShowAddRackPicker(p => !p)}
                   disabled={unplacedRacks.length === 0}
                 >
@@ -940,7 +942,7 @@ export default function CellarRoom() {
                   {t('room.redo', 'Redo')}
                 </button>
                 {saveError && <span style={{ color: 'var(--color-danger)', fontSize: '0.75rem' }}>{saveError}</span>}
-                <button className="btn btn-primary btn-small" onClick={handleSave} disabled={saving}>
+                <button className="btn btn-primary btn-small" data-guide="room-save" onClick={handleSave} disabled={saving}>
                   {saving ? t('common.saving', 'Saving...') : t('room.saveLayout', 'Save')}
                 </button>
               </>
