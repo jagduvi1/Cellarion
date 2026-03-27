@@ -135,34 +135,13 @@ export function GuideProvider({ children }) {
 
     const bestStart = findBestStartStep(tour, location.pathname);
     const step = tour.steps[bestStart];
-    const stepsRemaining = tour.steps.length - bestStart;
 
     // Auto-navigate if the chosen step requires it
     if (step.navigateTo && !location.pathname.startsWith(step.navigateTo)) {
       navigate(step.navigateTo);
     }
 
-    // Single-step tours that just navigate + explain: show the message
-    // but don't start a tour overlay — the chat message IS the help.
-    if (stepsRemaining === 1 && !step.clickAdvance) {
-      setIsOpen(true);
-      setMessages(prev => [
-        ...prev,
-        {
-          role: 'assistant',
-          isTourStep: true,
-          text: step.description,
-        },
-        {
-          role: 'assistant',
-          text: 'There you go! Is there anything else you\'d like help with?',
-          suggestions: getSuggestionsForPage(step.navigateTo || location.pathname),
-        },
-      ]);
-      return; // No overlay, no active tour
-    }
-
-    // Multi-step tour: activate the overlay
+    // Always activate the overlay — the user wants to SEE the element
     setActiveTour(tour);
     setTourStepIndex(bestStart);
     setIsOpen(true);
