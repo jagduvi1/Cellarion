@@ -29,10 +29,14 @@ function matchesPage(pattern, pathname) {
 function findBestStartStep(tour, pathname) {
   for (let i = tour.steps.length - 1; i > 0; i--) {
     const step = tour.steps[i];
-    // Steps marked noSkip require a prerequisite (e.g. opening a menu first)
     if (step.noSkip) continue;
     if (step.waitForPage && matchesPage(step.waitForPage, pathname)) {
-      return i;
+      // Verify the element actually exists on the current page.
+      // This prevents picking a cellar-detail step when on a bottle page,
+      // even though the URL pattern matches broadly.
+      if (document.querySelector(step.element)) {
+        return i;
+      }
     }
   }
   return 0;
@@ -224,9 +228,10 @@ export function GuideProvider({ children }) {
 
     // Current step doesn't match the page we're on
     if (!matchesPage(step.waitForPage, location.pathname)) {
-      // Look for a later step that matches
+      // Look for a later step that matches (skip noSkip steps — they need prerequisites)
       for (let i = tourStepIndex + 1; i < activeTour.steps.length; i++) {
         const laterStep = activeTour.steps[i];
+        if (laterStep.noSkip) continue;
         if (laterStep.waitForPage && matchesPage(laterStep.waitForPage, location.pathname)) {
           setTourStepIndex(i);
           setMessages(prev => [...prev, stepMessage(activeTour, i)]);
