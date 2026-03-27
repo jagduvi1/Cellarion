@@ -167,18 +167,17 @@ const FAQ_ENTRIES = [
   { keywords: ['help', 'how', 'what', 'feature', 'can', 'hjälp', 'hur', 'vad', 'funktion'], tourId: null, messageKey: 'help.faq.general' },
 ];
 
-/**
- * Get contextual suggestions for the current page.
- */
+// Precompile regexes at module load (patterns are static)
+const SORTED_PAGE_PATTERNS = Object.keys(PAGE_SUGGESTIONS)
+  .sort((a, b) => b.length - a.length)
+  .map(pattern => ({
+    regex: new RegExp('^' + pattern.replace(/:[^/]+/g, '[^/]+') + '(/|$)'),
+    suggestions: PAGE_SUGGESTIONS[pattern],
+  }));
+
 export function getSuggestionsForPage(pathname) {
-  // Try most specific match first (routes with params)
-  const sortedKeys = Object.keys(PAGE_SUGGESTIONS).sort((a, b) => b.length - a.length);
-  for (const pattern of sortedKeys) {
-    // Convert :param patterns to regex-like matching
-    const regex = new RegExp('^' + pattern.replace(/:[^/]+/g, '[^/]+') + '(/|$)');
-    if (regex.test(pathname)) {
-      return PAGE_SUGGESTIONS[pattern];
-    }
+  for (const { regex, suggestions } of SORTED_PAGE_PATTERNS) {
+    if (regex.test(pathname)) return suggestions;
   }
   return DEFAULT_SUGGESTIONS;
 }

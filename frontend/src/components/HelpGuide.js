@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { useGuide } from '../contexts/GuideContext';
 import './HelpGuide.css';
 
-/* ─── SVG icons ─── */
+/* ─── SVG icons (module-level, stable identity) ─── */
 const HelpIcon = () => (
   <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <circle cx="12" cy="12" r="10" /><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" /><line x1="12" y1="17" x2="12.01" y2="17" />
@@ -28,14 +28,40 @@ const PlayIcon = () => (
   </svg>
 );
 
+const LayerIcon = ({ size = 14, strokeWidth = 2 }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
+    <path d="M12 2L2 7l10 5 10-5-10-5z" /><path d="M2 17l10 5 10-5" /><path d="M2 12l10 5 10-5" />
+  </svg>
+);
+
+const AssistantAvatar = () => (
+  <div className="guide-msg-avatar"><LayerIcon size={14} /></div>
+);
+
+/* ─── Helpers ─── */
+
+const RECT_PADDING = 6;
+
+function computePaddedRect(el) {
+  const r = el.getBoundingClientRect();
+  return {
+    top: r.top - RECT_PADDING,
+    left: r.left - RECT_PADDING,
+    width: r.width + RECT_PADDING * 2,
+    height: r.height + RECT_PADDING * 2,
+    bottom: r.bottom + RECT_PADDING,
+    right: r.right + RECT_PADDING,
+  };
+}
+
 /* ═══════════════════════════════════════════
-   Tour Overlay — just backdrop + highlight ring.
-   All text/instructions live in the chat panel.
+   Tour Overlay — backdrop + highlight ring
    ═══════════════════════════════════════════ */
 function TourOverlay() {
   const { activeTour, currentStep, tourStepIndex, isStepPageMatch, advanceTour, endTour } = useGuide();
   const [targetRect, setTargetRect] = useState(null);
   const retryRef = useRef(null);
+  const rafRef = useRef(null);
 
   useEffect(() => {
     if (!activeTour || !currentStep || !isStepPageMatch) {
@@ -47,32 +73,24 @@ function TourOverlay() {
     let clickCleanup = null;
     const isLastStep = tourStepIndex === activeTour.steps.length - 1;
     const canAutoSkip = currentStep.navigateTo && !isLastStep;
-    const MAX_RETRIES = canAutoSkip ? 20 : Infinity;
+    // Cap retries: 20 (~4s) for auto-skip, 150 (~30s) otherwise
+    const MAX_RETRIES = canAutoSkip ? 20 : 150;
 
     const findTarget = () => {
       const el = document.querySelector(currentStep.element);
       if (!el) {
         retryCount++;
         if (retryCount >= MAX_RETRIES) {
-          advanceTour();
+          if (canAutoSkip) advanceTour();
           return;
         }
         retryRef.current = setTimeout(findTarget, 200);
         return;
       }
 
-      const rect = el.getBoundingClientRect();
-      const padding = 6;
-      setTargetRect({
-        top: rect.top - padding,
-        left: rect.left - padding,
-        width: rect.width + padding * 2,
-        height: rect.height + padding * 2,
-        bottom: rect.bottom + padding,
-        right: rect.right + padding,
-      });
+      setTargetRect(computePaddedRect(el));
 
-      if (rect.top < 0 || rect.bottom > window.innerHeight) {
+      if (el.getBoundingClientRect().top < 0 || el.getBoundingClientRect().bottom > window.innerHeight) {
         el.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }
 
@@ -85,20 +103,14 @@ function TourOverlay() {
 
     findTarget();
 
+    // Throttled scroll/resize handler
     const updateRect = () => {
-      const el = document.querySelector(currentStep.element);
-      if (el) {
-        const rect = el.getBoundingClientRect();
-        const padding = 6;
-        setTargetRect({
-          top: rect.top - padding,
-          left: rect.left - padding,
-          width: rect.width + padding * 2,
-          height: rect.height + padding * 2,
-          bottom: rect.bottom + padding,
-          right: rect.right + padding,
-        });
-      }
+      if (rafRef.current) return;
+      rafRef.current = requestAnimationFrame(() => {
+        rafRef.current = null;
+        const el = document.querySelector(currentStep.element);
+        if (el) setTargetRect(computePaddedRect(el));
+      });
     };
 
     window.addEventListener('scroll', updateRect, true);
@@ -106,6 +118,7 @@ function TourOverlay() {
 
     return () => {
       clearTimeout(retryRef.current);
+      cancelAnimationFrame(rafRef.current);
       if (clickCleanup) clickCleanup();
       window.removeEventListener('scroll', updateRect, true);
       window.removeEventListener('resize', updateRect);
@@ -124,11 +137,7 @@ function TourOverlay() {
 
   return (
     <div className="guide-tour-overlay">
-      <div
-        className="guide-tour-backdrop"
-        style={{ clipPath }}
-        onClick={endTour}
-      />
+      <div className="guide-tour-backdrop" style={{ clipPath }} onClick={endTour} />
       <div
         className="guide-tour-highlight"
         style={{
@@ -144,25 +153,22 @@ function TourOverlay() {
 }
 
 /* ═══════════════════════════════════════════
-   Chat Panel — the single source of all guidance.
-   Tour steps render as special messages in the chat.
+   Chat Panel
    ═══════════════════════════════════════════ */
 function ChatPanel() {
   const { t } = useTranslation();
   const {
-    isOpen, setIsOpen, messages, sendMessage, loading,
+    isOpen, closeGuide, messages, sendMessage, loading,
     suggestions, startTour, clearChat, activeTour, endTour,
   } = useGuide();
   const [input, setInput] = useState('');
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
 
-  // Auto-scroll on new messages
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, loading]);
 
-  // Focus input when panel opens
   useEffect(() => {
     if (isOpen && !activeTour) {
       setTimeout(() => inputRef.current?.focus(), 300);
@@ -176,34 +182,17 @@ function ChatPanel() {
     setInput('');
   };
 
-  const handleSuggestionClick = (suggestion) => {
-    sendMessage(suggestion);
-  };
-
-  const handleTourClick = useCallback((tourId) => {
-    startTour(tourId);
-  }, [startTour]);
+  const handleSuggestionClick = (suggestion) => sendMessage(suggestion);
+  const handleTourClick = useCallback((tourId) => startTour(tourId), [startTour]);
 
   if (!isOpen) return null;
-
-  const AssistantAvatar = () => (
-    <div className="guide-msg-avatar">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M12 2L2 7l10 5 10-5-10-5z" /><path d="M2 17l10 5 10-5" /><path d="M2 12l10 5 10-5" />
-      </svg>
-    </div>
-  );
 
   return (
     <div className={`guide-panel ${activeTour ? 'guide-panel--touring' : ''}`}>
       {/* Header */}
       <div className="guide-panel-header">
         <div className="guide-panel-header-left">
-          <div className="guide-panel-avatar">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M12 2L2 7l10 5 10-5-10-5z" /><path d="M2 17l10 5 10-5" /><path d="M2 12l10 5 10-5" />
-            </svg>
-          </div>
+          <div className="guide-panel-avatar"><LayerIcon size={20} /></div>
           <div>
             <h3 className="guide-panel-title">{t('help.guide.title')}</h3>
             <span className="guide-panel-subtitle">
@@ -224,7 +213,7 @@ function ChatPanel() {
               </svg>
             </button>
           )}
-          <button className="guide-panel-close" onClick={() => { setIsOpen(false); if (activeTour) endTour(); }} aria-label="Close help">
+          <button className="guide-panel-close" onClick={closeGuide} aria-label="Close help">
             <CloseIcon />
           </button>
         </div>
@@ -234,11 +223,7 @@ function ChatPanel() {
       <div className="guide-panel-messages">
         {messages.length === 0 && (
           <div className="guide-panel-welcome">
-            <div className="guide-panel-welcome-icon">
-              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M12 2L2 7l10 5 10-5-10-5z" /><path d="M2 17l10 5 10-5" /><path d="M2 12l10 5 10-5" />
-              </svg>
-            </div>
+            <div className="guide-panel-welcome-icon"><LayerIcon size={32} strokeWidth={1.5} /></div>
             <h4>{t('help.guide.welcome')}</h4>
             <p>{t('help.guide.welcomeText')}</p>
           </div>
@@ -250,23 +235,16 @@ function ChatPanel() {
             <div className="guide-msg-content">
               <div className="guide-msg-text">{msg.text}</div>
 
-              {/* "Show me how" button */}
               {msg.tourId && (
-                <button
-                  className="guide-msg-tour-btn"
-                  onClick={() => handleTourClick(msg.tourId)}
-                >
+                <button className="guide-msg-tour-btn" onClick={() => handleTourClick(msg.tourId)}>
                   <PlayIcon /> {t('help.guide.showMe')}
                 </button>
               )}
 
-              {/* Follow-up suggestions (only on latest non-tour message) */}
               {msg.role === 'assistant' && !msg.isTourStep && msg.suggestions?.length > 0 && i === messages.length - 1 && (
                 <div className="guide-msg-suggestions">
                   {msg.suggestions.map((s, j) => (
-                    <button key={j} className="guide-chip" onClick={() => handleSuggestionClick(s)}>
-                      {s}
-                    </button>
+                    <button key={j} className="guide-chip" onClick={() => handleSuggestionClick(s)}>{s}</button>
                   ))}
                 </div>
               )}
@@ -286,18 +264,14 @@ function ChatPanel() {
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Quick suggestions (shown when chat is empty) */}
       {messages.length === 0 && (
         <div className="guide-panel-suggestions">
           {suggestions.map((s, i) => (
-            <button key={i} className="guide-chip guide-chip--initial" onClick={() => handleSuggestionClick(s)}>
-              {s}
-            </button>
+            <button key={i} className="guide-chip guide-chip--initial" onClick={() => handleSuggestionClick(s)}>{s}</button>
           ))}
         </div>
       )}
 
-      {/* Input — hidden during tour, shown otherwise */}
       {!activeTour && (
         <form className="guide-panel-input" onSubmit={handleSubmit}>
           <input
@@ -324,17 +298,12 @@ function HelpGuide() {
 
   return (
     <>
-      {/* Floating help button — hidden when panel is open or tour is active */}
       {!isOpen && !activeTour && (
         <button className="guide-fab" onClick={toggleOpen} aria-label="Open help guide" title="Need help?">
           <HelpIcon />
         </button>
       )}
-
-      {/* Chat panel — visible when open OR during a tour */}
       <ChatPanel />
-
-      {/* Tour overlay — just the highlight, no popover */}
       <TourOverlay />
     </>
   );

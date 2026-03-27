@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useCallback, useRef, useEffect } from 'react';
+import { createContext, useContext, useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from './AuthContext';
@@ -7,40 +7,38 @@ import TOURS, { getSuggestionsForPage, findFaqMatch } from '../utils/guideTours'
 
 /**
  * Match a pathname against a waitForPage pattern.
- *   - Trailing slash → prefix match  ('/cellars/' matches '/cellars/123')
- *   - No trailing slash → exact match ('/cellars' matches only '/cellars')
- *     OR suffix match ('/add-bottle' matches '/cellars/123/add-bottle')
+ *   - Trailing slash → contains match ('/bottles/' matches '/cellars/x/bottles/y')
+ *   - No trailing slash → exact or suffix match
  */
 function matchesPage(pattern, pathname) {
   if (!pattern) return true;
-  // Trailing slash → contains match ('/bottles/' matches '/cellars/x/bottles/y')
-  if (pattern.endsWith('/')) {
-    return pathname.includes(pattern);
-  }
-  // No trailing slash → exact match OR suffix match
+  if (pattern.endsWith('/')) return pathname.includes(pattern);
   return pathname === pattern || pathname.endsWith(pattern);
 }
 
 /**
- * Find the best starting step for a tour based on the user's current page.
- * Scans backwards from the last step and returns the index of the latest
- * step whose waitForPage matches — so we skip steps the user has already
- * navigated past.
+ * Find the best starting step based on current page.
+ * Scans backwards, skips noSkip steps, verifies element exists in DOM.
  */
 function findBestStartStep(tour, pathname) {
   for (let i = tour.steps.length - 1; i > 0; i--) {
     const step = tour.steps[i];
     if (step.noSkip) continue;
     if (step.waitForPage && matchesPage(step.waitForPage, pathname)) {
-      // Verify the element actually exists on the current page.
-      // This prevents picking a cellar-detail step when on a bottle page,
-      // even though the URL pattern matches broadly.
-      if (document.querySelector(step.element)) {
-        return i;
-      }
+      if (document.querySelector(step.element)) return i;
     }
   }
   return 0;
+}
+
+/** Resolve a FAQ result's i18n keys. */
+function resolveFaq(faq, t) {
+  return {
+    role: 'assistant',
+    text: t(faq.messageKey),
+    tourId: faq.tourId,
+    suggestions: faq.suggestionKeys.map(k => t(k)),
+  };
 }
 
 const GuideContext = createContext(null);
@@ -57,43 +55,29 @@ export function GuideProvider({ children }) {
   const location = useLocation();
   const navigate = useNavigate();
 
-  // Chat state
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(false);
-
-  // Tour state
   const [activeTour, setActiveTour] = useState(null);
   const [tourStepIndex, setTourStepIndex] = useState(0);
-  const tourRef = useRef(null);
-  const lastAdvanceRef = useRef(0); // debounce guard
+  const lastAdvanceRef = useRef(0);
 
-  // Keep tourRef in sync
-  useEffect(() => {
-    tourRef.current = activeTour ? { tour: activeTour, step: tourStepIndex } : null;
-  }, [activeTour, tourStepIndex]);
+  const suggestions = useMemo(
+    () => getSuggestionsForPage(location.pathname).map(key => t(key)),
+    [location.pathname, t]
+  );
 
-  // Get suggestions for current page (resolve i18n keys)
-  const suggestionKeys = getSuggestionsForPage(location.pathname);
-  const suggestions = suggestionKeys.map(key => t(key));
-
-  // ─── Helpers ───
-
-  /** Build a conversational chat message for a tour step (i18n-aware). */
-  function stepMessage(tour, index) {
-    const step = tour.steps[index];
-    return {
-      role: 'assistant',
-      isTourStep: true,
-      text: step.descKey ? t(step.descKey) : step.description,
-    };
+  function resolvedSuggestions(pathname) {
+    return getSuggestionsForPage(pathname).map(k => t(k));
   }
 
-  // ─── Chat ───
+  function stepMessage(tour, index) {
+    const step = tour.steps[index];
+    return { role: 'assistant', isTourStep: true, text: step.descKey ? t(step.descKey) : step.description };
+  }
 
   const sendMessage = useCallback(async (question) => {
     if (!question.trim()) return;
-
     setMessages(prev => [...prev, { role: 'user', text: question }]);
     setLoading(true);
 
@@ -102,13 +86,7 @@ export function GuideProvider({ children }) {
       const data = await res.json();
 
       if (data.fallback) {
-        const faq = findFaqMatch(question);
-        setMessages(prev => [...prev, {
-          role: 'assistant',
-          text: t(faq.messageKey),
-          tourId: faq.tourId,
-          suggestions: faq.suggestionKeys.map(k => t(k)),
-        }]);
+        setMessages(prev => [...prev, resolveFaq(findFaqMatch(question), t)]);
       } else {
         setMessages(prev => [...prev, {
           role: 'assistant',
@@ -118,19 +96,11 @@ export function GuideProvider({ children }) {
         }]);
       }
     } catch {
-      const faq = findFaqMatch(question);
-      setMessages(prev => [...prev, {
-        role: 'assistant',
-        text: faq.message,
-        tourId: faq.tourId,
-        suggestions: faq.suggestions,
-      }]);
+      setMessages(prev => [...prev, resolveFaq(findFaqMatch(question), t)]);
     } finally {
       setLoading(false);
     }
-  }, [apiFetch, location.pathname]);
-
-  // ─── Tour engine ───
+  }, [apiFetch, location.pathname, t]);
 
   const startTour = useCallback((tourId) => {
     const tour = TOURS[tourId];
@@ -139,78 +109,73 @@ export function GuideProvider({ children }) {
     const bestStart = findBestStartStep(tour, location.pathname);
     const step = tour.steps[bestStart];
 
-    // Auto-navigate if the chosen step requires it
     if (step.navigateTo && !location.pathname.startsWith(step.navigateTo)) {
       navigate(step.navigateTo);
     }
 
-    // Always activate the overlay — the user wants to SEE the element
     setActiveTour(tour);
     setTourStepIndex(bestStart);
     setIsOpen(true);
-    setMessages(prev => [
-      ...prev,
-      stepMessage(tour, bestStart),
-    ]);
-  }, [location.pathname, navigate]);
+    setMessages(prev => [...prev, stepMessage(tour, bestStart)]);
+  }, [location.pathname, navigate, t]);
 
   const advanceTour = useCallback(() => {
     if (!activeTour) return;
-    // Debounce: ignore rapid duplicate calls (e.g. click handler + auto-advance)
     const now = Date.now();
     if (now - lastAdvanceRef.current < 400) return;
     lastAdvanceRef.current = now;
 
     const nextIndex = tourStepIndex + 1;
     if (nextIndex >= activeTour.steps.length) {
-      // Tour complete
       setActiveTour(null);
       setTourStepIndex(0);
-  
       setMessages(prev => [...prev, {
         role: 'assistant',
         text: t('help.tour.done'),
-        suggestions: getSuggestionsForPage(location.pathname).map(k => t(k)),
+        suggestions: resolvedSuggestions(location.pathname),
       }]);
       return;
     }
 
     setTourStepIndex(nextIndex);
-
-    // Narrate the next step in chat
     setMessages(prev => [...prev, stepMessage(activeTour, nextIndex)]);
 
-    // Auto-navigate if next step requires it
     const nextStep = activeTour.steps[nextIndex];
     if (nextStep.navigateTo && !location.pathname.startsWith(nextStep.navigateTo)) {
       navigate(nextStep.navigateTo);
     }
-  }, [activeTour, tourStepIndex, location.pathname, navigate]);
+  }, [activeTour, tourStepIndex, location.pathname, navigate, t]);
 
   const endTour = useCallback(() => {
     if (activeTour) {
       setMessages(prev => [...prev, {
         role: 'assistant',
         text: t('help.tour.stopped'),
-        suggestions: getSuggestionsForPage(location.pathname).map(k => t(k)),
+        suggestions: resolvedSuggestions(location.pathname),
       }]);
     }
     setActiveTour(null);
     setTourStepIndex(0);
+  }, [activeTour, location.pathname, t]);
 
-  }, [activeTour, location.pathname]);
+  const closeGuide = useCallback(() => {
+    setIsOpen(false);
+    if (activeTour) {
+      setActiveTour(null);
+      setTourStepIndex(0);
+    }
+  }, [activeTour]);
 
-  // Watch for page changes during a tour — if the user navigated (or was
-  // redirected) past the current step, auto-jump to the matching step.
-  // This handles: only-one-cellar redirects, manual navigation, etc.
+  const toggleOpen = useCallback(() => setIsOpen(prev => !prev), []);
+  const clearChat = useCallback(() => setMessages([]), []);
+
+  // Auto-jump when page changes during tour
   useEffect(() => {
     if (!activeTour) return;
     const step = activeTour.steps[tourStepIndex];
     if (!step?.waitForPage) return;
 
-    // Current step doesn't match the page we're on
     if (!matchesPage(step.waitForPage, location.pathname)) {
-      // Look for a later step that matches (skip noSkip steps — they need prerequisites)
       for (let i = tourStepIndex + 1; i < activeTour.steps.length; i++) {
         const laterStep = activeTour.steps[i];
         if (laterStep.noSkip) continue;
@@ -221,40 +186,23 @@ export function GuideProvider({ children }) {
         }
       }
     }
-  }, [activeTour, tourStepIndex, location.pathname]);
+  }, [activeTour, tourStepIndex, location.pathname, t]);
 
-  // Check if the current page matches the current step's waitForPage
   const currentStep = activeTour?.steps[tourStepIndex] ?? null;
   const isStepPageMatch = !currentStep?.waitForPage ||
     matchesPage(currentStep.waitForPage, location.pathname);
 
-  const toggleOpen = useCallback(() => {
-    setIsOpen(prev => !prev);
-  }, []);
-
-  const clearChat = useCallback(() => {
-    setMessages([]);
-  }, []);
-
-  const value = {
-    // Chat
-    isOpen,
-    setIsOpen,
-    toggleOpen,
-    messages,
-    sendMessage,
-    loading,
-    suggestions,
-    clearChat,
-    // Tour
-    activeTour,
-    currentStep,
-    tourStepIndex,
-    isStepPageMatch,
-    startTour,
-    advanceTour,
-    endTour,
-  };
+  const value = useMemo(() => ({
+    isOpen, toggleOpen, closeGuide,
+    messages, sendMessage, loading, suggestions, clearChat,
+    activeTour, currentStep, tourStepIndex, isStepPageMatch,
+    startTour, advanceTour, endTour,
+  }), [
+    isOpen, toggleOpen, closeGuide,
+    messages, sendMessage, loading, suggestions, clearChat,
+    activeTour, currentStep, tourStepIndex, isStepPageMatch,
+    startTour, advanceTour, endTour,
+  ]);
 
   return (
     <GuideContext.Provider value={value}>

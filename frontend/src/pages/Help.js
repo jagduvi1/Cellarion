@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { getHelpContent } from '../api/help';
 import './Help.css';
@@ -27,8 +27,7 @@ function Help() {
       .catch(() => {});
   }, []);
 
-  // Build sections from i18n
-  const sections = SECTION_KEYS.map(key => {
+  const sections = useMemo(() => SECTION_KEYS.map(key => {
     const prefix = `help.sections.${key}`;
     const title = t(`${prefix}.title`);
     const summary = t(`${prefix}.summary`);
@@ -42,7 +41,7 @@ function Help() {
     }
 
     return { key, title, summary, details, route: routes[key] || null };
-  });
+  }), [t, routes]);
 
   const filtered = search.trim()
     ? sections.filter(s => {

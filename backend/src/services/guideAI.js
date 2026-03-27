@@ -56,12 +56,15 @@ const GUIDE_SYSTEM_PROMPT = [
   PROMPT_RULES,
 ].join('\n');
 
+let _client;
 function getClient() {
+  if (_client !== undefined) return _client;
   const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) return null;
+  if (!apiKey) { _client = null; return null; }
   const sdk = require('@anthropic-ai/sdk');
   const Anthropic = sdk.default ?? sdk;
-  return new Anthropic({ apiKey });
+  _client = new Anthropic({ apiKey });
+  return _client;
 }
 
 /**
