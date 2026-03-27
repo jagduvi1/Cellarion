@@ -59,7 +59,6 @@ export function GuideProvider({ children }) {
   // Tour state
   const [activeTour, setActiveTour] = useState(null);
   const [tourStepIndex, setTourStepIndex] = useState(0);
-  // tourStartOffset removed — no longer showing step numbers
   const tourRef = useRef(null);
   const lastAdvanceRef = useRef(0); // debounce guard
 
@@ -181,7 +180,7 @@ export function GuideProvider({ children }) {
       // Tour complete
       setActiveTour(null);
       setTourStepIndex(0);
-      // (offset removed)
+  
       setMessages(prev => [...prev, {
         role: 'assistant',
         text: 'There you go! Is there anything else you\'d like help with?',
@@ -212,8 +211,30 @@ export function GuideProvider({ children }) {
     }
     setActiveTour(null);
     setTourStepIndex(0);
-    // (offset removed)
+
   }, [activeTour, location.pathname]);
+
+  // Watch for page changes during a tour — if the user navigated (or was
+  // redirected) past the current step, auto-jump to the matching step.
+  // This handles: only-one-cellar redirects, manual navigation, etc.
+  useEffect(() => {
+    if (!activeTour) return;
+    const step = activeTour.steps[tourStepIndex];
+    if (!step?.waitForPage) return;
+
+    // Current step doesn't match the page we're on
+    if (!matchesPage(step.waitForPage, location.pathname)) {
+      // Look for a later step that matches
+      for (let i = tourStepIndex + 1; i < activeTour.steps.length; i++) {
+        const laterStep = activeTour.steps[i];
+        if (laterStep.waitForPage && matchesPage(laterStep.waitForPage, location.pathname)) {
+          setTourStepIndex(i);
+          setMessages(prev => [...prev, stepMessage(activeTour, i)]);
+          return;
+        }
+      }
+    }
+  }, [activeTour, tourStepIndex, location.pathname]);
 
   // Check if the current page matches the current step's waitForPage
   const currentStep = activeTour?.steps[tourStepIndex] ?? null;
