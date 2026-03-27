@@ -114,115 +114,57 @@ const TOURS = {
  * Context-aware suggestions shown as quick-action chips in the help panel.
  * Keyed by URL prefix — the most specific match wins.
  */
+// Suggestions use i18n keys — resolved with t() in GuideContext
 const PAGE_SUGGESTIONS = {
-  '/cellars/:id/add-bottle': [
-    'How do I scan a wine label?',
-    'How do I search for a wine?',
-    'What if my wine isn\'t in the database?',
-  ],
-  '/cellars/:id/racks': [
-    'How do racks work?',
-    'How do I place a bottle in a slot?',
-    'Can I print NFC tags for racks?',
-  ],
-  '/cellars/:id/room': [
-    'How do I build my 3D room?',
-    'How do I add racks to the room?',
-    'How do I save my room layout?',
-  ],
-  '/cellars/:id/history': [
-    'What is cellar history?',
-    'How do I mark a bottle as consumed?',
-    'Can I undo a consumption?',
-  ],
-  '/cellars/:id/import': [
-    'What file formats are supported?',
-    'How do I format my CSV?',
-    'Can I import from Vivino or CellarTracker?',
-  ],
-  '/cellars/:id': [
-    'How do I add a bottle?',
-    'How do I build a 3D cellar room?',
-    'How do I share this cellar?',
-  ],
-  '/cellars': [
-    'How do I create a cellar?',
-    'How do I add my first bottle?',
-    'How do I share a cellar?',
-  ],
-  '/wishlist': [
-    'How do I add wines to my wishlist?',
-    'How do I move a wishlist wine to my cellar?',
-    'Can I set price alerts?',
-  ],
-  '/journal': [
-    'How do I write a tasting note?',
-    'What should I include in my notes?',
-    'Can I add photos to journal entries?',
-  ],
-  '/statistics': [
-    'What do these charts show?',
-    'How is cellar value calculated?',
-    'Can I export my stats?',
-  ],
-  '/cellar-chat': [
-    'What can I ask the sommelier?',
-    'How do I get food pairing suggestions?',
-    'Can it recommend wines for a dinner?',
-  ],
-  '/recommendations': [
-    'How do recommendations work?',
-    'How do I improve my recommendations?',
-    'What data does it use?',
-  ],
-  '/restock': [
-    'How do restock alerts work?',
-    'How do I set up an alert?',
-    'What wines should I restock?',
-  ],
-  '/settings': [
-    'How do I change my currency?',
-    'How do I enable notifications?',
-    'How do I change my rating scale?',
-  ],
-  '/community': [
-    'How do I write a review?',
-    'How do I start a discussion?',
-    'How do I follow other users?',
-  ],
+  '/cellars/:id/add-bottle': ['help.sug.scanLabel', 'help.sug.searchWine', 'help.sug.missingWine'],
+  '/cellars/:id/racks': ['help.sug.howRacks', 'help.sug.placeBottle', 'help.sug.nfcTags'],
+  '/cellars/:id/room': ['help.sug.build3d', 'help.sug.addRacksRoom', 'help.sug.saveRoom'],
+  '/cellars/:id/history': ['help.sug.whatHistory', 'help.sug.consumeBottle', 'help.sug.undoConsume'],
+  '/cellars/:id/import': ['help.sug.importFormats', 'help.sug.formatCsv', 'help.sug.importFrom'],
+  '/cellars/:id': ['help.sug.addBottle', 'help.sug.build3dCellar', 'help.sug.shareCellar'],
+  '/cellars': ['help.sug.createCellar', 'help.sug.addFirstBottle', 'help.sug.shareCellar'],
+  '/wishlist': ['help.sug.addWishlist', 'help.sug.moveWishlist', 'help.sug.priceAlerts'],
+  '/journal': ['help.sug.writeTasting', 'help.sug.includeNotes', 'help.sug.journalPhotos'],
+  '/statistics': ['help.sug.chartsShow', 'help.sug.cellarValue', 'help.sug.exportStats'],
+  '/cellar-chat': ['help.sug.askSommelier', 'help.sug.foodPairing', 'help.sug.dinnerWine'],
+  '/recommendations': ['help.sug.howRecommend', 'help.sug.improveRecommend', 'help.sug.recommendData'],
+  '/restock': ['help.sug.howRestock', 'help.sug.restockSetup', 'help.sug.whatRestock'],
+  '/settings': ['help.sug.changeCurrency', 'help.sug.enableNotif', 'help.sug.changeRating'],
+  '/community': ['help.sug.writeReview', 'help.sug.startDiscussion', 'help.sug.followUsers'],
 };
 
 const DEFAULT_SUGGESTIONS = [
-  'How do I get started?',
-  'How do I add my first wine?',
-  'What features does Cellarion have?',
+  'help.sug.getStarted',
+  'help.sug.addFirstWine',
+  'help.sug.whatFeatures',
 ];
 
 /**
- * Keyword-based FAQ fallback for when AI is unavailable.
+ * Keyword-based FAQ fallback (when AI is unavailable).
+ * Messages use i18n keys — resolved with t() by the caller.
  */
 const FAQ_ENTRIES = [
-  { keywords: ['cellar', 'create', 'new', 'first', 'start', 'begin'], tourId: 'create-cellar', message: 'I can show you how to create your first cellar! Click "Show me" to start the guided tour.' },
-  { keywords: ['bottle', 'add', 'wine', 'put'], tourId: 'add-bottle', message: 'Adding a bottle is easy! I can walk you through it step by step.' },
-  { keywords: ['scan', 'label', 'camera', 'photo', 'picture'], tourId: 'scan-label', message: 'You can scan a wine label with your camera to automatically identify it! Let me show you.' },
-  { keywords: ['wishlist', 'wish', 'want', 'buy', 'purchase'], tourId: 'use-wishlist', message: 'The Wishlist helps you track wines you want to buy. Let me show you how!' },
-  { keywords: ['share', 'invite', 'friend', 'collaborate', 'together'], tourId: 'share-cellar', message: 'You can share a cellar with friends or family! I\'ll show you how.' },
-  { keywords: ['rack', 'organize', 'grid', 'physical', 'layout', 'slot'], tourId: 'manage-racks', message: 'Racks help you map your physical wine storage. You can create racks in any size! Let me show you.' },
-  { keywords: ['journal', 'tasting', 'note', 'taste', 'experience', 'diary'], tourId: 'write-journal', message: 'The Journal is perfect for recording your tasting experiences. Want me to show you?' },
-  { keywords: ['chat', 'sommelier', 'pairing', 'food', 'drink', 'recommend', 'dinner'], tourId: 'use-cellar-chat', message: 'Cellar Chat is an AI sommelier that knows your entire collection! Let me show you how.' },
-  { keywords: ['statistics', 'stats', 'analytics', 'chart', 'graph', 'value', 'insight'], tourId: 'view-statistics', message: 'The Analytics page shows beautiful charts about your collection. Let me give you a tour!' },
-  { keywords: ['settings', 'config', 'currency', 'language', 'notification', 'preference'], tourId: 'configure-settings', message: 'You can customize your experience in Settings. Let me show you!' },
-  { keywords: ['restock', 'low', 'stock', 'running out', 'alert'], tourId: 'use-restock', message: 'Restock tracking helps you know when your favorites are running low. Let me show you!' },
-  { keywords: ['recommendation', 'suggest', 'discover', 'new wine'], tourId: 'get-recommendations', message: 'Get AI-powered wine recommendations based on your collection! Let me show you.' },
-  { keywords: ['import', 'csv', 'bulk', 'spreadsheet', 'upload'], tourId: 'import-bottles', message: 'You can import bottles in bulk from a CSV or JSON file! Let me show you how.' },
-  { keywords: ['3d', 'room', 'virtual', 'build', 'layout', 'arrange'], tourId: 'build-3d-room', message: 'You can build a 3D virtual room that mirrors your real cellar! Place and arrange your racks visually. Let me show you.' },
-  { keywords: ['consume', 'drank', 'drunk', 'opened', 'finished', 'remove'], tourId: 'consume-bottle', message: 'You can mark a bottle as consumed and keep a record of when you drank it. Let me show you!' },
-  { keywords: ['review', 'rate', 'opinion', 'community review'], tourId: 'write-review', message: 'You can write reviews that other users see in the community feed! Let me show you how.' },
-  { keywords: ['request', 'missing', 'database', 'not found', 'suggest wine'], tourId: 'suggest-wine', message: 'If a wine is missing from our database, you can suggest it! An admin will review and add it.' },
-  { keywords: ['discussion', 'forum', 'thread', 'conversation', 'post'], tourId: 'start-discussion', message: 'Start a discussion with other wine lovers in the community! Let me show you.' },
-  { keywords: ['history', 'consumed', 'past', 'drank before'], tourId: 'view-history', message: 'Your cellar history shows every bottle you\'ve consumed. Let me show you where to find it!' },
-  { keywords: ['nfc', 'tag'], tourId: null, message: 'You can attach NFC tags to your racks! When scanned with a phone, they open the rack view directly. Set this up in the Rack view of a cellar.' },
-  { keywords: ['help', 'how', 'what', 'feature', 'can'], tourId: null, message: 'Cellarion helps you manage your wine collection! You can create cellars, add bottles (even by scanning labels), organize with racks, build a 3D room, get AI recommendations, track your wishlist, write tasting notes, and much more. What would you like to know about?' },
+  { keywords: ['cellar', 'create', 'new', 'first', 'start', 'begin', 'källare', 'skapa', 'ny', 'börja'], tourId: 'create-cellar', messageKey: 'help.faq.createCellar' },
+  { keywords: ['bottle', 'add', 'wine', 'put', 'flaska', 'lägg', 'vin'], tourId: 'add-bottle', messageKey: 'help.faq.addBottle' },
+  { keywords: ['scan', 'label', 'camera', 'photo', 'picture', 'skanna', 'etikett', 'kamera', 'foto'], tourId: 'scan-label', messageKey: 'help.faq.scanLabel' },
+  { keywords: ['wishlist', 'wish', 'want', 'buy', 'purchase', 'önskelista', 'köpa', 'önska'], tourId: 'use-wishlist', messageKey: 'help.faq.wishlist' },
+  { keywords: ['share', 'invite', 'friend', 'collaborate', 'dela', 'bjud', 'vän'], tourId: 'share-cellar', messageKey: 'help.faq.share' },
+  { keywords: ['rack', 'organize', 'grid', 'physical', 'layout', 'slot', 'ställ', 'organisera', 'fysisk'], tourId: 'manage-racks', messageKey: 'help.faq.racks' },
+  { keywords: ['journal', 'tasting', 'note', 'taste', 'experience', 'dagbok', 'provning', 'anteckning'], tourId: 'write-journal', messageKey: 'help.faq.journal' },
+  { keywords: ['chat', 'sommelier', 'pairing', 'food', 'drink', 'recommend', 'dinner', 'mat', 'dricka', 'middag'], tourId: 'use-cellar-chat', messageKey: 'help.faq.chat' },
+  { keywords: ['statistics', 'stats', 'analytics', 'chart', 'graph', 'statistik', 'analys', 'diagram'], tourId: 'view-statistics', messageKey: 'help.faq.statistics' },
+  { keywords: ['settings', 'config', 'currency', 'language', 'notification', 'inställning', 'valuta', 'språk'], tourId: 'configure-settings', messageKey: 'help.faq.settings' },
+  { keywords: ['restock', 'low', 'stock', 'running out', 'alert', 'påfyllning', 'slut', 'lager'], tourId: 'use-restock', messageKey: 'help.faq.restock' },
+  { keywords: ['recommendation', 'suggest', 'discover', 'rekommendation', 'föreslå', 'upptäck'], tourId: 'get-recommendations', messageKey: 'help.faq.recommendations' },
+  { keywords: ['import', 'csv', 'bulk', 'spreadsheet', 'upload', 'importera', 'ladda'], tourId: 'import-bottles', messageKey: 'help.faq.import' },
+  { keywords: ['3d', 'room', 'virtual', 'build', 'rum', 'bygg', 'virtuell'], tourId: 'build-3d-room', messageKey: 'help.faq.room' },
+  { keywords: ['consume', 'drank', 'drunk', 'opened', 'finished', 'remove', 'konsumera', 'drack', 'öppna'], tourId: 'consume-bottle', messageKey: 'help.faq.consume' },
+  { keywords: ['review', 'rate', 'opinion', 'recension', 'betygsätt'], tourId: 'write-review', messageKey: 'help.faq.review' },
+  { keywords: ['request', 'missing', 'database', 'not found', 'saknas', 'databas', 'förfrågan'], tourId: 'suggest-wine', messageKey: 'help.faq.suggestWine' },
+  { keywords: ['discussion', 'forum', 'thread', 'conversation', 'diskussion', 'tråd', 'konversation'], tourId: 'start-discussion', messageKey: 'help.faq.discussion' },
+  { keywords: ['history', 'consumed', 'past', 'historik', 'konsumerad', 'tidigare'], tourId: 'view-history', messageKey: 'help.faq.history' },
+  { keywords: ['nfc', 'tag', 'tagg'], tourId: null, messageKey: 'help.faq.nfc' },
+  { keywords: ['help', 'how', 'what', 'feature', 'can', 'hjälp', 'hur', 'vad', 'funktion'], tourId: null, messageKey: 'help.faq.general' },
 ];
 
 /**
@@ -260,16 +202,16 @@ export function findFaqMatch(question) {
 
   if (bestScore >= 1 && bestMatch) {
     return {
-      message: bestMatch.message,
+      messageKey: bestMatch.messageKey,
       tourId: bestMatch.tourId,
-      suggestions: DEFAULT_SUGGESTIONS,
+      suggestionKeys: DEFAULT_SUGGESTIONS,
     };
   }
 
   return {
-    message: 'I\'m not sure about that, but I can help you with many things! Try asking about creating cellars, adding bottles, scanning labels, or using the wishlist.',
+    messageKey: 'help.faq.general',
     tourId: null,
-    suggestions: DEFAULT_SUGGESTIONS,
+    suggestionKeys: DEFAULT_SUGGESTIONS,
   };
 }
 

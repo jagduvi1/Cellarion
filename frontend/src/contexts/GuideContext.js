@@ -73,8 +73,9 @@ export function GuideProvider({ children }) {
     tourRef.current = activeTour ? { tour: activeTour, step: tourStepIndex } : null;
   }, [activeTour, tourStepIndex]);
 
-  // Get suggestions for current page
-  const suggestions = getSuggestionsForPage(location.pathname);
+  // Get suggestions for current page (resolve i18n keys)
+  const suggestionKeys = getSuggestionsForPage(location.pathname);
+  const suggestions = suggestionKeys.map(key => t(key));
 
   // ─── Helpers ───
 
@@ -104,9 +105,9 @@ export function GuideProvider({ children }) {
         const faq = findFaqMatch(question);
         setMessages(prev => [...prev, {
           role: 'assistant',
-          text: faq.message,
+          text: t(faq.messageKey),
           tourId: faq.tourId,
-          suggestions: faq.suggestions,
+          suggestions: faq.suggestionKeys.map(k => t(k)),
         }]);
       } else {
         setMessages(prev => [...prev, {
@@ -169,7 +170,7 @@ export function GuideProvider({ children }) {
       setMessages(prev => [...prev, {
         role: 'assistant',
         text: t('help.tour.done'),
-        suggestions: getSuggestionsForPage(location.pathname),
+        suggestions: getSuggestionsForPage(location.pathname).map(k => t(k)),
       }]);
       return;
     }
@@ -191,7 +192,7 @@ export function GuideProvider({ children }) {
       setMessages(prev => [...prev, {
         role: 'assistant',
         text: t('help.tour.stopped'),
-        suggestions: getSuggestionsForPage(location.pathname),
+        suggestions: getSuggestionsForPage(location.pathname).map(k => t(k)),
       }]);
     }
     setActiveTour(null);
