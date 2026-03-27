@@ -25,6 +25,7 @@ router.get('/', sitemapLimiter, async (req, res) => {
     const staticPages = [
       { loc: '/', priority: '1.0', changefreq: 'weekly' },
       { loc: '/blog', priority: '0.8', changefreq: 'daily' },
+      { loc: '/help', priority: '0.6', changefreq: 'monthly' },
       { loc: '/privacy', priority: '0.3', changefreq: 'yearly' },
     ];
 
