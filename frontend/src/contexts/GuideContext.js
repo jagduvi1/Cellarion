@@ -12,9 +12,11 @@ import TOURS, { getSuggestionsForPage, findFaqMatch } from '../utils/guideTours'
  */
 function matchesPage(pattern, pathname) {
   if (!pattern) return true;
+  // Trailing slash → contains match ('/bottles/' matches '/cellars/x/bottles/y')
   if (pattern.endsWith('/')) {
-    return pathname.startsWith(pattern);
+    return pathname.includes(pattern);
   }
+  // No trailing slash → exact match OR suffix match
   return pathname === pattern || pathname.endsWith(pattern);
 }
 
@@ -27,6 +29,8 @@ function matchesPage(pattern, pathname) {
 function findBestStartStep(tour, pathname) {
   for (let i = tour.steps.length - 1; i > 0; i--) {
     const step = tour.steps[i];
+    // Steps marked noSkip require a prerequisite (e.g. opening a menu first)
+    if (step.noSkip) continue;
     if (step.waitForPage && matchesPage(step.waitForPage, pathname)) {
       return i;
     }
