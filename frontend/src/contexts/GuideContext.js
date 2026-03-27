@@ -131,22 +131,42 @@ export function GuideProvider({ children }) {
     if (!tour) return;
 
     const bestStart = findBestStartStep(tour, location.pathname);
+    const step = tour.steps[bestStart];
+    const stepsRemaining = tour.steps.length - bestStart;
 
+    // Auto-navigate if the chosen step requires it
+    if (step.navigateTo && !location.pathname.startsWith(step.navigateTo)) {
+      navigate(step.navigateTo);
+    }
+
+    // Single-step tours that just navigate + explain: show the message
+    // but don't start a tour overlay — the chat message IS the help.
+    if (stepsRemaining === 1 && !step.clickAdvance) {
+      setIsOpen(true);
+      setMessages(prev => [
+        ...prev,
+        {
+          role: 'assistant',
+          isTourStep: true,
+          text: step.description,
+        },
+        {
+          role: 'assistant',
+          text: 'There you go! Is there anything else you\'d like help with?',
+          suggestions: getSuggestionsForPage(step.navigateTo || location.pathname),
+        },
+      ]);
+      return; // No overlay, no active tour
+    }
+
+    // Multi-step tour: activate the overlay
     setActiveTour(tour);
     setTourStepIndex(bestStart);
-
-    // Open chat and narrate the first step conversationally
     setIsOpen(true);
     setMessages(prev => [
       ...prev,
       stepMessage(tour, bestStart),
     ]);
-
-    // Auto-navigate if the chosen step requires it
-    const step = tour.steps[bestStart];
-    if (step.navigateTo && !location.pathname.startsWith(step.navigateTo)) {
-      navigate(step.navigateTo);
-    }
   }, [location.pathname, navigate]);
 
   const advanceTour = useCallback(() => {
@@ -164,7 +184,7 @@ export function GuideProvider({ children }) {
       // (offset removed)
       setMessages(prev => [...prev, {
         role: 'assistant',
-        text: 'All done! You\'re all set. Is there anything else I can help with?',
+        text: 'There you go! Is there anything else you\'d like help with?',
         suggestions: getSuggestionsForPage(location.pathname),
       }]);
       return;
@@ -186,7 +206,7 @@ export function GuideProvider({ children }) {
     if (activeTour) {
       setMessages(prev => [...prev, {
         role: 'assistant',
-        text: 'Tour ended. Feel free to ask me anything else!',
+        text: 'No problem! Let me know if you need anything else.',
         suggestions: getSuggestionsForPage(location.pathname),
       }]);
     }

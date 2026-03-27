@@ -205,14 +205,14 @@ function ChatPanel() {
           <div>
             <h3 className="guide-panel-title">Cellarion Guide</h3>
             <span className="guide-panel-subtitle">
-              {activeTour ? activeTour.title : 'Ask anything about the app'}
+              {activeTour ? 'Guiding you...' : 'Ask anything about the app'}
             </span>
           </div>
         </div>
         <div className="guide-panel-header-actions">
           {activeTour && (
             <button className="guide-panel-end-tour" onClick={endTour}>
-              End tour
+              Stop
             </button>
           )}
           {!activeTour && messages.length > 0 && (
@@ -254,7 +254,7 @@ function ChatPanel() {
                   className="guide-msg-tour-btn"
                   onClick={() => handleTourClick(msg.tourId)}
                 >
-                  <PlayIcon /> Show me how
+                  <PlayIcon /> Yes, show me
                 </button>
               )}
 
