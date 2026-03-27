@@ -246,17 +246,7 @@ function ChatPanel() {
           <div key={i} className={`guide-msg guide-msg--${msg.role} ${msg.isTourStep ? 'guide-msg--tour-step' : ''}`}>
             {msg.role === 'assistant' && <AssistantAvatar />}
             <div className="guide-msg-content">
-              {/* Tour step badge — hidden for single-step tours */}
-              {msg.isTourStep && msg.stepLabel && (
-                <span className="guide-msg-step-badge">{msg.stepLabel}</span>
-              )}
-
               <div className="guide-msg-text">{msg.text}</div>
-
-              {/* Click hint for tour steps */}
-              {msg.isTourStep && msg.clickHint && i === messages.length - 1 && (
-                <span className="guide-msg-click-hint">{msg.clickHint}</span>
-              )}
 
               {/* "Show me how" button */}
               {msg.tourId && (

@@ -68,7 +68,7 @@
   box-shadow: 0 12px 48px rgba(0, 0, 0, 0.15), 0 2px 8px rgba(0, 0, 0, 0.08);
   display: flex;
   flex-direction: column;
-  z-index: 950;
+  z-index: 10010;
   animation: guide-panel-entrance 0.3s ease-out;
   overflow: hidden;
 }
@@ -463,25 +463,7 @@
   border-left: 3px solid var(--color-primary, #7A1E2D);
 }
 
-.guide-msg-step-badge {
-  display: inline-block;
-  padding: 2px 8px;
-  border-radius: 8px;
-  background: var(--color-primary, #7A1E2D);
-  color: #fff;
-  font-size: 0.68rem;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  margin-bottom: 4px;
-}
-
-.guide-msg-click-hint {
-  display: block;
-  margin-top: 6px;
-  font-size: 0.75rem;
-  color: var(--color-text-tertiary, #999);
-  font-style: italic;
-}
+/* Tour step messages get a subtle left border to distinguish from regular chat */
 
 /* "End tour" button in header */
 .guide-panel-end-tour {

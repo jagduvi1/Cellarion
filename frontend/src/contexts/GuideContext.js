@@ -59,7 +59,7 @@ export function GuideProvider({ children }) {
   // Tour state
   const [activeTour, setActiveTour] = useState(null);
   const [tourStepIndex, setTourStepIndex] = useState(0);
-  const [tourStartOffset, setTourStartOffset] = useState(0);
+  // tourStartOffset removed — no longer showing step numbers
   const tourRef = useRef(null);
   const lastAdvanceRef = useRef(0); // debounce guard
 
@@ -73,19 +73,13 @@ export function GuideProvider({ children }) {
 
   // ─── Helpers ───
 
-  /** Build a chat message for a tour step with relative numbering. */
-  function stepMessage(tour, index, offset) {
+  /** Build a conversational chat message for a tour step. */
+  function stepMessage(tour, index) {
     const step = tour.steps[index];
-    const visibleTotal = tour.steps.length - offset;
-    const visibleNumber = index - offset + 1;
     return {
       role: 'assistant',
       isTourStep: true,
-      stepLabel: visibleTotal > 1 ? `Step ${visibleNumber} of ${visibleTotal}` : null,
       text: step.description,
-      clickHint: step.clickAdvance
-        ? 'Click the highlighted element to continue.'
-        : null,
     };
   }
 
@@ -140,14 +134,12 @@ export function GuideProvider({ children }) {
 
     setActiveTour(tour);
     setTourStepIndex(bestStart);
-    setTourStartOffset(bestStart);
 
-    // Open chat and narrate the first step
+    // Open chat and narrate the first step conversationally
     setIsOpen(true);
     setMessages(prev => [
       ...prev,
-      { role: 'assistant', text: `Let me walk you through: **${tour.title}**` },
-      stepMessage(tour, bestStart, bestStart),
+      stepMessage(tour, bestStart),
     ]);
 
     // Auto-navigate if the chosen step requires it
@@ -169,7 +161,7 @@ export function GuideProvider({ children }) {
       // Tour complete
       setActiveTour(null);
       setTourStepIndex(0);
-      setTourStartOffset(0);
+      // (offset removed)
       setMessages(prev => [...prev, {
         role: 'assistant',
         text: 'All done! You\'re all set. Is there anything else I can help with?',
@@ -181,14 +173,14 @@ export function GuideProvider({ children }) {
     setTourStepIndex(nextIndex);
 
     // Narrate the next step in chat
-    setMessages(prev => [...prev, stepMessage(activeTour, nextIndex, tourStartOffset)]);
+    setMessages(prev => [...prev, stepMessage(activeTour, nextIndex)]);
 
     // Auto-navigate if next step requires it
     const nextStep = activeTour.steps[nextIndex];
     if (nextStep.navigateTo && !location.pathname.startsWith(nextStep.navigateTo)) {
       navigate(nextStep.navigateTo);
     }
-  }, [activeTour, tourStepIndex, tourStartOffset, location.pathname, navigate]);
+  }, [activeTour, tourStepIndex, location.pathname, navigate]);
 
   const endTour = useCallback(() => {
     if (activeTour) {
@@ -200,7 +192,7 @@ export function GuideProvider({ children }) {
     }
     setActiveTour(null);
     setTourStepIndex(0);
-    setTourStartOffset(0);
+    // (offset removed)
   }, [activeTour, location.pathname]);
 
   // Check if the current page matches the current step's waitForPage
