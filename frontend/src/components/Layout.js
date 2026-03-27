@@ -337,7 +337,7 @@ function Layout({ children }) {
         <SupportModal onClose={() => setSupportOpen(false)} />
       )}
 
-      {user && <HelpGuide />}
+      {user && roles.includes('admin') && <HelpGuide />}
     </div>
   );
 }
