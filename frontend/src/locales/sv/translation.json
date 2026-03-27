@@ -1328,5 +1328,200 @@
     "addToWishlist": "Lägg till i önskelistan",
     "dismiss": "Avfärda",
     "hideCategory": "Dölj denna kategori"
+  },
+  "help": {
+    "title": "Hjälp & Funktioner",
+    "subtitle": "Allt du behöver veta om att använda Cellarion.",
+    "searchPlaceholder": "Sök hjälpämnen...",
+    "noResults": "Inga matchande ämnen hittades. Prova ett annat sökord.",
+    "goTo": "Gå till {{name}}",
+    "sections": {
+      "cellars": {
+        "title": "Källare",
+        "summary": "Skapa källare för att organisera din vinsamling.",
+        "d1": "Skapa källare genom att klicka på \"+ Ny källare\" och skriva ett namn.",
+        "d2": "Varje källare är en separat flasksamling.",
+        "d3": "Öppna en källare för att se alla flaskor. Filtrera på sök, årgång, betyg. Sortera efter nyast/äldst/pris/betyg.",
+        "d4": "Översiktsfliken visar: antal flaskor, totalt värde och länkar till Ställ och Rumsvy."
+      },
+      "bottles": {
+        "title": "Flaskor",
+        "summary": "Lägg till, hantera och spåra enskilda flaskor i dina källare.",
+        "d1": "Lägg till en flaska: klicka på \"+ Lägg till flaska\" i en källare. Två sätt: sök i vindatabasen efter namn, ELLER skanna en vinetikett med din kamera (AI identifierar vinet).",
+        "d2": "Flaskdetaljsidan visar: vininfo, årgång, inköpspris, marknadsvärde, ditt betyg, dina anteckningar, bilder, druvor, lagring & mognadsstatus, prisutvecklingsgraf.",
+        "d3": "Redigera detaljer: klicka på \"Redigera detaljer\" på flasksidan för att ändra årgång, pris, betyg, anteckningar, storlek.",
+        "d4": "Ladda upp foton: på flaskdetaljsidan kan du lägga till foton av flaskan eller etiketten. Bakgrundsborttagning sker automatiskt.",
+        "d5": "Dela en flaska: klicka på dela-ikonen på flaskdetaljsidan för att skicka en länk till någon.",
+        "d6": "Konsumera/ta bort: klicka på \"Ta bort flaska\" för att markera den som konsumerad. Ange datumet du drack den. Flaskan flyttas till källarens historik.",
+        "d7": "Skriv en recension: på flaskdetaljsidan, scrolla ner för att skriva en gemenskapsrecension."
+      },
+      "labelScan": {
+        "title": "Etikettskanning",
+        "summary": "Skanna en vinetikett med din kamera för att identifiera vinet automatiskt.",
+        "d1": "Tillgängligt när du lägger till en flaska — klicka på kameraknappen.",
+        "d2": "Ta ett foto av vinetiketten så läser AI:n av den och identifierar vinet.",
+        "d3": "Fungerar med de flesta tryckta etiketter. Bäst resultat med tydliga, välbelysta foton.",
+        "d4": "Efter skanning fylls vindetaljerna i automatiskt. Granska och spara."
+      },
+      "sharing": {
+        "title": "Delning",
+        "summary": "Dela källare med vänner eller skicka en länk till en specifik flaska.",
+        "d1": "Dela en källare: öppna en källare → klicka på \"...\" menyn → Dela. Bjud in någon via e-post som Visare (kan bläddra) eller Redigerare (kan lägga till/ta bort flaskor). Bara källarägaren kan dela.",
+        "d2": "Dela en flaska: på valfri flaskdetaljsida, klicka på dela-ikonen för att skicka en direktlänk."
+      },
+      "racks": {
+        "title": "Vinställ",
+        "summary": "Organisera flaskor i fysiska ställ som matchar din verkliga förvaring.",
+        "d1": "Åtkomst: öppna en källare → klicka på \"...\" menyn → Ställ.",
+        "d2": "Skapa ställ med anpassade namn och storlekar (valfritt antal rader × kolumner).",
+        "d3": "Placera flaskor i ställplatser genom att klicka på en tom plats och välja en flaska.",
+        "d4": "Visuellt rutnät visar vilka platser som är fyllda och vilka som är tomma."
+      },
+      "roomView": {
+        "title": "3D-rumsvy",
+        "summary": "Bygg ett virtuellt 3D-rum som speglar din verkliga källare.",
+        "d1": "Åtkomst: öppna en källare → översiktsfliken → Rumsvy.",
+        "d2": "Placera och arrangera dina vinställ i ett virtuellt 3D-rum.",
+        "d3": "Klicka på \"Redigera\" för redigeringsläge: dra ställ, rotera dem, lägg till ej placerade ställ.",
+        "d4": "Klicka på \"Spara\" för att behålla din layout. Kom tillbaka när som helst för att ändra."
+      },
+      "wishlist": {
+        "title": "Önskelista",
+        "summary": "Håll koll på viner du vill köpa.",
+        "d1": "Klicka på \"+ Lägg till vin\" för att söka i databasen och lägga till ett vin.",
+        "d2": "Lägg till anteckningar (t.ex. var du kan köpa det) och sätt ett önskat pris.",
+        "d3": "Filterflikar: Önskade / Köpta / Alla."
+      },
+      "restock": {
+        "title": "Smart Påfyllning",
+        "summary": "Automatisk analys av dina konsumtionsmönster jämfört med lagret.",
+        "d1": "Visar: flaskor konsumerade per år, köpta per år, nettoförändring och antal års förråd.",
+        "d2": "Fördelar lagernivåer per vintyp, druva, region, land och producent.",
+        "d3": "Flaggar kategorier som håller på att ta slut baserat på din faktiska dryckestakt.",
+        "d4": "Helt automatiskt — baserat på din konsumtionshistorik. Ingen manuell inställning behövs."
+      },
+      "journal": {
+        "title": "Vindagbok",
+        "summary": "Skriv provningsanteckningar och dokumentera dina vinupplevelser.",
+        "d1": "Klicka på \"+ Ny anteckning\" för att skapa en provningsanteckning.",
+        "d2": "Varje anteckning dokumenterar vinet, dina intryck och tillfället.",
+        "d3": "Filtrera och sök bland tidigare anteckningar."
+      },
+      "recommendations": {
+        "title": "Rekommendationer",
+        "summary": "Vinrekommendationer från vänner och andra användare.",
+        "d1": "Andra användare kan rekommendera viner till dig.",
+        "d2": "Se deras förslag och lägg till viner du gillar i din källare eller önskelista."
+      },
+      "cellarChat": {
+        "title": "Källarchatt",
+        "summary": "Chatta med en AI-sommelier som känner hela din källare.",
+        "d1": "Fråga om matpairing, vad du ska dricka ikväll eller vinförslag från din samling.",
+        "d2": "Sommelieren känner till alla dina flaskor, betyg och anteckningar.",
+        "d3": "Användningsgränser beror på din plan (Gratis: 4/vecka, Bas: 20/dag, Premium: 50/dag)."
+      },
+      "analytics": {
+        "title": "Analys",
+        "summary": "Diagram och insikter om din vinsamling.",
+        "d1": "Samlingsvärde över tid, flaskor per land/typ/druva/region.",
+        "d2": "Världskarta som visar var dina viner kommer ifrån.",
+        "d3": "Drickfönsteröversikt: viner som är redo, fortfarande lagras eller passerat toppen.",
+        "d4": "Exportera din statistik som en delbar kortbild.",
+        "d5": "Premiumfunktion — tillgänglig med Premium-planen."
+      },
+      "community": {
+        "title": "Gemenskap",
+        "summary": "Anslut med andra vinälskare genom recensioner och diskussioner.",
+        "d1": "Recensionsfliken: bläddra bland vinrecensioner från andra användare.",
+        "d2": "Diskussionsfliken: forumtrådar. Skapa nya diskussioner, svara andra.",
+        "d3": "Följ andra användare och visa deras profiler."
+      },
+      "wineRequests": {
+        "title": "Vinförfrågningar",
+        "summary": "Föreslå viner som saknas i databasen.",
+        "d1": "Klicka på \"+ Ny förfrågan\" för att föreslå ett vin.",
+        "d2": "En administratör granskar och lägger till godkända viner så alla kan använda dem."
+      },
+      "import": {
+        "title": "Massimport",
+        "summary": "Importera din vinsamling från en CSV- eller JSON-fil.",
+        "d1": "Åtkomst: öppna en källare → \"...\" menyn → Importera flaskor.",
+        "d2": "Ladda upp en CSV- eller JSON-fil med dina vindata.",
+        "d3": "AI hjälper till att matcha importerade viner mot databasen automatiskt."
+      },
+      "settings": {
+        "title": "Inställningar",
+        "summary": "Anpassa din Cellarion-upplevelse.",
+        "d1": "Valutapreferens (används för priser och värdeuträkningar).",
+        "d2": "Språkval.",
+        "d3": "Betygsskala: 5-stjärnig, 10-poäng, 20-poäng eller 100-poäng.",
+        "d4": "Push-notifikationsinställningar och enhetshantering.",
+        "d5": "Profil: användarnamn och e-post."
+      },
+      "history": {
+        "title": "Källarhistorik",
+        "summary": "Visa alla flaskor du har konsumerat från en källare.",
+        "d1": "Åtkomst: öppna en källare → \"...\" menyn → Historik.",
+        "d2": "Visar varje flaska du markerat som konsumerad, med datum."
+      },
+      "other": {
+        "title": "Övriga funktioner",
+        "summary": "Blogg, planer, support och NFC-taggar.",
+        "d1": "Blogg (/blog): vinartiklar och guider.",
+        "d2": "Planer (/plans): prenumerationsnivåer — Gratis, Bas, Premium.",
+        "d3": "Support (/support): skicka supportärenden för hjälp.",
+        "d4": "NFC-taggar: fäst NFC-taggar på ställ — skanna med din telefon för att öppna stället direkt."
+      }
+    },
+    "tour": {
+      "createCellar": "Klicka på \"+ Ny källare\". Ge den ett namn som \"Köksstället\" eller \"Vinkylen\" — varje källare är en separat samling.",
+      "addBottleSelect": "Klicka först på källaren där du vill lägga till en flaska.",
+      "addBottleClick": "Klicka nu på \"Lägg till flaska\" — du kan söka i vår databas med tusentals viner eller skanna en etikett med kameran!",
+      "scanSelect": "Välj först källaren där du vill lägga till det skannade vinet.",
+      "scanAddBottle": "Klicka på \"Lägg till flaska\" för att öppna sidan.",
+      "scanClick": "Klicka nu på kameraknappen för att ta ett foto av vinetiketten. AI:n läser etiketten och identifierar vinet automatiskt!",
+      "wishlistAdd": "Klicka på \"Lägg till vin\" för att söka efter ett vin du vill köpa. Du kan lägga till anteckningar och sätta ett önskat pris!",
+      "shareCellarSelect": "Klicka på källaren du vill dela med någon.",
+      "shareMenu": "Klicka på menyknappen (tre prickar) för att se fler alternativ.",
+      "shareClick": "Klicka på \"Dela\" för att bjuda in någon via e-post. Du kan ge dem visnings- eller redigeringsåtkomst!",
+      "racksSelect": "Klicka på källaren du vill organisera.",
+      "racksMenu": "Klicka på menyknappen (tre prickar) för att hitta Ställ-alternativet.",
+      "racksClick": "Klicka på \"Ställ\" för att se din fysiska ställayout. Du kan skapa ställ i olika storlekar!",
+      "journalAdd": "Klicka på \"Ny anteckning\" för att skriva en provningsanteckning. Dokumentera vinet, dina intryck, aromer och smaker!",
+      "cellarChatInput": "Prova att fråga \"Vad ska jag dricka ikväll till pasta?\" eller \"Vilka av mina viner är i toppform?\" — sommelieren rekommenderar viner från din källare!",
+      "statistics": "Här kan du se detaljerade diagram och insikter om din vinsamling — värdetrender, landsfördelning, drickfönster och mer.",
+      "settings": "Här kan du anpassa din upplevelse — valuta, språk, betygsskala, notifikationsinställningar och din profil.",
+      "restock": "Här kan du se viner som börjar ta slut i din källare baserat på din konsumtionstakt.",
+      "recommendations": "Här kan du se vinrekommendationer från vänner och andra användare.",
+      "roomSelect": "Välj först källaren du vill bygga ett 3D-rum för.",
+      "roomOpen": "Klicka på \"Rumsvy\" för att öppna 3D-rumsbyggaren. Här kan du placera dina ställ i ett virtuellt rum!",
+      "roomEdit": "Klicka på \"Redigera\" för att börja arrangera ditt rum. I redigeringsläge kan du dra ställ, rotera dem och placera allt.",
+      "roomAddRack": "Klicka på \"Lägg till ställ\" för att placera dina ställ i 3D-rummet. Dra dem för att matcha din verkliga layout.",
+      "roomSave": "När du är nöjd med arrangemanget, klicka på \"Spara\" för att behålla din rumslayout!",
+      "importSelect": "Välj källaren där du vill importera flaskor.",
+      "importMenu": "Klicka på menyknappen (tre prickar) för att hitta Import-alternativet.",
+      "importClick": "Klicka på \"Importera flaskor\" för att öppna massimportverktyget. Du kan ladda upp en CSV- eller JSON-fil!",
+      "consumeSelect": "Öppna först källaren med flaskan du drack, klicka sedan på flaskan.",
+      "consumeClick": "Klicka på denna knapp för att markera flaskan som konsumerad. Du kan ange datum och lägga till provningsanteckningar. Den flyttas till din källarhistorik!",
+      "reviewSelect": "Öppna en källare och klicka sedan på flaskan du vill recensera.",
+      "reviewClick": "Klicka på \"Skriv en recension\" för att dela dina tankar med gemenskapen. Din recension visas på vinets sida och i gemenskapsflödet!",
+      "suggestWine": "Klicka här för att föreslå ett vin som saknas i vår databas. En administratör granskar och lägger till det!",
+      "discussionCreate": "Klicka på \"Ny diskussion\" för att starta en konversation med andra vinälskare. Dela upptäckter, ställ frågor eller diskutera pairing!",
+      "historySelect": "Välj källaren vars historik du vill se.",
+      "historyMenu": "Klicka på menyknappen (tre prickar) för att hitta Historik-alternativet.",
+      "historyClick": "Klicka på \"Historik\" för att se alla flaskor du konsumerat från denna källare, med datum och anteckningar.",
+      "done": "Varsågod! Finns det något mer du vill ha hjälp med?",
+      "stopped": "Inga problem! Hör av dig om du behöver något mer."
+    },
+    "guide": {
+      "title": "Cellarion Guide",
+      "subtitle": "Fråga vad som helst om appen",
+      "guiding": "Guidar dig...",
+      "placeholder": "Fråga mig vad som helst...",
+      "showMe": "Ja, visa mig",
+      "stop": "Stopp",
+      "welcome": "Välkommen till Cellarion!",
+      "welcomeText": "Jag kan hjälpa dig navigera i appen, visa funktioner och guida dig steg för steg."
+    }
   }
 }

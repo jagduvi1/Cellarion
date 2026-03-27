@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useGuide } from '../contexts/GuideContext';
 import './HelpGuide.css';
 
@@ -147,6 +148,7 @@ function TourOverlay() {
    Tour steps render as special messages in the chat.
    ═══════════════════════════════════════════ */
 function ChatPanel() {
+  const { t } = useTranslation();
   const {
     isOpen, setIsOpen, messages, sendMessage, loading,
     suggestions, startTour, clearChat, activeTour, endTour,
@@ -203,16 +205,16 @@ function ChatPanel() {
             </svg>
           </div>
           <div>
-            <h3 className="guide-panel-title">Cellarion Guide</h3>
+            <h3 className="guide-panel-title">{t('help.guide.title')}</h3>
             <span className="guide-panel-subtitle">
-              {activeTour ? 'Guiding you...' : 'Ask anything about the app'}
+              {activeTour ? t('help.guide.guiding') : t('help.guide.subtitle')}
             </span>
           </div>
         </div>
         <div className="guide-panel-header-actions">
           {activeTour && (
             <button className="guide-panel-end-tour" onClick={endTour}>
-              Stop
+              {t('help.guide.stop')}
             </button>
           )}
           {!activeTour && messages.length > 0 && (
@@ -237,8 +239,8 @@ function ChatPanel() {
                 <path d="M12 2L2 7l10 5 10-5-10-5z" /><path d="M2 17l10 5 10-5" /><path d="M2 12l10 5 10-5" />
               </svg>
             </div>
-            <h4>Welcome to Cellarion!</h4>
-            <p>I can help you navigate the app, show you features, and walk you through anything step by step.</p>
+            <h4>{t('help.guide.welcome')}</h4>
+            <p>{t('help.guide.welcomeText')}</p>
           </div>
         )}
 
@@ -254,7 +256,7 @@ function ChatPanel() {
                   className="guide-msg-tour-btn"
                   onClick={() => handleTourClick(msg.tourId)}
                 >
-                  <PlayIcon /> Yes, show me
+                  <PlayIcon /> {t('help.guide.showMe')}
                 </button>
               )}
 
@@ -303,7 +305,7 @@ function ChatPanel() {
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="Ask me anything..."
+            placeholder={t('help.guide.placeholder')}
             disabled={loading}
             maxLength={500}
           />

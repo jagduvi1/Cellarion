@@ -1328,5 +1328,200 @@
     "addToWishlist": "Add to Wishlist",
     "dismiss": "Dismiss",
     "hideCategory": "Hide this category"
+  },
+  "help": {
+    "title": "Help & Features",
+    "subtitle": "Everything you need to know about using Cellarion.",
+    "searchPlaceholder": "Search help topics...",
+    "noResults": "No matching topics found. Try a different search term.",
+    "goTo": "Go to {{name}}",
+    "sections": {
+      "cellars": {
+        "title": "Cellars",
+        "summary": "Create cellars to organize your wine collection.",
+        "d1": "Create cellars by clicking \"+ New Cellar\" and typing a name.",
+        "d2": "Each cellar is a separate bottle collection.",
+        "d3": "Open a cellar to see all its bottles. Filter by search, vintage, rating. Sort by newest/oldest/price/rating.",
+        "d4": "Cellar overview tab shows: bottle count, total value, and links to Racks and Room View."
+      },
+      "bottles": {
+        "title": "Bottles",
+        "summary": "Add, manage, and track individual bottles in your cellars.",
+        "d1": "Add a bottle: click \"+ Add Bottle\" in a cellar. Two ways: search the wine database by name, OR scan a wine label with your phone camera (AI identifies the wine).",
+        "d2": "Bottle detail page shows: wine info, vintage, price paid, market value estimate, your rating, your notes, images, grape varieties, aging & maturity status, price evolution chart.",
+        "d3": "Edit details: click \"Edit Details\" on the bottle page to change vintage, price, rating, notes, size.",
+        "d4": "Upload photos: on the bottle detail page, you can add photos of the bottle or label. Background removal is automatic.",
+        "d5": "Share a bottle: click the share icon on the bottle detail page to send a link to someone.",
+        "d6": "Consume/remove: click \"Remove Bottle\" to mark it as consumed. Set the date you drank it. The bottle moves to the cellar's history.",
+        "d7": "Write a review: on the bottle detail page, scroll down to write a community review."
+      },
+      "labelScan": {
+        "title": "Label Scanning",
+        "summary": "Scan a wine label with your camera to identify it automatically.",
+        "d1": "Available when adding a bottle — click the camera button.",
+        "d2": "Take a photo of the wine label and the AI will read it and identify the wine.",
+        "d3": "Works with most printed labels. Best results with clear, well-lit photos.",
+        "d4": "After scanning, the wine details are pre-filled. Review and save."
+      },
+      "sharing": {
+        "title": "Sharing",
+        "summary": "Share cellars with friends or send a link to a specific bottle.",
+        "d1": "Share a cellar: open a cellar → click the \"...\" menu → Share. Invite someone by email as Viewer (can browse) or Editor (can add/remove bottles). Only the cellar owner can share.",
+        "d2": "Share a bottle: on any bottle detail page, click the share icon to send a direct link to someone."
+      },
+      "racks": {
+        "title": "Racks",
+        "summary": "Organize bottles in physical rack grids that match your real storage.",
+        "d1": "Access racks: open a cellar → click the \"...\" menu → Racks.",
+        "d2": "Create racks with custom names and sizes (any number of rows × columns).",
+        "d3": "Place bottles into rack slots by clicking an empty slot and selecting a bottle.",
+        "d4": "Visual grid shows which slots are filled and which are empty."
+      },
+      "roomView": {
+        "title": "3D Room View",
+        "summary": "Build a 3D virtual room that mirrors your real cellar.",
+        "d1": "Access: open a cellar → overview tab → Room View.",
+        "d2": "Place and arrange your racks in a virtual 3D room.",
+        "d3": "Click \"Edit\" to enter edit mode: drag racks, rotate them, add unplaced racks.",
+        "d4": "Click \"Save\" to keep your layout. Come back anytime to rearrange."
+      },
+      "wishlist": {
+        "title": "Wishlist",
+        "summary": "Track wines you want to buy.",
+        "d1": "Click \"+ Add Wine\" to search the database and add a wine to your wishlist.",
+        "d2": "Add notes (e.g. where to buy it) and set a target price.",
+        "d3": "Filter tabs: Wanted / Bought / All."
+      },
+      "restock": {
+        "title": "Smart Restock",
+        "summary": "Automatic analysis of your consumption patterns vs inventory.",
+        "d1": "Shows: bottles consumed per year, purchased per year, net change, and years of runway.",
+        "d2": "Breaks down stock levels by wine type, grape, region, country, and producer.",
+        "d3": "Flags categories running low based on your actual drinking pace.",
+        "d4": "Fully automatic — based on your consumption history. No manual setup needed."
+      },
+      "journal": {
+        "title": "Wine Journal",
+        "summary": "Write tasting notes and record your wine experiences.",
+        "d1": "Click \"+ New Entry\" to create a tasting note.",
+        "d2": "Each entry records the wine, your impressions, and the occasion.",
+        "d3": "Filter and search past entries."
+      },
+      "recommendations": {
+        "title": "Recommendations",
+        "summary": "Wine recommendations from friends and other users.",
+        "d1": "Other users can recommend wines to you.",
+        "d2": "View their suggestions and add wines you like to your cellar or wishlist."
+      },
+      "cellarChat": {
+        "title": "Cellar Chat",
+        "summary": "Chat with an AI sommelier who knows your entire cellar.",
+        "d1": "Ask for food pairings, what to drink tonight, or wine suggestions from your collection.",
+        "d2": "The sommelier knows all your bottles, ratings, and notes.",
+        "d3": "Usage limits depend on your plan (Free: 4/week, Basic: 20/day, Premium: 50/day)."
+      },
+      "analytics": {
+        "title": "Analytics",
+        "summary": "Charts and insights about your wine collection.",
+        "d1": "Collection value over time, bottles by country/type/grape/region.",
+        "d2": "World map showing where your wines come from.",
+        "d3": "Drink window overview: wines that are ready, still aging, or past peak.",
+        "d4": "Export your stats as a shareable card image.",
+        "d5": "Premium feature — available on the Premium plan."
+      },
+      "community": {
+        "title": "Community",
+        "summary": "Connect with other wine lovers through reviews and discussions.",
+        "d1": "Reviews tab: browse wine reviews from other users.",
+        "d2": "Discussions tab: forum-style threads. Create new discussions, reply to others.",
+        "d3": "Follow other users and view their profiles."
+      },
+      "wineRequests": {
+        "title": "Wine Requests",
+        "summary": "Suggest wines missing from the database.",
+        "d1": "Click \"+ New Request\" to suggest a wine.",
+        "d2": "An admin reviews and adds approved wines so everyone can use them."
+      },
+      "import": {
+        "title": "Bulk Import",
+        "summary": "Import your wine collection from a CSV or JSON file.",
+        "d1": "Access: open a cellar → \"...\" menu → Import Bottles.",
+        "d2": "Upload a CSV or JSON file with your wine data.",
+        "d3": "AI helps match imported wines to the database automatically."
+      },
+      "settings": {
+        "title": "Settings",
+        "summary": "Customize your Cellarion experience.",
+        "d1": "Currency preference (used for prices and value calculations).",
+        "d2": "Language selection.",
+        "d3": "Rating scale: 5-star, 10-point, 20-point, or 100-point.",
+        "d4": "Push notification preferences and device management.",
+        "d5": "Profile: username and email."
+      },
+      "history": {
+        "title": "Cellar History",
+        "summary": "View all bottles you've consumed from a cellar.",
+        "d1": "Access: open a cellar → \"...\" menu → History.",
+        "d2": "Shows every bottle you've marked as consumed, with dates."
+      },
+      "other": {
+        "title": "Other Features",
+        "summary": "Blog, plans, support, and NFC tags.",
+        "d1": "Blog (/blog): wine articles and guides.",
+        "d2": "Plans (/plans): subscription tiers — Free, Basic, Premium.",
+        "d3": "Support (/support): submit support tickets for help.",
+        "d4": "NFC tags: attach NFC tags to racks — scan with your phone to open the rack directly."
+      }
+    },
+    "tour": {
+      "createCellar": "Click the \"+ New Cellar\" button. Give it a name like \"Kitchen Rack\" or \"Wine Fridge\" — each cellar is a separate collection.",
+      "addBottleSelect": "First, click on the cellar where you want to add a bottle.",
+      "addBottleClick": "Now click \"Add Bottle\" — you can search our database of thousands of wines or scan a label with your camera!",
+      "scanSelect": "First, select the cellar where you want to add the scanned wine.",
+      "scanAddBottle": "Click \"Add Bottle\" to open the add bottle page.",
+      "scanClick": "Now click the camera button to take a photo of your wine label. The AI will read the label and identify the wine automatically!",
+      "wishlistAdd": "Click \"Add Wine\" to search for a wine you want to buy. You can add notes about where to find it and set a target price!",
+      "shareCellarSelect": "Click on the cellar you want to share with someone.",
+      "shareMenu": "Click the menu button (three dots) to see more options.",
+      "shareClick": "Click \"Share\" to invite someone by email. You can give them view-only or editor access!",
+      "racksSelect": "Click on the cellar you want to organize.",
+      "racksMenu": "Click the menu button (three dots) to find the Racks option.",
+      "racksClick": "Click \"Racks\" to see your physical rack layout. You can create racks in different sizes to match your real wine storage!",
+      "journalAdd": "Click \"New Entry\" to write a tasting note. Record the wine, your impressions, aromas, flavors, and how it made you feel!",
+      "cellarChatInput": "Try asking \"What should I drink tonight with pasta?\" or \"Which of my wines is at peak maturity?\" — the sommelier will recommend wines from your cellar!",
+      "statistics": "Here you can see detailed charts and insights about your wine collection — value trends, country distribution, drink windows, and more.",
+      "settings": "Here you can customize your experience — currency, language, rating scale, notification preferences, and your profile.",
+      "restock": "Here you can see wines that are running low in your cellar. You can set alerts to be notified when it's time to restock!",
+      "recommendations": "Here you can get wine recommendations from friends and other users.",
+      "roomSelect": "First, select the cellar you want to build a 3D room for.",
+      "roomOpen": "Click \"Room View\" to enter the 3D room builder. Here you can place your racks in a virtual room that mirrors your real cellar!",
+      "roomEdit": "Click \"Edit\" to start arranging your room. In edit mode you can drag racks, rotate them, and position everything.",
+      "roomAddRack": "Click \"Add Rack\" to place your racks into the 3D room. Drag them around to match your real layout.",
+      "roomSave": "When you're happy with the arrangement, click \"Save\" to keep your room layout!",
+      "importSelect": "Select the cellar where you want to import bottles.",
+      "importMenu": "Click the menu button (three dots) to find the Import option.",
+      "importClick": "Click \"Import Bottles\" to open the bulk import tool. You can upload a CSV or JSON file!",
+      "consumeSelect": "First, open the cellar that has the bottle you drank, then click on the bottle.",
+      "consumeClick": "Click this button to mark the bottle as consumed. You can set the date you drank it and add tasting notes. It moves to your cellar history!",
+      "reviewSelect": "Open a cellar, then click on the bottle you want to review.",
+      "reviewClick": "Click \"Write a Review\" to share your thoughts with the community. Your review appears on the wine's page and in the community feed!",
+      "suggestWine": "Click here to suggest a wine that's missing from our database. An admin will review it and add it so everyone can use it!",
+      "discussionCreate": "Click \"New Discussion\" to start a conversation with other wine lovers. Share discoveries, ask questions, or discuss pairings!",
+      "historySelect": "Select the cellar whose history you want to see.",
+      "historyMenu": "Click the menu button (three dots) to find the History option.",
+      "historyClick": "Click \"History\" to see all bottles you've consumed from this cellar, with dates and tasting notes.",
+      "done": "There you go! Is there anything else you'd like help with?",
+      "stopped": "No problem! Let me know if you need anything else."
+    },
+    "guide": {
+      "title": "Cellarion Guide",
+      "subtitle": "Ask anything about the app",
+      "guiding": "Guiding you...",
+      "placeholder": "Ask me anything...",
+      "showMe": "Yes, show me",
+      "stop": "Stop",
+      "welcome": "Welcome to Cellarion!",
+      "welcomeText": "I can help you navigate the app, show you features, and walk you through anything step by step."
+    }
   }
 }

@@ -16,404 +16,98 @@
  */
 
 const TOURS = {
-  'create-cellar': {
-    title: 'Create Your First Cellar',
-    steps: [
-      {
-        element: '[data-guide="create-cellar"]',
-        description: 'Click the "+ New Cellar" button. Give it a name like "Kitchen Rack" or "Wine Fridge" — each cellar is a separate collection.',
-        placement: 'bottom',
-        navigateTo: '/cellars',
-        waitForPage: '/cellars',
-        clickAdvance: true,
-      },
-    ],
-  },
+  'create-cellar': { title: 'Create Your First Cellar', steps: [
+    { element: '[data-guide="create-cellar"]', descKey: 'help.tour.createCellar', placement: 'bottom', navigateTo: '/cellars', waitForPage: '/cellars', clickAdvance: true },
+  ]},
 
-  'add-bottle': {
-    title: 'Add a Bottle to Your Cellar',
-    steps: [
-      {
-        element: '[data-guide="cellar-card"]',
-        description: 'First, click on the cellar where you want to add a bottle.',
-        placement: 'bottom',
-        navigateTo: '/cellars',
-        waitForPage: '/cellars',
-        clickAdvance: true,
-      },
-      {
-        element: '[data-guide="add-bottle"]',
-        description: 'Now click "Add Bottle" — you can search our database of thousands of wines or scan a label with your camera!',
-        placement: 'bottom',
-        waitForPage: '/cellars/',
-        clickAdvance: true,
-      },
-    ],
-  },
+  'add-bottle': { title: 'Add a Bottle to Your Cellar', steps: [
+    { element: '[data-guide="cellar-card"]', descKey: 'help.tour.addBottleSelect', placement: 'bottom', navigateTo: '/cellars', waitForPage: '/cellars', clickAdvance: true },
+    { element: '[data-guide="add-bottle"]', descKey: 'help.tour.addBottleClick', placement: 'bottom', waitForPage: '/cellars/', clickAdvance: true },
+  ]},
 
-  'scan-label': {
-    title: 'Scan a Wine Label',
-    steps: [
-      {
-        element: '[data-guide="cellar-card"]',
-        description: 'First, select the cellar where you want to add the scanned wine.',
-        placement: 'bottom',
-        navigateTo: '/cellars',
-        waitForPage: '/cellars',
-        clickAdvance: true,
-      },
-      {
-        element: '[data-guide="add-bottle"]',
-        description: 'Click "Add Bottle" to open the add bottle page.',
-        placement: 'bottom',
-        waitForPage: '/cellars/',
-        clickAdvance: true,
-      },
-      {
-        element: '[data-guide="scan-label"]',
-        description: 'Now click the camera button to take a photo of your wine label. The AI will read the label and identify the wine automatically!',
-        placement: 'top',
-        waitForPage: '/add-bottle',
-        clickAdvance: true,
-      },
-    ],
-  },
+  'scan-label': { title: 'Scan a Wine Label', steps: [
+    { element: '[data-guide="cellar-card"]', descKey: 'help.tour.scanSelect', placement: 'bottom', navigateTo: '/cellars', waitForPage: '/cellars', clickAdvance: true },
+    { element: '[data-guide="add-bottle"]', descKey: 'help.tour.scanAddBottle', placement: 'bottom', waitForPage: '/cellars/', clickAdvance: true },
+    { element: '[data-guide="scan-label"]', descKey: 'help.tour.scanClick', placement: 'top', waitForPage: '/add-bottle', clickAdvance: true },
+  ]},
 
-  'use-wishlist': {
-    title: 'Use the Wishlist',
-    steps: [
-      {
-        element: '[data-guide="add-wishlist"]',
-        description: 'Click "Add Wine" to search for a wine you want to buy. You can add notes about where to find it and set a target price!',
-        placement: 'bottom',
-        navigateTo: '/wishlist',
-        waitForPage: '/wishlist',
-        clickAdvance: true,
-      },
-    ],
-  },
+  'use-wishlist': { title: 'Use the Wishlist', steps: [
+    { element: '[data-guide="add-wishlist"]', descKey: 'help.tour.wishlistAdd', placement: 'bottom', navigateTo: '/wishlist', waitForPage: '/wishlist', clickAdvance: true },
+  ]},
 
-  'share-cellar': {
-    title: 'Share a Cellar',
-    steps: [
-      {
-        element: '[data-guide="cellar-card"]',
-        description: 'Click on the cellar you want to share with someone.',
-        placement: 'bottom',
-        navigateTo: '/cellars',
-        waitForPage: '/cellars',
-        clickAdvance: true,
-      },
-      {
-        element: '[data-guide="more-menu-btn"]',
-        description: 'Click the menu button (three dots) to see more options.',
-        placement: 'bottom',
-        waitForPage: '/cellars/',
-        clickAdvance: true,
-      },
-      {
-        element: '[data-guide="share-cellar"]',
-        description: 'Click "Share" to invite someone by email. You can give them view-only or editor access!',
-        placement: 'left',
-        waitForPage: '/cellars/',
-        clickAdvance: true,
-        noSkip: true,
-      },
-    ],
-  },
+  'share-cellar': { title: 'Share a Cellar', steps: [
+    { element: '[data-guide="cellar-card"]', descKey: 'help.tour.shareCellarSelect', placement: 'bottom', navigateTo: '/cellars', waitForPage: '/cellars', clickAdvance: true },
+    { element: '[data-guide="more-menu-btn"]', descKey: 'help.tour.shareMenu', placement: 'bottom', waitForPage: '/cellars/', clickAdvance: true },
+    { element: '[data-guide="share-cellar"]', descKey: 'help.tour.shareClick', placement: 'left', waitForPage: '/cellars/', clickAdvance: true, noSkip: true },
+  ]},
 
-  'manage-racks': {
-    title: 'Organize Bottles in Racks',
-    steps: [
-      {
-        element: '[data-guide="cellar-card"]',
-        description: 'Click on the cellar you want to organize.',
-        placement: 'bottom',
-        navigateTo: '/cellars',
-        waitForPage: '/cellars',
-        clickAdvance: true,
-      },
-      {
-        element: '[data-guide="more-menu-btn"]',
-        description: 'Click the menu button (three dots) to find the Racks option.',
-        placement: 'bottom',
-        waitForPage: '/cellars/',
-        clickAdvance: true,
-      },
-      {
-        element: '[data-guide="rack-view"]',
-        description: 'Click "Racks" to see your physical rack layout. You can create racks in different sizes to match your real wine storage!',
-        placement: 'left',
-        waitForPage: '/cellars/',
-        clickAdvance: true,
-        noSkip: true,
-      },
-    ],
-  },
+  'manage-racks': { title: 'Organize Bottles in Racks', steps: [
+    { element: '[data-guide="cellar-card"]', descKey: 'help.tour.racksSelect', placement: 'bottom', navigateTo: '/cellars', waitForPage: '/cellars', clickAdvance: true },
+    { element: '[data-guide="more-menu-btn"]', descKey: 'help.tour.racksMenu', placement: 'bottom', waitForPage: '/cellars/', clickAdvance: true },
+    { element: '[data-guide="rack-view"]', descKey: 'help.tour.racksClick', placement: 'left', waitForPage: '/cellars/', clickAdvance: true, noSkip: true },
+  ]},
 
-  'write-journal': {
-    title: 'Write a Tasting Note',
-    steps: [
-      {
-        element: '[data-guide="add-journal"]',
-        description: 'Click "New Entry" to write a tasting note. Record the wine, your impressions, aromas, flavors, and how it made you feel!',
-        placement: 'bottom',
-        navigateTo: '/journal',
-        waitForPage: '/journal',
-        clickAdvance: true,
-      },
-    ],
-  },
+  'write-journal': { title: 'Write a Tasting Note', steps: [
+    { element: '[data-guide="add-journal"]', descKey: 'help.tour.journalAdd', placement: 'bottom', navigateTo: '/journal', waitForPage: '/journal', clickAdvance: true },
+  ]},
 
-  'use-cellar-chat': {
-    title: 'Chat with the AI Sommelier',
-    steps: [
-      {
-        element: '[data-guide="chat-input"]',
-        description: 'Try asking "What should I drink tonight with pasta?" or "Which of my wines is at peak maturity?" — the sommelier will recommend wines from your cellar!',
-        placement: 'top',
-        navigateTo: '/cellar-chat',
-        waitForPage: '/cellar-chat',
-        clickAdvance: true,
-      },
-    ],
-  },
+  'use-cellar-chat': { title: 'Chat with the AI Sommelier', steps: [
+    { element: '[data-guide="chat-input"]', descKey: 'help.tour.cellarChatInput', placement: 'top', navigateTo: '/cellar-chat', waitForPage: '/cellar-chat', clickAdvance: true },
+  ]},
 
-  'view-statistics': {
-    title: 'View Your Collection Analytics',
-    steps: [
-      {
-        element: '[data-guide="nav-statistics"]',
-        description: 'Here you can see detailed charts and insights about your wine collection — value trends, country distribution, drink windows, and more.',
-        placement: 'bottom',
-        navigateTo: '/statistics',
-        waitForPage: '/statistics',
-        clickAdvance: true,
-      },
-    ],
-  },
+  'view-statistics': { title: 'View Your Collection Analytics', steps: [
+    { element: '[data-guide="nav-statistics"]', descKey: 'help.tour.statistics', placement: 'bottom', navigateTo: '/statistics', waitForPage: '/statistics', clickAdvance: true },
+  ]},
 
-  'configure-settings': {
-    title: 'Configure Your Settings',
-    steps: [
-      {
-        element: '[data-guide="nav-settings"]',
-        description: 'Here you can customize your experience — currency, language, rating scale, notification preferences, and your profile.',
-        placement: 'left',
-        navigateTo: '/settings',
-        waitForPage: '/settings',
-        clickAdvance: true,
-      },
-    ],
-  },
+  'configure-settings': { title: 'Configure Your Settings', steps: [
+    { element: '[data-guide="nav-settings"]', descKey: 'help.tour.settings', placement: 'left', navigateTo: '/settings', waitForPage: '/settings', clickAdvance: true },
+  ]},
 
-  'use-restock': {
-    title: 'Track Low Stock Wines',
-    steps: [
-      {
-        element: '[data-guide="nav-restock"]',
-        description: 'Here you can see wines that are running low in your cellar. You can set alerts to be notified when it\'s time to restock!',
-        placement: 'bottom',
-        navigateTo: '/restock',
-        waitForPage: '/restock',
-        clickAdvance: true,
-      },
-    ],
-  },
+  'use-restock': { title: 'Track Low Stock Wines', steps: [
+    { element: '[data-guide="nav-restock"]', descKey: 'help.tour.restock', placement: 'bottom', navigateTo: '/restock', waitForPage: '/restock', clickAdvance: true },
+  ]},
 
-  'get-recommendations': {
-    title: 'Get Wine Recommendations',
-    steps: [
-      {
-        element: '[data-guide="nav-recommendations"]',
-        description: 'Here you can get AI-powered wine recommendations based on your collection and taste preferences.',
-        placement: 'bottom',
-        clickAdvance: true,
-        navigateTo: '/recommendations',
-        waitForPage: '/recommendations',
-      },
-    ],
-  },
+  'get-recommendations': { title: 'Get Wine Recommendations', steps: [
+    { element: '[data-guide="nav-recommendations"]', descKey: 'help.tour.recommendations', placement: 'bottom', navigateTo: '/recommendations', waitForPage: '/recommendations', clickAdvance: true },
+  ]},
 
-  'build-3d-room': {
-    title: 'Build a 3D Cellar Room',
-    steps: [
-      {
-        element: '[data-guide="cellar-card"]',
-        description: 'First, select the cellar you want to build a 3D room for.',
-        placement: 'bottom',
-        navigateTo: '/cellars',
-        waitForPage: '/cellars',
-        clickAdvance: true,
-      },
-      {
-        element: '[data-guide="cellar-room"]',
-        description: 'Click "Room View" to enter the 3D room builder. Here you can place your racks in a virtual room that mirrors your real cellar!',
-        placement: 'bottom',
-        waitForPage: '/cellars/',
-        clickAdvance: true,
-      },
-      {
-        element: '[data-guide="room-edit-mode"]',
-        description: 'Click "Edit" to start arranging your room. In edit mode you can drag racks, rotate them, and position everything.',
-        placement: 'bottom',
-        waitForPage: '/room',
-        clickAdvance: true,
-      },
-      {
-        element: '[data-guide="room-add-rack"]',
-        description: 'Click "Add Rack" to place your racks into the 3D room. Drag them around to match your real layout.',
-        placement: 'bottom',
-        waitForPage: '/room',
-        clickAdvance: true,
-      },
-      {
-        element: '[data-guide="room-save"]',
-        description: 'When you\'re happy with the arrangement, click "Save" to keep your room layout!',
-        placement: 'bottom',
-        waitForPage: '/room',
-        clickAdvance: true,
-      },
-    ],
-  },
+  'build-3d-room': { title: 'Build a 3D Cellar Room', steps: [
+    { element: '[data-guide="cellar-card"]', descKey: 'help.tour.roomSelect', placement: 'bottom', navigateTo: '/cellars', waitForPage: '/cellars', clickAdvance: true },
+    { element: '[data-guide="cellar-room"]', descKey: 'help.tour.roomOpen', placement: 'bottom', waitForPage: '/cellars/', clickAdvance: true },
+    { element: '[data-guide="room-edit-mode"]', descKey: 'help.tour.roomEdit', placement: 'bottom', waitForPage: '/room', clickAdvance: true },
+    { element: '[data-guide="room-add-rack"]', descKey: 'help.tour.roomAddRack', placement: 'bottom', waitForPage: '/room', clickAdvance: true },
+    { element: '[data-guide="room-save"]', descKey: 'help.tour.roomSave', placement: 'bottom', waitForPage: '/room', clickAdvance: true },
+  ]},
 
-  'import-bottles': {
-    title: 'Import Bottles from a File',
-    steps: [
-      {
-        element: '[data-guide="cellar-card"]',
-        description: 'Select the cellar where you want to import bottles.',
-        placement: 'bottom',
-        navigateTo: '/cellars',
-        waitForPage: '/cellars',
-        clickAdvance: true,
-      },
-      {
-        element: '[data-guide="more-menu-btn"]',
-        description: 'Click the menu button (three dots) to find the Import option.',
-        placement: 'bottom',
-        waitForPage: '/cellars/',
-        clickAdvance: true,
-      },
-      {
-        element: '[data-guide="cellar-import"]',
-        description: 'Click "Import Bottles" to open the bulk import tool. You can upload a CSV or JSON file!',
-        placement: 'left',
-        waitForPage: '/cellars/',
-        noSkip: true,
-        clickAdvance: true,
-      },
-    ],
-  },
+  'import-bottles': { title: 'Import Bottles from a File', steps: [
+    { element: '[data-guide="cellar-card"]', descKey: 'help.tour.importSelect', placement: 'bottom', navigateTo: '/cellars', waitForPage: '/cellars', clickAdvance: true },
+    { element: '[data-guide="more-menu-btn"]', descKey: 'help.tour.importMenu', placement: 'bottom', waitForPage: '/cellars/', clickAdvance: true },
+    { element: '[data-guide="cellar-import"]', descKey: 'help.tour.importClick', placement: 'left', waitForPage: '/cellars/', noSkip: true, clickAdvance: true },
+  ]},
 
-  'consume-bottle': {
-    title: 'Mark a Bottle as Consumed',
-    steps: [
-      {
-        element: '[data-guide="cellar-card"]',
-        description: 'First, open the cellar that has the bottle you drank, then click on the bottle.',
-        placement: 'bottom',
-        navigateTo: '/cellars',
-        waitForPage: '/cellars',
-        clickAdvance: true,
-      },
-      {
-        element: '[data-guide="bottle-consume"]',
-        description: 'Click this button to mark the bottle as consumed. You can set the date you drank it and add tasting notes. It moves to your cellar history!',
-        placement: 'bottom',
-        waitForPage: '/bottles/',
-        noSkip: true,
-        clickAdvance: true,
-      },
-    ],
-  },
+  'consume-bottle': { title: 'Mark a Bottle as Consumed', steps: [
+    { element: '[data-guide="cellar-card"]', descKey: 'help.tour.consumeSelect', placement: 'bottom', navigateTo: '/cellars', waitForPage: '/cellars', clickAdvance: true },
+    { element: '[data-guide="bottle-consume"]', descKey: 'help.tour.consumeClick', placement: 'bottom', waitForPage: '/bottles/', noSkip: true, clickAdvance: true },
+  ]},
 
-  'write-review': {
-    title: 'Write a Wine Review',
-    steps: [
-      {
-        element: '[data-guide="cellar-card"]',
-        description: 'Open a cellar, then click on the bottle you want to review.',
-        placement: 'bottom',
-        navigateTo: '/cellars',
-        waitForPage: '/cellars',
-        clickAdvance: true,
-      },
-      {
-        element: '[data-guide="bottle-write-review"]',
-        description: 'Click "Write a Review" to share your thoughts with the community. Your review appears on the wine\'s page and in the community feed!',
-        placement: 'bottom',
-        waitForPage: '/bottles/',
-        clickAdvance: true,
-        noSkip: true,
-      },
-    ],
-  },
+  'write-review': { title: 'Write a Wine Review', steps: [
+    { element: '[data-guide="cellar-card"]', descKey: 'help.tour.reviewSelect', placement: 'bottom', navigateTo: '/cellars', waitForPage: '/cellars', clickAdvance: true },
+    { element: '[data-guide="bottle-write-review"]', descKey: 'help.tour.reviewClick', placement: 'bottom', waitForPage: '/bottles/', clickAdvance: true, noSkip: true },
+  ]},
 
-  'suggest-wine': {
-    title: 'Suggest a Wine for the Database',
-    steps: [
-      {
-        element: '[data-guide="wine-request-create"]',
-        description: 'Click here to suggest a wine that\'s missing from our database. An admin will review it and add it so everyone can use it!',
-        placement: 'bottom',
-        navigateTo: '/wine-requests',
-        waitForPage: '/wine-requests',
-        clickAdvance: true,
-      },
-    ],
-  },
+  'suggest-wine': { title: 'Suggest a Wine for the Database', steps: [
+    { element: '[data-guide="wine-request-create"]', descKey: 'help.tour.suggestWine', placement: 'bottom', navigateTo: '/wine-requests', waitForPage: '/wine-requests', clickAdvance: true },
+  ]},
 
-  'start-discussion': {
-    title: 'Start a Community Discussion',
-    steps: [
-      {
-        element: '[data-guide="discussion-create"]',
-        description: 'Click "New Discussion" to start a conversation with other wine lovers. Share discoveries, ask questions, or discuss pairings!',
-        placement: 'bottom',
-        navigateTo: '/community/discussions',
-        waitForPage: '/community/discussions',
-        clickAdvance: true,
-      },
-    ],
-  },
+  'start-discussion': { title: 'Start a Community Discussion', steps: [
+    { element: '[data-guide="discussion-create"]', descKey: 'help.tour.discussionCreate', placement: 'bottom', navigateTo: '/community/discussions', waitForPage: '/community/discussions', clickAdvance: true },
+  ]},
 
-  'view-history': {
-    title: 'View Consumed Bottles',
-    steps: [
-      {
-        element: '[data-guide="cellar-card"]',
-        description: 'Select the cellar whose history you want to see.',
-        placement: 'bottom',
-        navigateTo: '/cellars',
-        waitForPage: '/cellars',
-        clickAdvance: true,
-      },
-      {
-        element: '[data-guide="more-menu-btn"]',
-        title: 'Open the Menu',
-        description: 'Click the menu button to find the History option.',
-        placement: 'bottom',
-        waitForPage: '/cellars/',
-        clickAdvance: true,
-      },
-      {
-        element: '[data-guide="more-menu-btn"]',
-        description: 'Click the menu button (three dots) to find the History option.',
-        placement: 'bottom',
-        waitForPage: '/cellars/',
-        clickAdvance: true,
-      },
-      {
-        element: '[data-guide="cellar-history"]',
-        description: 'Click "History" to see all bottles you\'ve consumed from this cellar, with dates and tasting notes.',
-        placement: 'left',
-        waitForPage: '/cellars/',
-        noSkip: true,
-        clickAdvance: true,
-      },
-    ],
-  },
+  'view-history': { title: 'View Consumed Bottles', steps: [
+    { element: '[data-guide="cellar-card"]', descKey: 'help.tour.historySelect', placement: 'bottom', navigateTo: '/cellars', waitForPage: '/cellars', clickAdvance: true },
+    { element: '[data-guide="more-menu-btn"]', descKey: 'help.tour.historyMenu', placement: 'bottom', waitForPage: '/cellars/', clickAdvance: true },
+    { element: '[data-guide="cellar-history"]', descKey: 'help.tour.historyClick', placement: 'left', waitForPage: '/cellars/', noSkip: true, clickAdvance: true },
+  ]},
 };
 
 /**

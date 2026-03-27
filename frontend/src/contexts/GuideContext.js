@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useCallback, useRef, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from './AuthContext';
 import { askGuide as askGuideApi } from '../api/guide';
 import TOURS, { getSuggestionsForPage, findFaqMatch } from '../utils/guideTours';
@@ -52,6 +53,7 @@ export function useGuide() {
 
 export function GuideProvider({ children }) {
   const { apiFetch } = useAuth();
+  const { t } = useTranslation();
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -76,13 +78,13 @@ export function GuideProvider({ children }) {
 
   // ─── Helpers ───
 
-  /** Build a conversational chat message for a tour step. */
+  /** Build a conversational chat message for a tour step (i18n-aware). */
   function stepMessage(tour, index) {
     const step = tour.steps[index];
     return {
       role: 'assistant',
       isTourStep: true,
-      text: step.description,
+      text: step.descKey ? t(step.descKey) : step.description,
     };
   }
 
@@ -166,7 +168,7 @@ export function GuideProvider({ children }) {
   
       setMessages(prev => [...prev, {
         role: 'assistant',
-        text: 'There you go! Is there anything else you\'d like help with?',
+        text: t('help.tour.done'),
         suggestions: getSuggestionsForPage(location.pathname),
       }]);
       return;
@@ -188,7 +190,7 @@ export function GuideProvider({ children }) {
     if (activeTour) {
       setMessages(prev => [...prev, {
         role: 'assistant',
-        text: 'No problem! Let me know if you need anything else.',
+        text: t('help.tour.stopped'),
         suggestions: getSuggestionsForPage(location.pathname),
       }]);
     }
