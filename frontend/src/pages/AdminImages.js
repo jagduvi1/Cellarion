@@ -3,9 +3,8 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import { adminGetImages, adminApproveImage, adminUnapproveImage, adminAssignImageToWine } from '../api/admin';
 import AuthImage from '../components/AuthImage';
+import { API_URL } from '../api/apiConstants';
 import './AdminImages.css';
-
-const API_URL = process.env.REACT_APP_API_URL || '';
 
 function AdminImages() {
   const { t } = useTranslation();

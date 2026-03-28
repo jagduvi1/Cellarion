@@ -6,6 +6,7 @@ import { getCellar, getCellarStatistics, exportCellar } from '../api/cellars';
 import { getRacks } from '../api/racks';
 import { getCellarLayout } from '../api/cellarLayout';
 import BottleCard from '../components/BottleCard';
+import downloadBlob from '../utils/downloadBlob';
 import './CellarDetail.css';
 
 // Lazy-load modals — they are heavy and only needed on user interaction
@@ -225,13 +226,7 @@ function CellarDetail() {
                               const res = await exportCellar(apiFetch, id);
                               const data = await res.json();
                               if (!res.ok) { alert(data.error || 'Export failed'); return; }
-                              const blob = new Blob([JSON.stringify(data.bottles, null, 2)], { type: 'application/json' });
-                              const url = URL.createObjectURL(blob);
-                              const a = document.createElement('a');
-                              a.href = url;
-                              a.download = `${data.cellarName || 'cellar'}-export.json`;
-                              a.click();
-                              URL.revokeObjectURL(url);
+                              downloadBlob(JSON.stringify(data.bottles, null, 2), `${data.cellarName || 'cellar'}-export.json`, 'application/json');
                             } catch { alert('Export failed'); }
                           }}
                         >
@@ -260,13 +255,7 @@ function CellarDetail() {
                                 return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s.replace(/"/g, '""')}"` : s;
                               };
                               const csv = [cols.join(','), ...bottles.map(b => cols.map(c => escape(b[c])).join(','))].join('\n');
-                              const blob = new Blob([csv], { type: 'text/csv' });
-                              const url = URL.createObjectURL(blob);
-                              const a = document.createElement('a');
-                              a.href = url;
-                              a.download = `${data.cellarName || 'cellar'}-export.csv`;
-                              a.click();
-                              URL.revokeObjectURL(url);
+                              downloadBlob(csv, `${data.cellarName || 'cellar'}-export.csv`, 'text/csv');
                             } catch { alert('Export failed'); }
                           }}
                         >

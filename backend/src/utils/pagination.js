@@ -1,11 +1,12 @@
 /**
  * Parse pagination parameters from a request query string.
  *
- * Supports two addressing modes:
+ * Supports three addressing modes:
  *   - **offset-based**: `?limit=50&offset=0`
- *   - **page-based**:   `?limit=50&page=1`  (offset is derived automatically)
+ *   - **skip-based**:   `?limit=50&skip=0`   (alias for offset)
+ *   - **page-based**:   `?limit=50&page=1`   (offset is derived automatically)
  *
- * When both `offset` and `page` are supplied, `page` takes precedence.
+ * Priority: `page` > `offset` > `skip`.
  *
  * @param {object} query       - `req.query` object
  * @param {object} [defaults]
@@ -31,7 +32,9 @@ function parsePagination(query, defaults = {}) {
     page   = Math.max(parseInt(query.page, 10) || 1, 1);
     offset = (page - 1) * limit;
   } else {
-    offset = Math.max(parseInt(query.offset, 10) || 0, 0);
+    // Accept both "offset" and "skip" as query param names
+    const rawOffset = query.offset != null ? query.offset : query.skip;
+    offset = Math.max(parseInt(rawOffset, 10) || 0, 0);
     page   = Math.floor(offset / limit) + 1;
   }
 

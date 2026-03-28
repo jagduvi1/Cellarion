@@ -8,9 +8,8 @@ import Layout from '../components/Layout';
 import SITE_URL from '../config/siteUrl';
 import WineImage from '../components/WineImage';
 import { getWineImageUrl } from '../utils/wineImageUrl';
+import { API_URL } from '../api/apiConstants';
 import './WineDetail.css';
-
-const API_URL = process.env.REACT_APP_API_URL || '';
 
 export default function WineDetail() {
   const { t } = useTranslation();

@@ -8,6 +8,7 @@ import { CURRENCIES } from '../config/currencies';
 import { PLANS } from '../config/plans';
 import { SCALE_META, VALID_SCALES } from '../utils/ratingUtils';
 import { isPushSupported, getPushPermissionState, subscribeToPush, unsubscribeFromPush, getCurrentEndpoint, getDeviceStatus, sendTestPush } from '../utils/pushSubscription';
+import { downloadBlobObject } from '../utils/downloadBlob';
 import './Settings.css';
 
 function Settings() {
@@ -214,14 +215,7 @@ function Settings() {
         throw new Error(data.error || 'Export failed');
       }
       const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `cellarion-data-export-${user?.username || 'user'}.json`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      downloadBlobObject(blob, `cellarion-data-export-${user?.username || 'user'}.json`);
     } catch (err) {
       setExportError(err.message);
     } finally {

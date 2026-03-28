@@ -16,6 +16,7 @@ const { toNormalized } = require('../utils/ratingUtils');
 const { classifyMaturity, buildProfileMap } = require('../utils/maturityUtils');
 const { CONSUMED_STATUSES, MS_PER_DAY, WINE_POPULATE } = require('../config/constants');
 const mongoose = require('mongoose');
+const { parsePagination } = require('../utils/pagination');
 
 const router = express.Router();
 
@@ -290,14 +291,11 @@ router.get('/:id', async (req, res) => {
       search,
       maturity: maturityFilter,
       sort = '-createdAt',
-      limit: rawLimit,
-      skip: rawSkip,
       exclude
     } = req.query;
 
     // Pagination — default 30, max 200; skip defaults to 0
-    const limit = Math.min(Math.max(parseInt(rawLimit, 10) || 30, 1), 200);
-    const skip  = Math.max(parseInt(rawSkip, 10)  || 0, 0);
+    const { limit, offset: skip } = parsePagination(req.query, { limit: 30, maxLimit: 200 });
 
     // Base MongoDB filter for Bottle (direct fields only)
     const filter = {

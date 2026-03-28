@@ -5,6 +5,7 @@ const Notification = require('../../models/Notification');
 const { requireAuth, requireRole } = require('../../middleware/auth');
 const { logAudit } = require('../../services/audit');
 const { stripHtml } = require('../../utils/sanitize');
+const { parsePagination } = require('../../utils/pagination');
 
 const TICKET_STATUSES = ['open', 'in_progress', 'closed'];
 
@@ -13,8 +14,8 @@ router.use(requireAuth, requireRole('admin'));
 // GET /api/admin/support-tickets — list all tickets with optional status filter
 router.get('/', async (req, res) => {
   try {
-    const { status, page = 1, limit = 20 } = req.query;
-    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const { status } = req.query;
+    const { limit, offset, page } = parsePagination(req.query, { limit: 20, maxLimit: 200 });
 
     // Retrieve from static array so the value in the filter is never user-tainted
     const statusIdx = TICKET_STATUSES.indexOf(String(status || ''));
@@ -24,15 +25,15 @@ router.get('/', async (req, res) => {
     const [tickets, total] = await Promise.all([
       SupportTicket.find(filter)
         .sort({ createdAt: -1 })
-        .skip(skip)
-        .limit(parseInt(limit))
+        .skip(offset)
+        .limit(limit)
         .populate('user', 'username email')
         .populate('respondedBy', 'username')
         .lean(),
       SupportTicket.countDocuments(filter)
     ]);
 
-    res.json({ tickets, total, page: parseInt(page), limit: parseInt(limit) });
+    res.json({ tickets, total, page, limit });
   } catch (err) {
     console.error('Admin list support tickets error:', err);
     res.status(500).json({ error: 'Failed to list support tickets' });

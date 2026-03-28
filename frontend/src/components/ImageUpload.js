@@ -1,9 +1,8 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import AuthImage from './AuthImage';
+import { API_URL } from '../api/apiConstants';
 import './ImageUpload.css';
-
-const API_URL = process.env.REACT_APP_API_URL || '';
 
 function ImageUpload({ bottleId, wineDefinitionId, credit, onUploadComplete, onProcessingComplete }) {
   const { apiFetch } = useAuth();

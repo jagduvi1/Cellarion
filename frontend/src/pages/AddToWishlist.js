@@ -1,14 +1,14 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { searchWines, getWine, findOrCreateWine, identifyWineByText } from '../api/wines';
+import useLabelScanner from '../hooks/useLabelScanner';
 import { addToWishlist } from '../api/wishlist';
 import '../components/ImageUpload.css';
 import './AddBottle.css';
 import WineImage from '../components/WineImage';
+import { WINE_TYPES } from '../config/wineTypes';
 import './AddToWishlist.css';
-
-const WINE_TYPES = ['red', 'white', 'rosé', 'sparkling', 'dessert', 'fortified'];
 
 function AddToWishlist() {
   const { apiFetch } = useAuth();
@@ -27,14 +27,6 @@ function AddToWishlist() {
   const [aiSearchError, setAiSearchError] = useState(null);
   const [aiResult, setAiResult] = useState(null);
 
-  // ── Label-scan camera ──
-  const [labelCam, setLabelCam] = useState({ open: false, error: null });
-  const [labelScanning, setLabelScanning] = useState(false);
-  const [labelFacing, setLabelFacing] = useState('environment');
-  const labelVideoRef = useRef(null);
-  const labelCanvasRef = useRef(null);
-  const labelStreamRef = useRef(null);
-
   // ── Scan result state ──
   const [scanResult, setScanResult] = useState(null);
   const [labelImage, setLabelImage] = useState(null);
@@ -48,14 +40,25 @@ function AddToWishlist() {
   const [priority, setPriority] = useState('medium');
   const [saving, setSaving] = useState(false);
 
-  // ── Camera helpers (same as AddBottle) ──
-  const stopLabelCamera = useCallback(() => {
-    if (labelStreamRef.current) {
-      labelStreamRef.current.getTracks().forEach(t => t.stop());
-      labelStreamRef.current = null;
-    }
-    setLabelCam({ open: false, error: null });
+  // ── Label-scan camera (shared hook) ──
+  const handleScanSuccess = useCallback((data) => {
+    setScanResult(data);
+    setLabelImage(data.labelImage || null);
+    setShowManualForm(false);
+    setPendingWineData(null);
+    // Pre-fill vintage from scan
+    if (data.extracted?.vintage) setVintage(data.extracted.vintage);
   }, []);
+
+  const handleScanError = useCallback((msg) => {
+    setError(msg);
+  }, []);
+
+  const {
+    labelCam, labelScanning, labelFacing, setLabelFacing,
+    labelVideoRef, labelCanvasRef,
+    startCamera: startLabelCamera, stopCamera: stopLabelCamera, capturePhoto: captureLabelPhoto
+  } = useLabelScanner(apiFetch, { onScanSuccess: handleScanSuccess, onScanError: handleScanError });
 
   // Pre-select wine when navigating from restock suggestions
   useEffect(() => {
@@ -75,102 +78,6 @@ function AddToWishlist() {
     })();
     return () => { cancelled = true; };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const startLabelCamera = useCallback(async () => {
-    setLabelCam({ open: true, error: null });
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: labelFacing, width: { ideal: 1280 }, height: { ideal: 720 } },
-        audio: false
-      });
-      labelStreamRef.current = stream;
-      requestAnimationFrame(() => {
-        if (labelVideoRef.current) labelVideoRef.current.srcObject = stream;
-      });
-    } catch (err) {
-      let msg = 'Could not access camera.';
-      if (err.name === 'NotAllowedError') msg = 'Camera access denied. Please allow camera permissions.';
-      else if (err.name === 'NotFoundError') msg = 'No camera found on this device.';
-      setLabelCam({ open: true, error: msg });
-    }
-  }, [labelFacing]);
-
-  useEffect(() => {
-    if (labelCam.open && !labelCam.error) {
-      if (labelStreamRef.current) labelStreamRef.current.getTracks().forEach(t => t.stop());
-      startLabelCamera();
-    }
-  }, [labelFacing]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  useEffect(() => {
-    return () => {
-      if (labelStreamRef.current) labelStreamRef.current.getTracks().forEach(t => t.stop());
-    };
-  }, []);
-
-  const captureLabelPhoto = useCallback(async () => {
-    const video = labelVideoRef.current;
-    const canvas = labelCanvasRef.current;
-    if (!video || !canvas) return;
-
-    const MAX_DIM = 800;
-    let vw = video.videoWidth;
-    let vh = video.videoHeight;
-    if (vw > MAX_DIM || vh > MAX_DIM) {
-      if (vw >= vh) { vh = Math.round((vh / vw) * MAX_DIM); vw = MAX_DIM; }
-      else { vw = Math.round((vw / vh) * MAX_DIM); vh = MAX_DIM; }
-    }
-    canvas.width = vw;
-    canvas.height = vh;
-    canvas.getContext('2d').drawImage(video, 0, 0, vw, vh);
-
-    if (labelStreamRef.current) {
-      labelStreamRef.current.getTracks().forEach(t => t.stop());
-      labelStreamRef.current = null;
-    }
-    setLabelScanning(true);
-
-    canvas.toBlob(async (blob) => {
-      if (!blob) {
-        setLabelCam({ open: true, error: 'Capture failed. Please try again.' });
-        setLabelScanning(false);
-        return;
-      }
-      try {
-        const base64 = await new Promise((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = () => resolve(reader.result.split(',')[1]);
-          reader.onerror = () => reject(reader.error);
-          reader.readAsDataURL(blob);
-        });
-
-        const res = await apiFetch('/api/wines/scan-label', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ image: base64, mediaType: 'image/jpeg' })
-        });
-        const data = await res.json();
-
-        if (res.ok && data.extracted) {
-          stopLabelCamera();
-          setScanResult(data);
-          setLabelImage(data.labelImage || null);
-          setShowManualForm(false);
-          setPendingWineData(null);
-          // Pre-fill vintage from scan
-          if (data.extracted.vintage) setVintage(data.extracted.vintage);
-        } else {
-          stopLabelCamera();
-          setError(data.error || 'Could not read label. Try again.');
-        }
-      } catch {
-        stopLabelCamera();
-        setError('Scan failed. Please try again.');
-      } finally {
-        setLabelScanning(false);
-      }
-    }, 'image/jpeg', 0.55);
-  }, [apiFetch, stopLabelCamera]);
 
   // ── Confirm scan result — find/create the wine then add to wishlist ──
   const handleConfirmScan = useCallback(async () => {

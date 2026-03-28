@@ -1,8 +1,7 @@
 import { useState } from 'react';
 import './ImageCarousel.css';
 import AuthImage from './AuthImage';
-
-const API_URL = process.env.REACT_APP_API_URL || '';
+import { API_URL } from '../api/apiConstants';
 
 function ImageCarousel({ images, size = 'medium', defaultImageId, onSetDefault }) {
   const [currentIndex, setCurrentIndex] = useState(0);

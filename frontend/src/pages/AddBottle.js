@@ -1,15 +1,15 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import { searchWines, findOrCreateWine, identifyWineByText } from '../api/wines';
+import useLabelScanner from '../hooks/useLabelScanner';
 import { CURRENCIES } from '../config/currencies';
 import ImageUpload from '../components/ImageUpload';
 import RatingInput from '../components/RatingInput';
 import WineImage from '../components/WineImage';
+import { WINE_TYPES } from '../config/wineTypes';
 import './AddBottle.css';
-
-const WINE_TYPES = ['red', 'white', 'rosé', 'sparkling', 'dessert', 'fortified'];
 
 function AddBottle() {
   const { t } = useTranslation();
@@ -51,14 +51,6 @@ function AddBottle() {
   const [uploadedImages, setUploadedImages] = useState([]);
   const [showDetails, setShowDetails] = useState(false);
 
-  // ── Label-scan camera ──
-  const [labelCam, setLabelCam] = useState({ open: false, error: null });
-  const [labelScanning, setLabelScanning] = useState(false);
-  const [labelFacing, setLabelFacing] = useState('environment');
-  const labelVideoRef = useRef(null);
-  const labelCanvasRef = useRef(null);
-  const labelStreamRef = useRef(null);
-
   // ── Scan result state ──
   const [scanResult, setScanResult] = useState(null);  // { extracted, match, labelImage }
   const [labelImage, setLabelImage] = useState(null);  // bg-removed data URL for display
@@ -66,111 +58,23 @@ function AddBottle() {
   const [pendingWineData, setPendingWineData] = useState(null);
   const [findingWine, setFindingWine] = useState(false);
 
-  const stopLabelCamera = useCallback(() => {
-    if (labelStreamRef.current) {
-      labelStreamRef.current.getTracks().forEach(t => t.stop());
-      labelStreamRef.current = null;
-    }
-    setLabelCam({ open: false, error: null });
+  // ── Label-scan camera (shared hook) ──
+  const handleScanSuccess = useCallback((data) => {
+    setScanResult(data);
+    setLabelImage(data.labelImage || null);
+    setShowManualForm(false);
+    setPendingWineData(null);
   }, []);
 
-  const startLabelCamera = useCallback(async () => {
-    setLabelCam({ open: true, error: null });
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: labelFacing, width: { ideal: 1280 }, height: { ideal: 720 } },
-        audio: false
-      });
-      labelStreamRef.current = stream;
-      requestAnimationFrame(() => {
-        if (labelVideoRef.current) labelVideoRef.current.srcObject = stream;
-      });
-    } catch (err) {
-      let msg = 'Could not access camera.';
-      if (err.name === 'NotAllowedError') msg = 'Camera access denied. Please allow camera permissions.';
-      else if (err.name === 'NotFoundError') msg = 'No camera found on this device.';
-      setLabelCam({ open: true, error: msg });
-    }
-  }, [labelFacing]);
-
-  // Restart camera when facing mode changes while camera is open
-  useEffect(() => {
-    if (labelCam.open && !labelCam.error) {
-      if (labelStreamRef.current) labelStreamRef.current.getTracks().forEach(t => t.stop());
-      startLabelCamera();
-    }
-  }, [labelFacing]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Stop camera on unmount
-  useEffect(() => {
-    return () => {
-      if (labelStreamRef.current) labelStreamRef.current.getTracks().forEach(t => t.stop());
-    };
+  const handleScanError = useCallback((msg) => {
+    setError(msg);
   }, []);
 
-  const captureLabelPhoto = useCallback(async () => {
-    const video = labelVideoRef.current;
-    const canvas = labelCanvasRef.current;
-    if (!video || !canvas) return;
-
-    // Resize to max 800px to keep API cost low
-    const MAX_DIM = 800;
-    let vw = video.videoWidth;
-    let vh = video.videoHeight;
-    if (vw > MAX_DIM || vh > MAX_DIM) {
-      if (vw >= vh) { vh = Math.round((vh / vw) * MAX_DIM); vw = MAX_DIM; }
-      else { vw = Math.round((vw / vh) * MAX_DIM); vh = MAX_DIM; }
-    }
-    canvas.width = vw;
-    canvas.height = vh;
-    canvas.getContext('2d').drawImage(video, 0, 0, vw, vh);
-
-    // Stop the stream right after capture
-    if (labelStreamRef.current) {
-      labelStreamRef.current.getTracks().forEach(t => t.stop());
-      labelStreamRef.current = null;
-    }
-    setLabelScanning(true);
-
-    canvas.toBlob(async (blob) => {
-      if (!blob) {
-        setLabelCam({ open: true, error: 'Capture failed. Please try again.' });
-        setLabelScanning(false);
-        return;
-      }
-      try {
-        const base64 = await new Promise((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = () => resolve(reader.result.split(',')[1]);
-          reader.onerror = () => reject(reader.error);
-          reader.readAsDataURL(blob);
-        });
-
-        const res = await apiFetch('/api/wines/scan-label', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ image: base64, mediaType: 'image/jpeg' })
-        });
-        const data = await res.json();
-
-        if (res.ok && data.extracted) {
-          stopLabelCamera();
-          setScanResult(data);
-          setLabelImage(data.labelImage || null);
-          setShowManualForm(false);
-          setPendingWineData(null);
-        } else {
-          stopLabelCamera();
-          setError(data.error || 'Could not read label. Try again.');
-        }
-      } catch {
-        stopLabelCamera();
-        setError('Scan failed. Please try again.');
-      } finally {
-        setLabelScanning(false);
-      }
-    }, 'image/jpeg', 0.55);
-  }, [apiFetch, stopLabelCamera]);
+  const {
+    labelCam, labelScanning, labelFacing, setLabelFacing,
+    labelVideoRef, labelCanvasRef,
+    startCamera: startLabelCamera, stopCamera: stopLabelCamera, capturePhoto: captureLabelPhoto
+  } = useLabelScanner(apiFetch, { onScanSuccess: handleScanSuccess, onScanError: handleScanError });
 
   // Confirm scan result — find/create the wine, save label image, go to bottle details
   const handleConfirmScan = useCallback(async () => {

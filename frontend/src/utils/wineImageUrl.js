@@ -1,4 +1,4 @@
-const API_URL = process.env.REACT_APP_API_URL || '';
+import { API_URL } from '../api/apiConstants';
 
 /**
  * Resolves a wine image field value into a full URL.

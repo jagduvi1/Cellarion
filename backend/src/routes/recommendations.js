@@ -8,6 +8,7 @@ const Follow = require('../models/Follow');
 const { logAudit } = require('../services/audit');
 const { createNotification } = require('../services/notifications');
 const { sendRecommendationEmail, EMAIL_VERIFICATION_ENABLED } = require('../services/mailgun');
+const { parsePagination } = require('../utils/pagination');
 
 const router = express.Router();
 router.use(requireAuth);
@@ -17,8 +18,7 @@ const isValidId = (id) => typeof id === 'string' && mongoose.isValidObjectId(id)
 // GET /api/recommendations — list recommendations received by the current user
 router.get('/', async (req, res) => {
   try {
-    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 20, 1), 50);
-    const skip = Math.max(parseInt(req.query.skip, 10) || 0, 0);
+    const { limit, offset: skip } = parsePagination(req.query, { limit: 20, maxLimit: 50 });
 
     const query = { recipient: new mongoose.Types.ObjectId(req.user.id) };
 
@@ -43,8 +43,7 @@ router.get('/', async (req, res) => {
 // GET /api/recommendations/sent — list recommendations sent by the current user
 router.get('/sent', async (req, res) => {
   try {
-    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 20, 1), 50);
-    const skip = Math.max(parseInt(req.query.skip, 10) || 0, 0);
+    const { limit, offset: skip } = parsePagination(req.query, { limit: 20, maxLimit: 50 });
 
     const query = { sender: new mongoose.Types.ObjectId(req.user.id) };
 
@@ -225,7 +224,7 @@ router.delete('/:id', async (req, res) => {
 router.get('/friends', async (req, res) => {
   try {
     const q = (req.query.q || '').trim();
-    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 10, 1), 20);
+    const { limit } = parsePagination(req.query, { limit: 10, maxLimit: 20 });
 
     // Get users the current user follows
     const follows = await Follow.find({ follower: req.user.id }).select('following').lean();

@@ -142,6 +142,31 @@ describe('parsePagination', () => {
     expect(result.limit).toBe(30);
   });
 
+  // ─── Skip alias for offset ──────────────────────────────────────────────
+
+  test('skip is treated as an alias for offset', () => {
+    const result = parsePagination({ skip: '60', limit: '20' });
+    expect(result.offset).toBe(60);
+    expect(result.page).toBe(4); // floor(60/20) + 1
+  });
+
+  test('offset takes precedence over skip when both are provided', () => {
+    const result = parsePagination({ offset: '40', skip: '100', limit: '20' });
+    expect(result.offset).toBe(40); // offset wins
+  });
+
+  test('page takes precedence over skip', () => {
+    const result = parsePagination({ page: '2', skip: '999', limit: '10' });
+    expect(result.page).toBe(2);
+    expect(result.offset).toBe(10); // (2-1) * 10, NOT 999
+  });
+
+  test('negative skip becomes 0', () => {
+    const result = parsePagination({ skip: '-10' });
+    expect(result.offset).toBe(0);
+    expect(result.page).toBe(1);
+  });
+
   // ─── Edge cases ──────────────────────────────────────────────────────────
 
   test('offset not a perfect multiple of limit derives correct page', () => {

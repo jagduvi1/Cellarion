@@ -9,6 +9,7 @@ const { logAudit } = require('../../services/audit');
 const { createNotification } = require('../../services/notifications');
 const { stripHtml } = require('../../utils/sanitize');
 const { incrementCred } = require('../../utils/cellarCred');
+const { parsePagination } = require('../../utils/pagination');
 
 const router = express.Router();
 
@@ -18,7 +19,8 @@ router.use(requireAuth, requireRole('admin'));
 // GET /api/admin/wine-requests - List all wine requests
 router.get('/', async (req, res) => {
   try {
-    const { status, limit: rawLimit, skip: rawSkip } = req.query;
+    const { status } = req.query;
+    const { limit, offset: skip } = parsePagination(req.query, { limit: 50, maxLimit: 200 });
     const filter = {};
     const VALID_STATUSES = ['pending', 'resolved', 'rejected'];
 
@@ -28,9 +30,6 @@ router.get('/', async (req, res) => {
       }
       filter.status = String(status);
     }
-
-    const limit = Math.min(Math.max(parseInt(rawLimit, 10) || 50, 1), 200);
-    const skip = Math.max(parseInt(rawSkip, 10) || 0, 0);
 
     const [requests, total] = await Promise.all([
       WineRequest.find(filter)
