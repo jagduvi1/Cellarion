@@ -74,13 +74,13 @@ router.get('/', requireAuth, async (req, res) => {
       ? { limit: 50, maxLimit: 10000 }
       : { limit: USER_SEARCH_LIMIT, maxLimit: USER_SEARCH_LIMIT };
     const { limit: parsedLimit, offset: parsedOffset } = parsePagination(req.query, paginationOpts);
-    const grapeIds = grapes ? grapes.split(',') : [];
+    const grapeIds = grapes ? String(grapes).split(',').filter(id => mongoose.isValidObjectId(id)) : [];
 
     // Build MongoDB filter (used for non-search queries and as fallback)
     const filter = {};
-    if (country) filter.country = country;
-    if (region) filter.region = region;
-    if (type) filter.type = type;
+    if (country) filter.country = mongoose.isValidObjectId(String(country)) ? String(country) : undefined;
+    if (region) filter.region = mongoose.isValidObjectId(String(region)) ? String(region) : undefined;
+    if (type) filter.type = String(type);
     if (grapeIds.length > 0) filter.grapes = { $in: grapeIds };
 
     // Try Meilisearch for text queries

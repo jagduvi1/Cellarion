@@ -3,6 +3,7 @@ const router = express.Router();
 const WineReport = require('../../models/WineReport');
 const { requireAuth, requireRole } = require('../../middleware/auth');
 const { logAudit } = require('../../services/audit');
+const { stripHtml } = require('../../utils/sanitize');
 const { incrementCred } = require('../../utils/cellarCred');
 
 const REPORT_STATUSES = ['pending', 'resolved', 'dismissed'];
@@ -73,7 +74,7 @@ router.put('/:id/resolve', async (req, res) => {
     }
 
     report.status = 'resolved';
-    report.adminNotes = adminNotes ? adminNotes.trim() : undefined;
+    report.adminNotes = adminNotes ? stripHtml(adminNotes) : undefined;
     report.resolvedBy = req.user.id;
     report.resolvedAt = new Date();
     await report.save();
@@ -107,7 +108,7 @@ router.put('/:id/dismiss', async (req, res) => {
     }
 
     report.status = 'dismissed';
-    report.adminNotes = adminNotes ? adminNotes.trim() : undefined;
+    report.adminNotes = adminNotes ? stripHtml(adminNotes) : undefined;
     report.resolvedBy = req.user.id;
     report.resolvedAt = new Date();
     await report.save();

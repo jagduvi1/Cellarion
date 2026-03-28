@@ -5,6 +5,7 @@ const WineReport = require('../models/WineReport');
 const WineDefinition = require('../models/WineDefinition');
 const { requireAuth } = require('../middleware/auth');
 const { logAudit } = require('../services/audit');
+const { stripHtml } = require('../utils/sanitize');
 
 const VALID_REASONS = ['wrong_info', 'duplicate', 'inappropriate', 'other'];
 
@@ -42,7 +43,7 @@ router.post('/', requireAuth, async (req, res) => {
       user: req.user.id,
       wineDefinition: wineDefinitionId,
       reason,
-      details: details ? details.trim() : undefined,
+      details: details ? stripHtml(details) : undefined,
       duplicateOf: duplicateOfId || undefined
     });
 

@@ -477,14 +477,10 @@ router.get('/unsubscribe', async (req, res) => {
   }
 
   try {
-    const crypto = require('crypto');
-    const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
-    // The unsubscribe token is the user's ID hashed with a secret
-    // We'll find the user by trying all users (or use a more efficient method)
-    // For simplicity, encode the user ID in the token
-    const [userId] = Buffer.from(token, 'base64url').toString().split(':');
+    const { verifyUnsubscribeToken } = require('../utils/unsubscribe');
+    const userId = verifyUnsubscribeToken(token);
 
-    if (!mongoose.Types.ObjectId.isValid(userId)) {
+    if (!userId || !mongoose.Types.ObjectId.isValid(userId)) {
       return res.status(400).json({ error: 'Invalid unsubscribe link' });
     }
 

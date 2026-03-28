@@ -123,7 +123,8 @@ async function sendDrinkWindowDigest(toEmail, username, bottles, userId) {
   if (!EMAIL_VERIFICATION_ENABLED || !bottles.length) return;
 
   const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
-  const unsubToken = Buffer.from(`${userId}:${Date.now()}`).toString('base64url');
+  const { createUnsubscribeToken } = require('../utils/unsubscribe');
+  const unsubToken = createUnsubscribeToken(userId);
   const unsubLink = `${process.env.BACKEND_URL || 'http://localhost:5000'}/api/users/unsubscribe?token=${unsubToken}`;
 
   const statusLabel = (s) =>

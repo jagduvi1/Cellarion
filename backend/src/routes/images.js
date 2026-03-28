@@ -109,9 +109,13 @@ router.post('/upload', requireAuth, upload.single('image'), async (req, res) => 
       ? stripHtml(credit).slice(0, 200)
       : null;
 
+    if (wineDefinitionId && !mongoose.isValidObjectId(String(wineDefinitionId))) {
+      return res.status(400).json({ error: 'Invalid wine definition ID' });
+    }
+
     const image = new BottleImage({
       bottle: bottleId || null,
-      wineDefinition: wineDefinitionId || null,
+      wineDefinition: wineDefinitionId ? String(wineDefinitionId) : null,
       uploadedBy: req.user.id,
       originalUrl: `/api/uploads/originals/${req.file.filename}`,
       status: 'uploaded',

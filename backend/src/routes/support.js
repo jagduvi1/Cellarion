@@ -3,6 +3,7 @@ const router = express.Router();
 const SupportTicket = require('../models/SupportTicket');
 const { requireAuth } = require('../middleware/auth');
 const { logAudit } = require('../services/audit');
+const { stripHtml } = require('../utils/sanitize');
 
 const VALID_CATEGORIES = ['bug', 'help', 'feature', 'other'];
 
@@ -29,8 +30,8 @@ router.post('/', requireAuth, async (req, res) => {
   const ticket = await SupportTicket.create({
     user: req.user.id,
     category,
-    subject: subject.trim(),
-    message: message.trim()
+    subject: stripHtml(subject),
+    message: stripHtml(message)
   });
 
   logAudit(req, 'support.ticket.created', { type: 'SupportTicket', id: ticket._id }, {

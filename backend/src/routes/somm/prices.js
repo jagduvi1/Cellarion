@@ -1,4 +1,5 @@
 const express = require('express');
+const mongoose = require('mongoose');
 const { requireAuth, requireSommOrAdmin } = require('../../middleware/auth');
 const WineVintagePrice = require('../../models/WineVintagePrice');
 const Bottle = require('../../models/Bottle');
@@ -129,8 +130,11 @@ router.get('/lookup', async (req, res) => {
     if (!wine || !vintage) {
       return res.status(400).json({ error: 'wine and vintage query params required' });
     }
+    if (!mongoose.isValidObjectId(String(wine))) {
+      return res.status(400).json({ error: 'Invalid wine ID' });
+    }
 
-    const history = await WineVintagePrice.find({ wineDefinition: wine, vintage })
+    const history = await WineVintagePrice.find({ wineDefinition: String(wine), vintage: String(vintage) })
       .populate('setBy', 'username')
       .sort({ setAt: -1 })
       .lean();

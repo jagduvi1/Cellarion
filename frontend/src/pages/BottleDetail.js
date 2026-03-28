@@ -19,6 +19,7 @@ import ReviewCard from '../components/ReviewCard';
 import { getWineReviews } from '../api/reviews';
 import { fromNormalized } from '../utils/ratingUtils';
 import ShareButton from '../components/ShareButton';
+import safeUrl from '../utils/safeUrl';
 import './BottleDetail.css';
 
 // Lazy-load heavy components only needed on user interaction
@@ -807,8 +808,8 @@ function ViewDetails({ bottle, rackInfo, cellarId, vintageProfile, priceHistory,
               <span>{new Date(bottle.purchaseDate).toLocaleDateString()}</span>
             )}
             {bottle.purchaseLocation && <span>{bottle.purchaseLocation}</span>}
-            {bottle.purchaseUrl && (
-              <a href={bottle.purchaseUrl} target="_blank" rel="noreferrer" className="bd-purchase-link">
+            {safeUrl(bottle.purchaseUrl) && (
+              <a href={safeUrl(bottle.purchaseUrl)} target="_blank" rel="noreferrer" className="bd-purchase-link">
                 <span aria-hidden="true">🔗</span> Link
               </a>
             )}

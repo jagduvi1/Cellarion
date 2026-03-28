@@ -1,4 +1,5 @@
 const express = require('express');
+const mongoose = require('mongoose');
 const { requireAuth, requireSommOrAdmin } = require('../../middleware/auth');
 const WineVintageProfile = require('../../models/WineVintageProfile');
 
@@ -60,10 +61,13 @@ router.get('/lookup', async (req, res) => {
     if (!wine || !vintage) {
       return res.status(400).json({ error: 'wine and vintage query params required' });
     }
+    if (!mongoose.isValidObjectId(String(wine))) {
+      return res.status(400).json({ error: 'Invalid wine ID' });
+    }
 
     const profile = await WineVintageProfile.findOne({
-      wineDefinition: wine,
-      vintage
+      wineDefinition: String(wine),
+      vintage: String(vintage)
     }).populate({ path: 'setBy', select: 'username' });
 
     if (!profile) {

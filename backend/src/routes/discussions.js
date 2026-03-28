@@ -651,13 +651,16 @@ router.post('/:id/report', async (req, res) => {
     const discussion = await Discussion.findById(req.params.id);
     if (!discussion) return res.status(404).json({ error: 'Discussion not found' });
 
+    const VALID_REASONS = ['spam', 'harassment', 'off_topic', 'inappropriate', 'other'];
     const { reason, details } = req.body;
-    if (!reason) return res.status(400).json({ error: 'Reason is required' });
+    if (!reason || !VALID_REASONS.includes(String(reason))) {
+      return res.status(400).json({ error: 'Valid reason is required (spam, harassment, off_topic, inappropriate, other)' });
+    }
 
     const report = new DiscussionReport({
       user: req.user.id,
       discussion: discussion._id,
-      reason,
+      reason: String(reason),
       details: details ? stripHtml(details) : undefined
     });
 
@@ -679,13 +682,16 @@ router.post('/:discussionId/replies/:replyId/report', async (req, res) => {
     const reply = await DiscussionReply.findById(req.params.replyId);
     if (!reply) return res.status(404).json({ error: 'Reply not found' });
 
+    const VALID_REASONS = ['spam', 'harassment', 'off_topic', 'inappropriate', 'other'];
     const { reason, details } = req.body;
-    if (!reason) return res.status(400).json({ error: 'Reason is required' });
+    if (!reason || !VALID_REASONS.includes(String(reason))) {
+      return res.status(400).json({ error: 'Valid reason is required (spam, harassment, off_topic, inappropriate, other)' });
+    }
 
     const report = new DiscussionReport({
       user: req.user.id,
       reply: reply._id,
-      reason,
+      reason: String(reason),
       details: details ? stripHtml(details) : undefined
     });
 

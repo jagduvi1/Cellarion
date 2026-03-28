@@ -4,6 +4,7 @@ const SupportTicket = require('../../models/SupportTicket');
 const Notification = require('../../models/Notification');
 const { requireAuth, requireRole } = require('../../middleware/auth');
 const { logAudit } = require('../../services/audit');
+const { stripHtml } = require('../../utils/sanitize');
 
 const TICKET_STATUSES = ['open', 'in_progress', 'closed'];
 
@@ -69,7 +70,7 @@ router.put('/:id/respond', async (req, res) => {
     const ticket = await SupportTicket.findById(req.params.id);
     if (!ticket) return res.status(404).json({ error: 'Ticket not found' });
 
-    ticket.adminResponse = adminResponse.trim();
+    ticket.adminResponse = stripHtml(adminResponse);
     ticket.respondedBy = req.user.id;
     ticket.respondedAt = new Date();
     ticket.status = newStatus;

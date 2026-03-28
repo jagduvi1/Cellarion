@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Helmet } from 'react-helmet-async';
+import DOMPurify from 'dompurify';
 import { getBlogPost } from '../api/blog';
 import { useAuth } from '../contexts/AuthContext';
 import SITE_URL from '../config/siteUrl';
@@ -157,7 +158,7 @@ function BlogPost() {
 
         <div
           className="blog-article-content"
-          dangerouslySetInnerHTML={{ __html: post.content }}
+          dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(post.content) }}
         />
       </article>
 
