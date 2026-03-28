@@ -214,4 +214,5 @@ export function findFaqMatch(question) {
   };
 }
 
+export { TOURS };
 export default TOURS;
