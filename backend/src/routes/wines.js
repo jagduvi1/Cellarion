@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const express = require('express');
+const mongoose = require('mongoose');
 const WineDefinition = require('../models/WineDefinition');
 const searchService = require('../services/search');
 const { requireAuth } = require('../middleware/auth');
