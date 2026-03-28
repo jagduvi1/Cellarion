@@ -2,3 +2,10 @@ node_modules
 uploads
 .env
 .env.*
+*.test.js
+**/*.test.js
+jest.config.*
+nodemon.json
+.git
+README.md
+CLAUDE.md

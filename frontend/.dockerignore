@@ -2,3 +2,9 @@ node_modules
 build
 .env
 .env.*
+*.test.js
+**/*.test.js
+**/__tests__
+.git
+README.md
+CLAUDE.md

@@ -2,8 +2,14 @@ services:
   mongo:
     image: mongo:7
     container_name: cellarion-mongo
+    restart: unless-stopped
+    command: ["mongod", "--wiredTigerCacheSizeGB", "0.2"]
     volumes:
       - mongo-data:/data/db
+    deploy:
+      resources:
+        limits:
+          memory: 384M
     healthcheck:
       test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
       interval: 10s
@@ -13,11 +19,16 @@ services:
   meilisearch:
     image: getmeili/meilisearch:v1.6
     container_name: cellarion-meilisearch
+    restart: unless-stopped
     environment:
       - MEILI_MASTER_KEY=${MEILI_MASTER_KEY}
       - MEILI_ENV=production
     volumes:
       - meili-data:/meili_data
+    deploy:
+      resources:
+        limits:
+          memory: 192M
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:7700/health"]
       interval: 10s
@@ -27,8 +38,13 @@ services:
   qdrant:
     image: qdrant/qdrant:v1.9.0
     container_name: cellarion-qdrant
+    restart: unless-stopped
     volumes:
       - qdrant-data:/qdrant/storage
+    deploy:
+      resources:
+        limits:
+          memory: 192M
     healthcheck:
       test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/localhost/6333' 2>/dev/null"]
       interval: 10s
@@ -39,6 +55,7 @@ services:
   backend:
     build: ./backend
     container_name: cellarion-backend
+    restart: unless-stopped
     environment:
       - MONGO_URI=mongodb://mongo:27017/winecellar
       - JWT_SECRET=${JWT_SECRET}
@@ -62,6 +79,10 @@ services:
       - VAPID_EMAIL=${VAPID_EMAIL:-}
     volumes:
       - image-data:/app/uploads
+    deploy:
+      resources:
+        limits:
+          memory: 384M
     depends_on:
       mongo:
         condition: service_healthy
@@ -78,6 +99,7 @@ services:
   rembg:
     build: ./rembg
     container_name: cellarion-rembg
+    restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
       interval: 30s
@@ -87,7 +109,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 2G
+          memory: 1536M
 
   frontend:
     build:
@@ -95,6 +117,11 @@ services:
       args:
         APP_VERSION: ${APP_VERSION:-dev}
     container_name: cellarion-frontend
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 64M
     expose:
       - "80"
     networks:
