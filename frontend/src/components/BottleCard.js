@@ -1,13 +1,23 @@
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { buildRackUrl } from '../utils/rackNavigation';
+import { useTranslation } from 'react-i18next';
 import AuthImage from './AuthImage';
+
+const MATURITY_LABELS = {
+  'not-ready': { key: 'maturity.notReady', cls: 'maturity-badge--not-ready' },
+  early:       { key: 'maturity.early',    cls: 'maturity-badge--early' },
+  peak:        { key: 'maturity.peak',     cls: 'maturity-badge--peak' },
+  late:        { key: 'maturity.late',     cls: 'maturity-badge--late' },
+  declining:   { key: 'maturity.declining', cls: 'maturity-badge--declining' },
+};
 
 /**
  * Renders a single bottle in either list or card (grid) view.
  * Props: bottle, rackMap, cellarId, viewMode ('list' | 'card')
  */
 function BottleCard({ bottle, rackMap, cellarId, viewMode }) {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const { user } = useAuth();
   const rackInfo = rackMap.get(bottle._id);
@@ -17,6 +27,7 @@ function BottleCard({ bottle, rackMap, cellarId, viewMode }) {
   const isPending = !bottle.wineDefinition && !!bottle.pendingWineRequest;
   const displayName = bottle.wineDefinition?.name || bottle.pendingWineRequest?.wineName || 'Unknown Wine';
   const displayProducer = bottle.wineDefinition?.producer || bottle.pendingWineRequest?.producer;
+  const maturityInfo = bottle.maturityStatus ? MATURITY_LABELS[bottle.maturityStatus] : null;
 
   const handleClick = () => navigate(`/cellars/${cellarId}/bottles/${bottle._id}`);
   const handleKey = e => e.key === 'Enter' && handleClick();
@@ -58,6 +69,12 @@ function BottleCard({ bottle, rackMap, cellarId, viewMode }) {
           <div className="bottle-badges">
             {isPending && (
               <span className="pending-wine-badge">Pending review</span>
+            )}
+            {maturityInfo && (
+              <span className={`maturity-badge ${maturityInfo.cls}`}>{t(maturityInfo.key)}</span>
+            )}
+            {!maturityInfo && bottle.maturityStatus === null && bottle.hasOwnProperty('maturityStatus') && (
+              <span className="maturity-badge maturity-badge--none">{t('maturity.noData')}</span>
             )}
             {rackInfo && (
               <Link
@@ -107,6 +124,12 @@ function BottleCard({ bottle, rackMap, cellarId, viewMode }) {
         <div className="bottle-badges">
           {isPending && (
             <span className="pending-wine-badge">Pending review</span>
+          )}
+          {maturityInfo && (
+            <span className={`maturity-badge ${maturityInfo.cls}`}>{t(maturityInfo.key)}</span>
+          )}
+          {!maturityInfo && bottle.maturityStatus === null && bottle.hasOwnProperty('maturityStatus') && (
+            <span className="maturity-badge maturity-badge--none">{t('maturity.noData')}</span>
           )}
           {rackInfo && (
             <Link

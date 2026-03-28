@@ -178,6 +178,8 @@
     "sortVintageNew": "Vintage (New→Old)",
     "sortPriceLow": "Price (Low→High)",
     "sortPriceHigh": "Price (High→Low)",
+    "sortMaturity": "Maturity (Drink Soon→Later)",
+    "allMaturity": "All Maturity",
     "noBottles": "No bottles in this cellar yet.",
     "addFirstBottle": "Add Your First Bottle",
     "loadMore": "Load more bottles",
@@ -1637,5 +1639,14 @@
     "footerLicense": "AGPL-3.0",
     "footerContributors": "Cellarion contributors",
     "metaDescription": "Cellarion — the open-source wine cellar manager. Track bottles, visualise racks, get drink-window alerts, and share cellars. Self-hosted or use cellarion.app."
+  },
+
+  "maturity": {
+    "peak": "Peak",
+    "early": "Early",
+    "late": "Late",
+    "declining": "Declining",
+    "notReady": "Not Ready",
+    "noData": "No Maturity Data"
   }
 }

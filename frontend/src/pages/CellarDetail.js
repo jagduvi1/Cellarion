@@ -41,6 +41,7 @@ function CellarDetail() {
     search: searchParams.get('search') || '',
     vintage: searchParams.get('vintage') || '',
     minRating: searchParams.get('minRating') || '',
+    maturity: searchParams.get('maturity') || '',
     sort: searchParams.get('sort') || '-createdAt'
   }));
 
@@ -395,7 +396,7 @@ function CellarDetail() {
       {/* ── Bottles tab — search bar renders immediately for fast LCP ── */}
       {activeTab === 'bottles' && (
         <div className="cellar-tab-content">
-          <div className="filters-bar filters-bar-4">
+          <div className="filters-bar filters-bar-5">
             <input
               type="text"
               placeholder={t('cellarDetail.searchPlaceholder')}
@@ -424,6 +425,20 @@ function CellarDetail() {
               <option value="40">{t('cellarDetail.stars2Plus')}</option>
             </select>
             <select
+              value={filters.maturity}
+              onChange={e => setFilters({ ...filters, maturity: e.target.value })}
+              className="filter-select"
+              aria-label="Filter by maturity"
+            >
+              <option value="">{t('cellarDetail.allMaturity')}</option>
+              <option value="peak">{t('maturity.peak')}</option>
+              <option value="early">{t('maturity.early')}</option>
+              <option value="late">{t('maturity.late')}</option>
+              <option value="declining">{t('maturity.declining')}</option>
+              <option value="not-ready">{t('maturity.notReady')}</option>
+              <option value="none">{t('maturity.noData')}</option>
+            </select>
+            <select
               value={filters.sort}
               onChange={e => setFilters({ ...filters, sort: e.target.value })}
               className="filter-select"
@@ -437,6 +452,7 @@ function CellarDetail() {
               <option value="-vintage">{t('cellarDetail.sortVintageNew')}</option>
               <option value="price">{t('cellarDetail.sortPriceLow')}</option>
               <option value="-price">{t('cellarDetail.sortPriceHigh')}</option>
+              <option value="maturity">{t('cellarDetail.sortMaturity')}</option>
             </select>
           </div>
 

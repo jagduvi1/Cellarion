@@ -13,6 +13,7 @@ const { getSnapshotsForDates, getOrCreateDailySnapshot, convertCurrency } = requ
 const { createNotification } = require('../services/notifications');
 const { getPlanConfig } = require('../config/plans');
 const { toNormalized } = require('../utils/ratingUtils');
+const { classifyMaturity, buildProfileMap } = require('../utils/maturityUtils');
 const { CONSUMED_STATUSES, MS_PER_DAY, WINE_POPULATE } = require('../config/constants');
 const mongoose = require('mongoose');
 
@@ -287,6 +288,7 @@ router.get('/:id', async (req, res) => {
       minRating,
       maxRating,
       search,
+      maturity: maturityFilter,
       sort = '-createdAt',
       limit: rawLimit,
       skip: rawSkip,
@@ -346,7 +348,8 @@ router.get('/:id', async (req, res) => {
     const canSortInDb = directSortFields.includes(sortField);
 
     // Whether we need in-memory post-processing (prevents DB-level pagination)
-    const needsInMemoryFilter = !!(search || minRating || maxRating);
+    const needsMaturity = !!(maturityFilter || sortField === 'maturity');
+    const needsInMemoryFilter = !!(search || minRating || maxRating || maturityFilter);
     const needsInMemorySort = !canSortInDb;
     const canPaginateInDb = !needsInMemoryFilter && !needsInMemorySort;
 
@@ -396,7 +399,27 @@ router.get('/:id', async (req, res) => {
       });
     }
 
-    // In-memory sort only for fields that require populated data (e.g. 'name')
+    // Build maturity profile map once when needed for filter, sort, or response enrichment
+    const MATURITY_RANK = { declining: 0, late: 1, peak: 2, early: 3, 'not-ready': 4 };
+    let maturityStatusMap;
+    if (needsMaturity) {
+      const profileMap = await buildProfileMap(bottles);
+      maturityStatusMap = new Map();
+      for (const b of bottles) {
+        maturityStatusMap.set(b._id.toString(), classifyMaturity(b, profileMap));
+      }
+    }
+
+    // Maturity filter: 'none' = only bottles without data, or a specific status
+    if (maturityFilter && maturityStatusMap) {
+      if (maturityFilter === 'none') {
+        bottles = bottles.filter(b => maturityStatusMap.get(b._id.toString()) == null);
+      } else {
+        bottles = bottles.filter(b => maturityStatusMap.get(b._id.toString()) === maturityFilter);
+      }
+    }
+
+    // In-memory sort only for fields that require populated data (e.g. 'name', 'maturity')
     if (needsInMemorySort) {
       bottles.sort((a, b) => {
         let aVal, bVal;
@@ -404,6 +427,11 @@ router.get('/:id', async (req, res) => {
         if (sortField === 'name') {
           aVal = a.wineDefinition?.name || '';
           bVal = b.wineDefinition?.name || '';
+        } else if (sortField === 'maturity') {
+          const aStatus = maturityStatusMap.get(a._id.toString());
+          const bStatus = maturityStatusMap.get(b._id.toString());
+          aVal = aStatus != null ? MATURITY_RANK[aStatus] : 5;
+          bVal = bStatus != null ? MATURITY_RANK[bStatus] : 5;
         } else {
           aVal = a.createdAt;
           bVal = b.createdAt;
@@ -453,7 +481,8 @@ router.get('/:id', async (req, res) => {
     const bottleItems = bottles.map(b => ({
       ...b,
       pendingImageUrl: pendingByBottle[b._id.toString()] || null,
-      defaultImageUrl: b.defaultImage ? (defaultImageMap[b.defaultImage.toString()] || null) : null
+      defaultImageUrl: b.defaultImage ? (defaultImageMap[b.defaultImage.toString()] || null) : null,
+      ...(maturityStatusMap ? { maturityStatus: maturityStatusMap.get(b._id.toString()) || null } : {})
     }));
 
     res.json({

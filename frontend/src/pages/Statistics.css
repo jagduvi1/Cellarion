@@ -406,8 +406,8 @@
 }
 
 .vintage-bar-label {
-  font-size: 0.58rem;
-  color: var(--color-input-placeholder);
+  font-size: 0.65rem;
+  color: var(--color-text-muted);
   position: absolute;
   bottom: 0;
   white-space: nowrap;
@@ -1083,9 +1083,10 @@
   }
   .vintage-bar-label {
     font-size: 0.62rem;
-    transform: rotate(-45deg);
-    transform-origin: top center;
-    bottom: -2px;
+    transform: rotate(-50deg);
+    transform-origin: top right;
+    bottom: -4px;
+    right: 50%;
   }
 
   /* Forecast chart: bigger count labels */
@@ -1193,7 +1194,7 @@
     padding-bottom: 40px;
   }
   .vintage-bar-label {
-    font-size: 0.56rem;
+    font-size: 0.55rem;
   }
 
   /* Forecast: tighter */
