@@ -36,7 +36,7 @@ const CATEGORY_MAP = {
   reply_like_received:      'community',
 };
 
-// ── Tier thresholds (ordered ascending) ─────────────────────────────────────
+// ── Tier thresholds (ordered descending for getTier lookup) ─────────────────
 const TIERS = [
   { name: 'ambassador',   threshold: 750 },
   { name: 'connoisseur',  threshold: 300 },
@@ -111,10 +111,16 @@ async function incrementCred(userId, eventType) {
   if (newTier !== user.contribution.tier) updates['contribution.tier'] = newTier;
   if (newSpecialty !== user.contribution.specialty) updates['contribution.specialty'] = newSpecialty;
 
-  // Check for tier reward
-  const reward = TIER_REWARDS[newTier];
-  if (reward && !(user.contribution.rewardsGranted || []).includes(newTier)) {
-    const currentRank = PLAN_RANK[user.plan] || 0;
+  // Check for all unclaimed tier rewards (handles tier-jumping, e.g. 0 → 100 skips contributor)
+  const granted = user.contribution.rewardsGranted || [];
+  const rewardTiers = Object.keys(TIER_REWARDS);
+  for (const rewardTier of rewardTiers) {
+    if (granted.includes(rewardTier)) continue;
+    const tierThreshold = TIERS.find(t => t.name === rewardTier)?.threshold || Infinity;
+    if (user.contribution.totalScore < tierThreshold) continue;
+
+    const reward = TIER_REWARDS[rewardTier];
+    const currentRank = PLAN_RANK[updates.plan || user.plan] || 0;
     const rewardRank = PLAN_RANK[reward.plan] || 0;
     const planExpired = user.planExpiresAt && new Date(user.planExpiresAt) < new Date();
 
@@ -123,8 +129,8 @@ async function incrementCred(userId, eventType) {
       updates.planStartedAt = new Date();
       updates.planExpiresAt = new Date(Date.now() + reward.durationDays * 24 * 60 * 60 * 1000);
     }
-    // Mark reward as granted even if plan wasn't changed (user already has better plan)
-    updates.$addToSet = { 'contribution.rewardsGranted': newTier };
+    if (!updates.$addToSet) updates.$addToSet = { 'contribution.rewardsGranted': { $each: [] } };
+    updates.$addToSet['contribution.rewardsGranted'].$each.push(rewardTier);
   }
 
   if (Object.keys(updates).length > 0) {

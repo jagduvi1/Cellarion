@@ -412,6 +412,11 @@ router.post('/:id/like', async (req, res) => {
       return res.status(404).json({ error: 'Review not found' });
     }
 
+    // Cannot like your own review
+    if (review.author.toString() === req.user.id) {
+      return res.status(400).json({ error: 'Cannot like your own review' });
+    }
+
     const existing = await ReviewVote.findOne({ user: req.user.id, review: review._id });
 
     if (existing) {

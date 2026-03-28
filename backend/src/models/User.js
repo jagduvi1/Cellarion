@@ -153,7 +153,11 @@ const userSchema = new mongoose.Schema({
       enum: ['newcomer', 'contributor', 'enthusiast', 'connoisseur', 'ambassador'],
       default: 'newcomer',
     },
-    specialty:      { type: String, default: null },
+    specialty: {
+      type: String,
+      enum: [null, 'curator', 'photographer', 'critic', 'community', 'allrounder'],
+      default: null,
+    },
     rewardsGranted: { type: [String], default: [] },
   },
   profileVisibility: {

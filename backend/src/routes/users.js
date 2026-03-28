@@ -278,7 +278,12 @@ router.get('/public/:userId', requireAuth, async (req, res) => {
         profileVisibility: user.profileVisibility,
         ratingScale: user.preferences?.ratingScale || '5',
         createdAt: user.createdAt,
-        contribution: user.contribution || { totalScore: 0, tier: 'newcomer', specialty: null, categories: {} },
+        contribution: {
+          totalScore: user.contribution?.totalScore || 0,
+          tier: user.contribution?.tier || 'newcomer',
+          specialty: user.contribution?.specialty || null,
+          categories: user.contribution?.categories || {},
+        },
         isFollowing
       }
     });
@@ -315,7 +320,7 @@ router.get('/me/export', requireAuth, async (req, res) => {
       Cellar.find({ $or: [{ user: userId }, { 'members.user': userId }], deletedAt: null }).lean(),
       Rack.find({ cellar: { $in: await Cellar.distinct('_id', { user: userId }) }, deletedAt: null }).lean(),
       WineRequest.find({ user: userId }).lean(),
-      Review.find({ user: userId }).lean(),
+      Review.find({ author: userId }).lean(),
       Notification.find({ user: userId }).lean(),
       AuditLog.find({ 'actor.userId': userId }).sort({ timestamp: -1 }).limit(1000).lean(),
       BottleImage.find({ uploadedBy: userId }).lean(),

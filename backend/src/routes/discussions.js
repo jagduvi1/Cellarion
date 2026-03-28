@@ -556,6 +556,11 @@ router.post('/:discussionId/replies/:replyId/like', async (req, res) => {
     const reply = await DiscussionReply.findById(req.params.replyId);
     if (!reply) return res.status(404).json({ error: 'Reply not found' });
 
+    // Cannot like your own reply
+    if (reply.author.toString() === req.user.id) {
+      return res.status(400).json({ error: 'Cannot like your own reply' });
+    }
+
     const existing = await DiscussionReplyVote.findOne({ user: req.user.id, reply: reply._id });
 
     if (existing) {
