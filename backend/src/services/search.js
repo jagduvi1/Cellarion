@@ -116,13 +116,14 @@ async function search(query, { countryId, regionId, type, grapeIds, limit = 50, 
     throw new Error('Meilisearch is not available');
   }
 
-  // Build filter array
+  // Build filter array — sanitize values to prevent filter injection
+  const sanitizeFilterValue = (v) => String(v).replace(/["\\]/g, '');
   const filters = [];
-  if (countryId) filters.push(`countryId = "${countryId}"`);
-  if (regionId) filters.push(`regionId = "${regionId}"`);
-  if (type) filters.push(`type = "${type}"`);
+  if (countryId) filters.push(`countryId = "${sanitizeFilterValue(countryId)}"`);
+  if (regionId) filters.push(`regionId = "${sanitizeFilterValue(regionId)}"`);
+  if (type) filters.push(`type = "${sanitizeFilterValue(type)}"`);
   if (grapeIds && grapeIds.length > 0) {
-    const grapeFilter = grapeIds.map(id => `grapeIds = "${id}"`).join(' AND ');
+    const grapeFilter = grapeIds.map(id => `grapeIds = "${sanitizeFilterValue(id)}"`).join(' AND ');
     filters.push(grapeFilter);
   }
 

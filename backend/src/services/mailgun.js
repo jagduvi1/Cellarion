@@ -3,6 +3,12 @@ const Mailgun = require('mailgun.js');
 
 const EMAIL_VERIFICATION_ENABLED = !!(process.env.MAILGUN_API_KEY && process.env.MAILGUN_DOMAIN);
 
+/** Escape user-supplied values for safe interpolation into HTML emails. */
+function escapeHtml(str) {
+  if (!str) return '';
+  return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
 let mg;
 if (EMAIL_VERIFICATION_ENABLED) {
   const mailgun = new Mailgun(FormData);
@@ -42,7 +48,7 @@ async function sendVerificationEmail(toEmail, username, token) {
     ].join('\n'),
     html: `
       <div style="font-family:sans-serif;max-width:480px;margin:0 auto;color:#2a2a2a;">
-        <p>Hello <strong>${username}</strong>,</p>
+        <p>Hello <strong>${escapeHtml(username)}</strong>,</p>
         <p>Please verify your email address by clicking the button below.
            This link expires in <strong>24 hours</strong>.</p>
         <p style="margin:2rem 0;">
@@ -90,7 +96,7 @@ async function sendPasswordResetEmail(toEmail, username, token) {
     ].join('\n'),
     html: `
       <div style="font-family:sans-serif;max-width:480px;margin:0 auto;color:#2a2a2a;">
-        <p>Hello <strong>${username}</strong>,</p>
+        <p>Hello <strong>${escapeHtml(username)}</strong>,</p>
         <p>We received a request to reset the password for your Cellarion account.
            Click the button below to set a new password.
            This link expires in <strong>1 hour</strong>.</p>
@@ -137,7 +143,7 @@ async function sendDrinkWindowDigest(toEmail, username, bottles, userId) {
 
   const rows = bottles.map(b => `
     <tr>
-      <td style="padding:8px 12px;border-bottom:1px solid #eee;">${b.name} ${b.vintage}</td>
+      <td style="padding:8px 12px;border-bottom:1px solid #eee;">${escapeHtml(b.name)} ${escapeHtml(b.vintage)}</td>
       <td style="padding:8px 12px;border-bottom:1px solid #eee;color:${statusColor(b.status)};font-weight:600;">
         ${statusLabel(b.status)}
       </td>
@@ -163,7 +169,7 @@ async function sendDrinkWindowDigest(toEmail, username, bottles, userId) {
     ].join('\n'),
     html: `
       <div style="font-family:sans-serif;max-width:520px;margin:0 auto;color:#2a2a2a;">
-        <p>Hello <strong>${username}</strong>,</p>
+        <p>Hello <strong>${escapeHtml(username)}</strong>,</p>
         <p>Some bottles in your cellar have drink-window updates:</p>
         <table style="width:100%;border-collapse:collapse;margin:1rem 0;">
           <thead>
@@ -225,9 +231,9 @@ async function sendRecommendationEmail(toEmail, senderName, wine, note) {
     html: `
       <div style="font-family:sans-serif;max-width:480px;margin:0 auto;color:#2a2a2a;">
         <p>Hello,</p>
-        <p><strong>${senderName}</strong> thinks you'd enjoy
-           <strong>${wineName}</strong>${producer}.</p>
-        ${note ? `<blockquote style="border-left:3px solid #7B9E88;padding:8px 16px;margin:1rem 0;color:#555;font-style:italic;">"${note}"</blockquote>` : ''}
+        <p><strong>${escapeHtml(senderName)}</strong> thinks you'd enjoy
+           <strong>${escapeHtml(wineName)}</strong>${escapeHtml(producer)}.</p>
+        ${note ? `<blockquote style="border-left:3px solid #7B9E88;padding:8px 16px;margin:1rem 0;color:#555;font-style:italic;">"${escapeHtml(note)}"</blockquote>` : ''}
         <p style="margin:2rem 0;">
           <a href="${wineLink}"
              style="background:#7B9E88;color:#0d0d0d;padding:12px 28px;

@@ -87,9 +87,9 @@ app.use('/api/bottles/import/sessions', express.json({ limit: '5mb' }));
 app.use('/api/bottles/import', express.json({ limit: '2mb' }));
 app.use('/api/blog/admin/posts', express.json({ limit: '2mb' }));
 app.use(express.json({ limit: '10kb' }));
-const corsOrigin = process.env.FRONTEND_URL || (process.env.NODE_ENV === 'production' ? undefined : 'http://localhost:3000');
+const corsOrigin = process.env.FRONTEND_URL || (process.env.NODE_ENV === 'production' ? false : 'http://localhost:3000');
 if (process.env.NODE_ENV === 'production' && !process.env.FRONTEND_URL) {
-  console.warn('[security] FRONTEND_URL is not set — CORS will reject all cross-origin requests in production');
+  console.warn('[security] FRONTEND_URL is not set — CORS will block all cross-origin requests in production');
 }
 app.use(cors({
   origin: corsOrigin,

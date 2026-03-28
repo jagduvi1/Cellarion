@@ -27,7 +27,7 @@ async function runDrinkWindowCheck() {
   // All users with drink-window notifications not explicitly turned off
   const users = await User.find({
     'preferences.notifications.drinkWindow': { $ne: false }
-  }).select('_id email username displayName preferences.notifications').lean();
+  }).select('_id email username displayName preferences.notifications emailVerified').lean();
 
   let totalNotified = 0;
 

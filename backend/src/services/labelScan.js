@@ -128,28 +128,30 @@ async function scanLabelFull(image, mediaType = 'image/jpeg') {
     console.error('labelScan JSON parse failed, raw response:', raw);
     const err = new Error('Could not read label');
     err.status = 422;
-    err._debugRaw = raw; // DEBUG — remove before release
+    // Debug raw logged server-side only
+    console.error('[labelScan] raw AI response:', raw);
     throw err;
   }
 
   if (data.error) {
     const err = new Error('Could not read label');
     err.status = 422;
-    err._debugRaw = raw; // DEBUG — remove before release
+    // Debug raw logged server-side only
+    console.error('[labelScan] raw AI response:', raw);
     throw err;
   }
 
   if (!data.name || !data.producer) {
     const err = new Error('Could not identify wine from label');
     err.status = 422;
-    err._debugRaw = raw; // DEBUG — remove before release
+    // Debug raw logged server-side only
+    console.error('[labelScan] raw AI response:', raw);
     throw err;
   }
 
   // Ensure grapes is always an array
   if (!Array.isArray(data.grapes)) data.grapes = [];
 
-  data._debugRaw = raw; // DEBUG — remove before release
   return data;
 }
 
