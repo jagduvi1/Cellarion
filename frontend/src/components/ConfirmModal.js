@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Modal from './Modal';
+import './ConfirmModal.css';
 
 /**
  * Reusable confirmation dialog that replaces window.confirm().
@@ -18,37 +19,43 @@ import Modal from './Modal';
 function ConfirmModal({ title, message, warning, confirmLabel, confirmClass, confirmText, onConfirm, onCancel }) {
   const { t } = useTranslation();
   const [typed, setTyped] = useState('');
+  const [submitting, setSubmitting] = useState(false);
   const needsTyping = !!confirmText;
-  const isConfirmEnabled = !needsTyping || typed === confirmText;
+  const isConfirmEnabled = !submitting && (!needsTyping || typed === confirmText);
+
+  const handleConfirm = async () => {
+    setSubmitting(true);
+    try { await onConfirm(); } catch { /* caller handles */ }
+  };
 
   return (
     <Modal title={title || t('common.confirm', 'Confirm')} onClose={onCancel}>
-      {message && <p style={{ margin: '0 0 0.5rem' }}>{message}</p>}
-      {warning && (
-        <p style={{ margin: '0 0 1rem', color: 'var(--color-danger)', fontSize: '0.85rem' }}>{warning}</p>
-      )}
+      {message && <p className="confirm-modal__message">{message}</p>}
+      {warning && <p className="confirm-modal__warning">{warning}</p>}
       {needsTyping && (
-        <div style={{ margin: '0.75rem 0' }}>
-          <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--color-text-muted)', marginBottom: '0.35rem' }}>
+        <div className="confirm-modal__typing">
+          <label htmlFor="confirm-type-input" className="confirm-modal__label">
             {t('common.typeToConfirm', { name: confirmText })}
           </label>
           <input
+            id="confirm-type-input"
             type="text"
             value={typed}
             onChange={e => setTyped(e.target.value)}
             placeholder={confirmText}
             autoFocus
-            style={{ width: '100%', padding: '0.5rem', border: '1px solid var(--color-input-border)', borderRadius: 'var(--radius-sm)', fontSize: '0.85rem' }}
+            className="confirm-modal__input"
+            aria-label={t('common.typeToConfirm', { name: confirmText })}
           />
         </div>
       )}
-      <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end', marginTop: '1rem' }}>
+      <div className="confirm-modal__actions">
         <button className="btn btn-outline btn-small" onClick={onCancel}>
           {t('common.cancel')}
         </button>
         <button
           className={confirmClass || 'btn btn-danger btn-small'}
-          onClick={onConfirm}
+          onClick={handleConfirm}
           disabled={!isConfirmEnabled}
         >
           {confirmLabel || t('common.delete', 'Delete')}

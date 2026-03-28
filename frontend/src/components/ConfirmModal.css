@@ -1,0 +1,42 @@
+.confirm-modal__message {
+  margin: 0 0 0.5rem;
+}
+
+.confirm-modal__warning {
+  margin: 0 0 1rem;
+  color: var(--color-danger);
+  font-size: 0.85rem;
+}
+
+.confirm-modal__typing {
+  margin: 0.75rem 0;
+}
+
+.confirm-modal__label {
+  display: block;
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+  margin-bottom: 0.35rem;
+}
+
+.confirm-modal__input {
+  width: 100%;
+  padding: 0.5rem;
+  border: 1px solid var(--color-input-border);
+  border-radius: var(--radius-sm);
+  font-size: 0.85rem;
+  background: var(--color-surface);
+  color: var(--color-text);
+}
+
+.confirm-modal__input:focus {
+  outline: none;
+  border-color: var(--color-border-focus);
+}
+
+.confirm-modal__actions {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: flex-end;
+  margin-top: 1rem;
+}

@@ -594,7 +594,9 @@
       "prestigeLabel": "Prestige",
       "appellationNameLabel": "Appellation Name *",
       "appellationRegionLabel": "Region (optional)",
-      "appellationRegionNone": "No specific region"
+      "appellationRegionNone": "No specific region",
+      "confirmDeleteItem": "Are you sure you want to delete this item?",
+      "deleteWarning": "This action cannot be undone."
     },
     "wines": {
       "title": "Admin: Wine Library",
@@ -1209,7 +1211,9 @@
     "addedToWishlist": "Added to wishlist",
     "statusPending": "Pending",
     "statusSeen": "Seen",
-    "statusAddedToWishlist": "Added to wishlist"
+    "statusAddedToWishlist": "Added to wishlist",
+    "delete": "Delete",
+    "confirmDelete": "Delete this recommendation?"
   },
   "wineDetail": {
     "appellation": "Appellation",

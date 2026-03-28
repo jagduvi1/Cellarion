@@ -479,9 +479,9 @@ function DiscussionDetail() {
       {/* Confirm delete reply */}
       {confirmDeleteReply && (
         <ConfirmModal
-          title="Delete Reply"
-          message="Delete this reply?"
-          warning="The text will be hidden but moderators can still review it."
+          title={t('discussions.deleteReply', 'Delete Reply')}
+          message={t('discussions.confirmDeleteReply', 'Delete this reply?')}
+          warning={t('discussions.deleteReplyWarning', 'The text will be hidden but moderators can still review it.')}
           onConfirm={() => handleDeleteReply(confirmDeleteReply)}
           onCancel={() => setConfirmDeleteReply(null)}
         />
@@ -490,9 +490,9 @@ function DiscussionDetail() {
       {/* Confirm delete discussion */}
       {confirmDeleteDiscussion && (
         <ConfirmModal
-          title="Delete Discussion"
-          message="Delete this discussion and all its replies?"
-          warning="This action cannot be undone."
+          title={t('discussions.deleteDiscussion', 'Delete Discussion')}
+          message={t('discussions.confirmDeleteDiscussion', 'Delete this discussion and all its replies?')}
+          warning={t('discussions.deleteDiscussionWarning', 'This action cannot be undone.')}
           onConfirm={handleDeleteDiscussion}
           onCancel={() => setConfirmDeleteDiscussion(false)}
         />

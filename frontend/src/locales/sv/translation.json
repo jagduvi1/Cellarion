@@ -594,7 +594,9 @@
       "prestigeLabel": "Prestige",
       "appellationNameLabel": "Appellationsnamn *",
       "appellationRegionLabel": "Region (valfri)",
-      "appellationRegionNone": "Ingen specifik region"
+      "appellationRegionNone": "Ingen specifik region",
+      "confirmDeleteItem": "Är du säker på att du vill ta bort detta objekt?",
+      "deleteWarning": "Denna åtgärd kan inte ångras."
     },
     "wines": {
       "title": "Admin: Vinbibliotek",
@@ -1209,7 +1211,9 @@
     "addedToWishlist": "Tillagd i önskelistan",
     "statusPending": "Väntande",
     "statusSeen": "Sedd",
-    "statusAddedToWishlist": "Tillagd i önskelistan"
+    "statusAddedToWishlist": "Tillagd i önskelistan",
+    "delete": "Ta bort",
+    "confirmDelete": "Ta bort denna rekommendation?"
   },
   "wineDetail": {
     "appellation": "Appellation",

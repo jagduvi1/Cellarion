@@ -155,15 +155,18 @@ function CellarRacks() {
 
   // --- delete rack ---
   const handleDeleteRack = async (rackId) => {
-    const res = await deleteRack(apiFetch, rackId);
-    if (res.ok) {
-      const remaining = racks.filter(r => r._id !== rackId);
-      setRacks(remaining);
-      if (selectedRackId === rackId) {
-        setSelectedRackId(remaining.length > 0 ? remaining[0]._id : null);
+    try {
+      const res = await deleteRack(apiFetch, rackId);
+      if (res.ok) {
+        const remaining = racks.filter(r => r._id !== rackId);
+        setRacks(remaining);
+        if (selectedRackId === rackId) {
+          setSelectedRackId(remaining.length > 0 ? remaining[0]._id : null);
+        }
       }
+    } finally {
+      setDeleteConfirm(null);
     }
-    setDeleteConfirm(null);
   };
 
   // --- assign bottle to slot ---
