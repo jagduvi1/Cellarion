@@ -1,59 +1,31 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
+import { Helmet } from 'react-helmet-async';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
 import './LandingPage.css';
 
 const LOGO_LIGHT = process.env.PUBLIC_URL + '/cellarion-logo-light.png';
 const LOGO_DARK  = process.env.PUBLIC_URL + '/cellarion-logo-dark.png';
-
-const features = [
-  {
-    icon: '🍷',
-    title: 'Bottle Tracking',
-    desc: 'Log every bottle in your collection — vintage, producer, region, price, personal rating, and tasting notes, all in one place.',
-  },
-  {
-    icon: '🗄️',
-    title: 'Cellar & Rack Management',
-    desc: 'Organize bottles across multiple cellars and visualize your physical racks on an interactive grid. Know exactly where each bottle lives.',
-  },
-  {
-    icon: '⏰',
-    title: 'Drink Window Alerts',
-    desc: 'Get notified when a bottle is approaching its peak or past it. Never open a great wine too early — or too late.',
-  },
-  {
-    icon: '📊',
-    title: 'Rich Statistics',
-    desc: 'Explore your cellar with charts and maps — breakdown by country, grape, value, drink status, and more.',
-  },
-  {
-    icon: '🔍',
-    title: 'Smart Wine Search',
-    desc: 'Powered by Meilisearch with fuzzy matching and deduplication so you always find the right wine, even with a typo.',
-  },
-  {
-    icon: '🤝',
-    title: 'Share Your Cellar',
-    desc: 'Invite friends or colleagues to browse or co-manage a cellar. Granular role-based access keeps you in control.',
-  },
-  {
-    icon: '📷',
-    title: 'Label Scanning',
-    desc: 'Snap a photo of the label and let AI fill in the details. Background removal keeps bottle images clean and beautiful.',
-  },
-  {
-    icon: '📥',
-    title: 'Import & Export',
-    desc: 'Bring your existing collection in via CSV. A structured wine registry shared across users ensures clean, consistent data.',
-  },
-];
+const SITE_URL = process.env.REACT_APP_SITE_URL || 'https://cellarion.app';
 
 export default function LandingPage() {
+  const { t, i18n } = useTranslation();
   const { user } = useAuth();
   const { theme } = useTheme();
   const [contactEmail, setContactEmail] = useState(null);
+
+  const features = [
+    { icon: '🍷', title: t('landing.featureBottleTitle'), desc: t('landing.featureBottleDesc') },
+    { icon: '🗄️', title: t('landing.featureCellarTitle'), desc: t('landing.featureCellarDesc') },
+    { icon: '⏰', title: t('landing.featureDrinkTitle'), desc: t('landing.featureDrinkDesc') },
+    { icon: '📊', title: t('landing.featureStatsTitle'), desc: t('landing.featureStatsDesc') },
+    { icon: '🔍', title: t('landing.featureSearchTitle'), desc: t('landing.featureSearchDesc') },
+    { icon: '🤝', title: t('landing.featureShareTitle'), desc: t('landing.featureShareDesc') },
+    { icon: '📷', title: t('landing.featureLabelTitle'), desc: t('landing.featureLabelDesc') },
+    { icon: '📥', title: t('landing.featureImportTitle'), desc: t('landing.featureImportDesc') },
+  ];
 
   useEffect(() => {
     fetch('/api/settings')
@@ -62,8 +34,55 @@ export default function LandingPage() {
       .catch(() => {});
   }, []);
 
+  const lang = i18n.language?.startsWith('sv') ? 'sv' : 'en';
+  const altLang = lang === 'sv' ? 'en' : 'sv';
+
+  // WebSite + Organization JSON-LD
+  const jsonLd = {
+    '@context': 'https://schema.org',
+    '@graph': [
+      {
+        '@type': 'WebSite',
+        '@id': `${SITE_URL}/#website`,
+        url: SITE_URL,
+        name: 'Cellarion',
+        description: t('landing.metaDescription'),
+        inLanguage: [lang, altLang],
+      },
+      {
+        '@type': 'Organization',
+        '@id': `${SITE_URL}/#organization`,
+        name: 'Cellarion',
+        url: SITE_URL,
+        logo: `${SITE_URL}/cellarion-logo.jpg`,
+        sameAs: ['https://github.com/jagduvi1/Cellarion'],
+      }
+    ]
+  };
+
   return (
     <div className="landing">
+      <Helmet>
+        <html lang={lang} />
+        <title>Cellarion — Wine Cellar Management</title>
+        <meta name="description" content={t('landing.metaDescription')} />
+        <meta property="og:type" content="website" />
+        <meta property="og:title" content="Cellarion — Wine Cellar Management" />
+        <meta property="og:description" content={t('landing.metaDescription')} />
+        <meta property="og:url" content={SITE_URL} />
+        <meta property="og:image" content={`${SITE_URL}/cellarion-logo.jpg`} />
+        <meta property="og:site_name" content="Cellarion" />
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content="Cellarion — Wine Cellar Management" />
+        <meta name="twitter:description" content={t('landing.metaDescription')} />
+        <meta name="twitter:image" content={`${SITE_URL}/cellarion-logo.jpg`} />
+        <link rel="canonical" href={SITE_URL} />
+        <link rel="alternate" hrefLang="en" href={SITE_URL} />
+        <link rel="alternate" hrefLang="sv" href={SITE_URL} />
+        <link rel="alternate" hrefLang="x-default" href={SITE_URL} />
+        <script type="application/ld+json">{JSON.stringify(jsonLd)}</script>
+      </Helmet>
+
       {/* ── Nav ── */}
       <nav className="landing-nav">
         <div className="landing-nav-brand">
@@ -80,11 +99,11 @@ export default function LandingPage() {
           </a>
           {user ? (
             <Link to="/cellars" className="btn-landing-primary">
-              My Cellar →
+              {t('landing.myCellar')} →
             </Link>
           ) : (
             <Link to="/login" className="btn-landing-primary">
-              Sign In
+              {t('landing.signIn')}
             </Link>
           )}
         </div>
@@ -98,23 +117,21 @@ export default function LandingPage() {
             <img src={theme === 'dark' ? LOGO_DARK : LOGO_LIGHT} alt="Cellarion" className="landing-hero-logo-img" />
           </div>
           <h1 className="landing-headline">
-            Your wine cellar,<br />
-            <span className="landing-headline-accent">beautifully organised.</span>
+            {t('landing.heroHeadline')}<br />
+            <span className="landing-headline-accent">{t('landing.heroAccent')}</span>
           </h1>
           <p className="landing-subline">
-            Cellarion is a self-hosted, open-source wine cellar manager.
-            Track bottles, visualise racks, get drink-window alerts, and share cellars —
-            all from a clean, private interface you own.
+            {t('landing.heroSubline')}
           </p>
           <div className="landing-cta-group">
             {user ? (
               <Link to="/cellars" className="btn-landing-primary btn-landing-large">
-                Go to My Cellar
+                {t('landing.goToCellar')}
               </Link>
             ) : (
               <>
                 <Link to="/login" className="btn-landing-primary btn-landing-large">
-                  Get Started — it&apos;s free
+                  {t('landing.getStarted')}
                 </Link>
                 <a
                   href="https://github.com/jagduvi1/Cellarion"
@@ -122,17 +139,17 @@ export default function LandingPage() {
                   rel="noopener noreferrer"
                   className="btn-landing-ghost btn-landing-large"
                 >
-                  ★ Star on GitHub
+                  ★ {t('landing.starOnGithub')}
                 </a>
               </>
             )}
           </div>
           <p className="landing-hosted-note">
-            Hosted at{' '}
+            {t('landing.hostedAt')}{' '}
             <a href="https://cellarion.app" className="landing-link">
               cellarion.app
             </a>{' '}
-            · or self-host in minutes with Docker
+            · {t('landing.selfHost')}
           </p>
         </div>
       </section>
@@ -140,9 +157,9 @@ export default function LandingPage() {
       {/* ── Features ── */}
       <section className="landing-features">
         <div className="landing-section-inner">
-          <h2 className="landing-section-title">Everything your cellar needs</h2>
+          <h2 className="landing-section-title">{t('landing.featuresTitle')}</h2>
           <p className="landing-section-sub">
-            From a single bottle to a thousand, Cellarion keeps your collection organised and drinkable.
+            {t('landing.featuresSub')}
           </p>
           <div className="landing-features-grid">
             {features.map((f) => (
@@ -159,12 +176,10 @@ export default function LandingPage() {
       {/* ── Open source banner ── */}
       <section className="landing-oss">
         <div className="landing-section-inner landing-oss-inner">
-          <div className="landing-oss-badge">Open Source</div>
-          <h2 className="landing-oss-title">Built in the open, owned by you</h2>
+          <div className="landing-oss-badge">{t('landing.ossBadge')}</div>
+          <h2 className="landing-oss-title">{t('landing.ossTitle')}</h2>
           <p className="landing-oss-body">
-            Cellarion is released under the <strong>AGPL-3.0</strong> license.
-            The full source code is on GitHub — audit it, fork it, self-host it.
-            No vendor lock-in, no subscription required, no data sent to third parties.
+            {t('landing.ossBody')}
           </p>
           <div className="landing-oss-pills">
             <span className="landing-pill">AGPL-3.0</span>
@@ -181,7 +196,7 @@ export default function LandingPage() {
             rel="noopener noreferrer"
             className="btn-landing-primary"
           >
-            View source on GitHub →
+            {t('landing.ossViewSource')} →
           </a>
         </div>
       </section>
@@ -190,17 +205,17 @@ export default function LandingPage() {
       <section className="landing-final-cta">
         <div className="landing-section-inner landing-final-inner">
           <img src={theme === 'dark' ? LOGO_DARK : LOGO_LIGHT} alt="Cellarion" className="landing-final-logo-img" />
-          <h2 className="landing-final-title">Start managing your cellar today</h2>
+          <h2 className="landing-final-title">{t('landing.finalTitle')}</h2>
           <p className="landing-final-sub">
-            Free to use at cellarion.app, or deploy your own instance in minutes.
+            {t('landing.finalSub')}
           </p>
           {user ? (
             <Link to="/cellars" className="btn-landing-primary btn-landing-large">
-              Open My Cellar
+              {t('landing.openCellar')}
             </Link>
           ) : (
             <Link to="/login" className="btn-landing-primary btn-landing-large">
-              Create a free account
+              {t('landing.createAccount')}
             </Link>
           )}
         </div>
@@ -225,7 +240,7 @@ export default function LandingPage() {
               target="_blank"
               rel="noopener noreferrer"
             >
-              AGPL-3.0
+              {t('landing.footerLicense')}
             </a>
             {contactEmail && (
               <a href={`mailto:${contactEmail}`}>{contactEmail}</a>
@@ -233,7 +248,7 @@ export default function LandingPage() {
             <Link to="/login">Login</Link>
           </div>
           <span className="landing-footer-copy">
-            © {new Date().getFullYear()} Cellarion contributors
+            © {new Date().getFullYear()} {t('landing.footerContributors')}
           </span>
         </div>
       </footer>

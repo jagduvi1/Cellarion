@@ -1,7 +1,10 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Helmet } from 'react-helmet-async';
 import { getHelpContent } from '../api/help';
 import './Help.css';
+
+const SITE_URL = process.env.REACT_APP_SITE_URL || 'https://cellarion.app';
 
 const SECTION_KEYS = [
   'cellars', 'bottles', 'labelScan', 'sharing', 'racks', 'roomView',
@@ -58,8 +61,35 @@ function Help() {
     setOpenSection(prev => prev === key ? null : key);
   };
 
+  // FAQPage JSON-LD — uses the first 10 sections as Q&A pairs
+  const faqJsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'FAQPage',
+    mainEntity: filtered.slice(0, 10).map(s => ({
+      '@type': 'Question',
+      name: s.title,
+      acceptedAnswer: {
+        '@type': 'Answer',
+        text: s.details.length > 0 ? s.details.join(' ') : s.summary,
+      }
+    }))
+  };
+
   return (
     <div className="help-page">
+      <Helmet>
+        <title>{t('help.title')} — Cellarion</title>
+        <meta name="description" content={t('help.subtitle')} />
+        <meta property="og:type" content="website" />
+        <meta property="og:title" content={`${t('help.title')} — Cellarion`} />
+        <meta property="og:description" content={t('help.subtitle')} />
+        <meta property="og:url" content={`${SITE_URL}/help`} />
+        <link rel="canonical" href={`${SITE_URL}/help`} />
+        <link rel="alternate" hrefLang="en" href={`${SITE_URL}/help`} />
+        <link rel="alternate" hrefLang="sv" href={`${SITE_URL}/help`} />
+        <link rel="alternate" hrefLang="x-default" href={`${SITE_URL}/help`} />
+        <script type="application/ld+json">{JSON.stringify(faqJsonLd)}</script>
+      </Helmet>
       <div className="help-container">
         <div className="help-header">
           <h1>{t('help.title')}</h1>

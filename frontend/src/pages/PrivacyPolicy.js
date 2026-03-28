@@ -1,8 +1,23 @@
+import { Helmet } from 'react-helmet-async';
 import './PrivacyPolicy.css';
+
+const SITE_URL = process.env.REACT_APP_SITE_URL || 'https://cellarion.app';
 
 function PrivacyPolicy() {
   return (
     <div className="privacy-page">
+      <Helmet>
+        <title>Privacy Policy — Cellarion</title>
+        <meta name="description" content="Cellarion privacy policy. Learn how we collect, use, and protect your personal data under GDPR." />
+        <meta property="og:type" content="website" />
+        <meta property="og:title" content="Privacy Policy — Cellarion" />
+        <meta property="og:description" content="Cellarion privacy policy. Learn how we collect, use, and protect your personal data under GDPR." />
+        <meta property="og:url" content={`${SITE_URL}/privacy`} />
+        <link rel="canonical" href={`${SITE_URL}/privacy`} />
+        <link rel="alternate" hrefLang="en" href={`${SITE_URL}/privacy`} />
+        <link rel="alternate" hrefLang="sv" href={`${SITE_URL}/privacy`} />
+        <link rel="alternate" hrefLang="x-default" href={`${SITE_URL}/privacy`} />
+      </Helmet>
       <div className="privacy-container">
         <h1>Privacy Policy</h1>
         <p className="privacy-updated">Last updated: March 2026 — Version 2026-03</p>

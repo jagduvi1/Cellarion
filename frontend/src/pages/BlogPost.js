@@ -50,32 +50,54 @@ function BlogPost() {
   const metaTitle = post.metaTitle || post.title;
   const metaDescription = post.metaDescription || post.excerpt || `${post.title} — Cellarion Blog`;
 
+  const SITE_URL = process.env.REACT_APP_SITE_URL || 'https://cellarion.app';
+  const postUrl = `${SITE_URL}/blog/${post.slug}`;
+
   // JSON-LD structured data for SEO
   const jsonLd = {
     '@context': 'https://schema.org',
-    '@type': 'BlogPosting',
-    headline: post.title,
-    description: metaDescription,
-    datePublished: post.publishedAt,
-    dateModified: post.updatedAt,
-    author: {
-      '@type': 'Organization',
-      name: 'Cellarion',
-      url: 'https://cellarion.app'
-    },
-    publisher: {
-      '@type': 'Organization',
-      name: 'Cellarion',
-      url: 'https://cellarion.app'
-    },
-    mainEntityOfPage: {
-      '@type': 'WebPage',
-      '@id': `https://cellarion.app/blog/${post.slug}`
-    }
+    '@graph': [
+      {
+        '@type': 'BlogPosting',
+        headline: post.title,
+        description: metaDescription,
+        datePublished: post.publishedAt,
+        dateModified: post.updatedAt,
+        author: {
+          '@type': 'Organization',
+          name: 'Cellarion',
+          url: SITE_URL
+        },
+        publisher: {
+          '@type': 'Organization',
+          name: 'Cellarion',
+          url: SITE_URL
+        },
+        mainEntityOfPage: {
+          '@type': 'WebPage',
+          '@id': postUrl
+        },
+        ...(post.coverImage ? { image: post.coverImage } : {})
+      },
+      {
+        '@type': 'BreadcrumbList',
+        itemListElement: [
+          {
+            '@type': 'ListItem',
+            position: 1,
+            name: t('blog.title'),
+            item: `${SITE_URL}/blog`
+          },
+          {
+            '@type': 'ListItem',
+            position: 2,
+            name: post.title,
+            item: postUrl
+          }
+        ]
+      }
+    ]
   };
-  if (post.coverImage) {
-    jsonLd.image = post.coverImage;
-  }
 
   return (
     <div className="blog-post-page">
@@ -86,13 +108,16 @@ function BlogPost() {
         <meta property="og:title" content={metaTitle} />
         <meta property="og:description" content={metaDescription} />
         {post.coverImage && <meta property="og:image" content={post.coverImage} />}
-        <meta property="og:url" content={`https://cellarion.app/blog/${post.slug}`} />
+        <meta property="og:url" content={postUrl} />
         <meta property="article:published_time" content={post.publishedAt} />
         <meta name="twitter:card" content="summary_large_image" />
         <meta name="twitter:title" content={metaTitle} />
         <meta name="twitter:description" content={metaDescription} />
         {post.coverImage && <meta name="twitter:image" content={post.coverImage} />}
-        <link rel="canonical" href={`https://cellarion.app/blog/${post.slug}`} />
+        <link rel="canonical" href={postUrl} />
+        <link rel="alternate" hrefLang="en" href={postUrl} />
+        <link rel="alternate" hrefLang="sv" href={postUrl} />
+        <link rel="alternate" hrefLang="x-default" href={postUrl} />
         <script type="application/ld+json">{JSON.stringify(jsonLd)}</script>
       </Helmet>
 

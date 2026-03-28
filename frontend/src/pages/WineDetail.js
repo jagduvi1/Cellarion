@@ -102,6 +102,9 @@ export default function WineDetail() {
         <meta name="twitter:description" content={metaDescription} />
         <meta name="twitter:image" content={imageUrl} />
         <link rel="canonical" href={pageUrl} />
+        <link rel="alternate" hrefLang="en" href={pageUrl} />
+        <link rel="alternate" hrefLang="sv" href={pageUrl} />
+        <link rel="alternate" hrefLang="x-default" href={pageUrl} />
         <script type="application/ld+json">{JSON.stringify(jsonLd)}</script>
       </Helmet>
 
