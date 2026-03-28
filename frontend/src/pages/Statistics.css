@@ -149,6 +149,7 @@
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 1.25rem;
+  max-width: 100%;
 }
 
 .stats-card {
@@ -157,6 +158,9 @@
   border-radius: var(--radius-md);
   padding: 1.5rem;
   animation: stats-fade-in 0.3s ease both;
+  min-width: 0;
+  overflow: hidden;
+  box-sizing: border-box;
 }
 
 @keyframes stats-fade-in {
