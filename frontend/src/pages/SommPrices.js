@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import { CURRENCIES } from '../config/currencies';
 import { fetchRates, convertAmountHistorical } from '../utils/currency';
+import WineImage from '../components/WineImage';
 import './SommPrices.css';
 
 function timeAgo(dateStr) {
@@ -184,12 +185,7 @@ function PriceCard({ item, defaultCurrency, userCurrency, rates, onSaved }) {
       {/* ── Header ── */}
       <div className="somm-card-header" onClick={() => setExpanded(o => !o)}>
         <div className="somm-card-identity">
-          {wine?.image ? (
-            <img src={wine.image} alt={wine?.name} className="somm-wine-thumb"
-              onError={e => { e.target.style.display = 'none'; }} />
-          ) : (
-            <div className={`somm-wine-thumb-placeholder ${wine?.type || 'red'}`} />
-          )}
+          <WineImage image={wine?.image} alt={wine?.name} className="somm-wine-thumb" wineType={wine?.type} placeholder="somm-wine-thumb-placeholder" />
           <div>
             <span className="somm-wine-name">{wine?.name || 'Unknown'}</span>
             <span className="somm-wine-meta">

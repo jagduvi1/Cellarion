@@ -5,6 +5,7 @@ import { searchWines, getWine, findOrCreateWine, identifyWineByText } from '../a
 import { addToWishlist } from '../api/wishlist';
 import '../components/ImageUpload.css';
 import './AddBottle.css';
+import WineImage from '../components/WineImage';
 import './AddToWishlist.css';
 
 const WINE_TYPES = ['red', 'white', 'rosé', 'sparkling', 'dessert', 'fortified'];
@@ -597,13 +598,7 @@ function AddToWishlist() {
                 <div className="wines-list">
                   {wines.map(wine => (
                     <div key={wine._id} className="wine-row" onClick={() => handleSelectWine(wine)}>
-                      {wine.image ? (
-                        <div className="wine-row-img-wrap">
-                          <img src={wine.image} alt={wine.name} className="wine-row-image" onError={(e) => { e.target.style.display = 'none'; }} />
-                        </div>
-                      ) : (
-                        <div className={`wine-row-placeholder ${wine.type}`}></div>
-                      )}
+                      <WineImage image={wine.image} alt={wine.name} className="wine-row-image" wrapClass="wine-row-img-wrap" wineType={wine.type} placeholder="wine-row-placeholder" />
                       <div className="wine-info">
                         <h3>{wine.name}</h3>
                         <p className="producer">{wine.producer}</p>

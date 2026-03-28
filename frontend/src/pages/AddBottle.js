@@ -6,6 +6,7 @@ import { searchWines, findOrCreateWine, identifyWineByText } from '../api/wines'
 import { CURRENCIES } from '../config/currencies';
 import ImageUpload from '../components/ImageUpload';
 import RatingInput from '../components/RatingInput';
+import WineImage from '../components/WineImage';
 import './AddBottle.css';
 
 const WINE_TYPES = ['red', 'white', 'rosé', 'sparkling', 'dessert', 'fortified'];
@@ -664,14 +665,7 @@ function AddBottle() {
                 <div className="wines-list">
                   {wines.map(wine => (
                     <div key={wine._id} className="wine-row" onClick={() => handleSelectWine(wine)}>
-                      {wine.image ? (
-                        <div className="wine-row-img-wrap">
-                          <img src={wine.image} alt={wine.name} className="wine-row-image" onError={(e) => { e.target.style.display = 'none'; }} />
-                          {wine.imageCredit && <span className="wine-row-credit">{wine.imageCredit}</span>}
-                        </div>
-                      ) : (
-                        <div className={`wine-row-placeholder ${wine.type}`}></div>
-                      )}
+                      <WineImage image={wine.image} alt={wine.name} className="wine-row-image" wrapClass="wine-row-img-wrap" credit={wine.imageCredit} creditClass="wine-row-credit" wineType={wine.type} placeholder="wine-row-placeholder" />
                       <div className="wine-info">
                         <h3>{wine.name}</h3>
                         <p className="producer">{wine.producer}</p>

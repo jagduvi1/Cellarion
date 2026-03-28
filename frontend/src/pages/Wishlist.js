@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { getWishlist, updateWishlistItem, removeWishlistItem } from '../api/wishlist';
 import Modal from '../components/Modal';
 import './AddBottle.css';
+import WineImage from '../components/WineImage';
 import './Wishlist.css';
 
 const PRIORITY_LABELS = { high: 'High', medium: 'Medium', low: 'Low' };
@@ -123,10 +124,9 @@ function Wishlist() {
     }
   };
 
-  const wineImage = (wd) => {
-    if (wd?.image) return <img src={wd.image} alt={wd.name} className="wishlist-wine-img" onError={(e) => { e.target.style.display = 'none'; }} />;
-    return <div className={`wishlist-wine-placeholder ${wd?.type || 'red'}`} />;
-  };
+  const wineImage = (wd) => (
+    <WineImage image={wd?.image} alt={wd?.name} className="wishlist-wine-img" wineType={wd?.type} placeholder="wishlist-wine-placeholder" />
+  );
 
   return (
     <div className="wishlist-page">

@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
+import WineImage from '../components/WineImage';
 import './SommMaturity.css';
 
 const CURRENT_YEAR = new Date().getFullYear();
@@ -216,12 +217,7 @@ function ProfileCard({ profile, isPending, onSaved, onReset }) {
       {/* ── Card header (click to expand) ── */}
       <div className="somm-card-header" onClick={() => setExpanded(o => !o)}>
         <div className="somm-card-identity">
-          {wine?.image ? (
-            <img src={wine.image} alt={wine?.name} className="somm-wine-thumb"
-              onError={e => { e.target.style.display = 'none'; }} />
-          ) : (
-            <div className={`somm-wine-thumb-placeholder ${wine?.type || 'red'}`} />
-          )}
+          <WineImage image={wine?.image} alt={wine?.name} className="somm-wine-thumb" wineType={wine?.type} placeholder="somm-wine-thumb-placeholder" />
           <div>
             <span className="somm-wine-name">{wine?.name || 'Unknown'}</span>
             <span className="somm-wine-meta">

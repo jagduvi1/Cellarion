@@ -6,6 +6,8 @@ import { useAuth } from '../contexts/AuthContext';
 import { fromNormalized } from '../utils/ratingUtils';
 import Layout from '../components/Layout';
 import SITE_URL from '../config/siteUrl';
+import WineImage from '../components/WineImage';
+import { getWineImageUrl } from '../utils/wineImageUrl';
 import './WineDetail.css';
 
 const API_URL = process.env.REACT_APP_API_URL || '';
@@ -56,9 +58,7 @@ export default function WineDetail() {
   ].filter(Boolean).join(' · ');
   const metaDescription = `${pageTitle}. ${description}. Discover, track, and manage your wine cellar with Cellarion.`;
   const pageUrl = `${SITE_URL}/wines/${wine._id}`;
-  const wineImageSrc = wine.image
-    ? (wine.image.startsWith('/api/') || wine.image.startsWith('http') ? `${API_URL}${wine.image}` : `${API_URL}/api/uploads/${wine.image}`)
-    : null;
+  const wineImageSrc = getWineImageUrl(wine.image);
   const imageUrl = wineImageSrc || `${SITE_URL}/cellarion-logo.jpg`;
   const grapeNames = wine.grapes?.map(g => g.name).filter(Boolean) || [];
 
@@ -109,16 +109,7 @@ export default function WineDetail() {
       </Helmet>
 
       <div className="wd-card">
-        {wine.image && (
-          <div className="wd-image-wrap">
-            <img
-              src={wine.image.startsWith('/api/') || wine.image.startsWith('http') ? `${API_URL}${wine.image}` : `${API_URL}/api/uploads/${wine.image}`}
-              alt={wine.name}
-              className="wd-image"
-              onError={(e) => { e.target.closest('.wd-image-wrap').style.display = 'none'; }}
-            />
-          </div>
-        )}
+        <WineImage image={wine.image} alt={wine.name} className="wd-image" wrapClass="wd-image-wrap" />
 
         <div className="wd-info">
           <h1 className="wd-name">{wine.name}</h1>

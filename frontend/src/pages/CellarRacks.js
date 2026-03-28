@@ -10,6 +10,7 @@ import { getTotalSlots, getModularTotalSlots } from '../utils/rackLayouts';
 import RackRenderer from '../components/racks/RackRenderer';
 import RackTypeSelector, { TYPE_DIMENSIONS } from '../components/racks/RackTypeSelector';
 import RatingInput from '../components/RatingInput';
+import WineImage from '../components/WineImage';
 import './CellarRacks.css';
 
 function CellarRacks() {
@@ -582,9 +583,7 @@ function FilledSlotContent({ position, slot, canEdit, onRemoveFromRack, onConsum
       </div>
 
       <div className="slot-bottle-detail">
-        {wine?.image && (
-          <img src={wine.image} alt={wine.name} className="slot-detail-img" onError={e => e.target.style.display = 'none'} />
-        )}
+        <WineImage image={wine?.image} alt={wine?.name} className="slot-detail-img" />
         <div className="slot-detail-info">
           <h4>{wine?.name || 'Unknown'}</h4>
           {wine?.producer && <p className="slot-detail-producer">{wine.producer}</p>}

@@ -10,6 +10,7 @@ import { getCellarLayout, saveCellarLayout } from '../api/cellarLayout';
 import { getPlacedBottleIds } from '../utils/rackUtils';
 import RoomScene from '../components/room/RoomScene';
 import { getRackHeight, clampToRoom } from '../utils/roomConstants';
+import WineImage from '../components/WineImage';
 import './CellarRoom.css';
 
 const DEFAULT_DIMENSIONS = { width: 10, depth: 10, height: 3 };
@@ -1080,14 +1081,7 @@ export default function CellarRoom() {
                   <h3>{wine?.name || t('common.unknown', 'Unknown')}</h3>
                   <button className="room-bottle-panel-close" onClick={() => setSelectedBottle(null)} aria-label="Close">&times;</button>
                 </div>
-                {wine?.image && (
-                  <img
-                    src={wine.image}
-                    alt={wine.name}
-                    className="room-bottle-panel-img"
-                    onError={e => { e.target.style.display = 'none'; }}
-                  />
-                )}
+                <WineImage image={wine?.image} alt={wine?.name} className="room-bottle-panel-img" />
                 <div className="room-bottle-panel-info">
                   {wine?.producer && <p className="room-bottle-producer">{wine.producer}</p>}
                   <div className="room-bottle-meta">

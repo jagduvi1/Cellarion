@@ -6,7 +6,7 @@ import { getRecommendations, getSentRecommendations, updateRecommendationStatus,
 import { addToWishlist } from '../api/wishlist';
 import './Recommendations.css';
 
-const API_URL = process.env.REACT_APP_API_URL || '';
+import WineImage from '../components/WineImage';
 
 function timeAgo(dateStr) {
   const seconds = Math.floor((Date.now() - new Date(dateStr)) / 1000);
@@ -108,13 +108,7 @@ export default function Recommendations() {
           {items.map((rec) => (
             <li key={rec._id} className={`rec-card ${rec.status === 'pending' && tab === 'received' ? 'rec-card--unread' : ''}`}>
               <div className="rec-card__wine">
-                {rec.wine?.image && (
-                  <img
-                    src={`${API_URL}/api/uploads/${rec.wine.image}`}
-                    alt=""
-                    className="rec-card__img"
-                  />
-                )}
+                <WineImage image={rec.wine?.image} className="rec-card__img" />
                 <div className="rec-card__info">
                   <strong className="rec-card__name">{rec.wine?.name || 'Unknown wine'}</strong>
                   {rec.wine?.producer && (

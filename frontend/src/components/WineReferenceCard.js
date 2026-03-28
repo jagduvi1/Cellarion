@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { getWine } from '../api/wines';
 import Modal from './Modal';
+import WineImage from './WineImage';
 import './WineReferenceCard.css';
 
 /**
@@ -64,11 +65,7 @@ export default function WineReferenceCard({ wine }) {
             <div className="wine-modal__loading">Loading wine details...</div>
           ) : (
             <div className="wine-modal">
-              {detail.image && (
-                <div className="wine-modal__image-wrap">
-                  <img src={detail.image} alt={detail.name} className="wine-modal__image" onError={(e) => { e.target.style.display = 'none'; }} />
-                </div>
-              )}
+              <WineImage image={detail.image} alt={detail.name} className="wine-modal__image" wrapClass="wine-modal__image-wrap" />
               <div className="wine-modal__header">
                 <span className={`wine-modal__type-badge ${detail.type || ''}`}>
                   {detail.type ? detail.type.charAt(0).toUpperCase() + detail.type.slice(1) : 'Wine'}

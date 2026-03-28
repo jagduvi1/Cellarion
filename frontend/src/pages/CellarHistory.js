@@ -3,6 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import RatingDisplay from '../components/RatingDisplay';
+import WineImage from '../components/WineImage';
 import './CellarHistory.css';
 
 const REASON_CONFIG = {
@@ -186,14 +187,7 @@ function HistoryBottleCard({ bottle, cellarId }) {
       className={`history-bottle-card ${bottle.consumedReason || bottle.status}`}
     >
       <div className="history-bottle-main">
-        {wine?.image && (
-          <img
-            src={wine.image}
-            alt={wine.name}
-            className="history-bottle-image"
-            onError={(e) => { e.target.style.display = 'none'; }}
-          />
-        )}
+        <WineImage image={wine?.image} alt={wine?.name} className="history-bottle-image" />
         <div className="history-bottle-info">
           <h3>{wine?.name || t('common.unknownWine')}</h3>
           <p className="history-producer">{wine?.producer}</p>
