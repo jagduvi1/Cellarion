@@ -4,11 +4,11 @@ import { useTranslation } from 'react-i18next';
 import { Helmet } from 'react-helmet-async';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
+import SITE_URL from '../config/siteUrl';
 import './LandingPage.css';
 
 const LOGO_LIGHT = process.env.PUBLIC_URL + '/cellarion-logo-light.png';
 const LOGO_DARK  = process.env.PUBLIC_URL + '/cellarion-logo-dark.png';
-const SITE_URL = process.env.REACT_APP_SITE_URL || 'https://cellarion.app';
 
 export default function LandingPage() {
   const { t, i18n } = useTranslation();

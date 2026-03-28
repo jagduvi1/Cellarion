@@ -1,7 +1,6 @@
 import { Helmet } from 'react-helmet-async';
+import SITE_URL from '../config/siteUrl';
 import './PrivacyPolicy.css';
-
-const SITE_URL = process.env.REACT_APP_SITE_URL || 'https://cellarion.app';
 
 function PrivacyPolicy() {
   return (

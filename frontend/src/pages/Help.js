@@ -2,9 +2,8 @@ import { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Helmet } from 'react-helmet-async';
 import { getHelpContent } from '../api/help';
+import SITE_URL from '../config/siteUrl';
 import './Help.css';
-
-const SITE_URL = process.env.REACT_APP_SITE_URL || 'https://cellarion.app';
 
 const SECTION_KEYS = [
   'cellars', 'bottles', 'labelScan', 'sharing', 'racks', 'roomView',

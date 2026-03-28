@@ -4,9 +4,8 @@ import { useTranslation } from 'react-i18next';
 import { Helmet } from 'react-helmet-async';
 import { getBlogPosts, getBlogTags } from '../api/blog';
 import { useAuth } from '../contexts/AuthContext';
+import SITE_URL from '../config/siteUrl';
 import './Blog.css';
-
-const SITE_URL = process.env.REACT_APP_SITE_URL || 'https://cellarion.app';
 
 function Blog() {
   const { t } = useTranslation();

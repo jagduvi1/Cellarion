@@ -8,6 +8,7 @@ import { getCellarLayout } from '../api/cellarLayout';
 import { buildRackUrl } from '../utils/rackNavigation';
 import { toInputDate, getMaturityStatus } from '../utils/drinkStatus';
 import { fetchRates, convertAmount, convertAmountHistorical } from '../utils/currency';
+import SITE_URL from '../config/siteUrl';
 import { calculatePriceChange } from '../utils/priceHistoryUtils';
 import { getMaturityPhases, isPhaseActive } from '../utils/maturityUtils';
 import { CURRENCIES } from '../config/currencies';
@@ -300,7 +301,7 @@ function BottleDetail() {
                 <ShareButton
                   title={displayName}
                   text={`Check out ${displayName}${displayProducer ? ` by ${displayProducer}` : ''} on Cellarion`}
-                  url={`${process.env.REACT_APP_SITE_URL || 'https://cellarion.app'}/wines/${wine._id}`}
+                  url={`${SITE_URL}/wines/${wine._id}`}
                   onRecommend={() => setRecommendOpen(true)}
                   variant="icon"
                 />

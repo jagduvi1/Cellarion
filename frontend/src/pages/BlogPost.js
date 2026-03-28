@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { Helmet } from 'react-helmet-async';
 import { getBlogPost } from '../api/blog';
 import { useAuth } from '../contexts/AuthContext';
+import SITE_URL from '../config/siteUrl';
 import './Blog.css';
 
 function BlogPost() {
@@ -50,7 +51,6 @@ function BlogPost() {
   const metaTitle = post.metaTitle || post.title;
   const metaDescription = post.metaDescription || post.excerpt || `${post.title} — Cellarion Blog`;
 
-  const SITE_URL = process.env.REACT_APP_SITE_URL || 'https://cellarion.app';
   const postUrl = `${SITE_URL}/blog/${post.slug}`;
 
   // JSON-LD structured data for SEO

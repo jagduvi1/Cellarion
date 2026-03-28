@@ -88,9 +88,10 @@ function TourOverlay() {
         return;
       }
 
+      const rect = el.getBoundingClientRect();
       setTargetRect(computePaddedRect(el));
 
-      if (el.getBoundingClientRect().top < 0 || el.getBoundingClientRect().bottom > window.innerHeight) {
+      if (rect.top < 0 || rect.bottom > window.innerHeight) {
         el.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }
 

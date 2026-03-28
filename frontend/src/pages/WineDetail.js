@@ -5,10 +5,10 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import { fromNormalized } from '../utils/ratingUtils';
 import Layout from '../components/Layout';
+import SITE_URL from '../config/siteUrl';
 import './WineDetail.css';
 
 const API_URL = process.env.REACT_APP_API_URL || '';
-const SITE_URL = process.env.REACT_APP_SITE_URL || 'https://cellarion.app';
 
 export default function WineDetail() {
   const { t } = useTranslation();
