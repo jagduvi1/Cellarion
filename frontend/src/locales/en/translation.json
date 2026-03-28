@@ -1648,5 +1648,19 @@
     "declining": "Declining",
     "notReady": "Not Ready",
     "noData": "No Maturity Data"
+  },
+
+  "cellarCred": {
+    "newcomer": "Newcomer",
+    "contributor": "Contributor",
+    "enthusiast": "Enthusiast",
+    "connoisseur": "Connoisseur",
+    "ambassador": "Ambassador",
+    "curator": "Curator",
+    "photographer": "Photographer",
+    "critic": "Critic",
+    "community": "Community",
+    "allrounder": "All-Rounder",
+    "score": "Cellar Cred"
   }
 }

@@ -1648,5 +1648,19 @@
     "declining": "Avtagande",
     "notReady": "Ej redo",
     "noData": "Ingen mognadsdata"
+  },
+
+  "cellarCred": {
+    "newcomer": "Nykomling",
+    "contributor": "Bidragsgivare",
+    "enthusiast": "Entusiast",
+    "connoisseur": "Konnässör",
+    "ambassador": "Ambassadör",
+    "curator": "Kurator",
+    "photographer": "Fotograf",
+    "critic": "Kritiker",
+    "community": "Gemenskap",
+    "allrounder": "Allroundare",
+    "score": "Cellar Cred"
   }
 }

@@ -257,7 +257,7 @@ router.get('/search', requireAuth, async (req, res) => {
 router.get('/public/:userId', requireAuth, async (req, res) => {
   try {
     const user = await User.findById(req.params.userId)
-      .select('username displayName bio followersCount followingCount reviewCount profileVisibility createdAt preferences.ratingScale');
+      .select('username displayName bio followersCount followingCount reviewCount profileVisibility createdAt preferences.ratingScale contribution');
 
     if (!user) return res.status(404).json({ error: 'User not found' });
 
@@ -278,6 +278,7 @@ router.get('/public/:userId', requireAuth, async (req, res) => {
         profileVisibility: user.profileVisibility,
         ratingScale: user.preferences?.ratingScale || '5',
         createdAt: user.createdAt,
+        contribution: user.contribution || { totalScore: 0, tier: 'newcomer', specialty: null, categories: {} },
         isFollowing
       }
     });
@@ -337,7 +338,8 @@ router.get('/me/export', requireAuth, async (req, res) => {
         profileVisibility: user.profileVisibility,
         emailVerified: user.emailVerified,
         gdprConsent: user.gdprConsent,
-        createdAt: user.createdAt
+        createdAt: user.createdAt,
+        contribution: user.contribution || { totalScore: 0, categories: {}, tier: 'newcomer', specialty: null, rewardsGranted: [] }
       },
       bottles,
       cellars,

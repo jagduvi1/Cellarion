@@ -3,6 +3,7 @@ const router = express.Router();
 const WineReport = require('../../models/WineReport');
 const { requireAuth, requireRole } = require('../../middleware/auth');
 const { logAudit } = require('../../services/audit');
+const { incrementCred } = require('../../utils/cellarCred');
 
 const REPORT_STATUSES = ['pending', 'resolved', 'dismissed'];
 const REPORT_REASONS = ['wrong_info', 'duplicate', 'inappropriate', 'other'];
@@ -76,6 +77,9 @@ router.put('/:id/resolve', async (req, res) => {
     report.resolvedBy = req.user.id;
     report.resolvedAt = new Date();
     await report.save();
+
+    // Award Cellar Cred to the reporter
+    incrementCred(report.user, 'wine_report_resolved').catch(() => {});
 
     logAudit(req, 'wine.report.resolved', { type: 'WineReport', id: report._id }, {
       wineDefinitionId: report.wineDefinition

@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import RatingDisplay from './RatingDisplay';
 import { toggleLike } from '../api/reviews';
+import CellarCredBadge from './CellarCredBadge';
 import './ReviewCard.css';
 
 function timeAgo(dateStr) {
@@ -61,6 +62,7 @@ export default function ReviewCard({ review, showWine = true, onUpdate }) {
           <Link to={`/users/${author._id}`} className="review-card__author-link">
             {authorName}
           </Link>
+          <CellarCredBadge tier={author.contribution?.tier} specialty={author.contribution?.specialty} />
           {review.vintage && (
             <span className="review-card__vintage">{review.vintage}</span>
           )}

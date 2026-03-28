@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import CategoryBadge from './CategoryBadge';
+import CellarCredBadge from './CellarCredBadge';
 import './DiscussionCard.css';
 
 function timeAgo(dateStr) {
@@ -54,6 +55,7 @@ export default function DiscussionCard({ discussion }) {
           </Link>
           {author.roles?.includes('moderator') && <span className="badge badge--mod">Mod</span>}
           {author.roles?.includes('admin') && <span className="badge badge--admin">Admin</span>}
+          <CellarCredBadge tier={author.contribution?.tier} specialty={author.contribution?.specialty} />
         </span>
         <span className="discussion-card__stats">
           <span className="discussion-card__replies">

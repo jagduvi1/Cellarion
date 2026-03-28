@@ -7,6 +7,7 @@ const { generateWineKey } = require('../../utils/normalize');
 const searchService = require('../../services/search');
 const { logAudit } = require('../../services/audit');
 const { createNotification } = require('../../services/notifications');
+const { incrementCred } = require('../../utils/cellarCred');
 
 const router = express.Router();
 
@@ -144,6 +145,10 @@ router.put('/:id/resolve', async (req, res) => {
     wineRequest.adminNotes = adminNotes?.trim() || '';
 
     await wineRequest.save();
+
+    // Award Cellar Cred to the submitting user
+    const credEvent = wineRequest.requestType === 'grape_suggestion' ? 'grape_suggestion_approved' : 'wine_request_approved';
+    incrementCred(wineRequest.user, credEvent).catch(() => {});
 
     // Backfill any bottles that were imported while waiting for this wine
     let backfilledCount = 0;

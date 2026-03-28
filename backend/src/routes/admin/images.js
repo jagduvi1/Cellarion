@@ -6,6 +6,7 @@ const searchService = require('../../services/search');
 const { reprocessAllImages } = require('../../services/imageProcessor');
 const { logAudit } = require('../../services/audit');
 const { createNotification } = require('../../services/notifications');
+const { incrementCred } = require('../../utils/cellarCred');
 const { parsePagination } = require('../../utils/pagination');
 
 const router = express.Router();
@@ -64,6 +65,9 @@ router.put('/:id/approve', async (req, res) => {
     image.reviewedBy = req.user.id;
     image.reviewedAt = new Date();
     await image.save();
+
+    // Award Cellar Cred to the uploader
+    incrementCred(image.uploadedBy, 'image_approved').catch(() => {});
 
     // Auto-assign as wine image if the wine doesn't already have one
     const wineDefId = image.wineDefinition;
@@ -233,6 +237,9 @@ router.put('/:id/assign-to-wine', async (req, res) => {
     image.assignedToWine = true;
     image.wineDefinition = wineDefId;
     await image.save();
+
+    // Award Cellar Cred for official wine image assignment
+    incrementCred(image.uploadedBy, 'image_assigned_official').catch(() => {});
 
     // Update WineDefinition.image to the processed URL (or original if not processed)
     const imageUrl = image.processedUrl || image.originalUrl;

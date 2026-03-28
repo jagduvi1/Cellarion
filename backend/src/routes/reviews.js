@@ -8,6 +8,7 @@ const User = require('../models/User');
 const Follow = require('../models/Follow');
 const { resolveRating } = require('../utils/ratingUtils');
 const { stripHtml } = require('../utils/sanitize');
+const { incrementCred } = require('../utils/cellarCred');
 const { logAudit } = require('../services/audit');
 const { updateWineCommunityRating } = require('../services/reviewAggregation');
 const { REVIEWS_PER_PAGE, REVIEWS_MAX_PER_PAGE, REVIEW_MAX_LENGTHS } = require('../config/constants');
@@ -86,15 +87,16 @@ router.post('/', async (req, res) => {
 
     await review.save();
 
-    // Fire-and-forget: update counts
+    // Fire-and-forget: update counts + Cellar Cred
     User.updateOne({ _id: req.user.id }, { $inc: { reviewCount: 1 } }).catch(() => {});
+    if (resolvedVisibility === 'public') incrementCred(req.user.id, 'review_created_public').catch(() => {});
     updateWineCommunityRating(new mongoose.Types.ObjectId(wineDefinition));
 
     logAudit(req, 'review.create', { type: 'review', id: review._id }, { wineDefinition, rating: resolvedRating });
 
     // Populate for response
     await review.populate([
-      { path: 'author', select: 'username displayName' },
+      { path: 'author', select: 'username displayName contribution.tier contribution.specialty' },
       { path: 'wineDefinition', select: 'name producer type', populate: { path: 'country', select: 'name' } }
     ]);
 
@@ -146,7 +148,7 @@ router.get('/wine/:wineId', async (req, res) => {
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit)
-        .populate('author', 'username displayName'),
+        .populate('author', 'username displayName contribution.tier contribution.specialty'),
       Review.countDocuments(filter)
     ]);
 
@@ -231,7 +233,7 @@ router.get('/feed', async (req, res) => {
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit)
-        .populate('author', 'username displayName')
+        .populate('author', 'username displayName contribution.tier contribution.specialty')
         .populate({ path: 'wineDefinition', select: 'name producer type', populate: { path: 'country', select: 'name' } }),
       Review.countDocuments(feedFilter)
     ]);
@@ -268,7 +270,7 @@ router.get('/discover', async (req, res) => {
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit)
-        .populate('author', 'username displayName')
+        .populate('author', 'username displayName contribution.tier contribution.specialty')
         .populate({ path: 'wineDefinition', select: 'name producer type', populate: { path: 'country', select: 'name' } }),
       Review.countDocuments(discoverFilter)
     ]);
@@ -295,7 +297,7 @@ router.get('/:id', async (req, res) => {
   try {
     if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid review ID' });
     const review = await Review.findById(req.params.id)
-      .populate('author', 'username displayName')
+      .populate('author', 'username displayName contribution.tier contribution.specialty')
       .populate({ path: 'wineDefinition', select: 'name producer type', populate: { path: 'country', select: 'name' } });
 
     if (!review) return res.status(404).json({ error: 'Review not found' });
@@ -355,7 +357,7 @@ router.put('/:id', async (req, res) => {
     logAudit(req, 'review.update', { type: 'review', id: review._id });
 
     await review.populate([
-      { path: 'author', select: 'username displayName' },
+      { path: 'author', select: 'username displayName contribution.tier contribution.specialty' },
       { path: 'wineDefinition', select: 'name producer type', populate: { path: 'country', select: 'name' } }
     ]);
 
@@ -419,6 +421,7 @@ router.post('/:id/like', async (req, res) => {
     } else {
       await new ReviewVote({ user: req.user.id, review: review._id }).save();
       await Review.updateOne({ _id: review._id }, { $inc: { likesCount: 1 } });
+      incrementCred(review.author.toString(), 'review_like_received').catch(() => {});
       res.json({ liked: true, likesCount: review.likesCount + 1 });
     }
   } catch (err) {

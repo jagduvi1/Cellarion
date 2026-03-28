@@ -7,6 +7,7 @@ import { getFollowers, getFollowing } from '../api/follows';
 import ReviewCard from '../components/ReviewCard';
 import FollowButton from '../components/FollowButton';
 import Modal from '../components/Modal';
+import CellarCredBadge from '../components/CellarCredBadge';
 import './UserProfile.css';
 
 function UserProfile() {
@@ -123,7 +124,10 @@ function UserProfile() {
             {displayName.charAt(0).toUpperCase()}
           </div>
           <div className="user-profile__details">
-            <h1 className="user-profile__name">{displayName}</h1>
+            <h1 className="user-profile__name">
+              {displayName}
+              {' '}<CellarCredBadge tier={profile.contribution?.tier} specialty={profile.contribution?.specialty} size="md" />
+            </h1>
             {profile.displayName && profile.displayName !== profile.username && (
               <p className="user-profile__username">@{profile.username}</p>
             )}

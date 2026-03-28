@@ -139,6 +139,23 @@ const userSchema = new mongoose.Schema({
     type: Number,
     default: 0
   },
+  // Cellar Cred — contribution score and badge system
+  contribution: {
+    totalScore:  { type: Number, default: 0 },
+    categories: {
+      curator:      { type: Number, default: 0 },
+      photographer: { type: Number, default: 0 },
+      critic:       { type: Number, default: 0 },
+      community:    { type: Number, default: 0 },
+    },
+    tier: {
+      type: String,
+      enum: ['newcomer', 'contributor', 'enthusiast', 'connoisseur', 'ambassador'],
+      default: 'newcomer',
+    },
+    specialty:      { type: String, default: null },
+    rewardsGranted: { type: [String], default: [] },
+  },
   profileVisibility: {
     type: String,
     enum: ['public', 'private'],

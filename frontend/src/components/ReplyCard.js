@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { toggleReplyLike, getReplyOriginal, banUser } from '../api/discussions';
 import WineReferenceCard from './WineReferenceCard';
+import CellarCredBadge from './CellarCredBadge';
 import './ReplyCard.css';
 
 function timeAgo(dateStr) {
@@ -138,6 +139,7 @@ export default function ReplyCard({ reply, discussionId, onReply, onEdit, onDele
         </Link>
         {author.roles?.includes('moderator') && <span className="badge badge--mod">Mod</span>}
         {author.roles?.includes('admin') && <span className="badge badge--admin">Admin</span>}
+        <CellarCredBadge tier={author.contribution?.tier} specialty={author.contribution?.specialty} />
         <span className="reply-card__time">{timeAgo(reply.createdAt)}</span>
         {reply.updatedAt !== reply.createdAt && (
           <span className="reply-card__edited">(edited)</span>

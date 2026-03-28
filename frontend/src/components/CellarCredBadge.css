@@ -1,0 +1,58 @@
+/* ── Cellar Cred Badge ─────────────────────────────────────────────────────── */
+.cred-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  border-radius: var(--radius-full);
+  font-weight: 500;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+/* Size variants */
+.cred-badge--sm {
+  font-size: 0.65rem;
+  padding: 1px 6px;
+}
+
+.cred-badge--md {
+  font-size: 0.75rem;
+  padding: 2px 8px;
+}
+
+/* Tier colours */
+.cred-badge--contributor {
+  background: #e8f5e9;
+  color: #2e7d32;
+  border: 1px solid #a5d6a7;
+}
+
+.cred-badge--enthusiast {
+  background: #e3f2fd;
+  color: #1565c0;
+  border: 1px solid #90caf9;
+}
+
+.cred-badge--connoisseur {
+  background: #fff8e1;
+  color: #f57f17;
+  border: 1px solid #ffe082;
+}
+
+.cred-badge--ambassador {
+  background: #fce4ec;
+  color: #ad1457;
+  border: 1px solid #f48fb1;
+}
+
+/* Icon sizing */
+.cred-badge__icon,
+.cred-badge__spec-icon {
+  font-size: 0.7em;
+  line-height: 1;
+}
+
+.cred-badge__sep {
+  opacity: 0.5;
+  margin: 0 0.05rem;
+}
