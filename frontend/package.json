@@ -59,6 +59,7 @@
   },
   "proxy": "http://backend:5000",
   "overrides": {
-    "yaml": "2.7.1"
+    "yaml": "2.8.3",
+    "serialize-javascript": "7.0.5"
   }
 }

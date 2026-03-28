@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import {
   getDiscussion, deleteDiscussion,
@@ -21,6 +22,7 @@ const CATEGORIES = Object.keys(CATEGORY_LABELS);
 function DiscussionDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const { apiFetch, user } = useAuth();
 
   const [discussion, setDiscussion] = useState(null);
