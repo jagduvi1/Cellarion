@@ -20,8 +20,13 @@ function CameraFocus({ target, controlsRef }) {
     if (!target || !animating.current) return;
     frameCount.current++;
 
-    // Position camera in front of the rack, slightly above and offset on Z
-    const goalPos = new THREE.Vector3(target.x, target.y + 0.8, target.z + 2.5);
+    // Position camera in front of the rack, rotated to match rack orientation
+    const rad = ((target.rotation || 0) * Math.PI) / 180;
+    const goalPos = new THREE.Vector3(
+      target.x + Math.sin(rad) * 2.5,
+      target.y + 0.8,
+      target.z + Math.cos(rad) * 2.5
+    );
     const goalTarget = new THREE.Vector3(target.x, target.y, target.z);
 
     const lerpFactor = 0.06;

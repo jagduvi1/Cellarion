@@ -105,6 +105,7 @@ export default function CellarRoom() {
       x: rp.position?.x || 0,
       y: rackHeight / 2 + (rp.position?.y || 0),
       z: rp.position?.z || 0,
+      rotation: rp.rotation || 0,
     };
   }, [focusRackId, layout, racks]);
 
