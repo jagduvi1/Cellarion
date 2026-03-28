@@ -7,6 +7,7 @@ import { addToWishlist } from '../api/wishlist';
 import './Recommendations.css';
 
 import WineImage from '../components/WineImage';
+import ConfirmModal from '../components/ConfirmModal';
 import timeAgo from '../utils/timeAgo';
 
 export default function Recommendations() {
@@ -16,6 +17,7 @@ export default function Recommendations() {
   const [items, setItems] = useState([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [confirmDeleteId, setConfirmDeleteId] = useState(null);
 
   useEffect(() => {
     fetchItems();
@@ -43,7 +45,6 @@ export default function Recommendations() {
   };
 
   const handleDelete = async (id) => {
-    if (!window.confirm(t('recommendations.confirmDelete', 'Delete this recommendation?'))) return;
     try {
       const res = await deleteRecommendation(apiFetch, id);
       if (res.ok) {
@@ -51,6 +52,7 @@ export default function Recommendations() {
         setTotal(prev => prev - 1);
       }
     } catch { /* ignore */ }
+    setConfirmDeleteId(null);
   };
 
   const handleAddToWishlist = async (rec) => {
@@ -156,7 +158,7 @@ export default function Recommendations() {
                   )}
                   <button
                     className="btn btn-small btn-danger"
-                    onClick={() => handleDelete(rec._id)}
+                    onClick={() => setConfirmDeleteId(rec._id)}
                   >
                     {t('recommendations.delete', 'Delete')}
                   </button>
@@ -173,6 +175,15 @@ export default function Recommendations() {
             </li>
           ))}
         </ul>
+      )}
+
+      {confirmDeleteId && (
+        <ConfirmModal
+          title={t('recommendations.delete', 'Delete')}
+          message={t('recommendations.confirmDelete', 'Delete this recommendation?')}
+          onConfirm={() => handleDelete(confirmDeleteId)}
+          onCancel={() => setConfirmDeleteId(null)}
+        />
       )}
     </div>
   );

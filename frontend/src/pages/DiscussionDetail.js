@@ -12,6 +12,7 @@ import ReplyCard from '../components/ReplyCard';
 import WineReferenceCard from '../components/WineReferenceCard';
 import WineSearchPicker from '../components/WineSearchPicker';
 import Modal from '../components/Modal';
+import ConfirmModal from '../components/ConfirmModal';
 import timeAgo from '../utils/timeAgo';
 import './DiscussionDetail.css';
 
@@ -47,6 +48,10 @@ function DiscussionDetail() {
   const [reportReason, setReportReason] = useState('');
   const [reportDetails, setReportDetails] = useState('');
   const [reporting, setReporting] = useState(false);
+
+  // Confirm modals
+  const [confirmDeleteReply, setConfirmDeleteReply] = useState(null); // reply object
+  const [confirmDeleteDiscussion, setConfirmDeleteDiscussion] = useState(false);
 
   // Mod: move modal
   const [showMove, setShowMove] = useState(false);
@@ -149,7 +154,6 @@ function DiscussionDetail() {
   };
 
   const handleDeleteReply = async (reply) => {
-    if (!window.confirm('Delete this reply? The text will be hidden but moderators can still review it.')) return;
     try {
       const res = await deleteReply(apiFetch, id, reply._id);
       if (res.ok) {
@@ -159,11 +163,12 @@ function DiscussionDetail() {
       }
     } catch {
       // silent
+    } finally {
+      setConfirmDeleteReply(null);
     }
   };
 
   const handleDeleteDiscussion = async () => {
-    if (!window.confirm('Delete this discussion and all its replies?')) return;
     try {
       const res = await deleteDiscussion(apiFetch, id);
       if (res.ok) {
@@ -171,6 +176,8 @@ function DiscussionDetail() {
       }
     } catch {
       // silent
+    } finally {
+      setConfirmDeleteDiscussion(false);
     }
   };
 
@@ -288,7 +295,7 @@ function DiscussionDetail() {
           )}
           {isMod && (
             <>
-              <button className="reply-card__action-btn reply-card__action-btn--danger" onClick={handleDeleteDiscussion}>
+              <button className="reply-card__action-btn reply-card__action-btn--danger" onClick={() => setConfirmDeleteDiscussion(true)}>
                 Delete
               </button>
               <button className="reply-card__action-btn" onClick={handlePin}>
@@ -329,7 +336,7 @@ function DiscussionDetail() {
                 }, 50);
               }}
               onEdit={(r) => { setEditingReply(r); setEditBody(r.body); }}
-              onDelete={handleDeleteReply}
+              onDelete={(r) => setConfirmDeleteReply(r)}
               onReport={(r) => setReportTarget({ type: 'reply', id: r._id })}
             />
           ))
@@ -467,6 +474,28 @@ function DiscussionDetail() {
             <button className="btn btn-primary" onClick={handleMove}>Move</button>
           </div>
         </Modal>
+      )}
+
+      {/* Confirm delete reply */}
+      {confirmDeleteReply && (
+        <ConfirmModal
+          title="Delete Reply"
+          message="Delete this reply?"
+          warning="The text will be hidden but moderators can still review it."
+          onConfirm={() => handleDeleteReply(confirmDeleteReply)}
+          onCancel={() => setConfirmDeleteReply(null)}
+        />
+      )}
+
+      {/* Confirm delete discussion */}
+      {confirmDeleteDiscussion && (
+        <ConfirmModal
+          title="Delete Discussion"
+          message="Delete this discussion and all its replies?"
+          warning="This action cannot be undone."
+          onConfirm={handleDeleteDiscussion}
+          onCancel={() => setConfirmDeleteDiscussion(false)}
+        />
       )}
     </div>
   );

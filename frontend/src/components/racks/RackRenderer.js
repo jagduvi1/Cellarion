@@ -95,15 +95,29 @@ export default function RackRenderer({
             {(rack.slots || []).length}/{layout.totalSlots} {t('racks.filled')}
           </span>
         </div>
-        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+        <div className="rack-header-actions">
           {canEdit && onNfcLink && (
-            <button className={`btn btn-small ${rack.rfidTag ? 'btn-secondary' : 'btn-outline'}`} onClick={onNfcLink}>
-              {rack.rfidTag ? t('racks.nfcLinked') : t('racks.nfcLink')}
+            <button
+              className={`rack-icon-btn ${rack.rfidTag ? 'rack-icon-btn--active' : ''}`}
+              onClick={onNfcLink}
+              title={rack.rfidTag ? t('racks.nfcLinked') : t('racks.nfcLink')}
+              aria-label={rack.rfidTag ? t('racks.nfcLinked') : t('racks.nfcLink')}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M6 8.32a7.43 7.43 0 0 1 0 7.36" /><path d="M9.46 6.21a11.76 11.76 0 0 1 0 11.58" /><path d="M12.91 4.1a15.91 15.91 0 0 1 .01 15.8" /><path d="M16.37 2a20.16 20.16 0 0 1 0 20" />
+              </svg>
             </button>
           )}
           {canEdit && (
-            <button className="btn btn-danger btn-small" onClick={onDelete}>
-              {t('racks.deleteRack')}
+            <button
+              className="rack-icon-btn rack-icon-btn--danger"
+              onClick={onDelete}
+              title={t('racks.deleteRack')}
+              aria-label={t('racks.deleteRack')}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+              </svg>
             </button>
           )}
         </div>

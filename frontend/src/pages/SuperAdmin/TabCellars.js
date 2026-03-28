@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { adminPermanentDeleteCellar } from '../../api/admin';
+import ConfirmModal from '../../components/ConfirmModal';
 import { fmtDate } from './helpers';
 
 function daysUntilPurge(deletedAt) {
@@ -18,6 +19,7 @@ export default function TabCellars() {
   const [restoring, setRestoring] = useState({});
   const [deleting, setDeleting] = useState({});
   const [notices, setNotices] = useState([]);
+  const [confirmDeleteCellar, setConfirmDeleteCellar] = useState(null); // cellar object
   const PAGE_SIZE = 50;
 
   const load = useCallback(async (q, p) => {
@@ -71,7 +73,6 @@ export default function TabCellars() {
   }
 
   async function permanentDelete(cellar) {
-    if (!window.confirm(`Permanently delete "${cellar.name}" and ALL its bottles and racks? This cannot be undone.`)) return;
     setDeleting(prev => ({ ...prev, [cellar._id]: true }));
     setError(null);
     try {
@@ -87,6 +88,7 @@ export default function TabCellars() {
       setError('Network error');
     } finally {
       setDeleting(prev => ({ ...prev, [cellar._id]: false }));
+      setConfirmDeleteCellar(null);
     }
   }
 
@@ -159,7 +161,7 @@ export default function TabCellars() {
                             <button
                               className="sa-btn sa-btn-danger"
                               disabled={busy}
-                              onClick={() => permanentDelete(c)}
+                              onClick={() => setConfirmDeleteCellar(c)}
                             >
                               {deleting[c._id] ? 'Deleting...' : 'Delete'}
                             </button>
@@ -193,6 +195,17 @@ export default function TabCellars() {
           )}
         </div>
       </div>
+
+      {confirmDeleteCellar && (
+        <ConfirmModal
+          title="Permanently Delete Cellar"
+          message={`Permanently delete "${confirmDeleteCellar.name}" and ALL its bottles and racks?`}
+          warning="This action cannot be undone."
+          confirmText={confirmDeleteCellar.name}
+          onConfirm={() => permanentDelete(confirmDeleteCellar)}
+          onCancel={() => setConfirmDeleteCellar(null)}
+        />
+      )}
     </>
   );
 }

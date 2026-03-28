@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import WineImage from '../components/WineImage';
+import ConfirmModal from '../components/ConfirmModal';
 import './SommMaturity.css';
 
 const CURRENT_YEAR = new Date().getFullYear();
@@ -122,6 +123,7 @@ function ProfileCard({ profile, isPending, onSaved, onReset }) {
   const [aiLoading, setAiLoading] = useState(false);
   const [aiMsg,     setAiMsg]     = useState(null);
   const [err,       setErr]       = useState(null);
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
 
   const [form, setForm] = useState({
     earlyFrom:  profile.earlyFrom  || '',
@@ -161,7 +163,6 @@ function ProfileCard({ profile, isPending, onSaved, onReset }) {
   };
 
   const handleReset = async () => {
-    if (!window.confirm(t('somm.maturity.resetConfirm'))) return;
     setResetting(true);
     try {
       const res = await apiFetch(`/api/somm/maturity/${profile._id}/reset`, {
@@ -169,11 +170,12 @@ function ProfileCard({ profile, isPending, onSaved, onReset }) {
       });
       const data = await res.json();
       if (res.ok) onReset(data.profile);
-      else alert(data.error || 'Failed to reset');
+      else setErr(data.error || 'Failed to reset');
     } catch {
-      alert('Network error');
+      setErr('Network error');
     } finally {
       setResetting(false);
+      setShowResetConfirm(false);
     }
   };
 
@@ -381,12 +383,23 @@ function ProfileCard({ profile, isPending, onSaved, onReset }) {
               {saving ? t('common.saving') : t('somm.maturity.markReviewed')}
             </button>
             {!isPending && (
-              <button type="button" className="btn btn-secondary" onClick={handleReset} disabled={resetting}>
+              <button type="button" className="btn btn-secondary" onClick={() => setShowResetConfirm(true)} disabled={resetting}>
                 {resetting ? t('somm.maturity.resetting') : t('somm.maturity.resetPending')}
               </button>
             )}
           </div>
         </form>
+      )}
+
+      {showResetConfirm && (
+        <ConfirmModal
+          title={t('somm.maturity.resetPending')}
+          message={t('somm.maturity.resetConfirm')}
+          confirmLabel={t('somm.maturity.resetPending')}
+          confirmClass="btn btn-danger btn-small"
+          onConfirm={handleReset}
+          onCancel={() => setShowResetConfirm(false)}
+        />
       )}
     </div>
   );

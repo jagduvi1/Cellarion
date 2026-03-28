@@ -6,6 +6,7 @@ import {
   adminCreateTaxonomy, adminUpdateTaxonomy, adminDeleteTaxonomy,
 } from '../api/admin';
 import GrapePicker from '../components/GrapePicker';
+import ConfirmModal from '../components/ConfirmModal';
 import './AdminTaxonomy.css';
 
 function AdminTaxonomy() {
@@ -21,6 +22,7 @@ function AdminTaxonomy() {
   const [allCountries, setAllCountries] = useState([]);
   const [allGrapes, setAllGrapes] = useState([]);
   const [allRegions, setAllRegions] = useState([]); // for parent region / appellation dropdowns
+  const [confirmDelete, setConfirmDelete] = useState(null); // id of item to delete
 
   const endpoints = {
     countries: '/api/admin/taxonomy/countries',
@@ -132,7 +134,6 @@ function AdminTaxonomy() {
   };
 
   const handleDelete = async (id) => {
-    if (!window.confirm('Delete this item?')) return;
     try {
       const res = await adminDeleteTaxonomy(apiFetch, endpoints[activeTab], id);
       const data = await res.json();
@@ -143,6 +144,8 @@ function AdminTaxonomy() {
       }
     } catch (err) {
       setError('Network error');
+    } finally {
+      setConfirmDelete(null);
     }
   };
 
@@ -626,7 +629,7 @@ function AdminTaxonomy() {
                     {t('common.edit')}
                   </button>
                   <button
-                    onClick={() => handleDelete(item._id)}
+                    onClick={() => setConfirmDelete(item._id)}
                     className="btn btn-danger btn-small"
                   >
                     {t('admin.taxonomy.deleteBtn')}
@@ -636,6 +639,16 @@ function AdminTaxonomy() {
             ))
           )}
         </div>
+      )}
+
+      {confirmDelete && (
+        <ConfirmModal
+          title={t('admin.taxonomy.deleteBtn')}
+          message={t('admin.taxonomy.confirmDeleteItem', 'Delete this item?')}
+          warning={t('admin.taxonomy.deleteWarning', 'This action cannot be undone.')}
+          onConfirm={() => handleDelete(confirmDelete)}
+          onCancel={() => setConfirmDelete(null)}
+        />
       )}
     </div>
   );

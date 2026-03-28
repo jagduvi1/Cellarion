@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import { getJournalEntries, deleteJournalEntry } from '../api/journal';
+import ConfirmModal from '../components/ConfirmModal';
 import './Journal.css';
 
 const JournalEntryForm = lazy(() => import('../components/JournalEntryForm'));
@@ -46,6 +47,7 @@ export default function Journal() {
   const [editEntry, setEditEntry] = useState(null);
   const [search, setSearch] = useState('');
   const [occasion, setOccasion] = useState('');
+  const [confirmDeleteId, setConfirmDeleteId] = useState(null);
 
   useEffect(() => {
     fetchEntries();
@@ -70,12 +72,12 @@ export default function Journal() {
   };
 
   const handleDelete = async (id) => {
-    if (!window.confirm(t('journal.confirmDelete', 'Delete this journal entry?'))) return;
     const res = await deleteJournalEntry(apiFetch, id);
     if (res.ok) {
       setEntries(prev => prev.filter(e => e._id !== id));
       setTotal(prev => prev - 1);
     }
+    setConfirmDeleteId(null);
   };
 
   const handleSaved = () => {
@@ -214,7 +216,7 @@ export default function Journal() {
                       <button className="journal-card__action" onClick={() => { setEditEntry(entry); setFormOpen(true); }}>
                         {t('journal.edit', 'Edit')}
                       </button>
-                      <button className="journal-card__action journal-card__action--danger" onClick={() => handleDelete(entry._id)}>
+                      <button className="journal-card__action journal-card__action--danger" onClick={() => setConfirmDeleteId(entry._id)}>
                         {t('journal.delete', 'Delete')}
                       </button>
                     </div>
@@ -224,6 +226,15 @@ export default function Journal() {
             </div>
           ))}
         </div>
+      )}
+
+      {confirmDeleteId && (
+        <ConfirmModal
+          title={t('journal.delete', 'Delete')}
+          message={t('journal.confirmDelete', 'Delete this journal entry?')}
+          onConfirm={() => handleDelete(confirmDeleteId)}
+          onCancel={() => setConfirmDeleteId(null)}
+        />
       )}
 
       {/* Form modal */}

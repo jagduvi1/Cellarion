@@ -142,6 +142,48 @@
   color: var(--color-text-muted);
 }
 
+/* ── Rack header icon buttons ── */
+.rack-header-actions {
+  display: flex;
+  gap: 0.35rem;
+  align-items: center;
+}
+
+.rack-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.rack-icon-btn:hover {
+  background: var(--color-surface-raised);
+  color: var(--color-text);
+}
+
+.rack-icon-btn--active {
+  color: var(--color-primary);
+  border-color: var(--color-primary);
+  background: rgba(var(--color-primary-rgb), 0.08);
+}
+
+.rack-icon-btn--active:hover {
+  background: rgba(var(--color-primary-rgb), 0.15);
+}
+
+.rack-icon-btn--danger:hover {
+  color: var(--color-danger);
+  border-color: var(--color-danger);
+  background: rgba(220, 53, 69, 0.08);
+}
+
 /* ---- Create mode toggle ---- */
 .new-rack-section {
   margin-bottom: 1.5rem;

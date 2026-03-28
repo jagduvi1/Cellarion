@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { toggleReplyLike, getReplyOriginal, banUser } from '../api/discussions';
 import WineReferenceCard from './WineReferenceCard';
 import CellarCredBadge from './CellarCredBadge';
+import ConfirmModal from './ConfirmModal';
 import timeAgo from '../utils/timeAgo';
 import './ReplyCard.css';
 
@@ -25,6 +26,7 @@ export default function ReplyCard({ reply, discussionId, onReply, onEdit, onDele
   const [originalBody, setOriginalBody] = useState(null);
   const [loadingOriginal, setLoadingOriginal] = useState(false);
   const [showBanMenu, setShowBanMenu] = useState(false);
+  const [confirmBan, setConfirmBan] = useState(null); // { duration, label }
 
   const author = reply.author || {};
   const authorName = author.displayName || author.username || 'Unknown';
@@ -32,17 +34,16 @@ export default function ReplyCard({ reply, discussionId, onReply, onEdit, onDele
   const isMod = user && (user.roles?.includes('moderator') || user.roles?.includes('admin'));
   const authorIsMod = author.roles?.includes('moderator') || author.roles?.includes('admin');
 
-  const handleBan = async (duration) => {
-    const label = { '10m': '10 minutes', '1h': '1 hour', '1d': '1 day', '1w': '1 week', 'permanent': 'permanently' }[duration];
-    if (!window.confirm(`Ban ${authorName} from discussions for ${label}?`)) return;
+  const handleBan = async (duration, label) => {
     try {
       const res = await banUser(apiFetch, author._id, duration);
       if (res.ok) {
         setShowBanMenu(false);
-        window.alert(`${authorName} has been banned for ${label}`);
       }
     } catch {
       // silent
+    } finally {
+      setConfirmBan(null);
     }
   };
 
@@ -182,14 +183,25 @@ export default function ReplyCard({ reply, discussionId, onReply, onEdit, onDele
             </button>
             {showBanMenu && (
               <div className="reply-card__ban-menu">
-                {[['10m', '10 min'], ['1h', '1 hour'], ['1d', '1 day'], ['1w', '1 week'], ['permanent', 'Permanent']].map(([val, label]) => (
-                  <button key={val} className="reply-card__ban-option" onClick={() => handleBan(val)}>{label}</button>
+                {[['10m', '10 minutes'], ['1h', '1 hour'], ['1d', '1 day'], ['1w', '1 week'], ['permanent', 'permanently']].map(([val, label]) => (
+                  <button key={val} className="reply-card__ban-option" onClick={() => setConfirmBan({ duration: val, label })}>{label}</button>
                 ))}
               </div>
             )}
           </div>
         )}
       </div>
+
+      {confirmBan && (
+        <ConfirmModal
+          title="Ban User"
+          message={`Ban ${authorName} from discussions for ${confirmBan.label}?`}
+          confirmLabel="Ban"
+          confirmClass="btn btn-warning btn-small"
+          onConfirm={() => handleBan(confirmBan.duration, confirmBan.label)}
+          onCancel={() => setConfirmBan(null)}
+        />
+      )}
     </div>
   );
 }
