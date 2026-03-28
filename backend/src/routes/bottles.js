@@ -111,7 +111,7 @@ router.post('/', async (req, res) => {
       currency: currency || 'USD',
       priceSetAt,
       bottleSize: bottleSize || '750ml',
-      purchaseDate,
+      purchaseDate: purchaseDate || new Date(),
       purchaseLocation: stripHtml(purchaseLocation),
       purchaseUrl,
       location: stripHtml(location),
