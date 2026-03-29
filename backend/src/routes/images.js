@@ -41,6 +41,8 @@ const bgRemovalLimiter = rateLimit({
   }
 });
 
+const MAX_IMAGE_DIMENSION = 8000; // max width or height in pixels
+
 // Validate image file by checking magic bytes (first 12 bytes)
 function validateImageMagicBytes(filePath) {
   const buf = Buffer.alloc(12);
@@ -62,6 +64,67 @@ function validateImageMagicBytes(filePath) {
   return false;
 }
 
+/**
+ * Read image dimensions from file headers without decoding the full image.
+ * Returns { width, height } or null if dimensions cannot be determined.
+ */
+function getImageDimensions(filePath) {
+  try {
+    const fd = fs.openSync(filePath, 'r');
+    try {
+      const header = Buffer.alloc(30);
+      fs.readSync(fd, header, 0, 30, 0);
+
+      // PNG: width at bytes 16-19, height at bytes 20-23 (big-endian in IHDR)
+      if (header[0] === 0x89 && header[1] === 0x50) {
+        return { width: header.readUInt32BE(16), height: header.readUInt32BE(20) };
+      }
+
+      // WebP: VP8 width/height at fixed offsets in RIFF container
+      if (header[0] === 0x52 && header[1] === 0x49 && header[8] === 0x57) {
+        // VP8 lossy
+        if (header[12] === 0x56 && header[13] === 0x50 && header[14] === 0x38 && header[15] === 0x20) {
+          const vp8 = Buffer.alloc(10);
+          fs.readSync(fd, vp8, 0, 10, 20);
+          // Frame tag at offset 3, then width/height as little-endian 16-bit
+          return { width: vp8.readUInt16LE(6) & 0x3FFF, height: vp8.readUInt16LE(8) & 0x3FFF };
+        }
+        // VP8L lossless
+        if (header[12] === 0x56 && header[13] === 0x50 && header[14] === 0x38 && header[15] === 0x4C) {
+          const vp8l = Buffer.alloc(5);
+          fs.readSync(fd, vp8l, 0, 5, 21);
+          const bits = vp8l.readUInt32LE(0);
+          return { width: (bits & 0x3FFF) + 1, height: ((bits >> 14) & 0x3FFF) + 1 };
+        }
+        return null;
+      }
+
+      // JPEG: scan for SOF0/SOF2 markers to find dimensions
+      if (header[0] === 0xFF && header[1] === 0xD8) {
+        const buf = Buffer.alloc(65536);
+        const bytesRead = fs.readSync(fd, buf, 0, buf.length, 0);
+        let pos = 2;
+        while (pos < bytesRead - 8) {
+          if (buf[pos] !== 0xFF) { pos++; continue; }
+          const marker = buf[pos + 1];
+          // SOF0 (0xC0) or SOF2 (0xC2) — baseline or progressive
+          if (marker === 0xC0 || marker === 0xC2) {
+            return { width: buf.readUInt16BE(pos + 7), height: buf.readUInt16BE(pos + 5) };
+          }
+          // Skip marker segment
+          const segLen = buf.readUInt16BE(pos + 2);
+          pos += 2 + segLen;
+        }
+      }
+    } finally {
+      fs.closeSync(fd);
+    }
+  } catch {
+    // If we can't read dimensions, let the upload proceed (fail open for dimension check)
+  }
+  return null;
+}
+
 const router = express.Router();
 
 // POST /api/images/upload - Upload image for a bottle or wine definition
@@ -75,6 +138,13 @@ router.post('/upload', requireAuth, upload.single('image'), async (req, res) => 
     if (!validateImageMagicBytes(req.file.path)) {
       safeUnlink(req.file.path);
       return res.status(400).json({ error: 'File content does not match a supported image format (JPEG, PNG, or WebP)' });
+    }
+
+    // Validate image dimensions to prevent pixel flood DoS
+    const dims = getImageDimensions(req.file.path);
+    if (dims && (dims.width > MAX_IMAGE_DIMENSION || dims.height > MAX_IMAGE_DIMENSION)) {
+      safeUnlink(req.file.path);
+      return res.status(400).json({ error: `Image dimensions too large (max ${MAX_IMAGE_DIMENSION}x${MAX_IMAGE_DIMENSION} pixels)` });
     }
 
     const { bottleId, wineDefinitionId, credit } = req.body;

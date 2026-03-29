@@ -116,15 +116,18 @@ async function search(query, { countryId, regionId, type, grapeIds, limit = 50, 
     throw new Error('Meilisearch is not available');
   }
 
-  // Build filter array — sanitize values to prevent filter injection
-  const sanitizeFilterValue = (v) => String(v).replace(/["\\]/g, '');
+  // Build filter array using Meilisearch array syntax (each element is ANDed).
+  // Validate IDs as hex ObjectIds and type against an allowlist to prevent injection.
+  const isObjectId = (v) => /^[a-f0-9]{24}$/i.test(String(v));
+  const VALID_TYPES = ['red', 'white', 'rosé', 'sparkling', 'dessert', 'fortified'];
   const filters = [];
-  if (countryId) filters.push(`countryId = "${sanitizeFilterValue(countryId)}"`);
-  if (regionId) filters.push(`regionId = "${sanitizeFilterValue(regionId)}"`);
-  if (type) filters.push(`type = "${sanitizeFilterValue(type)}"`);
+  if (countryId && isObjectId(countryId)) filters.push(`countryId = "${countryId}"`);
+  if (regionId && isObjectId(regionId)) filters.push(`regionId = "${regionId}"`);
+  if (type && VALID_TYPES.includes(String(type).toLowerCase())) filters.push(`type = "${type}"`);
   if (grapeIds && grapeIds.length > 0) {
-    const grapeFilter = grapeIds.map(id => `grapeIds = "${sanitizeFilterValue(id)}"`).join(' AND ');
-    filters.push(grapeFilter);
+    for (const id of grapeIds) {
+      if (isObjectId(id)) filters.push(`grapeIds = "${id}"`);
+    }
   }
 
   // Build sort array
@@ -138,7 +141,7 @@ async function search(query, { countryId, regionId, type, grapeIds, limit = 50, 
   }
 
   const result = await index.search(query, {
-    filter: filters.length > 0 ? filters.join(' AND ') : undefined,
+    filter: filters.length > 0 ? filters : undefined,
     sort: meiliSort.length > 0 ? meiliSort : undefined,
     limit,
     offset

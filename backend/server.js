@@ -17,6 +17,7 @@ const app = require('./src/app');
 const connectDB = require('./src/config/db');
 const searchService = require('./src/services/search');
 const { startScheduler } = require('./src/services/scheduler');
+const { cleanupOrphanedImages } = require('./src/services/imageProcessor');
 
 const PORT = process.env.PORT || 5000;
 
@@ -47,6 +48,10 @@ connectDB().then(async () => {
   const DiscussionReply = require('./src/models/DiscussionReply');
   DiscussionReply.purgeExpiredDeletes().catch(() => {});
   setInterval(() => DiscussionReply.purgeExpiredDeletes().catch(() => {}), 24 * 60 * 60 * 1000);
+
+  // Clean up orphaned images on startup and every hour
+  cleanupOrphanedImages().catch(() => {});
+  setInterval(() => cleanupOrphanedImages().catch(() => {}), 60 * 60 * 1000);
 
   // Start scheduled jobs (drink-window notifier, value snapshots)
   startScheduler();
