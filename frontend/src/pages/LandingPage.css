@@ -131,7 +131,7 @@
 }
 
 .landing-hero-logo-img {
-  height: clamp(320px, 50vw, 500px);
+  height: clamp(150px, 20vw, 180px);
   width: auto;
 }
 
