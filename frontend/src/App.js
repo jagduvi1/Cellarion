@@ -58,6 +58,8 @@ const Journal              = lazy(() => import('./pages/Journal'));
 const Restock              = lazy(() => import('./pages/Restock'));
 const WineDetail           = lazy(() => import('./pages/WineDetail'));
 const Help                 = lazy(() => import('./pages/Help'));
+const WineLists            = lazy(() => import('./pages/WineLists'));
+const WineListEditor       = lazy(() => import('./pages/WineListEditor'));
 
 function AppRoutes() {
   const { user, loading } = useAuth();
@@ -119,6 +121,22 @@ function AppRoutes() {
           element={
             <ProtectedRoute>
               <Layout><CellarRacks /></Layout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/cellars/:id/wine-lists"
+          element={
+            <ProtectedRoute>
+              <Layout><WineLists /></Layout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/cellars/:id/wine-lists/:listId/edit"
+          element={
+            <ProtectedRoute>
+              <Layout><WineListEditor /></Layout>
             </ProtectedRoute>
           }
         />

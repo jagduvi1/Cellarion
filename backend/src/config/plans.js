@@ -16,6 +16,7 @@ const PLANS = {
       agingMaturity: true,
       priceEvolution: false,
       restockAlerts: true,
+      wineLists: false,
     },
     featureList: [
       '1 cellar',
@@ -38,6 +39,7 @@ const PLANS = {
       agingMaturity: true,
       priceEvolution: false,
       restockAlerts: true,
+      wineLists: false,
     },
     featureList: [
       '5 cellars',
@@ -57,11 +59,13 @@ const PLANS = {
       agingMaturity: true,
       priceEvolution: true,
       restockAlerts: true,
+      wineLists: true,
     },
     featureList: [
       'Unlimited cellars',
       'Unlimited shared members per cellar',
       'Price evolution tracking',
+      'Wine list PDF generation',
       'Everything in Basic',
       'Cellar health score & Regret Index',
       'Urgency ladder, drink window forecast',

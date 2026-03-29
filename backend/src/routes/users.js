@@ -16,6 +16,7 @@ const JournalEntry = require('../models/JournalEntry');
 const RestockAlert = require('../models/RestockAlert');
 const PushSubscription = require('../models/PushSubscription');
 const CellarValueSnapshot = require('../models/CellarValueSnapshot');
+const WineList = require('../models/WineList');
 const { requireAuth, requireRole } = require('../middleware/auth');
 const { logAudit } = require('../services/audit');
 const { stripHtml } = require('../utils/sanitize');
@@ -315,7 +316,7 @@ router.get('/me/export', requireAuth, async (req, res) => {
     const user = await User.findById(userId);
     if (!user) return res.status(404).json({ error: 'User not found' });
 
-    const [bottles, cellars, racks, wineRequests, reviews, notifications, auditLogs, images, recommendationsSent, recommendationsReceived, journalEntries, restockAlerts] = await Promise.all([
+    const [bottles, cellars, racks, wineRequests, reviews, notifications, auditLogs, images, recommendationsSent, recommendationsReceived, journalEntries, restockAlerts, wineLists] = await Promise.all([
       Bottle.find({ user: userId }).lean(),
       Cellar.find({ $or: [{ user: userId }, { 'members.user': userId }], deletedAt: null }).lean(),
       Rack.find({ cellar: { $in: await Cellar.distinct('_id', { user: userId }) }, deletedAt: null }).lean(),
@@ -327,7 +328,8 @@ router.get('/me/export', requireAuth, async (req, res) => {
       Recommendation.find({ sender: userId }).populate('wine', 'name producer').lean(),
       Recommendation.find({ recipient: userId }).populate('wine', 'name producer').populate('sender', 'username').lean(),
       JournalEntry.find({ user: userId }).lean(),
-      RestockAlert.find({ user: userId }).lean()
+      RestockAlert.find({ user: userId }).lean(),
+      WineList.find({ user: userId }).select('name cellar structureMode branding layout createdAt updatedAt').lean()
     ]);
 
     const exportData = {
@@ -400,6 +402,13 @@ router.get('/me/export', requireAuth, async (req, res) => {
         wineProducer: a.wineProducer,
         status: a.status,
         createdAt: a.createdAt
+      })),
+      wineLists: wineLists.map(wl => ({
+        name: wl.name,
+        structureMode: wl.structureMode,
+        branding: wl.branding,
+        layout: wl.layout,
+        createdAt: wl.createdAt
       }))
     };
 

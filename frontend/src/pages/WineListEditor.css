@@ -1,0 +1,350 @@
+.wle-page {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 1.5rem 1rem;
+}
+
+.wle-header {
+  margin-bottom: 1rem;
+}
+
+.wle-header .back-link {
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+  text-decoration: none;
+}
+
+.wle-header .back-link:hover {
+  color: var(--color-primary);
+}
+
+.wle-header-row {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-top: 0.25rem;
+}
+
+.wle-title-input {
+  flex: 1;
+  font-size: 1.4rem;
+  font-weight: 700;
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--color-text);
+  padding: 0.25rem 0;
+  outline: none;
+}
+
+.wle-title-input:focus {
+  border-bottom-color: var(--color-primary);
+}
+
+.wle-header-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+/* Tabs */
+.wle-tabs {
+  display: flex;
+  gap: 0;
+  border-bottom: 2px solid var(--color-border);
+  margin-bottom: 1.5rem;
+}
+
+.wle-tab {
+  padding: 0.6rem 1.2rem;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 0.9rem;
+  color: var(--color-text-muted);
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  transition: color var(--transition-fast), border-color var(--transition-fast);
+}
+
+.wle-tab:hover {
+  color: var(--color-text);
+}
+
+.wle-tab.active {
+  color: var(--color-primary);
+  border-bottom-color: var(--color-primary);
+  font-weight: 600;
+}
+
+/* Section content */
+.wle-section {
+  animation: fadeIn 0.15s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* Structure mode toggle */
+.wle-mode-toggle {
+  display: flex;
+  gap: 1.5rem;
+  margin-bottom: 1.25rem;
+  font-size: 0.9rem;
+}
+
+.wle-mode-toggle label {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  cursor: pointer;
+}
+
+/* Auto-grouping options */
+.wle-auto-options {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+  flex-wrap: wrap;
+}
+
+.wle-auto-options .form-group {
+  flex: 1;
+  min-width: 200px;
+}
+
+/* Custom sections */
+.wle-custom-sections {
+  margin-bottom: 1.25rem;
+}
+
+.wle-section-block {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 0.75rem 1rem;
+  margin-bottom: 0.75rem;
+}
+
+.wle-section-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.wle-section-title-input {
+  flex: 1;
+  font-size: 1rem;
+  font-weight: 600;
+  border: none;
+  border-bottom: 1px solid var(--color-border);
+  background: transparent;
+  color: var(--color-text);
+  padding: 0.2rem 0;
+}
+
+.wle-section-title-input:focus {
+  outline: none;
+  border-bottom-color: var(--color-primary);
+}
+
+.wle-entry-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.3rem 0;
+  font-size: 0.85rem;
+}
+
+.wle-entry-name {
+  flex: 1;
+}
+
+.wle-move-select {
+  font-size: 0.75rem;
+  padding: 0.15rem 0.3rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
+}
+
+/* Subtitle */
+.wle-subtitle {
+  font-size: 1rem;
+  margin: 1.25rem 0 0.75rem;
+  color: var(--color-text-secondary);
+}
+
+/* Bulk pricing */
+.wle-bulk-pricing {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+  padding: 0.75rem 1rem;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  font-size: 0.85rem;
+}
+
+.wle-bulk-pricing input[type="number"] {
+  width: 80px;
+  padding: 0.3rem 0.5rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  font-size: 0.85rem;
+}
+
+/* Bottle list */
+.wle-bottle-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.wle-bottle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.6rem 0.75rem;
+  border-bottom: 1px solid var(--color-border);
+  transition: background var(--transition-fast);
+}
+
+.wle-bottle-row:last-child {
+  border-bottom: none;
+}
+
+.wle-bottle-row.selected {
+  background: var(--color-success-bg);
+}
+
+.wle-bottle-check {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  cursor: pointer;
+  flex: 1;
+}
+
+.wle-bottle-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  font-size: 0.85rem;
+}
+
+.wle-price-inputs {
+  display: flex;
+  gap: 0.4rem;
+  flex-shrink: 0;
+}
+
+.wle-price-input {
+  width: 90px;
+  padding: 0.3rem 0.5rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  font-size: 0.8rem;
+}
+
+/* Layout grid */
+.wle-layout-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.wle-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+
+/* Logo preview */
+.wle-logo-preview {
+  display: block;
+  max-width: 100px;
+  max-height: 100px;
+  margin-top: 0.5rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
+}
+
+/* Share */
+.wle-share-status {
+  margin-bottom: 1rem;
+}
+
+.wle-share-url {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.wle-url-input {
+  flex: 1;
+  padding: 0.5rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  font-size: 0.8rem;
+  background: var(--color-input-bg);
+  color: var(--color-text);
+}
+
+/* Status badges (imported from WineLists.css) */
+.status-badge {
+  display: inline-block;
+  padding: 0.15rem 0.5rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.status-badge.published {
+  background: var(--color-success-bg);
+  color: var(--color-success);
+}
+
+.status-badge.draft {
+  background: var(--color-warning-bg);
+  color: var(--color-warning);
+}
+
+/* Responsive */
+@media (max-width: 600px) {
+  .wle-header-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .wle-header-actions {
+    justify-content: flex-end;
+  }
+
+  .wle-bottle-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.5rem;
+  }
+
+  .wle-price-inputs {
+    margin-left: 1.5rem;
+  }
+
+  .wle-auto-options {
+    flex-direction: column;
+  }
+
+  .wle-bulk-pricing {
+    flex-wrap: wrap;
+  }
+}

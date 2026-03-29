@@ -7,6 +7,7 @@ const User = require('../models/User');
 const AuditLog = require('../models/AuditLog');
 const BottleImage = require('../models/BottleImage');
 const WineDefinition = require('../models/WineDefinition');
+const WineList = require('../models/WineList');
 const { getCellarRole } = require('../utils/cellarAccess');
 const { logAudit } = require('../services/audit');
 const { getSnapshotsForDates, getOrCreateDailySnapshot, convertCurrency } = require('../utils/exchangeRates');
@@ -579,6 +580,9 @@ router.delete('/:id', async (req, res) => {
 
     // Cascade soft-delete to all racks in this cellar
     await Rack.updateMany({ cellar: cellar._id }, { deletedAt: now });
+
+    // Delete wine lists for this cellar (hard delete — no soft-delete for wine lists)
+    await WineList.deleteMany({ cellar: cellar._id });
 
     // Bottles are preserved — they remain in history via their status field
 
