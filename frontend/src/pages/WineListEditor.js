@@ -46,7 +46,8 @@ function WineListEditor() {
       if (!cellarRes.ok) { setError(cellarData.error || 'Failed to load cellar'); return; }
 
       setWineList(wlData);
-      const activeBottles = (cellarData.bottles || []).filter(b => b.status === 'active');
+      // cellarData.bottles is { total, count, items: [...] } — already excludes consumed
+      const activeBottles = cellarData.bottles?.items || [];
       setBottles(activeBottles);
 
       // Show quick-start if this is a fresh wine list (no entries yet)

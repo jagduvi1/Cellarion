@@ -1,6 +1,6 @@
 const express = require('express');
 const crypto = require('crypto');
-const path = require('path');
+const fs = require('fs');
 const multer = require('multer');
 const { requireAuth, requireFeature } = require('../middleware/auth');
 const WineList = require('../models/WineList');
@@ -8,12 +8,13 @@ const Cellar = require('../models/Cellar');
 const Bottle = require('../models/Bottle');
 const { logAudit } = require('../services/audit');
 const { generateWineListPdf } = require('../services/wineListPdf');
-const { planHasFeature } = require('../config/plans');
 
 const router = express.Router();
 
 // --- Logo upload setup ---
 const LOGO_DIR = '/app/uploads/wine-list-logos';
+// Ensure logo directory exists on startup
+try { fs.mkdirSync(LOGO_DIR, { recursive: true }); } catch { /* Docker volume may already exist */ }
 const logoStorage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, LOGO_DIR),
   filename: (req, file, cb) => {
