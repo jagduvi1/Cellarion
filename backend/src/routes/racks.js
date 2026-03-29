@@ -178,8 +178,9 @@ router.delete('/:id', async (req, res) => {
       return res.status(403).json({ error: 'Only the cellar owner can delete racks' });
     }
 
+    // Clear all bottle slot assignments before soft-deleting
     if (rack.slots.length > 0) {
-      return res.status(400).json({ error: `Remove all ${rack.slots.length} bottle${rack.slots.length !== 1 ? 's' : ''} from this rack before deleting it` });
+      rack.slots = [];
     }
 
     rack.deletedAt = new Date();

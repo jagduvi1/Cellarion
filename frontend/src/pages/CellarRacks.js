@@ -163,6 +163,9 @@ function CellarRacks() {
         if (selectedRackId === rackId) {
           setSelectedRackId(remaining.length > 0 ? remaining[0]._id : null);
         }
+      } else {
+        const data = await res.json();
+        alert(data.error || 'Failed to delete rack');
       }
     } finally {
       setDeleteConfirm(null);
