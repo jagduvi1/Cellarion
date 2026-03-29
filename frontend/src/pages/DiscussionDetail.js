@@ -70,12 +70,12 @@ function DiscussionDetail() {
         setDiscussion(data.discussion);
         setError(null);
       } else {
-        setError(data.error || 'Discussion not found');
+        setError(data.error || t('discussions.failedLoadDiscussion'));
       }
     } catch {
-      setError('Failed to load discussion');
+      setError(t('discussions.failedLoadDiscussion'));
     }
-  }, [apiFetch, id]);
+  }, [apiFetch, id, t]);
 
   const fetchReplies = useCallback(async (p, replace = false) => {
     try {
@@ -129,10 +129,10 @@ function DiscussionDetail() {
         // Update discussion reply count locally
         setDiscussion(prev => prev ? { ...prev, replyCount: prev.replyCount + 1 } : prev);
       } else {
-        setReplyError(data.error || 'Failed to post reply');
+        setReplyError(data.error || t('discussions.failedPostReply'));
       }
     } catch {
-      setReplyError('Failed to post reply');
+      setReplyError(t('discussions.failedPostReply'));
     } finally {
       setSubmitting(false);
     }
@@ -161,7 +161,7 @@ function DiscussionDetail() {
       if (res.ok) {
         const data = await res.json();
         // Update reply in-place to show soft-deleted state
-        setReplies(prev => prev.map(r => r._id === reply._id ? { ...r, ...data.reply, isDeleted: true, body: '[This reply has been removed]' } : r));
+        setReplies(prev => prev.map(r => r._id === reply._id ? { ...r, ...data.reply, isDeleted: true, body: t('discussions.replyRemoved') } : r));
       }
     } catch {
       // silent
@@ -246,13 +246,13 @@ function DiscussionDetail() {
     return (
       <div className="discussion-detail">
         <div className="alert alert-error">{error}</div>
-        <Link to="/community/discussions" className="btn btn-secondary">Back to Discussions</Link>
+        <Link to="/community/discussions" className="btn btn-secondary">{t('discussions.backToDiscussions')}</Link>
       </div>
     );
   }
 
   if (!discussion || loading) {
-    return <div className="discussion-detail"><p className="discussion-detail__loading">Loading...</p></div>;
+    return <div className="discussion-detail"><p className="discussion-detail__loading">{t('common.loading')}</p></div>;
   }
 
   const author = discussion.author || {};
@@ -260,14 +260,14 @@ function DiscussionDetail() {
 
   return (
     <div className="discussion-detail">
-      <Link to="/community/discussions" className="discussion-detail__back">Back to Discussions</Link>
+      <Link to="/community/discussions" className="discussion-detail__back">{t('discussions.backToDiscussions')}</Link>
 
       {/* Discussion header */}
       <div className="discussion-detail__header card">
         <div className="discussion-detail__meta">
           <CategoryBadge category={discussion.category} />
-          {discussion.isPinned && <span className="discussion-card__pinned">Pinned</span>}
-          {discussion.isLocked && <span className="discussion-card__locked">Locked</span>}
+          {discussion.isPinned && <span className="discussion-card__pinned">{t('discussions.pinned')}</span>}
+          {discussion.isLocked && <span className="discussion-card__locked">{t('discussions.locked')}</span>}
         </div>
 
         <h1 className="discussion-detail__title">{discussion.title}</h1>
@@ -277,11 +277,11 @@ function DiscussionDetail() {
             <span className="reply-card__avatar">{authorName.charAt(0).toUpperCase()}</span>
             <span>{authorName}</span>
           </Link>
-          {author.roles?.includes('moderator') && <span className="badge badge--mod">Mod</span>}
-          {author.roles?.includes('admin') && <span className="badge badge--admin">Admin</span>}
+          {author.roles?.includes('moderator') && <span className="badge badge--mod">{t('discussions.mod')}</span>}
+          {author.roles?.includes('admin') && <span className="badge badge--admin">{t('discussions.admin')}</span>}
           <span className="discussion-detail__time">{timeAgo(discussion.createdAt)}</span>
           {discussion.replyCount > 0 && (
-            <span className="discussion-detail__reply-count">{discussion.replyCount} {discussion.replyCount === 1 ? 'reply' : 'replies'}</span>
+            <span className="discussion-detail__reply-count">{discussion.replyCount} {discussion.replyCount === 1 ? t('discussions.reply') : t('discussions.replies')}</span>
           )}
         </div>
 
@@ -292,22 +292,22 @@ function DiscussionDetail() {
         <div className="discussion-detail__actions">
           {!isOwner && (
             <button className="reply-card__action-btn" onClick={() => setReportTarget({ type: 'discussion', id: discussion._id })}>
-              Report
+              {t('discussions.report')}
             </button>
           )}
           {isMod && (
             <>
               <button className="reply-card__action-btn reply-card__action-btn--danger" onClick={() => setConfirmDeleteDiscussion(true)}>
-                Delete
+                {t('common.delete')}
               </button>
               <button className="reply-card__action-btn" onClick={handlePin}>
-                {discussion.isPinned ? 'Unpin' : 'Pin'}
+                {discussion.isPinned ? t('discussions.unpin') : t('discussions.pin')}
               </button>
               <button className="reply-card__action-btn" onClick={handleLock}>
-                {discussion.isLocked ? 'Unlock' : 'Lock'}
+                {discussion.isLocked ? t('discussions.unlock') : t('discussions.lock')}
               </button>
               <button className="reply-card__action-btn" onClick={() => { setMoveCategory(discussion.category); setShowMove(true); }}>
-                Move
+                {t('discussions.move')}
               </button>
             </>
           )}
@@ -316,9 +316,9 @@ function DiscussionDetail() {
 
       {/* Replies */}
       <div className="discussion-detail__replies">
-        <h2 className="discussion-detail__section-title">Replies</h2>
+        <h2 className="discussion-detail__section-title">{t('discussions.repliesTitle')}</h2>
         {replies.length === 0 ? (
-          <p className="discussion-detail__no-replies">No replies yet. Be the first to respond!</p>
+          <p className="discussion-detail__no-replies">{t('discussions.noReplies')}</p>
         ) : (
           replies.map(reply => (
             <ReplyCard
@@ -347,7 +347,7 @@ function DiscussionDetail() {
         {hasMore && (
           <div className="discussions__load-more">
             <button className="btn btn-secondary" onClick={() => fetchReplies(page + 1)} disabled={loadingMore}>
-              {loadingMore ? 'Loading...' : 'Load More Replies'}
+              {loadingMore ? t('common.loading') : t('discussions.loadMoreReplies')}
             </button>
           </div>
         )}
@@ -360,7 +360,7 @@ function DiscussionDetail() {
           {quoteData && (
             <div className="discussion-detail__quote-preview">
               <div className="discussion-detail__quote-preview-header">
-                <span>Replying to <strong>{quoteData.authorName}</strong></span>
+                <span>{t('discussions.replyingTo')} <strong>{quoteData.authorName}</strong></span>
                 <button type="button" className="discussion-detail__quote-remove" onClick={() => setQuoteData(null)}>&times;</button>
               </div>
               <div className="discussion-detail__quote-preview-body">{quoteData.body}</div>
@@ -372,7 +372,7 @@ function DiscussionDetail() {
               className="input discussion-detail__reply-textarea"
               value={replyBody}
               onChange={e => setReplyBody(e.target.value)}
-              placeholder="Write a reply..."
+              placeholder={t('discussions.replyPlaceholder')}
               rows={3}
               maxLength={3000}
               required
@@ -384,7 +384,7 @@ function DiscussionDetail() {
               </div>
             ) : (
               <details className="discussion-detail__wine-picker-toggle">
-                <summary className="reply-card__action-btn">Link a Wine</summary>
+                <summary className="reply-card__action-btn">{t('discussions.linkWineShort')}</summary>
                 <div className="discussion-detail__wine-picker">
                   <WineSearchPicker selected={null} onSelect={(w) => { if (w) setReplyWine(w); }} />
                 </div>
@@ -393,20 +393,20 @@ function DiscussionDetail() {
             <div className="discussion-detail__reply-actions">
               <span className="form-hint">{replyBody.length} / 3000</span>
               <button type="submit" className="btn btn-primary btn-small" disabled={submitting || !replyBody.trim()}>
-                {submitting ? 'Posting...' : 'Post Reply'}
+                {submitting ? t('discussions.posting') : t('discussions.postReply')}
               </button>
             </div>
           </form>
         </div>
       ) : (
         <div className="discussion-detail__locked-notice card">
-          This discussion is locked. No new replies can be posted.
+          {t('discussions.lockedNotice')}
         </div>
       )}
 
       {/* Edit reply modal */}
       {editingReply && (
-        <Modal title="Edit Reply" onClose={() => setEditingReply(null)}>
+        <Modal title={t('discussions.editReply')} onClose={() => setEditingReply(null)}>
           <form onSubmit={handleEditReply}>
             <textarea
               className="input discussion-detail__reply-textarea"
@@ -417,8 +417,8 @@ function DiscussionDetail() {
               required
             />
             <div className="discussions__create-actions">
-              <button type="button" className="btn btn-secondary" onClick={() => setEditingReply(null)}>Cancel</button>
-              <button type="submit" className="btn btn-primary" disabled={!editBody.trim()}>Save</button>
+              <button type="button" className="btn btn-secondary" onClick={() => setEditingReply(null)}>{t('common.cancel')}</button>
+              <button type="submit" className="btn btn-primary" disabled={!editBody.trim()}>{t('common.save')}</button>
             </div>
           </form>
         </Modal>
@@ -426,34 +426,34 @@ function DiscussionDetail() {
 
       {/* Report modal */}
       {reportTarget && (
-        <Modal title={`Report ${reportTarget.type === 'discussion' ? 'Discussion' : 'Reply'}`} onClose={() => setReportTarget(null)}>
+        <Modal title={reportTarget.type === 'discussion' ? t('discussions.reportDiscussion') : t('discussions.reportReply')} onClose={() => setReportTarget(null)}>
           <form onSubmit={handleReport} className="discussions__create-form">
             <div className="form-group">
-              <label className="form-label">Reason</label>
+              <label className="form-label">{t('discussions.reason')}</label>
               <select className="input" value={reportReason} onChange={e => setReportReason(e.target.value)} required>
-                <option value="">Select a reason...</option>
-                <option value="spam">Spam</option>
-                <option value="harassment">Harassment</option>
-                <option value="off_topic">Off Topic</option>
-                <option value="inappropriate">Inappropriate</option>
-                <option value="other">Other</option>
+                <option value="">{t('discussions.selectReason')}</option>
+                <option value="spam">{t('discussions.spam')}</option>
+                <option value="harassment">{t('discussions.harassment')}</option>
+                <option value="off_topic">{t('discussions.offTopic')}</option>
+                <option value="inappropriate">{t('discussions.inappropriate')}</option>
+                <option value="other">{t('discussions.other')}</option>
               </select>
             </div>
             <div className="form-group">
-              <label className="form-label">Details (optional)</label>
+              <label className="form-label">{t('discussions.detailsOptional')}</label>
               <textarea
                 className="input"
                 value={reportDetails}
                 onChange={e => setReportDetails(e.target.value)}
                 rows={3}
                 maxLength={1000}
-                placeholder="Provide additional context..."
+                placeholder={t('discussions.detailsPlaceholder')}
               />
             </div>
             <div className="discussions__create-actions">
-              <button type="button" className="btn btn-secondary" onClick={() => setReportTarget(null)}>Cancel</button>
+              <button type="button" className="btn btn-secondary" onClick={() => setReportTarget(null)}>{t('common.cancel')}</button>
               <button type="submit" className="btn btn-primary" disabled={reporting || !reportReason}>
-                {reporting ? 'Submitting...' : 'Submit Report'}
+                {reporting ? t('discussions.submitting') : t('discussions.submitReport')}
               </button>
             </div>
           </form>
@@ -462,9 +462,9 @@ function DiscussionDetail() {
 
       {/* Move category modal */}
       {showMove && (
-        <Modal title="Move Discussion" onClose={() => setShowMove(false)}>
+        <Modal title={t('discussions.moveDiscussion')} onClose={() => setShowMove(false)}>
           <div className="form-group">
-            <label className="form-label">New Category</label>
+            <label className="form-label">{t('discussions.newCategory')}</label>
             <select className="input" value={moveCategory} onChange={e => setMoveCategory(e.target.value)}>
               {CATEGORIES.map(cat => (
                 <option key={cat} value={cat}>{CATEGORY_LABELS[cat]}</option>
@@ -472,8 +472,8 @@ function DiscussionDetail() {
             </select>
           </div>
           <div className="discussions__create-actions">
-            <button className="btn btn-secondary" onClick={() => setShowMove(false)}>Cancel</button>
-            <button className="btn btn-primary" onClick={handleMove}>Move</button>
+            <button className="btn btn-secondary" onClick={() => setShowMove(false)}>{t('common.cancel')}</button>
+            <button className="btn btn-primary" onClick={handleMove}>{t('discussions.move')}</button>
           </div>
         </Modal>
       )}
@@ -481,9 +481,9 @@ function DiscussionDetail() {
       {/* Confirm delete reply */}
       {confirmDeleteReply && (
         <ConfirmModal
-          title={t('discussions.deleteReply', 'Delete Reply')}
-          message={t('discussions.confirmDeleteReply', 'Delete this reply?')}
-          warning={t('discussions.deleteReplyWarning', 'The text will be hidden but moderators can still review it.')}
+          title={t('discussions.deleteReply')}
+          message={t('discussions.confirmDeleteReply')}
+          warning={t('discussions.deleteReplyWarning')}
           onConfirm={() => handleDeleteReply(confirmDeleteReply)}
           onCancel={() => setConfirmDeleteReply(null)}
         />
@@ -492,9 +492,9 @@ function DiscussionDetail() {
       {/* Confirm delete discussion */}
       {confirmDeleteDiscussion && (
         <ConfirmModal
-          title={t('discussions.deleteDiscussion', 'Delete Discussion')}
-          message={t('discussions.confirmDeleteDiscussion', 'Delete this discussion and all its replies?')}
-          warning={t('discussions.deleteDiscussionWarning', 'This action cannot be undone.')}
+          title={t('discussions.deleteDiscussion')}
+          message={t('discussions.confirmDeleteDiscussion')}
+          warning={t('discussions.deleteDiscussionWarning')}
           onConfirm={handleDeleteDiscussion}
           onCancel={() => setConfirmDeleteDiscussion(false)}
         />

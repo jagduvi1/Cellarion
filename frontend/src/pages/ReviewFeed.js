@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Link, useLocation } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import { getReviewFeed, getDiscoverFeed } from '../api/reviews';
 import { searchUsers } from '../api/profiles';
@@ -8,6 +9,7 @@ import FollowButton from '../components/FollowButton';
 import './ReviewFeed.css';
 
 function ReviewFeed() {
+  const { t } = useTranslation();
   const { apiFetch, user } = useAuth();
   const location = useLocation();
   const [tab, setTab] = useState('discover'); // 'discover' | 'following'
@@ -38,15 +40,15 @@ function ReviewFeed() {
         setHasMore(p < data.pages);
         setError(null);
       } else {
-        setError(data.error || 'Failed to load feed');
+        setError(data.error || t('reviewFeed.failedLoad'));
       }
     } catch {
-      setError('Failed to load feed');
+      setError(t('reviewFeed.failedLoad'));
     } finally {
       setLoading(false);
       setLoadingMore(false);
     }
-  }, [apiFetch, tab]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [apiFetch, tab, t]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     setReviews([]);
@@ -80,19 +82,19 @@ function ReviewFeed() {
   return (
     <div className="review-feed-page">
       <div className="review-feed__header">
-        <h1>Community</h1>
+        <h1>{t('reviewFeed.community')}</h1>
         <div className="review-feed__section-tabs">
           <Link
             to="/community"
             className={`review-feed__section-tab ${location.pathname === '/community' ? 'active' : ''}`}
           >
-            Reviews
+            {t('reviewFeed.reviews')}
           </Link>
           <Link
             to="/community/discussions"
             className={`review-feed__section-tab ${location.pathname.startsWith('/community/discussions') ? 'active' : ''}`}
           >
-            Discussions
+            {t('reviewFeed.discussions')}
           </Link>
         </div>
       </div>
@@ -102,7 +104,7 @@ function ReviewFeed() {
         <input
           type="text"
           className="input review-feed__search-input"
-          placeholder="Search users..."
+          placeholder={t('reviewFeed.searchUsers')}
           value={searchQuery}
           onChange={e => {
             setSearchQuery(e.target.value);
@@ -111,7 +113,7 @@ function ReviewFeed() {
           minLength={2}
         />
         <button type="submit" className="btn btn-secondary btn-small" disabled={searching || searchQuery.trim().length < 2}>
-          {searching ? '...' : 'Search'}
+          {searching ? '...' : t('reviewFeed.search')}
         </button>
       </form>
 
@@ -119,11 +121,11 @@ function ReviewFeed() {
       {searchResults !== null && (
         <div className="review-feed__search-results card">
           <div className="review-feed__search-header">
-            <span>{searchResults.length} user{searchResults.length !== 1 ? 's' : ''} found</span>
-            <button className="review-feed__search-clear" onClick={clearSearch}>Clear</button>
+            <span>{t('reviewFeed.usersFound', { count: searchResults.length })}</span>
+            <button className="review-feed__search-clear" onClick={clearSearch}>{t('reviewFeed.clear')}</button>
           </div>
           {searchResults.length === 0 ? (
-            <p className="review-feed__search-empty">No users found. Only users with public profiles appear in search.</p>
+            <p className="review-feed__search-empty">{t('reviewFeed.noUsersFound')}</p>
           ) : (
             <div className="review-feed__user-list">
               {searchResults.map(u => (
@@ -135,7 +137,7 @@ function ReviewFeed() {
                     <span className="review-feed__user-info">
                       <span className="review-feed__user-name">{u.displayName || u.username}</span>
                       {u.reviewCount > 0 && (
-                        <span className="review-feed__user-reviews">{u.reviewCount} review{u.reviewCount !== 1 ? 's' : ''}</span>
+                        <span className="review-feed__user-reviews">{t('reviewFeed.reviewCount', { count: u.reviewCount })}</span>
                       )}
                     </span>
                   </Link>
@@ -155,31 +157,31 @@ function ReviewFeed() {
           className={`review-feed__tab ${tab === 'discover' ? 'active' : ''}`}
           onClick={() => setTab('discover')}
         >
-          Discover
+          {t('reviewFeed.discover')}
         </button>
         <button
           className={`review-feed__tab ${tab === 'following' ? 'active' : ''}`}
           onClick={() => setTab('following')}
         >
-          Following
+          {t('reviewFeed.following')}
         </button>
       </div>
 
       {error && <div className="alert alert-error">{error}</div>}
 
       {loading ? (
-        <p className="review-feed__loading">Loading...</p>
+        <p className="review-feed__loading">{t('common.loading')}</p>
       ) : reviews.length === 0 ? (
         <div className="review-feed__empty card">
           {tab === 'following' ? (
             <>
-              <h3>Your feed is empty</h3>
-              <p>Follow other wine enthusiasts to see their reviews here. Try the Discover tab or search for users above.</p>
+              <h3>{t('reviewFeed.feedEmpty')}</h3>
+              <p>{t('reviewFeed.feedEmptyHint')}</p>
             </>
           ) : (
             <>
-              <h3>No reviews yet</h3>
-              <p>Be the first to review a wine! Open a bottle from your cellar and write a review.</p>
+              <h3>{t('reviewFeed.noReviews')}</h3>
+              <p>{t('reviewFeed.noReviewsHint')}</p>
             </>
           )}
         </div>
@@ -198,7 +200,7 @@ function ReviewFeed() {
             onClick={() => fetchReviews(page + 1)}
             disabled={loadingMore}
           >
-            {loadingMore ? 'Loading...' : 'Load More'}
+            {loadingMore ? t('common.loading') : t('reviewFeed.loadMore')}
           </button>
         </div>
       )}

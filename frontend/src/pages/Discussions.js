@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import { getDiscussions, createDiscussion } from '../api/discussions';
 import DiscussionCard from '../components/DiscussionCard';
@@ -8,13 +9,10 @@ import WineSearchPicker from '../components/WineSearchPicker';
 import './Discussions.css';
 
 const CATEGORIES = Object.keys(CATEGORY_LABELS);
-const SORT_OPTIONS = [
-  { value: 'active', label: 'Most Active' },
-  { value: 'newest', label: 'Newest' },
-  { value: 'most-replies', label: 'Most Replies' }
-];
+const SORT_KEYS = ['active', 'newest', 'most-replies'];
 
 function Discussions() {
+  const { t } = useTranslation();
   const { apiFetch } = useAuth();
   const [discussions, setDiscussions] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -33,6 +31,12 @@ function Discussions() {
   const [linkedWine, setLinkedWine] = useState(null);
   const [formError, setFormError] = useState(null);
 
+  const sortLabels = {
+    'active': t('discussions.sortMostActive'),
+    'newest': t('discussions.sortNewest'),
+    'most-replies': t('discussions.sortMostReplies')
+  };
+
   const fetchDiscussions = useCallback(async (p, replace = false) => {
     try {
       if (replace) setLoading(true);
@@ -50,15 +54,15 @@ function Discussions() {
         setHasMore(p < data.pages);
         setError(null);
       } else {
-        setError(data.error || 'Failed to load discussions');
+        setError(data.error || t('discussions.failedLoad'));
       }
     } catch {
-      setError('Failed to load discussions');
+      setError(t('discussions.failedLoad'));
     } finally {
       setLoading(false);
       setLoadingMore(false);
     }
-  }, [apiFetch, category, sort]);
+  }, [apiFetch, category, sort, t]);
 
   useEffect(() => {
     setDiscussions([]);
@@ -70,7 +74,7 @@ function Discussions() {
     setFormError(null);
 
     if (!form.title.trim() || !form.body.trim()) {
-      setFormError('Title and body are required');
+      setFormError(t('discussions.titleBodyRequired'));
       return;
     }
 
@@ -88,10 +92,10 @@ function Discussions() {
         // Prepend new discussion to list
         setDiscussions(prev => [data.discussion, ...prev]);
       } else {
-        setFormError(data.error || 'Failed to create discussion');
+        setFormError(data.error || t('discussions.failedCreate'));
       }
     } catch {
-      setFormError('Failed to create discussion');
+      setFormError(t('discussions.failedCreate'));
     } finally {
       setCreating(false);
     }
@@ -100,8 +104,8 @@ function Discussions() {
   return (
     <div className="discussions-page">
       <div className="discussions__header">
-        <h1>Community</h1>
-        <span className="discussions__beta-badge">Beta</span>
+        <h1>{t('discussions.community')}</h1>
+        <span className="discussions__beta-badge">{t('discussions.beta')}</span>
       </div>
       <div className="discussions__controls">
         <div className="discussions__filters">
@@ -110,7 +114,7 @@ function Discussions() {
               className={`discussions__cat-btn ${!category ? 'active' : ''}`}
               onClick={() => setCategory('')}
             >
-              All
+              {t('discussions.all')}
             </button>
             {CATEGORIES.map(cat => (
               <CategoryBadge
@@ -125,24 +129,24 @@ function Discussions() {
             value={sort}
             onChange={e => setSort(e.target.value)}
           >
-            {SORT_OPTIONS.map(opt => (
-              <option key={opt.value} value={opt.value}>{opt.label}</option>
+            {SORT_KEYS.map(key => (
+              <option key={key} value={key}>{sortLabels[key]}</option>
             ))}
           </select>
         </div>
         <button className="btn btn-primary" data-guide="discussion-create" onClick={() => setShowCreate(true)}>
-          New Discussion
+          {t('discussions.newDiscussion')}
         </button>
       </div>
 
       {error && <div className="alert alert-error">{error}</div>}
 
       {loading ? (
-        <p className="discussions__loading">Loading...</p>
+        <p className="discussions__loading">{t('common.loading')}</p>
       ) : discussions.length === 0 ? (
         <div className="discussions__empty card">
-          <h3>No discussions yet</h3>
-          <p>Start a conversation! Click "New Discussion" to create the first thread.</p>
+          <h3>{t('discussions.noDiscussions')}</h3>
+          <p>{t('discussions.noDiscussionsHint')}</p>
         </div>
       ) : (
         <div className="discussions__list">
@@ -159,18 +163,18 @@ function Discussions() {
             onClick={() => fetchDiscussions(page + 1)}
             disabled={loadingMore}
           >
-            {loadingMore ? 'Loading...' : 'Load More'}
+            {loadingMore ? t('common.loading') : t('discussions.loadMore')}
           </button>
         </div>
       )}
 
       {showCreate && (
-        <Modal title="New Discussion" onClose={() => setShowCreate(false)}>
+        <Modal title={t('discussions.newDiscussion')} onClose={() => setShowCreate(false)}>
           <form onSubmit={handleCreate} className="discussions__create-form">
             {formError && <div className="alert alert-error">{formError}</div>}
 
             <div className="form-group">
-              <label className="form-label">Category</label>
+              <label className="form-label">{t('discussions.category')}</label>
               <select
                 className="input"
                 value={form.category}
@@ -183,25 +187,25 @@ function Discussions() {
             </div>
 
             <div className="form-group">
-              <label className="form-label">Title</label>
+              <label className="form-label">{t('discussions.title')}</label>
               <input
                 type="text"
                 className="input"
                 value={form.title}
                 onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
-                placeholder="What's on your mind?"
+                placeholder={t('discussions.titlePlaceholder')}
                 maxLength={200}
                 required
               />
             </div>
 
             <div className="form-group">
-              <label className="form-label">Body</label>
+              <label className="form-label">{t('discussions.body')}</label>
               <textarea
                 className="input discussions__create-body"
                 value={form.body}
                 onChange={e => setForm(f => ({ ...f, body: e.target.value }))}
-                placeholder="Share your thoughts, questions, or experiences..."
+                placeholder={t('discussions.bodyPlaceholder')}
                 rows={6}
                 maxLength={5000}
                 required
@@ -210,16 +214,16 @@ function Discussions() {
             </div>
 
             <div className="form-group">
-              <label className="form-label">Link a Wine (optional)</label>
+              <label className="form-label">{t('discussions.linkWine')}</label>
               <WineSearchPicker selected={linkedWine} onSelect={setLinkedWine} />
             </div>
 
             <div className="discussions__create-actions">
               <button type="button" className="btn btn-secondary" onClick={() => setShowCreate(false)}>
-                Cancel
+                {t('common.cancel')}
               </button>
               <button type="submit" className="btn btn-primary" disabled={creating}>
-                {creating ? 'Creating...' : 'Create Discussion'}
+                {creating ? t('common.creating') : t('discussions.createDiscussion')}
               </button>
             </div>
           </form>
