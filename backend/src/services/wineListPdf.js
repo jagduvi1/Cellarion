@@ -1,4 +1,5 @@
 const PDFDocument = require('pdfkit');
+const QRCode = require('qrcode');
 const fs = require('fs');
 const path = require('path');
 
@@ -16,9 +17,41 @@ const COLOR_SCHEMES = {
   minimal:  { heading: '#000000', subheading: '#666666', text: '#333333', accent: '#999999', line: '#eeeeee' },
 };
 
+// Multi-language section titles for auto-grouped wine types
+const TYPE_TITLES = {
+  en: {
+    red: 'Red Wines', white: 'White Wines', rosé: 'Rosé Wines',
+    sparkling: 'Sparkling Wines', dessert: 'Dessert Wines', fortified: 'Fortified Wines',
+  },
+  sv: {
+    red: 'Röda Viner', white: 'Vita Viner', rosé: 'Rosévin',
+    sparkling: 'Mousserande Viner', dessert: 'Dessertviner', fortified: 'Starkvin',
+  },
+  fr: {
+    red: 'Vins Rouges', white: 'Vins Blancs', rosé: 'Vins Rosés',
+    sparkling: 'Vins Effervescents', dessert: 'Vins de Dessert', fortified: 'Vins Fortifiés',
+  },
+  de: {
+    red: 'Rotweine', white: 'Weißweine', rosé: 'Roséweine',
+    sparkling: 'Schaumweine', dessert: 'Dessertweine', fortified: 'Likörweine',
+  },
+  es: {
+    red: 'Vinos Tintos', white: 'Vinos Blancos', rosé: 'Vinos Rosados',
+    sparkling: 'Vinos Espumosos', dessert: 'Vinos de Postre', fortified: 'Vinos Fortificados',
+  },
+  it: {
+    red: 'Vini Rossi', white: 'Vini Bianchi', rosé: 'Vini Rosati',
+    sparkling: 'Spumanti', dessert: 'Vini da Dessert', fortified: 'Vini Liquorosi',
+  },
+};
+
+// Glass label translations
+const GLASS_LABEL = {
+  en: 'glass', sv: 'glas', fr: 'verre', de: 'Glas', es: 'copa', it: 'bicchiere',
+};
+
 /**
  * Build structured sections from a populated WineList document.
- * Returns an array of { title, wines[] }.
  */
 function buildSections(wineList, bottleMap) {
   if (wineList.structureMode === 'custom') {
@@ -42,6 +75,10 @@ function resolveEntry(entry, bottleMap) {
     price: entry.listPrice != null ? entry.listPrice : bottle.price,
     glassPrice: entry.glassPrice,
     sortOrder: entry.sortOrder || 0,
+    // For stock/margin dashboard
+    bottleId: bottle._id.toString(),
+    purchasePrice: bottle.price,
+    wineDefinitionId: wine._id?.toString(),
   };
 }
 
@@ -63,12 +100,12 @@ function buildAutoSections(wineList, bottleMap) {
   const groupBy = grouping.groupBy || 'type';
   const typeOrder = grouping.typeOrder || ['sparkling', 'white', 'rosé', 'red', 'dessert', 'fortified'];
   const withinGroup = grouping.withinGroup || 'country-region-name';
+  const lang = wineList.language || 'en';
 
   const wines = (wineList.autoGroupEntries || [])
     .map(e => resolveEntry(e, bottleMap))
     .filter(Boolean);
 
-  // Group wines
   const groups = new Map();
   for (const wine of wines) {
     let key;
@@ -80,7 +117,6 @@ function buildAutoSections(wineList, bottleMap) {
     groups.get(key).push(wine);
   }
 
-  // Sort group keys
   let sortedKeys;
   if (groupBy === 'type') {
     sortedKeys = typeOrder.filter(t => groups.has(t));
@@ -97,7 +133,7 @@ function buildAutoSections(wineList, bottleMap) {
     const sectionWines = groups.get(key);
     sectionWines.sort(sortFn);
 
-    const title = groupBy === 'type' ? formatTypeTitle(key) : key;
+    const title = groupBy === 'type' ? formatTypeTitle(key, lang) : key;
     return { title, wines: sectionWines };
   }).filter(s => s.wines.length > 0);
 }
@@ -124,15 +160,8 @@ function getSortFn(withinGroup) {
   }
 }
 
-function formatTypeTitle(type) {
-  const titles = {
-    red: 'Red Wines',
-    white: 'White Wines',
-    rosé: 'Rosé Wines',
-    sparkling: 'Sparkling Wines',
-    dessert: 'Dessert Wines',
-    fortified: 'Fortified Wines',
-  };
+function formatTypeTitle(type, lang = 'en') {
+  const titles = TYPE_TITLES[lang] || TYPE_TITLES.en;
   return titles[type] || type.charAt(0).toUpperCase() + type.slice(1);
 }
 
@@ -141,11 +170,13 @@ function formatTypeTitle(type) {
  *
  * @param {Object} wineList - Populated WineList document
  * @param {Map<string, Object>} bottleMap - Map of bottleId → populated bottle doc
- * @returns {PDFDocument} - A PDFKit document (readable stream)
+ * @param {Object} [opts] - Optional: { publicUrl } for QR code
+ * @returns {Promise<PDFDocument>} - A PDFKit document (readable stream)
  */
-function generateWineListPdf(wineList, bottleMap) {
+async function generateWineListPdf(wineList, bottleMap, opts = {}) {
   const layout = wineList.layout || {};
   const branding = wineList.branding || {};
+  const lang = wineList.language || 'en';
   const scheme = COLOR_SCHEMES[layout.colorScheme] || COLOR_SCHEMES.classic;
   const pageSize = PAGE_SIZES[layout.pageSize] || PAGE_SIZES.A4;
   const font = layout.fontFamily === 'sans-serif' ? 'Helvetica' : 'Times-Roman';
@@ -153,9 +184,22 @@ function generateWineListPdf(wineList, bottleMap) {
   const fontItalic = layout.fontFamily === 'sans-serif' ? 'Helvetica-Oblique' : 'Times-Italic';
   const currencySymbol = layout.currencySymbol || '$';
   const showGlassPrice = layout.showGlassPrice || false;
+  const glassLabel = GLASS_LABEL[lang] || GLASS_LABEL.en;
 
   const margin = 50;
   const contentWidth = pageSize[0] - margin * 2;
+
+  // Generate QR code buffer if we have a public URL
+  let qrBuffer = null;
+  if (opts.publicUrl) {
+    try {
+      qrBuffer = await QRCode.toBuffer(opts.publicUrl, {
+        width: 60, margin: 1, color: { dark: scheme.text, light: '#ffffff00' },
+      });
+    } catch (e) {
+      // Skip QR if generation fails
+    }
+  }
 
   const doc = new PDFDocument({
     size: pageSize,
@@ -171,38 +215,32 @@ function generateWineListPdf(wineList, bottleMap) {
   const sections = buildSections(wineList, bottleMap);
 
   // --- Header ---
-  renderHeader(doc, branding, scheme, fontBold, fontItalic, contentWidth, margin);
+  renderHeader(doc, branding, scheme, fontBold, fontItalic, contentWidth, margin, qrBuffer);
 
   // --- Sections ---
   for (let i = 0; i < sections.length; i++) {
     const section = sections[i];
 
-    // Page break if near bottom
     if (doc.y > pageSize[1] - margin - 80) {
       doc.addPage();
     }
 
-    // Section title
     doc.moveDown(i === 0 ? 0.5 : 1.2);
     doc.font(fontBold).fontSize(13).fillColor(scheme.accent);
     doc.text(section.title.toUpperCase(), margin, doc.y, { width: contentWidth });
 
-    // Line under section title
     doc.moveDown(0.2);
     doc.moveTo(margin, doc.y).lineTo(margin + contentWidth, doc.y)
       .strokeColor(scheme.line).lineWidth(0.5).stroke();
     doc.moveDown(0.4);
 
-    // Sub-group headers for auto mode (country/region within type)
     let lastSubHeader = null;
 
     for (const wine of section.wines) {
-      // Page break check
       if (doc.y > pageSize[1] - margin - 35) {
         doc.addPage();
       }
 
-      // Country/region sub-headers in auto type-grouping
       if (wineList.structureMode === 'auto' &&
           wineList.autoGrouping?.groupBy === 'type' &&
           wineList.autoGrouping?.withinGroup === 'country-region-name') {
@@ -216,20 +254,18 @@ function generateWineListPdf(wineList, bottleMap) {
         }
       }
 
-      // Wine entry: Name Vintage .............. Price
       renderWineEntry(doc, wine, {
         margin, contentWidth, font, fontBold, fontItalic,
-        scheme, currencySymbol, showGlassPrice,
+        scheme, currencySymbol, showGlassPrice, glassLabel,
       });
     }
   }
 
-  // Page numbers on all pages
+  // Page numbers + footer on all pages
   const range = doc.bufferedPageRange();
   for (let i = 0; i < range.count; i++) {
     doc.switchToPage(i);
 
-    // Footer text
     if (branding.footerText) {
       doc.font(fontItalic).fontSize(7).fillColor(scheme.subheading);
       doc.text(branding.footerText, margin, pageSize[1] - margin + 5, {
@@ -237,7 +273,6 @@ function generateWineListPdf(wineList, bottleMap) {
       });
     }
 
-    // Page number
     doc.font(font).fontSize(7).fillColor(scheme.subheading);
     doc.text(`${i + 1} / ${range.count}`, margin, pageSize[1] - margin + 16, {
       width: contentWidth, align: 'center',
@@ -248,7 +283,7 @@ function generateWineListPdf(wineList, bottleMap) {
   return doc;
 }
 
-function renderHeader(doc, branding, scheme, fontBold, fontItalic, contentWidth, margin) {
+function renderHeader(doc, branding, scheme, fontBold, fontItalic, contentWidth, margin, qrBuffer) {
   // Logo
   if (branding.logoUrl) {
     try {
@@ -275,6 +310,14 @@ function renderHeader(doc, branding, scheme, fontBold, fontItalic, contentWidth,
     doc.text(branding.tagline, { width: contentWidth, align: 'center' });
   }
 
+  // QR code — top-right corner
+  if (qrBuffer) {
+    const qrSize = 50;
+    const qrX = margin + contentWidth - qrSize;
+    const qrY = margin;
+    doc.image(qrBuffer, qrX, qrY, { width: qrSize, height: qrSize });
+  }
+
   // Decorative line
   doc.moveDown(0.5);
   doc.moveTo(margin, doc.y).lineTo(margin + contentWidth, doc.y)
@@ -283,27 +326,24 @@ function renderHeader(doc, branding, scheme, fontBold, fontItalic, contentWidth,
 }
 
 function renderWineEntry(doc, wine, opts) {
-  const { margin, contentWidth, font, fontBold, fontItalic, scheme, currencySymbol, showGlassPrice } = opts;
+  const { margin, contentWidth, font, fontBold, fontItalic, scheme, currencySymbol, showGlassPrice, glassLabel } = opts;
   const indent = margin + 20;
   const priceColWidth = 100;
   const nameColWidth = contentWidth - 20 - priceColWidth;
 
-  // Build display: "Wine Name, Vintage"
   const vintage = wine.vintage && wine.vintage !== 'NV' ? wine.vintage : 'NV';
   const displayName = `${wine.name}, ${vintage}`;
 
   const y = doc.y;
 
-  // Wine name + vintage
   doc.font(fontBold).fontSize(9.5).fillColor(scheme.text);
   doc.text(displayName, indent, y, { width: nameColWidth, lineBreak: false });
 
-  // Price column (right-aligned)
   let priceText = '';
   if (wine.price != null) {
     priceText = `${currencySymbol}${wine.price.toFixed(0)}`;
     if (showGlassPrice && wine.glassPrice != null) {
-      priceText += ` / ${currencySymbol}${wine.glassPrice.toFixed(0)} glass`;
+      priceText += ` / ${currencySymbol}${wine.glassPrice.toFixed(0)} ${glassLabel}`;
     }
   }
   if (priceText) {
@@ -312,7 +352,6 @@ function renderWineEntry(doc, wine, opts) {
       width: priceColWidth, align: 'right', lineBreak: false,
     });
 
-    // Dot leader
     const nameW = Math.min(doc.widthOfString(displayName, { font: fontBold, fontSize: 9.5 }), nameColWidth);
     const dotsStart = indent + nameW + 4;
     const dotsEnd = margin + contentWidth - priceColWidth - 4;
@@ -327,15 +366,13 @@ function renderWineEntry(doc, wine, opts) {
     }
   }
 
-  // Second line: producer, region
   const details = [wine.producer, wine.region].filter(Boolean).join(' — ');
   if (details) {
     doc.font(fontItalic).fontSize(8).fillColor(scheme.subheading);
     doc.text(details, indent, y + 13, { width: nameColWidth + priceColWidth, lineBreak: false });
   }
 
-  // Move Y past this entry
   doc.y = y + (details ? 26 : 15);
 }
 
-module.exports = { generateWineListPdf };
+module.exports = { generateWineListPdf, buildSections, resolveEntry };

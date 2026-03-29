@@ -148,7 +148,7 @@ router.put('/:id', requireAuth, requireFeature('wineLists'), async (req, res) =>
 
     // Allowed update fields
     const fields = [
-      'name', 'structureMode',
+      'name', 'structureMode', 'language',
       'sections', 'autoGrouping', 'autoGroupEntries',
       'branding', 'layout',
     ];
@@ -233,7 +233,15 @@ router.get('/:id/preview-pdf', requireAuth, requireFeature('wineLists'), async (
     if (!wineList) return res.status(404).json({ error: 'Wine list not found' });
 
     const bottleMap = await loadBottleMap(wineList);
-    const pdfStream = generateWineListPdf(wineList, bottleMap);
+
+    // Build public URL for QR code if published
+    let publicUrl = null;
+    if (wineList.isPublished && wineList.shareToken) {
+      const base = process.env.FRONTEND_URL || 'http://localhost:5000';
+      publicUrl = `${base}/api/wine-lists/public/${wineList.shareToken}/pdf`;
+    }
+
+    const pdfStream = await generateWineListPdf(wineList, bottleMap, { publicUrl });
 
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(wineList.name || 'wine-list')}.pdf"`);
@@ -259,6 +267,91 @@ router.post('/:id/logo', requireAuth, requireFeature('wineLists'), logoUpload.si
   } catch (error) {
     console.error('Upload logo error:', error);
     res.status(500).json({ error: 'Failed to upload logo' });
+  }
+});
+
+// GET /api/wine-lists/:id/stats — stock count + profit margin per entry
+router.get('/:id/stats', requireAuth, requireFeature('wineLists'), async (req, res) => {
+  try {
+    const wineList = await WineList.findOne({ _id: req.params.id, user: req.user.id });
+    if (!wineList) return res.status(404).json({ error: 'Wine list not found' });
+
+    const bottleMap = await loadBottleMap(wineList);
+
+    // Collect all entries from both modes
+    const entries = wineList.structureMode === 'custom'
+      ? (wineList.sections || []).flatMap(s => s.entries || [])
+      : (wineList.autoGroupEntries || []);
+
+    // Count stock per wineDefinition in this cellar
+    const activeBottles = await Bottle.find({
+      cellar: wineList.cellar,
+      status: 'active',
+    }).select('wineDefinition price').lean();
+
+    // Build stock counts: wineDefinitionId → { count, avgPurchasePrice }
+    const stockMap = new Map();
+    for (const b of activeBottles) {
+      const wdId = b.wineDefinition?.toString();
+      if (!wdId) continue;
+      if (!stockMap.has(wdId)) stockMap.set(wdId, { count: 0, totalCost: 0, pricedCount: 0 });
+      const s = stockMap.get(wdId);
+      s.count++;
+      if (b.price != null) {
+        s.totalCost += b.price;
+        s.pricedCount++;
+      }
+    }
+
+    // Build stats per wine list entry
+    const stats = [];
+    let totalRevenue = 0;
+    let totalCost = 0;
+
+    for (const entry of entries) {
+      const bottle = bottleMap.get(entry.bottle.toString());
+      if (!bottle || bottle.status !== 'active') continue;
+
+      const wine = bottle.wineDefinition || {};
+      const wdId = wine._id?.toString();
+      const stock = wdId ? stockMap.get(wdId) : null;
+      const stockCount = stock?.count || 0;
+      const avgCost = stock?.pricedCount > 0 ? stock.totalCost / stock.pricedCount : null;
+      const listPrice = entry.listPrice != null ? entry.listPrice : bottle.price;
+      const margin = (avgCost != null && listPrice != null && avgCost > 0)
+        ? Math.round(((listPrice - avgCost) / avgCost) * 100)
+        : null;
+
+      if (listPrice != null) totalRevenue += listPrice * stockCount;
+      if (avgCost != null) totalCost += avgCost * stockCount;
+
+      stats.push({
+        bottleId: bottle._id,
+        wineName: wine.name || 'Unknown',
+        producer: wine.producer || '',
+        vintage: bottle.vintage || 'NV',
+        stockCount,
+        purchasePrice: avgCost != null ? Math.round(avgCost) : null,
+        listPrice: listPrice != null ? Math.round(listPrice) : null,
+        marginPercent: margin,
+      });
+    }
+
+    const totalMargin = totalCost > 0 ? Math.round(((totalRevenue - totalCost) / totalCost) * 100) : null;
+
+    res.json({
+      entries: stats,
+      summary: {
+        totalWines: stats.length,
+        totalBottlesInStock: stats.reduce((sum, s) => sum + s.stockCount, 0),
+        potentialRevenue: Math.round(totalRevenue),
+        totalCost: Math.round(totalCost),
+        overallMarginPercent: totalMargin,
+      },
+    });
+  } catch (error) {
+    console.error('Wine list stats error:', error);
+    res.status(500).json({ error: 'Failed to load stats' });
   }
 });
 

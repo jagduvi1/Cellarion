@@ -1,16 +1,24 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { getWineList, updateWineList, publishWineList, unpublishWineList, uploadWineListLogo } from '../api/wineLists';
+import { getWineList, updateWineList, publishWineList, unpublishWineList, uploadWineListLogo, getWineListStats } from '../api/wineLists';
 import { getCellar } from '../api/cellars';
 import './WineListEditor.css';
 
 const API_BASE = process.env.REACT_APP_API_URL || '';
 
+const LANGUAGE_OPTIONS = [
+  { value: 'en', label: 'English' },
+  { value: 'sv', label: 'Svenska' },
+  { value: 'fr', label: 'Fran\u00e7ais' },
+  { value: 'de', label: 'Deutsch' },
+  { value: 'es', label: 'Espa\u00f1ol' },
+  { value: 'it', label: 'Italiano' },
+];
+
 function WineListEditor() {
   const { id: cellarId, listId } = useParams();
   const { apiFetch } = useAuth();
-  const navigate = useNavigate();
 
   const [wineList, setWineList] = useState(null);
   const [bottles, setBottles] = useState([]);
@@ -19,6 +27,10 @@ function WineListEditor() {
   const [activeTab, setActiveTab] = useState('bottles');
   const [error, setError] = useState(null);
   const [bulkPercent, setBulkPercent] = useState('');
+  const [stats, setStats] = useState(null);
+  const [statsLoading, setStatsLoading] = useState(false);
+  const [showQuickStart, setShowQuickStart] = useState(false);
+  const [bottleSearch, setBottleSearch] = useState('');
 
   // Load wine list and cellar bottles
   const fetchData = useCallback(async () => {
@@ -34,9 +46,16 @@ function WineListEditor() {
       if (!cellarRes.ok) { setError(cellarData.error || 'Failed to load cellar'); return; }
 
       setWineList(wlData);
-      // Filter to active bottles only
       const activeBottles = (cellarData.bottles || []).filter(b => b.status === 'active');
       setBottles(activeBottles);
+
+      // Show quick-start if this is a fresh wine list (no entries yet)
+      const hasEntries = wlData.structureMode === 'custom'
+        ? (wlData.sections || []).some(s => (s.entries || []).length > 0)
+        : (wlData.autoGroupEntries || []).length > 0;
+      if (!hasEntries && activeBottles.length > 0) {
+        setShowQuickStart(true);
+      }
     } catch {
       setError('Network error');
     } finally {
@@ -46,6 +65,33 @@ function WineListEditor() {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
+  // Load stats when dashboard tab is opened
+  const loadStats = useCallback(async () => {
+    setStatsLoading(true);
+    try {
+      const res = await getWineListStats(apiFetch, listId);
+      const data = await res.json();
+      if (res.ok) setStats(data);
+    } catch { /* ignore */ }
+    finally { setStatsLoading(false); }
+  }, [apiFetch, listId]);
+
+  useEffect(() => {
+    if (activeTab === 'dashboard') loadStats();
+  }, [activeTab, loadStats]);
+
+  // --- Quick start: add all bottles with their cellar prices ---
+  const handleQuickStart = () => {
+    const entries = bottles.map((b, i) => ({
+      bottle: b._id,
+      listPrice: b.price || null,
+      glassPrice: null,
+      sortOrder: i,
+    }));
+    setWineList(prev => ({ ...prev, autoGroupEntries: entries, structureMode: 'auto' }));
+    setShowQuickStart(false);
+  };
+
   // --- Save handler ---
   const handleSave = async () => {
     setSaving(true);
@@ -53,6 +99,7 @@ function WineListEditor() {
       const res = await updateWineList(apiFetch, listId, {
         name: wineList.name,
         structureMode: wineList.structureMode,
+        language: wineList.language,
         sections: wineList.sections,
         autoGrouping: wineList.autoGrouping,
         autoGroupEntries: wineList.autoGroupEntries,
@@ -75,7 +122,6 @@ function WineListEditor() {
   // --- Entry helpers ---
   const getEntries = () => {
     if (wineList.structureMode === 'custom') {
-      // Flatten all section entries for the selection check
       return (wineList.sections || []).flatMap(s => s.entries || []);
     }
     return wineList.autoGroupEntries || [];
@@ -88,7 +134,6 @@ function WineListEditor() {
   const toggleBottle = (bottle) => {
     const bottleId = bottle._id;
     if (wineList.structureMode === 'custom') {
-      // In custom mode, add/remove from first section (or create one)
       const updated = { ...wineList };
       if (!updated.sections || updated.sections.length === 0) {
         updated.sections = [{ title: 'Wines', sortOrder: 0, entries: [] }];
@@ -107,7 +152,6 @@ function WineListEditor() {
       }
       setWineList({ ...updated });
     } else {
-      // Auto mode
       const entries = [...(wineList.autoGroupEntries || [])];
       const idx = entries.findIndex(e => e.bottle === bottleId);
       if (idx >= 0) {
@@ -121,6 +165,31 @@ function WineListEditor() {
         });
       }
       setWineList({ ...wineList, autoGroupEntries: entries });
+    }
+  };
+
+  const selectAllBottles = () => {
+    const entries = bottles.map((b, i) => ({
+      bottle: b._id,
+      listPrice: b.price || null,
+      glassPrice: null,
+      sortOrder: i,
+    }));
+    if (wineList.structureMode === 'custom') {
+      const sections = wineList.sections?.length ? [...wineList.sections] : [{ title: 'Wines', sortOrder: 0, entries: [] }];
+      sections[0] = { ...sections[0], entries };
+      setWineList({ ...wineList, sections });
+    } else {
+      setWineList({ ...wineList, autoGroupEntries: entries });
+    }
+  };
+
+  const deselectAllBottles = () => {
+    if (wineList.structureMode === 'custom') {
+      const sections = (wineList.sections || []).map(s => ({ ...s, entries: [] }));
+      setWineList({ ...wineList, sections });
+    } else {
+      setWineList({ ...wineList, autoGroupEntries: [] });
     }
   };
 
@@ -251,12 +320,28 @@ function WineListEditor() {
     return `${API_BASE}/api/wine-lists/public/${wineList.shareToken}/pdf`;
   };
 
+  // --- Filtered bottles for search ---
+  const filteredBottles = bottles.filter(b => {
+    if (!bottleSearch) return true;
+    const wine = b.wineDefinition || {};
+    const search = bottleSearch.toLowerCase();
+    return (
+      (wine.name || '').toLowerCase().includes(search) ||
+      (wine.producer || '').toLowerCase().includes(search) ||
+      (wine.region?.name || '').toLowerCase().includes(search) ||
+      (wine.country?.name || '').toLowerCase().includes(search) ||
+      (b.vintage || '').toLowerCase().includes(search)
+    );
+  });
+
   if (loading) return <div className="loading">Loading...</div>;
   if (error) return <div className="alert alert-error">{error}</div>;
   if (!wineList) return <div className="alert alert-error">Wine list not found</div>;
 
   const branding = wineList.branding || {};
   const layout = wineList.layout || {};
+  const selectedCount = getEntries().length;
+  const tabs = ['bottles', 'branding', 'layout', 'dashboard', 'share'];
 
   return (
     <div className="wle-page">
@@ -279,15 +364,36 @@ function WineListEditor() {
         </div>
       </div>
 
+      {/* Quick-start banner for empty lists */}
+      {showQuickStart && (
+        <div className="wle-quickstart">
+          <div className="wle-quickstart-content">
+            <strong>Quick start</strong>
+            <p>Add all {bottles.length} bottles from your cellar and use their current prices as a starting point?</p>
+          </div>
+          <div className="wle-quickstart-actions">
+            <button className="btn btn-primary" onClick={handleQuickStart}>
+              Add all bottles
+            </button>
+            <button className="btn btn-secondary" onClick={() => setShowQuickStart(false)}>
+              I'll pick manually
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Tabs */}
       <div className="wle-tabs">
-        {['bottles', 'branding', 'layout', 'share'].map(tab => (
+        {tabs.map(tab => (
           <button
             key={tab}
             className={`wle-tab ${activeTab === tab ? 'active' : ''}`}
             onClick={() => setActiveTab(tab)}
           >
-            {tab.charAt(0).toUpperCase() + tab.slice(1)}
+            {tab === 'dashboard' ? 'Dashboard' : tab.charAt(0).toUpperCase() + tab.slice(1)}
+            {tab === 'bottles' && selectedCount > 0 && (
+              <span className="wle-tab-count">{selectedCount}</span>
+            )}
           </button>
         ))}
       </div>
@@ -404,27 +510,46 @@ function WineListEditor() {
             </div>
           )}
 
-          {/* Bulk price adjustment */}
-          {getEntries().length > 0 && (
-            <div className="wle-bulk-pricing">
-              <span>Adjust all prices by</span>
-              <input
-                type="number"
-                value={bulkPercent}
-                onChange={e => setBulkPercent(e.target.value)}
-                placeholder="e.g. 10"
-              />
-              <span>%</span>
-              <button className="btn btn-small btn-secondary" onClick={applyBulkPriceAdjust}>
-                Apply
-              </button>
+          {/* Bulk actions */}
+          <div className="wle-bulk-actions">
+            {getEntries().length > 0 && (
+              <div className="wle-bulk-pricing">
+                <span>Adjust all prices by</span>
+                <input
+                  type="number"
+                  value={bulkPercent}
+                  onChange={e => setBulkPercent(e.target.value)}
+                  placeholder="e.g. 10"
+                />
+                <span>%</span>
+                <button className="btn btn-small btn-secondary" onClick={applyBulkPriceAdjust}>
+                  Apply
+                </button>
+              </div>
+            )}
+            <div className="wle-select-actions">
+              <button className="btn btn-small btn-secondary" onClick={selectAllBottles}>Select all</button>
+              {selectedCount > 0 && (
+                <button className="btn btn-small btn-secondary" onClick={deselectAllBottles}>Deselect all</button>
+              )}
             </div>
-          )}
+          </div>
+
+          {/* Bottle search */}
+          <div className="wle-bottle-search">
+            <input
+              type="text"
+              placeholder="Search bottles..."
+              value={bottleSearch}
+              onChange={e => setBottleSearch(e.target.value)}
+              className="search-input"
+            />
+            <span className="text-muted-sm">{selectedCount} of {bottles.length} selected</span>
+          </div>
 
           {/* Bottle selection list */}
-          <h3 className="wle-subtitle">Select bottles</h3>
           <div className="wle-bottle-list">
-            {bottles.map(bottle => {
+            {filteredBottles.map(bottle => {
               const wine = bottle.wineDefinition || {};
               const selected = isBottleSelected(bottle._id);
               return (
@@ -469,6 +594,9 @@ function WineListEditor() {
                 </div>
               );
             })}
+            {filteredBottles.length === 0 && bottles.length > 0 && (
+              <p className="empty-state">No bottles match your search.</p>
+            )}
             {bottles.length === 0 && (
               <p className="empty-state">No active bottles in this cellar.</p>
             )}
@@ -564,6 +692,18 @@ function WineListEditor() {
               </select>
             </div>
             <div className="form-group">
+              <label>Language</label>
+              <select
+                value={wineList.language || 'en'}
+                onChange={e => setWineList({ ...wineList, language: e.target.value })}
+                className="filter-select"
+              >
+                {LANGUAGE_OPTIONS.map(l => (
+                  <option key={l.value} value={l.value}>{l.label}</option>
+                ))}
+              </select>
+            </div>
+            <div className="form-group">
               <label>Page size</label>
               <select
                 value={layout.pageSize || 'A4'}
@@ -604,6 +744,70 @@ function WineListEditor() {
         </div>
       )}
 
+      {/* ── Dashboard tab (stock + margin) ── */}
+      {activeTab === 'dashboard' && (
+        <div className="wle-section">
+          {statsLoading && <div className="loading">Loading stats...</div>}
+          {stats && (
+            <>
+              <div className="wle-stats-summary">
+                <div className="stat-card">
+                  <h2>{stats.summary.totalWines}</h2>
+                  <p>Wines on list</p>
+                </div>
+                <div className="stat-card">
+                  <h2>{stats.summary.totalBottlesInStock}</h2>
+                  <p>Bottles in stock</p>
+                </div>
+                <div className="stat-card">
+                  <h2>{layout.currencySymbol || '$'}{stats.summary.potentialRevenue.toLocaleString()}</h2>
+                  <p>Potential revenue</p>
+                </div>
+                <div className="stat-card">
+                  <h2>{stats.summary.overallMarginPercent != null ? `${stats.summary.overallMarginPercent}%` : '—'}</h2>
+                  <p>Overall margin</p>
+                </div>
+              </div>
+
+              <table className="wle-stats-table">
+                <thead>
+                  <tr>
+                    <th>Wine</th>
+                    <th>Vintage</th>
+                    <th>Stock</th>
+                    <th>Cost</th>
+                    <th>List price</th>
+                    <th>Margin</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {stats.entries.map((entry, i) => (
+                    <tr key={i}>
+                      <td>
+                        <strong>{entry.wineName}</strong>
+                        {entry.producer && <span className="text-muted-sm"> — {entry.producer}</span>}
+                      </td>
+                      <td>{entry.vintage}</td>
+                      <td className={entry.stockCount === 0 ? 'wle-stock-zero' : ''}>
+                        {entry.stockCount}
+                      </td>
+                      <td>{entry.purchasePrice != null ? `${layout.currencySymbol || '$'}${entry.purchasePrice}` : '—'}</td>
+                      <td>{entry.listPrice != null ? `${layout.currencySymbol || '$'}${entry.listPrice}` : '—'}</td>
+                      <td className={entry.marginPercent != null ? (entry.marginPercent >= 0 ? 'wle-margin-pos' : 'wle-margin-neg') : ''}>
+                        {entry.marginPercent != null ? `${entry.marginPercent}%` : '—'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </>
+          )}
+          {!statsLoading && !stats && (
+            <p className="empty-state">Save your wine list first to see dashboard stats.</p>
+          )}
+        </div>
+      )}
+
       {/* ── Share tab ── */}
       {activeTab === 'share' && (
         <div className="wle-section">
@@ -615,7 +819,7 @@ function WineListEditor() {
 
           {wineList.isPublished ? (
             <>
-              <p>Your wine list is live. Anyone with the link can view and download the PDF.</p>
+              <p>Your wine list is live. Anyone with the link can view and download the PDF. A QR code linking to this URL is automatically included on the PDF.</p>
               <div className="wle-share-url">
                 <input type="text" readOnly value={getPublicUrl()} className="wle-url-input" />
                 <button
@@ -629,7 +833,7 @@ function WineListEditor() {
             </>
           ) : (
             <>
-              <p>Publish your wine list to get a public URL that anyone can access without logging in.</p>
+              <p>Publish your wine list to get a public URL. A QR code will be automatically added to the PDF so customers can scan it.</p>
               <button className="btn btn-primary" onClick={handlePublish}>Publish Wine List</button>
             </>
           )}

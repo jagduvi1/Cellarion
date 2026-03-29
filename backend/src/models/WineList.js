@@ -70,6 +70,13 @@ const wineListSchema = new mongoose.Schema({
     default: false
   },
 
+  // Language for PDF section headers
+  language: {
+    type: String,
+    enum: ['en', 'sv', 'fr', 'de', 'es', 'it'],
+    default: 'en'
+  },
+
   // Structure mode
   structureMode: {
     type: String,

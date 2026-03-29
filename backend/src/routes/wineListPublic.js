@@ -73,7 +73,12 @@ router.get('/:shareToken/pdf', async (req, res) => {
     }
 
     const bottleMap = await loadBottleMap(wineList);
-    const pdfStream = generateWineListPdf(wineList, bottleMap);
+
+    // Build the public URL for QR code (self-referencing)
+    const base = process.env.FRONTEND_URL || `${req.protocol}://${req.get('host')}`;
+    const publicUrl = `${base}/api/wine-lists/public/${req.params.shareToken}/pdf`;
+
+    const pdfStream = await generateWineListPdf(wineList, bottleMap, { publicUrl });
 
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(wineList.name || 'wine-list')}.pdf"`);

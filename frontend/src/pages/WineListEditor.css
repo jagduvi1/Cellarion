@@ -319,6 +319,144 @@
   color: var(--color-warning);
 }
 
+/* Quick-start banner */
+.wle-quickstart {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem 1.25rem;
+  margin-bottom: 1rem;
+  background: var(--color-success-bg);
+  border: 1px solid var(--color-success);
+  border-radius: var(--radius-md);
+}
+
+.wle-quickstart-content p {
+  margin: 0.25rem 0 0;
+  font-size: 0.85rem;
+  color: var(--color-text-secondary);
+}
+
+.wle-quickstart-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+/* Tab count badge */
+.wle-tab-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.2rem;
+  height: 1.2rem;
+  padding: 0 0.35rem;
+  margin-left: 0.4rem;
+  font-size: 0.7rem;
+  font-weight: 700;
+  background: var(--color-primary);
+  color: #fff;
+  border-radius: 10px;
+}
+
+/* Select/deselect actions */
+.wle-bulk-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.75rem;
+}
+
+.wle-select-actions {
+  display: flex;
+  gap: 0.4rem;
+}
+
+/* Bottle search */
+.wle-bottle-search {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.wle-bottle-search .search-input {
+  flex: 1;
+}
+
+/* Dashboard stats */
+.wle-stats-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+}
+
+.wle-stats-summary .stat-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 1rem;
+  text-align: center;
+}
+
+.wle-stats-summary .stat-card h2 {
+  margin: 0 0 0.25rem;
+  font-size: 1.3rem;
+  color: var(--color-primary);
+}
+
+.wle-stats-summary .stat-card p {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+}
+
+/* Stats table */
+.wle-stats-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.wle-stats-table th {
+  text-align: left;
+  padding: 0.5rem 0.75rem;
+  border-bottom: 2px solid var(--color-border);
+  color: var(--color-text-secondary);
+  font-weight: 600;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.wle-stats-table td {
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.wle-stats-table tbody tr:hover {
+  background: var(--color-surface);
+}
+
+.wle-stock-zero {
+  color: var(--color-danger);
+  font-weight: 600;
+}
+
+.wle-margin-pos {
+  color: var(--color-success);
+  font-weight: 600;
+}
+
+.wle-margin-neg {
+  color: var(--color-danger);
+  font-weight: 600;
+}
+
 /* Responsive */
 @media (max-width: 600px) {
   .wle-header-row {
@@ -346,5 +484,24 @@
 
   .wle-bulk-pricing {
     flex-wrap: wrap;
+  }
+
+  .wle-quickstart {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .wle-stats-table {
+    font-size: 0.75rem;
+  }
+
+  .wle-stats-table th,
+  .wle-stats-table td {
+    padding: 0.35rem 0.5rem;
+  }
+
+  .wle-bulk-actions {
+    flex-direction: column;
+    align-items: stretch;
   }
 }
