@@ -3,13 +3,13 @@ services:
     image: mongo:7
     container_name: cellarion-mongo
     restart: unless-stopped
-    command: ["mongod", "--wiredTigerCacheSizeGB", "0.2"]
+    command: ["mongod", "--wiredTigerCacheSizeGB", "0.5"]
     volumes:
       - mongo-data:/data/db
     deploy:
       resources:
         limits:
-          memory: 384M
+          memory: 512M
     healthcheck:
       test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
       interval: 10s
@@ -28,7 +28,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 192M
+          memory: 256M
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:7700/health"]
       interval: 10s
@@ -44,7 +44,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 192M
+          memory: 256M
     healthcheck:
       test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/localhost/6333' 2>/dev/null"]
       interval: 10s

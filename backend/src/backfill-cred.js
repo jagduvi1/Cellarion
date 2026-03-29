@@ -8,7 +8,7 @@
  *   docker exec cellarion-backend node src/backfill-cred.js
  */
 
-require('./config/db');
+const connectDB = require('./config/db');
 const mongoose = require('mongoose');
 const User = require('./models/User');
 const WineRequest = require('./models/WineRequest');
@@ -22,7 +22,7 @@ const DiscussionReplyVote = require('./models/DiscussionReplyVote');
 const { POINT_VALUES, getTier, getSpecialty } = require('./utils/cellarCred');
 
 async function backfill() {
-  await mongoose.connection.asPromise();
+  await connectDB();
   console.log('Connected to MongoDB — starting Cellar Cred backfill…');
 
   const users = await User.find({}).select('_id username').lean();
