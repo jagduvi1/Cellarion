@@ -56,7 +56,7 @@ function makeReq(app, url, headers = {}) {
 }
 
 function validToken() {
-  return jwt.sign({ id: 'u1', roles: ['user'] }, 'test-secret', { expiresIn: '1h' });
+  return jwt.sign({ id: 'u1', roles: ['user'] }, 'test-secret', { algorithm: 'HS256', expiresIn: '1h' });
 }
 
 describe('/api/uploads auth guard', () => {

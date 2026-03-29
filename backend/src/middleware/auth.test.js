@@ -19,7 +19,7 @@ function makeRes() {
 }
 
 function signToken(payload, secret = 'test-secret', opts = {}) {
-  return jwt.sign(payload, secret, { expiresIn: '1h', ...opts });
+  return jwt.sign(payload, secret, { algorithm: 'HS256', expiresIn: '1h', ...opts });
 }
 
 // ─── requireAuth ─────────────────────────────────────────────────────────────

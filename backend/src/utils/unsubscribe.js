@@ -1,6 +1,9 @@
 const crypto = require('crypto');
 
-const SECRET = process.env.JWT_SECRET || 'fallback-dev-secret';
+if (!process.env.JWT_SECRET) {
+  throw new Error('JWT_SECRET environment variable is required');
+}
+const SECRET = process.env.JWT_SECRET;
 
 /**
  * Create a signed unsubscribe token: base64url(userId:timestamp:hmac).

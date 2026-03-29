@@ -52,7 +52,7 @@ const generateAccessToken = (user) => {
   return jwt.sign(
     { id: user._id, roles, plan: user.plan || 'free', planExpiresAt: user.planExpiresAt || null },
     process.env.JWT_SECRET,
-    { expiresIn: process.env.ACCESS_TOKEN_EXPIRES_IN || '15m' }
+    { algorithm: 'HS256', expiresIn: process.env.ACCESS_TOKEN_EXPIRES_IN || '15m' }
   );
 };
 
@@ -333,6 +333,53 @@ router.post('/refresh', async (req, res) => {
     console.error('Refresh error:', error);
     res.clearCookie('refreshToken', refreshCookieOptions);
     res.status(401).json({ error: 'Invalid or expired refresh token' });
+  }
+});
+
+// POST /api/auth/change-password - Change password while authenticated
+router.post('/change-password', requireAuth, authLimiter, async (req, res) => {
+  const { currentPassword, newPassword } = req.body;
+
+  if (!currentPassword || !newPassword) {
+    return res.status(400).json({ error: 'Current password and new password are required' });
+  }
+
+  try {
+    const user = await User.findById(req.user.id);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const isMatch = await user.comparePassword(currentPassword);
+    if (!isMatch) {
+      logAudit(req, 'auth.change_password.failed',
+        { type: 'user', id: user._id },
+        { reason: 'incorrect_current_password' }
+      );
+      return res.status(401).json({ error: 'Current password is incorrect' });
+    }
+
+    user.password = newPassword;
+    user.refreshTokenHash = null; // Invalidate all existing sessions
+
+    const accessToken = await issueTokens(user, res);
+
+    logAudit(req, 'auth.change_password',
+      { type: 'user', id: user._id },
+      { username: user.username }
+    );
+
+    res.json({
+      message: 'Password changed successfully.',
+      token: accessToken
+    });
+  } catch (error) {
+    if (error.name === 'ValidationError') {
+      const messages = Object.values(error.errors).map(e => e.message);
+      return res.status(400).json({ error: messages.join(', ') });
+    }
+    console.error('Change password error:', error);
+    res.status(500).json({ error: 'Failed to change password' });
   }
 });
 

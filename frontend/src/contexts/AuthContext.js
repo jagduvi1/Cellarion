@@ -39,19 +39,16 @@ export const AuthProvider = ({ children }) => {
   useEffect(() => { tokenRef.current = token; }, [token]);
 
   // ------------------------------------------------------------------
-  // Token helpers — storage depends on "Remember Me" preference
+  // Token helpers — in-memory only (no localStorage/sessionStorage)
   // ------------------------------------------------------------------
 
-  const getStorage = () =>
-    sessionStorage.getItem('sessionOnly') ? sessionStorage : localStorage;
-
   const storeToken = (newToken) => {
-    getStorage().setItem('token', newToken);
     setToken(newToken);
     tokenRef.current = newToken;
   };
 
   const clearToken = () => {
+    // Clean up any legacy stored tokens from previous versions
     localStorage.removeItem('token');
     sessionStorage.removeItem('token');
     sessionStorage.removeItem('sessionOnly');
@@ -122,13 +119,21 @@ export const AuthProvider = ({ children }) => {
   // ------------------------------------------------------------------
 
   useEffect(() => {
-    const storedToken = localStorage.getItem('token') || sessionStorage.getItem('token');
-    if (storedToken) {
-      storeToken(storedToken);
-      fetchUserProfile(storedToken);
-    } else {
-      setLoading(false);
-    }
+    // Migrate: clear any legacy stored tokens from previous versions
+    localStorage.removeItem('token');
+    sessionStorage.removeItem('token');
+    sessionStorage.removeItem('sessionOnly');
+
+    // On mount, attempt to restore session via httpOnly refresh cookie
+    const restoreSession = async () => {
+      const newToken = await handleRefresh();
+      if (newToken) {
+        await fetchUserProfile(newToken);
+      } else {
+        setLoading(false);
+      }
+    };
+    restoreSession();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -206,13 +211,6 @@ export const AuthProvider = ({ children }) => {
 
   const login = async (username, password, rememberMe = true) => {
     try {
-      // Set storage preference before storing the token
-      if (!rememberMe) {
-        sessionStorage.setItem('sessionOnly', '1');
-      } else {
-        sessionStorage.removeItem('sessionOnly');
-      }
-
       const response = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

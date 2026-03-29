@@ -14,7 +14,7 @@ const requireAuth = async (req, res, next) => {
     const token = authHeader.substring(7); // Remove "Bearer " prefix
 
     // Verify token
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const decoded = jwt.verify(token, process.env.JWT_SECRET, { algorithms: ['HS256'] });
 
     // Support old tokens that carry a single `role` string
     const roles = decoded.roles || (decoded.role ? [decoded.role] : ['user']);
