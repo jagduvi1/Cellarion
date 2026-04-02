@@ -29,6 +29,7 @@
     "react-scripts": "5.0.1",
     "react-simple-maps": "^3.0.0",
     "recharts": "^3.8.0",
+    "rehype-sanitize": "^6.0.0",
     "three": "^0.183.2",
     "web-vitals": "^2.1.4",
     "world-atlas": "^2.0.2"

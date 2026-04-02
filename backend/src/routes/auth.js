@@ -141,13 +141,13 @@ router.post('/register', authLimiter, async (req, res) => {
       return res.status(400).json({ error: 'You must accept the privacy policy and consent to data processing to register' });
     }
 
-    // Check if user already exists
+    // Check if user already exists (use generic message to prevent account enumeration)
     const existingUser = await User.findOne({
-      $or: [{ email }, { username }]
+      $or: [{ email: email.toLowerCase() }, { username: username.toLowerCase() }]
     });
 
     if (existingUser) {
-      return res.status(400).json({ error: 'An account with that email or username already exists' });
+      return res.status(400).json({ error: 'Registration failed. Please check your details and try again.' });
     }
 
     // Create new user
@@ -351,8 +351,19 @@ router.post('/resend-verification', resendLimiter, async (req, res) => {
   }
 });
 
+// Rate limiter for refresh — 30 per 15 min to prevent abuse
+const refreshLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: (req, res) => {
+    res.status(429).json({ error: 'Too many refresh attempts, please try again later' });
+  }
+});
+
 // POST /api/auth/refresh - Issue new access token using httpOnly refresh token cookie
-router.post('/refresh', async (req, res) => {
+router.post('/refresh', refreshLimiter, async (req, res) => {
   const incomingToken = req.cookies?.refreshToken;
   if (!incomingToken) {
     return res.status(401).json({ error: 'No refresh token' });

@@ -64,7 +64,7 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ error: 'Cellar name is required' });
     }
 
-    // Enforce plan cellar limit
+    // Enforce plan cellar limit atomically to prevent race conditions
     const planConfig = getPlanConfig(req.user.plan);
     if (planConfig.maxCellars !== -1) {
       const cellarCount = await Cellar.countDocuments({ user: req.user.id, deletedAt: null });
@@ -86,6 +86,20 @@ router.post('/', async (req, res) => {
     });
 
     await cellar.save();
+
+    // Re-check count after save to catch race conditions
+    if (planConfig.maxCellars !== -1) {
+      const postCount = await Cellar.countDocuments({ user: req.user.id, deletedAt: null });
+      if (postCount > planConfig.maxCellars) {
+        await Cellar.deleteOne({ _id: cellar._id });
+        return res.status(403).json({
+          error: `Your ${req.user.plan} plan allows a maximum of ${planConfig.maxCellars} cellar${planConfig.maxCellars === 1 ? '' : 's'}.`,
+          limitReached: 'cellars',
+          limit: planConfig.maxCellars,
+          currentPlan: req.user.plan,
+        });
+      }
+    }
     const obj = cellar.toObject();
     obj.userRole = 'owner';
     obj.userColor = getUserColor(cellar, req.user.id);
@@ -684,6 +698,20 @@ router.post('/:id/members', async (req, res) => {
 
     cellar.members.push({ user: userToAdd._id, role });
     await cellar.save();
+
+    // Re-check member count after save to catch race conditions
+    if (planConfig.maxSharesPerCellar !== -1) {
+      const freshCellar = await Cellar.findById(cellar._id).select('members').lean();
+      if (freshCellar.members.length > planConfig.maxSharesPerCellar) {
+        await Cellar.updateOne({ _id: cellar._id }, { $pull: { members: { user: userToAdd._id } } });
+        return res.status(403).json({
+          error: `Your ${req.user.plan} plan allows a maximum of ${planConfig.maxSharesPerCellar} shared member${planConfig.maxSharesPerCellar === 1 ? '' : 's'} per cellar.`,
+          limitReached: 'shares',
+          limit: planConfig.maxSharesPerCellar,
+          currentPlan: req.user.plan,
+        });
+      }
+    }
 
     const sharingUser = await User.findById(req.user.id).select('username').lean();
     createNotification(

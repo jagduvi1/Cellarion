@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
+import rehypeSanitize from 'rehype-sanitize';
 import { useAuth } from '../contexts/AuthContext';
 import './CellarChat.css';
 
@@ -89,7 +90,7 @@ function Message({ msg }) {
       <div className={`cellar-chat__bubble${msg.thinking ? ' cellar-chat__bubble--thinking' : ''}`}>
         {isUser || msg.thinking
           ? msg.text
-          : <ReactMarkdown>{msg.text}</ReactMarkdown>
+          : <ReactMarkdown rehypePlugins={[rehypeSanitize]}>{msg.text}</ReactMarkdown>
         }
       </div>
       {msg.expandedQuery && <ExpandedQueryHint text={msg.expandedQuery} />}

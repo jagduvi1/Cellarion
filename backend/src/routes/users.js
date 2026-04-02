@@ -295,13 +295,38 @@ router.get('/public/:userId', requireAuth, async (req, res) => {
   }
 });
 
-// GET /api/users/all - Get all users (admin only)
+// GET /api/users/all - Get all users (admin only, paginated)
 router.get('/all', requireAuth, requireRole('admin'), async (req, res) => {
   try {
-    const users = await User.find({}).select('-password');
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 50));
+    const skip = (page - 1) * limit;
+    const search = req.query.search?.trim();
+
+    const filter = {};
+    if (search) {
+      const escaped = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      filter.$or = [
+        { username: { $regex: escaped, $options: 'i' } },
+        { email: { $regex: escaped, $options: 'i' } }
+      ];
+    }
+
+    const [users, total] = await Promise.all([
+      User.find(filter)
+        .select('username email roles plan createdAt emailVerified')
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean(),
+      User.countDocuments(filter)
+    ]);
 
     res.json({
-      count: users.length,
+      total,
+      page,
+      limit,
+      pages: Math.ceil(total / limit),
       users
     });
   } catch (error) {

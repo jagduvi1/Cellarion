@@ -185,7 +185,8 @@ router.get('/services', async (req, res) => {
     const data = await meiliRes.json();
     results.meilisearch = { status: data.status || 'unknown', latencyMs };
   } catch (e) {
-    results.meilisearch = { status: 'error', error: e.message };
+    console.error('[superadmin] Meilisearch health check failed:', e.message);
+    results.meilisearch = { status: 'error', error: 'Service unavailable' };
   }
 
   // Meilisearch stats (index info)
@@ -209,7 +210,8 @@ router.get('/services', async (req, res) => {
     const rembgRes = await fetch(`${rembgUrl}/health`, { signal: AbortSignal.timeout(5000) });
     results.rembg = { status: rembgRes.ok ? 'ok' : 'error', latencyMs: Date.now() - t0 };
   } catch (e) {
-    results.rembg = { status: 'error', error: e.message };
+    console.error('[superadmin] rembg health check failed:', e.message);
+    results.rembg = { status: 'error', error: 'Service unavailable' };
   }
 
   // Anthropic API
@@ -232,7 +234,8 @@ router.get('/services', async (req, res) => {
       const latencyMs = Date.now() - t0;
       results.qdrant = { status: qdrantRes.ok ? 'ok' : 'error', latencyMs };
     } catch (e) {
-      results.qdrant = { status: 'error', error: e.message };
+      console.error('[superadmin] Qdrant health check failed:', e.message);
+      results.qdrant = { status: 'error', error: 'Service unavailable' };
     }
   } else {
     results.qdrant = { status: 'not_configured' };
