@@ -38,6 +38,9 @@ function CellarDetail() {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
   const [activeTab, setActiveTab] = useState('bottles');
+  const [filtersOpen, setFiltersOpen] = useState(
+    () => !!(searchParams.get('vintage') || searchParams.get('minRating') || searchParams.get('maturity'))
+  );
   const [filters, setFilters] = useState(() => ({
     search: searchParams.get('search') || '',
     vintage: searchParams.get('vintage') || '',
@@ -404,7 +407,7 @@ function CellarDetail() {
       {/* ── Bottles tab — search bar renders immediately for fast LCP ── */}
       {activeTab === 'bottles' && (
         <div className="cellar-tab-content">
-          <div className="filters-bar filters-bar-5">
+          <div className="search-row">
             <input
               type="text"
               placeholder={t('cellarDetail.searchPlaceholder')}
@@ -413,56 +416,76 @@ function CellarDetail() {
               className="search-input"
               aria-label={t('cellarDetail.searchPlaceholder')}
             />
-            <input
-              type="text"
-              placeholder={t('cellarDetail.vintagePlaceholder')}
-              value={filters.vintage}
-              onChange={e => setFilters({ ...filters, vintage: e.target.value })}
-              className="filter-input"
-              aria-label={t('cellarDetail.vintagePlaceholder')}
-            />
-            <select
-              value={filters.minRating}
-              onChange={e => setFilters({ ...filters, minRating: e.target.value })}
-              className="filter-select"
-              aria-label="Filter by rating"
+            <button
+              type="button"
+              className={`filter-toggle-btn${filtersOpen ? ' filter-toggle-btn--active' : ''}${(filters.vintage || filters.minRating || filters.maturity) ? ' filter-toggle-btn--has-filters' : ''}`}
+              onClick={() => setFiltersOpen(o => !o)}
+              aria-expanded={filtersOpen}
+              aria-label={t('cellarDetail.toggleFilters')}
+              title={t('cellarDetail.toggleFilters')}
             >
-              <option value="">{t('cellarDetail.allRatings')}</option>
-              <option value="80">{t('cellarDetail.stars4Plus')}</option>
-              <option value="60">{t('cellarDetail.stars3Plus')}</option>
-              <option value="40">{t('cellarDetail.stars2Plus')}</option>
-            </select>
-            <select
-              value={filters.maturity}
-              onChange={e => setFilters({ ...filters, maturity: e.target.value })}
-              className="filter-select"
-              aria-label="Filter by maturity"
-            >
-              <option value="">{t('cellarDetail.allMaturity')}</option>
-              <option value="peak">{t('maturity.peak')}</option>
-              <option value="early">{t('maturity.early')}</option>
-              <option value="late">{t('maturity.late')}</option>
-              <option value="declining">{t('maturity.declining')}</option>
-              <option value="not-ready">{t('maturity.notReady')}</option>
-              <option value="none">{t('maturity.noData')}</option>
-            </select>
-            <select
-              value={filters.sort}
-              onChange={e => setFilters({ ...filters, sort: e.target.value })}
-              className="filter-select"
-              aria-label="Sort bottles"
-            >
-              <option value="-createdAt">{t('cellarDetail.sortNewest')}</option>
-              <option value="createdAt">{t('cellarDetail.sortOldest')}</option>
-              <option value="name">{t('cellarDetail.sortNameAZ')}</option>
-              <option value="-name">{t('cellarDetail.sortNameZA')}</option>
-              <option value="vintage">{t('cellarDetail.sortVintageOld')}</option>
-              <option value="-vintage">{t('cellarDetail.sortVintageNew')}</option>
-              <option value="price">{t('cellarDetail.sortPriceLow')}</option>
-              <option value="-price">{t('cellarDetail.sortPriceHigh')}</option>
-              <option value="maturity">{t('cellarDetail.sortMaturity')}</option>
-            </select>
+              <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+                <path d="M2 4h16M5 10h10M8 16h4" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+              </svg>
+              {(filters.vintage || filters.minRating || filters.maturity) && (
+                <span className="filter-badge" />
+              )}
+            </button>
           </div>
+
+          {filtersOpen && (
+            <div className="filters-bar">
+              <input
+                type="text"
+                placeholder={t('cellarDetail.vintagePlaceholder')}
+                value={filters.vintage}
+                onChange={e => setFilters({ ...filters, vintage: e.target.value })}
+                className="filter-input"
+                aria-label={t('cellarDetail.vintagePlaceholder')}
+              />
+              <select
+                value={filters.minRating}
+                onChange={e => setFilters({ ...filters, minRating: e.target.value })}
+                className="filter-select"
+                aria-label="Filter by rating"
+              >
+                <option value="">{t('cellarDetail.allRatings')}</option>
+                <option value="80">{t('cellarDetail.stars4Plus')}</option>
+                <option value="60">{t('cellarDetail.stars3Plus')}</option>
+                <option value="40">{t('cellarDetail.stars2Plus')}</option>
+              </select>
+              <select
+                value={filters.maturity}
+                onChange={e => setFilters({ ...filters, maturity: e.target.value })}
+                className="filter-select"
+                aria-label="Filter by maturity"
+              >
+                <option value="">{t('cellarDetail.allMaturity')}</option>
+                <option value="peak">{t('maturity.peak')}</option>
+                <option value="early">{t('maturity.early')}</option>
+                <option value="late">{t('maturity.late')}</option>
+                <option value="declining">{t('maturity.declining')}</option>
+                <option value="not-ready">{t('maturity.notReady')}</option>
+                <option value="none">{t('maturity.noData')}</option>
+              </select>
+              <select
+                value={filters.sort}
+                onChange={e => setFilters({ ...filters, sort: e.target.value })}
+                className="filter-select"
+                aria-label="Sort bottles"
+              >
+                <option value="-createdAt">{t('cellarDetail.sortNewest')}</option>
+                <option value="createdAt">{t('cellarDetail.sortOldest')}</option>
+                <option value="name">{t('cellarDetail.sortNameAZ')}</option>
+                <option value="-name">{t('cellarDetail.sortNameZA')}</option>
+                <option value="vintage">{t('cellarDetail.sortVintageOld')}</option>
+                <option value="-vintage">{t('cellarDetail.sortVintageNew')}</option>
+                <option value="price">{t('cellarDetail.sortPriceLow')}</option>
+                <option value="-price">{t('cellarDetail.sortPriceHigh')}</option>
+                <option value="maturity">{t('cellarDetail.sortMaturity')}</option>
+              </select>
+            </div>
+          )}
 
           {loading ? (
             <div className="loading">{t('cellarDetail.loadingCellar')}</div>
