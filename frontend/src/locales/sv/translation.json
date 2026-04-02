@@ -276,6 +276,7 @@
 
   "bottleDetail": {
     "backToCellar": "← Tillbaka till källare",
+    "backToChat": "← Tillbaka till chatten",
     "loadingBottle": "Laddar flaska...",
     "vintage": "Årgång",
     "size": "Storlek",

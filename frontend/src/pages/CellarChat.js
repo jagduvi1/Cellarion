@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
+import { Link } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import { useAuth } from '../contexts/AuthContext';
 import './CellarChat.css';
@@ -52,8 +53,14 @@ const PROMPT_CATEGORIES = [
 // ── Sub-components ────────────────────────────────────────────────────────────
 
 function WineCard({ wine }) {
+  const hasLink = wine.cellarId && wine.bottleId;
+  const Wrapper = hasLink ? Link : 'div';
+  const linkProps = hasLink
+    ? { to: `/cellars/${wine.cellarId}/bottles/${wine.bottleId}`, state: { fromChat: true } }
+    : {};
+
   return (
-    <div className="cellar-chat__wine-card" aria-label={wine.grapes?.join(', ')}>
+    <Wrapper className="cellar-chat__wine-card" aria-label={wine.grapes?.join(', ')} {...linkProps}>
       <div className="cellar-chat__wine-card-name">{wine.name}</div>
       <div className="cellar-chat__wine-card-meta">
         {wine.vintage} · {wine.producer}
@@ -61,7 +68,8 @@ function WineCard({ wine }) {
       {wine.region && (
         <div className="cellar-chat__wine-card-meta">{wine.region}</div>
       )}
-    </div>
+      {hasLink && <div className="cellar-chat__wine-card-arrow">›</div>}
+    </Wrapper>
   );
 }
 

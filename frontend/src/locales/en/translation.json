@@ -276,6 +276,7 @@
 
   "bottleDetail": {
     "backToCellar": "← Back to Cellar",
+    "backToChat": "← Back to chat",
     "loadingBottle": "Loading bottle...",
     "vintage": "Vintage",
     "size": "Size",

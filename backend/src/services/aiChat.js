@@ -362,6 +362,7 @@ async function _prepareChatContext(userId, message, { useQueryExpansion = true, 
   const wines = needsNewSearch
     ? matches.map(({ bottle }) => ({
         bottleId: bottle._id,
+        cellarId: bottle.cellar,
         wineDefinitionId: bottle.wineDefinition._id,
         name: bottle.wineDefinition.name,
         producer: bottle.wineDefinition.producer,

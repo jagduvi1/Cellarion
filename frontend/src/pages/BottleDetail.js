@@ -33,6 +33,7 @@ function BottleDetail() {
   const navigate = useNavigate();
   const location = useLocation();
   const fromHistory = location.state?.fromHistory === true;
+  const fromChat = location.state?.fromChat === true;
   const [bottle, setBottle] = useState(null);
   const [userRole, setUserRole] = useState(null);
   const [cellarColor, setCellarColor] = useState(null);
@@ -240,9 +241,9 @@ function BottleDetail() {
       {/* ── Clean header ── */}
       <div className="bd-page-header">
         <div className="bd-header-top">
-          <Link to={isConsumed || fromHistory ? `/cellars/${cellarId}/history` : `/cellars/${cellarId}`} className="back-link">
+          <Link to={fromChat ? '/cellar-chat' : (isConsumed || fromHistory ? `/cellars/${cellarId}/history` : `/cellars/${cellarId}`)} className="back-link">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="15 18 9 12 15 6"/></svg>
-            {isConsumed || fromHistory ? t('bottleDetail.backToHistory', 'Back to history') : t('bottleDetail.backToCellar')}
+            {fromChat ? t('bottleDetail.backToChat', 'Back to chat') : (isConsumed || fromHistory ? t('bottleDetail.backToHistory', 'Back to history') : t('bottleDetail.backToCellar'))}
           </Link>
           {!loading && !editing && (
             <div className="bd-header-actions">

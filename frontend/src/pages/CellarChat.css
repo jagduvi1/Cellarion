@@ -335,6 +335,20 @@
   color: var(--color-text-muted);
   min-width: 140px;
   max-width: 200px;
+  text-decoration: none;
+  display: block;
+  position: relative;
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+a.cellar-chat__wine-card {
+  cursor: pointer;
+  padding-right: 1.5rem;
+}
+
+a.cellar-chat__wine-card:hover {
+  border-color: var(--color-border-focus);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
 }
 
 .cellar-chat__wine-card-name {
@@ -349,6 +363,16 @@
 .cellar-chat__wine-card-meta {
   color: var(--color-text-muted);
   font-size: 0.73rem;
+}
+
+.cellar-chat__wine-card-arrow {
+  position: absolute;
+  right: 0.5rem;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 1rem;
+  color: var(--color-text-muted);
+  font-weight: 600;
 }
 
 /* ── Input area ── */
