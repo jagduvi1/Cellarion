@@ -17,6 +17,7 @@ const RestockAlert = require('../models/RestockAlert');
 const PushSubscription = require('../models/PushSubscription');
 const CellarValueSnapshot = require('../models/CellarValueSnapshot');
 const WineList = require('../models/WineList');
+const PendingShare = require('../models/PendingShare');
 const { requireAuth, requireRole } = require('../middleware/auth');
 const { logAudit } = require('../services/audit');
 const { stripHtml } = require('../utils/sanitize');
@@ -316,7 +317,7 @@ router.get('/me/export', requireAuth, async (req, res) => {
     const user = await User.findById(userId);
     if (!user) return res.status(404).json({ error: 'User not found' });
 
-    const [bottles, cellars, racks, wineRequests, reviews, notifications, auditLogs, images, recommendationsSent, recommendationsReceived, journalEntries, restockAlerts, wineLists] = await Promise.all([
+    const [bottles, cellars, racks, wineRequests, reviews, notifications, auditLogs, images, recommendationsSent, recommendationsReceived, journalEntries, restockAlerts, wineLists, pendingSharesSent] = await Promise.all([
       Bottle.find({ user: userId }).lean(),
       Cellar.find({ $or: [{ user: userId }, { 'members.user': userId }], deletedAt: null }).lean(),
       Rack.find({ cellar: { $in: await Cellar.distinct('_id', { user: userId }) }, deletedAt: null }).lean(),
@@ -329,7 +330,8 @@ router.get('/me/export', requireAuth, async (req, res) => {
       Recommendation.find({ recipient: userId }).populate('wine', 'name producer').populate('sender', 'username').lean(),
       JournalEntry.find({ user: userId }).lean(),
       RestockAlert.find({ user: userId }).lean(),
-      WineList.find({ user: userId }).select('name cellar structureMode branding layout createdAt updatedAt').lean()
+      WineList.find({ user: userId }).select('name cellar structureMode branding layout createdAt updatedAt').lean(),
+      PendingShare.find({ invitedBy: userId }).populate('cellar', 'name').lean()
     ]);
 
     const exportData = {
@@ -409,6 +411,12 @@ router.get('/me/export', requireAuth, async (req, res) => {
         branding: wl.branding,
         layout: wl.layout,
         createdAt: wl.createdAt
+      })),
+      pendingCellarInvites: pendingSharesSent.map(ps => ({
+        invitedEmail: ps.email,
+        cellarName: ps.cellar?.name,
+        role: ps.role,
+        createdAt: ps.createdAt
       }))
     };
 
@@ -441,6 +449,9 @@ router.delete('/me', requireAuth, async (req, res) => {
     user.deletionRequestedAt = now;
     user.deletionScheduledFor = scheduledFor;
     await user.save();
+
+    // Clean up pending cellar invites sent by this user
+    PendingShare.deleteMany({ invitedBy: userId }).catch(() => {});
 
     logAudit(req, 'user.deletion_requested', { type: 'user', id: user._id });
 

@@ -252,4 +252,72 @@ async function sendRecommendationEmail(toEmail, senderName, wine, note) {
   });
 }
 
-module.exports = { sendVerificationEmail, sendPasswordResetEmail, sendDrinkWindowDigest, sendRecommendationEmail, EMAIL_VERIFICATION_ENABLED };
+/**
+ * Send a cellar sharing invitation email to someone who is not yet a Cellarion user.
+ * @param {string} toEmail       - Recipient email address
+ * @param {string} senderName    - Display name / username of the person sharing
+ * @param {string} senderEmail   - Email of the person sharing
+ * @param {string} cellarName    - Name of the cellar being shared
+ * @param {string} role          - 'viewer' or 'editor'
+ */
+async function sendCellarInviteEmail(toEmail, senderName, senderEmail, cellarName, role) {
+  if (!EMAIL_VERIFICATION_ENABLED) return;
+
+  const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+  const registerLink = `${frontendUrl}/register`;
+  const googlePlayLink = 'https://play.google.com/store/apps/details?id=app.cellarion.twa';
+  const websiteLink = 'https://cellarion.app';
+  const roleLabel = role === 'editor' ? 'view and edit' : 'view';
+
+  await mg.messages.create(DOMAIN, {
+    from: FROM,
+    to: [toEmail],
+    subject: `${senderName} wants to share a wine cellar with you on Cellarion`,
+    text: [
+      'Hello,',
+      '',
+      `${senderName} (${senderEmail}) wants to share their wine cellar "${cellarName}" with you so you can ${roleLabel} it.`,
+      '',
+      'To accept the invitation, create a free Cellarion account using this email address:',
+      registerLink,
+      '',
+      'Once you sign up, the shared cellar will automatically appear in your account.',
+      '',
+      'You can also get Cellarion on Google Play:',
+      googlePlayLink,
+      '',
+      `Or visit our website: ${websiteLink}`,
+      '',
+      'Cheers!',
+      'The Cellarion Team'
+    ].join('\n'),
+    html: `
+      <div style="font-family:sans-serif;max-width:480px;margin:0 auto;color:#2a2a2a;">
+        <p>Hello,</p>
+        <p><strong>${escapeHtml(senderName)}</strong> (${escapeHtml(senderEmail)}) wants to share their wine cellar
+           <strong>&ldquo;${escapeHtml(cellarName)}&rdquo;</strong> with you so you can ${roleLabel} it.</p>
+        <p>To accept the invitation, create a free Cellarion account using this email address:</p>
+        <p style="margin:2rem 0;">
+          <a href="${registerLink}"
+             style="background:#7B9E88;color:#0d0d0d;padding:12px 28px;
+                    border-radius:4px;text-decoration:none;font-weight:600;
+                    display:inline-block;">
+            Join Cellarion
+          </a>
+        </p>
+        <p>Once you sign up, the shared cellar will automatically appear in your account.</p>
+        <p style="margin-top:1.5rem;">
+          <a href="${googlePlayLink}" style="color:#7B9E88;font-weight:600;">Get it on Google Play</a>
+          &nbsp;&middot;&nbsp;
+          <a href="${websiteLink}" style="color:#7B9E88;font-weight:600;">Visit cellarion.app</a>
+        </p>
+        <hr style="border:none;border-top:1px solid #ddd;margin:2rem 0;" />
+        <p style="color:#9A9484;font-size:0.85em;">
+          Cheers!<br />The Cellarion Team
+        </p>
+      </div>
+    `
+  });
+}
+
+module.exports = { sendVerificationEmail, sendPasswordResetEmail, sendDrinkWindowDigest, sendRecommendationEmail, sendCellarInviteEmail, EMAIL_VERIFICATION_ENABLED };

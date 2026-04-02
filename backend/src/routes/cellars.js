@@ -8,11 +8,13 @@ const AuditLog = require('../models/AuditLog');
 const BottleImage = require('../models/BottleImage');
 const WineDefinition = require('../models/WineDefinition');
 const WineList = require('../models/WineList');
+const PendingShare = require('../models/PendingShare');
 const { getCellarRole } = require('../utils/cellarAccess');
 const { logAudit } = require('../services/audit');
 const { getSnapshotsForDates, getOrCreateDailySnapshot, convertCurrency } = require('../utils/exchangeRates');
 const { createNotification } = require('../services/notifications');
 const { getPlanConfig } = require('../config/plans');
+const { sendCellarInviteEmail, EMAIL_VERIFICATION_ENABLED } = require('../services/mailgun');
 const { toNormalized } = require('../utils/ratingUtils');
 const { classifyMaturity, buildProfileMap } = require('../utils/maturityUtils');
 const { CONSUMED_STATUSES, MS_PER_DAY, WINE_POPULATE } = require('../config/constants');
@@ -623,15 +625,51 @@ router.post('/:id/members', async (req, res) => {
       });
     }
 
+    const normalizedEmail = email.toLowerCase().trim();
+
     // Look up user by email
-    const userToAdd = await User.findOne({ email: email.toLowerCase().trim() });
-    if (!userToAdd) {
-      return res.status(404).json({ error: 'No user found with that email address' });
-    }
+    const userToAdd = await User.findOne({ email: normalizedEmail });
 
     // Can't share with yourself
-    if (userToAdd._id.toString() === req.user.id.toString()) {
+    if (userToAdd && userToAdd._id.toString() === req.user.id.toString()) {
       return res.status(400).json({ error: 'Cannot share a cellar with yourself' });
+    }
+
+    if (!userToAdd) {
+      // User doesn't exist — create a pending invite and send an email
+      const existingPending = await PendingShare.findOne({ email: normalizedEmail, cellar: cellar._id });
+      if (existingPending) {
+        return res.status(400).json({ error: 'An invitation has already been sent to this email' });
+      }
+
+      const sharingUser = await User.findById(req.user.id).select('username email').lean();
+
+      await PendingShare.create({
+        email: normalizedEmail,
+        cellar: cellar._id,
+        role,
+        invitedBy: req.user.id
+      });
+
+      sendCellarInviteEmail(
+        normalizedEmail,
+        sharingUser?.username ?? 'A Cellarion user',
+        sharingUser?.email ?? '',
+        cellar.name,
+        role
+      ).catch(err => {
+        console.error('Failed to send cellar invite email:', err.message);
+      });
+
+      logAudit(req, 'cellar.share.invite',
+        { type: 'cellar', id: cellar._id, cellarId: cellar._id },
+        { invitedEmail: normalizedEmail, role }
+      );
+
+      return res.status(202).json({
+        invited: true,
+        message: `Invitation sent to ${normalizedEmail}. The cellar will be shared when they join Cellarion.`
+      });
     }
 
     // Check if already a member

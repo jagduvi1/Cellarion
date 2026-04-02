@@ -42,10 +42,15 @@ function ShareCellarModal({ cellarId, cellarName, onClose }) {
         body: JSON.stringify({ email: email.trim(), role })
       });
       const data = await res.json();
-      if (res.ok) {
-        setMembers(data.members);
-        setEmail('');
-        setSuccess('Member added successfully.');
+      if (res.ok || (res.status === 202 && data.invited)) {
+        if (data.invited) {
+          setEmail('');
+          setSuccess(data.message);
+        } else {
+          setMembers(data.members);
+          setEmail('');
+          setSuccess('Member added successfully.');
+        }
       } else if (res.status === 403 && data.limitReached === 'shares') {
         setLimitError(data);
       } else {
