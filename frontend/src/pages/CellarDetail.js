@@ -467,14 +467,20 @@ function CellarDetail() {
           {loading ? (
             <div className="loading">{t('cellarDetail.loadingCellar')}</div>
           ) : bottles.length === 0 && !bottlesLoading ? (
-            <div className="empty-state">
-              <p>{t('cellarDetail.noBottles')}</p>
-              {canEdit && (
-                <Link to={`/cellars/${id}/add-bottle`} className="btn btn-primary">
-                  {t('cellarDetail.addFirstBottle')}
-                </Link>
-              )}
-            </div>
+            (filters.search || filters.vintage || filters.minRating || filters.maturity) ? (
+              <div className="empty-state">
+                <p>{t('cellarDetail.noSearchResults')}</p>
+              </div>
+            ) : (
+              <div className="empty-state">
+                <p>{t('cellarDetail.noBottles')}</p>
+                {canEdit && (
+                  <Link to={`/cellars/${id}/add-bottle`} className="btn btn-primary">
+                    {t('cellarDetail.addFirstBottle')}
+                  </Link>
+                )}
+              </div>
+            )
           ) : (
             <BottlesList
               bottles={bottles}

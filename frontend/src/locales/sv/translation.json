@@ -182,6 +182,7 @@
     "sortMaturity": "Mognad (Drick snart→Senare)",
     "allMaturity": "All mognad",
     "noBottles": "Inga flaskor i denna källare ännu.",
+    "noSearchResults": "Inga flaskor matchar din sökning.",
     "addFirstBottle": "Lägg till din första flaska",
     "loadMore": "Ladda fler flaskor",
     "myCellarColor": "Min källarfärg",

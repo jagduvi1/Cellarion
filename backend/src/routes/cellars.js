@@ -368,16 +368,18 @@ router.get('/:id', async (req, res) => {
     // ── In-memory filters for cases that can't be expressed cleanly in Mongo ──
 
     if (search) {
-      const searchLower = search.toLowerCase();
+      // Strip diacritics so e.g. "Macon" matches "Mâcon"
+      const stripAccents = (s) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      const searchNorm = stripAccents(search.toLowerCase());
       bottles = bottles.filter(b => {
-        const wineName = b.wineDefinition?.name?.toLowerCase() || '';
-        const producer = b.wineDefinition?.producer?.toLowerCase() || '';
-        const notes = b.notes?.toLowerCase() || '';
-        const location = b.location?.toLowerCase() || '';
-        return wineName.includes(searchLower) ||
-               producer.includes(searchLower) ||
-               notes.includes(searchLower) ||
-               location.includes(searchLower);
+        const wineName = stripAccents(b.wineDefinition?.name?.toLowerCase() || '');
+        const producer = stripAccents(b.wineDefinition?.producer?.toLowerCase() || '');
+        const notes = stripAccents(b.notes?.toLowerCase() || '');
+        const location = stripAccents(b.location?.toLowerCase() || '');
+        return wineName.includes(searchNorm) ||
+               producer.includes(searchNorm) ||
+               notes.includes(searchNorm) ||
+               location.includes(searchNorm);
       });
     }
 
