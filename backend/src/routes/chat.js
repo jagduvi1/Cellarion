@@ -10,10 +10,12 @@
  */
 
 const express = require('express');
+const mongoose = require('mongoose');
 const { requireAuth } = require('../middleware/auth');
 const aiChat = require('../services/aiChat');
 const aiConfig = require('../config/aiConfig');
 const ChatUsage = require('../models/ChatUsage');
+const User = require('../models/User');
 
 const router = express.Router();
 
@@ -73,7 +75,7 @@ async function validateAndCheckLimit(req, res) {
     return null;
   }
 
-  const { message, useQueryExpansion, history: rawHistory, previousWines: rawPreviousWines } = req.body;
+  const { message, useQueryExpansion, history: rawHistory, previousWines: rawPreviousWines, cellarIds: rawCellarIds } = req.body;
   if (!message || typeof message !== 'string' || !message.trim()) {
     res.status(400).json({ error: 'message is required' });
     return null;
@@ -123,11 +125,26 @@ async function validateAndCheckLimit(req, res) {
     { upsert: true }
   );
 
+  // Validate and resolve cellar scope
+  let cellarIds = null;
+  if (Array.isArray(rawCellarIds) && rawCellarIds.length > 0) {
+    cellarIds = rawCellarIds.filter(id => mongoose.Types.ObjectId.isValid(id)).slice(0, 20);
+    if (!cellarIds.length) cellarIds = null;
+  } else if (rawCellarIds === undefined || rawCellarIds === null) {
+    // Default to user's default cellar if set
+    const user = await User.findById(req.user.id).select('preferences.defaultCellarId').lean();
+    if (user?.preferences?.defaultCellarId) {
+      cellarIds = [user.preferences.defaultCellarId.toString()];
+    }
+  }
+  // rawCellarIds === [] (explicit empty array) means "search all cellars"
+
   return {
     message: message.trim(),
     useQueryExpansion: useQueryExpansion !== false,
     history,
     previousWines,
+    cellarIds,
     plan,
     limit,
     period,
@@ -157,13 +174,14 @@ router.post('/', requireAuth, async (req, res) => {
   const validated = await validateAndCheckLimit(req, res);
   if (!validated) return;
 
-  const { message, useQueryExpansion, history, previousWines, date, usedBefore, limit, period } = validated;
+  const { message, useQueryExpansion, history, previousWines, cellarIds, date, usedBefore, limit, period } = validated;
 
   try {
     const result = await aiChat.chat(req.user.id, message, {
       useQueryExpansion,
       history,
       previousWines,
+      cellarIds,
     });
 
     if (result.usage) {
@@ -193,7 +211,7 @@ router.post('/stream', requireAuth, async (req, res) => {
   const validated = await validateAndCheckLimit(req, res);
   if (!validated) return;
 
-  const { message, useQueryExpansion, history, previousWines, date, usedBefore, limit, period } = validated;
+  const { message, useQueryExpansion, history, previousWines, cellarIds, date, usedBefore, limit, period } = validated;
 
   // Set SSE headers
   res.setHeader('Content-Type', 'text/event-stream');
@@ -209,6 +227,7 @@ router.post('/stream', requireAuth, async (req, res) => {
     const result = await aiChat.chatStream(req.user.id, message, {
       useQueryExpansion,
       history,
+      cellarIds,
       previousWines,
     }, res);
 

@@ -63,6 +63,71 @@
   color: var(--color-danger);
 }
 
+/* ── Cellar scope selector ── */
+
+.cellar-chat__scope {
+  position: relative;
+  padding: 0 1rem;
+  flex-shrink: 0;
+}
+
+.cellar-chat__scope-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.35rem 0.75rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg);
+  color: var(--color-text-muted);
+  font-size: 0.78rem;
+  cursor: pointer;
+  transition: border-color var(--transition-fast);
+}
+
+.cellar-chat__scope-btn:hover {
+  border-color: var(--color-border-focus);
+  color: var(--color-text);
+}
+
+.cellar-chat__scope-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 1rem;
+  z-index: 20;
+  margin-top: 0.25rem;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  min-width: 180px;
+  max-height: 240px;
+  overflow-y: auto;
+  padding: 0.35rem 0;
+}
+
+.cellar-chat__scope-option {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.45rem 0.75rem;
+  font-size: 0.82rem;
+  color: var(--color-text);
+  cursor: pointer;
+  transition: background var(--transition-fast);
+}
+
+.cellar-chat__scope-option:hover {
+  background: var(--color-hover);
+}
+
+.cellar-chat__scope-option input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--color-primary);
+  flex-shrink: 0;
+}
+
 /* ── Message list ── */
 
 .cellar-chat__messages {

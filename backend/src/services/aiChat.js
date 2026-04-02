@@ -59,7 +59,7 @@ function getEventLog() {
  * @param {number} maxResults
  * @returns {Promise<Array>}
  */
-async function filterToUserCellar(userId, hits, maxResults) {
+async function filterToUserCellar(userId, hits, maxResults, { cellarIds } = {}) {
   if (!hits.length) return [];
 
   // Build lookup: "wineDefinitionId|vintage" → qdrant score
@@ -74,11 +74,15 @@ async function filterToUserCellar(userId, hits, maxResults) {
   }
 
   // Fetch active bottles the user owns for those wine definitions
-  const bottles = await Bottle.find({
+  const bottleFilter = {
     user: userId,
     status: 'active',
     wineDefinition: { $in: wineDefIds }
-  })
+  };
+  if (cellarIds?.length) {
+    bottleFilter.cellar = { $in: cellarIds };
+  }
+  const bottles = await Bottle.find(bottleFilter)
     .populate('wineDefinition', 'name producer type appellation region country grapes')
     .populate('wineDefinition.region', 'name')
     .populate('wineDefinition.country', 'name')
@@ -299,7 +303,7 @@ function parseExpandResult(text, originalMessage, hasHistory) {
  * Prepare the chat context: expand query, search, filter, enrich.
  * Returns everything needed to call Claude.
  */
-async function _prepareChatContext(userId, message, { useQueryExpansion = true, history = [], previousWines = null } = {}) {
+async function _prepareChatContext(userId, message, { useQueryExpansion = true, history = [], previousWines = null, cellarIds = null } = {}) {
   const cfg = aiConfig.get();
 
   if (!cfg.chatEnabled) {
@@ -336,7 +340,7 @@ async function _prepareChatContext(userId, message, { useQueryExpansion = true, 
     }
     const queryVector = await embedSingle(searchQuery, { model: cfg.embeddingModel });
     const hits = await vectorStore.searchSimilar(cfg.vectorIndex, queryVector, cfg.chatTopK);
-    matches = await filterToUserCellar(userId, hits, cfg.chatMaxResults);
+    matches = await filterToUserCellar(userId, hits, cfg.chatMaxResults, { cellarIds });
 
     // Enrich matches with maturity, price, and count data
     const enrichment = await fetchEnrichmentData(userId, matches);
