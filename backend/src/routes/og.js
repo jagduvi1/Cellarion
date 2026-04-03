@@ -1,18 +1,20 @@
 const express = require('express');
 const WineDefinition = require('../models/WineDefinition');
+const BlogPost = require('../models/BlogPost');
+const { fromNormalized } = require('../utils/ratingUtils');
 
 const router = express.Router();
 
 const SITE_URL = process.env.FRONTEND_URL || 'https://cellarion.app';
 const API_URL = process.env.BACKEND_URL || process.env.FRONTEND_URL || 'https://cellarion.app';
 
-// GET /og/wines/:id — Returns minimal HTML with OG meta tags for social media crawlers.
+// GET /og/wines/:id — Full server-rendered HTML for search engine crawlers.
 // Nginx routes crawler user-agents here; real users get the SPA.
 router.get('/wines/:id', async (req, res) => {
   try {
     const wine = await WineDefinition.findById(req.params.id)
       .populate(['country', 'region', 'grapes'])
-      .select('name producer country region appellation grapes type image communityRating')
+      .select('name producer country region appellation classification grapes type image communityRating')
       .lean();
 
     if (!wine) {
@@ -32,7 +34,30 @@ router.get('/wines/:id', async (req, res) => {
       ? (wine.image.startsWith('/api/') || wine.image.startsWith('http') ? `${API_URL}${wine.image}` : `${API_URL}/api/uploads/${wine.image}`)
       : `${SITE_URL}/cellarion-logo.jpg`;
 
-    // Minimal HTML — crawlers only read the <head>
+    const grapeNames = (wine.grapes || []).map(g => g.name).filter(Boolean);
+    const hasRating = wine.communityRating?.reviewCount > 0;
+
+    // JSON-LD structured data
+    const jsonLd = {
+      '@context': 'https://schema.org',
+      '@type': 'Product',
+      name: wine.name,
+      description,
+      brand: { '@type': 'Brand', name: wine.producer },
+      image: imageUrl,
+      url: pageUrl,
+      category: wine.type ? `${wine.type} wine` : 'wine'
+    };
+    const ratingOn5 = hasRating ? fromNormalized(wine.communityRating.averageNormalized, '5') : null;
+    if (hasRating && ratingOn5 != null) {
+      jsonLd.aggregateRating = {
+        '@type': 'AggregateRating',
+        ratingValue: ratingOn5.toFixed(1),
+        bestRating: '5',
+        reviewCount: wine.communityRating.reviewCount
+      };
+    }
+
     const html = `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -50,10 +75,26 @@ router.get('/wines/:id', async (req, res) => {
   <meta name="twitter:description" content="${esc(description)}" />
   <meta name="twitter:image" content="${esc(imageUrl)}" />
   <link rel="canonical" href="${esc(pageUrl)}" />
-  <meta http-equiv="refresh" content="0;url=${esc(pageUrl)}" />
+  <script type="application/ld+json">${JSON.stringify(jsonLd)}</script>
 </head>
 <body>
-  <p>Redirecting to <a href="${esc(pageUrl)}">${esc(pageTitle)}</a>...</p>
+  <header>
+    <h1>${esc(wine.name)}</h1>
+    <p>${esc(wine.producer)}</p>
+  </header>
+  <main>
+    ${wine.type ? `<p><strong>Type:</strong> ${esc(wine.type.charAt(0).toUpperCase() + wine.type.slice(1))}</p>` : ''}
+    ${wine.appellation ? `<p><strong>Appellation:</strong> ${esc(wine.appellation)}</p>` : ''}
+    ${wine.classification ? `<p><strong>Classification:</strong> ${esc(wine.classification)}</p>` : ''}
+    ${wine.region?.name ? `<p><strong>Region:</strong> ${esc(wine.region.name)}</p>` : ''}
+    ${wine.country?.name ? `<p><strong>Country:</strong> ${esc(wine.country.name)}</p>` : ''}
+    ${grapeNames.length > 0 ? `<p><strong>Grapes:</strong> ${esc(grapeNames.join(', '))}</p>` : ''}
+    ${hasRating && ratingOn5 != null ? `<p><strong>Community rating:</strong> ${ratingOn5.toFixed(1)}/5 from ${wine.communityRating.reviewCount} ${wine.communityRating.reviewCount === 1 ? 'review' : 'reviews'}</p>` : ''}
+    ${wine.image ? `<img src="${esc(imageUrl)}" alt="${esc(wine.name)}" width="300" />` : ''}
+  </main>
+  <footer>
+    <p>Discover, track, and manage your wine cellar with <a href="${esc(SITE_URL)}">Cellarion</a>.</p>
+  </footer>
 </body>
 </html>`;
 
@@ -62,6 +103,86 @@ router.get('/wines/:id', async (req, res) => {
     res.send(html);
   } catch (err) {
     console.error('[og] wine page error:', err.message);
+    res.status(500).send('Error generating page');
+  }
+});
+
+// GET /og/blog/:slug — Full server-rendered HTML for blog post crawlers.
+router.get('/blog/:slug', async (req, res) => {
+  try {
+    const post = await BlogPost.findOne({ slug: req.params.slug, status: 'published' })
+      .populate('author', 'username')
+      .lean();
+
+    if (!post) {
+      return res.status(404).send('Not found');
+    }
+
+    const metaTitle = post.metaTitle || post.title;
+    const metaDescription = post.metaDescription || post.excerpt || `${post.title} — Cellarion Blog`;
+    const postUrl = `${SITE_URL}/blog/${post.slug}`;
+    const publishedDate = post.publishedAt ? new Date(post.publishedAt).toISOString().split('T')[0] : '';
+    const modifiedDate = post.updatedAt ? new Date(post.updatedAt).toISOString().split('T')[0] : '';
+
+    // Strip HTML tags from content for a text-only body
+    const textContent = post.content.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+
+    const jsonLd = {
+      '@context': 'https://schema.org',
+      '@type': 'BlogPosting',
+      headline: post.title,
+      description: metaDescription,
+      datePublished: post.publishedAt,
+      dateModified: post.updatedAt,
+      author: { '@type': 'Organization', name: 'Cellarion', url: SITE_URL },
+      publisher: { '@type': 'Organization', name: 'Cellarion', url: SITE_URL },
+      mainEntityOfPage: { '@type': 'WebPage', '@id': postUrl },
+      ...(post.coverImage ? { image: post.coverImage } : {})
+    };
+
+    const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>${esc(metaTitle)} — Cellarion Blog</title>
+  <meta name="description" content="${esc(metaDescription)}" />
+  <meta property="og:type" content="article" />
+  <meta property="og:title" content="${esc(metaTitle)}" />
+  <meta property="og:description" content="${esc(metaDescription)}" />
+  ${post.coverImage ? `<meta property="og:image" content="${esc(post.coverImage)}" />` : ''}
+  <meta property="og:url" content="${esc(postUrl)}" />
+  <meta property="og:site_name" content="Cellarion" />
+  ${publishedDate ? `<meta property="article:published_time" content="${esc(post.publishedAt)}" />` : ''}
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="${esc(metaTitle)}" />
+  <meta name="twitter:description" content="${esc(metaDescription)}" />
+  ${post.coverImage ? `<meta name="twitter:image" content="${esc(post.coverImage)}" />` : ''}
+  <link rel="canonical" href="${esc(postUrl)}" />
+  <script type="application/ld+json">${JSON.stringify(jsonLd)}</script>
+</head>
+<body>
+  <nav><a href="${esc(SITE_URL)}/blog">Cellarion Blog</a> / ${esc(post.title)}</nav>
+  <article>
+    <header>
+      <h1>${esc(post.title)}</h1>
+      ${publishedDate ? `<time datetime="${esc(publishedDate)}">${esc(publishedDate)}</time>` : ''}
+      ${post.author?.username ? `<p>By ${esc(post.author.username)}</p>` : ''}
+      ${post.tags?.length ? `<p>Tags: ${post.tags.map(t => esc(t)).join(', ')}</p>` : ''}
+    </header>
+    ${post.coverImage ? `<img src="${esc(post.coverImage)}" alt="${esc(post.title)}" width="800" />` : ''}
+    <div>${textContent.slice(0, 5000)}</div>
+  </article>
+  <footer>
+    <p><a href="${esc(SITE_URL)}/blog">Back to blog</a> · <a href="${esc(SITE_URL)}">Cellarion</a></p>
+  </footer>
+</body>
+</html>`;
+
+    res.set('Content-Type', 'text/html; charset=utf-8');
+    res.set('Cache-Control', 'public, max-age=3600');
+    res.send(html);
+  } catch (err) {
+    console.error('[og] blog page error:', err.message);
     res.status(500).send('Error generating page');
   }
 });

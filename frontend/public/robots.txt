@@ -21,4 +21,4 @@ Allow: /privacy
 Allow: /api/sitemap.xml
 Allow: /api/blog
 
-Sitemap: https://cellarion.app/api/sitemap.xml
+Sitemap: https://cellarion.app/sitemap.xml
