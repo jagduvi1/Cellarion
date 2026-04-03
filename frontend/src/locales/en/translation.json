@@ -312,6 +312,7 @@
     "notePlaceholder": "How was it? Any tasting notes?",
     "noPriceData": "No market price data yet.",
     "sommelierAddPricing": "Our staff will add pricing data for this vintage soon.",
+    "reportPrice": "Report incorrect price",
     "maturityPhaseEarly": "Early drinking",
     "maturityPhasePeak": "Optimal maturity ⭐",
     "maturityPhaseLate": "Late maturity",
@@ -821,7 +822,14 @@
       "aiSuggestError": "Could not suggest a price",
       "aiSuggestFilled": "Suggestion applied — review and save",
       "aiNoValue": "This wine has no significant market value",
-      "aiReasoning": "Reasoning:"
+      "aiReasoning": "Reasoning:",
+      "sommNotes": "Sommelier notes",
+      "sommNotesOptional": "(optional)",
+      "sommNotesPlaceholder": "Pricing rationale, market context…",
+      "skipTracking": "Not worth tracking",
+      "skipping": "Skipping…",
+      "skipConfirm": "Mark this wine as not worth tracking for price evolution? It will be permanently removed from the queue.",
+      "skipTitle": "Remove from price queue — this wine doesn't need price tracking"
     }
   },
 

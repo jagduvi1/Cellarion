@@ -312,6 +312,7 @@
     "notePlaceholder": "Hur smakade det? Några smaknoteringar?",
     "noPriceData": "Inga marknadsprisdata ännu.",
     "sommelierAddPricing": "Vår personal kommer snart att lägga till prisdata för denna årgång.",
+    "reportPrice": "Rapportera felaktigt pris",
     "maturityPhaseEarly": "Tidig drickning",
     "maturityPhasePeak": "Optimal mognad ⭐",
     "maturityPhaseLate": "Sen mognad",
@@ -821,7 +822,14 @@
       "aiSuggestError": "Kunde inte föreslå ett pris",
       "aiSuggestFilled": "Förslag tillämpat — granska och spara",
       "aiNoValue": "Detta vin har inget betydande marknadsvärde",
-      "aiReasoning": "Resonemang:"
+      "aiReasoning": "Resonemang:",
+      "sommNotes": "Sommelieranteckningar",
+      "sommNotesOptional": "(valfritt)",
+      "sommNotesPlaceholder": "Prisresonemang, marknadskontext…",
+      "skipTracking": "Inte värd att följa",
+      "skipping": "Hoppar över…",
+      "skipConfirm": "Markera detta vin som inte värt att följa för prisutveckling? Det tas permanent bort från kön.",
+      "skipTitle": "Ta bort från priskön — detta vin behöver ingen prisbevakning"
     }
   },
 

@@ -83,6 +83,28 @@
 .sp-currency-field {}
 .sp-source-field {}
 
+/* ── Sommelier notes ── */
+.sp-notes-field {
+  margin-top: 0.5rem;
+}
+
+.sp-notes-field textarea {
+  width: 100%;
+  font-size: 0.85rem;
+  resize: vertical;
+  min-height: 2.5rem;
+}
+
+/* ── Skip button ── */
+.sp-skip-btn {
+  font-size: 0.8rem;
+  opacity: 0.7;
+}
+
+.sp-skip-btn:hover {
+  opacity: 1;
+}
+
 /* ── Mobile ── */
 @media (max-width: 600px) {
   .sp-form-row {

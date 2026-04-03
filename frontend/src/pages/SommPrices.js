@@ -95,8 +95,10 @@ function PriceCard({ item, defaultCurrency, userCurrency, rates, onSaved }) {
   const [form, setForm] = useState({
     price:    '',
     currency: item.latestPrice?.currency || defaultCurrency || 'USD',
-    source:   ''
+    source:   '',
+    sommNotes: ''
   });
+  const [skipping, setSkipping] = useState(false);
 
   const set = (field) => (e) => setForm(f => ({ ...f, [field]: e.target.value }));
 
@@ -121,7 +123,8 @@ function PriceCard({ item, defaultCurrency, userCurrency, rates, onSaved }) {
             ...f,
             price:    String(s.price),
             currency: s.currency || f.currency,
-            source:   s.source   || f.source
+            source:   s.source   || f.source,
+            sommNotes: s.sommNotes || f.sommNotes
           }));
           setAiMsg({ ok: true, text: t('somm.prices.aiSuggestFilled'), reasoning: s.reasoning });
         } else {
@@ -151,7 +154,8 @@ function PriceCard({ item, defaultCurrency, userCurrency, rates, onSaved }) {
           vintage:  item.vintage,
           price:    parseFloat(form.price),
           currency: form.currency,
-          source:   form.source || undefined
+          source:   form.source || undefined,
+          sommNotes: form.sommNotes || undefined
         })
       });
       const data = await res.json();
@@ -164,6 +168,33 @@ function PriceCard({ item, defaultCurrency, userCurrency, rates, onSaved }) {
       setErr('Network error');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleSkip = async () => {
+    if (!window.confirm(t('somm.prices.skipConfirm'))) return;
+    setSkipping(true);
+    setErr(null);
+    try {
+      const res = await apiFetch('/api/somm/prices/skip', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          wineDefinition: wine?._id,
+          vintage: item.vintage,
+          reason: form.sommNotes || undefined
+        })
+      });
+      if (res.ok) {
+        onSaved(wine?._id, item.vintage);
+      } else {
+        const data = await res.json();
+        setErr(data.error || 'Failed to skip');
+      }
+    } catch {
+      setErr('Network error');
+    } finally {
+      setSkipping(false);
     }
   };
 
@@ -275,9 +306,29 @@ function PriceCard({ item, defaultCurrency, userCurrency, rates, onSaved }) {
             </div>
           </div>
 
+          <div className="form-group sp-notes-field">
+            <label>{t('somm.prices.sommNotes')} <span className="somm-year-hint">{t('somm.prices.sommNotesOptional')}</span></label>
+            <textarea
+              placeholder={t('somm.prices.sommNotesPlaceholder')}
+              value={form.sommNotes}
+              onChange={set('sommNotes')}
+              rows={2}
+              maxLength={2000}
+            />
+          </div>
+
           <div className="somm-form-actions">
             <button type="submit" className="btn btn-primary" disabled={saving}>
               {saving ? t('common.saving') : t('somm.prices.savePrice')}
+            </button>
+            <button
+              type="button"
+              className="btn btn-secondary sp-skip-btn"
+              onClick={handleSkip}
+              disabled={skipping}
+              title={t('somm.prices.skipTitle')}
+            >
+              {skipping ? t('somm.prices.skipping') : t('somm.prices.skipTracking')}
             </button>
           </div>
         </form>

@@ -128,7 +128,7 @@ Rules:
 - Never invent aging data`;
 
 const DEFAULT_PRICE_SUGGEST_PROMPT =
-`You are a wine market expert with comprehensive knowledge of wine pricing and investment value. Given the wine details below, suggest the current market price.
+`You are a wine market expert specialising in the European wine market. Given the wine details below, estimate its current market value.
 
 Wine: {{name}}
 Producer: {{producer}}
@@ -136,19 +136,37 @@ Vintage: {{vintage}}
 Country: {{country}}
 Region: {{region}}
 Appellation: {{appellation}}
+Classification: {{classification}}
 Type: {{type}}
 Grapes: {{grapes}}
+QualityTier: {{qualityTier}}
+# (one of: unclassified, entry-level, mid-tier, prestige)
+
+Your pricing approach — in this order:
+1. **Try to recall real market data first.** If you know the current retail price for this exact wine and vintage from European retailers (Wine-Searcher, Vivino, auction records, specialist merchants), use that. Cite the source.
+2. **If no exact data**, estimate based on comparable wines of the same appellation, classification, and vintage.
+3. **If still uncertain**, return null rather than guessing.
+
+What determines the price of a wine:
+- **Classification** is the primary price driver. Grand Cru, Premier Cru, Cru Classé, Gran Reserva, Riserva DOCG — these are the wines that command premium prices. Without an official classification, a wine is priced as a standard regional bottle.
+- **Single-vineyard bottlings** (named vineyard, "Vigna", "Clos", "Lieu-dit") signal better selection, more structure, and longer cellar life — worth a moderate premium over generic cuvées from the same appellation.
+- **Cellar aging potential** directly affects value. A wine that can age 15–30 years in a cellar is fundamentally more valuable than one meant to drink within 5 years. Structure, concentration, and proven track records matter.
+- **The vintage year is critical.** A 2022 current release and a 1990 mature bottle of the same wine are entirely different price points. Older vintages of age-worthy wines gain value; older vintages of everyday wines lose it. Always consider how old the bottle is and whether age adds or subtracts value for this specific wine.
+- **The appellation alone does NOT set the price.** Châteauneuf-du-Pape, Barolo, Brunello — these are famous regions, but within each there are €15 bottles and €200 bottles. The wine's tier within the appellation matters most.
+- **Do NOT infer classifications** not explicitly stated. "Cuvée Réservée" or "Réserve" in the name is a marketing label, not an official classification.
+- **Producer reputation** matters only for well-established, widely traded names. Do not assume prestige from an unfamiliar producer.
 
 Return ONLY a raw JSON object (no markdown, no code fences, no extra text):
-{"price":NUMBER_OR_NULL,"currency":"USD","source":"AI estimate based on market knowledge","reasoning":"brief explanation","confidence":0.0}
+{"price":NUMBER_OR_NULL,"currency":"EUR","source":"description of price source","reasoning":"brief explanation","sommNotes":"1-2 sentence pricing rationale for the sommelier record","confidence":0.0}
 
 Rules:
-- price is the estimated current retail/market value per bottle in USD
-- If this wine has NO meaningful cellar/collectible value (e.g. everyday table wine, bulk-produced wine, wine that does not appreciate with age, or wine you cannot reliably price), set price to null and explain in reasoning
-- For wines that LOSE value over time (past their prime, not age-worthy), set price to null with reasoning like "past optimal drinking window" or "does not appreciate with cellaring"
-- Only provide a price if you are reasonably confident it reflects real market value
-- confidence: 1.0 = well-known traded wine with reliable auction/retail data, 0.7 = confident estimate from similar wines, 0.4 = rough guess
-- Never invent a price — if uncertain, return null for price
+- price is the estimated current market value per bottle in EUR (European retail)
+- source: if based on real market data, name it (e.g. "Wine-Searcher average", "Vivino median", "auction estimate"). If estimated from comparable wines, say so.
+- If this wine has no meaningful market value to track (everyday table wine, bulk-produced, or wine you cannot reliably price), set price to null and explain in reasoning
+- For wines past their prime (not age-worthy, too old), set price to null with reasoning
+- sommNotes: 1–2 sentences explaining the pricing rationale — what tier, why this price, how vintage age affects it
+- confidence: 1.0 = exact wine+vintage found in market data, 0.7 = confident estimate from comparable wines, 0.4 = rough guess
+- Never invent a price — if uncertain, return null
 - Return {"error":"unknown"} ONLY if the wine is completely unrecognisable`;
 
 // Models that are known to work reliably for text chat.

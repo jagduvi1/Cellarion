@@ -327,13 +327,15 @@ async function suggestDrinkWindow({ name, producer, vintage, country, region, ap
 /**
  * Suggest market price for a wine+vintage using AI.
  * Returns { data, debugRaw, debugReason }.
- *   data — { price (number|null), currency, source, reasoning, confidence }
+ *   data — { price (number|null), currency, source, reasoning, sommNotes, confidence }
  */
-async function suggestPrice({ name, producer, vintage, country, region, appellation, type, grapes }) {
+async function suggestPrice({ name, producer, vintage, country, region, appellation, classification, type, grapes }) {
   if (!name || !vintage) return { data: null, debugRaw: null, debugReason: 'missing_fields' };
 
   let client;
   try { client = getClient(); } catch { return { data: null, debugRaw: null, debugReason: 'no_api_key' }; }
+
+  const qualityTier = classifyQualityTier({ name, appellation });
 
   const prompt = aiConfig.get().priceSuggestPrompt
     .replace('{{name}}', name || '')
@@ -342,8 +344,10 @@ async function suggestPrice({ name, producer, vintage, country, region, appellat
     .replace('{{country}}', country || '')
     .replace('{{region}}', region || '')
     .replace('{{appellation}}', appellation || '')
+    .replace('{{classification}}', classification || '')
     .replace('{{type}}', type || '')
-    .replace('{{grapes}}', Array.isArray(grapes) ? grapes.join(', ') : (grapes || ''));
+    .replace('{{grapes}}', Array.isArray(grapes) ? grapes.join(', ') : (grapes || ''))
+    .replace('{{qualityTier}}', qualityTier);
 
   const apiParams = {
     model: aiConfig.get().priceSuggestModel,

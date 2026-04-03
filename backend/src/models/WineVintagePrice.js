@@ -48,6 +48,12 @@ const wineVintagePriceSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
     required: true
+  },
+  // Optional sommelier notes explaining pricing rationale
+  sommNotes: {
+    type: String,
+    trim: true,
+    maxlength: [2000, 'Sommelier notes too long']
   }
 });
 

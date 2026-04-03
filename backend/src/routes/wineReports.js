@@ -7,7 +7,7 @@ const { requireAuth } = require('../middleware/auth');
 const { logAudit } = require('../services/audit');
 const { stripHtml } = require('../utils/sanitize');
 
-const VALID_REASONS = ['wrong_info', 'duplicate', 'inappropriate', 'other'];
+const VALID_REASONS = ['wrong_info', 'duplicate', 'inappropriate', 'wrong_price', 'other'];
 
 // POST /api/wine-reports — report a wine
 router.post('/', requireAuth, async (req, res) => {

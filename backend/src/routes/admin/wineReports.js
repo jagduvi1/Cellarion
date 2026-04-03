@@ -8,7 +8,7 @@ const { incrementCred } = require('../../utils/cellarCred');
 const { parsePagination } = require('../../utils/pagination');
 
 const REPORT_STATUSES = ['pending', 'resolved', 'dismissed'];
-const REPORT_REASONS = ['wrong_info', 'duplicate', 'inappropriate', 'other'];
+const REPORT_REASONS = ['wrong_info', 'duplicate', 'inappropriate', 'wrong_price', 'other'];
 
 router.use(requireAuth, requireRole('admin'));
 

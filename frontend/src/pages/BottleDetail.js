@@ -47,6 +47,7 @@ function BottleDetail() {
   const [consumeOpen, setConsumeOpen] = useState(false);
   const [suggestGrapesOpen, setSuggestGrapesOpen] = useState(false);
   const [reportWineOpen, setReportWineOpen] = useState(false);
+  const [reportDefaultReason, setReportDefaultReason] = useState(null);
   const [recommendOpen, setRecommendOpen] = useState(false);
   const [journalPrompt, setJournalPrompt] = useState(false);
   const [journalFormOpen, setJournalFormOpen] = useState(false);
@@ -339,7 +340,7 @@ function BottleDetail() {
           onEdit={() => setEditing(true)}
           onSuggestGrapes={() => setSuggestGrapesOpen(true)}
           onRemove={() => setConsumeOpen(true)}
-          onReportWine={() => setReportWineOpen(true)}
+          onReportWine={(reason) => { setReportWineOpen(true); setReportDefaultReason(reason || null); }}
         />
       )}
 
@@ -462,7 +463,8 @@ function BottleDetail() {
         {reportWineOpen && bottle?.wineDefinition && (
           <ReportWineModal
             wine={bottle.wineDefinition}
-            onClose={() => setReportWineOpen(false)}
+            defaultReason={reportDefaultReason}
+            onClose={() => { setReportWineOpen(false); setReportDefaultReason(null); }}
           />
         )}
 

@@ -7,13 +7,14 @@ import './ReportWineModal.css';
 const REASONS = [
   { value: 'wrong_info', label: 'Wrong information (name, producer, region, etc.)' },
   { value: 'duplicate', label: 'Duplicate wine entry' },
+  { value: 'wrong_price', label: 'Wrong or inaccurate market price' },
   { value: 'inappropriate', label: 'Inappropriate content' },
   { value: 'other', label: 'Other' },
 ];
 
-function ReportWineModal({ wine, onClose }) {
+function ReportWineModal({ wine, defaultReason, onClose }) {
   const { apiFetch } = useAuth();
-  const [form, setForm] = useState({ reason: 'wrong_info', details: '' });
+  const [form, setForm] = useState({ reason: defaultReason || 'wrong_info', details: '' });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(false);

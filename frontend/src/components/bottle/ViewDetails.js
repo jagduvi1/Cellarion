@@ -192,7 +192,17 @@ function ViewDetails({ bottle, rackInfo, cellarId, vintageProfile, priceHistory,
         <div className="bd-section">
           <span className="bd-section-label">{t('bottleDetail.priceEvolution')}</span>
           {hasPriceEvolution ? (
-            <PriceHistoryTimeline history={priceHistory} rates={rates} userCurrency={userCurrency} />
+            <>
+              <PriceHistoryTimeline history={priceHistory} rates={rates} userCurrency={userCurrency} />
+              {priceHistory && priceHistory.length > 0 && wine && (
+                <button
+                  className="btn-report-wine sp-report-price"
+                  onClick={() => onReportWine('wrong_price')}
+                >
+                  {t('bottleDetail.reportPrice')}
+                </button>
+              )}
+            </>
           ) : (
             <div className="bd-price-evolution bd-price-evolution--locked">
               <span className="bd-price-evolution__icon" aria-hidden="true">{'\u{1F512}'}</span>

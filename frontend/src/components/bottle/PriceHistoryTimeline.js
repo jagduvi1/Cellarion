@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { convertAmountHistorical } from '../../utils/currency';
 import { calculatePriceChange } from '../../utils/priceHistoryUtils';
@@ -5,6 +6,7 @@ import timeAgo from '../../utils/timeAgo';
 
 function PriceHistoryTimeline({ history, rates, userCurrency }) {
   const { t } = useTranslation();
+  const [showSommNotes, setShowSommNotes] = useState(false);
   if (history === null) {
     return <span className="bd-no-dates">{t('bottleDetail.loadingMaturity')}</span>;
   }
@@ -44,6 +46,22 @@ function PriceHistoryTimeline({ history, rates, userCurrency }) {
         {latest.source && <> &middot; <em>{latest.source}</em></>}
         {latest.setBy?.username && <> &middot; {latest.setBy.username}</>}
       </div>
+
+      {latest.sommNotes && (
+        <div className="bd-somm-notes-toggle">
+          <button
+            className="bd-somm-notes-btn"
+            onClick={() => setShowSommNotes(v => !v)}
+            aria-expanded={showSommNotes}
+          >
+            {t('bottleDetail.sommNotes')}
+            <span className={`bd-somm-notes-chevron${showSommNotes ? ' bd-somm-notes-chevron--open' : ''}`}>&rsaquo;</span>
+          </button>
+          {showSommNotes && (
+            <p className="bd-maturity-notes">{latest.sommNotes}</p>
+          )}
+        </div>
+      )}
 
       {history.length > 1 && (
         <div className="bd-price-timeline">

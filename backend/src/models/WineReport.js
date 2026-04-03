@@ -15,7 +15,7 @@ const wineReportSchema = new mongoose.Schema({
   },
   reason: {
     type: String,
-    enum: ['wrong_info', 'duplicate', 'inappropriate', 'other'],
+    enum: ['wrong_info', 'duplicate', 'inappropriate', 'wrong_price', 'other'],
     required: true,
     index: true
   },

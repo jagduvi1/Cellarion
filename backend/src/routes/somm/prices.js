@@ -2,6 +2,7 @@ const express = require('express');
 const mongoose = require('mongoose');
 const { requireAuth, requireSommOrAdmin } = require('../../middleware/auth');
 const WineVintagePrice = require('../../models/WineVintagePrice');
+const PriceTrackingSkip = require('../../models/PriceTrackingSkip');
 const Bottle = require('../../models/Bottle');
 const WineDefinition = require('../../models/WineDefinition');
 const { getOrCreateDailySnapshot, getSnapshotsForDates } = require('../../utils/exchangeRates');
@@ -36,6 +37,13 @@ router.get('/queue', requireSommOrAdmin, async (req, res) => {
 
     if (rawPairs.length === 0) return res.json({ queue: [] });
 
+    // Step 1b: exclude wine+vintage pairs that have been skipped
+    const skips = await PriceTrackingSkip.find({}, 'wineDefinition vintage').lean();
+    const skipSet = new Set(skips.map(s => `${s.wineDefinition}:${s.vintage}`));
+    const activePairs = rawPairs.filter(p => !skipSet.has(`${p._id.wineDefinition}:${p._id.vintage}`));
+
+    if (activePairs.length === 0) return res.json({ queue: [] });
+
     // Step 2: find the latest price snapshot for each pair in one aggregation
     const latestPrices = await WineVintagePrice.aggregate([
       {
@@ -57,7 +65,7 @@ router.get('/queue', requireSommOrAdmin, async (req, res) => {
     }
 
     // Step 3: filter pairs that need attention
-    const needsUpdate = rawPairs.filter(p => {
+    const needsUpdate = activePairs.filter(p => {
       const key = `${p._id.wineDefinition}:${p._id.vintage}`;
       const latest = priceMap.get(key);
       return !latest || latest.latestSetAt < staleThreshold;
@@ -184,6 +192,7 @@ router.post('/ai-suggest', requireSommOrAdmin, async (req, res) => {
       country: wine.country?.name,
       region: wine.region?.name,
       appellation: wine.appellation,
+      classification: wine.classification,
       type: wine.type,
       grapes: wine.grapes?.map(g => g.name)
     });
@@ -205,11 +214,11 @@ router.post('/ai-suggest', requireSommOrAdmin, async (req, res) => {
 /**
  * POST /api/somm/prices
  * Add a new price snapshot for a wine+vintage. Somm/admin only.
- * Body: { wineDefinition, vintage, price, currency, source }
+ * Body: { wineDefinition, vintage, price, currency, source, sommNotes }
  */
 router.post('/', requireSommOrAdmin, async (req, res) => {
   try {
-    const { wineDefinition, vintage, price, currency, source } = req.body;
+    const { wineDefinition, vintage, price, currency, source, sommNotes } = req.body;
 
     if (!wineDefinition || !vintage) {
       return res.status(400).json({ error: 'wineDefinition and vintage are required' });
@@ -238,6 +247,7 @@ router.post('/', requireSommOrAdmin, async (req, res) => {
       price: priceNum,
       currency: currency || 'USD',
       source: source ? source.trim() : undefined,
+      sommNotes: sommNotes ? sommNotes.trim() : undefined,
       setBy: req.user.id
     });
 
@@ -248,6 +258,51 @@ router.post('/', requireSommOrAdmin, async (req, res) => {
   } catch (error) {
     console.error('Add price entry error:', error);
     res.status(500).json({ error: 'Failed to add price entry' });
+  }
+});
+
+/**
+ * POST /api/somm/prices/skip
+ * Mark a wine+vintage as not worth price tracking. Somm/admin only.
+ * Body: { wineDefinition, vintage, reason }
+ */
+router.post('/skip', requireSommOrAdmin, async (req, res) => {
+  try {
+    const { wineDefinition, vintage, reason } = req.body;
+    if (!wineDefinition || !vintage) {
+      return res.status(400).json({ error: 'wineDefinition and vintage are required' });
+    }
+
+    const skip = await PriceTrackingSkip.findOneAndUpdate(
+      { wineDefinition, vintage },
+      { wineDefinition, vintage, reason: reason || undefined, skippedBy: req.user.id, skippedAt: new Date() },
+      { upsert: true, new: true }
+    );
+
+    res.status(201).json({ skip });
+  } catch (error) {
+    console.error('Skip price tracking error:', error);
+    res.status(500).json({ error: 'Failed to skip price tracking' });
+  }
+});
+
+/**
+ * DELETE /api/somm/prices/skip
+ * Remove the skip flag for a wine+vintage, re-enabling price tracking. Somm/admin only.
+ * Body: { wineDefinition, vintage }
+ */
+router.delete('/skip', requireSommOrAdmin, async (req, res) => {
+  try {
+    const { wineDefinition, vintage } = req.body;
+    if (!wineDefinition || !vintage) {
+      return res.status(400).json({ error: 'wineDefinition and vintage are required' });
+    }
+
+    await PriceTrackingSkip.deleteOne({ wineDefinition, vintage });
+    res.json({ message: 'Price tracking re-enabled' });
+  } catch (error) {
+    console.error('Unskip price tracking error:', error);
+    res.status(500).json({ error: 'Failed to re-enable price tracking' });
   }
 });
 
