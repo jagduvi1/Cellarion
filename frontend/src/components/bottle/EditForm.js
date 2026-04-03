@@ -31,8 +31,6 @@ function EditForm({ bottle, onSaved, onCancel, onImageUploaded }) {
   const [saving, setSaving] = useState(false);
   const [error, setError]   = useState(null);
 
-  const hasWineImage = !!bottle.wineDefinition?.image;
-
   const set = (field) => (e) => setForm(f => ({ ...f, [field]: e.target.value }));
 
   const handleSave = async (e) => {
@@ -142,35 +140,31 @@ function EditForm({ bottle, onSaved, onCancel, onImageUploaded }) {
             }}
           />
         </Suspense>
-        {!hasWineImage && (
-          <>
-            <Suspense fallback={null}>
-              <ImageUpload
-                bottleId={bottle._id}
-                wineDefinitionId={bottle.wineDefinition?._id}
-                onUploadComplete={(img) => {
-                  if (onImageUploaded && img?.originalUrl) {
-                    const url = img.originalUrl.startsWith('http')
-                      ? img.originalUrl
-                      : `${API_URL}${img.originalUrl}`;
-                    onImageUploaded(url);
-                  }
-                  galleryRef.current?.refresh();
-                }}
-                onProcessingComplete={(url) => {
-                  onImageUploaded?.(url);
-                  galleryRef.current?.refresh();
-                }}
-              />
-            </Suspense>
-            <p className="image-public-notice">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flexShrink: 0, marginTop: '1px' }}>
-                <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
-              </svg>
-              {t('bottleDetail.imageNotice', 'Images are reviewed by an admin before being added to the shared wine registry, where they will be visible to all Cellarion users.')}
-            </p>
-          </>
-        )}
+        <Suspense fallback={null}>
+          <ImageUpload
+            bottleId={bottle._id}
+            wineDefinitionId={bottle.wineDefinition?._id}
+            onUploadComplete={(img) => {
+              if (onImageUploaded && img?.originalUrl) {
+                const url = img.originalUrl.startsWith('http')
+                  ? img.originalUrl
+                  : `${API_URL}${img.originalUrl}`;
+                onImageUploaded(url);
+              }
+              galleryRef.current?.refresh();
+            }}
+            onProcessingComplete={(url) => {
+              onImageUploaded?.(url);
+              galleryRef.current?.refresh();
+            }}
+          />
+        </Suspense>
+        <p className="image-public-notice">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flexShrink: 0, marginTop: '1px' }}>
+            <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+          </svg>
+          {t('bottleDetail.imageNotice', 'Images are reviewed by an admin before being added to the shared wine registry, where they will be visible to all Cellarion users.')}
+        </p>
       </div>
 
       <div className="form-actions">

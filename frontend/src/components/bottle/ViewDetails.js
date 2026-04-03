@@ -66,7 +66,7 @@ function ViewDetails({ bottle, rackInfo, cellarId, vintageProfile, priceHistory,
       {!hasImage && canEdit && (
         <ContributePrompt
           storageKey={`cellarion_contrib_photo_${wine?._id}`}
-          icon="\u{1F4F7}"
+          icon="📷"
           title={t('bottleDetail.contributePhotoTitle', 'Help the community')}
           message={t('bottleDetail.contributePhotoMsg', 'This wine has no photo yet. Adding one helps other collectors recognise it \u2014 it will be reviewed before going public.')}
           actionLabel={t('bottleDetail.contributePhotoAction', 'Add a photo')}
@@ -86,7 +86,7 @@ function ViewDetails({ bottle, rackInfo, cellarId, vintageProfile, priceHistory,
         ) : canEdit ? (
           <ContributePrompt
             storageKey={`cellarion_contrib_grapes_${wine?._id}`}
-            icon="\u{1F347}"
+            icon="🍇"
             title={t('bottleDetail.contributeGrapesTitle', 'Help the community')}
             message={t('bottleDetail.contributeGrapesMsg', 'Grape varieties aren\'t listed for this wine yet. Suggest them and our team will review.')}
             actionLabel={t('bottleDetail.contributeGrapesAction', 'Suggest grapes')}
