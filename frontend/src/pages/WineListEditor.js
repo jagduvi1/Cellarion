@@ -249,11 +249,18 @@ function WineListEditor() {
     if (isNaN(pct)) return;
     const multiplier = 1 + pct / 100;
 
+    // Look up bottle purchase price for entries that have no listPrice yet
+    const bottlePriceMap = new Map(bottles.map(b => [b._id, b.price]));
+    const adjustPrice = (entry) => {
+      const base = entry.listPrice != null ? entry.listPrice : (bottlePriceMap.get(entry.bottle) || null);
+      return base != null ? Math.round(base * multiplier) : null;
+    };
+
     if (wineList.structureMode === 'custom') {
       const updated = { ...wineList };
       for (const section of updated.sections || []) {
         for (const entry of section.entries || []) {
-          if (entry.listPrice != null) entry.listPrice = Math.round(entry.listPrice * multiplier);
+          entry.listPrice = adjustPrice(entry);
           if (entry.glassPrice != null) entry.glassPrice = Math.round(entry.glassPrice * multiplier);
         }
       }
@@ -261,7 +268,7 @@ function WineListEditor() {
     } else {
       const entries = (wineList.autoGroupEntries || []).map(e => ({
         ...e,
-        listPrice: e.listPrice != null ? Math.round(e.listPrice * multiplier) : e.listPrice,
+        listPrice: adjustPrice(e),
         glassPrice: e.glassPrice != null ? Math.round(e.glassPrice * multiplier) : e.glassPrice,
       }));
       setWineList({ ...wineList, autoGroupEntries: entries });
