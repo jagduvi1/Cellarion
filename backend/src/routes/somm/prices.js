@@ -9,6 +9,8 @@ const { getOrCreateDailySnapshot, getSnapshotsForDates } = require('../../utils/
 
 const { suggestPrice } = require('../../services/labelScan');
 
+const User = require('../../models/User');
+
 const router = express.Router();
 
 router.use(requireAuth);
@@ -24,9 +26,24 @@ router.get('/queue', requireSommOrAdmin, async (req, res) => {
   try {
     const staleThreshold = new Date(Date.now() - STALE_MS);
 
+    // Exclude bottles owned by the super admin (bulk imports / test data)
+    const superAdminEmail = (process.env.SUPER_ADMIN_EMAIL || '').toLowerCase().trim();
+    let excludeUserId = null;
+    if (superAdminEmail) {
+      const sa = await User.findOne({ email: superAdminEmail }).select('_id').lean();
+      if (sa) excludeUserId = sa._id;
+    }
+
+    const bottleMatch = {
+      status: 'active',
+      wineDefinition: { $ne: null },
+      vintage: { $nin: ['NV', '', null] }
+    };
+    if (excludeUserId) bottleMatch.user = { $ne: excludeUserId };
+
     // Step 1: unique (wineDefinition, vintage) pairs with at least one active bottle
     const rawPairs = await Bottle.aggregate([
-      { $match: { status: 'active', wineDefinition: { $ne: null }, vintage: { $nin: ['NV', '', null] } } },
+      { $match: bottleMatch },
       {
         $group: {
           _id: { wineDefinition: '$wineDefinition', vintage: '$vintage' },
