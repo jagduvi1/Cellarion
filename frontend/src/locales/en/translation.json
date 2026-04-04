@@ -1381,8 +1381,8 @@
     "yourCellar": "Your cellar",
     "wineRegister": "Wine register",
     "noWineResults": "No wines found",
-    "aiSearch": "Search with AI",
-    "aiSearching": "Searching with AI...",
+    "aiSearch": "Smart Search",
+    "aiSearching": "Searching...",
     "searching": "Searching...",
     "pairingNotesPlaceholder": "Tasting note for this pairing...",
     "addPairing": "Add pairing",
@@ -1457,7 +1457,7 @@
       "bottles": {
         "title": "Bottles",
         "summary": "Add, manage, and track individual bottles in your cellars.",
-        "d1": "Add a bottle: click \"+ Add Bottle\" in a cellar. Two ways: search the wine database by name, OR scan a wine label with your phone camera (AI identifies the wine).",
+        "d1": "Add a bottle: click \"+ Add Bottle\" in a cellar. Two ways: search the wine database by name, OR scan a wine label with your phone camera to identify the wine automatically.",
         "d2": "Bottle detail page shows: wine info, vintage, price paid, market value estimate, your rating, your notes, images, grape varieties, aging & maturity status, price evolution chart.",
         "d3": "Edit details: click \"Edit Details\" on the bottle page to change vintage, price, rating, notes, size.",
         "d4": "Upload photos: on the bottle detail page, you can add photos of the bottle or label. Background removal is automatic.",
@@ -1469,7 +1469,7 @@
         "title": "Label Scanning",
         "summary": "Scan a wine label with your camera to identify it automatically.",
         "d1": "Available when adding a bottle — click the camera button.",
-        "d2": "Take a photo of the wine label and the AI will read it and identify the wine.",
+        "d2": "Take a photo of the wine label and we'll read it and identify the wine for you.",
         "d3": "Works with most printed labels. Best results with clear, well-lit photos.",
         "d4": "After scanning, the wine details are pre-filled. Review and save."
       },
@@ -1483,9 +1483,10 @@
         "title": "Racks",
         "summary": "Organize bottles in physical rack grids that match your real storage.",
         "d1": "Access racks: open a cellar → click the \"...\" menu → Racks.",
-        "d2": "Create racks with custom names and sizes (any number of rows × columns).",
-        "d3": "Place bottles into rack slots by clicking an empty slot and selecting a bottle.",
-        "d4": "Visual grid shows which slots are filled and which are empty."
+        "d2": "Choose from multiple rack types: standard grid, X-rack, hexagonal honeycomb, triangle (A-frame), vertical stack, modular cube, or open shelf.",
+        "d3": "Customize each rack with a name, size, and layout that matches your real storage.",
+        "d4": "Place bottles into rack slots by clicking an empty slot and selecting a bottle.",
+        "d5": "Visual grid shows which slots are filled and which are empty."
       },
       "roomView": {
         "title": "3D Room View",
@@ -1525,7 +1526,7 @@
       },
       "cellarChat": {
         "title": "Cellar Chat",
-        "summary": "Chat with an AI sommelier who knows your entire cellar.",
+        "summary": "Chat with a sommelier who knows your entire cellar.",
         "d1": "Ask for food pairings, what to drink tonight, or wine suggestions from your collection.",
         "d2": "The sommelier knows all your bottles, ratings, and notes.",
         "d3": "Usage limits depend on your plan (Free: 4/week, Basic: 20/day, Premium: 50/day)."
@@ -1557,7 +1558,7 @@
         "summary": "Import your wine collection from a CSV or JSON file.",
         "d1": "Access: open a cellar → \"...\" menu → Import Bottles.",
         "d2": "Upload a CSV or JSON file with your wine data.",
-        "d3": "AI helps match imported wines to the database automatically."
+        "d3": "Imported wines are automatically matched to the database."
       },
       "settings": {
         "title": "Settings",
@@ -1589,7 +1590,7 @@
       "addBottleClick": "Now click \"Add Bottle\" — you can search our database of thousands of wines or scan a label with your camera!",
       "scanSelect": "First, select the cellar where you want to add the scanned wine.",
       "scanAddBottle": "Click \"Add Bottle\" to open the add bottle page.",
-      "scanClick": "Now click the camera button to take a photo of your wine label. The AI will read the label and identify the wine automatically!",
+      "scanClick": "Now click the camera button to take a photo of your wine label. We'll read the label and identify the wine automatically!",
       "wishlistAdd": "Click \"Add Wine\" to search for a wine you want to buy. You can add notes about where to find it and set a target price!",
       "shareCellarSelect": "Click on the cellar you want to share with someone.",
       "shareMenu": "Click the menu button (three dots) to see more options.",
@@ -1680,7 +1681,7 @@
       "share": "You can share a cellar with friends or family!",
       "racks": "Racks help you map your physical wine storage. You can create racks in any size!",
       "journal": "The Journal is perfect for recording your tasting experiences.",
-      "chat": "Cellar Chat is an AI sommelier that knows your entire collection!",
+      "chat": "Cellar Chat is a sommelier that knows your entire collection!",
       "statistics": "The Analytics page shows beautiful charts about your collection.",
       "settings": "You can customize your experience in Settings.",
       "restock": "Restock tracking shows you when your favorites are running low.",
@@ -1733,7 +1734,7 @@
     "featureShareTitle": "Share Your Cellar",
     "featureShareDesc": "Invite friends or colleagues to browse or co-manage a cellar. Granular role-based access keeps you in control.",
     "featureLabelTitle": "Label Scanning",
-    "featureLabelDesc": "Snap a photo of the label and let AI fill in the details. Background removal keeps bottle images clean and beautiful.",
+    "featureLabelDesc": "Snap a photo of the label and we'll fill in the details. Background removal keeps bottle images clean and beautiful.",
     "featureImportTitle": "Import & Export",
     "featureImportDesc": "Bring your existing collection in via CSV. A structured wine registry shared across users ensures clean, consistent data.",
     "ossTitle": "Built in the open, owned by you",

@@ -1381,8 +1381,8 @@
     "yourCellar": "Din källare",
     "wineRegister": "Vinregister",
     "noWineResults": "Inga viner hittades",
-    "aiSearch": "Sök med AI",
-    "aiSearching": "Söker med AI...",
+    "aiSearch": "Smart sökning",
+    "aiSearching": "Söker...",
     "searching": "Söker...",
     "pairingNotesPlaceholder": "Smaknotering för denna kombination...",
     "addPairing": "Lägg till kombination",
@@ -1457,7 +1457,7 @@
       "bottles": {
         "title": "Flaskor",
         "summary": "Lägg till, hantera och spåra enskilda flaskor i dina källare.",
-        "d1": "Lägg till en flaska: klicka på \"+ Lägg till flaska\" i en källare. Två sätt: sök i vindatabasen efter namn, ELLER skanna en vinetikett med din kamera (AI identifierar vinet).",
+        "d1": "Lägg till en flaska: klicka på \"+ Lägg till flaska\" i en källare. Två sätt: sök i vindatabasen efter namn, ELLER skanna en vinetikett med din kamera för att identifiera vinet automatiskt.",
         "d2": "Flaskdetaljsidan visar: vininfo, årgång, inköpspris, marknadsvärde, ditt betyg, dina anteckningar, bilder, druvor, lagring & mognadsstatus, prisutvecklingsgraf.",
         "d3": "Redigera detaljer: klicka på \"Redigera detaljer\" på flasksidan för att ändra årgång, pris, betyg, anteckningar, storlek.",
         "d4": "Ladda upp foton: på flaskdetaljsidan kan du lägga till foton av flaskan eller etiketten. Bakgrundsborttagning sker automatiskt.",
@@ -1469,7 +1469,7 @@
         "title": "Etikettskanning",
         "summary": "Skanna en vinetikett med din kamera för att identifiera vinet automatiskt.",
         "d1": "Tillgängligt när du lägger till en flaska — klicka på kameraknappen.",
-        "d2": "Ta ett foto av vinetiketten så läser AI:n av den och identifierar vinet.",
+        "d2": "Ta ett foto av vinetiketten så läser vi av den och identifierar vinet åt dig.",
         "d3": "Fungerar med de flesta tryckta etiketter. Bäst resultat med tydliga, välbelysta foton.",
         "d4": "Efter skanning fylls vindetaljerna i automatiskt. Granska och spara."
       },
@@ -1483,9 +1483,10 @@
         "title": "Vinställ",
         "summary": "Organisera flaskor i fysiska ställ som matchar din verkliga förvaring.",
         "d1": "Åtkomst: öppna en källare → klicka på \"...\" menyn → Ställ.",
-        "d2": "Skapa ställ med anpassade namn och storlekar (valfritt antal rader × kolumner).",
-        "d3": "Placera flaskor i ställplatser genom att klicka på en tom plats och välja en flaska.",
-        "d4": "Visuellt rutnät visar vilka platser som är fyllda och vilka som är tomma."
+        "d2": "Välj bland flera ställtyper: standardrutnät, X-ställ, hexagonalt bikakemönster, triangel (A-ram), vertikal stapel, modulär kub eller öppen hylla.",
+        "d3": "Anpassa varje ställ med namn, storlek och layout som matchar din verkliga förvaring.",
+        "d4": "Placera flaskor i ställplatser genom att klicka på en tom plats och välja en flaska.",
+        "d5": "Visuellt rutnät visar vilka platser som är fyllda och vilka som är tomma."
       },
       "roomView": {
         "title": "3D-rumsvy",
@@ -1525,7 +1526,7 @@
       },
       "cellarChat": {
         "title": "Källarchatt",
-        "summary": "Chatta med en AI-sommelier som känner hela din källare.",
+        "summary": "Chatta med en sommelier som känner hela din källare.",
         "d1": "Fråga om matpairing, vad du ska dricka ikväll eller vinförslag från din samling.",
         "d2": "Sommelieren känner till alla dina flaskor, betyg och anteckningar.",
         "d3": "Användningsgränser beror på din plan (Gratis: 4/vecka, Bas: 20/dag, Premium: 50/dag)."
@@ -1557,7 +1558,7 @@
         "summary": "Importera din vinsamling från en CSV- eller JSON-fil.",
         "d1": "Åtkomst: öppna en källare → \"...\" menyn → Importera flaskor.",
         "d2": "Ladda upp en CSV- eller JSON-fil med dina vindata.",
-        "d3": "AI hjälper till att matcha importerade viner mot databasen automatiskt."
+        "d3": "Importerade viner matchas automatiskt mot databasen."
       },
       "settings": {
         "title": "Inställningar",
@@ -1589,7 +1590,7 @@
       "addBottleClick": "Klicka nu på \"Lägg till flaska\" — du kan söka i vår databas med tusentals viner eller skanna en etikett med kameran!",
       "scanSelect": "Välj först källaren där du vill lägga till det skannade vinet.",
       "scanAddBottle": "Klicka på \"Lägg till flaska\" för att öppna sidan.",
-      "scanClick": "Klicka nu på kameraknappen för att ta ett foto av vinetiketten. AI:n läser etiketten och identifierar vinet automatiskt!",
+      "scanClick": "Klicka nu på kameraknappen för att ta ett foto av vinetiketten. Vi läser etiketten och identifierar vinet automatiskt!",
       "wishlistAdd": "Klicka på \"Lägg till vin\" för att söka efter ett vin du vill köpa. Du kan lägga till anteckningar och sätta ett önskat pris!",
       "shareCellarSelect": "Klicka på källaren du vill dela med någon.",
       "shareMenu": "Klicka på menyknappen (tre prickar) för att se fler alternativ.",
@@ -1680,7 +1681,7 @@
       "share": "Du kan dela en källare med vänner eller familj!",
       "racks": "Vinställ hjälper dig kartlägga din fysiska vinförvaring. Du kan skapa ställ i valfri storlek!",
       "journal": "Dagboken är perfekt för att dokumentera dina provningsupplevelser.",
-      "chat": "Källarchatten är en AI-sommelier som känner hela din samling!",
+      "chat": "Källarchatten är en sommelier som känner hela din samling!",
       "statistics": "Analyssidan visar vackra diagram om din samling.",
       "settings": "Du kan anpassa din upplevelse i Inställningar.",
       "restock": "Påfyllningsspårning visar när dina favoriter börjar ta slut.",
@@ -1733,7 +1734,7 @@
     "featureShareTitle": "Dela din källare",
     "featureShareDesc": "Bjud in vänner eller kollegor att bläddra eller samhantera en källare. Detaljerad rollbaserad åtkomst ger dig kontroll.",
     "featureLabelTitle": "Etikettskanning",
-    "featureLabelDesc": "Ta ett foto av etiketten och låt AI fylla i detaljerna. Bakgrundsborttagning håller flaskbilder rena och vackra.",
+    "featureLabelDesc": "Ta ett foto av etiketten så fyller vi i detaljerna. Bakgrundsborttagning håller flaskbilder rena och vackra.",
     "featureImportTitle": "Import och export",
     "featureImportDesc": "Importera din befintliga samling via CSV. Ett strukturerat vinregister delat mellan användare säkerställer ren, konsekvent data.",
     "ossTitle": "Byggt öppet, ägt av dig",
