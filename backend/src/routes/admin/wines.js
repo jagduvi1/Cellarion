@@ -20,6 +20,7 @@ const DiscussionReply = require('../../models/DiscussionReply');
 const WineEmbedding = require('../../models/WineEmbedding');
 const searchService = require('../../services/search');
 const { logAudit } = require('../../services/audit');
+const { submitUrls } = require('../../services/indexNow');
 
 // Escape special regex characters to prevent ReDoS / NoSQL injection
 function escapeRegex(str) {
@@ -151,6 +152,8 @@ router.post('/', async (req, res) => {
       { type: 'wine', id: wine._id },
       { name: wine.name, producer: wine.producer }
     );
+
+    submitUrls(`/wines/${wine._id}`);
 
     res.status(201).json({ wine });
   } catch (error) {
@@ -310,6 +313,8 @@ router.put('/:id', async (req, res) => {
       { type: 'wine', id: wine._id },
       { fields: Object.keys(req.body) }
     );
+
+    submitUrls(`/wines/${wine._id}`);
 
     res.json({ wine });
   } catch (error) {

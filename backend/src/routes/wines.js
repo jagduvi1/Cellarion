@@ -10,6 +10,7 @@ const { findOrCreateWine } = require('../services/findOrCreateWine');
 const { generateWineKey, combinedSimilarity } = require('../utils/normalize');
 const { PROCESSED_DIR } = require('../config/upload');
 const { parsePagination } = require('../utils/pagination');
+const { submitUrls } = require('../services/indexNow');
 
 const REMBG_URL = process.env.REMBG_URL || 'http://rembg:5000';
 
@@ -290,6 +291,8 @@ router.post('/find-or-create', requireAuth, async (req, res) => {
         console.warn('Failed to save wine label image:', imgErr.message);
       }
     }
+
+    if (created) submitUrls(`/wines/${wine._id}`);
 
     res.status(created ? 201 : 200).json({ wine, created });
   } catch (err) {

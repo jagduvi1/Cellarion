@@ -103,10 +103,18 @@ app.use(cors({
 // Public wine list PDF — before rate limiter (has its own limiter)
 app.use('/api/wine-lists/public', wineListPublicRoute);
 
-// Sitemap & OG — before rate limiter so crawlers are never blocked
+// Sitemap, OG & IndexNow — before rate limiter so crawlers are never blocked
 app.use('/sitemap.xml', sitemapRoute);
 app.use('/api/sitemap.xml', sitemapRoute);
 app.use('/api/og', ogRoute);
+
+// IndexNow key verification file
+const indexNowKey = process.env.INDEXNOW_KEY;
+if (indexNowKey) {
+  app.get(`/api/${indexNowKey}.txt`, (req, res) => {
+    res.type('text/plain').send(indexNowKey);
+  });
+}
 
 // Global API rate limiter — default 200 requests per 15 min per IP (admin-configurable)
 const apiLimiter = rateLimit({

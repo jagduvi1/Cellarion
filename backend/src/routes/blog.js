@@ -3,6 +3,7 @@ const mongoose = require('mongoose');
 const { requireAuth, requireRole } = require('../middleware/auth');
 const BlogPost = require('../models/BlogPost');
 const { logAudit } = require('../services/audit');
+const { submitUrls } = require('../services/indexNow');
 
 const router = express.Router();
 
@@ -154,6 +155,10 @@ router.post('/admin/posts', requireAuth, requireRole('admin'), async (req, res) 
 
     logAudit(req, 'blog.create', { postId: post._id, title: post.title, status: post.status });
 
+    if (post.status === 'published') {
+      submitUrls(`/blog/${post.slug}`);
+    }
+
     res.status(201).json({ post });
   } catch (err) {
     if (err.name === 'ValidationError') {
@@ -206,6 +211,10 @@ router.put('/admin/posts/:id', requireAuth, requireRole('admin'), async (req, re
     await post.populate('author', 'username');
 
     logAudit(req, 'blog.update', { postId: post._id, title: post.title, status: post.status });
+
+    if (post.status === 'published') {
+      submitUrls(`/blog/${post.slug}`);
+    }
 
     res.json({ post });
   } catch (err) {
