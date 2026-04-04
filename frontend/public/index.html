@@ -41,7 +41,14 @@
     <title>Cellarion — Wine Cellar Management</title>
   </head>
   <body>
-    <noscript>You need to enable JavaScript to run this app.</noscript>
+    <noscript>
+      <h1>Cellarion — Wine Cellar Management</h1>
+      <p>The open-source, self-hosted wine cellar manager. Track bottles, visualise racks, get drink-window alerts, and share cellars.</p>
+    </noscript>
+    <!-- SEO: visible h1 for crawlers that don't render JS. React removes #preboot-heading on mount. -->
+    <div id="preboot-heading" aria-hidden="true" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)">
+      <h1>Cellarion — Wine Cellar Management</h1>
+    </div>
     <!--
       Static LCP logo: paints immediately before React boots.
       Removed by React in index.js after first render.
@@ -53,7 +60,7 @@
         <source srcset="%PUBLIC_URL%/cellarion-logo-dark.webp"  type="image/webp" media="(prefers-color-scheme: dark)" />
         <source srcset="%PUBLIC_URL%/cellarion-logo-light.png" media="(prefers-color-scheme: light)" />
         <source srcset="%PUBLIC_URL%/cellarion-logo-dark.png"  media="(prefers-color-scheme: dark)" />
-        <img src="%PUBLIC_URL%/cellarion-logo-light.webp" alt="" width="159" height="128" fetchpriority="high" style="height:64px;width:auto" />
+        <img src="%PUBLIC_URL%/cellarion-logo-light.webp" alt="Cellarion" width="159" height="128" fetchpriority="high" style="height:64px;width:auto" />
       </picture>
     </div>
     <div id="root"></div>

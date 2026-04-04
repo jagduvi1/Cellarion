@@ -16,10 +16,10 @@ root.render(
   </React.StrictMode>
 );
 
-// Remove the static pre-boot logo once React has painted its own navbar logo
+// Remove static pre-boot elements once React has painted
 requestAnimationFrame(() => {
-  const el = document.getElementById('preboot-logo');
-  if (el) el.remove();
+  document.getElementById('preboot-logo')?.remove();
+  document.getElementById('preboot-heading')?.remove();
 });
 
 // Register the service worker for PWA support (offline caching + installability)
