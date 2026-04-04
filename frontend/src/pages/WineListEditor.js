@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { getWineList, updateWineList, publishWineList, unpublishWineList, uploadWineListLogo, getWineListStats } from '../api/wineLists';
+import { getWineList, updateWineList, publishWineList, unpublishWineList, uploadWineListLogo, getWineListStats, previewWineListPdf } from '../api/wineLists';
 import { getCellar } from '../api/cellars';
 import './WineListEditor.css';
 
@@ -312,8 +312,16 @@ function WineListEditor() {
   };
 
   // --- Preview PDF ---
-  const openPreview = () => {
-    window.open(`${API_BASE}/api/wine-lists/${listId}/preview-pdf`, '_blank');
+  const openPreview = async () => {
+    try {
+      const res = await previewWineListPdf(apiFetch, listId);
+      if (!res.ok) throw new Error('Failed to generate PDF');
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      window.open(url, '_blank');
+    } catch {
+      alert('Failed to generate PDF preview');
+    }
   };
 
   const getPublicUrl = () => {

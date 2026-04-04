@@ -37,3 +37,6 @@ export const uploadWineListLogo = (apiFetch, id, formData) =>
 
 export const getWineListStats = (apiFetch, id) =>
   apiFetch(`/api/wine-lists/${id}/stats`);
+
+export const previewWineListPdf = (apiFetch, id) =>
+  apiFetch(`/api/wine-lists/${id}/preview-pdf`);

@@ -88,6 +88,7 @@ app.use('/api/wines/find-or-create', express.json({ limit: '5mb' }));
 app.use('/api/bottles/import/sessions', express.json({ limit: '5mb' }));
 app.use('/api/bottles/import', express.json({ limit: '2mb' }));
 app.use('/api/blog/admin/posts', express.json({ limit: '2mb' }));
+app.use('/api/wine-lists', express.json({ limit: '1mb' }));
 app.use(express.json({ limit: '10kb' }));
 const corsOrigin = process.env.FRONTEND_URL || (process.env.NODE_ENV === 'production' ? false : 'http://localhost:3000');
 if (process.env.NODE_ENV === 'production' && !process.env.FRONTEND_URL) {
