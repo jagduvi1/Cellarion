@@ -150,6 +150,17 @@ const wineListSchema = new mongoose.Schema({
       default: 'serif'
     },
     showGlassPrice: { type: Boolean, default: false },
+    glassesPerBottle: {
+      type: Number,
+      default: 6,
+      min: [1, 'Must have at least 1 glass per bottle'],
+      max: [20, 'Too many glasses per bottle'],
+    },
+    glassMarkup: {
+      type: Number,
+      default: 0,
+      min: [-100, 'Markup cannot be less than -100%'],
+    },
     currency: {
       type: String,
       default: 'USD',

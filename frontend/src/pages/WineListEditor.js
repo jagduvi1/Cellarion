@@ -275,6 +275,35 @@ function WineListEditor() {
     }
   };
 
+  // --- Calculate glass prices ---
+  const calculateGlassPrices = () => {
+    const layout = wineList.layout || {};
+    const glasses = layout.glassesPerBottle || 6;
+    const markup = layout.glassMarkup || 0;
+    const multiplier = (1 + markup / 100) / glasses;
+
+    const calcGlass = (entry) => {
+      if (entry.listPrice == null) return null;
+      return Math.round(entry.listPrice * multiplier);
+    };
+
+    if (wineList.structureMode === 'custom') {
+      const updated = { ...wineList };
+      for (const section of updated.sections || []) {
+        for (const entry of section.entries || []) {
+          entry.glassPrice = calcGlass(entry);
+        }
+      }
+      setWineList({ ...updated });
+    } else {
+      const entries = (wineList.autoGroupEntries || []).map(e => ({
+        ...e,
+        glassPrice: calcGlass(e),
+      }));
+      setWineList({ ...wineList, autoGroupEntries: entries });
+    }
+  };
+
   // --- Publish/Unpublish ---
   const handlePublish = async () => {
     try {
@@ -756,6 +785,44 @@ function WineListEditor() {
             />
             Show glass prices
           </label>
+          {layout.showGlassPrice && (
+            <div className="wle-glass-calc">
+              <div className="wle-glass-calc-fields">
+                <div className="form-group">
+                  <label>Glasses per bottle</label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="20"
+                    value={layout.glassesPerBottle || 6}
+                    onChange={e => setWineList({
+                      ...wineList,
+                      layout: { ...layout, glassesPerBottle: parseInt(e.target.value) || 6 }
+                    })}
+                    style={{ width: '80px' }}
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Glass markup %</label>
+                  <input
+                    type="number"
+                    value={layout.glassMarkup || 0}
+                    onChange={e => setWineList({
+                      ...wineList,
+                      layout: { ...layout, glassMarkup: parseFloat(e.target.value) || 0 }
+                    })}
+                    style={{ width: '80px' }}
+                  />
+                </div>
+                <button className="btn btn-small btn-secondary" onClick={calculateGlassPrices}>
+                  Calculate glass prices
+                </button>
+              </div>
+              <p className="text-muted-sm">
+                Formula: (bottle price / {layout.glassesPerBottle || 6}) {layout.glassMarkup ? `\u00d7 ${(1 + (layout.glassMarkup || 0) / 100).toFixed(2)}` : ''} = glass price
+              </p>
+            </div>
+          )}
         </div>
       )}
 
