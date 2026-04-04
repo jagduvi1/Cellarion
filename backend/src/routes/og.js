@@ -21,14 +21,19 @@ router.get('/wines/:id', async (req, res) => {
       return res.status(404).send('Not found');
     }
 
-    const pageTitle = `${wine.name} — ${wine.producer}`;
+    // Keep title under 60 chars for SEO — drop " — Cellarion" suffix if needed
+    const fullTitle = `${wine.name} — ${wine.producer}`;
+    const pageTitle = fullTitle.length > 47 ? fullTitle.slice(0, 57) : fullTitle;
+    const titleTag = pageTitle.length > 47 ? pageTitle : `${pageTitle} — Cellarion`;
     const details = [
       wine.type && wine.type.charAt(0).toUpperCase() + wine.type.slice(1),
       wine.appellation,
       wine.region?.name,
       wine.country?.name
     ].filter(Boolean).join(' · ');
-    const description = `${pageTitle}. ${details}. Discover, track, and manage your wine cellar with Cellarion.`;
+    // Keep meta description under 160 chars
+    const fullDesc = `${fullTitle}. ${details}. Discover, track, and manage your wine cellar with Cellarion.`;
+    const description = fullDesc.length > 160 ? fullDesc.slice(0, 157) + '...' : fullDesc;
     const pageUrl = `${SITE_URL}/wines/${wine._id}`;
     const imageUrl = wine.image
       ? (wine.image.startsWith('/api/') || wine.image.startsWith('http') ? `${API_URL}${wine.image}` : `${API_URL}/api/uploads/${wine.image}`)
@@ -62,7 +67,7 @@ router.get('/wines/:id', async (req, res) => {
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>${esc(pageTitle)} — Cellarion</title>
+  <title>${esc(titleTag)}</title>
   <meta name="description" content="${esc(description)}" />
   <meta property="og:type" content="product" />
   <meta property="og:title" content="${esc(pageTitle)}" />

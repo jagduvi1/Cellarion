@@ -48,14 +48,17 @@ export default function WineDetail() {
     return user ? <Layout>{content}</Layout> : content;
   }
 
-  const pageTitle = `${wine.name} — ${wine.producer}`;
+  const fullTitle = `${wine.name} — ${wine.producer}`;
+  const pageTitle = fullTitle.length > 47 ? fullTitle.slice(0, 57) : fullTitle;
+  const titleTag = pageTitle.length > 47 ? pageTitle : `${pageTitle} — Cellarion`;
   const description = [
     wine.type && wine.type.charAt(0).toUpperCase() + wine.type.slice(1),
     wine.appellation,
     wine.region?.name,
     wine.country?.name
   ].filter(Boolean).join(' · ');
-  const metaDescription = `${pageTitle}. ${description}. Discover, track, and manage your wine cellar with Cellarion.`;
+  const fullDesc = `${fullTitle}. ${description}. Discover, track, and manage your wine cellar with Cellarion.`;
+  const metaDescription = fullDesc.length > 160 ? fullDesc.slice(0, 157) + '...' : fullDesc;
   const pageUrl = `${SITE_URL}/wines/${wine._id}`;
   const wineImageSrc = getWineImageUrl(wine.image);
   const imageUrl = wineImageSrc || `${SITE_URL}/cellarion-logo.jpg`;
@@ -88,7 +91,7 @@ export default function WineDetail() {
   const page = (
     <div className="wine-detail-page">
       <Helmet>
-        <title>{pageTitle} — Cellarion</title>
+        <title>{titleTag}</title>
         <meta name="description" content={metaDescription} />
         <meta property="og:type" content="product" />
         <meta property="og:title" content={pageTitle} />
