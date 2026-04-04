@@ -1,6 +1,6 @@
 {
   "name": "frontend",
-  "version": "1.42.3",
+  "version": "1.42.4",
   "private": true,
   "dependencies": {
     "@react-three/drei": "^10.7.7",
