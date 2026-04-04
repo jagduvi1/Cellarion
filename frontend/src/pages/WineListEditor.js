@@ -266,7 +266,6 @@ function WineListEditor() {
       }));
       setWineList({ ...wineList, autoGroupEntries: entries });
     }
-    setBulkPercent('');
   };
 
   // --- Publish/Unpublish ---
