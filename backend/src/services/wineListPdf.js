@@ -269,13 +269,13 @@ async function generateWineListPdf(wineList, bottleMap, opts = {}) {
     if (branding.footerText) {
       doc.font(fontItalic).fontSize(7).fillColor(scheme.subheading);
       doc.text(branding.footerText, margin, pageSize[1] - margin + 5, {
-        width: contentWidth, align: 'center',
+        width: contentWidth, align: 'center', lineBreak: false,
       });
     }
 
     doc.font(font).fontSize(7).fillColor(scheme.subheading);
     doc.text(`${i + 1} / ${range.count}`, margin, pageSize[1] - margin + 16, {
-      width: contentWidth, align: 'center',
+      width: contentWidth, align: 'center', lineBreak: false,
     });
   }
 
