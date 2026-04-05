@@ -48,7 +48,6 @@ const wishlistRoute = require('./routes/wishlist');
 const recommendationsRoute = require('./routes/recommendations');
 const journalRoute = require('./routes/journal');
 const restockAlertsRoute = require('./routes/restockAlerts');
-const guideRoute = require('./routes/guide');
 const helpRoute = require('./routes/help');
 const wineListsRoute = require('./routes/wineLists');
 const wineListPublicRoute = require('./routes/wineListPublic');
@@ -200,7 +199,6 @@ app.use('/api/wishlist', wishlistRoute);
 app.use('/api/recommendations', recommendationsRoute);
 app.use('/api/journal', journalRoute);
 app.use('/api/restock-alerts', restockAlertsRoute);
-app.use('/api/guide', guideRoute);
 app.use('/api/help', helpRoute);
 app.use('/api/wine-lists', wineListsRoute);
 

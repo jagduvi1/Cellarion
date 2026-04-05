@@ -4,7 +4,6 @@ import { HelmetProvider } from 'react-helmet-async';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { NotificationProvider } from './contexts/NotificationContext';
 import { ThemeProvider } from './contexts/ThemeContext';
-import { GuideProvider } from './contexts/GuideContext';
 import Layout from './components/Layout';
 import ProtectedRoute from './components/ProtectedRoute';
 import './styles/common.css';
@@ -439,9 +438,7 @@ function App() {
         <BrowserRouter>
           <AuthProvider>
             <NotificationProvider>
-              <GuideProvider>
                 <AppRoutes />
-              </GuideProvider>
             </NotificationProvider>
           </AuthProvider>
         </BrowserRouter>

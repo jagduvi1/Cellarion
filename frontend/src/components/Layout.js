@@ -7,7 +7,6 @@ import { PLANS } from '../config/plans';
 import NotificationBell from './NotificationBell';
 import SupportModal from './SupportModal';
 import InstallPrompt from './InstallPrompt';
-import HelpGuide from './HelpGuide';
 import './Layout.css';
 
 const LOGO_LIGHT_WEBP = process.env.PUBLIC_URL + '/cellarion-logo-light.webp';
@@ -337,7 +336,6 @@ function Layout({ children }) {
         <SupportModal onClose={() => setSupportOpen(false)} />
       )}
 
-      {user && roles.includes('admin') && <HelpGuide />}
     </div>
   );
 }
