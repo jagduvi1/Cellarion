@@ -3,7 +3,8 @@ const { requireAuth, requireRole } = require('../../middleware/auth');
 const BottleImage = require('../../models/BottleImage');
 const WineDefinition = require('../../models/WineDefinition');
 const searchService = require('../../services/search');
-const { reprocessAllImages } = require('../../services/imageProcessor');
+const fs = require('fs');
+const { reprocessAllImages, safeUploadPath } = require('../../services/imageProcessor');
 const { logAudit } = require('../../services/audit');
 const { createNotification } = require('../../services/notifications');
 const { incrementCred } = require('../../utils/cellarCred');
@@ -65,6 +66,18 @@ router.put('/:id/approve', async (req, res) => {
     image.reviewedBy = req.user.id;
     image.reviewedAt = new Date();
     await image.save();
+
+    // Delete the original file if a processed version exists
+    if (image.processedUrl && image.originalUrl) {
+      try {
+        const originalPath = safeUploadPath(image.originalUrl.replace('/api/uploads/', ''));
+        fs.unlinkSync(originalPath);
+      } catch (err) {
+        if (err.code !== 'ENOENT') console.error('Failed to delete original image:', err.message);
+      }
+      image.originalUrl = null;
+      await image.save();
+    }
 
     // Award Cellar Cred to the uploader
     incrementCred(image.uploadedBy, 'image_approved').catch(() => {});
@@ -128,6 +141,18 @@ router.put('/:id/reject', async (req, res) => {
     image.status = 'rejected';
     image.reviewedBy = req.user.id;
     image.reviewedAt = new Date();
+
+    // Delete both original and processed files from disk
+    for (const url of [image.originalUrl, image.processedUrl]) {
+      if (!url) continue;
+      try {
+        fs.unlinkSync(safeUploadPath(url.replace('/api/uploads/', '')));
+      } catch (err) {
+        if (err.code !== 'ENOENT') console.error('Failed to delete image file:', err.message);
+      }
+    }
+    image.originalUrl = null;
+    image.processedUrl = null;
     await image.save();
 
     const rejectedWine = image.wineDefinition

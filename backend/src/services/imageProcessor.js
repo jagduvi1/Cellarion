@@ -159,4 +159,4 @@ async function cleanupOrphanedImages() {
   }
 }
 
-module.exports = { processImage, reprocessAllImages, cleanupOrphanedImages };
+module.exports = { processImage, reprocessAllImages, cleanupOrphanedImages, safeUploadPath };
