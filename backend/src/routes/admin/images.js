@@ -51,7 +51,20 @@ router.get('/', async (req, res) => {
   }
 });
 
+// Helper: delete the original file if a processed version exists
+function deleteOriginalFile(image) {
+  if (image.processedUrl && image.originalUrl) {
+    try {
+      fs.unlinkSync(safeUploadPath(image.originalUrl.replace('/api/uploads/', '')));
+    } catch (err) {
+      if (err.code !== 'ENOENT') console.error('Failed to delete original image:', err.message);
+    }
+    image.originalUrl = null;
+  }
+}
+
 // PUT /api/admin/images/:id/approve
+// Body: { visibility: 'private' | 'public' } — defaults to 'public'
 router.put('/:id/approve', async (req, res) => {
   try {
     const image = await BottleImage.findById(req.params.id);
@@ -62,30 +75,25 @@ router.put('/:id/approve', async (req, res) => {
       return res.status(400).json({ error: 'Image cannot be approved in current state' });
     }
 
+    const visibility = req.body.visibility || 'public';
+    if (!['private', 'public'].includes(visibility)) {
+      return res.status(400).json({ error: 'visibility must be "private" or "public"' });
+    }
+
     image.status = 'approved';
+    image.visibility = visibility;
     image.reviewedBy = req.user.id;
     image.reviewedAt = new Date();
+    deleteOriginalFile(image);
     await image.save();
-
-    // Delete the original file if a processed version exists
-    if (image.processedUrl && image.originalUrl) {
-      try {
-        const originalPath = safeUploadPath(image.originalUrl.replace('/api/uploads/', ''));
-        fs.unlinkSync(originalPath);
-      } catch (err) {
-        if (err.code !== 'ENOENT') console.error('Failed to delete original image:', err.message);
-      }
-      image.originalUrl = null;
-      await image.save();
-    }
 
     // Award Cellar Cred to the uploader
     incrementCred(image.uploadedBy, 'image_approved').catch(() => {});
 
-    // Auto-assign as wine image if the wine doesn't already have one
+    // Auto-assign as wine image if public and the wine doesn't already have one
     const wineDefId = image.wineDefinition;
     let approvedWine = null;
-    if (wineDefId) {
+    if (visibility === 'public' && wineDefId) {
       approvedWine = await WineDefinition.findById(wineDefId);
       if (approvedWine && !approvedWine.image) {
         await BottleImage.updateMany(
@@ -120,7 +128,7 @@ router.put('/:id/approve', async (req, res) => {
 
     logAudit(req, 'admin.image.approve',
       { type: 'image', id: image._id },
-      { wineDefinitionId: image.wineDefinition }
+      { wineDefinitionId: image.wineDefinition, visibility }
     );
 
     res.json({ image });
@@ -288,6 +296,56 @@ router.put('/:id/assign-to-wine', async (req, res) => {
   } catch (error) {
     console.error('Assign image error:', error);
     res.status(500).json({ error: 'Failed to assign image to wine' });
+  }
+});
+
+// PUT /api/admin/images/:id/visibility - Change visibility of an approved image
+router.put('/:id/visibility', async (req, res) => {
+  try {
+    const image = await BottleImage.findById(req.params.id);
+    if (!image) {
+      return res.status(404).json({ error: 'Image not found' });
+    }
+    if (image.status !== 'approved') {
+      return res.status(400).json({ error: 'Only approved images can change visibility' });
+    }
+
+    const { visibility } = req.body;
+    if (!['private', 'public'].includes(visibility)) {
+      return res.status(400).json({ error: 'visibility must be "private" or "public"' });
+    }
+
+    // If changing to private, unassign from wine
+    if (visibility === 'private' && image.assignedToWine && image.wineDefinition) {
+      const imageUrl = image.processedUrl || image.originalUrl;
+      const wine = await WineDefinition.findById(image.wineDefinition);
+      if (wine && wine.image === imageUrl) {
+        wine.image = null;
+        wine.imageCredit = null;
+        await wine.save();
+        searchService.indexWine(image.wineDefinition);
+      }
+      image.assignedToWine = false;
+    }
+
+    image.visibility = visibility;
+    await image.save();
+
+    await image.populate([
+      { path: 'uploadedBy', select: 'username' },
+      { path: 'reviewedBy', select: 'username' },
+      { path: 'wineDefinition', select: 'name producer type' }
+    ]);
+
+    logAudit(req, 'admin.image.visibility',
+      { type: 'image', id: image._id },
+      { visibility }
+    );
+
+    res.json({ image });
+  } catch (error) {
+    console.error('Change visibility error:', error);
+    res.status(500).json({ error: 'Failed to change image visibility' });
   }
 });
 

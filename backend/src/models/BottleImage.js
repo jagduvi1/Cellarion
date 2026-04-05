@@ -21,7 +21,7 @@ const bottleImageSchema = new mongoose.Schema({
   },
   originalUrl: {
     type: String,
-    required: true
+    default: null
   },
   processedUrl: {
     type: String,
@@ -46,6 +46,11 @@ const bottleImageSchema = new mongoose.Schema({
   reviewedAt: {
     type: Date,
     default: null
+  },
+  visibility: {
+    type: String,
+    enum: ['private', 'public'],
+    default: 'public'
   },
   assignedToWine: {
     type: Boolean,

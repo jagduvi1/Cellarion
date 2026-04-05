@@ -96,11 +96,14 @@ export const adminGetAudit = (apiFetch, params) =>
 export const adminGetImages = (apiFetch, params) =>
   apiFetch(`/api/admin/images?${params}`);
 
-export const adminApproveImage = (apiFetch, id) =>
-  apiFetch(`/api/admin/images/${id}/approve`, { method: 'PUT' });
+export const adminApproveImage = (apiFetch, id, data = {}) =>
+  apiFetch(`/api/admin/images/${id}/approve`, { method: 'PUT', headers: J, body: JSON.stringify(data) });
 
 export const adminRejectImage = (apiFetch, id) =>
   apiFetch(`/api/admin/images/${id}/reject`, { method: 'PUT' });
+
+export const adminSetImageVisibility = (apiFetch, id, visibility) =>
+  apiFetch(`/api/admin/images/${id}/visibility`, { method: 'PUT', headers: J, body: JSON.stringify({ visibility }) });
 
 export const adminUnapproveImage = (apiFetch, id) =>
   apiFetch(`/api/admin/images/${id}/unapprove`, { method: 'PUT' });

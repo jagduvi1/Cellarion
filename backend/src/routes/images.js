@@ -221,22 +221,26 @@ router.get('/bottle/:bottleId', requireAuth, async (req, res) => {
       return res.status(404).json({ error: 'Bottle not found' });
     }
 
-    // Fetch bottle-specific images: approved for everyone, non-approved only for the uploader
+    // Fetch bottle-specific images:
+    // - Public approved images for everyone
+    // - Private approved images only for the uploader
+    // - Non-approved images only for the uploader
     const bottleImages = await BottleImage.find({
       bottle: req.params.bottleId,
       $or: [
-        { status: 'approved' },
+        { status: 'approved', visibility: 'public' },
         { uploadedBy: req.user.id }
       ]
     }).sort({ createdAt: -1 });
 
-    // Also fetch approved wine-level images so the user can pick any as default
+    // Also fetch public approved wine-level images so the user can pick any as default
     let wineImages = [];
     if (bottle.wineDefinition) {
       const bottleImageIds = new Set(bottleImages.map(img => img._id.toString()));
       wineImages = await BottleImage.find({
         wineDefinition: bottle.wineDefinition,
-        status: 'approved'
+        status: 'approved',
+        visibility: 'public'
       }).sort({ assignedToWine: -1, createdAt: -1 });
       // Exclude any that are already in the bottle-specific list
       wineImages = wineImages.filter(img => !bottleImageIds.has(img._id.toString()));
@@ -270,7 +274,9 @@ router.get('/wine/:wineDefinitionId', requireAuth, async (req, res) => {
 
     const filter = {
       wineDefinition: req.params.wineDefinitionId,
-      status: showAll ? { $ne: 'rejected' } : 'approved'
+      ...(showAll
+        ? { status: { $ne: 'rejected' } }
+        : { status: 'approved', visibility: 'public' })
     };
 
     const images = await BottleImage.find(filter)

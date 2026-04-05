@@ -101,6 +101,7 @@
 .status-processed  { background: #142d2a; color: #5ae0d8; }
 .status-approved   { background: var(--color-success-bg); color: var(--color-success); }
 .status-rejected   { background: var(--color-danger-bg); color: var(--color-danger); }
+.status-private    { background: var(--color-info-bg); color: var(--color-info); margin-left: 0.25rem; }
 
 /* Detail panel */
 .image-detail {

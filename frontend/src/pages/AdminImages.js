@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
-import { adminGetImages, adminApproveImage, adminUnapproveImage, adminAssignImageToWine } from '../api/admin';
+import { adminGetImages, adminApproveImage, adminRejectImage, adminUnapproveImage, adminAssignImageToWine, adminSetImageVisibility } from '../api/admin';
 import AuthImage from '../components/AuthImage';
 import { API_URL } from '../api/apiConstants';
 import './AdminImages.css';
@@ -51,12 +51,52 @@ function AdminImages() {
     }
   };
 
-  const handleApprove = async () => {
+  const handleApprove = async (visibility = 'public') => {
     if (!selected) return;
     setSubmitting(true);
     setError(null);
     try {
-      const res = await adminApproveImage(apiFetch, selected._id);
+      const res = await adminApproveImage(apiFetch, selected._id, { visibility });
+      const data = await res.json();
+      if (res.ok) {
+        setSelected(data.image);
+        fetchImages();
+      } else {
+        setError(data.error);
+      }
+    } catch (err) {
+      setError('Network error');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleReject = async () => {
+    if (!selected) return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      const res = await adminRejectImage(apiFetch, selected._id);
+      const data = await res.json();
+      if (res.ok) {
+        setSelected(null);
+        fetchImages();
+      } else {
+        setError(data.error);
+      }
+    } catch (err) {
+      setError('Network error');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleVisibility = async (visibility) => {
+    if (!selected) return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      const res = await adminSetImageVisibility(apiFetch, selected._id, visibility);
       const data = await res.json();
       if (res.ok) {
         setSelected(data.image);
@@ -167,6 +207,9 @@ function AdminImages() {
                           {img.wineDefinition?.name || img.bottle?.wineDefinition?.name || t('admin.images.noWineLinked')}
                         </span>
                         <span className={`status-badge status-${img.status}`}>{img.status}</span>
+                        {img.status === 'approved' && img.visibility === 'private' && (
+                          <span className="status-badge status-private">{t('admin.images.private', 'private')}</span>
+                        )}
                       </div>
                       <div className="image-item-meta">
                         <span>By: {img.uploadedBy?.username}</span>
@@ -208,14 +251,16 @@ function AdminImages() {
                 <h2>{t('admin.images.imageDetail')}</h2>
 
                 <div className="image-comparison">
-                  <div className="image-compare-item">
-                    <h3>{t('admin.images.original')}</h3>
-                    <AuthImage
-                      src={`${API_URL}${selected.originalUrl}`}
-                      alt="Original"
-                      className="detail-image"
-                    />
-                  </div>
+                  {selected.originalUrl && (
+                    <div className="image-compare-item">
+                      <h3>{t('admin.images.original')}</h3>
+                      <AuthImage
+                        src={`${API_URL}${selected.originalUrl}`}
+                        alt="Original"
+                        className="detail-image"
+                      />
+                    </div>
+                  )}
                   {selected.processedUrl && (
                     <div className="image-compare-item">
                       <h3>{t('admin.images.backgroundRemoved')}</h3>
@@ -240,6 +285,9 @@ function AdminImages() {
                   {selected.reviewedBy && (
                     <p><strong>{t('admin.images.reviewedBy')}</strong> {selected.reviewedBy.username} on {new Date(selected.reviewedAt).toLocaleString()}</p>
                   )}
+                  {selected.status === 'approved' && (
+                    <p><strong>{t('admin.images.visibilityLabel', 'Visibility:')}</strong> {selected.visibility === 'private' ? t('admin.images.visibilityPrivate', 'Uploader only') : t('admin.images.visibilityPublic', 'Public')}</p>
+                  )}
                   {selected.assignedToWine && (
                     <p className="assigned-badge">{t('admin.images.assignedBadge')}</p>
                   )}
@@ -254,21 +302,53 @@ function AdminImages() {
                   <h3>{t('admin.images.reviewActions')}</h3>
                   <div className="form-actions">
                     <button
-                      onClick={handleApprove}
+                      onClick={() => handleApprove('public')}
                       className="btn btn-success"
                       disabled={submitting}
                     >
-                      {submitting ? t('admin.images.processing') : t('admin.images.approve')}
+                      {submitting ? t('admin.images.processing') : t('admin.images.approvePublic', 'Approve for all')}
+                    </button>
+                    <button
+                      onClick={() => handleApprove('private')}
+                      className="btn btn-primary"
+                      disabled={submitting}
+                    >
+                      {submitting ? t('admin.images.processing') : t('admin.images.approvePrivate', 'Approve for uploader only')}
+                    </button>
+                    <button
+                      onClick={handleReject}
+                      className="btn btn-danger"
+                      disabled={submitting}
+                    >
+                      {submitting ? t('admin.images.processing') : t('admin.images.reject', 'Reject')}
                     </button>
                   </div>
                 </div>
               )}
 
-              {/* Unapprove for approved images */}
+              {/* Actions for approved images */}
               {selected.status === 'approved' && (
                 <div className="review-actions card">
                   <h3>{t('admin.images.reviewActions')}</h3>
                   <div className="form-actions">
+                    {selected.visibility === 'private' && (
+                      <button
+                        onClick={() => handleVisibility('public')}
+                        className="btn btn-success"
+                        disabled={submitting}
+                      >
+                        {submitting ? t('admin.images.processing') : t('admin.images.makePublic', 'Make public')}
+                      </button>
+                    )}
+                    {selected.visibility !== 'private' && (
+                      <button
+                        onClick={() => handleVisibility('private')}
+                        className="btn btn-primary"
+                        disabled={submitting}
+                      >
+                        {submitting ? t('admin.images.processing') : t('admin.images.makePrivate', 'Make uploader only')}
+                      </button>
+                    )}
                     <button
                       onClick={handleUnapprove}
                       className="btn btn-warning"
