@@ -12,6 +12,7 @@ const { sendVerificationEmail, sendPasswordResetEmail, EMAIL_VERIFICATION_ENABLE
 const PendingShare = require('../models/PendingShare');
 const Cellar = require('../models/Cellar');
 const { createNotification } = require('../services/notifications');
+const { getClientIp } = require('../utils/clientIp');
 
 /**
  * Resolve any pending cellar shares for a newly registered / verified user.
@@ -55,6 +56,7 @@ const router = express.Router();
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: () => rateLimitsConfig.get().auth.max,
+  keyGenerator: (req) => getClientIp(req),
   standardHeaders: true,
   legacyHeaders: false,
   handler: (req, res) => {
@@ -67,6 +69,7 @@ const authLimiter = rateLimit({
 const forgotLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 5,
+  keyGenerator: (req) => getClientIp(req),
   standardHeaders: true,
   legacyHeaders: false,
   handler: (req, res) => {
@@ -78,6 +81,7 @@ const forgotLimiter = rateLimit({
 const resendLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 5,
+  keyGenerator: (req) => getClientIp(req),
   standardHeaders: true,
   legacyHeaders: false,
   handler: (req, res) => {
@@ -355,6 +359,7 @@ router.post('/resend-verification', resendLimiter, async (req, res) => {
 const refreshLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 30,
+  keyGenerator: (req) => getClientIp(req),
   standardHeaders: true,
   legacyHeaders: false,
   handler: (req, res) => {

@@ -8,6 +8,7 @@ const { upload, ORIGINALS_DIR } = require('../config/upload');
 const BottleImage = require('../models/BottleImage');
 const Bottle = require('../models/Bottle');
 const Cellar = require('../models/Cellar');
+const { getClientIp } = require('../utils/clientIp');
 const { getCellarRole } = require('../utils/cellarAccess');
 const { processImage } = require('../services/imageProcessor');
 const { stripHtml } = require('../utils/sanitize');
@@ -33,7 +34,7 @@ const MAX_IMAGES_PER_BOTTLE = 20;
 const bgRemovalLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 5,
-  keyGenerator: (req) => req.user?.id || req.ip,
+  keyGenerator: (req) => req.user?.id || getClientIp(req),
   standardHeaders: true,
   legacyHeaders: false,
   handler: (req, res) => {

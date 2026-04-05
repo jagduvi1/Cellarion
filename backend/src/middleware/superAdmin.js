@@ -1,5 +1,6 @@
 const User = require('../models/User');
 const { logAudit } = require('../services/audit');
+const { getClientIp } = require('../utils/clientIp');
 
 /**
  * Middleware that restricts access to the configured Super Admin.
@@ -27,7 +28,7 @@ const requireSuperAdmin = async (req, res, next) => {
   const rawIPs = process.env.SUPER_ADMIN_IPS || '';
   const allowedIPs = rawIPs.split(',').map(ip => ip.trim()).filter(Boolean);
   if (allowedIPs.length > 0) {
-    const clientIP = req.ip;
+    const clientIP = getClientIp(req);
     if (!allowedIPs.includes(clientIP)) {
       // Generic error — do not reveal allowlist content
       logAudit(req, 'superadmin.access.blocked', {}, { reason: 'ip_not_allowed', ip: clientIP });
@@ -68,7 +69,7 @@ const checkIsSuperAdmin = (req, userEmail) => {
 
   const rawIPs = process.env.SUPER_ADMIN_IPS || '';
   const allowedIPs = rawIPs.split(',').map(ip => ip.trim()).filter(Boolean);
-  if (allowedIPs.length > 0 && !allowedIPs.includes(req.ip)) return false;
+  if (allowedIPs.length > 0 && !allowedIPs.includes(getClientIp(req))) return false;
 
   return true;
 };

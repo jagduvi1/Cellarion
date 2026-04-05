@@ -5,6 +5,7 @@ const Bottle = require('../models/Bottle');
 const User = require('../models/User');
 const { planHasFeature } = require('../config/plans');
 const { generateWineListPdf } = require('../services/wineListPdf');
+const { getClientIp } = require('../utils/clientIp');
 
 const router = express.Router();
 
@@ -12,6 +13,7 @@ const router = express.Router();
 const publicPdfLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 30,
+  keyGenerator: (req) => getClientIp(req),
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many requests, please try again later' },

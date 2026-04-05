@@ -5,6 +5,7 @@ const helmet = require('helmet');
 const path = require('path');
 const rateLimit = require('express-rate-limit');
 const cookieParser = require('cookie-parser');
+const { getClientIp } = require('./utils/clientIp');
 const { requireAuth } = require('./middleware/auth');
 const healthRoute = require('./routes/health');
 const authRoute = require('./routes/auth');
@@ -60,8 +61,7 @@ const { logAudit } = require('./services/audit');
 const app = express();
 
 // Trust two proxy hops: Traefik → frontend nginx → backend.
-// With only 1, req.ip resolves to the Docker bridge gateway instead of the
-// real client IP, breaking SUPER_ADMIN_IPS and per-IP rate limiting.
+// req.ip is used as fallback when CF-Connecting-IP is absent (local dev).
 app.set('trust proxy', 2);
 
 // Security headers — explicit config for production SaaS
@@ -121,6 +121,7 @@ if (indexNowKey) {
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: () => rateLimitsConfig.get().api.max,
+  keyGenerator: (req) => getClientIp(req),
   standardHeaders: true,
   legacyHeaders: false,
   handler: (req, res) => {
@@ -134,6 +135,7 @@ app.use('/api/', apiLimiter);
 const writeLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: () => rateLimitsConfig.get().write.max,
+  keyGenerator: (req) => getClientIp(req),
   standardHeaders: true,
   legacyHeaders: false,
   skip: (req) => req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS',

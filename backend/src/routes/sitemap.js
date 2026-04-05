@@ -2,6 +2,7 @@ const express = require('express');
 const rateLimit = require('express-rate-limit');
 const BlogPost = require('../models/BlogPost');
 const WineDefinition = require('../models/WineDefinition');
+const { getClientIp } = require('../utils/clientIp');
 
 const router = express.Router();
 
@@ -10,6 +11,7 @@ const SITE_URL = process.env.FRONTEND_URL || 'https://cellarion.app';
 const sitemapLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 30,
+  keyGenerator: (req) => getClientIp(req),
   standardHeaders: true,
   legacyHeaders: false
 });

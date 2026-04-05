@@ -1,5 +1,6 @@
 const pino = require('pino');
 const AuditLog = require('../models/AuditLog');
+const { getClientIp } = require('../utils/clientIp');
 
 // Structured logger — outputs newline-delimited JSON to stdout.
 // In Docker this is captured by the container runtime.
@@ -22,7 +23,7 @@ function logAudit(req, action, resource = {}, detail = {}) {
     actor: {
       userId:    req.user?.id    || null,
       role:      req.user?.roles?.[0]  || 'anonymous',
-      ipAddress: req.ip
+      ipAddress: getClientIp(req)
     },
     action,
     resource,
