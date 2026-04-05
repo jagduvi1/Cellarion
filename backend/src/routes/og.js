@@ -42,26 +42,33 @@ router.get('/wines/:id', async (req, res) => {
     const grapeNames = (wine.grapes || []).map(g => g.name).filter(Boolean);
     const hasRating = wine.communityRating?.reviewCount > 0;
 
-    // JSON-LD structured data
-    const jsonLd = {
-      '@context': 'https://schema.org',
-      '@type': 'Product',
-      name: wine.name,
-      description,
-      brand: { '@type': 'Brand', name: wine.producer },
-      image: imageUrl,
-      url: pageUrl,
-      category: wine.type ? `${wine.type} wine` : 'wine'
-    };
+    // JSON-LD structured data — only use Product type when we have aggregateRating,
+    // otherwise Google flags it as invalid (requires offers, review, or aggregateRating).
     const ratingOn5 = hasRating ? fromNormalized(wine.communityRating.averageNormalized, '5') : null;
-    if (hasRating && ratingOn5 != null) {
-      jsonLd.aggregateRating = {
-        '@type': 'AggregateRating',
-        ratingValue: ratingOn5.toFixed(1),
-        bestRating: '5',
-        reviewCount: wine.communityRating.reviewCount
-      };
-    }
+    const jsonLd = (hasRating && ratingOn5 != null)
+      ? {
+          '@context': 'https://schema.org',
+          '@type': 'Product',
+          name: wine.name,
+          description,
+          brand: { '@type': 'Brand', name: wine.producer },
+          image: imageUrl,
+          url: pageUrl,
+          category: wine.type ? `${wine.type} wine` : 'wine',
+          aggregateRating: {
+            '@type': 'AggregateRating',
+            ratingValue: ratingOn5.toFixed(1),
+            bestRating: '5',
+            reviewCount: wine.communityRating.reviewCount
+          }
+        }
+      : {
+          '@context': 'https://schema.org',
+          '@type': 'WebPage',
+          name: wine.name,
+          description,
+          url: pageUrl
+        };
 
     const html = `<!DOCTYPE html>
 <html lang="en">
@@ -69,7 +76,7 @@ router.get('/wines/:id', async (req, res) => {
   <meta charset="utf-8" />
   <title>${esc(titleTag)}</title>
   <meta name="description" content="${esc(description)}" />
-  <meta property="og:type" content="product" />
+  <meta property="og:type" content="${hasRating ? 'product' : 'website'}" />
   <meta property="og:title" content="${esc(pageTitle)}" />
   <meta property="og:description" content="${esc(description)}" />
   <meta property="og:image" content="${esc(imageUrl)}" />

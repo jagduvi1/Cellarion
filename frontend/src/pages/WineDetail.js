@@ -68,25 +68,32 @@ export default function WineDetail() {
   const hasRating = wine.communityRating?.reviewCount > 0;
   const reviewCount = wine.communityRating?.reviewCount || 0;
 
-  // JSON-LD structured data
-  const jsonLd = {
-    '@context': 'https://schema.org',
-    '@type': 'Product',
-    name: wine.name,
-    description: metaDescription,
-    brand: { '@type': 'Brand', name: wine.producer },
-    image: imageUrl,
-    url: pageUrl,
-    category: wine.type ? `${wine.type} wine` : 'wine'
-  };
-  if (hasRating) {
-    jsonLd.aggregateRating = {
-      '@type': 'AggregateRating',
-      ratingValue: fromNormalized(wine.communityRating.averageNormalized, '5').toFixed(1),
-      bestRating: '5',
-      reviewCount
-    };
-  }
+  // JSON-LD structured data — only use Product type when we have aggregateRating,
+  // otherwise Google flags it as invalid (requires offers, review, or aggregateRating).
+  const jsonLd = hasRating
+    ? {
+        '@context': 'https://schema.org',
+        '@type': 'Product',
+        name: wine.name,
+        description: metaDescription,
+        brand: { '@type': 'Brand', name: wine.producer },
+        image: imageUrl,
+        url: pageUrl,
+        category: wine.type ? `${wine.type} wine` : 'wine',
+        aggregateRating: {
+          '@type': 'AggregateRating',
+          ratingValue: fromNormalized(wine.communityRating.averageNormalized, '5').toFixed(1),
+          bestRating: '5',
+          reviewCount
+        }
+      }
+    : {
+        '@context': 'https://schema.org',
+        '@type': 'WebPage',
+        name: wine.name,
+        description: metaDescription,
+        url: pageUrl
+      };
 
   const page = (
     <div className="wine-detail-page">
