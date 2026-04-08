@@ -2,7 +2,7 @@ const express = require('express');
 const crypto = require('crypto');
 const fs = require('fs');
 const multer = require('multer');
-const { requireAuth, requireFeature } = require('../middleware/auth');
+const { requireAuth } = require('../middleware/auth');
 const WineList = require('../models/WineList');
 const Cellar = require('../models/Cellar');
 const Bottle = require('../models/Bottle');
@@ -77,11 +77,11 @@ async function loadBottleMap(wineList) {
 }
 
 // =====================================================================
-// Authenticated routes — requireAuth + requireFeature('wineLists')
+// Authenticated routes
 // =====================================================================
 
 // GET /api/wine-lists?cellar=:cellarId — list wine lists for a cellar
-router.get('/', requireAuth, requireFeature('wineLists'), async (req, res) => {
+router.get('/', requireAuth, async (req, res) => {
   try {
     const { cellar: cellarId } = req.query;
     if (!cellarId) return res.status(400).json({ error: 'cellar query parameter is required' });
@@ -103,7 +103,7 @@ router.get('/', requireAuth, requireFeature('wineLists'), async (req, res) => {
 });
 
 // POST /api/wine-lists — create a new wine list
-router.post('/', requireAuth, requireFeature('wineLists'), async (req, res) => {
+router.post('/', requireAuth, async (req, res) => {
   try {
     const { cellar: cellarId, name } = req.body;
     if (!cellarId || !name) return res.status(400).json({ error: 'cellar and name are required' });
@@ -129,7 +129,7 @@ router.post('/', requireAuth, requireFeature('wineLists'), async (req, res) => {
 });
 
 // GET /api/wine-lists/:id — get wine list details
-router.get('/:id', requireAuth, requireFeature('wineLists'), async (req, res) => {
+router.get('/:id', requireAuth, async (req, res) => {
   try {
     const wineList = await WineList.findOne({ _id: req.params.id, user: req.user.id });
     if (!wineList) return res.status(404).json({ error: 'Wine list not found' });
@@ -142,7 +142,7 @@ router.get('/:id', requireAuth, requireFeature('wineLists'), async (req, res) =>
 });
 
 // PUT /api/wine-lists/:id — update wine list
-router.put('/:id', requireAuth, requireFeature('wineLists'), async (req, res) => {
+router.put('/:id', requireAuth, async (req, res) => {
   try {
     const wineList = await WineList.findOne({ _id: req.params.id, user: req.user.id });
     if (!wineList) return res.status(404).json({ error: 'Wine list not found' });
@@ -173,7 +173,7 @@ router.put('/:id', requireAuth, requireFeature('wineLists'), async (req, res) =>
 });
 
 // DELETE /api/wine-lists/:id
-router.delete('/:id', requireAuth, requireFeature('wineLists'), async (req, res) => {
+router.delete('/:id', requireAuth, async (req, res) => {
   try {
     const wineList = await WineList.findOneAndDelete({ _id: req.params.id, user: req.user.id });
     if (!wineList) return res.status(404).json({ error: 'Wine list not found' });
@@ -188,7 +188,7 @@ router.delete('/:id', requireAuth, requireFeature('wineLists'), async (req, res)
 });
 
 // POST /api/wine-lists/:id/publish — generate token and publish
-router.post('/:id/publish', requireAuth, requireFeature('wineLists'), async (req, res) => {
+router.post('/:id/publish', requireAuth, async (req, res) => {
   try {
     const wineList = await WineList.findOne({ _id: req.params.id, user: req.user.id });
     if (!wineList) return res.status(404).json({ error: 'Wine list not found' });
@@ -210,7 +210,7 @@ router.post('/:id/publish', requireAuth, requireFeature('wineLists'), async (req
 });
 
 // POST /api/wine-lists/:id/unpublish — disable public URL
-router.post('/:id/unpublish', requireAuth, requireFeature('wineLists'), async (req, res) => {
+router.post('/:id/unpublish', requireAuth, async (req, res) => {
   try {
     const wineList = await WineList.findOne({ _id: req.params.id, user: req.user.id });
     if (!wineList) return res.status(404).json({ error: 'Wine list not found' });
@@ -228,7 +228,7 @@ router.post('/:id/unpublish', requireAuth, requireFeature('wineLists'), async (r
 });
 
 // GET /api/wine-lists/:id/preview-pdf — generate PDF preview (authenticated)
-router.get('/:id/preview-pdf', requireAuth, requireFeature('wineLists'), async (req, res) => {
+router.get('/:id/preview-pdf', requireAuth, async (req, res) => {
   try {
     const wineList = await WineList.findOne({ _id: req.params.id, user: req.user.id });
     if (!wineList) return res.status(404).json({ error: 'Wine list not found' });
@@ -254,7 +254,7 @@ router.get('/:id/preview-pdf', requireAuth, requireFeature('wineLists'), async (
 });
 
 // POST /api/wine-lists/:id/logo — upload restaurant logo
-router.post('/:id/logo', requireAuth, requireFeature('wineLists'), logoUpload.single('logo'), async (req, res) => {
+router.post('/:id/logo', requireAuth, logoUpload.single('logo'), async (req, res) => {
   try {
     const wineList = await WineList.findOne({ _id: req.params.id, user: req.user.id });
     if (!wineList) return res.status(404).json({ error: 'Wine list not found' });
@@ -272,7 +272,7 @@ router.post('/:id/logo', requireAuth, requireFeature('wineLists'), logoUpload.si
 });
 
 // GET /api/wine-lists/:id/stats — stock count + profit margin per entry
-router.get('/:id/stats', requireAuth, requireFeature('wineLists'), async (req, res) => {
+router.get('/:id/stats', requireAuth, async (req, res) => {
   try {
     const wineList = await WineList.findOne({ _id: req.params.id, user: req.user.id });
     if (!wineList) return res.status(404).json({ error: 'Wine list not found' });

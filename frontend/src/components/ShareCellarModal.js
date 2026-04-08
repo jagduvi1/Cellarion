@@ -1,17 +1,14 @@
 import { useState, useEffect } from 'react';
-import { useAuth, usePlan } from '../contexts/AuthContext';
-import { formatLimit } from '../config/plans';
+import { useAuth } from '../contexts/AuthContext';
 import './ShareCellarModal.css';
 
 function ShareCellarModal({ cellarId, cellarName, onClose }) {
   const { apiFetch } = useAuth();
-  const { plan, config } = usePlan();
   const [members, setMembers] = useState([]);
   const [email, setEmail] = useState('');
   const [role, setRole] = useState('viewer');
   const [adding, setAdding] = useState(false);
   const [error, setError] = useState(null);
-  const [limitError, setLimitError] = useState(null);
   const [success, setSuccess] = useState(null);
 
   useEffect(() => {
@@ -26,13 +23,10 @@ function ShareCellarModal({ cellarId, cellarName, onClose }) {
     } catch {}
   };
 
-  const atLimit = config.maxSharesPerCellar !== -1 && members.length >= config.maxSharesPerCellar;
-
   const handleAdd = async (e) => {
     e.preventDefault();
     setAdding(true);
     setError(null);
-    setLimitError(null);
     setSuccess(null);
 
     try {
@@ -51,8 +45,6 @@ function ShareCellarModal({ cellarId, cellarName, onClose }) {
           setEmail('');
           setSuccess('Member added successfully.');
         }
-      } else if (res.status === 403 && data.limitReached === 'shares') {
-        setLimitError(data);
       } else {
         setError(data.error || 'Failed to add member');
       }
@@ -87,7 +79,6 @@ function ShareCellarModal({ cellarId, cellarName, onClose }) {
       });
       if (res.ok) {
         setMembers(prev => prev.filter(m => m.user._id !== userId));
-        setLimitError(null);
       } else {
         const data = await res.json();
         setError(data.error || 'Failed to remove member');
@@ -102,57 +93,40 @@ function ShareCellarModal({ cellarId, cellarName, onClose }) {
       <div className="share-modal" onClick={e => e.stopPropagation()}>
         <div className="share-modal-header">
           <h2>Share "{cellarName}"</h2>
-          <button className="modal-close-btn" onClick={onClose} aria-label="Close">✕</button>
+          <button className="modal-close-btn" onClick={onClose} aria-label="Close">{'\u2715'}</button>
         </div>
 
         {error && <div className="alert alert-error">{error}</div>}
         {success && <div className="alert alert-success">{success}</div>}
 
-        {/* Plan share limit notice */}
-        {(atLimit || limitError) && (
-          <div className="share-limit-notice">
-            <span>🔒</span>
-            <div>
-              <strong>Share limit reached</strong>
-              <p>
-                Your <strong>{plan.charAt(0).toUpperCase() + plan.slice(1)}</strong> plan allows{' '}
-                <strong>{formatLimit(config.maxSharesPerCellar)} shared member{config.maxSharesPerCellar === 1 ? '' : 's'}</strong> per cellar.
-                Contact an admin to upgrade your plan.
-              </p>
-            </div>
+        <form onSubmit={handleAdd} className="share-add-form">
+          <label className="share-form-label">Add a person by email</label>
+          <div className="share-input-row">
+            <input
+              type="email"
+              className="share-email-input"
+              placeholder="friend@example.com"
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+              required
+            />
+            <select
+              className="share-role-select"
+              value={role}
+              onChange={e => setRole(e.target.value)}
+            >
+              <option value="viewer">Viewer</option>
+              <option value="editor">Editor</option>
+            </select>
+            <button type="submit" className="btn btn-primary" disabled={adding}>
+              {adding ? 'Adding\u2026' : 'Add'}
+            </button>
           </div>
-        )}
-
-        {!atLimit && (
-          <form onSubmit={handleAdd} className="share-add-form">
-            <label className="share-form-label">Add a person by email</label>
-            <div className="share-input-row">
-              <input
-                type="email"
-                className="share-email-input"
-                placeholder="friend@example.com"
-                value={email}
-                onChange={e => setEmail(e.target.value)}
-                required
-              />
-              <select
-                className="share-role-select"
-                value={role}
-                onChange={e => setRole(e.target.value)}
-              >
-                <option value="viewer">Viewer</option>
-                <option value="editor">Editor</option>
-              </select>
-              <button type="submit" className="btn btn-primary" disabled={adding}>
-                {adding ? 'Adding…' : 'Add'}
-              </button>
-            </div>
-            <p className="share-role-hint">
-              <strong>Viewer</strong> — can browse bottles and racks.{' '}
-              <strong>Editor</strong> — can also add and remove bottles.
-            </p>
-          </form>
-        )}
+          <p className="share-role-hint">
+            <strong>Viewer</strong> — can browse bottles and racks.{' '}
+            <strong>Editor</strong> — can also add and remove bottles.
+          </p>
+        </form>
 
         {members.length > 0 && (
           <div className="share-members">
@@ -187,7 +161,7 @@ function ShareCellarModal({ cellarId, cellarName, onClose }) {
           </div>
         )}
 
-        {members.length === 0 && !atLimit && (
+        {members.length === 0 && (
           <p className="share-empty">Not shared with anyone yet.</p>
         )}
       </div>

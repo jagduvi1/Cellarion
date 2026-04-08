@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
-import { useAuth, usePlan } from '../../contexts/AuthContext';
+import { useAuth } from '../../contexts/AuthContext';
 import { getMaturityStatus } from '../../utils/drinkStatus';
 import { convertAmountHistorical } from '../../utils/currency';
 import { buildRackUrl } from '../../utils/rackNavigation';
@@ -14,9 +14,6 @@ import PriceHistoryTimeline from './PriceHistoryTimeline';
 function ViewDetails({ bottle, rackInfo, cellarId, vintageProfile, priceHistory, rates, userCurrency, canEdit, hasImage, onEdit, onSuggestGrapes, onRemove, onReportWine }) {
   const { t } = useTranslation();
   const { user } = useAuth();
-  const { plan, hasFeature } = usePlan();
-  const hasAgingMaturity = hasFeature('agingMaturity');
-  const hasPriceEvolution = hasFeature('priceEvolution');
   const maturityStatus = getMaturityStatus(vintageProfile);
   const [showSommNotes, setShowSommNotes] = useState(false);
   const wine = bottle.wineDefinition;
@@ -97,52 +94,42 @@ function ViewDetails({ bottle, rackInfo, cellarId, vintageProfile, priceHistory,
         )}
       </div>
 
-      {/* Sommelier maturity section — premium feature, not shown for NV */}
+      {/* Sommelier maturity section — not shown for NV */}
       {bottle.vintage && bottle.vintage !== 'NV' && (
         <div className="bd-section">
           <span className="bd-section-label">{t('bottleDetail.sommMaturity')}</span>
-          {hasAgingMaturity ? (
-            !vintageProfile ? (
-              <span className="bd-no-dates">{t('bottleDetail.loadingMaturity')}</span>
-            ) : vintageProfile.status === 'pending' ? (
-              <div className="bd-maturity-pending">
-                <span className="maturity-badge maturity-badge--pending">{t('bottleDetail.awaitingSommelier')}</span>
-                <span className="bd-maturity-note">
-                  {t('bottleDetail.sommelierWillSet')}
-                </span>
-              </div>
-            ) : (
-              <div className="bd-maturity-reviewed">
-                {maturityStatus && (
-                  <span className={`maturity-badge maturity-badge--${maturityStatus.status}`}>
-                    {maturityStatus.label}
-                  </span>
-                )}
-                <MaturityPhaseTable profile={vintageProfile} />
-                {vintageProfile.sommNotes && (
-                  <div className="bd-somm-notes-toggle">
-                    <button
-                      className="bd-somm-notes-btn"
-                      onClick={() => setShowSommNotes(v => !v)}
-                      aria-expanded={showSommNotes}
-                    >
-                      {t('bottleDetail.sommNotes')}
-                      <span className={`bd-somm-notes-chevron${showSommNotes ? ' bd-somm-notes-chevron--open' : ''}`}>&rsaquo;</span>
-                    </button>
-                    {showSommNotes && (
-                      <p className="bd-maturity-notes">{vintageProfile.sommNotes}</p>
-                    )}
-                  </div>
-                )}
-              </div>
-            )
+          {!vintageProfile ? (
+            <span className="bd-no-dates">{t('bottleDetail.loadingMaturity')}</span>
+          ) : vintageProfile.status === 'pending' ? (
+            <div className="bd-maturity-pending">
+              <span className="maturity-badge maturity-badge--pending">{t('bottleDetail.awaitingSommelier')}</span>
+              <span className="bd-maturity-note">
+                {t('bottleDetail.sommelierWillSet')}
+              </span>
+            </div>
           ) : (
-            <div className="bd-price-evolution bd-price-evolution--locked">
-              <span className="bd-price-evolution__icon" aria-hidden="true">{'\u{1F512}'}</span>
-              <div>
-                <strong>{t('bottleDetail.premiumFeature')}</strong>
-                <p>{t('bottleDetail.agingMaturityPremiumDesc')}</p>
-              </div>
+            <div className="bd-maturity-reviewed">
+              {maturityStatus && (
+                <span className={`maturity-badge maturity-badge--${maturityStatus.status}`}>
+                  {maturityStatus.label}
+                </span>
+              )}
+              <MaturityPhaseTable profile={vintageProfile} />
+              {vintageProfile.sommNotes && (
+                <div className="bd-somm-notes-toggle">
+                  <button
+                    className="bd-somm-notes-btn"
+                    onClick={() => setShowSommNotes(v => !v)}
+                    aria-expanded={showSommNotes}
+                  >
+                    {t('bottleDetail.sommNotes')}
+                    <span className={`bd-somm-notes-chevron${showSommNotes ? ' bd-somm-notes-chevron--open' : ''}`}>&rsaquo;</span>
+                  </button>
+                  {showSommNotes && (
+                    <p className="bd-maturity-notes">{vintageProfile.sommNotes}</p>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -187,30 +174,18 @@ function ViewDetails({ bottle, rackInfo, cellarId, vintageProfile, priceHistory,
         </div>
       )}
 
-      {/* Price Evolution — premium feature, not shown for NV */}
+      {/* Price Evolution — not shown for NV */}
       {bottle.vintage !== 'NV' && (
         <div className="bd-section">
           <span className="bd-section-label">{t('bottleDetail.priceEvolution')}</span>
-          {hasPriceEvolution ? (
-            <>
-              <PriceHistoryTimeline history={priceHistory} rates={rates} userCurrency={userCurrency} />
-              {priceHistory && priceHistory.length > 0 && wine && (
-                <button
-                  className="btn-report-wine sp-report-price"
-                  onClick={() => onReportWine('wrong_price')}
-                >
-                  {t('bottleDetail.reportPrice')}
-                </button>
-              )}
-            </>
-          ) : (
-            <div className="bd-price-evolution bd-price-evolution--locked">
-              <span className="bd-price-evolution__icon" aria-hidden="true">{'\u{1F512}'}</span>
-              <div>
-                <strong>{t('bottleDetail.premiumFeature')}</strong>
-                <p>{t('bottleDetail.premiumFeatureDesc')}</p>
-              </div>
-            </div>
+          <PriceHistoryTimeline history={priceHistory} rates={rates} userCurrency={userCurrency} />
+          {priceHistory && priceHistory.length > 0 && wine && (
+            <button
+              className="btn-report-wine sp-report-price"
+              onClick={() => onReportWine('wrong_price')}
+            >
+              {t('bottleDetail.reportPrice')}
+            </button>
           )}
         </div>
       )}

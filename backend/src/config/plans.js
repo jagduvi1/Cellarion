@@ -1,77 +1,52 @@
 /**
- * Plan definitions for Cellarion subscription tiers.
+ * Supporter tier definitions for Cellarion.
  *
- * maxCellars:         max owned cellars; -1 = unlimited
- * maxSharesPerCellar: max members per cellar; -1 = unlimited
- * features:           boolean feature flags for gated functionality
- * description:        short human-readable summary of the plan
- * featureList:        ordered list of features displayed on the Plans page
+ * All tiers have full access to every feature. The only difference is
+ * the Cellar Chat quota (questions per rolling 7-day window).
+ *
+ * chatQuota: max chat questions per 7-day rolling window; -1 = unlimited
+ * price:     monthly price in USD (0 = free)
  */
 const PLANS = {
   free: {
-    description: 'Get started with wine tracking at no cost.',
-    maxCellars: 1,
-    maxSharesPerCellar: 1,
-    features: {
-      agingMaturity: true,
-      priceEvolution: false,
-      restockAlerts: true,
-      wineLists: false,
-    },
+    label: 'Enthusiast',
+    description: 'Full access to every feature — completely free.',
+    price: 0,
+    chatQuota: 5,
     featureList: [
-      '1 cellar',
-      '1 shared member per cellar',
+      'Unlimited cellars & shared members',
       'Bottle tracking (vintages, ratings, notes)',
+      'All analytics & statistics',
       'Aging & maturity profiles',
+      'Price evolution tracking',
+      'Wine list PDF generation',
       'Smart restock alerts',
       'Drink-window alerts',
       'Rack management',
       'Wine requests',
-      'Basic stats: wine types, maturity status, rating distribution',
       'Cellar Chat (5 questions / week)',
     ],
   },
-  basic: {
-    description: 'More space to grow your collection.',
-    maxCellars: 5,
-    maxSharesPerCellar: 1,
-    features: {
-      agingMaturity: true,
-      priceEvolution: false,
-      restockAlerts: true,
-      wineLists: false,
-    },
+  supporter: {
+    label: 'Supporter',
+    description: 'Support Cellarion and get more Cellar Chat.',
+    price: 1.5,
+    chatQuota: 50,
     featureList: [
-      '5 cellars',
-      '1 shared member per cellar',
-      'Everything in Free',
-      'Smart restock alerts (AI-powered)',
-      'Full analytics: vintage charts, world map, regions, producers',
-      'Consumption history & cellar pace',
-      'Cellar Chat (20 questions / day)',
+      'Everything in Enthusiast',
+      'Cellar Chat (50 questions / week)',
+      'Support independent development',
     ],
   },
-  premium: {
-    description: 'Unlimited access and advanced analytics.',
-    maxCellars: -1,
-    maxSharesPerCellar: -1,
-    features: {
-      agingMaturity: true,
-      priceEvolution: true,
-      restockAlerts: true,
-      wineLists: true,
-    },
+  patron: {
+    label: 'Patron',
+    description: 'Maximum support with unlimited Cellar Chat.',
+    price: 5.5,
+    chatQuota: -1,
     featureList: [
-      'Unlimited cellars',
-      'Unlimited shared members per cellar',
-      'Price evolution tracking',
-      'Wine list PDF generation',
-      'Everything in Basic',
-      'Cellar health score & Regret Index',
-      'Urgency ladder, drink window forecast',
-      'Joy Per Dollar, Patience Payoff, Expectation vs Reality',
-      'Collection value & most valuable bottles',
-      'Cellar Chat (50 questions / day)',
+      'Everything in Supporter',
+      'Cellar Chat (unlimited)',
+      'Priority support',
     ],
   },
 };
@@ -87,22 +62,4 @@ function getPlanConfig(plan) {
   return PLANS[plan] || PLANS.free;
 }
 
-/**
- * Returns true if the given plan has access to the named feature.
- */
-function planHasFeature(plan, featureName) {
-  const config = getPlanConfig(plan);
-  return config.features[featureName] === true;
-}
-
-/**
- * Returns the first plan (by tier order) that grants the feature.
- */
-function getRequiredPlanForFeature(featureName) {
-  for (const name of PLAN_NAMES) {
-    if (PLANS[name].features[featureName]) return name;
-  }
-  return null;
-}
-
-module.exports = { PLANS, PLAN_NAMES, getPlanConfig, planHasFeature, getRequiredPlanForFeature };
+module.exports = { PLANS, PLAN_NAMES, getPlanConfig };

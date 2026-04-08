@@ -77,9 +77,6 @@ function Layout({ children }) {
                   data-guide="nav-statistics"
                 >
                   Analytics
-                  {user.plan !== 'premium' && (
-                    <span className="nav-premium-star" aria-hidden="true">★</span>
-                  )}
                 </Link>
                 <Link
                   to="/restock"
@@ -137,10 +134,10 @@ function Layout({ children }) {
                   {t('nav.blog')}
                 </Link>
                 <Link
-                  to="/plans"
-                  className={`nav-link ${isActive('/plans') ? 'active' : ''}`}
+                  to="/supporter"
+                  className={`nav-link ${isActive('/supporter') ? 'active' : ''}`}
                 >
-                  {t('nav.plans')}
+                  {t('nav.supporter')}
                 </Link>
                 <Link
                   to="/support"
@@ -251,7 +248,7 @@ function Layout({ children }) {
               <Link to="/wine-requests" className={`mobile-menu-link ${isActive('/wine-requests') ? 'active' : ''}`} onClick={closeMenu}>{t('nav.myRequests')}</Link>
               <Link to="/cellar-chat" className={`mobile-menu-link ${isActive('/cellar-chat') ? 'active' : ''}`} onClick={closeMenu}>Cellar Chat</Link>
               <Link to="/blog" className={`mobile-menu-link ${isActive('/blog') ? 'active' : ''}`} onClick={closeMenu}>{t('nav.blog')}</Link>
-              <Link to="/plans" className={`mobile-menu-link ${isActive('/plans') ? 'active' : ''}`} onClick={closeMenu}>{t('nav.plans')}</Link>
+              <Link to="/supporter" className={`mobile-menu-link ${isActive('/supporter') ? 'active' : ''}`} onClick={closeMenu}>{t('nav.supporter')}</Link>
               <Link to="/support" className={`mobile-menu-link ${isActive('/support') ? 'active' : ''}`} onClick={closeMenu}>Support</Link>
             </div>
 

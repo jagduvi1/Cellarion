@@ -414,9 +414,9 @@ router.get('/ai', async (req, res) => {
 // Update per-plan daily chat limits stored in aiConfig
 // ---------------------------------------------------------------------------
 router.patch('/ai/chat-limits', async (req, res) => {
-  const { free, basic, premium } = req.body;
+  const { free, supporter, patron } = req.body;
   const parse = (v) => parseInt(v, 10);
-  const vals = { free: parse(free), basic: parse(basic), premium: parse(premium) };
+  const vals = { free: parse(free), supporter: parse(supporter), patron: parse(patron) };
   if (Object.values(vals).some(v => isNaN(v) || v < 0)) {
     return res.status(400).json({ error: 'Each limit must be a non-negative integer' });
   }

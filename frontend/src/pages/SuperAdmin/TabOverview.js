@@ -32,12 +32,12 @@ export default function TabOverview() {
       </div>
 
       <div className="sa-grid-3">
-        {/* Users by plan */}
+        {/* Users by supporter tier */}
         <div className="sa-panel">
-          <div className="sa-panel-header"><span className="sa-panel-title">Users by Plan</span></div>
+          <div className="sa-panel-header"><span className="sa-panel-title">Users by Tier</span></div>
           <div className="sa-panel-body">
             <div className="sa-kv">
-              {['free', 'basic', 'premium'].map(p => (
+              {['free', 'supporter', 'patron'].map(p => (
                 <div key={p} className="sa-kv-row">
                   <span className="sa-kv-key"><PlanBadge plan={p} /></span>
                   <span className="sa-kv-val">{num(byPlan[p] || 0)}</span>

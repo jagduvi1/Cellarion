@@ -2,21 +2,17 @@ import { useState, useEffect, useCallback } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
-import { usePlan } from '../contexts/AuthContext';
-import { formatLimit } from '../config/plans';
 import CellarColorPicker from '../components/CellarColorPicker';
 import './Cellars.css';
 
 function Cellars() {
   const { t } = useTranslation();
   const { user, apiFetch, updatePreferences } = useAuth();
-  const { plan, config } = usePlan();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [cellars, setCellars] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [limitError, setLimitError] = useState(null);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [newCellar, setNewCellar] = useState({ name: '', description: '', color: null });
   const [creating, setCreating] = useState(false);
@@ -65,15 +61,14 @@ function Cellars() {
     await updatePreferences({ defaultCellarId: newId });
   }, [defaultCellarId, updatePreferences]);
 
-  // Number of owned cellars (not shared ones)
   const ownedCellars = cellars.filter(c => c.userRole === 'owner');
-  const atLimit = config.maxCellars !== -1 && ownedCellars.length >= config.maxCellars;
+
 
   const handleCreateCellar = async (e) => {
     e.preventDefault();
     setCreating(true);
     setError(null);
-    setLimitError(null);
+
 
     try {
       const res = await apiFetch('/api/cellars', {
@@ -86,9 +81,6 @@ function Cellars() {
       if (res.ok) {
         setCellars([data.cellar, ...cellars]);
         setNewCellar({ name: '', description: '', color: null });
-        setShowCreateForm(false);
-      } else if (res.status === 403 && data.limitReached === 'cellars') {
-        setLimitError(data);
         setShowCreateForm(false);
       } else {
         setError(data.error || 'Failed to create cellar');
@@ -111,7 +103,7 @@ function Cellars() {
           <h1>{t('cellars.title')}</h1>
           <button
             onClick={() => {
-              setLimitError(null);
+          
               setShowCreateForm(!showCreateForm);
             }}
             className="btn btn-primary btn-small cellars-desktop-create"
@@ -127,24 +119,9 @@ function Cellars() {
         )}
       </div>
 
-      {/* Plan limit upgrade prompt — only after the button is clicked */}
-      {((showCreateForm && atLimit) || limitError) && (
-        <div className="plan-limit-notice">
-          <span className="plan-limit-notice__icon" aria-hidden="true">🔒</span>
-          <div>
-            <strong>{t('cellars.limitReached')}</strong>
-            <p>
-              Your <strong>{plan.charAt(0).toUpperCase() + plan.slice(1)}</strong> plan allows{' '}
-              <strong>{formatLimit(config.maxCellars)} cellar{config.maxCellars === 1 ? '' : 's'}</strong>.
-              Contact an admin to upgrade your plan and create more cellars.
-            </p>
-          </div>
-        </div>
-      )}
-
       {error && <div className="alert alert-error">{error}</div>}
 
-      {showCreateForm && !atLimit && (
+      {showCreateForm && (
         <div className="card create-form">
           <h2>{t('cellars.createTitle')}</h2>
           <form onSubmit={handleCreateCellar}>
@@ -238,7 +215,7 @@ function Cellars() {
       <button
         className="fab cellars-fab"
         onClick={() => {
-          setLimitError(null);
+      
           setShowCreateForm(!showCreateForm);
           window.scrollTo({ top: 0, behavior: 'smooth' });
         }}

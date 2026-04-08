@@ -1,12 +1,14 @@
 /**
  * Cellar Chat routes.
  *
- * POST /api/chat         – ask a question (non-streaming); rate-limited by plan quota
+ * POST /api/chat         – ask a question (non-streaming); rate-limited by supporter tier quota
  * POST /api/chat/stream  – ask a question (streaming SSE); same rate limiting
  * GET  /api/chat/usage   – return current usage + limit for the current user
  *
- * Free plan: 5 questions per rolling 7-day window
- * Basic/Premium: daily limits (configurable via aiConfig)
+ * All tiers use a rolling 7-day window:
+ *   Enthusiast (free): 5 questions / week
+ *   Supporter:         50 questions / week
+ *   Patron:            unlimited
  */
 
 const express = require('express');
@@ -16,10 +18,9 @@ const aiChat = require('../services/aiChat');
 const aiConfig = require('../config/aiConfig');
 const ChatUsage = require('../models/ChatUsage');
 const User = require('../models/User');
+const { getPlanConfig } = require('../config/plans');
 
 const router = express.Router();
-
-const FREE_WEEKLY_LIMIT = 5;
 
 // Returns today's UTC date string 'YYYY-MM-DD'
 function todayUTC() {
@@ -38,29 +39,21 @@ function expiresAt() {
   return new Date(Date.now() + 90 * 24 * 60 * 60 * 1000);
 }
 
-// Returns the daily limit for a given plan from the current aiConfig
-function dailyLimitForPlan(plan) {
-  const limits = aiConfig.get().chatDailyLimits || {};
-  return limits[plan] ?? limits.free ?? 4;
-}
-
 /**
  * Returns { limit, used, period } for the given plan.
- * Free plan uses a rolling 7-day window; others use daily.
+ * All tiers use a rolling 7-day window. Patron (-1) = unlimited.
  */
 async function getUsageForPlan(userId, plan) {
-  if (plan === 'free') {
-    const startDate = daysAgoUTC(6); // today minus 6 = 7-day window
-    const docs = await ChatUsage.find({
-      userId,
-      date: { $gte: startDate },
-    }).lean();
-    const used = docs.reduce((sum, d) => sum + (d.count || 0), 0);
-    return { limit: FREE_WEEKLY_LIMIT, used, period: 'weekly' };
-  }
-  const date = todayUTC();
-  const doc = await ChatUsage.findOne({ userId, date }).lean();
-  return { limit: dailyLimitForPlan(plan), used: doc?.count ?? 0, period: 'daily' };
+  const config = getPlanConfig(plan);
+  const limit = config.chatQuota; // -1 = unlimited
+
+  const startDate = daysAgoUTC(6); // today minus 6 = 7-day window
+  const docs = await ChatUsage.find({
+    userId,
+    date: { $gte: startDate },
+  }).lean();
+  const used = docs.reduce((sum, d) => sum + (d.count || 0), 0);
+  return { limit, used, period: 'weekly' };
 }
 
 /**
@@ -105,12 +98,10 @@ async function validateAndCheckLimit(req, res) {
 
   const { limit, used: usedBefore, period } = await getUsageForPlan(req.user.id, plan);
 
-  if (usedBefore >= limit) {
-    const resetMsg = period === 'weekly'
-      ? 'Try again in a few days.'
-      : 'Resets at midnight UTC.';
+  // limit === -1 means unlimited (patron tier)
+  if (limit !== -1 && usedBefore >= limit) {
     res.status(429).json({
-      error: `You've reached your ${period} limit of ${limit} question${limit === 1 ? '' : 's'}. ${resetMsg}`,
+      error: `You've reached your ${period} limit of ${limit} question${limit === 1 ? '' : 's'}. Try again in a few days.`,
       used: usedBefore,
       limit,
       period,

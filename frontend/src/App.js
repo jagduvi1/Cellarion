@@ -31,7 +31,7 @@ const UserProfile     = lazy(() => import('./pages/UserProfile'));
 const SommMaturity    = lazy(() => import('./pages/SommMaturity'));
 const SommPrices      = lazy(() => import('./pages/SommPrices'));
 const Settings        = lazy(() => import('./pages/Settings'));
-const Plans           = lazy(() => import('./pages/Plans'));
+const Supporter       = lazy(() => import('./pages/Supporter'));
 const Statistics      = lazy(() => import('./pages/Statistics'));
 const StatsCard       = lazy(() => import('./pages/StatsCard'));
 const AdminWines      = lazy(() => import('./pages/AdminWines'));
@@ -291,13 +291,15 @@ function AppRoutes() {
           }
         />
         <Route
-          path="/plans"
+          path="/supporter"
           element={
             <ProtectedRoute>
-              <Layout><Plans /></Layout>
+              <Layout><Supporter /></Layout>
             </ProtectedRoute>
           }
         />
+        {/* Redirect old /plans URL */}
+        <Route path="/plans" element={<Navigate to="/supporter" replace />} />
         <Route
           path="/statistics"
           element={

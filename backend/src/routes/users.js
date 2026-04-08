@@ -146,14 +146,14 @@ router.post('/trial', requireAuth, async (req, res) => {
       return res.status(400).json({ error: 'Trial already used' });
     }
 
-    const planActive = user.plan === 'premium' &&
+    const planActive = user.plan === 'patron' &&
       (!user.planExpiresAt || Date.now() < new Date(user.planExpiresAt).getTime());
     if (planActive) {
-      return res.status(400).json({ error: 'Already on Premium plan' });
+      return res.status(400).json({ error: 'Already on Patron tier' });
     }
 
     const now = new Date();
-    user.plan = 'premium';
+    user.plan = 'patron';
     user.planStartedAt = now;
     user.planExpiresAt = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
     user.trialEligible = false;

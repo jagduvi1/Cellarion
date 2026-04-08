@@ -3,9 +3,9 @@ const jwt = require('jsonwebtoken');
 // Use a fixed test secret so we can sign real tokens
 process.env.JWT_SECRET = 'test-secret';
 
-const { requireAuth, requireRole, requireFeature, requireSommOrAdmin } = require('./auth');
+const { requireAuth, requireRole, requireSommOrAdmin } = require('./auth');
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
+// ─── Helpers ────────────────────────────────────────��────────────────────────
 
 function makeReq(overrides = {}) {
   return { headers: {}, ...overrides };
@@ -22,7 +22,7 @@ function signToken(payload, secret = 'test-secret', opts = {}) {
   return jwt.sign(payload, secret, { algorithm: 'HS256', expiresIn: '1h', ...opts });
 }
 
-// ─── requireAuth ─────────────────────────────────────────────────────────────
+// ─── requireAuth ─────────────────────��───────────────────────────────────────
 
 describe('requireAuth', () => {
   test('401 when Authorization header is absent', async () => {
@@ -82,7 +82,7 @@ describe('requireAuth', () => {
   });
 
   test('attaches req.user and calls next for a valid token with roles array', async () => {
-    const token = signToken({ id: 'u1', roles: ['admin'], plan: 'premium' });
+    const token = signToken({ id: 'u1', roles: ['admin'], plan: 'patron' });
     const req = makeReq({ headers: { authorization: `Bearer ${token}` } });
     const res = makeRes();
     const next = jest.fn();
@@ -90,7 +90,7 @@ describe('requireAuth', () => {
     await requireAuth(req, res, next);
 
     expect(next).toHaveBeenCalled();
-    expect(req.user).toMatchObject({ id: 'u1', roles: ['admin'], plan: 'premium' });
+    expect(req.user).toMatchObject({ id: 'u1', roles: ['admin'], plan: 'patron' });
   });
 
   test('supports legacy tokens that carry a single "role" string', async () => {
@@ -116,9 +116,22 @@ describe('requireAuth', () => {
     expect(req.user.roles).toEqual(['user']);
     expect(req.user.plan).toBe('free');
   });
+
+  test('downgrades expired plan to free', async () => {
+    const expired = new Date(Date.now() - 60000).toISOString();
+    const token = signToken({ id: 'u4', roles: ['user'], plan: 'patron', planExpiresAt: expired });
+    const req = makeReq({ headers: { authorization: `Bearer ${token}` } });
+    const res = makeRes();
+    const next = jest.fn();
+
+    await requireAuth(req, res, next);
+
+    expect(next).toHaveBeenCalled();
+    expect(req.user.plan).toBe('free');
+  });
 });
 
-// ─── requireRole ─────────────────────────────────────────────────────────────
+// ─── requireRole ──────────────────────────────────���──────────────────────────
 
 describe('requireRole', () => {
   test('401 when req.user is not set', () => {
@@ -169,63 +182,7 @@ describe('requireRole', () => {
   });
 });
 
-// ─── requireFeature ──────────────────────────────────────────────────────────
-
-describe('requireFeature', () => {
-  test('401 when req.user is not set', () => {
-    const middleware = requireFeature('priceEvolution');
-    const req = makeReq();
-    const res = makeRes();
-    const next = jest.fn();
-
-    middleware(req, res, next);
-
-    expect(res.status).toHaveBeenCalledWith(401);
-    expect(next).not.toHaveBeenCalled();
-  });
-
-  test('403 when plan does not include the feature (free plan)', () => {
-    const middleware = requireFeature('priceEvolution');
-    const req = { user: { plan: 'free' } };
-    const res = makeRes();
-    const next = jest.fn();
-
-    middleware(req, res, next);
-
-    expect(res.status).toHaveBeenCalledWith(403);
-    expect(res.json).toHaveBeenCalledWith(
-      expect.objectContaining({ feature: 'priceEvolution', currentPlan: 'free' })
-    );
-    expect(next).not.toHaveBeenCalled();
-  });
-
-  test('calls next when plan includes the feature (premium plan)', () => {
-    const middleware = requireFeature('priceEvolution');
-    const req = { user: { plan: 'premium' } };
-    const res = makeRes();
-    const next = jest.fn();
-
-    middleware(req, res, next);
-
-    expect(next).toHaveBeenCalled();
-    expect(res.status).not.toHaveBeenCalled();
-  });
-
-  test('403 response includes the required plan name', () => {
-    const middleware = requireFeature('priceEvolution');
-    const req = { user: { plan: 'basic' } };
-    const res = makeRes();
-    const next = jest.fn();
-
-    middleware(req, res, next);
-
-    expect(res.json).toHaveBeenCalledWith(
-      expect.objectContaining({ requiredPlan: 'premium' })
-    );
-  });
-});
-
-// ─── requireSommOrAdmin ───────────────────────────────────────────────────────
+// ─── requireSommOrAdmin ─────────────────────────��─────────────────────────────
 
 describe('requireSommOrAdmin', () => {
   test('401 when req.user is not set', () => {

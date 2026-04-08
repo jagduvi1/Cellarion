@@ -59,6 +59,7 @@
     "logout": "Logout",
     "toggleNav": "Toggle navigation",
     "plans": "Plans",
+    "supporter": "Support Us",
     "blog": "Blog",
     "blogAdmin": "Blog",
     "badge": {
@@ -121,6 +122,20 @@
     "currentTag": "Your plan",
     "adminManaged": "Plans are managed by your administrator.",
     "tryPremium": "Try Premium free for 30 days"
+  },
+
+  "supporter": {
+    "title": "Support Cellarion",
+    "subtitle": "Every tier gets full access to all features. Supporters help keep Cellarion free and get more Cellar Chat.",
+    "yourTier": "Your current tier:",
+    "expires": "Valid until:",
+    "noExpiry": "No expiry (indefinite)",
+    "expired": "Expired",
+    "currentTag": "Your tier",
+    "allFeaturesNote": "All features are available on every tier. Supporter tiers unlock more Cellar Chat questions and help fund development.",
+    "tryPatron": "Try Patron free for 30 days",
+    "free": "Free",
+    "month": "month"
   },
 
   "cellars": {
@@ -1579,7 +1594,7 @@
         "title": "Other Features",
         "summary": "Blog, plans, support, and NFC tags.",
         "d1": "Blog (/blog): wine articles and guides.",
-        "d2": "Plans (/plans): subscription tiers — Free, Basic, Premium.",
+        "d2": "Support Us (/supporter): supporter tiers — Enthusiast (free), Supporter ($1.50/mo), Patron ($5.50/mo).",
         "d3": "Support (/support): submit support tickets for help.",
         "d4": "NFC tags: attach NFC tags to racks — scan with your phone to open the rack directly."
       }

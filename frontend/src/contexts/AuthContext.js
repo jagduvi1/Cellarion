@@ -1,5 +1,5 @@
 import React, { createContext, useState, useContext, useEffect, useRef, useCallback } from 'react';
-import { getPlanConfig, planHasFeature } from '../config/plans';
+import { getPlanConfig } from '../config/plans';
 import { createApiFetch } from '../utils/apiFetch';
 import i18n from '../i18n';
 
@@ -21,11 +21,7 @@ export const usePlan = () => {
   const { user } = useAuth();
   const plan = user?.plan || 'free';
   const config = getPlanConfig(plan);
-  return {
-    plan,
-    config,
-    hasFeature: (featureName) => planHasFeature(plan, featureName),
-  };
+  return { plan, config };
 };
 
 export const AuthProvider = ({ children }) => {

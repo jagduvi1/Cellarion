@@ -778,7 +778,7 @@ function PriceSuggestPromptPanel({ prompt, apiFetch }) {
 }
 
 function ChatLimitsPanel({ limits, apiFetch }) {
-  const [vals, setVals] = useState({ free: limits.free ?? 4, basic: limits.basic ?? 20, premium: limits.premium ?? 50 });
+  const [vals, setVals] = useState({ free: limits.free ?? 5, supporter: limits.supporter ?? 50, patron: limits.patron ?? -1 });
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState(null);
 
@@ -807,15 +807,15 @@ function ChatLimitsPanel({ limits, apiFetch }) {
   return (
     <div className="sa-panel" style={{ marginTop: 16 }}>
       <div className="sa-panel-header">
-        <span className="sa-panel-title">Cellar Chat — Daily Limits</span>
+        <span className="sa-panel-title">Cellar Chat — Weekly Limits</span>
         <button className="sa-btn" onClick={save} disabled={saving}>{saving ? 'Saving...' : 'Save'}</button>
       </div>
       <div className="sa-panel-body">
         <div style={{ fontSize: 11, color: 'var(--sa-text-dim)', marginBottom: 12 }}>
-          Max questions per user per day. Resets at midnight UTC.
+          Max questions per user per rolling 7-day window. Use -1 for unlimited.
         </div>
         <div className="sa-kv">
-          {[['free', 'Free plan'], ['basic', 'Basic plan'], ['premium', 'Premium plan']].map(([key, label]) => (
+          {[['free', 'Enthusiast (free)'], ['supporter', 'Supporter ($1.50)'], ['patron', 'Patron ($5.50)']].map(([key, label]) => (
             <div className="sa-kv-row" key={key}>
               <span className="sa-kv-key">{label}</span>
               <input

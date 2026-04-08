@@ -206,7 +206,7 @@ const defaults = {
   chatMaxTokens: 800,
   chatMaxHistoryTurns: 10,
   embeddingBatchDelayMs: 500,
-  chatDailyLimits: { free: 4, basic: 20, premium: 50 },
+  chatDailyLimits: { free: 5, supporter: 50, patron: -1 },
   chatModel: 'claude-haiku-4-5-20251001',
   chatModelFallback: null,
   chatSystemPrompt: DEFAULT_SYSTEM_PROMPT,

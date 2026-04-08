@@ -61,9 +61,9 @@
   letter-spacing: 0.04em;
 }
 
-.plans-badge--free    { background: rgba(154,148,132,0.15); color: var(--color-text-muted); }
-.plans-badge--basic   { background: rgba(200,168,126,0.15); color: var(--color-accent); }
-.plans-badge--premium { background: rgba(var(--color-primary-rgb),0.18); color: var(--color-primary); }
+.plans-badge--free      { background: rgba(154,148,132,0.15); color: var(--color-text-muted); }
+.plans-badge--supporter { background: rgba(200,168,126,0.15); color: var(--color-accent); }
+.plans-badge--patron    { background: rgba(var(--color-primary-rgb),0.18); color: var(--color-primary); }
 
 /* ── Comparison grid ── */
 .plans-grid {
@@ -125,15 +125,28 @@
   font-weight: 700;
 }
 
-.plans-card-name--free    { color: var(--color-text-muted); }
-.plans-card-name--basic   { color: var(--color-accent); }
-.plans-card-name--premium { color: var(--color-primary); }
+.plans-card-name--free      { color: var(--color-text-muted); }
+.plans-card-name--supporter { color: var(--color-accent); }
+.plans-card-name--patron    { color: var(--color-primary); }
+
+.plans-card-price {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--color-text);
+}
 
 .plans-card-desc {
   margin: 0;
   font-size: 0.82rem;
   color: var(--color-text-muted);
   line-height: 1.4;
+}
+
+.plans-card-chat {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--color-text-secondary);
 }
 
 /* ── Feature list ── */

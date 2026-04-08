@@ -72,9 +72,9 @@
   letter-spacing: 0.04em;
 }
 
-.settings-plan-badge--free    { background: rgba(154,148,132,0.15); color: var(--color-text-muted); }
-.settings-plan-badge--basic   { background: rgba(200,168,126,0.15); color: var(--color-accent); }
-.settings-plan-badge--premium { background: rgba(var(--color-primary-rgb),0.18); color: var(--color-primary); }
+.settings-plan-badge--free      { background: rgba(154,148,132,0.15); color: var(--color-text-muted); }
+.settings-plan-badge--supporter { background: rgba(200,168,126,0.15); color: var(--color-accent); }
+.settings-plan-badge--patron    { background: rgba(var(--color-primary-rgb),0.18); color: var(--color-primary); }
 
 .settings-plan-desc {
   font-size: 0.85rem;

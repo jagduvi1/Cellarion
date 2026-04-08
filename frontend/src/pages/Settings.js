@@ -318,7 +318,7 @@ function Settings() {
         </form>
       </div>
 
-      {/* ── Your Plan card ── */}
+      {/* ── Your Supporter Tier card ── */}
       <div className="card settings-card settings-plan-card">
         <h2 className="settings-section-title">{t('settings.plan.title')}</h2>
         <div className="settings-plan-row">
@@ -327,11 +327,11 @@ function Settings() {
         </div>
         <p className="settings-hint">
           {planExpired
-            ? <span className="settings-plan-expired">{t('plans.expired')}</span>
+            ? <span className="settings-plan-expired">{t('supporter.expired')}</span>
             : <>{t('settings.plan.expires')} <strong>{formatExpiry(planExpiresAt)}</strong></>
           }
         </p>
-        <Link to="/plans" className="btn btn-secondary settings-plan-link">
+        <Link to="/supporter" className="btn btn-secondary settings-plan-link">
           {t('settings.plan.comparePlans')}
         </Link>
       </div>

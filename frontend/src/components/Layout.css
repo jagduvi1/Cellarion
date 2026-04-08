@@ -155,9 +155,9 @@
 }
 
 .badge--plan { font-weight: 600; }
-.badge--plan-free    { background: var(--badge-plan-free-bg); color: var(--badge-plan-free-text); }
-.badge--plan-basic   { background: var(--badge-plan-basic-bg); color: var(--badge-plan-basic-text); }
-.badge--plan-premium { background: var(--badge-plan-premium-bg); color: var(--badge-plan-premium-text); }
+.badge--plan-free      { background: var(--badge-plan-free-bg); color: var(--badge-plan-free-text); }
+.badge--plan-supporter { background: var(--badge-plan-basic-bg); color: var(--badge-plan-basic-text); }
+.badge--plan-patron    { background: var(--badge-plan-premium-bg); color: var(--badge-plan-premium-text); }
 
 /* ── Icon buttons in nav ── */
 .btn-icon-nav {

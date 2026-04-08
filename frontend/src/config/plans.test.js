@@ -2,16 +2,15 @@ import {
   PLANS,
   PLAN_NAMES,
   getPlanConfig,
-  planHasFeature,
-  formatLimit,
+  formatChatQuota,
 } from './plans';
 
 // ---------------------------------------------------------------------------
 // PLAN_NAMES
 // ---------------------------------------------------------------------------
 describe('PLAN_NAMES', () => {
-  it('contains all plan keys', () => {
-    expect(PLAN_NAMES).toEqual(expect.arrayContaining(['free', 'basic', 'premium']));
+  it('contains all supporter tier keys', () => {
+    expect(PLAN_NAMES).toEqual(expect.arrayContaining(['free', 'supporter', 'patron']));
     expect(PLAN_NAMES).toHaveLength(3);
   });
 
@@ -24,31 +23,25 @@ describe('PLAN_NAMES', () => {
 // getPlanConfig
 // ---------------------------------------------------------------------------
 describe('getPlanConfig', () => {
-  it('returns correct config for free plan', () => {
+  it('returns correct config for free (Enthusiast) tier', () => {
     const config = getPlanConfig('free');
-    expect(config.label).toBe('Free');
-    expect(config.maxCellars).toBe(1);
-    expect(config.maxSharesPerCellar).toBe(1);
-    expect(config.features.agingMaturity).toBe(true);
-    expect(config.features.priceEvolution).toBe(false);
+    expect(config.label).toBe('Enthusiast');
+    expect(config.price).toBe(0);
+    expect(config.chatQuota).toBe(5);
   });
 
-  it('returns correct config for basic plan', () => {
-    const config = getPlanConfig('basic');
-    expect(config.label).toBe('Basic');
-    expect(config.maxCellars).toBe(5);
-    expect(config.maxSharesPerCellar).toBe(1);
-    expect(config.features.agingMaturity).toBe(true);
-    expect(config.features.priceEvolution).toBe(false);
+  it('returns correct config for supporter tier', () => {
+    const config = getPlanConfig('supporter');
+    expect(config.label).toBe('Supporter');
+    expect(config.price).toBe(1.5);
+    expect(config.chatQuota).toBe(50);
   });
 
-  it('returns correct config for premium plan', () => {
-    const config = getPlanConfig('premium');
-    expect(config.label).toBe('Premium');
-    expect(config.maxCellars).toBe(-1);
-    expect(config.maxSharesPerCellar).toBe(-1);
-    expect(config.features.agingMaturity).toBe(true);
-    expect(config.features.priceEvolution).toBe(true);
+  it('returns correct config for patron tier', () => {
+    const config = getPlanConfig('patron');
+    expect(config.label).toBe('Patron');
+    expect(config.price).toBe(5.5);
+    expect(config.chatQuota).toBe(-1);
   });
 
   it('falls back to free for unknown plan', () => {
@@ -84,81 +77,18 @@ describe('getPlanConfig', () => {
 });
 
 // ---------------------------------------------------------------------------
-// planHasFeature
+// formatChatQuota
 // ---------------------------------------------------------------------------
-describe('planHasFeature', () => {
-  it('returns true for premium agingMaturity', () => {
-    expect(planHasFeature('premium', 'agingMaturity')).toBe(true);
-  });
-
-  it('returns true for premium priceEvolution', () => {
-    expect(planHasFeature('premium', 'priceEvolution')).toBe(true);
-  });
-
-  it('returns true for free agingMaturity', () => {
-    expect(planHasFeature('free', 'agingMaturity')).toBe(true);
-  });
-
-  it('returns false for free priceEvolution', () => {
-    expect(planHasFeature('free', 'priceEvolution')).toBe(false);
-  });
-
-  it('returns true for basic agingMaturity', () => {
-    expect(planHasFeature('basic', 'agingMaturity')).toBe(true);
-  });
-
-  it('returns false for basic priceEvolution', () => {
-    expect(planHasFeature('basic', 'priceEvolution')).toBe(false);
-  });
-
-  it('returns true for free restockAlerts', () => {
-    expect(planHasFeature('free', 'restockAlerts')).toBe(true);
-  });
-
-  it('returns true for basic restockAlerts', () => {
-    expect(planHasFeature('basic', 'restockAlerts')).toBe(true);
-  });
-
-  it('returns true for premium restockAlerts', () => {
-    expect(planHasFeature('premium', 'restockAlerts')).toBe(true);
-  });
-
-  it('returns false for unknown feature on any plan', () => {
-    expect(planHasFeature('premium', 'nonexistentFeature')).toBe(false);
-  });
-
-  it('falls back to free plan for unknown plan name', () => {
-    // Unknown plan -> free config -> agingMaturity is now true
-    expect(planHasFeature('nonexistent', 'agingMaturity')).toBe(true);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// formatLimit
-// ---------------------------------------------------------------------------
-describe('formatLimit', () => {
+describe('formatChatQuota', () => {
   it('returns "Unlimited" for -1', () => {
-    expect(formatLimit(-1)).toBe('Unlimited');
+    expect(formatChatQuota(-1)).toBe('Unlimited');
   });
 
-  it('returns string "1" for 1', () => {
-    expect(formatLimit(1)).toBe('1');
+  it('returns "5 / week" for 5', () => {
+    expect(formatChatQuota(5)).toBe('5 / week');
   });
 
-  it('returns string "5" for 5', () => {
-    expect(formatLimit(5)).toBe('5');
-  });
-
-  it('returns string "0" for 0', () => {
-    expect(formatLimit(0)).toBe('0');
-  });
-
-  it('returns string for large number', () => {
-    expect(formatLimit(100)).toBe('100');
-  });
-
-  it('always returns a string for positive numbers', () => {
-    const result = formatLimit(42);
-    expect(typeof result).toBe('string');
+  it('returns "50 / week" for 50', () => {
+    expect(formatChatQuota(50)).toBe('50 / week');
   });
 });

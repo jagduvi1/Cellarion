@@ -3,7 +3,6 @@ const rateLimit = require('express-rate-limit');
 const WineList = require('../models/WineList');
 const Bottle = require('../models/Bottle');
 const User = require('../models/User');
-const { planHasFeature } = require('../config/plans');
 const { generateWineListPdf } = require('../services/wineListPdf');
 const { getClientIp } = require('../utils/clientIp');
 
@@ -65,15 +64,6 @@ router.get('/:shareToken/pdf', async (req, res) => {
     if (!wineList) return res.status(404).json({ error: 'Wine list not found or not published' });
 
     // Verify owner's plan still includes wineLists feature (downgrade protection)
-    const owner = await User.findById(wineList.user).select('plan planExpiresAt').lean();
-    if (!owner) return res.status(404).json({ error: 'Wine list not found' });
-
-    const planExpired = owner.planExpiresAt && Date.now() > new Date(owner.planExpiresAt).getTime();
-    const effectivePlan = planExpired ? 'free' : (owner.plan || 'free');
-    if (!planHasFeature(effectivePlan, 'wineLists')) {
-      return res.status(403).json({ error: 'Wine list is no longer available' });
-    }
-
     const bottleMap = await loadBottleMap(wineList);
 
     // Build the public URL for QR code (self-referencing)

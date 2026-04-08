@@ -15,7 +15,7 @@ router.use(requireAuth);
 router.get('/overview', async (req, res) => {
   try {
     const dbUser = await User.findById(req.user.id)
-      .select('plan planExpiresAt preferences')
+      .select('preferences')
       .lean();
 
     const cellars = await Cellar.find({ user: req.user.id, deletedAt: null }).lean();
@@ -45,18 +45,12 @@ router.get('/overview', async (req, res) => {
   }
 });
 
-// GET /api/stats/value-history — collection value over time (premium only)
+// GET /api/stats/value-history — collection value over time
 router.get('/value-history', async (req, res) => {
   try {
     const dbUser = await User.findById(req.user.id)
-      .select('plan planExpiresAt preferences')
+      .select('preferences')
       .lean();
-
-    const planExpired = dbUser.planExpiresAt && Date.now() > new Date(dbUser.planExpiresAt).getTime();
-    const effectivePlan = planExpired ? 'free' : (dbUser.plan || 'free');
-    if (effectivePlan !== 'premium') {
-      return res.status(403).json({ error: 'Premium plan required' });
-    }
 
     const months = Math.min(Math.max(parseInt(req.query.months, 10) || 12, 1), 60);
     const cutoff = new Date();

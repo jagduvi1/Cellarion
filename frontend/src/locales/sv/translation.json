@@ -59,6 +59,7 @@
     "logout": "Logga ut",
     "toggleNav": "Växla navigering",
     "plans": "Abonnemang",
+    "supporter": "Stöd oss",
     "blog": "Blogg",
     "blogAdmin": "Blogg",
     "badge": {
@@ -121,6 +122,20 @@
     "currentTag": "Ditt abonnemang",
     "adminManaged": "Abonnemang hanteras av din administratör.",
     "tryPremium": "Prova Premium gratis i 30 dagar"
+  },
+
+  "supporter": {
+    "title": "Stöd Cellarion",
+    "subtitle": "Alla nivåer ger full tillgång till alla funktioner. Supportrar hjälper till att hålla Cellarion gratis och får mer Cellar Chat.",
+    "yourTier": "Din nuvarande nivå:",
+    "expires": "Giltigt till:",
+    "noExpiry": "Inget utgångsdatum",
+    "expired": "Utgånget",
+    "currentTag": "Din nivå",
+    "allFeaturesNote": "Alla funktioner är tillgängliga på varje nivå. Supporternivåer låser upp fler Cellar Chat-frågor och hjälper till att finansiera utvecklingen.",
+    "tryPatron": "Prova Patron gratis i 30 dagar",
+    "free": "Gratis",
+    "month": "månad"
   },
 
   "cellars": {
@@ -1579,7 +1594,7 @@
         "title": "Övriga funktioner",
         "summary": "Blogg, planer, support och NFC-taggar.",
         "d1": "Blogg (/blog): vinartiklar och guider.",
-        "d2": "Planer (/plans): prenumerationsnivåer — Gratis, Bas, Premium.",
+        "d2": "Stöd oss (/supporter): supporternivåer — Enthusiast (gratis), Supporter ($1.50/mån), Patron ($5.50/mån).",
         "d3": "Support (/support): skicka supportärenden för hjälp.",
         "d4": "NFC-taggar: fäst NFC-taggar på ställ — skanna med din telefon för att öppna stället direkt."
       }

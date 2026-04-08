@@ -13,7 +13,6 @@ const { getCellarRole } = require('../utils/cellarAccess');
 const { logAudit } = require('../services/audit');
 const { getSnapshotsForDates, getOrCreateDailySnapshot, convertCurrency } = require('../utils/exchangeRates');
 const { createNotification } = require('../services/notifications');
-const { getPlanConfig } = require('../config/plans');
 const { sendCellarInviteEmail, EMAIL_VERIFICATION_ENABLED } = require('../services/mailgun');
 const { toNormalized } = require('../utils/ratingUtils');
 const { classifyMaturity, buildProfileMap } = require('../utils/maturityUtils');
@@ -64,20 +63,6 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ error: 'Cellar name is required' });
     }
 
-    // Enforce plan cellar limit atomically to prevent race conditions
-    const planConfig = getPlanConfig(req.user.plan);
-    if (planConfig.maxCellars !== -1) {
-      const cellarCount = await Cellar.countDocuments({ user: req.user.id, deletedAt: null });
-      if (cellarCount >= planConfig.maxCellars) {
-        return res.status(403).json({
-          error: `Your ${req.user.plan} plan allows a maximum of ${planConfig.maxCellars} cellar${planConfig.maxCellars === 1 ? '' : 's'}.`,
-          limitReached: 'cellars',
-          limit: planConfig.maxCellars,
-          currentPlan: req.user.plan,
-        });
-      }
-    }
-
     const cellar = new Cellar({
       name: name.trim(),
       description: description?.trim() || '',
@@ -87,19 +72,6 @@ router.post('/', async (req, res) => {
 
     await cellar.save();
 
-    // Re-check count after save to catch race conditions
-    if (planConfig.maxCellars !== -1) {
-      const postCount = await Cellar.countDocuments({ user: req.user.id, deletedAt: null });
-      if (postCount > planConfig.maxCellars) {
-        await Cellar.deleteOne({ _id: cellar._id });
-        return res.status(403).json({
-          error: `Your ${req.user.plan} plan allows a maximum of ${planConfig.maxCellars} cellar${planConfig.maxCellars === 1 ? '' : 's'}.`,
-          limitReached: 'cellars',
-          limit: planConfig.maxCellars,
-          currentPlan: req.user.plan,
-        });
-      }
-    }
     const obj = cellar.toObject();
     obj.userRole = 'owner';
     obj.userColor = getUserColor(cellar, req.user.id);
@@ -629,17 +601,6 @@ router.post('/:id/members', async (req, res) => {
 
     const cellar = await Cellar.findOne({ _id: req.params.id, user: req.user.id });
     if (!cellar) return res.status(404).json({ error: 'Cellar not found' });
-
-    // Enforce plan share limit
-    const planConfig = getPlanConfig(req.user.plan);
-    if (planConfig.maxSharesPerCellar !== -1 && cellar.members.length >= planConfig.maxSharesPerCellar) {
-      return res.status(403).json({
-        error: `Your ${req.user.plan} plan allows a maximum of ${planConfig.maxSharesPerCellar} shared member${planConfig.maxSharesPerCellar === 1 ? '' : 's'} per cellar.`,
-        limitReached: 'shares',
-        limit: planConfig.maxSharesPerCellar,
-        currentPlan: req.user.plan,
-      });
-    }
 
     const normalizedEmail = email.toLowerCase().trim();
 

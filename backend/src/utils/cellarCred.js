@@ -47,11 +47,11 @@ const TIERS = [
 
 // ── Plan rewards per tier (one-time) ────────────────────────────────────────
 const TIER_REWARDS = {
-  contributor: { plan: 'basic',   durationDays: 30 },
-  connoisseur: { plan: 'premium', durationDays: 30 },
+  contributor: { plan: 'supporter', durationDays: 30 },
+  connoisseur: { plan: 'patron',   durationDays: 30 },
 };
 
-const PLAN_RANK = { free: 0, basic: 1, premium: 2 };
+const PLAN_RANK = { free: 0, supporter: 1, patron: 2 };
 
 /** Return the tier name for a given total score. */
 function getTier(totalScore) {

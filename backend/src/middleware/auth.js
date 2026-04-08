@@ -1,5 +1,4 @@
 const jwt = require('jsonwebtoken');
-const { planHasFeature, getRequiredPlanForFeature } = require('../config/plans');
 
 // Middleware to verify JWT and attach user to request
 const requireAuth = async (req, res, next) => {
@@ -57,29 +56,6 @@ const requireRole = (role) => {
 };
 
 /**
- * Middleware factory that checks whether the requesting user's plan
- * includes the named feature. Returns 403 with the required plan if not.
- * Must be used after requireAuth.
- */
-const requireFeature = (featureName) => {
-  return (req, res, next) => {
-    if (!req.user) {
-      return res.status(401).json({ error: 'Authentication required' });
-    }
-    if (!planHasFeature(req.user.plan, featureName)) {
-      const requiredPlan = getRequiredPlanForFeature(featureName);
-      return res.status(403).json({
-        error: `This feature requires the ${requiredPlan} plan.`,
-        feature: featureName,
-        requiredPlan,
-        currentPlan: req.user.plan,
-      });
-    }
-    next();
-  };
-};
-
-/**
  * Middleware that allows both somm and admin roles.
  * Used to protect sommelier queue routes.
  */
@@ -110,7 +86,6 @@ const requireModeratorOrAdmin = (req, res, next) => {
 module.exports = {
   requireAuth,
   requireRole,
-  requireFeature,
   requireSommOrAdmin,
   requireModeratorOrAdmin,
 };
