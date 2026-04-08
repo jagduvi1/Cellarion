@@ -1,16 +1,24 @@
 const express = require('express');
+const rateLimit = require('express-rate-limit');
 const WineDefinition = require('../models/WineDefinition');
 const BlogPost = require('../models/BlogPost');
 const { fromNormalized } = require('../utils/ratingUtils');
 
 const router = express.Router();
 
+const ogLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 60,
+  standardHeaders: true,
+  legacyHeaders: false
+});
+
 const SITE_URL = process.env.FRONTEND_URL || 'https://cellarion.app';
 const API_URL = process.env.BACKEND_URL || process.env.FRONTEND_URL || 'https://cellarion.app';
 
 // GET /og/wines/:id — Full server-rendered HTML for search engine crawlers.
 // Nginx routes crawler user-agents here; real users get the SPA.
-router.get('/wines/:id', async (req, res) => {
+router.get('/wines/:id', ogLimiter, async (req, res) => {
   try {
     const wine = await WineDefinition.findById(req.params.id)
       .populate(['country', 'region', 'grapes'])
@@ -133,7 +141,7 @@ router.get('/wines/:id', async (req, res) => {
 });
 
 // GET /og/blog/:slug — Full server-rendered HTML for blog post crawlers.
-router.get('/blog/:slug', async (req, res) => {
+router.get('/blog/:slug', ogLimiter, async (req, res) => {
   try {
     const post = await BlogPost.findOne({ slug: req.params.slug, status: 'published' })
       .populate('author', 'username')

@@ -1,4 +1,5 @@
 const express = require('express');
+const mongoose = require('mongoose');
 const crypto = require('crypto');
 const fs = require('fs');
 const multer = require('multer');
@@ -37,6 +38,7 @@ const logoUpload = multer({
 
 /** Verify user owns the cellar (or is a member with editor+ role). */
 async function requireCellarOwner(userId, cellarId) {
+  if (!mongoose.Types.ObjectId.isValid(cellarId)) return null;
   const cellar = await Cellar.findOne({ _id: cellarId, user: userId, deletedAt: null });
   return cellar;
 }
@@ -84,7 +86,9 @@ async function loadBottleMap(wineList) {
 router.get('/', requireAuth, async (req, res) => {
   try {
     const { cellar: cellarId } = req.query;
-    if (!cellarId) return res.status(400).json({ error: 'cellar query parameter is required' });
+    if (!cellarId || !mongoose.Types.ObjectId.isValid(cellarId)) {
+      return res.status(400).json({ error: 'Valid cellar ID is required' });
+    }
 
     // Verify ownership
     const cellar = await requireCellarOwner(req.user.id, cellarId);

@@ -71,6 +71,11 @@ function validateImageMagicBytes(filePath) {
  */
 function getImageDimensions(filePath) {
   try {
+    // Ensure filePath is within the expected upload directory
+    const resolved = path.resolve(filePath);
+    const originalsPrefix = path.resolve(ORIGINALS_DIR) + path.sep;
+    if (!resolved.startsWith(originalsPrefix)) return null;
+
     const fd = fs.openSync(filePath, 'r');
     try {
       const header = Buffer.alloc(30);

@@ -289,10 +289,14 @@ router.post('/skip', requireSommOrAdmin, async (req, res) => {
     if (!wineDefinition || !vintage) {
       return res.status(400).json({ error: 'wineDefinition and vintage are required' });
     }
+    if (!mongoose.Types.ObjectId.isValid(wineDefinition)) {
+      return res.status(400).json({ error: 'Invalid wineDefinition ID' });
+    }
+    const safeVintage = String(vintage);
 
     const skip = await PriceTrackingSkip.findOneAndUpdate(
-      { wineDefinition, vintage },
-      { wineDefinition, vintage, reason: reason || undefined, skippedBy: req.user.id, skippedAt: new Date() },
+      { wineDefinition, vintage: safeVintage },
+      { wineDefinition, vintage: safeVintage, reason: reason || undefined, skippedBy: req.user.id, skippedAt: new Date() },
       { upsert: true, new: true }
     );
 
@@ -314,8 +318,11 @@ router.delete('/skip', requireSommOrAdmin, async (req, res) => {
     if (!wineDefinition || !vintage) {
       return res.status(400).json({ error: 'wineDefinition and vintage are required' });
     }
+    if (!mongoose.Types.ObjectId.isValid(wineDefinition)) {
+      return res.status(400).json({ error: 'Invalid wineDefinition ID' });
+    }
 
-    await PriceTrackingSkip.deleteOne({ wineDefinition, vintage });
+    await PriceTrackingSkip.deleteOne({ wineDefinition, vintage: String(vintage) });
     res.json({ message: 'Price tracking re-enabled' });
   } catch (error) {
     console.error('Unskip price tracking error:', error);
