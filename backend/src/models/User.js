@@ -53,6 +53,14 @@ const userSchema = new mongoose.Schema({
     type: Boolean,
     default: true   // admin can reset to true to allow another trial
   },
+  stripeCustomerId: {
+    type: String,
+    default: null
+  },
+  stripeSubscriptionId: {
+    type: String,
+    default: null
+  },
   preferences: {
     currency: {
       type: String,
@@ -286,6 +294,7 @@ userSchema.methods.toJSON = function() {
   delete obj.emailVerificationExpiresAt;
   delete obj.passwordResetTokenHash;
   delete obj.passwordResetExpiresAt;
+  delete obj.stripeCustomerId;
   return obj;
 };
 

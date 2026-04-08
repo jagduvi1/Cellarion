@@ -368,6 +368,7 @@ router.get('/me/export', requireAuth, async (req, res) => {
         bio: user.bio,
         roles: user.roles,
         plan: user.plan,
+        stripeSubscriptionId: user.stripeSubscriptionId || null,
         preferences: user.preferences,
         profileVisibility: user.profileVisibility,
         emailVerified: user.emailVerified,
@@ -470,6 +471,18 @@ router.delete('/me', requireAuth, async (req, res) => {
 
     const now = new Date();
     const scheduledFor = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+
+    // Cancel Stripe subscription immediately if active
+    if (user.stripeSubscriptionId && process.env.STRIPE_SECRET_KEY) {
+      try {
+        const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+        await stripe.subscriptions.cancel(user.stripeSubscriptionId);
+        user.stripeSubscriptionId = null;
+        user.plan = 'free';
+      } catch (stripeErr) {
+        console.error('Failed to cancel Stripe subscription during deletion:', stripeErr.message);
+      }
+    }
 
     user.deletionRequestedAt = now;
     user.deletionScheduledFor = scheduledFor;

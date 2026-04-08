@@ -53,6 +53,7 @@ const wineListsRoute = require('./routes/wineLists');
 const wineListPublicRoute = require('./routes/wineListPublic');
 const sitemapRoute = require('./routes/sitemap');
 const ogRoute = require('./routes/og');
+const stripeRoute = require('./routes/stripe');
 const rateLimitsConfig = require('./config/rateLimits');
 const aiConfig = require('./config/aiConfig');
 const { logAudit } = require('./services/audit');
@@ -78,6 +79,8 @@ app.use(helmet({
 // Middleware
 app.use(compression());
 app.use(cookieParser());
+// Stripe webhook needs the raw body for signature verification — must be before express.json()
+app.use('/api/stripe/webhook', express.raw({ type: 'application/json' }));
 // Routes that accept base64 images need a larger body limit
 app.use('/api/images/remove-bg-preview', express.json({ limit: '5mb' }));
 app.use('/api/wine-requests', express.json({ limit: '5mb' }));
@@ -201,6 +204,7 @@ app.use('/api/journal', journalRoute);
 app.use('/api/restock-alerts', restockAlertsRoute);
 app.use('/api/help', helpRoute);
 app.use('/api/wine-lists', wineListsRoute);
+app.use('/api/stripe', stripeRoute);
 
 // 404 handler
 app.use((req, res) => {

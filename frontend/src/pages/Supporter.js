@@ -2,17 +2,20 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import { PLANS, PLAN_NAMES, formatChatQuota } from '../config/plans';
+import { createCheckout, createPortal } from '../api/stripe';
 import './Plans.css';
 
 function Supporter() {
   const { t } = useTranslation();
-  const { user, startTrial } = useAuth();
+  const { user, apiFetch, startTrial } = useAuth();
   const [trialLoading, setTrialLoading] = useState(false);
   const [trialError, setTrialError] = useState(null);
+  const [checkoutLoading, setCheckoutLoading] = useState(null);
 
   const userPlan = user?.plan || 'free';
   const userExpiresAt = user?.planExpiresAt || null;
   const planExpired = userExpiresAt && Date.now() > new Date(userExpiresAt).getTime();
+  const hasStripeSubscription = !!user?.stripeSubscriptionId;
 
   const isPatronActive = userPlan === 'patron' && !planExpired;
   const canTrial = !isPatronActive && user?.trialEligible === true;
@@ -23,6 +26,33 @@ function Supporter() {
     const result = await startTrial();
     setTrialLoading(false);
     if (!result.success) setTrialError(result.error);
+  }
+
+  async function handleCheckout(plan) {
+    setCheckoutLoading(plan);
+    try {
+      const res = await createCheckout(apiFetch, plan);
+      const data = await res.json();
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        setTrialError(data.error || t('supporter.checkoutError'));
+        setCheckoutLoading(null);
+      }
+    } catch {
+      setTrialError(t('supporter.checkoutError'));
+      setCheckoutLoading(null);
+    }
+  }
+
+  async function handleManageSubscription() {
+    try {
+      const res = await createPortal(apiFetch);
+      const data = await res.json();
+      if (data.url) window.location.href = data.url;
+    } catch {
+      setTrialError(t('supporter.portalError'));
+    }
   }
 
   function formatExpiry(expiresAt) {
@@ -87,22 +117,43 @@ function Supporter() {
                 ))}
               </ul>
 
-              {planKey === 'patron' && canTrial && (
+              {planKey !== 'free' && !isCurrent && (
                 <div className="plans-trial-wrap">
                   <button
                     className="btn btn-primary plans-trial-btn"
+                    onClick={() => handleCheckout(planKey)}
+                    disabled={checkoutLoading === planKey}
+                  >
+                    {checkoutLoading === planKey ? t('common.saving') : t('supporter.subscribe')}
+                  </button>
+                </div>
+              )}
+
+              {planKey === 'patron' && canTrial && !isCurrent && (
+                <div className="plans-trial-wrap">
+                  <button
+                    className="btn btn-secondary plans-trial-btn"
                     onClick={handleStartTrial}
                     disabled={trialLoading}
                   >
                     {trialLoading ? t('common.saving') : t('supporter.tryPatron')}
                   </button>
-                  {trialError && <p className="plans-trial-error">{trialError}</p>}
                 </div>
               )}
+
+              {trialError && isCurrent && <p className="plans-trial-error">{trialError}</p>}
             </div>
           );
         })}
       </div>
+
+      {hasStripeSubscription && (
+        <div className="plans-manage-wrap">
+          <button className="btn btn-secondary" onClick={handleManageSubscription}>
+            {t('supporter.manageSubscription')}
+          </button>
+        </div>
+      )}
 
       <p className="plans-admin-note">{t('supporter.allFeaturesNote')}</p>
     </div>

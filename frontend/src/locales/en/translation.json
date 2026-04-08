@@ -134,6 +134,10 @@
     "currentTag": "Your tier",
     "allFeaturesNote": "All features are available on every tier. Supporter tiers unlock more Cellar Chat questions and help fund development.",
     "tryPatron": "Try Patron free for 30 days",
+    "subscribe": "Subscribe",
+    "manageSubscription": "Manage Subscription",
+    "checkoutError": "Could not start checkout. Please try again.",
+    "portalError": "Could not open subscription management. Please try again.",
     "free": "Free",
     "month": "month"
   },

@@ -134,6 +134,10 @@
     "currentTag": "Din nivå",
     "allFeaturesNote": "Alla funktioner är tillgängliga på varje nivå. Supporternivåer låser upp fler Cellar Chat-frågor och hjälper till att finansiera utvecklingen.",
     "tryPatron": "Prova Patron gratis i 30 dagar",
+    "subscribe": "Prenumerera",
+    "manageSubscription": "Hantera prenumeration",
+    "checkoutError": "Kunde inte starta betalningen. Försök igen.",
+    "portalError": "Kunde inte öppna prenumerationshantering. Försök igen.",
     "free": "Gratis",
     "month": "månad"
   },

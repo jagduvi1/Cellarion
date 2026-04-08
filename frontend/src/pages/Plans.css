@@ -195,6 +195,11 @@
 }
 
 /* ── Admin note ── */
+.plans-manage-wrap {
+  text-align: center;
+  margin: 1.5rem 0 0.5rem;
+}
+
 .plans-admin-note {
   text-align: center;
   font-size: 0.78rem;
