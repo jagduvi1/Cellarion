@@ -1346,7 +1346,8 @@
     "addToWishlist": "Lägg till i önskelistan",
     "backToCellars": "Tillbaka till källare",
     "wineNotFound": "Vin hittades inte",
-    "goToCellarion": "Gå till Cellarion"
+    "goToCellarion": "Gå till Cellarion",
+    "wines": "Viner"
   },
   "statsCard": {
     "title": "Ditt källarkort",
@@ -1734,6 +1735,8 @@
     "signIn": "Logga in",
     "hostedAt": "Hostad på",
     "selfHost": "eller självhosta på några minuter med Docker",
+    "aboutTitle": "Vad är Cellarion?",
+    "aboutText": "Cellarion är en gratis vinsamlingshanterare med öppen källkod som hjälper dig att spåra varje flaska i din samling. Organisera viner i källare och ställ, få drickfönster-aviseringar så att du aldrig missar en flaskas topp, och dela din källare med vänner. Tillgänglig som en hostad tjänst på cellarion.app eller självhostad med Docker Compose. Byggd med React, Node.js och MongoDB under AGPL-3.0-licensen.",
     "featuresTitle": "Allt din källare behöver",
     "featuresSub": "Från en enda flaska till tusen — Cellarion håller din samling organiserad och drickbar.",
     "featureBottleTitle": "Flaskspårning",

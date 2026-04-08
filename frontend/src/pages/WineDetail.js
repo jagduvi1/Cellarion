@@ -70,9 +70,8 @@ export default function WineDetail() {
 
   // JSON-LD structured data — only use Product type when we have aggregateRating,
   // otherwise Google flags it as invalid (requires offers, review, or aggregateRating).
-  const jsonLd = hasRating
+  const mainEntity = hasRating
     ? {
-        '@context': 'https://schema.org',
         '@type': 'Product',
         name: wine.name,
         description: metaDescription,
@@ -88,12 +87,26 @@ export default function WineDetail() {
         }
       }
     : {
-        '@context': 'https://schema.org',
         '@type': 'WebPage',
         name: wine.name,
         description: metaDescription,
         url: pageUrl
       };
+
+  const jsonLd = {
+    '@context': 'https://schema.org',
+    '@graph': [
+      mainEntity,
+      {
+        '@type': 'BreadcrumbList',
+        itemListElement: [
+          { '@type': 'ListItem', position: 1, name: 'Cellarion', item: SITE_URL },
+          { '@type': 'ListItem', position: 2, name: t('wineDetail.wines'), item: `${SITE_URL}/wines` },
+          { '@type': 'ListItem', position: 3, name: wine.name, item: pageUrl }
+        ]
+      }
+    ]
+  };
 
   const page = (
     <div className="wine-detail-page">

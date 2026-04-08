@@ -1346,7 +1346,8 @@
     "addToWishlist": "Add to Wishlist",
     "backToCellars": "Back to Cellars",
     "wineNotFound": "Wine not found",
-    "goToCellarion": "Go to Cellarion"
+    "goToCellarion": "Go to Cellarion",
+    "wines": "Wines"
   },
   "statsCard": {
     "title": "Your Cellar Card",
@@ -1734,6 +1735,8 @@
     "signIn": "Sign In",
     "hostedAt": "Hosted at",
     "selfHost": "or self-host in minutes with Docker",
+    "aboutTitle": "What is Cellarion?",
+    "aboutText": "Cellarion is a free, open-source wine cellar management app that helps you track every bottle in your collection. Organize wines across cellars and racks, get drink-window alerts so you never miss a wine's peak, and share your cellar with friends. Available as a hosted service at cellarion.app or self-hosted with Docker Compose. Built with React, Node.js, and MongoDB under the AGPL-3.0 license.",
     "featuresTitle": "Everything your cellar needs",
     "featuresSub": "From a single bottle to a thousand, Cellarion keeps your collection organised and drinkable.",
     "featureBottleTitle": "Bottle Tracking",

@@ -56,6 +56,20 @@ export default function LandingPage() {
         url: SITE_URL,
         logo: `${SITE_URL}/cellarion-logo.jpg`,
         sameAs: ['https://github.com/jagduvi1/Cellarion'],
+      },
+      {
+        '@type': 'SoftwareApplication',
+        '@id': `${SITE_URL}/#app`,
+        name: 'Cellarion',
+        description: t('landing.metaDescription'),
+        applicationCategory: 'LifestyleApplication',
+        operatingSystem: 'Web',
+        url: SITE_URL,
+        offers: {
+          '@type': 'Offer',
+          price: '0',
+          priceCurrency: 'USD'
+        }
       }
     ]
   };
@@ -64,16 +78,16 @@ export default function LandingPage() {
     <div className="landing">
       <Helmet>
         <html lang={lang} />
-        <title>Cellarion — Wine Cellar Management</title>
+        <title>Cellarion — Track & Manage Your Wine Collection | Free Open-Source Wine Cellar App</title>
         <meta name="description" content={t('landing.metaDescription')} />
         <meta property="og:type" content="website" />
-        <meta property="og:title" content="Cellarion — Wine Cellar Management" />
+        <meta property="og:title" content="Cellarion — Track & Manage Your Wine Collection" />
         <meta property="og:description" content={t('landing.metaDescription')} />
         <meta property="og:url" content={SITE_URL} />
         <meta property="og:image" content={`${SITE_URL}/cellarion-logo.jpg`} />
         <meta property="og:site_name" content="Cellarion" />
         <meta name="twitter:card" content="summary_large_image" />
-        <meta name="twitter:title" content="Cellarion — Wine Cellar Management" />
+        <meta name="twitter:title" content="Cellarion — Track & Manage Your Wine Collection" />
         <meta name="twitter:description" content={t('landing.metaDescription')} />
         <meta name="twitter:image" content={`${SITE_URL}/cellarion-logo.jpg`} />
         <link rel="canonical" href={SITE_URL} />
@@ -150,6 +164,16 @@ export default function LandingPage() {
               cellarion.app
             </a>{' '}
             · {t('landing.selfHost')}
+          </p>
+        </div>
+      </section>
+
+      {/* ── What is Cellarion — AI-extractable definition block ── */}
+      <section className="landing-about">
+        <div className="landing-section-inner">
+          <h2 className="landing-section-title">{t('landing.aboutTitle')}</h2>
+          <p className="landing-about-text">
+            {t('landing.aboutText')}
           </p>
         </div>
       </section>

@@ -45,9 +45,8 @@ router.get('/wines/:id', async (req, res) => {
     // JSON-LD structured data — only use Product type when we have aggregateRating,
     // otherwise Google flags it as invalid (requires offers, review, or aggregateRating).
     const ratingOn5 = hasRating ? fromNormalized(wine.communityRating.averageNormalized, '5') : null;
-    const jsonLd = (hasRating && ratingOn5 != null)
+    const mainEntity = (hasRating && ratingOn5 != null)
       ? {
-          '@context': 'https://schema.org',
           '@type': 'Product',
           name: wine.name,
           description,
@@ -63,12 +62,26 @@ router.get('/wines/:id', async (req, res) => {
           }
         }
       : {
-          '@context': 'https://schema.org',
           '@type': 'WebPage',
           name: wine.name,
           description,
           url: pageUrl
         };
+
+    const jsonLd = {
+      '@context': 'https://schema.org',
+      '@graph': [
+        mainEntity,
+        {
+          '@type': 'BreadcrumbList',
+          itemListElement: [
+            { '@type': 'ListItem', position: 1, name: 'Cellarion', item: SITE_URL },
+            { '@type': 'ListItem', position: 2, name: 'Wines', item: `${SITE_URL}/wines` },
+            { '@type': 'ListItem', position: 3, name: wine.name, item: pageUrl }
+          ]
+        }
+      ]
+    };
 
     const html = `<!DOCTYPE html>
 <html lang="en">
@@ -146,8 +159,15 @@ router.get('/blog/:slug', async (req, res) => {
       description: metaDescription,
       datePublished: post.publishedAt,
       dateModified: post.updatedAt,
-      author: { '@type': 'Organization', name: 'Cellarion', url: SITE_URL },
-      publisher: { '@type': 'Organization', name: 'Cellarion', url: SITE_URL },
+      author: post.author?.username
+        ? { '@type': 'Person', name: post.author.username }
+        : { '@type': 'Organization', name: 'Cellarion', url: SITE_URL },
+      publisher: {
+        '@type': 'Organization',
+        name: 'Cellarion',
+        url: SITE_URL,
+        logo: { '@type': 'ImageObject', url: `${SITE_URL}/cellarion-logo.jpg` }
+      },
       mainEntityOfPage: { '@type': 'WebPage', '@id': postUrl },
       ...(post.coverImage ? { image: post.coverImage } : {})
     };

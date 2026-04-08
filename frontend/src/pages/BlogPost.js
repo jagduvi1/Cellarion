@@ -64,15 +64,14 @@ function BlogPost() {
         description: metaDescription,
         datePublished: post.publishedAt,
         dateModified: post.updatedAt,
-        author: {
-          '@type': 'Organization',
-          name: 'Cellarion',
-          url: SITE_URL
-        },
+        author: post.author?.username
+          ? { '@type': 'Person', name: post.author.username }
+          : { '@type': 'Organization', name: 'Cellarion', url: SITE_URL },
         publisher: {
           '@type': 'Organization',
           name: 'Cellarion',
-          url: SITE_URL
+          url: SITE_URL,
+          logo: { '@type': 'ImageObject', url: `${SITE_URL}/cellarion-logo.jpg` }
         },
         mainEntityOfPage: {
           '@type': 'WebPage',

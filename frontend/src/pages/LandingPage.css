@@ -218,6 +218,21 @@
   max-width: 520px;
 }
 
+/* ── About / What is Cellarion ── */
+.landing-about {
+  padding: 60px 0;
+  text-align: center;
+  border-top: 1px solid var(--color-border-light);
+}
+
+.landing-about-text {
+  font-size: 1.1rem;
+  line-height: 1.75;
+  max-width: 720px;
+  margin: 0 auto;
+  color: var(--color-text-secondary);
+}
+
 /* ── Features ── */
 .landing-features {
   padding: 80px 0;
