@@ -1,5 +1,4 @@
 const express = require('express');
-const mongoose = require('mongoose');
 const { requireAuth } = require('../middleware/auth');
 const JournalEntry = require('../models/JournalEntry');
 const Bottle = require('../models/Bottle');
@@ -8,11 +7,10 @@ const { logAudit } = require('../services/audit');
 const { createNotification } = require('../services/notifications');
 const User = require('../models/User');
 const { stripHtml } = require('../utils/sanitize');
+const { isValidId } = require('../utils/validation');
 
 const router = express.Router();
 router.use(requireAuth);
-
-const isValidId = (id) => typeof id === 'string' && mongoose.isValidObjectId(id);
 const MAX_PAIRINGS = 20;
 const MAX_PEOPLE = 20;
 const MAX_PHOTOS = 10;

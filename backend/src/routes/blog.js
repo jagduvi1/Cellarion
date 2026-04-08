@@ -1,13 +1,11 @@
 const express = require('express');
-const mongoose = require('mongoose');
 const { requireAuth, requireRole } = require('../middleware/auth');
 const BlogPost = require('../models/BlogPost');
 const { logAudit } = require('../services/audit');
 const { submitUrls } = require('../services/indexNow');
+const { isValidId } = require('../utils/validation');
 
 const router = express.Router();
-
-const isValidId = (id) => typeof id === 'string' && mongoose.isValidObjectId(id);
 
 function generateSlug(title) {
   return title

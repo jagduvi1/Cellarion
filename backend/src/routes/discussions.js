@@ -1,5 +1,4 @@
 const express = require('express');
-const mongoose = require('mongoose');
 const { requireAuth, requireModeratorOrAdmin } = require('../middleware/auth');
 const Discussion = require('../models/Discussion');
 const { CATEGORIES } = require('../models/Discussion');
@@ -12,13 +11,13 @@ const WineDefinition = require('../models/WineDefinition');
 const { stripHtml } = require('../utils/sanitize');
 const { logAudit } = require('../services/audit');
 const { incrementCred } = require('../utils/cellarCred');
+const { parsePagination } = require('../utils/pagination');
+const { isValidId } = require('../utils/validation');
 const { DISCUSSIONS_PER_PAGE, DISCUSSIONS_MAX_PER_PAGE, DISCUSSION_MAX_LENGTHS } = require('../config/constants');
 
 const router = express.Router();
 
 router.use(requireAuth);
-
-const isValidId = (id) => typeof id === 'string' && mongoose.isValidObjectId(id);
 
 // Check if the requesting user is banned from discussions; returns error response or null
 async function checkDiscussionBan(req, res) {
@@ -34,12 +33,6 @@ async function checkDiscussionBan(req, res) {
   return false;
 }
 
-function parsePagination(query) {
-  const page = Math.max(1, parseInt(query.page, 10) || 1);
-  const limit = Math.min(DISCUSSIONS_MAX_PER_PAGE, Math.max(1, parseInt(query.limit, 10) || DISCUSSIONS_PER_PAGE));
-  return { page, limit, skip: (page - 1) * limit };
-}
-
 // GET /api/discussions/categories - Available categories
 router.get('/categories', (req, res) => {
   res.json({ categories: CATEGORIES });
@@ -48,7 +41,7 @@ router.get('/categories', (req, res) => {
 // GET /api/discussions - List discussions
 router.get('/', async (req, res) => {
   try {
-    const { page, limit, skip } = parsePagination(req.query);
+    const { page, limit, offset: skip } = parsePagination(req.query, { limit: DISCUSSIONS_PER_PAGE, maxLimit: DISCUSSIONS_MAX_PER_PAGE });
     const { category, sort } = req.query;
 
     const filter = {};
@@ -91,7 +84,7 @@ router.get('/', async (req, res) => {
 // GET /api/discussions/moderation/reports - List pending reports
 router.get('/moderation/reports', requireModeratorOrAdmin, async (req, res) => {
   try {
-    const { page, limit, skip } = parsePagination(req.query);
+    const { page, limit, offset: skip } = parsePagination(req.query, { limit: DISCUSSIONS_PER_PAGE, maxLimit: DISCUSSIONS_MAX_PER_PAGE });
     const VALID_STATUSES = ['pending', 'resolved', 'dismissed'];
     const status = VALID_STATUSES.includes(req.query.status) ? req.query.status : 'pending';
 
@@ -353,7 +346,7 @@ router.delete('/:id', requireModeratorOrAdmin, async (req, res) => {
 router.get('/:id/replies', async (req, res) => {
   try {
     if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid discussion ID' });
-    const { page, limit, skip } = parsePagination(req.query);
+    const { page, limit, offset: skip } = parsePagination(req.query, { limit: DISCUSSIONS_PER_PAGE, maxLimit: DISCUSSIONS_MAX_PER_PAGE });
 
     const [replies, total] = await Promise.all([
       DiscussionReply.find({ discussion: req.params.id })

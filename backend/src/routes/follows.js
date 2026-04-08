@@ -1,17 +1,15 @@
 const express = require('express');
-const mongoose = require('mongoose');
 const { requireAuth } = require('../middleware/auth');
 const Follow = require('../models/Follow');
 const User = require('../models/User');
 const Notification = require('../models/Notification');
 const { logAudit } = require('../services/audit');
+const { isValidId } = require('../utils/validation');
 
 const router = express.Router();
 
 // All routes require authentication
 router.use(requireAuth);
-
-const isValidId = (id) => typeof id === 'string' && mongoose.isValidObjectId(id);
 
 // POST /api/follows/:userId - Follow a user
 router.post('/:userId', async (req, res) => {

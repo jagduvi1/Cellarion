@@ -11,22 +11,14 @@ const { stripHtml } = require('../utils/sanitize');
 const { incrementCred } = require('../utils/cellarCred');
 const { logAudit } = require('../services/audit');
 const { updateWineCommunityRating } = require('../services/reviewAggregation');
+const { parsePagination } = require('../utils/pagination');
+const { isValidId } = require('../utils/validation');
 const { REVIEWS_PER_PAGE, REVIEWS_MAX_PER_PAGE, REVIEW_MAX_LENGTHS } = require('../config/constants');
 
 const router = express.Router();
 
 // All routes require authentication
 router.use(requireAuth);
-
-// Helper: validate MongoDB ObjectId
-const isValidId = (id) => typeof id === 'string' && mongoose.isValidObjectId(id);
-
-// Helper: parse pagination params
-function parsePagination(query) {
-  const page = Math.max(1, parseInt(query.page, 10) || 1);
-  const limit = Math.min(REVIEWS_MAX_PER_PAGE, Math.max(1, parseInt(query.limit, 10) || REVIEWS_PER_PAGE));
-  return { page, limit, skip: (page - 1) * limit };
-}
 
 // Helper: sanitize tasting notes
 function sanitizeTasting(tasting) {
@@ -112,7 +104,7 @@ router.post('/', async (req, res) => {
 router.get('/wine/:wineId', async (req, res) => {
   try {
     if (!isValidId(req.params.wineId)) return res.status(400).json({ error: 'Invalid wine ID' });
-    const { page, limit, skip } = parsePagination(req.query);
+    const { page, limit, offset: skip } = parsePagination(req.query, { limit: REVIEWS_PER_PAGE, maxLimit: REVIEWS_MAX_PER_PAGE });
     const { audience, vintage } = req.query;
 
     const filter = { wineDefinition: new mongoose.Types.ObjectId(req.params.wineId) };
@@ -173,7 +165,7 @@ router.get('/wine/:wineId', async (req, res) => {
 router.get('/user/:userId', async (req, res) => {
   try {
     if (!isValidId(req.params.userId)) return res.status(400).json({ error: 'Invalid user ID' });
-    const { page, limit, skip } = parsePagination(req.query);
+    const { page, limit, offset: skip } = parsePagination(req.query, { limit: REVIEWS_PER_PAGE, maxLimit: REVIEWS_MAX_PER_PAGE });
 
     // If viewing own profile, show all reviews; otherwise only public
     const filter = { author: req.params.userId };
@@ -210,7 +202,7 @@ router.get('/user/:userId', async (req, res) => {
 // GET /api/reviews/feed - Reviews from followed users
 router.get('/feed', async (req, res) => {
   try {
-    const { page, limit, skip } = parsePagination(req.query);
+    const { page, limit, offset: skip } = parsePagination(req.query, { limit: REVIEWS_PER_PAGE, maxLimit: REVIEWS_MAX_PER_PAGE });
 
     // Get list of users the current user follows
     const follows = await Follow.find({ follower: req.user.id }).select('following');
@@ -258,7 +250,7 @@ router.get('/feed', async (req, res) => {
 // GET /api/reviews/discover - All recent reviews from public profiles
 router.get('/discover', async (req, res) => {
   try {
-    const { page, limit, skip } = parsePagination(req.query);
+    const { page, limit, offset: skip } = parsePagination(req.query, { limit: REVIEWS_PER_PAGE, maxLimit: REVIEWS_MAX_PER_PAGE });
 
     // Find users with public profiles
     const publicUsers = await User.find({ profileVisibility: 'public' }).select('_id');

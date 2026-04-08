@@ -1,5 +1,4 @@
 const express = require('express');
-const mongoose = require('mongoose');
 const { requireAuth } = require('../middleware/auth');
 const Recommendation = require('../models/Recommendation');
 const WineDefinition = require('../models/WineDefinition');
@@ -9,11 +8,10 @@ const { logAudit } = require('../services/audit');
 const { createNotification } = require('../services/notifications');
 const { sendRecommendationEmail, EMAIL_VERIFICATION_ENABLED } = require('../services/mailgun');
 const { parsePagination } = require('../utils/pagination');
+const { isValidId } = require('../utils/validation');
 
 const router = express.Router();
 router.use(requireAuth);
-
-const isValidId = (id) => typeof id === 'string' && mongoose.isValidObjectId(id);
 
 // GET /api/recommendations — list recommendations received by the current user
 router.get('/', async (req, res) => {
