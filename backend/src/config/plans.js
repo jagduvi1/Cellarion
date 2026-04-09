@@ -2,10 +2,11 @@
  * Supporter tier definitions for Cellarion.
  *
  * All tiers have full access to every feature. The only difference is
- * the Cellar Chat quota (questions per rolling 7-day window).
+ * the Cellar Chat quota.
  *
- * chatQuota: max chat questions per 7-day rolling window; -1 = unlimited
- * price:     monthly price in USD (0 = free)
+ * chatQuota:  max chat questions per rolling window; -1 = unlimited
+ * chatPeriod: 'daily' | 'weekly' — rolling window size for the quota
+ * price:      monthly price in USD (0 = free)
  */
 const PLANS = {
   free: {
@@ -13,6 +14,7 @@ const PLANS = {
     description: 'Full access to every feature — completely free.',
     price: 0,
     chatQuota: 5,
+    chatPeriod: 'weekly',
     featureList: [
       'Unlimited cellars & shared members',
       'Bottle tracking (vintages, ratings, notes)',
@@ -32,9 +34,10 @@ const PLANS = {
     description: 'Support Cellarion and get more Cellar Chat.',
     price: 1.5,
     chatQuota: 50,
+    chatPeriod: 'daily',
     featureList: [
       'Everything in Enthusiast',
-      'Cellar Chat (50 questions / week)',
+      'Cellar Chat (50 questions / day)',
       'Support independent development',
     ],
   },
@@ -43,6 +46,7 @@ const PLANS = {
     description: 'Maximum support with unlimited Cellar Chat.',
     price: 5.5,
     chatQuota: -1,
+    chatPeriod: 'daily',
     featureList: [
       'Everything in Supporter',
       'Cellar Chat (unlimited)',

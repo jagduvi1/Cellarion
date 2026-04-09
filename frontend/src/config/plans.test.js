@@ -84,11 +84,16 @@ describe('formatChatQuota', () => {
     expect(formatChatQuota(-1)).toBe('Unlimited');
   });
 
-  it('returns "5 / week" for 5', () => {
+  it('returns "5 / week" for 5 with weekly period', () => {
     expect(formatChatQuota(5)).toBe('5 / week');
+    expect(formatChatQuota(5, 'weekly')).toBe('5 / week');
   });
 
-  it('returns "50 / week" for 50', () => {
+  it('returns "50 / day" for 50 with daily period', () => {
+    expect(formatChatQuota(50, 'daily')).toBe('50 / day');
+  });
+
+  it('defaults to weekly when period omitted', () => {
     expect(formatChatQuota(50)).toBe('50 / week');
   });
 });

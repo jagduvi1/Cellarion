@@ -105,7 +105,7 @@ function Supporter() {
                 <p className="plans-card-price">{formatPrice(plan.price)}</p>
                 <p className="plans-card-desc">{plan.description}</p>
                 <p className="plans-card-chat">
-                  Cellar Chat: <strong>{formatChatQuota(plan.chatQuota)}</strong>
+                  Cellar Chat: <strong>{formatChatQuota(plan.chatQuota, plan.chatPeriod)}</strong>
                 </p>
               </div>
               <ul className="plans-feature-list">

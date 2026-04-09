@@ -4,7 +4,7 @@
  * Keep in sync with the backend config.
  *
  * All tiers have full access to every feature. The only difference is
- * the Cellar Chat quota (questions per rolling 7-day window).
+ * the Cellar Chat quota.
  */
 export const PLANS = {
   free: {
@@ -12,6 +12,7 @@ export const PLANS = {
     description: 'Full access to every feature — completely free.',
     price: 0,
     chatQuota: 5,
+    chatPeriod: 'weekly',
     featureList: [
       'Unlimited cellars & shared members',
       'Bottle tracking (vintages, ratings, notes)',
@@ -31,9 +32,10 @@ export const PLANS = {
     description: 'Support Cellarion and get more Cellar Chat.',
     price: 1.5,
     chatQuota: 50,
+    chatPeriod: 'daily',
     featureList: [
       'Everything in Enthusiast',
-      'Cellar Chat (50 questions / week)',
+      'Cellar Chat (50 questions / day)',
       'Support independent development',
     ],
   },
@@ -42,6 +44,7 @@ export const PLANS = {
     description: 'Maximum support with unlimited Cellar Chat.',
     price: 5.5,
     chatQuota: -1,
+    chatPeriod: 'daily',
     featureList: [
       'Everything in Supporter',
       'Cellar Chat (unlimited)',
@@ -61,6 +64,7 @@ export function getPlanConfig(plan) {
  * Returns a human-readable chat quota string.
  * e.g. formatChatQuota(5) => "5 / week", formatChatQuota(-1) => "Unlimited"
  */
-export function formatChatQuota(n) {
-  return n === -1 ? 'Unlimited' : `${n} / week`;
+export function formatChatQuota(n, period = 'weekly') {
+  if (n === -1) return 'Unlimited';
+  return `${n} / ${period === 'daily' ? 'day' : 'week'}`;
 }

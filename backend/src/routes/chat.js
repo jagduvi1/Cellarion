@@ -41,19 +41,21 @@ function expiresAt() {
 
 /**
  * Returns { limit, used, period } for the given plan.
- * All tiers use a rolling 7-day window. Patron (-1) = unlimited.
+ * Window size depends on the plan's chatPeriod ('daily' or 'weekly').
+ * Patron (-1) = unlimited.
  */
 async function getUsageForPlan(userId, plan) {
   const config = getPlanConfig(plan);
   const limit = config.chatQuota; // -1 = unlimited
+  const period = config.chatPeriod || 'weekly';
 
-  const startDate = daysAgoUTC(6); // today minus 6 = 7-day window
+  const startDate = period === 'daily' ? daysAgoUTC(0) : daysAgoUTC(6);
   const docs = await ChatUsage.find({
     userId,
     date: { $gte: startDate },
   }).lean();
   const used = docs.reduce((sum, d) => sum + (d.count || 0), 0);
-  return { limit, used, period: 'weekly' };
+  return { limit, used, period };
 }
 
 /**
@@ -101,7 +103,7 @@ async function validateAndCheckLimit(req, res) {
   // limit === -1 means unlimited (patron tier)
   if (limit !== -1 && usedBefore >= limit) {
     res.status(429).json({
-      error: `You've reached your ${period} limit of ${limit} question${limit === 1 ? '' : 's'}. Try again in a few days.`,
+      error: `You've reached your ${period} limit of ${limit} question${limit === 1 ? '' : 's'}. Try again ${period === 'daily' ? 'tomorrow' : 'in a few days'}.`,
       used: usedBefore,
       limit,
       period,
