@@ -5,6 +5,7 @@ import { useAuth } from '../contexts/AuthContext';
 import RatingDisplay from '../components/RatingDisplay';
 import WineImage from '../components/WineImage';
 import BottleFilterModal from '../components/BottleFilterModal';
+import './CellarDetail.css';
 import './CellarHistory.css';
 
 const REASON_CONFIG = {
