@@ -975,9 +975,18 @@
     width: 100%;
   }
 
+  .search-row {
+    flex-wrap: wrap;
+  }
+
+  .search-row .search-input {
+    flex: 1 1 100%;
+    min-width: 0;
+  }
+
   .sort-select {
     min-width: 0;
-    width: 100%;
+    flex: 1;
   }
 
   .active-filters-row {

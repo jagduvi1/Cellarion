@@ -99,7 +99,7 @@ function BottleFilterModal({ filters, onApply, onClose, facets, baseFacets, face
   };
 
   return (
-    <Modal title={t('cellarDetail.filterModalTitle')} onClose={onClose} wide>
+    <Modal title={t('cellarDetail.filterModalTitle')} onClose={onClose} wide showClose>
       <div className="bfm-content">
         {/* Wine Type */}
         {allFacets?.type && Object.keys(allFacets.type).length > 0 && (() => {
