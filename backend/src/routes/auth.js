@@ -106,7 +106,7 @@ const generateRefreshToken = () => crypto.randomBytes(64).toString('hex');
 const refreshCookieBase = {
   httpOnly: true,
   secure: process.env.NODE_ENV === 'production',
-  sameSite: 'strict'
+  sameSite: 'lax'
 };
 
 // Backward-compatible default (7-day persistent cookie)
