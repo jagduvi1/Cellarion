@@ -224,7 +224,8 @@ async function fullSyncBottles() {
   if (!isAvailable) return;
 
   try {
-    const bottles = await Bottle.find({ status: { $nin: CONSUMED_STATUSES } })
+    // Sync ALL bottles (active + consumed) so history search works too
+    const bottles = await Bottle.find()
       .populate(WINE_POPULATE)
       .lean();
 
@@ -250,12 +251,7 @@ async function indexBottle(bottleId) {
 
     if (!bottle) return;
 
-    // If bottle is consumed, remove it from the index instead
-    if (CONSUMED_STATUSES.includes(bottle.status)) {
-      await bottlesIndex.deleteDocument(bottleId.toString());
-      return;
-    }
-
+    // Always re-index (including consumed bottles for history search)
     await bottlesIndex.addDocuments([buildBottleDocument(bottle)], { primaryKey: 'id' });
   } catch (err) {
     console.error(`Meilisearch index bottle ${bottleId} failed: ${err.message}`);
@@ -280,9 +276,7 @@ async function bulkIndexBottles(bottleIds) {
       .populate(WINE_POPULATE)
       .lean();
 
-    const documents = bottles
-      .filter(b => !CONSUMED_STATUSES.includes(b.status))
-      .map(buildBottleDocument);
+    const documents = bottles.map(buildBottleDocument);
 
     if (documents.length > 0) {
       await bottlesIndex.addDocuments(documents, { primaryKey: 'id' });
@@ -301,6 +295,7 @@ async function searchBottles(query, {
   vintage,
   minRating,
   sort,
+  statusFilter = 'active',  // 'active' | 'consumed' | 'all'
   limit = 30,
   offset = 0
 } = {}) {
@@ -312,9 +307,14 @@ async function searchBottles(query, {
   const VALID_TYPES = ['red', 'white', 'rosé', 'sparkling', 'dessert', 'fortified'];
   const filters = [];
 
-  // Always scope to cellar and active bottles
+  // Scope to cellar
   if (cellarId) filters.push(`cellarId = "${cellarId}"`);
-  filters.push(`status NOT IN ["${CONSUMED_STATUSES.join('","')}"]`);
+  // Status filter: active (exclude consumed), consumed (only consumed), or all
+  if (statusFilter === 'active') {
+    filters.push(`status NOT IN ["${CONSUMED_STATUSES.join('","')}"]`);
+  } else if (statusFilter === 'consumed') {
+    filters.push(`status IN ["${CONSUMED_STATUSES.join('","')}"]`);
+  }
 
   // Type: single or comma-separated multi-select
   if (type) {
