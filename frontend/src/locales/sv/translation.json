@@ -529,6 +529,9 @@
     "vintageLabel": "Årgång:",
     "paidLabel": "Betalt:",
     "atConsumption": "vid drickning",
+    "rateThisBottle": "Betygsätt denna flaska",
+    "tastingNote": "Smaknotering",
+    "tastingNotePlaceholder": "Hur var vinet?",
     "loadingHistory": "Laddar historik..."
   },
 

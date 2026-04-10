@@ -17,6 +17,13 @@ export const consumeBottle = (apiFetch, id, data) =>
     body: JSON.stringify(data),
   });
 
+export const updateConsumedRating = (apiFetch, id, data) =>
+  apiFetch(`/api/bottles/${id}/consumed-rating`, {
+    method: 'PUT',
+    headers: JSON_HEADERS,
+    body: JSON.stringify(data),
+  });
+
 export const setBottleDefaultImage = (apiFetch, id, imageId) =>
   apiFetch(`/api/bottles/${id}/default-image`, {
     method: 'PUT',

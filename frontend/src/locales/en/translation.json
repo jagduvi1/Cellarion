@@ -529,6 +529,9 @@
     "vintageLabel": "Vintage:",
     "paidLabel": "Paid:",
     "atConsumption": "at consumption",
+    "rateThisBottle": "Rate this bottle",
+    "tastingNote": "Tasting note",
+    "tastingNotePlaceholder": "How was the wine?",
     "loadingHistory": "Loading history..."
   },
 

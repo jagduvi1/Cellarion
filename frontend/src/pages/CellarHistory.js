@@ -169,23 +169,16 @@ function CellarHistory() {
         </div>
       )}
 
-      {/* Search + filter bar */}
-      <div className="search-row" style={{ margin: '1rem 0 0' }}>
-        <div className="history-search" style={{ flex: 1, margin: 0 }}>
-          <svg className="history-search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-          <input
-            type="text"
-            className="search-input"
-            placeholder={t('cellarDetail.searchPlaceholder')}
-            value={filters.search}
-            onChange={e => setFilters({ ...filters, search: e.target.value })}
-          />
-          {filters.search && (
-            <button className="history-search-clear" onClick={() => setFilters({ ...filters, search: '' })} aria-label={t('common.clear', 'Clear')}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-            </button>
-          )}
-        </div>
+      {/* Search + filter bar — same layout as cellar bottles tab */}
+      <div className="search-row history-search-row">
+        <input
+          type="text"
+          className="search-input"
+          placeholder={t('cellarDetail.searchPlaceholder')}
+          value={filters.search}
+          onChange={e => setFilters({ ...filters, search: e.target.value })}
+          aria-label={t('cellarDetail.searchPlaceholder')}
+        />
         <button
           type="button"
           className={`filter-toggle-btn${activeChips.length > 0 ? ' filter-toggle-btn--has-filters' : ''}`}
