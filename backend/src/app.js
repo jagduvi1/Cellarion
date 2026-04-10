@@ -78,7 +78,7 @@ app.use(helmet({
 
 // Middleware
 app.use(compression());
-app.use(cookieParser()); // lgtm[js/missing-token-validation] — auth uses JWT Bearer tokens, not cookies; CSRF does not apply
+app.use(cookieParser());
 // Stripe webhook needs the raw body for signature verification — must be before express.json()
 app.use('/api/stripe/webhook', express.raw({ type: 'application/json' }));
 // Routes that accept base64 images need a larger body limit
