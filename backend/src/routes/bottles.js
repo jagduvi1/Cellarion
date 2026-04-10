@@ -316,6 +316,43 @@ router.put('/:id', requireBottleAccess('editor'), async (req, res) => {
   }
 });
 
+// PUT /api/bottles/:id/consumed-rating - Set or update rating on a consumed bottle
+router.put('/:id/consumed-rating', requireBottleAccess('editor'), async (req, res) => {
+  try {
+    const { bottle } = req;
+    if (!CONSUMED_STATUSES.includes(bottle.status)) {
+      return res.status(400).json({ error: 'Bottle is not consumed' });
+    }
+
+    const { rating, ratingScale, note } = req.body;
+
+    if (rating !== undefined) {
+      const { rating: resolved, ratingScale: resolvedScale, error: ratingError } = resolveRating(rating, ratingScale);
+      if (ratingError) return res.status(400).json({ error: ratingError });
+      bottle.consumedRating = resolved;
+      bottle.consumedRatingScale = resolvedScale;
+    }
+
+    if (note !== undefined) {
+      if (note.length > 1000) return res.status(400).json({ error: 'Note is too long (max 1000 characters)' });
+      bottle.consumedNote = stripHtml(note);
+    }
+
+    await bottle.save();
+    await bottle.populate(WINE_POPULATE);
+
+    logAudit(req, 'bottle.update',
+      { type: 'bottle', id: bottle._id, cellarId: bottle.cellar },
+      { changes: { consumedRating: rating, consumedNote: note !== undefined } }
+    );
+
+    res.json({ bottle });
+  } catch (error) {
+    console.error('Update consumed rating error:', error);
+    res.status(500).json({ error: 'Failed to update consumed rating' });
+  }
+});
+
 // PUT /api/bottles/:id/default-image - Set the user's preferred default image for this bottle
 router.put('/:id/default-image', requireBottleAccess('editor'), async (req, res) => {
   try {

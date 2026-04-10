@@ -236,6 +236,7 @@ function BottleDetail() {
   const displayProducer = wine?.producer || bottle?.pendingWineRequest?.producer;
   const isConsumed = bottle?.status && bottle.status !== 'active';
   const canEdit = !isConsumed && (userRole === 'owner' || userRole === 'editor');
+  const canEditConsumed = isConsumed && (userRole === 'owner' || userRole === 'editor');
 
   return (
     <div className="bottle-detail-page">
@@ -315,7 +316,7 @@ function BottleDetail() {
 
       {/* ── Consumption details (history bottles only) ── */}
       {isConsumed && (
-        <ConsumedDetails bottle={bottle} />
+        <ConsumedDetails bottle={bottle} canEdit={canEditConsumed} onUpdate={setBottle} />
       )}
 
       {/* Bottle details or edit form */}
