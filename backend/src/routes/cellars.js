@@ -230,17 +230,156 @@ router.get('/:id/history', async (req, res) => {
     const role = getCellarRole(cellar, req.user.id);
     if (!role || cellar.deletedAt) return res.status(404).json({ error: 'Cellar not found' });
 
-    const bottles = await Bottle.find({
-      cellar: req.params.id,
-      status: { $in: CONSUMED_STATUSES }
-    })
-      .populate(WINE_POPULATE)
-      .sort({ consumedAt: -1 });
+    const { search, type, country, region, grapes, vintage } = req.query;
+    const { isValidObjectId } = mongoose;
+
+    // Base query: consumed bottles in this cellar
+    const filter = { cellar: req.params.id, status: { $in: CONSUMED_STATUSES } };
+    if (vintage) {
+      const vintages = String(vintage).split(',').map(v => v.trim()).filter(Boolean);
+      filter.vintage = vintages.length === 1 ? vintages[0] : { $in: vintages };
+    }
+
+    // Taxonomy pre-query
+    const wdFilter = {};
+    if (country) {
+      const ids = String(country).split(',').map(c => c.trim()).filter(isValidObjectId);
+      if (ids.length === 1) wdFilter.country = ids[0];
+      else if (ids.length > 1) wdFilter.country = { $in: ids };
+    }
+    if (region) {
+      const ids = String(region).split(',').map(r => r.trim()).filter(isValidObjectId);
+      if (ids.length === 1) wdFilter.region = ids[0];
+      else if (ids.length > 1) wdFilter.region = { $in: ids };
+    }
+    if (type) {
+      const types = String(type).split(',').map(t => t.trim()).filter(Boolean);
+      wdFilter.type = types.length === 1 ? types[0] : { $in: types };
+    }
+    if (grapes) {
+      const grapeIds = String(grapes).split(',').map(g => g.trim()).filter(isValidObjectId);
+      if (grapeIds.length > 0) wdFilter.grapes = { $in: grapeIds };
+    }
+    if (Object.keys(wdFilter).length > 0) {
+      const matchingWdIds = await WineDefinition.find(wdFilter).distinct('_id');
+      if (matchingWdIds.length === 0) {
+        const cellarObj = cellar.toObject();
+        cellarObj.userRole = role;
+        cellarObj.userColor = getUserColor(cellar, req.user.id);
+        return res.json({ cellar: cellarObj, bottles: [], facets: null, baseFacets: null, facetMeta: null });
+      }
+      filter.wineDefinition = { $in: matchingWdIds };
+    }
+
+    const grapeIds = grapes
+      ? String(grapes).split(',').map(g => g.trim()).filter(isValidObjectId)
+      : [];
+    const hasMeiliFilters = !!(search || type || country || region || grapes || vintage);
+
+    // Try Meilisearch for text search (typo tolerance)
+    let usedMeili = false;
+    let bottles;
+    if (searchService.getIsAvailable() && hasMeiliFilters) {
+      try {
+        const meiliResult = await searchService.searchBottles(search || '', {
+          cellarId: req.params.id,
+          type: type || undefined,
+          countryId: country || undefined,
+          regionId: region || undefined,
+          grapeIds: grapeIds.length > 0 ? grapeIds : undefined,
+          vintage: vintage || undefined,
+          statusFilter: 'consumed',
+          limit: 10000, offset: 0
+        });
+
+        const matchingIds = meiliResult.ids;
+        if (matchingIds.length === 0) {
+          const cellarObj = cellar.toObject();
+          cellarObj.userRole = role;
+          cellarObj.userColor = getUserColor(cellar, req.user.id);
+          return res.json({ cellar: cellarObj, bottles: [], facets: meiliResult.facetDistribution || null, baseFacets: null, facetMeta: null });
+        }
+
+        bottles = await Bottle.find({ _id: { $in: matchingIds } })
+          .populate(WINE_POPULATE).lean();
+
+        // Preserve Meilisearch sort order
+        const idOrder = new Map(matchingIds.map((id, i) => [id, i]));
+        bottles.sort((a, b) => (idOrder.get(a._id.toString()) ?? 0) - (idOrder.get(b._id.toString()) ?? 0));
+        usedMeili = true;
+      } catch {
+        // Fall through to MongoDB
+      }
+    }
+
+    if (!usedMeili) {
+      bottles = await Bottle.find(filter)
+        .populate(WINE_POPULATE)
+        .sort({ consumedAt: -1 })
+        .lean();
+
+      // In-memory text search fallback
+      if (search) {
+        const stripAccents = (s) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        const words = stripAccents(search.toLowerCase()).split(/\s+/).filter(Boolean);
+        bottles = bottles.filter(b => {
+          const allText = [
+            b.wineDefinition?.name, b.wineDefinition?.producer,
+            b.notes, b.consumedNote,
+            b.wineDefinition?.country?.name, b.wineDefinition?.region?.name,
+            b.wineDefinition?.appellation, b.wineDefinition?.type,
+            ...(b.wineDefinition?.grapes || []).map(g => g.name)
+          ].filter(Boolean).map(s => stripAccents(s.toLowerCase())).join(' ');
+          return words.every(word => allText.includes(word));
+        });
+      }
+    }
+
+    // Facets from Meilisearch
+    let facets = null, baseFacets = null, facetMeta = null;
+    if (searchService.getIsAvailable()) {
+      try {
+        const baseResult = await searchService.searchBottles('', {
+          cellarId: req.params.id, statusFilter: 'consumed', limit: 0, offset: 0
+        });
+        baseFacets = baseResult.facetDistribution || null;
+
+        if (hasMeiliFilters) {
+          const filteredResult = await searchService.searchBottles(search || '', {
+            cellarId: req.params.id, statusFilter: 'consumed',
+            type: type || undefined, countryId: country || undefined,
+            regionId: region || undefined,
+            grapeIds: grapeIds.length > 0 ? grapeIds : undefined,
+            vintage: vintage || undefined,
+            limit: 0, offset: 0
+          });
+          facets = filteredResult.facetDistribution || null;
+        } else {
+          facets = baseFacets;
+        }
+      } catch { /* skip facets */ }
+    }
+
+    // Build facetMeta
+    if (baseFacets || facets) {
+      const wdIds = await Bottle.find({ cellar: req.params.id, status: { $in: CONSUMED_STATUSES } }).distinct('wineDefinition');
+      const wds = await WineDefinition.find({ _id: { $in: wdIds } })
+        .populate('country', 'name').populate('region', 'name').populate('grapes', 'name').lean();
+      const countries = {}, regions = {}, grapesMap = {};
+      for (const wd of wds) {
+        if (wd.country?.name && wd.country._id) countries[wd.country.name] = wd.country._id.toString();
+        if (wd.region?.name && wd.region._id) regions[wd.region.name] = wd.region._id.toString();
+        for (const g of (wd.grapes || [])) {
+          if (g.name && g._id) grapesMap[g.name] = g._id.toString();
+        }
+      }
+      facetMeta = { countries, regions, grapes: grapesMap };
+    }
 
     const cellarObj = cellar.toObject();
     cellarObj.userRole = role;
     cellarObj.userColor = getUserColor(cellar, req.user.id);
-    res.json({ cellar: cellarObj, bottles });
+    res.json({ cellar: cellarObj, bottles, facets, baseFacets, facetMeta });
   } catch (error) {
     console.error('Get cellar history error:', error);
     res.status(500).json({ error: 'Failed to get cellar history' });
