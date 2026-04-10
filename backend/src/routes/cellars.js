@@ -391,7 +391,7 @@ router.get('/:id', async (req, res) => {
         const types = String(type).split(',').map(t => t.trim()).filter(Boolean);
         wdFilter.type = types.length === 1 ? types[0] : { $in: types };
       }
-      if (grapeIds.length > 0) wdFilter.grapes = { $all: grapeIds };
+      if (grapeIds.length > 0) wdFilter.grapes = { $in: grapeIds };
 
       if (Object.keys(wdFilter).length > 0) {
         const matchingWdIds = await WineDefinition.find(wdFilter).distinct('_id');

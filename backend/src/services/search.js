@@ -335,9 +335,9 @@ async function searchBottles(query, {
     else if (ids.length > 1) filters.push(`regionId IN ["${ids.join('","')}"]`);
   }
   if (grapeIds && grapeIds.length > 0) {
-    for (const id of grapeIds) {
-      if (isObjectId(id)) filters.push(`grapeIds = "${id}"`);
-    }
+    const validIds = grapeIds.filter(isObjectId);
+    if (validIds.length === 1) filters.push(`grapeIds = "${validIds[0]}"`);
+    else if (validIds.length > 1) filters.push(`grapeIds IN ["${validIds.join('","')}"]`);
   }
   // Vintage: single or comma-separated
   if (vintage) {
