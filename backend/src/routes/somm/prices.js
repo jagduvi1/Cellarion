@@ -293,10 +293,11 @@ router.post('/skip', requireSommOrAdmin, async (req, res) => {
       return res.status(400).json({ error: 'Invalid wineDefinition ID' });
     }
     const safeVintage = String(vintage);
+    const safeReason = reason != null ? String(reason).slice(0, 500) : undefined;
 
     const skip = await PriceTrackingSkip.findOneAndUpdate(
       { wineDefinition, vintage: safeVintage },
-      { wineDefinition, vintage: safeVintage, reason: reason || undefined, skippedBy: req.user.id, skippedAt: new Date() },
+      { wineDefinition, vintage: safeVintage, reason: safeReason, skippedBy: req.user.id, skippedAt: new Date() },
       { upsert: true, new: true }
     );
 
