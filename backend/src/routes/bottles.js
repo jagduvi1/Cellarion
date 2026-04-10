@@ -15,6 +15,7 @@ const { embedSinglePair } = require('../services/embeddingJob');
 const { CONSUMED_STATUSES, WINE_POPULATE } = require('../config/constants');
 const { checkRestockGap, resolveRestockAlerts } = require('../services/restockChecker');
 const { stripHtml, isSafeUrl } = require('../utils/sanitize');
+const searchService = require('../services/search');
 
 const router = express.Router();
 
@@ -138,6 +139,9 @@ router.post('/', async (req, res) => {
 
     await bottle.save();
     await bottle.populate(WINE_POPULATE);
+
+    // Index in Meilisearch (fire-and-forget) — skip if added directly as consumed
+    if (!addToHistory) searchService.indexBottle(bottle._id);
 
     // Auto-create a pending WineVintageProfile if the vintage is a numeric year
     // and one doesn't already exist. The somm queue will pick this up.
@@ -286,6 +290,9 @@ router.put('/:id', requireBottleAccess('editor'), async (req, res) => {
     await bottle.save();
     await bottle.populate(WINE_POPULATE);
 
+    // Re-index in Meilisearch (fire-and-forget)
+    searchService.indexBottle(bottle._id);
+
     if (Object.keys(changes).length > 0) {
       logAudit(req, 'bottle.update',
         { type: 'bottle', id: bottle._id, cellarId: bottle.cellar },
@@ -373,6 +380,9 @@ router.post('/:id/consume', requireBottleAccess('editor'), async (req, res) => {
 
     await bottle.save();
 
+    // Remove from Meilisearch (consumed bottles are excluded)
+    searchService.indexBottle(bottle._id);
+
     logAudit(req, 'bottle.consume',
       { type: 'bottle', id: bottle._id, cellarId: bottle.cellar },
       { reason }
@@ -397,6 +407,9 @@ router.delete('/:id', requireBottleAccess('editor'), async (req, res) => {
 
     // Remove bottle from any rack slot that references it
     await removeFromRacks(bottle._id);
+
+    // Remove from Meilisearch before deleting
+    searchService.removeBottle(bottle._id);
 
     logAudit(req, 'bottle.delete',
       { type: 'bottle', id: bottle._id, cellarId: bottle.cellar },

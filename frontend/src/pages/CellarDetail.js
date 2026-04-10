@@ -1,4 +1,4 @@
-import { useState, useEffect, lazy, Suspense } from 'react';
+import { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { useParams, Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
@@ -6,6 +6,7 @@ import { getCellar, getCellarStatistics, exportCellar } from '../api/cellars';
 import { getRacks } from '../api/racks';
 import { getCellarLayout } from '../api/cellarLayout';
 import BottleCard from '../components/BottleCard';
+import BottleFilterModal from '../components/BottleFilterModal';
 import downloadBlob from '../utils/downloadBlob';
 import './CellarDetail.css';
 
@@ -38,27 +39,49 @@ function CellarDetail() {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
   const [activeTab, setActiveTab] = useState('bottles');
-  const [filtersOpen, setFiltersOpen] = useState(
-    () => !!(searchParams.get('vintage') || searchParams.get('minRating') || searchParams.get('maturity'))
-  );
+  const [showFilterModal, setShowFilterModal] = useState(false);
   const [filters, setFilters] = useState(() => ({
     search: searchParams.get('search') || '',
-    vintage: searchParams.get('vintage') || '',
+    type: searchParams.get('type')?.split(',').filter(Boolean) || [],
+    country: searchParams.get('country')?.split(',').filter(Boolean) || [],
+    region: searchParams.get('region')?.split(',').filter(Boolean) || [],
+    grapes: searchParams.get('grapes')?.split(',').filter(Boolean) || [],
+    vintage: searchParams.get('vintage')?.split(',').filter(Boolean) || [],
     minRating: searchParams.get('minRating') || '',
     maturity: searchParams.get('maturity') || '',
     sort: searchParams.get('sort') || '-createdAt'
   }));
+  const [facets, setFacets] = useState(null);
+  const [baseFacets, setBaseFacets] = useState(null);
+  const [facetMeta, setFacetMeta] = useState(null);
+
+  // Debounce the search input — only send the API call after the user stops typing
+  const [debouncedSearch, setDebouncedSearch] = useState(filters.search);
+  const searchTimer = useRef(null);
+  useEffect(() => {
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+    searchTimer.current = setTimeout(() => setDebouncedSearch(filters.search), 350);
+    return () => clearTimeout(searchTimer.current);
+  }, [filters.search]);
 
   // Clear URL search params after they've been read into filter state
   useEffect(() => {
-    if (searchParams.has('search') || searchParams.has('vintage') || searchParams.has('minRating') || searchParams.has('sort')) {
+    if (searchParams.has('search') || searchParams.has('vintage') || searchParams.has('minRating') || searchParams.has('sort') || searchParams.has('type') || searchParams.has('country') || searchParams.has('region') || searchParams.has('grapes')) {
       setSearchParams({}, { replace: true });
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Serialize array filters for dependency comparison
+  const filterKey = [
+    debouncedSearch,
+    filters.type.join(','), filters.country.join(','), filters.region.join(','),
+    filters.grapes.join(','), filters.vintage.join(','),
+    filters.minRating, filters.maturity, filters.sort
+  ].join('|');
+
   useEffect(() => {
     fetchCellarData(0);
-  }, [id, filters]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [id, filterKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     fetchStatistics();
@@ -71,7 +94,14 @@ function CellarDetail() {
       if (skip > 0) setBottlesLoading(true);
       const params = new URLSearchParams();
       Object.keys(filters).forEach(key => {
-        if (filters[key]) params.append(key, filters[key]);
+        const val = filters[key];
+        if (key === 'search') {
+          if (debouncedSearch) params.append('search', debouncedSearch);
+        } else if (Array.isArray(val)) {
+          if (val.length > 0) params.append(key, val.join(','));
+        } else if (val) {
+          params.append(key, val);
+        }
       });
       params.set('limit', BOTTLES_PER_PAGE);
       params.set('skip', skip);
@@ -82,6 +112,10 @@ function CellarDetail() {
         setBottlesTotal(data.bottles.total);
         if (skip === 0) {
           setBottles(data.bottles.items);
+          // Update facets on every fetch so cascading filters work
+          if (data.facets) setFacets(data.facets);
+          if (data.baseFacets) setBaseFacets(data.baseFacets);
+          if (data.facetMeta) setFacetMeta(data.facetMeta);
         } else {
           setBottles(prev => [...prev, ...data.bottles.items]);
         }
@@ -407,90 +441,125 @@ function CellarDetail() {
       {/* ── Bottles tab — search bar renders immediately for fast LCP ── */}
       {activeTab === 'bottles' && (
         <div className="cellar-tab-content">
-          <div className="search-row">
-            <input
-              type="text"
-              placeholder={t('cellarDetail.searchPlaceholder')}
-              value={filters.search}
-              onChange={e => setFilters({ ...filters, search: e.target.value })}
-              className="search-input"
-              aria-label={t('cellarDetail.searchPlaceholder')}
-            />
-            <button
-              type="button"
-              className={`filter-toggle-btn${filtersOpen ? ' filter-toggle-btn--active' : ''}${(filters.vintage || filters.minRating || filters.maturity) ? ' filter-toggle-btn--has-filters' : ''}`}
-              onClick={() => setFiltersOpen(o => !o)}
-              aria-expanded={filtersOpen}
-              aria-label={t('cellarDetail.toggleFilters')}
-              title={t('cellarDetail.toggleFilters')}
-            >
-              <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
-                <path d="M2 4h16M5 10h10M8 16h4" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
-              </svg>
-              {(filters.vintage || filters.minRating || filters.maturity) && (
-                <span className="filter-badge" />
-              )}
-            </button>
-          </div>
+          {(() => {
+            // Build list of active filter chips for the active-filters bar
+            const activeChips = [];
+            const reverseMap = (map) => {
+              const rev = {};
+              if (map) Object.entries(map).forEach(([name, id]) => { rev[id] = name; });
+              return rev;
+            };
+            const countryNames = reverseMap(facetMeta?.countries);
+            const regionNames = reverseMap(facetMeta?.regions);
+            const grapeNames = reverseMap(facetMeta?.grapes);
 
-          {filtersOpen && (
-            <div className="filters-bar">
-              <input
-                type="text"
-                placeholder={t('cellarDetail.vintagePlaceholder')}
-                value={filters.vintage}
-                onChange={e => setFilters({ ...filters, vintage: e.target.value })}
-                className="filter-input"
-                aria-label={t('cellarDetail.vintagePlaceholder')}
-              />
-              <select
-                value={filters.minRating}
-                onChange={e => setFilters({ ...filters, minRating: e.target.value })}
-                className="filter-select"
-                aria-label="Filter by rating"
-              >
-                <option value="">{t('cellarDetail.allRatings')}</option>
-                <option value="80">{t('cellarDetail.stars4Plus')}</option>
-                <option value="60">{t('cellarDetail.stars3Plus')}</option>
-                <option value="40">{t('cellarDetail.stars2Plus')}</option>
-              </select>
-              <select
-                value={filters.maturity}
-                onChange={e => setFilters({ ...filters, maturity: e.target.value })}
-                className="filter-select"
-                aria-label="Filter by maturity"
-              >
-                <option value="">{t('cellarDetail.allMaturity')}</option>
-                <option value="peak">{t('maturity.peak')}</option>
-                <option value="early">{t('maturity.early')}</option>
-                <option value="late">{t('maturity.late')}</option>
-                <option value="declining">{t('maturity.declining')}</option>
-                <option value="not-ready">{t('maturity.notReady')}</option>
-                <option value="none">{t('maturity.noData')}</option>
-              </select>
-              <select
-                value={filters.sort}
-                onChange={e => setFilters({ ...filters, sort: e.target.value })}
-                className="filter-select"
-                aria-label="Sort bottles"
-              >
-                <option value="-createdAt">{t('cellarDetail.sortNewest')}</option>
-                <option value="createdAt">{t('cellarDetail.sortOldest')}</option>
-                <option value="name">{t('cellarDetail.sortNameAZ')}</option>
-                <option value="-name">{t('cellarDetail.sortNameZA')}</option>
-                <option value="vintage">{t('cellarDetail.sortVintageOld')}</option>
-                <option value="-vintage">{t('cellarDetail.sortVintageNew')}</option>
-                <option value="price">{t('cellarDetail.sortPriceLow')}</option>
-                <option value="-price">{t('cellarDetail.sortPriceHigh')}</option>
-                <option value="maturity">{t('cellarDetail.sortMaturity')}</option>
-              </select>
-            </div>
-          )}
+            (filters.type || []).forEach(v => activeChips.push({ key: 'type', value: v, label: v.charAt(0).toUpperCase() + v.slice(1) }));
+            (filters.country || []).forEach(v => activeChips.push({ key: 'country', value: v, label: countryNames[v] || v }));
+            (filters.region || []).forEach(v => activeChips.push({ key: 'region', value: v, label: regionNames[v] || v }));
+            (filters.grapes || []).forEach(v => activeChips.push({ key: 'grapes', value: v, label: grapeNames[v] || v }));
+            (filters.vintage || []).forEach(v => activeChips.push({ key: 'vintage', value: v, label: v }));
+            if (filters.minRating) activeChips.push({ key: 'minRating', value: filters.minRating, label: `${filters.minRating}+ rating` });
+            if (filters.maturity) activeChips.push({ key: 'maturity', value: filters.maturity, label: filters.maturity });
+
+            const removeChip = (chip) => {
+              setFilters(prev => {
+                const val = prev[chip.key];
+                if (Array.isArray(val)) {
+                  return { ...prev, [chip.key]: val.filter(v => v !== chip.value) };
+                }
+                return { ...prev, [chip.key]: '' };
+              });
+            };
+
+            const clearAll = () => setFilters(prev => ({
+              ...prev,
+              type: [], country: [], region: [], grapes: [], vintage: [],
+              minRating: '', maturity: ''
+            }));
+
+            return (
+              <>
+                <div className="search-row">
+                  <input
+                    type="text"
+                    placeholder={t('cellarDetail.searchPlaceholder')}
+                    value={filters.search}
+                    onChange={e => setFilters({ ...filters, search: e.target.value })}
+                    className="search-input"
+                    aria-label={t('cellarDetail.searchPlaceholder')}
+                  />
+                  <button
+                    type="button"
+                    className={`filter-toggle-btn${activeChips.length > 0 ? ' filter-toggle-btn--has-filters' : ''}`}
+                    onClick={() => setShowFilterModal(true)}
+                    aria-label={t('cellarDetail.toggleFilters')}
+                    title={t('cellarDetail.toggleFilters')}
+                  >
+                    <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+                      <path d="M2 4h16M5 10h10M8 16h4" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                    </svg>
+                    {activeChips.length > 0 && (
+                      <span className="filter-badge">{activeChips.length}</span>
+                    )}
+                  </button>
+                  <select
+                    value={filters.sort}
+                    onChange={e => setFilters({ ...filters, sort: e.target.value })}
+                    className="filter-select sort-select"
+                    aria-label="Sort bottles"
+                  >
+                    <option value="-createdAt">{t('cellarDetail.sortNewest')}</option>
+                    <option value="createdAt">{t('cellarDetail.sortOldest')}</option>
+                    <option value="name">{t('cellarDetail.sortNameAZ')}</option>
+                    <option value="-name">{t('cellarDetail.sortNameZA')}</option>
+                    <option value="vintage">{t('cellarDetail.sortVintageOld')}</option>
+                    <option value="-vintage">{t('cellarDetail.sortVintageNew')}</option>
+                    <option value="price">{t('cellarDetail.sortPriceLow')}</option>
+                    <option value="-price">{t('cellarDetail.sortPriceHigh')}</option>
+                    <option value="maturity">{t('cellarDetail.sortMaturity')}</option>
+                  </select>
+                </div>
+
+                {activeChips.length > 0 && (
+                  <div className="active-filters-row">
+                    {activeChips.map((chip, i) => (
+                      <span key={`${chip.key}-${chip.value}-${i}`} className="active-filter-chip">
+                        {chip.label}
+                        <button
+                          type="button"
+                          className="active-filter-chip-remove"
+                          onClick={() => removeChip(chip)}
+                          aria-label={`Remove ${chip.label}`}
+                        >×</button>
+                      </span>
+                    ))}
+                    <button type="button" className="active-filters-clear" onClick={clearAll}>
+                      {t('cellarDetail.clearAllFilters')}
+                    </button>
+                  </div>
+                )}
+
+                {showFilterModal && (
+                  <Suspense fallback={null}>
+                    <BottleFilterModal
+                      filters={filters}
+                      onApply={setFilters}
+                      onClose={() => setShowFilterModal(false)}
+                      facets={facets}
+                      baseFacets={baseFacets}
+                      facetMeta={facetMeta}
+                      bottlesTotal={bottlesTotal}
+                    />
+                  </Suspense>
+                )}
+              </>
+            );
+          })()}
 
           {loading ? (
             <div className="loading">{t('cellarDetail.loadingCellar')}</div>
           ) : bottles.length === 0 && !bottlesLoading ? (
-            (filters.search || filters.vintage || filters.minRating || filters.maturity) ? (
+            (filters.search || filters.vintage?.length || filters.minRating || filters.maturity || filters.type?.length || filters.country?.length || filters.region?.length || filters.grapes?.length) ? (
               <div className="empty-state">
                 <p>{t('cellarDetail.noSearchResults')}</p>
               </div>

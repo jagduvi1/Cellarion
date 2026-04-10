@@ -1,0 +1,215 @@
+/* ── BottleFilterModal ── */
+
+.bfm-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin-bottom: 1rem;
+}
+
+/* ── Section: collapsible header ── */
+.bfm-section {
+  border-bottom: 1px solid var(--color-border);
+  padding-bottom: 0.75rem;
+}
+
+.bfm-section:last-child {
+  border-bottom: none;
+}
+
+.bfm-section-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.6rem 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  color: var(--color-text);
+  font-size: 0.95rem;
+  font-weight: 600;
+  text-align: left;
+}
+
+.bfm-section-header:hover {
+  color: var(--color-primary);
+}
+
+.bfm-section-icon {
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.bfm-section-label {
+  flex: 1;
+}
+
+.bfm-section-chevron {
+  transition: transform var(--transition-fast);
+  opacity: 0.4;
+  flex-shrink: 0;
+}
+
+.bfm-section-chevron--open {
+  transform: rotate(180deg);
+}
+
+/* ── Pills ── */
+.bfm-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  padding-bottom: 0.25rem;
+}
+
+.filter-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.3rem 0.7rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-full);
+  background: var(--color-surface);
+  color: var(--color-text-secondary);
+  font-size: 0.82rem;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  white-space: nowrap;
+  line-height: 1.4;
+}
+
+.filter-pill:hover {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+  background: var(--color-primary-light);
+}
+
+.filter-pill--selected {
+  background: var(--color-primary);
+  color: #fff;
+  border-color: var(--color-primary);
+}
+
+.filter-pill--selected:hover {
+  background: var(--color-primary-hover);
+  border-color: var(--color-primary-hover);
+  color: #fff;
+}
+
+.filter-pill--dimmed {
+  opacity: 0.4;
+}
+
+.filter-pill-count {
+  font-size: 0.72rem;
+  opacity: 0.7;
+  font-weight: 500;
+}
+
+.filter-pill--selected .filter-pill-count {
+  opacity: 0.85;
+}
+
+/* ── Show more / less ── */
+.bfm-show-more {
+  border: none;
+  background: transparent;
+  color: var(--color-primary);
+  font-size: 0.8rem;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 0.3rem 0;
+  margin-top: 0.15rem;
+}
+
+.bfm-show-more:hover {
+  text-decoration: underline;
+}
+
+/* ── Dropdowns row (Rating + Maturity side by side) ── */
+.bfm-dropdowns-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  padding-top: 0.5rem;
+}
+
+.bfm-dropdown-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.bfm-dropdown-label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+
+.bfm-select {
+  padding: 0.55rem 0.75rem;
+  border: 1px solid var(--color-input-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-input-bg);
+  color: var(--color-text);
+  font-size: 0.85rem;
+  min-height: 40px;
+  width: 100%;
+}
+
+.bfm-select:focus {
+  outline: none;
+  border-color: var(--color-border-focus);
+  box-shadow: 0 0 0 3px rgba(var(--color-primary-rgb), 0.08);
+}
+
+/* ── Footer ── */
+.bfm-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--color-border);
+}
+
+.bfm-clear-btn {
+  padding: 0.6rem 1.25rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.bfm-clear-btn:hover {
+  border-color: var(--color-text-muted);
+  color: var(--color-text);
+}
+
+.bfm-apply-btn {
+  padding: 0.6rem 1.5rem;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: var(--color-primary);
+  color: #fff;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--transition-fast);
+}
+
+.bfm-apply-btn:hover {
+  background: var(--color-primary-hover);
+}
+
+/* ── Mobile ── */
+@media (max-width: 768px) {
+  .bfm-dropdowns-row {
+    grid-template-columns: 1fr;
+    gap: 0.75rem;
+  }
+}

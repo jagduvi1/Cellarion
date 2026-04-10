@@ -12,10 +12,10 @@ import './Modal.css';
  *     </div>
  *   </Modal>
  */
-function Modal({ title, onClose, children }) {
+function Modal({ title, onClose, children, wide }) {
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-box" onClick={e => e.stopPropagation()}>
+      <div className={`modal-box${wide ? ' modal-box--wide' : ''}`} onClick={e => e.stopPropagation()}>
         {title && <h2>{title}</h2>}
         {children}
       </div>

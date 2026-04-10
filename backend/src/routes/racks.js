@@ -8,6 +8,7 @@ const Bottle = require('../models/Bottle');
 const CellarLayout = require('../models/CellarLayout');
 const { getCellarRole } = require('../utils/cellarAccess');
 const { getMaxPosition } = require('../utils/rackGeometry');
+const searchService = require('../services/search');
 
 const router = express.Router();
 
@@ -270,6 +271,7 @@ router.post('/:id/slots/:position/consume', async (req, res) => {
       bottle.consumedAt = new Date();
       bottle.consumedReason = 'drank';
       await bottle.save();
+      searchService.indexBottle(bottle._id);
     }
 
     // Remove the slot assignment

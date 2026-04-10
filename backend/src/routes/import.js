@@ -411,6 +411,7 @@ router.post('/confirm', async (req, res) => {
     let created = 0;
     const skipped = [];
     const errors = [];
+    const createdBottleIds = []; // Track IDs for Meilisearch bulk sync
     // Dedup map: "wineName|producer" -> WineRequest doc created in this batch
     const pendingRequestCache = new Map();
 
@@ -493,6 +494,7 @@ router.post('/confirm', async (req, res) => {
 
           await bottle.save();
           created++;
+          if (!item.addToHistory) createdBottleIds.push(bottle._id);
           continue;
         }
 
@@ -567,6 +569,7 @@ router.post('/confirm', async (req, res) => {
 
         await bottle.save();
         created++;
+        if (!item.addToHistory) createdBottleIds.push(bottle._id);
 
         // Place bottle in rack if rackName + rackPosition provided (active bottles only)
         if (item.rackName && item.rackPosition && bottle.status === 'active') {
@@ -602,6 +605,9 @@ router.post('/confirm', async (req, res) => {
         errors.push({ index: i, reason: err.message });
       }
     }
+
+    // Bulk-index created bottles in Meilisearch (fire-and-forget)
+    searchService.bulkIndexBottles(createdBottleIds);
 
     logAudit(req, 'bottle.import', { type: 'cellar', id: cellarId }, {
       created,

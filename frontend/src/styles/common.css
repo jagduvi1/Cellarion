@@ -266,6 +266,10 @@
   box-shadow: var(--shadow-lg);
 }
 
+.modal-box--wide {
+  max-width: 600px;
+}
+
 .modal-box h2,
 .modal-box h3 {
   color: var(--color-text);

@@ -446,20 +446,84 @@
 
 .filter-badge {
   position: absolute;
-  top: 6px;
-  right: 6px;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
+  top: 2px;
+  right: 2px;
+  min-width: 16px;
+  height: 16px;
+  border-radius: var(--radius-full);
   background: var(--color-primary);
+  color: #fff;
+  font-size: 0.65rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 3px;
 }
 
-/* ── Filters bar (collapsible) ── */
-.filters-bar {
-  display: grid;
-  grid-template-columns: 1fr 1fr 1fr 1fr;
-  gap: 0.75rem;
+/* ── Sort select inline in search row ── */
+.sort-select {
+  flex-shrink: 0;
+  width: auto;
+  min-width: 140px;
+}
+
+/* ── Active filters row ── */
+.active-filters-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
   margin: 0.5rem 0 0;
+}
+
+.active-filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: var(--radius-full);
+  background: var(--color-primary-light);
+  color: var(--color-primary);
+  font-size: 0.8rem;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.active-filter-chip-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--color-primary);
+  font-size: 0.85rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+  transition: background var(--transition-fast);
+}
+
+.active-filter-chip-remove:hover {
+  background: rgba(var(--color-primary-rgb), 0.15);
+}
+
+.active-filters-clear {
+  border: none;
+  background: transparent;
+  color: var(--color-text-muted);
+  font-size: 0.8rem;
+  cursor: pointer;
+  padding: 0.25rem 0.5rem;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.active-filters-clear:hover {
+  color: var(--color-text);
 }
 
 .search-input,
@@ -482,6 +546,7 @@
   border-color: var(--color-border-focus);
   box-shadow: 0 0 0 3px rgba(var(--color-primary-rgb), 0.08);
 }
+
 
 /* ── Drink alert strip ── */
 .drink-alert-strip {
@@ -902,14 +967,6 @@
     display: flex;
   }
 
-  .filters-bar {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 0.5rem;
-    overflow: visible;
-    padding-bottom: 0;
-  }
-
   .search-input,
   .filter-input,
   .filter-select {
@@ -918,10 +975,15 @@
     width: 100%;
   }
 
-  .filters-bar input,
-  .filters-bar select {
+  .sort-select {
     min-width: 0;
     width: 100%;
+  }
+
+  .active-filters-row {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    -webkit-overflow-scrolling: touch;
   }
 
   .statistics-grid {

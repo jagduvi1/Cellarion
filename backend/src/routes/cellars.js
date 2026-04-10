@@ -19,6 +19,7 @@ const { classifyMaturity, buildProfileMap } = require('../utils/maturityUtils');
 const { CONSUMED_STATUSES, MS_PER_DAY, WINE_POPULATE } = require('../config/constants');
 const mongoose = require('mongoose');
 const { parsePagination } = require('../utils/pagination');
+const searchService = require('../services/search');
 
 const router = express.Router();
 
@@ -274,6 +275,7 @@ router.get('/:id', async (req, res) => {
       country,
       region,
       grapes,
+      type,
       vintage,
       minRating,
       maxRating,
@@ -286,94 +288,192 @@ router.get('/:id', async (req, res) => {
     // Pagination — default 30, max 200; skip defaults to 0
     const { limit, offset: skip } = parsePagination(req.query, { limit: 30, maxLimit: 200 });
 
-    // Base MongoDB filter for Bottle (direct fields only)
-    const filter = {
-      cellar: req.params.id,
-      status: { $nin: CONSUMED_STATUSES }
-    };
-
-    // Exclude specific bottle IDs (used by rack slot picker to skip already-placed bottles)
-    if (exclude) {
-      const excludeIds = String(exclude).split(',').filter(mongoose.isValidObjectId);
-      if (excludeIds.length > 0) {
-        filter._id = { $nin: excludeIds };
-      }
-    }
-
-    // Push vintage directly into the DB query — cast to string to prevent NoSQL injection
-    if (vintage) filter.vintage = String(vintage);
-
-    // Push taxonomy filters (country, region, grapes) down via a WineDefinition pre-query.
-    // This avoids loading every bottle in the cellar just to discard most of them.
-    // Only accept valid ObjectIds to prevent NoSQL injection via operator objects.
     const { isValidObjectId } = mongoose;
-    const wdFilter = {};
-    if (country && isValidObjectId(country)) wdFilter.country = country;
-    if (region  && isValidObjectId(region))  wdFilter.region  = region;
-    if (grapes) {
-      const grapeIds = String(grapes).split(',').map(g => g.trim()).filter(isValidObjectId);
-      // $all ensures every requested grape is present in the wine's grapes array
-      if (grapeIds.length > 0) wdFilter.grapes = { $all: grapeIds };
-    }
-
-    if (Object.keys(wdFilter).length > 0) {
-      const matchingWdIds = await WineDefinition.find(wdFilter).distinct('_id');
-      if (matchingWdIds.length === 0) {
-        // No wines match the taxonomy filter — short-circuit with empty result
-        return res.json({
-          cellar: { ...cellar, userRole: role, userColor: getUserColor(cellar, req.user.id) },
-          bottles: { count: 0, items: [] }
-        });
-      }
-      filter.wineDefinition = { $in: matchingWdIds };
-    }
-
-    // Push sort to MongoDB for direct Bottle fields (faster than JS sort)
     const sortField = sort.startsWith('-') ? sort.substring(1) : sort;
     const sortDir = sort.startsWith('-') ? -1 : 1;
-    const directSortFields = ['createdAt', 'vintage', 'price', 'rating'];
-    const canSortInDb = directSortFields.includes(sortField);
 
-    // Whether we need in-memory post-processing (prevents DB-level pagination)
+    // Parse grape IDs once (used by both paths)
+    const grapeIds = grapes
+      ? String(grapes).split(',').map(g => g.trim()).filter(isValidObjectId)
+      : [];
+
+    // Whether we need in-memory post-processing that neither Meilisearch nor MongoDB can do
     const needsMaturity = !!(maturityFilter || sortField === 'maturity');
-    const needsInMemoryFilter = !!(search || minRating || maxRating || maturityFilter);
-    const needsInMemorySort = !canSortInDb;
-    const canPaginateInDb = !needsInMemoryFilter && !needsInMemorySort;
+    const MATURITY_RANK = { declining: 0, late: 1, peak: 2, early: 3, 'not-ready': 4 };
 
-    // Fetch the filtered set from DB — .lean() skips Mongoose document hydration (3-5× faster)
-    let query = Bottle.find(filter).populate(WINE_POPULATE);
-    if (canSortInDb) query = query.sort({ [sortField]: sortDir });
-    // When no in-memory work is needed, paginate directly in DB for speed
-    if (canPaginateInDb) query = query.skip(skip).limit(limit);
-    let bottles = await query.lean();
-
-    // Total count: use countDocuments for DB-paginated, array length otherwise
+    // ── Determine if we can use Meilisearch as the primary search engine ──
+    const hasMeiliFilters = !!(search || type || country || region || grapes || vintage);
+    let usedMeili = false;
+    let bottles;
     let totalCount;
-    if (canPaginateInDb) {
-      totalCount = await Bottle.countDocuments(filter);
+    let canPaginateInDb;
+
+    if (searchService.getIsAvailable() && hasMeiliFilters) {
+      // ── PRIMARY PATH: Meilisearch handles search + filters ──
+      try {
+        const meiliResult = await searchService.searchBottles(search || '', {
+          cellarId: req.params.id,
+          type: type || undefined,
+          countryId: country || undefined,
+          regionId: region || undefined,
+          grapeIds: grapeIds.length > 0 ? grapeIds : undefined,
+          vintage: vintage || undefined,
+          sort,
+          limit: 10000,  // Get all matching IDs — we paginate after in-memory filters
+          offset: 0
+        });
+
+        const matchingIds = meiliResult.ids;
+
+        if (matchingIds.length === 0) {
+          // Meilisearch found nothing — short-circuit
+          return res.json({
+            cellar: { ...cellar, userRole: role, userColor: getUserColor(cellar, req.user.id) },
+            bottles: { count: 0, total: 0, limit, skip, items: [] },
+            facets: meiliResult.facetDistribution || null,
+            facetMeta: null
+          });
+        }
+
+        // Exclude specific bottle IDs if requested
+        let idsToFetch = matchingIds;
+        if (exclude) {
+          const excludeSet = new Set(String(exclude).split(',').filter(isValidObjectId));
+          idsToFetch = matchingIds.filter(id => !excludeSet.has(id));
+        }
+
+        // Fetch just the matching bottles from MongoDB (by ID) — much smaller query
+        bottles = await Bottle.find({ _id: { $in: idsToFetch } })
+          .populate(WINE_POPULATE)
+          .lean();
+
+        // Preserve Meilisearch's sort order
+        const idOrder = new Map(idsToFetch.map((id, i) => [id, i]));
+        bottles.sort((a, b) => (idOrder.get(a._id.toString()) ?? 0) - (idOrder.get(b._id.toString()) ?? 0));
+
+        usedMeili = true;
+        canPaginateInDb = false; // We paginate after in-memory filters below
+      } catch {
+        // Meilisearch failed — fall through to MongoDB path
+      }
     }
 
-    // ── In-memory filters for cases that can't be expressed cleanly in Mongo ──
+    if (!usedMeili) {
+      // ── FALLBACK PATH: MongoDB + in-memory (when Meilisearch unavailable) ──
+      const filter = {
+        cellar: req.params.id,
+        status: { $nin: CONSUMED_STATUSES }
+      };
 
-    if (search) {
-      // Strip diacritics so e.g. "Macon" matches "Mâcon"
-      const stripAccents = (s) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-      const searchNorm = stripAccents(search.toLowerCase());
-      bottles = bottles.filter(b => {
-        const wineName = stripAccents(b.wineDefinition?.name?.toLowerCase() || '');
-        const producer = stripAccents(b.wineDefinition?.producer?.toLowerCase() || '');
-        const notes = stripAccents(b.notes?.toLowerCase() || '');
-        const location = stripAccents(b.location?.toLowerCase() || '');
-        return wineName.includes(searchNorm) ||
-               producer.includes(searchNorm) ||
-               notes.includes(searchNorm) ||
-               location.includes(searchNorm);
-      });
+      if (exclude) {
+        const excludeIds = String(exclude).split(',').filter(isValidObjectId);
+        if (excludeIds.length > 0) filter._id = { $nin: excludeIds };
+      }
+      // Vintage: single or comma-separated
+      if (vintage) {
+        const vintages = String(vintage).split(',').map(v => v.trim()).filter(Boolean);
+        filter.vintage = vintages.length === 1 ? vintages[0] : { $in: vintages };
+      }
+
+      // Taxonomy pre-query
+      const wdFilter = {};
+      if (country) {
+        const countryIds = String(country).split(',').map(c => c.trim()).filter(isValidObjectId);
+        if (countryIds.length === 1) wdFilter.country = countryIds[0];
+        else if (countryIds.length > 1) wdFilter.country = { $in: countryIds };
+      }
+      if (region) {
+        const regionIds = String(region).split(',').map(r => r.trim()).filter(isValidObjectId);
+        if (regionIds.length === 1) wdFilter.region = regionIds[0];
+        else if (regionIds.length > 1) wdFilter.region = { $in: regionIds };
+      }
+      if (type) {
+        const types = String(type).split(',').map(t => t.trim()).filter(Boolean);
+        wdFilter.type = types.length === 1 ? types[0] : { $in: types };
+      }
+      if (grapeIds.length > 0) wdFilter.grapes = { $all: grapeIds };
+
+      if (Object.keys(wdFilter).length > 0) {
+        const matchingWdIds = await WineDefinition.find(wdFilter).distinct('_id');
+        if (matchingWdIds.length === 0) {
+          return res.json({
+            cellar: { ...cellar, userRole: role, userColor: getUserColor(cellar, req.user.id) },
+            bottles: { count: 0, items: [] }
+          });
+        }
+        filter.wineDefinition = { $in: matchingWdIds };
+      }
+
+      const directSortFields = ['createdAt', 'vintage', 'price', 'rating'];
+      const canSortInDb_ = directSortFields.includes(sortField);
+      const needsInMemoryFilter = !!(search || minRating || maxRating || maturityFilter);
+      const needsInMemorySort = !canSortInDb_;
+      canPaginateInDb = !needsInMemoryFilter && !needsInMemorySort;
+
+      let query = Bottle.find(filter).populate(WINE_POPULATE);
+      if (canSortInDb_) query = query.sort({ [sortField]: sortDir });
+      if (canPaginateInDb) query = query.skip(skip).limit(limit);
+      bottles = await query.lean();
+
+      if (canPaginateInDb) {
+        totalCount = await Bottle.countDocuments(filter);
+      }
+
+      // In-memory text search (fallback — no typo tolerance but multi-word AND works)
+      if (search) {
+        const stripAccents = (s) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        const words = stripAccents(search.toLowerCase()).split(/\s+/).filter(Boolean);
+        bottles = bottles.filter(b => {
+          const allText = [
+            b.wineDefinition?.name,
+            b.wineDefinition?.producer,
+            b.notes,
+            b.location,
+            b.wineDefinition?.country?.name,
+            b.wineDefinition?.region?.name,
+            b.wineDefinition?.appellation,
+            b.wineDefinition?.type,
+            ...(b.wineDefinition?.grapes || []).map(g => g.name)
+          ].filter(Boolean).map(s => stripAccents(s.toLowerCase())).join(' ');
+          return words.every(word => allText.includes(word));
+        });
+      }
+
+      // In-memory sort for fields that require populated data
+      if (needsInMemorySort) {
+        let maturityStatusMap_;
+        if (sortField === 'maturity') {
+          const profileMap = await buildProfileMap(bottles);
+          maturityStatusMap_ = new Map();
+          for (const b of bottles) {
+            maturityStatusMap_.set(b._id.toString(), classifyMaturity(b, profileMap));
+          }
+        }
+        bottles.sort((a, b) => {
+          let aVal, bVal;
+          if (sortField === 'name') {
+            aVal = a.wineDefinition?.name || '';
+            bVal = b.wineDefinition?.name || '';
+          } else if (sortField === 'maturity' && maturityStatusMap_) {
+            const aStatus = maturityStatusMap_.get(a._id.toString());
+            const bStatus = maturityStatusMap_.get(b._id.toString());
+            aVal = aStatus != null ? MATURITY_RANK[aStatus] : 5;
+            bVal = bStatus != null ? MATURITY_RANK[bStatus] : 5;
+          } else {
+            aVal = a.createdAt;
+            bVal = b.createdAt;
+          }
+          if (aVal < bVal) return -sortDir;
+          if (aVal > bVal) return sortDir;
+          return 0;
+        });
+      }
     }
+
+    // ── Shared post-filters (applied to both Meilisearch and fallback paths) ──
 
     if (minRating) {
       const min = parseFloat(minRating);
-      // minRating is sent as a normalized 0-100 value; compare against normalized bottle rating
       bottles = bottles.filter(b => {
         if (!b.rating) return false;
         return toNormalized(b.rating, b.ratingScale || '5') >= min;
@@ -388,8 +488,6 @@ router.get('/:id', async (req, res) => {
       });
     }
 
-    // Build maturity profile map once when needed for filter, sort, or response enrichment
-    const MATURITY_RANK = { declining: 0, late: 1, peak: 2, early: 3, 'not-ready': 4 };
     let maturityStatusMap;
     if (needsMaturity) {
       const profileMap = await buildProfileMap(bottles);
@@ -399,7 +497,6 @@ router.get('/:id', async (req, res) => {
       }
     }
 
-    // Maturity filter: 'none' = only bottles without data, or a specific status
     if (maturityFilter && maturityStatusMap) {
       if (maturityFilter === 'none') {
         bottles = bottles.filter(b => maturityStatusMap.get(b._id.toString()) == null);
@@ -408,31 +505,7 @@ router.get('/:id', async (req, res) => {
       }
     }
 
-    // In-memory sort only for fields that require populated data (e.g. 'name', 'maturity')
-    if (needsInMemorySort) {
-      bottles.sort((a, b) => {
-        let aVal, bVal;
-
-        if (sortField === 'name') {
-          aVal = a.wineDefinition?.name || '';
-          bVal = b.wineDefinition?.name || '';
-        } else if (sortField === 'maturity') {
-          const aStatus = maturityStatusMap.get(a._id.toString());
-          const bStatus = maturityStatusMap.get(b._id.toString());
-          aVal = aStatus != null ? MATURITY_RANK[aStatus] : 5;
-          bVal = bStatus != null ? MATURITY_RANK[bStatus] : 5;
-        } else {
-          aVal = a.createdAt;
-          bVal = b.createdAt;
-        }
-
-        if (aVal < bVal) return -sortDir;
-        if (aVal > bVal) return sortDir;
-        return 0;
-      });
-    }
-
-    // For in-memory paths, capture total then slice
+    // Paginate (for paths that didn't paginate in DB)
     if (!canPaginateInDb) {
       totalCount = bottles.length;
       bottles = bottles.slice(skip, skip + limit);
@@ -474,6 +547,73 @@ router.get('/:id', async (req, res) => {
       ...(maturityStatusMap ? { maturityStatus: maturityStatusMap.get(b._id.toString()) || null } : {})
     }));
 
+    // ── Facets: two queries for smart cascading ──
+    // 1. baseFacets: unfiltered — shows ALL options so users can always add more selections
+    // 2. facets: filtered — reflects what's available given current filters (for counts + cascading)
+    let facets = null;
+    let baseFacets = null;
+    let facetMeta = null;
+    const hasAnyFilter = !!(type || country || region || grapes || vintage || search);
+    if (searchService.getIsAvailable()) {
+      try {
+        // Always fetch unfiltered facets for showing all available options
+        const baseResult = await searchService.searchBottles('', {
+          cellarId: req.params.id,
+          limit: 0, offset: 0
+        });
+        baseFacets = baseResult.facetDistribution || null;
+
+        // If filters are active, also fetch filtered facets for cascading counts
+        if (hasAnyFilter) {
+          const filteredResult = await searchService.searchBottles(search || '', {
+            cellarId: req.params.id,
+            type: type || undefined,
+            countryId: country || undefined,
+            regionId: region || undefined,
+            grapeIds: grapeIds.length > 0 ? grapeIds : undefined,
+            vintage: vintage || undefined,
+            limit: 0, offset: 0
+          });
+          facets = filteredResult.facetDistribution || null;
+        } else {
+          facets = baseFacets;
+        }
+      } catch {
+        // Meilisearch unavailable — skip facets
+      }
+    }
+
+    // Build name→ID mappings so the frontend can show names but filter by ID.
+    // Query the distinct WineDefinitions for this cellar (fast: typically <200 unique wines).
+    if (baseFacets || facets) {
+      const wdIds = await Bottle.find({
+        cellar: req.params.id,
+        status: { $nin: CONSUMED_STATUSES }
+      }).distinct('wineDefinition');
+
+      const wds = await WineDefinition.find({ _id: { $in: wdIds } })
+        .populate('country', 'name')
+        .populate('region', 'name')
+        .populate('grapes', 'name')
+        .lean();
+
+      const countries = {};
+      const regions = {};
+      const grapesMap = {};
+      for (const wd of wds) {
+        if (wd.country?.name && wd.country._id) {
+          countries[wd.country.name] = wd.country._id.toString();
+        }
+        if (wd.region?.name && wd.region._id) {
+          regions[wd.region.name] = wd.region._id.toString();
+        }
+        for (const g of (wd.grapes || [])) {
+          if (g.name && g._id) grapesMap[g.name] = g._id.toString();
+        }
+      }
+      facetMeta = { countries, regions, grapes: grapesMap };
+    }
+
     res.json({
       cellar: { ...cellar, userRole: role, userColor: getUserColor(cellar, req.user.id) },
       bottles: {
@@ -482,7 +622,8 @@ router.get('/:id', async (req, res) => {
         limit,
         skip,
         items: bottleItems
-      }
+      },
+      ...(facets ? { facets, baseFacets, facetMeta } : {})
     });
   } catch (error) {
     console.error('Get cellar error:', error);
