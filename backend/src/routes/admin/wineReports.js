@@ -6,6 +6,7 @@ const { logAudit } = require('../../services/audit');
 const { stripHtml } = require('../../utils/sanitize');
 const { incrementCred } = require('../../utils/cellarCred');
 const { parsePagination } = require('../../utils/pagination');
+const { isValidId } = require('../../utils/validation');
 
 const REPORT_STATUSES = ['pending', 'resolved', 'dismissed'];
 const REPORT_REASONS = ['wrong_info', 'duplicate', 'inappropriate', 'wrong_price', 'other'];
@@ -48,6 +49,7 @@ router.get('/', async (req, res) => {
 // GET /api/admin/wine-reports/:id — get single report
 router.get('/:id', async (req, res) => {
   try {
+    if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
     const report = await WineReport.findById(req.params.id)
       .populate('user', 'username email')
       .populate('wineDefinition', 'name producer country type appellation')
@@ -66,6 +68,7 @@ router.get('/:id', async (req, res) => {
 // PUT /api/admin/wine-reports/:id/resolve — mark a wine report as resolved
 router.put('/:id/resolve', async (req, res) => {
   try {
+    if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
     const { adminNotes } = req.body;
 
     const report = await WineReport.findById(req.params.id);
@@ -100,6 +103,7 @@ router.put('/:id/resolve', async (req, res) => {
 // PUT /api/admin/wine-reports/:id/dismiss — dismiss a wine report
 router.put('/:id/dismiss', async (req, res) => {
   try {
+    if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
     const { adminNotes } = req.body;
 
     const report = await WineReport.findById(req.params.id);

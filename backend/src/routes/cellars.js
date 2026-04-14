@@ -20,6 +20,7 @@ const { CONSUMED_STATUSES, MS_PER_DAY, WINE_POPULATE } = require('../config/cons
 const mongoose = require('mongoose');
 const { parsePagination } = require('../utils/pagination');
 const searchService = require('../services/search');
+const { isValidId } = require('../utils/validation');
 
 const router = express.Router();
 
@@ -89,6 +90,7 @@ router.post('/', async (req, res) => {
 // GET /api/cellars/:id/statistics - Get cellar statistics (active bottles only)
 router.get('/:id/statistics', async (req, res) => {
   try {
+    if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
     const cellar = await Cellar.findById(req.params.id);
     const role = getCellarRole(cellar, req.user.id);
     if (!role || cellar.deletedAt) {
@@ -226,6 +228,7 @@ router.get('/:id/statistics', async (req, res) => {
 // GET /api/cellars/:id/history - Get consumed/gifted/sold bottles for this cellar
 router.get('/:id/history', async (req, res) => {
   try {
+    if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
     const cellar = await Cellar.findById(req.params.id).populate('user', 'username');
     const role = getCellarRole(cellar, req.user.id);
     if (!role || cellar.deletedAt) return res.status(404).json({ error: 'Cellar not found' });
@@ -389,6 +392,7 @@ router.get('/:id/history', async (req, res) => {
 // GET /api/cellars/:id/members - List members (owner only)
 router.get('/:id/members', async (req, res) => {
   try {
+    if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
     const cellar = await Cellar.findOne({ _id: req.params.id, user: req.user.id, deletedAt: null })
       .populate('members.user', 'username email');
     if (!cellar) return res.status(404).json({ error: 'Cellar not found' });
@@ -403,6 +407,7 @@ router.get('/:id/members', async (req, res) => {
 // GET /api/cellars/:id - Get cellar details with bottles (active only, with filtering)
 router.get('/:id', async (req, res) => {
   try {
+    if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
     // Populate owner username so shared users can display "Shared by X"
     const cellar = await Cellar.findById(req.params.id).populate('user', 'username').lean();
     const role = getCellarRole(cellar, req.user.id);
@@ -773,6 +778,7 @@ router.get('/:id', async (req, res) => {
 // PUT /api/cellars/:id - Update cellar (owner only)
 router.put('/:id', async (req, res) => {
   try {
+    if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
     const { name, description } = req.body;
 
     const cellar = await Cellar.findOne({
@@ -805,6 +811,7 @@ router.put('/:id', async (req, res) => {
 // PATCH /api/cellars/:id/color - Set personal color preference (any role)
 router.patch('/:id/color', async (req, res) => {
   try {
+    if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
     const { color } = req.body; // hex string or null/empty to clear
     const cellar = await Cellar.findById(req.params.id);
     const role = getCellarRole(cellar, req.user.id);
@@ -834,6 +841,7 @@ router.patch('/:id/color', async (req, res) => {
 // DELETE /api/cellars/:id - Soft-delete cellar (owner only); data retained 30 days
 router.delete('/:id', async (req, res) => {
   try {
+    if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
     const cellar = await Cellar.findOne({
       _id: req.params.id,
       user: req.user.id,
@@ -871,6 +879,7 @@ router.delete('/:id', async (req, res) => {
 // POST /api/cellars/:id/members - Add a member (owner only)
 router.post('/:id/members', async (req, res) => {
   try {
+    if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
     const { email, role } = req.body;
     if (!email || !role) {
       return res.status(400).json({ error: 'email and role are required' });
@@ -979,6 +988,8 @@ router.post('/:id/members', async (req, res) => {
 // PUT /api/cellars/:id/members/:userId - Change a member's role (owner only)
 router.put('/:id/members/:userId', async (req, res) => {
   try {
+    if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
+    if (!isValidId(req.params.userId)) return res.status(400).json({ error: 'Invalid ID' });
     const { role } = req.body;
     if (!role || !['viewer', 'editor'].includes(role)) {
       return res.status(400).json({ error: 'role must be viewer or editor' });
@@ -1010,6 +1021,8 @@ router.put('/:id/members/:userId', async (req, res) => {
 // DELETE /api/cellars/:id/members/:userId - Remove a member (owner, or self-removal)
 router.delete('/:id/members/:userId', async (req, res) => {
   try {
+    if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
+    if (!isValidId(req.params.userId)) return res.status(400).json({ error: 'Invalid ID' });
     const cellar = await Cellar.findById(req.params.id);
     if (!cellar) return res.status(404).json({ error: 'Cellar not found' });
 
@@ -1043,6 +1056,7 @@ router.delete('/:id/members/:userId', async (req, res) => {
 // GET /api/cellars/:id/export — owner only, no images, no staff-curated data
 router.get('/:id/export', async (req, res) => {
   try {
+    if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
     const cellar = await Cellar.findOne({ _id: req.params.id, user: req.user.id, deletedAt: null });
     if (!cellar) return res.status(403).json({ error: 'Not authorized — only the cellar owner can export' });
 
@@ -1143,6 +1157,7 @@ router.get('/:id/export', async (req, res) => {
 
 router.get('/:id/audit', async (req, res) => {
   try {
+    if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
     const cellar = await Cellar.findOne({ _id: req.params.id, user: req.user.id });
     if (!cellar) return res.status(403).json({ error: 'Not authorized' });
 

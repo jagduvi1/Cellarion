@@ -2,6 +2,7 @@ const express = require('express');
 const mongoose = require('mongoose');
 const { requireAuth, requireSommOrAdmin } = require('../../middleware/auth');
 const WineVintageProfile = require('../../models/WineVintageProfile');
+const { isValidId } = require('../../utils/validation');
 
 const { suggestDrinkWindow } = require('../../services/labelScan');
 
@@ -88,6 +89,7 @@ router.get('/lookup', async (req, res) => {
  */
 router.put('/:id', requireSommOrAdmin, async (req, res) => {
   try {
+    if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
     const profile = await WineVintageProfile.findById(req.params.id);
     if (!profile) {
       return res.status(404).json({ error: 'Profile not found' });
@@ -161,6 +163,7 @@ router.put('/:id', requireSommOrAdmin, async (req, res) => {
  */
 router.post('/:id/ai-suggest', requireSommOrAdmin, async (req, res) => {
   try {
+    if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
     const profile = await WineVintageProfile.findById(req.params.id)
       .populate({
         path: 'wineDefinition',
@@ -208,6 +211,7 @@ router.post('/:id/ai-suggest', requireSommOrAdmin, async (req, res) => {
  */
 router.delete('/:id/reset', requireSommOrAdmin, async (req, res) => {
   try {
+    if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
     const profile = await WineVintageProfile.findById(req.params.id);
     if (!profile) {
       return res.status(404).json({ error: 'Profile not found' });

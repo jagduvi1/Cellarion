@@ -9,6 +9,7 @@ const { logAudit } = require('../../services/audit');
 const { createNotification } = require('../../services/notifications');
 const { incrementCred } = require('../../utils/cellarCred');
 const { parsePagination } = require('../../utils/pagination');
+const { isValidId } = require('../../utils/validation');
 
 const router = express.Router();
 
@@ -67,6 +68,7 @@ function deleteOriginalFile(image) {
 // Body: { visibility: 'private' | 'public' } — defaults to 'public'
 router.put('/:id/approve', async (req, res) => {
   try {
+    if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
     const image = await BottleImage.findById(req.params.id);
     if (!image) {
       return res.status(404).json({ error: 'Image not found' });
@@ -141,6 +143,7 @@ router.put('/:id/approve', async (req, res) => {
 // PUT /api/admin/images/:id/reject
 router.put('/:id/reject', async (req, res) => {
   try {
+    if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
     const image = await BottleImage.findById(req.params.id);
     if (!image) {
       return res.status(404).json({ error: 'Image not found' });
@@ -197,6 +200,7 @@ router.put('/:id/reject', async (req, res) => {
 // PUT /api/admin/images/:id/unapprove - Revert approved image back to processed
 router.put('/:id/unapprove', async (req, res) => {
   try {
+    if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
     const image = await BottleImage.findById(req.params.id);
     if (!image) {
       return res.status(404).json({ error: 'Image not found' });
@@ -247,6 +251,7 @@ router.put('/:id/unapprove', async (req, res) => {
 // PUT /api/admin/images/:id/assign-to-wine - Set as official wine image
 router.put('/:id/assign-to-wine', async (req, res) => {
   try {
+    if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
     const image = await BottleImage.findById(req.params.id);
     if (!image) {
       return res.status(404).json({ error: 'Image not found' });
@@ -302,6 +307,7 @@ router.put('/:id/assign-to-wine', async (req, res) => {
 // PUT /api/admin/images/:id/visibility - Change visibility of an approved image
 router.put('/:id/visibility', async (req, res) => {
   try {
+    if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
     const image = await BottleImage.findById(req.params.id);
     if (!image) {
       return res.status(404).json({ error: 'Image not found' });

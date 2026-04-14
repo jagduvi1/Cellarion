@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const Notification = require('../models/Notification');
 const { requireAuth } = require('../middleware/auth');
+const { isValidId } = require('../utils/validation');
 
 // All routes require auth
 router.use(requireAuth);
@@ -40,6 +41,7 @@ router.put('/read-all', async (req, res) => {
 // PUT /api/notifications/:id/read - mark a single notification as read
 router.put('/:id/read', async (req, res) => {
   try {
+    if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
     const notification = await Notification.findOneAndUpdate(
       { _id: req.params.id, user: req.user.id },
       { read: true },

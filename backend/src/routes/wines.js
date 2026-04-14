@@ -10,6 +10,7 @@ const { findOrCreateWine } = require('../services/findOrCreateWine');
 const { generateWineKey, combinedSimilarity } = require('../utils/normalize');
 const { PROCESSED_DIR } = require('../config/upload');
 const { parsePagination } = require('../utils/pagination');
+const { isValidId } = require('../utils/validation');
 const { submitUrls } = require('../services/indexNow');
 
 const REMBG_URL = process.env.REMBG_URL || 'http://rembg:5000';
@@ -345,6 +346,8 @@ router.post('/ai-info', requireAuth, async (req, res) => {
 // Used for shared links and social media previews.
 router.get('/:id/public', async (req, res) => {
   try {
+    if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
+
     const wine = await WineDefinition.findById(req.params.id)
       .populate(['country', 'region', 'grapes'])
       .select('name producer country region appellation grapes type image communityRating classification');
@@ -362,6 +365,8 @@ router.get('/:id/public', async (req, res) => {
 
 router.get('/:id', requireAuth, async (req, res) => {
   try {
+    if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
+
     const wine = await WineDefinition.findById(req.params.id)
       .populate(['country', 'region', 'grapes']);
 

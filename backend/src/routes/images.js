@@ -12,6 +12,7 @@ const { getClientIp } = require('../utils/clientIp');
 const { getCellarRole } = require('../utils/cellarAccess');
 const { processImage } = require('../services/imageProcessor');
 const { stripHtml } = require('../utils/sanitize');
+const { isValidId } = require('../utils/validation');
 
 /**
  * Safely remove an uploaded file, but only if it resides within the expected
@@ -215,6 +216,8 @@ router.post('/upload', requireAuth, upload.single('image'), async (req, res) => 
 // GET /api/images/bottle/:bottleId - Get images for a bottle
 router.get('/bottle/:bottleId', requireAuth, async (req, res) => {
   try {
+    if (!isValidId(req.params.bottleId)) return res.status(400).json({ error: 'Invalid ID' });
+
     // Verify bottle access (owner or shared cellar viewer+)
     const bottle = await Bottle.findById(req.params.bottleId);
     if (!bottle) {
@@ -274,6 +277,8 @@ router.get('/bottle/:bottleId', requireAuth, async (req, res) => {
 // ?all=true (admin only) includes all non-rejected images
 router.get('/wine/:wineDefinitionId', requireAuth, async (req, res) => {
   try {
+    if (!isValidId(req.params.wineDefinitionId)) return res.status(400).json({ error: 'Invalid ID' });
+
     const isAdmin = req.user.roles && req.user.roles.includes('admin');
     const showAll = req.query.all === 'true' && isAdmin;
 
@@ -297,6 +302,8 @@ router.get('/wine/:wineDefinitionId', requireAuth, async (req, res) => {
 // GET /api/images/:id - Get single image by ID (for polling processing status)
 router.get('/:id', requireAuth, async (req, res) => {
   try {
+    if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
+
     const image = await BottleImage.findById(req.params.id);
     if (!image) {
       return res.status(404).json({ error: 'Image not found' });
@@ -410,6 +417,8 @@ router.post('/link-to-bottle', requireAuth, async (req, res) => {
 // POST /api/images/:id/retry - Retry background removal
 router.post('/:id/retry', requireAuth, async (req, res) => {
   try {
+    if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
+
     const image = await BottleImage.findById(req.params.id);
     if (!image) {
       return res.status(404).json({ error: 'Image not found' });

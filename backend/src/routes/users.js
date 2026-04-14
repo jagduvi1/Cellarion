@@ -21,6 +21,7 @@ const PendingShare = require('../models/PendingShare');
 const { requireAuth, requireRole } = require('../middleware/auth');
 const { logAudit } = require('../services/audit');
 const { stripHtml } = require('../utils/sanitize');
+const { isValidId } = require('../utils/validation');
 
 const router = express.Router();
 
@@ -258,6 +259,7 @@ router.get('/search', requireAuth, async (req, res) => {
 // GET /api/users/public/:userId - Get public profile
 router.get('/public/:userId', requireAuth, async (req, res) => {
   try {
+    if (!isValidId(req.params.userId)) return res.status(400).json({ error: 'Invalid ID' });
     const user = await User.findById(req.params.userId)
       .select('username displayName bio followersCount followingCount reviewCount profileVisibility createdAt preferences.ratingScale contribution');
 

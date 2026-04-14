@@ -6,6 +6,7 @@ const { requireAuth, requireRole } = require('../../middleware/auth');
 const { logAudit } = require('../../services/audit');
 const { stripHtml } = require('../../utils/sanitize');
 const { parsePagination } = require('../../utils/pagination');
+const { isValidId } = require('../../utils/validation');
 
 const TICKET_STATUSES = ['open', 'in_progress', 'closed'];
 
@@ -43,6 +44,7 @@ router.get('/', async (req, res) => {
 // GET /api/admin/support-tickets/:id — get single ticket
 router.get('/:id', async (req, res) => {
   try {
+    if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
     const ticket = await SupportTicket.findById(req.params.id)
       .populate('user', 'username email')
       .populate('respondedBy', 'username')
@@ -59,6 +61,7 @@ router.get('/:id', async (req, res) => {
 // PUT /api/admin/support-tickets/:id/respond — respond to a ticket
 router.put('/:id/respond', async (req, res) => {
   try {
+    if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
     const { adminResponse, status } = req.body;
 
     if (!adminResponse || !adminResponse.trim()) {
@@ -102,6 +105,7 @@ router.put('/:id/respond', async (req, res) => {
 // PUT /api/admin/support-tickets/:id/status — update ticket status only
 router.put('/:id/status', async (req, res) => {
   try {
+    if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
     const statusIdx = TICKET_STATUSES.indexOf(String(req.body.status || ''));
     if (statusIdx === -1) {
       return res.status(400).json({ error: 'Invalid status' });

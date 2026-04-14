@@ -8,6 +8,7 @@ const Grape = require('../../models/Grape');
 const Appellation = require('../../models/Appellation');
 const searchService = require('../../services/search');
 const { logAudit } = require('../../services/audit');
+const { isValidId } = require('../../utils/validation');
 
 const router = express.Router();
 
@@ -63,6 +64,7 @@ router.post('/countries', async (req, res) => {
 // PUT /api/admin/taxonomy/countries/:id - Update country
 router.put('/countries/:id', async (req, res) => {
   try {
+    if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
     const { name, code } = req.body;
 
     const country = await Country.findById(req.params.id);
@@ -93,6 +95,7 @@ router.put('/countries/:id', async (req, res) => {
 // DELETE /api/admin/taxonomy/countries/:id - Delete country
 router.delete('/countries/:id', async (req, res) => {
   try {
+    if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
     const country = await Country.findById(req.params.id);
     if (!country) {
       return res.status(404).json({ error: 'Country not found' });
@@ -204,6 +207,7 @@ router.post('/regions', async (req, res) => {
 // PUT /api/admin/taxonomy/regions/:id - Update region
 router.put('/regions/:id', async (req, res) => {
   try {
+    if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
     const { name, parentRegion, classification, styles,
             agingRules, prestigeLevel, typicalGrapes, permittedGrapes } = req.body;
 
@@ -257,6 +261,7 @@ router.put('/regions/:id', async (req, res) => {
 // DELETE /api/admin/taxonomy/regions/:id - Delete region
 router.delete('/regions/:id', async (req, res) => {
   try {
+    if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
     const region = await Region.findById(req.params.id);
     if (!region) {
       return res.status(404).json({ error: 'Region not found' });
@@ -328,6 +333,7 @@ router.post('/grapes', async (req, res) => {
 // PUT /api/admin/taxonomy/grapes/:id - Update grape
 router.put('/grapes/:id', async (req, res) => {
   try {
+    if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
     const { name, synonyms, color, origin, characteristics, agingPotential, prestige } = req.body;
 
     const grape = await Grape.findById(req.params.id);
@@ -361,6 +367,7 @@ router.put('/grapes/:id', async (req, res) => {
 // DELETE /api/admin/taxonomy/grapes/:id - Delete grape
 router.delete('/grapes/:id', async (req, res) => {
   try {
+    if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
     const grape = await Grape.findById(req.params.id);
     if (!grape) {
       return res.status(404).json({ error: 'Grape not found' });
@@ -450,6 +457,7 @@ router.post('/appellations', async (req, res) => {
 // PUT /api/admin/taxonomy/appellations/:id - Update appellation
 router.put('/appellations/:id', async (req, res) => {
   try {
+    if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
     const { name, region } = req.body;
 
     const appellation = await Appellation.findById(req.params.id);
@@ -477,6 +485,7 @@ router.put('/appellations/:id', async (req, res) => {
 // DELETE /api/admin/taxonomy/appellations/:id - Delete appellation
 router.delete('/appellations/:id', async (req, res) => {
   try {
+    if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
     const appellation = await Appellation.findById(req.params.id);
     if (!appellation) {
       return res.status(404).json({ error: 'Appellation not found' });

@@ -5,6 +5,7 @@ const Rack = require('../../models/Rack');
 const Bottle = require('../../models/Bottle');
 const { logAudit } = require('../../services/audit');
 const { parsePagination } = require('../../utils/pagination');
+const { isValidId } = require('../../utils/validation');
 
 const router = express.Router();
 router.use(requireAuth, requireRole('admin'));
@@ -47,6 +48,7 @@ router.get('/deleted', async (req, res) => {
 // ---------------------------------------------------------------------------
 router.post('/:id/restore', async (req, res) => {
   try {
+    if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
     const cellar = await Cellar.findOne({ _id: req.params.id, deletedAt: { $ne: null } });
     if (!cellar) {
       return res.status(404).json({ error: 'Deleted cellar not found' });
@@ -79,6 +81,7 @@ router.post('/:id/restore', async (req, res) => {
 // ---------------------------------------------------------------------------
 router.delete('/:id', async (req, res) => {
   try {
+    if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
     const cellar = await Cellar.findOne({ _id: req.params.id, deletedAt: { $ne: null } });
     if (!cellar) {
       return res.status(404).json({ error: 'Deleted cellar not found' });

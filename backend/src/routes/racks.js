@@ -8,6 +8,7 @@ const Bottle = require('../models/Bottle');
 const CellarLayout = require('../models/CellarLayout');
 const { getCellarRole } = require('../utils/cellarAccess');
 const { getMaxPosition } = require('../utils/rackGeometry');
+const { isValidId } = require('../utils/validation');
 const searchService = require('../services/search');
 
 const router = express.Router();
@@ -18,6 +19,7 @@ const MAX_MODULES = 50;
 // Requires auth so only logged-in users can follow NFC links.
 router.get('/nfc/:id', requireAuth, async (req, res) => {
   try {
+    if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
     const rack = await Rack.findOne({ _id: req.params.id, deletedAt: null }).select('cellar');
     if (!rack) return res.status(404).json({ error: 'Rack not found' });
     // Check if rack is placed in the 3D room layout
@@ -104,6 +106,7 @@ router.post('/', requireCellarAccess('editor'), async (req, res) => {
 // PUT /api/racks/:id  — update rack name, type, dimensions (owner or editor)
 router.put('/:id', async (req, res) => {
   try {
+    if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
     const rack = await Rack.findOne({ _id: req.params.id, deletedAt: null });
     if (!rack) return res.status(404).json({ error: 'Rack not found' });
 
@@ -170,6 +173,7 @@ router.put('/:id', async (req, res) => {
 // DELETE /api/racks/:id  — soft-delete a rack (owner only); data retained 30 days
 router.delete('/:id', async (req, res) => {
   try {
+    if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
     const rack = await Rack.findOne({ _id: req.params.id, deletedAt: null });
     if (!rack) return res.status(404).json({ error: 'Rack not found' });
 
@@ -203,6 +207,7 @@ router.delete('/:id', async (req, res) => {
 // PUT /api/racks/:id/slots/:position  — assign a bottle to a slot (owner or editor)
 router.put('/:id/slots/:position', async (req, res) => {
   try {
+    if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
     const position = parseInt(req.params.position, 10);
     if (isNaN(position)) return res.status(400).json({ error: 'Invalid position' });
     const { bottleId } = req.body;
@@ -249,6 +254,7 @@ router.put('/:id/slots/:position', async (req, res) => {
 // POST /api/racks/:id/slots/:position/consume  — soft-remove the bottle in a slot (owner or editor)
 router.post('/:id/slots/:position/consume', async (req, res) => {
   try {
+    if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
     const position = parseInt(req.params.position, 10);
     if (isNaN(position)) return res.status(400).json({ error: 'Invalid position' });
 
@@ -293,6 +299,7 @@ router.post('/:id/slots/:position/consume', async (req, res) => {
 // DELETE /api/racks/:id/slots/:position  — clear a slot (owner or editor)
 router.delete('/:id/slots/:position', async (req, res) => {
   try {
+    if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
     const position = parseInt(req.params.position, 10);
     if (isNaN(position)) return res.status(400).json({ error: 'Invalid position' });
 

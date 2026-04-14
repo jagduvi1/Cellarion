@@ -21,6 +21,7 @@ const WineEmbedding = require('../../models/WineEmbedding');
 const searchService = require('../../services/search');
 const { logAudit } = require('../../services/audit');
 const { submitUrls } = require('../../services/indexNow');
+const { isValidId } = require('../../utils/validation');
 
 // Escape special regex characters to prevent ReDoS / NoSQL injection
 function escapeRegex(str) {
@@ -262,6 +263,7 @@ router.get('/duplicates', async (req, res) => {
 // GET /api/admin/wines/:id - Get single wine definition
 router.get('/:id', async (req, res) => {
   try {
+    if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
     const wine = await WineDefinition.findById(req.params.id)
       .populate('country', 'name')
       .populate('region', 'name')
@@ -277,6 +279,7 @@ router.get('/:id', async (req, res) => {
 // PUT /api/admin/wines/:id - Update wine definition
 router.put('/:id', async (req, res) => {
   try {
+    if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
     const { name, producer, country, region, appellation, grapes, type, image } = req.body;
 
     const wine = await WineDefinition.findById(req.params.id);
@@ -331,6 +334,7 @@ router.put('/:id', async (req, res) => {
 // DELETE /api/admin/wines/:id - Delete wine definition
 router.delete('/:id', async (req, res) => {
   try {
+    if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
     const wine = await WineDefinition.findById(req.params.id);
     if (!wine) {
       return res.status(404).json({ error: 'Wine not found' });
@@ -365,6 +369,7 @@ router.delete('/:id', async (req, res) => {
 // POST /api/admin/wines/:id/merge - Merge source wine into target, reassign all references, then delete source
 router.post('/:id/merge', async (req, res) => {
   try {
+    if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
     const { targetId } = req.body;
     const sourceId = req.params.id;
 

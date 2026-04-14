@@ -4,6 +4,7 @@ const User = require('../../models/User');
 const { PLAN_NAMES } = require('../../config/plans');
 const { logAudit } = require('../../services/audit');
 const { parsePagination } = require('../../utils/pagination');
+const { isValidId } = require('../../utils/validation');
 
 const router = express.Router();
 
@@ -55,6 +56,7 @@ router.get('/', async (req, res) => {
 // PATCH /api/admin/users/:id/plan - Change a user's plan (and optional expiry)
 router.patch('/:id/plan', async (req, res) => {
   try {
+    if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
     const { plan, expiresInDays } = req.body;
 
     if (!plan || !PLAN_NAMES.includes(plan)) {
@@ -106,6 +108,7 @@ router.patch('/:id/plan', async (req, res) => {
 // PATCH /api/admin/users/:id/trial-eligible - Reset trial eligibility so the user can start another trial
 router.patch('/:id/trial-eligible', async (req, res) => {
   try {
+    if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
     const user = await User.findById(req.params.id)
       .select('username email roles plan planStartedAt planExpiresAt trialEligible');
     if (!user) return res.status(404).json({ error: 'User not found' });
@@ -139,6 +142,7 @@ router.patch('/:id/trial-eligible', async (req, res) => {
 // PATCH /api/admin/users/:id/roles - Set the full roles array for a user
 router.patch('/:id/roles', async (req, res) => {
   try {
+    if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
     const { roles } = req.body;
 
     if (!Array.isArray(roles) || roles.length === 0) {

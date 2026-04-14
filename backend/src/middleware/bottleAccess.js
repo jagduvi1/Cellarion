@@ -1,6 +1,7 @@
 const Bottle = require('../models/Bottle');
 const Cellar = require('../models/Cellar');
 const { getCellarRole } = require('../utils/cellarAccess');
+const { isValidId } = require('../utils/validation');
 
 const ROLE_LEVELS = { viewer: 1, editor: 2, owner: 3 };
 
@@ -17,6 +18,8 @@ const ROLE_LEVELS = { viewer: 1, editor: 2, owner: 3 };
 function requireBottleAccess(minRole = 'viewer') {
   return async (req, res, next) => {
     try {
+      if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
+
       const bottle = await Bottle.findById(req.params.id);
       if (!bottle) return res.status(404).json({ error: 'Bottle not found' });
 

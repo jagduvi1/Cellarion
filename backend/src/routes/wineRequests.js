@@ -2,6 +2,7 @@ const express = require('express');
 const { requireAuth } = require('../middleware/auth');
 const WineRequest = require('../models/WineRequest');
 const WineDefinition = require('../models/WineDefinition');
+const { isValidId } = require('../utils/validation');
 
 const router = express.Router();
 
@@ -110,6 +111,7 @@ router.get('/', async (req, res) => {
 // GET /api/wine-requests/:id - Get single wine request
 router.get('/:id', async (req, res) => {
   try {
+    if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
     const wineRequest = await WineRequest.findOne({
       _id: req.params.id,
       user: req.user.id

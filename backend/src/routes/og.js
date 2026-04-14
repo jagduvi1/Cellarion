@@ -3,6 +3,7 @@ const rateLimit = require('express-rate-limit');
 const WineDefinition = require('../models/WineDefinition');
 const BlogPost = require('../models/BlogPost');
 const { fromNormalized } = require('../utils/ratingUtils');
+const { isValidId } = require('../utils/validation');
 
 const router = express.Router();
 
@@ -20,6 +21,7 @@ const API_URL = process.env.BACKEND_URL || process.env.FRONTEND_URL || 'https://
 // Nginx routes crawler user-agents here; real users get the SPA.
 router.get('/wines/:id', ogLimiter, async (req, res) => {
   try {
+    if (!isValidId(req.params.id)) return res.status(404).send('Not found');
     const wine = await WineDefinition.findById(req.params.id)
       .populate(['country', 'region', 'grapes'])
       .select('name producer country region appellation classification grapes type image communityRating')

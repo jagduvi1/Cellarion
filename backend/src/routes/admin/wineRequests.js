@@ -10,6 +10,7 @@ const { createNotification } = require('../../services/notifications');
 const { stripHtml } = require('../../utils/sanitize');
 const { incrementCred } = require('../../utils/cellarCred');
 const { parsePagination } = require('../../utils/pagination');
+const { isValidId } = require('../../utils/validation');
 
 const router = express.Router();
 
@@ -59,6 +60,7 @@ router.get('/', async (req, res) => {
 // GET /api/admin/wine-requests/:id - Get single wine request
 router.get('/:id', async (req, res) => {
   try {
+    if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
     const wineRequest = await WineRequest.findById(req.params.id)
       .populate('user', 'username email')
       .populate({
@@ -81,6 +83,7 @@ router.get('/:id', async (req, res) => {
 // PUT /api/admin/wine-requests/:id/resolve - Resolve wine request
 router.put('/:id/resolve', async (req, res) => {
   try {
+    if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
     const { wineDefinitionId, createNew, wineData, adminNotes, applyGrapes } = req.body;
 
     const wineRequest = await WineRequest.findById(req.params.id);
@@ -219,6 +222,7 @@ router.put('/:id/resolve', async (req, res) => {
 // PUT /api/admin/wine-requests/:id/reject - Reject wine request
 router.put('/:id/reject', async (req, res) => {
   try {
+    if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
     const { adminNotes } = req.body;
 
     if (!adminNotes || !adminNotes.trim()) {
