@@ -504,7 +504,7 @@ function AddToWishlist() {
               {!aiResult && !aiSearching && wines.length > 0 && (
                 <div className="wines-list">
                   {wines.map(wine => (
-                    <div key={wine._id} className="wine-row" onClick={() => handleSelectWine(wine)}>
+                    <div key={wine._id} className="wine-row" onClick={() => handleSelectWine(wine)} role="button" tabIndex={0} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleSelectWine(wine); } }}>
                       <WineImage image={wine.image} alt={wine.name} className="wine-row-image" wrapClass="wine-row-img-wrap" wineType={wine.type} placeholder="wine-row-placeholder" />
                       <div className="wine-info">
                         <h3>{wine.name}</h3>
@@ -526,7 +526,7 @@ function AddToWishlist() {
 
               {/* Can't find wine? */}
               {!loading && search.trim() && !aiResult && !aiSearching && (
-                <div className="ai-search-row" onClick={!aiSearching ? handleAiIdentify : undefined}>
+                <div className="ai-search-row" onClick={!aiSearching ? handleAiIdentify : undefined} role="button" tabIndex={0} onKeyDown={e => { if ((e.key === 'Enter' || e.key === ' ') && !aiSearching) { e.preventDefault(); handleAiIdentify(); } }}>
                   <div className="ai-search-row-icon">
                     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                       <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>

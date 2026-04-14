@@ -217,7 +217,7 @@ function ProfileCard({ profile, isPending, onSaved, onReset }) {
   return (
     <div className={`somm-card ${expanded ? 'expanded' : ''}`}>
       {/* ── Card header (click to expand) ── */}
-      <div className="somm-card-header" onClick={() => setExpanded(o => !o)}>
+      <div className="somm-card-header" role="button" tabIndex={0} onClick={() => setExpanded(o => !o)} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setExpanded(o => !o); } }}>
         <div className="somm-card-identity">
           <WineImage image={wine?.image} alt={wine?.name} className="somm-wine-thumb" wineType={wine?.type} placeholder="somm-wine-thumb-placeholder" />
           <div>
