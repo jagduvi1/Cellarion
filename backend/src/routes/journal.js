@@ -110,7 +110,7 @@ router.get('/', async (req, res) => {
     const search = String(req.query.q || '').trim();
     const occasion = req.query.occasion;
 
-    const query = { user: new mongoose.Types.ObjectId(req.user.id) };
+    const query = { user: req.user.id };
 
     if (occasion && OCCASIONS.includes(occasion)) {
       query.occasion = occasion;
