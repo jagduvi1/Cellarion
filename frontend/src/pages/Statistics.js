@@ -309,7 +309,7 @@ function Statistics() {
         <div className="stats-card stats-card--full stats-card--desktop-only">
           <h2 className="stats-card-title">
             {t('statistics.sections.collectionOrigins')}
-            <span className="stats-card-title-note">{t('statistics.sections.darkerMoreBottles')}</span>
+            <span className="stats-card-title-note">{t('statistics.sections.lighterMoreBottles')}</span>
           </h2>
           <WorldMapChart byCountry={byCountry} />
         </div>
