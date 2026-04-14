@@ -19,7 +19,7 @@ export default function CellarRoom() {
   const { t } = useTranslation();
   const { id } = useParams();
   const [searchParams] = useSearchParams();
-  const { apiFetch } = useAuth();
+  const { apiFetch, user } = useAuth();
   const focusRackId = searchParams.get('focusRack');
   const highlightBottleId = searchParams.get('highlight');
 
@@ -1178,6 +1178,7 @@ export default function CellarRoom() {
                 <RoomConsumeForm
                   onSubmit={handleConsumeSubmit}
                   onCancel={() => setConsumeModal(null)}
+                  defaultRatingScale={user?.preferences?.ratingScale}
                   t={t}
                 />
               </div>
@@ -1382,11 +1383,11 @@ export default function CellarRoom() {
   );
 }
 
-function RoomConsumeForm({ onSubmit, onCancel, t }) {
+function RoomConsumeForm({ onSubmit, onCancel, defaultRatingScale, t }) {
   const [reason, setReason] = useState('drank');
   const [note, setNote] = useState('');
   const [rating, setRating] = useState('');
-  const [ratingScale, setRatingScale] = useState('5');
+  const [ratingScale, setRatingScale] = useState(defaultRatingScale || '5');
   const [saving, setSaving] = useState(false);
 
   const handleSubmit = async (e) => {
