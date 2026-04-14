@@ -19,6 +19,7 @@ const aiConfig = require('../config/aiConfig');
 const ChatUsage = require('../models/ChatUsage');
 const User = require('../models/User');
 const { getPlanConfig } = require('../config/plans');
+const { logAudit } = require('../services/audit');
 
 const router = express.Router();
 
@@ -184,6 +185,7 @@ router.post('/', requireAuth, async (req, res) => {
       ).catch(err => console.warn('[chat] token tracking error:', err.message));
     }
 
+    logAudit(req, 'chat.query', { type: 'chat' });
     res.json({ ...result, used: usedBefore + 1, limit, period });
   } catch (err) {
     await ChatUsage.findOneAndUpdate(
@@ -231,6 +233,8 @@ router.post('/stream', requireAuth, async (req, res) => {
         { $inc: { inputTokens: result.usage.inputTokens, outputTokens: result.usage.outputTokens } }
       ).catch(err => console.warn('[chat] token tracking error:', err.message));
     }
+
+    logAudit(req, 'chat.query', { type: 'chat' });
   } catch (err) {
     // Refund the debit
     await ChatUsage.findOneAndUpdate(

@@ -1,6 +1,7 @@
 const express = require('express');
 const { requireAuth } = require('../middleware/auth');
 const { requireCellarAccess } = require('../middleware/cellarAccess');
+const { logAudit } = require('../services/audit');
 const CellarLayout = require('../models/CellarLayout');
 const Rack = require('../models/Rack');
 
@@ -57,6 +58,7 @@ router.put('/', requireCellarAccess('editor'), async (req, res) => {
       { upsert: true, new: true, runValidators: true }
     );
 
+    logAudit(req, 'cellarLayout.update', { type: 'cellarLayout', id: layout._id });
     res.json({ layout });
   } catch (err) {
     console.error('Save cellar layout error:', err.message, err.errors ? JSON.stringify(err.errors) : '');

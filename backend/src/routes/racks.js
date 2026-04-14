@@ -9,6 +9,7 @@ const CellarLayout = require('../models/CellarLayout');
 const { getCellarRole } = require('../utils/cellarAccess');
 const { getMaxPosition } = require('../utils/rackGeometry');
 const searchService = require('../services/search');
+const { logAudit } = require('../services/audit');
 
 const router = express.Router();
 
@@ -93,6 +94,7 @@ router.post('/', requireCellarAccess('editor'), async (req, res) => {
     const rack = new Rack(rackData);
 
     await rack.save();
+    logAudit(req, 'rack.create', { type: 'rack', id: rack._id });
     res.status(201).json({ rack });
   } catch (err) {
     if (err.code === 11000) return res.status(409).json({ error: 'A rack with that name already exists in this cellar' });
@@ -156,6 +158,7 @@ router.put('/:id', async (req, res) => {
       populate: { path: 'wineDefinition', populate: ['country', 'region', 'grapes'] }
     });
 
+    logAudit(req, 'rack.update', { type: 'rack', id: rack._id });
     res.json({ rack });
   } catch (err) {
     if (err.code === 11000) return res.status(409).json({ error: 'A rack with that name already exists in this cellar' });
@@ -193,6 +196,7 @@ router.delete('/:id', async (req, res) => {
       { $pull: { rackPlacements: { rack: rack._id } } }
     );
 
+    logAudit(req, 'rack.delete', { type: 'rack', id: rack._id });
     res.json({ message: 'Rack deleted' });
   } catch (err) {
     console.error('Delete rack error:', err);
@@ -236,6 +240,7 @@ router.put('/:id/slots/:position', async (req, res) => {
       populate: { path: 'wineDefinition', populate: ['country', 'region', 'grapes'] }
     });
 
+    logAudit(req, 'rack.slot_assign', { type: 'rack', id: rack._id });
     res.json({ rack });
   } catch (err) {
     if (err.name === 'VersionError') {
@@ -283,6 +288,7 @@ router.post('/:id/slots/:position/consume', async (req, res) => {
       populate: { path: 'wineDefinition', populate: ['country', 'region', 'grapes'] }
     });
 
+    logAudit(req, 'rack.slot_consume', { type: 'rack', id: rack._id });
     res.json({ rack });
   } catch (err) {
     console.error('Consume slot error:', err);
@@ -313,6 +319,7 @@ router.delete('/:id/slots/:position', async (req, res) => {
       populate: { path: 'wineDefinition', populate: ['country', 'region', 'grapes'] }
     });
 
+    logAudit(req, 'rack.slot_clear', { type: 'rack', id: rack._id });
     res.json({ rack });
   } catch (err) {
     console.error('Clear slot error:', err);

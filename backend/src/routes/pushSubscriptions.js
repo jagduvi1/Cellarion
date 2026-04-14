@@ -1,6 +1,7 @@
 const express = require('express');
 const PushSubscription = require('../models/PushSubscription');
 const { requireAuth } = require('../middleware/auth');
+const { logAudit } = require('../services/audit');
 
 let webpush;
 const VAPID_CONFIGURED = !!(process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY);
@@ -81,6 +82,7 @@ router.post('/', async (req, res) => {
       { upsert: true, new: true }
     );
 
+    logAudit(req, 'pushSubscription.create', { type: 'pushSubscription' });
     res.json({ ok: true });
   } catch (err) {
     console.error('Save push subscription error:', err);
@@ -97,6 +99,7 @@ router.delete('/', async (req, res) => {
     }
 
     await PushSubscription.deleteOne({ user: req.user.id, endpoint: String(endpoint) });
+    logAudit(req, 'pushSubscription.delete', { type: 'pushSubscription' });
     res.json({ ok: true });
   } catch (err) {
     console.error('Delete push subscription error:', err);
