@@ -23,7 +23,7 @@ const {
   MAX_IMPORT_SIZE,
   AI_CONCURRENCY,
 } = require('../config/constants');
-const { stripHtml } = require('../utils/sanitize');
+const { stripHtml, escapeRegex } = require('../utils/sanitize');
 const { extractAiExplanation } = require('../utils/jsonExtract');
 const { getMaxPosition } = require('../utils/rackGeometry');
 const { runConcurrent } = require('../utils/concurrency');
@@ -127,8 +127,8 @@ async function findWineMatches(item) {
 
     const directMatches = await WineDefinition.find({
       $or: [
-        { normalizedKey: { $regex: `^${normalizedProducer.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}:` } },
-        { normalizedKey: { $regex: `:${normalizedName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}:` } }
+        { normalizedKey: { $regex: `^${escapeRegex(normalizedProducer)}:` } },
+        { normalizedKey: { $regex: `:${escapeRegex(normalizedName)}:` } }
       ]
     })
       .populate(['country', 'region', 'grapes'])

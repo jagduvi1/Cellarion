@@ -5,6 +5,7 @@ const { PLAN_NAMES } = require('../../config/plans');
 const { logAudit } = require('../../services/audit');
 const { parsePagination } = require('../../utils/pagination');
 const { isValidId } = require('../../utils/validation');
+const { escapeRegex } = require('../../utils/sanitize');
 
 const router = express.Router();
 
@@ -22,7 +23,7 @@ router.get('/', async (req, res) => {
     const filter = {};
 
     if (typeof search === 'string' && search) {
-      const escaped = search.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const escaped = escapeRegex(search.trim());
       const re = new RegExp(escaped, 'i');
       filter.$or = [{ username: re }, { email: re }];
     }

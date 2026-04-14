@@ -3,6 +3,7 @@ const mongoose = require('mongoose');
 const { requireAuth } = require('../middleware/auth');
 const WishlistItem = require('../models/WishlistItem');
 const { logAudit } = require('../services/audit');
+const { escapeRegex } = require('../utils/sanitize');
 
 const router = express.Router();
 
@@ -90,7 +91,7 @@ router.get('/', async (req, res) => {
 
     // Free-text search on wine name or producer
     if (search && search.trim()) {
-      const escaped = search.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const escaped = escapeRegex(search.trim());
       pipeline.push({
         $match: {
           $or: [

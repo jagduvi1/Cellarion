@@ -22,11 +22,7 @@ const searchService = require('../../services/search');
 const { logAudit } = require('../../services/audit');
 const { submitUrls } = require('../../services/indexNow');
 const { isValidId } = require('../../utils/validation');
-
-// Escape special regex characters to prevent ReDoS / NoSQL injection
-function escapeRegex(str) {
-  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
+const { escapeRegex } = require('../../utils/sanitize');
 
 const router = express.Router();
 

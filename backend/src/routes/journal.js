@@ -5,7 +5,7 @@ const Bottle = require('../models/Bottle');
 const WineDefinition = require('../models/WineDefinition');
 const { logAudit } = require('../services/audit');
 const { createNotification } = require('../services/notifications');
-const { stripHtml } = require('../utils/sanitize');
+const { stripHtml, escapeRegex } = require('../utils/sanitize');
 const { isValidId } = require('../utils/validation');
 
 const router = express.Router();
@@ -63,7 +63,7 @@ router.get('/wine-search', async (req, res) => {
     const q = String(req.query.q || '').trim();
     if (!q || q.length < 2) return res.json({ bottles: [], wines: [] });
 
-    const regex = new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+    const regex = new RegExp(escapeRegex(q), 'i');
 
     // Search user's bottles (via wine definition name)
     const bottles = await Bottle.find({ user: req.user.id, status: 'active' })
@@ -117,7 +117,7 @@ router.get('/', async (req, res) => {
     }
 
     if (search) {
-      const regex = new RegExp(search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+      const regex = new RegExp(escapeRegex(search), 'i');
       query.$or = [
         { title: regex },
         { notes: regex },

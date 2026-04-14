@@ -29,7 +29,7 @@ const WineReport = require('../models/WineReport');
 const WishlistItem = require('../models/WishlistItem');
 const { requireAuth, requireRole } = require('../middleware/auth');
 const { logAudit } = require('../services/audit');
-const { stripHtml } = require('../utils/sanitize');
+const { stripHtml, escapeRegex } = require('../utils/sanitize');
 const { isValidId } = require('../utils/validation');
 
 const router = express.Router();
@@ -236,7 +236,7 @@ router.get('/search', requireAuth, async (req, res) => {
       return res.status(400).json({ error: 'Search query must be at least 2 characters' });
     }
 
-    const regex = new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+    const regex = new RegExp(escapeRegex(q), 'i');
     const users = await User.find({
       profileVisibility: 'public',
       $or: [{ username: regex }, { displayName: regex }]
@@ -316,7 +316,7 @@ router.get('/all', requireAuth, requireRole('admin'), async (req, res) => {
 
     const filter = {};
     if (search) {
-      const escaped = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const escaped = escapeRegex(search);
       filter.$or = [
         { username: { $regex: escaped, $options: 'i' } },
         { email: { $regex: escaped, $options: 'i' } }

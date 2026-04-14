@@ -18,6 +18,7 @@ const aiConfig = require('../config/aiConfig');
 const aiChat = require('../services/aiChat');
 const { updateSiteConfig } = require('../utils/siteConfig');
 const { parsePagination } = require('../utils/pagination');
+const { escapeRegex } = require('../utils/sanitize');
 const { SYSTEM_PROMPT_MAX_LENGTH, SCAN_PROMPT_MAX_LENGTH } = require('../config/constants');
 
 const router = express.Router();
@@ -294,7 +295,7 @@ router.get('/audit', async (req, res) => {
     const { limit, offset } = parsePagination(req.query, { limit: 100, maxLimit: 500 });
     const filter = {};
     if (req.query.action) {
-      const escaped = req.query.action.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const escaped = escapeRegex(req.query.action);
       filter.action = new RegExp(escaped, 'i');
     }
 
@@ -325,7 +326,7 @@ router.get('/users', async (req, res) => {
     const filter = {};
 
     if (req.query.search) {
-      const escaped = req.query.search.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const escaped = escapeRegex(req.query.search.trim());
       const re = new RegExp(escaped, 'i');
       filter.$or = [{ username: re }, { email: re }];
     }

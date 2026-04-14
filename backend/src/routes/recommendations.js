@@ -9,6 +9,7 @@ const { createNotification } = require('../services/notifications');
 const { sendRecommendationEmail, EMAIL_VERIFICATION_ENABLED } = require('../services/mailgun');
 const { parsePagination } = require('../utils/pagination');
 const { isValidId } = require('../utils/validation');
+const { escapeRegex } = require('../utils/sanitize');
 
 const router = express.Router();
 router.use(requireAuth);
@@ -232,7 +233,7 @@ router.get('/friends', async (req, res) => {
 
     const filter = { _id: { $in: followingIds } };
     if (q) {
-      const regex = new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+      const regex = new RegExp(escapeRegex(q), 'i');
       filter.$or = [{ username: regex }, { displayName: regex }];
     }
 

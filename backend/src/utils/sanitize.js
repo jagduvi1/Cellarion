@@ -41,4 +41,12 @@ function isSafeUrl(url) {
   }
 }
 
-module.exports = { stripHtml, isSafeUrl };
+/**
+ * Escapes special regex characters in a user-supplied string so it can
+ * be safely used inside `new RegExp(...)` for literal matching.
+ */
+function escapeRegex(str) {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+module.exports = { stripHtml, isSafeUrl, escapeRegex };

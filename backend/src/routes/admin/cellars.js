@@ -6,6 +6,7 @@ const Bottle = require('../../models/Bottle');
 const { logAudit } = require('../../services/audit');
 const { parsePagination } = require('../../utils/pagination');
 const { isValidId } = require('../../utils/validation');
+const { escapeRegex } = require('../../utils/sanitize');
 
 const router = express.Router();
 router.use(requireAuth, requireRole('admin'));
@@ -20,7 +21,7 @@ router.get('/deleted', async (req, res) => {
 
     const filter = { deletedAt: { $ne: null } };
     if (req.query.search) {
-      const escaped = req.query.search.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const escaped = escapeRegex(req.query.search.trim());
       filter.name = new RegExp(escaped, 'i');
     }
 
