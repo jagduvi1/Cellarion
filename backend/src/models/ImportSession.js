@@ -33,4 +33,10 @@ const importSessionSchema = new mongoose.Schema({
   }
 }, { timestamps: true });
 
+// Auto-purge abandoned draft sessions after 7 days
+importSessionSchema.index({ updatedAt: 1 }, {
+  expireAfterSeconds: 7 * 24 * 60 * 60,
+  partialFilterExpression: { status: 'draft' }
+});
+
 module.exports = mongoose.model('ImportSession', importSessionSchema);

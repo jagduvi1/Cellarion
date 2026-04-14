@@ -191,6 +191,7 @@ const wineListSchema = new mongoose.Schema({
 
 // Indexes
 wineListSchema.index({ user: 1, cellar: 1 });
+wineListSchema.index({ user: 1 });
 
 // Update timestamp on save
 wineListSchema.pre('save', function(next) {

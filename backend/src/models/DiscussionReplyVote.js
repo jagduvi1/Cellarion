@@ -20,5 +20,7 @@ const discussionReplyVoteSchema = new mongoose.Schema({
 
 // Prevent double-likes
 discussionReplyVoteSchema.index({ user: 1, reply: 1 }, { unique: true });
+// Allow efficient lookup of all votes by a user (GDPR export/deletion)
+discussionReplyVoteSchema.index({ user: 1 });
 
 module.exports = mongoose.model('DiscussionReplyVote', discussionReplyVoteSchema);

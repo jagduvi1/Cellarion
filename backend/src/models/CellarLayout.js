@@ -22,7 +22,7 @@ const cellarLayoutSchema = new mongoose.Schema({
     depth:  { type: Number, default: 10, min: 2, max: 50 },
     height: { type: Number, default: 3,  min: 2, max: 10 },
   },
-  rackPlacements: [rackPlacementSchema],
+  rackPlacements: { type: [rackPlacementSchema], default: [] },
 }, { timestamps: true });
 
 module.exports = mongoose.model('CellarLayout', cellarLayoutSchema);

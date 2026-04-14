@@ -20,5 +20,7 @@ const reviewVoteSchema = new mongoose.Schema({
 
 // Prevent double-likes
 reviewVoteSchema.index({ user: 1, review: 1 }, { unique: true });
+// Allow efficient lookup of all votes by a user (GDPR export/deletion)
+reviewVoteSchema.index({ user: 1 });
 
 module.exports = mongoose.model('ReviewVote', reviewVoteSchema);
