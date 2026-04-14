@@ -110,6 +110,7 @@ router.get('/', async (req, res) => {
     const search = String(req.query.q || '').trim();
     const occasion = req.query.occasion;
 
+    if (!isValidId(req.user.id)) return res.status(401).json({ error: 'Invalid user' });
     const query = { user: req.user.id };
 
     if (occasion && OCCASIONS.includes(occasion)) {
