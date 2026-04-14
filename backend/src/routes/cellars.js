@@ -940,20 +940,6 @@ router.post('/:id/members', async (req, res) => {
     cellar.members.push({ user: userToAdd._id, role });
     await cellar.save();
 
-    // Re-check member count after save to catch race conditions
-    if (planConfig.maxSharesPerCellar !== -1) {
-      const freshCellar = await Cellar.findById(cellar._id).select('members').lean();
-      if (freshCellar.members.length > planConfig.maxSharesPerCellar) {
-        await Cellar.updateOne({ _id: cellar._id }, { $pull: { members: { user: userToAdd._id } } });
-        return res.status(403).json({
-          error: `Your ${req.user.plan} plan allows a maximum of ${planConfig.maxSharesPerCellar} shared member${planConfig.maxSharesPerCellar === 1 ? '' : 's'} per cellar.`,
-          limitReached: 'shares',
-          limit: planConfig.maxSharesPerCellar,
-          currentPlan: req.user.plan,
-        });
-      }
-    }
-
     const sharingUser = await User.findById(req.user.id).select('username').lean();
     createNotification(
       userToAdd._id,
