@@ -18,6 +18,15 @@ const PushSubscription = require('../models/PushSubscription');
 const CellarValueSnapshot = require('../models/CellarValueSnapshot');
 const WineList = require('../models/WineList');
 const PendingShare = require('../models/PendingShare');
+const Discussion = require('../models/Discussion');
+const DiscussionReply = require('../models/DiscussionReply');
+const DiscussionReplyVote = require('../models/DiscussionReplyVote');
+const DiscussionReport = require('../models/DiscussionReport');
+const ChatUsage = require('../models/ChatUsage');
+const ImportSession = require('../models/ImportSession');
+const SupportTicket = require('../models/SupportTicket');
+const WineReport = require('../models/WineReport');
+const WishlistItem = require('../models/WishlistItem');
 const { requireAuth, requireRole } = require('../middleware/auth');
 const { logAudit } = require('../services/audit');
 const { stripHtml } = require('../utils/sanitize');
@@ -342,10 +351,19 @@ router.get('/me/export', requireAuth, async (req, res) => {
     const user = await User.findById(userId);
     if (!user) return res.status(404).json({ error: 'User not found' });
 
-    const [bottles, cellars, racks, wineRequests, reviews, notifications, auditLogs, images, recommendationsSent, recommendationsReceived, journalEntries, restockAlerts, wineLists, pendingSharesSent] = await Promise.all([
+    const cellarIds = await Cellar.distinct('_id', { user: userId });
+
+    const [
+      bottles, cellars, racks, wineRequests, reviews, notifications, auditLogs,
+      images, recommendationsSent, recommendationsReceived, journalEntries,
+      restockAlerts, wineLists, pendingSharesSent,
+      discussions, discussionReplies, reviewVotes, discussionReplyVotes,
+      follows, chatUsage, importSessions, supportTickets,
+      discussionReports, wineReports, wishlistItems
+    ] = await Promise.all([
       Bottle.find({ user: userId }).lean(),
       Cellar.find({ $or: [{ user: userId }, { 'members.user': userId }], deletedAt: null }).lean(),
-      Rack.find({ cellar: { $in: await Cellar.distinct('_id', { user: userId }) }, deletedAt: null }).lean(),
+      Rack.find({ cellar: { $in: cellarIds }, deletedAt: null }).lean(),
       WineRequest.find({ user: userId }).lean(),
       Review.find({ author: userId }).lean(),
       Notification.find({ user: userId }).lean(),
@@ -356,7 +374,19 @@ router.get('/me/export', requireAuth, async (req, res) => {
       JournalEntry.find({ user: userId }).lean(),
       RestockAlert.find({ user: userId }).lean(),
       WineList.find({ user: userId }).select('name cellar structureMode branding layout createdAt updatedAt').lean(),
-      PendingShare.find({ invitedBy: userId }).populate('cellar', 'name').lean()
+      PendingShare.find({ invitedBy: userId }).populate('cellar', 'name').lean(),
+      Discussion.find({ author: userId }).select('title category body createdAt').lean(),
+      DiscussionReply.find({ author: userId }).select('discussion body createdAt').lean(),
+      ReviewVote.find({ user: userId }).select('review vote createdAt').lean(),
+      DiscussionReplyVote.find({ user: userId }).select('reply vote createdAt').lean(),
+      Follow.find({ $or: [{ follower: userId }, { following: userId }] })
+        .populate('follower', 'username').populate('following', 'username').lean(),
+      ChatUsage.find({ userId: userId }).select('date promptTokens completionTokens').lean(),
+      ImportSession.find({ user: userId }).select('cellar status rows createdAt').lean(),
+      SupportTicket.find({ user: userId }).select('category subject status createdAt').lean(),
+      DiscussionReport.find({ user: userId }).select('discussion reply reason createdAt').lean(),
+      WineReport.find({ user: userId }).select('wineDefinition reason status createdAt').lean(),
+      WishlistItem.find({ user: userId }).lean()
     ]);
 
     const exportData = {
@@ -443,7 +473,48 @@ router.get('/me/export', requireAuth, async (req, res) => {
         cellarName: ps.cellar?.name,
         role: ps.role,
         createdAt: ps.createdAt
-      }))
+      })),
+      discussions: discussions.map(d => ({
+        title: d.title,
+        category: d.category,
+        createdAt: d.createdAt
+      })),
+      discussionReplies: discussionReplies.map(r => ({
+        discussion: r.discussion,
+        createdAt: r.createdAt
+      })),
+      votes: {
+        reviews: reviewVotes.map(v => ({ review: v.review, vote: v.vote, createdAt: v.createdAt })),
+        discussionReplies: discussionReplyVotes.map(v => ({ reply: v.reply, vote: v.vote, createdAt: v.createdAt }))
+      },
+      social: {
+        following: follows.filter(f => f.follower?._id?.toString() === userId || f.follower?.toString() === userId)
+          .map(f => ({ username: f.following?.username, createdAt: f.createdAt })),
+        followers: follows.filter(f => f.following?._id?.toString() === userId || f.following?.toString() === userId)
+          .map(f => ({ username: f.follower?.username, createdAt: f.createdAt }))
+      },
+      chatUsage: chatUsage.map(c => ({
+        date: c.date,
+        promptTokens: c.promptTokens,
+        completionTokens: c.completionTokens
+      })),
+      importSessions: importSessions.map(s => ({
+        cellar: s.cellar,
+        status: s.status,
+        rowCount: s.rows?.length || 0,
+        createdAt: s.createdAt
+      })),
+      supportTickets: supportTickets.map(t => ({
+        category: t.category,
+        subject: t.subject,
+        status: t.status,
+        createdAt: t.createdAt
+      })),
+      reports: {
+        discussions: discussionReports.map(r => ({ reason: r.reason, createdAt: r.createdAt })),
+        wines: wineReports.map(r => ({ reason: r.reason, status: r.status, createdAt: r.createdAt }))
+      },
+      wishlist: wishlistItems
     };
 
     res.setHeader('Content-Disposition', `attachment; filename="cellarion-data-export-${user.username}.json"`);

@@ -1,6 +1,7 @@
 const cron = require('node-cron');
 const { runDrinkWindowCheck } = require('./drinkWindowNotifier');
 const { runCellarValueSnapshots } = require('./cellarValueSnapshotJob');
+const { runUserDeletionJob } = require('./userDeletionJob');
 
 /**
  * Start all scheduled cron jobs.
@@ -27,7 +28,17 @@ function startScheduler() {
     }
   });
 
-  console.log('[scheduler] Cron jobs registered (drink-window daily 06:00 UTC, value-snapshot weekly Sun 01:00 UTC)');
+  // User account deletion: daily at 03:00 UTC (after 7-day cooling-off)
+  cron.schedule('0 3 * * *', async () => {
+    console.log('[scheduler] Running user deletion job…');
+    try {
+      await runUserDeletionJob();
+    } catch (err) {
+      console.error('[scheduler] User deletion job failed:', err);
+    }
+  });
+
+  console.log('[scheduler] Cron jobs registered (drink-window daily 06:00 UTC, value-snapshot weekly Sun 01:00 UTC, user-deletion daily 03:00 UTC)');
 }
 
 module.exports = { startScheduler };
