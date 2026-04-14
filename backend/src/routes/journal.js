@@ -5,7 +5,6 @@ const Bottle = require('../models/Bottle');
 const WineDefinition = require('../models/WineDefinition');
 const { logAudit } = require('../services/audit');
 const { createNotification } = require('../services/notifications');
-const User = require('../models/User');
 const { stripHtml } = require('../utils/sanitize');
 const { isValidId } = require('../utils/validation');
 
