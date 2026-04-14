@@ -1982,7 +1982,7 @@
 
 .worldmap-info-hint {
   font-size: 0.78rem;
-  color: var(--color-border);
+  color: var(--color-input-placeholder);
   font-style: italic;
 }
 
@@ -2011,7 +2011,7 @@
 }
 
 .worldmap-legend-unit {
-  color: var(--color-border);
+  color: var(--color-input-placeholder);
 }
 
 .worldmap-legend-note {
