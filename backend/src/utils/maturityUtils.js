@@ -17,11 +17,16 @@ function classifyMaturity(bottle, profileMap) {
   if (!profile || profile.status !== 'reviewed') return null;
 
   const { earlyFrom, earlyUntil, peakFrom, peakUntil, lateFrom, lateUntil } = profile;
-  if (!earlyFrom) return null;
+
+  // Need at least one window boundary to classify
+  if (!earlyFrom && !peakFrom && !peakUntil) return null;
 
   const currentYear = new Date().getFullYear();
 
-  if (currentYear < earlyFrom) return 'not-ready';
+  // Before the earliest defined window → not ready
+  const firstYear = earlyFrom || peakFrom;
+  if (firstYear && currentYear < firstYear) return 'not-ready';
+
   if (earlyUntil && currentYear <= earlyUntil) return 'early';
   if (peakFrom && currentYear < peakFrom) return 'early';
   if (peakUntil && currentYear <= peakUntil) return 'peak';
@@ -70,7 +75,7 @@ function maturityLabel(status, profile) {
   if (!status) return null;
   switch (status) {
     case 'not-ready':
-      return `Not ready yet — early drinking from ${profile?.earlyFrom || '?'}`;
+      return `Not ready yet — drinking from ${profile?.earlyFrom || profile?.peakFrom || '?'}`;
     case 'early':
       return profile?.peakFrom
         ? `Early drinking — peak from ${profile.peakFrom}`

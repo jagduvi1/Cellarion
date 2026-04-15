@@ -7,9 +7,12 @@ const CURRENT_YEAR = new Date().getFullYear();
 export function getMaturityStatus(profile) {
   if (!profile || profile.status !== 'reviewed') return null;
   const { earlyFrom, earlyUntil, peakFrom, peakUntil, lateFrom, lateUntil } = profile;
-  if (!earlyFrom) return null;
 
-  if (CURRENT_YEAR < earlyFrom)                              return { status: 'not-ready', label: `Not yet mature — from ${earlyFrom}` };
+  // Need at least one window boundary to classify
+  if (!earlyFrom && !peakFrom && !peakUntil) return null;
+
+  const firstYear = earlyFrom || peakFrom;
+  if (firstYear && CURRENT_YEAR < firstYear)                 return { status: 'not-ready', label: `Not yet mature — from ${firstYear}` };
   if (earlyUntil && CURRENT_YEAR <= earlyUntil)              return { status: 'early',     label: 'Early drinking' };
   if (peakFrom   && CURRENT_YEAR <  peakFrom)                return { status: 'early',     label: `Early drinking — peak from ${peakFrom}` };
   if (peakUntil  && CURRENT_YEAR <= peakUntil)               return { status: 'peak',      label: 'Optimal maturity ⭐' };

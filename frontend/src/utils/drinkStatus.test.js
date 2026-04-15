@@ -27,8 +27,35 @@ describe('getMaturityStatus', () => {
     expect(getMaturityStatus({ status: 'pending', earlyFrom: 2020 })).toBeNull();
   });
 
-  test('returns null when earlyFrom is missing', () => {
+  test('returns null when no window boundaries are set', () => {
     expect(getMaturityStatus({ status: 'reviewed' })).toBeNull();
+  });
+
+  test('peak-only: returns not-ready when current year is before peakFrom', () => {
+    const result = getMaturityStatus({
+      status: 'reviewed',
+      peakFrom: CURRENT_YEAR + 2,
+      peakUntil: CURRENT_YEAR + 5,
+    });
+    expect(result.status).toBe('not-ready');
+  });
+
+  test('peak-only: returns peak when in peak window', () => {
+    const result = getMaturityStatus({
+      status: 'reviewed',
+      peakFrom: CURRENT_YEAR - 1,
+      peakUntil: CURRENT_YEAR + 3,
+    });
+    expect(result.status).toBe('peak');
+  });
+
+  test('peak-only: returns declining when past peakUntil', () => {
+    const result = getMaturityStatus({
+      status: 'reviewed',
+      peakFrom: CURRENT_YEAR - 5,
+      peakUntil: CURRENT_YEAR - 2,
+    });
+    expect(result.status).toBe('declining');
   });
 
   test('returns not-ready when current year is before earlyFrom', () => {

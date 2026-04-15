@@ -70,10 +70,53 @@ describe('classifyMaturity', () => {
     expect(classifyMaturity(bottle, new Map())).toBeNull();
   });
 
-  test('returns null when earlyFrom is missing', () => {
+  test('returns null when no window boundaries are set', () => {
     const bottle = makeBottle(2020);
-    const map = makeMap(2020, { status: 'reviewed', earlyFrom: null });
+    const map = makeMap(2020, { status: 'reviewed' });
     expect(classifyMaturity(bottle, map)).toBeNull();
+  });
+
+  // ── Peak-only profiles (no early window) ──────────────────────────────────
+
+  test('peak-only: returns "not-ready" when currentYear < peakFrom', () => {
+    // currentYear=2026, peakFrom=2028, peakUntil=2030
+    const bottle = makeBottle(2020);
+    const map = makeMap(2020, {
+      status: 'reviewed',
+      peakFrom: 2028, peakUntil: 2030,
+    });
+    expect(classifyMaturity(bottle, map)).toBe('not-ready');
+  });
+
+  test('peak-only: returns "peak" when in peak window', () => {
+    // currentYear=2026, peakFrom=2025, peakUntil=2028
+    const bottle = makeBottle(2020);
+    const map = makeMap(2020, {
+      status: 'reviewed',
+      peakFrom: 2025, peakUntil: 2028,
+    });
+    expect(classifyMaturity(bottle, map)).toBe('peak');
+  });
+
+  test('peak-only: returns "declining" when past peakUntil', () => {
+    // currentYear=2026, peakFrom=2020, peakUntil=2024
+    const bottle = makeBottle(2020);
+    const map = makeMap(2020, {
+      status: 'reviewed',
+      peakFrom: 2020, peakUntil: 2024,
+    });
+    expect(classifyMaturity(bottle, map)).toBe('declining');
+  });
+
+  test('peak-only with late: returns "late" when in late window', () => {
+    // currentYear=2026, peakFrom=2020, peakUntil=2024, lateFrom=2025, lateUntil=2028
+    const bottle = makeBottle(2020);
+    const map = makeMap(2020, {
+      status: 'reviewed',
+      peakFrom: 2020, peakUntil: 2024,
+      lateFrom: 2025, lateUntil: 2028,
+    });
+    expect(classifyMaturity(bottle, map)).toBe('late');
   });
 
   test('returns "not-ready" when currentYear < earlyFrom', () => {
@@ -208,15 +251,21 @@ describe('maturityLabel', () => {
     expect(maturityLabel(undefined)).toBeNull();
   });
 
-  test('returns correct string for "not-ready"', () => {
+  test('returns correct string for "not-ready" with earlyFrom', () => {
     const profile = { earlyFrom: 2028 };
     const label = maturityLabel('not-ready', profile);
-    expect(label).toBe('Not ready yet — early drinking from 2028');
+    expect(label).toBe('Not ready yet — drinking from 2028');
   });
 
-  test('returns correct string for "not-ready" with missing earlyFrom', () => {
+  test('returns correct string for "not-ready" with peakFrom only', () => {
+    const profile = { peakFrom: 2030 };
+    const label = maturityLabel('not-ready', profile);
+    expect(label).toBe('Not ready yet — drinking from 2030');
+  });
+
+  test('returns correct string for "not-ready" with missing windows', () => {
     const label = maturityLabel('not-ready', {});
-    expect(label).toBe('Not ready yet — early drinking from ?');
+    expect(label).toBe('Not ready yet — drinking from ?');
   });
 
   test('returns correct string for "early" with peakFrom', () => {
@@ -269,6 +318,6 @@ describe('maturityLabel', () => {
   test('handles null profile gracefully', () => {
     // Uses optional chaining: profile?.earlyFrom
     const label = maturityLabel('not-ready', null);
-    expect(label).toBe('Not ready yet — early drinking from ?');
+    expect(label).toBe('Not ready yet — drinking from ?');
   });
 });
