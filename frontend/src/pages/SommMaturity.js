@@ -11,9 +11,12 @@ const CURRENT_YEAR = new Date().getFullYear();
 function getMaturityPhase(p) {
   if (!p || p.status !== 'reviewed') return null;
   const { earlyFrom, earlyUntil, peakFrom, peakUntil, lateFrom, lateUntil } = p;
-  if (!earlyFrom) return null;
 
-  if (CURRENT_YEAR < earlyFrom)                              return { cls: 'not-ready', label: `Not yet mature — from ${earlyFrom}` };
+  // Need at least one window boundary to classify
+  if (!earlyFrom && !peakFrom && !peakUntil) return null;
+
+  const firstYear = earlyFrom || peakFrom;
+  if (firstYear && CURRENT_YEAR < firstYear)                 return { cls: 'not-ready', label: `Not yet mature — from ${firstYear}` };
   if (earlyUntil && CURRENT_YEAR <= earlyUntil)              return { cls: 'early',     label: 'Early drinking' };
   if (peakFrom   && CURRENT_YEAR <  peakFrom)                return { cls: 'early',     label: `Early drinking — peak from ${peakFrom}` };
   if (peakUntil  && CURRENT_YEAR <= peakUntil)               return { cls: 'peak',      label: 'Optimal maturity ⭐' };
