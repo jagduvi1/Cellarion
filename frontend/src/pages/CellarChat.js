@@ -207,7 +207,7 @@ export default function CellarChat() {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  const atLimit = usage && usage.used >= usage.limit;
+  const atLimit = usage && usage.limit !== -1 && usage.used >= usage.limit;
 
   // Build conversation history from messages state (text only, no wine cards / thinking)
   const buildHistory = useCallback(() =>
@@ -301,7 +301,9 @@ export default function CellarChat() {
   };
 
   const usagePeriodLabel = usage?.period === 'weekly' ? 'this week' : 'today';
-  const usageLabel = usage ? `${usage.used} / ${usage.limit} ${usagePeriodLabel}` : null;
+  const usageLabel = usage
+    ? (usage.limit === -1 ? null : `${usage.used} / ${usage.limit} ${usagePeriodLabel}`)
+    : null;
 
   return (
     <div className="cellar-chat">
