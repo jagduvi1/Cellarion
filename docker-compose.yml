@@ -120,6 +120,8 @@ services:
       context: ./frontend
       args:
         APP_VERSION: ${APP_VERSION:-dev}
+        REACT_APP_UMAMI_URL: ${REACT_APP_UMAMI_URL:-}
+        REACT_APP_UMAMI_WEBSITE_ID: ${REACT_APP_UMAMI_WEBSITE_ID:-}
     container_name: cellarion-frontend
     restart: unless-stopped
     deploy:
@@ -141,11 +143,62 @@ services:
       backend:
         condition: service_healthy
 
+  # Umami — privacy-friendly self-hosted analytics. Only loaded by the frontend when
+  # REACT_APP_UMAMI_URL and REACT_APP_UMAMI_WEBSITE_ID are set at build time, so this
+  # service is optional and inert without those vars.
+  umami:
+    image: ghcr.io/umami-software/umami:postgresql-latest
+    container_name: cellarion-umami
+    restart: unless-stopped
+    environment:
+      - DATABASE_URL=postgresql://umami:${UMAMI_DB_PASSWORD:-umami}@umami-db:5432/umami
+      - DATABASE_TYPE=postgresql
+      - APP_SECRET=${UMAMI_APP_SECRET:-replace-with-random-string-in-production}
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+    expose:
+      - "3000"
+    networks:
+      - web
+      - default
+    labels:
+      traefik.enable: "true"
+      traefik.docker.network: "web"
+      traefik.http.routers.umami.rule: "Host(`analytics.cellarion.app`)"
+      traefik.http.routers.umami.entrypoints: "web"
+      traefik.http.services.umami.loadbalancer.server.port: "3000"
+    depends_on:
+      umami-db:
+        condition: service_healthy
+
+  umami-db:
+    image: postgres:16-alpine
+    container_name: cellarion-umami-db
+    restart: unless-stopped
+    environment:
+      - POSTGRES_DB=umami
+      - POSTGRES_USER=umami
+      - POSTGRES_PASSWORD=${UMAMI_DB_PASSWORD:-umami}
+    volumes:
+      - umami-db-data:/var/lib/postgresql/data
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U umami -d umami"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
 volumes:
   mongo-data:
   meili-data:
   qdrant-data:
   image-data:
+  umami-db-data:
 
 networks:
   web:
