@@ -27,6 +27,17 @@ export default function LandingPage() {
     { icon: '📥', title: t('landing.featureImportTitle'), desc: t('landing.featureImportDesc') },
   ];
 
+  // Visible Q&A on the page MUST match the FAQPage JSON-LD verbatim — Google penalises
+  // schema-only Q&A that doesn't appear on the page.
+  const faqs = [
+    { q: t('landing.faq.q1'), a: t('landing.faq.a1') },
+    { q: t('landing.faq.q2'), a: t('landing.faq.a2') },
+    { q: t('landing.faq.q3'), a: t('landing.faq.a3') },
+    { q: t('landing.faq.q4'), a: t('landing.faq.a4') },
+    { q: t('landing.faq.q5'), a: t('landing.faq.a5') },
+    { q: t('landing.faq.q6'), a: t('landing.faq.a6') },
+  ];
+
   useEffect(() => {
     fetch('/api/settings')
       .then(r => r.ok ? r.json() : null)
@@ -70,6 +81,15 @@ export default function LandingPage() {
           price: '0',
           priceCurrency: 'USD'
         }
+      },
+      {
+        '@type': 'FAQPage',
+        '@id': `${SITE_URL}/#faq`,
+        mainEntity: faqs.map(({ q, a }) => ({
+          '@type': 'Question',
+          name: q,
+          acceptedAnswer: { '@type': 'Answer', text: a }
+        }))
       }
     ]
   };
@@ -222,6 +242,22 @@ export default function LandingPage() {
           >
             {t('landing.ossViewSource')} →
           </a>
+        </div>
+      </section>
+
+      {/* ── FAQ ── */}
+      <section className="landing-faq">
+        <div className="landing-section-inner">
+          <h2 className="landing-section-title">{t('landing.faqTitle')}</h2>
+          <p className="landing-section-sub">{t('landing.faqSub')}</p>
+          <div className="landing-faq-list">
+            {faqs.map(({ q, a }, i) => (
+              <details key={i} className="landing-faq-item">
+                <summary className="landing-faq-question">{q}</summary>
+                <p className="landing-faq-answer">{a}</p>
+              </details>
+            ))}
+          </div>
         </div>
       </section>
 

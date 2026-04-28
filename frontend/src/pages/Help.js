@@ -60,18 +60,30 @@ function Help() {
     setOpenSection(prev => prev === key ? null : key);
   };
 
-  // FAQPage JSON-LD — uses the first 10 sections as Q&A pairs
-  const faqJsonLd = {
+  // FAQPage + BreadcrumbList JSON-LD. Uses @graph so a single <script> tag
+  // emits both entities, which is what Google's Rich Results Test prefers.
+  const jsonLd = {
     '@context': 'https://schema.org',
-    '@type': 'FAQPage',
-    mainEntity: filtered.slice(0, 10).map(s => ({
-      '@type': 'Question',
-      name: s.title,
-      acceptedAnswer: {
-        '@type': 'Answer',
-        text: s.details.length > 0 ? s.details.join(' ') : s.summary,
+    '@graph': [
+      {
+        '@type': 'FAQPage',
+        mainEntity: filtered.slice(0, 10).map(s => ({
+          '@type': 'Question',
+          name: s.title,
+          acceptedAnswer: {
+            '@type': 'Answer',
+            text: s.details.length > 0 ? s.details.join(' ') : s.summary,
+          }
+        }))
+      },
+      {
+        '@type': 'BreadcrumbList',
+        itemListElement: [
+          { '@type': 'ListItem', position: 1, name: 'Cellarion', item: SITE_URL },
+          { '@type': 'ListItem', position: 2, name: t('help.title'), item: `${SITE_URL}/help` }
+        ]
       }
-    }))
+    ]
   };
 
   return (
@@ -87,7 +99,7 @@ function Help() {
         <link rel="alternate" hrefLang="en" href={`${SITE_URL}/help`} />
         <link rel="alternate" hrefLang="sv" href={`${SITE_URL}/help`} />
         <link rel="alternate" hrefLang="x-default" href={`${SITE_URL}/help`} />
-        <script type="application/ld+json">{JSON.stringify(faqJsonLd)}</script>
+        <script type="application/ld+json">{JSON.stringify(jsonLd)}</script>
       </Helmet>
       <div className="help-container">
         <div className="help-header">
