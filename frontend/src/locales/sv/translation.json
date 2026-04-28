@@ -1788,7 +1788,23 @@
     "openCellar": "Öppna min källare",
     "footerLicense": "AGPL-3.0",
     "footerContributors": "Cellarion-bidragsgivare",
-    "metaDescription": "Cellarion — vinsamlingshanteraren med öppen källkod. Spåra flaskor, visualisera ställ, få drickfönster-aviseringar och dela källare. Självhostad eller använd cellarion.app."
+    "metaDescription": "Cellarion — vinsamlingshanteraren med öppen källkod. Spåra flaskor, visualisera ställ, få drickfönster-aviseringar och dela källare. Självhostad eller använd cellarion.app.",
+    "faqTitle": "Vanliga frågor",
+    "faqSub": "Snabba svar om Cellarion, vinsamlingshantering och hur du kommer igång.",
+    "faq": {
+      "q1": "Vilken är den bästa självhostade vinkällar-appen?",
+      "a1": "Cellarion är en gratis självhostad vinkällarhanterare med öppen källkod. Den körs på din egen server med Docker Compose, stöder obegränsat antal flaskor och källare, har drickfönster-aviseringar, fuzzy-sökning, etikettskanning och ett delat vinregister — allt under AGPL-3.0-licensen utan prenumeration, inlåsning eller data som skickas till tredje part.",
+      "q2": "Hur spårar jag min vinsamling med Cellarion?",
+      "a2": "Du loggar varje flaska med årgång, producent, region, pris, personligt betyg och provningsanteckningar. Flaskorna placeras i namngivna källare och kan ställas i anpassningsbara ställ för visuell organisation. Cellarion beräknar automatiskt drickfönster, följer din konsumtionshistorik och ger statistik över hela samlingen.",
+      "q3": "Vad är ett drickfönster för vin?",
+      "a3": "Ett drickfönster är den period då ett vin är som bäst — vanligtvis ett spann av år runt vinets mognadstopp. Cellarion klassar varje årgång som Ej redo, Tidig, Topp, Sen eller Avtagande baserat på producentanteckningar och årgångsdata, så du vet vilka flaskor du bör dricka snart och vilka du kan lagra längre.",
+      "q4": "Är Cellarion gratis? Är det öppen källkod?",
+      "a4": "Ja. Cellarion släpps under AGPL-3.0-licensen. Du kan använda den hostade versionen på cellarion.app gratis, eller självhosta din egen instans med Docker Compose. Hela källkoden finns på GitHub på github.com/jagduvi1/Cellarion — du kan granska den, forka den och köra den på din egen hårdvara.",
+      "q5": "Hur importerar jag viner från Vivino eller CellarTracker?",
+      "a5": "Cellarion stöder CSV-import. Exportera din samling från Vivino, CellarTracker eller något kalkylark, ladda sedan upp CSV-filen i Cellarions importverktyg. Det delade vinregistret deduplicerar poster automatiskt så att din data förblir ren och konsekvent i hela katalogen.",
+      "q6": "Var lagras min data?",
+      "a6": "Om du självhostar finns din data helt på din egen server i MongoDB — inget skickas till tredje part. På den hostade versionen på cellarion.app lagras din data på europeisk infrastruktur, du kan exportera allt som JSON när som helst och du kan radera ditt konto med 7 dagars betänketid. Cellarion är GDPR-kompatibel från grunden."
+    }
   },
 
   "maturity": {

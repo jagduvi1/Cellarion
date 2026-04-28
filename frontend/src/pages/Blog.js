@@ -82,11 +82,22 @@ function Blog() {
         <link rel="alternate" hrefLang="x-default" href={`${SITE_URL}/blog`} />
         <script type="application/ld+json">{JSON.stringify({
           '@context': 'https://schema.org',
-          '@type': 'CollectionPage',
-          name: `${t('blog.title')} — Cellarion`,
-          description: 'News, tips, and updates from the Cellarion team.',
-          url: `${SITE_URL}/blog`,
-          isPartOf: { '@type': 'WebSite', '@id': `${SITE_URL}/#website` }
+          '@graph': [
+            {
+              '@type': 'CollectionPage',
+              name: `${t('blog.title')} — Cellarion`,
+              description: 'News, tips, and updates from the Cellarion team.',
+              url: `${SITE_URL}/blog`,
+              isPartOf: { '@type': 'WebSite', '@id': `${SITE_URL}/#website` }
+            },
+            {
+              '@type': 'BreadcrumbList',
+              itemListElement: [
+                { '@type': 'ListItem', position: 1, name: 'Cellarion', item: SITE_URL },
+                { '@type': 'ListItem', position: 2, name: t('blog.title'), item: `${SITE_URL}/blog` }
+              ]
+            }
+          ]
         })}</script>
       </Helmet>
 

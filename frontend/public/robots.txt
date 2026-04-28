@@ -1,4 +1,6 @@
 # https://www.robotstxt.org/robotstxt.html
+
+# Default policy — applies to all crawlers not matched below
 User-agent: *
 Disallow: /admin/
 Disallow: /superadmin
@@ -17,6 +19,50 @@ Disallow: /api/settings/
 Allow: /
 Allow: /blog
 Allow: /blog/*
+Allow: /wines/
+Allow: /help
+Allow: /privacy
+Allow: /api/sitemap.xml
+Allow: /api/blog
+
+# AI crawlers — explicit allow for content discovery and citation.
+# These index for AI assistants (ChatGPT, Claude, Perplexity, Copilot, Gemini, etc.).
+# Same disallow list as the default group: only public marketing/reference surfaces are crawlable.
+# Note: Google-Extended and Applebot-Extended only opt-out of generative-AI training, not search
+# indexing — allowing them is the explicit "we want to be cited" choice.
+User-agent: GPTBot
+User-agent: ChatGPT-User
+User-agent: OAI-SearchBot
+User-agent: ClaudeBot
+User-agent: anthropic-ai
+User-agent: Claude-Web
+User-agent: PerplexityBot
+User-agent: Perplexity-User
+User-agent: Google-Extended
+User-agent: Applebot-Extended
+User-agent: CCBot
+User-agent: cohere-ai
+User-agent: Meta-ExternalAgent
+User-agent: Bytespider
+User-agent: DuckAssistBot
+Disallow: /admin/
+Disallow: /superadmin
+Disallow: /settings
+Disallow: /cellars/
+Disallow: /users/
+Disallow: /api/auth/
+Disallow: /api/bottles/
+Disallow: /api/cellars/
+Disallow: /api/users/
+Disallow: /api/admin/
+Disallow: /api/chat/
+Disallow: /api/notifications/
+Disallow: /api/settings/
+Allow: /
+Allow: /blog
+Allow: /blog/*
+Allow: /wines/
+Allow: /help
 Allow: /privacy
 Allow: /api/sitemap.xml
 Allow: /api/blog
