@@ -289,10 +289,41 @@ const resolveGrapeName = (name) => {
   return GRAPE_SYNONYMS[key] || name.trim();
 };
 
+/**
+ * Convert any string to a URL-safe slug (lowercase, hyphenated, ASCII-only).
+ * Builds on normalizeString (which already strips diacritics and punctuation).
+ */
+const slugify = (str) => {
+  if (!str) return '';
+  return normalizeString(str)
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '')
+    .substring(0, 80);
+};
+
+/**
+ * Build a vintage-neutral slug for a WineDefinition. If the wine name already
+ * starts with the producer name, we don't duplicate the producer ("Cloudy Bay
+ * Sauvignon Blanc" produced by "Cloudy Bay" → "cloudy-bay-sauvignon-blanc",
+ * not "cloudy-bay-cloudy-bay-sauvignon-blanc").
+ */
+const generateWineSlug = (name, producer) => {
+  const nName = normalizeString(name);
+  const nProducer = normalizeString(producer);
+  if (!nName) return slugify(producer);
+  if (!nProducer || nName === nProducer || nName.startsWith(nProducer + ' ')) {
+    return slugify(name);
+  }
+  return slugify(`${producer} ${name}`);
+};
+
 module.exports = {
   normalizeString,
   tokenize,
   generateWineKey,
+  generateWineSlug,
+  slugify,
   resolveGrapeName,
   levenshteinDistance,
   calculateSimilarity,

@@ -52,17 +52,19 @@ router.get('/', sitemapLimiter, async (req, res) => {
       xml += '  </url>\n';
     }
 
-    // Wine pages — public wine detail pages
+    // Wine pages — public wine detail pages. Prefer slug URLs when available
+    // (human-readable, AI-citable); fall back to ObjectId for any wine that
+    // hasn't been migrated yet so the sitemap stays complete.
     const wines = await WineDefinition.find()
       .sort({ updatedAt: -1 })
-      .select('_id updatedAt')
+      .select('_id slug updatedAt')
       .limit(5000)
       .lean();
 
     for (const wine of wines) {
       const lastmod = (wine.updatedAt || wine._id.getTimestamp()).toISOString().split('T')[0];
       xml += '  <url>\n';
-      xml += `    <loc>${SITE_URL}/wines/${wine._id}</loc>\n`;
+      xml += `    <loc>${SITE_URL}/wines/${wine.slug || wine._id}</loc>\n`;
       xml += `    <lastmod>${lastmod}</lastmod>\n`;
       xml += '    <changefreq>monthly</changefreq>\n';
       xml += '    <priority>0.5</priority>\n';
