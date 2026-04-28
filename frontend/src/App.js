@@ -6,6 +6,7 @@ import { NotificationProvider } from './contexts/NotificationContext';
 import { ThemeProvider } from './contexts/ThemeContext';
 import Layout from './components/Layout';
 import ProtectedRoute from './components/ProtectedRoute';
+import Analytics from './components/Analytics';
 import './styles/common.css';
 
 // Lazy-load all pages so each route gets its own chunk.
@@ -440,6 +441,7 @@ function App() {
         <BrowserRouter>
           <AuthProvider>
             <NotificationProvider>
+                <Analytics />
                 <AppRoutes />
             </NotificationProvider>
           </AuthProvider>

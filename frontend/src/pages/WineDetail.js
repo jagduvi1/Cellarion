@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { Helmet } from 'react-helmet-async';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import { fromNormalized } from '../utils/ratingUtils';
 import Layout from '../components/Layout';
+import SEOHead from '../components/SEOHead';
 import SITE_URL from '../config/siteUrl';
 import WineImage from '../components/WineImage';
 import { getWineImageUrl } from '../utils/wineImageUrl';
@@ -49,8 +49,7 @@ export default function WineDetail() {
   }
 
   const fullTitle = `${wine.name} — ${wine.producer}`;
-  const pageTitle = fullTitle.length > 47 ? fullTitle.slice(0, 57) : fullTitle;
-  const titleTag = pageTitle.length > 47 ? pageTitle : `${pageTitle} — Cellarion`;
+  const titleTag = fullTitle.length > 47 ? fullTitle.slice(0, 57) : `${fullTitle} — Cellarion`;
   const description = [
     wine.type && wine.type.charAt(0).toUpperCase() + wine.type.slice(1),
     wine.appellation,
@@ -110,25 +109,14 @@ export default function WineDetail() {
 
   const page = (
     <div className="wine-detail-page">
-      <Helmet>
-        <title>{titleTag}</title>
-        <meta name="description" content={metaDescription} />
-        <meta property="og:type" content="product" />
-        <meta property="og:title" content={pageTitle} />
-        <meta property="og:description" content={metaDescription} />
-        <meta property="og:image" content={imageUrl} />
-        <meta property="og:url" content={pageUrl} />
-        <meta property="og:site_name" content="Cellarion" />
-        <meta name="twitter:card" content="summary_large_image" />
-        <meta name="twitter:title" content={pageTitle} />
-        <meta name="twitter:description" content={metaDescription} />
-        <meta name="twitter:image" content={imageUrl} />
-        <link rel="canonical" href={pageUrl} />
-        <link rel="alternate" hrefLang="en" href={pageUrl} />
-        <link rel="alternate" hrefLang="sv" href={pageUrl} />
-        <link rel="alternate" hrefLang="x-default" href={pageUrl} />
-        <script type="application/ld+json">{JSON.stringify(jsonLd)}</script>
-      </Helmet>
+      <SEOHead
+        title={titleTag}
+        description={metaDescription}
+        path={`/wines/${wine._id}`}
+        image={imageUrl}
+        ogType={hasRating ? 'product' : 'website'}
+        jsonLd={jsonLd}
+      />
 
       <div className="wd-card">
         <WineImage image={wine.image} alt={wine.name} className="wd-image" wrapClass="wd-image-wrap" />

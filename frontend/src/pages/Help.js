@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Helmet } from 'react-helmet-async';
 import { getHelpContent } from '../api/help';
+import SEOHead from '../components/SEOHead';
 import SITE_URL from '../config/siteUrl';
 import './Help.css';
 
@@ -88,19 +88,12 @@ function Help() {
 
   return (
     <div className="help-page">
-      <Helmet>
-        <title>{t('help.title')} — Cellarion</title>
-        <meta name="description" content={t('help.subtitle')} />
-        <meta property="og:type" content="website" />
-        <meta property="og:title" content={`${t('help.title')} — Cellarion`} />
-        <meta property="og:description" content={t('help.subtitle')} />
-        <meta property="og:url" content={`${SITE_URL}/help`} />
-        <link rel="canonical" href={`${SITE_URL}/help`} />
-        <link rel="alternate" hrefLang="en" href={`${SITE_URL}/help`} />
-        <link rel="alternate" hrefLang="sv" href={`${SITE_URL}/help`} />
-        <link rel="alternate" hrefLang="x-default" href={`${SITE_URL}/help`} />
-        <script type="application/ld+json">{JSON.stringify(jsonLd)}</script>
-      </Helmet>
+      <SEOHead
+        title={`${t('help.title')} — Cellarion`}
+        description={t('help.subtitle')}
+        path="/help"
+        jsonLd={jsonLd}
+      />
       <div className="help-container">
         <div className="help-header">
           <h1>{t('help.title')}</h1>

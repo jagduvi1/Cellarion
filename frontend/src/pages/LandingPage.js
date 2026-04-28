@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Helmet } from 'react-helmet-async';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
+import SEOHead from '../components/SEOHead';
 import SITE_URL from '../config/siteUrl';
 import './LandingPage.css';
 
@@ -96,26 +96,13 @@ export default function LandingPage() {
 
   return (
     <div className="landing">
-      <Helmet>
-        <html lang={lang} />
-        <title>Cellarion — Track & Manage Your Wine Collection | Free Open-Source Wine Cellar App</title>
-        <meta name="description" content={t('landing.metaDescription')} />
-        <meta property="og:type" content="website" />
-        <meta property="og:title" content="Cellarion — Track & Manage Your Wine Collection" />
-        <meta property="og:description" content={t('landing.metaDescription')} />
-        <meta property="og:url" content={SITE_URL} />
-        <meta property="og:image" content={`${SITE_URL}/cellarion-logo.jpg`} />
-        <meta property="og:site_name" content="Cellarion" />
-        <meta name="twitter:card" content="summary_large_image" />
-        <meta name="twitter:title" content="Cellarion — Track & Manage Your Wine Collection" />
-        <meta name="twitter:description" content={t('landing.metaDescription')} />
-        <meta name="twitter:image" content={`${SITE_URL}/cellarion-logo.jpg`} />
-        <link rel="canonical" href={SITE_URL} />
-        <link rel="alternate" hrefLang="en" href={SITE_URL} />
-        <link rel="alternate" hrefLang="sv" href={SITE_URL} />
-        <link rel="alternate" hrefLang="x-default" href={SITE_URL} />
-        <script type="application/ld+json">{JSON.stringify(jsonLd)}</script>
-      </Helmet>
+      <SEOHead
+        title="Cellarion — Track & Manage Your Wine Collection | Free Open-Source Wine Cellar App"
+        description={t('landing.metaDescription')}
+        path="/"
+        language={lang}
+        jsonLd={jsonLd}
+      />
 
       {/* ── Nav ── */}
       <nav className="landing-nav">

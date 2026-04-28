@@ -7,3 +7,6 @@ services:
   backend:
     ports:
       - "5000:5000"
+  umami:
+    ports:
+      - "3001:3000"

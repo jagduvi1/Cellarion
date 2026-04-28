@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Helmet } from 'react-helmet-async';
 import DOMPurify from 'dompurify';
 import { getBlogPost } from '../api/blog';
 import { useAuth } from '../contexts/AuthContext';
+import SEOHead from '../components/SEOHead';
 import SITE_URL from '../config/siteUrl';
 import './Blog.css';
 
@@ -101,25 +101,18 @@ function BlogPost() {
 
   return (
     <div className="blog-post-page">
-      <Helmet>
-        <title>{metaTitle} — Cellarion Blog</title>
-        <meta name="description" content={metaDescription} />
-        <meta property="og:type" content="article" />
-        <meta property="og:title" content={metaTitle} />
-        <meta property="og:description" content={metaDescription} />
-        {post.coverImage && <meta property="og:image" content={post.coverImage} />}
-        <meta property="og:url" content={postUrl} />
-        <meta property="article:published_time" content={post.publishedAt} />
-        <meta name="twitter:card" content="summary_large_image" />
-        <meta name="twitter:title" content={metaTitle} />
-        <meta name="twitter:description" content={metaDescription} />
-        {post.coverImage && <meta name="twitter:image" content={post.coverImage} />}
-        <link rel="canonical" href={postUrl} />
-        <link rel="alternate" hrefLang="en" href={postUrl} />
-        <link rel="alternate" hrefLang="sv" href={postUrl} />
-        <link rel="alternate" hrefLang="x-default" href={postUrl} />
-        <script type="application/ld+json">{JSON.stringify(jsonLd)}</script>
-      </Helmet>
+      <SEOHead
+        title={`${metaTitle} — Cellarion Blog`}
+        description={metaDescription}
+        path={`/blog/${post.slug}`}
+        image={post.coverImage || undefined}
+        ogType="article"
+        jsonLd={jsonLd}
+        articleMeta={{
+          publishedTime: post.publishedAt,
+          modifiedTime: post.updatedAt,
+        }}
+      />
 
       <nav className="blog-breadcrumb">
         <Link to="/blog">{t('blog.title')}</Link>
