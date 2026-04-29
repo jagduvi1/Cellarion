@@ -20,10 +20,14 @@ Allow: /
 Allow: /blog
 Allow: /blog/*
 Allow: /wines/
+Allow: /regions/
+Allow: /countries/
+Allow: /grapes/
 Allow: /help
 Allow: /privacy
 Allow: /api/sitemap.xml
 Allow: /api/blog
+Allow: /api/taxonomy/
 
 # AI crawlers — explicit allow for content discovery and citation.
 # These index for AI assistants (ChatGPT, Claude, Perplexity, Copilot, Gemini, etc.).
@@ -62,9 +66,13 @@ Allow: /
 Allow: /blog
 Allow: /blog/*
 Allow: /wines/
+Allow: /regions/
+Allow: /countries/
+Allow: /grapes/
 Allow: /help
 Allow: /privacy
 Allow: /api/sitemap.xml
 Allow: /api/blog
+Allow: /api/taxonomy/
 
 Sitemap: https://cellarion.app/sitemap.xml

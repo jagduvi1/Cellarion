@@ -31,7 +31,7 @@ router.get('/countries', async (req, res) => {
 // POST /api/admin/taxonomy/countries - Add country
 router.post('/countries', async (req, res) => {
   try {
-    const { name, code } = req.body;
+    const { name, code, description } = req.body;
 
     if (!name) {
       return res.status(400).json({ error: 'Country name is required' });
@@ -43,6 +43,7 @@ router.post('/countries', async (req, res) => {
       name: name.trim(),
       code: code?.trim().toUpperCase(),
       normalizedName,
+      description: description || '',
       createdBy: req.user.id
     });
 
@@ -65,7 +66,7 @@ router.post('/countries', async (req, res) => {
 router.put('/countries/:id', async (req, res) => {
   try {
     if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
-    const { name, code } = req.body;
+    const { name, code, description } = req.body;
 
     const country = await Country.findById(req.params.id);
     if (!country) {
@@ -79,6 +80,7 @@ router.put('/countries/:id', async (req, res) => {
     if (code !== undefined) {
       country.code = code?.trim().toUpperCase();
     }
+    if (description !== undefined) country.description = description;
 
     await country.save();
 
@@ -153,7 +155,7 @@ router.get('/regions', async (req, res) => {
 router.post('/regions', async (req, res) => {
   try {
     const { name, country, parentRegion, classification, styles,
-            agingRules, prestigeLevel, typicalGrapes, permittedGrapes } = req.body;
+            agingRules, prestigeLevel, typicalGrapes, permittedGrapes, description } = req.body;
 
     if (!name || !country) {
       return res.status(400).json({ error: 'Name and country are required' });
@@ -183,6 +185,7 @@ router.post('/regions', async (req, res) => {
       prestigeLevel: prestigeLevel || null,
       typicalGrapes: typicalGrapes || [],
       permittedGrapes: permittedGrapes || [],
+      description: description || '',
       createdBy: req.user.id
     });
 
@@ -209,7 +212,7 @@ router.put('/regions/:id', async (req, res) => {
   try {
     if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
     const { name, parentRegion, classification, styles,
-            agingRules, prestigeLevel, typicalGrapes, permittedGrapes } = req.body;
+            agingRules, prestigeLevel, typicalGrapes, permittedGrapes, description } = req.body;
 
     const region = await Region.findById(req.params.id);
     if (!region) {
@@ -242,6 +245,7 @@ router.put('/regions/:id', async (req, res) => {
     if (prestigeLevel !== undefined) region.prestigeLevel = prestigeLevel;
     if (typicalGrapes !== undefined) region.typicalGrapes = typicalGrapes;
     if (permittedGrapes !== undefined) region.permittedGrapes = permittedGrapes;
+    if (description !== undefined) region.description = description;
 
     await region.save();
     await region.populate('country', 'name');
@@ -295,7 +299,7 @@ router.get('/grapes', async (req, res) => {
 // POST /api/admin/taxonomy/grapes - Add grape
 router.post('/grapes', async (req, res) => {
   try {
-    const { name, synonyms, color, origin, characteristics, agingPotential, prestige } = req.body;
+    const { name, synonyms, color, origin, characteristics, agingPotential, prestige, description } = req.body;
 
     if (!name) {
       return res.status(400).json({ error: 'Grape name is required' });
@@ -312,6 +316,7 @@ router.post('/grapes', async (req, res) => {
       characteristics: characteristics || [],
       agingPotential: agingPotential || null,
       prestige: prestige || null,
+      description: description || '',
       createdBy: req.user.id
     });
 
@@ -334,7 +339,7 @@ router.post('/grapes', async (req, res) => {
 router.put('/grapes/:id', async (req, res) => {
   try {
     if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
-    const { name, synonyms, color, origin, characteristics, agingPotential, prestige } = req.body;
+    const { name, synonyms, color, origin, characteristics, agingPotential, prestige, description } = req.body;
 
     const grape = await Grape.findById(req.params.id);
     if (!grape) {
@@ -351,6 +356,7 @@ router.put('/grapes/:id', async (req, res) => {
     if (characteristics !== undefined) grape.characteristics = characteristics;
     if (agingPotential !== undefined) grape.agingPotential = agingPotential;
     if (prestige !== undefined) grape.prestige = prestige;
+    if (description !== undefined) grape.description = description;
 
     await grape.save();
 

@@ -318,8 +318,10 @@ const generateWineSlug = (name, producer) => {
   return slugify(`${producer} ${name}`);
 };
 
+
 module.exports = {
   normalizeString,
+  slugify,
   tokenize,
   generateWineKey,
   generateWineSlug,
