@@ -220,6 +220,27 @@
   flex-wrap: wrap;
 }
 
+/* ── Wine image thumbnail in list ── */
+.col-img {
+  width: 44px;
+  padding-right: 0;
+}
+
+.wine-list-thumb {
+  display: block;
+  width: 40px;
+  height: 40px;
+  object-fit: cover;
+  border-radius: var(--radius-sm, 6px);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+
+.wine-list-thumb--empty {
+  background: var(--color-border-light, #e8e4e0);
+  border: 1px dashed var(--color-border);
+}
+
 @media (max-width: 768px) {
   .wines-filter-bar {
     flex-direction: column;

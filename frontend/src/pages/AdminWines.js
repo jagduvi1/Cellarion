@@ -12,6 +12,7 @@ import { WINE_TYPES } from '../config/wineTypes';
 import GrapePicker from '../components/GrapePicker';
 import ImageUpload from '../components/ImageUpload';
 import ImageGallery from '../components/ImageGallery';
+import { getWineImageUrl } from '../utils/wineImageUrl';
 import './AdminWines.css';
 
 const emptyForm = {
@@ -539,6 +540,7 @@ function AdminWines() {
           <table className="wines-table">
             <thead>
               <tr>
+                <th className="col-img"></th>
                 <th>{t('admin.wines.nameLabel')}</th>
                 <th>{t('admin.wines.producerLabel')}</th>
                 <th>{t('admin.wines.countryLabel')}</th>
@@ -549,8 +551,15 @@ function AdminWines() {
               </tr>
             </thead>
             <tbody>
-              {wines.map(wine => (
+              {wines.map(wine => {
+                const imgSrc = getWineImageUrl(wine.image);
+                return (
                 <tr key={wine._id} className={editWine?._id === wine._id ? 'row-editing' : ''}>
+                  <td className="col-img">
+                    {imgSrc
+                      ? <img src={imgSrc} alt={wine.name} className="wine-list-thumb" />
+                      : <span className="wine-list-thumb wine-list-thumb--empty" />}
+                  </td>
                   <td className="wine-name">{wine.name}</td>
                   <td>{wine.producer}</td>
                   <td>{wine.country?.name || '—'}</td>
@@ -576,7 +585,8 @@ function AdminWines() {
                     </button>
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>
