@@ -1,0 +1,152 @@
+.taxonomy-page {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 32px 20px 64px;
+}
+
+.taxonomy-header {
+  margin-bottom: 32px;
+  border-bottom: 1px solid var(--color-border-light);
+  padding-bottom: 24px;
+}
+
+.taxonomy-header h1 {
+  font-family: var(--font-heading);
+  font-size: clamp(1.8rem, 3vw, 2.4rem);
+  font-weight: 700;
+  margin: 0 0 8px;
+  color: var(--color-text);
+  letter-spacing: -0.02em;
+}
+
+.taxonomy-subtitle {
+  font-size: 0.95rem;
+  color: var(--color-text-secondary);
+  margin: 0;
+}
+
+.taxonomy-description {
+  font-size: 0.97rem;
+  line-height: 1.8;
+  color: var(--color-text-secondary);
+  margin: 0 0 32px;
+  max-width: 760px;
+}
+
+.taxonomy-meta-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 28px;
+}
+
+.taxonomy-pill {
+  background: var(--color-primary-light);
+  color: var(--color-primary);
+  font-size: 0.82rem;
+  font-weight: 500;
+  padding: 4px 12px;
+  border-radius: 99px;
+  border: 1px solid var(--color-primary);
+}
+
+/* ── Section heading ── */
+.taxonomy-section-title {
+  font-family: var(--font-heading);
+  font-size: 1.15rem;
+  font-weight: 600;
+  margin: 32px 0 16px;
+  color: var(--color-text);
+}
+
+/* ── Wine grid ── */
+.taxonomy-wine-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 16px;
+}
+
+.taxonomy-wine-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: 18px 16px;
+  text-decoration: none;
+  color: inherit;
+  transition: border-color 0.2s, box-shadow 0.2s, transform 0.15s;
+  box-shadow: var(--shadow-card);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.taxonomy-wine-card:hover {
+  border-color: var(--color-primary);
+  box-shadow: var(--shadow-card-hover);
+  transform: translateY(-2px);
+}
+
+.taxonomy-wine-name {
+  font-weight: 600;
+  font-size: 0.92rem;
+  color: var(--color-text);
+  line-height: 1.35;
+}
+
+.taxonomy-wine-producer {
+  font-size: 0.83rem;
+  color: var(--color-text-secondary);
+}
+
+.taxonomy-wine-meta {
+  font-size: 0.78rem;
+  color: var(--color-text-tertiary, var(--color-text-secondary));
+  margin-top: 4px;
+}
+
+/* ── Related grapes / regions ── */
+.taxonomy-related-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.taxonomy-related-chip {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 99px;
+  padding: 5px 14px;
+  font-size: 0.85rem;
+  color: var(--color-text);
+  text-decoration: none;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.taxonomy-related-chip:hover {
+  border-color: var(--color-primary);
+  background: var(--color-primary-light);
+}
+
+/* ── Pagination ── */
+.taxonomy-pagination {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  justify-content: center;
+  margin-top: 32px;
+}
+
+.taxonomy-pagination-info {
+  font-size: 0.88rem;
+  color: var(--color-text-secondary);
+}
+
+/* ── Empty/loading ── */
+.taxonomy-loading,
+.taxonomy-empty,
+.taxonomy-error {
+  text-align: center;
+  padding: 80px 20px;
+  color: var(--color-text-secondary);
+}

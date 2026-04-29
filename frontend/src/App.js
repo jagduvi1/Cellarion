@@ -57,6 +57,10 @@ const Recommendations      = lazy(() => import('./pages/Recommendations'));
 const Journal              = lazy(() => import('./pages/Journal'));
 const Restock              = lazy(() => import('./pages/Restock'));
 const WineDetail           = lazy(() => import('./pages/WineDetail'));
+const RegionDetail         = lazy(() => import('./pages/RegionDetail'));
+const CountryDetail        = lazy(() => import('./pages/CountryDetail'));
+const GrapeDetail          = lazy(() => import('./pages/GrapeDetail'));
+const WineTypeDetail       = lazy(() => import('./pages/WineTypeDetail'));
 const Help                 = lazy(() => import('./pages/Help'));
 const WineLists            = lazy(() => import('./pages/WineLists'));
 const WineListEditor       = lazy(() => import('./pages/WineListEditor'));
@@ -329,6 +333,10 @@ function AppRoutes() {
 
         {/* Public content — no auth required */}
         <Route path="/wines/:idOrSlug" element={<WineDetail />} />
+        <Route path="/wines/type/:type" element={<WineTypeDetail />} />
+        <Route path="/regions/:slug" element={<RegionDetail />} />
+        <Route path="/countries/:slug" element={<CountryDetail />} />
+        <Route path="/grapes/:slug" element={<GrapeDetail />} />
         <Route path="/blog" element={<Layout><Blog /></Layout>} />
         <Route path="/blog/:slug" element={<Layout><BlogPost /></Layout>} />
         <Route path="/help" element={<Layout><Help /></Layout>} />

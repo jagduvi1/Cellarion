@@ -154,7 +154,7 @@ function AdminTaxonomy() {
     setEditItem(item);
     // Populate formData from item
     if (activeTab === 'countries') {
-      setFormData({ name: item.name, code: item.code || '' });
+      setFormData({ name: item.name, code: item.code || '', description: item.description || '' });
     } else if (activeTab === 'regions') {
       const countryId = item.country?._id || item.country || '';
       fetchRegionsForCountry(countryId);
@@ -169,7 +169,8 @@ function AdminTaxonomy() {
         agingNotes: item.agingRules?.notes || '',
         prestigeLevel: item.prestigeLevel || '',
         typicalGrapes: (item.typicalGrapes || []).map(g => g._id || g),
-        permittedGrapes: (item.permittedGrapes || []).map(g => g._id || g)
+        permittedGrapes: (item.permittedGrapes || []).map(g => g._id || g),
+        description: item.description || ''
       });
     } else if (activeTab === 'grapes') {
       setFormData({
@@ -181,7 +182,8 @@ function AdminTaxonomy() {
         characteristicsText: (item.characteristics || []).join(', '),
         characteristics: item.characteristics || [],
         agingPotential: item.agingPotential || '',
-        prestige: item.prestige || ''
+        prestige: item.prestige || '',
+        description: item.description || ''
       });
     } else if (activeTab === 'appellations') {
       const countryId = item.country?._id || item.country || '';
@@ -197,7 +199,7 @@ function AdminTaxonomy() {
   // Build the API payload from formData (handles comma-separated text → arrays, etc.)
   const buildPayload = (fd) => {
     if (activeTab === 'countries') {
-      return { name: fd.name, code: fd.code };
+      return { name: fd.name, code: fd.code, description: fd.description || '' };
     }
     if (activeTab === 'regions') {
       return {
@@ -212,7 +214,8 @@ function AdminTaxonomy() {
         },
         prestigeLevel: fd.prestigeLevel || null,
         typicalGrapes: fd.typicalGrapes || [],
-        permittedGrapes: fd.permittedGrapes || []
+        permittedGrapes: fd.permittedGrapes || [],
+        description: fd.description || ''
       };
     }
     if (activeTab === 'grapes') {
@@ -223,7 +226,8 @@ function AdminTaxonomy() {
         origin: fd.origin || null,
         characteristics: fd.characteristics || [],
         agingPotential: fd.agingPotential || null,
-        prestige: fd.prestige || null
+        prestige: fd.prestige || null,
+        description: fd.description || ''
       };
     }
     if (activeTab === 'appellations') {
@@ -262,6 +266,15 @@ function AdminTaxonomy() {
           onChange={(e) => setFormData({ ...formData, code: e.target.value.toUpperCase() })}
           maxLength="2"
           placeholder="FR"
+        />
+      </div>
+      <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+        <label>Description <span style={{ fontWeight: 400, color: 'var(--color-text-secondary)' }}>(shown publicly on /countries/:slug)</span></label>
+        <textarea
+          rows={6}
+          value={formData.description || ''}
+          onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+          placeholder="Write a curated description of this country's wine culture. At least 100 unique words for SEO value."
         />
       </div>
     </>
@@ -392,6 +405,15 @@ function AdminTaxonomy() {
           </div>
         </>
       )}
+      <div className="form-group">
+        <label>Description <span style={{ fontWeight: 400, color: 'var(--color-text-secondary)' }}>(shown publicly on /regions/:slug)</span></label>
+        <textarea
+          rows={6}
+          value={formData.description || ''}
+          onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+          placeholder="Write a curated description of this wine region. At least 100 unique words for SEO value."
+        />
+      </div>
     </div>
   );
 
@@ -468,6 +490,15 @@ function AdminTaxonomy() {
           value={formData.prestige || ''}
           onChange={(e) => setFormData({ ...formData, prestige: e.target.value })}
           placeholder="e.g. Noble, Premium"
+        />
+      </div>
+      <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+        <label>Description <span style={{ fontWeight: 400, color: 'var(--color-text-secondary)' }}>(shown publicly on /grapes/:slug)</span></label>
+        <textarea
+          rows={6}
+          value={formData.description || ''}
+          onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+          placeholder="Write a curated description of this grape variety. At least 100 unique words for SEO value."
         />
       </div>
     </div>

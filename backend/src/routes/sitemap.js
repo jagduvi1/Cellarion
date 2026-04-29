@@ -2,7 +2,13 @@ const express = require('express');
 const rateLimit = require('express-rate-limit');
 const BlogPost = require('../models/BlogPost');
 const WineDefinition = require('../models/WineDefinition');
+const Country = require('../models/Country');
+const Region = require('../models/Region');
+const Grape = require('../models/Grape');
 const { getClientIp } = require('../utils/clientIp');
+
+const WINE_TYPES = ['red', 'white', 'rosé', 'sparkling', 'dessert', 'fortified'];
+const MIN_WINES = 3;
 
 const router = express.Router();
 
@@ -66,6 +72,61 @@ router.get('/', sitemapLimiter, async (req, res) => {
       xml += '  <url>\n';
       xml += `    <loc>${SITE_URL}/wines/${wine.slug || wine._id}</loc>\n`;
       xml += `    <lastmod>${lastmod}</lastmod>\n`;
+      xml += '    <changefreq>monthly</changefreq>\n';
+      xml += '    <priority>0.5</priority>\n';
+      xml += '  </url>\n';
+    }
+
+    // Taxonomy pages — only include entries that meet the minimum wine threshold
+    // so we don't submit empty pages to search engines.
+
+    const [countries, regions, grapes] = await Promise.all([
+      Country.find({ slug: { $exists: true, $ne: null } }).select('slug updatedAt').lean(),
+      Region.find({ slug: { $exists: true, $ne: null } }).select('slug updatedAt').lean(),
+      Grape.find({ slug: { $exists: true, $ne: null } }).select('slug updatedAt').lean()
+    ]);
+
+    for (const c of countries) {
+      const count = await WineDefinition.countDocuments({ country: c._id });
+      if (count < MIN_WINES) continue;
+      const lastmod = c.updatedAt ? c.updatedAt.toISOString().split('T')[0] : '';
+      xml += '  <url>\n';
+      xml += `    <loc>${SITE_URL}/countries/${c.slug}</loc>\n`;
+      if (lastmod) xml += `    <lastmod>${lastmod}</lastmod>\n`;
+      xml += '    <changefreq>monthly</changefreq>\n';
+      xml += '    <priority>0.6</priority>\n';
+      xml += '  </url>\n';
+    }
+
+    for (const r of regions) {
+      const count = await WineDefinition.countDocuments({ region: r._id });
+      if (count < MIN_WINES) continue;
+      const lastmod = r.updatedAt ? r.updatedAt.toISOString().split('T')[0] : '';
+      xml += '  <url>\n';
+      xml += `    <loc>${SITE_URL}/regions/${r.slug}</loc>\n`;
+      if (lastmod) xml += `    <lastmod>${lastmod}</lastmod>\n`;
+      xml += '    <changefreq>monthly</changefreq>\n';
+      xml += '    <priority>0.6</priority>\n';
+      xml += '  </url>\n';
+    }
+
+    for (const g of grapes) {
+      const count = await WineDefinition.countDocuments({ grapes: g._id });
+      if (count < MIN_WINES) continue;
+      const lastmod = g.updatedAt ? g.updatedAt.toISOString().split('T')[0] : '';
+      xml += '  <url>\n';
+      xml += `    <loc>${SITE_URL}/grapes/${g.slug}</loc>\n`;
+      if (lastmod) xml += `    <lastmod>${lastmod}</lastmod>\n`;
+      xml += '    <changefreq>monthly</changefreq>\n';
+      xml += '    <priority>0.6</priority>\n';
+      xml += '  </url>\n';
+    }
+
+    for (const type of WINE_TYPES) {
+      const count = await WineDefinition.countDocuments({ type });
+      if (count < MIN_WINES) continue;
+      xml += '  <url>\n';
+      xml += `    <loc>${SITE_URL}/wines/type/${type}</loc>\n`;
       xml += '    <changefreq>monthly</changefreq>\n';
       xml += '    <priority>0.5</priority>\n';
       xml += '  </url>\n';

@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const { slugify } = require('../utils/normalize');
 
 const countrySchema = new mongoose.Schema({
   name: {
@@ -20,6 +21,8 @@ const countrySchema = new mongoose.Schema({
     lowercase: true,
     index: true
   },
+  slug: { type: String, trim: true, lowercase: true, unique: true, sparse: true, index: true },
+  description: { type: String, trim: true, default: '' },
   createdBy: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
@@ -31,7 +34,20 @@ const countrySchema = new mongoose.Schema({
   }
 });
 
-// Index for name lookups
-countrySchema.index({ name: 1 });
+// (Implicit unique index on `name` from the field declaration covers name lookups.)
+
+countrySchema.pre('save', async function(next) {
+  if (this.slug || !this.isNew) return next();
+  const base = slugify(this.name);
+  if (!base) return next();
+  let candidate = base;
+  for (let i = 2; i < 100; i++) {
+    const hit = await this.constructor.findOne({ slug: candidate }).select('_id').lean();
+    if (!hit) break;
+    candidate = `${base}-${i}`;
+  }
+  this.slug = candidate;
+  next();
+});
 
 module.exports = mongoose.model('Country', countrySchema);
