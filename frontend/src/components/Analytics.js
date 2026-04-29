@@ -9,27 +9,41 @@ import { Helmet } from 'react-helmet-async';
 //
 // If either is missing the script isn't injected — analytics is fully opt-in.
 //
-// IMPORTANT — hostname guard: these vars are baked into the pre-built GHCR image,
-// so without this check self-hosters running that image on their own domain would
-// send their users' data to cellarion.app's Umami. The guard ensures the tracker
-// only fires on the domain the URL var points to.
+// Hostname guard: the vars are baked into the GHCR image, so without this check
+// self-hosters running that image on their own domain would send their traffic to
+// cellarion.app's Umami. We derive the expected hostname from the URL var and
+// compare at runtime — if they don't match, no script is injected.
+//
+// Route exclusions: admin, superadmin, and settings paths are excluded. They contain
+// no useful SEO/marketing data and recording them pollutes the dashboard with noise.
+// Note: Umami fires before React's ProtectedRoute can redirect, so a non-admin who
+// visits /admin/* would otherwise be recorded even though they never see the content.
+
+const EXCLUDED_PREFIXES = [
+  '/admin',
+  '/superadmin',
+  '/settings',
+  '/cellars',
+  '/users',
+];
+
 export default function Analytics() {
   const url = process.env.REACT_APP_UMAMI_URL;
   const websiteId = process.env.REACT_APP_UMAMI_WEBSITE_ID;
 
   if (!url || !websiteId) return null;
 
-  // Derive the expected hostname from the configured URL and compare it to the
-  // current page hostname at runtime. This works even after the vars are baked in.
+  // Hostname guard
   try {
-    const expectedHost = new URL(url).hostname
-      .replace(/^www\./, '');
-    const currentHost = window.location.hostname
-      .replace(/^www\./, '');
+    const expectedHost = new URL(url).hostname.replace(/^www\./, '');
+    const currentHost = window.location.hostname.replace(/^www\./, '');
     if (currentHost !== expectedHost) return null;
   } catch {
     return null;
   }
+
+  const path = window.location.pathname;
+  if (EXCLUDED_PREFIXES.some(prefix => path.startsWith(prefix))) return null;
 
   return (
     <Helmet>
