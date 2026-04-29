@@ -669,6 +669,7 @@ function AddBottle() {
                   type="number"
                   value={numBottles}
                   onChange={(e) => setNumBottles(Math.max(1, parseInt(e.target.value) || 1))}
+                  onFocus={(e) => e.target.select()}
                   min="1"
                   required
                 />
