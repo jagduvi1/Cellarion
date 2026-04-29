@@ -220,6 +220,39 @@
   flex-wrap: wrap;
 }
 
+/* ── Current default image in edit form ── */
+.wine-image-current {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 12px;
+  margin-bottom: 16px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md, 8px);
+}
+
+.wine-image-current-thumb {
+  width: 80px;
+  height: 80px;
+  object-fit: cover;
+  border-radius: var(--radius-sm, 6px);
+  border: 1px solid var(--color-border);
+  flex-shrink: 0;
+}
+
+.wine-image-current-info {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.wine-image-current-label {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--color-text-secondary);
+}
+
 /* ── Wine image thumbnail in list ── */
 .col-img {
   width: 44px;

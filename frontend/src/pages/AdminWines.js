@@ -473,6 +473,44 @@ function AdminWines() {
                 <div className="form-group wine-image-section" style={{ gridColumn: '1 / -1' }}>
                   <label>Wine Images</label>
                   <p className="wine-image-hint">{t('admin.wines.defaultImageHint', 'Click the star to set the default image for this wine.')}</p>
+
+                  {/* Current default image with explicit remove button. The
+                      WineDefinition.image field can hold a URL that doesn't
+                      correspond to a WineImage record (legacy auto-saved
+                      label scans), so the gallery alone can't clear it. */}
+                  {editWine.image && (
+                    <div className="wine-image-current">
+                      <img
+                        src={getWineImageUrl(editWine.image)}
+                        alt={editWine.name}
+                        className="wine-image-current-thumb"
+                      />
+                      <div className="wine-image-current-info">
+                        <p className="wine-image-current-label">Current default image</p>
+                        <button
+                          type="button"
+                          className="btn btn-danger btn-small"
+                          onClick={async () => {
+                            try {
+                              const res = await adminSaveWine(apiFetch, { image: null }, editWine._id);
+                              if (res.ok) {
+                                setEditWine({ ...editWine, image: null });
+                                fetchWines();
+                              } else {
+                                const data = await res.json().catch(() => ({}));
+                                setFormError(data.error || 'Failed to remove image');
+                              }
+                            } catch {
+                              setFormError('Network error while removing image');
+                            }
+                          }}
+                        >
+                          Remove default image
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
                   <div className="wine-image-existing">
                     <ImageGallery
                       ref={galleryRef}
