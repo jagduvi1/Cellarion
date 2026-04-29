@@ -1,5 +1,3 @@
-const fs = require('fs');
-const path = require('path');
 const express = require('express');
 const mongoose = require('mongoose');
 const WineDefinition = require('../models/WineDefinition');
@@ -8,7 +6,6 @@ const { requireAuth } = require('../middleware/auth');
 const { scanLabelFull, identifyWineFromQuery } = require('../services/labelScan');
 const { findOrCreateWine } = require('../services/findOrCreateWine');
 const { generateWineKey, combinedSimilarity } = require('../utils/normalize');
-const { PROCESSED_DIR } = require('../config/upload');
 const { parsePagination } = require('../utils/pagination');
 const { isValidId } = require('../utils/validation');
 const { submitUrls } = require('../services/indexNow');
@@ -270,28 +267,6 @@ router.post('/find-or-create', requireAuth, async (req, res) => {
       { name, producer, country, region, appellation, type, grapes: grapes || [] },
       req.user.id
     );
-
-    // Save label image as wine's registry image if:
-    //   - a labelImage was provided, AND
-    //   - the wine has no image yet (don't overwrite an existing one)
-    if (labelImage && !wine.image) {
-      try {
-        // labelImage is a data URL: "data:<type>;base64,<data>"
-        const matches = labelImage.match(/^data:([^;]+);base64,(.+)$/);
-        if (matches) {
-          const ext = matches[1] === 'image/png' ? '.png' : '.jpg';
-          const buf = Buffer.from(matches[2], 'base64');
-          const filename = `wine-label-${wine._id}-${Date.now()}${ext}`;
-          const filepath = path.join(PROCESSED_DIR, filename);
-          fs.writeFileSync(filepath, buf);
-          wine.image = `/api/uploads/processed/${filename}`;
-          await WineDefinition.findByIdAndUpdate(wine._id, { image: wine.image });
-          searchService.indexWine(wine._id); // keep search index in sync
-        }
-      } catch (imgErr) {
-        console.warn('Failed to save wine label image:', imgErr.message);
-      }
-    }
 
     if (created) submitUrls(`/wines/${wine.slug || wine._id}`);
 
