@@ -494,7 +494,11 @@ function AdminWines() {
                             try {
                               const res = await adminSaveWine(apiFetch, { image: null }, editWine._id);
                               if (res.ok) {
-                                setEditWine({ ...editWine, image: null });
+                                // Server may auto-promote an approved gallery
+                                // image — use the response value, not null.
+                                const data = await res.json().catch(() => ({}));
+                                setEditWine({ ...editWine, image: data.wine?.image ?? null });
+                                galleryRef.current?.refresh();
                                 fetchWines();
                               } else {
                                 const data = await res.json().catch(() => ({}));

@@ -291,7 +291,38 @@ router.put('/:id', async (req, res) => {
     if (appellation !== undefined) wine.appellation = appellation?.trim();
     if (grapes !== undefined) wine.grapes = grapes;
     if (type) wine.type = type;
-    if (image !== undefined) wine.image = image || null;
+
+    // Image handling. When the admin clears the default image, look for an
+    // approved+public gallery image to promote in its place — otherwise the
+    // wine ends up with no image even though candidates exist (the legacy
+    // label-scan URL bug left wines in this state after Remove default image).
+    if (image !== undefined) {
+      if (image) {
+        wine.image = image;
+      } else {
+        const replacement = await BottleImage.findOne({
+          wineDefinition: wine._id,
+          status: 'approved',
+          visibility: 'public'
+        }).sort({ assignedToWine: -1, createdAt: -1 });
+
+        // Clear stale assignedToWine flags so only the new default carries it
+        await BottleImage.updateMany(
+          { wineDefinition: wine._id, assignedToWine: true },
+          { assignedToWine: false }
+        );
+
+        if (replacement) {
+          replacement.assignedToWine = true;
+          await replacement.save();
+          wine.image = replacement.processedUrl || replacement.originalUrl;
+          wine.imageCredit = replacement.credit || null;
+        } else {
+          wine.image = null;
+          wine.imageCredit = null;
+        }
+      }
+    }
 
     // Regenerate normalized key if name, producer, or appellation changed
     if (name || producer || appellation !== undefined) {
