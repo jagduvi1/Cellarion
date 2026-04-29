@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const { generateWineSlug } = require('../utils/normalize');
 
 const wineDefinitionSchema = new mongoose.Schema({
   name: {
@@ -89,6 +90,18 @@ const wineDefinitionSchema = new mongoose.Schema({
     unique: true,
     index: true
   },
+  // Vintage-neutral, human-readable slug used in public URLs (/wines/:slug).
+  // Sparse so older docs without a slug don't violate the unique index until
+  // the migration runs. Once set, never auto-regenerated on rename — URLs are
+  // stable forever; renames must be a deliberate admin action.
+  slug: {
+    type: String,
+    trim: true,
+    lowercase: true,
+    unique: true,
+    sparse: true,
+    index: true
+  },
   createdBy: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
@@ -115,6 +128,23 @@ wineDefinitionSchema.index({ type: 1, createdAt: -1 });
 // Update timestamp on save
 wineDefinitionSchema.pre('save', function(next) {
   this.updatedAt = Date.now();
+  next();
+});
+
+// Auto-generate slug for new wines when missing. On collision the caller (the
+// findOrCreateWine flow) appends a -2/-3 suffix; the migration script does the
+// same when backfilling. Existing slugs are never overwritten — URL stability.
+wineDefinitionSchema.pre('save', async function(next) {
+  if (this.slug || !this.isNew) return next();
+  const base = generateWineSlug(this.name, this.producer);
+  if (!base) return next();
+  let candidate = base;
+  for (let i = 2; i < 100; i++) {
+    const collision = await this.constructor.findOne({ slug: candidate }).select('_id').lean();
+    if (!collision) break;
+    candidate = `${base}-${i}`;
+  }
+  this.slug = candidate;
   next();
 });
 

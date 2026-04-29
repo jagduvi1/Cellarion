@@ -1,6 +1,7 @@
 const express = require('express');
 const rateLimit = require('express-rate-limit');
 const WineDefinition = require('../models/WineDefinition');
+const WineVintageProfile = require('../models/WineVintageProfile');
 const BlogPost = require('../models/BlogPost');
 const { fromNormalized } = require('../utils/ratingUtils');
 const { isValidId } = require('../utils/validation');
@@ -17,19 +18,33 @@ const ogLimiter = rateLimit({
 const SITE_URL = process.env.FRONTEND_URL || 'https://cellarion.app';
 const API_URL = process.env.BACKEND_URL || process.env.FRONTEND_URL || 'https://cellarion.app';
 
-// GET /og/wines/:id — Full server-rendered HTML for search engine crawlers.
+// GET /og/wines/:idOrSlug — Full server-rendered HTML for search engine crawlers.
 // Nginx routes crawler user-agents here; real users get the SPA.
-router.get('/wines/:id', ogLimiter, async (req, res) => {
+// Accepts both ObjectId and slug. When given an ObjectId for a wine that has a slug,
+// returns 301 to the slug URL — that's how link equity transfers and how external links
+// to old ObjectId URLs keep working forever.
+router.get('/wines/:idOrSlug', ogLimiter, async (req, res) => {
   try {
-    if (!isValidId(req.params.id)) return res.status(404).send('Not found');
-    const wine = await WineDefinition.findById(req.params.id)
+    const { idOrSlug } = req.params;
+    const isId = isValidId(idOrSlug);
+    const filter = isId ? { _id: idOrSlug } : { slug: String(idOrSlug).toLowerCase() };
+
+    const wine = await WineDefinition.findOne(filter)
       .populate(['country', 'region', 'grapes'])
-      .select('name producer country region appellation classification grapes type image communityRating')
+      .select('name producer slug country region appellation classification grapes type image communityRating')
       .lean();
 
     if (!wine) {
       return res.status(404).send('Not found');
     }
+
+    // Canonicalise to slug URL when one exists. 301 means crawlers + browsers
+    // both follow and any link equity earned by the ObjectId URL transfers.
+    if (isId && wine.slug) {
+      return res.redirect(301, `${SITE_URL}/wines/${wine.slug}`);
+    }
+
+    const slugOrId = wine.slug || wine._id;
 
     // Keep title under 60 chars for SEO — drop " — Cellarion" suffix if needed
     const fullTitle = `${wine.name} — ${wine.producer}`;
@@ -44,13 +59,74 @@ router.get('/wines/:id', ogLimiter, async (req, res) => {
     // Keep meta description under 160 chars
     const fullDesc = `${fullTitle}. ${details}. Discover, track, and manage your wine cellar with Cellarion.`;
     const description = fullDesc.length > 160 ? fullDesc.slice(0, 157) + '...' : fullDesc;
-    const pageUrl = `${SITE_URL}/wines/${wine._id}`;
+    const pageUrl = `${SITE_URL}/wines/${slugOrId}`;
     const imageUrl = wine.image
       ? (wine.image.startsWith('/api/') || wine.image.startsWith('http') ? `${API_URL}${wine.image}` : `${API_URL}/api/uploads/${wine.image}`)
       : `${SITE_URL}/cellarion-logo.jpg`;
 
     const grapeNames = (wine.grapes || []).map(g => g.name).filter(Boolean);
     const hasRating = wine.communityRating?.reviewCount > 0;
+
+    // Pull the most authoritative vintage profile so we can include real drink-window
+    // dates in the prose and FAQ. Prefer reviewed profiles, then most recent vintage.
+    let profile = null;
+    try {
+      profile = await WineVintageProfile.findOne({
+        wineDefinition: wine._id,
+        status: 'reviewed'
+      }).sort({ vintage: -1 }).select('vintage peakFrom peakUntil earlyFrom earlyUntil lateFrom lateUntil').lean();
+    } catch (e) {
+      // Profile is optional — failure here shouldn't break the page render.
+    }
+    const peakFrom = profile?.peakFrom;
+    const peakUntil = profile?.peakUntil;
+    const peakKnown = peakFrom && peakUntil;
+
+    // Generate a prose paragraph (template, not LLM) — AI engines extract from prose,
+    // not from key-value lists. ~80–150 words including drink-window text when known.
+    const typeWord = wine.type ? wine.type.toLowerCase() : 'wine';
+    const placeWords = [wine.appellation, wine.region?.name, wine.country?.name].filter(Boolean).join(', ');
+    const grapesPhrase = grapeNames.length === 0
+      ? ''
+      : grapeNames.length === 1
+        ? `Made from ${grapeNames[0]}.`
+        : `Made from ${grapeNames.slice(0, -1).join(', ')} and ${grapeNames[grapeNames.length - 1]}.`;
+    const classificationPhrase = wine.classification
+      ? ` Classified as ${wine.classification}.`
+      : '';
+    const drinkPhrase = peakKnown
+      ? (profile.vintage
+          ? ` The ${profile.vintage} vintage is at peak maturity from ${peakFrom} to ${peakUntil}.`
+          : ` Peak maturity is from ${peakFrom} to ${peakUntil}.`)
+      : '';
+    const ratingPhrase = hasRating
+      ? ` Cellarion users rate it ${fromNormalized(wine.communityRating.averageNormalized, '5').toFixed(1)} out of 5 across ${wine.communityRating.reviewCount} ${wine.communityRating.reviewCount === 1 ? 'review' : 'reviews'}.`
+      : '';
+    const proseParagraph = `${wine.name} is a ${typeWord} produced by ${wine.producer}${placeWords ? ` in ${placeWords}` : ''}.${classificationPhrase} ${grapesPhrase}${drinkPhrase}${ratingPhrase} Track this wine and manage your cellar with Cellarion — open-source, self-hostable, free.`.replace(/\s+/g, ' ').trim();
+
+    // Per-wine FAQ — only emit a question when the underlying data exists. AI engines
+    // love quoting Q&A pairs verbatim; this is what shows up in chat answers.
+    const faqs = [];
+    if (peakKnown) {
+      faqs.push({
+        q: `When should I drink ${wine.name}?`,
+        a: `${wine.name}${profile.vintage ? ` ${profile.vintage}` : ''} reaches peak maturity between ${peakFrom} and ${peakUntil}. Outside that window, expect either underdeveloped tannins (too early) or fading fruit (too late).`
+      });
+    }
+    if (placeWords) {
+      faqs.push({
+        q: `Where is ${wine.name} from?`,
+        a: `${wine.name} is produced by ${wine.producer} in ${placeWords}.`
+      });
+    }
+    if (grapeNames.length > 0) {
+      faqs.push({
+        q: `What grapes are in ${wine.name}?`,
+        a: grapeNames.length === 1
+          ? `${wine.name} is made from ${grapeNames[0]}.`
+          : `${wine.name} is a blend of ${grapeNames.slice(0, -1).join(', ')} and ${grapeNames[grapeNames.length - 1]}.`
+      });
+    }
 
     // JSON-LD structured data — only use Product type when we have aggregateRating,
     // otherwise Google flags it as invalid (requires offers, review, or aggregateRating).
@@ -78,20 +154,28 @@ router.get('/wines/:id', ogLimiter, async (req, res) => {
           url: pageUrl
         };
 
-    const jsonLd = {
-      '@context': 'https://schema.org',
-      '@graph': [
-        mainEntity,
-        {
-          '@type': 'BreadcrumbList',
-          itemListElement: [
-            { '@type': 'ListItem', position: 1, name: 'Cellarion', item: SITE_URL },
-            { '@type': 'ListItem', position: 2, name: 'Wines', item: `${SITE_URL}/wines` },
-            { '@type': 'ListItem', position: 3, name: wine.name, item: pageUrl }
-          ]
-        }
-      ]
-    };
+    const graph = [
+      mainEntity,
+      {
+        '@type': 'BreadcrumbList',
+        itemListElement: [
+          { '@type': 'ListItem', position: 1, name: 'Cellarion', item: SITE_URL },
+          { '@type': 'ListItem', position: 2, name: 'Wines', item: `${SITE_URL}/wines` },
+          { '@type': 'ListItem', position: 3, name: wine.name, item: pageUrl }
+        ]
+      }
+    ];
+    if (faqs.length > 0) {
+      graph.push({
+        '@type': 'FAQPage',
+        mainEntity: faqs.map(({ q, a }) => ({
+          '@type': 'Question',
+          name: q,
+          acceptedAnswer: { '@type': 'Answer', text: a }
+        }))
+      });
+    }
+    const jsonLd = { '@context': 'https://schema.org', '@graph': graph };
 
     const html = `<!DOCTYPE html>
 <html lang="en">
@@ -118,14 +202,17 @@ router.get('/wines/:id', ogLimiter, async (req, res) => {
     <p>${esc(wine.producer)}</p>
   </header>
   <main>
+    <p>${esc(proseParagraph)}</p>
     ${wine.type ? `<p><strong>Type:</strong> ${esc(wine.type.charAt(0).toUpperCase() + wine.type.slice(1))}</p>` : ''}
     ${wine.appellation ? `<p><strong>Appellation:</strong> ${esc(wine.appellation)}</p>` : ''}
     ${wine.classification ? `<p><strong>Classification:</strong> ${esc(wine.classification)}</p>` : ''}
     ${wine.region?.name ? `<p><strong>Region:</strong> ${esc(wine.region.name)}</p>` : ''}
     ${wine.country?.name ? `<p><strong>Country:</strong> ${esc(wine.country.name)}</p>` : ''}
     ${grapeNames.length > 0 ? `<p><strong>Grapes:</strong> ${esc(grapeNames.join(', '))}</p>` : ''}
+    ${peakKnown ? `<p><strong>Drink window:</strong> ${peakFrom}–${peakUntil}${profile.vintage ? ` (${esc(profile.vintage)} vintage)` : ''}</p>` : ''}
     ${hasRating && ratingOn5 != null ? `<p><strong>Community rating:</strong> ${ratingOn5.toFixed(1)}/5 from ${wine.communityRating.reviewCount} ${wine.communityRating.reviewCount === 1 ? 'review' : 'reviews'}</p>` : ''}
     ${wine.image ? `<img src="${esc(imageUrl)}" alt="${esc(wine.name)}" width="300" />` : ''}
+    ${faqs.length > 0 ? `<section><h2>Frequently asked questions</h2>${faqs.map(({ q, a }) => `<h3>${esc(q)}</h3><p>${esc(a)}</p>`).join('')}</section>` : ''}
   </main>
   <footer>
     <p>Discover, track, and manage your wine cellar with <a href="${esc(SITE_URL)}">Cellarion</a>.</p>

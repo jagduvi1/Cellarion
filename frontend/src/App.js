@@ -328,7 +328,7 @@ function AppRoutes() {
         />
 
         {/* Public content — no auth required */}
-        <Route path="/wines/:id" element={<WineDetail />} />
+        <Route path="/wines/:idOrSlug" element={<WineDetail />} />
         <Route path="/blog" element={<Layout><Blog /></Layout>} />
         <Route path="/blog/:slug" element={<Layout><BlogPost /></Layout>} />
         <Route path="/help" element={<Layout><Help /></Layout>} />

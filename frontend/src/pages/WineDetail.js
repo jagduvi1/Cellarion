@@ -11,9 +11,13 @@ import { getWineImageUrl } from '../utils/wineImageUrl';
 import { API_URL } from '../api/apiConstants';
 import './WineDetail.css';
 
+// Same regex used by the backend's isValidId — 24 hex chars = ObjectId, anything
+// else is treated as a slug.
+const OBJECT_ID_RE = /^[a-f0-9]{24}$/i;
+
 export default function WineDetail() {
   const { t } = useTranslation();
-  const { id } = useParams();
+  const { idOrSlug } = useParams();
   const { user } = useAuth();
   const [wine, setWine] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -22,10 +26,16 @@ export default function WineDetail() {
   useEffect(() => {
     const fetchWine = async () => {
       try {
-        const res = await fetch(`${API_URL}/api/wines/${id}/public`);
+        const res = await fetch(`${API_URL}/api/wines/${encodeURIComponent(idOrSlug)}/public`);
         if (res.ok) {
           const data = await res.json();
           setWine(data.wine);
+          // If we landed on an ObjectId URL but the wine has a slug, transparently
+          // upgrade the URL bar to the slug so users see + share the pretty form.
+          // replaceState avoids a navigation event and preserves history.
+          if (OBJECT_ID_RE.test(idOrSlug) && data.wine?.slug) {
+            window.history.replaceState(null, '', `/wines/${data.wine.slug}`);
+          }
         } else {
           setError(t('wineDetail.wineNotFound'));
         }
@@ -35,7 +45,7 @@ export default function WineDetail() {
       setLoading(false);
     };
     fetchWine();
-  }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [idOrSlug]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (loading) return <div className="wd-loading">Loading...</div>;
   if (error || !wine) {
@@ -50,6 +60,9 @@ export default function WineDetail() {
 
   const fullTitle = `${wine.name} — ${wine.producer}`;
   const titleTag = fullTitle.length > 47 ? fullTitle.slice(0, 57) : `${fullTitle} — Cellarion`;
+  // Canonical URL: prefer slug whenever the wine has one. ObjectId is the fallback
+  // for any wine not yet migrated.
+  const winePath = `/wines/${wine.slug || wine._id}`;
   const description = [
     wine.type && wine.type.charAt(0).toUpperCase() + wine.type.slice(1),
     wine.appellation,
@@ -58,7 +71,7 @@ export default function WineDetail() {
   ].filter(Boolean).join(' · ');
   const fullDesc = `${fullTitle}. ${description}. Discover, track, and manage your wine cellar with Cellarion.`;
   const metaDescription = fullDesc.length > 160 ? fullDesc.slice(0, 157) + '...' : fullDesc;
-  const pageUrl = `${SITE_URL}/wines/${wine._id}`;
+  const pageUrl = `${SITE_URL}${winePath}`;
   const wineImageSrc = getWineImageUrl(wine.image);
   const imageUrl = wineImageSrc || `${SITE_URL}/cellarion-logo.jpg`;
   const grapeNames = wine.grapes?.map(g => g.name).filter(Boolean) || [];
@@ -112,7 +125,7 @@ export default function WineDetail() {
       <SEOHead
         title={titleTag}
         description={metaDescription}
-        path={`/wines/${wine._id}`}
+        path={winePath}
         image={imageUrl}
         ogType={hasRating ? 'product' : 'website'}
         jsonLd={jsonLd}

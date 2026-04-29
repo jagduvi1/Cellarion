@@ -293,7 +293,7 @@ router.post('/find-or-create', requireAuth, async (req, res) => {
       }
     }
 
-    if (created) submitUrls(`/wines/${wine._id}`);
+    if (created) submitUrls(`/wines/${wine.slug || wine._id}`);
 
     res.status(created ? 201 : 200).json({ wine, created });
   } catch (err) {
@@ -341,16 +341,20 @@ router.post('/ai-info', requireAuth, async (req, res) => {
   }
 });
 
-// GET /api/wines/:id - Get single wine definition (auth required)
-// GET /api/wines/:id/public — Public wine detail (no auth required)
-// Used for shared links and social media previews.
-router.get('/:id/public', async (req, res) => {
-  try {
-    if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
+// GET /api/wines/:idOrSlug/public — Public wine detail (no auth required)
+// Accepts both ObjectId and slug. Used for shared links and social previews.
+const PUBLIC_PROJECTION = 'name producer slug country region appellation grapes type image communityRating classification';
 
-    const wine = await WineDefinition.findById(req.params.id)
+router.get('/:idOrSlug/public', async (req, res) => {
+  try {
+    const { idOrSlug } = req.params;
+    const filter = isValidId(idOrSlug)
+      ? { _id: idOrSlug }
+      : { slug: String(idOrSlug).toLowerCase() };
+
+    const wine = await WineDefinition.findOne(filter)
       .populate(['country', 'region', 'grapes'])
-      .select('name producer country region appellation grapes type image communityRating classification');
+      .select(PUBLIC_PROJECTION);
 
     if (!wine) {
       return res.status(404).json({ error: 'Wine not found' });

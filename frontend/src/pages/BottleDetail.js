@@ -297,7 +297,7 @@ function BottleDetail() {
                 <ShareButton
                   title={displayName}
                   text={`Check out ${displayName}${displayProducer ? ` by ${displayProducer}` : ''} on Cellarion`}
-                  url={`${SITE_URL}/wines/${wine._id}`}
+                  url={`${SITE_URL}/wines/${wine.slug || wine._id}`}
                   onRecommend={() => setRecommendOpen(true)}
                   variant="icon"
                 />
