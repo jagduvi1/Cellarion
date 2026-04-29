@@ -33,11 +33,22 @@ export default function Analytics() {
 
   if (!url || !websiteId) return null;
 
-  // Hostname guard
+  // Hostname guard — compare the base domain (eTLD+1) of the Umami URL against
+  // the current page domain. This ensures the tracker only fires when the site
+  // is running on the same root domain as the analytics instance.
+  //
+  // Example: REACT_APP_UMAMI_URL = "https://analytics.cellarion.app"
+  //   → baseDomain = "cellarion.app"
+  //   → only fires when window.location.hostname ends with "cellarion.app"
+  //   → self-hosters on "their-domain.com" are excluded automatically
   try {
-    const expectedHost = new URL(url).hostname.replace(/^www\./, '');
-    const currentHost = window.location.hostname.replace(/^www\./, '');
-    if (currentHost !== expectedHost) return null;
+    const getBase = (hostname) => {
+      const parts = hostname.replace(/^www\./, '').split('.');
+      return parts.length >= 2 ? parts.slice(-2).join('.') : hostname;
+    };
+    const expectedBase = getBase(new URL(url).hostname);
+    const currentBase = getBase(window.location.hostname);
+    if (currentBase !== expectedBase) return null;
   } catch {
     return null;
   }
