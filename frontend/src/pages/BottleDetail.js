@@ -2,7 +2,7 @@ import { useState, useEffect, lazy, Suspense } from 'react';
 import { useParams, useNavigate, Link, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
-import { getBottle, consumeBottle, setBottleDefaultImage } from '../api/bottles';
+import { getBottle, consumeBottle, setBottleDefaultImage, undoBottle } from '../api/bottles';
 import { getRacks } from '../api/racks';
 import { getCellarLayout } from '../api/cellarLayout';
 import { fetchRates } from '../utils/currency';
@@ -45,6 +45,8 @@ function BottleDetail() {
   const [error, setError] = useState(null);
   const [editing, setEditing] = useState(false);
   const [consumeOpen, setConsumeOpen] = useState(false);
+  const [mistakeOpen, setMistakeOpen] = useState(false);
+  const [mistakeBusy, setMistakeBusy] = useState(false);
   const [suggestGrapesOpen, setSuggestGrapesOpen] = useState(false);
   const [reportWineOpen, setReportWineOpen] = useState(false);
   const [reportDefaultReason, setReportDefaultReason] = useState(null);
@@ -207,6 +209,24 @@ function BottleDetail() {
     setEditing(false);
   };
 
+  const handleMistakeConfirm = async () => {
+    if (mistakeBusy) return;
+    setMistakeBusy(true);
+    try {
+      const res = await undoBottle(apiFetch, bottleId);
+      if (res.ok) {
+        navigate(`/cellars/${cellarId}`);
+      } else {
+        const data = await res.json().catch(() => ({}));
+        alert(data.error || t('bottleDetail.mistakeError', 'Failed to remove bottle'));
+        setMistakeBusy(false);
+      }
+    } catch {
+      alert(t('bottleDetail.mistakeError', 'Failed to remove bottle'));
+      setMistakeBusy(false);
+    }
+  };
+
   const handleConsumeConfirm = async (reason, note, rating, consumedRatingScale) => {
     try {
       const res = await consumeBottle(apiFetch, bottleId, { reason, note, rating, consumedRatingScale });
@@ -264,6 +284,13 @@ function BottleDetail() {
             </div>
           )}
         </div>
+        {!loading && !editing && canEdit && (
+          <div className="bd-mistake-row">
+            <button type="button" className="bd-mistake-link" onClick={() => setMistakeOpen(true)}>
+              {t('bottleDetail.mistakeLink', 'Added by mistake?')}
+            </button>
+          </div>
+        )}
       </div>
 
       {loading ? (
@@ -441,6 +468,35 @@ function BottleDetail() {
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M8 2h8l4 10H4L8 2z"/><path d="M12 12v6"/><path d="M8 22h8"/></svg>
             {t('bottleDetail.removeBottle')}
           </button>
+        </div>
+      )}
+
+      {mistakeOpen && (
+        <div className="modal-overlay" onClick={() => !mistakeBusy && setMistakeOpen(false)}>
+          <div className="modal-box" onClick={e => e.stopPropagation()}>
+            <h2>{t('bottleDetail.mistakeTitle', 'Remove as a mistake?')}</h2>
+            <p>{t('bottleDetail.mistakeBody', 'This will permanently remove the bottle as if it had never been added. It will not appear in your stats, history, or search. This cannot be undone.')}</p>
+            <div className="modal-actions">
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => setMistakeOpen(false)}
+                disabled={mistakeBusy}
+              >
+                {t('common.cancel', 'Cancel')}
+              </button>
+              <button
+                type="button"
+                className="btn btn-danger"
+                onClick={handleMistakeConfirm}
+                disabled={mistakeBusy}
+              >
+                {mistakeBusy
+                  ? t('bottleDetail.mistakeRemoving', 'Removing…')
+                  : t('bottleDetail.mistakeConfirm', 'Yes, remove it')}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

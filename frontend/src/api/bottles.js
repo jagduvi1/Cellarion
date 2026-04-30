@@ -17,6 +17,11 @@ export const consumeBottle = (apiFetch, id, data) =>
     body: JSON.stringify(data),
   });
 
+export const undoBottle = (apiFetch, id) =>
+  apiFetch(`/api/bottles/${id}/undo`, {
+    method: 'POST',
+  });
+
 export const updateConsumedRating = (apiFetch, id, data) =>
   apiFetch(`/api/bottles/${id}/consumed-rating`, {
     method: 'PUT',

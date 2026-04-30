@@ -27,6 +27,27 @@
   gap: 0.35rem;
 }
 
+.bd-mistake-row {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 0.25rem;
+}
+
+.bd-mistake-link {
+  background: none;
+  border: none;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.78rem;
+  color: var(--color-text-muted, #888);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.bd-mistake-link:hover {
+  color: var(--color-danger, #c0392b);
+}
+
 /* ── Mobile action bar ── */
 .bd-mobile-actions {
   display: none;
