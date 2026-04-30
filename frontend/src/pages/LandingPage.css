@@ -179,22 +179,6 @@
   animation: fadeDown 0.7s ease 0.3s both;
 }
 
-.landing-hosted-note {
-  font-size: 0.85rem;
-  color: var(--color-text-muted);
-  animation: fadeDown 0.7s ease 0.4s both;
-}
-
-.landing-link {
-  color: var(--color-text-secondary);
-  text-decoration: underline;
-  text-underline-offset: 2px;
-}
-
-.landing-link:hover {
-  color: var(--color-text);
-}
-
 /* ── Shared section layout ── */
 .landing-section-inner {
   max-width: 1080px;
@@ -282,70 +266,12 @@
   margin: 0;
 }
 
-/* ── Open source ── */
-.landing-oss {
+/* ── Why Cellarion ── */
+.landing-why {
   padding: 80px 0;
   background: var(--color-primary-light);
   border-top: 1px solid var(--color-border-light);
   border-bottom: 1px solid var(--color-border-light);
-  text-align: center;
-}
-
-.landing-oss-inner {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 20px;
-}
-
-.landing-oss-badge {
-  display: inline-block;
-  padding: 4px 14px;
-  border: 1px solid var(--color-primary);
-  border-radius: var(--radius-full);
-  font-size: 0.75rem;
-  font-weight: 700;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--color-primary);
-}
-
-.landing-oss-title {
-  font-family: var(--font-heading);
-  font-size: clamp(1.6rem, 3vw, 2.2rem);
-  font-weight: 700;
-  margin: 0;
-  letter-spacing: -0.02em;
-  color: var(--color-text);
-}
-
-.landing-oss-body {
-  font-size: 1rem;
-  color: var(--color-text-secondary);
-  line-height: 1.7;
-  max-width: 540px;
-  margin: 0;
-}
-
-.landing-oss-body strong {
-  color: var(--color-accent);
-}
-
-.landing-oss-pills {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  justify-content: center;
-}
-
-.landing-pill {
-  padding: 5px 13px;
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-full);
-  font-size: 0.8rem;
-  color: var(--color-text-secondary);
-  font-family: 'SF Mono', 'Fira Code', monospace;
 }
 
 /* ── Final CTA ── */

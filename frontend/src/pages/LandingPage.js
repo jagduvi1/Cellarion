@@ -27,6 +27,13 @@ export default function LandingPage() {
     { icon: '📥', title: t('landing.featureImportTitle'), desc: t('landing.featureImportDesc') },
   ];
 
+  const whyPoints = [
+    { icon: '🎁', title: t('landing.whyFreeTitle'), desc: t('landing.whyFreeDesc') },
+    { icon: '📤', title: t('landing.whyExportTitle'), desc: t('landing.whyExportDesc') },
+    { icon: '🔒', title: t('landing.whyPrivacyTitle'), desc: t('landing.whyPrivacyDesc') },
+    { icon: '🇪🇺', title: t('landing.whyGdprTitle'), desc: t('landing.whyGdprDesc') },
+  ];
+
   // Visible Q&A on the page MUST match the FAQPage JSON-LD verbatim — Google penalises
   // schema-only Q&A that doesn't appear on the page.
   const faqs = [
@@ -66,7 +73,6 @@ export default function LandingPage() {
         name: 'Cellarion',
         url: SITE_URL,
         logo: `${SITE_URL}/cellarion-logo.jpg`,
-        sameAs: ['https://github.com/jagduvi1/Cellarion'],
       },
       {
         '@type': 'SoftwareApplication',
@@ -97,7 +103,7 @@ export default function LandingPage() {
   return (
     <div className="landing">
       <SEOHead
-        title="Cellarion — Track & Manage Your Wine Collection | Free Open-Source Wine Cellar App"
+        title={t('landing.metaTitle')}
         description={t('landing.metaDescription')}
         path="/"
         language={lang}
@@ -110,14 +116,6 @@ export default function LandingPage() {
           <img src={theme === 'dark' ? LOGO_DARK : LOGO_LIGHT} alt="Cellarion" className="landing-nav-logo-img" />
         </div>
         <div className="landing-nav-actions">
-          <a
-            href="https://github.com/jagduvi1/Cellarion"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="landing-nav-link"
-          >
-            GitHub
-          </a>
           {user ? (
             <Link to="/cellars" className="btn-landing-primary">
               {t('landing.myCellar')} →
@@ -150,28 +148,11 @@ export default function LandingPage() {
                 {t('landing.goToCellar')}
               </Link>
             ) : (
-              <>
-                <Link to="/login" className="btn-landing-primary btn-landing-large">
-                  {t('landing.getStarted')}
-                </Link>
-                <a
-                  href="https://github.com/jagduvi1/Cellarion"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="btn-landing-ghost btn-landing-large"
-                >
-                  ★ {t('landing.starOnGithub')}
-                </a>
-              </>
+              <Link to="/login" className="btn-landing-primary btn-landing-large">
+                {t('landing.getStarted')}
+              </Link>
             )}
           </div>
-          <p className="landing-hosted-note">
-            {t('landing.hostedAt')}{' '}
-            <a href="https://cellarion.app" className="landing-link">
-              cellarion.app
-            </a>{' '}
-            · {t('landing.selfHost')}
-          </p>
         </div>
       </section>
 
@@ -204,31 +185,20 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* ── Open source banner ── */}
-      <section className="landing-oss">
-        <div className="landing-section-inner landing-oss-inner">
-          <div className="landing-oss-badge">{t('landing.ossBadge')}</div>
-          <h2 className="landing-oss-title">{t('landing.ossTitle')}</h2>
-          <p className="landing-oss-body">
-            {t('landing.ossBody')}
-          </p>
-          <div className="landing-oss-pills">
-            <span className="landing-pill">AGPL-3.0</span>
-            <span className="landing-pill">Self-hostable</span>
-            <span className="landing-pill">Docker Compose</span>
-            <span className="landing-pill">MongoDB</span>
-            <span className="landing-pill">React 19</span>
-            <span className="landing-pill">Node.js 20</span>
-            <span className="landing-pill">Meilisearch</span>
+      {/* ── Why Cellarion ── */}
+      <section className="landing-why">
+        <div className="landing-section-inner">
+          <h2 className="landing-section-title">{t('landing.whyTitle')}</h2>
+          <p className="landing-section-sub">{t('landing.whySub')}</p>
+          <div className="landing-features-grid">
+            {whyPoints.map((p) => (
+              <div key={p.title} className="landing-feature-card">
+                <span className="landing-feature-icon">{p.icon}</span>
+                <h3 className="landing-feature-title">{p.title}</h3>
+                <p className="landing-feature-desc">{p.desc}</p>
+              </div>
+            ))}
           </div>
-          <a
-            href="https://github.com/jagduvi1/Cellarion"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="btn-landing-primary"
-          >
-            {t('landing.ossViewSource')} →
-          </a>
         </div>
       </section>
 
@@ -275,27 +245,21 @@ export default function LandingPage() {
             <img src={theme === 'dark' ? LOGO_DARK : LOGO_LIGHT} alt="" className="landing-footer-logo-img" /> Cellarion
           </span>
           <div className="landing-footer-links">
+            <Link to="/privacy">Privacy</Link>
+            {contactEmail && (
+              <a href={`mailto:${contactEmail}`}>{contactEmail}</a>
+            )}
+            <Link to="/login">Login</Link>
             <a
               href="https://github.com/jagduvi1/Cellarion"
               target="_blank"
               rel="noopener noreferrer"
             >
-              GitHub
+              {t('landing.footerSourceLink')}
             </a>
-            <a
-              href="https://github.com/jagduvi1/Cellarion/blob/main/LICENSE"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              {t('landing.footerLicense')}
-            </a>
-            {contactEmail && (
-              <a href={`mailto:${contactEmail}`}>{contactEmail}</a>
-            )}
-            <Link to="/login">Login</Link>
           </div>
           <span className="landing-footer-copy">
-            © {new Date().getFullYear()} {t('landing.footerContributors')}
+            © {new Date().getFullYear()} {t('landing.footerCopy')}
           </span>
         </div>
       </footer>
