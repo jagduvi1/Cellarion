@@ -24,6 +24,7 @@ const {
   AI_CONCURRENCY,
 } = require('../config/constants');
 const { stripHtml, escapeRegex } = require('../utils/sanitize');
+const { parseAndValidateVintage } = require('../utils/validation');
 const { extractAiExplanation } = require('../utils/jsonExtract');
 const { getMaxPosition } = require('../utils/rackGeometry');
 const { runConcurrent } = require('../utils/concurrency');
@@ -423,6 +424,15 @@ router.post('/confirm', async (req, res) => {
         continue;
       }
 
+      // Validate vintage up front. A single typo'd row is reported as an
+      // error and skipped, but doesn't abort the whole batch.
+      const vintageCheck = parseAndValidateVintage(item.vintage);
+      if (!vintageCheck.ok) {
+        errors.push({ index: i, reason: vintageCheck.error });
+        continue;
+      }
+      const canonicalVintage = vintageCheck.value;
+
       try {
         let wineDoc = null;
 
@@ -467,7 +477,7 @@ router.post('/confirm', async (req, res) => {
             cellar: cellarId,
             user: cellar.user,
             pendingWineRequest: wineRequest._id,
-            vintage: item.vintage || 'NV',
+            vintage: canonicalVintage,
             price: item.price || undefined,
             currency: item.currency || 'USD',
             priceSetAt,
@@ -538,7 +548,7 @@ router.post('/confirm', async (req, res) => {
           cellar: cellarId,
           user: cellar.user,
           wineDefinition: item.wineDefinition,
-          vintage: item.vintage || 'NV',
+          vintage: canonicalVintage,
           price: item.price || undefined,
           currency: item.currency || 'USD',
           priceSetAt,
@@ -591,13 +601,13 @@ router.post('/confirm', async (req, res) => {
           }
         }
 
-        // Auto-create pending WineVintageProfile for numeric vintages
-        const vintageYear = parseInt(item.vintage);
-        if (item.vintage && item.vintage !== 'NV' && !isNaN(vintageYear)) {
+        // Auto-create pending WineVintageProfile for non-NV vintages.
+        // Vintage was validated at the top of the iteration.
+        if (canonicalVintage !== 'NV') {
           const wineDefId = wineDoc._id;
           WineVintageProfile.findOneAndUpdate(
-            { wineDefinition: wineDefId, vintage: String(vintageYear) },
-            { $setOnInsert: { wineDefinition: wineDefId, vintage: String(vintageYear), status: 'pending' } },
+            { wineDefinition: wineDefId, vintage: canonicalVintage },
+            { $setOnInsert: { wineDefinition: wineDefId, vintage: canonicalVintage, status: 'pending' } },
             { upsert: true, new: false }
           ).catch(err => console.error('Failed to upsert WineVintageProfile during import:', err.message));
         }
