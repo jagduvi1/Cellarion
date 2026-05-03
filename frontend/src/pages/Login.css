@@ -163,6 +163,15 @@
   margin-top: 0.5rem;
 }
 
+.login-version a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.login-version a:hover {
+  text-decoration: underline;
+}
+
 .consent-group {
   margin-top: 0.5rem;
 }

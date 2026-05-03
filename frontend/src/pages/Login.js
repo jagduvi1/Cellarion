@@ -113,7 +113,15 @@ function Login() {
         <a href="mailto:support@cellarion.app">Contact support</a>.
       </p>
       {appVersion && (
-        <p className="login-version">v{appVersion}</p>
+        <p className="login-version">
+          <a
+            href={`https://github.com/jagduvi1/Cellarion/releases/tag/v${appVersion}`}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            v{appVersion}
+          </a>
+        </p>
       )}
     </footer>
   );

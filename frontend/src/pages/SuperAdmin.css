@@ -61,6 +61,15 @@
   letter-spacing: 0;
 }
 
+.sa-topbar-title span a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.sa-topbar-title span a:hover {
+  text-decoration: underline;
+}
+
 .sa-topbar-meta {
   font-size: 11px;
   color: var(--sa-text-dim);
