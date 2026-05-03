@@ -7,6 +7,7 @@ const Rack = require('../models/Rack');
 const WineDefinition = require('../models/WineDefinition');
 const WineVintageProfile = require('../models/WineVintageProfile');
 const BottleImage = require('../models/BottleImage');
+const WineRequest = require('../models/WineRequest');
 const { getCellarRole } = require('../utils/cellarAccess');
 const { logAudit } = require('../services/audit');
 const { getOrCreateDailySnapshot, getSnapshotForDate } = require('../utils/exchangeRates');
@@ -434,6 +435,57 @@ router.post('/:id/consume', requireBottleAccess('editor'), async (req, res) => {
   } catch (error) {
     console.error('Consume bottle error:', error);
     res.status(500).json({ error: 'Failed to consume bottle' });
+  }
+});
+
+// POST /api/bottles/:id/undo - Reverse an incorrectly-added bottle.
+// The bottle disappears from cellar, racks, search, and stats as if it had
+// never been added. Internal audit log keeps the original `bottle.add` row
+// plus a new `bottle.undo` row so admins can still investigate disputes.
+// Active bottles only — consumed bottles must use a different path.
+router.post('/:id/undo', requireBottleAccess('editor'), async (req, res) => {
+  try {
+    const { bottle } = req;
+
+    if (bottle.status !== 'active') {
+      return res.status(400).json({
+        error: 'Only active bottles can be marked as a mistake. Already-consumed bottles cannot be undone.'
+      });
+    }
+
+    const bottleId = bottle._id;
+    const cellarId = bottle.cellar;
+    const pendingRequestId = bottle.pendingWineRequest || null;
+
+    await removeFromRacks(bottleId);
+    searchService.removeBottle(bottleId);
+
+    // Bottle-only images go away. Images promoted to a WineDefinition (e.g.
+    // approved community photos) stay, but lose their link back to this bottle.
+    await BottleImage.deleteMany({ bottle: bottleId, assignedToWine: false });
+    await BottleImage.updateMany(
+      { bottle: bottleId, assignedToWine: true },
+      { $set: { bottle: null } }
+    );
+
+    // If this bottle held a still-pending wine request, drop it — the user
+    // is saying the entry shouldn't have been created in the first place.
+    // Resolved/rejected requests are admin-actioned and stay put.
+    if (pendingRequestId) {
+      await WineRequest.deleteOne({ _id: pendingRequestId, status: 'pending' });
+    }
+
+    await bottle.deleteOne();
+
+    logAudit(req, 'bottle.undo',
+      { type: 'bottle', id: bottleId, cellarId },
+      { reason: 'mistake' }
+    );
+
+    res.json({ message: 'Bottle removed as mistake' });
+  } catch (error) {
+    console.error('Undo bottle error:', error);
+    res.status(500).json({ error: 'Failed to undo bottle' });
   }
 });
 
