@@ -658,9 +658,9 @@ function AddBottle() {
                   value={bottleData.vintage}
                   onChange={(e) => setBottleData({ ...bottleData, vintage: e.target.value })}
                   placeholder={t('addBottle.vintagePlaceholder')}
-                  pattern="^(?:[Nn][Vv]|(?:19|20)\d{2})$"
+                  pattern="^(?:[Nn][Vv]|[Uu]nknown|(?:19|20)\d{2})$"
                   title={t('addBottle.vintagePattern')}
-                  maxLength={4}
+                  maxLength={7}
                   required
                   autoFocus
                 />
