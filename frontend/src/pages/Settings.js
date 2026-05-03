@@ -627,7 +627,16 @@ function Settings() {
       </div>
 
       {appVersion && (
-        <p className="settings-version">Cellarion v{appVersion}</p>
+        <p className="settings-version">
+          Cellarion{' '}
+          <a
+            href={`https://github.com/jagduvi1/Cellarion/releases/tag/v${appVersion}`}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            v{appVersion}
+          </a>
+        </p>
       )}
     </div>
   );

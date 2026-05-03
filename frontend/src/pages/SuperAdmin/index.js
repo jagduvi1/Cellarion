@@ -73,7 +73,18 @@ export default function SuperAdmin() {
       <div className="sa-topbar">
         <div className="sa-topbar-title">
           CELLARION SYSTEM MONITOR
-          <span>v{appVersion || '—'} · {user.email}</span>
+          <span>
+            {appVersion ? (
+              <a
+                href={`https://github.com/jagduvi1/Cellarion/releases/tag/v${appVersion}`}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                v{appVersion}
+              </a>
+            ) : 'v—'}
+            {' · '}{user.email}
+          </span>
         </div>
         <div className="sa-topbar-meta">
           <span>Last refresh: {lastRefresh.toLocaleTimeString()}</span>
