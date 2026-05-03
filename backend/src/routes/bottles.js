@@ -149,20 +149,20 @@ router.post('/', async (req, res) => {
     // Index in Meilisearch (fire-and-forget) — skip if added directly as consumed
     if (!addToHistory) searchService.indexBottle(bottle._id);
 
-    // Auto-create a pending WineVintageProfile for any non-NV vintage. The
-    // value has already been validated as a plausible year above, so the
-    // somm queue is protected from typos like "1001".
-    if (canonicalVintage !== 'NV') {
-      try {
-        await WineVintageProfile.findOneAndUpdate(
-          { wineDefinition: wineDefinition, vintage: canonicalVintage },
-          { $setOnInsert: { wineDefinition, vintage: canonicalVintage, status: 'pending' } },
-          { upsert: true, new: false }
-        );
-      } catch (profileErr) {
-        // Non-fatal: log but don't fail the bottle creation
-        console.warn('WineVintageProfile upsert warning:', profileErr.message);
-      }
+    // Auto-create a pending WineVintageProfile for every bottle, including
+    // NV. The value has been validated above (a plausible year or "NV") so
+    // the somm queue is protected from typos like "1001". NV profiles let
+    // somms attach drinking notes to non-vintage wines (Champagne, sparkling)
+    // even though the calendar-year phase fields don't apply.
+    try {
+      await WineVintageProfile.findOneAndUpdate(
+        { wineDefinition: wineDefinition, vintage: canonicalVintage },
+        { $setOnInsert: { wineDefinition, vintage: canonicalVintage, status: 'pending' } },
+        { upsert: true, new: false }
+      );
+    } catch (profileErr) {
+      // Non-fatal: log but don't fail the bottle creation
+      console.warn('WineVintageProfile upsert warning:', profileErr.message);
     }
 
     logAudit(req, addToHistory ? 'bottle.addToHistory' : 'bottle.add',

@@ -601,9 +601,9 @@ router.post('/confirm', async (req, res) => {
           }
         }
 
-        // Auto-create pending WineVintageProfile for non-NV vintages.
-        // Vintage was validated at the top of the iteration.
-        if (canonicalVintage !== 'NV') {
+        // Auto-create pending WineVintageProfile for every bottle, including
+        // NV. Vintage was validated at the top of the iteration.
+        {
           const wineDefId = wineDoc._id;
           WineVintageProfile.findOneAndUpdate(
             { wineDefinition: wineDefId, vintage: canonicalVintage },
