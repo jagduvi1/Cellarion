@@ -63,7 +63,15 @@ function EditForm({ bottle, onSaved, onCancel, onImageUploaded }) {
       <div className="bd-edit-grid">
         <div className="form-group">
           <label>{t('bottleDetail.vintage')}</label>
-          <input type="text" value={form.vintage} onChange={set('vintage')} placeholder={t('bottleDetail.vintagePlaceholder')} />
+          <input
+            type="text"
+            value={form.vintage}
+            onChange={set('vintage')}
+            placeholder={t('bottleDetail.vintagePlaceholder')}
+            pattern="^(?:[Nn][Vv]|(?:19|20)\d{2})$"
+            title={t('bottleDetail.vintagePattern')}
+            maxLength={4}
+          />
         </div>
 
         <div className="form-group">

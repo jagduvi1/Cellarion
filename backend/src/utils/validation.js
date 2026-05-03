@@ -13,4 +13,49 @@ function isValidId(id) {
   return typeof id === 'string' && mongoose.isValidObjectId(id);
 }
 
-module.exports = { isValidId };
+// Lower bound: oldest plausible drinkable vintage. Tightening this to ~1900
+// keeps obvious typos like "1001" out of the maturity queue without
+// excluding fortified/aged wines that occasionally surface from old cellars.
+const MIN_VINTAGE_YEAR = 1900;
+
+/**
+ * Parse a vintage value coming from the client (bottle create/update or
+ * import). Returns one of:
+ *   { ok: true,  value: 'NV' }              — non-vintage / blank
+ *   { ok: true,  value: '2018' }            — valid year as canonical string
+ *   { ok: false, error: 'Invalid vintage' } — anything else
+ *
+ * The upper bound floats with the current year (current + 5) so future
+ * en primeur releases stay accepted without code changes.
+ *
+ * Accepts numbers, strings, and trims whitespace. Rejects anything that
+ * isn't strictly an integer year in [MIN_VINTAGE_YEAR, currentYear+5] or
+ * the literal "NV" / blank.
+ */
+function parseAndValidateVintage(raw, { now = new Date() } = {}) {
+  if (raw === undefined || raw === null || raw === '') {
+    return { ok: true, value: 'NV' };
+  }
+
+  const str = String(raw).trim();
+  if (str === '') return { ok: true, value: 'NV' };
+  if (str.toUpperCase() === 'NV') return { ok: true, value: 'NV' };
+
+  // Strict integer match — rejects "2001.5", "20a1", " 2001 abc", etc.
+  if (!/^-?\d+$/.test(str)) {
+    return { ok: false, error: `Invalid vintage "${str}" — expected a year or "NV"` };
+  }
+
+  const year = parseInt(str, 10);
+  const maxYear = now.getFullYear() + 5;
+  if (year < MIN_VINTAGE_YEAR || year > maxYear) {
+    return {
+      ok: false,
+      error: `Vintage ${year} is out of range (expected ${MIN_VINTAGE_YEAR}–${maxYear} or "NV")`
+    };
+  }
+
+  return { ok: true, value: String(year) };
+}
+
+module.exports = { isValidId, parseAndValidateVintage, MIN_VINTAGE_YEAR };

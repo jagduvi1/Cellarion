@@ -15,6 +15,7 @@ const { embedSinglePair } = require('../services/embeddingJob');
 const { CONSUMED_STATUSES, WINE_POPULATE } = require('../config/constants');
 const { checkRestockGap, resolveRestockAlerts } = require('../services/restockChecker');
 const { stripHtml, isSafeUrl } = require('../utils/sanitize');
+const { parseAndValidateVintage } = require('../utils/validation');
 const searchService = require('../services/search');
 
 const router = express.Router();
@@ -60,6 +61,10 @@ router.post('/', async (req, res) => {
     if (!cellar || !wineDefinition) {
       return res.status(400).json({ error: 'Cellar and wine definition are required' });
     }
+
+    const vintageCheck = parseAndValidateVintage(vintage);
+    if (!vintageCheck.ok) return res.status(400).json({ error: vintageCheck.error });
+    const canonicalVintage = vintageCheck.value;
 
     if (purchaseUrl) {
       if (purchaseUrl.length > 2048) return res.status(400).json({ error: 'purchaseUrl is too long (max 2048 characters)' });
@@ -107,7 +112,7 @@ router.post('/', async (req, res) => {
       cellar,
       user: cellarDoc.user,
       wineDefinition,
-      vintage: vintage || 'NV',
+      vintage: canonicalVintage,
       price,
       currency: currency || 'USD',
       priceSetAt,
@@ -143,14 +148,14 @@ router.post('/', async (req, res) => {
     // Index in Meilisearch (fire-and-forget) — skip if added directly as consumed
     if (!addToHistory) searchService.indexBottle(bottle._id);
 
-    // Auto-create a pending WineVintageProfile if the vintage is a numeric year
-    // and one doesn't already exist. The somm queue will pick this up.
-    const vintageYear = parseInt(vintage);
-    if (vintage && vintage !== 'NV' && !isNaN(vintageYear)) {
+    // Auto-create a pending WineVintageProfile for any non-NV vintage. The
+    // value has already been validated as a plausible year above, so the
+    // somm queue is protected from typos like "1001".
+    if (canonicalVintage !== 'NV') {
       try {
         await WineVintageProfile.findOneAndUpdate(
-          { wineDefinition: wineDefinition, vintage: String(vintageYear) },
-          { $setOnInsert: { wineDefinition, vintage: String(vintageYear), status: 'pending' } },
+          { wineDefinition: wineDefinition, vintage: canonicalVintage },
+          { $setOnInsert: { wineDefinition, vintage: canonicalVintage, status: 'pending' } },
           { upsert: true, new: false }
         );
       } catch (profileErr) {
@@ -236,6 +241,14 @@ router.put('/:id', requireBottleAccess('editor'), async (req, res) => {
     if (req.body.notes && req.body.notes.length > 5000) return res.status(400).json({ error: 'Notes are too long (max 5000 characters)' });
     if (req.body.location && req.body.location.length > 500) return res.status(400).json({ error: 'Location is too long (max 500 characters)' });
     if (req.body.purchaseLocation && req.body.purchaseLocation.length > 500) return res.status(400).json({ error: 'Purchase location is too long (max 500 characters)' });
+
+    // Coerce vintage to its canonical form (or reject) before the generic
+    // field-diff loop assigns it onto the bottle.
+    if ('vintage' in req.body) {
+      const vintageCheck = parseAndValidateVintage(req.body.vintage);
+      if (!vintageCheck.ok) return res.status(400).json({ error: vintageCheck.error });
+      req.body.vintage = vintageCheck.value;
+    }
 
     // Update allowed fields — diff old vs new for the audit log
     const updateFields = [
