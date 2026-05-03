@@ -104,10 +104,12 @@ function BottleDetail() {
             setCommunityRating(wineObj.communityRating);
           }
         }
-        // Fetch the sommelier maturity profile for this wine+vintage
+        // Fetch the sommelier maturity profile for this wine+vintage. Skip
+        // for non-vintage / unknown bottles since calendar-year windows
+        // and historical pricing don't apply to them.
         const wine = data.bottle?.wineDefinition;
         const vintage = data.bottle?.vintage;
-        if (wine?._id && vintage && vintage !== 'NV') {
+        if (wine?._id && vintage && vintage !== 'NV' && vintage !== 'Unknown') {
           fetchVintageProfile(wine._id, vintage);
           fetchPriceHistory(wine._id, vintage);
           fetchRates().then(r => { if (r) setRates(r); });

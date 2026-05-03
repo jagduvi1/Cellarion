@@ -68,9 +68,9 @@ function EditForm({ bottle, onSaved, onCancel, onImageUploaded }) {
             value={form.vintage}
             onChange={set('vintage')}
             placeholder={t('bottleDetail.vintagePlaceholder')}
-            pattern="^(?:[Nn][Vv]|(?:19|20)\d{2})$"
+            pattern="^(?:[Nn][Vv]|[Uu]nknown|(?:19|20)\d{2})$"
             title={t('bottleDetail.vintagePattern')}
-            maxLength={4}
+            maxLength={7}
           />
         </div>
 

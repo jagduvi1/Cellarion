@@ -37,6 +37,12 @@ describe('parseAndValidateVintage', () => {
     expect(parseAndValidateVintage(' Nv ', { now })).toEqual({ ok: true, value: 'NV' });
   });
 
+  it('accepts the literal "Unknown" in any case', () => {
+    expect(parseAndValidateVintage('Unknown', { now })).toEqual({ ok: true, value: 'Unknown' });
+    expect(parseAndValidateVintage('unknown', { now })).toEqual({ ok: true, value: 'Unknown' });
+    expect(parseAndValidateVintage(' UNKNOWN ', { now })).toEqual({ ok: true, value: 'Unknown' });
+  });
+
   it('accepts plausible vintage years and returns canonical string', () => {
     expect(parseAndValidateVintage('2018', { now })).toEqual({ ok: true, value: '2018' });
     expect(parseAndValidateVintage(2018, { now })).toEqual({ ok: true, value: '2018' });
