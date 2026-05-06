@@ -12,7 +12,7 @@ import SEOHead from '../components/SEOHead';
 import './Discussions.css';
 
 const CATEGORIES = Object.keys(CATEGORY_LABELS);
-const SORT_KEYS = ['active', 'newest', 'most-replies'];
+const SORT_KEYS = ['active', 'trending', 'newest', 'most-replies'];
 
 function Discussions() {
   const { t } = useTranslation();
@@ -27,6 +27,8 @@ function Discussions() {
 
   const [category, setCategory] = useState('');
   const [sort, setSort] = useState('active');
+  const [searchInput, setSearchInput] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
 
   // Create modal state
   const [showCreate, setShowCreate] = useState(false);
@@ -37,6 +39,7 @@ function Discussions() {
 
   const sortLabels = {
     'active': t('discussions.sortMostActive'),
+    'trending': t('discussions.sortTrending'),
     'newest': t('discussions.sortNewest'),
     'most-replies': t('discussions.sortMostReplies')
   };
@@ -48,6 +51,7 @@ function Discussions() {
 
       const params = new URLSearchParams({ page: p, limit: 20, sort });
       if (category) params.set('category', category);
+      if (searchQuery) params.set('q', searchQuery);
 
       const res = await getDiscussions(apiFetch, params.toString());
       const data = await res.json();
@@ -66,12 +70,22 @@ function Discussions() {
       setLoading(false);
       setLoadingMore(false);
     }
-  }, [apiFetch, category, sort, t]);
+  }, [apiFetch, category, sort, searchQuery, t]);
 
   useEffect(() => {
     setDiscussions([]);
     fetchDiscussions(1, true);
-  }, [category, sort]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [category, sort, searchQuery]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleSearchSubmit = (e) => {
+    e.preventDefault();
+    setSearchQuery(searchInput.trim());
+  };
+
+  const clearSearch = () => {
+    setSearchInput('');
+    setSearchQuery('');
+  };
 
   // Pre-fill the create modal when the user arrives from a wine page's
   // "Start a discussion about this wine" CTA. We use route state (not a query
@@ -147,6 +161,26 @@ function Discussions() {
         <h1>{t('discussions.community')}</h1>
         <span className="discussions__beta-badge">{t('discussions.beta')}</span>
       </div>
+
+      <form className="discussions__search" onSubmit={handleSearchSubmit} role="search">
+        <input
+          type="search"
+          className="input discussions__search-input"
+          value={searchInput}
+          onChange={e => setSearchInput(e.target.value)}
+          placeholder={t('discussions.searchPlaceholder')}
+          aria-label={t('discussions.searchPlaceholder')}
+        />
+        {searchQuery && (
+          <button type="button" className="btn btn-secondary btn-small" onClick={clearSearch}>
+            {t('common.cancel')}
+          </button>
+        )}
+        <button type="submit" className="btn btn-primary btn-small">
+          {t('discussions.search')}
+        </button>
+      </form>
+
       <div className="discussions__controls">
         <div className="discussions__filters">
           <div className="discussions__categories">

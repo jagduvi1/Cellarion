@@ -1224,8 +1224,11 @@
     "discussions": "Discussions",
     "all": "All",
     "sortMostActive": "Most Active",
+    "sortTrending": "Trending",
     "sortNewest": "Newest",
     "sortMostReplies": "Most Replies",
+    "search": "Search",
+    "searchPlaceholder": "Search discussions…",
     "newDiscussion": "New Discussion",
     "noDiscussions": "No discussions yet",
     "noDiscussionsHint": "Start a conversation! Click \"New Discussion\" to create the first thread.",
@@ -1299,6 +1302,10 @@
     "signInToStart": "Sign in to discuss",
     "viewAll": "View all {{count}} discussions",
     "empty": "No discussions yet — be the first to share your thoughts on this wine."
+  },
+  "discussionsWidget": {
+    "title": "Latest from the community",
+    "seeAll": "See all"
   },
   "reviewFeed": {
     "community": "Community",

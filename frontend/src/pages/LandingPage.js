@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
 import SEOHead from '../components/SEOHead';
+import DiscussionsFeedWidget from '../components/DiscussionsFeedWidget';
 import SITE_URL from '../config/siteUrl';
 import './LandingPage.css';
 
@@ -237,6 +238,9 @@ export default function LandingPage() {
           )}
         </div>
       </section>
+
+      {/* ── Latest community activity — public-readable forum teaser ── */}
+      <DiscussionsFeedWidget limit={5} sort="active" />
 
       {/* ── Footer ── */}
       <footer className="landing-footer">
