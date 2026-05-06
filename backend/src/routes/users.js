@@ -377,8 +377,8 @@ router.get('/me/export', requireAuth, async (req, res) => {
       RestockAlert.find({ user: userId }).lean(),
       WineList.find({ user: userId }).select('name cellar structureMode branding layout createdAt updatedAt').lean(),
       PendingShare.find({ invitedBy: userId }).populate('cellar', 'name').lean(),
-      Discussion.find({ author: userId }).select('title category body createdAt').lean(),
-      DiscussionReply.find({ author: userId }).select('discussion body createdAt').lean(),
+      Discussion.find({ author: userId }).select('title category body wineDefinition isPinned isLocked replyCount createdAt updatedAt').lean(),
+      DiscussionReply.find({ author: userId }).select('discussion body quote wineDefinition likesCount isDeleted createdAt updatedAt').lean(),
       ReviewVote.find({ user: userId }).select('review vote createdAt').lean(),
       DiscussionReplyVote.find({ user: userId }).select('reply vote createdAt').lean(),
       Follow.find({ $or: [{ follower: userId }, { following: userId }] })
@@ -479,11 +479,23 @@ router.get('/me/export', requireAuth, async (req, res) => {
       discussions: discussions.map(d => ({
         title: d.title,
         category: d.category,
-        createdAt: d.createdAt
+        body: d.body,
+        wineDefinition: d.wineDefinition,
+        isPinned: d.isPinned,
+        isLocked: d.isLocked,
+        replyCount: d.replyCount,
+        createdAt: d.createdAt,
+        updatedAt: d.updatedAt
       })),
       discussionReplies: discussionReplies.map(r => ({
         discussion: r.discussion,
-        createdAt: r.createdAt
+        body: r.body,
+        quote: r.quote,
+        wineDefinition: r.wineDefinition,
+        likesCount: r.likesCount,
+        isDeleted: r.isDeleted,
+        createdAt: r.createdAt,
+        updatedAt: r.updatedAt
       })),
       votes: {
         reviews: reviewVotes.map(v => ({ review: v.review, vote: v.vote, createdAt: v.createdAt })),

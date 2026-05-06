@@ -42,6 +42,37 @@ const requireAuth = async (req, res, next) => {
   }
 };
 
+// Same JWT decode as requireAuth, but missing/invalid tokens leave req.user = null
+// instead of returning 401. Use this on routes that are public-readable but
+// need to know "who am I, if anyone" — e.g. forum list/detail with personalized
+// flags like `liked`, or future "you have this in your cellar" hints.
+const optionalAuth = async (req, res, next) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    req.user = null;
+    return next();
+  }
+
+  try {
+    const token = authHeader.substring(7);
+    const decoded = jwt.verify(token, process.env.JWT_SECRET, { algorithms: ['HS256'] });
+
+    const roles = decoded.roles || (decoded.role ? [decoded.role] : ['user']);
+    const planExpired = decoded.planExpiresAt && Date.now() > new Date(decoded.planExpiresAt).getTime();
+    const effectivePlan = planExpired ? 'free' : (decoded.plan || 'free');
+
+    req.user = {
+      id: decoded.id,
+      roles,
+      plan: effectivePlan,
+      planExpiresAt: decoded.planExpiresAt || null,
+    };
+  } catch {
+    req.user = null;
+  }
+  next();
+};
+
 // Middleware to check user has a specific role
 const requireRole = (role) => {
   return (req, res, next) => {
@@ -85,6 +116,7 @@ const requireModeratorOrAdmin = (req, res, next) => {
 
 module.exports = {
   requireAuth,
+  optionalAuth,
   requireRole,
   requireSommOrAdmin,
   requireModeratorOrAdmin,

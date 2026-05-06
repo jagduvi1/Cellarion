@@ -3,7 +3,7 @@ const jwt = require('jsonwebtoken');
 // Use a fixed test secret so we can sign real tokens
 process.env.JWT_SECRET = 'test-secret';
 
-const { requireAuth, requireRole, requireSommOrAdmin } = require('./auth');
+const { requireAuth, optionalAuth, requireRole, requireSommOrAdmin } = require('./auth');
 
 // ─── Helpers ────────────────────────────────────────��────────────────────────
 
@@ -125,6 +125,83 @@ describe('requireAuth', () => {
     const next = jest.fn();
 
     await requireAuth(req, res, next);
+
+    expect(next).toHaveBeenCalled();
+    expect(req.user.plan).toBe('free');
+  });
+});
+
+// ─── optionalAuth ────────────────────────────────────────────────────────────
+
+describe('optionalAuth', () => {
+  test('sets req.user = null and calls next when Authorization header is absent', async () => {
+    const req = makeReq();
+    const res = makeRes();
+    const next = jest.fn();
+
+    await optionalAuth(req, res, next);
+
+    expect(next).toHaveBeenCalled();
+    expect(req.user).toBeNull();
+    expect(res.status).not.toHaveBeenCalled();
+  });
+
+  test('sets req.user = null when header is malformed (no "Bearer " prefix)', async () => {
+    const req = makeReq({ headers: { authorization: 'Token abc' } });
+    const res = makeRes();
+    const next = jest.fn();
+
+    await optionalAuth(req, res, next);
+
+    expect(next).toHaveBeenCalled();
+    expect(req.user).toBeNull();
+    expect(res.status).not.toHaveBeenCalled();
+  });
+
+  test('sets req.user = null for an invalid token (does NOT 401)', async () => {
+    const req = makeReq({ headers: { authorization: 'Bearer not.a.valid.token' } });
+    const res = makeRes();
+    const next = jest.fn();
+
+    await optionalAuth(req, res, next);
+
+    expect(next).toHaveBeenCalled();
+    expect(req.user).toBeNull();
+    expect(res.status).not.toHaveBeenCalled();
+  });
+
+  test('sets req.user = null for an expired token', async () => {
+    const token = signToken({ id: 'u1', roles: ['user'] }, 'test-secret', { expiresIn: -1 });
+    const req = makeReq({ headers: { authorization: `Bearer ${token}` } });
+    const res = makeRes();
+    const next = jest.fn();
+
+    await optionalAuth(req, res, next);
+
+    expect(next).toHaveBeenCalled();
+    expect(req.user).toBeNull();
+  });
+
+  test('attaches req.user for a valid token', async () => {
+    const token = signToken({ id: 'u1', roles: ['admin'], plan: 'patron' });
+    const req = makeReq({ headers: { authorization: `Bearer ${token}` } });
+    const res = makeRes();
+    const next = jest.fn();
+
+    await optionalAuth(req, res, next);
+
+    expect(next).toHaveBeenCalled();
+    expect(req.user).toMatchObject({ id: 'u1', roles: ['admin'], plan: 'patron' });
+  });
+
+  test('downgrades expired plan to free (matches requireAuth behavior)', async () => {
+    const expired = new Date(Date.now() - 60000).toISOString();
+    const token = signToken({ id: 'u4', roles: ['user'], plan: 'patron', planExpiresAt: expired });
+    const req = makeReq({ headers: { authorization: `Bearer ${token}` } });
+    const res = makeRes();
+    const next = jest.fn();
+
+    await optionalAuth(req, res, next);
 
     expect(next).toHaveBeenCalled();
     expect(req.user.plan).toBe('free');

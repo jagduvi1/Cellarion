@@ -14,6 +14,7 @@ import WineReferenceCard from '../components/WineReferenceCard';
 import WineSearchPicker from '../components/WineSearchPicker';
 import Modal from '../components/Modal';
 import ConfirmModal from '../components/ConfirmModal';
+import CommunityCTA from '../components/CommunityCTA';
 import timeAgo from '../utils/timeAgo';
 import './DiscussionDetail.css';
 
@@ -290,7 +291,7 @@ function DiscussionDetail() {
         <div className="discussion-detail__body">{discussion.body}</div>
 
         <div className="discussion-detail__actions">
-          {!isOwner && (
+          {user && !isOwner && (
             <button className="reply-card__action-btn" onClick={() => setReportTarget({ type: 'discussion', id: discussion._id })}>
               {t('discussions.report')}
             </button>
@@ -325,7 +326,7 @@ function DiscussionDetail() {
               key={reply._id}
               reply={reply}
               discussionId={id}
-              onReply={discussion.isLocked ? null : (r) => {
+              onReply={!user || discussion.isLocked ? null : (r) => {
                 const authorName = r.author?.displayName || r.author?.username || 'Unknown';
                 const snippet = r.body.length > 300 ? r.body.slice(0, 300) + '…' : r.body;
                 setQuoteData({ replyId: r._id, authorName, body: snippet });
@@ -337,9 +338,9 @@ function DiscussionDetail() {
                   }
                 }, 50);
               }}
-              onEdit={(r) => { setEditingReply(r); setEditBody(r.body); }}
-              onDelete={(r) => setConfirmDeleteReply(r)}
-              onReport={(r) => setReportTarget({ type: 'reply', id: r._id })}
+              onEdit={user ? (r) => { setEditingReply(r); setEditBody(r.body); } : null}
+              onDelete={user ? (r) => setConfirmDeleteReply(r) : null}
+              onReport={user ? (r) => setReportTarget({ type: 'reply', id: r._id }) : null}
             />
           ))
         )}
@@ -353,8 +354,10 @@ function DiscussionDetail() {
         )}
       </div>
 
-      {/* Reply form */}
-      {!discussion.isLocked ? (
+      {/* Reply form — anon users see a sign-in CTA, logged-in users get the composer (unless locked) */}
+      {!user ? (
+        <CommunityCTA message={t('discussions.signInToReply')} />
+      ) : !discussion.isLocked ? (
         <div className="discussion-detail__reply-form card">
           {replyError && <div className="alert alert-error">{replyError}</div>}
           {quoteData && (

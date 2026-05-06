@@ -1286,7 +1286,12 @@
     "deleteReplyWarning": "Texten döljs men moderatorer kan fortfarande granska den.",
     "deleteDiscussion": "Ta bort diskussion",
     "confirmDeleteDiscussion": "Ta bort denna diskussion och alla dess svar?",
-    "deleteDiscussionWarning": "Denna åtgärd kan inte ångras."
+    "deleteDiscussionWarning": "Denna åtgärd kan inte ångras.",
+    "signIn": "Logga in",
+    "createAccount": "Skapa konto",
+    "signInToJoin": "Logga in för att vara med i samtalet — läs fritt, skriv med ett Cellarion-konto.",
+    "signInToReply": "Logga in för att svara på denna diskussion.",
+    "signInToStart": "Logga in för att starta en diskussion."
   },
   "reviewFeed": {
     "community": "Gemenskap",

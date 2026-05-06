@@ -1286,7 +1286,12 @@
     "deleteReplyWarning": "The text will be hidden but moderators can still review it.",
     "deleteDiscussion": "Delete Discussion",
     "confirmDeleteDiscussion": "Delete this discussion and all its replies?",
-    "deleteDiscussionWarning": "This action cannot be undone."
+    "deleteDiscussionWarning": "This action cannot be undone.",
+    "signIn": "Sign in",
+    "createAccount": "Create account",
+    "signInToJoin": "Sign in to join the conversation — read freely, write with a Cellarion account.",
+    "signInToReply": "Sign in to reply to this discussion.",
+    "signInToStart": "Sign in to start a discussion."
   },
   "reviewFeed": {
     "community": "Community",

@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { getDiscussions, createDiscussion } from '../api/discussions';
 import DiscussionCard from '../components/DiscussionCard';
 import CategoryBadge, { CATEGORY_LABELS } from '../components/CategoryBadge';
+import CommunityCTA from '../components/CommunityCTA';
 import Modal from '../components/Modal';
 import WineSearchPicker from '../components/WineSearchPicker';
 import './Discussions.css';
@@ -13,7 +14,7 @@ const SORT_KEYS = ['active', 'newest', 'most-replies'];
 
 function Discussions() {
   const { t } = useTranslation();
-  const { apiFetch } = useAuth();
+  const { apiFetch, user } = useAuth();
   const [discussions, setDiscussions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
@@ -134,10 +135,14 @@ function Discussions() {
             ))}
           </select>
         </div>
-        <button className="btn btn-primary" data-guide="discussion-create" onClick={() => setShowCreate(true)}>
-          {t('discussions.newDiscussion')}
-        </button>
+        {user ? (
+          <button className="btn btn-primary" data-guide="discussion-create" onClick={() => setShowCreate(true)}>
+            {t('discussions.newDiscussion')}
+          </button>
+        ) : null}
       </div>
+
+      {!user && <CommunityCTA variant="inline" />}
 
       {error && <div className="alert alert-error">{error}</div>}
 
@@ -146,7 +151,7 @@ function Discussions() {
       ) : discussions.length === 0 ? (
         <div className="discussions__empty card">
           <h3>{t('discussions.noDiscussions')}</h3>
-          <p>{t('discussions.noDiscussionsHint')}</p>
+          <p>{user ? t('discussions.noDiscussionsHint') : t('discussions.signInToStart')}</p>
         </div>
       ) : (
         <div className="discussions__list">

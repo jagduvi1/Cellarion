@@ -233,31 +233,17 @@ function AppRoutes() {
           }
         />
 
-        {/* Community routes */}
+        {/* Community routes — discussions are publicly readable; reply/post requires auth.
+            ReviewFeed (the "Reviews" tab) stays auth-only since its primary value is
+            following users — opening it up is a separate enhancement. */}
         <Route
           path="/community"
           element={
-            <ProtectedRoute>
-              <Layout><ReviewFeed /></Layout>
-            </ProtectedRoute>
+            user ? <Layout><ReviewFeed /></Layout> : <Navigate to="/community/discussions" replace />
           }
         />
-        <Route
-          path="/community/discussions"
-          element={
-            <ProtectedRoute>
-              <Layout><CommunityDiscussions /></Layout>
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/community/discussions/:id"
-          element={
-            <ProtectedRoute>
-              <Layout><DiscussionDetail /></Layout>
-            </ProtectedRoute>
-          }
-        />
+        <Route path="/community/discussions" element={<Layout><CommunityDiscussions /></Layout>} />
+        <Route path="/community/discussions/:id" element={<Layout><DiscussionDetail /></Layout>} />
         <Route
           path="/users/:userId"
           element={
