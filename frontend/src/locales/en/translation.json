@@ -1239,6 +1239,7 @@
     "link": "Link",
     "linkUrl": "Link URL (https:// or mailto:)",
     "composerToolbar": "Formatting toolbar",
+    "originalPost": "Original Post",
     "newDiscussion": "New Discussion",
     "noDiscussions": "No discussions yet",
     "noDiscussionsHint": "Start a conversation! Click \"New Discussion\" to create the first thread.",

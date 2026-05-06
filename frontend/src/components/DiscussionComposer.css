@@ -93,25 +93,56 @@
 }
 
 /* Read-only render styles for sanitized body output. Used wherever forum
-   bodies are rendered with dangerouslySetInnerHTML. */
+   bodies are rendered with dangerouslySetInnerHTML. Reading-mode typography:
+   capped line length, generous line-height, distinct blockquote/link styling
+   so wine-talk threads read like long-form prose, not like chat messages. */
+.discussion-body {
+  max-width: 68ch;
+  font-size: 1.0625rem;
+  line-height: 1.7;
+  color: var(--color-text);
+}
+
 .discussion-body p {
-  margin: 0 0 0.5rem;
+  margin: 0 0 1rem;
 }
 .discussion-body p:last-child {
   margin-bottom: 0;
 }
+
 .discussion-body blockquote {
-  border-left: 3px solid var(--color-border, rgba(0, 0, 0, 0.15));
-  margin: 0.5rem 0;
-  padding-left: 0.75rem;
-  color: var(--color-text-secondary, #666);
+  margin: 1rem 0;
+  padding: 0.6rem 1rem;
+  border-left: 3px solid var(--color-accent);
+  background: var(--color-primary-light);
+  color: var(--color-text-secondary);
+  font-style: italic;
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
 }
+
 .discussion-body ul,
 .discussion-body ol {
-  margin: 0.5rem 0;
+  margin: 0.75rem 0;
   padding-left: 1.5rem;
 }
+.discussion-body li {
+  margin: 0.25rem 0;
+}
+
 .discussion-body a {
-  color: var(--color-primary, inherit);
+  color: var(--color-primary);
   text-decoration: underline;
+  text-underline-offset: 2px;
+  text-decoration-thickness: 1px;
+}
+.discussion-body a:hover {
+  text-decoration-thickness: 2px;
+}
+
+/* Reply bodies sit inside narrower cards with their own padding — drop the
+   width cap there so the existing card edges define line length. */
+.reply-card .discussion-body {
+  max-width: none;
+  font-size: 1rem;
+  line-height: 1.65;
 }
