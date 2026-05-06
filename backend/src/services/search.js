@@ -3,6 +3,7 @@ const WineDefinition = require('../models/WineDefinition');
 const Bottle = require('../models/Bottle');
 const Discussion = require('../models/Discussion');
 const { WINE_POPULATE, CONSUMED_STATUSES } = require('../config/constants');
+const { stripHtml } = require('../utils/sanitize');
 
 const INDEX_NAME = 'wines';
 const BOTTLES_INDEX_NAME = 'bottles';
@@ -398,7 +399,8 @@ function buildDiscussionDocument(discussion) {
     id: discussion._id.toString(),
     slug: discussion.slug || '',
     title: discussion.title || '',
-    body: discussion.body || '',
+    // Index plain text — Meilisearch shouldn't tokenize HTML markup as content
+    body: stripHtml(discussion.body || ''),
     category: discussion.category || '',
     isLocked: !!discussion.isLocked,
     isPinned: !!discussion.isPinned,

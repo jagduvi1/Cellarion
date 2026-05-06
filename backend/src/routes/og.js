@@ -10,6 +10,8 @@ const Discussion = require('../models/Discussion');
 const DiscussionReply = require('../models/DiscussionReply');
 const { fromNormalized } = require('../utils/ratingUtils');
 const { isValidId } = require('../utils/validation');
+const { sanitizeForumHtml } = require('../utils/sanitizeHtml');
+const { stripHtml } = require('../utils/sanitize');
 
 const WINE_TYPES = ['red', 'white', 'rosé', 'sparkling', 'dessert', 'fortified'];
 const MIN_WINES = 3;
@@ -700,9 +702,12 @@ router.get('/community/discussions', ogLimiter, async (req, res) => {
     <p>${esc(metaDescription)}</p>
     ${discussions.length === 0 ? '<p>No discussions yet — be the first to start one.</p>' : `<ul>${discussions.map(d => {
       const url = `${SITE_URL}/community/discussions/${d.slug || d._id}`;
-      const preview = (d.body || '').slice(0, 160);
+      // Body is HTML — strip to plain text for the preview snippet so we don't
+      // leak markup into the list view.
+      const plain = stripHtml(d.body || '');
+      const preview = plain.slice(0, 160);
       const cat = DISCUSSION_CATEGORY_LABELS[d.category] || d.category;
-      return `<li><a href="${esc(url)}"><strong>${esc(d.title)}</strong></a> — ${esc(cat)} · ${d.replyCount || 0} ${d.replyCount === 1 ? 'reply' : 'replies'}<br/><small>${esc(preview)}${d.body && d.body.length > 160 ? '…' : ''}</small></li>`;
+      return `<li><a href="${esc(url)}"><strong>${esc(d.title)}</strong></a> — ${esc(cat)} · ${d.replyCount || 0} ${d.replyCount === 1 ? 'reply' : 'replies'}<br/><small>${esc(preview)}${plain.length > 160 ? '…' : ''}</small></li>`;
     }).join('')}</ul>`}
   </main>
   <footer>
@@ -756,7 +761,10 @@ router.get('/community/discussions/:idOrSlug', ogLimiter, async (req, res) => {
       .select('body author createdAt')
       .lean();
 
-    const fullDesc = `${discussion.body || ''}`.slice(0, 160);
+    // body is sanitized HTML — strip to plain text for the meta description
+    // so we don't leak `<p>` etc. into Google's snippet.
+    const plainBody = stripHtml(discussion.body || '');
+    const fullDesc = plainBody.slice(0, 160);
     const metaDescription = fullDesc.length > 0 ? fullDesc : `${discussion.title} — Cellarion wine discussion`;
     const datePublished = discussion.createdAt ? new Date(discussion.createdAt).toISOString() : '';
     const dateModified = discussion.lastActivityAt
@@ -767,7 +775,8 @@ router.get('/community/discussions/:idOrSlug', ogLimiter, async (req, res) => {
       '@context': 'https://schema.org',
       '@type': 'DiscussionForumPosting',
       headline: discussion.title,
-      articleBody: discussion.body,
+      // schema.org expects plain-text article bodies, not HTML
+      articleBody: plainBody,
       datePublished,
       dateModified,
       url: pageUrl,
@@ -787,7 +796,7 @@ router.get('/community/discussions/:idOrSlug', ogLimiter, async (req, res) => {
       ...(replies.length > 0 ? {
         comment: replies.map(r => ({
           '@type': 'Comment',
-          text: r.body,
+          text: stripHtml(r.body || ''),
           datePublished: r.createdAt ? new Date(r.createdAt).toISOString() : undefined,
           author: { '@type': 'Person', name: r.author?.displayName || r.author?.username || 'Anonymous' }
         }))
@@ -822,11 +831,11 @@ router.get('/community/discussions/:idOrSlug', ogLimiter, async (req, res) => {
       <p>By ${esc(authorName)}${datePublished ? ` · <time datetime="${esc(datePublished)}">${esc(datePublished.split('T')[0])}</time>` : ''}</p>
       ${discussion.wineDefinition ? `<p>About: <a href="${esc(SITE_URL)}/wines/${esc(discussion.wineDefinition.slug || discussion.wineDefinition._id)}">${esc(discussion.wineDefinition.name)}${discussion.wineDefinition.producer ? ` — ${esc(discussion.wineDefinition.producer)}` : ''}</a></p>` : ''}
     </header>
-    <div>${esc(discussion.body)}</div>
+    <div>${sanitizeForumHtml(discussion.body || '')}</div>
     ${replies.length > 0 ? `<section><h2>${replies.length} ${replies.length === 1 ? 'reply' : 'replies'}</h2>${replies.map(r => {
       const rname = r.author?.displayName || r.author?.username || 'Anonymous';
       const rdate = r.createdAt ? new Date(r.createdAt).toISOString().split('T')[0] : '';
-      return `<div><p><strong>${esc(rname)}</strong>${rdate ? ` <time datetime="${esc(rdate)}">${esc(rdate)}</time>` : ''}</p><p>${esc(r.body)}</p></div>`;
+      return `<div><p><strong>${esc(rname)}</strong>${rdate ? ` <time datetime="${esc(rdate)}">${esc(rdate)}</time>` : ''}</p><div>${sanitizeForumHtml(r.body || '')}</div></div>`;
     }).join('')}</section>` : ''}
   </article>
   <footer>

@@ -1,0 +1,117 @@
+.discussion-composer {
+  border: 1px solid var(--color-border, rgba(0, 0, 0, 0.2));
+  border-radius: 6px;
+  background: var(--color-input-bg, #fff);
+}
+
+.discussion-composer__toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.4rem 0.5rem;
+  border-bottom: 1px solid var(--color-border, rgba(0, 0, 0, 0.08));
+  flex-wrap: wrap;
+}
+
+.discussion-composer__btn {
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--color-text, inherit);
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  min-width: 1.8rem;
+  line-height: 1;
+}
+
+.discussion-composer__btn:hover {
+  background: var(--color-button-hover, rgba(0, 0, 0, 0.05));
+}
+
+.discussion-composer__btn.is-active {
+  background: var(--color-button-active, rgba(0, 0, 0, 0.1));
+  border-color: var(--color-border, rgba(0, 0, 0, 0.2));
+}
+
+.discussion-composer__sep {
+  display: inline-block;
+  width: 1px;
+  height: 1.2rem;
+  background: var(--color-border, rgba(0, 0, 0, 0.15));
+  margin: 0 0.25rem;
+}
+
+.discussion-composer__content {
+  padding: 0.6rem 0.75rem;
+}
+
+/* TipTap renders a contenteditable inside; remove the default outline on focus
+   inside the wrapper since the wrapper itself can show focus state. */
+.discussion-composer__content .ProseMirror {
+  outline: none;
+  min-height: inherit;
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+
+.discussion-composer__content .ProseMirror p {
+  margin: 0 0 0.5rem;
+}
+.discussion-composer__content .ProseMirror p:last-child {
+  margin-bottom: 0;
+}
+
+.discussion-composer__content .ProseMirror blockquote {
+  border-left: 3px solid var(--color-border, rgba(0, 0, 0, 0.15));
+  margin: 0.5rem 0;
+  padding-left: 0.75rem;
+  color: var(--color-text-secondary, #666);
+}
+
+.discussion-composer__content .ProseMirror ul,
+.discussion-composer__content .ProseMirror ol {
+  margin: 0.5rem 0;
+  padding-left: 1.5rem;
+}
+
+/* Placeholder shown when the editor is empty */
+.discussion-composer__content .ProseMirror p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  color: var(--color-text-muted, #999);
+  pointer-events: none;
+  height: 0;
+  float: left;
+}
+
+.discussion-composer__counter {
+  text-align: right;
+  font-size: 0.8rem;
+  color: var(--color-text-secondary, #888);
+  padding: 0.25rem 0.5rem;
+  border-top: 1px solid var(--color-border, rgba(0, 0, 0, 0.05));
+}
+
+/* Read-only render styles for sanitized body output. Used wherever forum
+   bodies are rendered with dangerouslySetInnerHTML. */
+.discussion-body p {
+  margin: 0 0 0.5rem;
+}
+.discussion-body p:last-child {
+  margin-bottom: 0;
+}
+.discussion-body blockquote {
+  border-left: 3px solid var(--color-border, rgba(0, 0, 0, 0.15));
+  margin: 0.5rem 0;
+  padding-left: 0.75rem;
+  color: var(--color-text-secondary, #666);
+}
+.discussion-body ul,
+.discussion-body ol {
+  margin: 0.5rem 0;
+  padding-left: 1.5rem;
+}
+.discussion-body a {
+  color: var(--color-primary, inherit);
+  text-decoration: underline;
+}

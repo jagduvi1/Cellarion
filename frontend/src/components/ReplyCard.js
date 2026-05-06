@@ -5,6 +5,7 @@ import { toggleReplyLike, getReplyOriginal, banUser } from '../api/discussions';
 import WineReferenceCard from './WineReferenceCard';
 import CellarCredBadge from './CellarCredBadge';
 import ConfirmModal from './ConfirmModal';
+import { sanitizeForumRender } from '../utils/sanitizeForumRender';
 import timeAgo from '../utils/timeAgo';
 import './ReplyCard.css';
 
@@ -103,7 +104,13 @@ export default function ReplyCard({ reply, discussionId, onReply, onEdit, onDele
         </div>
 
         <div className="reply-card__body reply-card__body--deleted">
-          {showOriginal && originalBody ? originalBody : reply.body}
+          {showOriginal && originalBody ? (
+            // The mod-only "view original" shows the deletedBody, which is
+            // sanitized HTML — render through the same allowlist as live replies.
+            <div className="discussion-body" dangerouslySetInnerHTML={{ __html: sanitizeForumRender(originalBody) }} />
+          ) : (
+            reply.body
+          )}
         </div>
 
         {isMod && (
@@ -137,7 +144,10 @@ export default function ReplyCard({ reply, discussionId, onReply, onEdit, onDele
 
       {reply.quote?.body && <QuoteBlock quote={reply.quote} />}
       {reply.wineDefinition && <WineReferenceCard wine={reply.wineDefinition} />}
-      <div className="reply-card__body">{reply.body}</div>
+      <div
+        className="reply-card__body discussion-body"
+        dangerouslySetInnerHTML={{ __html: sanitizeForumRender(reply.body) }}
+      />
 
       <div className="reply-card__footer">
         {user ? (

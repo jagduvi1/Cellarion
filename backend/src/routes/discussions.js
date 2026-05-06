@@ -8,6 +8,7 @@ const DiscussionReport = require('../models/DiscussionReport');
 const User = require('../models/User');
 const WineDefinition = require('../models/WineDefinition');
 const { stripHtml } = require('../utils/sanitize');
+const { sanitizeForumHtml, visibleTextLength } = require('../utils/sanitizeHtml');
 const { logAudit } = require('../services/audit');
 const { incrementCred } = require('../utils/cellarCred');
 const { submitUrls: submitToIndexNow } = require('../services/indexNow');
@@ -312,12 +313,13 @@ router.post('/', requireAuth, async (req, res) => {
     }
 
     const cleanTitle = stripHtml(title);
-    const cleanBody = stripHtml(body);
+    const cleanBody = sanitizeForumHtml(body);
+    const visibleLength = visibleTextLength(cleanBody);
 
     if (cleanTitle.length < 3) return res.status(400).json({ error: 'Title must be at least 3 characters' });
     if (cleanTitle.length > DISCUSSION_MAX_LENGTHS.title) return res.status(400).json({ error: `Title too long (max ${DISCUSSION_MAX_LENGTHS.title} characters)` });
-    if (cleanBody.length < 10) return res.status(400).json({ error: 'Body must be at least 10 characters' });
-    if (cleanBody.length > DISCUSSION_MAX_LENGTHS.body) return res.status(400).json({ error: `Body too long (max ${DISCUSSION_MAX_LENGTHS.body} characters)` });
+    if (visibleLength < 10) return res.status(400).json({ error: 'Body must be at least 10 characters' });
+    if (visibleLength > DISCUSSION_MAX_LENGTHS.body) return res.status(400).json({ error: `Body too long (max ${DISCUSSION_MAX_LENGTHS.body} characters)` });
 
     const discussion = new Discussion({
       author: req.user.id,
@@ -383,9 +385,10 @@ router.put('/:idOrSlug', requireAuth, async (req, res) => {
     }
 
     if (body !== undefined) {
-      const cleanBody = stripHtml(body);
-      if (cleanBody.length < 10) return res.status(400).json({ error: 'Body must be at least 10 characters' });
-      if (cleanBody.length > DISCUSSION_MAX_LENGTHS.body) return res.status(400).json({ error: 'Body too long' });
+      const cleanBody = sanitizeForumHtml(body);
+      const visibleLength = visibleTextLength(cleanBody);
+      if (visibleLength < 10) return res.status(400).json({ error: 'Body must be at least 10 characters' });
+      if (visibleLength > DISCUSSION_MAX_LENGTHS.body) return res.status(400).json({ error: 'Body too long' });
       discussion.body = cleanBody;
     }
 
@@ -505,9 +508,10 @@ router.post('/:idOrSlug/replies', requireAuth, async (req, res) => {
     const { body, quote, wineDefinition: wineDefId } = req.body;
     if (!body) return res.status(400).json({ error: 'Reply body is required' });
 
-    const cleanBody = stripHtml(body);
-    if (cleanBody.length < 1) return res.status(400).json({ error: 'Reply cannot be empty' });
-    if (cleanBody.length > DISCUSSION_MAX_LENGTHS.replyBody) return res.status(400).json({ error: 'Reply too long' });
+    const cleanBody = sanitizeForumHtml(body);
+    const visibleLength = visibleTextLength(cleanBody);
+    if (visibleLength < 1) return res.status(400).json({ error: 'Reply cannot be empty' });
+    if (visibleLength > DISCUSSION_MAX_LENGTHS.replyBody) return res.status(400).json({ error: 'Reply too long' });
 
     // Build quote snapshot if quoting another reply
     let quoteData = {};
@@ -516,10 +520,13 @@ router.post('/:idOrSlug/replies', requireAuth, async (req, res) => {
       const quotedReply = await DiscussionReply.findById(quote.replyId).populate('author', 'username displayName');
       if (quotedReply) {
         const quotedName = quotedReply.author?.displayName || quotedReply.author?.username || 'Unknown';
-        // Store a truncated snapshot (max 300 chars) so the DB doesn't bloat
-        const snippetBody = quotedReply.body.length > 300
-          ? quotedReply.body.slice(0, 300) + '…'
-          : quotedReply.body;
+        // Strip the quoted body to plain text before truncating — slicing raw
+        // HTML would split tags ("<stro|ng>") and break rendering. The quote
+        // is rendered in a styled blockquote, so plain text is the right form.
+        const quotedPlain = stripHtml(quotedReply.body || '');
+        const snippetBody = quotedPlain.length > 300
+          ? quotedPlain.slice(0, 300) + '…'
+          : quotedPlain;
         quoteData = {
           replyId: quotedReply._id,
           authorName: quotedName,
@@ -631,9 +638,10 @@ router.put('/:discussionId/replies/:replyId', requireAuth, async (req, res) => {
 
     const { body } = req.body;
     if (body !== undefined) {
-      const cleanBody = stripHtml(body);
-      if (cleanBody.length < 1) return res.status(400).json({ error: 'Reply cannot be empty' });
-      if (cleanBody.length > DISCUSSION_MAX_LENGTHS.replyBody) return res.status(400).json({ error: 'Reply too long' });
+      const cleanBody = sanitizeForumHtml(body);
+      const visibleLength = visibleTextLength(cleanBody);
+      if (visibleLength < 1) return res.status(400).json({ error: 'Reply cannot be empty' });
+      if (visibleLength > DISCUSSION_MAX_LENGTHS.replyBody) return res.status(400).json({ error: 'Reply too long' });
       reply.body = cleanBody;
     }
 

@@ -18,7 +18,10 @@ const discussionReplySchema = new mongoose.Schema({
     required: [true, 'Body is required'],
     trim: true,
     minlength: [1, 'Reply cannot be empty'],
-    maxlength: [3000, 'Reply too long']
+    // Raw HTML cap. Visible-text length is enforced in the route handler
+    // (against DISCUSSION_MAX_LENGTHS.replyBody); this is the schema-level
+    // hard ceiling.
+    maxlength: [4000, 'Reply too long']
   },
   // Snapshot of the quoted reply — stored inline so it survives edits/deletes
   quote: {
