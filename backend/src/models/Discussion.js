@@ -21,8 +21,11 @@ const discussionSchema = new mongoose.Schema({
     type: String,
     required: [true, 'Body is required'],
     trim: true,
-    minlength: [10, 'Body must be at least 10 characters'],
-    maxlength: [5000, 'Body too long']
+    minlength: [1, 'Body is required'],
+    // Raw HTML cap. UX-level visible-text length is validated in the route
+    // (against DISCUSSION_MAX_LENGTHS.body); this is the schema-level hard
+    // ceiling that prevents an attacker from posting megabytes of HTML.
+    maxlength: [8000, 'Body too long']
   },
   category: {
     type: String,

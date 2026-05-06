@@ -6,6 +6,7 @@ import { getDiscussions, createDiscussion } from '../api/discussions';
 import DiscussionCard from '../components/DiscussionCard';
 import CategoryBadge, { CATEGORY_LABELS } from '../components/CategoryBadge';
 import CommunityCTA from '../components/CommunityCTA';
+import DiscussionComposer from '../components/DiscussionComposer';
 import Modal from '../components/Modal';
 import WineSearchPicker from '../components/WineSearchPicker';
 import SEOHead from '../components/SEOHead';
@@ -34,8 +35,10 @@ function Discussions() {
   const [showCreate, setShowCreate] = useState(false);
   const [creating, setCreating] = useState(false);
   const [form, setForm] = useState({ title: '', body: '', category: 'general' });
+  const [bodyTextLength, setBodyTextLength] = useState(0);
   const [linkedWine, setLinkedWine] = useState(null);
   const [formError, setFormError] = useState(null);
+  const BODY_VISIBLE_MAX = 5000;
 
   const sortLabels = {
     'active': t('discussions.sortMostActive'),
@@ -104,7 +107,9 @@ function Discussions() {
     e.preventDefault();
     setFormError(null);
 
-    if (!form.title.trim() || !form.body.trim()) {
+    // Body validation matches the backend's visibleTextLength check: empty
+    // HTML or HTML with only whitespace counts as empty.
+    if (!form.title.trim() || bodyTextLength < 10) {
       setFormError(t('discussions.titleBodyRequired'));
       return;
     }
@@ -119,6 +124,7 @@ function Discussions() {
       if (res.ok) {
         setShowCreate(false);
         setForm({ title: '', body: '', category: 'general' });
+        setBodyTextLength(0);
         setLinkedWine(null);
         // Prepend new discussion to list
         setDiscussions(prev => [data.discussion, ...prev]);
@@ -279,16 +285,14 @@ function Discussions() {
 
             <div className="form-group">
               <label className="form-label">{t('discussions.body')}</label>
-              <textarea
-                className="input discussions__create-body"
+              <DiscussionComposer
                 value={form.body}
-                onChange={e => setForm(f => ({ ...f, body: e.target.value }))}
+                onChange={(html) => setForm(f => ({ ...f, body: html }))}
+                onTextLengthChange={setBodyTextLength}
                 placeholder={t('discussions.bodyPlaceholder')}
-                rows={6}
-                maxLength={5000}
-                required
+                maxVisibleLength={BODY_VISIBLE_MAX}
+                minHeight={160}
               />
-              <span className="form-hint">{form.body.length} / 5000</span>
             </div>
 
             <div className="form-group">

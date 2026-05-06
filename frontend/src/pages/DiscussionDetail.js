@@ -16,6 +16,8 @@ import Modal from '../components/Modal';
 import ConfirmModal from '../components/ConfirmModal';
 import CommunityCTA from '../components/CommunityCTA';
 import SEOHead from '../components/SEOHead';
+import DiscussionComposer from '../components/DiscussionComposer';
+import { sanitizeForumRender, extractForumPlainText } from '../utils/sanitizeForumRender';
 import timeAgo from '../utils/timeAgo';
 import './DiscussionDetail.css';
 
@@ -41,14 +43,17 @@ function DiscussionDetail() {
   // Reply form
   const replyTextareaRef = useRef(null);
   const [replyBody, setReplyBody] = useState('');
+  const [replyTextLength, setReplyTextLength] = useState(0);
   const [quoteData, setQuoteData] = useState(null); // { replyId, authorName, body }
   const [replyWine, setReplyWine] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [replyError, setReplyError] = useState(null);
+  const REPLY_VISIBLE_MAX = 3000;
 
   // Edit reply
   const [editingReply, setEditingReply] = useState(null);
   const [editBody, setEditBody] = useState('');
+  const [editTextLength, setEditTextLength] = useState(0);
 
   // Report modal
   const [reportTarget, setReportTarget] = useState(null); // { type: 'discussion'|'reply', id }
@@ -116,7 +121,7 @@ function DiscussionDetail() {
 
   const handleSubmitReply = async (e) => {
     e.preventDefault();
-    if (!replyBody.trim()) return;
+    if (replyTextLength < 1) return;
 
     setSubmitting(true);
     setReplyError(null);
@@ -135,6 +140,7 @@ function DiscussionDetail() {
       if (res.ok) {
         setReplies(prev => [...prev, { ...data.reply, liked: false }]);
         setReplyBody('');
+        setReplyTextLength(0);
         setQuoteData(null);
         setReplyWine(null);
         // Update discussion reply count locally
@@ -151,7 +157,7 @@ function DiscussionDetail() {
 
   const handleEditReply = async (e) => {
     e.preventDefault();
-    if (!editBody.trim() || !editingReply) return;
+    if (editTextLength < 1 || !editingReply) return;
 
     try {
       const res = await updateReply(apiFetch, id, editingReply._id, { body: editBody });
@@ -331,7 +337,10 @@ function DiscussionDetail() {
 
         {discussion.wineDefinition && <WineReferenceCard wine={discussion.wineDefinition} />}
 
-        <div className="discussion-detail__body">{discussion.body}</div>
+        <div
+          className="discussion-detail__body discussion-body"
+          dangerouslySetInnerHTML={{ __html: sanitizeForumRender(discussion.body) }}
+        />
 
         <div className="discussion-detail__actions">
           {user && !isOwner && (
@@ -371,17 +380,26 @@ function DiscussionDetail() {
               discussionId={id}
               onReply={!user || discussion.isLocked ? null : (r) => {
                 const authorName = r.author?.displayName || r.author?.username || 'Unknown';
-                const snippet = r.body.length > 300 ? r.body.slice(0, 300) + '…' : r.body;
+                // r.body is HTML — strip to plain text for the quote preview.
+                // The backend independently rebuilds the persisted snapshot
+                // from the server-side body, so this is preview-only.
+                const plain = extractForumPlainText(r.body);
+                const snippet = plain.length > 300 ? plain.slice(0, 300) + '…' : plain;
                 setQuoteData({ replyId: r._id, authorName, body: snippet });
-                // Scroll to and focus the textarea
+                // Scroll the composer into view
                 setTimeout(() => {
                   if (replyTextareaRef.current) {
-                    replyTextareaRef.current.focus();
                     replyTextareaRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
                   }
                 }, 50);
               }}
-              onEdit={user ? (r) => { setEditingReply(r); setEditBody(r.body); } : null}
+              onEdit={user ? (r) => {
+                setEditingReply(r);
+                setEditBody(r.body);
+                // Seed the visible-length counter so the Save button isn't
+                // disabled before the user edits anything.
+                setEditTextLength(extractForumPlainText(r.body).length);
+              } : null}
               onDelete={user ? (r) => setConfirmDeleteReply(r) : null}
               onReport={user ? (r) => setReportTarget({ type: 'reply', id: r._id }) : null}
             />
@@ -413,16 +431,16 @@ function DiscussionDetail() {
             </div>
           )}
           <form onSubmit={handleSubmitReply}>
-            <textarea
-              ref={replyTextareaRef}
-              className="input discussion-detail__reply-textarea"
-              value={replyBody}
-              onChange={e => setReplyBody(e.target.value)}
-              placeholder={t('discussions.replyPlaceholder')}
-              rows={3}
-              maxLength={3000}
-              required
-            />
+            <div ref={replyTextareaRef}>
+              <DiscussionComposer
+                value={replyBody}
+                onChange={setReplyBody}
+                onTextLengthChange={setReplyTextLength}
+                placeholder={t('discussions.replyPlaceholder')}
+                maxVisibleLength={REPLY_VISIBLE_MAX}
+                minHeight={100}
+              />
+            </div>
             {replyWine ? (
               <div className="discussion-detail__reply-wine">
                 <WineReferenceCard wine={replyWine} />
@@ -437,8 +455,7 @@ function DiscussionDetail() {
               </details>
             )}
             <div className="discussion-detail__reply-actions">
-              <span className="form-hint">{replyBody.length} / 3000</span>
-              <button type="submit" className="btn btn-primary btn-small" disabled={submitting || !replyBody.trim()}>
+              <button type="submit" className="btn btn-primary btn-small" disabled={submitting || replyTextLength < 1}>
                 {submitting ? t('discussions.posting') : t('discussions.postReply')}
               </button>
             </div>
@@ -454,17 +471,16 @@ function DiscussionDetail() {
       {editingReply && (
         <Modal title={t('discussions.editReply')} onClose={() => setEditingReply(null)}>
           <form onSubmit={handleEditReply}>
-            <textarea
-              className="input discussion-detail__reply-textarea"
+            <DiscussionComposer
               value={editBody}
-              onChange={e => setEditBody(e.target.value)}
-              rows={4}
-              maxLength={3000}
-              required
+              onChange={setEditBody}
+              onTextLengthChange={setEditTextLength}
+              maxVisibleLength={REPLY_VISIBLE_MAX}
+              minHeight={140}
             />
             <div className="discussions__create-actions">
               <button type="button" className="btn btn-secondary" onClick={() => setEditingReply(null)}>{t('common.cancel')}</button>
-              <button type="submit" className="btn btn-primary" disabled={!editBody.trim()}>{t('common.save')}</button>
+              <button type="submit" className="btn btn-primary" disabled={editTextLength < 1}>{t('common.save')}</button>
             </div>
           </form>
         </Modal>
