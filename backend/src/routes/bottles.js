@@ -156,8 +156,8 @@ router.post('/', async (req, res) => {
     if (canonicalVintage !== 'Unknown') {
       try {
         await WineVintageProfile.findOneAndUpdate(
-          { wineDefinition: wineDefinition, vintage: canonicalVintage },
-          { $setOnInsert: { wineDefinition, vintage: canonicalVintage, status: 'pending' } },
+          { wineDefinition: wineDoc._id, vintage: canonicalVintage },
+          { $setOnInsert: { wineDefinition: wineDoc._id, vintage: canonicalVintage, status: 'pending' } },
           { upsert: true, new: false }
         );
       } catch (profileErr) {
