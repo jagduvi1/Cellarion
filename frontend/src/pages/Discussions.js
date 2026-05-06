@@ -7,6 +7,7 @@ import CategoryBadge, { CATEGORY_LABELS } from '../components/CategoryBadge';
 import CommunityCTA from '../components/CommunityCTA';
 import Modal from '../components/Modal';
 import WineSearchPicker from '../components/WineSearchPicker';
+import SEOHead from '../components/SEOHead';
 import './Discussions.css';
 
 const CATEGORIES = Object.keys(CATEGORY_LABELS);
@@ -104,6 +105,29 @@ function Discussions() {
 
   return (
     <div className="discussions-page">
+      <SEOHead
+        title="Wine Discussions — Cellarion Community"
+        description="Public wine discussion forum: tasting notes, food pairing, cellar tips, and recommendations from Cellarion users."
+        path="/community/discussions"
+        jsonLd={{
+          '@context': 'https://schema.org',
+          '@type': 'CollectionPage',
+          name: 'Wine Discussions — Cellarion Community',
+          description: 'Public wine discussion forum: tasting notes, food pairing, cellar tips, and recommendations from Cellarion users.',
+          ...(discussions.length > 0 ? {
+            mainEntity: {
+              '@type': 'ItemList',
+              numberOfItems: discussions.length,
+              itemListElement: discussions.slice(0, 20).map((d, i) => ({
+                '@type': 'ListItem',
+                position: i + 1,
+                url: `https://cellarion.app/community/discussions/${d.slug || d._id}`,
+                name: d.title
+              }))
+            }
+          } : {})
+        }}
+      />
       <div className="discussions__header">
         <h1>{t('discussions.community')}</h1>
         <span className="discussions__beta-badge">{t('discussions.beta')}</span>

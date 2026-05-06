@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const { slugify } = require('../utils/normalize');
 
 const CATEGORIES = ['tasting-notes', 'food-pairing', 'recommendations', 'cellar-tips', 'general'];
 
@@ -49,6 +50,18 @@ const discussionSchema = new mongoose.Schema({
   lastActivityAt: {
     type: Date,
     default: Date.now
+  },
+  // Human-readable URL slug. Pinned at create time and never regenerated on
+  // title edit — URLs stay stable forever, old links don't break. Sparse so
+  // existing pre-migration discussions don't violate the unique index until
+  // backfilled.
+  slug: {
+    type: String,
+    trim: true,
+    lowercase: true,
+    unique: true,
+    sparse: true,
+    index: true
   }
 }, { timestamps: true });
 
@@ -58,6 +71,16 @@ discussionSchema.index({ isPinned: -1, lastActivityAt: -1 });
 discussionSchema.index({ category: 1, isPinned: -1, lastActivityAt: -1 });
 // User's discussions
 discussionSchema.index({ author: 1, createdAt: -1 });
+
+// Generate slug from title + last 6 of ObjectId on insert. The ObjectId suffix
+// gives collision-resistance without needing a uniqueness retry loop.
+discussionSchema.pre('save', function(next) {
+  if (this.slug || !this.isNew) return next();
+  const base = slugify(this.title);
+  const suffix = this._id.toString().slice(-6);
+  this.slug = base ? `${base}-${suffix}` : suffix;
+  next();
+});
 
 module.exports = mongoose.model('Discussion', discussionSchema);
 module.exports.CATEGORIES = CATEGORIES;

@@ -5,6 +5,7 @@ const WineDefinition = require('../models/WineDefinition');
 const Country = require('../models/Country');
 const Region = require('../models/Region');
 const Grape = require('../models/Grape');
+const Discussion = require('../models/Discussion');
 const { getClientIp } = require('../utils/clientIp');
 
 const WINE_TYPES = ['red', 'white', 'rosé', 'sparkling', 'dessert', 'fortified'];
@@ -33,6 +34,7 @@ router.get('/', sitemapLimiter, async (req, res) => {
     const staticPages = [
       { loc: '/', priority: '1.0', changefreq: 'weekly' },
       { loc: '/blog', priority: '0.8', changefreq: 'daily' },
+      { loc: '/community/discussions', priority: '0.8', changefreq: 'daily' },
       { loc: '/help', priority: '0.6', changefreq: 'monthly' },
       { loc: '/privacy', priority: '0.3', changefreq: 'yearly' },
     ];
@@ -129,6 +131,28 @@ router.get('/', sitemapLimiter, async (req, res) => {
       xml += `    <loc>${SITE_URL}/wines/type/${type}</loc>\n`;
       xml += '    <changefreq>monthly</changefreq>\n';
       xml += '    <priority>0.5</priority>\n';
+      xml += '  </url>\n';
+    }
+
+    // Community discussions — only non-locked threads (locked threads can't accept
+    // new replies, so their content is stable but their value-as-a-destination is
+    // weaker). Capped at 5000 to stay well under the 50 000 sitemap.xml limit.
+    const discussions = await Discussion.find({ isLocked: { $ne: true } })
+      .sort({ lastActivityAt: -1 })
+      .select('_id slug lastActivityAt replyCount')
+      .limit(5000)
+      .lean();
+
+    for (const d of discussions) {
+      const lastmod = d.lastActivityAt
+        ? d.lastActivityAt.toISOString().split('T')[0]
+        : d._id.getTimestamp().toISOString().split('T')[0];
+      const priority = (d.replyCount || 0) > 10 ? '0.6' : '0.4';
+      xml += '  <url>\n';
+      xml += `    <loc>${SITE_URL}/community/discussions/${d.slug || d._id}</loc>\n`;
+      xml += `    <lastmod>${lastmod}</lastmod>\n`;
+      xml += '    <changefreq>weekly</changefreq>\n';
+      xml += `    <priority>${priority}</priority>\n`;
       xml += '  </url>\n';
     }
 
