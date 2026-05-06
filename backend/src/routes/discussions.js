@@ -5,13 +5,14 @@ const { CATEGORIES } = require('../models/Discussion');
 const DiscussionReply = require('../models/DiscussionReply');
 const DiscussionReplyVote = require('../models/DiscussionReplyVote');
 const DiscussionReport = require('../models/DiscussionReport');
-const Notification = require('../models/Notification');
 const User = require('../models/User');
 const WineDefinition = require('../models/WineDefinition');
 const { stripHtml } = require('../utils/sanitize');
 const { logAudit } = require('../services/audit');
 const { incrementCred } = require('../utils/cellarCred');
 const { submitUrls: submitToIndexNow } = require('../services/indexNow');
+const { createNotification } = require('../services/notifications');
+const { extractMentions } = require('../utils/mentionParser');
 const { parsePagination } = require('../utils/pagination');
 const { isValidId } = require('../utils/validation');
 const { DISCUSSIONS_PER_PAGE, DISCUSSIONS_MAX_PER_PAGE, DISCUSSION_MAX_LENGTHS } = require('../config/constants');
@@ -286,6 +287,22 @@ router.post('/', requireAuth, async (req, res) => {
 
     await discussion.populate('author', 'username displayName roles contribution.tier contribution.specialty');
 
+    // Notify @mentioned users — dispatched after the response would normally be
+    // optimal, but since createNotification is fire-and-forget internally, calling
+    // it before res.json() doesn't add latency.
+    const authorName = discussion.author?.displayName || discussion.author?.username || 'Someone';
+    const link = `/community/discussions/${discussion.slug || discussion._id}`;
+    const mentionedIds = await extractMentions(cleanBody, req.user.id);
+    for (const uid of mentionedIds) {
+      createNotification(
+        uid,
+        'discussion_mention',
+        `${authorName} mentioned you`,
+        `In a new discussion: "${cleanTitle}"`,
+        link
+      );
+    }
+
     res.status(201).json({ discussion });
   } catch (err) {
     console.error('Create discussion error:', err);
@@ -437,6 +454,7 @@ router.post('/:idOrSlug/replies', requireAuth, async (req, res) => {
 
     // Build quote snapshot if quoting another reply
     let quoteData = {};
+    let quotedAuthorId = null;
     if (quote && quote.replyId && isValidId(quote.replyId)) {
       const quotedReply = await DiscussionReply.findById(quote.replyId).populate('author', 'username displayName');
       if (quotedReply) {
@@ -450,6 +468,9 @@ router.post('/:idOrSlug/replies', requireAuth, async (req, res) => {
           authorName: quotedName,
           body: snippetBody
         };
+        // Track separately — author is needed for the "you were quoted"
+        // notification, but we don't want to persist it on the reply document.
+        quotedAuthorId = quotedReply.author?._id || null;
       }
     }
 
@@ -480,17 +501,48 @@ router.post('/:idOrSlug/replies', requireAuth, async (req, res) => {
     // The thread's lastmod just changed — let search engines re-crawl
     submitToIndexNow(`/community/discussions/${discussion.slug || discussion._id}`);
 
-    // Notify the discussion author (if not replying to own thread)
-    if (discussion.author.toString() !== req.user.id) {
-      const replier = await User.findById(req.user.id).select('username displayName');
-      const replierName = replier?.displayName || replier?.username || 'Someone';
-      new Notification({
-        user: discussion.author,
-        type: 'discussion_reply',
-        title: 'New reply to your discussion',
-        message: `${replierName} replied to "${discussion.title}"`,
-        link: `/community/discussions/${discussion.slug || discussion._id}`
-      }).save().catch(() => {});
+    // Notification fan-out: OP, then quoted-author (if different), then any
+    // @mentioned users (deduped). Each user gets at most one notification per
+    // reply event. createNotification handles in-app + web-push.
+    const replier = await User.findById(req.user.id).select('username displayName');
+    const replierName = replier?.displayName || replier?.username || 'Someone';
+    const link = `/community/discussions/${discussion.slug || discussion._id}`;
+    const notified = new Set();
+    const selfId = String(req.user.id);
+
+    if (String(discussion.author) !== selfId) {
+      notified.add(String(discussion.author));
+      createNotification(
+        discussion.author,
+        'discussion_reply',
+        'New reply to your discussion',
+        `${replierName} replied to "${discussion.title}"`,
+        link
+      );
+    }
+
+    if (quotedAuthorId && String(quotedAuthorId) !== selfId && !notified.has(String(quotedAuthorId))) {
+      notified.add(String(quotedAuthorId));
+      createNotification(
+        quotedAuthorId,
+        'discussion_reply',
+        `${replierName} quoted you`,
+        `In "${discussion.title}"`,
+        link
+      );
+    }
+
+    const mentionedIds = await extractMentions(cleanBody, req.user.id);
+    for (const uid of mentionedIds) {
+      if (notified.has(uid)) continue;
+      notified.add(uid);
+      createNotification(
+        uid,
+        'discussion_mention',
+        `${replierName} mentioned you`,
+        `In "${discussion.title}"`,
+        link
+      );
     }
 
     logAudit(req, 'discussion_reply.create', { type: 'discussion_reply', id: reply._id }, { discussion: discussion._id });

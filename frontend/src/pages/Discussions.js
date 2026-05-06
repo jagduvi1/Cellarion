@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import { getDiscussions, createDiscussion } from '../api/discussions';
@@ -16,6 +17,7 @@ const SORT_KEYS = ['active', 'newest', 'most-replies'];
 function Discussions() {
   const { t } = useTranslation();
   const { apiFetch, user } = useAuth();
+  const location = useLocation();
   const [discussions, setDiscussions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
@@ -70,6 +72,19 @@ function Discussions() {
     setDiscussions([]);
     fetchDiscussions(1, true);
   }, [category, sort]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Pre-fill the create modal when the user arrives from a wine page's
+  // "Start a discussion about this wine" CTA. We use route state (not a query
+  // param) so the wine object stays attached without a refetch and the URL
+  // stays clean. Only fires for logged-in users — anon doesn't get the CTA.
+  useEffect(() => {
+    if (user && location.state?.newDiscussionWine) {
+      setLinkedWine(location.state.newDiscussionWine);
+      setShowCreate(true);
+      // Clear the state so a Back-then-Forward doesn't re-open the modal
+      window.history.replaceState({}, '');
+    }
+  }, [user, location.state]);
 
   const handleCreate = async (e) => {
     e.preventDefault();

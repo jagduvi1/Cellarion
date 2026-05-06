@@ -1,8 +1,9 @@
 const express = require('express');
 const mongoose = require('mongoose');
 const WineDefinition = require('../models/WineDefinition');
+const Discussion = require('../models/Discussion');
 const searchService = require('../services/search');
-const { requireAuth } = require('../middleware/auth');
+const { requireAuth, optionalAuth } = require('../middleware/auth');
 const { scanLabelFull, identifyWineFromQuery } = require('../services/labelScan');
 const { findOrCreateWine } = require('../services/findOrCreateWine');
 const { generateWineKey, combinedSimilarity } = require('../utils/normalize');
@@ -357,6 +358,38 @@ router.get('/:id', requireAuth, async (req, res) => {
   } catch (error) {
     console.error('Get wine error:', error);
     res.status(500).json({ error: 'Failed to get wine' });
+  }
+});
+
+// GET /api/wines/:idOrSlug/discussions — Public-readable list of discussions
+// linked to a wine. Used by the WineDetail page's "Discussions about this wine"
+// panel and by future wine-page widgets.
+router.get('/:idOrSlug/discussions', optionalAuth, async (req, res) => {
+  try {
+    const { idOrSlug } = req.params;
+    const filter = isValidId(idOrSlug)
+      ? { _id: idOrSlug }
+      : { slug: String(idOrSlug).toLowerCase() };
+
+    const wine = await WineDefinition.findOne(filter).select('_id');
+    if (!wine) return res.status(404).json({ error: 'Wine not found' });
+
+    const { page, limit, offset: skip } = parsePagination(req.query, { limit: 10, maxLimit: 30 });
+
+    const [discussions, total] = await Promise.all([
+      Discussion.find({ wineDefinition: wine._id })
+        .sort({ isPinned: -1, lastActivityAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .populate('author', 'username displayName roles contribution.tier contribution.specialty')
+        .select('title slug body category replyCount lastActivityAt createdAt isPinned isLocked author wineDefinition'),
+      Discussion.countDocuments({ wineDefinition: wine._id })
+    ]);
+
+    res.json({ discussions, total, page, pages: Math.ceil(total / limit) });
+  } catch (error) {
+    console.error('List wine discussions error:', error);
+    res.status(500).json({ error: 'Failed to list discussions' });
   }
 });
 
