@@ -1,5 +1,5 @@
 const express = require('express');
-const { requireAuth, requireModeratorOrAdmin } = require('../middleware/auth');
+const { requireAuth, optionalAuth, requireModeratorOrAdmin } = require('../middleware/auth');
 const Discussion = require('../models/Discussion');
 const { CATEGORIES } = require('../models/Discussion');
 const DiscussionReply = require('../models/DiscussionReply');
@@ -17,7 +17,9 @@ const { DISCUSSIONS_PER_PAGE, DISCUSSIONS_MAX_PER_PAGE, DISCUSSION_MAX_LENGTHS }
 
 const router = express.Router();
 
-router.use(requireAuth);
+// Per-route auth: GETs use optionalAuth (public reads with personalization when
+// logged in), writes use requireAuth. Moderation routes additionally require
+// requireModeratorOrAdmin. There is no global requireAuth on the router.
 
 // Check if the requesting user is banned from discussions; returns error response or null
 async function checkDiscussionBan(req, res) {
@@ -33,13 +35,13 @@ async function checkDiscussionBan(req, res) {
   return false;
 }
 
-// GET /api/discussions/categories - Available categories
-router.get('/categories', (req, res) => {
+// GET /api/discussions/categories - Available categories (public)
+router.get('/categories', optionalAuth, (req, res) => {
   res.json({ categories: CATEGORIES });
 });
 
-// GET /api/discussions - List discussions
-router.get('/', async (req, res) => {
+// GET /api/discussions - List discussions (public)
+router.get('/', optionalAuth, async (req, res) => {
   try {
     const { page, limit, offset: skip } = parsePagination(req.query, { limit: DISCUSSIONS_PER_PAGE, maxLimit: DISCUSSIONS_MAX_PER_PAGE });
     const { category, sort } = req.query;
@@ -82,7 +84,7 @@ router.get('/', async (req, res) => {
 // These routes MUST be registered before /:id to avoid "moderation" being treated as an ID.
 
 // GET /api/discussions/moderation/reports - List pending reports
-router.get('/moderation/reports', requireModeratorOrAdmin, async (req, res) => {
+router.get('/moderation/reports', requireAuth, requireModeratorOrAdmin, async (req, res) => {
   try {
     const { page, limit, offset: skip } = parsePagination(req.query, { limit: DISCUSSIONS_PER_PAGE, maxLimit: DISCUSSIONS_MAX_PER_PAGE });
     const VALID_STATUSES = ['pending', 'resolved', 'dismissed'];
@@ -107,7 +109,7 @@ router.get('/moderation/reports', requireModeratorOrAdmin, async (req, res) => {
 });
 
 // PATCH /api/discussions/moderation/reports/:reportId - Resolve a report
-router.patch('/moderation/reports/:reportId', requireModeratorOrAdmin, async (req, res) => {
+router.patch('/moderation/reports/:reportId', requireAuth, requireModeratorOrAdmin, async (req, res) => {
   try {
     if (!isValidId(req.params.reportId)) return res.status(400).json({ error: 'Invalid report ID' });
     const report = await DiscussionReport.findById(req.params.reportId);
@@ -144,7 +146,7 @@ const BAN_DURATIONS = {
 };
 
 // POST /api/discussions/moderation/ban - Ban a user from discussions
-router.post('/moderation/ban', requireModeratorOrAdmin, async (req, res) => {
+router.post('/moderation/ban', requireAuth, requireModeratorOrAdmin, async (req, res) => {
   try {
     const { userId, duration, reason } = req.body;
     if (!userId || !isValidId(userId)) return res.status(400).json({ error: 'Invalid user ID' });
@@ -183,7 +185,7 @@ router.post('/moderation/ban', requireModeratorOrAdmin, async (req, res) => {
 });
 
 // DELETE /api/discussions/moderation/ban/:userId - Unban a user
-router.delete('/moderation/ban/:userId', requireModeratorOrAdmin, async (req, res) => {
+router.delete('/moderation/ban/:userId', requireAuth, requireModeratorOrAdmin, async (req, res) => {
   try {
     if (!isValidId(req.params.userId)) return res.status(400).json({ error: 'Invalid user ID' });
     const targetUser = await User.findById(req.params.userId);
@@ -207,8 +209,8 @@ router.delete('/moderation/ban/:userId', requireModeratorOrAdmin, async (req, re
   }
 });
 
-// GET /api/discussions/:id - Single discussion
-router.get('/:id', async (req, res) => {
+// GET /api/discussions/:id - Single discussion (public)
+router.get('/:id', optionalAuth, async (req, res) => {
   try {
     if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid discussion ID' });
 
@@ -226,7 +228,7 @@ router.get('/:id', async (req, res) => {
 });
 
 // POST /api/discussions - Create a discussion
-router.post('/', async (req, res) => {
+router.post('/', requireAuth, async (req, res) => {
   try {
     if (await checkDiscussionBan(req, res)) return;
 
@@ -272,7 +274,7 @@ router.post('/', async (req, res) => {
 });
 
 // PUT /api/discussions/:id - Update own discussion (or moderator/admin)
-router.put('/:id', async (req, res) => {
+router.put('/:id', requireAuth, async (req, res) => {
   try {
     if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid discussion ID' });
     const discussion = await Discussion.findById(req.params.id);
@@ -317,7 +319,7 @@ router.put('/:id', async (req, res) => {
 });
 
 // DELETE /api/discussions/:id - Delete discussion (moderator/admin only)
-router.delete('/:id', requireModeratorOrAdmin, async (req, res) => {
+router.delete('/:id', requireAuth, requireModeratorOrAdmin, async (req, res) => {
   try {
     if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid discussion ID' });
     const discussion = await Discussion.findById(req.params.id);
@@ -342,8 +344,8 @@ router.delete('/:id', requireModeratorOrAdmin, async (req, res) => {
 
 // ─── Replies ────────────────────────────────────────────────────────────────
 
-// GET /api/discussions/:id/replies - List replies for a discussion
-router.get('/:id/replies', async (req, res) => {
+// GET /api/discussions/:id/replies - List replies for a discussion (public)
+router.get('/:id/replies', optionalAuth, async (req, res) => {
   try {
     if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid discussion ID' });
     const { page, limit, offset: skip } = parsePagination(req.query, { limit: DISCUSSIONS_PER_PAGE, maxLimit: DISCUSSIONS_MAX_PER_PAGE });
@@ -358,16 +360,19 @@ router.get('/:id/replies', async (req, res) => {
       DiscussionReply.countDocuments({ discussion: req.params.id })
     ]);
 
-    // Check which replies the current user has liked
-    const replyIds = replies.map(r => r._id);
-    const userVotes = await DiscussionReplyVote.find({ user: req.user.id, reply: { $in: replyIds } }).select('reply');
-    const likedSet = new Set(userVotes.map(v => v.reply.toString()));
+    // Personalization (only when logged in): mark which replies the user has liked
+    let likedSet = new Set();
+    if (req.user) {
+      const replyIds = replies.map(r => r._id);
+      const userVotes = await DiscussionReplyVote.find({ user: req.user.id, reply: { $in: replyIds } }).select('reply');
+      likedSet = new Set(userVotes.map(v => v.reply.toString()));
+    }
 
-    const isMod = req.user.roles && (req.user.roles.includes('moderator') || req.user.roles.includes('admin'));
+    const isMod = !!req.user && req.user.roles && (req.user.roles.includes('moderator') || req.user.roles.includes('admin'));
     const enriched = replies.map(r => {
       const obj = r.toObject();
       obj.liked = likedSet.has(r._id.toString());
-      // Never leak deletedBody to non-mods
+      // Never leak deletedBody to non-mods (or anonymous viewers)
       if (!isMod) delete obj.deletedBody;
       return obj;
     });
@@ -380,7 +385,7 @@ router.get('/:id/replies', async (req, res) => {
 });
 
 // POST /api/discussions/:id/replies - Create a reply
-router.post('/:id/replies', async (req, res) => {
+router.post('/:id/replies', requireAuth, async (req, res) => {
   try {
     if (await checkDiscussionBan(req, res)) return;
     if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid discussion ID' });
@@ -466,7 +471,7 @@ router.post('/:id/replies', async (req, res) => {
 });
 
 // PUT /api/discussions/:discussionId/replies/:replyId - Update own reply
-router.put('/:discussionId/replies/:replyId', async (req, res) => {
+router.put('/:discussionId/replies/:replyId', requireAuth, async (req, res) => {
   try {
     if (!isValidId(req.params.replyId)) return res.status(400).json({ error: 'Invalid reply ID' });
     const reply = await DiscussionReply.findById(req.params.replyId);
@@ -498,7 +503,7 @@ router.put('/:discussionId/replies/:replyId', async (req, res) => {
 });
 
 // DELETE /api/discussions/:discussionId/replies/:replyId - Soft-delete reply (user or mod/admin)
-router.delete('/:discussionId/replies/:replyId', async (req, res) => {
+router.delete('/:discussionId/replies/:replyId', requireAuth, async (req, res) => {
   try {
     if (!isValidId(req.params.replyId)) return res.status(400).json({ error: 'Invalid reply ID' });
     const reply = await DiscussionReply.findById(req.params.replyId);
@@ -528,7 +533,7 @@ router.delete('/:discussionId/replies/:replyId', async (req, res) => {
 });
 
 // GET /api/discussions/:discussionId/replies/:replyId/original - View original text of deleted reply (mod/admin)
-router.get('/:discussionId/replies/:replyId/original', requireModeratorOrAdmin, async (req, res) => {
+router.get('/:discussionId/replies/:replyId/original', requireAuth, requireModeratorOrAdmin, async (req, res) => {
   try {
     if (!isValidId(req.params.replyId)) return res.status(400).json({ error: 'Invalid reply ID' });
     const reply = await DiscussionReply.findById(req.params.replyId).select('deletedBody isDeleted');
@@ -543,7 +548,7 @@ router.get('/:discussionId/replies/:replyId/original', requireModeratorOrAdmin, 
 });
 
 // POST /api/discussions/:discussionId/replies/:replyId/like - Toggle like on reply
-router.post('/:discussionId/replies/:replyId/like', async (req, res) => {
+router.post('/:discussionId/replies/:replyId/like', requireAuth, async (req, res) => {
   try {
     if (!isValidId(req.params.replyId)) return res.status(400).json({ error: 'Invalid reply ID' });
     const reply = await DiscussionReply.findById(req.params.replyId);
@@ -575,7 +580,7 @@ router.post('/:discussionId/replies/:replyId/like', async (req, res) => {
 // ─── Moderation ─────────────────────────────────────────────────────────────
 
 // PATCH /api/discussions/:id/pin - Toggle pin (moderator/admin only)
-router.patch('/:id/pin', requireModeratorOrAdmin, async (req, res) => {
+router.patch('/:id/pin', requireAuth, requireModeratorOrAdmin, async (req, res) => {
   try {
     if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid discussion ID' });
     const discussion = await Discussion.findById(req.params.id);
@@ -593,7 +598,7 @@ router.patch('/:id/pin', requireModeratorOrAdmin, async (req, res) => {
 });
 
 // PATCH /api/discussions/:id/lock - Toggle lock (moderator/admin only)
-router.patch('/:id/lock', requireModeratorOrAdmin, async (req, res) => {
+router.patch('/:id/lock', requireAuth, requireModeratorOrAdmin, async (req, res) => {
   try {
     if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid discussion ID' });
     const discussion = await Discussion.findById(req.params.id);
@@ -611,7 +616,7 @@ router.patch('/:id/lock', requireModeratorOrAdmin, async (req, res) => {
 });
 
 // PATCH /api/discussions/:id/move - Move to different category (moderator/admin only)
-router.patch('/:id/move', requireModeratorOrAdmin, async (req, res) => {
+router.patch('/:id/move', requireAuth, requireModeratorOrAdmin, async (req, res) => {
   try {
     if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid discussion ID' });
     const { category } = req.body;
@@ -637,7 +642,7 @@ router.patch('/:id/move', requireModeratorOrAdmin, async (req, res) => {
 // ─── Reporting ──────────────────────────────────────────────────────────────
 
 // POST /api/discussions/:id/report - Report a discussion
-router.post('/:id/report', async (req, res) => {
+router.post('/:id/report', requireAuth, async (req, res) => {
   try {
     if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid discussion ID' });
 
@@ -668,7 +673,7 @@ router.post('/:id/report', async (req, res) => {
 });
 
 // POST /api/discussions/:discussionId/replies/:replyId/report - Report a reply
-router.post('/:discussionId/replies/:replyId/report', async (req, res) => {
+router.post('/:discussionId/replies/:replyId/report', requireAuth, async (req, res) => {
   try {
     if (!isValidId(req.params.replyId)) return res.status(400).json({ error: 'Invalid reply ID' });
 

@@ -119,6 +119,15 @@
   cursor: default;
 }
 
+.reply-card__likes-readonly {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  color: #e11d48;
+  font-size: 0.82rem;
+  padding: 0.2rem 0;
+}
+
 .reply-card__action-btn {
   background: none;
   border: none;
