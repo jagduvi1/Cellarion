@@ -1293,6 +1293,13 @@
     "signInToReply": "Logga in för att svara på denna diskussion.",
     "signInToStart": "Logga in för att starta en diskussion."
   },
+  "wineDiscussions": {
+    "title": "Diskussioner om detta vin",
+    "startCta": "Starta en diskussion",
+    "signInToStart": "Logga in för att diskutera",
+    "viewAll": "Visa alla {{count}} diskussioner",
+    "empty": "Inga diskussioner än — bli först med att dela dina tankar om detta vin."
+  },
   "reviewFeed": {
     "community": "Gemenskap",
     "reviews": "Omdömen",

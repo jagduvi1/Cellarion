@@ -7,6 +7,7 @@ import Layout from '../components/Layout';
 import SEOHead from '../components/SEOHead';
 import SITE_URL from '../config/siteUrl';
 import WineImage from '../components/WineImage';
+import WineDiscussionsPanel from '../components/WineDiscussionsPanel';
 import { getWineImageUrl } from '../utils/wineImageUrl';
 import { API_URL } from '../api/apiConstants';
 import './WineDetail.css';
@@ -213,6 +214,8 @@ export default function WineDetail() {
           </Link>
         </div>
       )}
+
+      <WineDiscussionsPanel wine={wine} />
     </div>
   );
 

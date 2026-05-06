@@ -52,3 +52,11 @@ export const getAiWineInfo = (apiFetch, query) =>
     headers: JSON_HEADERS,
     body: JSON.stringify({ query }),
   });
+
+/**
+ * Public-readable list of community discussions linked to a wine. Used by the
+ * WineDetail "Discussions about this wine" panel.
+ * Returns: { discussions, total, page, pages }
+ */
+export const getWineDiscussions = (apiFetch, idOrSlug, params = '') =>
+  apiFetch(`/api/wines/${idOrSlug}/discussions${params ? `?${params}` : ''}`);

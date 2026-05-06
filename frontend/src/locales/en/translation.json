@@ -1293,6 +1293,13 @@
     "signInToReply": "Sign in to reply to this discussion.",
     "signInToStart": "Sign in to start a discussion."
   },
+  "wineDiscussions": {
+    "title": "Discussions about this wine",
+    "startCta": "Start a discussion",
+    "signInToStart": "Sign in to discuss",
+    "viewAll": "View all {{count}} discussions",
+    "empty": "No discussions yet — be the first to share your thoughts on this wine."
+  },
   "reviewFeed": {
     "community": "Community",
     "reviews": "Reviews",
