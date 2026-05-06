@@ -18,7 +18,7 @@ const Review = require('./models/Review');
 const Discussion = require('./models/Discussion');
 const DiscussionReply = require('./models/DiscussionReply');
 const ReviewVote = require('./models/ReviewVote');
-const DiscussionReplyVote = require('./models/DiscussionReplyVote');
+const DiscussionReaction = require('./models/DiscussionReaction');
 const { POINT_VALUES, getTier, getSpecialty } = require('./utils/cellarCred');
 
 async function backfill() {
@@ -65,8 +65,10 @@ async function backfill() {
     ]);
     const userReplies = await DiscussionReply.find({ author: uid, isDeleted: { $ne: true } }).select('_id').lean();
     const replyIds = userReplies.map(r => r._id);
+    // Any reaction kind awards reply_like_received credit (kind-agnostic;
+    // engagement is engagement). Excludes self-reactions to avoid gaming.
     const replyLikes = replyIds.length > 0
-      ? await DiscussionReplyVote.countDocuments({ reply: { $in: replyIds } })
+      ? await DiscussionReaction.countDocuments({ reply: { $in: replyIds }, user: { $ne: uid } })
       : 0;
     const community = threads * POINT_VALUES.discussion_created
                     + replies * POINT_VALUES.discussion_reply_created

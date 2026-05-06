@@ -1,11 +1,14 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
-import { toggleReplyLike, getReplyOriginal, banUser } from '../api/discussions';
+import { toggleReaction, getReplyOriginal, banUser } from '../api/discussions';
 import WineReferenceCard from './WineReferenceCard';
 import CellarCredBadge from './CellarCredBadge';
 import ConfirmModal from './ConfirmModal';
+import ReactionPicker, { REACTIONS, EMOJI_BY_KIND } from './ReactionPicker';
 import { sanitizeForumRender } from '../utils/sanitizeForumRender';
+import { isDeletedUser } from '../utils/deletedUser';
 import timeAgo from '../utils/timeAgo';
 import './ReplyCard.css';
 
@@ -20,9 +23,13 @@ function QuoteBlock({ quote }) {
 }
 
 export default function ReplyCard({ reply, discussionId, onReply, onEdit, onDelete, onReport }) {
+  const { t } = useTranslation();
   const { apiFetch, user } = useAuth();
-  const [liked, setLiked] = useState(reply.liked || false);
-  const [likesCount, setLikesCount] = useState(reply.likesCount || 0);
+  // Reactions: counts come from the server (`reply.reactions = { kind: count }`)
+  // and the requester's own reactions come as `reply.myReactions = [kind]`.
+  // We mirror both into local state for optimistic toggling.
+  const [reactionCounts, setReactionCounts] = useState(reply.reactions || {});
+  const [myReactions, setMyReactions] = useState(new Set(reply.myReactions || []));
   const [showOriginal, setShowOriginal] = useState(false);
   const [originalBody, setOriginalBody] = useState(null);
   const [loadingOriginal, setLoadingOriginal] = useState(false);
@@ -30,10 +37,13 @@ export default function ReplyCard({ reply, discussionId, onReply, onEdit, onDele
   const [confirmBan, setConfirmBan] = useState(null); // { duration, label }
 
   const author = reply.author || {};
-  const authorName = author.displayName || author.username || 'Unknown';
+  const authorDeleted = isDeletedUser(author);
+  const authorName = authorDeleted
+    ? t('common.deletedUser')
+    : (author.displayName || author.username || 'Unknown');
   const isOwn = user && author._id === user.id;
   const isMod = user && (user.roles?.includes('moderator') || user.roles?.includes('admin'));
-  const authorIsMod = author.roles?.includes('moderator') || author.roles?.includes('admin');
+  const authorIsMod = !authorDeleted && (author.roles?.includes('moderator') || author.roles?.includes('admin'));
 
   const handleBan = async (duration, label) => {
     try {
@@ -48,25 +58,39 @@ export default function ReplyCard({ reply, discussionId, onReply, onEdit, onDele
     }
   };
 
-  const handleLike = async () => {
-    const prevLiked = liked;
-    const prevCount = likesCount;
-    setLiked(!liked);
-    setLikesCount(liked ? likesCount - 1 : likesCount + 1);
+  // Toggle a reaction kind. Optimistic: flip locally first, reconcile from
+  // the server response. Self-reactions are allowed (Slack/Discord/GitHub
+  // model — let authors react to their own posts).
+  const handleReact = async (kind) => {
+    const had = myReactions.has(kind);
+    const nextMine = new Set(myReactions);
+    if (had) nextMine.delete(kind); else nextMine.add(kind);
+    setMyReactions(nextMine);
+    setReactionCounts(prev => {
+      const next = { ...prev };
+      const cur = next[kind] || 0;
+      const adjusted = had ? cur - 1 : cur + 1;
+      if (adjusted <= 0) delete next[kind];
+      else next[kind] = adjusted;
+      return next;
+    });
 
     try {
-      const res = await toggleReplyLike(apiFetch, discussionId, reply._id);
+      const res = await toggleReaction(apiFetch, discussionId, reply._id, kind);
       if (res.ok) {
         const data = await res.json();
-        setLiked(data.liked);
-        setLikesCount(data.likesCount);
+        // Reconcile authoritative counts; mirror the optimistic mine flip
+        // (the server doesn't return myReactions on toggle — it's keyed off
+        // the requester and we already know).
+        setReactionCounts(data.reactions || {});
       } else {
-        setLiked(prevLiked);
-        setLikesCount(prevCount);
+        // Roll back optimistic update
+        setMyReactions(myReactions);
+        setReactionCounts(reactionCounts);
       }
     } catch {
-      setLiked(prevLiked);
-      setLikesCount(prevCount);
+      setMyReactions(myReactions);
+      setReactionCounts(reactionCounts);
     }
   };
 
@@ -127,15 +151,22 @@ export default function ReplyCard({ reply, discussionId, onReply, onEdit, onDele
   return (
     <div className="reply-card">
       <div className="reply-card__header">
-        <Link to={`/users/${author._id}`} className="reply-card__author">
-          <span className="reply-card__avatar">
-            {authorName.charAt(0).toUpperCase()}
+        {authorDeleted ? (
+          <span className="reply-card__author reply-card__author--deleted">
+            <span className="reply-card__avatar reply-card__avatar--deleted">?</span>
+            <span className="reply-card__author-name">{authorName}</span>
           </span>
-          <span className="reply-card__author-name">{authorName}</span>
-        </Link>
-        {author.roles?.includes('moderator') && <span className="badge badge--mod">Mod</span>}
-        {author.roles?.includes('admin') && <span className="badge badge--admin">Admin</span>}
-        <CellarCredBadge tier={author.contribution?.tier} specialty={author.contribution?.specialty} />
+        ) : (
+          <Link to={`/users/${author._id}`} className="reply-card__author">
+            <span className="reply-card__avatar">
+              {authorName.charAt(0).toUpperCase()}
+            </span>
+            <span className="reply-card__author-name">{authorName}</span>
+          </Link>
+        )}
+        {!authorDeleted && author.roles?.includes('moderator') && <span className="badge badge--mod">Mod</span>}
+        {!authorDeleted && author.roles?.includes('admin') && <span className="badge badge--admin">Admin</span>}
+        {!authorDeleted && <CellarCredBadge tier={author.contribution?.tier} specialty={author.contribution?.specialty} />}
         <span className="reply-card__time">{timeAgo(reply.createdAt)}</span>
         {reply.updatedAt !== reply.createdAt && (
           <span className="reply-card__edited">(edited)</span>
@@ -150,26 +181,31 @@ export default function ReplyCard({ reply, discussionId, onReply, onEdit, onDele
       />
 
       <div className="reply-card__footer">
-        {user ? (
-          <button
-            className={`reply-card__like-btn ${liked ? 'liked' : ''}`}
-            onClick={handleLike}
-            disabled={isOwn}
-            title={isOwn ? 'Cannot like your own reply' : (liked ? 'Unlike' : 'Like')}
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill={liked ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
-            </svg>
-            {likesCount > 0 && <span>{likesCount}</span>}
-          </button>
-        ) : likesCount > 0 ? (
-          <span className="reply-card__likes-readonly" aria-label={`${likesCount} likes`}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
-            </svg>
-            <span>{likesCount}</span>
-          </span>
-        ) : null}
+        {/* Reaction chips: existing reactions ordered by the curated REACTIONS
+            list (so the same kind always sits in the same slot). Logged-in
+            users can click to toggle their own reaction; anon users see them
+            as read-only. The picker "+" only renders when logged in. */}
+        <div className="reply-card__reactions">
+          {REACTIONS.filter(r => (reactionCounts[r.kind] || 0) > 0).map(r => {
+            const count = reactionCounts[r.kind];
+            const mine = myReactions.has(r.kind);
+            return (
+              <button
+                key={r.kind}
+                type="button"
+                className={`reaction-chip ${mine ? 'is-mine' : ''}`}
+                onClick={user ? () => handleReact(r.kind) : undefined}
+                disabled={!user}
+                title={t(r.labelKey)}
+                aria-label={`${t(r.labelKey)} ${count}`}
+              >
+                <span className="reaction-chip__emoji" aria-hidden="true">{r.emoji}</span>
+                <span className="reaction-chip__count">{count}</span>
+              </button>
+            );
+          })}
+          {user && <ReactionPicker onPick={handleReact} />}
+        </div>
 
         {onReply && (
           <button className="reply-card__action-btn" onClick={() => onReply(reply)}>
@@ -189,6 +225,7 @@ export default function ReplyCard({ reply, discussionId, onReply, onEdit, onDele
           </button>
         )}
 
+        {/* Self-reactions are allowed; reporting yourself is not. */}
         {!isOwn && onReport && (
           <button className="reply-card__action-btn" onClick={() => onReport(reply)}>
             Report

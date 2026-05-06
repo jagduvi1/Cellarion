@@ -38,7 +38,9 @@ function buildApp() {
   app.post('/api/discussions/:id/replies', requireAuth, ok);
   app.put('/api/discussions/:id/replies/:replyId', requireAuth, ok);
   app.delete('/api/discussions/:id/replies/:replyId', requireAuth, ok);
-  app.post('/api/discussions/:id/replies/:replyId/like', requireAuth, ok);
+  app.post('/api/discussions/:id/replies/:replyId/reactions', requireAuth, ok);
+  app.post('/api/discussions/:idOrSlug/watch', requireAuth, ok);
+  app.delete('/api/discussions/:idOrSlug/watch', requireAuth, ok);
   app.post('/api/discussions/:id/report', requireAuth, ok);
   app.post('/api/discussions/:id/replies/:replyId/report', requireAuth, ok);
 
@@ -116,7 +118,9 @@ const WRITE_ROUTES = [
   ['POST',   '/api/discussions/anyid/replies'],
   ['PUT',    '/api/discussions/anyid/replies/r1'],
   ['DELETE', '/api/discussions/anyid/replies/r1'],
-  ['POST',   '/api/discussions/anyid/replies/r1/like'],
+  ['POST',   '/api/discussions/anyid/replies/r1/reactions'],
+  ['POST',   '/api/discussions/anyid/watch'],
+  ['DELETE', '/api/discussions/anyid/watch'],
   ['POST',   '/api/discussions/anyid/report'],
   ['POST',   '/api/discussions/anyid/replies/r1/report'],
 ];

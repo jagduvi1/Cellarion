@@ -33,11 +33,27 @@ function Settings() {
   const [profileSaved, setProfileSaved] = useState(false);
   const [profileError, setProfileError] = useState(null);
 
-  // Notification preferences state
+  // Notification preferences — per-category × per-channel grid. The state
+  // mirrors the User schema shape so updatePreferences just passes through.
+  // Defaults match the backend schema defaults so unsaved-yet users see the
+  // same toggles their account will get on first save.
   const notifPrefs = user?.preferences?.notifications || {};
-  const [drinkWindow, setDrinkWindow] = useState(notifPrefs.drinkWindow !== false);
-  const [emailNotif, setEmailNotif] = useState(notifPrefs.email === true);
-  const [pushNotif, setPushNotif] = useState(notifPrefs.push === true);
+  const dwInit = notifPrefs.drinkWindow || {};
+  const crInit = notifPrefs.communityReply || {};
+  const cmInit = notifPrefs.communityMention || {};
+  const cfInit = notifPrefs.communityFollow || {};
+  const [drinkWindowEnabled, setDrinkWindowEnabled] = useState(dwInit.enabled !== false);
+  const [drinkWindowEmail, setDrinkWindowEmail] = useState(dwInit.email === true);
+  const [drinkWindowPush,  setDrinkWindowPush]  = useState(dwInit.push  === true);
+  const [communityReplyEmail, setCommunityReplyEmail] = useState(crInit.email === true);
+  const [communityReplyPush,  setCommunityReplyPush]  = useState(crInit.push  !== false); // defaults true
+  const [communityMentionEmail, setCommunityMentionEmail] = useState(cmInit.email === true);
+  const [communityMentionPush,  setCommunityMentionPush]  = useState(cmInit.push  !== false);
+  const [communityFollowPush,   setCommunityFollowPush]   = useState(cfInit.push  !== false);
+  // Combined "any push enabled?" flag — drives the device-registration UX
+  // below. If the user turns off all push categories there's no reason to
+  // keep a registered device.
+  const anyPushEnabled = drinkWindowPush || communityReplyPush || communityMentionPush || communityFollowPush;
   const [notifSaving, setNotifSaving] = useState(false);
   const [notifSaved, setNotifSaved] = useState(false);
   const [notifError, setNotifError] = useState(null);
@@ -78,12 +94,21 @@ function Settings() {
     const result = await subscribeToPush(apiFetch, vapidKey);
     if (!result.success) {
       setNotifError(result.error);
-    } else {
-      // Also enable master push toggle if it wasn't on
-      if (!pushNotif) {
-        setPushNotif(true);
-        await updatePreferences({ notifications: { drinkWindow, email: emailNotif, push: true } });
-      }
+    } else if (!anyPushEnabled) {
+      // Registering a device with no push categories enabled would never
+      // deliver anything — flip on the community categories (matches the
+      // schema defaults for new accounts) so the device is actually useful.
+      setCommunityReplyPush(true);
+      setCommunityMentionPush(true);
+      setCommunityFollowPush(true);
+      await updatePreferences({
+        notifications: {
+          drinkWindow:      { enabled: drinkWindowEnabled, email: drinkWindowEmail, push: drinkWindowPush },
+          communityReply:   { email: communityReplyEmail,   push: true },
+          communityMention: { email: communityMentionEmail, push: true },
+          communityFollow:  { push: true }
+        }
+      });
     }
     await refreshDeviceStatus();
     setDeviceLoading(false);
@@ -121,7 +146,12 @@ function Settings() {
     setNotifSaved(false);
 
     const result = await updatePreferences({
-      notifications: { drinkWindow, email: emailNotif, push: pushNotif }
+      notifications: {
+        drinkWindow:      { enabled: drinkWindowEnabled, email: drinkWindowEmail, push: drinkWindowPush },
+        communityReply:   { email: communityReplyEmail,   push: communityReplyPush },
+        communityMention: { email: communityMentionEmail, push: communityMentionPush },
+        communityFollow:  { push: communityFollowPush }
+      }
     });
     setNotifSaving(false);
     if (result.success) {
@@ -338,56 +368,92 @@ function Settings() {
 
       {/* ── Notifications card ── */}
       <div className="card settings-card">
-        <h2 className="settings-section-title">Notifications</h2>
+        <h2 className="settings-section-title">{t('settings.notifications.title')}</h2>
+        <p className="settings-hint settings-notif-intro">
+          {t('settings.notifications.intro')}
+        </p>
 
-        <div className="form-group">
-          <label className="settings-toggle-row">
-            <input
-              type="checkbox"
-              checked={drinkWindow}
-              onChange={e => setDrinkWindow(e.target.checked)}
-            />
-            <span>Drink window alerts</span>
-          </label>
-          <p className="settings-hint">
-            Get notified when bottles enter their peak, are nearing the end, or have passed their window.
-          </p>
-        </div>
+        {/* Per-category × per-channel grid. In-app notifications (the bell)
+            are always on; this grid only governs outbound channels. */}
+        <table className="settings-notif-grid">
+          <thead>
+            <tr>
+              <th scope="col">{t('settings.notifications.category')}</th>
+              <th scope="col">{t('settings.notifications.email')}</th>
+              <th scope="col">{t('settings.notifications.push')}</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>
+                <label className="settings-toggle-row">
+                  <input
+                    type="checkbox"
+                    checked={drinkWindowEnabled}
+                    onChange={e => setDrinkWindowEnabled(e.target.checked)}
+                  />
+                  <span>{t('settings.notifications.drinkWindow')}</span>
+                </label>
+              </td>
+              <td>
+                <input type="checkbox" aria-label={`${t('settings.notifications.drinkWindow')} — ${t('settings.notifications.email')}`}
+                  checked={drinkWindowEmail} onChange={e => setDrinkWindowEmail(e.target.checked)} />
+              </td>
+              <td>
+                <input type="checkbox" aria-label={`${t('settings.notifications.drinkWindow')} — ${t('settings.notifications.push')}`}
+                  checked={drinkWindowPush}
+                  onChange={e => setDrinkWindowPush(e.target.checked)}
+                  disabled={!pushSupported || pushDenied} />
+              </td>
+            </tr>
+            <tr>
+              <td>{t('settings.notifications.communityReply')}</td>
+              <td>
+                <input type="checkbox" aria-label={`${t('settings.notifications.communityReply')} — ${t('settings.notifications.email')}`}
+                  checked={communityReplyEmail} onChange={e => setCommunityReplyEmail(e.target.checked)} />
+              </td>
+              <td>
+                <input type="checkbox" aria-label={`${t('settings.notifications.communityReply')} — ${t('settings.notifications.push')}`}
+                  checked={communityReplyPush}
+                  onChange={e => setCommunityReplyPush(e.target.checked)}
+                  disabled={!pushSupported || pushDenied} />
+              </td>
+            </tr>
+            <tr>
+              <td>{t('settings.notifications.communityMention')}</td>
+              <td>
+                <input type="checkbox" aria-label={`${t('settings.notifications.communityMention')} — ${t('settings.notifications.email')}`}
+                  checked={communityMentionEmail} onChange={e => setCommunityMentionEmail(e.target.checked)} />
+              </td>
+              <td>
+                <input type="checkbox" aria-label={`${t('settings.notifications.communityMention')} — ${t('settings.notifications.push')}`}
+                  checked={communityMentionPush}
+                  onChange={e => setCommunityMentionPush(e.target.checked)}
+                  disabled={!pushSupported || pushDenied} />
+              </td>
+            </tr>
+            <tr>
+              <td>{t('settings.notifications.communityFollow')}</td>
+              <td className="settings-notif-grid__na">—</td>
+              <td>
+                <input type="checkbox" aria-label={`${t('settings.notifications.communityFollow')} — ${t('settings.notifications.push')}`}
+                  checked={communityFollowPush}
+                  onChange={e => setCommunityFollowPush(e.target.checked)}
+                  disabled={!pushSupported || pushDenied} />
+              </td>
+            </tr>
+          </tbody>
+        </table>
 
-        <div className="form-group">
-          <label className="settings-toggle-row">
-            <input
-              type="checkbox"
-              checked={emailNotif}
-              onChange={e => setEmailNotif(e.target.checked)}
-            />
-            <span>Email notifications</span>
-          </label>
-          <p className="settings-hint">
-            Receive emails when your bottles have drink-window updates and when someone replies, quotes, or mentions you in a discussion.
-          </p>
-        </div>
-
-        <div className="form-group">
-          <label className="settings-toggle-row">
-            <input
-              type="checkbox"
-              checked={pushNotif}
-              onChange={e => setPushNotif(e.target.checked)}
-              disabled={!pushSupported || (!vapidKey && !pushNotif) || pushDenied}
-            />
-            <span>Push notifications</span>
-          </label>
-          <p className="settings-hint">
-            {!pushSupported
-              ? 'Push notifications are not supported in this browser.'
-              : pushDenied
-                ? 'Push notifications are blocked. Please enable them in your browser settings.'
-                : !vapidKey
-                  ? 'Push notifications are not configured on this server.'
-                  : 'Receive browser push notifications for all alerts — even when Cellarion is closed.'}
-          </p>
-        </div>
+        <p className="settings-hint settings-notif-push-hint">
+          {!pushSupported
+            ? t('settings.notifications.pushUnsupported')
+            : pushDenied
+              ? t('settings.notifications.pushBlocked')
+              : !vapidKey
+                ? t('settings.notifications.pushNotConfigured')
+                : t('settings.notifications.pushHint')}
+        </p>
 
         {/* ── Per-device push management ── */}
         {pushSupported && vapidKey && !pushDenied && (

@@ -54,6 +54,20 @@
   border-radius: var(--radius-sm);
 }
 
+.discussion-detail__title-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  margin: 0 0 0.75rem;
+}
+
+.discussion-detail__title-row .discussion-detail__title {
+  margin: 0;
+  flex: 1;
+  min-width: 0;
+}
+
 .discussion-detail__title {
   margin: 0 0 0.75rem;
   font-size: 1.5rem;

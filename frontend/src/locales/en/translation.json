@@ -29,6 +29,7 @@
     "all": "All",
     "by": "by",
     "unknown": "Unknown",
+    "deletedUser": "[Deleted user]",
     "unknownWine": "Unknown Wine",
     "vintage": "Vintage",
     "source": "Source",
@@ -109,7 +110,33 @@
       "expires": "Valid until:",
       "noExpiry": "No expiry (indefinite)",
       "comparePlans": "Compare plans →"
+    },
+    "notifications": {
+      "title": "Notifications",
+      "intro": "Choose how you'd like to be notified. The bell in the navbar always shows everything; these toggles only control email and push.",
+      "category": "Category",
+      "email": "Email",
+      "push": "Push",
+      "drinkWindow": "Drink window alerts",
+      "communityReply": "Replies, quotes",
+      "communityMention": "@mentions",
+      "communityFollow": "Followed thread activity",
+      "pushUnsupported": "Push notifications are not supported in this browser.",
+      "pushBlocked": "Push notifications are blocked. Enable them in your browser settings.",
+      "pushNotConfigured": "Push notifications are not configured on this server.",
+      "pushHint": "Push delivers notifications to your device even when Cellarion is closed."
     }
+  },
+  "reactions": {
+    "addReaction": "Add reaction",
+    "thumbsUp": "Agree",
+    "heart": "Love this",
+    "cheers": "Cheers",
+    "wine": "Want to try",
+    "thinking": "Hmm",
+    "target": "Spot on",
+    "laugh": "Funny",
+    "pray": "Thanks"
   },
 
   "plans": {
@@ -1240,6 +1267,9 @@
     "linkUrl": "Link URL (https:// or mailto:)",
     "composerToolbar": "Formatting toolbar",
     "originalPost": "Original Post",
+    "follow": "Follow",
+    "following": "Following",
+    "signInToFollow": "Sign in to follow",
     "newDiscussion": "New Discussion",
     "noDiscussions": "No discussions yet",
     "noDiscussionsHint": "Start a conversation! Click \"New Discussion\" to create the first thread.",

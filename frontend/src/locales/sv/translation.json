@@ -29,6 +29,7 @@
     "all": "Alla",
     "by": "av",
     "unknown": "Okänd",
+    "deletedUser": "[Borttagen användare]",
     "unknownWine": "Okänt vin",
     "vintage": "Årgång",
     "source": "Källa",
@@ -109,7 +110,33 @@
       "expires": "Giltigt till:",
       "noExpiry": "Inget utgångsdatum",
       "comparePlans": "Jämför abonnemang →"
+    },
+    "notifications": {
+      "title": "Aviseringar",
+      "intro": "Välj hur du vill bli aviserad. Klockan i navigeringen visar alltid allt; dessa val styr endast e-post och push.",
+      "category": "Kategori",
+      "email": "E-post",
+      "push": "Push",
+      "drinkWindow": "Drickfönsteraviseringar",
+      "communityReply": "Svar, citat",
+      "communityMention": "@-omnämnanden",
+      "communityFollow": "Aktivitet i följda trådar",
+      "pushUnsupported": "Push-aviseringar stöds inte i denna webbläsare.",
+      "pushBlocked": "Push-aviseringar är blockerade. Aktivera dem i webbläsarens inställningar.",
+      "pushNotConfigured": "Push-aviseringar är inte konfigurerade på denna server.",
+      "pushHint": "Push levererar aviseringar till din enhet även när Cellarion är stängt."
     }
+  },
+  "reactions": {
+    "addReaction": "Lägg till reaktion",
+    "thumbsUp": "Håller med",
+    "heart": "Älskar detta",
+    "cheers": "Skål",
+    "wine": "Vill prova",
+    "thinking": "Hmm",
+    "target": "Helt rätt",
+    "laugh": "Roligt",
+    "pray": "Tack"
   },
 
   "plans": {
@@ -1240,6 +1267,9 @@
     "linkUrl": "Länkadress (https:// eller mailto:)",
     "composerToolbar": "Formateringsverktyg",
     "originalPost": "Ursprungligt inlägg",
+    "follow": "Följ",
+    "following": "Följer",
+    "signInToFollow": "Logga in för att följa",
     "newDiscussion": "Ny diskussion",
     "noDiscussions": "Inga diskussioner ännu",
     "noDiscussionsHint": "Starta en konversation! Klicka på \"Ny diskussion\" för att skapa den första tråden.",

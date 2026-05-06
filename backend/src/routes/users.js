@@ -20,7 +20,8 @@ const WineList = require('../models/WineList');
 const PendingShare = require('../models/PendingShare');
 const Discussion = require('../models/Discussion');
 const DiscussionReply = require('../models/DiscussionReply');
-const DiscussionReplyVote = require('../models/DiscussionReplyVote');
+const DiscussionReaction = require('../models/DiscussionReaction');
+const DiscussionWatch = require('../models/DiscussionWatch');
 const DiscussionReport = require('../models/DiscussionReport');
 const ChatUsage = require('../models/ChatUsage');
 const ImportSession = require('../models/ImportSession');
@@ -61,15 +62,32 @@ router.patch('/preferences', requireAuth, async (req, res) => {
     const { currency, language, ratingScale, rackNavigation, restockScope, defaultCellarId, notifications } = req.body;
     const update = {};
 
+    // Notifications schema is per-category × per-channel (see User.js).
+    // Accepted leaves are explicitly allow-listed so a malicious client can't
+    // inject arbitrary keys into preferences.notifications.
     if (notifications !== undefined && typeof notifications === 'object') {
-      if (notifications.drinkWindow !== undefined) {
-        update['preferences.notifications.drinkWindow'] = !!notifications.drinkWindow;
+      const setLeaf = (path, value) => {
+        update[`preferences.notifications.${path}`] = !!value;
+      };
+      const dw = notifications.drinkWindow;
+      if (dw && typeof dw === 'object') {
+        if (dw.enabled !== undefined) setLeaf('drinkWindow.enabled', dw.enabled);
+        if (dw.email   !== undefined) setLeaf('drinkWindow.email', dw.email);
+        if (dw.push    !== undefined) setLeaf('drinkWindow.push', dw.push);
       }
-      if (notifications.email !== undefined) {
-        update['preferences.notifications.email'] = !!notifications.email;
+      const cr = notifications.communityReply;
+      if (cr && typeof cr === 'object') {
+        if (cr.email !== undefined) setLeaf('communityReply.email', cr.email);
+        if (cr.push  !== undefined) setLeaf('communityReply.push', cr.push);
       }
-      if (notifications.push !== undefined) {
-        update['preferences.notifications.push'] = !!notifications.push;
+      const cm = notifications.communityMention;
+      if (cm && typeof cm === 'object') {
+        if (cm.email !== undefined) setLeaf('communityMention.email', cm.email);
+        if (cm.push  !== undefined) setLeaf('communityMention.push', cm.push);
+      }
+      const cf = notifications.communityFollow;
+      if (cf && typeof cf === 'object') {
+        if (cf.push !== undefined) setLeaf('communityFollow.push', cf.push);
       }
     }
 
@@ -359,7 +377,7 @@ router.get('/me/export', requireAuth, async (req, res) => {
       bottles, cellars, racks, wineRequests, reviews, notifications, auditLogs,
       images, recommendationsSent, recommendationsReceived, journalEntries,
       restockAlerts, wineLists, pendingSharesSent,
-      discussions, discussionReplies, reviewVotes, discussionReplyVotes,
+      discussions, discussionReplies, reviewVotes, discussionReactions, discussionWatches,
       follows, chatUsage, importSessions, supportTickets,
       discussionReports, wineReports, wishlistItems
     ] = await Promise.all([
@@ -380,7 +398,8 @@ router.get('/me/export', requireAuth, async (req, res) => {
       Discussion.find({ author: userId }).select('title category body wineDefinition isPinned isLocked replyCount createdAt updatedAt').lean(),
       DiscussionReply.find({ author: userId }).select('discussion body quote wineDefinition likesCount isDeleted createdAt updatedAt').lean(),
       ReviewVote.find({ user: userId }).select('review vote createdAt').lean(),
-      DiscussionReplyVote.find({ user: userId }).select('reply vote createdAt').lean(),
+      DiscussionReaction.find({ user: userId }).select('reply kind createdAt').lean(),
+      DiscussionWatch.find({ user: userId }).select('discussion createdAt').lean(),
       Follow.find({ $or: [{ follower: userId }, { following: userId }] })
         .populate('follower', 'username').populate('following', 'username').lean(),
       ChatUsage.find({ userId: userId }).select('date promptTokens completionTokens').lean(),
@@ -497,10 +516,9 @@ router.get('/me/export', requireAuth, async (req, res) => {
         createdAt: r.createdAt,
         updatedAt: r.updatedAt
       })),
-      votes: {
-        reviews: reviewVotes.map(v => ({ review: v.review, vote: v.vote, createdAt: v.createdAt })),
-        discussionReplies: discussionReplyVotes.map(v => ({ reply: v.reply, vote: v.vote, createdAt: v.createdAt }))
-      },
+      reviewVotes: reviewVotes.map(v => ({ review: v.review, vote: v.vote, createdAt: v.createdAt })),
+      discussionReactions: discussionReactions.map(r => ({ reply: r.reply, kind: r.kind, createdAt: r.createdAt })),
+      discussionWatches: discussionWatches.map(w => ({ discussion: w.discussion, createdAt: w.createdAt })),
       social: {
         following: follows.filter(f => f.follower?._id?.toString() === userId || f.follower?.toString() === userId)
           .map(f => ({ username: f.following?.username, createdAt: f.createdAt })),
