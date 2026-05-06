@@ -10,10 +10,12 @@ export const useTheme = () => {
 
 export const ThemeProvider = ({ children }) => {
   const [theme, setTheme] = useState(() => {
+    // Light is the brand default. Cellarion's colour system, photography, and
+    // wine-label imagery are designed for the warm cream palette — first-time
+    // visitors see that even when their OS is in dark mode. Returning users
+    // get whatever they last chose via the toggle.
     const saved = localStorage.getItem('cellarion-theme');
-    if (saved) return saved;
-    // Default to system preference
-    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    return saved || 'light';
   });
 
   useEffect(() => {
@@ -32,21 +34,7 @@ export const ThemeProvider = ({ children }) => {
     }
   }, [theme]);
 
-  // Listen for system preference changes
-  useEffect(() => {
-    const mql = window.matchMedia('(prefers-color-scheme: dark)');
-    const handler = (e) => {
-      // Only auto-switch if user hasn't manually chosen
-      if (!localStorage.getItem('cellarion-theme-manual')) {
-        setTheme(e.matches ? 'dark' : 'light');
-      }
-    };
-    mql.addEventListener('change', handler);
-    return () => mql.removeEventListener('change', handler);
-  }, []);
-
   const toggleTheme = () => {
-    localStorage.setItem('cellarion-theme-manual', 'true');
     setTheme(prev => prev === 'light' ? 'dark' : 'light');
   };
 
