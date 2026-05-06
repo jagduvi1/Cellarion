@@ -36,4 +36,20 @@ export function sanitizeForumRender(html) {
   });
 }
 
+/**
+ * Extract plain text from a sanitized body. Uses DOMPurify with
+ * ALLOWED_TAGS:[] + KEEP_CONTENT:true so all markup is stripped via a real
+ * HTML parser (not regex). This handles malformed input like an unclosed
+ * `<script` correctly — a hand-rolled `<[^>]+>` regex doesn't (CodeQL's
+ * `js/incomplete-multi-character-sanitization` rule).
+ *
+ * Used for quote-preview snippets and visible-length counters; the actual
+ * body is rendered via sanitizeForumRender, never as plain text.
+ */
+export function extractForumPlainText(html) {
+  if (typeof html !== 'string' || !html) return '';
+  const stripped = DOMPurify.sanitize(html, { ALLOWED_TAGS: [], KEEP_CONTENT: true });
+  return stripped.replace(/\s+/g, ' ').trim();
+}
+
 export const FORUM_ALLOWED_TAGS = ALLOWED_TAGS;

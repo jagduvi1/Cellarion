@@ -17,7 +17,7 @@ import ConfirmModal from '../components/ConfirmModal';
 import CommunityCTA from '../components/CommunityCTA';
 import SEOHead from '../components/SEOHead';
 import DiscussionComposer from '../components/DiscussionComposer';
-import { sanitizeForumRender } from '../utils/sanitizeForumRender';
+import { sanitizeForumRender, extractForumPlainText } from '../utils/sanitizeForumRender';
 import timeAgo from '../utils/timeAgo';
 import './DiscussionDetail.css';
 
@@ -380,10 +380,10 @@ function DiscussionDetail() {
               discussionId={id}
               onReply={!user || discussion.isLocked ? null : (r) => {
                 const authorName = r.author?.displayName || r.author?.username || 'Unknown';
-                // r.body is now HTML — strip to plain text for the quote
-                // preview. The backend independently rebuilds the persisted
-                // snapshot from the server-side body, so this is preview-only.
-                const plain = String(r.body || '').replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
+                // r.body is HTML — strip to plain text for the quote preview.
+                // The backend independently rebuilds the persisted snapshot
+                // from the server-side body, so this is preview-only.
+                const plain = extractForumPlainText(r.body);
                 const snippet = plain.length > 300 ? plain.slice(0, 300) + '…' : plain;
                 setQuoteData({ replyId: r._id, authorName, body: snippet });
                 // Scroll the composer into view
@@ -398,8 +398,7 @@ function DiscussionDetail() {
                 setEditBody(r.body);
                 // Seed the visible-length counter so the Save button isn't
                 // disabled before the user edits anything.
-                const plain = String(r.body || '').replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
-                setEditTextLength(plain.length);
+                setEditTextLength(extractForumPlainText(r.body).length);
               } : null}
               onDelete={user ? (r) => setConfirmDeleteReply(r) : null}
               onReport={user ? (r) => setReportTarget({ type: 'reply', id: r._id }) : null}
