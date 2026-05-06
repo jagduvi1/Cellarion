@@ -146,3 +146,31 @@
   font-size: 1rem;
   line-height: 1.65;
 }
+
+/* ── Mobile (≤ 600px) ──
+   Bigger tap targets on the toolbar buttons (44px is Apple's HIG minimum,
+   Android Material recommends 48dp). Tighter content padding to maximise
+   typing area on narrow viewports. */
+@media (max-width: 600px) {
+  .discussion-composer__toolbar {
+    padding: 0.5rem 0.5rem;
+    gap: 0.35rem;
+  }
+
+  .discussion-composer__btn {
+    min-width: 2.5rem;
+    min-height: 2.5rem;
+    padding: 0.4rem 0.6rem;
+    font-size: 1rem;
+  }
+
+  .discussion-composer__content {
+    padding: 0.6rem 0.75rem;
+  }
+
+  /* Reading-mode body: keep typography but trim padding margins on phones */
+  .discussion-body {
+    font-size: 1rem;
+    line-height: 1.65;
+  }
+}

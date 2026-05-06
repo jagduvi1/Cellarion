@@ -220,3 +220,47 @@
   text-align: center;
   font-size: 0.9rem;
 }
+
+/* ── Mobile (≤ 600px) ──
+   Tighter outer padding, smaller title, less generous OP card padding so the
+   layout breathes naturally on phones. The reading-mode 68ch cap on
+   .discussion-body already adapts (viewports < 68ch just fall back to 100%). */
+@media (max-width: 600px) {
+  .discussion-detail {
+    padding: 1rem 0.75rem;
+  }
+
+  .discussion-detail__header {
+    padding: 1.125rem 1rem 1rem;
+    margin-bottom: 1rem;
+  }
+
+  .discussion-detail__title {
+    font-size: 1.25rem;
+    line-height: 1.3;
+  }
+
+  .discussion-detail__op-pill {
+    font-size: 0.68rem;
+    padding: 0.1rem 0.45rem;
+  }
+
+  .discussion-detail__actions {
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .discussion-detail__reply-form {
+    padding: 0.875rem 1rem;
+  }
+
+  .discussion-detail__reply-actions {
+    flex-direction: column-reverse;
+    align-items: stretch;
+    gap: 0.5rem;
+  }
+
+  .discussion-detail__reply-actions .btn {
+    width: 100%;
+  }
+}

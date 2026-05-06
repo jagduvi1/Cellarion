@@ -148,11 +148,22 @@
 }
 
 @media (max-width: 600px) {
+  .discussions-page {
+    padding: 0 0.75rem 1.5rem;
+  }
+
   .discussions__controls {
     flex-direction: column;
   }
 
   .discussions__controls .btn-primary {
     width: 100%;
+  }
+
+  /* Search row stays inline but the small buttons collapse to icon-padding
+     on tight screens. The submit button retains its label so the meaning is
+     clear without an aria-label. */
+  .discussions__search {
+    gap: 0.4rem;
   }
 }

@@ -239,3 +239,30 @@
   background: var(--color-bg-secondary, #f5f5f5);
   color: #e11d48;
 }
+
+/* ── Mobile (≤ 600px) ──
+   Touch devices already get always-visible actions via @media (hover: none),
+   but the buttons themselves need bigger tap targets. The action row also
+   uses comma-separated wrapping rather than a tight gap so it doesn't
+   overflow on narrow viewports. */
+@media (max-width: 600px) {
+  .reply-card {
+    padding: 1rem 0;
+  }
+
+  .reply-card__footer {
+    gap: 0.5rem 1rem;
+    flex-wrap: wrap;
+  }
+
+  .reply-card__like-btn,
+  .reply-card .reply-card__action-btn {
+    padding: 0.4rem 0;
+    font-size: 0.88rem;
+    min-height: 1.8rem;
+  }
+
+  .reply-card__quote {
+    font-size: 0.82rem;
+  }
+}
