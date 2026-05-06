@@ -364,7 +364,7 @@ function Settings() {
             <span>Email notifications</span>
           </label>
           <p className="settings-hint">
-            Receive a digest email when your bottles have drink-window updates.
+            Receive emails when your bottles have drink-window updates and when someone replies, quotes, or mentions you in a discussion.
           </p>
         </div>
 

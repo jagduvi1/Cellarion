@@ -320,4 +320,74 @@ async function sendCellarInviteEmail(toEmail, senderName, senderEmail, cellarNam
   });
 }
 
-module.exports = { sendVerificationEmail, sendPasswordResetEmail, sendDrinkWindowDigest, sendRecommendationEmail, sendCellarInviteEmail, EMAIL_VERIFICATION_ENABLED };
+/**
+ * Email a forum participant when someone replies to / quotes / mentions them.
+ * No-ops when Mailgun isn't configured. The recipient is responsible for
+ * having opted in via preferences.notifications.email — the route handler
+ * checks that before calling this function.
+ *
+ * @param {string} toEmail
+ * @param {string} recipientName  display/username of the recipient (greeting)
+ * @param {string} recipientId    user ObjectId (for the unsubscribe token)
+ * @param {string} replierName
+ * @param {string} discussionTitle
+ * @param {string} discussionUrl  full URL to the discussion (incl. anchor)
+ * @param {string} replyText      plain-text reply preview (already sanitized)
+ * @param {string} kind           'reply' | 'quote' | 'mention'
+ */
+async function sendDiscussionReplyEmail(toEmail, recipientName, recipientId, replierName, discussionTitle, discussionUrl, replyText, kind = 'reply') {
+  if (!EMAIL_VERIFICATION_ENABLED) return;
+
+  const { createUnsubscribeToken } = require('../utils/unsubscribe');
+  const unsubToken = createUnsubscribeToken(recipientId);
+  const unsubLink = `${process.env.BACKEND_URL || 'http://localhost:5000'}/api/users/unsubscribe?token=${unsubToken}`;
+
+  const verb = kind === 'quote' ? 'quoted you' : kind === 'mention' ? 'mentioned you' : 'replied to your discussion';
+  const subject = kind === 'quote'
+    ? `${replierName} quoted you in "${discussionTitle}"`
+    : kind === 'mention'
+      ? `${replierName} mentioned you in "${discussionTitle}"`
+      : `${replierName} replied to "${discussionTitle}"`;
+
+  const previewText = (replyText || '').slice(0, 280);
+
+  await mg.messages.create(DOMAIN, {
+    from: FROM,
+    to: [toEmail],
+    subject,
+    text: [
+      `Hello ${recipientName},`,
+      '',
+      `${replierName} ${verb}: "${discussionTitle}".`,
+      '',
+      previewText ? `> ${previewText}` : '',
+      '',
+      `Read and reply: ${discussionUrl}`,
+      '',
+      `To stop receiving these emails: ${unsubLink}`
+    ].filter(Boolean).join('\n'),
+    html: `
+      <div style="font-family:sans-serif;max-width:520px;margin:0 auto;color:#2a2a2a;">
+        <p>Hello <strong>${escapeHtml(recipientName)}</strong>,</p>
+        <p><strong>${escapeHtml(replierName)}</strong> ${verb}:
+           <em>${escapeHtml(discussionTitle)}</em>.</p>
+        ${previewText ? `<blockquote style="border-left:3px solid #D4A373;margin:1rem 0;padding:0.25rem 0.75rem;color:#555;">${escapeHtml(previewText)}</blockquote>` : ''}
+        <p style="margin:1.5rem 0;">
+          <a href="${discussionUrl}"
+             style="background:#7B9E88;color:#0d0d0d;padding:10px 22px;
+                    border-radius:4px;text-decoration:none;font-weight:600;
+                    display:inline-block;">
+            Read and reply
+          </a>
+        </p>
+        <hr style="border:none;border-top:1px solid #ddd;margin:2rem 0;" />
+        <p style="color:#9A9484;font-size:0.85em;">
+          You're getting this because you have community email notifications turned on.
+          <a href="${unsubLink}" style="color:#9A9484;">Unsubscribe</a>.
+        </p>
+      </div>
+    `
+  });
+}
+
+module.exports = { sendVerificationEmail, sendPasswordResetEmail, sendDrinkWindowDigest, sendRecommendationEmail, sendCellarInviteEmail, sendDiscussionReplyEmail, EMAIL_VERIFICATION_ENABLED };
