@@ -205,3 +205,74 @@
   opacity: 0.5;
   cursor: not-allowed;
 }
+
+/* ── Notification preferences grid ──
+   Per-category × per-channel layout. In-app notifications (the bell) are
+   always on for every category — only outbound channels (email, push) are
+   user-controlled. */
+.settings-notif-intro {
+  margin-bottom: 1rem;
+}
+
+.settings-notif-grid {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 0.75rem;
+}
+
+.settings-notif-grid th {
+  text-align: left;
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-secondary);
+  padding: 0.4rem 0.5rem;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.settings-notif-grid th:not(:first-child),
+.settings-notif-grid td:not(:first-child) {
+  text-align: center;
+  width: 4.5rem;
+}
+
+.settings-notif-grid td {
+  padding: 0.55rem 0.5rem;
+  font-size: 0.92rem;
+}
+
+.settings-notif-grid tr + tr td {
+  border-top: 1px solid var(--color-border-light, var(--color-border));
+}
+
+.settings-notif-grid input[type="checkbox"] {
+  width: 1.1rem;
+  height: 1.1rem;
+  cursor: pointer;
+}
+
+.settings-notif-grid input[type="checkbox"]:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.settings-notif-grid__na {
+  color: var(--color-text-muted);
+  font-size: 0.9rem;
+}
+
+.settings-notif-push-hint {
+  margin-top: 0.25rem;
+  margin-bottom: 1rem;
+}
+
+@media (max-width: 600px) {
+  .settings-notif-grid th:not(:first-child),
+  .settings-notif-grid td:not(:first-child) {
+    width: 3.25rem;
+  }
+  .settings-notif-grid td {
+    font-size: 0.85rem;
+  }
+}

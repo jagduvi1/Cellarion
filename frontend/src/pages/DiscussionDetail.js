@@ -17,7 +17,9 @@ import ConfirmModal from '../components/ConfirmModal';
 import CommunityCTA from '../components/CommunityCTA';
 import SEOHead from '../components/SEOHead';
 import DiscussionComposer from '../components/DiscussionComposer';
+import WatchThreadButton from '../components/WatchThreadButton';
 import { sanitizeForumRender, extractForumPlainText } from '../utils/sanitizeForumRender';
+import { isDeletedUser } from '../utils/deletedUser';
 import timeAgo from '../utils/timeAgo';
 import './DiscussionDetail.css';
 
@@ -273,7 +275,10 @@ function DiscussionDetail() {
   }
 
   const author = discussion.author || {};
-  const authorName = author.displayName || author.username || 'Unknown';
+  const authorDeleted = isDeletedUser(author);
+  const authorName = authorDeleted
+    ? t('common.deletedUser')
+    : (author.displayName || author.username || 'Unknown');
 
   const slugOrId = discussion.slug || discussion._id;
   const canonicalPath = `/community/discussions/${slugOrId}`;
@@ -321,15 +326,32 @@ function DiscussionDetail() {
           {discussion.isLocked && <span className="discussion-card__locked">{t('discussions.locked')}</span>}
         </div>
 
-        <h1 className="discussion-detail__title">{discussion.title}</h1>
+        <div className="discussion-detail__title-row">
+          <h1 className="discussion-detail__title">{discussion.title}</h1>
+          <WatchThreadButton
+            idOrSlug={discussion.slug || discussion._id}
+            isWatching={discussion.isWatching}
+            watcherCount={discussion.watcherCount}
+          />
+        </div>
 
         <div className="discussion-detail__author-line">
-          <Link to={`/users/${author._id}`} className="discussion-detail__author-link">
-            <span className="reply-card__avatar">{authorName.charAt(0).toUpperCase()}</span>
-            <span>{authorName}</span>
-          </Link>
-          {author.roles?.includes('moderator') && <span className="badge badge--mod">{t('discussions.mod')}</span>}
-          {author.roles?.includes('admin') && <span className="badge badge--admin">{t('discussions.admin')}</span>}
+          {/* Deleted user: show as a non-clickable label, no badges, generic
+              avatar — their account no longer exists, the profile route
+              would dead-end on the sentinel user. */}
+          {authorDeleted ? (
+            <span className="discussion-detail__author-link discussion-detail__author-link--deleted">
+              <span className="reply-card__avatar reply-card__avatar--deleted">?</span>
+              <span>{authorName}</span>
+            </span>
+          ) : (
+            <Link to={`/users/${author._id}`} className="discussion-detail__author-link">
+              <span className="reply-card__avatar">{authorName.charAt(0).toUpperCase()}</span>
+              <span>{authorName}</span>
+            </Link>
+          )}
+          {!authorDeleted && author.roles?.includes('moderator') && <span className="badge badge--mod">{t('discussions.mod')}</span>}
+          {!authorDeleted && author.roles?.includes('admin') && <span className="badge badge--admin">{t('discussions.admin')}</span>}
           <span className="discussion-detail__time">{timeAgo(discussion.createdAt)}</span>
           {discussion.replyCount > 0 && (
             <span className="discussion-detail__reply-count">{discussion.replyCount} {discussion.replyCount === 1 ? t('discussions.reply') : t('discussions.replies')}</span>

@@ -112,7 +112,8 @@ function PrivacyPolicy() {
           <li><strong>Account data:</strong> retained for as long as your account is active.</li>
           <li><strong>Activity logs:</strong> automatically deleted after 90 days.</li>
           <li><strong>Deleted cellars/racks:</strong> soft-deleted and permanently removed after 30 days.</li>
-          <li><strong>Account deletion:</strong> when you request account deletion, there is a 7-day cooling-off period. After that, all your data is permanently and irreversibly deleted.</li>
+          <li><strong>Account deletion:</strong> when you request account deletion, there is a 7-day cooling-off period. After that, your personal data (account, cellar, bottles, journal, settings, reactions, watches, reports) is permanently and irreversibly deleted.</li>
+          <li><strong>Forum content (discussions and replies):</strong> to preserve multi-party conversations for other users, your forum posts are <em>anonymised</em> rather than hard-deleted — your authorship is replaced with "[Deleted user]" and the personal-data link is severed (GDPR Art. 17 compliant). The post text remains visible. If you need a specific post fully removed, contact support before requesting account deletion.</li>
         </ul>
 
         <h2>8. Your rights (GDPR)</h2>
@@ -120,7 +121,7 @@ function PrivacyPolicy() {
         <ul>
           <li><strong>Right of access (Art. 15):</strong> you can view all your data within the app at any time. You can also download a complete export of your data from Settings.</li>
           <li><strong>Right to rectification (Art. 16):</strong> you can update your profile, preferences, and cellar data at any time.</li>
-          <li><strong>Right to erasure (Art. 17):</strong> you can delete your account and all associated data from Settings. Deletion takes effect after a 7-day cooling-off period.</li>
+          <li><strong>Right to erasure (Art. 17):</strong> you can delete your account and all associated personal data from Settings. Deletion takes effect after a 7-day cooling-off period. Forum posts are anonymised rather than hard-deleted (your authorship is severed) so other users' conversations stay intact; contact support if you need specific posts fully removed.</li>
           <li><strong>Right to data portability (Art. 20):</strong> you can export all your data as JSON from Settings at any time.</li>
           <li><strong>Right to restrict processing (Art. 18):</strong> you can disable all notifications and set your profile to private to restrict how your data is used.</li>
           <li><strong>Right to object (Art. 21):</strong> you can opt out of all email and push notifications in Settings, or use the one-click unsubscribe link in any email.</li>

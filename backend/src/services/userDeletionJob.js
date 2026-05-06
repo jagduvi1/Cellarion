@@ -13,7 +13,8 @@ const CellarValueSnapshot = require('../models/CellarValueSnapshot');
 const ChatUsage = require('../models/ChatUsage');
 const Discussion = require('../models/Discussion');
 const DiscussionReply = require('../models/DiscussionReply');
-const DiscussionReplyVote = require('../models/DiscussionReplyVote');
+const DiscussionReaction = require('../models/DiscussionReaction');
+const DiscussionWatch = require('../models/DiscussionWatch');
 const DiscussionReport = require('../models/DiscussionReport');
 const Follow = require('../models/Follow');
 const ImportSession = require('../models/ImportSession');
@@ -36,6 +37,7 @@ const WineVintageProfile = require('../models/WineVintageProfile');
 const WishlistItem = require('../models/WishlistItem');
 const AuditLog = require('../models/AuditLog');
 const BlogPost = require('../models/BlogPost');
+const { getOrCreateDeletedUser } = require('../utils/deletedUser');
 
 /**
  * Delete all data linked to a single user.
@@ -44,6 +46,15 @@ const BlogPost = require('../models/BlogPost');
 async function purgeUserData(userId, userEmail) {
   // Get cellar IDs for cascade cleanup
   const cellarIds = await Cellar.distinct('_id', { user: userId });
+
+  // Forum content gets anonymised (re-pointed at a sentinel "[deleted]" user)
+  // rather than hard-deleted. Reasoning: a thread someone replied to is part
+  // of a multi-party conversation — deleting just one author's posts breaks
+  // it for everyone else. Anonymising severs the personal-data link (GDPR-
+  // compliant, art. 17 right to erasure) while keeping the conversation
+  // intact. Reactions, watches, reports stay hard-deleted (they're personal-
+  // data-only with no community value).
+  const deletedUserId = await getOrCreateDeletedUser();
 
   await Promise.all([
     // Core wine data
@@ -55,10 +66,15 @@ async function purgeUserData(userId, userEmail) {
     WineList.deleteMany({ user: userId }),
     WishlistItem.deleteMany({ user: userId }),
 
-    // Social & engagement
-    Discussion.deleteMany({ author: userId }),
-    DiscussionReply.deleteMany({ author: userId }),
-    DiscussionReplyVote.deleteMany({ user: userId }),
+    // Forum content: anonymise (preserve conversations for other users)
+    Discussion.updateMany({ author: userId }, { $set: { author: deletedUserId } }),
+    DiscussionReply.updateMany({ author: userId }, { $set: { author: deletedUserId } }),
+
+    // Personal-data-only forum collections: hard-delete
+    DiscussionReaction.deleteMany({ user: userId }),
+    DiscussionWatch.deleteMany({ user: userId }),
+
+    // Social & engagement (non-forum)
     ReviewVote.deleteMany({ user: userId }),
     Review.deleteMany({ author: userId }),
     Follow.deleteMany({ $or: [{ follower: userId }, { following: userId }] }),

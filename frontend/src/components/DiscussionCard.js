@@ -39,16 +39,24 @@ export default function DiscussionCard({ discussion }) {
 
       <div className="discussion-card__footer">
         <span className="discussion-card__author">
-          <Link
-            to={`/users/${author._id}`}
-            className="discussion-card__author-link"
-            onClick={e => e.stopPropagation()}
-          >
-            {authorName}
-          </Link>
-          {author.roles?.includes('moderator') && <span className="badge badge--mod">Mod</span>}
-          {author.roles?.includes('admin') && <span className="badge badge--admin">Admin</span>}
-          <CellarCredBadge tier={author.contribution?.tier} specialty={author.contribution?.specialty} />
+          {/* Deleted users are shown as a non-clickable label — their profile
+              page would be a dead-end (sentinel account, no real data). */}
+          {deleted ? (
+            <span className="discussion-card__author-link discussion-card__author-link--deleted">
+              {authorName}
+            </span>
+          ) : (
+            <Link
+              to={`/users/${author._id}`}
+              className="discussion-card__author-link"
+              onClick={e => e.stopPropagation()}
+            >
+              {authorName}
+            </Link>
+          )}
+          {!deleted && author.roles?.includes('moderator') && <span className="badge badge--mod">Mod</span>}
+          {!deleted && author.roles?.includes('admin') && <span className="badge badge--admin">Admin</span>}
+          {!deleted && <CellarCredBadge tier={author.contribution?.tier} specialty={author.contribution?.specialty} />}
         </span>
         <span className="discussion-card__stats">
           <span className="discussion-card__replies">

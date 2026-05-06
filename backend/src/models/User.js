@@ -89,9 +89,36 @@ const userSchema = new mongoose.Schema({
       default: 'auto'
     },
     notifications: {
-      drinkWindow: { type: Boolean, default: true },
-      email:       { type: Boolean, default: false },
-      push:        { type: Boolean, default: false }
+      // In-app notifications (the bell) are always on for every category —
+      // they're a pull surface, not interruptive. The toggles below gate
+      // outbound channels (email, push) per category.
+      //
+      // Defaults: drink-window stays opt-in (existing behaviour); community
+      // categories default ON for push (push is already explicit-subscription
+      // gated, so it's safe to opt in once subscribed) and OFF for email
+      // (email is the more intrusive channel — opt in if you want it).
+      drinkWindow: {
+        // Master toggle (back-compat with the old single boolean — still drives
+        // the in-app bell; the email/push children gate outbound channels).
+        enabled: { type: Boolean, default: true },
+        email:   { type: Boolean, default: false },
+        push:    { type: Boolean, default: false }
+      },
+      communityReply: {
+        // Reply to your discussion, or someone quoted your reply.
+        email: { type: Boolean, default: false },
+        push:  { type: Boolean, default: true }
+      },
+      communityMention: {
+        // @mentioned you anywhere.
+        email: { type: Boolean, default: false },
+        push:  { type: Boolean, default: true }
+      },
+      communityFollow: {
+        // New reply on a thread you're following (and didn't author).
+        // Email skipped — would be too noisy.
+        push:  { type: Boolean, default: true }
+      }
     },
     restockScope: {
       type: String,

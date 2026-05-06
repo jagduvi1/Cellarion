@@ -27,8 +27,23 @@ export const updateReply = (apiFetch, discussionId, replyId, data) =>
 export const deleteReply = (apiFetch, discussionId, replyId) =>
   apiFetch(`/api/discussions/${discussionId}/replies/${replyId}`, { method: 'DELETE' });
 
-export const toggleReplyLike = (apiFetch, discussionId, replyId) =>
-  apiFetch(`/api/discussions/${discussionId}/replies/${replyId}/like`, { method: 'POST' });
+// Toggle a reaction kind on a reply. The backend treats the same kind twice
+// as a flip (off), and different kinds as independent reactions.
+export const toggleReaction = (apiFetch, discussionId, replyId, kind) =>
+  apiFetch(`/api/discussions/${discussionId}/replies/${replyId}/reactions`, {
+    method: 'POST',
+    headers: JSON_HEADERS,
+    body: JSON.stringify({ kind })
+  });
+
+// Follow / unfollow a thread. Auto-follow happens server-side when you post
+// or reply; this endpoint is only used by the manual Follow button on
+// threads you didn't author.
+export const watchDiscussion = (apiFetch, idOrSlug) =>
+  apiFetch(`/api/discussions/${idOrSlug}/watch`, { method: 'POST' });
+
+export const unwatchDiscussion = (apiFetch, idOrSlug) =>
+  apiFetch(`/api/discussions/${idOrSlug}/watch`, { method: 'DELETE' });
 
 export const pinDiscussion = (apiFetch, id) =>
   apiFetch(`/api/discussions/${id}/pin`, { method: 'PATCH' });

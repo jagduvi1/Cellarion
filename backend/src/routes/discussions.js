@@ -3,7 +3,9 @@ const { requireAuth, optionalAuth, requireModeratorOrAdmin } = require('../middl
 const Discussion = require('../models/Discussion');
 const { CATEGORIES } = require('../models/Discussion');
 const DiscussionReply = require('../models/DiscussionReply');
-const DiscussionReplyVote = require('../models/DiscussionReplyVote');
+const DiscussionReaction = require('../models/DiscussionReaction');
+const { REACTION_KINDS } = require('../models/DiscussionReaction');
+const DiscussionWatch = require('../models/DiscussionWatch');
 const DiscussionReport = require('../models/DiscussionReport');
 const User = require('../models/User');
 const WineDefinition = require('../models/WineDefinition');
@@ -289,7 +291,19 @@ router.get('/:idOrSlug', optionalAuth, async (req, res) => {
 
     if (!discussion) return res.status(404).json({ error: 'Discussion not found' });
 
-    res.json({ discussion });
+    // Watch status: total followers + whether the requester is one of them.
+    // Anonymous viewers get isWatching=false.
+    const [watcherCount, myWatch] = await Promise.all([
+      DiscussionWatch.countDocuments({ discussion: discussion._id }),
+      req.user
+        ? DiscussionWatch.findOne({ user: req.user.id, discussion: discussion._id }).select('_id').lean()
+        : Promise.resolve(null)
+    ]);
+
+    const obj = discussion.toObject();
+    obj.watcherCount = watcherCount;
+    obj.isWatching = !!myWatch;
+    res.json({ discussion: obj });
   } catch (err) {
     console.error('Get discussion error:', err);
     res.status(500).json({ error: 'Failed to get discussion' });
@@ -333,6 +347,13 @@ router.post('/', requireAuth, async (req, res) => {
     await discussion.save();
     incrementCred(req.user.id, 'discussion_created').catch(() => {});
     logAudit(req, 'discussion.create', { type: 'discussion', id: discussion._id }, { title: cleanTitle, category });
+
+    // Auto-watch: posting a discussion implies you want updates on it.
+    DiscussionWatch.updateOne(
+      { user: req.user.id, discussion: discussion._id },
+      { $setOnInsert: { user: req.user.id, discussion: discussion._id } },
+      { upsert: true }
+    ).catch(() => {});
 
     // Notify search engines about the new public-readable URL
     submitToIndexNow(`/community/discussions/${discussion.slug || discussion._id}`);
@@ -418,12 +439,13 @@ router.delete('/:idOrSlug', requireAuth, requireModeratorOrAdmin, async (req, re
     const discussion = await findDiscussionByIdOrSlug(req.params.idOrSlug);
     if (!discussion) return res.status(404).json({ error: 'Discussion not found' });
 
-    // Clean up replies and votes
+    // Clean up replies, reactions, watches, reports
     const replyIds = await DiscussionReply.find({ discussion: discussion._id }).select('_id');
     const replyIdList = replyIds.map(r => r._id);
-    DiscussionReplyVote.deleteMany({ reply: { $in: replyIdList } }).catch(() => {});
+    DiscussionReaction.deleteMany({ reply: { $in: replyIdList } }).catch(() => {});
     DiscussionReply.deleteMany({ discussion: discussion._id }).catch(() => {});
     DiscussionReport.deleteMany({ discussion: discussion._id }).catch(() => {});
+    DiscussionWatch.deleteMany({ discussion: discussion._id }).catch(() => {});
 
     // Capture the public URL before deletion so we can ping IndexNow afterwards.
     const publicPath = `/community/discussions/${discussion.slug || discussion._id}`;
@@ -471,18 +493,43 @@ router.get('/:idOrSlug/replies', optionalAuth, async (req, res) => {
       DiscussionReply.countDocuments({ discussion: discussionId })
     ]);
 
-    // Personalization (only when logged in): mark which replies the user has liked
-    let likedSet = new Set();
-    if (req.user) {
-      const replyIds = replies.map(r => r._id);
-      const userVotes = await DiscussionReplyVote.find({ user: req.user.id, reply: { $in: replyIds } }).select('reply');
-      likedSet = new Set(userVotes.map(v => v.reply.toString()));
+    // Aggregate reaction counts per (reply, kind) for the page in one query
+    // and, when the requester is logged in, also pull which kinds they've
+    // reacted with so the UI can render the toggle state.
+    const replyIds = replies.map(r => r._id);
+    const reactionCountsByReply = new Map(); // replyId → { kind: count }
+    const myReactionsByReply = new Map();    // replyId → [kind]
+
+    if (replyIds.length > 0) {
+      const counts = await DiscussionReaction.aggregate([
+        { $match: { reply: { $in: replyIds } } },
+        { $group: { _id: { reply: '$reply', kind: '$kind' }, count: { $sum: 1 } } }
+      ]);
+      for (const row of counts) {
+        const replyKey = row._id.reply.toString();
+        if (!reactionCountsByReply.has(replyKey)) reactionCountsByReply.set(replyKey, {});
+        reactionCountsByReply.get(replyKey)[row._id.kind] = row.count;
+      }
+
+      if (req.user) {
+        const mine = await DiscussionReaction.find({
+          user: req.user.id,
+          reply: { $in: replyIds }
+        }).select('reply kind').lean();
+        for (const r of mine) {
+          const replyKey = r.reply.toString();
+          if (!myReactionsByReply.has(replyKey)) myReactionsByReply.set(replyKey, []);
+          myReactionsByReply.get(replyKey).push(r.kind);
+        }
+      }
     }
 
     const isMod = !!req.user && req.user.roles && (req.user.roles.includes('moderator') || req.user.roles.includes('admin'));
     const enriched = replies.map(r => {
       const obj = r.toObject();
-      obj.liked = likedSet.has(r._id.toString());
+      const replyKey = r._id.toString();
+      obj.reactions = reactionCountsByReply.get(replyKey) || {};
+      obj.myReactions = myReactionsByReply.get(replyKey) || [];
       // Never leak deletedBody to non-mods (or anonymous viewers)
       if (!isMod) delete obj.deletedBody;
       return obj;
@@ -568,10 +615,24 @@ router.post('/:idOrSlug/replies', requireAuth, async (req, res) => {
     // Re-index so the trending/active sort and search reflect new replyCount/lastActivityAt
     searchService.indexDiscussion(discussion._id);
 
-    // Notification fan-out: OP, then quoted-author (if different), then any
-    // @mentioned users (deduped). Each user gets at most one notification per
-    // reply event. createNotification handles in-app + web-push; for users
-    // with preferences.notifications.email = true, also fire an email.
+    // Auto-watch: replying is an engagement signal that you want updates on
+    // this thread. Idempotent via the (user, discussion) unique index.
+    DiscussionWatch.updateOne(
+      { user: req.user.id, discussion: discussion._id },
+      { $setOnInsert: { user: req.user.id, discussion: discussion._id } },
+      { upsert: true }
+    ).catch(() => {});
+
+    // Notification fan-out priority order:
+    //   1. OP (highest signal — your thread got a new reply)
+    //   2. Quoted-author (someone quoted you)
+    //   3. @mentioned users (you were tagged)
+    //   4. Watchers (lowest signal — your followed thread got activity)
+    //
+    // Each user is notified at most once per reply event (Set dedupe). Each
+    // category has its own granular email/push preferences (drinkWindow,
+    // communityReply, communityMention, communityFollow); email/push fire
+    // only when the recipient opted in for that category.
     const replier = await User.findById(req.user.id).select('username displayName');
     const replierName = replier?.displayName || replier?.username || 'Someone';
     const link = `/community/discussions/${discussion.slug || discussion._id}`;
@@ -580,15 +641,18 @@ router.post('/:idOrSlug/replies', requireAuth, async (req, res) => {
     const notified = new Set();
     const selfId = String(req.user.id);
 
-    // Helper: fire an email if the recipient has community email opt-in.
-    // Fire-and-forget; never blocks the reply create.
-    async function maybeEmail(recipientId, kind) {
+    // Helper: fire an email for a notification category if the recipient
+    // opted into email for that category. Fire-and-forget; never blocks the
+    // reply create. The email-template `kind` differs from the prefs category
+    // (e.g. quote/reply both gated by communityReply).
+    async function maybeEmail(recipientId, prefsCategory, emailKind) {
       if (!EMAIL_VERIFICATION_ENABLED) return;
       try {
         const recipient = await User.findById(recipientId)
-          .select('email displayName username preferences.notifications.email emailVerified');
+          .select('email displayName username preferences.notifications emailVerified');
         if (!recipient || !recipient.email || !recipient.emailVerified) return;
-        if (!recipient.preferences?.notifications?.email) return;
+        const cat = recipient.preferences?.notifications?.[prefsCategory];
+        if (!cat?.email) return;
         const recipientName = recipient.displayName || recipient.username || 'there';
         await sendDiscussionReplyEmail(
           recipient.email,
@@ -598,7 +662,7 @@ router.post('/:idOrSlug/replies', requireAuth, async (req, res) => {
           discussion.title,
           fullUrl,
           replyTextPreview,
-          kind
+          emailKind
         );
       } catch (err) {
         console.warn(`[email-on-reply] failed for ${recipientId}:`, err.message);
@@ -614,7 +678,7 @@ router.post('/:idOrSlug/replies', requireAuth, async (req, res) => {
         `${replierName} replied to "${discussion.title}"`,
         link
       );
-      maybeEmail(discussion.author, 'reply');
+      maybeEmail(discussion.author, 'communityReply', 'reply');
     }
 
     if (quotedAuthorId && String(quotedAuthorId) !== selfId && !notified.has(String(quotedAuthorId))) {
@@ -626,7 +690,7 @@ router.post('/:idOrSlug/replies', requireAuth, async (req, res) => {
         `In "${discussion.title}"`,
         link
       );
-      maybeEmail(quotedAuthorId, 'quote');
+      maybeEmail(quotedAuthorId, 'communityReply', 'quote');
     }
 
     const mentionedIds = await extractMentions(cleanBody, req.user.id);
@@ -640,7 +704,26 @@ router.post('/:idOrSlug/replies', requireAuth, async (req, res) => {
         `In "${discussion.title}"`,
         link
       );
-      maybeEmail(uid, 'mention');
+      maybeEmail(uid, 'communityMention', 'mention');
+    }
+
+    // Watchers — anyone following this thread who isn't already covered.
+    // Lower-priority notification ("There's a new reply on a thread you
+    // follow") so the title differs from the OP-owns-the-thread case.
+    const watchers = await DiscussionWatch.find({ discussion: discussion._id })
+      .select('user').lean();
+    for (const w of watchers) {
+      const uid = w.user.toString();
+      if (uid === selfId || notified.has(uid)) continue;
+      notified.add(uid);
+      createNotification(
+        uid,
+        'discussion_reply',
+        `New reply in "${discussion.title}"`,
+        `${replierName} replied — you're following this thread`,
+        link
+      );
+      // No email for follow-watchers — would be the noisiest channel.
     }
 
     logAudit(req, 'discussion_reply.create', { type: 'discussion_reply', id: reply._id }, { discussion: discussion._id });
@@ -733,33 +816,94 @@ router.get('/:discussionId/replies/:replyId/original', requireAuth, requireModer
   }
 });
 
-// POST /api/discussions/:discussionId/replies/:replyId/like - Toggle like on reply
-router.post('/:discussionId/replies/:replyId/like', requireAuth, async (req, res) => {
+// POST /api/discussions/:discussionId/replies/:replyId/reactions - Toggle a
+// reaction kind on a reply. Body: { kind: 'thumbs_up' | 'heart' | 'cheers' |
+// 'wine' | 'thinking' | 'target' | 'laugh' | 'pray' }. Idempotent toggle:
+// the same kind twice flips off, a different kind adds independently.
+//
+// Self-reactions are allowed (Slack/Discord/GitHub all do this — letting an
+// author 🥂 their own answer is a normal interaction).
+router.post('/:discussionId/replies/:replyId/reactions', requireAuth, async (req, res) => {
   try {
     if (!isValidId(req.params.replyId)) return res.status(400).json({ error: 'Invalid reply ID' });
-    const reply = await DiscussionReply.findById(req.params.replyId);
+    const { kind } = req.body || {};
+    if (!kind || !REACTION_KINDS.includes(kind)) {
+      return res.status(400).json({ error: `Invalid reaction kind. Allowed: ${REACTION_KINDS.join(', ')}` });
+    }
+
+    const reply = await DiscussionReply.findById(req.params.replyId).select('_id author');
     if (!reply) return res.status(404).json({ error: 'Reply not found' });
 
-    // Cannot like your own reply
-    if (reply.author.toString() === req.user.id) {
-      return res.status(400).json({ error: 'Cannot like your own reply' });
-    }
-
-    const existing = await DiscussionReplyVote.findOne({ user: req.user.id, reply: reply._id });
+    const existing = await DiscussionReaction.findOne({
+      user: req.user.id,
+      reply: reply._id,
+      kind
+    });
 
     if (existing) {
-      await DiscussionReplyVote.deleteOne({ _id: existing._id });
-      await DiscussionReply.updateOne({ _id: reply._id }, { $inc: { likesCount: -1 } });
-      res.json({ liked: false, likesCount: Math.max(0, reply.likesCount - 1) });
-    } else {
-      await new DiscussionReplyVote({ user: req.user.id, reply: reply._id }).save();
-      await DiscussionReply.updateOne({ _id: reply._id }, { $inc: { likesCount: 1 } });
-      incrementCred(reply.author.toString(), 'reply_like_received').catch(() => {});
-      res.json({ liked: true, likesCount: reply.likesCount + 1 });
+      await DiscussionReaction.deleteOne({ _id: existing._id });
+      const counts = await reactionCountsForReply(reply._id);
+      return res.json({ reacted: false, kind, reactions: counts });
     }
+
+    await new DiscussionReaction({ user: req.user.id, reply: reply._id, kind }).save();
+    // Award contribution credit on the reply author when a different user
+    // reacts (kind-agnostic — any reaction is positive engagement).
+    if (reply.author.toString() !== req.user.id) {
+      incrementCred(reply.author.toString(), 'reply_like_received').catch(() => {});
+    }
+    const counts = await reactionCountsForReply(reply._id);
+    res.json({ reacted: true, kind, reactions: counts });
   } catch (err) {
-    console.error('Toggle reply like error:', err);
-    res.status(500).json({ error: 'Failed to toggle like' });
+    console.error('Toggle reaction error:', err);
+    res.status(500).json({ error: 'Failed to toggle reaction' });
+  }
+});
+
+// Helper: reaction counts (by kind) for a single reply. Kept inline near the
+// route since it's only used by the reaction toggle.
+async function reactionCountsForReply(replyId) {
+  const rows = await DiscussionReaction.aggregate([
+    { $match: { reply: replyId } },
+    { $group: { _id: '$kind', count: { $sum: 1 } } }
+  ]);
+  return Object.fromEntries(rows.map(r => [r._id, r.count]));
+}
+
+// POST /api/discussions/:idOrSlug/watch - Follow this thread.
+// DELETE same path - Unfollow.
+//
+// Watchers receive notifications for new replies on the thread (via the
+// reply fan-out), in addition to the existing OP/quoted/mention paths.
+// Idempotent: re-following a thread you already watch returns 200 without
+// creating duplicates (the unique index on (user, discussion) backstops it).
+router.post('/:idOrSlug/watch', requireAuth, async (req, res) => {
+  try {
+    const discussion = await findDiscussionByIdOrSlug(req.params.idOrSlug);
+    if (!discussion) return res.status(404).json({ error: 'Discussion not found' });
+
+    await DiscussionWatch.updateOne(
+      { user: req.user.id, discussion: discussion._id },
+      { $setOnInsert: { user: req.user.id, discussion: discussion._id } },
+      { upsert: true }
+    );
+    res.json({ watching: true });
+  } catch (err) {
+    console.error('Watch discussion error:', err);
+    res.status(500).json({ error: 'Failed to follow discussion' });
+  }
+});
+
+router.delete('/:idOrSlug/watch', requireAuth, async (req, res) => {
+  try {
+    const discussion = await findDiscussionByIdOrSlug(req.params.idOrSlug);
+    if (!discussion) return res.status(404).json({ error: 'Discussion not found' });
+
+    await DiscussionWatch.deleteOne({ user: req.user.id, discussion: discussion._id });
+    res.json({ watching: false });
+  } catch (err) {
+    console.error('Unwatch discussion error:', err);
+    res.status(500).json({ error: 'Failed to unfollow discussion' });
   }
 });
 
