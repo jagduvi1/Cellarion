@@ -15,16 +15,20 @@ import WineSearchPicker from '../components/WineSearchPicker';
 import Modal from '../components/Modal';
 import ConfirmModal from '../components/ConfirmModal';
 import CommunityCTA from '../components/CommunityCTA';
+import SEOHead from '../components/SEOHead';
 import timeAgo from '../utils/timeAgo';
 import './DiscussionDetail.css';
 
 const CATEGORIES = Object.keys(CATEGORY_LABELS);
 
 function DiscussionDetail() {
-  const { id } = useParams();
+  const { idOrSlug } = useParams();
   const navigate = useNavigate();
   const { t } = useTranslation();
   const { apiFetch, user } = useAuth();
+  // Once the discussion has loaded, prefer its canonical _id for write actions
+  // — the URL might be a slug, but the API expects an ObjectId for writes.
+  const id = idOrSlug;
 
   const [discussion, setDiscussion] = useState(null);
   const [replies, setReplies] = useState([]);
@@ -65,18 +69,24 @@ function DiscussionDetail() {
 
   const fetchDiscussion = useCallback(async () => {
     try {
-      const res = await getDiscussion(apiFetch, id);
+      const res = await getDiscussion(apiFetch, idOrSlug);
       const data = await res.json();
       if (res.ok) {
         setDiscussion(data.discussion);
         setError(null);
+        // Canonicalise the URL: if the user landed on the ObjectId form but the
+        // discussion has a slug, swap to the slug URL via history.replaceState
+        // (no navigation, no extra render). Same trick WineDetail uses.
+        if (data.discussion?.slug && data.discussion.slug !== idOrSlug) {
+          window.history.replaceState({}, '', `/community/discussions/${data.discussion.slug}`);
+        }
       } else {
         setError(data.error || t('discussions.failedLoadDiscussion'));
       }
     } catch {
       setError(t('discussions.failedLoadDiscussion'));
     }
-  }, [apiFetch, id, t]);
+  }, [apiFetch, idOrSlug, t]);
 
   const fetchReplies = useCallback(async (p, replace = false) => {
     try {
@@ -259,8 +269,41 @@ function DiscussionDetail() {
   const author = discussion.author || {};
   const authorName = author.displayName || author.username || 'Unknown';
 
+  const slugOrId = discussion.slug || discussion._id;
+  const canonicalPath = `/community/discussions/${slugOrId}`;
+  const seoDescription = (discussion.body || '').slice(0, 160);
+
   return (
     <div className="discussion-detail">
+      <SEOHead
+        title={`${discussion.title} — Cellarion`}
+        description={seoDescription || `${discussion.title} — Cellarion wine discussion`}
+        path={canonicalPath}
+        ogType="article"
+        articleMeta={{
+          publishedTime: discussion.createdAt,
+          modifiedTime: discussion.lastActivityAt || discussion.updatedAt
+        }}
+        jsonLd={{
+          '@context': 'https://schema.org',
+          '@type': 'DiscussionForumPosting',
+          headline: discussion.title,
+          articleBody: discussion.body,
+          datePublished: discussion.createdAt,
+          dateModified: discussion.lastActivityAt || discussion.updatedAt,
+          author: { '@type': 'Person', name: authorName },
+          publisher: {
+            '@type': 'Organization',
+            name: 'Cellarion',
+            url: 'https://cellarion.app'
+          },
+          interactionStatistic: {
+            '@type': 'InteractionCounter',
+            interactionType: 'https://schema.org/CommentAction',
+            userInteractionCount: discussion.replyCount || 0
+          }
+        }}
+      />
       <Link to="/community/discussions" className="discussion-detail__back">{t('discussions.backToDiscussions')}</Link>
 
       {/* Discussion header */}

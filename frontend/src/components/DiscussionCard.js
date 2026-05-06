@@ -9,7 +9,7 @@ export default function DiscussionCard({ discussion }) {
   const authorName = author.displayName || author.username || 'Unknown';
 
   return (
-    <Link to={`/community/discussions/${discussion._id}`} className="discussion-card card">
+    <Link to={`/community/discussions/${discussion.slug || discussion._id}`} className="discussion-card card">
       <div className="discussion-card__header">
         <div className="discussion-card__meta">
           <CategoryBadge category={discussion.category} />

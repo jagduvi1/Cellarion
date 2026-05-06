@@ -11,6 +11,7 @@ const WineDefinition = require('../models/WineDefinition');
 const { stripHtml } = require('../utils/sanitize');
 const { logAudit } = require('../services/audit');
 const { incrementCred } = require('../utils/cellarCred');
+const { submitUrls: submitToIndexNow } = require('../services/indexNow');
 const { parsePagination } = require('../utils/pagination');
 const { isValidId } = require('../utils/validation');
 const { DISCUSSIONS_PER_PAGE, DISCUSSIONS_MAX_PER_PAGE, DISCUSSION_MAX_LENGTHS } = require('../config/constants');
@@ -20,6 +21,17 @@ const router = express.Router();
 // Per-route auth: GETs use optionalAuth (public reads with personalization when
 // logged in), writes use requireAuth. Moderation routes additionally require
 // requireModeratorOrAdmin. There is no global requireAuth on the router.
+
+// Resolve a URL parameter that may be either an ObjectId or a slug to a Discussion
+// document. The slug form is the canonical SEO URL, so writes triggered from a
+// thread that the user navigated to via slug must still find the discussion.
+async function findDiscussionByIdOrSlug(idOrSlug) {
+  if (!idOrSlug) return null;
+  const filter = isValidId(idOrSlug)
+    ? { _id: idOrSlug }
+    : { slug: String(idOrSlug).toLowerCase() };
+  return Discussion.findOne(filter);
+}
 
 // Check if the requesting user is banned from discussions; returns error response or null
 async function checkDiscussionBan(req, res) {
@@ -209,12 +221,17 @@ router.delete('/moderation/ban/:userId', requireAuth, requireModeratorOrAdmin, a
   }
 });
 
-// GET /api/discussions/:id - Single discussion (public)
-router.get('/:id', optionalAuth, async (req, res) => {
+// GET /api/discussions/:idOrSlug - Single discussion (public). Accepts both
+// ObjectId and human-readable slug. The frontend swaps the URL to the slug form
+// via history.replaceState() once it has the response.
+router.get('/:idOrSlug', optionalAuth, async (req, res) => {
   try {
-    if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid discussion ID' });
+    const { idOrSlug } = req.params;
+    const filter = isValidId(idOrSlug)
+      ? { _id: idOrSlug }
+      : { slug: String(idOrSlug).toLowerCase() };
 
-    const discussion = await Discussion.findById(req.params.id)
+    const discussion = await Discussion.findOne(filter)
       .populate('author', 'username displayName roles contribution.tier contribution.specialty')
       .populate({ path: 'wineDefinition', select: 'name producer type', populate: { path: 'country', select: 'name' } });
 
@@ -264,6 +281,9 @@ router.post('/', requireAuth, async (req, res) => {
     incrementCred(req.user.id, 'discussion_created').catch(() => {});
     logAudit(req, 'discussion.create', { type: 'discussion', id: discussion._id }, { title: cleanTitle, category });
 
+    // Notify search engines about the new public-readable URL
+    submitToIndexNow(`/community/discussions/${discussion.slug || discussion._id}`);
+
     await discussion.populate('author', 'username displayName roles contribution.tier contribution.specialty');
 
     res.status(201).json({ discussion });
@@ -273,11 +293,10 @@ router.post('/', requireAuth, async (req, res) => {
   }
 });
 
-// PUT /api/discussions/:id - Update own discussion (or moderator/admin)
-router.put('/:id', requireAuth, async (req, res) => {
+// PUT /api/discussions/:idOrSlug - Update own discussion (or moderator/admin)
+router.put('/:idOrSlug', requireAuth, async (req, res) => {
   try {
-    if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid discussion ID' });
-    const discussion = await Discussion.findById(req.params.id);
+    const discussion = await findDiscussionByIdOrSlug(req.params.idOrSlug);
     if (!discussion) return res.status(404).json({ error: 'Discussion not found' });
 
     const isOwner = discussion.author.toString() === req.user.id;
@@ -318,11 +337,10 @@ router.put('/:id', requireAuth, async (req, res) => {
   }
 });
 
-// DELETE /api/discussions/:id - Delete discussion (moderator/admin only)
-router.delete('/:id', requireAuth, requireModeratorOrAdmin, async (req, res) => {
+// DELETE /api/discussions/:idOrSlug - Delete discussion (moderator/admin only)
+router.delete('/:idOrSlug', requireAuth, requireModeratorOrAdmin, async (req, res) => {
   try {
-    if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid discussion ID' });
-    const discussion = await Discussion.findById(req.params.id);
+    const discussion = await findDiscussionByIdOrSlug(req.params.idOrSlug);
     if (!discussion) return res.status(404).json({ error: 'Discussion not found' });
 
     // Clean up replies and votes
@@ -332,8 +350,13 @@ router.delete('/:id', requireAuth, requireModeratorOrAdmin, async (req, res) => 
     DiscussionReply.deleteMany({ discussion: discussion._id }).catch(() => {});
     DiscussionReport.deleteMany({ discussion: discussion._id }).catch(() => {});
 
+    // Capture the public URL before deletion so we can ping IndexNow afterwards.
+    const publicPath = `/community/discussions/${discussion.slug || discussion._id}`;
     await Discussion.deleteOne({ _id: discussion._id });
     logAudit(req, 'discussion.delete', { type: 'discussion', id: discussion._id });
+
+    // Tell crawlers the URL is gone (ping returns 404 on next crawl → drop from index)
+    submitToIndexNow(publicPath);
 
     res.json({ message: 'Discussion deleted' });
   } catch (err) {
@@ -344,20 +367,30 @@ router.delete('/:id', requireAuth, requireModeratorOrAdmin, async (req, res) => 
 
 // ─── Replies ────────────────────────────────────────────────────────────────
 
-// GET /api/discussions/:id/replies - List replies for a discussion (public)
-router.get('/:id/replies', optionalAuth, async (req, res) => {
+// GET /api/discussions/:idOrSlug/replies - List replies for a discussion (public).
+// :idOrSlug accepts both ObjectId and slug; we resolve it to an ObjectId before
+// querying replies (which always reference the discussion by ObjectId).
+router.get('/:idOrSlug/replies', optionalAuth, async (req, res) => {
   try {
-    if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid discussion ID' });
+    const { idOrSlug } = req.params;
+    let discussionId;
+    if (isValidId(idOrSlug)) {
+      discussionId = idOrSlug;
+    } else {
+      const discussion = await Discussion.findOne({ slug: String(idOrSlug).toLowerCase() }).select('_id');
+      if (!discussion) return res.status(404).json({ error: 'Discussion not found' });
+      discussionId = discussion._id;
+    }
     const { page, limit, offset: skip } = parsePagination(req.query, { limit: DISCUSSIONS_PER_PAGE, maxLimit: DISCUSSIONS_MAX_PER_PAGE });
 
     const [replies, total] = await Promise.all([
-      DiscussionReply.find({ discussion: req.params.id })
+      DiscussionReply.find({ discussion: discussionId })
         .sort({ createdAt: 1 })
         .skip(skip)
         .limit(limit)
         .populate('author', 'username displayName roles contribution.tier contribution.specialty')
         .populate({ path: 'wineDefinition', select: 'name producer type', populate: { path: 'country', select: 'name' } }),
-      DiscussionReply.countDocuments({ discussion: req.params.id })
+      DiscussionReply.countDocuments({ discussion: discussionId })
     ]);
 
     // Personalization (only when logged in): mark which replies the user has liked
@@ -384,13 +417,12 @@ router.get('/:id/replies', optionalAuth, async (req, res) => {
   }
 });
 
-// POST /api/discussions/:id/replies - Create a reply
-router.post('/:id/replies', requireAuth, async (req, res) => {
+// POST /api/discussions/:idOrSlug/replies - Create a reply
+router.post('/:idOrSlug/replies', requireAuth, async (req, res) => {
   try {
     if (await checkDiscussionBan(req, res)) return;
-    if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid discussion ID' });
 
-    const discussion = await Discussion.findById(req.params.id);
+    const discussion = await findDiscussionByIdOrSlug(req.params.idOrSlug);
     if (!discussion) return res.status(404).json({ error: 'Discussion not found' });
     if (discussion.isLocked) {
       return res.status(403).json({ error: 'This discussion is locked' });
@@ -445,6 +477,9 @@ router.post('/:id/replies', requireAuth, async (req, res) => {
       { $inc: { replyCount: 1 }, $set: { lastActivityAt: new Date() } }
     ).catch(() => {});
 
+    // The thread's lastmod just changed — let search engines re-crawl
+    submitToIndexNow(`/community/discussions/${discussion.slug || discussion._id}`);
+
     // Notify the discussion author (if not replying to own thread)
     if (discussion.author.toString() !== req.user.id) {
       const replier = await User.findById(req.user.id).select('username displayName');
@@ -454,7 +489,7 @@ router.post('/:id/replies', requireAuth, async (req, res) => {
         type: 'discussion_reply',
         title: 'New reply to your discussion',
         message: `${replierName} replied to "${discussion.title}"`,
-        link: `/community/discussions/${discussion._id}`
+        link: `/community/discussions/${discussion.slug || discussion._id}`
       }).save().catch(() => {});
     }
 
@@ -579,11 +614,10 @@ router.post('/:discussionId/replies/:replyId/like', requireAuth, async (req, res
 
 // ─── Moderation ─────────────────────────────────────────────────────────────
 
-// PATCH /api/discussions/:id/pin - Toggle pin (moderator/admin only)
-router.patch('/:id/pin', requireAuth, requireModeratorOrAdmin, async (req, res) => {
+// PATCH /api/discussions/:idOrSlug/pin - Toggle pin (moderator/admin only)
+router.patch('/:idOrSlug/pin', requireAuth, requireModeratorOrAdmin, async (req, res) => {
   try {
-    if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid discussion ID' });
-    const discussion = await Discussion.findById(req.params.id);
+    const discussion = await findDiscussionByIdOrSlug(req.params.idOrSlug);
     if (!discussion) return res.status(404).json({ error: 'Discussion not found' });
 
     discussion.isPinned = !discussion.isPinned;
@@ -597,16 +631,18 @@ router.patch('/:id/pin', requireAuth, requireModeratorOrAdmin, async (req, res) 
   }
 });
 
-// PATCH /api/discussions/:id/lock - Toggle lock (moderator/admin only)
-router.patch('/:id/lock', requireAuth, requireModeratorOrAdmin, async (req, res) => {
+// PATCH /api/discussions/:idOrSlug/lock - Toggle lock (moderator/admin only)
+router.patch('/:idOrSlug/lock', requireAuth, requireModeratorOrAdmin, async (req, res) => {
   try {
-    if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid discussion ID' });
-    const discussion = await Discussion.findById(req.params.id);
+    const discussion = await findDiscussionByIdOrSlug(req.params.idOrSlug);
     if (!discussion) return res.status(404).json({ error: 'Discussion not found' });
 
     discussion.isLocked = !discussion.isLocked;
     await discussion.save();
     logAudit(req, 'discussion.lock', { type: 'discussion', id: discussion._id }, { isLocked: discussion.isLocked });
+
+    // Locking changes the page meaning — re-ping crawlers to refresh their snapshot
+    submitToIndexNow(`/community/discussions/${discussion.slug || discussion._id}`);
 
     res.json({ discussion });
   } catch (err) {
@@ -615,16 +651,15 @@ router.patch('/:id/lock', requireAuth, requireModeratorOrAdmin, async (req, res)
   }
 });
 
-// PATCH /api/discussions/:id/move - Move to different category (moderator/admin only)
-router.patch('/:id/move', requireAuth, requireModeratorOrAdmin, async (req, res) => {
+// PATCH /api/discussions/:idOrSlug/move - Move to different category (moderator/admin only)
+router.patch('/:idOrSlug/move', requireAuth, requireModeratorOrAdmin, async (req, res) => {
   try {
-    if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid discussion ID' });
     const { category } = req.body;
     if (!category || !CATEGORIES.includes(category)) {
       return res.status(400).json({ error: 'Invalid category' });
     }
 
-    const discussion = await Discussion.findById(req.params.id);
+    const discussion = await findDiscussionByIdOrSlug(req.params.idOrSlug);
     if (!discussion) return res.status(404).json({ error: 'Discussion not found' });
 
     const oldCategory = discussion.category;
@@ -641,12 +676,10 @@ router.patch('/:id/move', requireAuth, requireModeratorOrAdmin, async (req, res)
 
 // ─── Reporting ──────────────────────────────────────────────────────────────
 
-// POST /api/discussions/:id/report - Report a discussion
-router.post('/:id/report', requireAuth, async (req, res) => {
+// POST /api/discussions/:idOrSlug/report - Report a discussion
+router.post('/:idOrSlug/report', requireAuth, async (req, res) => {
   try {
-    if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid discussion ID' });
-
-    const discussion = await Discussion.findById(req.params.id);
+    const discussion = await findDiscussionByIdOrSlug(req.params.idOrSlug);
     if (!discussion) return res.status(404).json({ error: 'Discussion not found' });
 
     const VALID_REASONS = ['spam', 'harassment', 'off_topic', 'inappropriate', 'other'];

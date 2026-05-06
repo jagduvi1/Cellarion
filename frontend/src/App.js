@@ -243,7 +243,7 @@ function AppRoutes() {
           }
         />
         <Route path="/community/discussions" element={<Layout><CommunityDiscussions /></Layout>} />
-        <Route path="/community/discussions/:id" element={<Layout><DiscussionDetail /></Layout>} />
+        <Route path="/community/discussions/:idOrSlug" element={<Layout><DiscussionDetail /></Layout>} />
         <Route
           path="/users/:userId"
           element={
