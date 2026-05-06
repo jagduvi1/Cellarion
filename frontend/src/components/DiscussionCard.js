@@ -1,12 +1,19 @@
 import { Link } from 'react-router-dom';
 import CategoryBadge from './CategoryBadge';
 import CellarCredBadge from './CellarCredBadge';
+import { extractForumPlainText } from '../utils/sanitizeForumRender';
 import timeAgo from '../utils/timeAgo';
 import './DiscussionCard.css';
 
 export default function DiscussionCard({ discussion }) {
   const author = discussion.author || {};
   const authorName = author.displayName || author.username || 'Unknown';
+  // Body is sanitized HTML — strip to plain text for the list-card preview.
+  // Rendering markup in a 150-char snippet would break paragraphs awkwardly
+  // and leak `<p>` tags when the strip regex misses (this view originally
+  // rendered `String.slice` over raw HTML, which surfaced the tags as text).
+  const bodyPlain = extractForumPlainText(discussion.body);
+  const preview = bodyPlain.length > 150 ? bodyPlain.slice(0, 150) + '…' : bodyPlain;
 
   return (
     <Link to={`/community/discussions/${discussion.slug || discussion._id}`} className="discussion-card card">
@@ -28,9 +35,7 @@ export default function DiscussionCard({ discussion }) {
         </span>
       )}
 
-      <p className="discussion-card__body">
-        {discussion.body.length > 150 ? discussion.body.slice(0, 150) + '...' : discussion.body}
-      </p>
+      <p className="discussion-card__body">{preview}</p>
 
       <div className="discussion-card__footer">
         <span className="discussion-card__author">
