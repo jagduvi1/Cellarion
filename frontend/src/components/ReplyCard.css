@@ -1,5 +1,13 @@
 .reply-card {
-  padding: 0.75rem 0;
+  padding: 0.875rem 0;
+  /* Light cushioning on hover so the active reply reads as a discrete unit
+     and the action row's appearance doesn't feel jarring. */
+  border-radius: var(--radius-sm);
+  transition: background 0.12s ease;
+}
+
+.reply-card:hover {
+  background: var(--color-surface-hover, rgba(0, 0, 0, 0.02));
 }
 
 .reply-card:not(:last-child) {
@@ -80,17 +88,44 @@
 }
 
 .reply-card__body {
-  font-size: 0.92rem;
-  line-height: 1.55;
-  white-space: pre-wrap;
   word-break: break-word;
 }
 
+/* Action row: Like stays always-visible (it's a count + interaction signal),
+   but the button-y secondary actions (Reply / Edit / Delete / Report / Ban)
+   fade in on hover or focus-within. Less button noise in long threads,
+   keyboard users still get full access via :focus-within. */
 .reply-card__footer {
   display: flex;
   align-items: center;
   gap: 0.75rem;
   margin-top: 0.5rem;
+  min-height: 1.6rem; /* prevent height shift when actions appear */
+}
+
+/* Scoped to .reply-card so the same .reply-card__action-btn class used on
+   the OP action row stays visible. The OP is rendered inside
+   .discussion-detail__header, never inside .reply-card. */
+.reply-card .reply-card__action-btn,
+.reply-card .reply-card__ban-wrapper {
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+
+.reply-card:hover .reply-card__action-btn,
+.reply-card:focus-within .reply-card__action-btn,
+.reply-card:hover .reply-card__ban-wrapper,
+.reply-card:focus-within .reply-card__ban-wrapper {
+  opacity: 1;
+}
+
+/* Touch devices can't hover — always show actions there, otherwise the row
+   becomes invisible and unreachable on mobile. */
+@media (hover: none) {
+  .reply-card .reply-card__action-btn,
+  .reply-card .reply-card__ban-wrapper {
+    opacity: 1;
+  }
 }
 
 .reply-card__like-btn {

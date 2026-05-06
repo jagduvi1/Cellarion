@@ -22,10 +22,14 @@
   padding: 2rem 0;
 }
 
-/* ── Header card ── */
+/* ── Header card (Original Post) ──
+   The OP gets a burgundy left accent bar so it reads as the "anchor" of the
+   thread — visually distinct from the replies that follow. Slightly more
+   generous padding signals "this is the main post." */
 .discussion-detail__header {
-  padding: 1.25rem;
-  margin-bottom: 1.25rem;
+  padding: 1.5rem 1.5rem 1.25rem;
+  margin-bottom: 1.5rem;
+  border-left: 3px solid var(--color-primary);
 }
 
 .discussion-detail__meta {
@@ -36,10 +40,25 @@
   flex-wrap: wrap;
 }
 
+/* "Original Post" pill — quiet on its own, but anchors the OP visually
+   alongside the category badge. */
+.discussion-detail__op-pill {
+  display: inline-block;
+  padding: 0.15rem 0.55rem;
+  background: var(--color-primary-light);
+  color: var(--color-primary);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  border-radius: var(--radius-sm);
+}
+
 .discussion-detail__title {
   margin: 0 0 0.75rem;
-  font-size: 1.3rem;
-  line-height: 1.3;
+  font-size: 1.5rem;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
 }
 
 .discussion-detail__author-line {
@@ -73,10 +92,10 @@
   color: var(--color-text-secondary);
 }
 
+/* OP body uses the reading-mode .discussion-body styles inherited from
+   DiscussionComposer.css. Width-cap, line-height, blockquote and link styling
+   live there so reply bodies read identically. */
 .discussion-detail__body {
-  font-size: 0.95rem;
-  line-height: 1.65;
-  white-space: pre-wrap;
   word-break: break-word;
 }
 

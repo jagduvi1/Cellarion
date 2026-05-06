@@ -316,6 +316,7 @@ function DiscussionDetail() {
       <div className="discussion-detail__header card">
         <div className="discussion-detail__meta">
           <CategoryBadge category={discussion.category} />
+          <span className="discussion-detail__op-pill">{t('discussions.originalPost')}</span>
           {discussion.isPinned && <span className="discussion-card__pinned">{t('discussions.pinned')}</span>}
           {discussion.isLocked && <span className="discussion-card__locked">{t('discussions.locked')}</span>}
         </div>
