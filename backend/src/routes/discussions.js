@@ -13,6 +13,7 @@ const { incrementCred } = require('../utils/cellarCred');
 const { submitUrls: submitToIndexNow } = require('../services/indexNow');
 const { createNotification } = require('../services/notifications');
 const { extractMentions } = require('../utils/mentionParser');
+const searchService = require('../services/search');
 const { parsePagination } = require('../utils/pagination');
 const { isValidId } = require('../utils/validation');
 const { DISCUSSIONS_PER_PAGE, DISCUSSIONS_MAX_PER_PAGE, DISCUSSION_MAX_LENGTHS } = require('../config/constants');
@@ -54,14 +55,53 @@ router.get('/categories', optionalAuth, (req, res) => {
 });
 
 // GET /api/discussions - List discussions (public)
+//
+// When `q` is provided we route through Meilisearch for fuzzy text matching;
+// otherwise we use a MongoDB filter+sort. Either path returns the same response
+// shape, so the frontend doesn't have to special-case search results.
 router.get('/', optionalAuth, async (req, res) => {
   try {
     const { page, limit, offset: skip } = parsePagination(req.query, { limit: DISCUSSIONS_PER_PAGE, maxLimit: DISCUSSIONS_MAX_PER_PAGE });
-    const { category, sort } = req.query;
+    const { category, sort, q } = req.query;
+    const query = (q || '').toString().trim();
 
     const filter = {};
     if (category && CATEGORIES.includes(category)) {
       filter.category = category;
+    }
+
+    // Meilisearch path: fuzzy match on title/body/authorName/wineName,
+    // hydrate hits from MongoDB to keep the response shape consistent.
+    if (query && searchService.getIsAvailable()) {
+      try {
+        const { ids, estimatedTotalHits } = await searchService.searchDiscussions(query, {
+          category: filter.category,
+          limit,
+          offset: skip
+        });
+
+        if (ids.length === 0) {
+          return res.json({ discussions: [], total: estimatedTotalHits, page, pages: Math.ceil(estimatedTotalHits / limit) });
+        }
+
+        const docs = await Discussion.find({ _id: { $in: ids } })
+          .populate('author', 'username displayName roles contribution.tier contribution.specialty')
+          .populate({ path: 'wineDefinition', select: 'name producer type', populate: { path: 'country', select: 'name' } });
+
+        // Preserve Meilisearch relevance ordering
+        const byId = new Map(docs.map(d => [d._id.toString(), d]));
+        const ordered = ids.map(id => byId.get(id)).filter(Boolean);
+
+        return res.json({
+          discussions: ordered,
+          total: estimatedTotalHits,
+          page,
+          pages: Math.ceil(estimatedTotalHits / limit)
+        });
+      } catch (searchErr) {
+        // Fall through to MongoDB path on Meilisearch failure
+        console.warn('[discussions] search fallback to MongoDB:', searchErr.message);
+      }
     }
 
     let sortObj;
@@ -70,6 +110,15 @@ router.get('/', optionalAuth, async (req, res) => {
         sortObj = { isPinned: -1, createdAt: -1 };
         break;
       case 'most-replies':
+        sortObj = { isPinned: -1, replyCount: -1, lastActivityAt: -1 };
+        break;
+      case 'trending':
+        // Threads with recent activity, ranked by recent reply volume. The
+        // 7-day window keeps the tab feeling fresh; pinned threads still float.
+        // A truer trending score (replies-in-last-7d × 2 + likes + recency) is
+        // a future refinement; this simple proxy already differentiates from
+        // "most-replies" (which surfaces all-time-popular threads).
+        filter.lastActivityAt = { $gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) };
         sortObj = { isPinned: -1, replyCount: -1, lastActivityAt: -1 };
         break;
       default: // 'active' - default sort
@@ -284,6 +333,8 @@ router.post('/', requireAuth, async (req, res) => {
 
     // Notify search engines about the new public-readable URL
     submitToIndexNow(`/community/discussions/${discussion.slug || discussion._id}`);
+    // Index in Meilisearch for in-forum search (fire-and-forget)
+    searchService.indexDiscussion(discussion._id);
 
     await discussion.populate('author', 'username displayName roles contribution.tier contribution.specialty');
 
@@ -346,6 +397,9 @@ router.put('/:idOrSlug', requireAuth, async (req, res) => {
     await discussion.save();
     logAudit(req, 'discussion.update', { type: 'discussion', id: discussion._id });
 
+    // Re-index after edit so search results reflect the new title/body
+    searchService.indexDiscussion(discussion._id);
+
     await discussion.populate('author', 'username displayName roles contribution.tier contribution.specialty');
     res.json({ discussion });
   } catch (err) {
@@ -369,11 +423,14 @@ router.delete('/:idOrSlug', requireAuth, requireModeratorOrAdmin, async (req, re
 
     // Capture the public URL before deletion so we can ping IndexNow afterwards.
     const publicPath = `/community/discussions/${discussion.slug || discussion._id}`;
+    const deletedId = discussion._id;
     await Discussion.deleteOne({ _id: discussion._id });
-    logAudit(req, 'discussion.delete', { type: 'discussion', id: discussion._id });
+    logAudit(req, 'discussion.delete', { type: 'discussion', id: deletedId });
 
     // Tell crawlers the URL is gone (ping returns 404 on next crawl → drop from index)
     submitToIndexNow(publicPath);
+    // Drop from Meilisearch so search results don't show ghost threads
+    searchService.removeDiscussion(deletedId);
 
     res.json({ message: 'Discussion deleted' });
   } catch (err) {
@@ -500,6 +557,8 @@ router.post('/:idOrSlug/replies', requireAuth, async (req, res) => {
 
     // The thread's lastmod just changed — let search engines re-crawl
     submitToIndexNow(`/community/discussions/${discussion.slug || discussion._id}`);
+    // Re-index so the trending/active sort and search reflect new replyCount/lastActivityAt
+    searchService.indexDiscussion(discussion._id);
 
     // Notification fan-out: OP, then quoted-author (if different), then any
     // @mentioned users (deduped). Each user gets at most one notification per

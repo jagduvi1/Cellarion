@@ -1,14 +1,17 @@
 const { MeiliSearch } = require('meilisearch');
 const WineDefinition = require('../models/WineDefinition');
 const Bottle = require('../models/Bottle');
+const Discussion = require('../models/Discussion');
 const { WINE_POPULATE, CONSUMED_STATUSES } = require('../config/constants');
 
 const INDEX_NAME = 'wines';
 const BOTTLES_INDEX_NAME = 'bottles';
+const DISCUSSIONS_INDEX_NAME = 'discussions';
 
 let client = null;
 let index = null;
 let bottlesIndex = null;
+let discussionsIndex = null;
 let isAvailable = false;
 
 async function initialize() {
@@ -70,11 +73,23 @@ async function initialize() {
       pagination: { maxTotalHits: 10000 }
     });
 
+    // ── Discussions index ──
+    discussionsIndex = client.index(DISCUSSIONS_INDEX_NAME);
+
+    await discussionsIndex.updateSettings({
+      searchableAttributes: ['title', 'body', 'authorName', 'wineName'],
+      filterableAttributes: ['category', 'isLocked', 'wineDefinitionId'],
+      sortableAttributes: ['lastActivityAt', 'createdAt', 'replyCount'],
+      separatorTokens: ['.'],
+      pagination: { maxTotalHits: 5000 }
+    });
+
     isAvailable = true;
     console.log(`Meilisearch connected: ${url}`);
 
     await fullSync();
     await fullSyncBottles();
+    await fullSyncDiscussions();
   } catch (err) {
     isAvailable = false;
     console.warn(`Meilisearch unavailable (${url}): ${err.message}. Falling back to MongoDB search.`);
@@ -374,6 +389,107 @@ async function searchBottles(query, {
   };
 }
 
+// ── Discussion index helpers ─────────────────────────────────────────────────
+
+function buildDiscussionDocument(discussion) {
+  const author = discussion.author || {};
+  const wine = discussion.wineDefinition || {};
+  return {
+    id: discussion._id.toString(),
+    slug: discussion.slug || '',
+    title: discussion.title || '',
+    body: discussion.body || '',
+    category: discussion.category || '',
+    isLocked: !!discussion.isLocked,
+    isPinned: !!discussion.isPinned,
+    replyCount: discussion.replyCount || 0,
+    authorId: (author._id || author).toString?.() || '',
+    authorName: author.displayName || author.username || '',
+    wineDefinitionId: (wine._id || wine || '').toString?.() || '',
+    wineName: wine.name ? `${wine.name}${wine.producer ? ' ' + wine.producer : ''}` : '',
+    lastActivityAt: discussion.lastActivityAt
+      ? Math.floor(new Date(discussion.lastActivityAt).getTime() / 1000)
+      : 0,
+    createdAt: discussion.createdAt
+      ? Math.floor(new Date(discussion.createdAt).getTime() / 1000)
+      : 0
+  };
+}
+
+async function fullSyncDiscussions() {
+  if (!isAvailable) return;
+
+  try {
+    const discussions = await Discussion.find()
+      .populate('author', 'username displayName')
+      .populate({ path: 'wineDefinition', select: 'name producer' })
+      .lean();
+
+    const documents = discussions.map(buildDiscussionDocument);
+
+    if (documents.length > 0) {
+      await discussionsIndex.addDocuments(documents, { primaryKey: 'id' });
+    }
+
+    console.log(`Meilisearch: synced ${documents.length} discussions`);
+  } catch (err) {
+    console.error(`Meilisearch discussion full sync failed: ${err.message}`);
+  }
+}
+
+async function indexDiscussion(discussionId) {
+  if (!isAvailable) return;
+
+  try {
+    const discussion = await Discussion.findById(discussionId)
+      .populate('author', 'username displayName')
+      .populate({ path: 'wineDefinition', select: 'name producer' })
+      .lean();
+
+    if (!discussion) return;
+
+    await discussionsIndex.addDocuments([buildDiscussionDocument(discussion)], { primaryKey: 'id' });
+  } catch (err) {
+    console.error(`Meilisearch index discussion ${discussionId} failed: ${err.message}`);
+  }
+}
+
+async function removeDiscussion(discussionId) {
+  if (!isAvailable) return;
+
+  try {
+    await discussionsIndex.deleteDocument(discussionId.toString());
+  } catch (err) {
+    console.error(`Meilisearch remove discussion ${discussionId} failed: ${err.message}`);
+  }
+}
+
+// Search discussions by free-text query. Returns ordered IDs so the route
+// handler can hydrate them from MongoDB and keep the API response shape
+// consistent with the non-search list view.
+async function searchDiscussions(query, { category, limit = 20, offset = 0 } = {}) {
+  if (!isAvailable) {
+    throw new Error('Meilisearch is not available');
+  }
+
+  const VALID_CATEGORIES = ['tasting-notes', 'food-pairing', 'recommendations', 'cellar-tips', 'general'];
+  const filters = [];
+  if (category && VALID_CATEGORIES.includes(String(category))) {
+    filters.push(`category = "${category}"`);
+  }
+
+  const result = await discussionsIndex.search(query || '', {
+    filter: filters.length > 0 ? filters : undefined,
+    limit,
+    offset
+  });
+
+  return {
+    ids: result.hits.map(hit => hit.id),
+    estimatedTotalHits: result.estimatedTotalHits || 0
+  };
+}
+
 function getIsAvailable() {
   return isAvailable;
 }
@@ -382,6 +498,7 @@ module.exports = {
   initialize,
   fullSync,
   fullSyncBottles,
+  fullSyncDiscussions,
   indexWine,
   removeWine,
   search,
@@ -389,5 +506,8 @@ module.exports = {
   removeBottle,
   bulkIndexBottles,
   searchBottles,
+  indexDiscussion,
+  removeDiscussion,
+  searchDiscussions,
   getIsAvailable
 };

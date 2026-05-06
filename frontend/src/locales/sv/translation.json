@@ -1224,8 +1224,11 @@
     "discussions": "Diskussioner",
     "all": "Alla",
     "sortMostActive": "Mest aktiva",
+    "sortTrending": "Trendar",
     "sortNewest": "Nyaste",
     "sortMostReplies": "Flest svar",
+    "search": "Sök",
+    "searchPlaceholder": "Sök diskussioner…",
     "newDiscussion": "Ny diskussion",
     "noDiscussions": "Inga diskussioner ännu",
     "noDiscussionsHint": "Starta en konversation! Klicka på \"Ny diskussion\" för att skapa den första tråden.",
@@ -1299,6 +1302,10 @@
     "signInToStart": "Logga in för att diskutera",
     "viewAll": "Visa alla {{count}} diskussioner",
     "empty": "Inga diskussioner än — bli först med att dela dina tankar om detta vin."
+  },
+  "discussionsWidget": {
+    "title": "Senast från gemenskapen",
+    "seeAll": "Visa alla"
   },
   "reviewFeed": {
     "community": "Gemenskap",

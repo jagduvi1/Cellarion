@@ -28,6 +28,19 @@
   color: #fff;
 }
 
+/* ── Search bar ── */
+.discussions__search {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+  align-items: center;
+}
+
+.discussions__search-input {
+  flex: 1;
+  min-width: 0;
+}
+
 /* ── Controls ── */
 .discussions__controls {
   display: flex;
