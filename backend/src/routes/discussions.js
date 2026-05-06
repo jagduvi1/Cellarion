@@ -15,6 +15,7 @@ const { submitUrls: submitToIndexNow } = require('../services/indexNow');
 const { createNotification } = require('../services/notifications');
 const { extractMentions } = require('../utils/mentionParser');
 const searchService = require('../services/search');
+const { sendDiscussionReplyEmail, EMAIL_VERIFICATION_ENABLED } = require('../services/mailgun');
 const { parsePagination } = require('../utils/pagination');
 const { isValidId } = require('../utils/validation');
 const { DISCUSSIONS_PER_PAGE, DISCUSSIONS_MAX_PER_PAGE, DISCUSSION_MAX_LENGTHS } = require('../config/constants');
@@ -569,12 +570,40 @@ router.post('/:idOrSlug/replies', requireAuth, async (req, res) => {
 
     // Notification fan-out: OP, then quoted-author (if different), then any
     // @mentioned users (deduped). Each user gets at most one notification per
-    // reply event. createNotification handles in-app + web-push.
+    // reply event. createNotification handles in-app + web-push; for users
+    // with preferences.notifications.email = true, also fire an email.
     const replier = await User.findById(req.user.id).select('username displayName');
     const replierName = replier?.displayName || replier?.username || 'Someone';
     const link = `/community/discussions/${discussion.slug || discussion._id}`;
+    const fullUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}${link}`;
+    const replyTextPreview = stripHtml(cleanBody).slice(0, 280);
     const notified = new Set();
     const selfId = String(req.user.id);
+
+    // Helper: fire an email if the recipient has community email opt-in.
+    // Fire-and-forget; never blocks the reply create.
+    async function maybeEmail(recipientId, kind) {
+      if (!EMAIL_VERIFICATION_ENABLED) return;
+      try {
+        const recipient = await User.findById(recipientId)
+          .select('email displayName username preferences.notifications.email emailVerified');
+        if (!recipient || !recipient.email || !recipient.emailVerified) return;
+        if (!recipient.preferences?.notifications?.email) return;
+        const recipientName = recipient.displayName || recipient.username || 'there';
+        await sendDiscussionReplyEmail(
+          recipient.email,
+          recipientName,
+          recipientId.toString(),
+          replierName,
+          discussion.title,
+          fullUrl,
+          replyTextPreview,
+          kind
+        );
+      } catch (err) {
+        console.warn(`[email-on-reply] failed for ${recipientId}:`, err.message);
+      }
+    }
 
     if (String(discussion.author) !== selfId) {
       notified.add(String(discussion.author));
@@ -585,6 +614,7 @@ router.post('/:idOrSlug/replies', requireAuth, async (req, res) => {
         `${replierName} replied to "${discussion.title}"`,
         link
       );
+      maybeEmail(discussion.author, 'reply');
     }
 
     if (quotedAuthorId && String(quotedAuthorId) !== selfId && !notified.has(String(quotedAuthorId))) {
@@ -596,6 +626,7 @@ router.post('/:idOrSlug/replies', requireAuth, async (req, res) => {
         `In "${discussion.title}"`,
         link
       );
+      maybeEmail(quotedAuthorId, 'quote');
     }
 
     const mentionedIds = await extractMentions(cleanBody, req.user.id);
@@ -609,6 +640,7 @@ router.post('/:idOrSlug/replies', requireAuth, async (req, res) => {
         `In "${discussion.title}"`,
         link
       );
+      maybeEmail(uid, 'mention');
     }
 
     logAudit(req, 'discussion_reply.create', { type: 'discussion_reply', id: reply._id }, { discussion: discussion._id });
