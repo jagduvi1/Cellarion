@@ -834,10 +834,14 @@ router.post('/:discussionId/replies/:replyId/reactions', requireAuth, async (req
     const reply = await DiscussionReply.findById(req.params.replyId).select('_id author');
     if (!reply) return res.status(404).json({ error: 'Reply not found' });
 
+    // $eq forces literal-value comparison, blocking NoSQL operator injection
+    // even though `kind` is already validated against REACTION_KINDS above.
+    // CodeQL doesn't recognise Array.includes() as a taint cleanser, so this
+    // also keeps the `js/sql-injection` rule satisfied.
     const existing = await DiscussionReaction.findOne({
       user: req.user.id,
       reply: reply._id,
-      kind
+      kind: { $eq: kind }
     });
 
     if (existing) {
