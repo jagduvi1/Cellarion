@@ -19,6 +19,7 @@ import SEOHead from '../components/SEOHead';
 import DiscussionComposer from '../components/DiscussionComposer';
 import WatchThreadButton from '../components/WatchThreadButton';
 import ParticipantStack from '../components/ParticipantStack';
+import JumpToReplyButton from '../components/JumpToReplyButton';
 import { sanitizeForumRender, extractForumPlainText } from '../utils/sanitizeForumRender';
 import { isDeletedUser } from '../utils/deletedUser';
 import timeAgo from '../utils/timeAgo';
@@ -592,6 +593,14 @@ function DiscussionDetail() {
           onCancel={() => setConfirmDeleteDiscussion(false)}
         />
       )}
+
+      {/* Sticky FAB that floats while the composer is off-screen. Only
+          renders for logged-in users on unlocked threads — otherwise there
+          is no composer to jump to. */}
+      <JumpToReplyButton
+        composerRef={replyTextareaRef}
+        enabled={!!user && !discussion.isLocked}
+      />
     </div>
   );
 }
