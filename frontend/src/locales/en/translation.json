@@ -1276,6 +1276,8 @@
     "participants": "{{count}} people in this thread",
     "moreParticipants": "{{count}} more participants",
     "hasUnread": "New activity since your last visit",
+    "jumpToReply": "Jump to the reply box",
+    "replyShort": "Reply",
     "newDiscussion": "New Discussion",
     "noDiscussions": "No discussions yet",
     "noDiscussionsHint": "Start a conversation! Click \"New Discussion\" to create the first thread.",
