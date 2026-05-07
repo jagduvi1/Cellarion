@@ -189,6 +189,7 @@ function Layout({ children }) {
                     <Link to="/admin/images" className={`nav-link nav-link--admin ${isActive('/admin/images') ? 'active' : ''}`}>{t('nav.imageReview')}</Link>
                     <Link to="/admin/support" className={`nav-link nav-link--admin ${isActive('/admin/support') ? 'active' : ''}`}>Support Tickets</Link>
                     <Link to="/admin/wine-reports" className={`nav-link nav-link--admin ${isActive('/admin/wine-reports') ? 'active' : ''}`}>Wine Reports</Link>
+                    <Link to="/admin/moderators" className={`nav-link nav-link--admin ${isActive('/admin/moderators') ? 'active' : ''}`}>{t('nav.moderators')}</Link>
                     <Link to="/admin/blog" className={`nav-link nav-link--admin ${isActive('/admin/blog') ? 'active' : ''}`}>{t('nav.blogAdmin')}</Link>
                   </>
                 )}

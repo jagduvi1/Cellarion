@@ -40,6 +40,7 @@ const AdminTaxonomy   = lazy(() => import('./pages/AdminTaxonomy'));
 const AdminImages     = lazy(() => import('./pages/AdminImages'));
 const AdminSupportTickets = lazy(() => import('./pages/AdminSupportTickets'));
 const AdminWineReports    = lazy(() => import('./pages/AdminWineReports'));
+const AdminModerators     = lazy(() => import('./pages/AdminModerators'));
 const SupportPage     = lazy(() => import('./pages/SupportPage'));
 const SuperAdmin      = lazy(() => import('./pages/SuperAdmin'));
 const CommunityDiscussions = lazy(() => import('./pages/CommunityDiscussions'));
@@ -373,6 +374,14 @@ function AppRoutes() {
           element={
             <ProtectedRoute requireAdmin>
               <Layout><AdminWineReports /></Layout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/moderators"
+          element={
+            <ProtectedRoute requireAdmin>
+              <Layout><AdminModerators /></Layout>
             </ProtectedRoute>
           }
         />

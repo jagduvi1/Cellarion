@@ -64,6 +64,7 @@
     "supporter": "Support Us",
     "blog": "Blog",
     "blogAdmin": "Blog",
+    "moderators": "Moderators",
     "badge": {
       "admin": "Admin",
       "somm": "Somm"
@@ -127,6 +128,24 @@
       "pushNotConfigured": "Push notifications are not configured on this server.",
       "pushHint": "Push delivers notifications to your device even when Cellarion is closed."
     }
+  },
+  "adminModerators": {
+    "title": "Forum Moderators",
+    "intro": "Moderators can pin / lock / move discussions, delete posts, view + resolve reports, and ban users from the forum. Promote trusted community members; revoke when no longer needed. Admins always have moderator powers — this list shows users with the dedicated moderator role.",
+    "currentMods_one": "{{count}} current moderator",
+    "currentMods_other": "{{count}} current moderators",
+    "currentMods": "Current moderators ({{count}})",
+    "noMods": "No moderators yet. Search for a user below to promote one.",
+    "findUser": "Find a user",
+    "searchPlaceholder": "Search by username or email…",
+    "noResults": "No users matched that search.",
+    "promote": "Promote to moderator",
+    "revoke": "Revoke",
+    "revokeTitle": "Revoke moderator role",
+    "revokeConfirm": "Remove moderator privileges from {{name}}?",
+    "revokeWarning": "They will lose the ability to pin, lock, move or delete discussions, see reports, or ban users.",
+    "you": "(you)",
+    "failedLoad": "Failed to load moderators."
   },
   "reactions": {
     "addReaction": "Add reaction",

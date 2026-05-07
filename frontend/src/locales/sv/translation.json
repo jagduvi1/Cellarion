@@ -64,6 +64,7 @@
     "supporter": "Stöd oss",
     "blog": "Blogg",
     "blogAdmin": "Blogg",
+    "moderators": "Moderatorer",
     "badge": {
       "admin": "Admin",
       "somm": "Somm"
@@ -127,6 +128,24 @@
       "pushNotConfigured": "Push-aviseringar är inte konfigurerade på denna server.",
       "pushHint": "Push levererar aviseringar till din enhet även när Cellarion är stängt."
     }
+  },
+  "adminModerators": {
+    "title": "Forum-moderatorer",
+    "intro": "Moderatorer kan fästa/låsa/flytta diskussioner, ta bort inlägg, se och hantera rapporter samt blockera användare från forumet. Befordra betrodda medlemmar; återkalla när det inte längre behövs. Administratörer har alltid moderatorbehörighet — listan här visar användare med den dedikerade moderatorrollen.",
+    "currentMods_one": "{{count}} aktiv moderator",
+    "currentMods_other": "{{count}} aktiva moderatorer",
+    "currentMods": "Aktiva moderatorer ({{count}})",
+    "noMods": "Inga moderatorer än. Sök efter en användare nedan för att befordra en.",
+    "findUser": "Hitta en användare",
+    "searchPlaceholder": "Sök på användarnamn eller e-post…",
+    "noResults": "Inga användare matchade sökningen.",
+    "promote": "Befordra till moderator",
+    "revoke": "Återkalla",
+    "revokeTitle": "Återkalla moderatorroll",
+    "revokeConfirm": "Ta bort moderatorbehörighet från {{name}}?",
+    "revokeWarning": "Hen förlorar möjligheten att fästa, låsa, flytta eller ta bort diskussioner, se rapporter eller blockera användare.",
+    "you": "(du)",
+    "failedLoad": "Kunde inte ladda moderatorerna."
   },
   "reactions": {
     "addReaction": "Lägg till reaktion",

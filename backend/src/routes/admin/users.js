@@ -9,7 +9,11 @@ const { escapeRegex } = require('../../utils/sanitize');
 
 const router = express.Router();
 
-const VALID_ROLES = ['user', 'somm', 'admin'];
+// 'moderator' is a forum-specific role: pin/lock/move/delete discussions,
+// see + resolve reports, ban users from the forum. Granted by admins via the
+// PATCH /:id/roles endpoint below — usually surfaced through the
+// /admin/moderators page rather than direct API calls.
+const VALID_ROLES = ['user', 'somm', 'moderator', 'admin'];
 
 // All routes require admin
 router.use(requireAuth, requireRole('admin'));
