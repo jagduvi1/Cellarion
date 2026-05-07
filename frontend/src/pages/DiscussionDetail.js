@@ -18,6 +18,7 @@ import CommunityCTA from '../components/CommunityCTA';
 import SEOHead from '../components/SEOHead';
 import DiscussionComposer from '../components/DiscussionComposer';
 import WatchThreadButton from '../components/WatchThreadButton';
+import ParticipantStack from '../components/ParticipantStack';
 import { sanitizeForumRender, extractForumPlainText } from '../utils/sanitizeForumRender';
 import { isDeletedUser } from '../utils/deletedUser';
 import timeAgo from '../utils/timeAgo';
@@ -357,6 +358,13 @@ function DiscussionDetail() {
             <span className="discussion-detail__reply-count">{discussion.replyCount} {discussion.replyCount === 1 ? t('discussions.reply') : t('discussions.replies')}</span>
           )}
         </div>
+
+        {discussion.participants && discussion.participants.length > 0 && (
+          <ParticipantStack
+            participants={discussion.participants}
+            total={discussion.totalParticipants}
+          />
+        )}
 
         {discussion.wineDefinition && <WineReferenceCard wine={discussion.wineDefinition} />}
 

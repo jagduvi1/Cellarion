@@ -1,71 +1,105 @@
 import { Link } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import CategoryBadge from './CategoryBadge';
 import CellarCredBadge from './CellarCredBadge';
 import { extractForumPlainText } from '../utils/sanitizeForumRender';
+import { isDeletedUser } from '../utils/deletedUser';
 import timeAgo from '../utils/timeAgo';
 import './DiscussionCard.css';
 
+// Two-column list row: title + body preview + OP author on the left,
+// last-poster + reply count + time on the right. Pinned threads get a
+// distinct treatment via data-pinned (CSS-only). Deleted authors render
+// as a non-clickable "[Deleted user]" label without badges.
 export default function DiscussionCard({ discussion }) {
+  const { t } = useTranslation();
   const author = discussion.author || {};
-  const authorName = author.displayName || author.username || 'Unknown';
-  // Body is sanitized HTML — strip to plain text for the list-card preview.
-  // Rendering markup in a 150-char snippet would break paragraphs awkwardly
-  // and leak `<p>` tags when the strip regex misses (this view originally
-  // rendered `String.slice` over raw HTML, which surfaced the tags as text).
+  const authorIsDeleted = isDeletedUser(author);
+  const authorName = authorIsDeleted
+    ? t('common.deletedUser')
+    : (author.displayName || author.username || 'Unknown');
+
   const bodyPlain = extractForumPlainText(discussion.body);
-  const preview = bodyPlain.length > 150 ? bodyPlain.slice(0, 150) + '…' : bodyPlain;
+  const preview = bodyPlain.length > 140 ? bodyPlain.slice(0, 140) + '…' : bodyPlain;
+
+  // Last-reply chip: who-said-what-most-recently. Falls back to OP for
+  // threads with no replies (the OP is the most-recent activity by default).
+  const lastReply = discussion.lastReply;
+  const lastPoster = lastReply?.author || author;
+  const lastPosterIsDeleted = isDeletedUser(lastPoster);
+  const lastPosterName = lastPosterIsDeleted
+    ? t('common.deletedUser')
+    : (lastPoster?.displayName || lastPoster?.username || 'Unknown');
+  const lastPosterInitial = lastPosterIsDeleted ? '?' : lastPosterName.charAt(0).toUpperCase();
+  const lastPosterIsOP = !lastReply;
 
   return (
-    <Link to={`/community/discussions/${discussion.slug || discussion._id}`} className="discussion-card card">
-      <div className="discussion-card__header">
-        <div className="discussion-card__meta">
+    <Link
+      to={`/community/discussions/${discussion.slug || discussion._id}`}
+      className="discussion-card card"
+      data-pinned={discussion.isPinned ? 'true' : undefined}
+    >
+      <div className="discussion-card__main">
+        <div className="discussion-card__header">
           <CategoryBadge category={discussion.category} />
-          {discussion.isPinned && <span className="discussion-card__pinned" title="Pinned">Pinned</span>}
-          {discussion.isLocked && <span className="discussion-card__locked" title="Locked">Locked</span>}
+          {discussion.isPinned && <span className="discussion-card__pinned" title={t('discussions.pinned')}>📌 {t('discussions.pinned')}</span>}
+          {discussion.isLocked && <span className="discussion-card__locked" title={t('discussions.locked')}>{t('discussions.locked')}</span>}
+        </div>
+
+        <h3 className="discussion-card__title">{discussion.title}</h3>
+
+        {discussion.wineDefinition && (
+          <span className="discussion-card__wine-tag">
+            <span className={`discussion-card__wine-dot ${discussion.wineDefinition.type || ''}`} />
+            {discussion.wineDefinition.name}
+            {discussion.wineDefinition.producer && ` — ${discussion.wineDefinition.producer}`}
+          </span>
+        )}
+
+        <p className="discussion-card__body">{preview}</p>
+
+        <div className="discussion-card__op">
+          <span className="discussion-card__author">
+            {authorIsDeleted ? (
+              <span className="discussion-card__author-link discussion-card__author-link--deleted">
+                {authorName}
+              </span>
+            ) : (
+              <Link
+                to={`/users/${author._id}`}
+                className="discussion-card__author-link"
+                onClick={e => e.stopPropagation()}
+              >
+                {authorName}
+              </Link>
+            )}
+            {!authorIsDeleted && author.roles?.includes('moderator') && <span className="badge badge--mod">Mod</span>}
+            {!authorIsDeleted && author.roles?.includes('admin') && <span className="badge badge--admin">Admin</span>}
+            {!authorIsDeleted && <CellarCredBadge tier={author.contribution?.tier} specialty={author.contribution?.specialty} />}
+          </span>
         </div>
       </div>
 
-      <h3 className="discussion-card__title">{discussion.title}</h3>
-
-      {discussion.wineDefinition && (
-        <span className="discussion-card__wine-tag">
-          <span className={`discussion-card__wine-dot ${discussion.wineDefinition.type || ''}`} />
-          {discussion.wineDefinition.name}
-          {discussion.wineDefinition.producer && ` — ${discussion.wineDefinition.producer}`}
-        </span>
-      )}
-
-      <p className="discussion-card__body">{preview}</p>
-
-      <div className="discussion-card__footer">
-        <span className="discussion-card__author">
-          {/* Deleted users are shown as a non-clickable label — their profile
-              page would be a dead-end (sentinel account, no real data). */}
-          {deleted ? (
-            <span className="discussion-card__author-link discussion-card__author-link--deleted">
-              {authorName}
+      <div className="discussion-card__side">
+        {/* Last-poster preview: who replied last, when. The hero of forum
+            "is this thread alive?" scanning. Falls back to the OP for empty
+            threads so the slot stays consistent. */}
+        <div className="discussion-card__last-poster" title={lastPosterName}>
+          <span className={`discussion-card__avatar ${lastPosterIsDeleted ? 'discussion-card__avatar--deleted' : ''}`} aria-hidden="true">{lastPosterInitial}</span>
+          <span className="discussion-card__last-poster-meta">
+            <span className="discussion-card__last-poster-name">
+              {lastPosterIsOP ? t('discussions.startedBy', { name: lastPosterName }) : lastPosterName}
             </span>
-          ) : (
-            <Link
-              to={`/users/${author._id}`}
-              className="discussion-card__author-link"
-              onClick={e => e.stopPropagation()}
-            >
-              {authorName}
-            </Link>
-          )}
-          {!deleted && author.roles?.includes('moderator') && <span className="badge badge--mod">Mod</span>}
-          {!deleted && author.roles?.includes('admin') && <span className="badge badge--admin">Admin</span>}
-          {!deleted && <CellarCredBadge tier={author.contribution?.tier} specialty={author.contribution?.specialty} />}
-        </span>
-        <span className="discussion-card__stats">
-          <span className="discussion-card__replies">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-            </svg>
-            {discussion.replyCount}
+            <span className="discussion-card__time">
+              {timeAgo(lastReply?.createdAt || discussion.lastActivityAt || discussion.createdAt)}
+            </span>
           </span>
-          <span className="discussion-card__time">{timeAgo(discussion.lastActivityAt)}</span>
+        </div>
+        <span className="discussion-card__replies" aria-label={`${discussion.replyCount || 0} ${discussion.replyCount === 1 ? t('discussions.reply') : t('discussions.replies')}`}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+          </svg>
+          <span className="discussion-card__reply-count">{discussion.replyCount || 0}</span>
         </span>
       </div>
     </Link>

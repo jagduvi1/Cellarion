@@ -95,9 +95,10 @@ router.get('/', optionalAuth, async (req, res) => {
         // Preserve Meilisearch relevance ordering
         const byId = new Map(docs.map(d => [d._id.toString(), d]));
         const ordered = ids.map(id => byId.get(id)).filter(Boolean);
+        const enrichedSearch = await attachLastReply(ordered);
 
         return res.json({
-          discussions: ordered,
+          discussions: enrichedSearch,
           total: estimatedTotalHits,
           page,
           pages: Math.ceil(estimatedTotalHits / limit)
@@ -139,12 +140,50 @@ router.get('/', optionalAuth, async (req, res) => {
       Discussion.countDocuments(filter)
     ]);
 
-    res.json({ discussions, total, page, pages: Math.ceil(total / limit) });
+    const enriched = await attachLastReply(discussions);
+    res.json({ discussions: enriched, total, page, pages: Math.ceil(total / limit) });
   } catch (err) {
     console.error('List discussions error:', err);
     res.status(500).json({ error: 'Failed to list discussions' });
   }
 });
+
+// Helper: attach a `lastReply: { author, createdAt }` snippet to each
+// discussion in the list. Two queries: aggregate the most-recent non-deleted
+// reply per discussion, then populate the author display names. Both are
+// indexed scans; cost is proportional to page size (≤30 discussions).
+async function attachLastReply(discussions) {
+  if (!discussions || discussions.length === 0) return discussions;
+  const ids = discussions.map(d => d._id);
+  const latestPerDiscussion = await DiscussionReply.aggregate([
+    { $match: { discussion: { $in: ids }, isDeleted: { $ne: true } } },
+    { $sort: { discussion: 1, createdAt: -1 } },
+    { $group: {
+        _id: '$discussion',
+        author: { $first: '$author' },
+        createdAt: { $first: '$createdAt' }
+      }
+    }
+  ]);
+  const authorIds = latestPerDiscussion.map(r => r.author).filter(Boolean);
+  const authorsById = new Map();
+  if (authorIds.length > 0) {
+    const users = await User.find({ _id: { $in: authorIds } })
+      .select('username displayName')
+      .lean();
+    for (const u of users) authorsById.set(u._id.toString(), u);
+  }
+  const lastByDiscussion = new Map();
+  for (const r of latestPerDiscussion) {
+    const author = authorsById.get(String(r.author)) || null;
+    lastByDiscussion.set(r._id.toString(), { author, createdAt: r.createdAt });
+  }
+  return discussions.map(d => {
+    const obj = d.toObject ? d.toObject() : { ...d };
+    obj.lastReply = lastByDiscussion.get(d._id.toString()) || null;
+    return obj;
+  });
+}
 
 // ─── Moderation Queue (moderator/admin only) ───────────────────────────────
 // These routes MUST be registered before /:id to avoid "moderation" being treated as an ID.
@@ -300,9 +339,30 @@ router.get('/:idOrSlug', optionalAuth, async (req, res) => {
         : Promise.resolve(null)
     ]);
 
+    // Top participants — distinct reply authors (excluding the OP, who is
+    // shown separately as the thread anchor). Capped at 6 with totalCount
+    // for the "+N more" overflow chip.
+    const participantAgg = await DiscussionReply.aggregate([
+      { $match: { discussion: discussion._id, isDeleted: { $ne: true }, author: { $ne: discussion.author } } },
+      { $group: { _id: '$author', firstAt: { $min: '$createdAt' } } },
+      { $sort: { firstAt: 1 } }
+    ]);
+    const totalParticipants = participantAgg.length;
+    const topAuthorIds = participantAgg.slice(0, 6).map(p => p._id);
+    let participants = [];
+    if (topAuthorIds.length > 0) {
+      const users = await User.find({ _id: { $in: topAuthorIds } })
+        .select('username displayName')
+        .lean();
+      const byId = new Map(users.map(u => [u._id.toString(), u]));
+      participants = topAuthorIds.map(id => byId.get(id.toString())).filter(Boolean);
+    }
+
     const obj = discussion.toObject();
     obj.watcherCount = watcherCount;
     obj.isWatching = !!myWatch;
+    obj.participants = participants;
+    obj.totalParticipants = totalParticipants;
     res.json({ discussion: obj });
   } catch (err) {
     console.error('Get discussion error:', err);
