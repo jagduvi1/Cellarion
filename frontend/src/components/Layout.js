@@ -39,6 +39,10 @@ function Layout({ children }) {
 
   return (
     <div className="layout">
+      {/* Skip-to-content link — visible only on keyboard focus. Lets users
+          who tab through the page jump past the navbar to the main content,
+          which is the WCAG 2.4.1 'Bypass Blocks' requirement. */}
+      <a href="#main-content" className="skip-link">{t('common.skipToContent')}</a>
       <InstallPrompt />
       {/* ── Top navbar ── */}
       <nav className="navbar">
@@ -299,7 +303,7 @@ function Layout({ children }) {
         )}
       </nav>
 
-      <main className="main-content">
+      <main id="main-content" className="main-content" tabIndex={-1}>
         {children}
       </main>
 
