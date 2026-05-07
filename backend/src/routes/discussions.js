@@ -823,6 +823,10 @@ router.put('/:discussionId/replies/:replyId', requireAuth, async (req, res) => {
     await reply.save();
     logAudit(req, 'discussion_reply.update', { type: 'discussion_reply', id: reply._id });
 
+    // Re-index the parent discussion so search results pick up the edited
+    // reply content. Fire-and-forget; never blocks the response.
+    searchService.indexDiscussion(reply.discussion);
+
     await reply.populate('author', 'username displayName roles contribution.tier contribution.specialty');
     res.json({ reply });
   } catch (err) {
@@ -853,6 +857,10 @@ router.delete('/:discussionId/replies/:replyId', requireAuth, async (req, res) =
     await reply.save();
 
     logAudit(req, 'discussion_reply.soft_delete', { type: 'discussion_reply', id: reply._id });
+
+    // Re-index parent so search drops this reply's content (the index
+    // helper filters out isDeleted replies).
+    searchService.indexDiscussion(reply.discussion);
 
     res.json({ message: 'Reply deleted', reply: reply.toObject() });
   } catch (err) {
