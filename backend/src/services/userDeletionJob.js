@@ -15,6 +15,7 @@ const Discussion = require('../models/Discussion');
 const DiscussionReply = require('../models/DiscussionReply');
 const DiscussionReaction = require('../models/DiscussionReaction');
 const DiscussionWatch = require('../models/DiscussionWatch');
+const DiscussionRead = require('../models/DiscussionRead');
 const DiscussionReport = require('../models/DiscussionReport');
 const Follow = require('../models/Follow');
 const ImportSession = require('../models/ImportSession');
@@ -73,6 +74,7 @@ async function purgeUserData(userId, userEmail) {
     // Personal-data-only forum collections: hard-delete
     DiscussionReaction.deleteMany({ user: userId }),
     DiscussionWatch.deleteMany({ user: userId }),
+    DiscussionRead.deleteMany({ user: userId }),
 
     // Social & engagement (non-forum)
     ReviewVote.deleteMany({ user: userId }),
