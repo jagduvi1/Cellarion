@@ -1,0 +1,61 @@
+.participant-stack {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin: 0.4rem 0 0.5rem;
+}
+
+.participant-stack__label {
+  font-size: 0.78rem;
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}
+
+.participant-stack__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  align-items: center;
+}
+
+.participant-stack__avatar,
+.participant-stack__overflow {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--color-primary);
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 0.72rem;
+  border: 2px solid var(--color-surface, #fff);
+  margin-left: -8px; /* overlap */
+  cursor: default;
+  transition: transform 0.12s, z-index 0.12s;
+  position: relative;
+  z-index: 1;
+}
+
+.participant-stack__avatar:first-child,
+.participant-stack__list > :first-child {
+  margin-left: 0;
+}
+
+.participant-stack__avatar:hover {
+  transform: translateY(-2px);
+  z-index: 5;
+}
+
+.participant-stack__avatar--deleted {
+  background: var(--color-text-muted);
+}
+
+.participant-stack__overflow {
+  background: var(--color-surface-hover);
+  color: var(--color-text-secondary);
+  font-weight: 600;
+  font-size: 0.7rem;
+}
