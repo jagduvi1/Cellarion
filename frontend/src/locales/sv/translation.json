@@ -1274,6 +1274,8 @@
     "alsoTalking": "Pratar också:",
     "participants": "{{count}} personer i denna tråd",
     "moreParticipants": "{{count}} fler deltagare",
+    "jumpToReply": "Hoppa till svarsfältet",
+    "replyShort": "Svara",
     "newDiscussion": "Ny diskussion",
     "noDiscussions": "Inga diskussioner ännu",
     "noDiscussionsHint": "Starta en konversation! Klicka på \"Ny diskussion\" för att skapa den första tråden.",
