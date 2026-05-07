@@ -69,6 +69,29 @@
   color: var(--color-accent-hover);
 }
 
+/* Unread indicator — small burgundy dot in the meta row when the thread
+   has activity since the user's last visit. Only shows for users who have
+   visited before (first-time visitors don't see "unread" on every card). */
+.discussion-card__unread-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-primary);
+  flex-shrink: 0;
+  /* Subtle pulse so the dot reads as "fresh" without being aggressive */
+  animation: discussion-card-unread-pulse 2.4s ease-in-out infinite;
+}
+
+@keyframes discussion-card-unread-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .discussion-card__unread-dot { animation: none; }
+}
+
 .discussion-card__locked {
   background: #fee2e2;
   color: #991b1b;

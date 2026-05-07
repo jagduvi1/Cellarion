@@ -1275,6 +1275,7 @@
     "alsoTalking": "Also talking:",
     "participants": "{{count}} people in this thread",
     "moreParticipants": "{{count}} more participants",
+    "hasUnread": "New activity since your last visit",
     "newDiscussion": "New Discussion",
     "noDiscussions": "No discussions yet",
     "noDiscussionsHint": "Start a conversation! Click \"New Discussion\" to create the first thread.",
