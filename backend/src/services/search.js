@@ -78,7 +78,13 @@ async function initialize() {
     discussionsIndex = client.index(DISCUSSIONS_INDEX_NAME);
 
     await discussionsIndex.updateSettings({
-      searchableAttributes: ['title', 'body', 'authorName', 'wineName'],
+      // `replyContent` carries plain-text bodies of all non-deleted replies
+      // joined together — lets users find threads where the OP didn't say it
+      // but a reply did ("anyone tried this with foie gras?" buried in
+      // reply 7 is now reachable). The single-index approach (vs separate
+      // discussion_replies index) keeps the search query simple — Meilisearch
+      // returns one hit per thread regardless of which field matched.
+      searchableAttributes: ['title', 'body', 'replyContent', 'authorName', 'wineName'],
       filterableAttributes: ['category', 'isLocked', 'wineDefinitionId'],
       sortableAttributes: ['lastActivityAt', 'createdAt', 'replyCount'],
       separatorTokens: ['.'],
@@ -392,15 +398,27 @@ async function searchBottles(query, {
 
 // ── Discussion index helpers ─────────────────────────────────────────────────
 
-function buildDiscussionDocument(discussion) {
+// Cap on the concatenated reply-content field. 8 KB keeps the index
+// reasonable (most threads stay well below); threads that exceed it lose
+// their tail in search but still match on title/body/early replies.
+const REPLY_CONTENT_MAX = 8000;
+
+function buildDiscussionDocument(discussion, replyTexts = []) {
   const author = discussion.author || {};
   const wine = discussion.wineDefinition || {};
+  // Concatenate reply texts with a paragraph break between each so the
+  // tokenizer treats them as separate phrases. Pre-truncated; raw HTML is
+  // stripped by the caller before passing in.
+  const replyContent = replyTexts.length > 0
+    ? replyTexts.join('\n\n').slice(0, REPLY_CONTENT_MAX)
+    : '';
   return {
     id: discussion._id.toString(),
     slug: discussion.slug || '',
     title: discussion.title || '',
     // Index plain text — Meilisearch shouldn't tokenize HTML markup as content
     body: stripHtml(discussion.body || ''),
+    replyContent,
     category: discussion.category || '',
     isLocked: !!discussion.isLocked,
     isPinned: !!discussion.isPinned,
@@ -418,6 +436,21 @@ function buildDiscussionDocument(discussion) {
   };
 }
 
+// Helper: pull the plain-text bodies of non-deleted replies for a discussion,
+// in chronological order, so search hits highlight the earliest matching
+// reply when the index is rebuilt.
+async function fetchReplyTextsForIndex(discussionId) {
+  const DiscussionReply = require('../models/DiscussionReply');
+  const replies = await DiscussionReply.find({
+    discussion: discussionId,
+    isDeleted: { $ne: true }
+  })
+    .sort({ createdAt: 1 })
+    .select('body')
+    .lean();
+  return replies.map(r => stripHtml(r.body || '')).filter(Boolean);
+}
+
 async function fullSyncDiscussions() {
   if (!isAvailable) return;
 
@@ -427,13 +460,28 @@ async function fullSyncDiscussions() {
       .populate({ path: 'wineDefinition', select: 'name producer' })
       .lean();
 
-    const documents = discussions.map(buildDiscussionDocument);
+    // Bulk-fetch reply texts so we don't hit N+1 on the full sync.
+    const DiscussionReply = require('../models/DiscussionReply');
+    const allReplies = await DiscussionReply.find({ isDeleted: { $ne: true } })
+      .sort({ discussion: 1, createdAt: 1 })
+      .select('discussion body')
+      .lean();
+    const repliesByDiscussion = new Map();
+    for (const r of allReplies) {
+      const key = r.discussion.toString();
+      if (!repliesByDiscussion.has(key)) repliesByDiscussion.set(key, []);
+      repliesByDiscussion.get(key).push(stripHtml(r.body || ''));
+    }
+
+    const documents = discussions.map(d =>
+      buildDiscussionDocument(d, repliesByDiscussion.get(d._id.toString()) || [])
+    );
 
     if (documents.length > 0) {
       await discussionsIndex.addDocuments(documents, { primaryKey: 'id' });
     }
 
-    console.log(`Meilisearch: synced ${documents.length} discussions`);
+    console.log(`Meilisearch: synced ${documents.length} discussions (with reply content)`);
   } catch (err) {
     console.error(`Meilisearch discussion full sync failed: ${err.message}`);
   }
@@ -443,14 +491,20 @@ async function indexDiscussion(discussionId) {
   if (!isAvailable) return;
 
   try {
-    const discussion = await Discussion.findById(discussionId)
-      .populate('author', 'username displayName')
-      .populate({ path: 'wineDefinition', select: 'name producer' })
-      .lean();
+    const [discussion, replyTexts] = await Promise.all([
+      Discussion.findById(discussionId)
+        .populate('author', 'username displayName')
+        .populate({ path: 'wineDefinition', select: 'name producer' })
+        .lean(),
+      fetchReplyTextsForIndex(discussionId)
+    ]);
 
     if (!discussion) return;
 
-    await discussionsIndex.addDocuments([buildDiscussionDocument(discussion)], { primaryKey: 'id' });
+    await discussionsIndex.addDocuments(
+      [buildDiscussionDocument(discussion, replyTexts)],
+      { primaryKey: 'id' }
+    );
   } catch (err) {
     console.error(`Meilisearch index discussion ${discussionId} failed: ${err.message}`);
   }

@@ -42,6 +42,9 @@ export default function DiscussionCard({ discussion }) {
       <div className="discussion-card__main">
         <div className="discussion-card__header">
           <CategoryBadge category={discussion.category} />
+          {discussion.hasUnread && (
+            <span className="discussion-card__unread-dot" title={t('discussions.hasUnread')} aria-label={t('discussions.hasUnread')} />
+          )}
           {discussion.isPinned && <span className="discussion-card__pinned" title={t('discussions.pinned')}>📌 {t('discussions.pinned')}</span>}
           {discussion.isLocked && <span className="discussion-card__locked" title={t('discussions.locked')}>{t('discussions.locked')}</span>}
         </div>

@@ -351,3 +351,47 @@
   color: var(--color-primary);
   margin-left: 0.25rem;
 }
+
+/* ── Accessibility ────────────────────────────────────────────────────────── */
+
+/* Skip-to-content link — visually hidden until focused. Lets keyboard users
+   bypass the navbar (WCAG 2.4.1 'Bypass Blocks'). The 'visible on focus'
+   pattern is preferred over a permanent visible link because it doesn't
+   clutter the layout for sighted mouse users. */
+.skip-link {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translate(-50%, -100%);
+  padding: 0.6rem 1rem;
+  background: var(--color-primary);
+  color: var(--color-text-inverse);
+  text-decoration: none;
+  font-weight: 600;
+  border-radius: 0 0 var(--radius-sm, 6px) var(--radius-sm, 6px);
+  box-shadow: var(--shadow-md, 0 4px 12px rgba(0, 0, 0, 0.08));
+  z-index: 1000;
+  transition: transform 0.18s;
+}
+
+.skip-link:focus {
+  transform: translate(-50%, 0);
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+/* Visible focus rings for keyboard users on every interactive element.
+   :focus-visible (vs plain :focus) excludes mouse-click focus, so the
+   ring only appears when actually navigating with the keyboard. */
+:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+  border-radius: inherit;
+}
+
+/* When the main-content gets programmatic focus from skip-link, don't show
+   a ring on the whole content area — it's a focus target, not interactive. */
+#main-content:focus,
+#main-content:focus-visible {
+  outline: none;
+}

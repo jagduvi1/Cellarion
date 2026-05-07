@@ -6,6 +6,7 @@ const DiscussionReply = require('../models/DiscussionReply');
 const DiscussionReaction = require('../models/DiscussionReaction');
 const { REACTION_KINDS } = require('../models/DiscussionReaction');
 const DiscussionWatch = require('../models/DiscussionWatch');
+const DiscussionRead = require('../models/DiscussionRead');
 const DiscussionReport = require('../models/DiscussionReport');
 const User = require('../models/User');
 const WineDefinition = require('../models/WineDefinition');
@@ -96,9 +97,10 @@ router.get('/', optionalAuth, async (req, res) => {
         const byId = new Map(docs.map(d => [d._id.toString(), d]));
         const ordered = ids.map(id => byId.get(id)).filter(Boolean);
         const enrichedSearch = await attachLastReply(ordered);
+        const withUnreadSearch = await attachUnreadStatus(enrichedSearch, req.user);
 
         return res.json({
-          discussions: enrichedSearch,
+          discussions: withUnreadSearch,
           total: estimatedTotalHits,
           page,
           pages: Math.ceil(estimatedTotalHits / limit)
@@ -141,12 +143,40 @@ router.get('/', optionalAuth, async (req, res) => {
     ]);
 
     const enriched = await attachLastReply(discussions);
-    res.json({ discussions: enriched, total, page, pages: Math.ceil(total / limit) });
+    const withUnread = await attachUnreadStatus(enriched, req.user);
+    res.json({ discussions: withUnread, total, page, pages: Math.ceil(total / limit) });
   } catch (err) {
     console.error('List discussions error:', err);
     res.status(500).json({ error: 'Failed to list discussions' });
   }
 });
+
+// Helper: tag each discussion with `hasUnread: bool` based on whether the
+// requester has visited it before AND there's been activity since their
+// last visit. Threads they've never opened don't get the unread flag —
+// otherwise every list item would buzz on a first-time visitor.
+//
+// Anonymous users get hasUnread = false on every item (no read history to
+// compare against).
+async function attachUnreadStatus(discussions, user) {
+  if (!user || !discussions || discussions.length === 0) {
+    return (discussions || []).map(d => ({ ...d, hasUnread: false }));
+  }
+  const ids = discussions.map(d => d._id);
+  const reads = await DiscussionRead.find({ user: user.id, discussion: { $in: ids } })
+    .select('discussion lastReadAt')
+    .lean();
+  const lastReadByDiscussion = new Map();
+  for (const r of reads) lastReadByDiscussion.set(r.discussion.toString(), r.lastReadAt);
+  return discussions.map(d => {
+    const lastRead = lastReadByDiscussion.get(d._id.toString());
+    const lastActivity = d.lastActivityAt || d.createdAt;
+    return {
+      ...d,
+      hasUnread: !!lastRead && new Date(lastActivity) > new Date(lastRead)
+    };
+  });
+}
 
 // Helper: attach a `lastReply: { author, createdAt }` snippet to each
 // discussion in the list. Two queries: aggregate the most-recent non-deleted
@@ -506,6 +536,7 @@ router.delete('/:idOrSlug', requireAuth, requireModeratorOrAdmin, async (req, re
     DiscussionReply.deleteMany({ discussion: discussion._id }).catch(() => {});
     DiscussionReport.deleteMany({ discussion: discussion._id }).catch(() => {});
     DiscussionWatch.deleteMany({ discussion: discussion._id }).catch(() => {});
+    DiscussionRead.deleteMany({ discussion: discussion._id }).catch(() => {});
 
     // Capture the public URL before deletion so we can ping IndexNow afterwards.
     const publicPath = `/community/discussions/${discussion.slug || discussion._id}`;
@@ -594,6 +625,18 @@ router.get('/:idOrSlug/replies', optionalAuth, async (req, res) => {
       if (!isMod) delete obj.deletedBody;
       return obj;
     });
+
+    // Mark this thread as read for the current user. Fire-and-forget upsert
+    // — the response doesn't depend on it, and a transient failure shouldn't
+    // surface to the caller. Reading replies is the strongest "I've seen
+    // this thread" signal (the user is actively scrolling content).
+    if (req.user) {
+      DiscussionRead.findOneAndUpdate(
+        { user: req.user.id, discussion: discussionId },
+        { $set: { lastReadAt: new Date() } },
+        { upsert: true }
+      ).catch(() => {});
+    }
 
     res.json({ replies: enriched, total, page, pages: Math.ceil(total / limit) });
   } catch (err) {
@@ -823,6 +866,10 @@ router.put('/:discussionId/replies/:replyId', requireAuth, async (req, res) => {
     await reply.save();
     logAudit(req, 'discussion_reply.update', { type: 'discussion_reply', id: reply._id });
 
+    // Re-index the parent discussion so search results pick up the edited
+    // reply content. Fire-and-forget; never blocks the response.
+    searchService.indexDiscussion(reply.discussion);
+
     await reply.populate('author', 'username displayName roles contribution.tier contribution.specialty');
     res.json({ reply });
   } catch (err) {
@@ -853,6 +900,10 @@ router.delete('/:discussionId/replies/:replyId', requireAuth, async (req, res) =
     await reply.save();
 
     logAudit(req, 'discussion_reply.soft_delete', { type: 'discussion_reply', id: reply._id });
+
+    // Re-index parent so search drops this reply's content (the index
+    // helper filters out isDeleted replies).
+    searchService.indexDiscussion(reply.discussion);
 
     res.json({ message: 'Reply deleted', reply: reply.toObject() });
   } catch (err) {
