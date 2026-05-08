@@ -114,10 +114,24 @@ const requireModeratorOrAdmin = (req, res, next) => {
   next();
 };
 
+/**
+ * Convenience predicate used by handlers to branch on "is the requester a
+ * forum moderator OR admin?". Centralised here so the four+ inline copies
+ * across route handlers stop drifting (one of them used to forget admin).
+ *
+ * @param {{roles?: string[]}|null} user — typically req.user from optionalAuth
+ * @returns {boolean}
+ */
+function isModerator(user) {
+  if (!user || !Array.isArray(user.roles)) return false;
+  return user.roles.includes('moderator') || user.roles.includes('admin');
+}
+
 module.exports = {
   requireAuth,
   optionalAuth,
   requireRole,
   requireSommOrAdmin,
   requireModeratorOrAdmin,
+  isModerator,
 };

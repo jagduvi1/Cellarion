@@ -22,6 +22,7 @@ const Discussion = require('../models/Discussion');
 const DiscussionReply = require('../models/DiscussionReply');
 const DiscussionReaction = require('../models/DiscussionReaction');
 const DiscussionWatch = require('../models/DiscussionWatch');
+const DiscussionRead = require('../models/DiscussionRead');
 const DiscussionReport = require('../models/DiscussionReport');
 const ChatUsage = require('../models/ChatUsage');
 const ImportSession = require('../models/ImportSession');
@@ -378,7 +379,7 @@ router.get('/me/export', requireAuth, async (req, res) => {
       images, recommendationsSent, recommendationsReceived, journalEntries,
       restockAlerts, wineLists, pendingSharesSent,
       discussions, discussionReplies, reviewVotes, discussionReactions, discussionWatches,
-      follows, chatUsage, importSessions, supportTickets,
+      discussionReads, follows, chatUsage, importSessions, supportTickets,
       discussionReports, wineReports, wishlistItems
     ] = await Promise.all([
       Bottle.find({ user: userId }).lean(),
@@ -396,10 +397,11 @@ router.get('/me/export', requireAuth, async (req, res) => {
       WineList.find({ user: userId }).select('name cellar structureMode branding layout createdAt updatedAt').lean(),
       PendingShare.find({ invitedBy: userId }).populate('cellar', 'name').lean(),
       Discussion.find({ author: userId }).select('title category body wineDefinition isPinned isLocked replyCount createdAt updatedAt').lean(),
-      DiscussionReply.find({ author: userId }).select('discussion body quote wineDefinition likesCount isDeleted createdAt updatedAt').lean(),
+      DiscussionReply.find({ author: userId }).select('discussion body quote wineDefinition isDeleted createdAt updatedAt').lean(),
       ReviewVote.find({ user: userId }).select('review vote createdAt').lean(),
       DiscussionReaction.find({ user: userId }).select('reply kind createdAt').lean(),
       DiscussionWatch.find({ user: userId }).select('discussion createdAt').lean(),
+      DiscussionRead.find({ user: userId }).select('discussion lastReadAt').lean(),
       Follow.find({ $or: [{ follower: userId }, { following: userId }] })
         .populate('follower', 'username').populate('following', 'username').lean(),
       ChatUsage.find({ userId: userId }).select('date promptTokens completionTokens').lean(),
@@ -511,7 +513,6 @@ router.get('/me/export', requireAuth, async (req, res) => {
         body: r.body,
         quote: r.quote,
         wineDefinition: r.wineDefinition,
-        likesCount: r.likesCount,
         isDeleted: r.isDeleted,
         createdAt: r.createdAt,
         updatedAt: r.updatedAt
@@ -519,6 +520,7 @@ router.get('/me/export', requireAuth, async (req, res) => {
       reviewVotes: reviewVotes.map(v => ({ review: v.review, vote: v.vote, createdAt: v.createdAt })),
       discussionReactions: discussionReactions.map(r => ({ reply: r.reply, kind: r.kind, createdAt: r.createdAt })),
       discussionWatches: discussionWatches.map(w => ({ discussion: w.discussion, createdAt: w.createdAt })),
+      discussionReads: discussionReads.map(r => ({ discussion: r.discussion, lastReadAt: r.lastReadAt })),
       social: {
         following: follows.filter(f => f.follower?._id?.toString() === userId || f.follower?.toString() === userId)
           .map(f => ({ username: f.following?.username, createdAt: f.createdAt })),

@@ -49,6 +49,7 @@ function PrivacyPolicy() {
           <li><strong>Account information:</strong> email address, username, and password (stored as a bcrypt hash — we never store your plain-text password).</li>
           <li><strong>Profile information:</strong> optional display name, bio, and profile visibility preference.</li>
           <li><strong>Cellar data:</strong> bottles, cellars, racks, tasting notes, ratings, purchase information, and wine images you add to your account.</li>
+          <li><strong>Community / forum data:</strong> discussions and replies you post, reactions you add to other users' replies, threads you subscribe to ("watch"), and read-state markers tracking which threads you've opened (used to drive the unread indicator).</li>
           <li><strong>Activity logs:</strong> actions you take in the app (e.g. adding a bottle, logging in) are logged with your user ID, IP address, and browser user-agent for security and service maintenance purposes.</li>
           <li><strong>Consent records:</strong> timestamps of when you accepted this privacy policy and consented to data processing.</li>
         </ul>
@@ -112,7 +113,7 @@ function PrivacyPolicy() {
           <li><strong>Account data:</strong> retained for as long as your account is active.</li>
           <li><strong>Activity logs:</strong> automatically deleted after 90 days.</li>
           <li><strong>Deleted cellars/racks:</strong> soft-deleted and permanently removed after 30 days.</li>
-          <li><strong>Account deletion:</strong> when you request account deletion, there is a 7-day cooling-off period. After that, your personal data (account, cellar, bottles, journal, settings, reactions, watches, reports) is permanently and irreversibly deleted.</li>
+          <li><strong>Account deletion:</strong> when you request account deletion, there is a 7-day cooling-off period. After that, your personal data (account, cellar, bottles, journal, settings, forum reactions, thread subscriptions, read-state markers, reports) is permanently and irreversibly deleted.</li>
           <li><strong>Forum content (discussions and replies):</strong> to preserve multi-party conversations for other users, your forum posts are <em>anonymised</em> rather than hard-deleted — your authorship is replaced with "[Deleted user]" and the personal-data link is severed (GDPR Art. 17 compliant). The post text remains visible. If you need a specific post fully removed, contact support before requesting account deletion.</li>
         </ul>
 
