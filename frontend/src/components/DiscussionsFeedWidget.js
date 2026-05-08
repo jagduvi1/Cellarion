@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { authorDisplayName } from '../utils/deletedUser';
 import timeAgo from '../utils/timeAgo';
 import './DiscussionsFeedWidget.css';
 
@@ -49,7 +50,7 @@ export default function DiscussionsFeedWidget({ limit = 5, sort = 'active' }) {
       <ul className="discussions-feed-widget__list">
         {discussions.map(d => {
           const author = d.author || {};
-          const authorName = author.displayName || author.username || 'Anonymous';
+          const authorName = authorDisplayName(author, t, t('discussions.anonymous'));
           const slugOrId = d.slug || d._id;
           return (
             <li key={d._id} className="discussions-feed-widget__item">

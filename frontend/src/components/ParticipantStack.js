@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next';
-import { isDeletedUser } from '../utils/deletedUser';
+import { isDeletedUser, authorDisplayName } from '../utils/deletedUser';
 import './ParticipantStack.css';
 
 // Overlapping avatar stack used on the discussion-detail header to show who
@@ -20,9 +20,7 @@ export default function ParticipantStack({ participants, total }) {
       <ul className="participant-stack__list">
         {participants.map(p => {
           const deleted = isDeletedUser(p);
-          const name = deleted
-            ? t('common.deletedUser')
-            : (p.displayName || p.username || 'Unknown');
+          const name = authorDisplayName(p, t, t('common.unknown'));
           const initial = deleted ? '?' : name.charAt(0).toUpperCase();
           return (
             <li
