@@ -1,57 +1,60 @@
 .discussion-detail {
-  max-width: 700px;
+  max-width: 760px;
   margin: 0 auto;
-  padding: 1.5rem 1rem;
+  padding: 1.25rem 1rem 2rem;
 }
 
 .discussion-detail__back {
   display: inline-block;
-  color: var(--color-text-secondary);
+  color: var(--color-text-muted);
   text-decoration: none;
-  font-size: 0.88rem;
-  margin-bottom: 1rem;
+  font-size: 0.85rem;
+  margin-bottom: 1.25rem;
 }
 
 .discussion-detail__back:hover {
-  color: var(--color-primary);
+  color: var(--color-text);
 }
 
 .discussion-detail__loading {
   text-align: center;
-  color: var(--color-text-secondary);
+  color: var(--color-text-muted);
   padding: 2rem 0;
+  font-size: 0.9rem;
 }
 
-/* ── Header card (Original Post) ──
-   The OP gets a burgundy left accent bar so it reads as the "anchor" of the
-   thread — visually distinct from the replies that follow. Slightly more
-   generous padding signals "this is the main post." */
+/* ── Header (Original Post) ──
+   No card chrome, no left-bar, no tinted background — just generous
+   typography and a neutral divider before the replies. The "Original
+   Post" pill in the meta row carries the OP role on its own; doubling up
+   with a coloured stripe was visual stutter. */
 .discussion-detail__header {
-  padding: 1.5rem 1.5rem 1.25rem;
-  margin-bottom: 1.5rem;
-  border-left: 3px solid var(--color-primary);
+  padding: 0 0 1.5rem;
+  margin-bottom: 1.25rem;
+  border-bottom: 1px solid var(--color-border-light, var(--color-border));
 }
 
 .discussion-detail__meta {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  margin-bottom: 0.5rem;
+  margin-bottom: 0.75rem;
   flex-wrap: wrap;
 }
 
-/* "Original Post" pill — quiet on its own, but anchors the OP visually
-   alongside the category badge. */
+/* "Original Post" pill — neutral typography, no colour. The role is
+   self-evident from layout (it's the top post); the pill exists only to
+   match the visual rhythm with the category badge beside it. */
 .discussion-detail__op-pill {
   display: inline-block;
-  padding: 0.15rem 0.55rem;
-  background: var(--color-primary-light);
-  color: var(--color-primary);
-  font-size: 0.72rem;
+  padding: 0.1rem 0.5rem;
+  background: var(--color-surface-hover);
+  color: var(--color-text-muted);
+  font-size: 0.68rem;
   font-weight: 600;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.05em;
   text-transform: uppercase;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-full);
 }
 
 .discussion-detail__title-row {
@@ -59,7 +62,7 @@
   justify-content: space-between;
   align-items: flex-start;
   gap: 1rem;
-  margin: 0 0 0.75rem;
+  margin: 0 0 0.5rem;
 }
 
 .discussion-detail__title-row .discussion-detail__title {
@@ -69,20 +72,22 @@
 }
 
 .discussion-detail__title {
-  margin: 0 0 0.75rem;
-  font-size: 1.5rem;
+  margin: 0 0 0.5rem;
+  font-size: 1.625rem;
+  font-weight: 600;
   line-height: 1.25;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.015em;
+  color: var(--color-text);
 }
 
 .discussion-detail__author-line {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  margin-bottom: 1rem;
+  margin-bottom: 1.25rem;
   flex-wrap: wrap;
   font-size: 0.85rem;
-  color: var(--color-text-secondary);
+  color: var(--color-text-muted);
 }
 
 .discussion-detail__author-link {
@@ -90,7 +95,7 @@
   align-items: center;
   gap: 0.4rem;
   text-decoration: none;
-  color: inherit;
+  color: var(--color-text);
   font-weight: 500;
 }
 
@@ -98,27 +103,24 @@
   color: var(--color-primary);
 }
 
-.discussion-detail__time {
-  color: var(--color-text-secondary);
-}
-
+.discussion-detail__time,
 .discussion-detail__reply-count {
-  color: var(--color-text-secondary);
+  color: var(--color-text-muted);
 }
 
 /* OP body uses the reading-mode .discussion-body styles inherited from
-   DiscussionComposer.css. Width-cap, line-height, blockquote and link styling
-   live there so reply bodies read identically. */
+   DiscussionComposer.css. Width-cap, line-height, blockquote and link
+   styling live there so reply bodies read identically. */
 .discussion-detail__body {
   word-break: break-word;
 }
 
 .discussion-detail__actions {
   display: flex;
-  gap: 0.75rem;
-  margin-top: 1rem;
-  padding-top: 0.75rem;
-  border-top: 1px solid var(--color-border);
+  gap: 0.6rem;
+  margin-top: 1.25rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--color-border-light, var(--color-border));
 }
 
 /* ── Replies section ── */
@@ -127,12 +129,16 @@
 }
 
 .discussion-detail__section-title {
-  font-size: 1rem;
-  margin: 0 0 0.75rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-text-muted);
+  margin: 0 0 1rem;
 }
 
 .discussion-detail__no-replies {
-  color: var(--color-text-secondary);
+  color: var(--color-text-muted);
   font-size: 0.9rem;
   padding: 1rem 0;
 }
@@ -152,16 +158,16 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-top: 0.5rem;
+  margin-top: 0.6rem;
 }
 
 /* ── Quote preview above textarea ── */
 .discussion-detail__quote-preview {
-  border-left: 3px solid var(--color-primary, #6366f1);
-  background: var(--color-bg-secondary, #f9fafb);
+  border-left: 2px solid var(--color-border);
+  background: var(--color-surface-hover);
   padding: 0.5rem 0.75rem;
   margin-bottom: 0.75rem;
-  border-radius: 0 4px 4px 0;
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
   font-size: 0.85rem;
 }
 
@@ -170,14 +176,14 @@
   justify-content: space-between;
   align-items: center;
   margin-bottom: 0.25rem;
-  color: var(--color-text-secondary);
-  font-size: 0.8rem;
+  color: var(--color-text-muted);
+  font-size: 0.78rem;
 }
 
 .discussion-detail__quote-remove {
   background: none;
   border: none;
-  color: var(--color-text-secondary);
+  color: var(--color-text-muted);
   cursor: pointer;
   font-size: 1.1rem;
   padding: 0 0.25rem;
@@ -185,14 +191,14 @@
 }
 
 .discussion-detail__quote-remove:hover {
-  color: var(--color-primary);
+  color: var(--color-text);
 }
 
 .discussion-detail__quote-preview-body {
   color: var(--color-text-secondary);
   white-space: pre-wrap;
   word-break: break-word;
-  line-height: 1.45;
+  line-height: 1.5;
   max-height: 4.5em;
   overflow: hidden;
 }
@@ -206,6 +212,12 @@
   list-style: none;
   cursor: pointer;
   display: inline-block;
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+}
+
+.discussion-detail__wine-picker-toggle summary:hover {
+  color: var(--color-text);
 }
 
 .discussion-detail__wine-picker-toggle summary::-webkit-details-marker {
@@ -230,33 +242,31 @@
 
 .discussion-detail__locked-notice {
   padding: 1rem 1.25rem;
-  color: var(--color-text-secondary);
+  color: var(--color-text-muted);
   text-align: center;
   font-size: 0.9rem;
+  background: var(--color-surface-hover);
+  border-radius: var(--radius-sm);
 }
 
-/* ── Mobile (≤ 600px) ──
-   Tighter outer padding, smaller title, less generous OP card padding so the
-   layout breathes naturally on phones. The reading-mode 68ch cap on
-   .discussion-body already adapts (viewports < 68ch just fall back to 100%). */
+/* ── Mobile (≤ 600px) ── */
 @media (max-width: 600px) {
   .discussion-detail {
-    padding: 1rem 0.75rem;
+    padding: 1rem 0.75rem 2rem;
   }
 
   .discussion-detail__header {
-    padding: 1.125rem 1rem 1rem;
+    padding-bottom: 1.125rem;
     margin-bottom: 1rem;
   }
 
   .discussion-detail__title {
-    font-size: 1.25rem;
+    font-size: 1.375rem;
     line-height: 1.3;
   }
 
   .discussion-detail__op-pill {
-    font-size: 0.68rem;
-    padding: 0.1rem 0.45rem;
+    font-size: 0.66rem;
   }
 
   .discussion-detail__actions {

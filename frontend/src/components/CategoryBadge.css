@@ -1,44 +1,58 @@
+/* Category badge — small, quiet, typography-led. The colour palette is
+   desaturated on purpose: a forum doesn't need fluorescent pastels to
+   distinguish "tasting notes" from "food pairing". A subtle hue + the
+   label itself is enough, and it leaves the wine burgundy as the only
+   loud colour on the page. */
 .category-badge {
-  display: inline-block;
-  padding: 0.15rem 0.5rem;
-  border-radius: 12px;
-  font-size: 0.75rem;
-  font-weight: 500;
-  line-height: 1.4;
-  border: none;
+  display: inline-flex;
+  align-items: center;
+  padding: 0.1rem 0.5rem;
+  border-radius: var(--radius-full);
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  line-height: 1.5;
+  border: 1px solid transparent;
   cursor: default;
   white-space: nowrap;
+  text-transform: uppercase;
 }
 
 button.category-badge {
   cursor: pointer;
+  transition: background var(--transition-fast), border-color var(--transition-fast);
 }
 
 button.category-badge:hover {
-  opacity: 0.85;
+  border-color: currentColor;
 }
 
+/* Tasting notes — soft plum */
 .category-badge--tasting-notes {
-  background: var(--color-wine-light, #f3e8ff);
-  color: var(--color-wine, #7c3aed);
+  background: rgba(120, 70, 130, 0.08);
+  color: #6B3F76;
 }
 
+/* Food pairing — soft amber */
 .category-badge--food-pairing {
-  background: #fef3c7;
-  color: #92400e;
+  background: rgba(180, 130, 50, 0.1);
+  color: #8B6510;
 }
 
+/* Recommendations — soft slate */
 .category-badge--recommendations {
-  background: #dbeafe;
-  color: #1e40af;
+  background: rgba(60, 90, 130, 0.08);
+  color: #3E5A7E;
 }
 
+/* Cellar tips — soft moss */
 .category-badge--cellar-tips {
-  background: #d1fae5;
-  color: #065f46;
+  background: rgba(70, 110, 70, 0.08);
+  color: #406B40;
 }
 
+/* General — neutral */
 .category-badge--general {
-  background: var(--color-bg-secondary, #f3f4f6);
-  color: var(--color-text-secondary, #6b7280);
+  background: var(--color-surface-hover);
+  color: var(--color-text-muted);
 }
