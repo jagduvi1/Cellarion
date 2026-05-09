@@ -1,39 +1,38 @@
 /* Two-column list row. Main column carries title + body + OP author;
    side column carries the last-poster preview + reply count — the "is
-   this thread alive?" scanning signal. Pinned threads use a sage-tinted
-   background via [data-pinned] so they read as anchored without losing
-   the standard card hierarchy. */
+   this thread alive?" scanning signal. Pinned threads use a 📌 icon and
+   a subtle accent left-bar so they read as anchored without shouting. */
 .discussion-card {
   display: grid;
   grid-template-columns: 1fr auto;
   gap: 1rem;
   text-decoration: none;
   color: inherit;
-  padding: 0.875rem 1.125rem;
-  transition: background 0.12s, border-color 0.15s, box-shadow 0.15s;
+  padding: 1rem 1.125rem;
+  /* Override the heavier .card defaults (1.5rem padding, drop shadow at rest)
+     so the list reads as a calm column of rows, not a stack of standalone
+     cards. Shadow only appears on hover. */
+  box-shadow: none;
+  border-color: var(--color-border-light, var(--color-border));
+  transition: background var(--transition-fast), border-color var(--transition-fast), box-shadow var(--transition-fast);
   cursor: pointer;
 }
 
 .discussion-card:hover {
-  border-color: var(--color-primary);
+  border-color: var(--color-border);
   background: var(--color-surface-hover);
   box-shadow: var(--shadow-sm);
 }
 
-/* Pinned: warm cream tint + accent left bar so it visually anchors as a
-   "stuck" thread even when scrolled past in a long list. */
+/* Pinned: 3px accent bar, no tint. The 📌 in the header carries the meaning;
+   we don't need a coloured background on top. */
 .discussion-card[data-pinned="true"] {
-  background: rgba(212, 163, 115, 0.06);
   border-left: 3px solid var(--color-accent);
   padding-left: calc(1.125rem - 3px);
 }
 
-.discussion-card[data-pinned="true"]:hover {
-  background: rgba(212, 163, 115, 0.1);
-}
-
 .discussion-card__main {
-  min-width: 0; /* allow inner text to truncate */
+  min-width: 0;
 }
 
 .discussion-card__side {
@@ -50,70 +49,57 @@
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  margin-bottom: 0.4rem;
+  margin-bottom: 0.5rem;
   flex-wrap: wrap;
+  font-size: 0.78rem;
+  color: var(--color-text-muted);
 }
 
+/* Pinned/locked labels: neutral, lower-weight than the category badge —
+   they're modifiers, not identities. */
 .discussion-card__pinned,
 .discussion-card__locked {
-  font-size: 0.7rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  padding: 0.1rem 0.4rem;
-  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  font-size: 0.72rem;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  color: var(--color-text-muted);
 }
 
-.discussion-card__pinned {
-  background: var(--color-accent-light);
-  color: var(--color-accent-hover);
+.discussion-card__locked::before {
+  content: "🔒";
+  font-size: 0.72rem;
 }
 
 /* Unread indicator — small burgundy dot in the meta row when the thread
-   has activity since the user's last visit. Only shows for users who have
-   visited before (first-time visitors don't see "unread" on every card). */
+   has activity since the user's last visit. Static (no pulse) so the page
+   doesn't twitch with motion when several threads are unread. */
 .discussion-card__unread-dot {
   display: inline-block;
-  width: 8px;
-  height: 8px;
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
   background: var(--color-primary);
   flex-shrink: 0;
-  /* Subtle pulse so the dot reads as "fresh" without being aggressive */
-  animation: discussion-card-unread-pulse 2.4s ease-in-out infinite;
-}
-
-@keyframes discussion-card-unread-pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.55; }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .discussion-card__unread-dot { animation: none; }
-}
-
-.discussion-card__locked {
-  background: #fee2e2;
-  color: #991b1b;
 }
 
 .discussion-card__title {
-  margin: 0 0 0.35rem;
-  font-size: 1.05rem;
+  margin: 0 0 0.4rem;
+  font-size: 1rem;
   font-weight: 600;
-  line-height: 1.3;
+  line-height: 1.4;
+  color: var(--color-text);
 }
 
+/* Wine reference chip on the list row — quiet, mostly text, single-line. */
 .discussion-card__wine-tag {
   display: inline-flex;
   align-items: center;
-  gap: 0.3rem;
+  gap: 0.35rem;
   font-size: 0.78rem;
-  padding: 0.15rem 0.5rem;
-  background: var(--color-surface-hover, #f5f5f5);
-  border: 1px solid var(--color-border);
-  border-radius: 12px;
-  margin-bottom: 0.4rem;
+  margin-bottom: 0.5rem;
   color: var(--color-text-secondary);
   white-space: nowrap;
   overflow: hidden;
@@ -122,25 +108,25 @@
 }
 
 .discussion-card__wine-dot {
-  width: 8px;
-  height: 8px;
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
   flex-shrink: 0;
-  background: var(--color-text-secondary);
+  background: var(--color-text-muted);
 }
 
-.discussion-card__wine-dot.red       { background: #c0392b; }
-.discussion-card__wine-dot.white     { background: #d4ac0d; }
-.discussion-card__wine-dot.rosé      { background: #e91e8c; }
-.discussion-card__wine-dot.sparkling { background: #f39c12; }
-.discussion-card__wine-dot.dessert   { background: #8e44ad; }
-.discussion-card__wine-dot.fortified { background: #27ae60; }
+.discussion-card__wine-dot.red       { background: #8B2635; }
+.discussion-card__wine-dot.white     { background: #C9A646; }
+.discussion-card__wine-dot.rosé      { background: #D17B8F; }
+.discussion-card__wine-dot.sparkling { background: #D4A373; }
+.discussion-card__wine-dot.dessert   { background: #6B3F8B; }
+.discussion-card__wine-dot.fortified { background: #4A7B4A; }
 
 .discussion-card__body {
-  margin: 0 0 0.6rem;
-  font-size: 0.88rem;
+  margin: 0 0 0.5rem;
+  font-size: 0.875rem;
   color: var(--color-text-secondary);
-  line-height: 1.5;
+  line-height: 1.55;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
@@ -150,8 +136,8 @@
 .discussion-card__op {
   display: flex;
   align-items: center;
-  font-size: 0.82rem;
-  color: var(--color-text-secondary);
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
 }
 
 .discussion-card__author {
@@ -168,7 +154,7 @@
 
 .discussion-card__author-link:hover {
   text-decoration: underline;
-  color: var(--color-primary);
+  color: var(--color-text);
 }
 
 .discussion-card__author-link--deleted {
@@ -188,34 +174,38 @@
 }
 
 .discussion-card__avatar {
-  width: 26px;
-  height: 26px;
+  width: 24px;
+  height: 24px;
   border-radius: 50%;
-  background: var(--color-primary);
-  color: #fff;
+  /* Quieter than the original solid burgundy — a tinted background with
+     the brand colour as foreground reads as "wine-club discreet" rather
+     than "tech-startup loud". */
+  background: var(--color-primary-light);
+  color: var(--color-primary);
   display: flex;
   align-items: center;
   justify-content: center;
   font-weight: 600;
-  font-size: 0.74rem;
+  font-size: 0.72rem;
   flex-shrink: 0;
 }
 
 .discussion-card__avatar--deleted {
-  background: var(--color-text-muted);
+  background: var(--color-surface-hover);
+  color: var(--color-text-muted);
 }
 
 .discussion-card__last-poster-meta {
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  gap: 0.05rem;
-  line-height: 1.2;
+  gap: 0;
+  line-height: 1.25;
 }
 
 .discussion-card__last-poster-name {
   font-weight: 500;
-  font-size: 0.82rem;
+  font-size: 0.8rem;
   color: var(--color-text);
   max-width: 9rem;
   overflow: hidden;
@@ -223,30 +213,36 @@
 }
 
 .discussion-card__time {
-  color: var(--color-text-secondary);
-  font-size: 0.75rem;
+  color: var(--color-text-muted);
+  font-size: 0.72rem;
 }
 
 .discussion-card__replies {
   display: flex;
   align-items: center;
   gap: 0.3rem;
-  color: var(--color-text-secondary);
+  color: var(--color-text-muted);
+  font-size: 0.78rem;
 }
 
 .discussion-card__reply-count {
   font-weight: 600;
   font-variant-numeric: tabular-nums;
+  color: var(--color-text-secondary);
 }
 
-.badge--mod {
-  background: #d1fae5;
-  color: #065f46;
-  font-size: 0.65rem;
-  padding: 0.05rem 0.35rem;
-  border-radius: 4px;
+/* Mod/Admin in card header — neutral, mostly typography. The role isn't
+   a personality, just an annotation. */
+.badge--mod,
+.badge--admin {
+  font-size: 0.62rem;
   font-weight: 600;
   text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 0.05rem 0.35rem;
+  border-radius: 3px;
+  background: var(--color-surface-hover);
+  color: var(--color-text-muted);
 }
 
 /* ── Mobile (≤ 600px) ──
