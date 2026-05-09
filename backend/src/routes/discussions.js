@@ -1,5 +1,5 @@
 const express = require('express');
-const { requireAuth, optionalAuth, requireModeratorOrAdmin } = require('../middleware/auth');
+const { requireAuth, optionalAuth, requireModeratorOrAdmin, isModerator } = require('../middleware/auth');
 const Discussion = require('../models/Discussion');
 const { CATEGORIES } = require('../models/Discussion');
 const DiscussionReply = require('../models/DiscussionReply');
@@ -464,7 +464,8 @@ router.post('/', requireAuth, async (req, res) => {
         'discussion_mention',
         `${authorName} mentioned you`,
         `In a new discussion: "${cleanTitle}"`,
-        link
+        link,
+        'communityMention'
       );
     }
 
@@ -482,7 +483,7 @@ router.put('/:idOrSlug', requireAuth, async (req, res) => {
     if (!discussion) return res.status(404).json({ error: 'Discussion not found' });
 
     const isOwner = discussion.author.toString() === req.user.id;
-    const isMod = req.user.roles && (req.user.roles.includes('moderator') || req.user.roles.includes('admin'));
+    const isMod = isModerator(req.user);
     if (!isOwner && !isMod) {
       return res.status(403).json({ error: 'You can only edit your own discussions' });
     }
@@ -529,12 +530,20 @@ router.delete('/:idOrSlug', requireAuth, requireModeratorOrAdmin, async (req, re
     const discussion = await findDiscussionByIdOrSlug(req.params.idOrSlug);
     if (!discussion) return res.status(404).json({ error: 'Discussion not found' });
 
-    // Clean up replies, reactions, watches, reports
+    // Clean up replies, reactions, watches, reads, and reports — both reports
+    // filed against the discussion itself AND reports against any of its
+    // replies (the reply IDs go away in the next step, leaving orphan reports
+    // pointing at deleted documents in the moderation queue otherwise).
     const replyIds = await DiscussionReply.find({ discussion: discussion._id }).select('_id');
     const replyIdList = replyIds.map(r => r._id);
     DiscussionReaction.deleteMany({ reply: { $in: replyIdList } }).catch(() => {});
     DiscussionReply.deleteMany({ discussion: discussion._id }).catch(() => {});
-    DiscussionReport.deleteMany({ discussion: discussion._id }).catch(() => {});
+    DiscussionReport.deleteMany({
+      $or: [
+        { discussion: discussion._id },
+        { reply: { $in: replyIdList } }
+      ]
+    }).catch(() => {});
     DiscussionWatch.deleteMany({ discussion: discussion._id }).catch(() => {});
     DiscussionRead.deleteMany({ discussion: discussion._id }).catch(() => {});
 
@@ -615,7 +624,7 @@ router.get('/:idOrSlug/replies', optionalAuth, async (req, res) => {
       }
     }
 
-    const isMod = !!req.user && req.user.roles && (req.user.roles.includes('moderator') || req.user.roles.includes('admin'));
+    const isMod = isModerator(req.user);
     const enriched = replies.map(r => {
       const obj = r.toObject();
       const replyKey = r._id.toString();
@@ -779,7 +788,8 @@ router.post('/:idOrSlug/replies', requireAuth, async (req, res) => {
         'discussion_reply',
         'New reply to your discussion',
         `${replierName} replied to "${discussion.title}"`,
-        link
+        link,
+        'communityReply'
       );
       maybeEmail(discussion.author, 'communityReply', 'reply');
     }
@@ -791,7 +801,8 @@ router.post('/:idOrSlug/replies', requireAuth, async (req, res) => {
         'discussion_reply',
         `${replierName} quoted you`,
         `In "${discussion.title}"`,
-        link
+        link,
+        'communityReply'
       );
       maybeEmail(quotedAuthorId, 'communityReply', 'quote');
     }
@@ -805,7 +816,8 @@ router.post('/:idOrSlug/replies', requireAuth, async (req, res) => {
         'discussion_mention',
         `${replierName} mentioned you`,
         `In "${discussion.title}"`,
-        link
+        link,
+        'communityMention'
       );
       maybeEmail(uid, 'communityMention', 'mention');
     }
@@ -813,6 +825,8 @@ router.post('/:idOrSlug/replies', requireAuth, async (req, res) => {
     // Watchers — anyone following this thread who isn't already covered.
     // Lower-priority notification ("There's a new reply on a thread you
     // follow") so the title differs from the OP-owns-the-thread case.
+    // Push delivery is gated per-user via the 'communityFollow' category;
+    // no email channel for this category by design (would be too noisy).
     const watchers = await DiscussionWatch.find({ discussion: discussion._id })
       .select('user').lean();
     for (const w of watchers) {
@@ -824,9 +838,9 @@ router.post('/:idOrSlug/replies', requireAuth, async (req, res) => {
         'discussion_reply',
         `New reply in "${discussion.title}"`,
         `${replierName} replied — you're following this thread`,
-        link
+        link,
+        'communityFollow'
       );
-      // No email for follow-watchers — would be the noisiest channel.
     }
 
     logAudit(req, 'discussion_reply.create', { type: 'discussion_reply', id: reply._id }, { discussion: discussion._id });
@@ -849,7 +863,7 @@ router.put('/:discussionId/replies/:replyId', requireAuth, async (req, res) => {
     if (!reply) return res.status(404).json({ error: 'Reply not found' });
 
     const isOwner = reply.author.toString() === req.user.id;
-    const isMod = req.user.roles && (req.user.roles.includes('moderator') || req.user.roles.includes('admin'));
+    const isMod = isModerator(req.user);
     if (!isOwner && !isMod) {
       return res.status(403).json({ error: 'You can only edit your own replies' });
     }
@@ -887,7 +901,7 @@ router.delete('/:discussionId/replies/:replyId', requireAuth, async (req, res) =
     if (reply.isDeleted) return res.status(400).json({ error: 'Reply already deleted' });
 
     const isOwner = reply.author.toString() === req.user.id;
-    const isMod = req.user.roles && (req.user.roles.includes('moderator') || req.user.roles.includes('admin'));
+    const isMod = isModerator(req.user);
     if (!isOwner && !isMod) {
       return res.status(403).json({ error: 'You can only delete your own replies' });
     }
@@ -904,6 +918,11 @@ router.delete('/:discussionId/replies/:replyId', requireAuth, async (req, res) =
     // Re-index parent so search drops this reply's content (the index
     // helper filters out isDeleted replies).
     searchService.indexDiscussion(reply.discussion);
+
+    // Soft-deleted replies still hold their reactions for moderator review,
+    // but reports filed AGAINST a since-deleted reply lose their value (the
+    // mod queue would point at "[This reply has been removed]"). Drop them.
+    DiscussionReport.deleteMany({ reply: reply._id }).catch(() => {});
 
     res.json({ message: 'Reply deleted', reply: reply.toObject() });
   } catch (err) {
@@ -997,11 +1016,14 @@ router.post('/:idOrSlug/watch', requireAuth, async (req, res) => {
     const discussion = await findDiscussionByIdOrSlug(req.params.idOrSlug);
     if (!discussion) return res.status(404).json({ error: 'Discussion not found' });
 
-    await DiscussionWatch.updateOne(
+    const result = await DiscussionWatch.updateOne(
       { user: req.user.id, discussion: discussion._id },
       { $setOnInsert: { user: req.user.id, discussion: discussion._id } },
       { upsert: true }
     );
+    if (result.upsertedCount > 0) {
+      logAudit(req, 'discussion.watch', { type: 'discussion', id: discussion._id });
+    }
     res.json({ watching: true });
   } catch (err) {
     console.error('Watch discussion error:', err);
@@ -1014,7 +1036,10 @@ router.delete('/:idOrSlug/watch', requireAuth, async (req, res) => {
     const discussion = await findDiscussionByIdOrSlug(req.params.idOrSlug);
     if (!discussion) return res.status(404).json({ error: 'Discussion not found' });
 
-    await DiscussionWatch.deleteOne({ user: req.user.id, discussion: discussion._id });
+    const result = await DiscussionWatch.deleteOne({ user: req.user.id, discussion: discussion._id });
+    if (result.deletedCount > 0) {
+      logAudit(req, 'discussion.unwatch', { type: 'discussion', id: discussion._id });
+    }
     res.json({ watching: false });
   } catch (err) {
     console.error('Unwatch discussion error:', err);
@@ -1033,6 +1058,10 @@ router.patch('/:idOrSlug/pin', requireAuth, requireModeratorOrAdmin, async (req,
     discussion.isPinned = !discussion.isPinned;
     await discussion.save();
     logAudit(req, 'discussion.pin', { type: 'discussion', id: discussion._id }, { isPinned: discussion.isPinned });
+
+    // Re-index so the search filter on `isPinned` and the trending/active sort
+    // ordering reflect the toggle. Without this the search index goes stale.
+    searchService.indexDiscussion(discussion._id);
 
     res.json({ discussion });
   } catch (err) {
@@ -1053,6 +1082,8 @@ router.patch('/:idOrSlug/lock', requireAuth, requireModeratorOrAdmin, async (req
 
     // Locking changes the page meaning — re-ping crawlers to refresh their snapshot
     submitToIndexNow(`/community/discussions/${discussion.slug || discussion._id}`);
+    // Re-index so the search filter on `isLocked` reflects the toggle.
+    searchService.indexDiscussion(discussion._id);
 
     res.json({ discussion });
   } catch (err) {
@@ -1076,6 +1107,9 @@ router.patch('/:idOrSlug/move', requireAuth, requireModeratorOrAdmin, async (req
     discussion.category = category;
     await discussion.save();
     logAudit(req, 'discussion.move', { type: 'discussion', id: discussion._id }, { from: oldCategory, to: category });
+
+    // Re-index so the search filter on `category` reflects the move.
+    searchService.indexDiscussion(discussion._id);
 
     res.json({ discussion });
   } catch (err) {

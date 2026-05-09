@@ -35,10 +35,6 @@ const discussionReplySchema = new mongoose.Schema({
     ref: 'WineDefinition',
     default: null
   },
-  likesCount: {
-    type: Number,
-    default: 0
-  },
   // Soft-delete: body is replaced with placeholder; original stored for mod review
   isDeleted: {
     type: Boolean,
