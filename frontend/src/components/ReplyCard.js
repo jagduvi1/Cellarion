@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
@@ -6,17 +6,20 @@ import { toggleReaction, getReplyOriginal, banUser } from '../api/discussions';
 import WineReferenceCard from './WineReferenceCard';
 import CellarCredBadge from './CellarCredBadge';
 import ConfirmModal from './ConfirmModal';
-import ReactionPicker, { REACTIONS, EMOJI_BY_KIND } from './ReactionPicker';
+import ReactionPicker, { REACTIONS } from './ReactionPicker';
 import { sanitizeForumRender } from '../utils/sanitizeForumRender';
-import { isDeletedUser } from '../utils/deletedUser';
+import { isDeletedUser, authorDisplayName } from '../utils/deletedUser';
 import timeAgo from '../utils/timeAgo';
 import './ReplyCard.css';
 
 function QuoteBlock({ quote }) {
+  const { t } = useTranslation();
   if (!quote || !quote.body) return null;
   return (
     <div className="reply-card__quote">
-      <div className="reply-card__quote-author">{quote.authorName || 'Unknown'} wrote:</div>
+      <div className="reply-card__quote-author">
+        {t('discussions.quoteAttribution', { name: quote.authorName || t('common.unknown') })}
+      </div>
       <div className="reply-card__quote-body">{quote.body}</div>
     </div>
   );
@@ -35,12 +38,15 @@ export default function ReplyCard({ reply, discussionId, onReply, onEdit, onDele
   const [loadingOriginal, setLoadingOriginal] = useState(false);
   const [showBanMenu, setShowBanMenu] = useState(false);
   const [confirmBan, setConfirmBan] = useState(null); // { duration, label }
+  // Monotonic counter for in-flight reaction toggles. Used to discard
+  // rollbacks from older requests when the user has already fired a newer
+  // toggle — without this, a slow first-click failure can stomp on the
+  // already-applied second click.
+  const reactionRequestRef = useRef(0);
 
   const author = reply.author || {};
   const authorDeleted = isDeletedUser(author);
-  const authorName = authorDeleted
-    ? t('common.deletedUser')
-    : (author.displayName || author.username || 'Unknown');
+  const authorName = authorDisplayName(author, t, t('common.unknown'));
   const isOwn = user && author._id === user.id;
   const isMod = user && (user.roles?.includes('moderator') || user.roles?.includes('admin'));
   const authorIsMod = !authorDeleted && (author.roles?.includes('moderator') || author.roles?.includes('admin'));
@@ -61,9 +67,16 @@ export default function ReplyCard({ reply, discussionId, onReply, onEdit, onDele
   // Toggle a reaction kind. Optimistic: flip locally first, reconcile from
   // the server response. Self-reactions are allowed (Slack/Discord/GitHub
   // model — let authors react to their own posts).
+  //
+  // Rapid double-click safety: a per-toggle token guards rollback paths so a
+  // slow earlier-failed call can't undo an already-applied later call. The
+  // server is the single source of truth; only the *latest* response wins.
   const handleReact = async (kind) => {
-    const had = myReactions.has(kind);
-    const nextMine = new Set(myReactions);
+    const token = ++reactionRequestRef.current;
+    const prevMine = myReactions;
+    const prevCounts = reactionCounts;
+    const had = prevMine.has(kind);
+    const nextMine = new Set(prevMine);
     if (had) nextMine.delete(kind); else nextMine.add(kind);
     setMyReactions(nextMine);
     setReactionCounts(prev => {
@@ -77,6 +90,7 @@ export default function ReplyCard({ reply, discussionId, onReply, onEdit, onDele
 
     try {
       const res = await toggleReaction(apiFetch, discussionId, reply._id, kind);
+      if (token !== reactionRequestRef.current) return; // a newer toggle owns state
       if (res.ok) {
         const data = await res.json();
         // Reconcile authoritative counts; mirror the optimistic mine flip
@@ -84,13 +98,13 @@ export default function ReplyCard({ reply, discussionId, onReply, onEdit, onDele
         // the requester and we already know).
         setReactionCounts(data.reactions || {});
       } else {
-        // Roll back optimistic update
-        setMyReactions(myReactions);
-        setReactionCounts(reactionCounts);
+        setMyReactions(prevMine);
+        setReactionCounts(prevCounts);
       }
     } catch {
-      setMyReactions(myReactions);
-      setReactionCounts(reactionCounts);
+      if (token !== reactionRequestRef.current) return;
+      setMyReactions(prevMine);
+      setReactionCounts(prevCounts);
     }
   };
 
@@ -124,7 +138,7 @@ export default function ReplyCard({ reply, discussionId, onReply, onEdit, onDele
             <span className="reply-card__author-name">{authorName}</span>
           </Link>
           <span className="reply-card__time">{timeAgo(reply.createdAt)}</span>
-          <span className="reply-card__deleted-badge">Removed</span>
+          <span className="reply-card__deleted-badge">{t('discussions.removed')}</span>
         </div>
 
         <div className="reply-card__body reply-card__body--deleted">
@@ -140,7 +154,7 @@ export default function ReplyCard({ reply, discussionId, onReply, onEdit, onDele
         {isMod && (
           <div className="reply-card__footer">
             <button className="reply-card__action-btn" onClick={handleViewOriginal} disabled={loadingOriginal}>
-              {loadingOriginal ? 'Loading...' : (showOriginal ? 'Hide Original' : 'View Original')}
+              {loadingOriginal ? t('common.loading') : (showOriginal ? t('discussions.hideOriginal') : t('discussions.viewOriginal'))}
             </button>
           </div>
         )}
@@ -164,12 +178,12 @@ export default function ReplyCard({ reply, discussionId, onReply, onEdit, onDele
             <span className="reply-card__author-name">{authorName}</span>
           </Link>
         )}
-        {!authorDeleted && author.roles?.includes('moderator') && <span className="badge badge--mod">Mod</span>}
-        {!authorDeleted && author.roles?.includes('admin') && <span className="badge badge--admin">Admin</span>}
+        {!authorDeleted && author.roles?.includes('moderator') && <span className="badge badge--mod">{t('discussions.mod')}</span>}
+        {!authorDeleted && author.roles?.includes('admin') && <span className="badge badge--admin">{t('discussions.admin')}</span>}
         {!authorDeleted && <CellarCredBadge tier={author.contribution?.tier} specialty={author.contribution?.specialty} />}
         <span className="reply-card__time">{timeAgo(reply.createdAt)}</span>
         {reply.updatedAt !== reply.createdAt && (
-          <span className="reply-card__edited">(edited)</span>
+          <span className="reply-card__edited">{t('discussions.editedSuffix')}</span>
         )}
       </div>
 
@@ -209,37 +223,43 @@ export default function ReplyCard({ reply, discussionId, onReply, onEdit, onDele
 
         {onReply && (
           <button className="reply-card__action-btn" onClick={() => onReply(reply)}>
-            Reply
+            {t('discussions.replyShort')}
           </button>
         )}
 
         {isOwn && onEdit && (
           <button className="reply-card__action-btn" onClick={() => onEdit(reply)}>
-            Edit
+            {t('common.edit')}
           </button>
         )}
 
         {(isOwn || isMod) && onDelete && (
           <button className="reply-card__action-btn reply-card__action-btn--danger" onClick={() => onDelete(reply)}>
-            Delete
+            {t('common.delete')}
           </button>
         )}
 
         {/* Self-reactions are allowed; reporting yourself is not. */}
         {!isOwn && onReport && (
           <button className="reply-card__action-btn" onClick={() => onReport(reply)}>
-            Report
+            {t('discussions.report')}
           </button>
         )}
 
         {isMod && !isOwn && !authorIsMod && (
           <div className="reply-card__ban-wrapper">
             <button className="reply-card__action-btn reply-card__action-btn--danger" onClick={() => setShowBanMenu(!showBanMenu)}>
-              Ban
+              {t('discussions.ban')}
             </button>
             {showBanMenu && (
               <div className="reply-card__ban-menu">
-                {[['10m', '10 minutes'], ['1h', '1 hour'], ['1d', '1 day'], ['1w', '1 week'], ['permanent', 'permanently']].map(([val, label]) => (
+                {[
+                  ['10m', t('discussions.banDuration.10m')],
+                  ['1h', t('discussions.banDuration.1h')],
+                  ['1d', t('discussions.banDuration.1d')],
+                  ['1w', t('discussions.banDuration.1w')],
+                  ['permanent', t('discussions.banDuration.permanent')]
+                ].map(([val, label]) => (
                   <button key={val} className="reply-card__ban-option" onClick={() => setConfirmBan({ duration: val, label })}>{label}</button>
                 ))}
               </div>
@@ -250,9 +270,9 @@ export default function ReplyCard({ reply, discussionId, onReply, onEdit, onDele
 
       {confirmBan && (
         <ConfirmModal
-          title="Ban User"
-          message={`Ban ${authorName} from discussions for ${confirmBan.label}?`}
-          confirmLabel="Ban"
+          title={t('discussions.banUserTitle')}
+          message={t('discussions.confirmBan', { name: authorName, duration: confirmBan.label })}
+          confirmLabel={t('discussions.ban')}
           confirmClass="btn btn-warning btn-small"
           onConfirm={() => handleBan(confirmBan.duration, confirmBan.label)}
           onCancel={() => setConfirmBan(null)}

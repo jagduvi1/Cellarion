@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import CategoryBadge from './CategoryBadge';
 import CellarCredBadge from './CellarCredBadge';
 import { extractForumPlainText } from '../utils/sanitizeForumRender';
-import { isDeletedUser } from '../utils/deletedUser';
+import { isDeletedUser, authorDisplayName } from '../utils/deletedUser';
 import timeAgo from '../utils/timeAgo';
 import './DiscussionCard.css';
 
@@ -15,9 +15,7 @@ export default function DiscussionCard({ discussion }) {
   const { t } = useTranslation();
   const author = discussion.author || {};
   const authorIsDeleted = isDeletedUser(author);
-  const authorName = authorIsDeleted
-    ? t('common.deletedUser')
-    : (author.displayName || author.username || 'Unknown');
+  const authorName = authorDisplayName(author, t, t('common.unknown'));
 
   const bodyPlain = extractForumPlainText(discussion.body);
   const preview = bodyPlain.length > 140 ? bodyPlain.slice(0, 140) + '…' : bodyPlain;
@@ -27,9 +25,7 @@ export default function DiscussionCard({ discussion }) {
   const lastReply = discussion.lastReply;
   const lastPoster = lastReply?.author || author;
   const lastPosterIsDeleted = isDeletedUser(lastPoster);
-  const lastPosterName = lastPosterIsDeleted
-    ? t('common.deletedUser')
-    : (lastPoster?.displayName || lastPoster?.username || 'Unknown');
+  const lastPosterName = authorDisplayName(lastPoster, t, t('common.unknown'));
   const lastPosterInitial = lastPosterIsDeleted ? '?' : lastPosterName.charAt(0).toUpperCase();
   const lastPosterIsOP = !lastReply;
 
@@ -76,8 +72,8 @@ export default function DiscussionCard({ discussion }) {
                 {authorName}
               </Link>
             )}
-            {!authorIsDeleted && author.roles?.includes('moderator') && <span className="badge badge--mod">Mod</span>}
-            {!authorIsDeleted && author.roles?.includes('admin') && <span className="badge badge--admin">Admin</span>}
+            {!authorIsDeleted && author.roles?.includes('moderator') && <span className="badge badge--mod">{t('discussions.mod')}</span>}
+            {!authorIsDeleted && author.roles?.includes('admin') && <span className="badge badge--admin">{t('discussions.admin')}</span>}
             {!authorIsDeleted && <CellarCredBadge tier={author.contribution?.tier} specialty={author.contribution?.specialty} />}
           </span>
         </div>

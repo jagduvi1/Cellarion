@@ -1362,7 +1362,23 @@
     "createAccount": "Create account",
     "signInToJoin": "Sign in to join the conversation — read freely, write with a Cellarion account.",
     "signInToReply": "Sign in to reply to this discussion.",
-    "signInToStart": "Sign in to start a discussion."
+    "signInToStart": "Sign in to start a discussion.",
+    "removed": "Removed",
+    "viewOriginal": "View Original",
+    "hideOriginal": "Hide Original",
+    "editedSuffix": "(edited)",
+    "quoteAttribution": "{{name}} wrote:",
+    "anonymous": "Anonymous",
+    "ban": "Ban",
+    "banUserTitle": "Ban User",
+    "confirmBan": "Ban {{name}} from discussions for {{duration}}?",
+    "banDuration": {
+      "10m": "10 minutes",
+      "1h": "1 hour",
+      "1d": "1 day",
+      "1w": "1 week",
+      "permanent": "permanently"
+    }
   },
   "wineDiscussions": {
     "title": "Discussions about this wine",

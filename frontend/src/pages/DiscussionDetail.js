@@ -21,7 +21,7 @@ import WatchThreadButton from '../components/WatchThreadButton';
 import ParticipantStack from '../components/ParticipantStack';
 import JumpToReplyButton from '../components/JumpToReplyButton';
 import { sanitizeForumRender, extractForumPlainText } from '../utils/sanitizeForumRender';
-import { isDeletedUser } from '../utils/deletedUser';
+import { isDeletedUser, authorDisplayName } from '../utils/deletedUser';
 import timeAgo from '../utils/timeAgo';
 import './DiscussionDetail.css';
 
@@ -278,9 +278,7 @@ function DiscussionDetail() {
 
   const author = discussion.author || {};
   const authorDeleted = isDeletedUser(author);
-  const authorName = authorDeleted
-    ? t('common.deletedUser')
-    : (author.displayName || author.username || 'Unknown');
+  const authorName = authorDisplayName(author, t, t('common.unknown'));
 
   const slugOrId = discussion.slug || discussion._id;
   const canonicalPath = `/community/discussions/${slugOrId}`;
@@ -411,7 +409,7 @@ function DiscussionDetail() {
               reply={reply}
               discussionId={id}
               onReply={!user || discussion.isLocked ? null : (r) => {
-                const authorName = r.author?.displayName || r.author?.username || 'Unknown';
+                const authorName = authorDisplayName(r.author, t, t('common.unknown'));
                 // r.body is HTML — strip to plain text for the quote preview.
                 // The backend independently rebuilds the persisted snapshot
                 // from the server-side body, so this is preview-only.
