@@ -4,8 +4,8 @@ import { Helmet } from 'react-helmet-async';
 // per session and Umami's built-in History API listener handles SPA route changes.
 //
 // Configured via build-time env vars:
-//   REACT_APP_UMAMI_URL          e.g. https://analytics.cellarion.app
-//   REACT_APP_UMAMI_WEBSITE_ID   uuid from the Umami dashboard
+//   VITE_UMAMI_URL          e.g. https://analytics.cellarion.app
+//   VITE_UMAMI_WEBSITE_ID   uuid from the Umami dashboard
 //
 // If either is missing the script isn't injected — analytics is fully opt-in.
 //
@@ -28,8 +28,8 @@ const EXCLUDED_PREFIXES = [
 ];
 
 export default function Analytics() {
-  const url = process.env.REACT_APP_UMAMI_URL;
-  const websiteId = process.env.REACT_APP_UMAMI_WEBSITE_ID;
+  const url = import.meta.env.VITE_UMAMI_URL;
+  const websiteId = import.meta.env.VITE_UMAMI_WEBSITE_ID;
 
   if (!url || !websiteId) return null;
 
@@ -37,7 +37,7 @@ export default function Analytics() {
   // the current page domain. This ensures the tracker only fires when the site
   // is running on the same root domain as the analytics instance.
   //
-  // Example: REACT_APP_UMAMI_URL = "https://analytics.cellarion.app"
+  // Example: VITE_UMAMI_URL = "https://analytics.cellarion.app"
   //   → baseDomain = "cellarion.app"
   //   → only fires when window.location.hostname ends with "cellarion.app"
   //   → self-hosters on "their-domain.com" are excluded automatically

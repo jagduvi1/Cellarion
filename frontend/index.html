@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <link rel="icon" href="%PUBLIC_URL%/favicon.ico" />
+    <link rel="icon" href="/favicon.ico" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#FAF8F6" media="(prefers-color-scheme: light)" />
     <meta name="theme-color" content="#121212" media="(prefers-color-scheme: dark)" />
@@ -10,8 +10,8 @@
     <meta name="keywords" content="wine cellar management, wine tracking, bottle tracker, wine collection, open source wine app, self-hosted wine cellar, drink window, wine rack" />
 
     <!-- Preload LCP logo (WebP with PNG fallback) so browser discovers it before React renders -->
-    <link rel="preload" as="image" href="%PUBLIC_URL%/cellarion-logo-light.webp" type="image/webp" media="(prefers-color-scheme: light)" fetchpriority="high" />
-    <link rel="preload" as="image" href="%PUBLIC_URL%/cellarion-logo-dark.webp"  type="image/webp" media="(prefers-color-scheme: dark)"  fetchpriority="high" />
+    <link rel="preload" as="image" href="/cellarion-logo-light.webp" type="image/webp" media="(prefers-color-scheme: light)" fetchpriority="high" />
+    <link rel="preload" as="image" href="/cellarion-logo-dark.webp"  type="image/webp" media="(prefers-color-scheme: dark)"  fetchpriority="high" />
 
     <!-- Fonts: Playfair Display (headings) + Inter (body) -->
     <!-- preload downloads the CSS early; the stylesheet link is non-blocking because it hits cache immediately -->
@@ -24,12 +24,12 @@
     <meta property="og:type" content="website" />
     <meta property="og:title" content="Cellarion — Track & Manage Your Wine Collection" />
     <meta property="og:description" content="The open-source, self-hosted wine cellar manager. Track bottles, visualise racks, and get drink-window alerts." />
-    <meta property="og:image" content="%PUBLIC_URL%/cellarion-logo.jpg" />
+    <meta property="og:image" content="/cellarion-logo.jpg" />
     <meta property="og:url" content="https://cellarion.app" />
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="Cellarion — Track & Manage Your Wine Collection" />
     <meta name="twitter:description" content="The open-source, self-hosted wine cellar manager. Track bottles, visualise racks, and get drink-window alerts." />
-    <meta name="twitter:image" content="%PUBLIC_URL%/cellarion-logo.jpg" />
+    <meta name="twitter:image" content="/cellarion-logo.jpg" />
 
     <!--
       CSP additions for Umami analytics: script-src and connect-src include
@@ -51,8 +51,8 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="Cellarion" />
-    <link rel="apple-touch-icon" href="%PUBLIC_URL%/apple-touch-icon.png" />
-    <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/manifest.json" />
     <title>Cellarion — Track & Manage Your Wine Collection | Free Open-Source Wine Cellar App</title>
   </head>
   <body>
@@ -71,13 +71,14 @@
     <style>#preboot-logo{display:flex;padding:12px 16px}</style>
     <div id="preboot-logo" aria-hidden="true">
       <picture>
-        <source srcset="%PUBLIC_URL%/cellarion-logo-light.webp" type="image/webp" media="(prefers-color-scheme: light)" />
-        <source srcset="%PUBLIC_URL%/cellarion-logo-dark.webp"  type="image/webp" media="(prefers-color-scheme: dark)" />
-        <source srcset="%PUBLIC_URL%/cellarion-logo-light.png" media="(prefers-color-scheme: light)" />
-        <source srcset="%PUBLIC_URL%/cellarion-logo-dark.png"  media="(prefers-color-scheme: dark)" />
-        <img src="%PUBLIC_URL%/cellarion-logo-light.webp" alt="Cellarion" width="159" height="128" fetchpriority="high" style="height:64px;width:auto" />
+        <source srcset="/cellarion-logo-light.webp" type="image/webp" media="(prefers-color-scheme: light)" />
+        <source srcset="/cellarion-logo-dark.webp"  type="image/webp" media="(prefers-color-scheme: dark)" />
+        <source srcset="/cellarion-logo-light.png" media="(prefers-color-scheme: light)" />
+        <source srcset="/cellarion-logo-dark.png"  media="(prefers-color-scheme: dark)" />
+        <img src="/cellarion-logo-light.webp" alt="Cellarion" width="159" height="128" fetchpriority="high" style="height:64px;width:auto" />
       </picture>
     </div>
     <div id="root"></div>
+    <script type="module" src="/src/index.js"></script>
   </body>
 </html>

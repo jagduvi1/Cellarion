@@ -27,7 +27,7 @@ Thumbs.db
 
 # Build outputs
 backend/dist/
-frontend/build/
+frontend/dist/
 
 # Misc
 .cache/

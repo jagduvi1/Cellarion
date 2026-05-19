@@ -18,7 +18,7 @@ describe('Modal', () => {
   });
 
   test('calls onClose when overlay is clicked', () => {
-    const onClose = jest.fn();
+    const onClose = vi.fn();
     const { container } = render(<Modal onClose={onClose}>body</Modal>);
     const overlay = container.firstChild;
     fireEvent.click(overlay);
@@ -26,7 +26,7 @@ describe('Modal', () => {
   });
 
   test('does not call onClose when modal box is clicked', () => {
-    const onClose = jest.fn();
+    const onClose = vi.fn();
     render(<Modal onClose={onClose}>body</Modal>);
     fireEvent.click(screen.getByText('body'));
     expect(onClose).not.toHaveBeenCalled();
