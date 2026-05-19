@@ -71,8 +71,12 @@ router.get('/', optionalAuth, async (req, res) => {
     const query = (q || '').toString().trim();
 
     const filter = {};
+    // $eq forces literal-value comparison even though `category` is already
+    // gated by an allowlist (CATEGORIES.includes). CodeQL doesn't recognise
+    // Array.includes() as a taint cleanser, so the `$eq` keeps the
+    // `js/sql-injection` rule satisfied without changing behaviour.
     if (category && CATEGORIES.includes(category)) {
-      filter.category = category;
+      filter.category = { $eq: category };
     }
 
     // Meilisearch path: fuzzy match on title/body/authorName/wineName,
