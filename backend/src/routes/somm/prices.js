@@ -222,13 +222,24 @@ router.post('/', requireSommOrAdmin, async (req, res) => {
     if (price === undefined || price === null || price === '') {
       return res.status(400).json({ error: 'price is required' });
     }
+    // Coerce + validate user-controlled values before they reach Mongo queries.
+    // Without this an attacker could pass an object like { $ne: null } as the
+    // vintage and turn an exact-match into a broad query.
+    if (!mongoose.isValidObjectId(wineDefinition)) {
+      return res.status(400).json({ error: 'Invalid wineDefinition ID' });
+    }
+    if (typeof vintage !== 'string') {
+      return res.status(400).json({ error: 'vintage must be a string' });
+    }
+    const wineDefId = String(wineDefinition);
+    const safeVintage = vintage.trim();
     const priceNum = parseFloat(price);
     if (isNaN(priceNum) || priceNum < 0) {
       return res.status(400).json({ error: 'price must be a non-negative number' });
     }
 
     // Verify the wine exists
-    const wineExists = await WineDefinition.exists({ _id: wineDefinition });
+    const wineExists = await WineDefinition.exists({ _id: wineDefId });
     if (!wineExists) {
       return res.status(404).json({ error: 'Wine definition not found' });
     }
@@ -238,8 +249,8 @@ router.post('/', requireSommOrAdmin, async (req, res) => {
     await getOrCreateDailySnapshot();
 
     const entry = new WineVintagePrice({
-      wineDefinition,
-      vintage,
+      wineDefinition: wineDefId,
+      vintage: safeVintage,
       price: priceNum,
       currency: currency || 'USD',
       source: source ? source.trim() : undefined,
@@ -252,7 +263,7 @@ router.post('/', requireSommOrAdmin, async (req, res) => {
 
     // Notify everyone who requested tracking for this pair (best-effort,
     // never block the response on it).
-    PriceTrackingRequest.findOne({ wineDefinition, vintage })
+    PriceTrackingRequest.findOne({ wineDefinition: wineDefId, vintage: safeVintage })
       .populate('wineDefinition', 'name producer')
       .then(request => {
         if (!request || !request.requesters.length) return;
@@ -260,7 +271,7 @@ router.post('/', requireSommOrAdmin, async (req, res) => {
           ? [request.wineDefinition.producer, request.wineDefinition.name].filter(Boolean).join(' — ')
           : 'wine';
         const title = 'Market price updated';
-        const body = `A sommelier just added a market price for ${wineLabel} ${vintage}: ${entry.currency} ${entry.price}.`;
+        const body = `A sommelier just added a market price for ${wineLabel} ${safeVintage}: ${entry.currency} ${entry.price}.`;
         for (const r of request.requesters) {
           createNotification(r.user, 'price_tracked', title, body, '/somm/prices');
         }
