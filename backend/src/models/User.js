@@ -239,6 +239,43 @@ const userSchema = new mongoose.Schema({
 userSchema.index({ emailVerificationTokenHash: 1 }, { sparse: true });
 userSchema.index({ passwordResetTokenHash: 1 }, { sparse: true });
 
+// Heal legacy notification-pref shapes before save. Old docs stored
+// `drinkWindow: false` (single boolean); the current schema expects
+// `{ enabled, email, push }`. Without this, Mongoose generates dotted $set
+// sub-paths and MongoDB throws "Cannot create field 'email' in element
+// {drinkWindow: false}". See issue #390.
+//
+// Mutates `notif` in place. Returns the list of top-level keys that were
+// rewritten so the caller can markModified() each parent path — this forces
+// Mongoose to write a whole-object replacement instead of dotted sub-paths.
+function normalizeLegacyNotifications(notif) {
+  if (!notif) return [];
+  const changed = [];
+  if (typeof notif.drinkWindow === 'boolean') {
+    notif.drinkWindow = { enabled: notif.drinkWindow, email: false, push: false };
+    changed.push('drinkWindow');
+  }
+  for (const key of ['communityReply', 'communityMention', 'communityFollow']) {
+    if (typeof notif[key] === 'boolean') {
+      const truthy = notif[key];
+      notif[key] = key === 'communityFollow'
+        ? { push: truthy }
+        : { email: false, push: truthy };
+      changed.push(key);
+    }
+  }
+  return changed;
+}
+
+userSchema.pre('save', function(next) {
+  const notif = this.preferences && this.preferences.notifications;
+  const changed = normalizeLegacyNotifications(notif);
+  for (const key of changed) {
+    this.markModified('preferences.notifications.' + key);
+  }
+  next();
+});
+
 // Hash password before saving
 userSchema.pre('save', async function(next) {
   // Only hash if password is modified or new
@@ -326,3 +363,4 @@ userSchema.methods.toJSON = function() {
 };
 
 module.exports = mongoose.model('User', userSchema);
+module.exports.normalizeLegacyNotifications = normalizeLegacyNotifications;
