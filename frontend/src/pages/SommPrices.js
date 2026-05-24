@@ -98,7 +98,7 @@ function PriceCard({ item, defaultCurrency, userCurrency, rates, onSaved }) {
     source:   '',
     sommNotes: ''
   });
-  const [skipping, setSkipping] = useState(false);
+  const [declining, setDeclining] = useState(false);
 
   const set = (field) => (e) => setForm(f => ({ ...f, [field]: e.target.value }));
 
@@ -171,30 +171,24 @@ function PriceCard({ item, defaultCurrency, userCurrency, rates, onSaved }) {
     }
   };
 
-  const handleSkip = async () => {
-    if (!window.confirm(t('somm.prices.skipConfirm'))) return;
-    setSkipping(true);
+  const handleDecline = async () => {
+    if (!window.confirm(t('somm.prices.declineConfirm', 'Decline this request? The user(s) who requested it will be notified.'))) return;
+    setDeclining(true);
     setErr(null);
     try {
-      const res = await apiFetch('/api/somm/prices/skip', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          wineDefinition: wine?._id,
-          vintage: item.vintage,
-          reason: form.sommNotes || undefined
-        })
+      const res = await apiFetch(`/api/somm/prices/requests/${item.requestId}`, {
+        method: 'DELETE'
       });
       if (res.ok) {
         onSaved(wine?._id, item.vintage);
       } else {
         const data = await res.json();
-        setErr(data.error || 'Failed to skip');
+        setErr(data.error || 'Failed to decline');
       }
     } catch {
       setErr('Network error');
     } finally {
-      setSkipping(false);
+      setDeclining(false);
     }
   };
 
@@ -225,9 +219,19 @@ function PriceCard({ item, defaultCurrency, userCurrency, rates, onSaved }) {
           {item.bottleCount > 1 && (
             <span className="sp-bottle-count">{t('somm.prices.bottle', { count: item.bottleCount })}</span>
           )}
+          {item.requesterCount > 0 && (
+            <span className="sp-requester-count" title={item.firstRequester?.username ? `First requested by ${item.firstRequester.username}` : null}>
+              {t('somm.prices.requesterCount', '{{count}} requester(s)', { count: item.requesterCount })}
+            </span>
+          )}
           <span className="somm-chevron">{expanded ? '▲' : '▼'}</span>
         </div>
       </div>
+      {expanded && item.firstRequester?.note && (
+        <div className="sp-requester-note">
+          <strong>{t('somm.prices.requesterNoteLabel', 'Requester note')}:</strong> {item.firstRequester.note}
+        </div>
+      )}
 
       {/* ── Inline form ── */}
       {expanded && (
@@ -324,11 +328,11 @@ function PriceCard({ item, defaultCurrency, userCurrency, rates, onSaved }) {
             <button
               type="button"
               className="btn btn-secondary sp-skip-btn"
-              onClick={handleSkip}
-              disabled={skipping}
-              title={t('somm.prices.skipTitle')}
+              onClick={handleDecline}
+              disabled={declining}
+              title={t('somm.prices.declineTitle', 'Decline this tracking request — the requester(s) will be notified.')}
             >
-              {skipping ? t('somm.prices.skipping') : t('somm.prices.skipTracking')}
+              {declining ? t('somm.prices.declining', 'Declining…') : t('somm.prices.declineRequest', 'Decline request')}
             </button>
           </div>
         </form>

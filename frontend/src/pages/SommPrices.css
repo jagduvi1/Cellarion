@@ -24,7 +24,8 @@
   font-weight: 400;
 }
 
-.sp-bottle-count {
+.sp-bottle-count,
+.sp-requester-count {
   font-size: 0.75rem;
   color: var(--color-text-muted);
   background: rgba(154, 148, 132, 0.1);
@@ -32,6 +33,21 @@
   border-radius: var(--radius-sm);
   padding: 0.15rem 0.5rem;
   white-space: nowrap;
+}
+
+.sp-requester-count {
+  background: rgba(var(--color-primary-rgb, 154 30 45), 0.10);
+  border-color: rgba(var(--color-primary-rgb, 154 30 45), 0.25);
+}
+
+.sp-requester-note {
+  margin: 0.5rem 0.9rem;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.85rem;
+  color: var(--color-text);
+  background: var(--color-surface-raised);
+  border-left: 3px solid var(--color-primary, #9a1e2d);
+  border-radius: var(--radius-sm);
 }
 
 /* ── Previous price block ── */

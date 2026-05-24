@@ -924,8 +924,28 @@
       "skipTracking": "Inte värd att följa",
       "skipping": "Hoppar över…",
       "skipConfirm": "Markera detta vin som inte värt att följa för prisutveckling? Det tas permanent bort från kön.",
-      "skipTitle": "Ta bort från priskön — detta vin behöver ingen prisbevakning"
+      "skipTitle": "Ta bort från priskön — detta vin behöver ingen prisbevakning",
+      "declineRequest": "Avslå förfrågan",
+      "declining": "Avslår…",
+      "declineConfirm": "Avslå denna förfrågan? Användaren/användarna som begärde den meddelas.",
+      "declineTitle": "Avslå denna prisbevakningsförfrågan — användaren/användarna meddelas.",
+      "requesterCount_one": "{{count}} användare har begärt",
+      "requesterCount_other": "{{count}} användare har begärt",
+      "requesterNoteLabel": "Förfrågans kommentar"
     }
+  },
+
+  "priceTracking": {
+    "statusRequested": "Marknadsprisbevakning begärd",
+    "statusHistoryOnly": "Prisbevakning är inte längre aktiv",
+    "statusNotRequested": "Bevaka marknadspris för detta vin",
+    "hintRequested": "En sommelier kommer att undersöka och lägga till ett pris. Du meddelas när det är satt.",
+    "hintGuidance": "Bara värt att begära för flaskor med riktigt andrahandsvärde — Bordeaux Premier Cru, Burgundy Grand Cru, lagringsvärda samlarviner. Vardagsviner har sällan tillförlitlig marknadsdata.",
+    "requesterCount_one": "{{count}} annan användare har också begärt detta",
+    "requesterCount_other": "{{count}} andra användare har också begärt detta",
+    "request": "Begär bevakning",
+    "cancel": "Avbryt förfrågan",
+    "saving": "Sparar…"
   },
 
   "statistics": {

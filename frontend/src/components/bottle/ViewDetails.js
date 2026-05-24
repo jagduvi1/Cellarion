@@ -10,6 +10,7 @@ import RatingDisplay from '../RatingDisplay';
 import ContributePrompt from './ContributePrompt';
 import MaturityPhaseTable from './MaturityPhaseTable';
 import PriceHistoryTimeline from './PriceHistoryTimeline';
+import PriceTrackingToggle from './PriceTrackingToggle';
 
 function ViewDetails({ bottle, rackInfo, cellarId, vintageProfile, priceHistory, rates, userCurrency, canEdit, hasImage, onEdit, onSuggestGrapes, onRemove, onReportWine }) {
   const { t } = useTranslation();
@@ -187,6 +188,11 @@ function ViewDetails({ bottle, rackInfo, cellarId, vintageProfile, priceHistory,
               {t('bottleDetail.reportPrice')}
             </button>
           )}
+          <PriceTrackingToggle
+            bottleId={bottle._id}
+            vintage={bottle.vintage}
+            hasHistory={!!(priceHistory && priceHistory.length > 0)}
+          />
         </div>
       )}
 
