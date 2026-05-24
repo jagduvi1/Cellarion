@@ -2,139 +2,118 @@ const express = require('express');
 const mongoose = require('mongoose');
 const { requireAuth, requireSommOrAdmin } = require('../../middleware/auth');
 const WineVintagePrice = require('../../models/WineVintagePrice');
-const PriceTrackingSkip = require('../../models/PriceTrackingSkip');
+const PriceTrackingRequest = require('../../models/PriceTrackingRequest');
 const Bottle = require('../../models/Bottle');
 const WineDefinition = require('../../models/WineDefinition');
 const { getOrCreateDailySnapshot, getSnapshotsForDates } = require('../../utils/exchangeRates');
+const { createNotification } = require('../../services/notifications');
 
 const { suggestPrice } = require('../../services/labelScan');
-
-const User = require('../../models/User');
 
 const router = express.Router();
 
 router.use(requireAuth);
 
-const STALE_MS = 90 * 24 * 60 * 60 * 1000; // 3 months in milliseconds
+const STALE_MS = 90 * 24 * 60 * 60 * 1000; // 3 months
 
 /**
  * GET /api/somm/prices/queue
- * Returns wine+vintage pairs that have no price history, or whose most recent
- * price snapshot is older than 3 months. Somm/admin only.
+ * Returns user-requested wine+vintage pairs awaiting sommelier curation.
+ * Sorted by most-requested first, then oldest request. Somm/admin only.
+ *
+ * Each item carries: the wine, requester count, first requester username/note,
+ * latest price snapshot (if any, for staleness UI), and active-bottle count.
  */
 router.get('/queue', requireSommOrAdmin, async (req, res) => {
   try {
-    const staleThreshold = new Date(Date.now() - STALE_MS);
+    // Step 1: load every active tracking request, newest-requester populated
+    const requests = await PriceTrackingRequest.find({})
+      .populate({ path: 'wineDefinition', populate: [
+        { path: 'country', select: 'name' },
+        { path: 'region',  select: 'name' }
+      ]})
+      .populate('requesters.user', 'username')
+      .lean();
 
-    // Exclude bottles owned by the super admin (bulk imports / test data)
-    const superAdminEmail = (process.env.SUPER_ADMIN_EMAIL || '').toLowerCase().trim();
-    let excludeUserId = null;
-    if (superAdminEmail) {
-      const sa = await User.findOne({ email: superAdminEmail }).select('_id').lean();
-      if (sa) excludeUserId = sa._id;
-    }
+    if (requests.length === 0) return res.json({ queue: [] });
 
-    const bottleMatch = {
-      status: 'active',
-      wineDefinition: { $ne: null },
-      vintage: { $nin: ['NV', '', null] }
-    };
-    if (excludeUserId) bottleMatch.user = { $ne: excludeUserId };
+    // Drop any requests whose wine was deleted out from under them.
+    const validRequests = requests.filter(r => r.wineDefinition);
+    if (validRequests.length === 0) return res.json({ queue: [] });
 
-    // Step 1: unique (wineDefinition, vintage) pairs with at least one active bottle
-    const rawPairs = await Bottle.aggregate([
-      { $match: bottleMatch },
-      {
-        $group: {
-          _id: { wineDefinition: '$wineDefinition', vintage: '$vintage' },
-          bottleCount: { $sum: 1 }
-        }
-      }
-    ]);
-
-    if (rawPairs.length === 0) return res.json({ queue: [] });
-
-    // Step 1b: exclude wine+vintage pairs that have been skipped
-    const skips = await PriceTrackingSkip.find({}, 'wineDefinition vintage').lean();
-    const skipSet = new Set(skips.map(s => `${s.wineDefinition}:${s.vintage}`));
-    const activePairs = rawPairs.filter(p => !skipSet.has(`${p._id.wineDefinition}:${p._id.vintage}`));
-
-    if (activePairs.length === 0) return res.json({ queue: [] });
-
-    // Step 2: find the latest price snapshot for each pair in one aggregation
+    // Step 2: latest price snapshot per pair (for staleness display)
     const latestPrices = await WineVintagePrice.aggregate([
-      {
-        $group: {
+      { $group: {
           _id: { wineDefinition: '$wineDefinition', vintage: '$vintage' },
           latestSetAt:    { $last: '$setAt' },
           latestPrice:    { $last: '$price' },
           latestCurrency: { $last: '$currency' },
           latestSource:   { $last: '$source' }
-        }
-      }
+      }}
     ]);
+    const priceMap = new Map(latestPrices.map(lp => [
+      `${lp._id.wineDefinition}:${lp._id.vintage}`, lp
+    ]));
 
-    // Build lookup map
-    const priceMap = new Map();
-    for (const lp of latestPrices) {
-      const key = `${lp._id.wineDefinition}:${lp._id.vintage}`;
-      priceMap.set(key, lp);
-    }
+    // Step 3: bottle counts per pair (so somms see how many users are affected)
+    const bottleCounts = await Bottle.aggregate([
+      { $match: {
+          status: 'active',
+          wineDefinition: { $in: validRequests.map(r => r.wineDefinition._id) },
+          vintage: { $in: validRequests.map(r => r.vintage) }
+      }},
+      { $group: {
+          _id: { wineDefinition: '$wineDefinition', vintage: '$vintage' },
+          bottleCount: { $sum: 1 }
+      }}
+    ]);
+    const bottleCountMap = new Map(bottleCounts.map(b => [
+      `${b._id.wineDefinition}:${b._id.vintage}`, b.bottleCount
+    ]));
 
-    // Step 3: filter pairs that need attention
-    const needsUpdate = activePairs.filter(p => {
-      const key = `${p._id.wineDefinition}:${p._id.vintage}`;
-      const latest = priceMap.get(key);
+    // Filter to actionable items: no price history yet, OR latest price is stale (>3 months old).
+    const staleThreshold = new Date(Date.now() - STALE_MS);
+    const actionable = validRequests.filter(r => {
+      const latest = priceMap.get(`${r.wineDefinition._id}:${r.vintage}`);
       return !latest || latest.latestSetAt < staleThreshold;
     });
+    if (actionable.length === 0) return res.json({ queue: [] });
 
-    if (needsUpdate.length === 0) return res.json({ queue: [] });
-
-    // Step 4: populate wine definitions for the filtered pairs
-    const wineIds = [...new Set(needsUpdate.map(p => p._id.wineDefinition.toString()))];
-    const wines = await WineDefinition.find({ _id: { $in: wineIds } })
-      .populate('country', 'name')
-      .populate('region', 'name')
-      .lean();
-    const wineMap = new Map(wines.map(w => [w._id.toString(), w]));
-
-    const queue = needsUpdate.map(p => {
-      const key = `${p._id.wineDefinition}:${p._id.vintage}`;
+    const queue = actionable.map(r => {
+      const key = `${r.wineDefinition._id}:${r.vintage}`;
       const latest = priceMap.get(key);
+      const firstReq = r.requesters[0];
       return {
-        wineDefinition: wineMap.get(p._id.wineDefinition.toString()) || null,
-        vintage:       p._id.vintage,
-        bottleCount:   p.bottleCount,
-        latestPrice:   latest
+        requestId:      r._id,
+        wineDefinition: r.wineDefinition,
+        vintage:        r.vintage,
+        bottleCount:    bottleCountMap.get(key) || 0,
+        requesterCount: r.requesters.length,
+        firstRequestedAt: r.firstRequestedAt,
+        firstRequester:  firstReq ? { username: firstReq.user?.username, note: firstReq.note } : null,
+        latestPrice: latest
           ? { price: latest.latestPrice, currency: latest.latestCurrency, setAt: latest.latestSetAt, source: latest.latestSource }
           : null
       };
     });
 
-    // Sort: no history first, then by oldest update
+    // Sort: most requesters first, then oldest first-request
     queue.sort((a, b) => {
-      if (!a.latestPrice && !b.latestPrice) return 0;
-      if (!a.latestPrice) return -1;
-      if (!b.latestPrice) return 1;
-      return new Date(a.latestPrice.setAt) - new Date(b.latestPrice.setAt);
+      if (b.requesterCount !== a.requesterCount) return b.requesterCount - a.requesterCount;
+      return new Date(a.firstRequestedAt) - new Date(b.firstRequestedAt);
     });
 
-    // Step 5: batch-fetch rate snapshots for all latestPrice dates and attach them.
-    // This keeps conversion time-anchored without storing rates on every price document.
+    // Step 4: attach exchange-rate snapshots for time-anchored display
     const queueDates = [...new Set(
-      queue
-        .filter(item => item.latestPrice?.setAt)
-        .map(item => new Date(item.latestPrice.setAt).toISOString().slice(0, 10))
+      queue.filter(item => item.latestPrice?.setAt)
+           .map(item => new Date(item.latestPrice.setAt).toISOString().slice(0, 10))
     )];
     const snapshotMap = await getSnapshotsForDates(queueDates);
 
     const enrichedQueue = queue.map(item => {
       if (!item.latestPrice?.setAt) return item;
       const date = new Date(item.latestPrice.setAt).toISOString().slice(0, 10);
-      return {
-        ...item,
-        latestPrice: { ...item.latestPrice, exchangeRates: snapshotMap.get(date) || null }
-      };
+      return { ...item, latestPrice: { ...item.latestPrice, exchangeRates: snapshotMap.get(date) || null } };
     });
 
     res.json({ queue: enrichedQueue });
@@ -243,13 +222,24 @@ router.post('/', requireSommOrAdmin, async (req, res) => {
     if (price === undefined || price === null || price === '') {
       return res.status(400).json({ error: 'price is required' });
     }
+    // Coerce + validate user-controlled values before they reach Mongo queries.
+    // Without this an attacker could pass an object like { $ne: null } as the
+    // vintage and turn an exact-match into a broad query.
+    if (!mongoose.isValidObjectId(wineDefinition)) {
+      return res.status(400).json({ error: 'Invalid wineDefinition ID' });
+    }
+    if (typeof vintage !== 'string') {
+      return res.status(400).json({ error: 'vintage must be a string' });
+    }
+    const wineDefId = String(wineDefinition);
+    const safeVintage = vintage.trim();
     const priceNum = parseFloat(price);
     if (isNaN(priceNum) || priceNum < 0) {
       return res.status(400).json({ error: 'price must be a non-negative number' });
     }
 
     // Verify the wine exists
-    const wineExists = await WineDefinition.exists({ _id: wineDefinition });
+    const wineExists = await WineDefinition.exists({ _id: wineDefId });
     if (!wineExists) {
       return res.status(404).json({ error: 'Wine definition not found' });
     }
@@ -259,8 +249,8 @@ router.post('/', requireSommOrAdmin, async (req, res) => {
     await getOrCreateDailySnapshot();
 
     const entry = new WineVintagePrice({
-      wineDefinition,
-      vintage,
+      wineDefinition: wineDefId,
+      vintage: safeVintage,
       price: priceNum,
       currency: currency || 'USD',
       source: source ? source.trim() : undefined,
@@ -271,6 +261,23 @@ router.post('/', requireSommOrAdmin, async (req, res) => {
     await entry.save();
     await entry.populate('setBy', 'username');
 
+    // Notify everyone who requested tracking for this pair (best-effort,
+    // never block the response on it).
+    PriceTrackingRequest.findOne({ wineDefinition: wineDefId, vintage: safeVintage })
+      .populate('wineDefinition', 'name producer')
+      .then(request => {
+        if (!request || !request.requesters.length) return;
+        const wineLabel = request.wineDefinition
+          ? [request.wineDefinition.producer, request.wineDefinition.name].filter(Boolean).join(' — ')
+          : 'wine';
+        const title = 'Market price updated';
+        const body = `A sommelier just added a market price for ${wineLabel} ${safeVintage}: ${entry.currency} ${entry.price}.`;
+        for (const r of request.requesters) {
+          createNotification(r.user, 'price_tracked', title, body, '/somm/prices');
+        }
+      })
+      .catch(err => console.error('Notify price requesters failed:', err.message));
+
     res.status(201).json({ entry });
   } catch (error) {
     console.error('Add price entry error:', error);
@@ -279,56 +286,43 @@ router.post('/', requireSommOrAdmin, async (req, res) => {
 });
 
 /**
- * POST /api/somm/prices/skip
- * Mark a wine+vintage as not worth price tracking. Somm/admin only.
- * Body: { wineDefinition, vintage, reason }
+ * DELETE /api/somm/prices/requests/:requestId
+ * Decline a price tracking request. Removes the request entirely and notifies
+ * all requesters that their request was declined. Somm/admin only.
  */
-router.post('/skip', requireSommOrAdmin, async (req, res) => {
+router.delete('/requests/:requestId', requireSommOrAdmin, async (req, res) => {
   try {
-    const { wineDefinition, vintage, reason } = req.body;
-    if (!wineDefinition || !vintage) {
-      return res.status(400).json({ error: 'wineDefinition and vintage are required' });
+    const { requestId } = req.params;
+    if (!mongoose.isValidObjectId(requestId)) {
+      return res.status(400).json({ error: 'Invalid request ID' });
     }
-    if (!mongoose.Types.ObjectId.isValid(wineDefinition)) {
-      return res.status(400).json({ error: 'Invalid wineDefinition ID' });
+
+    const request = await PriceTrackingRequest.findById(requestId)
+      .populate('wineDefinition', 'name producer');
+    if (!request) {
+      return res.status(404).json({ error: 'Tracking request not found' });
     }
-    const safeVintage = String(vintage);
-    const safeReason = reason != null ? String(reason).slice(0, 500) : undefined;
 
-    const skip = await PriceTrackingSkip.findOneAndUpdate(
-      { wineDefinition, vintage: safeVintage },
-      { wineDefinition, vintage: safeVintage, reason: safeReason, skippedBy: req.user.id, skippedAt: new Date() },
-      { upsert: true, new: true }
-    );
+    const wineLabel = request.wineDefinition
+      ? [request.wineDefinition.producer, request.wineDefinition.name].filter(Boolean).join(' — ')
+      : 'this wine';
+    const title = 'Price tracking request declined';
+    const body = `Your request to track market price for ${wineLabel} ${request.vintage} was declined by a sommelier.`;
+    for (const r of request.requesters) {
+      createNotification(r.user, 'price_tracking_declined', title, body, null);
+    }
 
-    res.status(201).json({ skip });
+    await request.deleteOne();
+    res.json({ message: 'Tracking request declined' });
   } catch (error) {
-    console.error('Skip price tracking error:', error);
-    res.status(500).json({ error: 'Failed to skip price tracking' });
+    console.error('Decline tracking request error:', error);
+    res.status(500).json({ error: 'Failed to decline tracking request' });
   }
 });
 
-/**
- * DELETE /api/somm/prices/skip
- * Remove the skip flag for a wine+vintage, re-enabling price tracking. Somm/admin only.
- * Body: { wineDefinition, vintage }
- */
-router.delete('/skip', requireSommOrAdmin, async (req, res) => {
-  try {
-    const { wineDefinition, vintage } = req.body;
-    if (!wineDefinition || !vintage) {
-      return res.status(400).json({ error: 'wineDefinition and vintage are required' });
-    }
-    if (!mongoose.Types.ObjectId.isValid(wineDefinition)) {
-      return res.status(400).json({ error: 'Invalid wineDefinition ID' });
-    }
-
-    await PriceTrackingSkip.deleteOne({ wineDefinition, vintage: String(vintage) });
-    res.json({ message: 'Price tracking re-enabled' });
-  } catch (error) {
-    console.error('Unskip price tracking error:', error);
-    res.status(500).json({ error: 'Failed to re-enable price tracking' });
-  }
-});
+// NOTE: the old POST/DELETE /skip endpoints (used with PriceTrackingSkip) were
+// removed when the queue became opt-in. The replacement is
+// DELETE /api/somm/prices/requests/:id (above). PriceTrackingSkip docs are
+// no longer read by anything but the collection is left in place for audit.
 
 module.exports = router;

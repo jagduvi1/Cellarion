@@ -924,8 +924,28 @@
       "skipTracking": "Not worth tracking",
       "skipping": "Skipping…",
       "skipConfirm": "Mark this wine as not worth tracking for price evolution? It will be permanently removed from the queue.",
-      "skipTitle": "Remove from price queue — this wine doesn't need price tracking"
+      "skipTitle": "Remove from price queue — this wine doesn't need price tracking",
+      "declineRequest": "Decline request",
+      "declining": "Declining…",
+      "declineConfirm": "Decline this request? The user(s) who requested it will be notified.",
+      "declineTitle": "Decline this tracking request — the requester(s) will be notified.",
+      "requesterCount_one": "{{count}} requester",
+      "requesterCount_other": "{{count}} requesters",
+      "requesterNoteLabel": "Requester note"
     }
+  },
+
+  "priceTracking": {
+    "statusRequested": "Market price tracking requested",
+    "statusHistoryOnly": "Price tracking is no longer active",
+    "statusNotRequested": "Track market price for this wine",
+    "hintRequested": "A sommelier will research and add a price. You will be notified when it is set.",
+    "hintGuidance": "Only worth requesting for bottles with a real secondary-market value — Bordeaux Premier Cru, Burgundy Grand Cru, age-worthy collectibles. Everyday wines usually don't have reliable market data.",
+    "requesterCount_one": "{{count}} other user also requested this",
+    "requesterCount_other": "{{count}} other users also requested this",
+    "request": "Request tracking",
+    "cancel": "Cancel request",
+    "saving": "Saving…"
   },
 
   "statistics": {
