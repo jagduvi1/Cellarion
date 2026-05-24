@@ -194,14 +194,14 @@ export default function RackRenderer({
           {/* Slots */}
           {(() => {
             const bpc = layout.bottlesPerCell || 1;
+            const backR = layout.backRadius;
 
             if (bpc === 1) {
-              // Standard: one position per visual circle
-              return layout.slots.map(({ position, cx, cy }) => (
+              return layout.slots.map(({ position, cx, cy, isBack }) => (
                 <SlotCircle
                   key={position}
                   position={position}
-                  cx={cx} cy={cy} R={R}
+                  cx={cx} cy={cy} R={isBack && backR ? backR : R}
                   slot={slotMap[position]}
                   isActive={activePos === position}
                   isHighlight={highlightPos === position}
@@ -215,31 +215,35 @@ export default function RackRenderer({
             const cellMap = {};
             layout.slots.forEach(s => {
               const key = `${s.cx},${s.cy}`;
-              if (!cellMap[key]) cellMap[key] = { cx: s.cx, cy: s.cy, positions: [] };
+              if (!cellMap[key]) cellMap[key] = { cx: s.cx, cy: s.cy, isBack: !!s.isBack, positions: [] };
               cellMap[key].positions.push(s.position);
             });
 
             const subOffsets = getSubOffsets(bpc, R);
             const subR = getSubRadius(bpc, R);
+            const backSubOffsets = backR ? getSubOffsets(bpc, backR) : subOffsets;
+            const backSubR = backR ? getSubRadius(bpc, backR) : subR;
 
-            return Object.values(cellMap).map(cell =>
-              cell.positions.map((pos, idx) => {
-                const off = subOffsets[idx] || { dx: 0, dy: 0 };
+            return Object.values(cellMap).map(cell => {
+              const useOff = cell.isBack ? backSubOffsets : subOffsets;
+              const useR = cell.isBack ? backSubR : subR;
+              return cell.positions.map((pos, idx) => {
+                const off = useOff[idx] || { dx: 0, dy: 0 };
                 return (
                   <SlotCircle
                     key={pos}
                     position={pos}
                     cx={cell.cx + off.dx}
                     cy={cell.cy + off.dy}
-                    R={subR}
+                    R={useR}
                     slot={slotMap[pos]}
                     isActive={activePos === pos}
                     isHighlight={highlightPos === pos}
                     onSlotClick={onSlotClick}
                   />
                 );
-              })
-            );
+              });
+            });
           })()}
         </svg>
       </div>
@@ -290,15 +294,21 @@ function SlotCircle({ position, cx, cy, R, slot, isActive, isHighlight, onSlotCl
 function ShelfLines({ layout, rack, isModular }) {
   if (!layout.slots.length) return null;
 
-  // Group slots by approximate Y coordinate to find row boundaries
   const R = SLOT_RADIUS;
-  const yValues = [...new Set(layout.slots.map(s => Math.round(s.cy)))].sort((a, b) => a - b);
-  if (yValues.length < 2) return null;
+  let lineYs;
+  if (layout.shelfYs && layout.shelfYs.length) {
+    lineYs = layout.shelfYs;
+  } else {
+    const yValues = [...new Set(layout.slots.map(s => Math.round(s.cy)))].sort((a, b) => a - b);
+    if (yValues.length < 2) return null;
+    lineYs = [];
+    for (let i = 0; i < yValues.length - 1; i++) {
+      lineYs.push((yValues[i] + yValues[i + 1]) / 2);
+    }
+  }
 
   const lines = [];
-  for (let i = 0; i < yValues.length - 1; i++) {
-    const midY = (yValues[i] + yValues[i + 1]) / 2;
-    // Shelf plank
+  lineYs.forEach((midY, i) => {
     lines.push(
       <rect
         key={`shelf-${i}`}
@@ -310,7 +320,6 @@ function ShelfLines({ layout, rack, isModular }) {
         rx={1}
       />
     );
-    // Front rail (thin line)
     lines.push(
       <line
         key={`rail-${i}`}
@@ -322,11 +331,12 @@ function ShelfLines({ layout, rack, isModular }) {
         strokeWidth={1}
       />
     );
-  }
+  });
 
-  // Scallop bumps between slots in each row (small vertical ticks)
+  // Scallop bumps between front-row slots only (back row sits above, no plank below it)
   const rowSlots = {};
   layout.slots.forEach(s => {
+    if (s.isBack) return;
     const ry = Math.round(s.cy);
     if (!rowSlots[ry]) rowSlots[ry] = [];
     rowSlots[ry].push(s);

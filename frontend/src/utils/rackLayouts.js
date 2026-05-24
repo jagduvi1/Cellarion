@@ -230,26 +230,64 @@ function cubeLayout(rows, cols, typeConfig) {
 }
 
 // ── Shelf (open case storage) ────────────────────────────────────────
-// Same grid as 'grid' visually but each compartment holds bottlesPerCell bottles.
+// Grid of compartments; each holds bottlesPerCell bottles.
+// Optional backCols: staggered back row per shelf, dimmed/smaller for depth.
+const BACK_R = SLOT_R * 0.7;
+const BACK_INTRA_GAP = 22;
+
 function shelfLayout(rows, cols, typeConfig) {
   const bpc = typeConfig?.bottlesPerCell || 1;
+  const backCols = Math.max(0, typeConfig?.backCols || 0);
+  const hasBack = backCols > 0;
+
+  const compartmentH = hasBack
+    ? BACK_R * 2 + BACK_INTRA_GAP + CELL
+    : CELL;
+
   const slots = [];
+  const shelfYs = [];
   let pos = 1;
+
   for (let r = 0; r < rows; r++) {
+    const compartmentTopY = PADDING + r * compartmentH;
+    const frontCY = hasBack
+      ? compartmentTopY + BACK_R * 2 + BACK_INTRA_GAP + SLOT_R
+      : compartmentTopY + SLOT_R;
+    const backCY = compartmentTopY + BACK_R;
+
     for (let c = 0; c < cols; c++) {
       const cx = PADDING + SLOT_R + c * CELL;
-      const cy = PADDING + SLOT_R + r * CELL;
       for (let b = 0; b < bpc; b++) {
-        slots.push({ position: pos++, cx, cy });
+        slots.push({ position: pos++, cx, cy: frontCY });
       }
     }
+
+    if (hasBack) {
+      for (let c = 0; c < backCols; c++) {
+        const cx = PADDING + SLOT_R + (c + 0.5) * CELL;
+        for (let b = 0; b < bpc; b++) {
+          slots.push({ position: pos++, cx, cy: backCY, isBack: true });
+        }
+      }
+    }
+
+    if (r < rows - 1) {
+      shelfYs.push(compartmentTopY + compartmentH - SLOT_GAP / 2);
+    }
   }
+
+  const maxRightFront = cols > 0 ? PADDING + SLOT_R + (cols - 1) * CELL + SLOT_R : 0;
+  const maxRightBack = hasBack ? PADDING + SLOT_R + (backCols - 0.5) * CELL + BACK_R : 0;
+  const contentRight = Math.max(maxRightFront, maxRightBack);
+
   return {
     totalSlots: slots.length,
     bottlesPerCell: bpc,
+    backRadius: hasBack ? BACK_R : undefined,
+    shelfYs: hasBack ? shelfYs : undefined,
     viewBox: {
-      width:  PADDING * 2 + cols * CELL - SLOT_GAP,
-      height: PADDING * 2 + rows * CELL - SLOT_GAP,
+      width:  contentRight + PADDING,
+      height: PADDING * 2 + rows * compartmentH - SLOT_GAP,
     },
     slots,
   };
@@ -379,7 +417,8 @@ export function getTotalSlots(type, rows, cols, typeConfig) {
       return rows * cols * mr * mc;
     }
     case 'shelf': {
-      const cells = rows * cols;
+      const backCols = Math.max(0, typeConfig?.backCols || 0);
+      const cells = rows * (cols + backCols);
       const bpc = typeConfig?.bottlesPerCell || 1;
       return cells * bpc;
     }

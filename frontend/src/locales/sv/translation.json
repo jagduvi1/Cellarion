@@ -441,6 +441,7 @@
     "typeLabel": "Hylltyp",
     "totalSlots": "Totala platser",
     "bottlesPerCellLabel": "Flaskor per fack",
+    "backColsLabel": "Bakre rad (flaskor per hylla)",
     "filled": "fyllda",
     "type_grid": "Rutnät",
     "type_x-rack": "X-hylla",
