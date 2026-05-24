@@ -88,6 +88,7 @@
 
   "settings": {
     "title": "Inställningar",
+    "signedInAs": "Inloggad som",
     "displayPreferences": "Visningsinställningar",
     "defaultCurrency": "Standardvaluta",
     "currencyHint": "Används som standard i flaskformulär och prisfält.",

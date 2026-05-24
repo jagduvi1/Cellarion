@@ -89,15 +89,20 @@ async function upsertPoints(indexVersion, points) {
  * @param {string}   indexVersion
  * @param {number[]} vector – query vector
  * @param {number}   topK   – number of results
+ * @param {object}   [options]
+ * @param {object}   [options.filter] – optional Qdrant payload filter (e.g.
+ *   { must: [{ key: 'wineDefinitionId', match: { any: ['…','…'] } }] })
  * @returns {Promise<Array<{ id: string, score: number, payload: object }>>}
  */
-async function searchSimilar(indexVersion, vector, topK = 50) {
+async function searchSimilar(indexVersion, vector, topK = 50, { filter } = {}) {
   const name = collectionName(indexVersion);
-  const result = await qdrantRequest('POST', `/collections/${name}/points/search`, {
+  const body = {
     vector,
     limit: topK,
     with_payload: true
-  });
+  };
+  if (filter) body.filter = filter;
+  const result = await qdrantRequest('POST', `/collections/${name}/points/search`, body);
   return (result.result || []).map(hit => ({
     id: hit.id,
     score: hit.score,
