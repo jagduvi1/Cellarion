@@ -50,6 +50,15 @@ export function getRackHeight(rack) {
 }
 
 /**
+ * Default rack depth in metres. Two-deep shelves need extra depth to fit
+ * front + back bottles end-to-end inside the shelf.
+ */
+export function getDefaultRackDepth(rack) {
+  const hasShelfBack = rack.type === 'shelf' && (rack.typeConfig?.backCols || 0) > 0;
+  return hasShelfBack ? RACK_DEPTH * 1.7 : RACK_DEPTH;
+}
+
+/**
  * Compute world-space half-width/half-depth for a rack, accounting for
  * rotation and width/depth overrides from the placement.
  */
@@ -57,7 +66,7 @@ export function getRackWorldDims(rack, placement) {
   const { displayCols } = getDisplayDims(rack);
   const defaultW = displayCols * CELL_W + PANEL_THICK * 2;
   const w = placement.widthOverride || defaultW;
-  const d = placement.depthOverride || RACK_DEPTH;
+  const d = placement.depthOverride || getDefaultRackDepth(rack);
   const scale = placement.scaleOverride || 1;
   const rot = (placement.rotation || 0) % 360;
   const isRotated = rot === 90 || rot === 270;

@@ -21,7 +21,7 @@ export const TYPE_DIMENSIONS = {
   triangle: { showRows: false, showCols: true,  defaultRows: 1, defaultCols: 5, colLabel: 'racks.baseWidthLabel' },
   stack:    { showRows: true,  showCols: false, defaultRows: 8, defaultCols: 1, rowLabel: 'racks.heightLabel' },
   cube:     { showRows: true,  showCols: true,  defaultRows: 2, defaultCols: 3, showModule: true },
-  shelf:    { showRows: true,  showCols: true,  defaultRows: 3, defaultCols: 2, showBottlesPerCell: true },
+  shelf:    { showRows: true,  showCols: true,  defaultRows: 3, defaultCols: 2, showBottlesPerCell: true, showBackCols: true },
 };
 
 export default function RackTypeSelector({ value, onChange }) {

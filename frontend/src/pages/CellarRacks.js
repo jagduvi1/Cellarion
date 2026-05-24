@@ -149,7 +149,7 @@ function CellarRacks() {
       typeConfig: type === 'cube'
         ? { moduleRows: 2, moduleCols: 2 }
         : type === 'x-rack' ? { bottlesPerSection: 10 }
-        : type === 'shelf' ? { bottlesPerCell: 1 } : {},
+        : type === 'shelf' ? { bottlesPerCell: 1, backCols: 0 } : {},
     }));
   };
 
@@ -479,6 +479,21 @@ function NewRackForm({ newRack, setNewRack, onTypeChange, onSubmit, saving }) {
               onChange={e => setNewRack({
                 ...newRack,
                 typeConfig: { ...newRack.typeConfig, bottlesPerCell: parseInt(e.target.value) || 1 }
+              })}
+            />
+          </div>
+        )}
+
+        {dims.showBackCols && (
+          <div className="form-group">
+            <label>{t('racks.backColsLabel', 'Back row bottles (per shelf)')}</label>
+            <input
+              type="number"
+              min={0} max={20}
+              value={newRack.typeConfig?.backCols ?? 0}
+              onChange={e => setNewRack({
+                ...newRack,
+                typeConfig: { ...newRack.typeConfig, backCols: Math.max(0, parseInt(e.target.value) || 0) }
               })}
             />
           </div>

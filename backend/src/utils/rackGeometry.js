@@ -57,8 +57,9 @@ function totalSlots(type, rows, cols, typeConfig) {
     }
 
     case 'shelf': {
-      // Open case storage: rows × cols compartments, each holds bottlesPerCell bottles.
-      const cells = rows * cols;
+      // Open case storage: rows × cols front compartments + optional backCols back row per shelf.
+      const backCols = Math.max(0, typeConfig?.backCols || 0);
+      const cells = rows * (cols + backCols);
       const bpc = typeConfig?.bottlesPerCell || 1;
       return cells * bpc;
     }

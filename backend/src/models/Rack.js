@@ -16,7 +16,8 @@ const rackModuleSchema = new mongoose.Schema({
     moduleRows: { type: Number, min: 1, max: 10 },
     moduleCols: { type: Number, min: 1, max: 10 },
     bottlesPerCell: { type: Number, min: 1, max: 20 },
-    bottlesPerSection: { type: Number, min: 1, max: 30 }
+    bottlesPerSection: { type: Number, min: 1, max: 30 },
+    backCols: { type: Number, min: 0, max: 20 }
   },
   x:          { type: Number, default: 0 },
   y:          { type: Number, default: 0 },
@@ -34,7 +35,8 @@ const rackSchema = new mongoose.Schema({
     moduleRows: { type: Number, min: 1, max: 10 },
     moduleCols: { type: Number, min: 1, max: 10 },
     bottlesPerCell: { type: Number, min: 1, max: 20 },
-    bottlesPerSection: { type: Number, min: 1, max: 30 }
+    bottlesPerSection: { type: Number, min: 1, max: 30 },
+    backCols: { type: Number, min: 0, max: 20 }
   },
   // Modular rack fields (used when isModular is true)
   isModular: { type: Boolean, default: false },

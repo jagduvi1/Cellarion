@@ -441,6 +441,7 @@
     "typeLabel": "Rack Type",
     "totalSlots": "Total slots",
     "bottlesPerCellLabel": "Bottles per cell",
+    "backColsLabel": "Back row bottles (per shelf)",
     "filled": "filled",
     "type_grid": "Grid",
     "type_x-rack": "X-Rack",

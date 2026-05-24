@@ -103,7 +103,7 @@ function getBottleGeometry() {
 // ── Clickable bottle (no inline popup — info shown in side panel) ────
 // Rotation [PI/2, 0, 0] maps local Y→Z so bottle points into rack
 // with neck/foil sticking out the front (+Z).
-function Bottle({ position, wineType, slot, onBottleClick, highlighted }) {
+function Bottle({ position, wineType, slot, onBottleClick, highlighted, scale = 1 }) {
   const glassColor = GLASS_COLORS[wineType] || GLASS_COLORS.red;
   const wineColor = WINE_COLORS[wineType] || WINE_COLORS.red;
   const foilColor = FOIL_COLORS[wineType] || FOIL_COLORS.red;
@@ -116,7 +116,7 @@ function Bottle({ position, wineType, slot, onBottleClick, highlighted }) {
   };
 
   return (
-    <group position={position} rotation={[Math.PI / 2, 0, 0]}>
+    <group position={position} rotation={[Math.PI / 2, 0, 0]} scale={scale}>
       {/* Highlight glow ring behind the bottle */}
       {highlighted && (
         <mesh position={[0, -0.01, 0]}>
@@ -177,15 +177,15 @@ function Bottle({ position, wineType, slot, onBottleClick, highlighted }) {
 }
 
 // ── Empty slot (ring + invisible click disc at cubby opening) ────────
-function EmptySlot({ position, slotPosition, onClick }) {
+function EmptySlot({ position, slotPosition, onClick, isBack }) {
+  const zBase = RACK_DEPTH / 2 - 0.005 + (position[2] || 0);
+  const ringR = isBack ? (BOTTLE_RADIUS - 0.005) * 0.7 : BOTTLE_RADIUS - 0.005;
   return (
-    <group position={[position[0], position[1], RACK_DEPTH / 2 - 0.005]}>
-      {/* Visible ring */}
+    <group position={[position[0], position[1], zBase]}>
       <mesh>
-        <torusGeometry args={[BOTTLE_RADIUS - 0.005, 0.003, 6, 16]} />
-        <meshStandardMaterial color="#9A8A70" transparent opacity={0.3} />
+        <torusGeometry args={[ringR, 0.003, 6, 16]} />
+        <meshStandardMaterial color="#9A8A70" transparent opacity={isBack ? 0.2 : 0.3} />
       </mesh>
-      {/* Larger invisible click target covering the full cell area */}
       <mesh
         onClick={(e) => { e.stopPropagation(); onClick?.(slotPosition); }}
         onPointerOver={(e) => { if (onClick) { e.stopPropagation(); document.body.style.cursor = 'pointer'; } }}
@@ -307,6 +307,48 @@ function computeTriangleSlotPositions(cols, width, height) {
   return positions;
 }
 
+// Shelf with optional back row.
+// Standard two-deep storage: both rows at the same shelf height, both with
+// necks toward the viewer; the back row is positioned deeper in the rack and
+// staggered in x so its necks peek between the front bottles.
+function computeShelfSlotPositions(rows, cols, backCols, width, height) {
+  const positions = [];
+  const cW = width / cols;
+  const cH = height / rows;
+  const hasBack = backCols > 0;
+  const frontBottleZ = -0.08;
+  const backBottleZ = -0.26;
+  const frontEmptyZ = 0;
+  const backEmptyZ = -0.18;
+  let pos = 1;
+  for (let r = 0; r < rows; r++) {
+    const y = height / 2 - cH / 2 - r * cH;
+    for (let c = 0; c < cols; c++) {
+      positions.push({
+        position: pos++,
+        x: -width / 2 + cW / 2 + c * cW,
+        y,
+        z: frontEmptyZ,
+        bottleZ: frontBottleZ,
+        isBack: false,
+      });
+    }
+    if (hasBack) {
+      for (let c = 0; c < backCols; c++) {
+        positions.push({
+          position: pos++,
+          x: -width / 2 + cW / 2 + (c + 0.5) * cW,
+          y,
+          z: backEmptyZ,
+          bottleZ: backBottleZ,
+          isBack: true,
+        });
+      }
+    }
+  }
+  return positions;
+}
+
 // Stack: single column
 function computeStackSlotPositions(rows, height) {
   const cH = height / rows;
@@ -378,7 +420,8 @@ export default function RackMesh({
   const rackScale = scaleOverride || 1;
   const defaultWidth = displayCols * CELL_W + PANEL_THICK * 2;
   const width = widthOverride || defaultWidth;
-  const depth = depthOverride || RACK_DEPTH;
+  const hasShelfBack = rackType === 'shelf' && (rack.typeConfig?.backCols || 0) > 0;
+  const depth = depthOverride || (hasShelfBack ? RACK_DEPTH * 1.7 : RACK_DEPTH);
   const height = displayRows * CELL_H + PANEL_THICK * 2;
   const innerW = (width - PANEL_THICK * 2);
   const effectiveCellW = innerW / displayCols;
@@ -408,7 +451,10 @@ export default function RackMesh({
       }
       case 'triangle': { const b = Math.max(1, rack.cols || 1); return (b * (b + 1)) / 2; }
       case 'stack': return rack.rows || 4;
-      case 'shelf': return displayRows * displayCols * bpc;
+      case 'shelf': {
+        const backCols = rack.typeConfig?.backCols || 0;
+        return displayRows * (displayCols + backCols) * bpc;
+      }
       default: return displayRows * displayCols;
     }
   }, [rack.isModular, rack.modules, rack.typeConfig, rackType, rack.rows, rack.cols, displayRows, displayCols]);
@@ -418,8 +464,11 @@ export default function RackMesh({
     if (rackType === 'hex') return computeHexSlotPositions(rack.rows || 4, rack.cols || 4, innerW, innerH);
     if (rackType === 'triangle') return computeTriangleSlotPositions(rack.cols || 1, innerW, innerH);
     if (rackType === 'stack') return computeStackSlotPositions(rack.rows || 4, innerH);
+    if (rackType === 'shelf') return computeShelfSlotPositions(
+      displayRows, displayCols, rack.typeConfig?.backCols || 0, innerW, innerH
+    );
     return computeSlotPositions(displayRows, displayCols, innerW, innerH);
-  }, [rackType, rack.rows, rack.cols, displayRows, displayCols, innerW, innerH]);
+  }, [rackType, rack.rows, rack.cols, displayRows, displayCols, innerW, innerH, rack.typeConfig?.backCols]);
 
   const edgesGeom = useMemo(() => {
     const sw = width * rackScale, sh = height * rackScale, sd = depth * rackScale;
@@ -635,21 +684,22 @@ export default function RackMesh({
       })()}
 
       {/* ── Bottles / empty slots ─────────────────── */}
-      {slotPositions.map(({ position: pos, x, y }) => {
+      {slotPositions.map(({ position: pos, x, y, z = 0, bottleZ, isBack }) => {
         const slot = slotMap[pos];
         const filled = !!slot;
         const wineType = slot?.bottle?.wineDefinition?.type || 'red';
+        const finalBottleZ = bottleZ !== undefined ? bottleZ : (-0.08 + z);
         return filled ? (
           <Bottle
             key={pos}
-            position={[x, y, -0.08]}
+            position={[x, y, finalBottleZ]}
             wineType={wineType}
             slot={slot}
             onBottleClick={onBottleClick}
             highlighted={highlightBottleId && (slot.bottle?._id || slot.bottle) === highlightBottleId}
           />
         ) : (
-          <EmptySlot key={pos} position={[x, y, 0]} slotPosition={pos} onClick={onEmptySlotClick} />
+          <EmptySlot key={pos} position={[x, y, z]} slotPosition={pos} onClick={onEmptySlotClick} isBack={isBack} />
         );
       })}
 
