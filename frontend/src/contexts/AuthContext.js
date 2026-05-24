@@ -100,6 +100,9 @@ export const AuthProvider = ({ children }) => {
     } catch {
       // Best-effort; clear client state regardless
     }
+    // Wipe per-tab user state so chat history etc. don't bleed across logins.
+    // Only sessionStorage — localStorage holds theme / language / persisted token.
+    try { sessionStorage.clear(); } catch { /* noop */ }
     clearToken();
     setUser(null);
   }, []);

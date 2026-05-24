@@ -338,8 +338,26 @@ async function _prepareChatContext(userId, message, { useQueryExpansion = true, 
     if (!process.env.VOYAGE_API_KEY) {
       throw Object.assign(new Error('VOYAGE_API_KEY is not configured'), { status: 503 });
     }
-    const queryVector = await embedSingle(searchQuery, { model: cfg.embeddingModel });
-    const hits = await vectorStore.searchSimilar(cfg.vectorIndex, queryVector, cfg.chatTopK);
+
+    // Restrict Qdrant search to wines the user actually owns. Without this,
+    // top-K is pulled from the global catalogue and small cellars get filtered
+    // out entirely (see issue #386).
+    const bottleScope = { user: userId, status: 'active' };
+    if (cellarIds?.length) bottleScope.cellar = { $in: cellarIds };
+    const userWineDefIds = await Bottle.distinct('wineDefinition', bottleScope);
+
+    let hits = [];
+    if (userWineDefIds.length) {
+      const queryVector = await embedSingle(searchQuery, { model: cfg.embeddingModel });
+      hits = await vectorStore.searchSimilar(cfg.vectorIndex, queryVector, cfg.chatTopK, {
+        filter: {
+          must: [{
+            key: 'wineDefinitionId',
+            match: { any: userWineDefIds.map(id => id.toString()) }
+          }]
+        }
+      });
+    }
     matches = await filterToUserCellar(userId, hits, cfg.chatMaxResults, { cellarIds });
 
     // Enrich matches with maturity, price, and count data

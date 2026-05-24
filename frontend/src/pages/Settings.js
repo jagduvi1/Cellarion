@@ -291,6 +291,10 @@ function Settings() {
         <h2 className="settings-section-title">Profile</h2>
         <form onSubmit={handleProfileSave}>
           <div className="form-group">
+            <label>{t('settings.signedInAs', 'Signed in as')}</label>
+            <div className="settings-email-display">{user?.email || '—'}</div>
+          </div>
+          <div className="form-group">
             <label htmlFor="display-name-input">Display Name</label>
             <p className="settings-hint">
               How your name appears to other users. Leave blank to use your username.

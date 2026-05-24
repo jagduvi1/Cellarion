@@ -88,6 +88,7 @@
 
   "settings": {
     "title": "Settings",
+    "signedInAs": "Signed in as",
     "displayPreferences": "Display Preferences",
     "defaultCurrency": "Default Currency",
     "currencyHint": "Used as the default in bottle forms and price fields.",
