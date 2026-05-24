@@ -4,8 +4,8 @@ import { useAuth } from '../contexts/AuthContext';
 import useVersion from '../hooks/useVersion';
 import './Login.css';
 
-const LOGO_WEBP = process.env.PUBLIC_URL + '/cellarion-logo-light.webp';
-const LOGO_PNG  = process.env.PUBLIC_URL + '/cellarion-logo-light.png';
+const LOGO_WEBP = '/cellarion-logo-light.webp';
+const LOGO_PNG  = '/cellarion-logo-light.png';
 
 function Login() {
   const [mode, setMode] = useState('login');

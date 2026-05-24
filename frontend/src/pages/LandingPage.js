@@ -8,8 +8,8 @@ import DiscussionsFeedWidget from '../components/DiscussionsFeedWidget';
 import SITE_URL from '../config/siteUrl';
 import './LandingPage.css';
 
-const LOGO_LIGHT = process.env.PUBLIC_URL + '/cellarion-logo-light.png';
-const LOGO_DARK  = process.env.PUBLIC_URL + '/cellarion-logo-dark.png';
+const LOGO_LIGHT = '/cellarion-logo-light.png';
+const LOGO_DARK  = '/cellarion-logo-dark.png';
 
 export default function LandingPage() {
   const { t, i18n } = useTranslation();

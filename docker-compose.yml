@@ -120,8 +120,8 @@ services:
       context: ./frontend
       args:
         APP_VERSION: ${APP_VERSION:-dev}
-        REACT_APP_UMAMI_URL: ${REACT_APP_UMAMI_URL:-}
-        REACT_APP_UMAMI_WEBSITE_ID: ${REACT_APP_UMAMI_WEBSITE_ID:-}
+        VITE_UMAMI_URL: ${VITE_UMAMI_URL:-}
+        VITE_UMAMI_WEBSITE_ID: ${VITE_UMAMI_WEBSITE_ID:-}
     container_name: cellarion-frontend
     restart: unless-stopped
     deploy:
@@ -144,7 +144,7 @@ services:
         condition: service_healthy
 
   # Umami — privacy-friendly self-hosted analytics. Only loaded by the frontend when
-  # REACT_APP_UMAMI_URL and REACT_APP_UMAMI_WEBSITE_ID are set at build time, so this
+  # VITE_UMAMI_URL and VITE_UMAMI_WEBSITE_ID are set at build time, so this
   # service is optional and inert without those vars.
   umami:
     image: ghcr.io/umami-software/umami:postgresql-latest

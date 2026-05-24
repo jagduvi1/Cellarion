@@ -9,10 +9,10 @@ import SupportModal from './SupportModal';
 import InstallPrompt from './InstallPrompt';
 import './Layout.css';
 
-const LOGO_LIGHT_WEBP = process.env.PUBLIC_URL + '/cellarion-logo-light.webp';
-const LOGO_DARK_WEBP  = process.env.PUBLIC_URL + '/cellarion-logo-dark.webp';
-const LOGO_LIGHT_PNG  = process.env.PUBLIC_URL + '/cellarion-logo-light.png';
-const LOGO_DARK_PNG   = process.env.PUBLIC_URL + '/cellarion-logo-dark.png';
+const LOGO_LIGHT_WEBP = '/cellarion-logo-light.webp';
+const LOGO_DARK_WEBP  = '/cellarion-logo-dark.webp';
+const LOGO_LIGHT_PNG  = '/cellarion-logo-light.png';
+const LOGO_DARK_PNG   = '/cellarion-logo-dark.png';
 
 function Layout({ children }) {
   const { t } = useTranslation();
