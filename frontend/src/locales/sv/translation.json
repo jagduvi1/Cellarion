@@ -402,7 +402,7 @@
     "noteOptional": "Anteckning (valfritt)",
     "notePlaceholder": "Hur smakade det? Några smaknoteringar?",
     "noPriceData": "Inga marknadsprisdata ännu.",
-    "sommelierAddPricing": "Vår personal kommer snart att lägga till prisdata för denna årgång.",
+    "sommelierAddPricing": "Marknadsprisbevakning är opt-in — använd reglaget nedan för att begära den.",
     "reportPrice": "Rapportera felaktigt pris",
     "maturityPhaseEarly": "Tidig drickning",
     "maturityPhasePeak": "Optimal mognad ⭐",
