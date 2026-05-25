@@ -169,20 +169,31 @@ export function suggestRackDimensions(maxPosition) {
 
 /**
  * Summarise rack usage in a parsed-items batch:
- *   { [rackName]: { count, maxPosition, observedPositions: number[] } }
+ *   { [rackName]: { count, maxPosition, maxPerCell, observedPositions: number[] } }
+ *
+ * `maxPerCell` is the highest number of items sharing the same rackPosition
+ * within a single rack. For Vintec/Oeno-style cabinets where each "Rack_
+ * Location" is a multi-bottle cell (3 Chenin Blancs all stored at M3-11),
+ * this is the bottlesPerCell value that an auto-created shelf rack needs.
  */
 export function summariseRacks(items) {
   const summary = {};
+  const positionCounts = {}; // { [rackName]: { [position]: count } }
   for (const item of items) {
     if (!item?.rackName) continue;
     const name = String(item.rackName).trim();
     if (!name) continue;
-    if (!summary[name]) summary[name] = { count: 0, maxPosition: 0, observedPositions: [] };
+    if (!summary[name]) summary[name] = { count: 0, maxPosition: 0, maxPerCell: 1, observedPositions: [] };
     summary[name].count += 1;
     const pos = parseInt(item.rackPosition, 10);
     if (!isNaN(pos)) {
       summary[name].observedPositions.push(pos);
       if (pos > summary[name].maxPosition) summary[name].maxPosition = pos;
+      if (!positionCounts[name]) positionCounts[name] = {};
+      positionCounts[name][pos] = (positionCounts[name][pos] || 0) + 1;
+      if (positionCounts[name][pos] > summary[name].maxPerCell) {
+        summary[name].maxPerCell = positionCounts[name][pos];
+      }
     }
   }
   return summary;

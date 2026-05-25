@@ -17,11 +17,17 @@ const VALID_ANCHORS = ['top-left', 'top-right', 'bottom-left', 'bottom-right'];
 const DEFAULT_ANCHOR = 'top-left';
 
 /**
- * Compute the 1-indexed sequential position for a slot in Cellarion's internal
- * coordinate system (top-left, row-major), given:
+ * Compute the 1-indexed slot position in Cellarion's internal coordinate
+ * system (top-left, row-major), given:
  *   - A sequential `position` from the source system, or
  *   - A (row, col) pair from the source system,
  * plus the rack's dimensions and where the source system's "bottle 1" sits.
+ *
+ * For shelf racks with `bottlesPerCell > 1` (e.g. Vintec/Oeno cabinets where
+ * each "slot" physically holds a stack of identical bottles), the input
+ * position is treated as a CELL index. The output is the FIRST slot of that
+ * cell — subsequent bottles claiming the same cell will naturally overflow
+ * into the cell's remaining slots via forward-scan placement.
  *
  * `anchor` describes the corner where the source data's position 1 (or row 1,
  * col 1) is located:
@@ -32,13 +38,20 @@ const DEFAULT_ANCHOR = 'top-left';
  *
  * Returns { position } on success or { error } on bad input.
  */
-function computeRackPosition({ position, row, col, rackRows, rackCols, anchor = DEFAULT_ANCHOR }) {
+function computeRackPosition({
+  position, row, col,
+  rackRows, rackCols,
+  rackType, bottlesPerCell,
+  anchor = DEFAULT_ANCHOR
+}) {
   if (!VALID_ANCHORS.includes(anchor)) {
     return { error: `Invalid anchor: ${anchor}` };
   }
 
   const cols = parseInt(rackCols, 10);
   const rows = parseInt(rackRows, 10);
+  const bpc = Math.max(1, parseInt(bottlesPerCell, 10) || 1);
+  const isMultiCell = rackType === 'shelf' && bpc > 1;
 
   let srcRow, srcCol;
 
@@ -46,12 +59,17 @@ function computeRackPosition({ position, row, col, rackRows, rackCols, anchor = 
     const p = parseInt(position, 10);
     if (isNaN(p) || p < 1) return { error: 'Invalid position' };
 
-    // Identity case — no dimensions needed when nothing to flip.
-    if (anchor === 'top-left') return { position: p };
+    // Identity case — no anchor flip needed.
+    if (anchor === 'top-left') {
+      // For shelf cells, the input is a cell index → translate to the
+      // first slot of that cell. For grid, position == slot.
+      return { position: isMultiCell ? (p - 1) * bpc + 1 : p };
+    }
 
     if (isNaN(cols) || cols < 1) {
       return { error: 'rackCols is required to transform position with a non-default anchor' };
     }
+    // Expand the source position into (row, col) of its CELL grid.
     srcRow = Math.ceil(p / cols);
     srcCol = ((p - 1) % cols) + 1;
   } else {
@@ -63,7 +81,8 @@ function computeRackPosition({ position, row, col, rackRows, rackCols, anchor = 
     if (srcCol > cols) return { error: `col ${srcCol} exceeds rackCols ${cols}` };
   }
 
-  // Apply anchor transforms to land in Cellarion's top-left, row-major space.
+  // Apply anchor transforms in CELL-grid space (rows × cols cells), then
+  // expand the resulting cell index to a slot index for multi-cell shelves.
   let effectiveRow = srcRow;
   let effectiveCol = srcCol;
 
@@ -81,7 +100,8 @@ function computeRackPosition({ position, row, col, rackRows, rackCols, anchor = 
     effectiveCol = cols - srcCol + 1;
   }
 
-  return { position: (effectiveRow - 1) * cols + effectiveCol };
+  const cellIndex = (effectiveRow - 1) * cols + effectiveCol;
+  return { position: isMultiCell ? (cellIndex - 1) * bpc + 1 : cellIndex };
 }
 
 /**
@@ -210,6 +230,8 @@ function placeBottlesInRack(rack, items, anchor) {
       col: it.item.col,
       rackRows: rack.rows,
       rackCols: rack.cols,
+      rackType: rack.type,
+      bottlesPerCell: rack.typeConfig?.bottlesPerCell,
       anchor
     });
     if (result.error) {

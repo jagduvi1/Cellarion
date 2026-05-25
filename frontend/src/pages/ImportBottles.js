@@ -314,14 +314,33 @@ function ImportBottles() {
         setFileName(file.name);
 
         // Build per-rack summary + seed editable config with suggestions.
-        // Default type = 'grid' (1 bottle per slot) — users can change to
-        // shelf, stack, etc. if their physical rack has multi-bottle cells
-        // or a different shape (or if they don't have a physical rack at all).
+        //
+        // If multiple items share the same (rackName, rackPosition) — the
+        // hallmark of Vintec/Oeno cabinets where each "slot" is actually a
+        // multi-bottle cell — default to shelf type with bottlesPerCell
+        // set to the max observed. Otherwise default to grid (1 bottle/slot).
+        //
+        // Users can switch any rack to a different shape in the picker, or
+        // skip the inference entirely for the user-doesn't-own-a-rack case.
         const summary = summariseRacks(items);
         const initialConfigs = {};
         for (const [name, info] of Object.entries(summary)) {
-          const required = Math.max(info.maxPosition || 0, info.count || 0);
-          initialConfigs[name] = { type: 'grid', ...suggestRackDimensions(required), typeConfig: {} };
+          const bpc = Math.max(1, info.maxPerCell || 1);
+          if (bpc > 1) {
+            // Shelf: size the cell grid to fit the highest cell index seen,
+            // then total slots = rows × cols × bpc.
+            const cells = Math.max(info.maxPosition || 0, 1);
+            const dims = suggestRackDimensions(cells);
+            initialConfigs[name] = {
+              type: 'shelf',
+              rows: dims.rows,
+              cols: dims.cols,
+              typeConfig: { bottlesPerCell: bpc }
+            };
+          } else {
+            const required = Math.max(info.maxPosition || 0, info.count || 0);
+            initialConfigs[name] = { type: 'grid', ...suggestRackDimensions(required), typeConfig: {} };
+          }
         }
         setRackSummary(summary);
         setRackConfigs(initialConfigs);
@@ -813,7 +832,8 @@ function ImportBottles() {
                       <span className="rack-config-existing-badge">Already exists</span>
                       <span className="rack-config-meta">
                         {info.count} bottle{info.count !== 1 ? 's' : ''}
-                        {info.maxPosition > 0 && <>, highest slot {info.maxPosition}</>}
+                        {info.maxPosition > 0 && <>, highest cell {info.maxPosition}</>}
+                        {info.maxPerCell > 1 && <>, up to {info.maxPerCell} per cell</>}
                       </span>
                     </div>
                     <div className="rack-config-existing-note">
@@ -858,7 +878,8 @@ function ImportBottles() {
                     <strong>{name}</strong>
                     <span className="rack-config-meta">
                       {info.count} bottle{info.count !== 1 ? 's' : ''}
-                      {info.maxPosition > 0 && <>, highest slot {info.maxPosition}</>}
+                      {info.maxPosition > 0 && <>, highest cell {info.maxPosition}</>}
+                      {info.maxPerCell > 1 && <>, up to {info.maxPerCell} per cell</>}
                     </span>
                   </div>
                   <div className="rack-config-card-body">

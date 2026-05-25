@@ -741,7 +741,9 @@ router.post('/confirm', async (req, res) => {
               type: rack.type,
               rows: rack.rows,
               cols: rack.cols,
-              typeConfig: rack.typeConfig,
+              // Pass typeConfig as a plain object — for Mongoose subdocs the
+              // .toObject() shape is what the helper expects.
+              typeConfig: rack.typeConfig?.toObject ? rack.typeConfig.toObject() : rack.typeConfig,
               slots: rack.slots,
               maxPosition: getMaxPosition(rack)
             },
