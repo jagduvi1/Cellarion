@@ -3,7 +3,11 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { validateImport, confirmImport } from '../api/bottles';
 import { searchWines } from '../api/wines';
-import { parseAndMap, parseJSON } from '../utils/importMappers';
+import { getRacks } from '../api/racks';
+import { parseAndMap, parseJSON, suggestRackDimensions, summariseRacks } from '../utils/importMappers';
+import { getTotalSlots } from '../utils/rackLayouts';
+import { TYPE_DIMENSIONS } from '../components/racks/RackTypeSelector';
+import { CURRENCIES } from '../config/currencies';
 import {
   listImportSessions,
   createImportSession,
@@ -20,6 +24,7 @@ const FORMAT_LABELS = {
   cellarion: 'Cellarion',
   vivino: 'Vivino',
   cellartracker: 'CellarTracker',
+  oeno: 'Oeno (Vintec)',
   generic: 'CSV'
 };
 
@@ -65,6 +70,21 @@ function ImportBottles() {
   const [detectedFormat, setDetectedFormat] = useState(null);
   const [fileName, setFileName] = useState('');
   const [dragOver, setDragOver] = useState(false);
+  // Where bottle 1 (or row 1, col 1) sits in the source system's rack:
+  // 'top-left' (default), 'top-right', 'bottom-left' (Oeno), 'bottom-right'
+  const [positionAnchor, setPositionAnchor] = useState('top-left');
+  // Per-rack dimension overrides: { [rackName]: { rows, cols } }
+  const [rackConfigs, setRackConfigs] = useState({});
+  // Rack summary built from parsed items: { [name]: { count, maxPosition, observedPositions } }
+  const [rackSummary, setRackSummary] = useState({});
+  // Existing racks in the target cellar (so we can show them as read-only and
+  // warn the user that their picker config will be ignored for those names).
+  // Shape: { [name]: { type, rows, cols, typeConfig, _id } }
+  const [existingRacks, setExistingRacks] = useState({});
+  // Default currency applied to imported bottles whose CSV row has no
+  // currency column. Seeded from the user's profile preference, but can be
+  // overridden per-import via the picker.
+  const [importCurrency, setImportCurrency] = useState(user?.preferences?.currency || 'USD');
 
   // Review step
   const [results, setResults] = useState([]);
@@ -112,10 +132,36 @@ function ImportBottles() {
       .catch(() => {});
   }, [apiFetch, cellarId]);
 
+  // Load the cellar's existing racks so the import picker can show which
+  // rack names collide with already-created racks (we can't reshape those
+  // mid-import without risking the bottles already in them).
+  useEffect(() => {
+    getRacks(apiFetch, cellarId)
+      .then(r => r.ok ? r.json() : null)
+      .then(d => {
+        if (!d?.racks) return;
+        const byName = {};
+        for (const rack of d.racks) {
+          byName[rack.name] = {
+            _id: rack._id,
+            type: rack.type,
+            rows: rack.rows,
+            cols: rack.cols,
+            typeConfig: rack.typeConfig,
+            isModular: rack.isModular,
+            modules: rack.modules
+          };
+        }
+        setExistingRacks(byName);
+      })
+      .catch(() => {});
+  }, [apiFetch, cellarId]);
+
   // Keep saveDataRef current so the debounced save always uses latest values
   saveDataRef.current = {
     apiFetch, cellarId, fileName, detectedFormat,
-    results, selections, manualWines, sessionId
+    results, selections, manualWines, sessionId,
+    positionAnchor, rackConfigs, importCurrency
   };
 
   // Auto-save whenever selections or manualWines change while in review step
@@ -129,7 +175,8 @@ function ImportBottles() {
       setSaveStatus('saving');
       const {
         apiFetch: af, cellarId: cid, fileName: fn, detectedFormat: df,
-        results: rs, selections: sels, manualWines: mw, sessionId: sid
+        results: rs, selections: sels, manualWines: mw, sessionId: sid,
+        positionAnchor: pa, rackConfigs: rc, importCurrency: ic
       } = saveDataRef.current;
 
       try {
@@ -137,7 +184,8 @@ function ImportBottles() {
           // First save for this review session — create a new session
           const res = await createImportSession(af, {
             cellarId: cid, fileName: fn, detectedFormat: df,
-            results: rs, selections: sels, manualWines: mw
+            results: rs, selections: sels, manualWines: mw,
+            positionAnchor: pa, rackConfigs: rc, defaultCurrency: ic
           });
           const data = await res.json();
           if (res.ok) {
@@ -148,8 +196,11 @@ function ImportBottles() {
             setSaveStatus('error');
           }
         } else {
-          // Subsequent saves — just update selections/manualWines
-          const res = await updateImportSession(af, sid, { selections: sels, manualWines: mw });
+          // Subsequent saves
+          const res = await updateImportSession(af, sid, {
+            selections: sels, manualWines: mw,
+            positionAnchor: pa, rackConfigs: rc, defaultCurrency: ic
+          });
           setSaveStatus(res.ok ? 'saved' : 'error');
         }
       } catch {
@@ -158,7 +209,7 @@ function ImportBottles() {
     }, 1500);
 
     return () => clearTimeout(saveTimerRef.current);
-  }, [step, selections, manualWines]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [step, selections, manualWines, positionAnchor, rackConfigs, importCurrency]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Recompute summary from a results array (used after resume + refresh)
   const computeSummary = (rs) => ({
@@ -212,6 +263,16 @@ function ImportBottles() {
       setSummary(computeSummary(updatedResults));
       setSessionId(s._id);
       setDraftSessions([]);
+      // Restore the user's picker choices so they don't have to redo them
+      if (s.positionAnchor) setPositionAnchor(s.positionAnchor);
+      if (s.defaultCurrency) setImportCurrency(s.defaultCurrency);
+      if (s.rackConfigs && Object.keys(s.rackConfigs).length > 0) {
+        setRackConfigs(s.rackConfigs);
+        // Rebuild rackSummary from the saved results so the review-step note
+        // and the (re-shown) picker on jump-back have the bottle counts.
+        const rs = updatedResults.map(r => r.item).filter(Boolean);
+        setRackSummary(summariseRacks(rs));
+      }
       setStep('review');
     } catch {
       // If load fails, just stay on upload step
@@ -251,6 +312,38 @@ function ImportBottles() {
         setParsedItems(items);
         setDetectedFormat(format);
         setFileName(file.name);
+
+        // Build per-rack summary + seed editable config with suggestions.
+        //
+        // If multiple items share the same (rackName, rackPosition) — the
+        // hallmark of Vintec/Oeno cabinets where each "slot" is actually a
+        // multi-bottle cell — default to shelf type with bottlesPerCell
+        // set to the max observed. Otherwise default to grid (1 bottle/slot).
+        //
+        // Users can switch any rack to a different shape in the picker, or
+        // skip the inference entirely for the user-doesn't-own-a-rack case.
+        const summary = summariseRacks(items);
+        const initialConfigs = {};
+        for (const [name, info] of Object.entries(summary)) {
+          const bpc = Math.max(1, info.maxPerCell || 1);
+          if (bpc > 1) {
+            // Shelf: size the cell grid to fit the highest cell index seen,
+            // then total slots = rows × cols × bpc.
+            const cells = Math.max(info.maxPosition || 0, 1);
+            const dims = suggestRackDimensions(cells);
+            initialConfigs[name] = {
+              type: 'shelf',
+              rows: dims.rows,
+              cols: dims.cols,
+              typeConfig: { bottlesPerCell: bpc }
+            };
+          } else {
+            const required = Math.max(info.maxPosition || 0, info.count || 0);
+            initialConfigs[name] = { type: 'grid', ...suggestRackDimensions(required), typeConfig: {} };
+          }
+        }
+        setRackSummary(summary);
+        setRackConfigs(initialConfigs);
       } catch (err) {
         setError(`Failed to parse file: ${err.message}`);
       }
@@ -547,7 +640,7 @@ function ImportBottles() {
     if (rowImporting !== null || importing) return;
     setRowImporting(r.index);
     try {
-      const res = await confirmImport(apiFetch, { cellarId, items: [buildImportItem(r)] });
+      const res = await confirmImport(apiFetch, { cellarId, items: [buildImportItem(r)], positionAnchor, rackConfigs, defaultCurrency: importCurrency });
       const data = await res.json();
       if (res.ok && data.created > 0) {
         // Mark as imported — auto-save will persist this to the session
@@ -573,7 +666,7 @@ function ImportBottles() {
       .map(buildImportItem);
 
     try {
-      const res = await confirmImport(apiFetch, { cellarId, items });
+      const res = await confirmImport(apiFetch, { cellarId, items, positionAnchor, rackConfigs, defaultCurrency: importCurrency });
       const data = await res.json();
 
       if (!res.ok) {
@@ -643,6 +736,10 @@ function ImportBottles() {
             <p>Export from CellarTracker via My Cellar &rarr; Download</p>
           </div>
           <div className="format-card">
+            <strong>Oeno (Vintec)</strong>
+            <p>CSV with Producer, Wine, Vintage, Quantity, Rack_Location columns</p>
+          </div>
+          <div className="format-card">
             <strong>Generic CSV</strong>
             <p>Any CSV with Wine, Producer, Vintage columns</p>
           </div>
@@ -679,6 +776,235 @@ function ImportBottles() {
           </div>
         )}
       </div>
+
+      {parsedItems.length > 0 && parsedItems.some(i => i.price) && (
+        <div className="import-currency-block">
+          <label className="import-currency-label">
+            <strong>Currency for prices</strong>
+            <select
+              value={importCurrency}
+              onChange={(e) => setImportCurrency(e.target.value)}
+            >
+              {CURRENCIES.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </label>
+          <p className="import-currency-hint">
+            {parsedItems.some(i => i.currency)
+              ? <>Applied to rows that don't already have a Currency column. Defaulted to your profile setting ({user?.preferences?.currency || 'USD'}).</>
+              : <>Your file has prices but no Currency column. All imported bottles will be tagged with this currency. Defaulted to your profile setting ({user?.preferences?.currency || 'USD'}).</>}
+          </p>
+        </div>
+      )}
+
+      {parsedItems.length > 0 && Object.keys(rackSummary).length > 0 && (
+        <div className="import-rack-options">
+          <h3>Rack placement</h3>
+          {detectedFormat === 'oeno' && (
+            <p className="rack-options-hint">
+              Detected an <strong>Oeno (Vintec)</strong> export. Your <code>Rack_Location</code> values
+              like <code>M2-11</code> have been split into rack name + slot number.
+            </p>
+          )}
+          <p className="rack-options-hint">
+            Found <strong>{Object.keys(rackSummary).length}</strong> unique
+            rack{Object.keys(rackSummary).length !== 1 ? 's' : ''} in your file.
+            We've guessed sensible dimensions from the highest slot number used — adjust them to match
+            your physical rack if you know better.
+          </p>
+
+          <div className="rack-config-list">
+            {Object.entries(rackSummary).map(([name, info]) => {
+              const existing = existingRacks[name];
+              const required = Math.max(info.maxPosition || 0, info.count || 0);
+
+              // Existing rack — read-only summary. The user's picker config
+              // would be ignored on the backend (we don't reshape live racks),
+              // so showing editable fields would be misleading.
+              if (existing) {
+                const existingCapacity = existing.isModular
+                  ? null
+                  : getTotalSlots(existing.type, existing.rows, existing.cols, existing.typeConfig);
+                const tooSmall = existingCapacity !== null && existingCapacity < required;
+                return (
+                  <div key={name} className="rack-config-card rack-config-existing">
+                    <div className="rack-config-card-head">
+                      <strong>{name}</strong>
+                      <span className="rack-config-existing-badge">Already exists</span>
+                      <span className="rack-config-meta">
+                        {info.count} bottle{info.count !== 1 ? 's' : ''}
+                        {info.maxPosition > 0 && <>, highest cell {info.maxPosition}</>}
+                        {info.maxPerCell > 1 && <>, up to {info.maxPerCell} per cell</>}
+                      </span>
+                    </div>
+                    <div className="rack-config-existing-note">
+                      Using the rack's current layout:{' '}
+                      <strong>
+                        {existing.isModular
+                          ? `Modular (${(existing.modules || []).length} modules)`
+                          : `${existing.type} ${existing.rows}×${existing.cols}${existing.typeConfig?.bottlesPerCell > 1 ? ` × ${existing.typeConfig.bottlesPerCell}/cell` : ''}`}
+                      </strong>
+                      {existingCapacity !== null && <> — {existingCapacity} slots</>}.
+                      {' '}To reshape it, delete the rack first from the Cellar page.
+                    </div>
+                    {tooSmall && (
+                      <div className="rack-config-warn rack-config-existing-warn">
+                        Capacity ({existingCapacity}) is below {required} bottles — extras will be reported as unplaced.
+                      </div>
+                    )}
+                  </div>
+                );
+              }
+
+              const cfg = rackConfigs[name] || { type: 'grid', rows: 1, cols: 1, typeConfig: {} };
+              const dims = TYPE_DIMENSIONS[cfg.type] || TYPE_DIMENSIONS.grid;
+              const capacity = getTotalSlots(cfg.type, cfg.rows, cfg.cols, cfg.typeConfig);
+              const tooSmall = capacity < required;
+
+              const updateCfg = (patch) => setRackConfigs(prev => ({
+                ...prev,
+                [name]: { ...prev[name], ...patch }
+              }));
+              const updateTc = (key, value) => setRackConfigs(prev => ({
+                ...prev,
+                [name]: {
+                  ...prev[name],
+                  typeConfig: { ...(prev[name]?.typeConfig || {}), [key]: value }
+                }
+              }));
+
+              return (
+                <div key={name} className="rack-config-card">
+                  <div className="rack-config-card-head">
+                    <strong>{name}</strong>
+                    <span className="rack-config-meta">
+                      {info.count} bottle{info.count !== 1 ? 's' : ''}
+                      {info.maxPosition > 0 && <>, highest cell {info.maxPosition}</>}
+                      {info.maxPerCell > 1 && <>, up to {info.maxPerCell} per cell</>}
+                    </span>
+                  </div>
+                  <div className="rack-config-card-body">
+                    <label className="rack-config-field">
+                      <span>Type</span>
+                      <select
+                        value={cfg.type}
+                        onChange={(e) => {
+                          const newType = e.target.value;
+                          const newDims = TYPE_DIMENSIONS[newType] || TYPE_DIMENSIONS.grid;
+                          updateCfg({
+                            type: newType,
+                            rows: newDims.defaultRows,
+                            cols: newDims.defaultCols
+                          });
+                        }}
+                      >
+                        <option value="grid">Grid (1 bottle per slot)</option>
+                        <option value="shelf">Open Shelf (multi-bottle cells)</option>
+                        <option value="stack">Stack (single column)</option>
+                        <option value="hex">Honeycomb</option>
+                        <option value="triangle">A-Frame (triangle)</option>
+                        <option value="x-rack">X-Rack</option>
+                        <option value="cube">Modular Cube</option>
+                      </select>
+                    </label>
+
+                    {dims.showRows && (
+                      <label className="rack-config-field">
+                        <span>{dims.rowLabel === 'racks.heightLabel' ? 'Height' : 'Rows'}</span>
+                        <input
+                          type="number" min="1" max="20"
+                          value={cfg.rows}
+                          onChange={(e) => updateCfg({ rows: parseInt(e.target.value, 10) || 1 })}
+                        />
+                      </label>
+                    )}
+                    {dims.showCols && (
+                      <label className="rack-config-field">
+                        <span>{dims.colLabel === 'racks.baseWidthLabel' ? 'Base width' : 'Cols'}</span>
+                        <input
+                          type="number" min="1" max="20"
+                          value={cfg.cols}
+                          onChange={(e) => updateCfg({ cols: parseInt(e.target.value, 10) || 1 })}
+                        />
+                      </label>
+                    )}
+                    {dims.showBottlesPerCell && (
+                      <label className="rack-config-field">
+                        <span>Per cell</span>
+                        <input
+                          type="number" min="1" max="20"
+                          value={cfg.typeConfig?.bottlesPerCell || 1}
+                          onChange={(e) => updateTc('bottlesPerCell', parseInt(e.target.value, 10) || 1)}
+                        />
+                      </label>
+                    )}
+                    {dims.showBottlesPerSection && (
+                      <label className="rack-config-field">
+                        <span>Per section</span>
+                        <input
+                          type="number" min="1" max="30"
+                          value={cfg.typeConfig?.bottlesPerSection || 10}
+                          onChange={(e) => updateTc('bottlesPerSection', parseInt(e.target.value, 10) || 10)}
+                        />
+                      </label>
+                    )}
+                    {dims.showModule && (
+                      <>
+                        <label className="rack-config-field">
+                          <span>Module rows</span>
+                          <input
+                            type="number" min="1" max="10"
+                            value={cfg.typeConfig?.moduleRows || 2}
+                            onChange={(e) => updateTc('moduleRows', parseInt(e.target.value, 10) || 2)}
+                          />
+                        </label>
+                        <label className="rack-config-field">
+                          <span>Module cols</span>
+                          <input
+                            type="number" min="1" max="10"
+                            value={cfg.typeConfig?.moduleCols || 2}
+                            onChange={(e) => updateTc('moduleCols', parseInt(e.target.value, 10) || 2)}
+                          />
+                        </label>
+                      </>
+                    )}
+                  </div>
+                  <div className="rack-config-capacity-line">
+                    = {capacity} slots
+                    {tooSmall && (
+                      <span className="rack-config-warn">
+                        {' '}— too small for {required} bottles
+                      </span>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="anchor-picker">
+            <div className="anchor-picker-label">Where does slot 1 sit in your physical rack?</div>
+            <div className="anchor-picker-grid">
+              {[
+                { value: 'top-left', label: 'Top-left', sub: 'Default for most apps' },
+                { value: 'top-right', label: 'Top-right', sub: '' },
+                { value: 'bottom-left', label: 'Bottom-left', sub: 'Oeno / Vintec' },
+                { value: 'bottom-right', label: 'Bottom-right', sub: '' },
+              ].map(opt => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  className={`anchor-btn anchor-btn-${opt.value} ${positionAnchor === opt.value ? 'active' : ''}`}
+                  onClick={() => setPositionAnchor(opt.value)}
+                >
+                  <span className="anchor-dot" aria-hidden="true" />
+                  <span className="anchor-label">{opt.label}</span>
+                  {opt.sub && <span className="anchor-sub">{opt.sub}</span>}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {parsedItems.length > 0 && (
         <div className="import-preview">
@@ -1056,6 +1382,12 @@ function ImportBottles() {
               {unresolved} item{unresolved !== 1 ? 's' : ''} still need a selection or to be skipped
             </p>
           )}
+          {Object.keys(rackSummary).length > 0 && (
+            <p className="review-anchor-note">
+              Slot 1 anchor: <strong>{positionAnchor.replace('-', ' ')}</strong>
+              {' '}— change it on the <button type="button" className="link-btn" onClick={() => setStep('upload')}>upload step</button> if needed.
+            </p>
+          )}
           <button
             className="btn btn-primary btn-import"
             onClick={handleImport}
@@ -1100,7 +1432,57 @@ function ImportBottles() {
               <span>Errors</span>
             </div>
           )}
+          {importResult.racksCreated?.length > 0 && (
+            <div className="done-stat">
+              <span className="done-number">{importResult.racksCreated.length}</span>
+              <span>Rack{importResult.racksCreated.length !== 1 ? 's' : ''} created</span>
+            </div>
+          )}
+          {importResult.placed > 0 && (
+            <div className="done-stat">
+              <span className="done-number">{importResult.placed}</span>
+              <span>Placed in racks{importResult.overflowed > 0 ? ` (${importResult.overflowed} into adjacent slots)` : ''}</span>
+            </div>
+          )}
+          {importResult.unplaced?.length > 0 && (
+            <div className="done-stat">
+              <span className="done-number done-errors">{importResult.unplaced.length}</span>
+              <span>Couldn't place</span>
+            </div>
+          )}
         </div>
+      )}
+      {importResult?.racksCreated?.length > 0 && (
+        <details className="done-errors-detail">
+          <summary>Auto-created racks ({importResult.racksCreated.length})</summary>
+          <ul>
+            {importResult.racksCreated.map((r, i) => (
+              <li key={i}>
+                <strong>{r.name}</strong> — {r.type} {r.rows}×{r.cols}
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
+      {importResult?.unplaced?.length > 0 && (
+        <details className="done-errors-detail">
+          <summary>Bottles that couldn't be placed in a rack ({importResult.unplaced.length})</summary>
+          <ul>
+            {importResult.unplaced.slice(0, 50).map((u, i) => (
+              <li key={i}>
+                Row {u.sourceIndex + 1} → rack <strong>{u.rackName}</strong>
+                {u.requestedPosition !== null && <> (slot {u.requestedPosition})</>}
+                : {u.reason}
+              </li>
+            ))}
+            {importResult.unplaced.length > 50 && (
+              <li><em>…and {importResult.unplaced.length - 50} more</em></li>
+            )}
+          </ul>
+          <p className="done-note">
+            These bottles were imported successfully — they just couldn't be assigned a rack slot. You can place them manually from the Cellar page.
+          </p>
+        </details>
       )}
       {importResult?.errors.length > 0 && (
         <details className="done-errors-detail">

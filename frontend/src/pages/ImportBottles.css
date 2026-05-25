@@ -1068,3 +1068,262 @@
 .btn-retry-ai:hover:not(:disabled) {
   background: var(--color-info-bg);
 }
+
+.import-currency-block {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 0.75rem 1.25rem;
+  margin: 1rem 0;
+}
+
+.import-currency-label {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 0.9rem;
+  color: var(--color-text);
+}
+
+.import-currency-label select {
+  padding: 0.3rem 0.5rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-size: 0.9rem;
+  min-width: 6rem;
+}
+
+.import-currency-hint {
+  margin: 0.4rem 0 0;
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+}
+
+.import-rack-options {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 1rem 1.25rem;
+  margin: 1rem 0 1.5rem;
+}
+
+.import-rack-options h3 {
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
+  color: var(--color-text);
+}
+
+.rack-options-hint {
+  margin: 0 0 0.75rem;
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+}
+
+.rack-options-hint code {
+  background: var(--color-bg);
+  padding: 0.05rem 0.3rem;
+  border-radius: 3px;
+  font-size: 0.8rem;
+}
+
+.rack-config-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  margin: 0.75rem 0 1rem;
+}
+
+.rack-config-card {
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: 0.6rem 0.8rem;
+}
+
+.rack-config-card-head {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  margin-bottom: 0.45rem;
+  flex-wrap: wrap;
+}
+
+.rack-config-card-head strong {
+  color: var(--color-text);
+  font-size: 0.95rem;
+}
+
+.rack-config-meta {
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+}
+
+.rack-config-card-body {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 0.75rem;
+  align-items: flex-end;
+}
+
+.rack-config-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  font-size: 0.7rem;
+  color: var(--color-text-muted);
+}
+
+.rack-config-field input[type="number"] {
+  width: 3.8rem;
+  padding: 0.3rem 0.4rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: 0.85rem;
+}
+
+.rack-config-field select {
+  padding: 0.3rem 0.4rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: 0.85rem;
+  min-width: 12rem;
+}
+
+.rack-config-capacity-line {
+  margin-top: 0.45rem;
+  font-size: 0.78rem;
+  color: var(--color-text-muted);
+}
+
+.rack-config-warn {
+  color: var(--color-danger, #c0392b);
+}
+
+.rack-config-existing {
+  background: var(--color-info-bg, rgba(0, 100, 200, 0.05));
+  border-color: var(--color-info-border, var(--color-border));
+}
+
+.rack-config-existing-badge {
+  display: inline-block;
+  background: var(--color-info, #5a7fa3);
+  color: white;
+  padding: 0.05rem 0.4rem;
+  border-radius: 999px;
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.rack-config-existing-note {
+  font-size: 0.78rem;
+  color: var(--color-text-muted);
+  margin-top: 0.3rem;
+  line-height: 1.4;
+}
+
+.rack-config-existing-note strong {
+  color: var(--color-text);
+}
+
+.rack-config-existing-warn {
+  margin-top: 0.4rem;
+  font-size: 0.78rem;
+}
+
+.anchor-picker {
+  margin-top: 0.75rem;
+}
+
+.anchor-picker-label {
+  font-size: 0.85rem;
+  color: var(--color-text);
+  margin-bottom: 0.5rem;
+}
+
+.anchor-picker-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.4rem;
+  max-width: 28rem;
+}
+
+.anchor-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.6rem 0.8rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg);
+  cursor: pointer;
+  font-size: 0.85rem;
+  color: var(--color-text);
+  text-align: left;
+  transition: border-color 0.15s, background 0.15s;
+  position: relative;
+}
+
+.anchor-btn:hover {
+  border-color: var(--color-primary);
+}
+
+.anchor-btn.active {
+  border-color: var(--color-primary);
+  background: var(--color-info-bg);
+}
+
+.anchor-dot {
+  width: 24px;
+  height: 24px;
+  border: 1px solid var(--color-border);
+  border-radius: 3px;
+  background: var(--color-surface);
+  flex-shrink: 0;
+  position: relative;
+  background-image: radial-gradient(circle 4px at var(--dot-x, 6px) var(--dot-y, 6px), var(--color-primary) 100%, transparent 100%);
+}
+
+.anchor-btn-top-left    .anchor-dot { --dot-x: 6px;  --dot-y: 6px; }
+.anchor-btn-top-right   .anchor-dot { --dot-x: 18px; --dot-y: 6px; }
+.anchor-btn-bottom-left .anchor-dot { --dot-x: 6px;  --dot-y: 18px; }
+.anchor-btn-bottom-right .anchor-dot { --dot-x: 18px; --dot-y: 18px; }
+
+.anchor-label {
+  display: block;
+  font-weight: 500;
+}
+
+.anchor-sub {
+  display: block;
+  font-size: 0.7rem;
+  color: var(--color-text-muted);
+  margin-top: 0.1rem;
+}
+
+.anchor-btn .anchor-label,
+.anchor-btn .anchor-sub {
+  display: block;
+}
+
+.review-anchor-note {
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+  margin: 0 0 0.5rem;
+}
+
+.review-anchor-note .link-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--color-primary);
+  cursor: pointer;
+  font: inherit;
+  text-decoration: underline;
+}

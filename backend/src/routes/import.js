@@ -27,6 +27,8 @@ const { stripHtml, escapeRegex } = require('../utils/sanitize');
 const { parseAndValidateVintage } = require('../utils/validation');
 const { extractAiExplanation } = require('../utils/jsonExtract');
 const { getMaxPosition } = require('../utils/rackGeometry');
+const { planRackCreations, placeBottlesInRack, VALID_ANCHORS, DEFAULT_ANCHOR } = require('../utils/rackImport');
+const { RACK_TYPES } = require('../models/Rack');
 const { runConcurrent } = require('../utils/concurrency');
 const WineRequest = require('../models/WineRequest');
 const ImportSession = require('../models/ImportSession');
@@ -378,7 +380,7 @@ router.post('/validate', async (req, res) => {
  */
 router.post('/confirm', async (req, res) => {
   try {
-    const { cellarId, items } = req.body;
+    const { cellarId, items, positionAnchor: rawAnchor, rackConfigs: rawRackConfigs, defaultCurrency: rawDefaultCurrency } = req.body;
 
     if (!cellarId) {
       return res.status(400).json({ error: 'cellarId is required' });
@@ -391,6 +393,57 @@ router.post('/confirm', async (req, res) => {
     }
     if (items.length > MAX_IMPORT_SIZE) {
       return res.status(400).json({ error: `Maximum ${MAX_IMPORT_SIZE} items per import` });
+    }
+
+    const positionAnchor = VALID_ANCHORS.includes(rawAnchor) ? rawAnchor : DEFAULT_ANCHOR;
+
+    // Currency to apply when an import item has no Currency column of its own.
+    // We accept any 3-letter ISO code here so the user's profile preference
+    // (or a future addition to the frontend CURRENCIES list) flows through
+    // without backend changes. Falls back to USD when no preference is set.
+    const defaultCurrency = (typeof rawDefaultCurrency === 'string' && /^[A-Z]{3}$/i.test(rawDefaultCurrency))
+      ? rawDefaultCurrency.toUpperCase()
+      : 'USD';
+
+    // Validate user-supplied per-rack configuration.
+    // Shape: { [rackName]: { type?, rows?, cols?, typeConfig?: {...} } }
+    // type — one of RACK_TYPES (defaults to 'grid' if absent/invalid)
+    // rows/cols — clamped to 1..20
+    // typeConfig — optional shape config (bottlesPerCell, bottlesPerSection,
+    //   moduleRows, moduleCols, backCols), each clamped to model bounds
+    const rackConfigs = {};
+    const clampInt = (v, min, max) => {
+      const n = parseInt(v, 10);
+      if (isNaN(n)) return undefined;
+      return Math.max(min, Math.min(max, n));
+    };
+    if (rawRackConfigs && typeof rawRackConfigs === 'object') {
+      for (const [name, cfg] of Object.entries(rawRackConfigs)) {
+        if (!cfg || typeof cfg !== 'object') continue;
+        const rows = clampInt(cfg.rows, 1, 20);
+        const cols = clampInt(cfg.cols, 1, 20);
+        if (!rows || !cols) continue;
+
+        const entry = { rows, cols };
+        if (cfg.type && RACK_TYPES.includes(cfg.type)) entry.type = cfg.type;
+
+        if (cfg.typeConfig && typeof cfg.typeConfig === 'object') {
+          const tc = {};
+          const mr = clampInt(cfg.typeConfig.moduleRows, 1, 10);
+          const mc = clampInt(cfg.typeConfig.moduleCols, 1, 10);
+          const bpc = clampInt(cfg.typeConfig.bottlesPerCell, 1, 20);
+          const bps = clampInt(cfg.typeConfig.bottlesPerSection, 1, 30);
+          const bc = clampInt(cfg.typeConfig.backCols, 0, 20);
+          if (mr !== undefined) tc.moduleRows = mr;
+          if (mc !== undefined) tc.moduleCols = mc;
+          if (bpc !== undefined) tc.bottlesPerCell = bpc;
+          if (bps !== undefined) tc.bottlesPerSection = bps;
+          if (bc !== undefined) tc.backCols = bc;
+          if (Object.keys(tc).length > 0) entry.typeConfig = tc;
+        }
+
+        rackConfigs[String(name)] = entry;
+      }
     }
 
     // Verify cellar access
@@ -409,12 +462,58 @@ router.post('/confirm', async (req, res) => {
       await getOrCreateDailySnapshot().catch(err => console.error('Failed to fetch daily exchange rate snapshot:', err.message));
     }
 
+    // Auto-create any racks referenced in the import that don't already exist
+    // in this cellar. User-supplied rackConfigs take precedence over inferred
+    // dimensions. Runs once up-front so the bottle-placement step below can
+    // rely on every rack being present.
+    const createdRacks = [];
+    try {
+      const rackPlan = planRackCreations(items);
+      if (rackPlan.size > 0) {
+        const existing = await Rack.find({
+          cellar: cellarId,
+          name: { $in: Array.from(rackPlan.keys()) },
+          deletedAt: null
+        }).select('name').lean();
+        const existingNames = new Set(existing.map(r => r.name));
+
+        for (const [name, spec] of rackPlan.entries()) {
+          if (existingNames.has(name)) continue;
+          const override = rackConfigs[name];
+          const rows = override?.rows || spec.rows;
+          const cols = override?.cols || spec.cols;
+          const chosenType = override?.type || spec.type;
+          const safeType = RACK_TYPES.includes(chosenType) ? chosenType : 'grid';
+          const rackData = {
+            cellar: cellarId,
+            user: cellar.user,
+            name,
+            type: safeType,
+            rows,
+            cols
+          };
+          if (override?.typeConfig) rackData.typeConfig = override.typeConfig;
+          const rack = new Rack(rackData);
+          await rack.save();
+          createdRacks.push({ name, type: safeType, rows, cols, typeConfig: override?.typeConfig });
+          logAudit(req, 'rack.create', { type: 'rack', id: rack._id }, { source: 'import', name });
+        }
+      }
+    } catch (err) {
+      console.error('Failed to auto-create racks during import (non-fatal):', err.message);
+    }
+
     let created = 0;
     const skipped = [];
     const errors = [];
     const createdBottleIds = []; // Track IDs for Meilisearch bulk sync
     // Dedup map: "wineName|producer" -> WineRequest doc created in this batch
     const pendingRequestCache = new Map();
+    // Collected rack-placement intents from this batch; processed per-rack
+    // after the main loop so multiple bottles claiming the same slot can
+    // overflow cleanly into adjacent free slots.
+    // Shape: [{ rackName, item, bottleId, sourceIndex }]
+    const pendingPlacements = [];
 
     for (let i = 0; i < items.length; i++) {
       const item = items[i];
@@ -479,7 +578,7 @@ router.post('/confirm', async (req, res) => {
             pendingWineRequest: wineRequest._id,
             vintage: canonicalVintage,
             price: item.price || undefined,
-            currency: item.currency || 'USD',
+            currency: item.currency || defaultCurrency,
             priceSetAt,
             bottleSize: item.bottleSize || '750ml',
             purchaseDate: item.purchaseDate || undefined,
@@ -505,6 +604,12 @@ router.post('/confirm', async (req, res) => {
           await bottle.save();
           created++;
           if (!item.addToHistory) createdBottleIds.push(bottle._id);
+
+          // Queue rack placement for unmatched bottles too
+          const hasPlacement = item.rackName && (item.rackPosition || (item.row && item.col));
+          if (hasPlacement && bottle.status === 'active') {
+            pendingPlacements.push({ rackName: String(item.rackName), item, bottleId: bottle._id, sourceIndex: i });
+          }
           continue;
         }
 
@@ -550,7 +655,7 @@ router.post('/confirm', async (req, res) => {
           wineDefinition: item.wineDefinition,
           vintage: canonicalVintage,
           price: item.price || undefined,
-          currency: item.currency || 'USD',
+          currency: item.currency || defaultCurrency,
           priceSetAt,
           bottleSize: item.bottleSize || '750ml',
           purchaseDate: item.purchaseDate || undefined,
@@ -581,24 +686,12 @@ router.post('/confirm', async (req, res) => {
         created++;
         if (!item.addToHistory) createdBottleIds.push(bottle._id);
 
-        // Place bottle in rack if rackName + rackPosition provided (active bottles only)
-        if (item.rackName && item.rackPosition && bottle.status === 'active') {
-          try {
-            const position = parseInt(item.rackPosition, 10);
-            if (!isNaN(position) && position >= 1) {
-              const rack = await Rack.findOne({ cellar: cellarId, name: String(item.rackName), deletedAt: null });
-              if (rack && position <= getMaxPosition(rack)) {
-                // Only place if slot is empty
-                const occupied = rack.slots.some(s => s.position === position);
-                if (!occupied) {
-                  rack.slots.push({ position, bottle: bottle._id });
-                  await rack.save().catch(err => console.error('Failed to save rack slot during import:', err.message));
-                }
-              }
-            }
-          } catch (err) {
-            console.error('Failed to place bottle in rack during import (non-fatal):', err.message);
-          }
+        // Queue rack placement — actual slot assignment runs per-rack after
+        // the bottle loop so multiple bottles claiming the same slot can
+        // overflow into adjacent free slots instead of being silently dropped.
+        const hasPlacement = item.rackName && (item.rackPosition || (item.row && item.col));
+        if (hasPlacement && bottle.status === 'active') {
+          pendingPlacements.push({ rackName: String(item.rackName), item, bottleId: bottle._id, sourceIndex: i });
         }
 
         // Auto-create pending WineVintageProfile for every bottle except
@@ -620,18 +713,85 @@ router.post('/confirm', async (req, res) => {
     // Bulk-index created bottles in Meilisearch (fire-and-forget)
     searchService.bulkIndexBottles(createdBottleIds);
 
+    // Per-rack two-pass placement: for each rack referenced in this import,
+    // assign exact slots first, then overflow extras into nearest empty slots.
+    let placedCount = 0;
+    let overflowedCount = 0;
+    const unplacedDetails = []; // [{ sourceIndex, rackName, requestedPosition, reason }]
+    if (pendingPlacements.length > 0) {
+      // Group by rackName
+      const byRack = new Map();
+      for (const p of pendingPlacements) {
+        if (!byRack.has(p.rackName)) byRack.set(p.rackName, []);
+        byRack.get(p.rackName).push(p);
+      }
+
+      for (const [rackName, group] of byRack.entries()) {
+        try {
+          const rack = await Rack.findOne({ cellar: cellarId, name: rackName, deletedAt: null });
+          if (!rack) {
+            for (const p of group) {
+              unplacedDetails.push({ sourceIndex: p.sourceIndex, rackName, requestedPosition: null, reason: 'Rack not found' });
+            }
+            continue;
+          }
+
+          const { placements, unplaced } = placeBottlesInRack(
+            {
+              type: rack.type,
+              rows: rack.rows,
+              cols: rack.cols,
+              // Pass typeConfig as a plain object — for Mongoose subdocs the
+              // .toObject() shape is what the helper expects.
+              typeConfig: rack.typeConfig?.toObject ? rack.typeConfig.toObject() : rack.typeConfig,
+              slots: rack.slots,
+              maxPosition: getMaxPosition(rack)
+            },
+            group,
+            positionAnchor
+          );
+
+          for (const pl of placements) {
+            rack.slots.push({ position: pl.position, bottle: pl.bottle });
+            placedCount++;
+            if (pl.overflowed) overflowedCount++;
+          }
+          for (const u of unplaced) {
+            unplacedDetails.push({ ...u, rackName });
+          }
+
+          if (placements.length > 0) {
+            await rack.save().catch(err => console.error(`Failed to save rack ${rackName} during import:`, err.message));
+          }
+        } catch (err) {
+          console.error(`Failed placement for rack ${rackName}:`, err.message);
+          for (const p of group) {
+            unplacedDetails.push({ sourceIndex: p.sourceIndex, rackName, requestedPosition: null, reason: err.message });
+          }
+        }
+      }
+    }
+
     logAudit(req, 'bottle.import', { type: 'cellar', id: cellarId }, {
       created,
       skipped: skipped.length,
       errors: errors.length,
-      total: items.length
+      total: items.length,
+      racksCreated: createdRacks.length,
+      placed: placedCount,
+      overflowed: overflowedCount,
+      unplaced: unplacedDetails.length
     });
 
     res.json({
       created,
       skipped,
       errors,
-      total: items.length
+      total: items.length,
+      racksCreated: createdRacks,
+      placed: placedCount,
+      overflowed: overflowedCount,
+      unplaced: unplacedDetails
     });
   } catch (error) {
     console.error('Import confirm error:', error);
@@ -656,7 +816,7 @@ router.post('/confirm', async (req, res) => {
  */
 router.post('/sessions', async (req, res) => {
   try {
-    const { cellarId, fileName, detectedFormat, results, selections, manualWines } = req.body;
+    const { cellarId, fileName, detectedFormat, results, selections, manualWines, positionAnchor, rackConfigs, defaultCurrency } = req.body;
 
     if (!cellarId || !mongoose.Types.ObjectId.isValid(cellarId)) {
       return res.status(400).json({ error: 'Valid cellarId is required' });
@@ -684,7 +844,10 @@ router.post('/sessions', async (req, res) => {
       detectedFormat,
       results,
       selections: selections || {},
-      manualWines: manualWines || {}
+      manualWines: manualWines || {},
+      positionAnchor: positionAnchor || 'top-left',
+      rackConfigs: rackConfigs || {},
+      defaultCurrency: defaultCurrency || 'USD'
     });
     await session.save();
 
@@ -808,9 +971,12 @@ router.put('/sessions/:id', async (req, res) => {
       return res.status(403).json({ error: 'Not authorized' });
     }
 
-    const { selections, manualWines } = req.body;
+    const { selections, manualWines, positionAnchor, rackConfigs, defaultCurrency } = req.body;
     if (selections !== undefined) session.selections = selections;
     if (manualWines !== undefined) session.manualWines = manualWines;
+    if (positionAnchor !== undefined) session.positionAnchor = positionAnchor;
+    if (rackConfigs !== undefined) session.rackConfigs = rackConfigs;
+    if (defaultCurrency !== undefined) session.defaultCurrency = defaultCurrency;
     await session.save();
 
     res.json({ ok: true });
