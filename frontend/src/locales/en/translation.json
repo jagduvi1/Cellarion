@@ -402,7 +402,7 @@
     "noteOptional": "Note (optional)",
     "notePlaceholder": "How was it? Any tasting notes?",
     "noPriceData": "No market price data yet.",
-    "sommelierAddPricing": "Our staff will add pricing data for this vintage soon.",
+    "sommelierAddPricing": "Market-price tracking is opt-in — use the toggle below to request it.",
     "reportPrice": "Report incorrect price",
     "maturityPhaseEarly": "Early drinking",
     "maturityPhasePeak": "Optimal maturity ⭐",
