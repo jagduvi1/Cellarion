@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { computeLayout, computeModularLayout, SLOT_RADIUS } from '../../utils/rackLayouts';
+import { computeLayout, computeModularLayout, SLOT_RADIUS, CELL_SIZE } from '../../utils/rackLayouts';
 import './RackRenderer.css';
 
 const WINE_COLORS = {
@@ -21,10 +21,18 @@ const SHELF_COLOR   = '#D4BA94';
 
 /** Sub-circle offsets for multi-bottle cells (dx, dy from cell centre) */
 function getSubOffsets(bpc, R) {
-  const g = R * 0.48;
+  const g = R * 0.42;
   switch (bpc) {
     case 2: return [{ dx: -g, dy: 0 }, { dx: g, dy: 0 }];
-    case 3: return [{ dx: 0, dy: -g * 0.7 }, { dx: -g, dy: g * 0.5 }, { dx: g, dy: g * 0.5 }];
+    case 3: {
+      // Equilateral triangle, slightly tighter so the cluster reads as one unit
+      const t = R * 0.38;
+      return [
+        { dx: 0,             dy: -t * 0.85 },
+        { dx: -t * 0.85,     dy:  t * 0.55 },
+        { dx:  t * 0.85,     dy:  t * 0.55 },
+      ];
+    }
     case 4: return [{ dx: -g, dy: -g }, { dx: g, dy: -g }, { dx: -g, dy: g }, { dx: g, dy: g }];
     default: {
       // General grid arrangement
@@ -48,9 +56,13 @@ function getSubOffsets(bpc, R) {
 /** Sub-circle radius for multi-bottle cells */
 function getSubRadius(bpc, R) {
   if (bpc <= 2) return R * 0.45;
-  if (bpc <= 4) return R * 0.38;
+  if (bpc <= 4) return R * 0.40;
   return R * 0.3;
 }
+
+/** Wood-tone cell tray colour — slightly darker than the rack background */
+const CELL_TRAY_FILL = '#C8AD82';
+const CELL_TRAY_STROKE = '#A89070';
 
 export default function RackRenderer({
   rack,
@@ -211,7 +223,9 @@ export default function RackRenderer({
             }
 
             // Multi-bottle cells: group positions sharing the same (cx,cy),
-            // then render each as an individual smaller circle in a sub-grid
+            // then render a wood-tone "tray" behind each cell so the cluster
+            // of sub-circles visually reads as a single cell, then each
+            // bottle as an individual smaller circle in a sub-grid.
             const cellMap = {};
             layout.slots.forEach(s => {
               const key = `${s.cx},${s.cy}`;
@@ -224,25 +238,46 @@ export default function RackRenderer({
             const backSubOffsets = backR ? getSubOffsets(bpc, backR) : subOffsets;
             const backSubR = backR ? getSubRadius(bpc, backR) : subR;
 
+            const trayPad = 3;
+            const traySize = CELL_SIZE - trayPad * 2;
+            const backTraySize = backR ? backR * 2 + 4 : traySize;
+
             return Object.values(cellMap).map(cell => {
               const useOff = cell.isBack ? backSubOffsets : subOffsets;
               const useR = cell.isBack ? backSubR : subR;
-              return cell.positions.map((pos, idx) => {
-                const off = useOff[idx] || { dx: 0, dy: 0 };
-                return (
-                  <SlotCircle
-                    key={pos}
-                    position={pos}
-                    cx={cell.cx + off.dx}
-                    cy={cell.cy + off.dy}
-                    R={useR}
-                    slot={slotMap[pos]}
-                    isActive={activePos === pos}
-                    isHighlight={highlightPos === pos}
-                    onSlotClick={onSlotClick}
+              const sz = cell.isBack ? backTraySize : traySize;
+              return (
+                <g key={`cell-${cell.cx},${cell.cy}`}>
+                  <rect
+                    x={cell.cx - sz / 2}
+                    y={cell.cy - sz / 2}
+                    width={sz}
+                    height={sz}
+                    rx={5}
+                    fill={CELL_TRAY_FILL}
+                    stroke={CELL_TRAY_STROKE}
+                    strokeWidth={0.75}
+                    opacity={0.7}
+                    pointerEvents="none"
                   />
-                );
-              });
+                  {cell.positions.map((pos, idx) => {
+                    const off = useOff[idx] || { dx: 0, dy: 0 };
+                    return (
+                      <SlotCircle
+                        key={pos}
+                        position={pos}
+                        cx={cell.cx + off.dx}
+                        cy={cell.cy + off.dy}
+                        R={useR}
+                        slot={slotMap[pos]}
+                        isActive={activePos === pos}
+                        isHighlight={highlightPos === pos}
+                        onSlotClick={onSlotClick}
+                      />
+                    );
+                  })}
+                </g>
+              );
             });
           })()}
         </svg>
