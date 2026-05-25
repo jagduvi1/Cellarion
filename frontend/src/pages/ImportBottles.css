@@ -1099,32 +1099,28 @@
 .rack-config-list {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 0.6rem;
   margin: 0.75rem 0 1rem;
 }
 
-.rack-config-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-  padding: 0.5rem 0.75rem;
+.rack-config-card {
   background: var(--color-bg);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
+  padding: 0.6rem 0.8rem;
+}
+
+.rack-config-card-head {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  margin-bottom: 0.45rem;
   flex-wrap: wrap;
 }
 
-.rack-config-name {
-  display: flex;
-  flex-direction: column;
-  gap: 0.1rem;
-  min-width: 8rem;
-}
-
-.rack-config-name strong {
+.rack-config-card-head strong {
   color: var(--color-text);
-  font-size: 0.9rem;
+  font-size: 0.95rem;
 }
 
 .rack-config-meta {
@@ -1132,25 +1128,24 @@
   color: var(--color-text-muted);
 }
 
-.rack-config-dims {
+.rack-config-card-body {
   display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  font-size: 0.85rem;
-  color: var(--color-text);
+  flex-wrap: wrap;
+  gap: 0.5rem 0.75rem;
+  align-items: flex-end;
 }
 
-.rack-config-dims label {
+.rack-config-field {
   display: flex;
   flex-direction: column;
+  gap: 0.1rem;
   font-size: 0.7rem;
   color: var(--color-text-muted);
-  gap: 0.1rem;
 }
 
-.rack-config-dims input[type="number"] {
-  width: 3.5rem;
-  padding: 0.25rem 0.4rem;
+.rack-config-field input[type="number"] {
+  width: 3.8rem;
+  padding: 0.3rem 0.4rem;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
   background: var(--color-surface);
@@ -1158,17 +1153,20 @@
   font-size: 0.85rem;
 }
 
-.rack-config-times {
-  color: var(--color-text-muted);
-  margin: 0 0.1rem;
-  align-self: flex-end;
-  padding-bottom: 0.3rem;
+.rack-config-field select {
+  padding: 0.3rem 0.4rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: 0.85rem;
+  min-width: 12rem;
 }
 
-.rack-config-capacity {
-  font-size: 0.75rem;
+.rack-config-capacity-line {
+  margin-top: 0.45rem;
+  font-size: 0.78rem;
   color: var(--color-text-muted);
-  margin-left: 0.4rem;
 }
 
 .rack-config-warn {

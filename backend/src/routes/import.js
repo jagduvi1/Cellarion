@@ -397,17 +397,44 @@ router.post('/confirm', async (req, res) => {
 
     const positionAnchor = VALID_ANCHORS.includes(rawAnchor) ? rawAnchor : DEFAULT_ANCHOR;
 
-    // Validate user-supplied per-rack dimensions (rows/cols clamped to 1..20)
-    // rackConfigs shape: { [rackName]: { rows: number, cols: number } }
+    // Validate user-supplied per-rack configuration.
+    // Shape: { [rackName]: { type?, rows?, cols?, typeConfig?: {...} } }
+    // type — one of RACK_TYPES (defaults to 'grid' if absent/invalid)
+    // rows/cols — clamped to 1..20
+    // typeConfig — optional shape config (bottlesPerCell, bottlesPerSection,
+    //   moduleRows, moduleCols, backCols), each clamped to model bounds
     const rackConfigs = {};
+    const clampInt = (v, min, max) => {
+      const n = parseInt(v, 10);
+      if (isNaN(n)) return undefined;
+      return Math.max(min, Math.min(max, n));
+    };
     if (rawRackConfigs && typeof rawRackConfigs === 'object') {
       for (const [name, cfg] of Object.entries(rawRackConfigs)) {
         if (!cfg || typeof cfg !== 'object') continue;
-        const rows = parseInt(cfg.rows, 10);
-        const cols = parseInt(cfg.cols, 10);
-        if (rows >= 1 && rows <= 20 && cols >= 1 && cols <= 20) {
-          rackConfigs[String(name)] = { rows, cols };
+        const rows = clampInt(cfg.rows, 1, 20);
+        const cols = clampInt(cfg.cols, 1, 20);
+        if (!rows || !cols) continue;
+
+        const entry = { rows, cols };
+        if (cfg.type && RACK_TYPES.includes(cfg.type)) entry.type = cfg.type;
+
+        if (cfg.typeConfig && typeof cfg.typeConfig === 'object') {
+          const tc = {};
+          const mr = clampInt(cfg.typeConfig.moduleRows, 1, 10);
+          const mc = clampInt(cfg.typeConfig.moduleCols, 1, 10);
+          const bpc = clampInt(cfg.typeConfig.bottlesPerCell, 1, 20);
+          const bps = clampInt(cfg.typeConfig.bottlesPerSection, 1, 30);
+          const bc = clampInt(cfg.typeConfig.backCols, 0, 20);
+          if (mr !== undefined) tc.moduleRows = mr;
+          if (mc !== undefined) tc.moduleCols = mc;
+          if (bpc !== undefined) tc.bottlesPerCell = bpc;
+          if (bps !== undefined) tc.bottlesPerSection = bps;
+          if (bc !== undefined) tc.backCols = bc;
+          if (Object.keys(tc).length > 0) entry.typeConfig = tc;
         }
+
+        rackConfigs[String(name)] = entry;
       }
     }
 
@@ -447,17 +474,20 @@ router.post('/confirm', async (req, res) => {
           const override = rackConfigs[name];
           const rows = override?.rows || spec.rows;
           const cols = override?.cols || spec.cols;
-          const safeType = RACK_TYPES.includes(spec.type) ? spec.type : 'grid';
-          const rack = new Rack({
+          const chosenType = override?.type || spec.type;
+          const safeType = RACK_TYPES.includes(chosenType) ? chosenType : 'grid';
+          const rackData = {
             cellar: cellarId,
             user: cellar.user,
             name,
             type: safeType,
             rows,
             cols
-          });
+          };
+          if (override?.typeConfig) rackData.typeConfig = override.typeConfig;
+          const rack = new Rack(rackData);
           await rack.save();
-          createdRacks.push({ name, type: safeType, rows, cols });
+          createdRacks.push({ name, type: safeType, rows, cols, typeConfig: override?.typeConfig });
           logAudit(req, 'rack.create', { type: 'rack', id: rack._id }, { source: 'import', name });
         }
       }

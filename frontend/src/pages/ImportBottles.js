@@ -4,6 +4,8 @@ import { useAuth } from '../contexts/AuthContext';
 import { validateImport, confirmImport } from '../api/bottles';
 import { searchWines } from '../api/wines';
 import { parseAndMap, parseJSON, suggestRackDimensions, summariseRacks } from '../utils/importMappers';
+import { getTotalSlots } from '../utils/rackLayouts';
+import { TYPE_DIMENSIONS } from '../components/racks/RackTypeSelector';
 import {
   listImportSessions,
   createImportSession,
@@ -260,11 +262,15 @@ function ImportBottles() {
         setDetectedFormat(format);
         setFileName(file.name);
 
-        // Build per-rack summary + seed editable dimensions with suggestions
+        // Build per-rack summary + seed editable config with suggestions.
+        // Default type = 'grid' (1 bottle per slot) — users can change to
+        // shelf, stack, etc. if their physical rack has multi-bottle cells
+        // or a different shape (or if they don't have a physical rack at all).
         const summary = summariseRacks(items);
         const initialConfigs = {};
         for (const [name, info] of Object.entries(summary)) {
-          initialConfigs[name] = suggestRackDimensions(info.maxPosition);
+          const required = Math.max(info.maxPosition || 0, info.count || 0);
+          initialConfigs[name] = { type: 'grid', ...suggestRackDimensions(required), typeConfig: {} };
         }
         setRackSummary(summary);
         setRackConfigs(initialConfigs);
@@ -719,50 +725,126 @@ function ImportBottles() {
 
           <div className="rack-config-list">
             {Object.entries(rackSummary).map(([name, info]) => {
-              const cfg = rackConfigs[name] || { rows: 1, cols: 1 };
+              const cfg = rackConfigs[name] || { type: 'grid', rows: 1, cols: 1, typeConfig: {} };
+              const dims = TYPE_DIMENSIONS[cfg.type] || TYPE_DIMENSIONS.grid;
+              const capacity = getTotalSlots(cfg.type, cfg.rows, cfg.cols, cfg.typeConfig);
+              const required = Math.max(info.maxPosition || 0, info.count || 0);
+              const tooSmall = capacity < required;
+
+              const updateCfg = (patch) => setRackConfigs(prev => ({
+                ...prev,
+                [name]: { ...prev[name], ...patch }
+              }));
+              const updateTc = (key, value) => setRackConfigs(prev => ({
+                ...prev,
+                [name]: {
+                  ...prev[name],
+                  typeConfig: { ...(prev[name]?.typeConfig || {}), [key]: value }
+                }
+              }));
+
               return (
-                <div key={name} className="rack-config-row">
-                  <div className="rack-config-name">
+                <div key={name} className="rack-config-card">
+                  <div className="rack-config-card-head">
                     <strong>{name}</strong>
                     <span className="rack-config-meta">
                       {info.count} bottle{info.count !== 1 ? 's' : ''}
                       {info.maxPosition > 0 && <>, highest slot {info.maxPosition}</>}
                     </span>
                   </div>
-                  <div className="rack-config-dims">
-                    <label>
-                      Rows
-                      <input
-                        type="number"
-                        min="1"
-                        max="20"
-                        value={cfg.rows}
-                        onChange={(e) => setRackConfigs(prev => ({
-                          ...prev,
-                          [name]: { ...prev[name], rows: parseInt(e.target.value, 10) || 1 }
-                        }))}
-                      />
+                  <div className="rack-config-card-body">
+                    <label className="rack-config-field">
+                      <span>Type</span>
+                      <select
+                        value={cfg.type}
+                        onChange={(e) => {
+                          const newType = e.target.value;
+                          const newDims = TYPE_DIMENSIONS[newType] || TYPE_DIMENSIONS.grid;
+                          updateCfg({
+                            type: newType,
+                            rows: newDims.defaultRows,
+                            cols: newDims.defaultCols
+                          });
+                        }}
+                      >
+                        <option value="grid">Grid (1 bottle per slot)</option>
+                        <option value="shelf">Open Shelf (multi-bottle cells)</option>
+                        <option value="stack">Stack (single column)</option>
+                        <option value="hex">Honeycomb</option>
+                        <option value="triangle">A-Frame (triangle)</option>
+                        <option value="x-rack">X-Rack</option>
+                        <option value="cube">Modular Cube</option>
+                      </select>
                     </label>
-                    <span className="rack-config-times">×</span>
-                    <label>
-                      Cols
-                      <input
-                        type="number"
-                        min="1"
-                        max="20"
-                        value={cfg.cols}
-                        onChange={(e) => setRackConfigs(prev => ({
-                          ...prev,
-                          [name]: { ...prev[name], cols: parseInt(e.target.value, 10) || 1 }
-                        }))}
-                      />
-                    </label>
-                    <span className="rack-config-capacity">
-                      = {cfg.rows * cfg.cols} slots
-                      {info.maxPosition > cfg.rows * cfg.cols && (
-                        <span className="rack-config-warn"> (too small for slot {info.maxPosition})</span>
-                      )}
-                    </span>
+
+                    {dims.showRows && (
+                      <label className="rack-config-field">
+                        <span>{dims.rowLabel === 'racks.heightLabel' ? 'Height' : 'Rows'}</span>
+                        <input
+                          type="number" min="1" max="20"
+                          value={cfg.rows}
+                          onChange={(e) => updateCfg({ rows: parseInt(e.target.value, 10) || 1 })}
+                        />
+                      </label>
+                    )}
+                    {dims.showCols && (
+                      <label className="rack-config-field">
+                        <span>{dims.colLabel === 'racks.baseWidthLabel' ? 'Base width' : 'Cols'}</span>
+                        <input
+                          type="number" min="1" max="20"
+                          value={cfg.cols}
+                          onChange={(e) => updateCfg({ cols: parseInt(e.target.value, 10) || 1 })}
+                        />
+                      </label>
+                    )}
+                    {dims.showBottlesPerCell && (
+                      <label className="rack-config-field">
+                        <span>Per cell</span>
+                        <input
+                          type="number" min="1" max="20"
+                          value={cfg.typeConfig?.bottlesPerCell || 1}
+                          onChange={(e) => updateTc('bottlesPerCell', parseInt(e.target.value, 10) || 1)}
+                        />
+                      </label>
+                    )}
+                    {dims.showBottlesPerSection && (
+                      <label className="rack-config-field">
+                        <span>Per section</span>
+                        <input
+                          type="number" min="1" max="30"
+                          value={cfg.typeConfig?.bottlesPerSection || 10}
+                          onChange={(e) => updateTc('bottlesPerSection', parseInt(e.target.value, 10) || 10)}
+                        />
+                      </label>
+                    )}
+                    {dims.showModule && (
+                      <>
+                        <label className="rack-config-field">
+                          <span>Module rows</span>
+                          <input
+                            type="number" min="1" max="10"
+                            value={cfg.typeConfig?.moduleRows || 2}
+                            onChange={(e) => updateTc('moduleRows', parseInt(e.target.value, 10) || 2)}
+                          />
+                        </label>
+                        <label className="rack-config-field">
+                          <span>Module cols</span>
+                          <input
+                            type="number" min="1" max="10"
+                            value={cfg.typeConfig?.moduleCols || 2}
+                            onChange={(e) => updateTc('moduleCols', parseInt(e.target.value, 10) || 2)}
+                          />
+                        </label>
+                      </>
+                    )}
+                  </div>
+                  <div className="rack-config-capacity-line">
+                    = {capacity} slots
+                    {tooSmall && (
+                      <span className="rack-config-warn">
+                        {' '}— too small for {required} bottles
+                      </span>
+                    )}
                   </div>
                 </div>
               );
