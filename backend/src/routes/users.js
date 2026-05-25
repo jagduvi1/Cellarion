@@ -405,7 +405,7 @@ router.get('/me/export', requireAuth, async (req, res) => {
       Follow.find({ $or: [{ follower: userId }, { following: userId }] })
         .populate('follower', 'username').populate('following', 'username').lean(),
       ChatUsage.find({ userId: userId }).select('date promptTokens completionTokens').lean(),
-      ImportSession.find({ user: userId }).select('cellar status rows createdAt').lean(),
+      ImportSession.find({ user: userId }).select('cellar status results positionAnchor rackConfigs defaultCurrency createdAt').lean(),
       SupportTicket.find({ user: userId }).select('category subject status createdAt').lean(),
       DiscussionReport.find({ user: userId }).select('discussion reply reason createdAt').lean(),
       WineReport.find({ user: userId }).select('wineDefinition reason status createdAt').lean(),
@@ -535,7 +535,10 @@ router.get('/me/export', requireAuth, async (req, res) => {
       importSessions: importSessions.map(s => ({
         cellar: s.cellar,
         status: s.status,
-        rowCount: s.rows?.length || 0,
+        rowCount: s.results?.length || 0,
+        positionAnchor: s.positionAnchor,
+        rackConfigs: s.rackConfigs,
+        defaultCurrency: s.defaultCurrency,
         createdAt: s.createdAt
       })),
       supportTickets: supportTickets.map(t => ({
