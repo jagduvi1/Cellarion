@@ -1068,3 +1068,67 @@
 .btn-retry-ai:hover:not(:disabled) {
   background: var(--color-info-bg);
 }
+
+.import-rack-options {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 1rem 1.25rem;
+  margin: 1rem 0 1.5rem;
+}
+
+.import-rack-options h3 {
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
+  color: var(--color-text);
+}
+
+.rack-options-hint {
+  margin: 0 0 0.75rem;
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+}
+
+.row-origin-toggle {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.row-origin-toggle label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg);
+  cursor: pointer;
+  font-size: 0.85rem;
+  color: var(--color-text);
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.row-origin-toggle label:hover {
+  border-color: var(--color-primary);
+}
+
+.row-origin-toggle label.active {
+  border-color: var(--color-primary);
+  background: var(--color-info-bg);
+}
+
+.row-origin-toggle input[type="radio"] {
+  margin: 0;
+}
+
+.row-origin-toggle-review {
+  margin-bottom: 0.75rem;
+  align-items: center;
+}
+
+.row-origin-label {
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+  margin-right: 0.25rem;
+}

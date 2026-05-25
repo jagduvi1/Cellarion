@@ -65,6 +65,8 @@ function ImportBottles() {
   const [detectedFormat, setDetectedFormat] = useState(null);
   const [fileName, setFileName] = useState('');
   const [dragOver, setDragOver] = useState(false);
+  // 'top' (most apps) or 'bottom' (Oeno-style: row 1 is at the bottom of the rack)
+  const [rowOrigin, setRowOrigin] = useState('top');
 
   // Review step
   const [results, setResults] = useState([]);
@@ -547,7 +549,7 @@ function ImportBottles() {
     if (rowImporting !== null || importing) return;
     setRowImporting(r.index);
     try {
-      const res = await confirmImport(apiFetch, { cellarId, items: [buildImportItem(r)] });
+      const res = await confirmImport(apiFetch, { cellarId, items: [buildImportItem(r)], rowOrigin });
       const data = await res.json();
       if (res.ok && data.created > 0) {
         // Mark as imported — auto-save will persist this to the session
@@ -573,7 +575,7 @@ function ImportBottles() {
       .map(buildImportItem);
 
     try {
-      const res = await confirmImport(apiFetch, { cellarId, items });
+      const res = await confirmImport(apiFetch, { cellarId, items, rowOrigin });
       const data = await res.json();
 
       if (!res.ok) {
@@ -679,6 +681,43 @@ function ImportBottles() {
           </div>
         )}
       </div>
+
+      {parsedItems.length > 0 && parsedItems.some(i => i.rackName) && (
+        <div className="import-rack-options">
+          <h3>Rack placement</h3>
+          <p className="rack-options-hint">
+            Your file references racks ({new Set(parsedItems.map(i => i.rackName).filter(Boolean)).size} unique).
+            Racks that don't exist in this cellar yet will be created automatically.
+            {parsedItems.some(i => i.row && i.col) && (
+              <> Your file uses <strong>row</strong> + <strong>col</strong> coordinates — pick which end "row 1" sits at:</>
+            )}
+          </p>
+          {parsedItems.some(i => i.row && i.col) && (
+            <div className="row-origin-toggle">
+              <label className={rowOrigin === 'top' ? 'active' : ''}>
+                <input
+                  type="radio"
+                  name="rowOrigin"
+                  value="top"
+                  checked={rowOrigin === 'top'}
+                  onChange={() => setRowOrigin('top')}
+                />
+                Row 1 is at the <strong>top</strong> (most apps)
+              </label>
+              <label className={rowOrigin === 'bottom' ? 'active' : ''}>
+                <input
+                  type="radio"
+                  name="rowOrigin"
+                  value="bottom"
+                  checked={rowOrigin === 'bottom'}
+                  onChange={() => setRowOrigin('bottom')}
+                />
+                Row 1 is at the <strong>bottom</strong> (Oeno / Vintec style)
+              </label>
+            </div>
+          )}
+        </div>
+      )}
 
       {parsedItems.length > 0 && (
         <div className="import-preview">
@@ -1056,6 +1095,31 @@ function ImportBottles() {
               {unresolved} item{unresolved !== 1 ? 's' : ''} still need a selection or to be skipped
             </p>
           )}
+          {results.some(r => r.item?.row && r.item?.col) && (
+            <div className="row-origin-toggle row-origin-toggle-review">
+              <span className="row-origin-label">Row 1 is at the:</span>
+              <label className={rowOrigin === 'top' ? 'active' : ''}>
+                <input
+                  type="radio"
+                  name="rowOriginReview"
+                  value="top"
+                  checked={rowOrigin === 'top'}
+                  onChange={() => setRowOrigin('top')}
+                />
+                top
+              </label>
+              <label className={rowOrigin === 'bottom' ? 'active' : ''}>
+                <input
+                  type="radio"
+                  name="rowOriginReview"
+                  value="bottom"
+                  checked={rowOrigin === 'bottom'}
+                  onChange={() => setRowOrigin('bottom')}
+                />
+                bottom (Oeno / Vintec)
+              </label>
+            </div>
+          )}
           <button
             className="btn btn-primary btn-import"
             onClick={handleImport}
@@ -1100,7 +1164,25 @@ function ImportBottles() {
               <span>Errors</span>
             </div>
           )}
+          {importResult.racksCreated?.length > 0 && (
+            <div className="done-stat">
+              <span className="done-number">{importResult.racksCreated.length}</span>
+              <span>Rack{importResult.racksCreated.length !== 1 ? 's' : ''} created</span>
+            </div>
+          )}
         </div>
+      )}
+      {importResult?.racksCreated?.length > 0 && (
+        <details className="done-errors-detail">
+          <summary>Auto-created racks ({importResult.racksCreated.length})</summary>
+          <ul>
+            {importResult.racksCreated.map((r, i) => (
+              <li key={i}>
+                <strong>{r.name}</strong> — {r.type} {r.rows}×{r.cols}
+              </li>
+            ))}
+          </ul>
+        </details>
       )}
       {importResult?.errors.length > 0 && (
         <details className="done-errors-detail">

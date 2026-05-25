@@ -27,6 +27,8 @@ const { stripHtml, escapeRegex } = require('../utils/sanitize');
 const { parseAndValidateVintage } = require('../utils/validation');
 const { extractAiExplanation } = require('../utils/jsonExtract');
 const { getMaxPosition } = require('../utils/rackGeometry');
+const { computeRackPosition, planRackCreations, VALID_ROW_ORIGINS } = require('../utils/rackImport');
+const { RACK_TYPES } = require('../models/Rack');
 const { runConcurrent } = require('../utils/concurrency');
 const WineRequest = require('../models/WineRequest');
 const ImportSession = require('../models/ImportSession');
@@ -378,7 +380,7 @@ router.post('/validate', async (req, res) => {
  */
 router.post('/confirm', async (req, res) => {
   try {
-    const { cellarId, items } = req.body;
+    const { cellarId, items, rowOrigin: rawRowOrigin } = req.body;
 
     if (!cellarId) {
       return res.status(400).json({ error: 'cellarId is required' });
@@ -392,6 +394,8 @@ router.post('/confirm', async (req, res) => {
     if (items.length > MAX_IMPORT_SIZE) {
       return res.status(400).json({ error: `Maximum ${MAX_IMPORT_SIZE} items per import` });
     }
+
+    const rowOrigin = rawRowOrigin && VALID_ROW_ORIGINS.includes(rawRowOrigin) ? rawRowOrigin : 'top';
 
     // Verify cellar access
     const cellar = await Cellar.findById(cellarId);
@@ -407,6 +411,40 @@ router.post('/confirm', async (req, res) => {
     const hasPrice = items.some(i => i.price != null && i.price !== '');
     if (hasPrice) {
       await getOrCreateDailySnapshot().catch(err => console.error('Failed to fetch daily exchange rate snapshot:', err.message));
+    }
+
+    // Auto-create any racks referenced in the import that don't already exist
+    // in this cellar. Runs once up-front so the bottle-placement step below
+    // can rely on every rack being present.
+    const createdRacks = [];
+    try {
+      const rackPlan = planRackCreations(items);
+      if (rackPlan.size > 0) {
+        const existing = await Rack.find({
+          cellar: cellarId,
+          name: { $in: Array.from(rackPlan.keys()) },
+          deletedAt: null
+        }).select('name').lean();
+        const existingNames = new Set(existing.map(r => r.name));
+
+        for (const [name, spec] of rackPlan.entries()) {
+          if (existingNames.has(name)) continue;
+          const safeType = RACK_TYPES.includes(spec.type) ? spec.type : 'grid';
+          const rack = new Rack({
+            cellar: cellarId,
+            user: cellar.user,
+            name,
+            type: safeType,
+            rows: spec.rows,
+            cols: spec.cols
+          });
+          await rack.save();
+          createdRacks.push({ name, type: safeType, rows: spec.rows, cols: spec.cols });
+          logAudit(req, 'rack.create', { type: 'rack', id: rack._id }, { source: 'import', name });
+        }
+      }
+    } catch (err) {
+      console.error('Failed to auto-create racks during import (non-fatal):', err.message);
     }
 
     let created = 0;
@@ -581,18 +619,30 @@ router.post('/confirm', async (req, res) => {
         created++;
         if (!item.addToHistory) createdBottleIds.push(bottle._id);
 
-        // Place bottle in rack if rackName + rackPosition provided (active bottles only)
-        if (item.rackName && item.rackPosition && bottle.status === 'active') {
+        // Place bottle in rack if rackName + (rackPosition or row+col) provided
+        // (active bottles only). Falls back silently when the rack doesn't
+        // exist or the slot is occupied — import doesn't fail over placement.
+        const hasPlacement = item.rackName && (item.rackPosition || (item.row && item.col));
+        if (hasPlacement && bottle.status === 'active') {
           try {
-            const position = parseInt(item.rackPosition, 10);
-            if (!isNaN(position) && position >= 1) {
-              const rack = await Rack.findOne({ cellar: cellarId, name: String(item.rackName), deletedAt: null });
-              if (rack && position <= getMaxPosition(rack)) {
-                // Only place if slot is empty
-                const occupied = rack.slots.some(s => s.position === position);
-                if (!occupied) {
-                  rack.slots.push({ position, bottle: bottle._id });
-                  await rack.save().catch(err => console.error('Failed to save rack slot during import:', err.message));
+            const rack = await Rack.findOne({ cellar: cellarId, name: String(item.rackName), deletedAt: null });
+            if (rack) {
+              const positionResult = computeRackPosition({
+                position: item.rackPosition,
+                row: item.row,
+                col: item.col,
+                rackRows: rack.rows,
+                rackCols: rack.cols,
+                rowOrigin
+              });
+              if (!positionResult.error) {
+                const { position } = positionResult;
+                if (position <= getMaxPosition(rack)) {
+                  const occupied = rack.slots.some(s => s.position === position);
+                  if (!occupied) {
+                    rack.slots.push({ position, bottle: bottle._id });
+                    await rack.save().catch(err => console.error('Failed to save rack slot during import:', err.message));
+                  }
                 }
               }
             }
@@ -624,14 +674,16 @@ router.post('/confirm', async (req, res) => {
       created,
       skipped: skipped.length,
       errors: errors.length,
-      total: items.length
+      total: items.length,
+      racksCreated: createdRacks.length
     });
 
     res.json({
       created,
       skipped,
       errors,
-      total: items.length
+      total: items.length,
+      racksCreated: createdRacks
     });
   } catch (error) {
     console.error('Import confirm error:', error);

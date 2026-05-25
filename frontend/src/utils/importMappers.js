@@ -22,6 +22,15 @@
  *   rating        - Numeric rating
  *   ratingScale   - '5' | '20' | '100'
  *   location      - Physical location in cellar
+ *   rackName      - Name of rack to place into (auto-created if missing)
+ *   rackPosition  - 1-indexed slot number (used directly if provided)
+ *   row, col      - Alternative to rackPosition: row and column in the rack.
+ *                   The importer flattens (row, col) → position using the
+ *                   rack's geometry and the user-selected rowOrigin.
+ *   rackRows, rackCols - Rack dimensions (used when auto-creating racks
+ *                   and for row-origin math). Optional — also inferred from
+ *                   max observed (row, col) per rack.
+ *   rackType      - Optional rack type (grid|shelf|hex|triangle|stack|x-rack|cube)
  */
 
 /**
@@ -178,6 +187,11 @@ function mapVivinoRow(row) {
     location: get(['Location', 'location', 'Bin', 'bin']),
     rackName: get(['Rack', 'rack', 'Rack Name', 'rackName']) || undefined,
     rackPosition: parseInt(get(['Rack Position', 'rackPosition', 'Position', 'Slot']), 10) || undefined,
+    row: parseInt(get(['Row', 'row', 'Bin Row', 'BinRow', 'Rack Row']), 10) || undefined,
+    col: parseInt(get(['Col', 'col', 'Column', 'column', 'Bin Col', 'BinCol', 'Rack Col']), 10) || undefined,
+    rackRows: parseInt(get(['Rack Rows', 'RackRows', 'rackRows', 'Rack Height']), 10) || undefined,
+    rackCols: parseInt(get(['Rack Cols', 'RackCols', 'rackCols', 'Rack Columns', 'Rack Width']), 10) || undefined,
+    rackType: get(['Rack Type', 'RackType', 'rackType']) || undefined,
   };
 }
 
@@ -231,6 +245,11 @@ function mapCellarTrackerRow(row) {
     location: get(['Location', 'location', 'Bin', 'bin']),
     rackName: get(['Rack', 'rack', 'Rack Name', 'rackName']) || undefined,
     rackPosition: parseInt(get(['Rack Position', 'rackPosition', 'Position', 'Slot']), 10) || undefined,
+    row: parseInt(get(['Row', 'row', 'Bin Row', 'BinRow', 'Rack Row']), 10) || undefined,
+    col: parseInt(get(['Col', 'col', 'Column', 'column', 'Bin Col', 'BinCol', 'Rack Col']), 10) || undefined,
+    rackRows: parseInt(get(['Rack Rows', 'RackRows', 'rackRows', 'Rack Height']), 10) || undefined,
+    rackCols: parseInt(get(['Rack Cols', 'RackCols', 'rackCols', 'Rack Columns', 'Rack Width']), 10) || undefined,
+    rackType: get(['Rack Type', 'RackType', 'rackType']) || undefined,
   };
 }
 
@@ -269,6 +288,11 @@ function mapGenericRow(row) {
     location: get(['Location', 'location', 'Bin', 'bin']),
     rackName: get(['Rack', 'rack', 'Rack Name', 'rackName']) || undefined,
     rackPosition: parseInt(get(['Rack Position', 'rackPosition', 'Position', 'Slot']), 10) || undefined,
+    row: parseInt(get(['Row', 'row', 'Bin Row', 'BinRow', 'Rack Row']), 10) || undefined,
+    col: parseInt(get(['Col', 'col', 'Column', 'column', 'Bin Col', 'BinCol', 'Rack Col']), 10) || undefined,
+    rackRows: parseInt(get(['Rack Rows', 'RackRows', 'rackRows', 'Rack Height']), 10) || undefined,
+    rackCols: parseInt(get(['Rack Cols', 'RackCols', 'rackCols', 'Rack Columns', 'Rack Width']), 10) || undefined,
+    rackType: get(['Rack Type', 'RackType', 'rackType']) || undefined,
   };
 }
 
@@ -303,6 +327,11 @@ function mapCellarionRow(row) {
     ratingScale: str('ratingScale') || undefined,
     rackName: str('rackName') || undefined,
     rackPosition: int('rackPosition'),
+    row: int('row'),
+    col: int('col'),
+    rackRows: int('rackRows'),
+    rackCols: int('rackCols'),
+    rackType: str('rackType') || undefined,
     dateAdded: str('dateAdded') || undefined,
     addToHistory: str('addToHistory') || undefined,
     consumedReason: str('consumedReason') || undefined,

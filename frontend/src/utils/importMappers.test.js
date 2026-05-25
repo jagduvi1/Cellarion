@@ -362,4 +362,50 @@ describe('parseAndMap', () => {
     const result = parseAndMap(csv);
     expect(result.items[0].type).toBe('sparkling');
   });
+
+  describe('rack columns (row/col/rackRows/rackCols/rackType)', () => {
+    it('maps Row, Col, Rack Rows, Rack Cols, Rack Type for generic CSV', () => {
+      const csv = 'Wine,Producer,Vintage,Rack,Row,Col,Rack Rows,Rack Cols,Rack Type\n' +
+        'Margaux,Chateau Margaux,2015,Main Cabinet,3,2,18,6,grid';
+      const result = parseAndMap(csv);
+      expect(result.items).toHaveLength(1);
+      expect(result.items[0]).toMatchObject({
+        rackName: 'Main Cabinet',
+        row: 3,
+        col: 2,
+        rackRows: 18,
+        rackCols: 6,
+        rackType: 'grid',
+      });
+    });
+
+    it('maps Bin Row / Bin Col aliases', () => {
+      const csv = 'Wine,Producer,Vintage,Rack,Bin Row,Bin Col\n' +
+        'Margaux,Chateau Margaux,2015,Cabinet A,5,3';
+      const result = parseAndMap(csv);
+      expect(result.items[0]).toMatchObject({ row: 5, col: 3 });
+    });
+
+    it('preserves rackPosition when row/col absent', () => {
+      const csv = 'Wine,Producer,Vintage,Rack,Position\n' +
+        'Margaux,Chateau Margaux,2015,Cabinet A,42';
+      const result = parseAndMap(csv);
+      expect(result.items[0]).toMatchObject({ rackName: 'Cabinet A', rackPosition: 42 });
+      expect(result.items[0].row).toBeUndefined();
+    });
+
+    it('expands quantity while preserving row/col on each generated bottle', () => {
+      const csv = 'Wine,Producer,Vintage,Quantity,Rack,Row,Col,Rack Rows,Rack Cols\n' +
+        'Margaux,Chateau Margaux,2015,3,Cabinet,1,1,18,6';
+      const result = parseAndMap(csv);
+      expect(result.items).toHaveLength(3);
+      result.items.forEach(item => {
+        expect(item.row).toBe(1);
+        expect(item.col).toBe(1);
+        expect(item.rackRows).toBe(18);
+        expect(item.rackCols).toBe(6);
+        expect(item.rackName).toBe('Cabinet');
+      });
+    });
+  });
 });
