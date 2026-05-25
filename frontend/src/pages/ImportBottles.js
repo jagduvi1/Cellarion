@@ -3,6 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { validateImport, confirmImport } from '../api/bottles';
 import { searchWines } from '../api/wines';
+import { getRacks } from '../api/racks';
 import { parseAndMap, parseJSON, suggestRackDimensions, summariseRacks } from '../utils/importMappers';
 import { getTotalSlots } from '../utils/rackLayouts';
 import { TYPE_DIMENSIONS } from '../components/racks/RackTypeSelector';
@@ -75,6 +76,10 @@ function ImportBottles() {
   const [rackConfigs, setRackConfigs] = useState({});
   // Rack summary built from parsed items: { [name]: { count, maxPosition, observedPositions } }
   const [rackSummary, setRackSummary] = useState({});
+  // Existing racks in the target cellar (so we can show them as read-only and
+  // warn the user that their picker config will be ignored for those names).
+  // Shape: { [name]: { type, rows, cols, typeConfig, _id } }
+  const [existingRacks, setExistingRacks] = useState({});
 
   // Review step
   const [results, setResults] = useState([]);
@@ -122,10 +127,36 @@ function ImportBottles() {
       .catch(() => {});
   }, [apiFetch, cellarId]);
 
+  // Load the cellar's existing racks so the import picker can show which
+  // rack names collide with already-created racks (we can't reshape those
+  // mid-import without risking the bottles already in them).
+  useEffect(() => {
+    getRacks(apiFetch, cellarId)
+      .then(r => r.ok ? r.json() : null)
+      .then(d => {
+        if (!d?.racks) return;
+        const byName = {};
+        for (const rack of d.racks) {
+          byName[rack.name] = {
+            _id: rack._id,
+            type: rack.type,
+            rows: rack.rows,
+            cols: rack.cols,
+            typeConfig: rack.typeConfig,
+            isModular: rack.isModular,
+            modules: rack.modules
+          };
+        }
+        setExistingRacks(byName);
+      })
+      .catch(() => {});
+  }, [apiFetch, cellarId]);
+
   // Keep saveDataRef current so the debounced save always uses latest values
   saveDataRef.current = {
     apiFetch, cellarId, fileName, detectedFormat,
-    results, selections, manualWines, sessionId
+    results, selections, manualWines, sessionId,
+    positionAnchor, rackConfigs
   };
 
   // Auto-save whenever selections or manualWines change while in review step
@@ -139,7 +170,8 @@ function ImportBottles() {
       setSaveStatus('saving');
       const {
         apiFetch: af, cellarId: cid, fileName: fn, detectedFormat: df,
-        results: rs, selections: sels, manualWines: mw, sessionId: sid
+        results: rs, selections: sels, manualWines: mw, sessionId: sid,
+        positionAnchor: pa, rackConfigs: rc
       } = saveDataRef.current;
 
       try {
@@ -147,7 +179,8 @@ function ImportBottles() {
           // First save for this review session — create a new session
           const res = await createImportSession(af, {
             cellarId: cid, fileName: fn, detectedFormat: df,
-            results: rs, selections: sels, manualWines: mw
+            results: rs, selections: sels, manualWines: mw,
+            positionAnchor: pa, rackConfigs: rc
           });
           const data = await res.json();
           if (res.ok) {
@@ -158,8 +191,11 @@ function ImportBottles() {
             setSaveStatus('error');
           }
         } else {
-          // Subsequent saves — just update selections/manualWines
-          const res = await updateImportSession(af, sid, { selections: sels, manualWines: mw });
+          // Subsequent saves
+          const res = await updateImportSession(af, sid, {
+            selections: sels, manualWines: mw,
+            positionAnchor: pa, rackConfigs: rc
+          });
           setSaveStatus(res.ok ? 'saved' : 'error');
         }
       } catch {
@@ -168,7 +204,7 @@ function ImportBottles() {
     }, 1500);
 
     return () => clearTimeout(saveTimerRef.current);
-  }, [step, selections, manualWines]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [step, selections, manualWines, positionAnchor, rackConfigs]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Recompute summary from a results array (used after resume + refresh)
   const computeSummary = (rs) => ({
@@ -222,6 +258,15 @@ function ImportBottles() {
       setSummary(computeSummary(updatedResults));
       setSessionId(s._id);
       setDraftSessions([]);
+      // Restore the user's picker choices so they don't have to redo them
+      if (s.positionAnchor) setPositionAnchor(s.positionAnchor);
+      if (s.rackConfigs && Object.keys(s.rackConfigs).length > 0) {
+        setRackConfigs(s.rackConfigs);
+        // Rebuild rackSummary from the saved results so the review-step note
+        // and the (re-shown) picker on jump-back have the bottle counts.
+        const rs = updatedResults.map(r => r.item).filter(Boolean);
+        setRackSummary(summariseRacks(rs));
+      }
       setStep('review');
     } catch {
       // If load fails, just stay on upload step
@@ -725,10 +770,49 @@ function ImportBottles() {
 
           <div className="rack-config-list">
             {Object.entries(rackSummary).map(([name, info]) => {
+              const existing = existingRacks[name];
+              const required = Math.max(info.maxPosition || 0, info.count || 0);
+
+              // Existing rack — read-only summary. The user's picker config
+              // would be ignored on the backend (we don't reshape live racks),
+              // so showing editable fields would be misleading.
+              if (existing) {
+                const existingCapacity = existing.isModular
+                  ? null
+                  : getTotalSlots(existing.type, existing.rows, existing.cols, existing.typeConfig);
+                const tooSmall = existingCapacity !== null && existingCapacity < required;
+                return (
+                  <div key={name} className="rack-config-card rack-config-existing">
+                    <div className="rack-config-card-head">
+                      <strong>{name}</strong>
+                      <span className="rack-config-existing-badge">Already exists</span>
+                      <span className="rack-config-meta">
+                        {info.count} bottle{info.count !== 1 ? 's' : ''}
+                        {info.maxPosition > 0 && <>, highest slot {info.maxPosition}</>}
+                      </span>
+                    </div>
+                    <div className="rack-config-existing-note">
+                      Using the rack's current layout:{' '}
+                      <strong>
+                        {existing.isModular
+                          ? `Modular (${(existing.modules || []).length} modules)`
+                          : `${existing.type} ${existing.rows}×${existing.cols}${existing.typeConfig?.bottlesPerCell > 1 ? ` × ${existing.typeConfig.bottlesPerCell}/cell` : ''}`}
+                      </strong>
+                      {existingCapacity !== null && <> — {existingCapacity} slots</>}.
+                      {' '}To reshape it, delete the rack first from the Cellar page.
+                    </div>
+                    {tooSmall && (
+                      <div className="rack-config-warn rack-config-existing-warn">
+                        Capacity ({existingCapacity}) is below {required} bottles — extras will be reported as unplaced.
+                      </div>
+                    )}
+                  </div>
+                );
+              }
+
               const cfg = rackConfigs[name] || { type: 'grid', rows: 1, cols: 1, typeConfig: {} };
               const dims = TYPE_DIMENSIONS[cfg.type] || TYPE_DIMENSIONS.grid;
               const capacity = getTotalSlots(cfg.type, cfg.rows, cfg.cols, cfg.typeConfig);
-              const required = Math.max(info.maxPosition || 0, info.count || 0);
               const tooSmall = capacity < required;
 
               const updateCfg = (patch) => setRackConfigs(prev => ({

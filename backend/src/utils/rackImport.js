@@ -184,6 +184,59 @@ function planRackCreations(items) {
 }
 
 /**
+ * End-to-end placement orchestration for a single rack: translate each item's
+ * (source-system) position via the anchor, then run the two-pass algorithm.
+ *
+ * Pure function — does not touch Mongo. The caller passes in the rack's
+ * geometry + existing slots and gets back a list of slot writes + the
+ * collection of items that couldn't be placed and why.
+ *
+ * @param {{type, rows, cols, typeConfig, slots, maxPosition}} rack
+ * @param {Array<{item: object, bottleId: any, sourceIndex?: number}>} items
+ * @param {string} anchor One of VALID_ANCHORS
+ * @returns {{
+ *   placements: Array<{position: number, bottle: any, overflowed?: boolean}>,
+ *   unplaced: Array<{sourceIndex?: number, requestedPosition: number|null, reason: string}>
+ * }}
+ */
+function placeBottlesInRack(rack, items, anchor) {
+  const requests = [];
+  const unplaced = [];
+
+  for (const it of items) {
+    const result = computeRackPosition({
+      position: it.item.rackPosition,
+      row: it.item.row,
+      col: it.item.col,
+      rackRows: rack.rows,
+      rackCols: rack.cols,
+      anchor
+    });
+    if (result.error) {
+      unplaced.push({ sourceIndex: it.sourceIndex, requestedPosition: null, reason: result.error });
+      continue;
+    }
+    if (result.position > rack.maxPosition) {
+      unplaced.push({
+        sourceIndex: it.sourceIndex,
+        requestedPosition: result.position,
+        reason: `Slot ${result.position} exceeds rack capacity (${rack.maxPosition})`
+      });
+      continue;
+    }
+    requests.push({ requestedPosition: result.position, bottleId: it.bottleId, sourceIndex: it.sourceIndex });
+  }
+
+  const { placements, unplaced: tooFull } = placeBottles(rack.slots || [], requests, rack.maxPosition);
+
+  for (const t of tooFull) {
+    unplaced.push({ sourceIndex: t.sourceIndex, requestedPosition: t.requestedPosition, reason: 'Rack full' });
+  }
+
+  return { placements, unplaced };
+}
+
+/**
  * Find the closest free position to `requestedPosition` within [1, maxPosition].
  * Scans forward first, then backward. Returns null if the rack is full.
  */
@@ -247,6 +300,7 @@ module.exports = {
   suggestRackDimensions,
   findNextFreeSlot,
   placeBottles,
+  placeBottlesInRack,
   DEFAULT_RACK_TYPE,
   DEFAULT_ANCHOR,
   VALID_ANCHORS,

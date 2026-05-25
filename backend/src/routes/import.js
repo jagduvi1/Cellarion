@@ -27,7 +27,7 @@ const { stripHtml, escapeRegex } = require('../utils/sanitize');
 const { parseAndValidateVintage } = require('../utils/validation');
 const { extractAiExplanation } = require('../utils/jsonExtract');
 const { getMaxPosition } = require('../utils/rackGeometry');
-const { computeRackPosition, planRackCreations, placeBottles, VALID_ANCHORS, DEFAULT_ANCHOR } = require('../utils/rackImport');
+const { planRackCreations, placeBottlesInRack, VALID_ANCHORS, DEFAULT_ANCHOR } = require('../utils/rackImport');
 const { RACK_TYPES } = require('../models/Rack');
 const { runConcurrent } = require('../utils/concurrency');
 const WineRequest = require('../models/WineRequest');
@@ -727,32 +727,19 @@ router.post('/confirm', async (req, res) => {
             }
             continue;
           }
-          const maxPos = getMaxPosition(rack);
 
-          // Translate each bottle's source-system position into Cellarion's
-          // internal top-left/row-major coordinate before placement.
-          const requests = [];
-          for (const p of group) {
-            const result = computeRackPosition({
-              position: p.item.rackPosition,
-              row: p.item.row,
-              col: p.item.col,
-              rackRows: rack.rows,
-              rackCols: rack.cols,
-              anchor: positionAnchor
-            });
-            if (result.error) {
-              unplacedDetails.push({ sourceIndex: p.sourceIndex, rackName, requestedPosition: null, reason: result.error });
-              continue;
-            }
-            if (result.position > maxPos) {
-              unplacedDetails.push({ sourceIndex: p.sourceIndex, rackName, requestedPosition: result.position, reason: `Slot ${result.position} exceeds rack capacity (${maxPos})` });
-              continue;
-            }
-            requests.push({ requestedPosition: result.position, bottleId: p.bottleId, sourceIndex: p.sourceIndex });
-          }
-
-          const { placements, unplaced } = placeBottles(rack.slots, requests, maxPos);
+          const { placements, unplaced } = placeBottlesInRack(
+            {
+              type: rack.type,
+              rows: rack.rows,
+              cols: rack.cols,
+              typeConfig: rack.typeConfig,
+              slots: rack.slots,
+              maxPosition: getMaxPosition(rack)
+            },
+            group,
+            positionAnchor
+          );
 
           for (const pl of placements) {
             rack.slots.push({ position: pl.position, bottle: pl.bottle });
@@ -760,7 +747,7 @@ router.post('/confirm', async (req, res) => {
             if (pl.overflowed) overflowedCount++;
           }
           for (const u of unplaced) {
-            unplacedDetails.push({ sourceIndex: u.sourceIndex, rackName, requestedPosition: u.requestedPosition, reason: 'Rack full' });
+            unplacedDetails.push({ ...u, rackName });
           }
 
           if (placements.length > 0) {
@@ -819,7 +806,7 @@ router.post('/confirm', async (req, res) => {
  */
 router.post('/sessions', async (req, res) => {
   try {
-    const { cellarId, fileName, detectedFormat, results, selections, manualWines } = req.body;
+    const { cellarId, fileName, detectedFormat, results, selections, manualWines, positionAnchor, rackConfigs } = req.body;
 
     if (!cellarId || !mongoose.Types.ObjectId.isValid(cellarId)) {
       return res.status(400).json({ error: 'Valid cellarId is required' });
@@ -847,7 +834,9 @@ router.post('/sessions', async (req, res) => {
       detectedFormat,
       results,
       selections: selections || {},
-      manualWines: manualWines || {}
+      manualWines: manualWines || {},
+      positionAnchor: positionAnchor || 'top-left',
+      rackConfigs: rackConfigs || {}
     });
     await session.save();
 
@@ -971,9 +960,11 @@ router.put('/sessions/:id', async (req, res) => {
       return res.status(403).json({ error: 'Not authorized' });
     }
 
-    const { selections, manualWines } = req.body;
+    const { selections, manualWines, positionAnchor, rackConfigs } = req.body;
     if (selections !== undefined) session.selections = selections;
     if (manualWines !== undefined) session.manualWines = manualWines;
+    if (positionAnchor !== undefined) session.positionAnchor = positionAnchor;
+    if (rackConfigs !== undefined) session.rackConfigs = rackConfigs;
     await session.save();
 
     res.json({ ok: true });

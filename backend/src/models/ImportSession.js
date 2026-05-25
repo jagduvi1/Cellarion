@@ -25,6 +25,11 @@ const importSessionSchema = new mongoose.Schema({
   selections: { type: mongoose.Schema.Types.Mixed, default: {} },
   // Wines found via manual search modal: { [index]: wineObject }
   manualWines: { type: mongoose.Schema.Types.Mixed, default: {} },
+  // User's chosen 4-corner anchor for translating source-system positions
+  // into Cellarion's top-left/row-major space.
+  positionAnchor: { type: String, default: 'top-left' },
+  // Per-rack dimension overrides: { [rackName]: { type, rows, cols, typeConfig } }
+  rackConfigs: { type: mongoose.Schema.Types.Mixed, default: {} },
   status: {
     type: String,
     enum: ['draft', 'completed'],

@@ -1173,6 +1173,38 @@
   color: var(--color-danger, #c0392b);
 }
 
+.rack-config-existing {
+  background: var(--color-info-bg, rgba(0, 100, 200, 0.05));
+  border-color: var(--color-info-border, var(--color-border));
+}
+
+.rack-config-existing-badge {
+  display: inline-block;
+  background: var(--color-info, #5a7fa3);
+  color: white;
+  padding: 0.05rem 0.4rem;
+  border-radius: 999px;
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.rack-config-existing-note {
+  font-size: 0.78rem;
+  color: var(--color-text-muted);
+  margin-top: 0.3rem;
+  line-height: 1.4;
+}
+
+.rack-config-existing-note strong {
+  color: var(--color-text);
+}
+
+.rack-config-existing-warn {
+  margin-top: 0.4rem;
+  font-size: 0.78rem;
+}
+
 .anchor-picker {
   margin-top: 0.75rem;
 }

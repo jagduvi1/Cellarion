@@ -1,4 +1,4 @@
-const { computeRackPosition, planRackCreations, suggestRackDimensions, findNextFreeSlot, placeBottles } = require('./rackImport');
+const { computeRackPosition, planRackCreations, suggestRackDimensions, findNextFreeSlot, placeBottles, placeBottlesInRack } = require('./rackImport');
 
 describe('computeRackPosition', () => {
   describe('explicit position', () => {
@@ -314,5 +314,68 @@ describe('placeBottles', () => {
       { requestedPosition: 5, bottleId: 'a' },
     ], 5);
     expect(result.placements[0].position).toBe(4);
+  });
+});
+
+describe('placeBottlesInRack (orchestration)', () => {
+  const buildRack = (overrides = {}) => ({
+    type: 'grid', rows: 4, cols: 6, typeConfig: undefined,
+    slots: [], maxPosition: 24, ...overrides
+  });
+
+  test('end-to-end: Oeno-style M3 with Quantity=3 at slot 11 spreads into 11,12,13', () => {
+    // Recreates Keith's scenario for a single rack
+    const rack = buildRack({ rows: 4, cols: 6, maxPosition: 24 });
+    const items = [
+      { item: { rackPosition: 11 }, bottleId: 'chenin-1', sourceIndex: 0 },
+      { item: { rackPosition: 11 }, bottleId: 'chenin-2', sourceIndex: 1 },
+      { item: { rackPosition: 11 }, bottleId: 'chenin-3', sourceIndex: 2 },
+    ];
+    const { placements, unplaced } = placeBottlesInRack(rack, items, 'top-left');
+    expect(unplaced).toHaveLength(0);
+    const placementOf = (id) => placements.find(p => p.bottle === id).position;
+    expect(placementOf('chenin-1')).toBe(11);
+    expect(placementOf('chenin-2')).toBe(12);
+    expect(placementOf('chenin-3')).toBe(13);
+  });
+
+  test('end-to-end: anchor=bottom-left flips row before placement', () => {
+    // Slot 11 in a 4×6 anchored bottom-left → Cellarion position 17
+    const rack = buildRack();
+    const { placements } = placeBottlesInRack(rack, [
+      { item: { rackPosition: 11 }, bottleId: 'a', sourceIndex: 0 },
+    ], 'bottom-left');
+    expect(placements[0].position).toBe(17);
+  });
+
+  test('end-to-end: existing slots block placement, force overflow', () => {
+    const rack = buildRack({
+      slots: [{ position: 11, bottle: 'pre' }]
+    });
+    const { placements } = placeBottlesInRack(rack, [
+      { item: { rackPosition: 11 }, bottleId: 'a', sourceIndex: 0 },
+    ], 'top-left');
+    expect(placements[0].position).toBe(12);
+    expect(placements[0].overflowed).toBe(true);
+  });
+
+  test('end-to-end: reports unplaced when slot exceeds capacity', () => {
+    const rack = buildRack({ rows: 2, cols: 6, maxPosition: 12 });
+    const { placements, unplaced } = placeBottlesInRack(rack, [
+      { item: { rackPosition: 25 }, bottleId: 'a', sourceIndex: 4 },
+    ], 'top-left');
+    expect(placements).toHaveLength(0);
+    expect(unplaced).toHaveLength(1);
+    expect(unplaced[0]).toMatchObject({ sourceIndex: 4, requestedPosition: 25 });
+    expect(unplaced[0].reason).toMatch(/capacity/);
+  });
+
+  test('end-to-end: row+col coordinates flatten using rack geometry', () => {
+    const rack = buildRack();
+    const { placements } = placeBottlesInRack(rack, [
+      { item: { row: 2, col: 3 }, bottleId: 'a', sourceIndex: 0 },
+    ], 'top-left');
+    // row 2 col 3 in a 6-col grid → position (2-1)*6 + 3 = 9
+    expect(placements[0].position).toBe(9);
   });
 });
