@@ -1069,6 +1069,38 @@
   background: var(--color-info-bg);
 }
 
+.import-currency-block {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 0.75rem 1.25rem;
+  margin: 1rem 0;
+}
+
+.import-currency-label {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 0.9rem;
+  color: var(--color-text);
+}
+
+.import-currency-label select {
+  padding: 0.3rem 0.5rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-size: 0.9rem;
+  min-width: 6rem;
+}
+
+.import-currency-hint {
+  margin: 0.4rem 0 0;
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+}
+
 .import-rack-options {
   background: var(--color-surface);
   border: 1px solid var(--color-border);

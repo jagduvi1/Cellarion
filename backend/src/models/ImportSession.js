@@ -30,6 +30,8 @@ const importSessionSchema = new mongoose.Schema({
   positionAnchor: { type: String, default: 'top-left' },
   // Per-rack dimension overrides: { [rackName]: { type, rows, cols, typeConfig } }
   rackConfigs: { type: mongoose.Schema.Types.Mixed, default: {} },
+  // Currency applied to bottles whose CSV row has no Currency column.
+  defaultCurrency: { type: String, default: 'USD', uppercase: true, trim: true },
   status: {
     type: String,
     enum: ['draft', 'completed'],

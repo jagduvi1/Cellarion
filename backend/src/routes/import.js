@@ -380,7 +380,7 @@ router.post('/validate', async (req, res) => {
  */
 router.post('/confirm', async (req, res) => {
   try {
-    const { cellarId, items, positionAnchor: rawAnchor, rackConfigs: rawRackConfigs } = req.body;
+    const { cellarId, items, positionAnchor: rawAnchor, rackConfigs: rawRackConfigs, defaultCurrency: rawDefaultCurrency } = req.body;
 
     if (!cellarId) {
       return res.status(400).json({ error: 'cellarId is required' });
@@ -396,6 +396,14 @@ router.post('/confirm', async (req, res) => {
     }
 
     const positionAnchor = VALID_ANCHORS.includes(rawAnchor) ? rawAnchor : DEFAULT_ANCHOR;
+
+    // Currency to apply when an import item has no Currency column of its own.
+    // We accept any 3-letter ISO code here so the user's profile preference
+    // (or a future addition to the frontend CURRENCIES list) flows through
+    // without backend changes. Falls back to USD when no preference is set.
+    const defaultCurrency = (typeof rawDefaultCurrency === 'string' && /^[A-Z]{3}$/i.test(rawDefaultCurrency))
+      ? rawDefaultCurrency.toUpperCase()
+      : 'USD';
 
     // Validate user-supplied per-rack configuration.
     // Shape: { [rackName]: { type?, rows?, cols?, typeConfig?: {...} } }
@@ -570,7 +578,7 @@ router.post('/confirm', async (req, res) => {
             pendingWineRequest: wineRequest._id,
             vintage: canonicalVintage,
             price: item.price || undefined,
-            currency: item.currency || 'USD',
+            currency: item.currency || defaultCurrency,
             priceSetAt,
             bottleSize: item.bottleSize || '750ml',
             purchaseDate: item.purchaseDate || undefined,
@@ -647,7 +655,7 @@ router.post('/confirm', async (req, res) => {
           wineDefinition: item.wineDefinition,
           vintage: canonicalVintage,
           price: item.price || undefined,
-          currency: item.currency || 'USD',
+          currency: item.currency || defaultCurrency,
           priceSetAt,
           bottleSize: item.bottleSize || '750ml',
           purchaseDate: item.purchaseDate || undefined,
@@ -806,7 +814,7 @@ router.post('/confirm', async (req, res) => {
  */
 router.post('/sessions', async (req, res) => {
   try {
-    const { cellarId, fileName, detectedFormat, results, selections, manualWines, positionAnchor, rackConfigs } = req.body;
+    const { cellarId, fileName, detectedFormat, results, selections, manualWines, positionAnchor, rackConfigs, defaultCurrency } = req.body;
 
     if (!cellarId || !mongoose.Types.ObjectId.isValid(cellarId)) {
       return res.status(400).json({ error: 'Valid cellarId is required' });
@@ -836,7 +844,8 @@ router.post('/sessions', async (req, res) => {
       selections: selections || {},
       manualWines: manualWines || {},
       positionAnchor: positionAnchor || 'top-left',
-      rackConfigs: rackConfigs || {}
+      rackConfigs: rackConfigs || {},
+      defaultCurrency: defaultCurrency || 'USD'
     });
     await session.save();
 
@@ -960,11 +969,12 @@ router.put('/sessions/:id', async (req, res) => {
       return res.status(403).json({ error: 'Not authorized' });
     }
 
-    const { selections, manualWines, positionAnchor, rackConfigs } = req.body;
+    const { selections, manualWines, positionAnchor, rackConfigs, defaultCurrency } = req.body;
     if (selections !== undefined) session.selections = selections;
     if (manualWines !== undefined) session.manualWines = manualWines;
     if (positionAnchor !== undefined) session.positionAnchor = positionAnchor;
     if (rackConfigs !== undefined) session.rackConfigs = rackConfigs;
+    if (defaultCurrency !== undefined) session.defaultCurrency = defaultCurrency;
     await session.save();
 
     res.json({ ok: true });

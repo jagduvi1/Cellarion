@@ -7,6 +7,7 @@ import { getRacks } from '../api/racks';
 import { parseAndMap, parseJSON, suggestRackDimensions, summariseRacks } from '../utils/importMappers';
 import { getTotalSlots } from '../utils/rackLayouts';
 import { TYPE_DIMENSIONS } from '../components/racks/RackTypeSelector';
+import { CURRENCIES } from '../config/currencies';
 import {
   listImportSessions,
   createImportSession,
@@ -80,6 +81,10 @@ function ImportBottles() {
   // warn the user that their picker config will be ignored for those names).
   // Shape: { [name]: { type, rows, cols, typeConfig, _id } }
   const [existingRacks, setExistingRacks] = useState({});
+  // Default currency applied to imported bottles whose CSV row has no
+  // currency column. Seeded from the user's profile preference, but can be
+  // overridden per-import via the picker.
+  const [importCurrency, setImportCurrency] = useState(user?.preferences?.currency || 'USD');
 
   // Review step
   const [results, setResults] = useState([]);
@@ -156,7 +161,7 @@ function ImportBottles() {
   saveDataRef.current = {
     apiFetch, cellarId, fileName, detectedFormat,
     results, selections, manualWines, sessionId,
-    positionAnchor, rackConfigs
+    positionAnchor, rackConfigs, importCurrency
   };
 
   // Auto-save whenever selections or manualWines change while in review step
@@ -171,7 +176,7 @@ function ImportBottles() {
       const {
         apiFetch: af, cellarId: cid, fileName: fn, detectedFormat: df,
         results: rs, selections: sels, manualWines: mw, sessionId: sid,
-        positionAnchor: pa, rackConfigs: rc
+        positionAnchor: pa, rackConfigs: rc, importCurrency: ic
       } = saveDataRef.current;
 
       try {
@@ -180,7 +185,7 @@ function ImportBottles() {
           const res = await createImportSession(af, {
             cellarId: cid, fileName: fn, detectedFormat: df,
             results: rs, selections: sels, manualWines: mw,
-            positionAnchor: pa, rackConfigs: rc
+            positionAnchor: pa, rackConfigs: rc, defaultCurrency: ic
           });
           const data = await res.json();
           if (res.ok) {
@@ -194,7 +199,7 @@ function ImportBottles() {
           // Subsequent saves
           const res = await updateImportSession(af, sid, {
             selections: sels, manualWines: mw,
-            positionAnchor: pa, rackConfigs: rc
+            positionAnchor: pa, rackConfigs: rc, defaultCurrency: ic
           });
           setSaveStatus(res.ok ? 'saved' : 'error');
         }
@@ -204,7 +209,7 @@ function ImportBottles() {
     }, 1500);
 
     return () => clearTimeout(saveTimerRef.current);
-  }, [step, selections, manualWines, positionAnchor, rackConfigs]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [step, selections, manualWines, positionAnchor, rackConfigs, importCurrency]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Recompute summary from a results array (used after resume + refresh)
   const computeSummary = (rs) => ({
@@ -260,6 +265,7 @@ function ImportBottles() {
       setDraftSessions([]);
       // Restore the user's picker choices so they don't have to redo them
       if (s.positionAnchor) setPositionAnchor(s.positionAnchor);
+      if (s.defaultCurrency) setImportCurrency(s.defaultCurrency);
       if (s.rackConfigs && Object.keys(s.rackConfigs).length > 0) {
         setRackConfigs(s.rackConfigs);
         // Rebuild rackSummary from the saved results so the review-step note
@@ -615,7 +621,7 @@ function ImportBottles() {
     if (rowImporting !== null || importing) return;
     setRowImporting(r.index);
     try {
-      const res = await confirmImport(apiFetch, { cellarId, items: [buildImportItem(r)], positionAnchor, rackConfigs });
+      const res = await confirmImport(apiFetch, { cellarId, items: [buildImportItem(r)], positionAnchor, rackConfigs, defaultCurrency: importCurrency });
       const data = await res.json();
       if (res.ok && data.created > 0) {
         // Mark as imported — auto-save will persist this to the session
@@ -641,7 +647,7 @@ function ImportBottles() {
       .map(buildImportItem);
 
     try {
-      const res = await confirmImport(apiFetch, { cellarId, items, positionAnchor, rackConfigs });
+      const res = await confirmImport(apiFetch, { cellarId, items, positionAnchor, rackConfigs, defaultCurrency: importCurrency });
       const data = await res.json();
 
       if (!res.ok) {
@@ -751,6 +757,25 @@ function ImportBottles() {
           </div>
         )}
       </div>
+
+      {parsedItems.length > 0 && parsedItems.some(i => i.price) && (
+        <div className="import-currency-block">
+          <label className="import-currency-label">
+            <strong>Currency for prices</strong>
+            <select
+              value={importCurrency}
+              onChange={(e) => setImportCurrency(e.target.value)}
+            >
+              {CURRENCIES.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </label>
+          <p className="import-currency-hint">
+            {parsedItems.some(i => i.currency)
+              ? <>Applied to rows that don't already have a Currency column. Defaulted to your profile setting ({user?.preferences?.currency || 'USD'}).</>
+              : <>Your file has prices but no Currency column. All imported bottles will be tagged with this currency. Defaulted to your profile setting ({user?.preferences?.currency || 'USD'}).</>}
+          </p>
+        </div>
+      )}
 
       {parsedItems.length > 0 && Object.keys(rackSummary).length > 0 && (
         <div className="import-rack-options">
