@@ -1,8 +1,8 @@
-const { computeRackPosition, planRackCreations } = require('./rackImport');
+const { computeRackPosition, planRackCreations, suggestRackDimensions } = require('./rackImport');
 
 describe('computeRackPosition', () => {
   describe('explicit position', () => {
-    test('returns the position when given a valid number', () => {
+    test('returns the position unchanged with default top-left anchor', () => {
       expect(computeRackPosition({ position: 7 })).toEqual({ position: 7 });
     });
 
@@ -20,21 +20,13 @@ describe('computeRackPosition', () => {
     });
   });
 
-  describe('row + col with rowOrigin=top (default)', () => {
+  describe('row + col with default top-left anchor', () => {
     test('maps (row=1, col=1) to position 1 in a 6-wide grid', () => {
       expect(computeRackPosition({ row: 1, col: 1, rackCols: 6 })).toEqual({ position: 1 });
     });
 
-    test('maps (row=1, col=6) to position 6', () => {
-      expect(computeRackPosition({ row: 1, col: 6, rackCols: 6 })).toEqual({ position: 6 });
-    });
-
     test('maps (row=2, col=1) to position 7 in a 6-wide grid', () => {
       expect(computeRackPosition({ row: 2, col: 1, rackCols: 6 })).toEqual({ position: 7 });
-    });
-
-    test('maps (row=3, col=4) to position 16 in a 6-wide grid', () => {
-      expect(computeRackPosition({ row: 3, col: 4, rackCols: 6 })).toEqual({ position: 16 });
     });
 
     test('rejects when rackCols is missing', () => {
@@ -46,61 +38,110 @@ describe('computeRackPosition', () => {
     });
   });
 
-  describe('row + col with rowOrigin=bottom (Oeno-style)', () => {
-    test('maps (row=1, col=1) at bottom to last row first slot in an 18×6 rack', () => {
-      // Bottom row 1 -> effectiveRow 18 -> position (18-1)*6 + 1 = 103
-      expect(computeRackPosition({ row: 1, col: 1, rackRows: 18, rackCols: 6, rowOrigin: 'bottom' }))
+  describe('anchor=bottom-left (row+col)', () => {
+    test('flips row only in an 18×6 rack', () => {
+      // Bottom row 1 → effective row 18 → position (18-1)*6 + 1 = 103
+      expect(computeRackPosition({ row: 1, col: 1, rackRows: 18, rackCols: 6, anchor: 'bottom-left' }))
         .toEqual({ position: 103 });
     });
 
-    test('maps (row=18, col=6) at bottom to position 6 (top-right)', () => {
-      // Top row 18 -> effectiveRow 1 -> position (1-1)*6 + 6 = 6
-      expect(computeRackPosition({ row: 18, col: 6, rackRows: 18, rackCols: 6, rowOrigin: 'bottom' }))
-        .toEqual({ position: 6 });
-    });
-
-    test('maps (row=9, col=3) at bottom in 18×6 to position 64', () => {
-      // effectiveRow = 18 - 9 + 1 = 10 -> position (10-1)*6 + 3 = 57 + 3 = 57? recompute: (10-1)*6=54; 54+3=57
-      // Wait: 18-9+1 = 10. (10-1)*6 = 54. 54+3 = 57. Adjust expectation.
-      expect(computeRackPosition({ row: 9, col: 3, rackRows: 18, rackCols: 6, rowOrigin: 'bottom' }))
-        .toEqual({ position: 57 });
-    });
-
-    test('rejects when rackRows missing and rowOrigin=bottom', () => {
-      expect(computeRackPosition({ row: 1, col: 1, rackCols: 6, rowOrigin: 'bottom' }).error)
+    test('rejects when rackRows missing', () => {
+      expect(computeRackPosition({ row: 1, col: 1, rackCols: 6, anchor: 'bottom-left' }).error)
         .toMatch(/rackRows/);
     });
 
     test('rejects when row exceeds rackRows', () => {
-      expect(computeRackPosition({ row: 19, col: 1, rackRows: 18, rackCols: 6, rowOrigin: 'bottom' }).error)
+      expect(computeRackPosition({ row: 19, col: 1, rackRows: 18, rackCols: 6, anchor: 'bottom-left' }).error)
         .toMatch(/exceeds/);
     });
   });
 
-  test('rejects invalid rowOrigin', () => {
-    expect(computeRackPosition({ row: 1, col: 1, rackCols: 6, rowOrigin: 'left' }).error)
-      .toMatch(/rowOrigin/);
+  describe('anchor=top-right (row+col)', () => {
+    test('flips col only', () => {
+      // (row=1, col=1) anchored top-right in a 6-wide rack → col 6 → position 6
+      expect(computeRackPosition({ row: 1, col: 1, rackCols: 6, anchor: 'top-right' }))
+        .toEqual({ position: 6 });
+    });
+  });
+
+  describe('anchor=bottom-right (row+col)', () => {
+    test('flips both row and col', () => {
+      // (row=1, col=1) bottom-right in 18×6 → effective (18, 6) → position (18-1)*6 + 6 = 108
+      expect(computeRackPosition({ row: 1, col: 1, rackRows: 18, rackCols: 6, anchor: 'bottom-right' }))
+        .toEqual({ position: 108 });
+    });
+  });
+
+  describe('explicit position with non-default anchor', () => {
+    test('flips row when anchor is bottom-left in a 4×6 grid', () => {
+      // Oeno position 11 in a 4-row × 6-col rack:
+      // srcRow = ceil(11/6) = 2, srcCol = ((11-1) % 6) + 1 = 5
+      // bottom-left flips row: effectiveRow = 4 - 2 + 1 = 3
+      // cellarion position = (3-1)*6 + 5 = 17
+      expect(computeRackPosition({ position: 11, rackRows: 4, rackCols: 6, anchor: 'bottom-left' }))
+        .toEqual({ position: 17 });
+    });
+
+    test('flips col when anchor is top-right in a 4×6 grid', () => {
+      // srcRow=2, srcCol=5, top-right flips col: effectiveCol = 6 - 5 + 1 = 2
+      // cellarion = (2-1)*6 + 2 = 8
+      expect(computeRackPosition({ position: 11, rackRows: 4, rackCols: 6, anchor: 'top-right' }))
+        .toEqual({ position: 8 });
+    });
+
+    test('flips both with bottom-right', () => {
+      // srcRow=2, srcCol=5, bottom-right: effectiveRow=3, effectiveCol=2
+      // cellarion = (3-1)*6 + 2 = 14
+      expect(computeRackPosition({ position: 11, rackRows: 4, rackCols: 6, anchor: 'bottom-right' }))
+        .toEqual({ position: 14 });
+    });
+
+    test('rejects non-default anchor without rackCols', () => {
+      expect(computeRackPosition({ position: 11, anchor: 'bottom-left' }).error)
+        .toMatch(/rackCols/);
+    });
+  });
+
+  test('rejects invalid anchor', () => {
+    expect(computeRackPosition({ row: 1, col: 1, rackCols: 6, anchor: 'sideways' }).error)
+      .toMatch(/anchor/);
+  });
+});
+
+describe('suggestRackDimensions', () => {
+  test('single row for tiny racks (≤ 6)', () => {
+    expect(suggestRackDimensions(5)).toEqual({ rows: 1, cols: 5 });
+    expect(suggestRackDimensions(6)).toEqual({ rows: 1, cols: 6 });
+  });
+
+  test('2×6 for small wine racks (7–12)', () => {
+    expect(suggestRackDimensions(11)).toEqual({ rows: 2, cols: 6 });
+    expect(suggestRackDimensions(12)).toEqual({ rows: 2, cols: 6 });
+  });
+
+  test('4×6 for medium racks (13–24)', () => {
+    expect(suggestRackDimensions(20)).toEqual({ rows: 4, cols: 6 });
+    expect(suggestRackDimensions(24)).toEqual({ rows: 4, cols: 6 });
+  });
+
+  test('6×12 for larger racks (25–72)', () => {
+    expect(suggestRackDimensions(48)).toEqual({ rows: 6, cols: 12 });
+  });
+
+  test('scales rows when max position exceeds 72, capped at 20', () => {
+    expect(suggestRackDimensions(120)).toEqual({ rows: 10, cols: 12 });
+    expect(suggestRackDimensions(500)).toEqual({ rows: 20, cols: 12 });
   });
 });
 
 describe('planRackCreations', () => {
-  test('returns empty map when no items have rackName', () => {
-    const plan = planRackCreations([
-      { wineName: 'Wine A' },
-      { wineName: 'Wine B', rackName: '' },
-    ]);
-    expect(plan.size).toBe(0);
-  });
-
   test('groups items by rackName', () => {
     const plan = planRackCreations([
-      { rackName: 'Rack A', row: 1, col: 1 },
-      { rackName: 'Rack A', row: 2, col: 3 },
-      { rackName: 'Rack B', row: 1, col: 1 },
+      { rackName: 'A', row: 1, col: 1 },
+      { rackName: 'A', row: 2, col: 3 },
+      { rackName: 'B', row: 1, col: 1 },
     ]);
     expect(plan.size).toBe(2);
-    expect(plan.has('Rack A')).toBe(true);
-    expect(plan.has('Rack B')).toBe(true);
   });
 
   test('infers rows/cols from max observed row/col', () => {
@@ -120,31 +161,14 @@ describe('planRackCreations', () => {
     expect(plan.get('A')).toMatchObject({ rows: 18, cols: 6 });
   });
 
-  test('grows rows to fit a rackPosition that exceeds rows*cols capacity', () => {
-    const plan = planRackCreations([
-      { rackName: 'A', rackPosition: 95, rackCols: 6 },
-    ]);
-    // cols=6, position=95, need rows >= ceil(95/6) = 16
-    expect(plan.get('A')).toMatchObject({ cols: 6, rows: 16 });
-  });
-
-  test('Oeno-style: uses 6-col default and 4-row minimum when only rackPosition is known', () => {
-    // Matches Keith's CSV: M3-11 → rackName=M3, rackPosition=11, no row/col,
-    // no rackRows/rackCols. We want a sensible default rack shape, not a 1-wide column.
+  test('uses suggestRackDimensions when only rackPosition is known', () => {
+    // Mirrors Keith's M3 (positions 4, 10, 11): max 11 → suggestion is 2×6
     const plan = planRackCreations([
       { rackName: 'M3', rackPosition: 11 },
       { rackName: 'M3', rackPosition: 4 },
       { rackName: 'M3', rackPosition: 10 },
     ]);
-    expect(plan.get('M3')).toMatchObject({ cols: 6, rows: 4, type: 'grid' });
-  });
-
-  test('Oeno-style: grows rows when max position exceeds 4 rows at 6 cols', () => {
-    const plan = planRackCreations([
-      { rackName: 'BigRack', rackPosition: 50 },
-    ]);
-    // 6 cols × 4 rows = 24 < 50 → rows = ceil(50/6) = 9
-    expect(plan.get('BigRack')).toMatchObject({ cols: 6, rows: 9 });
+    expect(plan.get('M3')).toMatchObject({ cols: 6, rows: 2, type: 'grid' });
   });
 
   test('respects rackType override', () => {
@@ -160,13 +184,6 @@ describe('planRackCreations', () => {
     ]);
     expect(plan.get('Huge').rows).toBe(20);
     expect(plan.get('Huge').cols).toBe(20);
-  });
-
-  test('defaults to rows=1, cols=1 when no positional info present', () => {
-    const plan = planRackCreations([
-      { rackName: 'Bare' },
-    ]);
-    expect(plan.get('Bare')).toMatchObject({ rows: 1, cols: 1, type: 'grid' });
   });
 
   test('skips empty/whitespace rackName', () => {

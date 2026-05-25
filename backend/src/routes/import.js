@@ -27,7 +27,7 @@ const { stripHtml, escapeRegex } = require('../utils/sanitize');
 const { parseAndValidateVintage } = require('../utils/validation');
 const { extractAiExplanation } = require('../utils/jsonExtract');
 const { getMaxPosition } = require('../utils/rackGeometry');
-const { computeRackPosition, planRackCreations, VALID_ROW_ORIGINS } = require('../utils/rackImport');
+const { computeRackPosition, planRackCreations, VALID_ANCHORS, DEFAULT_ANCHOR } = require('../utils/rackImport');
 const { RACK_TYPES } = require('../models/Rack');
 const { runConcurrent } = require('../utils/concurrency');
 const WineRequest = require('../models/WineRequest');
@@ -380,7 +380,7 @@ router.post('/validate', async (req, res) => {
  */
 router.post('/confirm', async (req, res) => {
   try {
-    const { cellarId, items, rowOrigin: rawRowOrigin } = req.body;
+    const { cellarId, items, positionAnchor: rawAnchor, rackConfigs: rawRackConfigs } = req.body;
 
     if (!cellarId) {
       return res.status(400).json({ error: 'cellarId is required' });
@@ -395,7 +395,21 @@ router.post('/confirm', async (req, res) => {
       return res.status(400).json({ error: `Maximum ${MAX_IMPORT_SIZE} items per import` });
     }
 
-    const rowOrigin = rawRowOrigin && VALID_ROW_ORIGINS.includes(rawRowOrigin) ? rawRowOrigin : 'top';
+    const positionAnchor = VALID_ANCHORS.includes(rawAnchor) ? rawAnchor : DEFAULT_ANCHOR;
+
+    // Validate user-supplied per-rack dimensions (rows/cols clamped to 1..20)
+    // rackConfigs shape: { [rackName]: { rows: number, cols: number } }
+    const rackConfigs = {};
+    if (rawRackConfigs && typeof rawRackConfigs === 'object') {
+      for (const [name, cfg] of Object.entries(rawRackConfigs)) {
+        if (!cfg || typeof cfg !== 'object') continue;
+        const rows = parseInt(cfg.rows, 10);
+        const cols = parseInt(cfg.cols, 10);
+        if (rows >= 1 && rows <= 20 && cols >= 1 && cols <= 20) {
+          rackConfigs[String(name)] = { rows, cols };
+        }
+      }
+    }
 
     // Verify cellar access
     const cellar = await Cellar.findById(cellarId);
@@ -414,8 +428,9 @@ router.post('/confirm', async (req, res) => {
     }
 
     // Auto-create any racks referenced in the import that don't already exist
-    // in this cellar. Runs once up-front so the bottle-placement step below
-    // can rely on every rack being present.
+    // in this cellar. User-supplied rackConfigs take precedence over inferred
+    // dimensions. Runs once up-front so the bottle-placement step below can
+    // rely on every rack being present.
     const createdRacks = [];
     try {
       const rackPlan = planRackCreations(items);
@@ -429,17 +444,20 @@ router.post('/confirm', async (req, res) => {
 
         for (const [name, spec] of rackPlan.entries()) {
           if (existingNames.has(name)) continue;
+          const override = rackConfigs[name];
+          const rows = override?.rows || spec.rows;
+          const cols = override?.cols || spec.cols;
           const safeType = RACK_TYPES.includes(spec.type) ? spec.type : 'grid';
           const rack = new Rack({
             cellar: cellarId,
             user: cellar.user,
             name,
             type: safeType,
-            rows: spec.rows,
-            cols: spec.cols
+            rows,
+            cols
           });
           await rack.save();
-          createdRacks.push({ name, type: safeType, rows: spec.rows, cols: spec.cols });
+          createdRacks.push({ name, type: safeType, rows, cols });
           logAudit(req, 'rack.create', { type: 'rack', id: rack._id }, { source: 'import', name });
         }
       }
@@ -633,7 +651,7 @@ router.post('/confirm', async (req, res) => {
                 col: item.col,
                 rackRows: rack.rows,
                 rackCols: rack.cols,
-                rowOrigin
+                anchor: positionAnchor
               });
               if (!positionResult.error) {
                 const { position } = positionResult;

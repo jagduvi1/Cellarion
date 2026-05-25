@@ -152,6 +152,43 @@ export function parseCombinedRackLocation(value) {
 }
 
 /**
+ * Suggest reasonable rack dimensions given a max position observed in import
+ * data. Mirrors the backend helper of the same name. Biases toward common
+ * physical wine-rack widths (6 or 12 columns).
+ */
+export function suggestRackDimensions(maxPosition) {
+  const p = Math.max(1, parseInt(maxPosition, 10) || 1);
+  if (p <= 6)  return { rows: 1, cols: p };
+  if (p <= 12) return { rows: 2, cols: 6 };
+  if (p <= 24) return { rows: 4, cols: 6 };
+  if (p <= 72) return { rows: 6, cols: 12 };
+  const cols = 12;
+  const rows = Math.min(20, Math.ceil(p / cols));
+  return { rows, cols };
+}
+
+/**
+ * Summarise rack usage in a parsed-items batch:
+ *   { [rackName]: { count, maxPosition, observedPositions: number[] } }
+ */
+export function summariseRacks(items) {
+  const summary = {};
+  for (const item of items) {
+    if (!item?.rackName) continue;
+    const name = String(item.rackName).trim();
+    if (!name) continue;
+    if (!summary[name]) summary[name] = { count: 0, maxPosition: 0, observedPositions: [] };
+    summary[name].count += 1;
+    const pos = parseInt(item.rackPosition, 10);
+    if (!isNaN(pos)) {
+      summary[name].observedPositions.push(pos);
+      if (pos > summary[name].maxPosition) summary[name].maxPosition = pos;
+    }
+  }
+  return summary;
+}
+
+/**
  * Normalise a bottle-size value. Accepts strings like "750ml", "1.5L", or a
  * bare number ("750" / 750) which is treated as millilitres.
  */

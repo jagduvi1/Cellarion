@@ -13,57 +13,91 @@
 const { totalSlots } = require('./rackGeometry');
 
 const DEFAULT_RACK_TYPE = 'grid';
-const VALID_ROW_ORIGINS = ['top', 'bottom'];
+const VALID_ANCHORS = ['top-left', 'top-right', 'bottom-left', 'bottom-right'];
+const DEFAULT_ANCHOR = 'top-left';
 
 /**
- * Compute the 1-indexed sequential position for a rack slot, given either
- * an explicit position or a (row, col) pair plus the rack's row/col count.
+ * Compute the 1-indexed sequential position for a slot in Cellarion's internal
+ * coordinate system (top-left, row-major), given:
+ *   - A sequential `position` from the source system, or
+ *   - A (row, col) pair from the source system,
+ * plus the rack's dimensions and where the source system's "bottle 1" sits.
  *
- * Supports `rowOrigin = 'bottom'` for apps (like Oeno) where row 1 is the
- * physical bottom of the rack. The default is 'top' which matches how
- * Cellarion's grid renders.
+ * `anchor` describes the corner where the source data's position 1 (or row 1,
+ * col 1) is located:
+ *   - 'top-left'     : matches Cellarion's internal layout (identity)
+ *   - 'top-right'    : column 1 is on the right
+ *   - 'bottom-left'  : row 1 is at the bottom (Oeno reading left-to-right)
+ *   - 'bottom-right' : row 1 at bottom AND col 1 on the right
  *
- * Returns:
- *   { position: number }            on success
- *   { error: string }               when the inputs can't produce a position
- *
- * Only meaningful for grid-shaped racks (grid, shelf). For other types we
- * still fall back to a row-major formula but consumers should generally
- * pass an explicit `position` when working with hex/triangle/x-rack/cube.
+ * Returns { position } on success or { error } on bad input.
  */
-function computeRackPosition({ position, row, col, rackRows, rackCols, rowOrigin = 'top' }) {
-  if (!VALID_ROW_ORIGINS.includes(rowOrigin)) {
-    return { error: `Invalid rowOrigin: ${rowOrigin}` };
+function computeRackPosition({ position, row, col, rackRows, rackCols, anchor = DEFAULT_ANCHOR }) {
+  if (!VALID_ANCHORS.includes(anchor)) {
+    return { error: `Invalid anchor: ${anchor}` };
   }
 
-  // Explicit position wins — used as-is.
+  const cols = parseInt(rackCols, 10);
+  const rows = parseInt(rackRows, 10);
+
+  let srcRow, srcCol;
+
   if (position !== undefined && position !== null && position !== '') {
     const p = parseInt(position, 10);
     if (isNaN(p) || p < 1) return { error: 'Invalid position' };
-    return { position: p };
-  }
 
-  // Otherwise we need row + col + rackCols at minimum.
-  const r = parseInt(row, 10);
-  const c = parseInt(col, 10);
-  const rows = parseInt(rackRows, 10);
-  const cols = parseInt(rackCols, 10);
+    // Identity case — no dimensions needed when nothing to flip.
+    if (anchor === 'top-left') return { position: p };
 
-  if (isNaN(r) || r < 1) return { error: 'Invalid row' };
-  if (isNaN(c) || c < 1) return { error: 'Invalid col' };
-  if (isNaN(cols) || cols < 1) return { error: 'rackCols is required to compute position from row/col' };
-  if (c > cols) return { error: `col ${c} exceeds rackCols ${cols}` };
-
-  let effectiveRow = r;
-  if (rowOrigin === 'bottom') {
-    if (isNaN(rows) || rows < 1) {
-      return { error: 'rackRows is required when rowOrigin is "bottom"' };
+    if (isNaN(cols) || cols < 1) {
+      return { error: 'rackCols is required to transform position with a non-default anchor' };
     }
-    if (r > rows) return { error: `row ${r} exceeds rackRows ${rows}` };
-    effectiveRow = rows - r + 1;
+    srcRow = Math.ceil(p / cols);
+    srcCol = ((p - 1) % cols) + 1;
+  } else {
+    srcRow = parseInt(row, 10);
+    srcCol = parseInt(col, 10);
+    if (isNaN(srcRow) || srcRow < 1) return { error: 'Invalid row' };
+    if (isNaN(srcCol) || srcCol < 1) return { error: 'Invalid col' };
+    if (isNaN(cols) || cols < 1) return { error: 'rackCols is required to compute position from row/col' };
+    if (srcCol > cols) return { error: `col ${srcCol} exceeds rackCols ${cols}` };
   }
 
-  return { position: (effectiveRow - 1) * cols + c };
+  // Apply anchor transforms to land in Cellarion's top-left, row-major space.
+  let effectiveRow = srcRow;
+  let effectiveCol = srcCol;
+
+  if (anchor === 'bottom-left' || anchor === 'bottom-right') {
+    if (isNaN(rows) || rows < 1) {
+      return { error: 'rackRows is required for bottom-anchored placement' };
+    }
+    if (srcRow > rows) return { error: `row ${srcRow} exceeds rackRows ${rows}` };
+    effectiveRow = rows - srcRow + 1;
+  }
+  if (anchor === 'top-right' || anchor === 'bottom-right') {
+    if (isNaN(cols) || cols < 1) {
+      return { error: 'rackCols is required for right-anchored placement' };
+    }
+    effectiveCol = cols - srcCol + 1;
+  }
+
+  return { position: (effectiveRow - 1) * cols + effectiveCol };
+}
+
+/**
+ * Suggest reasonable rack dimensions given a max position observed in import
+ * data. Bias toward common physical wine-rack widths (6 or 12 columns) so
+ * the auto-created rack matches what users typically own.
+ */
+function suggestRackDimensions(maxPosition) {
+  const p = Math.max(1, parseInt(maxPosition, 10) || 1);
+  if (p <= 6)  return { rows: 1, cols: p };
+  if (p <= 12) return { rows: 2, cols: 6 };
+  if (p <= 24) return { rows: 4, cols: 6 };
+  if (p <= 72) return { rows: 6, cols: 12 };
+  const cols = 12;
+  const rows = Math.min(20, Math.ceil(p / cols));
+  return { rows, cols };
 }
 
 /**
@@ -110,13 +144,14 @@ function planRackCreations(items) {
 
   // Finalise each entry: ensure rows/cols are at least 1, and that the rack's
   // capacity covers the highest position we'll try to place into. When only a
-  // sequential `rackPosition` is known (no row/col coordinates), fall back to
-  // a typical wine-rack width of 6 columns so the auto-created rack matches
-  // common physical layouts instead of becoming a 1-wide column.
+  // sequential `rackPosition` is known (no row/col coordinates), use
+  // suggestRackDimensions() so the auto-created rack matches typical
+  // physical layouts instead of becoming a 1-wide column.
   for (const entry of plan.values()) {
     if (!entry.rows && !entry.cols && entry.maxPosition > 0) {
-      entry.cols = 6;
-      entry.rows = Math.max(4, Math.ceil(entry.maxPosition / entry.cols));
+      const suggestion = suggestRackDimensions(entry.maxPosition);
+      entry.rows = suggestion.rows;
+      entry.cols = suggestion.cols;
     }
     if (!entry.rows) entry.rows = 1;
     if (!entry.cols) entry.cols = 1;
@@ -143,6 +178,8 @@ function planRackCreations(items) {
 module.exports = {
   computeRackPosition,
   planRackCreations,
+  suggestRackDimensions,
   DEFAULT_RACK_TYPE,
-  VALID_ROW_ORIGINS,
+  DEFAULT_ANCHOR,
+  VALID_ANCHORS,
 };

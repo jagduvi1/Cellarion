@@ -1089,46 +1089,179 @@
   color: var(--color-text-muted);
 }
 
-.row-origin-toggle {
+.rack-options-hint code {
+  background: var(--color-bg);
+  padding: 0.05rem 0.3rem;
+  border-radius: 3px;
+  font-size: 0.8rem;
+}
+
+.rack-config-list {
   display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin: 0.75rem 0 1rem;
+}
+
+.rack-config-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   gap: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
   flex-wrap: wrap;
 }
 
-.row-origin-toggle label {
+.rack-config-name {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-width: 8rem;
+}
+
+.rack-config-name strong {
+  color: var(--color-text);
+  font-size: 0.9rem;
+}
+
+.rack-config-meta {
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+}
+
+.rack-config-dims {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.85rem;
+  color: var(--color-text);
+}
+
+.rack-config-dims label {
+  display: flex;
+  flex-direction: column;
+  font-size: 0.7rem;
+  color: var(--color-text-muted);
+  gap: 0.1rem;
+}
+
+.rack-config-dims input[type="number"] {
+  width: 3.5rem;
+  padding: 0.25rem 0.4rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: 0.85rem;
+}
+
+.rack-config-times {
+  color: var(--color-text-muted);
+  margin: 0 0.1rem;
+  align-self: flex-end;
+  padding-bottom: 0.3rem;
+}
+
+.rack-config-capacity {
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+  margin-left: 0.4rem;
+}
+
+.rack-config-warn {
+  color: var(--color-danger, #c0392b);
+}
+
+.anchor-picker {
+  margin-top: 0.75rem;
+}
+
+.anchor-picker-label {
+  font-size: 0.85rem;
+  color: var(--color-text);
+  margin-bottom: 0.5rem;
+}
+
+.anchor-picker-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.4rem;
+  max-width: 28rem;
+}
+
+.anchor-btn {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  padding: 0.5rem 0.75rem;
+  padding: 0.6rem 0.8rem;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
   background: var(--color-bg);
   cursor: pointer;
   font-size: 0.85rem;
   color: var(--color-text);
+  text-align: left;
   transition: border-color 0.15s, background 0.15s;
+  position: relative;
 }
 
-.row-origin-toggle label:hover {
+.anchor-btn:hover {
   border-color: var(--color-primary);
 }
 
-.row-origin-toggle label.active {
+.anchor-btn.active {
   border-color: var(--color-primary);
   background: var(--color-info-bg);
 }
 
-.row-origin-toggle input[type="radio"] {
-  margin: 0;
+.anchor-dot {
+  width: 24px;
+  height: 24px;
+  border: 1px solid var(--color-border);
+  border-radius: 3px;
+  background: var(--color-surface);
+  flex-shrink: 0;
+  position: relative;
+  background-image: radial-gradient(circle 4px at var(--dot-x, 6px) var(--dot-y, 6px), var(--color-primary) 100%, transparent 100%);
 }
 
-.row-origin-toggle-review {
-  margin-bottom: 0.75rem;
-  align-items: center;
+.anchor-btn-top-left    .anchor-dot { --dot-x: 6px;  --dot-y: 6px; }
+.anchor-btn-top-right   .anchor-dot { --dot-x: 18px; --dot-y: 6px; }
+.anchor-btn-bottom-left .anchor-dot { --dot-x: 6px;  --dot-y: 18px; }
+.anchor-btn-bottom-right .anchor-dot { --dot-x: 18px; --dot-y: 18px; }
+
+.anchor-label {
+  display: block;
+  font-weight: 500;
 }
 
-.row-origin-label {
-  font-size: 0.85rem;
+.anchor-sub {
+  display: block;
+  font-size: 0.7rem;
   color: var(--color-text-muted);
-  margin-right: 0.25rem;
+  margin-top: 0.1rem;
+}
+
+.anchor-btn .anchor-label,
+.anchor-btn .anchor-sub {
+  display: block;
+}
+
+.review-anchor-note {
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+  margin: 0 0 0.5rem;
+}
+
+.review-anchor-note .link-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--color-primary);
+  cursor: pointer;
+  font: inherit;
+  text-decoration: underline;
 }

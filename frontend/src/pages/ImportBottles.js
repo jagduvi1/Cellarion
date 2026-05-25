@@ -3,7 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { validateImport, confirmImport } from '../api/bottles';
 import { searchWines } from '../api/wines';
-import { parseAndMap, parseJSON } from '../utils/importMappers';
+import { parseAndMap, parseJSON, suggestRackDimensions, summariseRacks } from '../utils/importMappers';
 import {
   listImportSessions,
   createImportSession,
@@ -66,8 +66,13 @@ function ImportBottles() {
   const [detectedFormat, setDetectedFormat] = useState(null);
   const [fileName, setFileName] = useState('');
   const [dragOver, setDragOver] = useState(false);
-  // 'top' (most apps) or 'bottom' (Oeno-style: row 1 is at the bottom of the rack)
-  const [rowOrigin, setRowOrigin] = useState('top');
+  // Where bottle 1 (or row 1, col 1) sits in the source system's rack:
+  // 'top-left' (default), 'top-right', 'bottom-left' (Oeno), 'bottom-right'
+  const [positionAnchor, setPositionAnchor] = useState('top-left');
+  // Per-rack dimension overrides: { [rackName]: { rows, cols } }
+  const [rackConfigs, setRackConfigs] = useState({});
+  // Rack summary built from parsed items: { [name]: { count, maxPosition, observedPositions } }
+  const [rackSummary, setRackSummary] = useState({});
 
   // Review step
   const [results, setResults] = useState([]);
@@ -254,6 +259,15 @@ function ImportBottles() {
         setParsedItems(items);
         setDetectedFormat(format);
         setFileName(file.name);
+
+        // Build per-rack summary + seed editable dimensions with suggestions
+        const summary = summariseRacks(items);
+        const initialConfigs = {};
+        for (const [name, info] of Object.entries(summary)) {
+          initialConfigs[name] = suggestRackDimensions(info.maxPosition);
+        }
+        setRackSummary(summary);
+        setRackConfigs(initialConfigs);
       } catch (err) {
         setError(`Failed to parse file: ${err.message}`);
       }
@@ -550,7 +564,7 @@ function ImportBottles() {
     if (rowImporting !== null || importing) return;
     setRowImporting(r.index);
     try {
-      const res = await confirmImport(apiFetch, { cellarId, items: [buildImportItem(r)], rowOrigin });
+      const res = await confirmImport(apiFetch, { cellarId, items: [buildImportItem(r)], positionAnchor, rackConfigs });
       const data = await res.json();
       if (res.ok && data.created > 0) {
         // Mark as imported — auto-save will persist this to the session
@@ -576,7 +590,7 @@ function ImportBottles() {
       .map(buildImportItem);
 
     try {
-      const res = await confirmImport(apiFetch, { cellarId, items, rowOrigin });
+      const res = await confirmImport(apiFetch, { cellarId, items, positionAnchor, rackConfigs });
       const data = await res.json();
 
       if (!res.ok) {
@@ -687,50 +701,96 @@ function ImportBottles() {
         )}
       </div>
 
-      {parsedItems.length > 0 && parsedItems.some(i => i.rackName) && (
+      {parsedItems.length > 0 && Object.keys(rackSummary).length > 0 && (
         <div className="import-rack-options">
           <h3>Rack placement</h3>
-          {detectedFormat === 'oeno' ? (
+          {detectedFormat === 'oeno' && (
             <p className="rack-options-hint">
               Detected an <strong>Oeno (Vintec)</strong> export. Your <code>Rack_Location</code> values
-              like <code>M2-11</code> will be split into rack <strong>M2</strong>, slot <strong>11</strong>.
-              Found <strong>{new Set(parsedItems.map(i => i.rackName).filter(Boolean)).size}</strong> unique
-              racks — any that don't exist in this cellar will be created automatically with a typical 6-wide grid layout.
-              You can adjust their shape after import from the Cellar page.
-            </p>
-          ) : (
-            <p className="rack-options-hint">
-              Your file references racks ({new Set(parsedItems.map(i => i.rackName).filter(Boolean)).size} unique).
-              Racks that don't exist in this cellar yet will be created automatically.
-              {parsedItems.some(i => i.row && i.col) && (
-                <> Your file uses <strong>row</strong> + <strong>col</strong> coordinates — pick which end "row 1" sits at:</>
-              )}
+              like <code>M2-11</code> have been split into rack name + slot number.
             </p>
           )}
-          {parsedItems.some(i => i.row && i.col) && (
-            <div className="row-origin-toggle">
-              <label className={rowOrigin === 'top' ? 'active' : ''}>
-                <input
-                  type="radio"
-                  name="rowOrigin"
-                  value="top"
-                  checked={rowOrigin === 'top'}
-                  onChange={() => setRowOrigin('top')}
-                />
-                Row 1 is at the <strong>top</strong> (most apps)
-              </label>
-              <label className={rowOrigin === 'bottom' ? 'active' : ''}>
-                <input
-                  type="radio"
-                  name="rowOrigin"
-                  value="bottom"
-                  checked={rowOrigin === 'bottom'}
-                  onChange={() => setRowOrigin('bottom')}
-                />
-                Row 1 is at the <strong>bottom</strong> (Oeno / Vintec style)
-              </label>
+          <p className="rack-options-hint">
+            Found <strong>{Object.keys(rackSummary).length}</strong> unique
+            rack{Object.keys(rackSummary).length !== 1 ? 's' : ''} in your file.
+            We've guessed sensible dimensions from the highest slot number used — adjust them to match
+            your physical rack if you know better.
+          </p>
+
+          <div className="rack-config-list">
+            {Object.entries(rackSummary).map(([name, info]) => {
+              const cfg = rackConfigs[name] || { rows: 1, cols: 1 };
+              return (
+                <div key={name} className="rack-config-row">
+                  <div className="rack-config-name">
+                    <strong>{name}</strong>
+                    <span className="rack-config-meta">
+                      {info.count} bottle{info.count !== 1 ? 's' : ''}
+                      {info.maxPosition > 0 && <>, highest slot {info.maxPosition}</>}
+                    </span>
+                  </div>
+                  <div className="rack-config-dims">
+                    <label>
+                      Rows
+                      <input
+                        type="number"
+                        min="1"
+                        max="20"
+                        value={cfg.rows}
+                        onChange={(e) => setRackConfigs(prev => ({
+                          ...prev,
+                          [name]: { ...prev[name], rows: parseInt(e.target.value, 10) || 1 }
+                        }))}
+                      />
+                    </label>
+                    <span className="rack-config-times">×</span>
+                    <label>
+                      Cols
+                      <input
+                        type="number"
+                        min="1"
+                        max="20"
+                        value={cfg.cols}
+                        onChange={(e) => setRackConfigs(prev => ({
+                          ...prev,
+                          [name]: { ...prev[name], cols: parseInt(e.target.value, 10) || 1 }
+                        }))}
+                      />
+                    </label>
+                    <span className="rack-config-capacity">
+                      = {cfg.rows * cfg.cols} slots
+                      {info.maxPosition > cfg.rows * cfg.cols && (
+                        <span className="rack-config-warn"> (too small for slot {info.maxPosition})</span>
+                      )}
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="anchor-picker">
+            <div className="anchor-picker-label">Where does slot 1 sit in your physical rack?</div>
+            <div className="anchor-picker-grid">
+              {[
+                { value: 'top-left', label: 'Top-left', sub: 'Default for most apps' },
+                { value: 'top-right', label: 'Top-right', sub: '' },
+                { value: 'bottom-left', label: 'Bottom-left', sub: 'Oeno / Vintec' },
+                { value: 'bottom-right', label: 'Bottom-right', sub: '' },
+              ].map(opt => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  className={`anchor-btn anchor-btn-${opt.value} ${positionAnchor === opt.value ? 'active' : ''}`}
+                  onClick={() => setPositionAnchor(opt.value)}
+                >
+                  <span className="anchor-dot" aria-hidden="true" />
+                  <span className="anchor-label">{opt.label}</span>
+                  {opt.sub && <span className="anchor-sub">{opt.sub}</span>}
+                </button>
+              ))}
             </div>
-          )}
+          </div>
         </div>
       )}
 
@@ -1110,30 +1170,11 @@ function ImportBottles() {
               {unresolved} item{unresolved !== 1 ? 's' : ''} still need a selection or to be skipped
             </p>
           )}
-          {results.some(r => r.item?.row && r.item?.col) && (
-            <div className="row-origin-toggle row-origin-toggle-review">
-              <span className="row-origin-label">Row 1 is at the:</span>
-              <label className={rowOrigin === 'top' ? 'active' : ''}>
-                <input
-                  type="radio"
-                  name="rowOriginReview"
-                  value="top"
-                  checked={rowOrigin === 'top'}
-                  onChange={() => setRowOrigin('top')}
-                />
-                top
-              </label>
-              <label className={rowOrigin === 'bottom' ? 'active' : ''}>
-                <input
-                  type="radio"
-                  name="rowOriginReview"
-                  value="bottom"
-                  checked={rowOrigin === 'bottom'}
-                  onChange={() => setRowOrigin('bottom')}
-                />
-                bottom (Oeno / Vintec)
-              </label>
-            </div>
+          {Object.keys(rackSummary).length > 0 && (
+            <p className="review-anchor-note">
+              Slot 1 anchor: <strong>{positionAnchor.replace('-', ' ')}</strong>
+              {' '}— change it on the <button type="button" className="link-btn" onClick={() => setStep('upload')}>upload step</button> if needed.
+            </p>
           )}
           <button
             className="btn btn-primary btn-import"
