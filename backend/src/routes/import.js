@@ -27,7 +27,7 @@ const { stripHtml, escapeRegex } = require('../utils/sanitize');
 const { parseAndValidateVintage } = require('../utils/validation');
 const { extractAiExplanation } = require('../utils/jsonExtract');
 const { getMaxPosition } = require('../utils/rackGeometry');
-const { computeRackPosition, planRackCreations, VALID_ANCHORS, DEFAULT_ANCHOR } = require('../utils/rackImport');
+const { computeRackPosition, planRackCreations, placeBottles, VALID_ANCHORS, DEFAULT_ANCHOR } = require('../utils/rackImport');
 const { RACK_TYPES } = require('../models/Rack');
 const { runConcurrent } = require('../utils/concurrency');
 const WineRequest = require('../models/WineRequest');
@@ -471,6 +471,11 @@ router.post('/confirm', async (req, res) => {
     const createdBottleIds = []; // Track IDs for Meilisearch bulk sync
     // Dedup map: "wineName|producer" -> WineRequest doc created in this batch
     const pendingRequestCache = new Map();
+    // Collected rack-placement intents from this batch; processed per-rack
+    // after the main loop so multiple bottles claiming the same slot can
+    // overflow cleanly into adjacent free slots.
+    // Shape: [{ rackName, item, bottleId, sourceIndex }]
+    const pendingPlacements = [];
 
     for (let i = 0; i < items.length; i++) {
       const item = items[i];
@@ -561,6 +566,12 @@ router.post('/confirm', async (req, res) => {
           await bottle.save();
           created++;
           if (!item.addToHistory) createdBottleIds.push(bottle._id);
+
+          // Queue rack placement for unmatched bottles too
+          const hasPlacement = item.rackName && (item.rackPosition || (item.row && item.col));
+          if (hasPlacement && bottle.status === 'active') {
+            pendingPlacements.push({ rackName: String(item.rackName), item, bottleId: bottle._id, sourceIndex: i });
+          }
           continue;
         }
 
@@ -637,36 +648,12 @@ router.post('/confirm', async (req, res) => {
         created++;
         if (!item.addToHistory) createdBottleIds.push(bottle._id);
 
-        // Place bottle in rack if rackName + (rackPosition or row+col) provided
-        // (active bottles only). Falls back silently when the rack doesn't
-        // exist or the slot is occupied — import doesn't fail over placement.
+        // Queue rack placement — actual slot assignment runs per-rack after
+        // the bottle loop so multiple bottles claiming the same slot can
+        // overflow into adjacent free slots instead of being silently dropped.
         const hasPlacement = item.rackName && (item.rackPosition || (item.row && item.col));
         if (hasPlacement && bottle.status === 'active') {
-          try {
-            const rack = await Rack.findOne({ cellar: cellarId, name: String(item.rackName), deletedAt: null });
-            if (rack) {
-              const positionResult = computeRackPosition({
-                position: item.rackPosition,
-                row: item.row,
-                col: item.col,
-                rackRows: rack.rows,
-                rackCols: rack.cols,
-                anchor: positionAnchor
-              });
-              if (!positionResult.error) {
-                const { position } = positionResult;
-                if (position <= getMaxPosition(rack)) {
-                  const occupied = rack.slots.some(s => s.position === position);
-                  if (!occupied) {
-                    rack.slots.push({ position, bottle: bottle._id });
-                    await rack.save().catch(err => console.error('Failed to save rack slot during import:', err.message));
-                  }
-                }
-              }
-            }
-          } catch (err) {
-            console.error('Failed to place bottle in rack during import (non-fatal):', err.message);
-          }
+          pendingPlacements.push({ rackName: String(item.rackName), item, bottleId: bottle._id, sourceIndex: i });
         }
 
         // Auto-create pending WineVintageProfile for every bottle except
@@ -688,12 +675,85 @@ router.post('/confirm', async (req, res) => {
     // Bulk-index created bottles in Meilisearch (fire-and-forget)
     searchService.bulkIndexBottles(createdBottleIds);
 
+    // Per-rack two-pass placement: for each rack referenced in this import,
+    // assign exact slots first, then overflow extras into nearest empty slots.
+    let placedCount = 0;
+    let overflowedCount = 0;
+    const unplacedDetails = []; // [{ sourceIndex, rackName, requestedPosition, reason }]
+    if (pendingPlacements.length > 0) {
+      // Group by rackName
+      const byRack = new Map();
+      for (const p of pendingPlacements) {
+        if (!byRack.has(p.rackName)) byRack.set(p.rackName, []);
+        byRack.get(p.rackName).push(p);
+      }
+
+      for (const [rackName, group] of byRack.entries()) {
+        try {
+          const rack = await Rack.findOne({ cellar: cellarId, name: rackName, deletedAt: null });
+          if (!rack) {
+            for (const p of group) {
+              unplacedDetails.push({ sourceIndex: p.sourceIndex, rackName, requestedPosition: null, reason: 'Rack not found' });
+            }
+            continue;
+          }
+          const maxPos = getMaxPosition(rack);
+
+          // Translate each bottle's source-system position into Cellarion's
+          // internal top-left/row-major coordinate before placement.
+          const requests = [];
+          for (const p of group) {
+            const result = computeRackPosition({
+              position: p.item.rackPosition,
+              row: p.item.row,
+              col: p.item.col,
+              rackRows: rack.rows,
+              rackCols: rack.cols,
+              anchor: positionAnchor
+            });
+            if (result.error) {
+              unplacedDetails.push({ sourceIndex: p.sourceIndex, rackName, requestedPosition: null, reason: result.error });
+              continue;
+            }
+            if (result.position > maxPos) {
+              unplacedDetails.push({ sourceIndex: p.sourceIndex, rackName, requestedPosition: result.position, reason: `Slot ${result.position} exceeds rack capacity (${maxPos})` });
+              continue;
+            }
+            requests.push({ requestedPosition: result.position, bottleId: p.bottleId, sourceIndex: p.sourceIndex });
+          }
+
+          const { placements, unplaced } = placeBottles(rack.slots, requests, maxPos);
+
+          for (const pl of placements) {
+            rack.slots.push({ position: pl.position, bottle: pl.bottle });
+            placedCount++;
+            if (pl.overflowed) overflowedCount++;
+          }
+          for (const u of unplaced) {
+            unplacedDetails.push({ sourceIndex: u.sourceIndex, rackName, requestedPosition: u.requestedPosition, reason: 'Rack full' });
+          }
+
+          if (placements.length > 0) {
+            await rack.save().catch(err => console.error(`Failed to save rack ${rackName} during import:`, err.message));
+          }
+        } catch (err) {
+          console.error(`Failed placement for rack ${rackName}:`, err.message);
+          for (const p of group) {
+            unplacedDetails.push({ sourceIndex: p.sourceIndex, rackName, requestedPosition: null, reason: err.message });
+          }
+        }
+      }
+    }
+
     logAudit(req, 'bottle.import', { type: 'cellar', id: cellarId }, {
       created,
       skipped: skipped.length,
       errors: errors.length,
       total: items.length,
-      racksCreated: createdRacks.length
+      racksCreated: createdRacks.length,
+      placed: placedCount,
+      overflowed: overflowedCount,
+      unplaced: unplacedDetails.length
     });
 
     res.json({
@@ -701,7 +761,10 @@ router.post('/confirm', async (req, res) => {
       skipped,
       errors,
       total: items.length,
-      racksCreated: createdRacks
+      racksCreated: createdRacks,
+      placed: placedCount,
+      overflowed: overflowedCount,
+      unplaced: unplacedDetails
     });
   } catch (error) {
     console.error('Import confirm error:', error);

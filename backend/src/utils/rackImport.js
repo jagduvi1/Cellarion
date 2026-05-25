@@ -113,7 +113,7 @@ function suggestRackDimensions(maxPosition) {
  * plan entry if the rack already exists in the cellar.
  */
 function planRackCreations(items) {
-  const plan = new Map(); // rackName -> { type, rows, cols, maxPosition }
+  const plan = new Map(); // rackName -> { type, rows, cols, maxPosition, totalBottles }
 
   for (const item of items) {
     if (!item || !item.rackName) continue;
@@ -122,9 +122,14 @@ function planRackCreations(items) {
 
     let entry = plan.get(name);
     if (!entry) {
-      entry = { type: DEFAULT_RACK_TYPE, rows: 0, cols: 0, maxPosition: 0 };
+      entry = { type: DEFAULT_RACK_TYPE, rows: 0, cols: 0, maxPosition: 0, totalBottles: 0 };
       plan.set(name, entry);
     }
+
+    // Every item in the (already quantity-expanded) batch counts as one bottle
+    // that will claim a slot in this rack — needed so we size the rack big
+    // enough to hold them all, not just to cover the highest slot number used.
+    entry.totalBottles += 1;
 
     if (item.rackType) entry.type = String(item.rackType).trim().toLowerCase();
 
@@ -142,25 +147,27 @@ function planRackCreations(items) {
     if (!isNaN(pos) && pos > entry.maxPosition) entry.maxPosition = pos;
   }
 
-  // Finalise each entry: ensure rows/cols are at least 1, and that the rack's
-  // capacity covers the highest position we'll try to place into. When only a
-  // sequential `rackPosition` is known (no row/col coordinates), use
-  // suggestRackDimensions() so the auto-created rack matches typical
-  // physical layouts instead of becoming a 1-wide column.
+  // Finalise each entry: pick row/col so the rack has capacity for *both* the
+  // highest slot number referenced AND the total number of bottles claiming
+  // it (the latter matters when multiple bottles want the same slot — e.g.
+  // Oeno's "Quantity: 3, Rack_Location: M3-11" expands to 3 bottles all
+  // pointing at slot 11; they need to spill into 2 more slots).
   for (const entry of plan.values()) {
-    if (!entry.rows && !entry.cols && entry.maxPosition > 0) {
-      const suggestion = suggestRackDimensions(entry.maxPosition);
+    const requiredCapacity = Math.max(entry.maxPosition || 0, entry.totalBottles || 0);
+
+    if (!entry.rows && !entry.cols && requiredCapacity > 0) {
+      const suggestion = suggestRackDimensions(requiredCapacity);
       entry.rows = suggestion.rows;
       entry.cols = suggestion.cols;
     }
     if (!entry.rows) entry.rows = 1;
     if (!entry.cols) entry.cols = 1;
 
-    // Grow capacity to fit the highest position if needed (grid + shelf).
+    // Grow capacity to fit if needed (grid + shelf).
     if (entry.type === 'grid' || entry.type === 'shelf') {
       const capacity = totalSlots(entry.type, entry.rows, entry.cols);
-      if (entry.maxPosition > capacity) {
-        entry.rows = Math.ceil(entry.maxPosition / entry.cols);
+      if (requiredCapacity > capacity) {
+        entry.rows = Math.ceil(requiredCapacity / entry.cols);
       }
     }
 
@@ -170,15 +177,76 @@ function planRackCreations(items) {
     if (entry.cols > 20) entry.cols = 20;
 
     delete entry.maxPosition;
+    delete entry.totalBottles;
   }
 
   return plan;
+}
+
+/**
+ * Find the closest free position to `requestedPosition` within [1, maxPosition].
+ * Scans forward first, then backward. Returns null if the rack is full.
+ */
+function findNextFreeSlot(occupied, requestedPosition, maxPosition) {
+  for (let p = requestedPosition + 1; p <= maxPosition; p++) {
+    if (!occupied.has(p)) return p;
+  }
+  for (let p = requestedPosition - 1; p >= 1; p--) {
+    if (!occupied.has(p)) return p;
+  }
+  return null;
+}
+
+/**
+ * Two-pass placement: bottles get their exact requested slot when free
+ * (pass 1, first-come-first-served), then unplaced bottles overflow into
+ * the nearest empty slot (pass 2). Returns the list of placements to add
+ * to the rack plus any bottles that couldn't fit.
+ *
+ * @param {Array<{position: number, bottle: any}>} existingSlots
+ *        Slots already on the rack (their positions are off-limits).
+ * @param {Array<{requestedPosition: number, bottleId: any, sourceIndex?: number}>} requests
+ *        Bottles wanting a slot in this rack, in the order they came from the CSV.
+ * @param {number} maxPosition Total addressable slots in this rack.
+ * @returns {{placements: Array, unplaced: Array}}
+ */
+function placeBottles(existingSlots, requests, maxPosition) {
+  const occupied = new Set((existingSlots || []).map(s => s.position));
+  const placements = [];
+  const overflow = [];
+
+  // Pass 1: exact placement, first request to a slot wins.
+  for (const req of requests) {
+    const pos = parseInt(req.requestedPosition, 10);
+    if (!isNaN(pos) && pos >= 1 && pos <= maxPosition && !occupied.has(pos)) {
+      placements.push({ position: pos, bottle: req.bottleId, request: req });
+      occupied.add(pos);
+    } else {
+      overflow.push(req);
+    }
+  }
+
+  // Pass 2: overflow into nearest empty slot.
+  const unplaced = [];
+  for (const req of overflow) {
+    const target = findNextFreeSlot(occupied, parseInt(req.requestedPosition, 10) || 1, maxPosition);
+    if (target !== null) {
+      placements.push({ position: target, bottle: req.bottleId, request: req, overflowed: true });
+      occupied.add(target);
+    } else {
+      unplaced.push(req);
+    }
+  }
+
+  return { placements, unplaced };
 }
 
 module.exports = {
   computeRackPosition,
   planRackCreations,
   suggestRackDimensions,
+  findNextFreeSlot,
+  placeBottles,
   DEFAULT_RACK_TYPE,
   DEFAULT_ANCHOR,
   VALID_ANCHORS,

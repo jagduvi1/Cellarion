@@ -1226,6 +1226,18 @@ function ImportBottles() {
               <span>Rack{importResult.racksCreated.length !== 1 ? 's' : ''} created</span>
             </div>
           )}
+          {importResult.placed > 0 && (
+            <div className="done-stat">
+              <span className="done-number">{importResult.placed}</span>
+              <span>Placed in racks{importResult.overflowed > 0 ? ` (${importResult.overflowed} into adjacent slots)` : ''}</span>
+            </div>
+          )}
+          {importResult.unplaced?.length > 0 && (
+            <div className="done-stat">
+              <span className="done-number done-errors">{importResult.unplaced.length}</span>
+              <span>Couldn't place</span>
+            </div>
+          )}
         </div>
       )}
       {importResult?.racksCreated?.length > 0 && (
@@ -1238,6 +1250,26 @@ function ImportBottles() {
               </li>
             ))}
           </ul>
+        </details>
+      )}
+      {importResult?.unplaced?.length > 0 && (
+        <details className="done-errors-detail">
+          <summary>Bottles that couldn't be placed in a rack ({importResult.unplaced.length})</summary>
+          <ul>
+            {importResult.unplaced.slice(0, 50).map((u, i) => (
+              <li key={i}>
+                Row {u.sourceIndex + 1} → rack <strong>{u.rackName}</strong>
+                {u.requestedPosition !== null && <> (slot {u.requestedPosition})</>}
+                : {u.reason}
+              </li>
+            ))}
+            {importResult.unplaced.length > 50 && (
+              <li><em>…and {importResult.unplaced.length - 50} more</em></li>
+            )}
+          </ul>
+          <p className="done-note">
+            These bottles were imported successfully — they just couldn't be assigned a rack slot. You can place them manually from the Cellar page.
+          </p>
         </details>
       )}
       {importResult?.errors.length > 0 && (

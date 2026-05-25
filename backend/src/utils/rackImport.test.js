@@ -1,4 +1,4 @@
-const { computeRackPosition, planRackCreations, suggestRackDimensions } = require('./rackImport');
+const { computeRackPosition, planRackCreations, suggestRackDimensions, findNextFreeSlot, placeBottles } = require('./rackImport');
 
 describe('computeRackPosition', () => {
   describe('explicit position', () => {
@@ -191,5 +191,128 @@ describe('planRackCreations', () => {
       { rackName: '   ', row: 1, col: 1 },
     ]);
     expect(plan.size).toBe(0);
+  });
+
+  test('sizes rack by total bottle count when many bottles share a slot', () => {
+    // Mirrors Keith's data: 3 Riesling + 3 Chenin Blanc + 2 Pinot + 1 Ata Rangi
+    // all claim positions in M3 (total 9 bottles), with max position 11.
+    // Required capacity = max(11, 9) = 11. Suggestion for 11 is 2×6 = 12 slots. ✓
+    const plan = planRackCreations([
+      { rackName: 'M3', rackPosition: 11 }, // Chenin 1
+      { rackName: 'M3', rackPosition: 11 }, // Chenin 2
+      { rackName: 'M3', rackPosition: 11 }, // Chenin 3
+      { rackName: 'M3', rackPosition: 10 }, // Riesling 1
+      { rackName: 'M3', rackPosition: 10 }, // Riesling 2
+      { rackName: 'M3', rackPosition: 10 }, // Riesling 3
+      { rackName: 'M3', rackPosition: 4 },  // Ata Rangi 1
+      { rackName: 'M3', rackPosition: 4 },  // Ata Rangi 2
+    ]);
+    const m3 = plan.get('M3');
+    // 2×6 = 12 slots, ≥ max(11, 8) = 11. ✓
+    expect(m3.rows * m3.cols).toBeGreaterThanOrEqual(11);
+    expect(m3.rows * m3.cols).toBeGreaterThanOrEqual(8); // bottle count
+  });
+
+  test('grows capacity when total bottle count exceeds max position', () => {
+    // Edge case: many bottles all claim slot 3 → capacity needs >= count
+    const items = Array.from({ length: 15 }, () => ({ rackName: 'Big', rackPosition: 3 }));
+    const plan = planRackCreations(items);
+    const big = plan.get('Big');
+    expect(big.rows * big.cols).toBeGreaterThanOrEqual(15);
+  });
+});
+
+describe('findNextFreeSlot', () => {
+  test('returns next forward slot when forward slot is free', () => {
+    const occupied = new Set([5]);
+    expect(findNextFreeSlot(occupied, 5, 24)).toBe(6);
+  });
+
+  test('skips occupied slots forward', () => {
+    const occupied = new Set([5, 6, 7]);
+    expect(findNextFreeSlot(occupied, 5, 24)).toBe(8);
+  });
+
+  test('falls back to backward search when forward is exhausted', () => {
+    const occupied = new Set([5, 6, 7, 8, 9, 10, 11, 12]);
+    expect(findNextFreeSlot(occupied, 7, 12)).toBe(4);
+  });
+
+  test('returns null when the rack is full', () => {
+    const occupied = new Set([1, 2, 3, 4, 5]);
+    expect(findNextFreeSlot(occupied, 3, 5)).toBeNull();
+  });
+});
+
+describe('placeBottles', () => {
+  test('places single bottles at their exact requested positions', () => {
+    const result = placeBottles([], [
+      { requestedPosition: 4, bottleId: 'a' },
+      { requestedPosition: 10, bottleId: 'b' },
+      { requestedPosition: 11, bottleId: 'c' },
+    ], 24);
+    expect(result.placements).toEqual([
+      expect.objectContaining({ position: 4, bottle: 'a' }),
+      expect.objectContaining({ position: 10, bottle: 'b' }),
+      expect.objectContaining({ position: 11, bottle: 'c' }),
+    ]);
+    expect(result.unplaced).toHaveLength(0);
+  });
+
+  test('overflows multiple bottles claiming the same slot into adjacent slots', () => {
+    // 3 bottles all want slot 11 in a 24-slot rack
+    const result = placeBottles([], [
+      { requestedPosition: 11, bottleId: 'a' },
+      { requestedPosition: 11, bottleId: 'b' },
+      { requestedPosition: 11, bottleId: 'c' },
+    ], 24);
+    const positions = result.placements.map(p => p.position).sort((a, b) => a - b);
+    expect(positions).toEqual([11, 12, 13]);
+    const overflowedFlags = result.placements.map(p => p.overflowed);
+    expect(overflowedFlags.filter(Boolean)).toHaveLength(2);
+    expect(result.unplaced).toHaveLength(0);
+  });
+
+  test('keeps exact slot for the first arrival even when others request the same', () => {
+    // Bottle wanting slot 12 (which is free) should NOT be displaced
+    // by overflow from slot-11 requests in pass 1.
+    const result = placeBottles([], [
+      { requestedPosition: 11, bottleId: 'a' },
+      { requestedPosition: 11, bottleId: 'b' },
+      { requestedPosition: 12, bottleId: 'c' },
+    ], 24);
+    const placementOf = (id) => result.placements.find(p => p.bottle === id).position;
+    expect(placementOf('a')).toBe(11);   // exact
+    expect(placementOf('c')).toBe(12);   // exact (not stolen by overflow)
+    expect(placementOf('b')).toBe(13);   // overflowed past taken 12
+  });
+
+  test('respects existing occupied slots', () => {
+    const existing = [{ position: 11, bottle: 'pre' }];
+    const result = placeBottles(existing, [
+      { requestedPosition: 11, bottleId: 'a' },
+    ], 24);
+    expect(result.placements[0].position).toBe(12);
+    expect(result.placements[0].overflowed).toBe(true);
+  });
+
+  test('reports unplaced bottles when the rack is full', () => {
+    // 5-slot rack, all pre-occupied
+    const existing = [1, 2, 3, 4, 5].map(p => ({ position: p, bottle: `pre-${p}` }));
+    const result = placeBottles(existing, [
+      { requestedPosition: 3, bottleId: 'overflow' },
+    ], 5);
+    expect(result.placements).toHaveLength(0);
+    expect(result.unplaced).toHaveLength(1);
+    expect(result.unplaced[0].bottleId).toBe('overflow');
+  });
+
+  test('falls back to backward search when forward space is exhausted', () => {
+    // 5-slot rack, slot 5 taken, requests at slot 5
+    const existing = [{ position: 5, bottle: 'pre' }];
+    const result = placeBottles(existing, [
+      { requestedPosition: 5, bottleId: 'a' },
+    ], 5);
+    expect(result.placements[0].position).toBe(4);
   });
 });
