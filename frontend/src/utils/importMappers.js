@@ -107,7 +107,7 @@ export function parseCSV(text, delimiter = ',') {
 
 /**
  * Detect the source format from CSV headers.
- * Returns: 'vivino' | 'cellartracker' | 'generic'
+ * Returns: 'cellarion' | 'vivino' | 'cellartracker' | 'oeno' | 'generic'
  */
 export function detectFormat(headers) {
   const h = new Set(headers.map(s => s.toLowerCase().trim()));
@@ -115,6 +115,9 @@ export function detectFormat(headers) {
 
   // Cellarion's own CSV export uses camelCase headers
   if (raw.has('wineName') && raw.has('producer') && raw.has('vintage')) return 'cellarion';
+
+  // Oeno (Vintec) export — distinctive columns
+  if (h.has('rack_location') || h.has('mastervarietal')) return 'oeno';
 
   // Vivino export headers
   if (h.has('wine name') || h.has('winery')) return 'vivino';
@@ -124,6 +127,40 @@ export function detectFormat(headers) {
   if (h.has('wine') && h.has('vintage') && (h.has('locale') || h.has('bin'))) return 'cellartracker';
 
   return 'generic';
+}
+
+/**
+ * Parse a combined rack-location string like "M2-11" or "Cabinet 1-15" into
+ * a rack name + 1-indexed position. Splits on the LAST hyphen so rack names
+ * containing hyphens still work. Returns null when the right side isn't a
+ * positive integer.
+ */
+export function parseCombinedRackLocation(value) {
+  if (!value) return null;
+  const trimmed = String(value).trim();
+  if (!trimmed) return null;
+  const lastDash = trimmed.lastIndexOf('-');
+  if (lastDash < 1 || lastDash === trimmed.length - 1) return null;
+  const left = trimmed.slice(0, lastDash).trim();
+  const right = trimmed.slice(lastDash + 1).trim();
+  if (!left) return null;
+  // Right side must be a pure positive integer (allow leading zeros: "04")
+  if (!/^\d+$/.test(right)) return null;
+  const pos = parseInt(right, 10);
+  if (pos < 1) return null;
+  return { rackName: left, rackPosition: pos };
+}
+
+/**
+ * Normalise a bottle-size value. Accepts strings like "750ml", "1.5L", or a
+ * bare number ("750" / 750) which is treated as millilitres.
+ */
+function normaliseBottleSize(value) {
+  if (value === undefined || value === null || value === '') return undefined;
+  const s = String(value).trim();
+  if (!s) return undefined;
+  if (/^\d+(\.\d+)?$/.test(s)) return `${s}ml`;
+  return s;
 }
 
 /**
@@ -268,6 +305,10 @@ function mapGenericRow(row) {
   const rating = parseFloat(get(['Rating', 'rating', 'Score', 'score']));
   const qty = parseInt(get(['Quantity', 'quantity', 'Qty', 'qty', 'Count', 'count']), 10);
 
+  // Combined rack+position columns like Oeno's "Rack_Location" = "M2-11"
+  const combined = get(['Rack_Location', 'Rack Location', 'RackLocation', 'Bin Location', 'BinLocation']);
+  const parsedRack = parseCombinedRackLocation(combined);
+
   return {
     wineName: get(['Wine', 'wine', 'Wine Name', 'WineName', 'Name', 'name']),
     producer: get(['Producer', 'producer', 'Winery', 'winery', 'Maker', 'maker']),
@@ -278,7 +319,7 @@ function mapGenericRow(row) {
     type: mapWineType(get(['Type', 'type', 'Color', 'Colour', 'Category', 'category'])),
     price: isNaN(price) ? undefined : price,
     currency: get(['Currency', 'currency']) || undefined,
-    bottleSize: get(['Size', 'size', 'Bottle Size', 'BottleSize']) || '750ml',
+    bottleSize: normaliseBottleSize(get(['Size', 'size', 'Bottle Size', 'BottleSize'])) || '750ml',
     quantity: isNaN(qty) || qty < 1 ? 1 : qty,
     purchaseDate: get(['Purchase Date', 'PurchaseDate', 'Date', 'date']),
     purchaseLocation: get(['Store', 'store', 'Purchase Location', 'Vendor', 'vendor']),
@@ -286,13 +327,61 @@ function mapGenericRow(row) {
     rating: isNaN(rating) ? undefined : rating,
     ratingScale: rating > 20 ? '100' : rating > 5 ? '20' : '5',
     location: get(['Location', 'location', 'Bin', 'bin']),
-    rackName: get(['Rack', 'rack', 'Rack Name', 'rackName']) || undefined,
-    rackPosition: parseInt(get(['Rack Position', 'rackPosition', 'Position', 'Slot']), 10) || undefined,
+    rackName: parsedRack?.rackName || get(['Rack', 'rack', 'Rack Name', 'rackName']) || undefined,
+    rackPosition: parsedRack?.rackPosition || parseInt(get(['Rack Position', 'rackPosition', 'Position', 'Slot']), 10) || undefined,
     row: parseInt(get(['Row', 'row', 'Bin Row', 'BinRow', 'Rack Row']), 10) || undefined,
     col: parseInt(get(['Col', 'col', 'Column', 'column', 'Bin Col', 'BinCol', 'Rack Col']), 10) || undefined,
     rackRows: parseInt(get(['Rack Rows', 'RackRows', 'rackRows', 'Rack Height']), 10) || undefined,
     rackCols: parseInt(get(['Rack Cols', 'RackCols', 'rackCols', 'Rack Columns', 'Rack Width']), 10) || undefined,
     rackType: get(['Rack Type', 'RackType', 'rackType']) || undefined,
+  };
+}
+
+// ── Oeno (Vintec) Mapper ────────────────────────────────────────────────────
+
+/**
+ * Map a row from an Oeno / Vintec CSV export. Distinctive columns:
+ *   - Rack_Location: combined "<rackName>-<position>" string (e.g. "M2-11")
+ *   - MasterVarietal / Varietal2 / Varietal3: grape varieties
+ *   - type: "Red Wine" / "White Wine" / etc.
+ *   - Size: bare number in millilitres
+ *   - BeginConsume / EndConsume: drink window (not yet imported)
+ *   - Location: typically the cellar name (e.g. "Cellar") — preserved as
+ *     the free-text bottle location field
+ */
+function mapOenoRow(row) {
+  const get = (keys) => {
+    for (const k of keys) {
+      const val = row[k] || row[k.toLowerCase()];
+      if (val) return val.trim();
+    }
+    return '';
+  };
+
+  const price = parseFloat(get(['Price', 'price']));
+  const qty = parseInt(get(['Quantity', 'quantity', 'Qty', 'Count']), 10);
+
+  // Oeno encodes rack + position together as e.g. "M2-11"
+  const combined = get(['Rack_Location', 'Rack Location', 'RackLocation']);
+  const parsed = parseCombinedRackLocation(combined);
+
+  return {
+    wineName: get(['Wine', 'wine']),
+    producer: get(['Producer', 'producer']),
+    vintage: get(['Vintage', 'vintage', 'Year']) || 'NV',
+    country: get(['Country', 'country']),
+    region: get(['Region', 'region']),
+    appellation: get(['Appellation', 'appellation', 'SubRegion']),
+    type: mapWineType(get(['type', 'Type', 'Wine Type'])),
+    price: isNaN(price) ? undefined : price,
+    bottleSize: normaliseBottleSize(get(['Size', 'size', 'Bottle Size'])) || '750ml',
+    quantity: isNaN(qty) || qty < 1 ? 1 : qty,
+    notes: get(['Notes', 'notes', 'Note', 'Comments']),
+    // Oeno's "Location" column is the cellar name (e.g. "Cellar"), preserved
+    // as a free-text label on the bottle since cellar selection happens in the UI.
+    location: get(['Location', 'location']),
+    rackName: parsed?.rackName || get(['Rack', 'rack', 'Rack Name']) || undefined,
+    rackPosition: parsed?.rackPosition || parseInt(get(['Rack Position', 'Position', 'Slot']), 10) || undefined,
   };
 }
 
@@ -423,7 +512,9 @@ export function parseAndMap(text, forceFormat) {
 
   const mapper = format === 'cellarion'
     ? mapCellarionRow
-    : format === 'vivino'
+    : format === 'oeno'
+      ? mapOenoRow
+      : format === 'vivino'
       ? mapVivinoRow
       : format === 'cellartracker'
         ? mapCellarTrackerRow

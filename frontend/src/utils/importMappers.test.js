@@ -4,6 +4,7 @@ import {
   detectDelimiter,
   parseJSON,
   parseAndMap,
+  parseCombinedRackLocation,
 } from './importMappers';
 
 // ---------------------------------------------------------------------------
@@ -363,6 +364,36 @@ describe('parseAndMap', () => {
     expect(result.items[0].type).toBe('sparkling');
   });
 
+  describe('parseCombinedRackLocation', () => {
+    it('parses "M2-11" into { rackName: "M2", rackPosition: 11 }', () => {
+      expect(parseCombinedRackLocation('M2-11')).toEqual({ rackName: 'M2', rackPosition: 11 });
+    });
+
+    it('handles leading-zero positions like "M3-04"', () => {
+      expect(parseCombinedRackLocation('M3-04')).toEqual({ rackName: 'M3', rackPosition: 4 });
+    });
+
+    it('splits on the LAST hyphen so rack names with hyphens still work', () => {
+      expect(parseCombinedRackLocation('Cabinet-A-15')).toEqual({ rackName: 'Cabinet-A', rackPosition: 15 });
+    });
+
+    it('returns null for missing or empty input', () => {
+      expect(parseCombinedRackLocation('')).toBeNull();
+      expect(parseCombinedRackLocation(null)).toBeNull();
+      expect(parseCombinedRackLocation(undefined)).toBeNull();
+    });
+
+    it('returns null when right side is not a positive integer', () => {
+      expect(parseCombinedRackLocation('M2-AB')).toBeNull();
+      expect(parseCombinedRackLocation('M2-0')).toBeNull();
+      expect(parseCombinedRackLocation('M2-')).toBeNull();
+    });
+
+    it('returns null when there is no hyphen', () => {
+      expect(parseCombinedRackLocation('M2')).toBeNull();
+    });
+  });
+
   describe('rack columns (row/col/rackRows/rackCols/rackType)', () => {
     it('maps Row, Col, Rack Rows, Rack Cols, Rack Type for generic CSV', () => {
       const csv = 'Wine,Producer,Vintage,Rack,Row,Col,Rack Rows,Rack Cols,Rack Type\n' +
@@ -392,6 +423,25 @@ describe('parseAndMap', () => {
       const result = parseAndMap(csv);
       expect(result.items[0]).toMatchObject({ rackName: 'Cabinet A', rackPosition: 42 });
       expect(result.items[0].row).toBeUndefined();
+    });
+
+    it('parses Oeno-style Rack_Location "M2-11" into rackName + rackPosition', () => {
+      const csv = 'Producer,Wine,Vintage,Quantity,Rack_Location,type,Size,Price,Country\n' +
+        'Amisfield,Amisfield Chenin Blanc,2019,3,M3-11,White Wine,750,35,New Zealand\n' +
+        'Alexander,Alexander Dusty Road Pinot Noir,2018,1,M2-11,Red Wine,750,35,New Zealand';
+      const result = parseAndMap(csv);
+      expect(result.format).toBe('oeno');
+      // Quantity 3 + 1 = 4 bottles
+      expect(result.items).toHaveLength(4);
+      const m3 = result.items[0];
+      expect(m3.rackName).toBe('M3');
+      expect(m3.rackPosition).toBe(11);
+      expect(m3.type).toBe('white');
+      expect(m3.bottleSize).toBe('750ml');
+      const m2 = result.items[3];
+      expect(m2.rackName).toBe('M2');
+      expect(m2.rackPosition).toBe(11);
+      expect(m2.type).toBe('red');
     });
 
     it('expands quantity while preserving row/col on each generated bottle', () => {

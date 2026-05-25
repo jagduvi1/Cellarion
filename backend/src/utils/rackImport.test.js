@@ -128,6 +128,25 @@ describe('planRackCreations', () => {
     expect(plan.get('A')).toMatchObject({ cols: 6, rows: 16 });
   });
 
+  test('Oeno-style: uses 6-col default and 4-row minimum when only rackPosition is known', () => {
+    // Matches Keith's CSV: M3-11 → rackName=M3, rackPosition=11, no row/col,
+    // no rackRows/rackCols. We want a sensible default rack shape, not a 1-wide column.
+    const plan = planRackCreations([
+      { rackName: 'M3', rackPosition: 11 },
+      { rackName: 'M3', rackPosition: 4 },
+      { rackName: 'M3', rackPosition: 10 },
+    ]);
+    expect(plan.get('M3')).toMatchObject({ cols: 6, rows: 4, type: 'grid' });
+  });
+
+  test('Oeno-style: grows rows when max position exceeds 4 rows at 6 cols', () => {
+    const plan = planRackCreations([
+      { rackName: 'BigRack', rackPosition: 50 },
+    ]);
+    // 6 cols × 4 rows = 24 < 50 → rows = ceil(50/6) = 9
+    expect(plan.get('BigRack')).toMatchObject({ cols: 6, rows: 9 });
+  });
+
   test('respects rackType override', () => {
     const plan = planRackCreations([
       { rackName: 'Honeycomb', row: 1, col: 1, rackType: 'hex' },

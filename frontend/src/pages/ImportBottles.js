@@ -20,6 +20,7 @@ const FORMAT_LABELS = {
   cellarion: 'Cellarion',
   vivino: 'Vivino',
   cellartracker: 'CellarTracker',
+  oeno: 'Oeno (Vintec)',
   generic: 'CSV'
 };
 
@@ -645,6 +646,10 @@ function ImportBottles() {
             <p>Export from CellarTracker via My Cellar &rarr; Download</p>
           </div>
           <div className="format-card">
+            <strong>Oeno (Vintec)</strong>
+            <p>CSV with Producer, Wine, Vintage, Quantity, Rack_Location columns</p>
+          </div>
+          <div className="format-card">
             <strong>Generic CSV</strong>
             <p>Any CSV with Wine, Producer, Vintage columns</p>
           </div>
@@ -685,13 +690,23 @@ function ImportBottles() {
       {parsedItems.length > 0 && parsedItems.some(i => i.rackName) && (
         <div className="import-rack-options">
           <h3>Rack placement</h3>
-          <p className="rack-options-hint">
-            Your file references racks ({new Set(parsedItems.map(i => i.rackName).filter(Boolean)).size} unique).
-            Racks that don't exist in this cellar yet will be created automatically.
-            {parsedItems.some(i => i.row && i.col) && (
-              <> Your file uses <strong>row</strong> + <strong>col</strong> coordinates — pick which end "row 1" sits at:</>
-            )}
-          </p>
+          {detectedFormat === 'oeno' ? (
+            <p className="rack-options-hint">
+              Detected an <strong>Oeno (Vintec)</strong> export. Your <code>Rack_Location</code> values
+              like <code>M2-11</code> will be split into rack <strong>M2</strong>, slot <strong>11</strong>.
+              Found <strong>{new Set(parsedItems.map(i => i.rackName).filter(Boolean)).size}</strong> unique
+              racks — any that don't exist in this cellar will be created automatically with a typical 6-wide grid layout.
+              You can adjust their shape after import from the Cellar page.
+            </p>
+          ) : (
+            <p className="rack-options-hint">
+              Your file references racks ({new Set(parsedItems.map(i => i.rackName).filter(Boolean)).size} unique).
+              Racks that don't exist in this cellar yet will be created automatically.
+              {parsedItems.some(i => i.row && i.col) && (
+                <> Your file uses <strong>row</strong> + <strong>col</strong> coordinates — pick which end "row 1" sits at:</>
+              )}
+            </p>
+          )}
           {parsedItems.some(i => i.row && i.col) && (
             <div className="row-origin-toggle">
               <label className={rowOrigin === 'top' ? 'active' : ''}>

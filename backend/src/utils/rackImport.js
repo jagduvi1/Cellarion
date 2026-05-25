@@ -109,14 +109,19 @@ function planRackCreations(items) {
   }
 
   // Finalise each entry: ensure rows/cols are at least 1, and that the rack's
-  // capacity covers the highest position we'll try to place into.
+  // capacity covers the highest position we'll try to place into. When only a
+  // sequential `rackPosition` is known (no row/col coordinates), fall back to
+  // a typical wine-rack width of 6 columns so the auto-created rack matches
+  // common physical layouts instead of becoming a 1-wide column.
   for (const entry of plan.values()) {
+    if (!entry.rows && !entry.cols && entry.maxPosition > 0) {
+      entry.cols = 6;
+      entry.rows = Math.max(4, Math.ceil(entry.maxPosition / entry.cols));
+    }
     if (!entry.rows) entry.rows = 1;
     if (!entry.cols) entry.cols = 1;
 
-    // If only `rackPosition` was used (no row/col), grow rows so capacity fits.
-    // Grid capacity = rows * cols. Prefer growing rows so a stack-of-positions
-    // import stays narrow.
+    // Grow capacity to fit the highest position if needed (grid + shelf).
     if (entry.type === 'grid' || entry.type === 'shelf') {
       const capacity = totalSlots(entry.type, entry.rows, entry.cols);
       if (entry.maxPosition > capacity) {
