@@ -433,6 +433,24 @@ describe('placeBottlesInRack (orchestration)', () => {
     expect(positions).toEqual([45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56]);
   });
 
+  test('Oeno shelf rack with bpc=2 (stacked): slot count = (cols+back)*bpc per shelf', () => {
+    // Hypothetical cabinet: 18 shelves, 6 front + 5 back, but each cell
+    // holds 2 bottles stacked. slotsPerShelf = (6+5)*2 = 22.
+    // First slot of shelf 11 (top-left anchor) = (11-1)*22 + 1 = 221.
+    const rack = {
+      type: 'shelf', rows: 18, cols: 6, typeConfig: { bottlesPerCell: 2, backCols: 5 },
+      slots: [], maxPosition: 396
+    };
+    const { placements, unplaced } = placeBottlesInRack(rack, [
+      { item: { rackPosition: 11 }, bottleId: 'a', sourceIndex: 0 },
+      { item: { rackPosition: 11 }, bottleId: 'b', sourceIndex: 1 },
+      { item: { rackPosition: 11 }, bottleId: 'c', sourceIndex: 2 },
+    ], 'top-left');
+    expect(unplaced).toHaveLength(0);
+    const positions = placements.map(p => p.position).sort((a, b) => a - b);
+    expect(positions).toEqual([221, 222, 223]);
+  });
+
   test('end-to-end: row+col coordinates flatten using rack geometry', () => {
     const rack = buildRack();
     const { placements } = placeBottlesInRack(rack, [

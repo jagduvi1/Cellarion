@@ -714,7 +714,9 @@ router.post('/confirm', async (req, res) => {
     searchService.bulkIndexBottles(createdBottleIds);
 
     // Per-rack two-pass placement: for each rack referenced in this import,
-    // assign exact slots first, then overflow extras into nearest empty slots.
+    // assign each item to its requested slot first (or, for shelf racks, the
+    // first slot of the requested shelf), then overflow extras into the
+    // nearest empty slot on the same rack.
     let placedCount = 0;
     let overflowedCount = 0;
     const unplacedDetails = []; // [{ sourceIndex, rackName, requestedPosition, reason }]
