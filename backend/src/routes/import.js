@@ -406,7 +406,9 @@ router.post('/confirm', async (req, res) => {
       : 'USD';
 
     // Validate user-supplied per-rack configuration.
-    // Shape: { [rackName]: { type?, rows?, cols?, typeConfig?: {...} } }
+    // Shape: { [rackName]: { skip?, type?, rows?, cols?, typeConfig?: {...} } }
+    // skip — when true, drop this rack from auto-creation AND placement;
+    //   bottles referencing it land in the cellar without rack placement
     // type — one of RACK_TYPES (defaults to 'grid' if absent/invalid)
     // rows/cols — clamped to 1..20
     // typeConfig — optional shape config (bottlesPerCell, bottlesPerSection,
@@ -420,6 +422,14 @@ router.post('/confirm', async (req, res) => {
     if (rawRackConfigs && typeof rawRackConfigs === 'object') {
       for (const [name, cfg] of Object.entries(rawRackConfigs)) {
         if (!cfg || typeof cfg !== 'object') continue;
+
+        // skip:true short-circuits — no rows/cols required since the rack
+        // won't be created and no bottles will be placed.
+        if (cfg.skip === true) {
+          rackConfigs[String(name)] = { skip: true };
+          continue;
+        }
+
         const rows = clampInt(cfg.rows, 1, 20);
         const cols = clampInt(cfg.cols, 1, 20);
         if (!rows || !cols) continue;
@@ -480,6 +490,9 @@ router.post('/confirm', async (req, res) => {
         for (const [name, spec] of rackPlan.entries()) {
           if (existingNames.has(name)) continue;
           const override = rackConfigs[name];
+          // User opted out of creating this rack — bottles will be imported
+          // into the cellar without placement (handled in the placement loop).
+          if (override?.skip) continue;
           const rows = override?.rows || spec.rows;
           const cols = override?.cols || spec.cols;
           const chosenType = override?.type || spec.type;
@@ -607,7 +620,7 @@ router.post('/confirm', async (req, res) => {
 
           // Queue rack placement for unmatched bottles too
           const hasPlacement = item.rackName && (item.rackPosition || (item.row && item.col));
-          if (hasPlacement && bottle.status === 'active') {
+          if (hasPlacement && bottle.status === 'active' && !rackConfigs[String(item.rackName)]?.skip) {
             pendingPlacements.push({ rackName: String(item.rackName), item, bottleId: bottle._id, sourceIndex: i });
           }
           continue;
@@ -690,7 +703,7 @@ router.post('/confirm', async (req, res) => {
         // the bottle loop so multiple bottles claiming the same slot can
         // overflow into adjacent free slots instead of being silently dropped.
         const hasPlacement = item.rackName && (item.rackPosition || (item.row && item.col));
-        if (hasPlacement && bottle.status === 'active') {
+        if (hasPlacement && bottle.status === 'active' && !rackConfigs[String(item.rackName)]?.skip) {
           pendingPlacements.push({ rackName: String(item.rackName), item, bottleId: bottle._id, sourceIndex: i });
         }
 

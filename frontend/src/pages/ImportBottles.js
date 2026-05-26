@@ -836,6 +836,17 @@ function ImportBottles() {
                         location. Delete the rack to recreate it with the Oeno-aware layout.
                       </div>
                     )}
+                    <label className="rack-config-skip-toggle">
+                      <input
+                        type="checkbox"
+                        checked={!!rackConfigs[name]?.skip}
+                        onChange={(e) => setRackConfigs(prev => ({
+                          ...prev,
+                          [name]: { ...prev[name], skip: e.target.checked }
+                        }))}
+                      />
+                      <span>Skip — don't place bottles into this existing rack</span>
+                    </label>
                   </div>
                 );
               }
@@ -857,8 +868,10 @@ function ImportBottles() {
                 }
               }));
 
+              const isSkipped = !!cfg.skip;
+
               return (
-                <div key={name} className="rack-config-card">
+                <div key={name} className={`rack-config-card ${isSkipped ? 'rack-config-skipped' : ''}`}>
                   <div className="rack-config-card-head">
                     <strong>{name}</strong>
                     <span className="rack-config-meta">
@@ -870,8 +883,21 @@ function ImportBottles() {
                         <>, up to {info.maxPerCell} on the busiest {detectedFormat === 'oeno' ? 'shelf' : 'cell'}</>
                       )}
                     </span>
+                    <label className="rack-config-skip-toggle">
+                      <input
+                        type="checkbox"
+                        checked={isSkipped}
+                        onChange={(e) => updateCfg({ skip: e.target.checked })}
+                      />
+                      <span>Skip — import bottles without a rack</span>
+                    </label>
                   </div>
-                  <div className="rack-config-card-body">
+                  {isSkipped && (
+                    <div className="rack-config-skipped-note">
+                      The {info.count} bottle{info.count !== 1 ? 's' : ''} for this rack will be imported into the cellar without rack placement. No rack named <strong>{name}</strong> will be created.
+                    </div>
+                  )}
+                  <div className="rack-config-card-body" style={{ display: isSkipped ? 'none' : undefined }}>
                     <label className="rack-config-field">
                       <span>Type</span>
                       <select
@@ -967,14 +993,16 @@ function ImportBottles() {
                       </>
                     )}
                   </div>
-                  <div className="rack-config-capacity-line">
-                    = {capacity} slots
-                    {tooSmall && (
-                      <span className="rack-config-warn">
-                        {' '}— too small for {required} bottles
-                      </span>
-                    )}
-                  </div>
+                  {!isSkipped && (
+                    <div className="rack-config-capacity-line">
+                      = {capacity} slots
+                      {tooSmall && (
+                        <span className="rack-config-warn">
+                          {' '}— too small for {required} bottles
+                        </span>
+                      )}
+                    </div>
+                  )}
                 </div>
               );
             })}
