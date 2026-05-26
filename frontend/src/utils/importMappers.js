@@ -171,10 +171,11 @@ export function suggestRackDimensions(maxPosition) {
  * Summarise rack usage in a parsed-items batch:
  *   { [rackName]: { count, maxPosition, maxPerCell, observedPositions: number[] } }
  *
- * `maxPerCell` is the highest number of items sharing the same rackPosition
- * within a single rack. For Vintec/Oeno-style cabinets where each "Rack_
- * Location" is a multi-bottle cell (3 Chenin Blancs all stored at M3-11),
- * this is the bottlesPerCell value that an auto-created shelf rack needs.
+ * `maxPerCell` tracks the highest number of items sharing the same
+ * rackPosition within a single rack — for Oeno-format imports this is the
+ * "max bottles on the busiest shelf" stat shown in the picker's meta line.
+ * Always returned for diagnostics; the rack-default chooser
+ * (`getDefaultRackConfig`) decides what to do with it per format.
  */
 export function summariseRacks(items) {
   const summary = {};
@@ -588,4 +589,41 @@ export function parseAndMap(text, forceFormat) {
   }
 
   return { items, format, headers };
+}
+
+/**
+ * Pick a sensible default rack configuration for the picker based on the
+ * detected source format and per-rack stats. Format-specific knowledge
+ * lives here so the page component doesn't have to know about it.
+ *
+ * Currently:
+ *   - oeno (Vintec/Transtherm-style): Open Shelf with the typical 6 front
+ *     + 5 back layout, one bottle per cell, rows = max shelf observed.
+ *     This matches Vintec V155/V190/V198 cabinets; users with non-standard
+ *     models can adjust in the picker.
+ *   - everything else: Grid with rows/cols sized to fit the data.
+ *
+ * To add a default for a new format, add a case here — the picker will
+ * pick it up automatically.
+ */
+export function getDefaultRackConfig(format, info) {
+  if (format === 'oeno') {
+    const shelvesObserved = Math.max(info.maxPosition || 0, 1);
+    return {
+      type: 'shelf',
+      rows: Math.min(20, shelvesObserved),
+      cols: 6,
+      typeConfig: { bottlesPerCell: 1, backCols: 5 }
+    };
+  }
+  const required = Math.max(info.maxPosition || 0, info.count || 0);
+  return { type: 'grid', ...suggestRackDimensions(required), typeConfig: {} };
+}
+
+/**
+ * Format-specific default for the slot-1 anchor. Oeno labels shelf 1 at
+ * the bottom of the cabinet; most other apps put slot 1 at the top.
+ */
+export function getDefaultAnchor(format) {
+  return format === 'oeno' ? 'bottom-left' : 'top-left';
 }

@@ -4,10 +4,11 @@ import { useAuth } from '../contexts/AuthContext';
 import { validateImport, confirmImport } from '../api/bottles';
 import { searchWines } from '../api/wines';
 import { getRacks } from '../api/racks';
-import { parseAndMap, parseJSON, suggestRackDimensions, summariseRacks } from '../utils/importMappers';
+import { parseAndMap, parseJSON, summariseRacks, getDefaultRackConfig, getDefaultAnchor } from '../utils/importMappers';
 import { getTotalSlots } from '../utils/rackLayouts';
 import { TYPE_DIMENSIONS } from '../components/racks/RackTypeSelector';
-import { CURRENCIES } from '../config/currencies';
+import AnchorPicker from './import/AnchorPicker';
+import CurrencyPicker from './import/CurrencyPicker';
 import {
   listImportSessions,
   createImportSession,
@@ -59,8 +60,6 @@ function ImportBottles() {
   const { id: cellarId } = useParams();
   const { apiFetch, user } = useAuth();
   const navigate = useNavigate();
-  const isAdmin = user?.roles?.includes('admin');
-
   // Step state
   const [step, setStep] = useState('upload');
   const [error, setError] = useState(null);
@@ -313,42 +312,17 @@ function ImportBottles() {
         setDetectedFormat(format);
         setFileName(file.name);
 
-        // Build per-rack summary + seed editable config with suggestions.
-        //
-        // For Oeno (Vintec/Transtherm) format: their cabinet model is one shelf
-        // = one labelled storage location with 11 bottles (6 front + 5 back).
-        // Their CSV's "M3-11" means "Module 3, shelf 11" — the source position
-        // is a SHELF NUMBER, and Quantity > 1 means multiple bottles on the
-        // SAME shelf (the source app doesn't track which specific cell). So
-        // we default to Open Shelf with cols=6, backCols=5, bottlesPerCell=1,
-        // rows sized to fit the highest shelf number observed.
-        //
-        // For other formats: default to grid where each position is a slot.
-        // Multi-bottle-per-cell stacking is left for the user to opt into
-        // manually if their physical rack works that way.
+        // Build per-rack summary + seed editable config with format-aware
+        // defaults. The format-specific logic (Oeno → shelf, etc.) lives in
+        // getDefaultRackConfig so this page stays format-agnostic.
         const summary = summariseRacks(items);
         const initialConfigs = {};
         for (const [name, info] of Object.entries(summary)) {
-          if (format === 'oeno') {
-            const shelvesObserved = Math.max(info.maxPosition || 0, 1);
-            initialConfigs[name] = {
-              type: 'shelf',
-              rows: Math.min(20, shelvesObserved),
-              cols: 6,
-              typeConfig: { bottlesPerCell: 1, backCols: 5 }
-            };
-          } else {
-            const required = Math.max(info.maxPosition || 0, info.count || 0);
-            initialConfigs[name] = { type: 'grid', ...suggestRackDimensions(required), typeConfig: {} };
-          }
+          initialConfigs[name] = getDefaultRackConfig(format, info);
         }
         setRackSummary(summary);
         setRackConfigs(initialConfigs);
-        // Oeno cabinets count shelf 1 from the bottom — see Vintec/Transtherm
-        // docs. Default the anchor accordingly so users don't have to flip it.
-        if (format === 'oeno') {
-          setPositionAnchor('bottom-left');
-        }
+        setPositionAnchor(getDefaultAnchor(format));
       } catch (err) {
         setError(`Failed to parse file: ${err.message}`);
       }
@@ -783,22 +757,12 @@ function ImportBottles() {
       </div>
 
       {parsedItems.length > 0 && parsedItems.some(i => i.price) && (
-        <div className="import-currency-block">
-          <label className="import-currency-label">
-            <strong>Currency for prices</strong>
-            <select
-              value={importCurrency}
-              onChange={(e) => setImportCurrency(e.target.value)}
-            >
-              {CURRENCIES.map(c => <option key={c} value={c}>{c}</option>)}
-            </select>
-          </label>
-          <p className="import-currency-hint">
-            {parsedItems.some(i => i.currency)
-              ? <>Applied to rows that don't already have a Currency column. Defaulted to your profile setting ({user?.preferences?.currency || 'USD'}).</>
-              : <>Your file has prices but no Currency column. All imported bottles will be tagged with this currency. Defaulted to your profile setting ({user?.preferences?.currency || 'USD'}).</>}
-          </p>
-        </div>
+        <CurrencyPicker
+          value={importCurrency}
+          onChange={setImportCurrency}
+          profileCurrency={user?.preferences?.currency}
+          anyRowHasCurrency={parsedItems.some(i => i.currency)}
+        />
       )}
 
       {parsedItems.length > 0 && Object.keys(rackSummary).length > 0 && (
@@ -808,10 +772,10 @@ function ImportBottles() {
             <p className="rack-options-hint">
               Detected an <strong>Oeno (Vintec/Transtherm)</strong> export. Each
               <code>Rack_Location</code> like <code>M3-11</code> maps to{' '}
-              <strong>Module 3, shelf 11</strong>. Defaulted to an Open Shelf
-              layout matching a standard Vintec cabinet (6 front + 5 back per
-              shelf, shelf 1 at the bottom) — adjust rows for each module if
-              your cabinet differs.
+              <strong>Module 3, shelf 11</strong>. Defaulted each rack to an Open Shelf
+              with the typical Vintec layout (6 front + 5 back per shelf, shelf 1 at
+              the bottom). Adjust rows, cols, or back-row count below to match your
+              specific cabinet model.
             </p>
           )}
           <p className="rack-options-hint">
@@ -862,6 +826,14 @@ function ImportBottles() {
                     {tooSmall && (
                       <div className="rack-config-warn rack-config-existing-warn">
                         Capacity ({existingCapacity}) is below {required} bottles — extras will be reported as unplaced.
+                      </div>
+                    )}
+                    {detectedFormat === 'oeno' && existing.type !== 'shelf' && !existing.isModular && (
+                      <div className="rack-config-warn rack-config-existing-warn">
+                        Oeno positions are <strong>shelf numbers</strong>, but this rack is a
+                        <code> {existing.type}</code>, so positions will be interpreted as
+                        slot indexes instead. Your bottles may land in the wrong physical
+                        location. Delete the rack to recreate it with the Oeno-aware layout.
                       </div>
                     )}
                   </div>
@@ -1008,28 +980,7 @@ function ImportBottles() {
             })}
           </div>
 
-          <div className="anchor-picker">
-            <div className="anchor-picker-label">Where does slot 1 sit in your physical rack?</div>
-            <div className="anchor-picker-grid">
-              {[
-                { value: 'top-left', label: 'Top-left', sub: 'Default for most apps' },
-                { value: 'top-right', label: 'Top-right', sub: '' },
-                { value: 'bottom-left', label: 'Bottom-left', sub: 'Oeno / Vintec' },
-                { value: 'bottom-right', label: 'Bottom-right', sub: '' },
-              ].map(opt => (
-                <button
-                  key={opt.value}
-                  type="button"
-                  className={`anchor-btn anchor-btn-${opt.value} ${positionAnchor === opt.value ? 'active' : ''}`}
-                  onClick={() => setPositionAnchor(opt.value)}
-                >
-                  <span className="anchor-dot" aria-hidden="true" />
-                  <span className="anchor-label">{opt.label}</span>
-                  {opt.sub && <span className="anchor-sub">{opt.sub}</span>}
-                </button>
-              ))}
-            </div>
-          </div>
+          <AnchorPicker value={positionAnchor} onChange={setPositionAnchor} />
         </div>
       )}
 

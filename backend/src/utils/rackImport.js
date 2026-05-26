@@ -210,11 +210,14 @@ function planRackCreations(items) {
     if (!entry.rows) entry.rows = 1;
     if (!entry.cols) entry.cols = 1;
 
-    // Grow capacity to fit if needed (grid + shelf).
+    // Grow capacity to fit if needed (grid + shelf). For shelf racks the
+    // per-row slot count includes back cells × bottlesPerCell; pass the
+    // typeConfig through so totalSlots() computes the right capacity.
     if (entry.type === 'grid' || entry.type === 'shelf') {
-      const capacity = totalSlots(entry.type, entry.rows, entry.cols);
+      const capacity = totalSlots(entry.type, entry.rows, entry.cols, entry.typeConfig);
       if (requiredCapacity > capacity) {
-        entry.rows = Math.ceil(requiredCapacity / entry.cols);
+        const perRow = capacity / entry.rows;
+        entry.rows = Math.ceil(requiredCapacity / Math.max(1, perRow));
       }
     }
 
