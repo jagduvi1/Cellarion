@@ -315,27 +315,27 @@ function ImportBottles() {
 
         // Build per-rack summary + seed editable config with suggestions.
         //
-        // If multiple items share the same (rackName, rackPosition) — the
-        // hallmark of Vintec/Oeno cabinets where each "slot" is actually a
-        // multi-bottle cell — default to shelf type with bottlesPerCell
-        // set to the max observed. Otherwise default to grid (1 bottle/slot).
+        // For Oeno (Vintec/Transtherm) format: their cabinet model is one shelf
+        // = one labelled storage location with 11 bottles (6 front + 5 back).
+        // Their CSV's "M3-11" means "Module 3, shelf 11" — the source position
+        // is a SHELF NUMBER, and Quantity > 1 means multiple bottles on the
+        // SAME shelf (the source app doesn't track which specific cell). So
+        // we default to Open Shelf with cols=6, backCols=5, bottlesPerCell=1,
+        // rows sized to fit the highest shelf number observed.
         //
-        // Users can switch any rack to a different shape in the picker, or
-        // skip the inference entirely for the user-doesn't-own-a-rack case.
+        // For other formats: default to grid where each position is a slot.
+        // Multi-bottle-per-cell stacking is left for the user to opt into
+        // manually if their physical rack works that way.
         const summary = summariseRacks(items);
         const initialConfigs = {};
         for (const [name, info] of Object.entries(summary)) {
-          const bpc = Math.max(1, info.maxPerCell || 1);
-          if (bpc > 1) {
-            // Shelf: size the cell grid to fit the highest cell index seen,
-            // then total slots = rows × cols × bpc.
-            const cells = Math.max(info.maxPosition || 0, 1);
-            const dims = suggestRackDimensions(cells);
+          if (format === 'oeno') {
+            const shelvesObserved = Math.max(info.maxPosition || 0, 1);
             initialConfigs[name] = {
               type: 'shelf',
-              rows: dims.rows,
-              cols: dims.cols,
-              typeConfig: { bottlesPerCell: bpc }
+              rows: Math.min(20, shelvesObserved),
+              cols: 6,
+              typeConfig: { bottlesPerCell: 1, backCols: 5 }
             };
           } else {
             const required = Math.max(info.maxPosition || 0, info.count || 0);
@@ -344,6 +344,11 @@ function ImportBottles() {
         }
         setRackSummary(summary);
         setRackConfigs(initialConfigs);
+        // Oeno cabinets count shelf 1 from the bottom — see Vintec/Transtherm
+        // docs. Default the anchor accordingly so users don't have to flip it.
+        if (format === 'oeno') {
+          setPositionAnchor('bottom-left');
+        }
       } catch (err) {
         setError(`Failed to parse file: ${err.message}`);
       }
@@ -801,8 +806,12 @@ function ImportBottles() {
           <h3>Rack placement</h3>
           {detectedFormat === 'oeno' && (
             <p className="rack-options-hint">
-              Detected an <strong>Oeno (Vintec)</strong> export. Your <code>Rack_Location</code> values
-              like <code>M2-11</code> have been split into rack name + slot number.
+              Detected an <strong>Oeno (Vintec/Transtherm)</strong> export. Each
+              <code>Rack_Location</code> like <code>M3-11</code> maps to{' '}
+              <strong>Module 3, shelf 11</strong>. Defaulted to an Open Shelf
+              layout matching a standard Vintec cabinet (6 front + 5 back per
+              shelf, shelf 1 at the bottom) — adjust rows for each module if
+              your cabinet differs.
             </p>
           )}
           <p className="rack-options-hint">
@@ -832,8 +841,12 @@ function ImportBottles() {
                       <span className="rack-config-existing-badge">Already exists</span>
                       <span className="rack-config-meta">
                         {info.count} bottle{info.count !== 1 ? 's' : ''}
-                        {info.maxPosition > 0 && <>, highest cell {info.maxPosition}</>}
-                        {info.maxPerCell > 1 && <>, up to {info.maxPerCell} per cell</>}
+                        {info.maxPosition > 0 && (
+                          <>, highest {detectedFormat === 'oeno' ? 'shelf' : 'cell'} {info.maxPosition}</>
+                        )}
+                        {info.maxPerCell > 1 && (
+                          <>, up to {info.maxPerCell} on the busiest {detectedFormat === 'oeno' ? 'shelf' : 'cell'}</>
+                        )}
                       </span>
                     </div>
                     <div className="rack-config-existing-note">
@@ -878,8 +891,12 @@ function ImportBottles() {
                     <strong>{name}</strong>
                     <span className="rack-config-meta">
                       {info.count} bottle{info.count !== 1 ? 's' : ''}
-                      {info.maxPosition > 0 && <>, highest cell {info.maxPosition}</>}
-                      {info.maxPerCell > 1 && <>, up to {info.maxPerCell} per cell</>}
+                      {info.maxPosition > 0 && (
+                        <>, highest {detectedFormat === 'oeno' ? 'shelf' : 'cell'} {info.maxPosition}</>
+                      )}
+                      {info.maxPerCell > 1 && (
+                        <>, up to {info.maxPerCell} on the busiest {detectedFormat === 'oeno' ? 'shelf' : 'cell'}</>
+                      )}
                     </span>
                   </div>
                   <div className="rack-config-card-body">
@@ -934,6 +951,16 @@ function ImportBottles() {
                           type="number" min="1" max="20"
                           value={cfg.typeConfig?.bottlesPerCell || 1}
                           onChange={(e) => updateTc('bottlesPerCell', parseInt(e.target.value, 10) || 1)}
+                        />
+                      </label>
+                    )}
+                    {dims.showBackCols && (
+                      <label className="rack-config-field">
+                        <span>Back row</span>
+                        <input
+                          type="number" min="0" max="20"
+                          value={cfg.typeConfig?.backCols ?? 0}
+                          onChange={(e) => updateTc('backCols', parseInt(e.target.value, 10) || 0)}
                         />
                       </label>
                     )}

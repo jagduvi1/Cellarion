@@ -370,13 +370,14 @@ describe('placeBottlesInRack (orchestration)', () => {
     expect(unplaced[0].reason).toMatch(/capacity/);
   });
 
-  test('shelf rack: 3 bottles claiming Oeno cell 11 land in slots 31, 32, 33 (bpc=3)', () => {
-    // Vintec/Oeno cabinet: shelf with 2 rows × 6 cols × 3 bottles/cell = 36 slots.
-    // Oeno "cell 11" = top row, col 5 → Cellarion's first slot of cell 11 = 31.
-    // 3 bottles all claiming cell 11 should naturally pack into slots 31, 32, 33.
+  test('Oeno shelf rack: 3 bottles at M3-11 land on shelf 11 (front cells 1-3)', () => {
+    // Transtherm Espace 1000: 18 shelves per module, 6 front + 5 back per shelf.
+    // Oeno "M3-11" = shelf 11; the source app doesn't track which specific
+    // cell within the shelf, so 3 bottles all land at the front of shelf 11.
+    // Slots per shelf = 6 + 5 = 11. First slot of shelf 11 = (11-1)*11 + 1 = 111.
     const rack = {
-      type: 'shelf', rows: 2, cols: 6, typeConfig: { bottlesPerCell: 3 },
-      slots: [], maxPosition: 36
+      type: 'shelf', rows: 18, cols: 6, typeConfig: { bottlesPerCell: 1, backCols: 5 },
+      slots: [], maxPosition: 198
     };
     const items = [
       { item: { rackPosition: 11 }, bottleId: 'chenin-1', sourceIndex: 0 },
@@ -386,52 +387,50 @@ describe('placeBottlesInRack (orchestration)', () => {
     const { placements, unplaced } = placeBottlesInRack(rack, items, 'top-left');
     expect(unplaced).toHaveLength(0);
     const positions = placements.map(p => p.position).sort((a, b) => a - b);
-    expect(positions).toEqual([31, 32, 33]);
+    expect(positions).toEqual([111, 112, 113]);
   });
 
-  test('shelf rack: cell 12 (next cell) gets positions 34-36; cell 1 gets 1-3', () => {
+  test('Oeno shelf rack: bottom-left anchor flips shelf 11 to shelf 8 (Keith real data)', () => {
+    // Keith's cabinet: 18 shelves, bottom-left anchor. Oeno shelf 11 from
+    // bottom = effective shelf 18-11+1 = 8 from top. First slot = (8-1)*11+1 = 78.
     const rack = {
-      type: 'shelf', rows: 2, cols: 6, typeConfig: { bottlesPerCell: 3 },
-      slots: [], maxPosition: 36
+      type: 'shelf', rows: 18, cols: 6, typeConfig: { bottlesPerCell: 1, backCols: 5 },
+      slots: [], maxPosition: 198
     };
-    const items = [
-      { item: { rackPosition: 1 }, bottleId: 'a', sourceIndex: 0 },
-      { item: { rackPosition: 12 }, bottleId: 'b', sourceIndex: 1 },
-    ];
-    const { placements } = placeBottlesInRack(rack, items, 'top-left');
-    const posOf = (id) => placements.find(p => p.bottle === id).position;
-    expect(posOf('a')).toBe(1);
-    expect(posOf('b')).toBe(34);
-  });
-
-  test('shelf rack with bottom-left anchor: cell 11 flips through cell-grid math', () => {
-    // 2×6 shelf, bpc=3, anchor=bottom-left.
-    // Oeno cell 11 → cell-grid (row 2, col 5). bottom-left flips row → (row 1, col 5).
-    // Cellarion cell index = (1-1)*6 + 5 = 5. First slot of cell 5 = (5-1)*3 + 1 = 13.
-    const rack = {
-      type: 'shelf', rows: 2, cols: 6, typeConfig: { bottlesPerCell: 3 },
-      slots: [], maxPosition: 36
-    };
-    const items = [
+    const { placements } = placeBottlesInRack(rack, [
       { item: { rackPosition: 11 }, bottleId: 'a', sourceIndex: 0 },
-    ];
-    const { placements } = placeBottlesInRack(rack, items, 'bottom-left');
-    expect(placements[0].position).toBe(13);
+    ], 'bottom-left');
+    expect(placements[0].position).toBe(78);
   });
 
-  test('shelf rack: overflow when cell is full spills into the next cell', () => {
-    // 4 bottles trying to fit into a cell with bpc=3 — the 4th overflows.
+  test('Oeno shelf rack: 11 bottles on the same shelf fill front then back', () => {
+    // A shelf full case: 11 bottles all at shelf 5. Slots 45-55 (front 6 + back 5).
     const rack = {
-      type: 'shelf', rows: 2, cols: 6, typeConfig: { bottlesPerCell: 3 },
-      slots: [], maxPosition: 36
+      type: 'shelf', rows: 18, cols: 6, typeConfig: { bottlesPerCell: 1, backCols: 5 },
+      slots: [], maxPosition: 198
     };
-    const items = Array.from({ length: 4 }, (_, i) => ({
-      item: { rackPosition: 11 }, bottleId: `b${i}`, sourceIndex: i
+    const items = Array.from({ length: 11 }, (_, i) => ({
+      item: { rackPosition: 5 }, bottleId: `b${i}`, sourceIndex: i
     }));
     const { placements, unplaced } = placeBottlesInRack(rack, items, 'top-left');
     expect(unplaced).toHaveLength(0);
     const positions = placements.map(p => p.position).sort((a, b) => a - b);
-    expect(positions).toEqual([31, 32, 33, 34]); // 34 is cell 12's first slot
+    expect(positions).toEqual([45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55]);
+  });
+
+  test('Oeno shelf rack: 12th bottle on a full shelf spills into the next shelf', () => {
+    const rack = {
+      type: 'shelf', rows: 18, cols: 6, typeConfig: { bottlesPerCell: 1, backCols: 5 },
+      slots: [], maxPosition: 198
+    };
+    const items = Array.from({ length: 12 }, (_, i) => ({
+      item: { rackPosition: 5 }, bottleId: `b${i}`, sourceIndex: i
+    }));
+    const { placements, unplaced } = placeBottlesInRack(rack, items, 'top-left');
+    expect(unplaced).toHaveLength(0);
+    const positions = placements.map(p => p.position).sort((a, b) => a - b);
+    // Shelf 5 holds 11 (positions 45-55); 12th bottle overflows to shelf 6 slot 56
+    expect(positions).toEqual([45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56]);
   });
 
   test('end-to-end: row+col coordinates flatten using rack geometry', () => {

@@ -18,30 +18,35 @@ const DEFAULT_ANCHOR = 'top-left';
 
 /**
  * Compute the 1-indexed slot position in Cellarion's internal coordinate
- * system (top-left, row-major), given:
- *   - A sequential `position` from the source system, or
- *   - A (row, col) pair from the source system,
- * plus the rack's dimensions and where the source system's "bottle 1" sits.
+ * system (top-left, row-major), given a source-system position and rack
+ * geometry.
  *
- * For shelf racks with `bottlesPerCell > 1` (e.g. Vintec/Oeno cabinets where
- * each "slot" physically holds a stack of identical bottles), the input
- * position is treated as a CELL index. The output is the FIRST slot of that
- * cell — subsequent bottles claiming the same cell will naturally overflow
- * into the cell's remaining slots via forward-scan placement.
+ * Two distinct interpretations depending on rack type:
  *
- * `anchor` describes the corner where the source data's position 1 (or row 1,
- * col 1) is located:
+ * 1. Grid racks — the source `position` is a SLOT NUMBER. Anchor transforms
+ *    expand the slot into (row, col), flip per anchor, then recompose.
+ *
+ * 2. Shelf racks — the source `position` is a SHELF NUMBER (row). This
+ *    matches how real-world shelf cabinets (Vintec, Transtherm) label
+ *    storage: "M3-11" means "Module 3, shelf 11". Output is the FIRST slot
+ *    of that shelf; multiple bottles claiming the same shelf naturally fan
+ *    out to adjacent cells via placeBottles' forward-scan overflow (front
+ *    cells first, then back cells if backCols > 0). For shelf racks only
+ *    the row component of the anchor matters; left/right is ignored since
+ *    the source position carries no column information.
+ *
+ * `anchor`:
  *   - 'top-left'     : matches Cellarion's internal layout (identity)
- *   - 'top-right'    : column 1 is on the right
- *   - 'bottom-left'  : row 1 is at the bottom (Oeno reading left-to-right)
- *   - 'bottom-right' : row 1 at bottom AND col 1 on the right
+ *   - 'top-right'    : column 1 is on the right (grid only)
+ *   - 'bottom-left'  : row 1 is at the bottom (Oeno/Transtherm convention)
+ *   - 'bottom-right' : row 1 at bottom AND col 1 on the right (grid only)
  *
  * Returns { position } on success or { error } on bad input.
  */
 function computeRackPosition({
   position, row, col,
   rackRows, rackCols,
-  rackType, bottlesPerCell,
+  rackType, bottlesPerCell, backCols,
   anchor = DEFAULT_ANCHOR
 }) {
   if (!VALID_ANCHORS.includes(anchor)) {
@@ -51,20 +56,44 @@ function computeRackPosition({
   const cols = parseInt(rackCols, 10);
   const rows = parseInt(rackRows, 10);
   const bpc = Math.max(1, parseInt(bottlesPerCell, 10) || 1);
-  const isMultiCell = rackType === 'shelf' && bpc > 1;
+  const back = Math.max(0, parseInt(backCols, 10) || 0);
+  const isShelf = rackType === 'shelf';
 
+  // Shelf racks: the source position is a SHELF NUMBER (row), matching how
+  // real-world cabinets (Vintec/Transtherm) label storage. "M3-11" means
+  // "Module 3, shelf 11" — the specific cell within that shelf isn't
+  // recorded by the source app. Output is the FIRST slot of the shelf;
+  // multiple bottles on the same shelf will fan out to adjacent cells via
+  // placeBottles' forward-scan overflow (front cells first, then back).
+  if (isShelf && position !== undefined && position !== null && position !== '') {
+    const p = parseInt(position, 10);
+    if (isNaN(p) || p < 1) return { error: 'Invalid shelf' };
+
+    let effectiveShelf = p;
+    if (anchor === 'bottom-left' || anchor === 'bottom-right') {
+      if (isNaN(rows) || rows < 1) {
+        return { error: 'rackRows is required for bottom-anchored shelf placement' };
+      }
+      if (p > rows) return { error: `shelf ${p} exceeds rackRows ${rows}` };
+      effectiveShelf = rows - p + 1;
+    }
+
+    if (isNaN(cols) || cols < 1) {
+      return { error: 'rackCols is required for shelf placement' };
+    }
+    const slotsPerShelf = (cols + back) * bpc;
+    return { position: (effectiveShelf - 1) * slotsPerShelf + 1 };
+  }
+
+  // Grid rack (or shelf with row+col input): source is a slot or (row, col).
   let srcRow, srcCol;
 
   if (position !== undefined && position !== null && position !== '') {
     const p = parseInt(position, 10);
     if (isNaN(p) || p < 1) return { error: 'Invalid position' };
 
-    // Identity case — no anchor flip needed.
-    if (anchor === 'top-left') {
-      // For shelf cells, the input is a cell index → translate to the
-      // first slot of that cell. For grid, position == slot.
-      return { position: isMultiCell ? (p - 1) * bpc + 1 : p };
-    }
+    // Identity case for grid — no anchor flip needed.
+    if (anchor === 'top-left') return { position: p };
 
     if (isNaN(cols) || cols < 1) {
       return { error: 'rackCols is required to transform position with a non-default anchor' };
@@ -81,8 +110,7 @@ function computeRackPosition({
     if (srcCol > cols) return { error: `col ${srcCol} exceeds rackCols ${cols}` };
   }
 
-  // Apply anchor transforms in CELL-grid space (rows × cols cells), then
-  // expand the resulting cell index to a slot index for multi-cell shelves.
+  // Apply anchor transforms in the cell grid (rows × cols).
   let effectiveRow = srcRow;
   let effectiveCol = srcCol;
 
@@ -100,8 +128,7 @@ function computeRackPosition({
     effectiveCol = cols - srcCol + 1;
   }
 
-  const cellIndex = (effectiveRow - 1) * cols + effectiveCol;
-  return { position: isMultiCell ? (cellIndex - 1) * bpc + 1 : cellIndex };
+  return { position: (effectiveRow - 1) * cols + effectiveCol };
 }
 
 /**
@@ -232,6 +259,7 @@ function placeBottlesInRack(rack, items, anchor) {
       rackCols: rack.cols,
       rackType: rack.type,
       bottlesPerCell: rack.typeConfig?.bottlesPerCell,
+      backCols: rack.typeConfig?.backCols,
       anchor
     });
     if (result.error) {
