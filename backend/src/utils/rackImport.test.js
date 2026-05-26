@@ -451,6 +451,16 @@ describe('placeBottlesInRack (orchestration)', () => {
     expect(positions).toEqual([221, 222, 223]);
   });
 
+  test('skip flag is honoured at the route level (helper level: pass an empty group)', () => {
+    // placeBottlesInRack itself doesn't know about `skip` — that's the route's
+    // responsibility. Verify the contract: when the route filters out skipped
+    // racks, the helper sees an empty items array and returns empty arrays.
+    const rack = buildRack();
+    const { placements, unplaced } = placeBottlesInRack(rack, [], 'top-left');
+    expect(placements).toEqual([]);
+    expect(unplaced).toEqual([]);
+  });
+
   test('end-to-end: row+col coordinates flatten using rack geometry', () => {
     const rack = buildRack();
     const { placements } = placeBottlesInRack(rack, [
