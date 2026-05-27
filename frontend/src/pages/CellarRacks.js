@@ -9,7 +9,6 @@ import { getPlacedBottleIds } from '../utils/rackUtils';
 import { getTotalSlots, getModularTotalSlots } from '../utils/rackLayouts';
 import RackRenderer from '../components/racks/RackRenderer';
 import ShelfView from '../components/racks/ShelfView';
-import ShelfViewIso from '../components/racks/ShelfViewIso';
 import ShelfView3D from '../components/racks/ShelfView3D';
 import RackTypeSelector, { TYPE_DIMENSIONS } from '../components/racks/RackTypeSelector';
 import RatingInput from '../components/RatingInput';
@@ -44,7 +43,11 @@ function CellarRacks() {
   // to whichever view they were in last.
   const [viewMode, setViewModeState] = useState(() => {
     try {
-      return window.localStorage.getItem('cellarion.rackViewMode') || 'compact';
+      const stored = window.localStorage.getItem('cellarion.rackViewMode');
+      // 'iso' was a short-lived option (deprecated in v1.53.1) — fall back to
+      // the closest equivalent so returning users don't see a missing view.
+      if (stored === 'iso') return 'shelf';
+      return stored || 'compact';
     } catch {
       return 'compact';
     }
@@ -344,14 +347,6 @@ function CellarRacks() {
               </button>
               <button
                 role="tab"
-                aria-selected={viewMode === 'iso'}
-                className={`view-mode-btn ${viewMode === 'iso' ? 'active' : ''}`}
-                onClick={() => setViewMode('iso')}
-              >
-                Isometric
-              </button>
-              <button
-                role="tab"
                 aria-selected={viewMode === '3d'}
                 className={`view-mode-btn ${viewMode === '3d' ? 'active' : ''}`}
                 onClick={() => setViewMode('3d')}
@@ -361,7 +356,7 @@ function CellarRacks() {
             </div>
           )}
           <div id={`rack-${rack._id}`}>
-          {rack.type === 'shelf' && !rack.isModular && (viewMode === 'shelf' || viewMode === 'iso' || viewMode === '3d') ? (
+          {rack.type === 'shelf' && !rack.isModular && (viewMode === 'shelf' || viewMode === '3d') ? (
             (() => {
               const handleClick = (pos, slotData) => {
                 if (!canEdit && !slotData) return;
@@ -378,7 +373,6 @@ function CellarRacks() {
                 onSlotClick: handleClick,
               };
               if (viewMode === '3d') return <ShelfView3D {...commonProps} />;
-              if (viewMode === 'iso') return <ShelfViewIso {...commonProps} />;
               return <ShelfView {...commonProps} />;
             })()
           ) : (
