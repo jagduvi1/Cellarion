@@ -101,9 +101,14 @@ function getBottleGeometry() {
 }
 
 // ── Clickable bottle (no inline popup — info shown in side panel) ────
-// Rotation [PI/2, 0, 0] maps local Y→Z so bottle points into rack
-// with neck/foil sticking out the front (+Z).
-function Bottle({ position, wineType, slot, onBottleClick, highlighted, scale = 1 }) {
+// Default rotation [PI/2, 0, 0] maps local Y→Z so the bottle lies on its
+// side with neck/foil sticking out the front (+Z, toward the viewer).
+// For shelf-style racks with a back row, `flipNeck` reverses the bottle so
+// its neck points -Z (into the cabinet). Front-row bottles get the default
+// orientation; back-row bottles get flipNeck=true. The two rows then meet
+// neck-to-neck at the shelf's depth centerline — matching how bottles
+// actually lie in a Vintec/Transtherm cabinet.
+function Bottle({ position, wineType, slot, onBottleClick, highlighted, scale = 1, flipNeck = false }) {
   const glassColor = GLASS_COLORS[wineType] || GLASS_COLORS.red;
   const wineColor = WINE_COLORS[wineType] || WINE_COLORS.red;
   const foilColor = FOIL_COLORS[wineType] || FOIL_COLORS.red;
@@ -115,8 +120,14 @@ function Bottle({ position, wineType, slot, onBottleClick, highlighted, scale = 
     onBottleClick?.(slot);
   };
 
+  // Inverse X-rotation lays the bottle on its side with the neck pointing
+  // -Z instead of the default +Z. Wine fill, foil, and label offsets are
+  // all on the bottle's local +Y axis so they stay in the right place after
+  // the rotation; only the world-space orientation of the bottle flips.
+  const rotation = flipNeck ? [-Math.PI / 2, 0, 0] : [Math.PI / 2, 0, 0];
+
   return (
-    <group position={position} rotation={[Math.PI / 2, 0, 0]} scale={scale}>
+    <group position={position} rotation={rotation} scale={scale}>
       {/* Highlight glow ring behind the bottle */}
       {highlighted && (
         <mesh position={[0, -0.01, 0]}>
@@ -316,10 +327,22 @@ function computeShelfSlotPositions(rows, cols, backCols, width, height) {
   const cW = width / cols;
   const cH = height / rows;
   const hasBack = backCols > 0;
-  const frontBottleZ = -0.08;
-  const backBottleZ = -0.26;
-  const frontEmptyZ = 0;
-  const backEmptyZ = -0.18;
+  // For a shelf with a back row, bottles lie neck-to-neck at the shelf
+  // centerline:
+  //   - Front row: BASE near the cabinet front (+Z), NECK pointing -Z toward
+  //     the centerline. Rotation flipped via flipNeck=true.
+  //   - Back row:  BASE near the cabinet back (-Z), NECK pointing +Z toward
+  //     the centerline. Default rotation.
+  // A bottle's local +Y axis has length 0.285 (LatheGeometry). To get its
+  // neck end ~0.025 from the centerline (small gap between rows), the base
+  // sits at ±0.26 give or take.
+  const frontBottleZ = hasBack ? 0.26 : -0.08;
+  const backBottleZ  = -0.26;
+  // Empty-slot ring positions: place them at the cubby openings so users
+  // see where to drop a bottle. For neck-to-neck shelves the openings are
+  // at the FRONT face for front-row slots and the BACK face for back-row.
+  const frontEmptyZ = hasBack ? 0.18 : 0;
+  const backEmptyZ  = hasBack ? -0.30 : -0.18;
   let pos = 1;
   for (let r = 0; r < rows; r++) {
     const y = height / 2 - cH / 2 - r * cH;
@@ -331,6 +354,7 @@ function computeShelfSlotPositions(rows, cols, backCols, width, height) {
         z: frontEmptyZ,
         bottleZ: frontBottleZ,
         isBack: false,
+        flipNeck: hasBack, // front-row bottles face into the shelf
       });
     }
     if (hasBack) {
@@ -342,6 +366,7 @@ function computeShelfSlotPositions(rows, cols, backCols, width, height) {
           z: backEmptyZ,
           bottleZ: backBottleZ,
           isBack: true,
+          flipNeck: false,
         });
       }
     }
@@ -684,7 +709,7 @@ export default function RackMesh({
       })()}
 
       {/* ── Bottles / empty slots ─────────────────── */}
-      {slotPositions.map(({ position: pos, x, y, z = 0, bottleZ, isBack }) => {
+      {slotPositions.map(({ position: pos, x, y, z = 0, bottleZ, isBack, flipNeck }) => {
         const slot = slotMap[pos];
         const filled = !!slot;
         const wineType = slot?.bottle?.wineDefinition?.type || 'red';
@@ -697,6 +722,7 @@ export default function RackMesh({
             slot={slot}
             onBottleClick={onBottleClick}
             highlighted={highlightBottleId && (slot.bottle?._id || slot.bottle) === highlightBottleId}
+            flipNeck={!!flipNeck}
           />
         ) : (
           <EmptySlot key={pos} position={[x, y, z]} slotPosition={pos} onClick={onEmptySlotClick} isBack={isBack} />
