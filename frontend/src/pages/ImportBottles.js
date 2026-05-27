@@ -25,7 +25,7 @@ const FORMAT_LABELS = {
   cellarion: 'Cellarion',
   vivino: 'Vivino',
   cellartracker: 'CellarTracker',
-  oeno: 'Oeno (Vintec)',
+  'oeno-export': 'Oeno by Vintec',
   generic: 'CSV'
 };
 
@@ -301,9 +301,10 @@ function ImportBottles() {
     const reader = new FileReader();
     reader.onload = (e) => {
       try {
-        const { items, format } = isJson
+        const parsed = isJson
           ? parseJSON(e.target.result)
           : parseAndMap(e.target.result);
+        const { items, format, oenoRackSpecs } = parsed;
         if (items.length === 0) {
           setError('No valid items found in the file.');
           return;
@@ -313,11 +314,15 @@ function ImportBottles() {
         setFileName(file.name);
 
         // Build per-rack summary + seed editable config with format-aware
-        // defaults. The format-specific logic (Oeno → shelf, etc.) lives in
-        // getDefaultRackConfig so this page stays format-agnostic.
+        // defaults. For Oeno-export, the cabinet metadata in the CSV gives
+        // us the exact shape of each rack (one per cabinet-column); pass
+        // that through to the picker via info.oenoRackSpec.
         const summary = summariseRacks(items);
         const initialConfigs = {};
         for (const [name, info] of Object.entries(summary)) {
+          if (oenoRackSpecs && oenoRackSpecs[name]) {
+            info.oenoRackSpec = oenoRackSpecs[name];
+          }
           initialConfigs[name] = getDefaultRackConfig(format, info);
         }
         setRackSummary(summary);
@@ -715,8 +720,8 @@ function ImportBottles() {
             <p>Export from CellarTracker via My Cellar &rarr; Download</p>
           </div>
           <div className="format-card">
-            <strong>Oeno (Vintec)</strong>
-            <p>CSV with Producer, Wine, Vintage, Quantity, Rack_Location columns</p>
+            <strong>Oeno by Vintec</strong>
+            <p>Real Oeno-by-Vintec export — two-section CSV with cabinet definitions + bottles. Cabinets, shelves, and bottle history all import automatically.</p>
           </div>
           <div className="format-card">
             <strong>Generic CSV</strong>
@@ -768,14 +773,13 @@ function ImportBottles() {
       {parsedItems.length > 0 && Object.keys(rackSummary).length > 0 && (
         <div className="import-rack-options">
           <h3>Rack placement</h3>
-          {detectedFormat === 'oeno' && (
+          {detectedFormat === 'oeno-export' && (
             <p className="rack-options-hint">
-              Detected an <strong>Oeno (Vintec/Transtherm)</strong> export. Each
-              <code>Rack_Location</code> like <code>M3-11</code> maps to{' '}
-              <strong>Module 3, shelf 11</strong>. Defaulted each rack to an Open Shelf
-              with the typical Vintec layout (6 front + 5 back per shelf, shelf 1 at
-              the bottom). Adjust rows, cols, or back-row count below to match your
-              specific cabinet model.
+              Detected an <strong>Oeno by Vintec</strong> export. Cabinets and per-column
+              modules from your CSV have been mapped to one Open Shelf rack each
+              (6 front + 5 back per shelf, shelf 1 at the bottom). Each bottle's
+              exact slot is preserved — adjust shelf counts below only if a cabinet
+              has more shelves than the file shows.
             </p>
           )}
           <p className="rack-options-hint">
@@ -806,10 +810,10 @@ function ImportBottles() {
                       <span className="rack-config-meta">
                         {info.count} bottle{info.count !== 1 ? 's' : ''}
                         {info.maxPosition > 0 && (
-                          <>, highest {detectedFormat === 'oeno' ? 'shelf' : 'cell'} {info.maxPosition}</>
+                          <>, highest {detectedFormat === 'oeno-export' ? 'shelf' : 'cell'} {info.maxPosition}</>
                         )}
                         {info.maxPerCell > 1 && (
-                          <>, up to {info.maxPerCell} on the busiest {detectedFormat === 'oeno' ? 'shelf' : 'cell'}</>
+                          <>, up to {info.maxPerCell} on the busiest {detectedFormat === 'oeno-export' ? 'shelf' : 'cell'}</>
                         )}
                       </span>
                     </div>
@@ -828,7 +832,7 @@ function ImportBottles() {
                         Capacity ({existingCapacity}) is below {required} bottles — extras will be reported as unplaced.
                       </div>
                     )}
-                    {detectedFormat === 'oeno' && existing.type !== 'shelf' && !existing.isModular && (
+                    {detectedFormat === 'oeno-export' && existing.type !== 'shelf' && !existing.isModular && (
                       <div className="rack-config-warn rack-config-existing-warn">
                         Oeno positions are <strong>shelf numbers</strong>, but this rack is a
                         <code> {existing.type}</code>, so positions will be interpreted as
@@ -877,10 +881,10 @@ function ImportBottles() {
                     <span className="rack-config-meta">
                       {info.count} bottle{info.count !== 1 ? 's' : ''}
                       {info.maxPosition > 0 && (
-                        <>, highest {detectedFormat === 'oeno' ? 'shelf' : 'cell'} {info.maxPosition}</>
+                        <>, highest {detectedFormat === 'oeno-export' ? 'shelf' : 'cell'} {info.maxPosition}</>
                       )}
                       {info.maxPerCell > 1 && (
-                        <>, up to {info.maxPerCell} on the busiest {detectedFormat === 'oeno' ? 'shelf' : 'cell'}</>
+                        <>, up to {info.maxPerCell} on the busiest {detectedFormat === 'oeno-export' ? 'shelf' : 'cell'}</>
                       )}
                     </span>
                     <label className="rack-config-skip-toggle">
