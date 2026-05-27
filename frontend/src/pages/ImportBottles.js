@@ -1427,9 +1427,15 @@ function ImportBottles() {
       {importResult && (
         <div className="done-stats">
           <div className="done-stat">
-            <span className="done-number">{importResult.created}</span>
-            <span>Bottles created</span>
+            <span className="done-number">{importResult.createdActive ?? importResult.created}</span>
+            <span>Active bottles</span>
           </div>
+          {importResult.createdHistory > 0 && (
+            <div className="done-stat">
+              <span className="done-number">{importResult.createdHistory}</span>
+              <span>Consumed (history)</span>
+            </div>
+          )}
           {importResult.skipped.length > 0 && (
             <div className="done-stat">
               <span className="done-number done-skipped">{importResult.skipped.length}</span>
