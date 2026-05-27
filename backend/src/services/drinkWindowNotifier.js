@@ -124,7 +124,14 @@ async function processUser(user, isFirstRun) {
     const wineName = bottle.wineDefinition?.name || 'Unknown wine';
     const vintage  = bottle.vintage;
 
-    alerts.push({ bottleId: bottle._id, cellarId: bottle.cellar, name: wineName, vintage, status: notifType });
+    alerts.push({
+      bottleId: bottle._id,
+      cellarId: bottle.cellar,
+      wdId,
+      name: wineName,
+      vintage,
+      status: notifType,
+    });
 
     await Bottle.updateOne(
       { _id: bottle._id },
@@ -134,8 +141,24 @@ async function processUser(user, isFirstRun) {
 
   if (alerts.length === 0) return 0;
 
-  // Create in-app notifications (also triggers push via the notification service)
+  // Dedup at the (wine, vintage, status) level so a user with N bottles of
+  // the same wine vintage gets ONE notification when they all transition
+  // together, not N copies of the same line. Bottle-level prevStatus is
+  // still updated for every bottle above, so a second transition (e.g.
+  // peak → ending) still fires exactly one new notification when it
+  // happens, rather than re-notifying for the same status.
+  const uniqueAlerts = [];
+  const seenKeys = new Set();
   for (const alert of alerts) {
+    const key = `${alert.wdId}:${alert.vintage}:${alert.status}`;
+    if (!seenKeys.has(key)) {
+      seenKeys.add(key);
+      uniqueAlerts.push(alert);
+    }
+  }
+
+  // Create in-app notifications (also triggers push via the notification service)
+  for (const alert of uniqueAlerts) {
     const { title, message, type } = buildNotification(alert);
     const link = `/cellars/${alert.cellarId}?search=${encodeURIComponent(alert.name)}`;
     await createNotification(user._id, type, title, message, link);
@@ -147,14 +170,14 @@ async function processUser(user, isFirstRun) {
       await sendDrinkWindowDigest(
         user.email,
         user.displayName || user.username,
-        alerts
+        uniqueAlerts
       );
     } catch (err) {
       console.error(`[drinkWindowNotifier] Email failed for ${user._id}:`, err.message);
     }
   }
 
-  return alerts.length;
+  return uniqueAlerts.length;
 }
 
 function buildNotification(alert) {
