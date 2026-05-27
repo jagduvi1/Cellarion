@@ -3,6 +3,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { buildRackUrl } from '../utils/rackNavigation';
 import { useTranslation } from 'react-i18next';
 import AuthImage from './AuthImage';
+import './BottleCard.css';
 
 const MATURITY_LABELS = {
   'not-ready': { key: 'maturity.notReady', cls: 'maturity-badge--not-ready' },

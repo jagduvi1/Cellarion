@@ -179,7 +179,7 @@ function Bottles() {
         </div>
       )}
 
-      <div className="bottles-grid">
+      <div className="bottles-page-grid">
         {data.items.map(bottle => (
           <BottleCard
             key={bottle._id}
