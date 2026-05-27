@@ -59,7 +59,7 @@ export default function ShelfView3D({ rack, activePosition, highlightPos, onSlot
     <div className="shelf-view-3d">
       <div className="shelf-view-3d-toolbar">
         <div className="shelf-view-hint">
-          Drag to rotate · scroll to zoom · right-drag to pan
+          Drag to rotate · scroll to zoom · click the wooden handle to slide a shelf out
         </div>
       </div>
       <div className="shelf-view-3d-canvas">
@@ -107,6 +107,7 @@ export default function ShelfView3D({ rack, activePosition, highlightPos, onSlot
               onBottleClick={(slot) => onSlotClick?.(slot.position, slot)}
               onEmptySlotClick={(slotPos) => onSlotClick?.(slotPos, null)}
               highlightBottleId={highlightBottleId}
+              enableShelfPullOut
             />
 
             <OrbitControls

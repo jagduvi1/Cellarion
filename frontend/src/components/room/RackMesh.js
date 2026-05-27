@@ -1,6 +1,6 @@
 import { useRef, useState, useMemo, useEffect } from 'react';
 import { Html } from '@react-three/drei';
-import { useThree } from '@react-three/fiber';
+import { useThree, useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import {
   BOTTLE_RADIUS, CELL_W, CELL_H, RACK_DEPTH, WOOD_THICK, PANEL_THICK,
@@ -355,6 +355,7 @@ function computeShelfSlotPositions(rows, cols, backCols, width, height) {
         bottleZ: frontBottleZ,
         isBack: false,
         flipNeck: hasBack, // front-row bottles face into the shelf
+        row: r,
       });
     }
     if (hasBack) {
@@ -367,6 +368,7 @@ function computeShelfSlotPositions(rows, cols, backCols, width, height) {
           bottleZ: backBottleZ,
           isBack: true,
           flipNeck: false,
+          row: r,
         });
       }
     }
@@ -389,6 +391,106 @@ function computeStackSlotPositions(rows, height) {
   return positions;
 }
 
+// Distance a pulled-out shelf row travels in +Z (toward the viewer).
+const PULL_OUT_DISTANCE = 0.20;
+
+/**
+ * One shelf row's worth of geometry that can slide forward when "pulled".
+ * Wraps the row's plank, bottles, empty rings, and a small pull-handle in
+ * a single group whose Z position is lerped via useFrame — so all pieces
+ * move together, like a real telescopic Vintec drawer.
+ */
+function PullOutShelfRow({
+  row,
+  isPulled,
+  plankY,
+  innerW,
+  shelfDepth,
+  depth,
+  cH,
+  woodTex,
+  shelfColor,
+  frameColor,
+  rowSlots,
+  slotMap,
+  onTogglePull,
+  onBottleClick,
+  onEmptySlotClick,
+  highlightBottleId,
+}) {
+  const groupRef = useRef();
+  const targetZ = isPulled ? PULL_OUT_DISTANCE : 0;
+  useFrame((_, delta) => {
+    if (!groupRef.current) return;
+    const current = groupRef.current.position.z;
+    // Critically-damped-ish lerp: covers ~95% of the remaining distance per ~0.4s
+    const t = Math.min(1, delta * 8);
+    groupRef.current.position.z = current + (targetZ - current) * t;
+  });
+
+  // Pull-handle: a small wooden bar at the front of the shelf row that the
+  // user can click to slide it forward. Hovering changes the cursor.
+  const handleY = plankY != null
+    ? plankY + 0.012
+    : -0.5; // bottom row — handle just above the floor panel
+  // Place the handle at the cabinet's actual front face so it's reachable
+  // before the shelf is pulled, and remains reachable after for retracting.
+  const handleZ = depth / 2 - 0.005;
+
+  return (
+    <group ref={groupRef}>
+      {/* Wooden shelf plank — only present for rows that have one
+          (every row except the bottom one, whose floor is the rack's
+          bottom panel) */}
+      {plankY != null && (
+        <mesh position={[0, plankY, -depth * 0.05]}>
+          <boxGeometry args={[innerW, WOOD_THICK_LOCAL, shelfDepth]} />
+          <meshStandardMaterial map={woodTex} color={shelfColor} roughness={0.75} />
+        </mesh>
+      )}
+
+      {/* Bottles + empty rings for this row */}
+      {rowSlots.map(({ position: pos, x, y, z = 0, bottleZ, isBack, flipNeck }) => {
+        const slot = slotMap[pos];
+        const filled = !!slot;
+        const wineType = slot?.bottle?.wineDefinition?.type || 'red';
+        const finalBottleZ = bottleZ !== undefined ? bottleZ : (-0.08 + z);
+        return filled ? (
+          <Bottle
+            key={pos}
+            position={[x, y, finalBottleZ]}
+            wineType={wineType}
+            slot={slot}
+            onBottleClick={onBottleClick}
+            highlighted={highlightBottleId && (slot.bottle?._id || slot.bottle) === highlightBottleId}
+            flipNeck={!!flipNeck}
+          />
+        ) : (
+          <EmptySlot key={pos} position={[x, y, z]} slotPosition={pos} onClick={onEmptySlotClick} isBack={isBack} />
+        );
+      })}
+
+      {/* Pull handle — visible wooden bar at the front of the shelf */}
+      <mesh
+        position={[0, handleY, handleZ]}
+        onClick={(e) => {
+          e.stopPropagation();
+          onTogglePull();
+        }}
+        onPointerOver={(e) => { e.stopPropagation(); document.body.style.cursor = 'pointer'; }}
+        onPointerOut={() => { document.body.style.cursor = ''; }}
+      >
+        <boxGeometry args={[innerW * 0.5, 0.012, 0.018]} />
+        <meshStandardMaterial color={frameColor} roughness={0.5} metalness={0.15} />
+      </mesh>
+    </group>
+  );
+}
+
+// Re-export of WOOD_THICK inside this file so the sub-component can read it
+// without importing from roomConstants (already imported at file top).
+const WOOD_THICK_LOCAL = 0.012;
+
 // ── Main rack component ──────────────────────────────────
 export default function RackMesh({
   rack,
@@ -409,7 +511,12 @@ export default function RackMesh({
   onEmptySlotClick,
   onSnapPosition,
   highlightBottleId,
+  enableShelfPullOut = false,
 }) {
+  // Which shelf row is currently pulled out (or null). Telescopic-drawer
+  // behaviour: only one row at a time; clicking the active row's pull
+  // handle retracts it.
+  const [pulledShelfRow, setPulledShelfRow] = useState(null);
   const groupRef = useRef();
   const [hovered, setHovered] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
@@ -669,8 +776,11 @@ export default function RackMesh({
         </>
       )}
 
-      {/* Shelf: open compartments — just horizontal shelf planks, no scallops or dividers */}
-      {rackType === 'shelf' && (
+      {/* Shelf: open compartments — just horizontal shelf planks, no scallops
+          or dividers. When pull-out is enabled the planks become part of
+          per-row sliding groups (rendered below alongside the bottles), so
+          we skip the static planks here to avoid double-rendering. */}
+      {rackType === 'shelf' && !enableShelfPullOut && (
         <>
           {/* Horizontal shelves between rows */}
           {Array.from({ length: Math.max(displayRows - 1, 0) }).map((_, i) => {
@@ -709,25 +819,59 @@ export default function RackMesh({
       })()}
 
       {/* ── Bottles / empty slots ─────────────────── */}
-      {slotPositions.map(({ position: pos, x, y, z = 0, bottleZ, isBack, flipNeck }) => {
-        const slot = slotMap[pos];
-        const filled = !!slot;
-        const wineType = slot?.bottle?.wineDefinition?.type || 'red';
-        const finalBottleZ = bottleZ !== undefined ? bottleZ : (-0.08 + z);
-        return filled ? (
-          <Bottle
-            key={pos}
-            position={[x, y, finalBottleZ]}
-            wineType={wineType}
-            slot={slot}
-            onBottleClick={onBottleClick}
-            highlighted={highlightBottleId && (slot.bottle?._id || slot.bottle) === highlightBottleId}
-            flipNeck={!!flipNeck}
-          />
-        ) : (
-          <EmptySlot key={pos} position={[x, y, z]} slotPosition={pos} onClick={onEmptySlotClick} isBack={isBack} />
-        );
-      })}
+      {rackType === 'shelf' && enableShelfPullOut ? (
+        // Per-row groups so each shelf row can slide forward independently.
+        // Planks live inside the row groups too (so the wood slides with
+        // its bottles).
+        Array.from({ length: displayRows }).map((_, r) => {
+          const rowSlots = slotPositions.filter(sp => sp.row === r);
+          const hasPlank = r < displayRows - 1;
+          const plankY = hasPlank
+            ? height / 2 - PANEL_THICK - (r + 1) * CELL_H
+            : null;
+          return (
+            <PullOutShelfRow
+              key={`row-${r}`}
+              row={r}
+              isPulled={pulledShelfRow === r}
+              plankY={plankY}
+              innerW={innerW}
+              shelfDepth={shelfDepth}
+              depth={depth}
+              cH={CELL_H}
+              woodTex={woodTex}
+              shelfColor={shelfColor}
+              frameColor={frameColor}
+              rowSlots={rowSlots}
+              slotMap={slotMap}
+              onTogglePull={() => setPulledShelfRow(prev => prev === r ? null : r)}
+              onBottleClick={onBottleClick}
+              onEmptySlotClick={onEmptySlotClick}
+              highlightBottleId={highlightBottleId}
+            />
+          );
+        })
+      ) : (
+        slotPositions.map(({ position: pos, x, y, z = 0, bottleZ, isBack, flipNeck }) => {
+          const slot = slotMap[pos];
+          const filled = !!slot;
+          const wineType = slot?.bottle?.wineDefinition?.type || 'red';
+          const finalBottleZ = bottleZ !== undefined ? bottleZ : (-0.08 + z);
+          return filled ? (
+            <Bottle
+              key={pos}
+              position={[x, y, finalBottleZ]}
+              wineType={wineType}
+              slot={slot}
+              onBottleClick={onBottleClick}
+              highlighted={highlightBottleId && (slot.bottle?._id || slot.bottle) === highlightBottleId}
+              flipNeck={!!flipNeck}
+            />
+          ) : (
+            <EmptySlot key={pos} position={[x, y, z]} slotPosition={pos} onClick={onEmptySlotClick} isBack={isBack} />
+          );
+        })
+      )}
 
       {/* ── Click/drag plane (behind rack, doesn't block bottle clicks) */}
       <mesh
