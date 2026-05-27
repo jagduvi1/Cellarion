@@ -5,6 +5,9 @@ const Bottle = require('../models/Bottle');
 const Cellar = require('../models/Cellar');
 const Rack = require('../models/Rack');
 const WineDefinition = require('../models/WineDefinition');
+const Country = require('../models/Country');
+const Region = require('../models/Region');
+const Grape = require('../models/Grape');
 const WineVintageProfile = require('../models/WineVintageProfile');
 const PriceTrackingRequest = require('../models/PriceTrackingRequest');
 const BottleImage = require('../models/BottleImage');
@@ -18,6 +21,10 @@ const { CONSUMED_STATUSES, WINE_POPULATE } = require('../config/constants');
 const { checkRestockGap, resolveRestockAlerts } = require('../services/restockChecker');
 const { stripHtml, isSafeUrl } = require('../utils/sanitize');
 const { parseAndValidateVintage } = require('../utils/validation');
+const { toNormalized } = require('../utils/ratingUtils');
+const { classifyMaturity, buildProfileMap } = require('../utils/maturityUtils');
+const { parsePagination } = require('../utils/pagination');
+const mongoose = require('mongoose');
 const searchService = require('../services/search');
 
 const router = express.Router();
@@ -32,6 +39,239 @@ async function removeFromRacks(bottleId) {
 
 // All routes require authentication
 router.use(requireAuth);
+
+// GET /api/bottles — list the authenticated user's active bottles across all
+// cellars they OWN (shared/read-only cellars are excluded, matching the
+// Statistics page's scope so the deep-links from Statistics chart segments
+// land on a bottle set with matching counts).
+//
+// Supported filter query params (all optional, combinable):
+//   search       — free-text match against wine name / producer / notes / location / type / appellation / grape names
+//   type         — wine type enum, comma-separated allowed
+//   country      — country ID, comma-separated allowed
+//   region       — region ID, comma-separated allowed
+//   grapes       — grape ID, comma-separated
+//   vintage      — vintage year string, comma-separated
+//   producer     — exact producer string (case-insensitive)
+//   bottleSize   — exact bottle-size string (e.g. "750ml")
+//   minRating    — minimum normalised rating (0-100)
+//   maturity     — one of 'declining','late','peak','early','not-ready','none'
+//   sort         — 'createdAt'|'vintage'|'price'|'rating'|'name'|'maturity' with optional leading '-' for descending
+//   limit / offset — pagination (defaults: limit 30, max 200)
+router.get('/', async (req, res) => {
+  try {
+    const { isValidObjectId } = mongoose;
+
+    const cellarIds = await Cellar.find({ user: req.user.id, deletedAt: null }).distinct('_id');
+    const { limit, offset: skip } = parsePagination(req.query, { limit: 30, maxLimit: 200 });
+
+    if (cellarIds.length === 0) {
+      return res.json({ bottles: { count: 0, total: 0, limit, skip, items: [] } });
+    }
+
+    const {
+      search,
+      type,
+      country,
+      region,
+      grapes,
+      vintage,
+      producer,
+      bottleSize,
+      minRating,
+      maturity: maturityFilter,
+      sort = '-createdAt',
+    } = req.query;
+
+    const sortField = sort.startsWith('-') ? sort.substring(1) : sort;
+    const sortDir = sort.startsWith('-') ? -1 : 1;
+
+    const filter = {
+      user: req.user.id,
+      cellar: { $in: cellarIds },
+      status: { $nin: CONSUMED_STATUSES },
+    };
+
+    if (vintage) {
+      const vintages = String(vintage).split(',').map(v => v.trim()).filter(Boolean);
+      filter.vintage = vintages.length === 1 ? vintages[0] : { $in: vintages };
+    }
+
+    if (bottleSize) {
+      filter.bottleSize = String(bottleSize);
+    }
+
+    // Pre-query WineDefinition for taxonomy / type / producer filters.
+    // country/region values may be ObjectIds OR display names — the
+    // Statistics charts only know names (the byCountry/byRegion stats
+    // aggregate by name), so we resolve names to IDs on the fly here
+    // so the same query param works from both worlds.
+    const wdFilter = {};
+
+    const resolveTaxonomy = async (raw, Model) => {
+      const ids = [];
+      const names = [];
+      for (const v of String(raw).split(',').map(s => s.trim()).filter(Boolean)) {
+        if (isValidObjectId(v)) ids.push(v);
+        else names.push(v);
+      }
+      if (names.length > 0) {
+        const found = await Model.find({ name: { $in: names } }).distinct('_id');
+        ids.push(...found.map(id => id.toString()));
+      }
+      return ids;
+    };
+
+    if (country) {
+      const ids = await resolveTaxonomy(country, Country);
+      if (ids.length === 0) {
+        return res.json({ bottles: { count: 0, total: 0, limit, skip, items: [] } });
+      }
+      wdFilter.country = ids.length === 1 ? ids[0] : { $in: ids };
+    }
+    if (region) {
+      const ids = await resolveTaxonomy(region, Region);
+      if (ids.length === 0) {
+        return res.json({ bottles: { count: 0, total: 0, limit, skip, items: [] } });
+      }
+      wdFilter.region = ids.length === 1 ? ids[0] : { $in: ids };
+    }
+    // Grapes can also be passed as names (the byGrape stat is a name list)
+    if (grapes) {
+      const grapeIds2 = await resolveTaxonomy(grapes, Grape);
+      if (grapeIds2.length === 0) {
+        return res.json({ bottles: { count: 0, total: 0, limit, skip, items: [] } });
+      }
+      wdFilter.grapes = grapeIds2.length === 1 ? grapeIds2[0] : { $in: grapeIds2 };
+    }
+    if (type) {
+      const types = String(type).split(',').map(t => t.trim()).filter(Boolean);
+      wdFilter.type = types.length === 1 ? types[0] : { $in: types };
+    }
+    if (producer) {
+      // Producer is a free-text field on WineDefinition; match case-insensitively
+      // with an anchored regex so chart segments that pass the exact value
+      // (e.g. "Château Margaux") find that producer's bottles.
+      const escaped = String(producer).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      wdFilter.producer = new RegExp(`^${escaped}$`, 'i');
+    }
+
+    if (Object.keys(wdFilter).length > 0) {
+      const wdIds = await WineDefinition.find(wdFilter).distinct('_id');
+      if (wdIds.length === 0) {
+        return res.json({ bottles: { count: 0, total: 0, limit, skip, items: [] } });
+      }
+      filter.wineDefinition = { $in: wdIds };
+    }
+
+    const directSortFields = ['createdAt', 'vintage', 'price', 'rating'];
+    const canSortInDb = directSortFields.includes(sortField);
+    const needsInMemoryFilter = !!(search || minRating || maturityFilter);
+    const canPaginateInDb = canSortInDb && !needsInMemoryFilter;
+
+    let query = Bottle.find(filter).populate(WINE_POPULATE);
+    if (canSortInDb) query = query.sort({ [sortField]: sortDir });
+    if (canPaginateInDb) query = query.skip(skip).limit(limit);
+    let bottles = await query.lean();
+    let totalCount = canPaginateInDb ? await Bottle.countDocuments(filter) : null;
+
+    // ── In-memory text search (multi-word AND across populated fields) ─────────
+    if (search) {
+      const stripAccents = (s) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      const words = stripAccents(String(search).toLowerCase()).split(/\s+/).filter(Boolean);
+      bottles = bottles.filter(b => {
+        const allText = [
+          b.wineDefinition?.name,
+          b.wineDefinition?.producer,
+          b.notes,
+          b.location,
+          b.wineDefinition?.country?.name,
+          b.wineDefinition?.region?.name,
+          b.wineDefinition?.appellation,
+          b.wineDefinition?.type,
+          ...(b.wineDefinition?.grapes || []).map(g => g.name),
+        ].filter(Boolean).map(s => stripAccents(String(s).toLowerCase())).join(' ');
+        return words.every(word => allText.includes(word));
+      });
+    }
+
+    // ── Min-rating post-filter (rating scales must be normalised) ──────────────
+    if (minRating) {
+      const min = parseFloat(minRating);
+      if (!isNaN(min)) {
+        bottles = bottles.filter(b => {
+          if (b.rating == null) return false;
+          return toNormalized(b.rating, b.ratingScale || '5') >= min;
+        });
+      }
+    }
+
+    // ── Maturity post-filter / sort (needs WineVintageProfile lookup) ─────────
+    let maturityMap = null;
+    const needsMaturity = !!(maturityFilter || sortField === 'maturity');
+    if (needsMaturity) {
+      const profileMap = await buildProfileMap(bottles);
+      maturityMap = new Map();
+      for (const b of bottles) {
+        maturityMap.set(b._id.toString(), classifyMaturity(b, profileMap));
+      }
+    }
+
+    if (maturityFilter && maturityMap) {
+      if (maturityFilter === 'none') {
+        bottles = bottles.filter(b => maturityMap.get(b._id.toString()) == null);
+      } else {
+        bottles = bottles.filter(b => maturityMap.get(b._id.toString()) === maturityFilter);
+      }
+    }
+
+    // ── In-memory sort for fields we couldn't sort in the DB ──────────────────
+    if (!canSortInDb) {
+      const MATURITY_RANK = { declining: 0, late: 1, peak: 2, early: 3, 'not-ready': 4 };
+      bottles.sort((a, b) => {
+        let aVal, bVal;
+        if (sortField === 'name') {
+          aVal = a.wineDefinition?.name || '';
+          bVal = b.wineDefinition?.name || '';
+        } else if (sortField === 'maturity' && maturityMap) {
+          const aStatus = maturityMap.get(a._id.toString());
+          const bStatus = maturityMap.get(b._id.toString());
+          aVal = aStatus != null ? MATURITY_RANK[aStatus] : 5;
+          bVal = bStatus != null ? MATURITY_RANK[bStatus] : 5;
+        } else {
+          aVal = a.createdAt;
+          bVal = b.createdAt;
+        }
+        if (aVal < bVal) return -sortDir;
+        if (aVal > bVal) return sortDir;
+        return 0;
+      });
+    }
+
+    if (!canPaginateInDb) {
+      totalCount = bottles.length;
+      bottles = bottles.slice(skip, skip + limit);
+    }
+
+    const items = bottles.map(b => ({
+      ...b,
+      ...(maturityMap ? { maturityStatus: maturityMap.get(b._id.toString()) || null } : {}),
+    }));
+
+    res.json({
+      bottles: {
+        count: items.length,
+        total: totalCount,
+        limit,
+        skip,
+        items,
+      },
+    });
+  } catch (err) {
+    console.error('GET /api/bottles error:', err);
+    res.status(500).json({ error: 'Failed to load bottles' });
+  }
+});
 
 // POST /api/bottles - Add bottle to cellar (owner or editor)
 router.post('/', async (req, res) => {

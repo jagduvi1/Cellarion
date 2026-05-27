@@ -2115,3 +2115,51 @@
   padding: 2rem 1rem;
   line-height: 1.5;
 }
+
+/* ── Clickable chart variants (deep-link to /bottles?filter=…) ───────── */
+.hbar-row--clickable,
+.rating-row--clickable,
+.drink-legend-item--clickable,
+.donut-legend-item--clickable,
+.vintage-bar-wrap--clickable,
+.drink-segment--clickable {
+  cursor: pointer;
+  background: transparent;
+  border: none;
+  text-align: left;
+  width: 100%;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  transition: background-color 0.15s ease, opacity 0.15s ease;
+}
+
+.hbar-row--clickable,
+.rating-row--clickable,
+.drink-legend-item--clickable,
+.donut-legend-item--clickable {
+  padding: 0.15rem 0.35rem;
+  margin: -0.15rem -0.35rem;
+  border-radius: 4px;
+}
+
+.hbar-row--clickable:hover,
+.rating-row--clickable:hover,
+.drink-legend-item--clickable:hover,
+.donut-legend-item--clickable:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.vintage-bar-wrap--clickable:hover .vintage-bar,
+.drink-segment--clickable:hover {
+  filter: brightness(1.2);
+}
+
+.hbar-row--clickable:focus-visible,
+.rating-row--clickable:focus-visible,
+.drink-legend-item--clickable:focus-visible,
+.donut-legend-item--clickable:focus-visible,
+.vintage-bar-wrap--clickable:focus-visible {
+  outline: 2px solid #D4C87A;
+  outline-offset: 1px;
+}
