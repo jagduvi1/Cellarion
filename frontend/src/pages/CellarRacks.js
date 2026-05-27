@@ -10,6 +10,7 @@ import { getTotalSlots, getModularTotalSlots } from '../utils/rackLayouts';
 import RackRenderer from '../components/racks/RackRenderer';
 import ShelfView from '../components/racks/ShelfView';
 import ShelfViewIso from '../components/racks/ShelfViewIso';
+import ShelfView3D from '../components/racks/ShelfView3D';
 import RackTypeSelector, { TYPE_DIMENSIONS } from '../components/racks/RackTypeSelector';
 import RatingInput from '../components/RatingInput';
 import WineImage from '../components/WineImage';
@@ -349,39 +350,37 @@ function CellarRacks() {
               >
                 Isometric
               </button>
+              <button
+                role="tab"
+                aria-selected={viewMode === '3d'}
+                className={`view-mode-btn ${viewMode === '3d' ? 'active' : ''}`}
+                onClick={() => setViewMode('3d')}
+              >
+                3D
+              </button>
             </div>
           )}
           <div id={`rack-${rack._id}`}>
-          {rack.type === 'shelf' && !rack.isModular && (viewMode === 'shelf' || viewMode === 'iso') ? (
-            viewMode === 'iso' ? (
-              <ShelfViewIso
-                rack={rack}
-                activePosition={activePopup?.rackId === rack._id ? activePopup.position : null}
-                highlightPos={highlightPos?.rackId === rack._id ? highlightPos.position : null}
-                onSlotClick={(pos, slotData) => {
-                  if (!canEdit && !slotData) return;
-                  if (activePopup?.rackId === rack._id && activePopup?.position === pos) {
-                    setActivePopup(null);
-                  } else {
-                    setActivePopup({ rackId: rack._id, position: pos, slot: slotData || null });
-                  }
-                }}
-              />
-            ) : (
-              <ShelfView
-                rack={rack}
-                activePosition={activePopup?.rackId === rack._id ? activePopup.position : null}
-                highlightPos={highlightPos?.rackId === rack._id ? highlightPos.position : null}
-                onSlotClick={(pos, slotData) => {
-                  if (!canEdit && !slotData) return;
-                  if (activePopup?.rackId === rack._id && activePopup?.position === pos) {
-                    setActivePopup(null);
-                  } else {
-                    setActivePopup({ rackId: rack._id, position: pos, slot: slotData || null });
-                  }
-                }}
-              />
-            )
+          {rack.type === 'shelf' && !rack.isModular && (viewMode === 'shelf' || viewMode === 'iso' || viewMode === '3d') ? (
+            (() => {
+              const handleClick = (pos, slotData) => {
+                if (!canEdit && !slotData) return;
+                if (activePopup?.rackId === rack._id && activePopup?.position === pos) {
+                  setActivePopup(null);
+                } else {
+                  setActivePopup({ rackId: rack._id, position: pos, slot: slotData || null });
+                }
+              };
+              const commonProps = {
+                rack,
+                activePosition: activePopup?.rackId === rack._id ? activePopup.position : null,
+                highlightPos: highlightPos?.rackId === rack._id ? highlightPos.position : null,
+                onSlotClick: handleClick,
+              };
+              if (viewMode === '3d') return <ShelfView3D {...commonProps} />;
+              if (viewMode === 'iso') return <ShelfViewIso {...commonProps} />;
+              return <ShelfView {...commonProps} />;
+            })()
           ) : (
             <RackRenderer
               rack={rack}

@@ -1,0 +1,31 @@
+.shelf-view-3d {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.shelf-view-3d-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.shelf-view-3d-canvas {
+  width: 100%;
+  /* Use viewport-relative height so the 3D scene gets real room to breathe
+     even on smaller racks, but clamp on huge screens. */
+  height: clamp(420px, 60vh, 720px);
+  background: linear-gradient(180deg, #1A1A1F 0%, #0E0E12 100%);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.shelf-view-3d-active-note {
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+  font-style: italic;
+}
