@@ -894,7 +894,18 @@ export default function RackMesh({
               flipNeck={!!flipNeck}
             />
           ) : (
-            <EmptySlot key={pos} position={[x, y, z]} slotPosition={pos} onClick={onEmptySlotClick} isBack={isBack} />
+            <EmptySlot
+              key={pos}
+              position={[x, y, z]}
+              slotPosition={pos}
+              onClick={onEmptySlotClick}
+              isBack={isBack}
+              // Shelf positions encode an absolute z (cubby opening for
+              // their row); other types use z=0 and need the front-face
+              // offset. Skip the offset for shelf so rings don't end up
+              // floating outside the cabinet in the room view.
+              useAbsoluteZ={rackType === 'shelf'}
+            />
           );
         })
       )}
