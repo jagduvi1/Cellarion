@@ -1547,8 +1547,13 @@ function ImportBottles() {
 
       {contactEmail && (
         <div className="import-beta-notice">
-          This feature is in beta. If you run into any issues, contact us at{' '}
-          <a href={`mailto:${contactEmail}`}>{contactEmail}</a>.
+          This feature is in beta. If anything doesn't import the way you expect,
+          email{' '}
+          <a href={`mailto:${contactEmail}?subject=Import%20issue&body=Hi%2C%20I%20ran%20into%20an%20issue%20importing%20bottles%20into%20Cellarion.%20A%20sample%20of%20the%20file%20I%20tried%20to%20import%20is%20attached.`}>
+            {contactEmail}
+          </a>{' '}
+          and attach a small example of the file you're trying to import — we'll
+          take a look and either fix it or tell you how to get it through.
         </div>
       )}
 
