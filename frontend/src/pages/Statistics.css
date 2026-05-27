@@ -2117,6 +2117,10 @@
 }
 
 /* ── Clickable chart variants (deep-link to /bottles?filter=…) ───────── */
+/* Reset the button defaults so the markup-as-button doesn't change the
+   chart's visual layout. Width is intentionally NOT set here — each
+   chart's own selector keeps its natural width (e.g. vintage bars stay
+   26 px wide, hbar rows stretch via their own rule). */
 .hbar-row--clickable,
 .rating-row--clickable,
 .drink-legend-item--clickable,
@@ -2129,11 +2133,16 @@
   background: transparent;
   border: none;
   text-align: left;
-  width: 100%;
   padding: 0;
   color: inherit;
   font: inherit;
   transition: background-color 0.15s ease, opacity 0.15s ease;
+}
+
+/* Row-shaped clickables: stretch to fill the card width */
+.hbar-row--clickable,
+.rating-row--clickable {
+  width: 100%;
 }
 
 .hbar-row--clickable,
