@@ -1,5 +1,20 @@
 import { JSON_HEADERS } from './apiConstants';
 
+/**
+ * Cross-cellar bottle list for the authenticated user.
+ * `params` is a plain object whose entries become URL query params
+ * (arrays are joined with commas, falsy values are skipped).
+ */
+export const listBottles = (apiFetch, params = {}) => {
+  const qs = new URLSearchParams();
+  for (const [k, v] of Object.entries(params)) {
+    if (v === null || v === undefined || v === '') continue;
+    qs.set(k, Array.isArray(v) ? v.filter(Boolean).join(',') : String(v));
+  }
+  const query = qs.toString();
+  return apiFetch(`/api/bottles${query ? `?${query}` : ''}`);
+};
+
 export const getBottle = (apiFetch, id) =>
   apiFetch(`/api/bottles/${id}`);
 

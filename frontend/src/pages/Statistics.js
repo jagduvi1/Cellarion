@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import { getValueHistory } from '../api/stats';
@@ -55,10 +55,22 @@ function EmptyCollection() {
 function Statistics() {
   const { t } = useTranslation();
   const { user, apiFetch } = useAuth();
+  const navigate = useNavigate();
   const [stats, setStats]  = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError]  = useState(null);
   const [valueHistory, setValueHistory] = useState(null);
+
+  // Each chart segment hands us a value; we encode it into a URL on
+  // the cross-cellar /bottles list which then renders just those bottles.
+  const goWithFilter = useCallback((params) => {
+    const qs = new URLSearchParams();
+    for (const [k, v] of Object.entries(params)) {
+      if (v == null || v === '') continue;
+      qs.set(k, String(v));
+    }
+    navigate(`/bottles?${qs.toString()}`);
+  }, [navigate]);
 
   const load = useCallback(async () => {
     try {
@@ -267,17 +279,26 @@ function Statistics() {
           <h2 className="stats-card-title">{t('statistics.sections.wineTypes')}</h2>
           {total > 0 ? (
             <div className="donut-layout">
-              <DonutChart segments={typeSegments} total={total} />
+              <DonutChart
+                segments={typeSegments}
+                total={total}
+                onSegmentClick={(seg) => goWithFilter({ type: seg.type })}
+              />
               <div className="donut-legend">
                 {typeSegments.map(seg => (
-                  <div key={seg.type} className="donut-legend-item">
+                  <button
+                    key={seg.type}
+                    type="button"
+                    className="donut-legend-item donut-legend-item--clickable"
+                    onClick={() => goWithFilter({ type: seg.type })}
+                  >
                     <span className="donut-legend-dot" style={{ background: seg.color }} />
                     <span className="donut-legend-label">{seg.label}</span>
                     <span className="donut-legend-count">{seg.value}</span>
                     <span className="donut-legend-pct">
                       ({total > 0 ? ((seg.value / total) * 100).toFixed(0) : 0}%)
                     </span>
-                  </div>
+                  </button>
                 ))}
               </div>
             </div>
@@ -289,7 +310,12 @@ function Statistics() {
         {/* Drinking Windows */}
         <div className="stats-card">
           <h2 className="stats-card-title">{t('statistics.sections.maturityStatus')}</h2>
-          <MaturityViz maturity={maturity} maturityCoverage={maturityCoverage} total={total} />
+          <MaturityViz
+            maturity={maturity}
+            maturityCoverage={maturityCoverage}
+            total={total}
+            onSegmentClick={(status) => goWithFilter({ maturity: status })}
+          />
         </div>
 
         {/* Vintage Distribution */}
@@ -302,7 +328,10 @@ function Statistics() {
               </span>
             )}
           </h2>
-          <VintageBarChart data={byVintage} />
+          <VintageBarChart
+            data={byVintage}
+            onBarClick={(year) => goWithFilter({ vintage: year })}
+          />
         </div>
 
         {/* World Map (desktop only, hover-based) */}
@@ -317,21 +346,32 @@ function Statistics() {
         {/* Top Origins */}
         <div className="stats-card">
           <h2 className="stats-card-title">{t('statistics.sections.topOrigins')}</h2>
-          <HBarChart data={byCountry} colors={COUNTRY_COLORS} />
+          <HBarChart
+            data={byCountry}
+            colors={COUNTRY_COLORS}
+            onItemClick={(item) => goWithFilter({ country: item.name })}
+          />
         </div>
 
         {/* Top Grape Varieties */}
         <div className="stats-card">
           <h2 className="stats-card-title">{t('statistics.sections.topGrapeVarieties')}</h2>
-          <HBarChart data={byGrape} colors={GRAPE_COLORS} />
+          <HBarChart
+            data={byGrape}
+            colors={GRAPE_COLORS}
+            onItemClick={(item) => goWithFilter({ grapes: item.name })}
+          />
         </div>
 
         {/* Top Regions */}
         {byRegion && byRegion.length > 0 && (
           <div className="stats-card">
             <h2 className="stats-card-title">{t('statistics.sections.topRegions')}</h2>
-            <HBarChart data={byRegion}
-              colors={['#7aade0', '#6a9dd0', '#5a8dc0', '#4a7db0', '#3a6da0']} />
+            <HBarChart
+              data={byRegion}
+              colors={['#7aade0', '#6a9dd0', '#5a8dc0', '#4a7db0', '#3a6da0']}
+              onItemClick={(item) => goWithFilter({ region: item.name })}
+            />
           </div>
         )}
 
@@ -339,22 +379,37 @@ function Statistics() {
         {hasProducers && (
           <div className="stats-card">
             <h2 className="stats-card-title">{t('statistics.sections.topProducers')}</h2>
-            <HBarChart data={topProducers}
-              colors={['#D4A070', '#C4906A', '#B48064', '#A4705E', '#946058']} />
+            <HBarChart
+              data={topProducers}
+              colors={['#D4A070', '#C4906A', '#B48064', '#A4705E', '#946058']}
+              onItemClick={(item) => goWithFilter({ producer: item.name })}
+            />
           </div>
         )}
 
         {/* Rating Distribution */}
         <div className="stats-card">
           <h2 className="stats-card-title">{t('statistics.sections.ratingDistribution')}</h2>
-          <RatingChart byRating={byRating} avg={overview.avgRating} targetScale={targetScale} />
+          <RatingChart
+            byRating={byRating}
+            avg={overview.avgRating}
+            targetScale={targetScale}
+            onBandClick={(band) => {
+              // band.key is "0-20" / "21-40" / "41-60" / "61-80" / "81-100"
+              const min = parseInt(String(band.key).split('-')[0], 10);
+              goWithFilter({ minRating: isNaN(min) ? '' : String(min) });
+            }}
+          />
         </div>
 
         {/* Bottle Sizes */}
         {hasMultipleSizes && (
           <div className="stats-card">
             <h2 className="stats-card-title">{t('statistics.sections.bottleSizes')}</h2>
-            <BottleSizeChart byBottleSize={byBottleSize} />
+            <BottleSizeChart
+              byBottleSize={byBottleSize}
+              onSizeClick={(size) => goWithFilter({ bottleSize: size })}
+            />
           </div>
         )}
 
@@ -362,7 +417,10 @@ function Statistics() {
         {hasPurchaseDates && (
           <div className="stats-card stats-card--desktop-only">
             <h2 className="stats-card-title">{t('statistics.sections.purchasesByYear')}</h2>
-            <PurchaseHistoryChart byPurchaseYear={byPurchaseYear} />
+            <PurchaseHistoryChart
+              byPurchaseYear={byPurchaseYear}
+              onYearClick={(year) => goWithFilter({ purchaseYear: year })}
+            />
           </div>
         )}
 
@@ -381,6 +439,8 @@ function Statistics() {
           <ConsumptionChart
             consumptionByYear={consumptionByYear}
             consumptionByReason={consumptionByReason}
+            onYearClick={(year) => goWithFilter({ consumedYear: year, status: 'consumed' })}
+            onReasonClick={(reason) => goWithFilter({ status: reason })}
           />
         </div>
 

@@ -1,6 +1,11 @@
 import { useTranslation } from 'react-i18next';
 
-function DonutChart({ segments, total }) {
+/**
+ * `onSegmentClick(segment)` makes each arc + its legend row a clickable
+ * deep-link target. When provided, segments get a pointer cursor and a
+ * keyboard-accessible role.
+ */
+function DonutChart({ segments, total, onSegmentClick }) {
   const { t } = useTranslation();
   const size = 180;
   const R  = size * 0.355;
@@ -9,6 +14,9 @@ function DonutChart({ segments, total }) {
   const cy = size / 2;
   const validSegs = segments.filter(s => s.value > 0);
   let cumulative  = 0;
+
+  const clickable = typeof onSegmentClick === 'function';
+  const handle = (seg) => clickable && onSegmentClick(seg);
 
   return (
     <svg
@@ -28,6 +36,8 @@ function DonutChart({ segments, total }) {
             fill="none" stroke={seg.color} strokeWidth="20"
             strokeDasharray={`${len} ${C}`} strokeDashoffset={dashoffset}
             strokeLinecap="butt"
+            onClick={clickable ? () => handle(seg) : undefined}
+            style={clickable ? { cursor: 'pointer' } : undefined}
           >
             <title>{seg.label}: {seg.value} ({total > 0 ? ((seg.value / total) * 100).toFixed(1) : 0}%)</title>
           </circle>

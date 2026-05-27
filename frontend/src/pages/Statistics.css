@@ -2115,3 +2115,75 @@
   padding: 2rem 1rem;
   line-height: 1.5;
 }
+
+/* ── Clickable chart variants (deep-link to /bottles?filter=…) ───────── */
+/* Reset the button defaults so the markup-as-button doesn't change the
+   chart's visual layout. Width is intentionally NOT set here — each
+   chart's own selector keeps its natural width (e.g. vintage bars stay
+   26 px wide, hbar rows stretch via their own rule). */
+.hbar-row--clickable,
+.rating-row--clickable,
+.drink-legend-item--clickable,
+.donut-legend-item--clickable,
+.vintage-bar-wrap--clickable,
+.drink-segment--clickable,
+.consumption-year-col--clickable,
+.consumption-legend-item--clickable {
+  cursor: pointer;
+  background: transparent;
+  border: none;
+  text-align: left;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  transition: background-color 0.15s ease, opacity 0.15s ease;
+}
+
+/* Row-shaped clickables: stretch to fill the card width */
+.hbar-row--clickable,
+.rating-row--clickable {
+  width: 100%;
+}
+
+.hbar-row--clickable,
+.rating-row--clickable,
+.drink-legend-item--clickable,
+.donut-legend-item--clickable,
+.consumption-legend-item--clickable {
+  padding: 0.15rem 0.35rem;
+  margin: -0.15rem -0.35rem;
+  border-radius: 4px;
+}
+
+.hbar-row--clickable:hover,
+.rating-row--clickable:hover,
+.drink-legend-item--clickable:hover,
+.donut-legend-item--clickable:hover,
+.consumption-legend-item--clickable:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.vintage-bar-wrap--clickable:hover .vintage-bar,
+.drink-segment--clickable:hover,
+.consumption-year-col--clickable:hover .consumption-bar-stack {
+  filter: brightness(1.2);
+}
+
+.hbar-row--clickable:focus-visible,
+.rating-row--clickable:focus-visible,
+.drink-legend-item--clickable:focus-visible,
+.donut-legend-item--clickable:focus-visible,
+.vintage-bar-wrap--clickable:focus-visible,
+.consumption-year-col--clickable:focus-visible,
+.consumption-legend-item--clickable:focus-visible {
+  outline: 2px solid #D4C87A;
+  outline-offset: 1px;
+}
+
+/* Reset consumption-year-col width so the button form keeps its column layout */
+.consumption-year-col--clickable {
+  width: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}

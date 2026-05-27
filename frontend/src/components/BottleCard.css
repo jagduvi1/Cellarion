@@ -1,0 +1,290 @@
+/* Styles for BottleCard (used by /cellars/:id and /bottles). Originally
+   lived in CellarDetail.css; co-located here so any page rendering a
+   BottleCard gets the styling without importing the whole cellar page CSS. */
+
+/* ── Image wrap + credit tooltip ── */
+.bottle-img-wrap,
+.bottle-grid-image-wrap {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.img-credit-tooltip {
+  display: none;
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: rgba(0, 0, 0, 0.78);
+  color: #b0a898;
+  font-size: 0.58rem;
+  text-align: center;
+  padding: 2px 3px;
+  border-radius: 0 0 3px 3px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.3;
+  pointer-events: none;
+}
+
+.bottle-img-wrap:hover .img-credit-tooltip,
+.bottle-grid-image-wrap:hover .img-credit-tooltip {
+  display: block;
+}
+
+/* ── List-mode card ── */
+.bottle-card {
+  display: flex;
+  align-items: center;
+  gap: 0.875rem;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 0.75rem 1rem;
+  cursor: pointer;
+  transition: border-color var(--transition-fast), background var(--transition-fast), box-shadow var(--transition-fast);
+  min-height: 68px;
+  min-width: 0;
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+}
+
+.bottle-card:hover {
+  border-color: var(--color-primary);
+  background: var(--color-primary-light);
+  box-shadow: var(--shadow-card-hover);
+}
+
+.bottle-wine-image {
+  width: 44px;
+  height: 64px;
+  object-fit: contain;
+  border-radius: 3px;
+  display: block;
+}
+
+.bottle-wine-placeholder {
+  width: 44px;
+  height: 64px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+.bottle-wine-placeholder.red       { background: var(--wine-red); }
+.bottle-wine-placeholder.white     { background: var(--wine-white); }
+.bottle-wine-placeholder.rosé      { background: var(--wine-rose); }
+.bottle-wine-placeholder.sparkling { background: var(--wine-sparkling); }
+.bottle-wine-placeholder.dessert   { background: var(--wine-dessert); }
+.bottle-wine-placeholder.fortified { background: var(--wine-fortified); }
+
+.bottle-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.bottle-name {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--color-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-bottom: 0.2rem;
+}
+
+.bottle-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.82rem;
+  color: var(--color-text-secondary);
+  flex-wrap: wrap;
+}
+
+.bottle-producer {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.bottle-vintage {
+  white-space: nowrap;
+  font-weight: 500;
+}
+
+.bottle-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-top: 0.3rem;
+}
+
+/* ── Rack badge ── */
+.rack-badge {
+  display: inline-block;
+  font-size: 0.72rem;
+  color: var(--color-accent);
+  background: var(--color-accent-light);
+  border: 1px solid rgba(var(--color-accent-rgb), 0.25);
+  border-radius: var(--radius-full);
+  padding: 1px 8px;
+  text-decoration: none;
+}
+
+.rack-badge:hover {
+  background: rgba(var(--color-accent-rgb), 0.18);
+}
+
+.pending-wine-badge {
+  display: inline-block;
+  font-size: 0.7rem;
+  padding: 1px 7px;
+  border-radius: var(--radius-full);
+  background: var(--color-info-bg);
+  color: var(--color-info);
+  border: 1px solid var(--color-info-border);
+}
+
+/* ── Maturity badges ── */
+.maturity-badge {
+  display: inline-block;
+  font-size: 0.7rem;
+  padding: 1px 7px;
+  border-radius: var(--radius-full);
+  font-weight: 500;
+}
+
+.maturity-badge--peak {
+  background: #e8f5e9;
+  color: #2e7d32;
+  border: 1px solid #a5d6a7;
+}
+
+.maturity-badge--early {
+  background: #e3f2fd;
+  color: #1565c0;
+  border: 1px solid #90caf9;
+}
+
+.maturity-badge--late {
+  background: #fff3e0;
+  color: #e65100;
+  border: 1px solid #ffcc80;
+}
+
+.maturity-badge--declining {
+  background: #fce4ec;
+  color: #c62828;
+  border: 1px solid #ef9a9a;
+}
+
+.maturity-badge--not-ready {
+  background: #f3e5f5;
+  color: #6a1b9a;
+  border: 1px solid #ce93d8;
+}
+
+.maturity-badge--none {
+  background: var(--color-surface-raised);
+  color: var(--color-text-muted);
+  border: 1px solid var(--color-border);
+}
+
+.bottle-chevron {
+  font-size: 1.4rem;
+  color: var(--color-text-muted);
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+/* ── Card grid-mode ── */
+.bottle-grid-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  cursor: pointer;
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+  display: flex;
+  flex-direction: column;
+  box-shadow: var(--shadow-card);
+}
+
+.bottle-grid-card:hover {
+  border-color: var(--color-primary);
+  box-shadow: var(--shadow-card-hover);
+}
+
+.bottle-grid-image-wrap {
+  width: 100%;
+  aspect-ratio: 1 / 1.6;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-bg);
+  overflow: hidden;
+}
+
+.bottle-grid-image {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  padding: 0.5rem;
+}
+
+.bottle-grid-placeholder {
+  width: 60%;
+  height: 80%;
+  border-radius: 4px;
+}
+
+.bottle-grid-placeholder.red       { background: var(--wine-red); }
+.bottle-grid-placeholder.white     { background: var(--wine-white); }
+.bottle-grid-placeholder.rosé      { background: var(--wine-rose); }
+.bottle-grid-placeholder.sparkling { background: var(--wine-sparkling); }
+.bottle-grid-placeholder.dessert   { background: var(--wine-dessert); }
+.bottle-grid-placeholder.fortified { background: var(--wine-fortified); }
+
+.bottle-grid-info {
+  padding: 0.625rem 0.75rem 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  flex: 1;
+}
+
+.bottle-grid-name {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--color-text);
+  line-height: 1.3;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.bottle-grid-producer {
+  font-size: 0.77rem;
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.bottle-grid-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  margin-top: 0.1rem;
+}
+
+.bottle-grid-region {
+  font-size: 0.72rem;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

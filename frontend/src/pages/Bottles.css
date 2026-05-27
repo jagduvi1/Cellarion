@@ -1,0 +1,123 @@
+.bottles-page {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 1.5rem 1rem 3rem;
+}
+
+.bottles-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.bottles-header h1 {
+  margin: 0;
+  font-size: 1.6rem;
+}
+
+.bottles-subtitle {
+  margin: 0.25rem 0 0;
+  color: var(--text-muted, #9A9484);
+  font-size: 0.95rem;
+}
+
+.bottles-chips-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 0.5rem 0 1.25rem;
+  align-items: center;
+}
+
+.bottles-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  background: rgba(122, 30, 45, 0.18);
+  color: #E8DFD0;
+  border: 1px solid rgba(122, 30, 45, 0.4);
+  padding: 0.3rem 0.7rem;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  line-height: 1.2;
+}
+
+.bottles-chip-remove {
+  background: none;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+  padding: 0;
+  margin-left: 0.1rem;
+  font-size: 1.05rem;
+  line-height: 1;
+  opacity: 0.7;
+}
+
+.bottles-chip-remove:hover {
+  opacity: 1;
+}
+
+.bottles-chip-clear {
+  background: none;
+  border: none;
+  color: var(--text-muted, #9A9484);
+  cursor: pointer;
+  padding: 0.3rem 0.5rem;
+  font-size: 0.85rem;
+  text-decoration: underline;
+}
+
+.bottles-chip-clear:hover {
+  color: #E8DFD0;
+}
+
+.bottles-empty {
+  padding: 3rem 1rem;
+  text-align: center;
+  color: var(--text-muted, #9A9484);
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px dashed rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+}
+
+.bottles-page-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 1rem;
+  margin-top: 0.5rem;
+}
+
+.bottles-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  margin-top: 2rem;
+}
+
+.bottles-pagination button {
+  background: rgba(255, 255, 255, 0.06);
+  color: #E8DFD0;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+
+.bottles-pagination button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.bottles-pagination button:not(:disabled):hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.bottles-page-indicator {
+  color: var(--text-muted, #9A9484);
+  font-size: 0.9rem;
+}
