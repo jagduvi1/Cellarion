@@ -400,8 +400,12 @@ function computeStackSlotPositions(rows, height) {
   return positions;
 }
 
-// Distance a pulled-out shelf row travels in +Z (toward the viewer).
-const PULL_OUT_DISTANCE = 0.20;
+// Fraction of the rack's depth a pulled-out shelf row travels in +Z
+// (toward the viewer). At 0.85 the shelf telescopes out almost completely
+// — for a shelf with a back row, this brings the back-row cubby openings
+// past the cabinet's front face so the back rings are clickable instead
+// of buried under the shelf above.
+const PULL_OUT_FRACTION = 0.85;
 
 /**
  * One shelf row's worth of geometry that can slide forward when "pulled".
@@ -428,7 +432,7 @@ function PullOutShelfRow({
   highlightBottleId,
 }) {
   const groupRef = useRef();
-  const targetZ = isPulled ? PULL_OUT_DISTANCE : 0;
+  const targetZ = isPulled ? depth * PULL_OUT_FRACTION : 0;
   useFrame((_, delta) => {
     if (!groupRef.current) return;
     const current = groupRef.current.position.z;
