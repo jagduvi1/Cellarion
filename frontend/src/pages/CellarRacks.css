@@ -479,3 +479,39 @@
   background: var(--color-primary);
   color: white;
 }
+
+/* New-rack-form preview */
+.new-rack-preview-toggle {
+  margin-right: 0.5rem;
+}
+
+.new-rack-preview-toggle.active {
+  background: var(--color-info-bg, rgba(0, 100, 200, 0.1));
+}
+
+.new-rack-preview-panel {
+  margin-top: 1rem;
+  padding: 1rem;
+  background: var(--color-bg);
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.new-rack-preview-label {
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+  margin-bottom: 0.6rem;
+  font-style: italic;
+}
+
+.new-rack-preview-canvas {
+  max-width: 100%;
+  overflow-x: auto;
+  display: flex;
+  justify-content: center;
+}
+
+.new-rack-preview-canvas .rack-actions,
+.new-rack-preview-canvas .rack-meta {
+  display: none;
+}
