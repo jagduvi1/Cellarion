@@ -110,13 +110,12 @@ async function processUser(user, isFirstRun) {
     }
 
     if (!notifType) {
-      // No transition — update status if changed but don't notify
-      if (prevStatus !== effectiveStatus) {
-        await Bottle.updateOne(
-          { _id: bottle._id },
-          { $set: { drinkWindowNotifiedStatus: effectiveStatus, drinkWindowNotifiedAt: new Date() } }
-        );
-      }
+      // No notifiable transition — leave prevStatus alone. Silently
+      // rewriting it here used to flip a "sticky" marker like 'ending'
+      // back to 'peak' on no-op cron passes (because effectiveStatus
+      // falls back to maturityStatus when notifType is null), which then
+      // let the ending check re-fire the next day and produced duplicate
+      // notifications for the same bottle every other day.
       continue;
     }
 
