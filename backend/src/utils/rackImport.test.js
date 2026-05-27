@@ -162,7 +162,7 @@ describe('planRackCreations', () => {
   });
 
   test('uses suggestRackDimensions when only rackPosition is known', () => {
-    // Mirrors Keith's M3 (positions 4, 10, 11): max 11 → suggestion is 2×6
+    // Realistic Oeno-style scenario: positions 4, 10, 11 → max 11 → 2×6
     const plan = planRackCreations([
       { rackName: 'M3', rackPosition: 11 },
       { rackName: 'M3', rackPosition: 4 },
@@ -194,18 +194,18 @@ describe('planRackCreations', () => {
   });
 
   test('sizes rack by total bottle count when many bottles share a slot', () => {
-    // Mirrors Keith's data: 3 Riesling + 3 Chenin Blanc + 2 Pinot + 1 Ata Rangi
-    // all claim positions in M3 (total 9 bottles), with max position 11.
+    // Realistic Oeno-style scenario: 9 bottles spread across positions 4-11
+    // of rack M3, with several wines doubling up on the same position.
     // Required capacity = max(11, 9) = 11. Suggestion for 11 is 2×6 = 12 slots. ✓
     const plan = planRackCreations([
-      { rackName: 'M3', rackPosition: 11 }, // Chenin 1
-      { rackName: 'M3', rackPosition: 11 }, // Chenin 2
-      { rackName: 'M3', rackPosition: 11 }, // Chenin 3
-      { rackName: 'M3', rackPosition: 10 }, // Riesling 1
-      { rackName: 'M3', rackPosition: 10 }, // Riesling 2
-      { rackName: 'M3', rackPosition: 10 }, // Riesling 3
-      { rackName: 'M3', rackPosition: 4 },  // Ata Rangi 1
-      { rackName: 'M3', rackPosition: 4 },  // Ata Rangi 2
+      { rackName: 'M3', rackPosition: 11 }, // wine A bottle 1
+      { rackName: 'M3', rackPosition: 11 }, // wine A bottle 2
+      { rackName: 'M3', rackPosition: 11 }, // wine A bottle 3
+      { rackName: 'M3', rackPosition: 10 }, // wine B bottle 1
+      { rackName: 'M3', rackPosition: 10 }, // wine B bottle 2
+      { rackName: 'M3', rackPosition: 10 }, // wine B bottle 3
+      { rackName: 'M3', rackPosition: 4 },  // wine C bottle 1
+      { rackName: 'M3', rackPosition: 4 },  // wine C bottle 2
     ]);
     const m3 = plan.get('M3');
     // 2×6 = 12 slots, ≥ max(11, 8) = 11. ✓
@@ -324,7 +324,7 @@ describe('placeBottlesInRack (orchestration)', () => {
   });
 
   test('end-to-end: Oeno-style M3 with Quantity=3 at slot 11 spreads into 11,12,13', () => {
-    // Recreates Keith's scenario for a single rack
+    // Three bottles of one wine all targeting slot 11 of the same rack
     const rack = buildRack({ rows: 4, cols: 6, maxPosition: 24 });
     const items = [
       { item: { rackPosition: 11 }, bottleId: 'chenin-1', sourceIndex: 0 },
@@ -390,9 +390,9 @@ describe('placeBottlesInRack (orchestration)', () => {
     expect(positions).toEqual([111, 112, 113]);
   });
 
-  test('Oeno shelf rack: bottom-left anchor flips shelf 11 to shelf 8 (Keith real data)', () => {
-    // Keith's cabinet: 18 shelves, bottom-left anchor. Oeno shelf 11 from
-    // bottom = effective shelf 18-11+1 = 8 from top. First slot = (8-1)*11+1 = 78.
+  test('Oeno shelf rack: bottom-left anchor flips shelf 11 to shelf 8', () => {
+    // 18-shelf rack, bottom-left anchor. Oeno shelf 11 from bottom =
+    // effective shelf 18 - 11 + 1 = 8 from top. First slot = (8-1)*11 + 1 = 78.
     const rack = {
       type: 'shelf', rows: 18, cols: 6, typeConfig: { bottlesPerCell: 1, backCols: 5 },
       slots: [], maxPosition: 198
@@ -434,8 +434,8 @@ describe('placeBottlesInRack (orchestration)', () => {
   });
 
   test('Oeno-export bottle with explicit layer + slotInLayer (front cell)', () => {
-    // Walk-in Module 3 (18 shelves × 6 front + 5 back). Bottle on shelf 18,
-    // front layer, slot 5. With bottom-left anchor → effective shelf 1.
+    // 18-shelf rack (6 front + 5 back). Bottle on shelf 18, front layer,
+    // slot 5. With bottom-left anchor → effective shelf 1.
     // First slot of shelf 1 = 1; front layer slot 5 = position 5.
     const rack = {
       type: 'shelf', rows: 18, cols: 6, typeConfig: { bottlesPerCell: 1, backCols: 5 },
