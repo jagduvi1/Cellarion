@@ -128,19 +128,11 @@ function Bottle({ position, wineType, slot, onBottleClick, highlighted, scale = 
 
   return (
     <group position={position} rotation={rotation} scale={scale}>
-      {/* Highlight glow ring behind the bottle */}
-      {highlighted && (
-        <mesh position={[0, -0.01, 0]}>
-          <torusGeometry args={[BOTTLE_RADIUS + 0.008, 0.006, 8, 24]} />
-          <meshStandardMaterial
-            color="#FFD700"
-            emissive="#FFD700"
-            emissiveIntensity={2}
-            transparent
-            opacity={0.9}
-          />
-        </mesh>
-      )}
+      {/* Highlight is conveyed by the bottle material itself (brighter
+          glass colour + emissive boost when highlighted) — see the
+          meshPhysicalMaterial below. No external ring/halo geometry, so
+          the highlighted bottle looks lit up instead of having a flat
+          torus sitting under its foot on the shelf. */}
       {/* Glass bottle */}
       <mesh
         geometry={bottleGeo}
