@@ -1,6 +1,6 @@
 {
   "name": "wine-cellar-backend",
-  "version": "1.51.0",
+  "version": "1.51.1",
   "description": "Wine cellar management backend",
   "main": "server.js",
   "scripts": {
