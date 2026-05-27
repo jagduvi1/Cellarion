@@ -37,7 +37,24 @@ function CellarRacks() {
 
   // View mode for the active rack: 'compact' (default, existing renderer) or
   // 'shelf' (top-down per-shelf view). Only meaningful for shelf racks.
-  const [viewMode, setViewMode] = useState('compact');
+  // Persisted to localStorage so the user's choice survives navigation —
+  // e.g. clicking a bottle's rack position from the wine list returns them
+  // to whichever view they were in last.
+  const [viewMode, setViewModeState] = useState(() => {
+    try {
+      return window.localStorage.getItem('cellarion.rackViewMode') || 'compact';
+    } catch {
+      return 'compact';
+    }
+  });
+  const setViewMode = (mode) => {
+    setViewModeState(mode);
+    try {
+      window.localStorage.setItem('cellarion.rackViewMode', mode);
+    } catch {
+      // localStorage unavailable (e.g. private mode) — view mode just won't persist
+    }
+  };
 
   // active popup: { rackId, position, slot: slotData|null } — rendered as fixed modal
   const [activePopup, setActivePopup] = useState(null);
