@@ -28,23 +28,20 @@ export default function ShelfView3D({ rack, activePosition, highlightPos, onSlot
   const height = displayRows * CELL_H + PANEL_THICK * 2;
   const depth  = hasShelfBack ? RACK_DEPTH * 1.7 : RACK_DEPTH;
 
-  // RackMesh centres the rack at y=0 (rack spans -height/2 to +height/2).
-  // Position the camera in a front-three-quarter view, pulled back enough
-  // that the FULL rack fits vertically in a 45° FOV. Without enough pull-
-  // back the bottom shelves of tall racks (e.g. an 18-shelf module) get
-  // cropped below the viewport.
+  // RackMesh centres the rack at y=0 internally. We shift it up by height/2
+  // so it stands ON the ground plane (its base touches y=0) instead of
+  // passing through it. The camera then aims at the rack's visual centre
+  // (y = height/2) so top and bottom shelves get equal screen real estate.
   const maxDim = Math.max(width, height, depth);
   // Distance needed to fit the rack's height in a 45° vertical FOV (with
-  // a 1.25× margin for comfort): H / (2 * tan(22.5°)) ≈ H * 1.21.
+  // a 1.35× margin for comfort): H / (2 * tan(22.5°)) ≈ H * 1.21.
   const fitDistance = height * 1.35 + depth * 0.5;
   const camPos = useMemo(() => ([
     width * 0.55,
-    height * 0.15,
+    height * 0.65,           // slight elevation above the rack centre
     fitDistance,
   ]), [width, height, fitDistance]);
-  // Look at the rack's vertical centre so top and bottom shelves get
-  // roughly equal screen space.
-  const camTarget = [0, 0, 0];
+  const camTarget = [0, height * 0.5, 0];
 
   // The popup-state in CellarRacks is keyed by SLOT POSITION; RackMesh's
   // highlight prop uses BOTTLE ID. Convert by looking up the bottle that
@@ -100,7 +97,7 @@ export default function ShelfView3D({ rack, activePosition, highlightPos, onSlot
 
             <RackMesh
               rack={rack}
-              position={[0, 0, 0]}
+              position={[0, height / 2, 0]}
               rotation={0}
               isEditMode={false}
               isSelected={false}
