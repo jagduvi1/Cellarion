@@ -432,8 +432,8 @@ describe('parseAndMap', () => {
       // dedicated "Oeno" format detection is reserved for real Oeno
       // two-section exports, not for spreadsheets with Rack_Location columns.
       const csv = 'Producer,Wine,Vintage,Quantity,Rack_Location,type,Size,Price,Country\n' +
-        'Amisfield,Amisfield Chenin Blanc,2019,3,M3-11,White Wine,750,35,New Zealand\n' +
-        'Alexander,Alexander Dusty Road Pinot Noir,2018,1,M2-11,Red Wine,750,35,New Zealand';
+        'Producer A,Test White Wine,2019,3,M3-11,White Wine,750,35,New Zealand\n' +
+        'Producer B,Test Red Wine,2018,1,M2-11,Red Wine,750,35,New Zealand';
       const result = parseAndMap(csv);
       expect(result.format).toBe('generic');
       // Quantity 3 + 1 = 4 bottles
@@ -469,25 +469,25 @@ describe('parseAndMap', () => {
 // Oeno-by-Vintec real two-section export
 // ---------------------------------------------------------------------------
 describe('parseOenoExport', () => {
-  // Minimal fixture mirroring the real export shape: one walk-in cabinet
-  // with two columns, the second cabinet with one column, plus four bottles
-  // covering placed/unshelved and active/consumed paths.
+  // Minimal fixture mirroring the real Oeno-by-Vintec export shape: one
+  // multi-column cabinet, one single-column cabinet, plus four bottles
+  // covering placed / unshelved and active / consumed paths.
   const fixture = [
     'Cabinet ID,Cabinet Label,Cabinet Brand,Cabinet Model,Column Index,Shelf Index,Layer Index,Layer ID,Disabled Slots,Total Slots,Empty Slots,Cabinet Added Date,Cabinet Purchased Date,Unshelved Bottle Count',
-    '34670,Walk-in,TRANSTHERM,ESPACE Walk-in Cellar,3,18,1,662711,"6, 5",702,30,2024-07-05,,0',
-    '34670,Walk-in,TRANSTHERM,ESPACE Walk-in Cellar,3,18,2,662712,0,702,30,2024-07-05,,0',
-    '34670,Walk-in,TRANSTHERM,ESPACE Walk-in Cellar,3,1,1,662713,0,702,30,2024-07-05,,0',
-    '34670,Walk-in,TRANSTHERM,ESPACE Walk-in Cellar,4,13,1,662714,0,702,30,2024-07-05,,0',
-    '35376,Euromaid Fridge,Eurocave,,1,5,1,674241,0,92,23,2024-08-13,,0',
+    '10001,Main Cellar,TRANSTHERM,Espace Cellar,3,18,1,1001,"6, 5",702,30,2024-07-05,,0',
+    '10001,Main Cellar,TRANSTHERM,Espace Cellar,3,18,2,1002,0,702,30,2024-07-05,,0',
+    '10001,Main Cellar,TRANSTHERM,Espace Cellar,3,1,1,1003,0,702,30,2024-07-05,,0',
+    '10001,Main Cellar,TRANSTHERM,Espace Cellar,4,13,1,1004,0,702,30,2024-07-05,,0',
+    '10002,Wine Fridge,Eurocave,,1,5,1,2001,0,92,23,2024-08-13,,0',
     '',
     '',
     'User Bottles Details',
     '',
     'Bottle ID,Cabinet ID,Column ID,Shelf ID,Layer ID,Slot,Bottle Size Liters,Wine Year,Wine Type,Bottle Note,Wine Title,Wine Country,Wine Region,Wine Winery,Purchase Cost,Purchase Currency,Purchase Date,Opened On,Consumed On',
-    '1278283,34670,58810,316374,662711,5,0.75,2018,Red Wine,,The Original Syrah,NZ,Gimblett Gravels,Stonecroft,30.50,NZD,2024-10-30,,',
-    '1281402,35376,59825,321749,674241,1,0.75,2020,Red Wine,,Zinfandel,NZ,Gimblett Gravels,Stonecroft,null,NZD,2024-11-02,,',
-    '1278383,null,null,null,null,null,0.75,2014,Red Wine,,River Run Pinot Noir,NZ,Central Otago,Chard Farm,null,NZD,2024-10-30,,2024-11-26',
-    '1278884,34670,58810,316246,662714,3,0.75,2019,White Wine,Aged on lees,Riesling,NZ,Marlborough,Cloudy Bay,42,NZD,2024-10-30,,'
+    '5001,10001,500,5500,1001,5,0.75,2018,Red Wine,,Test Wine A,NZ,Test Region,Producer A,30.50,NZD,2024-10-30,,',
+    '5002,10002,501,5501,2001,1,0.75,2020,Red Wine,,Test Wine B,NZ,Test Region,Producer B,null,NZD,2024-11-02,,',
+    '5003,null,null,null,null,null,0.75,2014,Red Wine,,Test Wine C,NZ,Test Region,Producer C,null,NZD,2024-10-30,,2024-11-26',
+    '5004,10001,500,5502,1004,3,0.75,2019,White Wine,Aged on lees,Test Wine D,NZ,Test Region,Producer D,42,NZD,2024-10-30,,'
   ].join('\n');
 
   it('detects the two-section boundary at the "Bottle ID" header row', () => {
@@ -505,61 +505,61 @@ describe('parseOenoExport', () => {
   it('builds per-cabinet/column rack specs with shelf + 6 front + 5 back', () => {
     const result = parseOenoExport(fixture);
     expect(result.oenoRackSpecs).toMatchObject({
-      'Walk-in – Module 3': {
+      'Main Cellar – Module 3': {
         type: 'shelf',
         cols: 6,
         typeConfig: { bottlesPerCell: 1, backCols: 5 }
       },
-      'Walk-in – Module 4': {
+      'Main Cellar – Module 4': {
         type: 'shelf',
         cols: 6,
         typeConfig: { bottlesPerCell: 1, backCols: 5 }
       },
-      // Euromaid has only one column, no module suffix
-      'Euromaid Fridge': {
+      // Single-column cabinet keeps just the label (no module suffix)
+      'Wine Fridge': {
         type: 'shelf',
         cols: 6,
         typeConfig: { bottlesPerCell: 1, backCols: 5 }
       }
     });
-    // Walk-in Module 3 has shelves 1 and 18 used → max 18
-    expect(result.oenoRackSpecs['Walk-in – Module 3'].rows).toBe(18);
-    expect(result.oenoRackSpecs['Walk-in – Module 4'].rows).toBe(13);
+    // Module 3 has shelves 1 and 18 referenced → rows = max observed (18)
+    expect(result.oenoRackSpecs['Main Cellar – Module 3'].rows).toBe(18);
+    expect(result.oenoRackSpecs['Main Cellar – Module 4'].rows).toBe(13);
   });
 
   it('maps shelved bottles to rackName + shelfNumber + layer + slotInLayer', () => {
     const result = parseOenoExport(fixture);
-    const syrah = result.items.find(i => i.wineName === 'The Original Syrah');
-    expect(syrah).toMatchObject({
-      rackName: 'Walk-in – Module 3',
+    const wineA = result.items.find(i => i.wineName === 'Test Wine A');
+    expect(wineA).toMatchObject({
+      rackName: 'Main Cellar – Module 3',
       vintage: '2018',
       type: 'red',
       country: 'NZ',
-      region: 'Gimblett Gravels',
-      producer: 'Stonecroft',
+      region: 'Test Region',
+      producer: 'Producer A',
       bottleSize: '750ml',
       price: 30.5,
       currency: 'NZD',
       layer: 1,
       slotInLayer: 5,
     });
-    expect(syrah.rackPosition).toBe(18); // shelf 18
+    expect(wineA.rackPosition).toBe(18); // shelf 18
   });
 
   it('imports unshelved bottles without rack placement', () => {
     const result = parseOenoExport(fixture);
-    const riverRun = result.items.find(i => i.wineName === 'River Run Pinot Noir');
-    expect(riverRun).toBeDefined();
-    expect(riverRun.rackName).toBeUndefined();
-    expect(riverRun.rackPosition).toBeUndefined();
+    const unshelved = result.items.find(i => i.wineName === 'Test Wine C');
+    expect(unshelved).toBeDefined();
+    expect(unshelved.rackName).toBeUndefined();
+    expect(unshelved.rackPosition).toBeUndefined();
   });
 
   it('routes Consumed-On bottles through the addToHistory path', () => {
     const result = parseOenoExport(fixture);
-    const riverRun = result.items.find(i => i.wineName === 'River Run Pinot Noir');
-    expect(riverRun.addToHistory).toBe(true);
-    expect(riverRun.consumedReason).toBe('drank');
-    expect(riverRun.consumedAt).toBe('2024-11-26');
+    const consumed = result.items.find(i => i.wineName === 'Test Wine C');
+    expect(consumed.addToHistory).toBe(true);
+    expect(consumed.consumedReason).toBe('drank');
+    expect(consumed.consumedAt).toBe('2024-11-26');
   });
 
   it('reads per-row currency directly from the CSV', () => {
