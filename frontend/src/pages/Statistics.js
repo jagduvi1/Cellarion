@@ -417,7 +417,10 @@ function Statistics() {
         {hasPurchaseDates && (
           <div className="stats-card stats-card--desktop-only">
             <h2 className="stats-card-title">{t('statistics.sections.purchasesByYear')}</h2>
-            <PurchaseHistoryChart byPurchaseYear={byPurchaseYear} />
+            <PurchaseHistoryChart
+              byPurchaseYear={byPurchaseYear}
+              onYearClick={(year) => goWithFilter({ purchaseYear: year })}
+            />
           </div>
         )}
 
@@ -436,6 +439,8 @@ function Statistics() {
           <ConsumptionChart
             consumptionByYear={consumptionByYear}
             consumptionByReason={consumptionByReason}
+            onYearClick={(year) => goWithFilter({ consumedYear: year, status: 'consumed' })}
+            onReasonClick={(reason) => goWithFilter({ status: reason })}
           />
         </div>
 

@@ -81,6 +81,17 @@ router.get('/', async (req, res) => {
       minRating,
       maturity: maturityFilter,
       sort = '-createdAt',
+      // Lifecycle filters — default is active-only, matching the
+      // Statistics page's `byType` / `byCountry` / etc. aggregates.
+      // Set status to 'drank'|'gifted'|'sold'|'other' to view a
+      // consumed bucket, or 'all' to include everything.
+      status: statusFilter,
+      // Purchase / consumption year filters (numeric year). Apply to
+      // bottle.purchaseDate.getFullYear() and bottle.consumedAt.getFullYear()
+      // respectively — used by the Purchase History and Consumption
+      // History charts on Statistics.
+      purchaseYear,
+      consumedYear,
     } = req.query;
 
     const sortField = sort.startsWith('-') ? sort.substring(1) : sort;
@@ -89,8 +100,21 @@ router.get('/', async (req, res) => {
     const filter = {
       user: req.user.id,
       cellar: { $in: cellarIds },
-      status: { $nin: CONSUMED_STATUSES },
     };
+
+    // Status / lifecycle scope
+    if (!statusFilter || statusFilter === 'active') {
+      filter.status = { $nin: CONSUMED_STATUSES };
+    } else if (statusFilter === 'all') {
+      // no status constraint — include everything
+    } else if (CONSUMED_STATUSES.includes(statusFilter)) {
+      filter.status = statusFilter;
+    } else if (statusFilter === 'consumed') {
+      filter.status = { $in: CONSUMED_STATUSES };
+    } else {
+      // Unknown value — fall back to the default active scope
+      filter.status = { $nin: CONSUMED_STATUSES };
+    }
 
     if (vintage) {
       const vintages = String(vintage).split(',').map(v => v.trim()).filter(Boolean);
@@ -99,6 +123,24 @@ router.get('/', async (req, res) => {
 
     if (bottleSize) {
       filter.bottleSize = String(bottleSize);
+    }
+
+    // Year-range filters on purchaseDate / consumedAt. Using $gte/$lt of
+    // Jan 1 of the year and Jan 1 of next year lets MongoDB use the
+    // existing date indexes and avoids JS-side getFullYear() iteration.
+    const yearRange = (yearStr) => {
+      const y = parseInt(yearStr, 10);
+      if (isNaN(y) || y < 1900 || y > 2200) return null;
+      return { $gte: new Date(y, 0, 1), $lt: new Date(y + 1, 0, 1) };
+    };
+
+    if (purchaseYear) {
+      const range = yearRange(purchaseYear);
+      if (range) filter.purchaseDate = range;
+    }
+    if (consumedYear) {
+      const range = yearRange(consumedYear);
+      if (range) filter.consumedAt = range;
     }
 
     // Pre-query WineDefinition for taxonomy / type / producer filters.

@@ -9,11 +9,22 @@ import './Bottles.css';
 const FILTER_KEYS = [
   'search', 'type', 'country', 'region', 'grapes',
   'vintage', 'producer', 'bottleSize', 'minRating', 'maturity', 'sort',
+  'purchaseYear', 'consumedYear', 'status',
 ];
 
 const TYPE_LABELS = {
   red: 'Red', white: 'White', 'rosé': 'Rosé', sparkling: 'Sparkling',
   dessert: 'Dessert', fortified: 'Fortified',
+};
+
+const STATUS_LABELS = {
+  active: 'Active',
+  consumed: 'Consumed',
+  all: 'All',
+  drank: 'Drunk',
+  gifted: 'Gifted',
+  sold: 'Sold',
+  other: 'Other',
 };
 
 const PAGE_SIZE = 30;
@@ -116,6 +127,9 @@ function Bottles() {
     if (filters.minRating) labels.minRating = `Rating: ${filters.minRating}+`;
     if (filters.maturity) labels.maturity = `Maturity: ${filters.maturity}`;
     if (filters.search) labels.search = `Search: "${filters.search}"`;
+    if (filters.purchaseYear) labels.purchaseYear = `Purchased: ${filters.purchaseYear}`;
+    if (filters.consumedYear) labels.consumedYear = `Consumed: ${filters.consumedYear}`;
+    if (filters.status) labels.status = `Status: ${STATUS_LABELS[filters.status] || filters.status}`;
     return labels;
     // sample is only referenced so the linter sees we read data
     // eslint-disable-next-line no-unused-vars
