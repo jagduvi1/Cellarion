@@ -47,19 +47,21 @@ export default function ShelfView({ rack, activePosition, highlightPos, onSlotCl
   }, [rack.slots]);
 
   // Per-shelf positions for the active layer.
-  // Shelves are displayed bottom-to-top to match how users physically face a
-  // cabinet (shelf 1 on top of the SVG is the highest shelf number).
+  // Display order: highest shelf-NUMBER label at the top of the SVG (matches
+  // how a user faces the cabinet — top of view = top of cabinet).
+  // Position MAPPING: positions count row-major from the top, matching the
+  // Compact and 3D views (position 1 = top-left of the rack). So the top
+  // shelf shows the LOW positions, not the high ones.
   const layerCols = layerMode === 'front' ? cols : backCols;
   const layerBpc = bpc;
   const shelfRowWidth = SHELF_LABEL_W + layerCols * layerBpc * (BOTTLE_RX * 2 + BOTTLE_GAP) + BOTTLE_GAP;
   const shelfRowHeight = BOTTLE_RY * 2 + SHELF_PAD_Y * 2;
   const totalHeight = rows * shelfRowHeight;
 
-  // Build the shelves array. Index 0 = highest shelf number (rendered at top).
   const shelves = [];
   for (let displayIdx = 0; displayIdx < rows; displayIdx++) {
     const shelfNumber = rows - displayIdx;
-    const shelfBase = (shelfNumber - 1) * slotsPerShelf;
+    const shelfBase = displayIdx * slotsPerShelf;
     const slotsForLayer = [];
     const slotCount = layerMode === 'front' ? cols * bpc : backCols * bpc;
     const offset = layerMode === 'front' ? 0 : cols * bpc;
