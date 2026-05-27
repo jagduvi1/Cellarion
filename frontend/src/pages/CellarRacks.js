@@ -8,6 +8,7 @@ import { consumeBottle } from '../api/bottles';
 import { getPlacedBottleIds } from '../utils/rackUtils';
 import { getTotalSlots, getModularTotalSlots } from '../utils/rackLayouts';
 import RackRenderer from '../components/racks/RackRenderer';
+import ShelfView from '../components/racks/ShelfView';
 import RackTypeSelector, { TYPE_DIMENSIONS } from '../components/racks/RackTypeSelector';
 import RatingInput from '../components/RatingInput';
 import WineImage from '../components/WineImage';
@@ -33,6 +34,10 @@ function CellarRacks() {
   const [saving, setSaving]           = useState(false);
   // which rack tab is selected
   const [selectedRackId, setSelectedRackId] = useState(null);
+
+  // View mode for the active rack: 'compact' (default, existing renderer) or
+  // 'shelf' (top-down per-shelf view). Only meaningful for shelf racks.
+  const [viewMode, setViewMode] = useState('compact');
 
   // active popup: { rackId, position, slot: slotData|null } — rendered as fixed modal
   const [activePopup, setActivePopup] = useState(null);
@@ -300,25 +305,61 @@ function CellarRacks() {
               </button>
             ))}
           </div>
+          {rack.type === 'shelf' && !rack.isModular && (
+            <div className="rack-view-mode-toggle" role="tablist">
+              <button
+                role="tab"
+                aria-selected={viewMode === 'compact'}
+                className={`view-mode-btn ${viewMode === 'compact' ? 'active' : ''}`}
+                onClick={() => setViewMode('compact')}
+              >
+                Compact
+              </button>
+              <button
+                role="tab"
+                aria-selected={viewMode === 'shelf'}
+                className={`view-mode-btn ${viewMode === 'shelf' ? 'active' : ''}`}
+                onClick={() => setViewMode('shelf')}
+              >
+                Shelf view
+              </button>
+            </div>
+          )}
           <div id={`rack-${rack._id}`}>
-          <RackRenderer
-            rack={rack}
-            canEdit={canEdit}
-            activeRackId={activePopup?.rackId}
-            activePosition={activePopup?.position}
-            highlightPos={highlightPos?.rackId === rack._id ? highlightPos.position : null}
-            onSlotClick={(pos, slotData) => {
-              // Viewers can only inspect filled slots, not interact with empty ones
-              if (!canEdit && !slotData) return;
-              if (activePopup?.rackId === rack._id && activePopup?.position === pos) {
-                setActivePopup(null);
-              } else {
-                setActivePopup({ rackId: rack._id, position: pos, slot: slotData || null });
-              }
-            }}
-            onDelete={() => setDeleteConfirm(rack._id)}
-            onNfcLink={() => setNfcModal({ rackId: rack._id })}
-          />
+          {rack.type === 'shelf' && !rack.isModular && viewMode === 'shelf' ? (
+            <ShelfView
+              rack={rack}
+              activePosition={activePopup?.rackId === rack._id ? activePopup.position : null}
+              highlightPos={highlightPos?.rackId === rack._id ? highlightPos.position : null}
+              onSlotClick={(pos, slotData) => {
+                if (!canEdit && !slotData) return;
+                if (activePopup?.rackId === rack._id && activePopup?.position === pos) {
+                  setActivePopup(null);
+                } else {
+                  setActivePopup({ rackId: rack._id, position: pos, slot: slotData || null });
+                }
+              }}
+            />
+          ) : (
+            <RackRenderer
+              rack={rack}
+              canEdit={canEdit}
+              activeRackId={activePopup?.rackId}
+              activePosition={activePopup?.position}
+              highlightPos={highlightPos?.rackId === rack._id ? highlightPos.position : null}
+              onSlotClick={(pos, slotData) => {
+                // Viewers can only inspect filled slots, not interact with empty ones
+                if (!canEdit && !slotData) return;
+                if (activePopup?.rackId === rack._id && activePopup?.position === pos) {
+                  setActivePopup(null);
+                } else {
+                  setActivePopup({ rackId: rack._id, position: pos, slot: slotData || null });
+                }
+              }}
+              onDelete={() => setDeleteConfirm(rack._id)}
+              onNfcLink={() => setNfcModal({ rackId: rack._id })}
+            />
+          )}
           </div>
         </>
       )}
