@@ -517,6 +517,11 @@ router.post('/confirm', async (req, res) => {
     }
 
     let created = 0;
+    // Split of `created` for the done-screen breakdown: active bottles vs
+    // those that were created already-consumed (addToHistory=true), e.g.
+    // Oeno-export rows with a Consumed On date.
+    let createdActive = 0;
+    let createdHistory = 0;
     const skipped = [];
     const errors = [];
     const createdBottleIds = []; // Track IDs for Meilisearch bulk sync
@@ -616,7 +621,12 @@ router.post('/confirm', async (req, res) => {
 
           await bottle.save();
           created++;
-          if (!item.addToHistory) createdBottleIds.push(bottle._id);
+          if (item.addToHistory) {
+            createdHistory++;
+          } else {
+            createdActive++;
+            createdBottleIds.push(bottle._id);
+          }
 
           // Queue rack placement for unmatched bottles too
           const hasPlacement = item.rackName && (item.rackPosition || (item.row && item.col));
@@ -697,7 +707,12 @@ router.post('/confirm', async (req, res) => {
 
         await bottle.save();
         created++;
-        if (!item.addToHistory) createdBottleIds.push(bottle._id);
+        if (item.addToHistory) {
+          createdHistory++;
+        } else {
+          createdActive++;
+          createdBottleIds.push(bottle._id);
+        }
 
         // Queue rack placement — actual slot assignment runs per-rack after
         // the bottle loop so multiple bottles claiming the same slot can
@@ -789,6 +804,8 @@ router.post('/confirm', async (req, res) => {
 
     logAudit(req, 'bottle.import', { type: 'cellar', id: cellarId }, {
       created,
+      createdActive,
+      createdHistory,
       skipped: skipped.length,
       errors: errors.length,
       total: items.length,
@@ -800,6 +817,8 @@ router.post('/confirm', async (req, res) => {
 
     res.json({
       created,
+      createdActive,
+      createdHistory,
       skipped,
       errors,
       total: items.length,
