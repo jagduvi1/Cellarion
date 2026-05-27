@@ -107,7 +107,12 @@ export function parseCSV(text, delimiter = ',') {
 
 /**
  * Detect the source format from CSV headers.
- * Returns: 'cellarion' | 'vivino' | 'cellartracker' | 'oeno' | 'generic'
+ * Returns: 'cellarion' | 'vivino' | 'cellartracker' | 'oeno-export' | 'generic'
+ *
+ * Note: real Oeno-by-Vintec exports use a two-section CSV (cabinet defs +
+ * bottles) detected by `detectOenoExport` against the raw text, not by
+ * single-row headers. This function only sees the headers of section 2 (or
+ * a single-section file), so Oeno-export detection happens at parse time.
  */
 export function detectFormat(headers) {
   const h = new Set(headers.map(s => s.toLowerCase().trim()));
@@ -115,9 +120,6 @@ export function detectFormat(headers) {
 
   // Cellarion's own CSV export uses camelCase headers
   if (raw.has('wineName') && raw.has('producer') && raw.has('vintage')) return 'cellarion';
-
-  // Oeno (Vintec) export — distinctive columns
-  if (h.has('rack_location') || h.has('mastervarietal')) return 'oeno';
 
   // Vivino export headers
   if (h.has('wine name') || h.has('winery')) return 'vivino';
@@ -127,6 +129,20 @@ export function detectFormat(headers) {
   if (h.has('wine') && h.has('vintage') && (h.has('locale') || h.has('bin'))) return 'cellartracker';
 
   return 'generic';
+}
+
+/**
+ * Detect Oeno-by-Vintec's real two-section export by scanning for the
+ * "User Bottles Details" marker separating the cabinet definitions from
+ * the bottle records. Returns the row index of the bottle-section header
+ * row, or -1 if the file isn't an Oeno export.
+ */
+export function detectOenoExportBoundary(rows) {
+  for (let i = 0; i < rows.length; i++) {
+    const firstCell = (rows[i].split(',')[0] || '').trim();
+    if (firstCell === 'Bottle ID') return i;
+  }
+  return -1;
 }
 
 /**
@@ -386,54 +402,6 @@ function mapGenericRow(row) {
   };
 }
 
-// ── Oeno (Vintec) Mapper ────────────────────────────────────────────────────
-
-/**
- * Map a row from an Oeno / Vintec CSV export. Distinctive columns:
- *   - Rack_Location: combined "<rackName>-<position>" string (e.g. "M2-11")
- *   - MasterVarietal / Varietal2 / Varietal3: grape varieties
- *   - type: "Red Wine" / "White Wine" / etc.
- *   - Size: bare number in millilitres
- *   - BeginConsume / EndConsume: drink window (not yet imported)
- *   - Location: typically the cellar name (e.g. "Cellar") — preserved as
- *     the free-text bottle location field
- */
-function mapOenoRow(row) {
-  const get = (keys) => {
-    for (const k of keys) {
-      const val = row[k] || row[k.toLowerCase()];
-      if (val) return val.trim();
-    }
-    return '';
-  };
-
-  const price = parseFloat(get(['Price', 'price']));
-  const qty = parseInt(get(['Quantity', 'quantity', 'Qty', 'Count']), 10);
-
-  // Oeno encodes rack + position together as e.g. "M2-11"
-  const combined = get(['Rack_Location', 'Rack Location', 'RackLocation']);
-  const parsed = parseCombinedRackLocation(combined);
-
-  return {
-    wineName: get(['Wine', 'wine']),
-    producer: get(['Producer', 'producer']),
-    vintage: get(['Vintage', 'vintage', 'Year']) || 'NV',
-    country: get(['Country', 'country']),
-    region: get(['Region', 'region']),
-    appellation: get(['Appellation', 'appellation', 'SubRegion']),
-    type: mapWineType(get(['type', 'Type', 'Wine Type'])),
-    price: isNaN(price) ? undefined : price,
-    bottleSize: normaliseBottleSize(get(['Size', 'size', 'Bottle Size'])) || '750ml',
-    quantity: isNaN(qty) || qty < 1 ? 1 : qty,
-    notes: get(['Notes', 'notes', 'Note', 'Comments']),
-    // Oeno's "Location" column is the cellar name (e.g. "Cellar"), preserved
-    // as a free-text label on the bottle since cellar selection happens in the UI.
-    location: get(['Location', 'location']),
-    rackName: parsed?.rackName || get(['Rack', 'rack', 'Rack Name']) || undefined,
-    rackPosition: parsed?.rackPosition || parseInt(get(['Rack Position', 'Position', 'Slot']), 10) || undefined,
-  };
-}
-
 // ── Cellarion CSV Mapper ─────────────────────────────────────────────────────
 
 /**
@@ -538,6 +506,239 @@ export function parseJSON(text) {
   return { items, format: 'cellarion', headers };
 }
 
+// \u2500\u2500 Oeno-by-Vintec export (real) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+
+/**
+ * Parse Oeno's real two-section CSV export.
+ *
+ * The file is structured as:
+ *   1. Cabinet/layer definitions \u2014 one row per (cabinet, column, shelf,
+ *      layer-front-back). Includes "Disabled Slots" so we know which
+ *      positions are unusable. Total/Empty Slots are cabinet-level stats.
+ *   2. A blank-row separator + literal "User Bottles Details" marker.
+ *   3. Bottle records \u2014 one row per individual bottle, joining to a
+ *      specific layer via Layer ID and indicating its slot within that
+ *      layer. Cabinet fields can all be "null" for unshelved bottles.
+ *
+ * The parser maps each (cabinet, column) pair into a Cellarion shelf rack
+ * sized for that column's shelves with cols=6, backCols=5, bpc=1 (Vintec/
+ * Transtherm standard \u2014 users can override in the picker). Each bottle
+ * carries an explicit shelf number, layer (1=front, 2=back), and
+ * slotInLayer; the backend's computeRackPosition uses those to compute
+ * the exact Cellarion slot.
+ *
+ * Consumed bottles (Consumed On set) come in via the existing
+ * addToHistory path. Unshelved bottles (Cabinet ID = null) skip rack
+ * placement.
+ *
+ * @param {string} text - Raw CSV text
+ * @returns {{ items: object[], format: 'oeno-export', headers: string[], oenoRackSpecs: object }}
+ *   `oenoRackSpecs` is keyed by rack name and used by the picker's
+ *   default-rack-config helper to pre-fill cabinet shapes.
+ */
+export function parseOenoExport(text) {
+  const cleaned = text.replace(/^\uFEFF/, '');
+  const lines = cleaned.split(/\r?\n/);
+  const boundary = detectOenoExportBoundary(lines);
+  if (boundary === -1) {
+    return null;
+  }
+
+  // \u2500\u2500 Section 1: cabinet/layer definitions \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+  // Lookup map: Layer ID (string) \u2192 { cabinetId, cabinetLabel, cabinetBrand,
+  //   cabinetModel, columnIndex, shelfIndex, layerIndex, disabledSlots:Set }
+  const layerById = new Map();
+  // Per-cabinet metadata for the rack-spec output
+  const cabinetById = new Map();
+
+  // Section 1 has a header row at index 0
+  for (let i = 1; i < boundary; i++) {
+    const cells = splitCSVLine(lines[i]);
+    if (!cells[0] || !cells[0].trim()) continue;
+    const cabinetId = cells[0].trim();
+    if (!cabinetId) continue;
+
+    const cabinetLabel = (cells[1] || '').trim();
+    const cabinetBrand = (cells[2] || '').trim();
+    const cabinetModel = (cells[3] || '').trim();
+    const columnIndex = parseInt(cells[4], 10);
+    const shelfIndex = parseInt(cells[5], 10);
+    const layerIndex = parseInt(cells[6], 10);
+    const layerId = (cells[7] || '').trim();
+
+    if (!layerId || isNaN(columnIndex) || isNaN(shelfIndex) || isNaN(layerIndex)) continue;
+
+    // "Disabled Slots" is a comma-separated list inside the field (which is
+    // itself comma-separated). The CSV parser already handles the quoting,
+    // so cells[8] is a raw string like "6, 5" or "0" (meaning none disabled)
+    // or "1, 2, 3" etc.
+    const disabledRaw = (cells[8] || '').trim();
+    const disabledSlots = new Set();
+    if (disabledRaw && disabledRaw !== '0') {
+      for (const part of disabledRaw.split(',')) {
+        const n = parseInt(part.trim(), 10);
+        if (!isNaN(n) && n > 0) disabledSlots.add(n);
+      }
+    }
+
+    layerById.set(layerId, {
+      cabinetId, cabinetLabel, cabinetBrand, cabinetModel,
+      columnIndex, shelfIndex, layerIndex, disabledSlots
+    });
+
+    if (!cabinetById.has(cabinetId)) {
+      cabinetById.set(cabinetId, {
+        label: cabinetLabel,
+        brand: cabinetBrand,
+        model: cabinetModel,
+        columns: new Map(), // columnIndex \u2192 { maxShelf }
+      });
+    }
+    const cab = cabinetById.get(cabinetId);
+    if (!cab.columns.has(columnIndex)) {
+      cab.columns.set(columnIndex, { maxShelf: 0 });
+    }
+    const col = cab.columns.get(columnIndex);
+    if (shelfIndex > col.maxShelf) col.maxShelf = shelfIndex;
+  }
+
+  // \u2500\u2500 Section 2: bottle records \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+  const bottleHeaders = splitCSVLine(lines[boundary]);
+  const headerIndex = (name) => bottleHeaders.findIndex(h => h.trim() === name);
+  const idx = {
+    bottleId: headerIndex('Bottle ID'),
+    cabinetId: headerIndex('Cabinet ID'),
+    layerId: headerIndex('Layer ID'),
+    slot: headerIndex('Slot'),
+    size: headerIndex('Bottle Size Liters'),
+    year: headerIndex('Wine Year'),
+    type: headerIndex('Wine Type'),
+    note: headerIndex('Bottle Note'),
+    title: headerIndex('Wine Title'),
+    country: headerIndex('Wine Country'),
+    region: headerIndex('Wine Region'),
+    winery: headerIndex('Wine Winery'),
+    cost: headerIndex('Purchase Cost'),
+    currency: headerIndex('Purchase Currency'),
+    purchase: headerIndex('Purchase Date'),
+    consumed: headerIndex('Consumed On'),
+  };
+
+  const items = [];
+  const rackNameFor = (cabinetLabel, columnIndex, totalColumns) =>
+    totalColumns > 1 ? `${cabinetLabel} \u2013 Module ${columnIndex}` : cabinetLabel;
+
+  for (let i = boundary + 1; i < lines.length; i++) {
+    const cells = splitCSVLine(lines[i]);
+    if (!cells[idx.bottleId] || !cells[idx.bottleId].trim()) continue;
+
+    const cabinetIdRaw = (cells[idx.cabinetId] || '').trim();
+    const layerIdRaw = (cells[idx.layerId] || '').trim();
+    const slotRaw = (cells[idx.slot] || '').trim();
+    const isUnshelved = !cabinetIdRaw || cabinetIdRaw === 'null';
+
+    const sizeLitres = parseFloat(cells[idx.size]);
+    const bottleSize = isNaN(sizeLitres) ? '750ml' : `${Math.round(sizeLitres * 1000)}ml`;
+    const cost = parseFloat(cells[idx.cost]);
+    const consumedAt = (cells[idx.consumed] || '').trim();
+
+    const baseItem = {
+      wineName: (cells[idx.title] || '').trim(),
+      producer: (cells[idx.winery] || '').trim(),
+      vintage: (cells[idx.year] || '').trim() || 'NV',
+      country: (cells[idx.country] || '').trim(),
+      region: (cells[idx.region] || '').trim(),
+      type: mapWineType((cells[idx.type] || '').trim()),
+      bottleSize,
+      notes: (cells[idx.note] || '').trim(),
+      price: isNaN(cost) ? undefined : cost,
+      currency: (cells[idx.currency] || '').trim() || undefined,
+      purchaseDate: (cells[idx.purchase] || '').trim() || undefined,
+    };
+
+    if (consumedAt) {
+      baseItem.addToHistory = true;
+      baseItem.consumedAt = consumedAt;
+      baseItem.consumedReason = 'drank';
+    }
+
+    if (isUnshelved) {
+      items.push(baseItem);
+      continue;
+    }
+
+    const layer = layerById.get(layerIdRaw);
+    if (!layer) {
+      // Layer ID references a layer we don't know \u2014 still import as unshelved
+      items.push(baseItem);
+      continue;
+    }
+
+    const totalColumns = cabinetById.get(layer.cabinetId)?.columns.size || 1;
+    items.push({
+      ...baseItem,
+      rackName: rackNameFor(layer.cabinetLabel, layer.columnIndex, totalColumns),
+      // For shelf racks the backend interprets rackPosition as the shelf
+      // number (row). layer + slotInLayer pin down the exact cell.
+      rackPosition: layer.shelfIndex,
+      layer: layer.layerIndex,
+      slotInLayer: parseInt(slotRaw, 10) || undefined,
+    });
+  }
+
+  // Build per-rack default configs so the picker can pre-fill cabinet shapes
+  const oenoRackSpecs = {};
+  for (const [, cab] of cabinetById) {
+    const totalColumns = cab.columns.size;
+    for (const [columnIndex, col] of cab.columns) {
+      const rackName = rackNameFor(cab.label, columnIndex, totalColumns);
+      oenoRackSpecs[rackName] = {
+        type: 'shelf',
+        rows: Math.min(20, col.maxShelf),
+        cols: 6,
+        typeConfig: { bottlesPerCell: 1, backCols: 5 },
+      };
+    }
+  }
+
+  return {
+    items,
+    format: 'oeno-export',
+    headers: bottleHeaders,
+    oenoRackSpecs,
+  };
+}
+
+/**
+ * Split one CSV line respecting double-quoted fields (which may contain
+ * commas). Same logic as parseCSV's inner splitLine but exposed for the
+ * Oeno-export parser to use on individual lines.
+ */
+function splitCSVLine(line, delimiter = ',') {
+  if (!line) return [];
+  const fields = [];
+  let field = '';
+  let inQ = false;
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i];
+    if (c === '"') {
+      if (inQ && line[i + 1] === '"') {
+        field += '"';
+        i++;
+      } else {
+        inQ = !inQ;
+      }
+    } else if (c === delimiter && !inQ) {
+      fields.push(field);
+      field = '';
+    } else {
+      field += c;
+    }
+  }
+  fields.push(field);
+  return fields;
+}
+
 /**
  * Main entry: parse a file and return mapped items in master format.
  *
@@ -548,6 +749,16 @@ export function parseJSON(text) {
 export function parseAndMap(text, forceFormat) {
   // Strip BOM
   const cleaned = text.replace(/^\uFEFF/, '');
+
+  // Oeno's real export has a distinctive two-section structure that single-
+  // row header detection can't pick up; try the Oeno-export parser first.
+  if (!forceFormat || forceFormat === 'oeno-export') {
+    const lines = cleaned.split(/\r?\n/);
+    if (detectOenoExportBoundary(lines) !== -1) {
+      const parsed = parseOenoExport(text);
+      if (parsed) return parsed;
+    }
+  }
 
   const delimiter = detectDelimiter(cleaned);
   const rows = parseCSV(cleaned, delimiter);
@@ -561,13 +772,11 @@ export function parseAndMap(text, forceFormat) {
 
   const mapper = format === 'cellarion'
     ? mapCellarionRow
-    : format === 'oeno'
-      ? mapOenoRow
-      : format === 'vivino'
+    : format === 'vivino'
       ? mapVivinoRow
-      : format === 'cellartracker'
-        ? mapCellarTrackerRow
-        : mapGenericRow;
+    : format === 'cellartracker'
+      ? mapCellarTrackerRow
+      : mapGenericRow;
 
   // Map rows and expand quantity > 1 into individual items
   const items = [];
@@ -597,33 +806,27 @@ export function parseAndMap(text, forceFormat) {
  * lives here so the page component doesn't have to know about it.
  *
  * Currently:
- *   - oeno (Vintec/Transtherm-style): Open Shelf with the typical 6 front
- *     + 5 back layout, one bottle per cell, rows = max shelf observed.
- *     This matches Vintec V155/V190/V198 cabinets; users with non-standard
- *     models can adjust in the picker.
- *   - everything else: Grid with rows/cols sized to fit the data.
- *
- * To add a default for a new format, add a case here — the picker will
- * pick it up automatically.
+ *   - oeno-export: rack defaults come from the cabinet metadata inside the
+ *     CSV itself (cabinet brand/model → shelf layout). Per-rack overrides
+ *     are written directly during parsing, so this function returns a
+ *     conservative shelf fallback for any rack that slips through.
+ *   - everything else: Grid with rows/cols sized to fit the data. No
+ *     auto-inferred multi-bottle stacking; users opt in via the picker.
  */
 export function getDefaultRackConfig(format, info) {
-  if (format === 'oeno') {
-    const shelvesObserved = Math.max(info.maxPosition || 0, 1);
-    return {
-      type: 'shelf',
-      rows: Math.min(20, shelvesObserved),
-      cols: 6,
-      typeConfig: { bottlesPerCell: 1, backCols: 5 }
-    };
+  if (format === 'oeno-export' && info.oenoRackSpec) {
+    // Cabinet/column-specific spec set during oeno-export parsing.
+    return info.oenoRackSpec;
   }
   const required = Math.max(info.maxPosition || 0, info.count || 0);
   return { type: 'grid', ...suggestRackDimensions(required), typeConfig: {} };
 }
 
 /**
- * Format-specific default for the slot-1 anchor. Oeno labels shelf 1 at
- * the bottom of the cabinet; most other apps put slot 1 at the top.
+ * Format-specific default for the slot-1 anchor.
+ *   - oeno-export: shelf 1 is at the bottom of the cabinet (Oeno convention)
+ *   - everything else: top-left (most apps)
  */
 export function getDefaultAnchor(format) {
-  return format === 'oeno' ? 'bottom-left' : 'top-left';
+  return format === 'oeno-export' ? 'bottom-left' : 'top-left';
 }

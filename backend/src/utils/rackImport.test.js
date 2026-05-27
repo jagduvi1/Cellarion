@@ -433,6 +433,44 @@ describe('placeBottlesInRack (orchestration)', () => {
     expect(positions).toEqual([45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56]);
   });
 
+  test('Oeno-export bottle with explicit layer + slotInLayer (front cell)', () => {
+    // Walk-in Module 3 (18 shelves × 6 front + 5 back). Bottle on shelf 18,
+    // front layer, slot 5. With bottom-left anchor → effective shelf 1.
+    // First slot of shelf 1 = 1; front layer slot 5 = position 5.
+    const rack = {
+      type: 'shelf', rows: 18, cols: 6, typeConfig: { bottlesPerCell: 1, backCols: 5 },
+      slots: [], maxPosition: 198
+    };
+    const { placements } = placeBottlesInRack(rack, [
+      { item: { rackPosition: 18, layer: 1, slotInLayer: 5 }, bottleId: 'syrah', sourceIndex: 0 },
+    ], 'bottom-left');
+    expect(placements[0].position).toBe(5);
+  });
+
+  test('Oeno-export bottle with layer=2 (back) maps to slot cols + slotInLayer', () => {
+    // Shelf 18, layer 2 (back), slot 3 → back slots start at cols+1 (=7).
+    // With bottom-left: effective shelf 1, base slot 0, back slot 3 = position 9.
+    const rack = {
+      type: 'shelf', rows: 18, cols: 6, typeConfig: { bottlesPerCell: 1, backCols: 5 },
+      slots: [], maxPosition: 198
+    };
+    const { placements } = placeBottlesInRack(rack, [
+      { item: { rackPosition: 18, layer: 2, slotInLayer: 3 }, bottleId: 'b', sourceIndex: 0 },
+    ], 'bottom-left');
+    expect(placements[0].position).toBe(9); // 0 + 6 + 3
+  });
+
+  test('Oeno-export bottle: top-left anchor maps shelf 1 layer 1 slot 1 → position 1', () => {
+    const rack = {
+      type: 'shelf', rows: 18, cols: 6, typeConfig: { bottlesPerCell: 1, backCols: 5 },
+      slots: [], maxPosition: 198
+    };
+    const { placements } = placeBottlesInRack(rack, [
+      { item: { rackPosition: 1, layer: 1, slotInLayer: 1 }, bottleId: 'a', sourceIndex: 0 },
+    ], 'top-left');
+    expect(placements[0].position).toBe(1);
+  });
+
   test('Oeno shelf rack with bpc=2 (stacked): slot count = (cols+back)*bpc per shelf', () => {
     // Hypothetical cabinet: 18 shelves, 6 front + 5 back, but each cell
     // holds 2 bottles stacked. slotsPerShelf = (6+5)*2 = 22.

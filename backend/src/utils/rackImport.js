@@ -47,6 +47,7 @@ function computeRackPosition({
   position, row, col,
   rackRows, rackCols,
   rackType, bottlesPerCell, backCols,
+  layer, slotInLayer,
   anchor = DEFAULT_ANCHOR
 }) {
   if (!VALID_ANCHORS.includes(anchor)) {
@@ -60,11 +61,14 @@ function computeRackPosition({
   const isShelf = rackType === 'shelf';
 
   // Shelf racks: the source position is a SHELF NUMBER (row), matching how
-  // real-world cabinets (Vintec/Transtherm) label storage. "M3-11" means
-  // "Module 3, shelf 11" — the specific cell within that shelf isn't
-  // recorded by the source app. Output is the FIRST slot of the shelf;
-  // multiple bottles on the same shelf will fan out to adjacent cells via
+  // real-world cabinets (Vintec/Transtherm) label storage. Output is the
+  // FIRST slot of the shelf when only the shelf number is known; multiple
+  // bottles on the same shelf will fan out to adjacent cells via
   // placeBottles' forward-scan overflow (front cells first, then back).
+  //
+  // Oeno's real two-section export additionally provides `layer` (1=front,
+  // 2=back) and `slotInLayer`, which let us compute the EXACT Cellarion
+  // slot for each bottle.
   if (isShelf && position !== undefined && position !== null && position !== '') {
     const p = parseInt(position, 10);
     if (isNaN(p) || p < 1) return { error: 'Invalid shelf' };
@@ -82,7 +86,27 @@ function computeRackPosition({
       return { error: 'rackCols is required for shelf placement' };
     }
     const slotsPerShelf = (cols + back) * bpc;
-    return { position: (effectiveShelf - 1) * slotsPerShelf + 1 };
+    const shelfBase = (effectiveShelf - 1) * slotsPerShelf;
+
+    const layerNum = parseInt(layer, 10);
+    const slotNum = parseInt(slotInLayer, 10);
+    if (!isNaN(layerNum) && !isNaN(slotNum) && slotNum >= 1) {
+      if (layerNum === 1) {
+        if (slotNum > cols) {
+          return { error: `front slot ${slotNum} exceeds cols ${cols}` };
+        }
+        return { position: shelfBase + slotNum };
+      }
+      if (layerNum === 2) {
+        if (slotNum > back) {
+          return { error: `back slot ${slotNum} exceeds backCols ${back}` };
+        }
+        return { position: shelfBase + cols + slotNum };
+      }
+      return { error: `invalid layer ${layerNum} (expected 1 or 2)` };
+    }
+
+    return { position: shelfBase + 1 };
   }
 
   // Grid rack (or shelf with row+col input): source is a slot or (row, col).
@@ -258,6 +282,8 @@ function placeBottlesInRack(rack, items, anchor) {
       position: it.item.rackPosition,
       row: it.item.row,
       col: it.item.col,
+      layer: it.item.layer,
+      slotInLayer: it.item.slotInLayer,
       rackRows: rack.rows,
       rackCols: rack.cols,
       rackType: rack.type,
