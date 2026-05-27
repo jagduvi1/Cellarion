@@ -128,19 +128,11 @@ function Bottle({ position, wineType, slot, onBottleClick, highlighted, scale = 
 
   return (
     <group position={position} rotation={rotation} scale={scale}>
-      {/* Highlight glow ring behind the bottle */}
-      {highlighted && (
-        <mesh position={[0, -0.01, 0]}>
-          <torusGeometry args={[BOTTLE_RADIUS + 0.008, 0.006, 8, 24]} />
-          <meshStandardMaterial
-            color="#FFD700"
-            emissive="#FFD700"
-            emissiveIntensity={2}
-            transparent
-            opacity={0.9}
-          />
-        </mesh>
-      )}
+      {/* Highlight is conveyed by the bottle material itself (brighter
+          glass colour + emissive boost when highlighted) — see the
+          meshPhysicalMaterial below. No external ring/halo geometry, so
+          the highlighted bottle looks lit up instead of having a flat
+          torus sitting under its foot on the shelf. */}
       {/* Glass bottle */}
       <mesh
         geometry={bottleGeo}
@@ -188,14 +180,19 @@ function Bottle({ position, wineType, slot, onBottleClick, highlighted, scale = 
 }
 
 // ── Empty slot (ring + invisible click disc at cubby opening) ────────
-function EmptySlot({ position, slotPosition, onClick, isBack }) {
-  const zBase = RACK_DEPTH / 2 - 0.005 + (position[2] || 0);
+// Default (grid/hex/etc): position[2] is 0 and we offset to the cabinet
+// front face. For shelf racks, the caller passes an absolute z (the cubby
+// opening for that row) and useAbsoluteZ=true so we don't double-offset.
+function EmptySlot({ position, slotPosition, onClick, isBack, useAbsoluteZ = false }) {
+  const zBase = useAbsoluteZ
+    ? (position[2] || 0)
+    : RACK_DEPTH / 2 - 0.005 + (position[2] || 0);
   const ringR = isBack ? (BOTTLE_RADIUS - 0.005) * 0.7 : BOTTLE_RADIUS - 0.005;
   return (
     <group position={[position[0], position[1], zBase]}>
       <mesh>
         <torusGeometry args={[ringR, 0.003, 6, 16]} />
-        <meshStandardMaterial color="#9A8A70" transparent opacity={isBack ? 0.2 : 0.3} />
+        <meshStandardMaterial color="#9A8A70" transparent opacity={isBack ? 0.35 : 0.5} />
       </mesh>
       <mesh
         onClick={(e) => { e.stopPropagation(); onClick?.(slotPosition); }}
@@ -341,8 +338,12 @@ function computeShelfSlotPositions(rows, cols, backCols, width, height) {
   // Empty-slot ring positions: place them at the cubby openings so users
   // see where to drop a bottle. For neck-to-neck shelves the openings are
   // at the FRONT face for front-row slots and the BACK face for back-row.
-  const frontEmptyZ = hasBack ? 0.18 : 0;
-  const backEmptyZ  = hasBack ? -0.30 : -0.18;
+  // These are absolute z within the rack, used with EmptySlot's
+  // `useAbsoluteZ` so they sit exactly at the cubby openings instead of
+  // being offset further by RACK_DEPTH/2.
+  const rackHalfDepth = hasBack ? (RACK_DEPTH * 1.7) / 2 : RACK_DEPTH / 2;
+  const frontEmptyZ = rackHalfDepth - 0.005;
+  const backEmptyZ  = -rackHalfDepth + 0.005;
   let pos = 1;
   for (let r = 0; r < rows; r++) {
     const y = height / 2 - cH / 2 - r * cH;
@@ -391,8 +392,12 @@ function computeStackSlotPositions(rows, height) {
   return positions;
 }
 
-// Distance a pulled-out shelf row travels in +Z (toward the viewer).
-const PULL_OUT_DISTANCE = 0.20;
+// Fraction of the rack's depth a pulled-out shelf row travels in +Z
+// (toward the viewer). At 0.85 the shelf telescopes out almost completely
+// — for a shelf with a back row, this brings the back-row cubby openings
+// past the cabinet's front face so the back rings are clickable instead
+// of buried under the shelf above.
+const PULL_OUT_FRACTION = 0.85;
 
 /**
  * One shelf row's worth of geometry that can slide forward when "pulled".
@@ -419,7 +424,7 @@ function PullOutShelfRow({
   highlightBottleId,
 }) {
   const groupRef = useRef();
-  const targetZ = isPulled ? PULL_OUT_DISTANCE : 0;
+  const targetZ = isPulled ? depth * PULL_OUT_FRACTION : 0;
   useFrame((_, delta) => {
     if (!groupRef.current) return;
     const current = groupRef.current.position.z;
@@ -449,40 +454,61 @@ function PullOutShelfRow({
         </mesh>
       )}
 
-      {/* Bottles + empty rings for this row */}
+      {/* Bottles for this row. Empty-slot rings are hidden by default to
+          keep the closed-rack view clean; they only appear once the user
+          has pulled the shelf out, so the click targets are then in clear
+          space in front of the cabinet rather than buried inside it. */}
       {rowSlots.map(({ position: pos, x, y, z = 0, bottleZ, isBack, flipNeck }) => {
         const slot = slotMap[pos];
         const filled = !!slot;
         const wineType = slot?.bottle?.wineDefinition?.type || 'red';
         const finalBottleZ = bottleZ !== undefined ? bottleZ : (-0.08 + z);
-        return filled ? (
-          <Bottle
+        if (filled) {
+          return (
+            <Bottle
+              key={pos}
+              position={[x, y, finalBottleZ]}
+              wineType={wineType}
+              slot={slot}
+              onBottleClick={onBottleClick}
+              highlighted={highlightBottleId && (slot.bottle?._id || slot.bottle) === highlightBottleId}
+              flipNeck={!!flipNeck}
+            />
+          );
+        }
+        if (!isPulled) return null;
+        return (
+          <EmptySlot
             key={pos}
-            position={[x, y, finalBottleZ]}
-            wineType={wineType}
-            slot={slot}
-            onBottleClick={onBottleClick}
-            highlighted={highlightBottleId && (slot.bottle?._id || slot.bottle) === highlightBottleId}
-            flipNeck={!!flipNeck}
+            position={[x, y, z]}
+            slotPosition={pos}
+            onClick={onEmptySlotClick}
+            isBack={isBack}
+            useAbsoluteZ
           />
-        ) : (
-          <EmptySlot key={pos} position={[x, y, z]} slotPosition={pos} onClick={onEmptySlotClick} isBack={isBack} />
         );
       })}
 
-      {/* Pull handle — visible wooden bar at the front of the shelf */}
-      <mesh
-        position={[0, handleY, handleZ]}
-        onClick={(e) => {
-          e.stopPropagation();
-          onTogglePull();
-        }}
-        onPointerOver={(e) => { e.stopPropagation(); document.body.style.cursor = 'pointer'; }}
-        onPointerOut={() => { document.body.style.cursor = ''; }}
-      >
-        <boxGeometry args={[innerW * 0.5, 0.012, 0.018]} />
-        <meshStandardMaterial color={frameColor} roughness={0.5} metalness={0.15} />
-      </mesh>
+      {/* Pull handle — wooden bar at the front of the shelf. The visible
+          mesh is small (Vintec-style); a separate invisible hitbox makes
+          it easy to click without hunting for a millimetre-thin target. */}
+      <group position={[0, handleY, handleZ]}>
+        <mesh
+          onClick={(e) => { e.stopPropagation(); onTogglePull(); }}
+          onPointerOver={(e) => { e.stopPropagation(); document.body.style.cursor = 'pointer'; }}
+          onPointerOut={() => { document.body.style.cursor = ''; }}
+        >
+          {/* Invisible larger hitbox: wider, taller, and deeper than the
+              visible bar so the cursor can reasonably land on it. */}
+          <boxGeometry args={[innerW * 0.65, 0.04, 0.05]} />
+          <meshBasicMaterial transparent opacity={0} />
+        </mesh>
+        <mesh>
+          {/* Visible handle — slightly larger than before for visibility. */}
+          <boxGeometry args={[innerW * 0.55, 0.018, 0.022]} />
+          <meshStandardMaterial color={frameColor} roughness={0.5} metalness={0.15} />
+        </mesh>
+      </group>
     </group>
   );
 }
@@ -868,7 +894,18 @@ export default function RackMesh({
               flipNeck={!!flipNeck}
             />
           ) : (
-            <EmptySlot key={pos} position={[x, y, z]} slotPosition={pos} onClick={onEmptySlotClick} isBack={isBack} />
+            <EmptySlot
+              key={pos}
+              position={[x, y, z]}
+              slotPosition={pos}
+              onClick={onEmptySlotClick}
+              isBack={isBack}
+              // Shelf positions encode an absolute z (cubby opening for
+              // their row); other types use z=0 and need the front-face
+              // offset. Skip the offset for shelf so rings don't end up
+              // floating outside the cabinet in the room view.
+              useAbsoluteZ={rackType === 'shelf'}
+            />
           );
         })
       )}
