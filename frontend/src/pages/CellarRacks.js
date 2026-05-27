@@ -455,6 +455,19 @@ function CellarRacks() {
 function NewRackForm({ newRack, setNewRack, onTypeChange, onSubmit, saving }) {
   const { t } = useTranslation();
   const dims = TYPE_DIMENSIONS[newRack.type] || TYPE_DIMENSIONS.grid;
+  const [showPreview, setShowPreview] = useState(false);
+
+  // Synthetic rack for the preview renderer — empty slots, just the geometry.
+  const previewRack = {
+    _id: 'preview',
+    name: newRack.name || t('racks.namePlaceholder', 'Preview'),
+    type: newRack.type,
+    rows: newRack.rows,
+    cols: newRack.cols,
+    typeConfig: newRack.typeConfig,
+    slots: [],
+    isModular: false,
+  };
 
   return (
     <form className="card new-rack-form" onSubmit={onSubmit}>
@@ -572,6 +585,13 @@ function NewRackForm({ newRack, setNewRack, onTypeChange, onSubmit, saving }) {
           </div>
         )}
 
+        <button
+          type="button"
+          className={`btn btn-secondary new-rack-preview-toggle ${showPreview ? 'active' : ''}`}
+          onClick={() => setShowPreview(p => !p)}
+        >
+          {showPreview ? t('racks.hidePreview', 'Hide preview') : t('racks.preview', 'Preview')}
+        </button>
         <button type="submit" className="btn btn-primary" disabled={saving}>
           {saving ? t('racks.creating') : t('racks.createRack')}
         </button>
@@ -580,6 +600,21 @@ function NewRackForm({ newRack, setNewRack, onTypeChange, onSubmit, saving }) {
       <div className="new-rack-preview-hint">
         {t('racks.totalSlots')}: {getTotalSlots(newRack.type, newRack.rows, newRack.cols, newRack.typeConfig)}
       </div>
+
+      {showPreview && (
+        <div className="new-rack-preview-panel">
+          <div className="new-rack-preview-label">
+            {t('racks.previewLabel', 'Preview — this is how the rack will look once created')}
+          </div>
+          <div className="new-rack-preview-canvas">
+            <RackRenderer
+              rack={previewRack}
+              canEdit={false}
+              onSlotClick={() => {}}
+            />
+          </div>
+        </div>
+      )}
     </form>
   );
 }
