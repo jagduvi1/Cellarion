@@ -69,30 +69,31 @@ router.get('/', async (req, res) => {
       return res.json({ bottles: { count: 0, total: 0, limit, skip, items: [] } });
     }
 
-    const {
-      search,
-      type,
-      country,
-      region,
-      grapes,
-      vintage,
-      producer,
-      bottleSize,
-      minRating,
-      maturity: maturityFilter,
-      sort = '-createdAt',
-      // Lifecycle filters — default is active-only, matching the
-      // Statistics page's `byType` / `byCountry` / etc. aggregates.
-      // Set status to 'drank'|'gifted'|'sold'|'other' to view a
-      // consumed bucket, or 'all' to include everything.
-      status: statusFilter,
-      // Purchase / consumption year filters (numeric year). Apply to
-      // bottle.purchaseDate.getFullYear() and bottle.consumedAt.getFullYear()
-      // respectively — used by the Purchase History and Consumption
-      // History charts on Statistics.
-      purchaseYear,
-      consumedYear,
-    } = req.query;
+    // Defensive scalar coercion: Express's qs query parser turns inputs
+    // like `?bottleSize[$ne]=1` into `{ bottleSize: { $ne: '1' } }`,
+    // which would bypass per-field guards and leak Mongo operators into
+    // the filter we build below. Reject anything that isn't a plain
+    // string so every value below is guaranteed to be primitive.
+    const q = (v) => (typeof v === 'string' ? v : undefined);
+    const search           = q(req.query.search);
+    const type             = q(req.query.type);
+    const country          = q(req.query.country);
+    const region           = q(req.query.region);
+    const grapes           = q(req.query.grapes);
+    const vintage          = q(req.query.vintage);
+    const producer         = q(req.query.producer);
+    const bottleSize       = q(req.query.bottleSize);
+    const minRating        = q(req.query.minRating);
+    const maturityFilter   = q(req.query.maturity);
+    const sort             = q(req.query.sort) || '-createdAt';
+    // Lifecycle filters — default is active-only, matching the
+    // Statistics page's by-type / by-country / etc. aggregates.
+    const statusFilter     = q(req.query.status);
+    // Purchase / consumption year filters apply to bottle.purchaseDate
+    // and bottle.consumedAt respectively — driven by the Statistics
+    // page's Purchase History and Consumption History charts.
+    const purchaseYear     = q(req.query.purchaseYear);
+    const consumedYear     = q(req.query.consumedYear);
 
     const sortField = sort.startsWith('-') ? sort.substring(1) : sort;
     const sortDir = sort.startsWith('-') ? -1 : 1;
