@@ -9,6 +9,21 @@ function fmt(n) {
   return Number(n).toLocaleString();
 }
 
+// Raw integer formatting for fields where a thousands separator is wrong —
+// vintage years (1973 not "1,973") and decade labels (2020 not "2,020").
+function fmtYear(n) {
+  if (n == null) return '—';
+  return String(n);
+}
+
+// Display percentage that shows "<1%" when the value rounds to zero but
+// isn't actually zero — avoids "6 (0%)" rows that look like a bug.
+function fmtPct(value) {
+  if (value == null || value === 0) return '0%';
+  if (value < 1) return '<1%';
+  return `${Math.round(value)}%`;
+}
+
 function StatCard({ label, value, sublabel, accent, tooltip }) {
   return (
     <div
@@ -79,7 +94,7 @@ function HorizontalBar({ label, count, total, color }) {
       <div className="admin-stats-hbar-track">
         <div className="admin-stats-hbar-fill" style={{ width: `${p}%`, background: color }} />
       </div>
-      <div className="admin-stats-hbar-count">{fmt(count)} <span className="admin-stats-hbar-pct">({Math.round(p)}%)</span></div>
+      <div className="admin-stats-hbar-count">{fmt(count)} <span className="admin-stats-hbar-pct">({fmtPct(p)})</span></div>
     </div>
   );
 }
@@ -297,7 +312,7 @@ function AdminStats() {
           {ratings.distribution && ratings.distribution.length > 0 && (
             <div className="admin-stats-panel">
               <h3>{t('adminStats.ratingDistribution')}</h3>
-              {ratings.distribution.map((r, i) => (
+              {ratings.distribution.filter(r => r.count > 0).map((r, i) => (
                 <HorizontalBar key={`${r.band}-${i}`} label={r.band} count={r.count} total={ratings.ratedCount} color="var(--accent)" />
               ))}
             </div>
@@ -333,8 +348,8 @@ function AdminStats() {
         <h2>{t('adminStats.section.vintage')}</h2>
         <div className="admin-stats-cards">
           <StatCard label={t('adminStats.avgVintageAge')}  value={vintage.avgAge != null ? `${vintage.avgAge} ${t('adminStats.years')}` : '—'} />
-          <StatCard label={t('adminStats.oldestVintage')}  value={fmt(vintage.oldest)} />
-          <StatCard label={t('adminStats.newestVintage')}  value={fmt(vintage.newest)} />
+          <StatCard label={t('adminStats.oldestVintage')}  value={fmtYear(vintage.oldest)} />
+          <StatCard label={t('adminStats.newestVintage')}  value={fmtYear(vintage.newest)} />
           <StatCard label={t('adminStats.withVintage')}    value={fmt(vintage.withVintageCount)} sublabel={t('adminStats.bottlesUnit')} />
         </div>
         {vintage.byDecade && vintage.byDecade.length > 0 && (
@@ -344,7 +359,7 @@ function AdminStats() {
               <tbody>
                 {vintage.byDecade.map(d => (
                   <tr key={d.decade}>
-                    <td className="admin-stats-name">{d.decade}s</td>
+                    <td className="admin-stats-name">{fmtYear(d.decade)}s</td>
                     <td className="admin-stats-count">{fmt(d.count)}</td>
                   </tr>
                 ))}
@@ -496,11 +511,11 @@ function AdminStats() {
               <p className="admin-stats-sub">{t('adminStats.holdingTimeNote')}</p>
               <table className="admin-stats-table">
                 <tbody>
-                  {holdingTime.map((h, i) => (
+                  {holdingTime.filter(h => h.count > 0).map((h, i) => (
                     <tr key={`${h.bucket}-${i}`}>
                       <td className="admin-stats-name">{h.bucket}</td>
                       <td className="admin-stats-count">{fmt(h.count)}</td>
-                      <td className="admin-stats-pct">{h.pct}%</td>
+                      <td className="admin-stats-pct">{fmtPct(h.pct)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -514,9 +529,11 @@ function AdminStats() {
               <p className="admin-stats-sub">{t('adminStats.cellarSizeNote')}</p>
               <table className="admin-stats-table">
                 <tbody>
-                  {cellarSizeDistribution.map((c, i) => (
+                  {cellarSizeDistribution.filter(c => c.cellars > 0).map((c, i) => (
                     <tr key={`${c.bucket}-${i}`}>
-                      <td className="admin-stats-name">{c.bucket} {t('adminStats.bottlesUnit')}</td>
+                      <td className="admin-stats-name">
+                        {c.bucket === 'other' ? t('adminStats.cellarSizeOther') : `${c.bucket} ${t('adminStats.bottlesUnit')}`}
+                      </td>
                       <td className="admin-stats-count">{fmt(c.cellars)} {t('adminStats.cellarsUnit')}</td>
                     </tr>
                   ))}

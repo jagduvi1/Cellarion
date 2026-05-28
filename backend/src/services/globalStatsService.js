@@ -260,11 +260,38 @@ async function _computeGlobalStatsUncached({ excludeAdmins = false } = {}) {
   });
 
   // ── Bottle-size distribution ────────────────────────────────────────────
+  // Bottle-size rollup — collapses minor variants of the same physical
+  // size. Users have entered "750ml", "750ml (Standard)", and the CJK
+  // fullwidth-paren "750ml（標準）" as three different strings; this
+  // groups them into one entry. Pattern:
+  //   1. Replace fullwidth '（' with ASCII '(' so the split below catches both
+  //   2. Split on '(' and take the first piece (drops any "(...)" suffix)
+  //   3. Trim + lowercase to canonicalise
+  //   4. Keep the most popular original spelling as the display name via $first
   const byBottleSize = await safeAggregate(Bottle, [
     { $match: { ...bottleMatch, status: 'active' } },
-    { $group: { _id: '$bottleSize', count: { $sum: 1 } } },
+    { $addFields: {
+      sizeKey: {
+        $toLower: {
+          $trim: {
+            input: {
+              $arrayElemAt: [
+                { $split: [
+                  { $replaceAll: { input: { $ifNull: ['$bottleSize', ''] }, find: '（', replacement: '(' } },
+                  '(',
+                ]},
+                0,
+              ],
+            },
+          },
+        },
+      },
+    }},
+    { $sort: { bottleSize: 1 } },  // deterministic $first pick for tie-breaks
+    { $group: { _id: '$sizeKey', size: { $first: '$bottleSize' }, count: { $sum: 1 } } },
+    { $match: { _id: { $ne: '' } } },
     { $sort: { count: -1 } },
-    { $project: { _id: 0, size: '$_id', count: 1 } },
+    { $project: { _id: 0, size: 1, count: 1 } },
   ]);
 
   // ── Cellar-size distribution ────────────────────────────────────────────

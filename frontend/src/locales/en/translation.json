@@ -2079,6 +2079,7 @@
     "holdingTimeNote": "Time from purchase date to consumption date.",
     "cellarSize": "Cellar size distribution",
     "cellarSizeNote": "Number of cellars by bottle count.",
+    "cellarSizeOther": "uncategorised",
     "bottleSize": "Bottle size"
   },
   "wineLists": {
