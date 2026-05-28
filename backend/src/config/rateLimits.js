@@ -26,6 +26,12 @@ const defaults = {
   // Cap concurrent SSE streams per user. Same protection lens as chatBurst:
   // no human reads two AI streams at once; cap is for script abuse.
   chatConcurrentStreams: { max: 2 },
+  // Per-user burst limit on Anthropic-backed wine endpoints (/wines/scan-label,
+  // /identify-text, /ai-info). Protects Anthropic budget from a scripted loop
+  // by any logged-in user. These share one bucket because they share one
+  // budget. Vision (scan-label) is the costliest, so 10/min is generous for
+  // a human walking through a cellar but still catches scripts.
+  aiBurst: { max: 10, windowMs: 60 * 1000 },
 };
 
 let cache = {
@@ -35,6 +41,7 @@ let cache = {
   accountLockout: { ...defaults.accountLockout },
   chatBurst: { ...defaults.chatBurst },
   chatConcurrentStreams: { ...defaults.chatConcurrentStreams },
+  aiBurst: { ...defaults.aiBurst },
 };
 
 async function load() {
@@ -59,6 +66,10 @@ async function load() {
         },
         chatConcurrentStreams: {
           max: doc.value.chatConcurrentStreams?.max ?? defaults.chatConcurrentStreams.max,
+        },
+        aiBurst: {
+          max:      doc.value.aiBurst?.max      ?? defaults.aiBurst.max,
+          windowMs: doc.value.aiBurst?.windowMs ?? defaults.aiBurst.windowMs,
         },
       };
     }
