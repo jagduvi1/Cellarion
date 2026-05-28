@@ -252,15 +252,10 @@ router.post('/stream', requireAuth, chatBurstLimiter, async (req, res) => {
   // loop runs away with a stuck client. Cleared on normal completion, on
   // client disconnect, and on any error path via the finally below.
   //
-  // Inline clamp: the value flows from rateLimitsConfig which is settable
-  // by admins through the rate-limits admin UI (so CodeQL sees a req.body →
-  // setTimeout taint path — js/resource-exhaustion). The clamp keeps the
-  // effective timeout in [5s, 5min] regardless of what the config says,
-  // so a misconfigured or hostile admin can't disable the safeguard.
-  const SSE_MIN_MS = 5_000;
-  const SSE_MAX_MS = 5 * 60 * 1000;
-  const cfgMs = Number(rateLimitsConfig.get().chatStreamMaxMs);
-  const maxMs = Math.max(SSE_MIN_MS, Math.min(isFinite(cfgMs) ? cfgMs : 90_000, SSE_MAX_MS));
+  // Hardcoded 90s — not admin-tunable. This is a system safety bound on
+  // Anthropic spend, not a tuning knob; making it editable would create a
+  // req.body → setTimeout taint path (CodeQL js/resource-exhaustion).
+  const SSE_MAX_MS = 90_000;
   let timeoutFired = false;
   const sseTimer = setTimeout(() => {
     timeoutFired = true;
@@ -268,8 +263,8 @@ router.post('/stream', requireAuth, chatBurstLimiter, async (req, res) => {
       try { res.write(`event: error\ndata: ${JSON.stringify({ error: 'Stream timed out' })}\n\n`); } catch (_) {}
       try { res.end(); } catch (_) {}
     }
-    logAudit(req, 'chat.stream.timeout', { type: 'chat' }, { userId: req.user.id, ms: maxMs });
-  }, maxMs);
+    logAudit(req, 'chat.stream.timeout', { type: 'chat' }, { userId: req.user.id, ms: SSE_MAX_MS });
+  }, SSE_MAX_MS);
 
   try {
     const validated = await validateAndCheckLimit(req, res);

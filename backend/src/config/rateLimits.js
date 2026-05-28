@@ -26,9 +26,6 @@ const defaults = {
   // Cap concurrent SSE streams per user. Same protection lens as chatBurst:
   // no human reads two AI streams at once; cap is for script abuse.
   chatConcurrentStreams: { max: 2 },
-  // Server-side ceiling on a single chat/stream lifetime. Bounds worst-case
-  // Anthropic spend if a tool-use loop runs away with a stuck client.
-  chatStreamMaxMs: 90 * 1000,
 };
 
 let cache = {
@@ -38,7 +35,6 @@ let cache = {
   accountLockout: { ...defaults.accountLockout },
   chatBurst: { ...defaults.chatBurst },
   chatConcurrentStreams: { ...defaults.chatConcurrentStreams },
-  chatStreamMaxMs: defaults.chatStreamMaxMs,
 };
 
 async function load() {
@@ -64,7 +60,6 @@ async function load() {
         chatConcurrentStreams: {
           max: doc.value.chatConcurrentStreams?.max ?? defaults.chatConcurrentStreams.max,
         },
-        chatStreamMaxMs: doc.value.chatStreamMaxMs ?? defaults.chatStreamMaxMs,
       };
     }
   } catch (err) {
