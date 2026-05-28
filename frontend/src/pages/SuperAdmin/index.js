@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
+import { adminGetSecuritySummary } from '../../api/admin';
 import useVersion from '../../hooks/useVersion';
 import TabOverview from './TabOverview';
 import TabServices from './TabServices';
@@ -26,14 +27,25 @@ const TABS = [
 ];
 
 export default function SuperAdmin() {
-  const { user, logout } = useAuth();
+  const { user, logout, apiFetch } = useAuth();
   const navigate = useNavigate();
   const appVersion = useVersion();
   const [tab, setTab] = useState('overview');
   const [autoRefresh, setAutoRefresh] = useState(false);
   const [lastRefresh, setLastRefresh] = useState(new Date());
   const [refreshKey, setRefreshKey] = useState(0);
+  const [securityCount, setSecurityCount] = useState(null);
   const timerRef = useRef(null);
+
+  // Pull the 24h security event count for the Audit Log tab badge.
+  // Refreshes alongside other admin data via refreshKey.
+  useEffect(() => {
+    if (!user?.isSuperAdmin) return;
+    adminGetSecuritySummary(apiFetch)
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d) setSecurityCount(d.count24h ?? 0); })
+      .catch(() => {/* silent — badge just won't appear */});
+  }, [user, apiFetch, refreshKey]);
 
   // Guard: if not super admin, redirect
   useEffect(() => {
@@ -109,6 +121,24 @@ export default function SuperAdmin() {
             onClick={() => setTab(t.id)}
           >
             {t.label}
+            {t.id === 'audit' && securityCount > 0 && (
+              <span
+                title={`${securityCount} security events in the last 24h`}
+                style={{
+                  marginLeft: 6,
+                  background: 'var(--sa-danger, #c0392b)',
+                  color: '#fff',
+                  borderRadius: 10,
+                  padding: '1px 7px',
+                  fontSize: 10,
+                  fontWeight: 600,
+                  lineHeight: '14px',
+                  verticalAlign: 'middle',
+                }}
+              >
+                {securityCount > 99 ? '99+' : securityCount}
+              </span>
+            )}
           </button>
         ))}
       </div>

@@ -458,4 +458,61 @@ async function sendAccountLockoutAlert(toEmail, username) {
   });
 }
 
-module.exports = { sendVerificationEmail, sendPasswordResetEmail, sendDrinkWindowDigest, sendRecommendationEmail, sendCellarInviteEmail, sendDiscussionReplyEmail, sendAccountLockoutAlert, EMAIL_VERIFICATION_ENABLED };
+/**
+ * Notify the site admin that a security threshold was crossed. The audit log
+ * already captures every event; this is the spike-only ping.
+ */
+async function sendSecurityAlertEmail(toEmail, trigger) {
+  if (!EMAIL_VERIFICATION_ENABLED) return;
+
+  const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+  const auditUrl = `${frontendUrl}/super-admin`;
+  const windowMin = Math.round((trigger.windowMs || 0) / 60000);
+
+  let subject, summary;
+  if (trigger.kind === 'lockout_spike') {
+    subject = `Cellarion security: ${trigger.count} account lockouts in ${windowMin} min`;
+    summary = `${trigger.count} account-lockout events fired in the last ${windowMin} minutes (threshold: ${trigger.threshold}). This may indicate a credential-stuffing campaign targeting multiple accounts.`;
+  } else if (trigger.kind === 'user_rate_limit_spike') {
+    subject = `Cellarion security: user ${trigger.userId} hitting rate limits`;
+    summary = `One user (id ${trigger.userId}) triggered ${trigger.count} rate-limit events in the last ${windowMin} minutes (threshold: ${trigger.threshold}). Worth a look in the audit log to decide if this is a stuck client or active abuse.`;
+  } else {
+    subject = `Cellarion security: ${trigger.kind}`;
+    summary = JSON.stringify(trigger);
+  }
+
+  await mg.messages.create(DOMAIN, {
+    from: FROM,
+    to: [toEmail],
+    subject,
+    text: [
+      subject,
+      '',
+      summary,
+      '',
+      `Audit log: ${auditUrl} (Audit Log tab)`,
+      '',
+      'Sent once per spike type per 4 hours. You will not get a stream of these.',
+    ].join('\n'),
+    html: `
+      <div style="font-family:sans-serif;max-width:520px;margin:0 auto;color:#2a2a2a;">
+        <p><strong>${escapeHtml(subject)}</strong></p>
+        <p>${escapeHtml(summary)}</p>
+        <p style="margin:2rem 0;">
+          <a href="${auditUrl}"
+             style="background:#7B9E88;color:#0d0d0d;padding:12px 28px;
+                    border-radius:4px;text-decoration:none;font-weight:600;
+                    display:inline-block;">
+            Open audit log
+          </a>
+        </p>
+        <hr style="border:none;border-top:1px solid #ddd;margin:2rem 0;" />
+        <p style="color:#9A9484;font-size:0.85em;">
+          Sent once per spike type per 4 hours. You will not get a stream of these.
+        </p>
+      </div>
+    `,
+  });
+}
+
+module.exports = { sendVerificationEmail, sendPasswordResetEmail, sendDrinkWindowDigest, sendRecommendationEmail, sendCellarInviteEmail, sendDiscussionReplyEmail, sendAccountLockoutAlert, sendSecurityAlertEmail, EMAIL_VERIFICATION_ENABLED };
