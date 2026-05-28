@@ -555,6 +555,15 @@ router.post('/:id/merge', async (req, res) => {
     if (!source) return res.status(404).json({ error: 'Source wine not found' });
     if (!target) return res.status(404).json({ error: 'Target wine not found' });
 
+    // Capture the source's primary BottleImage (the one whose URL backs
+    // WineDefinition.image) BEFORE the bulk reassign below. After reassign
+    // it'll point to target, so we need its _id now to decide what to do
+    // with the assignedToWine flag.
+    const sourcePrimaryImage = await BottleImage.findOne({
+      wineDefinition: sourceId,
+      assignedToWine: true,
+    }).select('_id processedUrl originalUrl');
+
     // Reassign all references from source to target
 
     const results = await Promise.all([
@@ -602,6 +611,34 @@ router.post('/:id/merge', async (req, res) => {
 
     const bottlesMoved = results[0].modifiedCount || 0;
 
+    // Image consolidation. Contract elsewhere in the codebase (admin/images.js
+    // approval flow) is: a wine has at most one BottleImage with
+    // assignedToWine: true, and its URL is denormalised into WineDefinition.image.
+    // After the bulk reassign above, two things can be broken:
+    //   1. Target had no image but source did → target.image still null even
+    //      though the source's primary BottleImage is now sitting on target.
+    //   2. Target had its own image AND source had a primary image → two
+    //      BottleImages now point to target with assignedToWine: true.
+    let imageAction = 'none';
+    if (sourcePrimaryImage) {
+      if (!target.image) {
+        // Case 1: adopt the source's primary image as target's
+        const sourceUrl = sourcePrimaryImage.processedUrl || sourcePrimaryImage.originalUrl;
+        await WineDefinition.findByIdAndUpdate(targetId, {
+          image: sourceUrl,
+          imageCredit: source.imageCredit || null,
+        });
+        imageAction = 'adopted_from_source';
+      } else {
+        // Case 2: target keeps its own image; clear the source's
+        // assigned-to-wine flag so we don't have two primaries
+        await BottleImage.findByIdAndUpdate(sourcePrimaryImage._id, {
+          assignedToWine: false,
+        });
+        imageAction = 'cleared_source_assignment';
+      }
+    }
+
     logAudit(req, 'admin.wine.merge',
       { type: 'wine', id: source._id },
       {
@@ -611,15 +648,19 @@ router.post('/:id/merge', async (req, res) => {
         targetName: target.name,
         targetProducer: target.producer,
         bottlesMoved,
+        imageAction,
       }
     );
 
     await source.deleteOne();
     searchService.removeWine(sourceId);
+    // Target was mutated if we adopted the image; re-index so search sees it
+    if (imageAction === 'adopted_from_source') searchService.indexWine(targetId);
 
     res.json({
       message: 'Wines merged successfully',
       bottlesMoved,
+      imageAction,
     });
   } catch (error) {
     console.error('Merge wine error:', error);
