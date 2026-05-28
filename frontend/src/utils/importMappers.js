@@ -34,8 +34,86 @@
  */
 
 /**
+ * Robust locale-aware number parser. Handles:
+ *   "1234.56"   → 1234.56   (US plain)
+ *   "1234,56"   → 1234.56   (EU plain)
+ *   "1,234.56"  → 1234.56   (US with thousands separator)
+ *   "1.234,56"  → 1234.56   (EU with thousands separator)
+ *   "1 234,56"  → 1234.56   (Swedish with space)
+ *   "$25.00"    → 25        (currency symbol stripped)
+ *   "€25,00"    → 25
+ *   "25 kr"    → 25         (trailing currency word stripped)
+ *   "0,75"      → 0.75      (EU bottle-size decimal)
+ *   "260,00"    → 260       (EU price)
+ *
+ * Ambiguous edge case: a single comma followed by exactly 3 digits
+ * ("1,234") is treated as a US thousands separator → 1234. A real EU
+ * decimal almost never has 3 fractional digits in wine pricing, and
+ * Vivino/CellarTracker CSV exports use this format heavily.
+ *
+ * Returns NaN for empty / unparseable input — drop-in safe replacement
+ * for parseFloat on any caller that already handles NaN.
+ */
+export function parseLocaleNumber(input) {
+  if (input == null) return NaN;
+  let s = String(input).trim();
+  if (!s) return NaN;
+
+  // Strip currency symbols and surrounding whitespace
+  s = s.replace(/[$€£¥¢฿₹₽₺]/g, '');
+  // Strip trailing currency words (kr, USD, EUR, etc.) and leading sign words
+  s = s.replace(/^[+-]?\s*/, m => m.replace(/\s+/g, ''));
+  s = s.replace(/\s*[a-zA-Z]+\s*$/, '');
+  // Collapse internal whitespace (common in Swedish thousands: "1 234,56")
+  s = s.replace(/\s+/g, '');
+  if (!s || s === '-' || s === '+') return NaN;
+
+  const hasComma  = s.includes(',');
+  const hasPeriod = s.includes('.');
+
+  if (hasComma && hasPeriod) {
+    // Both separators present — the LAST one is the decimal.
+    if (s.lastIndexOf(',') > s.lastIndexOf('.')) {
+      // EU: "1.234.567,89" → strip periods, swap comma
+      s = s.replace(/\./g, '').replace(',', '.');
+    } else {
+      // US: "1,234,567.89" → strip commas
+      s = s.replace(/,/g, '');
+    }
+  } else if (hasComma) {
+    const parts = s.split(',');
+    if (parts.length > 2) {
+      // Multiple commas = thousands separators (US: "1,234,567")
+      s = s.replace(/,/g, '');
+    } else if (parts[1].length === 3 && parts[0].length >= 1 && parts[0] !== '0') {
+      // "1,234" or "12,345" — exactly 3 digits after comma AND integer part
+      // > 0 → US thousands. Wine prices in EU rarely have 3 decimal places,
+      // and Vivino/CT exports use this format extensively for unquoted
+      // numbers. "0,375" with leading zero is treated as EU decimal because
+      // it's almost certainly a bottle size in litres (375ml).
+      s = s.replace(/,/g, '');
+    } else {
+      // 1 or 2 digits after, or ≥4 digits → EU decimal
+      s = s.replace(',', '.');
+    }
+  } else if (hasPeriod) {
+    const parts = s.split('.');
+    if (parts.length > 2) {
+      // Multiple periods = EU thousands ("1.234.567"). Drop them all.
+      s = s.replace(/\./g, '');
+    }
+    // Single period = US decimal — parseFloat handles it.
+  }
+
+  const n = parseFloat(s);
+  return isNaN(n) ? NaN : n;
+}
+
+/**
  * Parse CSV text into an array of row objects.
  * Handles quoted fields, embedded commas, and newlines within quotes.
+ * Production callers should pre-detect the delimiter via detectDelimiter()
+ * before calling this (see parseAndMap below).
  */
 export function parseCSV(text, delimiter = ',') {
   const lines = [];
@@ -265,8 +343,8 @@ function mapVivinoRow(row) {
     return '';
   };
 
-  const rating = parseFloat(get(['Rating', 'My Rating', 'rating']));
-  const price = parseFloat(get(['Price', 'price', 'Purchase Price']));
+  const rating = parseLocaleNumber(get(['Rating', 'My Rating', 'rating']));
+  const price = parseLocaleNumber(get(['Price', 'price', 'Purchase Price']));
   const qty = parseInt(get(['Quantity', 'quantity', 'Qty', 'Count']), 10);
 
   return {
@@ -323,9 +401,9 @@ function mapCellarTrackerRow(row) {
     }
   }
 
-  const price = parseFloat(get(['Price', 'price', 'Cost']));
+  const price = parseLocaleNumber(get(['Price', 'price', 'Cost']));
   const qty = parseInt(get(['Quantity', 'quantity', 'Qty', 'Count']), 10);
-  const ctRating = parseFloat(get(['MyCTRating', 'CT Rating', 'My Rating', 'Rating']));
+  const ctRating = parseLocaleNumber(get(['MyCTRating', 'CT Rating', 'My Rating', 'Rating']));
 
   return {
     wineName: get(['Wine', 'wine', 'WineName']),
@@ -366,8 +444,8 @@ function mapGenericRow(row) {
     return '';
   };
 
-  const price = parseFloat(get(['Price', 'price', 'Cost', 'cost']));
-  const rating = parseFloat(get(['Rating', 'rating', 'Score', 'score']));
+  const price = parseLocaleNumber(get(['Price', 'price', 'Cost', 'cost']));
+  const rating = parseLocaleNumber(get(['Rating', 'rating', 'Score', 'score']));
   const qty = parseInt(get(['Quantity', 'quantity', 'Qty', 'qty', 'Count', 'count']), 10);
 
   // Combined rack+position columns like Oeno's "Rack_Location" = "M2-11"
@@ -410,7 +488,7 @@ function mapGenericRow(row) {
  */
 function mapCellarionRow(row) {
   const str = (key) => (row[key] || '').trim();
-  const num = (key) => { const n = parseFloat(row[key]); return isNaN(n) ? undefined : n; };
+  const num = (key) => { const n = parseLocaleNumber(row[key]); return isNaN(n) ? undefined : n; };
   const int = (key) => { const n = parseInt(row[key], 10); return isNaN(n) ? undefined : n; };
 
   return {
@@ -637,9 +715,9 @@ export function parseOenoExport(text) {
     const slotRaw = (cells[idx.slot] || '').trim();
     const isUnshelved = !cabinetIdRaw || cabinetIdRaw === 'null';
 
-    const sizeLitres = parseFloat(cells[idx.size]);
+    const sizeLitres = parseLocaleNumber(cells[idx.size]);
     const bottleSize = isNaN(sizeLitres) ? '750ml' : `${Math.round(sizeLitres * 1000)}ml`;
-    const cost = parseFloat(cells[idx.cost]);
+    const cost = parseLocaleNumber(cells[idx.cost]);
     const consumedAt = (cells[idx.consumed] || '').trim();
 
     const baseItem = {

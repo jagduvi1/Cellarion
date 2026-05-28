@@ -7,6 +7,7 @@ import {
   parseCombinedRackLocation,
   parseOenoExport,
   detectOenoExportBoundary,
+  parseLocaleNumber,
 } from './importMappers';
 
 // ---------------------------------------------------------------------------
@@ -150,6 +151,137 @@ describe('detectDelimiter', () => {
   it('prefers tab over semicolon when both are present on first line', () => {
     // Tab is checked first, so it wins
     expect(detectDelimiter('Name\tVintage;Country')).toBe('\t');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// parseLocaleNumber — locale-aware replacement for parseFloat in CSV imports.
+// Catches the EU-decimal bug where parseFloat('1.234,56') returned 1.234.
+// ---------------------------------------------------------------------------
+describe('parseLocaleNumber', () => {
+  describe('invalid input', () => {
+    it('returns NaN for null/undefined/empty/whitespace', () => {
+      expect(parseLocaleNumber(null)).toBeNaN();
+      expect(parseLocaleNumber(undefined)).toBeNaN();
+      expect(parseLocaleNumber('')).toBeNaN();
+      expect(parseLocaleNumber('   ')).toBeNaN();
+    });
+
+    it('returns NaN for non-numeric strings', () => {
+      expect(parseLocaleNumber('abc')).toBeNaN();
+      expect(parseLocaleNumber('-')).toBeNaN();
+      expect(parseLocaleNumber('+')).toBeNaN();
+    });
+  });
+
+  describe('plain numbers (no separator)', () => {
+    it('parses positive integers', () => {
+      expect(parseLocaleNumber('260')).toBe(260);
+      expect(parseLocaleNumber('0')).toBe(0);
+      expect(parseLocaleNumber('1')).toBe(1);
+    });
+
+    it('accepts numeric input directly', () => {
+      expect(parseLocaleNumber(260)).toBe(260);
+      expect(parseLocaleNumber(0.75)).toBe(0.75);
+    });
+  });
+
+  describe('US format (period decimal, comma thousands)', () => {
+    it('parses simple US decimals', () => {
+      expect(parseLocaleNumber('1234.56')).toBe(1234.56);
+      expect(parseLocaleNumber('0.75')).toBe(0.75);
+      expect(parseLocaleNumber('260.00')).toBe(260);
+    });
+
+    it('parses US thousands+decimal', () => {
+      expect(parseLocaleNumber('1,234.56')).toBe(1234.56);
+      expect(parseLocaleNumber('1,234,567.89')).toBe(1234567.89);
+    });
+
+    it('parses US thousands only (3 digits after comma)', () => {
+      expect(parseLocaleNumber('1,234')).toBe(1234);
+      expect(parseLocaleNumber('12,345')).toBe(12345);
+      expect(parseLocaleNumber('1,234,567')).toBe(1234567);
+    });
+  });
+
+  describe('EU format (comma decimal, period thousands)', () => {
+    it('parses simple EU decimals — the production bug case', () => {
+      // parseFloat('1234,56') returned 1234 — losing the .56
+      expect(parseLocaleNumber('1234,56')).toBe(1234.56);
+      // parseFloat('0,75') returned 0 — bottle size was wrong
+      expect(parseLocaleNumber('0,75')).toBe(0.75);
+      // parseFloat('260,00') accidentally returned 260, which was right
+      expect(parseLocaleNumber('260,00')).toBe(260);
+    });
+
+    it('parses EU thousands+decimal', () => {
+      // parseFloat('1.234,56') returned 1.234 — 1000x too low
+      expect(parseLocaleNumber('1.234,56')).toBe(1234.56);
+      expect(parseLocaleNumber('1.234.567,89')).toBe(1234567.89);
+    });
+
+    it('parses Swedish space-separated thousands', () => {
+      expect(parseLocaleNumber('1 234,56')).toBe(1234.56);
+      expect(parseLocaleNumber('1 234 567,89')).toBe(1234567.89);
+    });
+
+    it('treats "0,375" with leading zero as bottle-size decimal, not thousands', () => {
+      expect(parseLocaleNumber('0,375')).toBe(0.375);  // 375ml in litres
+      expect(parseLocaleNumber('0,75')).toBe(0.75);    // 750ml in litres
+    });
+
+    it('parses EU thousands when no decimal is present', () => {
+      // Multiple periods unambiguously = EU thousands
+      expect(parseLocaleNumber('1.234.567')).toBe(1234567);
+    });
+
+    it('keeps a single period as US-style decimal (asymmetric to comma)', () => {
+      // "1.234" is ambiguous (could be 1.234 US-decimal or 1234 EU-thousands).
+      // We pick US-decimal because bottle sizes like "0.375" / "1.5" are
+      // common in litres, and the multi-period case handles real EU
+      // thousands ("1.234.567") correctly.
+      expect(parseLocaleNumber('1.234')).toBe(1.234);
+      expect(parseLocaleNumber('1.5')).toBe(1.5);
+      expect(parseLocaleNumber('0.375')).toBe(0.375);
+    });
+  });
+
+  describe('currency symbols and trailing words', () => {
+    it('strips $ € £ ¥ and similar leading symbols', () => {
+      expect(parseLocaleNumber('$25.00')).toBe(25);
+      expect(parseLocaleNumber('€25,00')).toBe(25);
+      expect(parseLocaleNumber('£1,234.56')).toBe(1234.56);
+      expect(parseLocaleNumber('¥1000')).toBe(1000);
+    });
+
+    it('strips trailing currency words', () => {
+      expect(parseLocaleNumber('25 kr')).toBe(25);
+      expect(parseLocaleNumber('260 USD')).toBe(260);
+      expect(parseLocaleNumber('1234,56 EUR')).toBe(1234.56);
+    });
+  });
+
+  describe('drop-in replacement compatibility', () => {
+    it('matches parseFloat behaviour on plain US numbers', () => {
+      const cases = ['25.00', '260', '0.75', '1234.56', '0'];
+      for (const c of cases) {
+        expect(parseLocaleNumber(c)).toBe(parseFloat(c));
+      }
+    });
+
+    it('FIXES the parseFloat bugs that broke EU imports', () => {
+      // These are the EU-format inputs that parseFloat got wrong
+      expect(parseFloat('1.234,56')).toBe(1.234);   // bug: should be 1234.56
+      expect(parseLocaleNumber('1.234,56')).toBe(1234.56);
+
+      expect(parseFloat('0,75')).toBe(0);           // bug: bottle size → 0ml
+      expect(parseLocaleNumber('0,75')).toBe(0.75);
+
+      expect(parseFloat('1,234.56')).toBe(1);       // bug: US thousands lost everything
+      expect(parseLocaleNumber('1,234.56')).toBe(1234.56);
+    });
   });
 });
 
