@@ -366,6 +366,12 @@ router.get('/all', requireAuth, requireRole('admin'), async (req, res) => {
 });
 
 // GET /api/users/me/export — GDPR data portability: export all user data as JSON
+//
+// Per-collection cap (EXPORT_MAX) bounds worst-case memory if a power user has
+// pathological collection sizes. 50k is generous — a serious collector has
+// ~5-10k bottles, and even the busiest discussion participant has < 5k replies.
+// AuditLog has a tighter cap (1000) because it's high-cardinality activity log.
+const EXPORT_MAX = 50000;
 router.get('/me/export', requireAuth, async (req, res) => {
   const userId = req.user.id;
   try {
@@ -382,35 +388,55 @@ router.get('/me/export', requireAuth, async (req, res) => {
       discussionReads, follows, chatUsage, importSessions, supportTickets,
       discussionReports, wineReports, wishlistItems
     ] = await Promise.all([
-      Bottle.find({ user: userId }).lean(),
-      Cellar.find({ $or: [{ user: userId }, { 'members.user': userId }], deletedAt: null }).lean(),
-      Rack.find({ cellar: { $in: cellarIds }, deletedAt: null }).lean(),
-      WineRequest.find({ user: userId }).lean(),
-      Review.find({ author: userId }).lean(),
-      Notification.find({ user: userId }).lean(),
+      Bottle.find({ user: userId }).limit(EXPORT_MAX).lean(),
+      Cellar.find({ $or: [{ user: userId }, { 'members.user': userId }], deletedAt: null }).limit(EXPORT_MAX).lean(),
+      Rack.find({ cellar: { $in: cellarIds }, deletedAt: null }).limit(EXPORT_MAX).lean(),
+      WineRequest.find({ user: userId }).limit(EXPORT_MAX).lean(),
+      Review.find({ author: userId }).limit(EXPORT_MAX).lean(),
+      Notification.find({ user: userId }).limit(EXPORT_MAX).lean(),
       AuditLog.find({ 'actor.userId': userId }).sort({ timestamp: -1 }).limit(1000).lean(),
-      BottleImage.find({ uploadedBy: userId }).lean(),
-      Recommendation.find({ sender: userId }).populate('wine', 'name producer').lean(),
-      Recommendation.find({ recipient: userId }).populate('wine', 'name producer').populate('sender', 'username').lean(),
-      JournalEntry.find({ user: userId }).lean(),
-      RestockAlert.find({ user: userId }).lean(),
-      WineList.find({ user: userId }).select('name cellar structureMode branding layout createdAt updatedAt').lean(),
-      PendingShare.find({ invitedBy: userId }).populate('cellar', 'name').lean(),
-      Discussion.find({ author: userId }).select('title category body wineDefinition isPinned isLocked replyCount createdAt updatedAt').lean(),
-      DiscussionReply.find({ author: userId }).select('discussion body quote wineDefinition isDeleted createdAt updatedAt').lean(),
-      ReviewVote.find({ user: userId }).select('review vote createdAt').lean(),
-      DiscussionReaction.find({ user: userId }).select('reply kind createdAt').lean(),
-      DiscussionWatch.find({ user: userId }).select('discussion createdAt').lean(),
-      DiscussionRead.find({ user: userId }).select('discussion lastReadAt').lean(),
-      Follow.find({ $or: [{ follower: userId }, { following: userId }] })
+      BottleImage.find({ uploadedBy: userId }).limit(EXPORT_MAX).lean(),
+      Recommendation.find({ sender: userId }).limit(EXPORT_MAX).populate('wine', 'name producer').lean(),
+      Recommendation.find({ recipient: userId }).limit(EXPORT_MAX).populate('wine', 'name producer').populate('sender', 'username').lean(),
+      JournalEntry.find({ user: userId }).limit(EXPORT_MAX).lean(),
+      RestockAlert.find({ user: userId }).limit(EXPORT_MAX).lean(),
+      WineList.find({ user: userId }).select('name cellar structureMode branding layout createdAt updatedAt').limit(EXPORT_MAX).lean(),
+      PendingShare.find({ invitedBy: userId }).limit(EXPORT_MAX).populate('cellar', 'name').lean(),
+      Discussion.find({ author: userId }).select('title category body wineDefinition isPinned isLocked replyCount createdAt updatedAt').limit(EXPORT_MAX).lean(),
+      DiscussionReply.find({ author: userId }).select('discussion body quote wineDefinition isDeleted createdAt updatedAt').limit(EXPORT_MAX).lean(),
+      ReviewVote.find({ user: userId }).select('review vote createdAt').limit(EXPORT_MAX).lean(),
+      DiscussionReaction.find({ user: userId }).select('reply kind createdAt').limit(EXPORT_MAX).lean(),
+      DiscussionWatch.find({ user: userId }).select('discussion createdAt').limit(EXPORT_MAX).lean(),
+      DiscussionRead.find({ user: userId }).select('discussion lastReadAt').limit(EXPORT_MAX).lean(),
+      Follow.find({ $or: [{ follower: userId }, { following: userId }] }).limit(EXPORT_MAX)
         .populate('follower', 'username').populate('following', 'username').lean(),
-      ChatUsage.find({ userId: userId }).select('date promptTokens completionTokens').lean(),
-      ImportSession.find({ user: userId }).select('cellar status results positionAnchor rackConfigs defaultCurrency createdAt').lean(),
-      SupportTicket.find({ user: userId }).select('category subject status createdAt').lean(),
-      DiscussionReport.find({ user: userId }).select('discussion reply reason createdAt').lean(),
-      WineReport.find({ user: userId }).select('wineDefinition reason status createdAt').lean(),
-      WishlistItem.find({ user: userId }).lean()
+      ChatUsage.find({ userId: userId }).select('date promptTokens completionTokens').limit(EXPORT_MAX).lean(),
+      ImportSession.find({ user: userId }).select('cellar status results positionAnchor rackConfigs defaultCurrency createdAt').limit(EXPORT_MAX).lean(),
+      SupportTicket.find({ user: userId }).select('category subject status createdAt').limit(EXPORT_MAX).lean(),
+      DiscussionReport.find({ user: userId }).select('discussion reply reason createdAt').limit(EXPORT_MAX).lean(),
+      WineReport.find({ user: userId }).select('wineDefinition reason status createdAt').limit(EXPORT_MAX).lean(),
+      WishlistItem.find({ user: userId }).limit(EXPORT_MAX).lean()
     ]);
+
+    // Note which collections hit the cap so the user (and ops) know it happened.
+    // Truncation is rare enough that a user hitting it should contact support
+    // for a full export — the GDPR right is preserved, the delivery mechanism
+    // just needs to switch from a sync HTTP response to something better.
+    const truncated = {};
+    for (const [name, arr] of Object.entries({
+      bottles, cellars, racks, wineRequests, reviews, notifications,
+      images, recommendationsSent, recommendationsReceived, journalEntries,
+      restockAlerts, wineLists, pendingSharesSent, discussions, discussionReplies,
+      reviewVotes, discussionReactions, discussionWatches, discussionReads,
+      follows, chatUsage, importSessions, supportTickets, discussionReports,
+      wineReports, wishlistItems,
+    })) {
+      if (arr.length >= EXPORT_MAX) truncated[name] = EXPORT_MAX;
+    }
+    if (auditLogs.length >= 1000) truncated.activityLog = 1000;
+    if (Object.keys(truncated).length > 0) {
+      console.warn('[users.export] truncation hit for user', userId, truncated);
+    }
 
     const exportData = {
       exportedAt: new Date().toISOString(),
@@ -551,7 +577,8 @@ router.get('/me/export', requireAuth, async (req, res) => {
         discussions: discussionReports.map(r => ({ reason: r.reason, createdAt: r.createdAt })),
         wines: wineReports.map(r => ({ reason: r.reason, status: r.status, createdAt: r.createdAt }))
       },
-      wishlist: wishlistItems
+      wishlist: wishlistItems,
+      _truncated: Object.keys(truncated).length > 0 ? truncated : undefined,
     };
 
     res.setHeader('Content-Disposition', `attachment; filename="cellarion-data-export-${user.username}.json"`);
