@@ -177,9 +177,12 @@ export const adminDismissWineReport = (apiFetch, id, data) =>
   });
 
 // ── Global stats (admin overview across all users) ───────────────────────────
-export const adminGetGlobalStats = (apiFetch, { excludeAdmins = false } = {}) => {
-  const qs = excludeAdmins ? '?excludeAdmins=true' : '';
-  return apiFetch(`/api/admin/stats/global${qs}`);
+export const adminGetGlobalStats = (apiFetch, { excludeAdmins = false, force = false } = {}) => {
+  const params = new URLSearchParams();
+  if (excludeAdmins) params.set('excludeAdmins', 'true');
+  if (force)         params.set('force', 'true');
+  const qs = params.toString();
+  return apiFetch(`/api/admin/stats/global${qs ? `?${qs}` : ''}`);
 };
 
 // ── Settings (contact email) ──────────────────────────────────────────────────

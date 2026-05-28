@@ -14,10 +14,13 @@ router.use(requireAuth, requireRole('admin'));
 //   excludeAdmins=true — filter out all users with the 'admin' role from
 //                       every per-user statistic. Useful for a customer-only
 //                       view that ignores test/admin data.
+//   force=true        — bypass the 5-minute in-memory cache and recompute
+//                       fresh. Used by the page's Refresh button.
 router.get('/global', async (req, res) => {
   try {
     const excludeAdmins = req.query.excludeAdmins === 'true' || req.query.excludeAdmins === '1';
-    const stats = await computeGlobalStats({ excludeAdmins });
+    const force         = req.query.force         === 'true' || req.query.force         === '1';
+    const stats = await computeGlobalStats({ excludeAdmins, force });
     res.json(stats);
   } catch (error) {
     console.error('Admin global stats error:', error);

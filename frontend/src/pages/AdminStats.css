@@ -51,6 +51,12 @@
   font-size: 0.8rem;
 }
 
+.admin-stats-cache-tag {
+  opacity: 0.6;
+  font-size: 0.8rem;
+  font-style: italic;
+}
+
 .admin-stats-note {
   color: var(--text-secondary);
   font-size: 0.9rem;

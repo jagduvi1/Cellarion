@@ -9,9 +9,12 @@ function fmt(n) {
   return Number(n).toLocaleString();
 }
 
-function StatCard({ label, value, sublabel, accent }) {
+function StatCard({ label, value, sublabel, accent, tooltip }) {
   return (
-    <div className={`admin-stats-card ${accent ? `admin-stats-card--${accent}` : ''}`}>
+    <div
+      className={`admin-stats-card ${accent ? `admin-stats-card--${accent}` : ''}`}
+      title={tooltip || undefined}
+    >
       <div className="admin-stats-card-value">{value ?? '—'}</div>
       <div className="admin-stats-card-label">{label}</div>
       {sublabel && <div className="admin-stats-card-sub">{sublabel}</div>}
@@ -89,11 +92,11 @@ function AdminStats() {
   const [error, setError] = useState('');
   const [excludeAdmins, setExcludeAdmins] = useState(false);
 
-  const fetchStats = useCallback(async () => {
+  const fetchStats = useCallback(async ({ force = false } = {}) => {
     setLoading(true);
     setError('');
     try {
-      const res = await adminGetGlobalStats(apiFetch, { excludeAdmins });
+      const res = await adminGetGlobalStats(apiFetch, { excludeAdmins, force });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       setStats(data);
@@ -159,8 +162,11 @@ function AdminStats() {
             )}
           </label>
           <span className="admin-stats-meta-sep">·</span>
-          <span>{t('adminStats.generatedAt')}: {new Date(stats.generatedAt).toLocaleString()}</span>
-          <button className="btn btn-secondary btn-sm" onClick={fetchStats} disabled={loading}>
+          <span title={stats.fromCache ? t('adminStats.cachedAtTip', { ts: stats.cachedAt ? new Date(stats.cachedAt).toLocaleString() : '' }) : undefined}>
+            {t('adminStats.generatedAt')}: {new Date(stats.generatedAt).toLocaleString()}
+            {stats.fromCache && <span className="admin-stats-cache-tag"> · {t('adminStats.cached')}</span>}
+          </span>
+          <button className="btn btn-secondary btn-sm" onClick={() => fetchStats({ force: true })} disabled={loading}>
             {loading ? '…' : t('adminStats.refresh')}
           </button>
         </div>
@@ -175,7 +181,7 @@ function AdminStats() {
           <StatCard label={t('adminStats.totalUsers')}        value={fmt(overview.totalUsers)} sublabel={`${fmt(overview.usersWithBottles)} ${t('adminStats.withBottles')}`} />
           <StatCard label={t('adminStats.totalCellars')}      value={fmt(overview.totalCellars)} />
           <StatCard label={t('adminStats.activeBottles')}     value={fmt(overview.activeBottles)} sublabel={`${fmt(overview.totalBottles)} ${t('adminStats.allTime')}`} />
-          <StatCard label={t('adminStats.consumedBottles')}   value={fmt(overview.consumedBottles)} sublabel={`${fmt(overview.drankBottles)} ${t('adminStats.drank')}`} />
+          <StatCard label={t('adminStats.consumedBottles')}   value={fmt(overview.consumedBottles)} sublabel={`${fmt(overview.drankBottles)} ${t('adminStats.drank')} · ${fmt(overview.giftedBottles)} ${t('adminStats.gifted')} · ${fmt(overview.soldBottles)} ${t('adminStats.sold')} · ${fmt(overview.otherBottles)} ${t('adminStats.other')}`} />
           <StatCard label={t('adminStats.avgPerUser')}        value={fmt(overview.avgBottlesPerUser)} />
           <StatCard label={t('adminStats.avgPerCellar')}      value={fmt(overview.avgBottlesPerCellar)} />
           <StatCard label={t('adminStats.uniqueWines')}       value={fmt(overview.totalWineDefinitions)} sublabel={t('adminStats.inLibrary')} />
@@ -185,11 +191,12 @@ function AdminStats() {
       {/* ── Engagement ── */}
       <section>
         <h2>{t('adminStats.section.engagement')}</h2>
+        <p className="admin-stats-section-note">{t('adminStats.engagementNote')}</p>
         <div className="admin-stats-cards">
-          <StatCard accent="ok" label={t('adminStats.activeUsers24h')} value={fmt(engagement.activeUsers24h)} sublabel={t('adminStats.dau')} />
-          <StatCard label={t('adminStats.activeUsers7d')}  value={fmt(engagement.activeUsers7d)}  sublabel={t('adminStats.wau')} />
-          <StatCard label={t('adminStats.activeUsers30d')} value={fmt(engagement.activeUsers30d)} sublabel={t('adminStats.mau')} />
-          <StatCard label={t('adminStats.activeUsers90d')} value={fmt(engagement.activeUsers90d)} sublabel={t('adminStats.in90Days')} />
+          <StatCard accent="ok" tooltip={t('adminStats.engagementTooltip')} label={t('adminStats.activeUsers24h')} value={fmt(engagement.activeUsers24h)} sublabel={t('adminStats.dau')} />
+          <StatCard tooltip={t('adminStats.engagementTooltip')} label={t('adminStats.activeUsers7d')}  value={fmt(engagement.activeUsers7d)}  sublabel={t('adminStats.wau')} />
+          <StatCard tooltip={t('adminStats.engagementTooltip')} label={t('adminStats.activeUsers30d')} value={fmt(engagement.activeUsers30d)} sublabel={t('adminStats.mau')} />
+          <StatCard tooltip={t('adminStats.engagementTooltip')} label={t('adminStats.activeUsers90d')} value={fmt(engagement.activeUsers90d)} sublabel={t('adminStats.in90Days')} />
         </div>
       </section>
 
@@ -404,15 +411,24 @@ function AdminStats() {
       {topExpensiveBottles && topExpensiveBottles.length > 0 && (
         <section>
           <h2>{t('adminStats.section.topExpensive')}</h2>
+          {topExpensiveBottles[0]?.redacted && (
+            <p className="admin-stats-section-note">{t('adminStats.topExpensiveRedacted')}</p>
+          )}
           <div className="admin-stats-panel">
             <table className="admin-stats-table">
               <tbody>
                 {topExpensiveBottles.map((w, i) => (
-                  <tr key={`${w.name}-${w.vintage}-${i}`}>
+                  <tr key={`${w.name || 'redacted'}-${w.vintage || i}-${i}`}>
                     <td className="admin-stats-rank">{i + 1}</td>
                     <td className="admin-stats-name">
-                      <span>{w.name}</span>
-                      {w.producer && <span className="admin-stats-sub">{w.producer} · {w.vintage}</span>}
+                      {w.redacted ? (
+                        <span className="admin-stats-sub">{t('adminStats.bottleRedacted')}</span>
+                      ) : (
+                        <>
+                          <span>{w.name}</span>
+                          {w.producer && <span className="admin-stats-sub">{w.producer} · {w.vintage}</span>}
+                        </>
+                      )}
                     </td>
                     <td className="admin-stats-count">{fmt(w.price)} {w.currency || ''}</td>
                   </tr>

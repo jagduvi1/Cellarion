@@ -26,6 +26,14 @@ const safeAggregate = async (model, pipeline) => {
 
 // ── Main ─────────────────────────────────────────────────────────────────────
 
+// ── In-memory cache ──────────────────────────────────────────────────────────
+// ~20 aggregations per call against MongoDB, plus an in-memory median sort
+// per currency. Admin-only traffic so the load is low, but caching keeps the
+// page snappy and avoids hammering Mongo if an admin holds Cmd-R. TTL is
+// short enough that the page never feels stale.
+const CACHE_TTL_MS = 5 * 60 * 1000;
+const _cache = new Map();  // key: excludeAdmins flag ('true' | 'false') → { at, data }
+
 /**
  * Compute platform-wide aggregate statistics across all users.
  * Returns an anonymised payload safe to surface to admins.
@@ -33,12 +41,26 @@ const safeAggregate = async (model, pipeline) => {
  * @param {object}  [options]
  * @param {boolean} [options.excludeAdmins=false]
  *        When true, all per-user data (bottles, cellars, user counts, plans,
- *        engagement, image uploads, wine requests) is filtered to exclude any
- *        user with the 'admin' role — useful for getting a customer-only view
- *        of the platform without admin/test data polluting the numbers.
+ *        engagement, image uploads, wine requests, racks) is filtered to
+ *        exclude any user with the 'admin' role.
+ * @param {boolean} [options.force=false]
+ *        When true, bypass the in-memory cache and recompute fresh.
  * @returns {Promise<object>}
  */
-async function computeGlobalStats({ excludeAdmins = false } = {}) {
+async function computeGlobalStats({ excludeAdmins = false, force = false } = {}) {
+  const cacheKey = String(!!excludeAdmins);
+  if (!force) {
+    const hit = _cache.get(cacheKey);
+    if (hit && (Date.now() - hit.at) < CACHE_TTL_MS) {
+      return { ...hit.data, fromCache: true, cachedAt: new Date(hit.at).toISOString() };
+    }
+  }
+  const data = await _computeGlobalStatsUncached({ excludeAdmins });
+  _cache.set(cacheKey, { at: Date.now(), data });
+  return { ...data, fromCache: false };
+}
+
+async function _computeGlobalStatsUncached({ excludeAdmins = false } = {}) {
   const currentYear = new Date().getFullYear();
   const since30 = new Date(Date.now() - 30 * 86400000);
   const since90 = new Date(Date.now() - 90 * 86400000);
@@ -46,16 +68,25 @@ async function computeGlobalStats({ excludeAdmins = false } = {}) {
   const since7d  = new Date(Date.now() - 7 * 86400000);
 
   // ── Admin-exclusion filters ─────────────────────────────────────────────
+  // When excludeAdmins=true, we filter every per-user collection to drop
+  // admin-owned data. For Rack (which has no `user` field — it belongs to a
+  // Cellar that belongs to a User) we have to resolve the chain by first
+  // collecting admin cellar IDs.
   let adminIds = [];
+  let adminCellarIds = [];
   if (excludeAdmins) {
     const admins = await User.find({ roles: 'admin' }).select('_id').lean();
     adminIds = admins.map(a => a._id);
+    if (adminIds.length > 0) {
+      adminCellarIds = await Cellar.find({ user: { $in: adminIds } }).distinct('_id');
+    }
   }
   const userMatch     = excludeAdmins ? { roles: { $nin: ['admin'] } } : {};
   const bottleMatch   = excludeAdmins ? { user: { $nin: adminIds } }   : {};
   const cellarMatch   = excludeAdmins ? { user: { $nin: adminIds } }   : {};
   const imageMatch    = excludeAdmins ? { uploadedBy: { $nin: adminIds } } : {};
   const requestMatch  = excludeAdmins ? { user: { $nin: adminIds } }       : {};
+  const rackMatch     = excludeAdmins ? { cellar: { $nin: adminCellarIds } } : {};
 
   // ── Overview ────────────────────────────────────────────────────────────
   const [
@@ -67,6 +98,7 @@ async function computeGlobalStats({ excludeAdmins = false } = {}) {
     drankBottles,
     giftedBottles,
     soldBottles,
+    otherBottles,
     usersWithBottles,
     newUsers30,
     newUsers90,
@@ -83,6 +115,7 @@ async function computeGlobalStats({ excludeAdmins = false } = {}) {
     Bottle.countDocuments({ ...bottleMatch, status: 'drank' }),
     Bottle.countDocuments({ ...bottleMatch, status: 'gifted' }),
     Bottle.countDocuments({ ...bottleMatch, status: 'sold' }),
+    Bottle.countDocuments({ ...bottleMatch, status: 'other' }),
     Bottle.distinct('user', bottleMatch).then(ids => ids.length),
     User.countDocuments({ ...userMatch, createdAt: { $gte: since30 } }),
     User.countDocuments({ ...userMatch, createdAt: { $gte: since90 } }),
@@ -133,15 +166,19 @@ async function computeGlobalStats({ excludeAdmins = false } = {}) {
     { $project: { _id: 0, name: '$_id', count: 1 } },
   ]);
 
+  // Producer rollup — collapses minor casing/whitespace variants of the
+  // same producer name (e.g. "Château Margaux " vs "château margaux") so
+  // they rank as one entry. Keeps an example display spelling via $first.
   const topProducers = await safeAggregate(Bottle, [
     { $match: { ...bottleMatch, status: 'active', wineDefinition: { $ne: null } } },
     { $lookup: { from: 'winedefinitions', localField: 'wineDefinition', foreignField: '_id', as: 'wd' } },
     { $unwind: '$wd' },
-    { $group: { _id: '$wd.producer', count: { $sum: 1 } } },
-    { $match: { _id: { $ne: null } } },
+    { $match: { 'wd.producer': { $ne: null } } },
+    { $addFields: { producerKey: { $toLower: { $trim: { input: '$wd.producer' } } } } },
+    { $group: { _id: '$producerKey', name: { $first: '$wd.producer' }, count: { $sum: 1 } } },
     { $sort: { count: -1 } },
     { $limit: 15 },
-    { $project: { _id: 0, name: '$_id', count: 1 } },
+    { $project: { _id: 0, name: 1, count: 1 } },
   ]);
 
   // ── Wine types ──────────────────────────────────────────────────────────
@@ -194,6 +231,17 @@ async function computeGlobalStats({ excludeAdmins = false } = {}) {
   ]);
 
   // ── Holding time (purchase → consumption) ───────────────────────────────
+  // NOTE: $bucket OMITS empty buckets, so we map results by _id (the bucket's
+  // lower boundary) rather than by array index — otherwise an empty middle
+  // bucket would shift every label downward and silently mislabel real data.
+  const HOLDING_BUCKETS = [
+    { id: 0,      label: '<1yr'  },
+    { id: 365,    label: '1–2yr' },
+    { id: 730,    label: '2–5yr' },
+    { id: 1825,   label: '5–10yr'},
+    { id: 3650,   label: '10+yr' },
+    { id: 'over', label: 'over'  },
+  ];
   const holdingRaw = await safeAggregate(Bottle, [
     { $match: { ...bottleMatch, status: { $ne: 'active' }, consumedAt: { $ne: null }, purchaseDate: { $ne: null } } },
     { $addFields: { daysHeld: { $divide: [{ $subtract: ['$consumedAt', '$purchaseDate'] }, 86400000] } } },
@@ -204,13 +252,12 @@ async function computeGlobalStats({ excludeAdmins = false } = {}) {
       output: { count: { $sum: 1 } },
     }},
   ]);
-  const holdingLabels = ['<1yr', '1–2yr', '2–5yr', '5–10yr', '10+yr', 'over'];
   const totalHeld = holdingRaw.reduce((s, h) => s + h.count, 0);
-  const holdingTime = holdingRaw.map((h, i) => ({
-    bucket: holdingLabels[i] || String(h._id),
-    count:  h.count,
-    pct:    pct(h.count, totalHeld),
-  }));
+  const holdingTime = HOLDING_BUCKETS.map(({ id, label }) => {
+    const row = holdingRaw.find(h => h._id === id);
+    const count = row?.count || 0;
+    return { bucket: label, count, pct: pct(count, totalHeld) };
+  });
 
   // ── Bottle-size distribution ────────────────────────────────────────────
   const byBottleSize = await safeAggregate(Bottle, [
@@ -221,6 +268,17 @@ async function computeGlobalStats({ excludeAdmins = false } = {}) {
   ]);
 
   // ── Cellar-size distribution ────────────────────────────────────────────
+  // Same _id-keyed mapping as holdingTime — defensive against empty buckets.
+  const CELLAR_BUCKETS = [
+    { id: 1,       label: '1–9'      },
+    { id: 10,      label: '10–24'    },
+    { id: 25,      label: '25–49'    },
+    { id: 50,      label: '50–99'    },
+    { id: 100,     label: '100–249'  },
+    { id: 250,     label: '250–499'  },
+    { id: 500,     label: '500+'     },
+    { id: 'other', label: 'other'    },
+  ];
   const bottlesPerCellar = await safeAggregate(Bottle, [
     { $match: { ...bottleMatch, status: 'active' } },
     { $group: { _id: '$cellar', count: { $sum: 1 } } },
@@ -231,11 +289,10 @@ async function computeGlobalStats({ excludeAdmins = false } = {}) {
       output: { count: { $sum: 1 } },
     }},
   ]);
-  const cellarSizeLabels = ['1–9', '10–24', '25–49', '50–99', '100–249', '250–499', '500+'];
-  const cellarSizeDistribution = bottlesPerCellar.map((b, i) => ({
-    bucket: cellarSizeLabels[i] || 'other',
-    cellars: b.count,
-  }));
+  const cellarSizeDistribution = CELLAR_BUCKETS.map(({ id, label }) => {
+    const row = bottlesPerCellar.find(b => b._id === id);
+    return { bucket: label, cellars: row?.count || 0 };
+  });
 
   // ── Top wine definitions (most-collected wines) ─────────────────────────
   const topWines = await safeAggregate(Bottle, [
@@ -309,8 +366,23 @@ async function computeGlobalStats({ excludeAdmins = false } = {}) {
     { $unwind: { path: '$profile', preserveNullAndEmptyArrays: true } },
     { $addFields: {
       maturity: {
+        // Mirror utils/maturityUtils.js#classifyMaturity exactly:
+        //   - No profile, or a reviewed profile with no window boundaries
+        //     defined, → 'noProfile' (NOT 'peak' — every window boundary in
+        //     WineVintageProfile is optional, so partial profiles are real)
+        //   - Fall-through default is 'early' (matches the JS function's
+        //     final `return 'early'`)
         $cond: {
-          if: { $eq: [{ $ifNull: ['$profile', null] }, null] },
+          if: {
+            $or: [
+              { $eq: [{ $ifNull: ['$profile', null] }, null] },
+              { $and: [
+                { $eq: [{ $ifNull: ['$profile.earlyFrom', null] }, null] },
+                { $eq: [{ $ifNull: ['$profile.peakFrom',  null] }, null] },
+                { $eq: [{ $ifNull: ['$profile.peakUntil', null] }, null] },
+              ]},
+            ],
+          },
           then: 'noProfile',
           else: {
             $switch: {
@@ -353,8 +425,12 @@ async function computeGlobalStats({ excludeAdmins = false } = {}) {
                   { $gt: [currentYear, '$profile.peakUntil'] },
                   { $eq: ['$profile.lateFrom', null] },
                 ]}, then: 'declining' },
+                { case: { $and: [
+                  { $ne: ['$profile.peakFrom', null] },
+                  { $gte: [currentYear, '$profile.peakFrom'] },
+                ]}, then: 'peak' },
               ],
-              default: 'peak',
+              default: 'early',
             },
           },
         },
@@ -411,13 +487,21 @@ async function computeGlobalStats({ excludeAdmins = false } = {}) {
   ]);
 
   const ratingOverall = ratingOverallRaw[0] || { avg: null, count: 0 };
-  const ratingBandLabels = ['0–20', '21–40', '41–60', '61–80', '81–100'];
+  // Map by lower-boundary _id rather than array index — $bucket omits empty
+  // buckets, so an empty middle band would otherwise mislabel everything.
+  const RATING_BUCKETS = [
+    { id: 0,  band: '0–20'   },
+    { id: 20, band: '21–40'  },
+    { id: 40, band: '41–60'  },
+    { id: 60, band: '61–80'  },
+    { id: 80, band: '81–100' },
+  ];
   const totalRated = ratingDistRaw.reduce((s, r) => s + r.count, 0);
-  const ratingDistribution = ratingDistRaw.map((r, i) => ({
-    band:  ratingBandLabels[i] || String(r._id),
-    count: r.count,
-    pct:   pct(r.count, totalRated),
-  }));
+  const ratingDistribution = RATING_BUCKETS.map(({ id, band }) => {
+    const row = ratingDistRaw.find(r => r._id === id);
+    const count = row?.count || 0;
+    return { band, count, pct: pct(count, totalRated) };
+  });
 
   // ── Monthly trends (last 12 calendar months) ────────────────────────────
   const buildMonthlySeries = async (model, dateField, baseMatch = {}, extraMatch = {}) => {
@@ -451,8 +535,15 @@ async function computeGlobalStats({ excludeAdmins = false } = {}) {
     buildMonthlySeries(Cellar, 'createdAt',  cellarMatch),
   ]);
 
-  // ── Most expensive bottles (anonymised — wine + producer + vintage) ─────
-  const topExpensiveBottles = await safeAggregate(Bottle, [
+  // ── Most expensive bottles ──────────────────────────────────────────────
+  // On platforms with very few users, showing the wine + producer + vintage
+  // of the single most expensive bottle could let one user infer it's theirs
+  // (or someone else's). When the user base is small we band the price and
+  // suppress the identifying fields. Threshold matches the same guard used
+  // for the "anonymised aggregate" framing on the blog data piece.
+  const EXPENSIVE_REDACT_THRESHOLD_USERS = 25;
+  const shouldRedactExpensive = usersWithBottles < EXPENSIVE_REDACT_THRESHOLD_USERS;
+  const topExpensiveBottlesRaw = await safeAggregate(Bottle, [
     { $match: { ...bottleMatch, status: 'active', price: { $gt: 0 }, wineDefinition: { $ne: null } } },
     { $sort: { price: -1 } },
     { $limit: 10 },
@@ -467,12 +558,16 @@ async function computeGlobalStats({ excludeAdmins = false } = {}) {
       currency: 1,
     }},
   ]);
+  const topExpensiveBottles = topExpensiveBottlesRaw.map(b => shouldRedactExpensive
+    ? { name: null, producer: null, vintage: null, price: b.price, currency: b.currency, redacted: true }
+    : { ...b, redacted: false }
+  );
 
   // ── Library health ──────────────────────────────────────────────────────
-  // Profile + WineDefinition + Rack stats are platform-wide — admin activity
-  // on these is product work, not test pollution, so we don't exclude them.
-  // Image uploads + wine requests track per-user contributions, so they do
-  // honour excludeAdmins.
+  // WineDefinition + WineVintageProfile are shared platform reference data
+  // (admin-curated by design), so they remain unfiltered. Racks belong to
+  // cellars which belong to users, so they DO honour excludeAdmins via
+  // rackMatch (resolved earlier via the admin cellar IDs).
   const [
     totalRacks,
     profilesTotal,
@@ -484,7 +579,7 @@ async function computeGlobalStats({ excludeAdmins = false } = {}) {
     wineDefinitionsWithBottles,
     totalWineDefinitions,
   ] = await Promise.all([
-    Rack.countDocuments(),
+    Rack.countDocuments(rackMatch),
     WineVintageProfile.countDocuments(),
     WineVintageProfile.countDocuments({ status: 'reviewed' }),
     WineVintageProfile.countDocuments({ status: 'pending' }),
@@ -524,6 +619,7 @@ async function computeGlobalStats({ excludeAdmins = false } = {}) {
       drankBottles,
       giftedBottles,
       soldBottles,
+      otherBottles,
       avgBottlesPerUser,
       avgBottlesPerCellar,
       totalWineDefinitions,
