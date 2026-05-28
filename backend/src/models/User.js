@@ -31,6 +31,7 @@ const userSchema = new mongoose.Schema({
     type: [String],
     enum: ['user', 'somm', 'admin', 'moderator'],
     default: ['user'],
+    index: true,
     validate: {
       validator: (arr) => arr.length > 0,
       message: 'User must have at least one role'
