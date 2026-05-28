@@ -13,6 +13,8 @@ const { getCellarRole } = require('../utils/cellarAccess');
 const { processImage } = require('../services/imageProcessor');
 const { stripHtml } = require('../utils/sanitize');
 const { isValidId } = require('../utils/validation');
+const rateLimitsConfig = require('../config/rateLimits');
+const { logAudit } = require('../services/audit');
 
 /**
  * Safely remove an uploaded file, but only if it resides within the expected
@@ -40,6 +42,24 @@ const bgRemovalLimiter = rateLimit({
   legacyHeaders: false,
   handler: (req, res) => {
     res.status(429).json({ error: 'Too many background removal requests, please try again later' });
+  }
+});
+
+// Per-user upload cap on /upload. The per-bottle MAX_IMAGES_PER_BOTTLE limits
+// per-resource growth, but doesn't stop a user creating bottles + uploading
+// in a loop to fill the disk. Keyed on req.user.id (not IP) so an attacker
+// rotating IPs can't bypass.
+const imageUploadLimiter = rateLimit({
+  // windowMs is read once at limiter creation (express-rate-limit doesn't
+  // support a functional windowMs in v7). Matches the chatBurst pattern.
+  windowMs: 60 * 60 * 1000,
+  max:      () => rateLimitsConfig.get().imageUploadBurst.max,
+  keyGenerator: (req) => String(req.user?.id || ''),
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: (req, res) => {
+    logAudit(req, 'system.rate_limit_exceeded', {}, { limiter: 'image-upload', userId: req.user?.id });
+    res.status(429).json({ error: 'Too many image uploads. Please wait and try again later.' });
   }
 });
 
@@ -135,7 +155,7 @@ function getImageDimensions(filePath) {
 const router = express.Router();
 
 // POST /api/images/upload - Upload image for a bottle or wine definition
-router.post('/upload', requireAuth, upload.single('image'), async (req, res) => {
+router.post('/upload', requireAuth, imageUploadLimiter, upload.single('image'), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ error: 'No image file provided' });
