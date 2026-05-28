@@ -191,6 +191,7 @@ function Layout({ children }) {
                     <Link to="/admin/wine-reports" className={`nav-link nav-link--admin ${isActive('/admin/wine-reports') ? 'active' : ''}`}>Wine Reports</Link>
                     <Link to="/admin/moderators" className={`nav-link nav-link--admin ${isActive('/admin/moderators') ? 'active' : ''}`}>{t('nav.moderators')}</Link>
                     <Link to="/admin/blog" className={`nav-link nav-link--admin ${isActive('/admin/blog') ? 'active' : ''}`}>{t('nav.blogAdmin')}</Link>
+                    <Link to="/admin/stats" className={`nav-link nav-link--admin ${isActive('/admin/stats') ? 'active' : ''}`}>{t('nav.adminStats')}</Link>
                   </>
                 )}
               </div>
@@ -274,6 +275,7 @@ function Layout({ children }) {
                 <Link to="/admin/support" className={`mobile-menu-link ${isActive('/admin/support') ? 'active' : ''}`} onClick={closeMenu}>Support Tickets</Link>
                 <Link to="/admin/wine-reports" className={`mobile-menu-link ${isActive('/admin/wine-reports') ? 'active' : ''}`} onClick={closeMenu}>Wine Reports</Link>
                 <Link to="/admin/blog" className={`mobile-menu-link ${isActive('/admin/blog') ? 'active' : ''}`} onClick={closeMenu}>{t('nav.blogAdmin')}</Link>
+                <Link to="/admin/stats" className={`mobile-menu-link ${isActive('/admin/stats') ? 'active' : ''}`} onClick={closeMenu}>{t('nav.adminStats')}</Link>
               </div>
             )}
 

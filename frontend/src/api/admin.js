@@ -176,6 +176,10 @@ export const adminDismissWineReport = (apiFetch, id, data) =>
     body: JSON.stringify(data),
   });
 
+// ── Global stats (admin overview across all users) ───────────────────────────
+export const adminGetGlobalStats = (apiFetch) =>
+  apiFetch('/api/admin/stats/global');
+
 // ── Settings (contact email) ──────────────────────────────────────────────────
 export const adminGetContactEmail = (apiFetch) =>
   apiFetch('/api/admin/settings/contact-email');

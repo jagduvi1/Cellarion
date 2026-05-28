@@ -50,6 +50,7 @@ const CellarRoom           = lazy(() => import('./pages/CellarRoom'));
 const Blog                 = lazy(() => import('./pages/Blog'));
 const BlogPost             = lazy(() => import('./pages/BlogPost'));
 const AdminBlog            = lazy(() => import('./pages/AdminBlog'));
+const AdminStats           = lazy(() => import('./pages/AdminStats'));
 const AdminBlogEditor      = lazy(() => import('./pages/AdminBlogEditor'));
 const NfcRedirect          = lazy(() => import('./pages/NfcRedirect'));
 const Wishlist             = lazy(() => import('./pages/Wishlist'));
@@ -399,6 +400,14 @@ function AppRoutes() {
           element={
             <ProtectedRoute requireAdmin>
               <Layout><AdminBlog /></Layout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/stats"
+          element={
+            <ProtectedRoute requireAdmin>
+              <Layout><AdminStats /></Layout>
             </ProtectedRoute>
           }
         />
