@@ -4,9 +4,14 @@ import { useAuth } from '../contexts/AuthContext';
 import { adminGetGlobalStats } from '../api/admin';
 import './AdminStats.css';
 
-function StatCard({ label, value, sublabel }) {
+function fmt(n) {
+  if (n == null) return '—';
+  return Number(n).toLocaleString();
+}
+
+function StatCard({ label, value, sublabel, accent }) {
   return (
-    <div className="admin-stats-card">
+    <div className={`admin-stats-card ${accent ? `admin-stats-card--${accent}` : ''}`}>
       <div className="admin-stats-card-value">{value ?? '—'}</div>
       <div className="admin-stats-card-label">{label}</div>
       {sublabel && <div className="admin-stats-card-sub">{sublabel}</div>}
@@ -42,9 +47,38 @@ function RankedList({ title, items, valueKey = 'count', nameKey = 'name', subKey
   );
 }
 
-function fmt(n) {
-  if (n == null) return '—';
-  return Number(n).toLocaleString();
+function BarChart({ data, valueKey = 'count', labelKey = 'month', height = 80 }) {
+  const max = Math.max(1, ...data.map(d => d[valueKey] || 0));
+  return (
+    <div className="admin-stats-bars" style={{ height: `${height}px` }}>
+      {data.map((d, i) => {
+        const v = d[valueKey] || 0;
+        const heightPct = (v / max) * 100;
+        const label = d[labelKey];
+        return (
+          <div key={`${label}-${i}`} className="admin-stats-bar-wrap" title={`${label}: ${v.toLocaleString()}`}>
+            <div className="admin-stats-bar" style={{ height: `${heightPct}%` }}>
+              <span className="admin-stats-bar-value">{v > 0 ? v.toLocaleString() : ''}</span>
+            </div>
+            <div className="admin-stats-bar-label">{label.slice(-2)}</div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function HorizontalBar({ label, count, total, color }) {
+  const p = total > 0 ? (count / total) * 100 : 0;
+  return (
+    <div className="admin-stats-hbar-row">
+      <div className="admin-stats-hbar-label">{label}</div>
+      <div className="admin-stats-hbar-track">
+        <div className="admin-stats-hbar-fill" style={{ width: `${p}%`, background: color }} />
+      </div>
+      <div className="admin-stats-hbar-count">{fmt(count)} <span className="admin-stats-hbar-pct">({Math.round(p)}%)</span></div>
+    </div>
+  );
 }
 
 function AdminStats() {
@@ -53,12 +87,13 @@ function AdminStats() {
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [excludeAdmins, setExcludeAdmins] = useState(false);
 
   const fetchStats = useCallback(async () => {
     setLoading(true);
     setError('');
     try {
-      const res = await adminGetGlobalStats(apiFetch);
+      const res = await adminGetGlobalStats(apiFetch, { excludeAdmins });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       setStats(data);
@@ -67,11 +102,11 @@ function AdminStats() {
     } finally {
       setLoading(false);
     }
-  }, [apiFetch]);
+  }, [apiFetch, excludeAdmins]);
 
   useEffect(() => { fetchStats(); }, [fetchStats]);
 
-  if (loading) {
+  if (loading && !stats) {
     return (
       <div className="admin-stats-page">
         <h1>{t('adminStats.title')}</h1>
@@ -92,15 +127,42 @@ function AdminStats() {
 
   if (!stats) return null;
 
-  const { overview, activity, vintage, byType, topCountries, topRegions, topGrapes, topProducers, topWines, priceByCurrency, holdingTime, byBottleSize, cellarSizeDistribution } = stats;
+  const {
+    overview, activity, engagement, plans, maturity, ratings, vintage, trends, library,
+    byType, topCountries, topRegions, topGrapes, topProducers, topWines,
+    topExpensiveBottles, priceByCurrency, holdingTime, byBottleSize, cellarSizeDistribution,
+  } = stats;
+
+  const maturityColors = {
+    peak:       '#1a7f37',
+    early:      '#3fb950',
+    notReady:   '#9e9e9e',
+    late:       '#bf8a2e',
+    declining:  '#dc3545',
+    noProfile:  'var(--border)',
+  };
 
   return (
     <div className="admin-stats-page">
       <div className="admin-stats-header">
         <h1>{t('adminStats.title')}</h1>
         <div className="admin-stats-meta">
+          <label className="admin-stats-toggle">
+            <input
+              type="checkbox"
+              checked={excludeAdmins}
+              onChange={(e) => setExcludeAdmins(e.target.checked)}
+            />
+            <span>{t('adminStats.excludeAdmins')}</span>
+            {stats.excludeAdmins && stats.adminsExcludedCount > 0 && (
+              <span className="admin-stats-toggle-info"> ({stats.adminsExcludedCount} {t('adminStats.adminsHidden')})</span>
+            )}
+          </label>
+          <span className="admin-stats-meta-sep">·</span>
           <span>{t('adminStats.generatedAt')}: {new Date(stats.generatedAt).toLocaleString()}</span>
-          <button className="btn btn-secondary btn-sm" onClick={fetchStats}>{t('adminStats.refresh')}</button>
+          <button className="btn btn-secondary btn-sm" onClick={fetchStats} disabled={loading}>
+            {loading ? '…' : t('adminStats.refresh')}
+          </button>
         </div>
       </div>
 
@@ -120,13 +182,142 @@ function AdminStats() {
         </div>
       </section>
 
-      {/* ── Activity ── */}
+      {/* ── Engagement ── */}
+      <section>
+        <h2>{t('adminStats.section.engagement')}</h2>
+        <div className="admin-stats-cards">
+          <StatCard accent="ok" label={t('adminStats.activeUsers24h')} value={fmt(engagement.activeUsers24h)} sublabel={t('adminStats.dau')} />
+          <StatCard label={t('adminStats.activeUsers7d')}  value={fmt(engagement.activeUsers7d)}  sublabel={t('adminStats.wau')} />
+          <StatCard label={t('adminStats.activeUsers30d')} value={fmt(engagement.activeUsers30d)} sublabel={t('adminStats.mau')} />
+          <StatCard label={t('adminStats.activeUsers90d')} value={fmt(engagement.activeUsers90d)} sublabel={t('adminStats.in90Days')} />
+        </div>
+      </section>
+
+      {/* ── Activity (30/90d) ── */}
       <section>
         <h2>{t('adminStats.section.activity')}</h2>
         <div className="admin-stats-cards">
           <StatCard label={t('adminStats.newUsers30')}        value={fmt(activity.newUsers30)} sublabel={`${fmt(activity.newUsers90)} ${t('adminStats.in90Days')}`} />
           <StatCard label={t('adminStats.bottlesAdded30')}    value={fmt(activity.bottlesAdded30)} sublabel={`${fmt(activity.bottlesAdded90)} ${t('adminStats.in90Days')}`} />
           <StatCard label={t('adminStats.bottlesConsumed30')} value={fmt(activity.bottlesConsumed30)} sublabel={`${fmt(activity.bottlesConsumed90)} ${t('adminStats.in90Days')}`} />
+        </div>
+      </section>
+
+      {/* ── 12-month trends ── */}
+      <section>
+        <h2>{t('adminStats.section.trends')}</h2>
+        <div className="admin-stats-grid">
+          <div className="admin-stats-panel">
+            <h3>{t('adminStats.trendBottlesAdded')}</h3>
+            <BarChart data={trends.bottlesAdded} />
+          </div>
+          <div className="admin-stats-panel">
+            <h3>{t('adminStats.trendBottlesConsumed')}</h3>
+            <BarChart data={trends.bottlesConsumed} />
+          </div>
+          <div className="admin-stats-panel">
+            <h3>{t('adminStats.trendNewUsers')}</h3>
+            <BarChart data={trends.newUsers} />
+          </div>
+          <div className="admin-stats-panel">
+            <h3>{t('adminStats.trendNewCellars')}</h3>
+            <BarChart data={trends.newCellars} />
+          </div>
+        </div>
+      </section>
+
+      {/* ── Subscriptions ── */}
+      <section>
+        <h2>{t('adminStats.section.subscriptions')}</h2>
+        <div className="admin-stats-cards">
+          <StatCard label={t('adminStats.paidUsers')}          value={fmt(plans.paidUsers)} />
+          <StatCard label={t('adminStats.trialEligible')}      value={fmt(plans.trialEligibleUsers)} />
+          <StatCard label={t('adminStats.expiringIn7d')}       value={fmt(plans.expiringIn7d)} sublabel={`${fmt(plans.expiringIn30d)} ${t('adminStats.in30Days')}`} accent={plans.expiringIn7d > 0 ? 'warn' : null} />
+          <StatCard label={t('adminStats.withStripeCustomer')} value={fmt(plans.withStripeCustomer)} />
+        </div>
+        {plans.distribution && plans.distribution.length > 0 && (
+          <div className="admin-stats-panel">
+            <h3>{t('adminStats.byPlan')}</h3>
+            <table className="admin-stats-table">
+              <tbody>
+                {plans.distribution.map((p, i) => {
+                  const pp = overview.totalUsers > 0 ? Math.round((p.count / overview.totalUsers) * 100) : 0;
+                  return (
+                    <tr key={`${p.plan || 'unknown'}-${i}`}>
+                      <td className="admin-stats-name">{p.plan || '—'}</td>
+                      <td className="admin-stats-count">{fmt(p.count)}</td>
+                      <td className="admin-stats-pct">{pp}%</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+
+      {/* ── Maturity & drink windows (Cellarion's USP) ── */}
+      <section>
+        <h2>{t('adminStats.section.maturity')}</h2>
+        <p className="admin-stats-section-note">
+          {t('adminStats.maturityNote', { coverage: maturity.coveragePct })}
+        </p>
+        <div className="admin-stats-panel">
+          {maturity.bottlesWithProfile > 0 ? (
+            <>
+              <HorizontalBar label={t('adminStats.maturityPeak')}      count={maturity.peak}      total={maturity.bottlesWithProfile} color={maturityColors.peak} />
+              <HorizontalBar label={t('adminStats.maturityEarly')}     count={maturity.early}     total={maturity.bottlesWithProfile} color={maturityColors.early} />
+              <HorizontalBar label={t('adminStats.maturityNotReady')}  count={maturity.notReady}  total={maturity.bottlesWithProfile} color={maturityColors.notReady} />
+              <HorizontalBar label={t('adminStats.maturityLate')}      count={maturity.late}      total={maturity.bottlesWithProfile} color={maturityColors.late} />
+              <HorizontalBar label={t('adminStats.maturityDeclining')} count={maturity.declining} total={maturity.bottlesWithProfile} color={maturityColors.declining} />
+            </>
+          ) : (
+            <p className="admin-stats-empty">{t('adminStats.maturityEmpty')}</p>
+          )}
+          <p className="admin-stats-sub" style={{ marginTop: '0.75rem' }}>
+            {t('adminStats.maturityNoProfile', { count: fmt(maturity.noProfile) })}
+          </p>
+        </div>
+      </section>
+
+      {/* ── Quality & ratings ── */}
+      <section>
+        <h2>{t('adminStats.section.ratings')}</h2>
+        <div className="admin-stats-cards">
+          <StatCard label={t('adminStats.avgRating')}    value={ratings.avgNormalized != null ? `${ratings.avgNormalized}/100` : '—'} sublabel={`${fmt(ratings.ratedCount)} ${t('adminStats.ratedBottles')}`} />
+        </div>
+        <div className="admin-stats-grid">
+          {ratings.distribution && ratings.distribution.length > 0 && (
+            <div className="admin-stats-panel">
+              <h3>{t('adminStats.ratingDistribution')}</h3>
+              {ratings.distribution.map((r, i) => (
+                <HorizontalBar key={`${r.band}-${i}`} label={r.band} count={r.count} total={ratings.ratedCount} color="var(--accent)" />
+              ))}
+            </div>
+          )}
+          {ratings.byType && ratings.byType.length > 0 && (
+            <div className="admin-stats-panel">
+              <h3>{t('adminStats.avgRatingByType')}</h3>
+              <table className="admin-stats-table">
+                <thead>
+                  <tr>
+                    <th>{t('adminStats.type')}</th>
+                    <th>{t('adminStats.avg')}</th>
+                    <th>{t('adminStats.priceCount')}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {ratings.byType.map((r, i) => (
+                    <tr key={`${r.type || 'unknown'}-${i}`}>
+                      <td className="admin-stats-name">{r.type || '—'}</td>
+                      <td className="admin-stats-count">{r.avg}</td>
+                      <td className="admin-stats-count">{fmt(r.count)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       </section>
 
@@ -186,7 +377,7 @@ function AdminStats() {
         </div>
       </section>
 
-      {/* ── Top wines (most-collected individual wines) ── */}
+      {/* ── Top wines (most-collected) ── */}
       {topWines && topWines.length > 0 && (
         <section>
           <h2>{t('adminStats.section.topWines')}</h2>
@@ -209,6 +400,29 @@ function AdminStats() {
         </section>
       )}
 
+      {/* ── Top expensive bottles ── */}
+      {topExpensiveBottles && topExpensiveBottles.length > 0 && (
+        <section>
+          <h2>{t('adminStats.section.topExpensive')}</h2>
+          <div className="admin-stats-panel">
+            <table className="admin-stats-table">
+              <tbody>
+                {topExpensiveBottles.map((w, i) => (
+                  <tr key={`${w.name}-${w.vintage}-${i}`}>
+                    <td className="admin-stats-rank">{i + 1}</td>
+                    <td className="admin-stats-name">
+                      <span>{w.name}</span>
+                      {w.producer && <span className="admin-stats-sub">{w.producer} · {w.vintage}</span>}
+                    </td>
+                    <td className="admin-stats-count">{fmt(w.price)} {w.currency || ''}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
+
       {/* ── Money ── */}
       {priceByCurrency && priceByCurrency.length > 0 && (
         <section>
@@ -220,6 +434,7 @@ function AdminStats() {
                   <th>{t('adminStats.currency')}</th>
                   <th>{t('adminStats.priceCount')}</th>
                   <th>{t('adminStats.avgPrice')}</th>
+                  <th>{t('adminStats.medianPrice')}</th>
                   <th>{t('adminStats.totalValue')}</th>
                   <th>{t('adminStats.maxPrice')}</th>
                 </tr>
@@ -230,6 +445,7 @@ function AdminStats() {
                     <td className="admin-stats-name">{p.currency || '—'}</td>
                     <td className="admin-stats-count">{fmt(p.count)}</td>
                     <td className="admin-stats-count">{fmt(p.avgPrice)}</td>
+                    <td className="admin-stats-count">{fmt(p.medianPrice)}</td>
                     <td className="admin-stats-count">{fmt(p.totalValue)}</td>
                     <td className="admin-stats-count">{fmt(p.maxPrice)}</td>
                   </tr>
@@ -239,6 +455,20 @@ function AdminStats() {
           </div>
         </section>
       )}
+
+      {/* ── Library health ── */}
+      <section>
+        <h2>{t('adminStats.section.library')}</h2>
+        <div className="admin-stats-cards">
+          <StatCard label={t('adminStats.totalWineDefs')}    value={fmt(library.totalWineDefinitions)} sublabel={`${fmt(library.wineDefinitionsWithBottles)} ${t('adminStats.withBottlesShort')}`} />
+          <StatCard label={t('adminStats.profilesReviewed')} value={fmt(library.profilesReviewed)} sublabel={`${fmt(library.profilesTotal)} ${t('adminStats.profilesTotal')}`} />
+          <StatCard label={t('adminStats.profilesPending')}  value={fmt(library.profilesPending)} accent={library.profilesPending > 50 ? 'warn' : null} />
+          <StatCard label={t('adminStats.pendingWineRequests')} value={fmt(library.pendingWineRequests)} accent={library.pendingWineRequests > 5 ? 'warn' : null} />
+          <StatCard label={t('adminStats.pendingImageReviews')} value={fmt(library.pendingImageReviews)} accent={library.pendingImageReviews > 10 ? 'warn' : null} />
+          <StatCard label={t('adminStats.totalImages')}      value={fmt(library.totalImages)} />
+          <StatCard label={t('adminStats.totalRacks')}       value={fmt(library.totalRacks)} />
+        </div>
+      </section>
 
       {/* ── Distributions ── */}
       <section>

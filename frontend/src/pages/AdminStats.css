@@ -25,6 +25,30 @@
   gap: 1rem;
   font-size: 0.85rem;
   color: var(--text-secondary);
+  flex-wrap: wrap;
+}
+
+.admin-stats-meta-sep {
+  opacity: 0.5;
+}
+
+.admin-stats-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  cursor: pointer;
+  user-select: none;
+}
+
+.admin-stats-toggle input[type="checkbox"] {
+  margin: 0;
+  cursor: pointer;
+}
+
+.admin-stats-toggle-info {
+  color: var(--text-secondary);
+  opacity: 0.7;
+  font-size: 0.8rem;
 }
 
 .admin-stats-note {
@@ -35,6 +59,17 @@
   background: var(--bg-secondary);
   border-radius: 6px;
   border-left: 3px solid var(--accent);
+}
+
+.admin-stats-section-note {
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  margin: -0.5rem 0 1rem;
+}
+
+.admin-stats-empty {
+  color: var(--text-secondary);
+  font-style: italic;
 }
 
 .admin-stats-error {
@@ -54,7 +89,7 @@
   padding-bottom: 0.5rem;
 }
 
-/* ── Stat cards (overview / activity / vintage summary) ── */
+/* ── Stat cards ── */
 .admin-stats-cards {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
@@ -67,6 +102,14 @@
   border: 1px solid var(--border);
   border-radius: 8px;
   padding: 1rem 1.1rem;
+}
+
+.admin-stats-card--ok {
+  border-left: 3px solid #1a7f37;
+}
+
+.admin-stats-card--warn {
+  border-left: 3px solid #bf8a2e;
 }
 
 .admin-stats-card-value {
@@ -92,7 +135,7 @@
   margin-top: 0.4rem;
 }
 
-/* ── Panels (ranked lists, distributions) ── */
+/* ── Panels ── */
 .admin-stats-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
@@ -178,6 +221,98 @@
   font-size: 0.85rem;
 }
 
+/* ── Monthly bar chart ── */
+.admin-stats-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.3rem;
+  padding: 0.5rem 0 0;
+}
+
+.admin-stats-bar-wrap {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+.admin-stats-bar {
+  width: 100%;
+  background: var(--accent);
+  border-radius: 3px 3px 0 0;
+  min-height: 1px;
+  position: relative;
+  transition: opacity 0.15s;
+  opacity: 0.85;
+}
+
+.admin-stats-bar:hover {
+  opacity: 1;
+}
+
+.admin-stats-bar-value {
+  position: absolute;
+  top: -1.1rem;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 0.65rem;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.admin-stats-bar-wrap:hover .admin-stats-bar-value {
+  opacity: 1;
+}
+
+.admin-stats-bar-label {
+  font-size: 0.7rem;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Horizontal stacked bar (maturity, rating distribution) ── */
+.admin-stats-hbar-row {
+  display: grid;
+  grid-template-columns: 110px 1fr 110px;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.3rem 0;
+  font-size: 0.85rem;
+}
+
+.admin-stats-hbar-label {
+  color: var(--text-primary);
+}
+
+.admin-stats-hbar-track {
+  height: 16px;
+  background: var(--bg-secondary);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.admin-stats-hbar-fill {
+  height: 100%;
+  transition: width 0.3s ease;
+  border-radius: 4px;
+}
+
+.admin-stats-hbar-count {
+  text-align: right;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.admin-stats-hbar-pct {
+  opacity: 0.6;
+  font-size: 0.8rem;
+}
+
 @media (max-width: 600px) {
   .admin-stats-header h1 {
     font-size: 1.5rem;
@@ -185,5 +320,10 @@
 
   .admin-stats-card-value {
     font-size: 1.4rem;
+  }
+
+  .admin-stats-hbar-row {
+    grid-template-columns: 90px 1fr 80px;
+    font-size: 0.8rem;
   }
 }
