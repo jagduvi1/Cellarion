@@ -24,28 +24,78 @@ router.get('/rate-limits', async (req, res) => {
 });
 
 // PATCH /api/admin/settings/rate-limits
+//
+// Partial update: any group/field that isn't sent is left at its current value,
+// so the UI can split the editor into multiple panels each with its own Save.
+//
+// Bounded ranges per field are enforced server-side. Admin tuning is a trusted
+// surface (requireRole('admin')), but the bounds also serve as guardrails
+// against typos that would silently disable a safety mechanism (e.g. setting
+// accountLockout.threshold to 9999 effectively turns lockout off).
 router.patch('/rate-limits', async (req, res) => {
   try {
-    const { api, write, auth } = req.body;
+    const { api, write, auth, accountLockout, chatBurst, chatConcurrentStreams } = req.body;
 
     const previous = { ...rateLimitsConfig.get() };
 
-    // Validate provided fields
-    const incoming = { api, write, auth };
-    for (const [name, val] of Object.entries(incoming)) {
-      if (val !== undefined) {
-        if (!Number.isInteger(val.max) || val.max < 1 || val.max > 10000) {
-          return res.status(400).json({
-            error: `${name}.max must be an integer between 1 and 10000`
-          });
-        }
+    const errors = [];
+
+    const requireIntInRange = (path, val, min, max) => {
+      if (val === undefined) return true;
+      if (!Number.isInteger(val) || val < min || val > max) {
+        errors.push(`${path} must be an integer between ${min} and ${max}`);
+        return false;
       }
+      return true;
+    };
+
+    // Per-IP request caps (api/write/auth share the same {max} shape)
+    for (const [name, group] of Object.entries({ api, write, auth })) {
+      if (group !== undefined) {
+        requireIntInRange(`${name}.max`, group.max, 1, 10000);
+      }
+    }
+
+    // Account lockout — threshold attempts within windowMs, locks for durationMs
+    if (accountLockout !== undefined) {
+      requireIntInRange('accountLockout.threshold',    accountLockout.threshold,    3,           1000);
+      requireIntInRange('accountLockout.windowMs',     accountLockout.windowMs,     60_000,      24 * 60 * 60 * 1000);
+      requireIntInRange('accountLockout.durationMs',   accountLockout.durationMs,   60_000,      30 * 24 * 60 * 60 * 1000);
+      requireIntInRange('accountLockout.emailDedupMs', accountLockout.emailDedupMs, 0,           30 * 24 * 60 * 60 * 1000);
+    }
+
+    // Chat burst limiter — max requests per user per windowMs
+    if (chatBurst !== undefined) {
+      requireIntInRange('chatBurst.max',      chatBurst.max,      1,      1000);
+      requireIntInRange('chatBurst.windowMs', chatBurst.windowMs, 10_000, 60 * 60 * 1000);
+    }
+
+    // Concurrent SSE streams cap per user
+    if (chatConcurrentStreams !== undefined) {
+      requireIntInRange('chatConcurrentStreams.max', chatConcurrentStreams.max, 1, 50);
+    }
+
+    if (errors.length > 0) {
+      return res.status(400).json({ error: errors[0], errors });
     }
 
     const updated = {
       api:   { max: api?.max   ?? previous.api.max   },
       write: { max: write?.max ?? previous.write.max },
-      auth:  { max: auth?.max  ?? previous.auth.max  }
+      auth:  { max: auth?.max  ?? previous.auth.max  },
+      accountLockout: {
+        threshold:    accountLockout?.threshold    ?? previous.accountLockout.threshold,
+        windowMs:     accountLockout?.windowMs     ?? previous.accountLockout.windowMs,
+        durationMs:   accountLockout?.durationMs   ?? previous.accountLockout.durationMs,
+        emailDedupMs: accountLockout?.emailDedupMs ?? previous.accountLockout.emailDedupMs,
+      },
+      chatBurst: {
+        max:      chatBurst?.max      ?? previous.chatBurst.max,
+        windowMs: chatBurst?.windowMs ?? previous.chatBurst.windowMs,
+      },
+      chatConcurrentStreams: {
+        max: chatConcurrentStreams?.max ?? previous.chatConcurrentStreams.max,
+      },
     };
 
     await updateSiteConfig('rateLimits', updated, req.user.id);
