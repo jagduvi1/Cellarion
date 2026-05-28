@@ -16,14 +16,25 @@ const defaults = {
     windowMs:     15 * 60 * 1000,   // count attempts within a 15-min window
     durationMs:   60 * 60 * 1000,   // lock the account for 1 hour
     emailDedupMs: 60 * 60 * 1000,   // send at most one lockout email per hour
-  }
+  },
+  // Per-user burst limit on /api/chat — protects Anthropic budget against
+  // scripted abuse from inside a single user's tier-quota allowance. The
+  // tier quota (config/plans.js chatQuota) is the cap; this is the speed
+  // limit. Default 5 chats/min/user is generous for human use and catches
+  // scripted bursts.
+  chatBurst: { max: 5, windowMs: 60 * 1000 },
+  // Cap concurrent SSE streams per user. Same protection lens as chatBurst:
+  // no human reads two AI streams at once; cap is for script abuse.
+  chatConcurrentStreams: { max: 2 },
 };
 
 let cache = {
   api:   { max: defaults.api.max },
   write: { max: defaults.write.max },
   auth:  { max: defaults.auth.max },
-  accountLockout: { ...defaults.accountLockout }
+  accountLockout: { ...defaults.accountLockout },
+  chatBurst: { ...defaults.chatBurst },
+  chatConcurrentStreams: { ...defaults.chatConcurrentStreams },
 };
 
 async function load() {
@@ -41,7 +52,14 @@ async function load() {
           windowMs:     doc.value.accountLockout?.windowMs     ?? defaults.accountLockout.windowMs,
           durationMs:   doc.value.accountLockout?.durationMs   ?? defaults.accountLockout.durationMs,
           emailDedupMs: doc.value.accountLockout?.emailDedupMs ?? defaults.accountLockout.emailDedupMs,
-        }
+        },
+        chatBurst: {
+          max:      doc.value.chatBurst?.max      ?? defaults.chatBurst.max,
+          windowMs: doc.value.chatBurst?.windowMs ?? defaults.chatBurst.windowMs,
+        },
+        chatConcurrentStreams: {
+          max: doc.value.chatConcurrentStreams?.max ?? defaults.chatConcurrentStreams.max,
+        },
       };
     }
   } catch (err) {
