@@ -114,7 +114,10 @@ router.post('/webhook', async (req, res) => {
     event = getStripe().webhooks.constructEvent(req.body, sig, endpointSecret);
   } catch (err) {
     console.error('[stripe] Webhook signature verification failed:', err.message);
-    return res.status(400).json({ error: `Webhook Error: ${err.message}` });
+    // Generic message to caller — Stripe's own error strings can leak which
+    // part of the verification failed (timestamp tolerance vs. signature
+    // mismatch). Log the detail server-side instead.
+    return res.status(400).json({ error: 'Invalid webhook' });
   }
 
   try {
