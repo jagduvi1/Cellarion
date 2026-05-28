@@ -96,7 +96,7 @@ app.use('/api/wine-lists', express.json({ limit: '1mb' }));
 app.use(express.json({ limit: '10kb' }));
 const corsOrigin = process.env.FRONTEND_URL || (process.env.NODE_ENV === 'production' ? false : 'http://localhost:3000');
 if (process.env.NODE_ENV === 'production' && !process.env.FRONTEND_URL) {
-  console.warn('[security] FRONTEND_URL is not set — CORS will block all cross-origin requests in production');
+  console.warn('[security] FRONTEND_URL is not set — CORS will block all cross-origin requests, AND every email unsubscribe / verification / password-reset link will point at http://localhost:3000');
 }
 app.use(cors({
   origin: corsOrigin,
