@@ -601,6 +601,33 @@
   margin: 0.1rem 0.15rem;
 }
 
+/* Price-sanity warning highlight on the detail tag itself */
+.detail-tag--warn {
+  background: rgba(191, 138, 46, 0.15);
+  color: #8a5a00;
+  border: 1px solid rgba(191, 138, 46, 0.4);
+  cursor: help;
+}
+
+[data-theme="dark"] .detail-tag--warn {
+  color: #e0a850;
+}
+
+/* Banner above the review table when any rows have price warnings */
+.import-price-warning-banner {
+  background: rgba(191, 138, 46, 0.1);
+  border-left: 3px solid #bf8a2e;
+  padding: 0.75rem 1rem;
+  margin: 0.75rem 0 1rem;
+  border-radius: 4px;
+  font-size: 0.9rem;
+  color: var(--color-text);
+}
+
+.summary-number.summary-warn {
+  color: #bf8a2e;
+}
+
 /* Action buttons */
 .action-buttons {
   display: flex;

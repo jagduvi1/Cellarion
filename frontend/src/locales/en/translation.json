@@ -288,6 +288,12 @@
   "addBottle": {
     "title": "Add Bottle",
     "backToCellar": "← Back to Cellar",
+    "priceWarning": {
+      "absoluteCap": "Unusually high — above the typical maximum of {{cap}} {{currency}} per bottle. Double-check before saving.",
+      "userOutlier": "{{ratio}}× higher than your typical bottle ({{median}} {{currency}}). Looks like a typo?",
+      "aboveMarket": "{{ratio}}× the recorded market price ({{marketPrice}} {{currency}}) for this wine and vintage.",
+      "possiblyCents": "Looks like cents — if you meant {{ifCents}} {{currency}}, divide by 100."
+    },
     "stepSelectWine": "Select Wine",
     "stepBottleDetails": "Bottle Details",
     "searchForWine": "Search for a Wine",
