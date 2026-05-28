@@ -1,4 +1,4 @@
-const { scoreWineMatch, findBestMatch, WEIGHTS } = require('./wineMatching');
+const { scoreWineMatch, findBestMatch, scoreAllMatches, WEIGHTS } = require('./wineMatching');
 
 // ─── scoreWineMatch ──────────────────────────────────────────────────────────
 
@@ -130,6 +130,35 @@ describe('findBestMatch', () => {
     // Both should find the same best match regardless of redistribute
     expect(matchRedist.name).toBe('Merlot');
     expect(matchNoRedist.name).toBe('Merlot');
+  });
+});
+
+// ─── scoreAllMatches ─────────────────────────────────────────────────────────
+
+describe('scoreAllMatches', () => {
+  const candidates = [
+    { name: 'Rosabella Rosato', producer: 'G.D. Vajra' },
+    { name: 'Rosa Bella', producer: 'G.D. Vajra' },
+    { name: 'Opus One', producer: 'Mondavi Rothschild' },
+  ];
+
+  test('returns all candidates with scores, sorted desc', () => {
+    const query = { name: 'Rosabella', producer: 'G.D. Vajra' };
+    const ranked = scoreAllMatches(query, candidates, { redistribute: false });
+    expect(ranked).toHaveLength(3);
+    expect(ranked[0].score).toBeGreaterThanOrEqual(ranked[1].score);
+    expect(ranked[1].score).toBeGreaterThanOrEqual(ranked[2].score);
+    expect(ranked[2].wine.name).toBe('Opus One'); // least similar last
+  });
+
+  test('preserves the candidate object reference on each entry', () => {
+    const query = { name: 'Opus One', producer: 'Mondavi Rothschild' };
+    const ranked = scoreAllMatches(query, candidates);
+    expect(ranked[0].wine).toBe(candidates[2]);
+  });
+
+  test('empty candidates returns empty array', () => {
+    expect(scoreAllMatches({ name: 'X', producer: 'Y' }, [])).toEqual([]);
   });
 });
 

@@ -69,4 +69,15 @@ function findBestMatch(query, candidates, opts) {
   return { bestMatch, bestScore };
 }
 
-module.exports = { scoreWineMatch, findBestMatch, WEIGHTS };
+/**
+ * Score every candidate and return them ranked by score (descending).
+ * Used by the soft-zone "did you mean?" prompt: we want the top N near-matches
+ * to show the user, not just the single best one.
+ */
+function scoreAllMatches(query, candidates, opts) {
+  return candidates
+    .map(c => ({ wine: c, score: scoreWineMatch(c, query, opts) }))
+    .sort((a, b) => b.score - a.score);
+}
+
+module.exports = { scoreWineMatch, findBestMatch, scoreAllMatches, WEIGHTS };
