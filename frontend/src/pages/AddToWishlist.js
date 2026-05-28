@@ -7,6 +7,7 @@ import { addToWishlist } from '../api/wishlist';
 import '../components/ImageUpload.css';
 import './AddBottle.css';
 import WineImage from '../components/WineImage';
+import SimilarWinesModal from '../components/SimilarWinesModal';
 import { WINE_TYPES } from '../config/wineTypes';
 import './AddToWishlist.css';
 
@@ -33,6 +34,40 @@ function AddToWishlist() {
   const [showManualForm, setShowManualForm] = useState(false);
   const [pendingWineData, setPendingWineData] = useState(null);
   const [findingWine, setFindingWine] = useState(false);
+
+  // ── Soft-zone "did you mean?" state — see AddBottle.js for the design ──
+  const [softCandidates, setSoftCandidates] = useState(null);
+  const [softPending, setSoftPending] = useState(null);
+
+  const applyResolvedWine = useCallback((wine) => {
+    setSelectedWine(wine);
+    setScanResult(null);
+    setLabelImage(null);
+    setShowManualForm(false);
+    setPendingWineData(null);
+    setSoftCandidates(null);
+    setSoftPending(null);
+  }, []);
+
+  const submitFindOrCreate = useCallback(async (wineData, { confirmCreate = false } = {}) => {
+    setError(null);
+    setFindingWine(true);
+    try {
+      const res = await findOrCreateWine(apiFetch, { ...wineData, confirmCreate });
+      const data = await res.json();
+      if (!res.ok) { setError(data.error || 'Failed to save wine'); return; }
+      if (data.candidates && data.candidates.length > 0) {
+        setSoftCandidates(data.candidates);
+        setSoftPending({ wineData });
+        return;
+      }
+      applyResolvedWine(data.wine);
+    } catch {
+      setError('Failed to save wine');
+    } finally {
+      setFindingWine(false);
+    }
+  }, [apiFetch, applyResolvedWine]);
 
   // ── Wishlist item details ──
   const [vintage, setVintage] = useState('');
@@ -104,23 +139,8 @@ function AddToWishlist() {
           labelImage: labelImage || undefined
         };
 
-    setError(null);
-    setFindingWine(true);
-    try {
-      const res = await findOrCreateWine(apiFetch, wineData);
-      const data = await res.json();
-      if (!res.ok) { setError(data.error || 'Failed to save wine'); return; }
-      setSelectedWine(data.wine);
-      setScanResult(null);
-      setLabelImage(null);
-      setShowManualForm(false);
-      setPendingWineData(null);
-    } catch {
-      setError('Failed to save wine');
-    } finally {
-      setFindingWine(false);
-    }
-  }, [apiFetch, scanResult, labelImage]);
+    await submitFindOrCreate(wineData);
+  }, [scanResult, labelImage, submitFindOrCreate]);
 
   const handleNotRightWine = useCallback(() => {
     const { extracted } = scanResult;
@@ -141,30 +161,11 @@ function AddToWishlist() {
       setError('Name, producer, and country are required');
       return;
     }
-    setError(null);
-    setFindingWine(true);
-    try {
-      const grapes = pendingWineData.grapes
-        ? pendingWineData.grapes.split(',').map(g => g.trim()).filter(Boolean)
-        : [];
-      const res = await findOrCreateWine(apiFetch, {
-        ...pendingWineData,
-        grapes,
-        labelImage: labelImage || undefined
-      });
-      const data = await res.json();
-      if (!res.ok) { setError(data.error || 'Failed to save wine'); return; }
-      setSelectedWine(data.wine);
-      setScanResult(null);
-      setLabelImage(null);
-      setShowManualForm(false);
-      setPendingWineData(null);
-    } catch {
-      setError('Failed to save wine');
-    } finally {
-      setFindingWine(false);
-    }
-  }, [apiFetch, pendingWineData, labelImage]);
+    const grapes = pendingWineData.grapes
+      ? pendingWineData.grapes.split(',').map(g => g.trim()).filter(Boolean)
+      : [];
+    await submitFindOrCreate({ ...pendingWineData, grapes, labelImage: labelImage || undefined });
+  }, [pendingWineData, labelImage, submitFindOrCreate]);
 
   const handleScanReset = useCallback(() => {
     setScanResult(null);
@@ -615,6 +616,17 @@ function AddToWishlist() {
             </div>
           </form>
         </div>
+      )}
+
+      {softCandidates && (
+        <SimilarWinesModal
+          candidates={softCandidates}
+          queryName={softPending?.wineData?.name}
+          busy={findingWine}
+          onPick={(wine) => applyResolvedWine(wine)}
+          onCreateNew={() => softPending && submitFindOrCreate(softPending.wineData, { confirmCreate: true })}
+          onCancel={() => { setSoftCandidates(null); setSoftPending(null); }}
+        />
       )}
     </div>
   );

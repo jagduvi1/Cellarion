@@ -270,10 +270,17 @@ router.post('/scan-label', requireAuth, aiBurstLimiter, async (req, res) => {
 // taxonomy records (country, region, grapes).
 //
 // Body:  { name, producer, country, region?, appellation?, type?, grapes?: string[],
-//           labelImage?: "data:image/png;base64,..." }
-// Returns: { wine: WineDefinition, created: boolean }
+//           labelImage?: "data:image/png;base64,...", confirmCreate?: boolean }
+// Returns one of:
+//   { wine: WineDefinition, created: false }       — exact or auto-fuzzy match
+//   { candidates: [{ wine, score }, ...] }         — soft-zone: similar wines exist,
+//                                                     UI should ask "did you mean…?"
+//   { wine: WineDefinition, created: true }        — new wine created
+//
+// Pass `confirmCreate: true` after the user has reviewed the soft-zone
+// candidates and explicitly chosen to create a new wine anyway.
 router.post('/find-or-create', requireAuth, async (req, res) => {
-  const { name, producer, country, region, appellation, type, grapes, labelImage } = req.body;
+  const { name, producer, country, region, appellation, type, grapes, labelImage, confirmCreate } = req.body;
 
   if (!name?.trim() || !producer?.trim()) {
     return res.status(400).json({ error: 'name and producer are required' });
@@ -283,11 +290,18 @@ router.post('/find-or-create', requireAuth, async (req, res) => {
   }
 
   try {
-    const { wine, created } = await findOrCreateWine(
+    const result = await findOrCreateWine(
       { name, producer, country, region, appellation, type, grapes: grapes || [] },
-      req.user.id
+      req.user.id,
+      { confirmCreate: !!confirmCreate }
     );
 
+    // Soft-zone: hand the candidates back so the UI can prompt the user
+    if (result.candidates) {
+      return res.status(200).json({ candidates: result.candidates });
+    }
+
+    const { wine, created } = result;
     if (created) submitUrls(`/wines/${wine.slug || wine._id}`);
 
     res.status(created ? 201 : 200).json({ wine, created });

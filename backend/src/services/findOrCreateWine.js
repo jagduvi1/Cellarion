@@ -16,9 +16,15 @@ const Region = require('../models/Region');
 const Grape = require('../models/Grape');
 const searchService = require('./search');
 const { generateWineKey, normalizeString, resolveGrapeName } = require('../utils/normalize');
-const { findBestMatch } = require('./wineMatching');
+const { scoreAllMatches } = require('./wineMatching');
 
+// Auto-match when combined score >= SIMILARITY_THRESHOLD.
+// In the SOFT_ZONE_MIN..SIMILARITY_THRESHOLD band, surface candidates to the
+// user instead of silently creating a new wine. Below SOFT_ZONE_MIN we trust
+// that none of the existing wines are remotely the same and create.
 const SIMILARITY_THRESHOLD = 0.75;
+const SOFT_ZONE_MIN = 0.50;
+const SOFT_ZONE_TOP_N = 5;
 const POPULATE = ['country', 'region', 'grapes'];
 
 // ── Taxonomy helpers ─────────────────────────────────────────────────────────
@@ -69,11 +75,21 @@ async function findOrCreateGrapes(names, userId) {
 /**
  * Find an existing WineDefinition or create a new one.
  *
+ * Three return shapes:
+ *   { wine, created: false }                   — exact or auto-fuzzy match (>= SIMILARITY_THRESHOLD)
+ *   { wine: null, candidates: [...] }          — soft zone: similar wines exist but not enough to auto-match.
+ *                                                Caller (UI) should show a "did you mean?" prompt.
+ *   { wine, created: true }                    — no match, new wine created
+ *
+ * Pass `confirmCreate: true` to bypass the soft-zone gate and force creation
+ * — used when the user has explicitly confirmed "no, none of those, make a new one".
+ *
  * @param {Object} wineData   - { name, producer, country, region, appellation, type, grapes[] }
  * @param {string} userId     - ObjectId string of the authenticated user (for createdBy)
- * @returns {{ wine: WineDefinition, created: boolean }}
+ * @param {Object} [opts]
+ * @param {boolean} [opts.confirmCreate=false] - Skip soft-zone candidate return and create directly
  */
-async function findOrCreateWine({ name, producer, country, region, appellation, type, grapes }, userId) {
+async function findOrCreateWine({ name, producer, country, region, appellation, type, grapes }, userId, { confirmCreate = false } = {}) {
   const trimmedName = name.trim();
   const trimmedProducer = producer.trim();
 
@@ -109,13 +125,26 @@ async function findOrCreateWine({ name, producer, country, region, appellation, 
   }
 
   if (candidates.length > 0) {
-    const { bestMatch, bestScore } = findBestMatch(
+    const ranked = scoreAllMatches(
       { name: trimmedName, producer: trimmedProducer, appellation },
       candidates,
       { redistribute: false }
     );
-    if (bestScore >= SIMILARITY_THRESHOLD && bestMatch) {
-      return { wine: bestMatch, created: false };
+
+    // Auto-match: top score is confident enough
+    if (ranked[0].score >= SIMILARITY_THRESHOLD) {
+      return { wine: ranked[0].wine, created: false };
+    }
+
+    // Soft zone: top score is suggestive but not confident. Surface up to N
+    // candidates and let the user choose, unless the caller has already
+    // confirmed they want to create regardless.
+    if (!confirmCreate && ranked[0].score >= SOFT_ZONE_MIN) {
+      const softCandidates = ranked
+        .filter(r => r.score >= SOFT_ZONE_MIN)
+        .slice(0, SOFT_ZONE_TOP_N)
+        .map(r => ({ wine: r.wine, score: Math.round(r.score * 100) / 100 }));
+      return { wine: null, candidates: softCandidates };
     }
   }
 

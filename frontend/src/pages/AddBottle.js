@@ -9,6 +9,7 @@ import { validatePriceSanity } from '../utils/priceValidation';
 import ImageUpload from '../components/ImageUpload';
 import RatingInput from '../components/RatingInput';
 import WineImage from '../components/WineImage';
+import SimilarWinesModal from '../components/SimilarWinesModal';
 import { WINE_TYPES } from '../config/wineTypes';
 import './AddBottle.css';
 
@@ -59,6 +60,14 @@ function AddBottle() {
   const [pendingWineData, setPendingWineData] = useState(null);
   const [findingWine, setFindingWine] = useState(false);
 
+  // ── Soft-zone "did you mean?" state ──
+  // When the backend's find-or-create finds similar (but not auto-matching)
+  // wines, it returns candidates instead of creating. We hold the user's
+  // pending wineData so we can re-fire with confirmCreate: true if the
+  // user picks "No, create new wine".
+  const [softCandidates, setSoftCandidates] = useState(null);
+  const [softPending, setSoftPending] = useState(null); // { wineData, carriedVintage }
+
   // ── Label-scan camera (shared hook) ──
   const handleScanSuccess = useCallback((data) => {
     setScanResult(data);
@@ -76,6 +85,46 @@ function AddBottle() {
     labelVideoRef, labelCanvasRef,
     startCamera: startLabelCamera, stopCamera: stopLabelCamera, capturePhoto: captureLabelPhoto
   } = useLabelScanner(apiFetch, { onScanSuccess: handleScanSuccess, onScanError: handleScanError });
+
+  // Apply a resolved wine (from find-or-create OR from a soft-zone pick) and
+  // advance to the bottle-details step. Centralised so all entry paths share
+  // the same teardown.
+  const applyResolvedWine = useCallback((wine, carriedVintage) => {
+    setSelectedWine(wine);
+    setBottleData(prev => ({ ...prev, vintage: carriedVintage || '' }));
+    setScanResult(null);
+    setLabelImage(null);
+    setShowManualForm(false);
+    setPendingWineData(null);
+    setSoftCandidates(null);
+    setSoftPending(null);
+    setStep(2);
+  }, []);
+
+  // Submit a find-or-create request, handling the three response shapes:
+  // resolved wine, soft-zone candidates, or error.
+  const submitFindOrCreate = useCallback(async (wineData, carriedVintage, { confirmCreate = false } = {}) => {
+    setError(null);
+    setFindingWine(true);
+    try {
+      const res = await findOrCreateWine(apiFetch, { ...wineData, confirmCreate });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error || t('addBottle.scanFailedToSaveWine'));
+        return;
+      }
+      if (data.candidates && data.candidates.length > 0) {
+        setSoftCandidates(data.candidates);
+        setSoftPending({ wineData, carriedVintage });
+        return;
+      }
+      applyResolvedWine(data.wine, carriedVintage);
+    } catch {
+      setError(t('addBottle.scanFailedToSaveWine'));
+    } finally {
+      setFindingWine(false);
+    }
+  }, [apiFetch, t, applyResolvedWine]);
 
   // Confirm scan result — find/create the wine, save label image, go to bottle details
   const handleConfirmScan = useCallback(async () => {
@@ -104,25 +153,8 @@ function AddBottle() {
           labelImage: labelImage || undefined
         };
 
-    setError(null);
-    setFindingWine(true);
-    try {
-      const res = await findOrCreateWine(apiFetch, wineData);
-      const data = await res.json();
-      if (!res.ok) { setError(data.error || t('addBottle.scanFailedToSaveWine')); return; }
-      setSelectedWine(data.wine);
-      setBottleData(prev => ({ ...prev, vintage: extracted.vintage || '' }));
-      setScanResult(null);
-      setLabelImage(null);
-      setShowManualForm(false);
-      setPendingWineData(null);
-      setStep(2);
-    } catch {
-      setError(t('addBottle.scanFailedToSaveWine'));
-    } finally {
-      setFindingWine(false);
-    }
-  }, [apiFetch, scanResult, labelImage, t]);
+    await submitFindOrCreate(wineData, extracted.vintage);
+  }, [scanResult, labelImage, submitFindOrCreate]);
 
   // Switch to the editable manual form (user says "not the right wine")
   const handleNotRightWine = useCallback(() => {
@@ -145,32 +177,14 @@ function AddBottle() {
       setError(t('addBottle.scanNameProducerCountryRequired'));
       return;
     }
-    setError(null);
-    setFindingWine(true);
-    try {
-      const grapes = pendingWineData.grapes
-        ? pendingWineData.grapes.split(',').map(g => g.trim()).filter(Boolean)
-        : [];
-      const res = await findOrCreateWine(apiFetch, {
-        ...pendingWineData,
-        grapes,
-        labelImage: labelImage || undefined
-      });
-      const data = await res.json();
-      if (!res.ok) { setError(data.error || t('addBottle.scanFailedToSaveWine')); return; }
-      setSelectedWine(data.wine);
-      setBottleData(prev => ({ ...prev, vintage: scanResult?.extracted?.vintage || '' }));
-      setScanResult(null);
-      setLabelImage(null);
-      setShowManualForm(false);
-      setPendingWineData(null);
-      setStep(2);
-    } catch {
-      setError(t('addBottle.scanFailedToSaveWine'));
-    } finally {
-      setFindingWine(false);
-    }
-  }, [apiFetch, pendingWineData, scanResult, labelImage, t]);
+    const grapes = pendingWineData.grapes
+      ? pendingWineData.grapes.split(',').map(g => g.trim()).filter(Boolean)
+      : [];
+    await submitFindOrCreate(
+      { ...pendingWineData, grapes, labelImage: labelImage || undefined },
+      scanResult?.extracted?.vintage
+    );
+  }, [pendingWineData, scanResult, labelImage, t, submitFindOrCreate]);
 
   // Reset — back to search
   const handleScanReset = useCallback(() => {
@@ -901,6 +915,19 @@ function AddBottle() {
             </div>
           </form>
         </div>
+      )}
+
+      {softCandidates && (
+        <SimilarWinesModal
+          candidates={softCandidates}
+          queryName={softPending?.wineData?.name}
+          busy={findingWine}
+          onPick={(wine) => applyResolvedWine(wine, softPending?.carriedVintage)}
+          onCreateNew={() => softPending && submitFindOrCreate(
+            softPending.wineData, softPending.carriedVintage, { confirmCreate: true }
+          )}
+          onCancel={() => { setSoftCandidates(null); setSoftPending(null); }}
+        />
       )}
     </div>
   );
