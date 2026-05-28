@@ -1,5 +1,6 @@
 const express = require('express');
 const mongoose = require('mongoose');
+const rateLimit = require('express-rate-limit');
 const WineDefinition = require('../models/WineDefinition');
 const Discussion = require('../models/Discussion');
 const searchService = require('../services/search');
@@ -10,10 +11,28 @@ const { generateWineKey, combinedSimilarity } = require('../utils/normalize');
 const { parsePagination } = require('../utils/pagination');
 const { isValidId } = require('../utils/validation');
 const { submitUrls } = require('../services/indexNow');
+const rateLimitsConfig = require('../config/rateLimits');
+const { logAudit } = require('../services/audit');
 
 const REMBG_URL = process.env.REMBG_URL || 'http://rembg:5000';
 
 const router = express.Router();
+
+// Per-user burst limiter on Anthropic-backed wine endpoints. Keyed on
+// req.user.id (not IP) so a scripted attacker rotating IPs can't bypass.
+// Per-IP apiLimiter still runs alongside. /scan-label, /identify-text,
+// /ai-info share one bucket because they share one Anthropic budget.
+const aiBurstLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: () => rateLimitsConfig.get().aiBurst.max,
+  keyGenerator: (req) => String(req.user?.id || ''),
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: (req, res) => {
+    logAudit(req, 'system.rate_limit_exceeded', {}, { limiter: 'ai-burst', userId: req.user?.id });
+    res.status(429).json({ error: 'Too many AI requests in a short time. Please wait a minute and try again.' });
+  },
+});
 
 const USER_SEARCH_LIMIT = 10;
 
@@ -143,7 +162,7 @@ router.get('/', requireAuth, async (req, res) => {
 //   match: { wine: WineDefinition, confidence: number } | null,
 //   labelImage: "data:image/png;base64,..." (background-removed label, or original as fallback)
 // }
-router.post('/scan-label', requireAuth, async (req, res) => {
+router.post('/scan-label', requireAuth, aiBurstLimiter, async (req, res) => {
   const { image, mediaType = 'image/jpeg' } = req.body;
 
   if (!image) {
@@ -280,7 +299,7 @@ router.post('/find-or-create', requireAuth, async (req, res) => {
 
 // POST /api/wines/identify-text — identify a wine from a free-text query using AI,
 // then find or create it in the registry. Used by the AddBottle manual search fallback.
-router.post('/identify-text', requireAuth, async (req, res) => {
+router.post('/identify-text', requireAuth, aiBurstLimiter, async (req, res) => {
   const query = typeof req.body.query === 'string' ? req.body.query.trim() : '';
   if (!query) return res.status(400).json({ error: 'query is required' });
 
@@ -301,7 +320,7 @@ router.post('/identify-text', requireAuth, async (req, res) => {
 // POST /api/wines/ai-info — query AI for wine info without creating anything in DB.
 // Returns raw AI-identified data (country/region/grapes as name strings, not IDs).
 // Used by the AdminRequests page to pre-fill the Create New Wine form.
-router.post('/ai-info', requireAuth, async (req, res) => {
+router.post('/ai-info', requireAuth, aiBurstLimiter, async (req, res) => {
   const query = typeof req.body.query === 'string' ? req.body.query.trim() : '';
   if (!query) return res.status(400).json({ error: 'query is required' });
 
