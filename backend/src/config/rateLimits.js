@@ -32,6 +32,13 @@ const defaults = {
   // budget. Vision (scan-label) is the costliest, so 10/min is generous for
   // a human walking through a cellar but still catches scripts.
   aiBurst: { max: 10, windowMs: 60 * 1000 },
+  // Per-user rolling cap on /api/images/upload. Each upload is up to 10MB and
+  // stored on disk; without this cap a logged-in user could script a loop and
+  // fill the disk. The per-bottle MAX_IMAGES_PER_BOTTLE cap limits per-resource
+  // growth but doesn't stop a user creating bottles + uploading in a loop.
+  // Default 30/hour bounds worst-case to ~7 GB/day per user — generous for
+  // real use (a session of adding bottles rarely exceeds 30 uploads).
+  imageUploadBurst: { max: 30, windowMs: 60 * 60 * 1000 },
 };
 
 let cache = {
@@ -42,6 +49,7 @@ let cache = {
   chatBurst: { ...defaults.chatBurst },
   chatConcurrentStreams: { ...defaults.chatConcurrentStreams },
   aiBurst: { ...defaults.aiBurst },
+  imageUploadBurst: { ...defaults.imageUploadBurst },
 };
 
 async function load() {
@@ -70,6 +78,10 @@ async function load() {
         aiBurst: {
           max:      doc.value.aiBurst?.max      ?? defaults.aiBurst.max,
           windowMs: doc.value.aiBurst?.windowMs ?? defaults.aiBurst.windowMs,
+        },
+        imageUploadBurst: {
+          max:      doc.value.imageUploadBurst?.max      ?? defaults.imageUploadBurst.max,
+          windowMs: doc.value.imageUploadBurst?.windowMs ?? defaults.imageUploadBurst.windowMs,
         },
       };
     }
