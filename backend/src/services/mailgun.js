@@ -131,7 +131,13 @@ async function sendDrinkWindowDigest(toEmail, username, bottles, userId) {
   const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
   const { createUnsubscribeToken } = require('../utils/unsubscribe');
   const unsubToken = createUnsubscribeToken(userId);
-  const unsubLink = `${process.env.BACKEND_URL || 'http://localhost:5000'}/api/users/unsubscribe?token=${unsubToken}`;
+  // Use FRONTEND_URL — the unsubscribe endpoint lives on the backend but is
+  // routed through the same public host as the SPA via Traefik (/api/* → backend).
+  // Using BACKEND_URL was a footgun: it isn't set on the standard deployment
+  // and silently fell back to http://localhost:5000, shipping broken links in
+  // every email. FRONTEND_URL is already required for CORS so it's guaranteed
+  // present in any working production setup.
+  const unsubLink = `${frontendUrl}/api/users/unsubscribe?token=${unsubToken}`;
 
   const statusLabel = (s) =>
     s === 'peak'      ? 'Entered peak — drink now'
@@ -340,7 +346,9 @@ async function sendDiscussionReplyEmail(toEmail, recipientName, recipientId, rep
 
   const { createUnsubscribeToken } = require('../utils/unsubscribe');
   const unsubToken = createUnsubscribeToken(recipientId);
-  const unsubLink = `${process.env.BACKEND_URL || 'http://localhost:5000'}/api/users/unsubscribe?token=${unsubToken}`;
+  // See sendDrinkWindowDigest for why this uses FRONTEND_URL not BACKEND_URL.
+  const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+  const unsubLink = `${frontendUrl}/api/users/unsubscribe?token=${unsubToken}`;
 
   const verb = kind === 'quote' ? 'quoted you' : kind === 'mention' ? 'mentioned you' : 'replied to your discussion';
   const subject = kind === 'quote'
