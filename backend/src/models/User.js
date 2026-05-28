@@ -131,6 +131,17 @@ const userSchema = new mongoose.Schema({
     type: String,
     default: null
   },
+  // Per-account brute-force lockout state. Incremented on each failed login,
+  // reset on success or successful password reset. Surfaced via the lockout
+  // checks in utils/loginAttempts.js — the login handler treats a locked
+  // account exactly like a wrong password (same generic 401, same latency)
+  // so an attacker can't tell when they've tripped a lockout.
+  failedLoginAttempts: {
+    count:              { type: Number, default: 0 },
+    firstFailedAt:      { type: Date,   default: null },
+    lockedUntil:        { type: Date,   default: null },
+    lockoutEmailSentAt: { type: Date,   default: null },  // dedupes the alert email
+  },
   emailVerified: {
     type: Boolean,
     default: false

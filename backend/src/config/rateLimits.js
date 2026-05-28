@@ -7,13 +7,23 @@
 const defaults = {
   api:   { max: 200 },
   write: { max: 60 },
-  auth:  { max: 10 }
+  auth:  { max: 10 },
+  // Per-account brute-force protection. Tracks failed login attempts on the
+  // User document so a credential-stuffing attacker rotating IPs can't bypass
+  // the per-IP authLimiter. See utils/loginAttempts.js for the enforcement.
+  accountLockout: {
+    threshold:    10,               // failed attempts before lockout
+    windowMs:     15 * 60 * 1000,   // count attempts within a 15-min window
+    durationMs:   60 * 60 * 1000,   // lock the account for 1 hour
+    emailDedupMs: 60 * 60 * 1000,   // send at most one lockout email per hour
+  }
 };
 
 let cache = {
   api:   { max: defaults.api.max },
   write: { max: defaults.write.max },
-  auth:  { max: defaults.auth.max }
+  auth:  { max: defaults.auth.max },
+  accountLockout: { ...defaults.accountLockout }
 };
 
 async function load() {
@@ -25,7 +35,13 @@ async function load() {
       cache = {
         api:   { max: doc.value.api?.max   ?? defaults.api.max   },
         write: { max: doc.value.write?.max ?? defaults.write.max },
-        auth:  { max: doc.value.auth?.max  ?? defaults.auth.max  }
+        auth:  { max: doc.value.auth?.max  ?? defaults.auth.max  },
+        accountLockout: {
+          threshold:    doc.value.accountLockout?.threshold    ?? defaults.accountLockout.threshold,
+          windowMs:     doc.value.accountLockout?.windowMs     ?? defaults.accountLockout.windowMs,
+          durationMs:   doc.value.accountLockout?.durationMs   ?? defaults.accountLockout.durationMs,
+          emailDedupMs: doc.value.accountLockout?.emailDedupMs ?? defaults.accountLockout.emailDedupMs,
+        }
       };
     }
   } catch (err) {
