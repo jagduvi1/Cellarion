@@ -47,10 +47,29 @@ async function gatherPriceWarnings({
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
+// Coerce a possibly-user-supplied id to either a plain hex string ObjectId
+// or a real Mongoose ObjectId instance. Anything else (an injected operator
+// object, a non-hex string) returns null, which short-circuits the query.
+// Used to defuse CodeQL js/sql-injection on req.body values that reach $match.
+function safeObjectIdLike(v) {
+  if (v == null) return null;
+  if (typeof v === 'string') return /^[a-f0-9]{24}$/i.test(v) ? v : null;
+  // Mongoose ObjectId / BSON ObjectId
+  if (typeof v === 'object' && typeof v.toHexString === 'function') return v;
+  return null;
+}
+
+function safeString(v) {
+  if (v == null) return null;
+  return typeof v === 'string' ? v : null;
+}
+
 async function resolveUserMedian(userId, currency) {
-  if (!userId) return { median: null, sample: 0 };
+  const uid = safeObjectIdLike(userId);
+  const cur = safeString(currency);
+  if (!uid || !cur) return { median: null, sample: 0 };
   const rows = await Bottle
-    .find({ user: userId, currency, price: { $gt: 0 } })
+    .find({ user: uid, currency: cur, price: { $gt: 0 } })
     .select('price')
     .sort({ price: 1 })
     .lean();
@@ -62,9 +81,12 @@ async function resolveUserMedian(userId, currency) {
 }
 
 async function resolveMarketMedian(wineDefinitionId, vintage, currency) {
-  if (!wineDefinitionId || !vintage || vintage === 'NV' || vintage === 'Unknown') return null;
+  const wd  = safeObjectIdLike(wineDefinitionId);
+  const v   = safeString(vintage);
+  const cur = safeString(currency);
+  if (!wd || !v || !cur || v === 'NV' || v === 'Unknown') return null;
   const snapshot = await WineVintagePrice
-    .findOne({ wineDefinition: wineDefinitionId, vintage, currency })
+    .findOne({ wineDefinition: wd, vintage: v, currency: cur })
     .sort({ setAt: -1 })
     .lean();
   return snapshot?.price ?? null;
@@ -78,9 +100,10 @@ async function resolveMarketMedian(wineDefinitionId, vintage, currency) {
  * Returns `{ USD: { median, sample }, EUR: { median, sample }, ... }`.
  */
 async function computeUserMediansByCurrency(userId) {
-  if (!userId) return {};
+  const uid = safeObjectIdLike(userId);
+  if (!uid) return {};
   const rows = await Bottle.aggregate([
-    { $match: { user: userId, price: { $gt: 0 } } },
+    { $match: { user: uid, price: { $gt: 0 } } },
     { $sort: { currency: 1, price: 1 } },
     { $group: {
       _id: '$currency',
