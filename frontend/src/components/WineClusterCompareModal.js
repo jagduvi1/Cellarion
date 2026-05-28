@@ -6,6 +6,7 @@ import {
   adminGetWine, adminSaveWine, adminMergeWine, adminGetGrapes,
 } from '../api/admin';
 import { WINE_TYPES } from '../config/wineTypes';
+import './WineModalThumbs.css';
 
 /**
  * Side-by-side comparison of every wine in a duplicate cluster, with inline

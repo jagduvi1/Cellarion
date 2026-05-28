@@ -1,0 +1,34 @@
+/* Image sizing for the dedup / soft-zone modals. The parent <div> sets the
+   box (e.g. 36x48 in the duplicates list, 48x64 in the soft-zone modal,
+   larger in the compare view). The <img> just fills its box without
+   distorting the aspect ratio. */
+
+.dup-wine-thumb,
+.similar-wine-thumb,
+.compare-wine-thumb {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+/* Compare view: bigger fixed area so the bottle is actually legible */
+.compare-wine-thumb {
+  max-width: 110px;
+  max-height: 140px;
+}
+
+/* Placeholder when a wine has no image — coloured tile sized to the slot */
+.compare-wine-placeholder {
+  width: 80px;
+  height: 110px;
+  border-radius: 4px;
+  background: var(--color-bg-elev, #eee);
+  opacity: 0.4;
+}
+.compare-wine-placeholder.red       { background: #722f37; }
+.compare-wine-placeholder.white     { background: #f0e6c3; }
+.compare-wine-placeholder.rose,
+.compare-wine-placeholder.rosé      { background: #f5b8b2; }
+.compare-wine-placeholder.sparkling { background: #d4d8e1; }
+.compare-wine-placeholder.dessert   { background: #c89c5a; }
+.compare-wine-placeholder.fortified { background: #5a3a2c; }

@@ -3,6 +3,7 @@ import Modal from './Modal';
 import WineImage from './WineImage';
 import WineClusterCompareModal from './WineClusterCompareModal';
 import { adminGetWineDuplicateClusters, adminMergeWine } from '../api/admin';
+import './WineModalThumbs.css';
 
 /**
  * Registry-wide duplicate scanner for admin users. Shows clusters of
