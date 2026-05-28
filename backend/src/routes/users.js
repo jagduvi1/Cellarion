@@ -655,9 +655,22 @@ router.get('/unsubscribe', async (req, res) => {
       return res.status(400).json({ error: 'Invalid unsubscribe link' });
     }
 
-    user.preferences.notifications.email = false;
-    user.preferences.notifications.push = false;
-    await user.save();
+    // Walk every notification category and flip its outbound channels
+    // (email + push) to false. Earlier code assigned to non-existent
+    // `notifications.email` / `notifications.push` paths — Mongoose's
+    // strict mode silently dropped those writes and the user kept
+    // receiving every category. See utils/notifications.js for the
+    // canonical category list, and notifications.test.js for the
+    // regression coverage that locks this in.
+    const { unsubscribeAllNotifications } = require('../utils/notifications');
+    const changed = unsubscribeAllNotifications(user);
+    if (changed) {
+      await user.save();
+      logAudit(req, 'user.unsubscribe.all',
+        { type: 'user', id: user._id },
+        { username: user.username }
+      );
+    }
 
     // Redirect to a confirmation page
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
