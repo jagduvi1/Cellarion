@@ -24,6 +24,9 @@ export const adminMergeWine = (apiFetch, sourceId, targetId) =>
     body: JSON.stringify({ targetId }),
   });
 
+export const adminGetWineDuplicateClusters = (apiFetch, { minScore = 0.6, limit = 50 } = {}) =>
+  apiFetch(`/api/admin/wines/duplicate-clusters?minScore=${minScore}&limit=${limit}`);
+
 // ── Taxonomy ─────────────────────────────────────────────────────────────────
 export const adminGetTaxonomy = (apiFetch, endpoint) =>
   apiFetch(endpoint);

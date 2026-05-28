@@ -6,8 +6,10 @@ const {
   calculateSimilarity,
   combinedSimilarity,
   trigramSimilarity,
-  tokenSimilarity
+  tokenSimilarity,
+  normalizeString
 } = require('../../utils/normalize');
+const { scoreWineMatch } = require('../../services/wineMatching');
 const WineDefinition = require('../../models/WineDefinition');
 const Bottle = require('../../models/Bottle');
 const BottleImage = require('../../models/BottleImage');
@@ -165,6 +167,145 @@ router.post('/', async (req, res) => {
 });
 
 // GET /api/admin/wines/duplicates - Find potential duplicates
+// GET /api/admin/wines/duplicate-clusters
+//
+// Registry-wide scan: groups wines by normalised producer (cheap O(N) bucket),
+// then runs pairwise scoring inside each bucket. Any pair scoring >= minScore
+// becomes an edge; connected components form clusters.
+//
+// Producer grouping is the pragmatic pre-filter: real duplicates almost always
+// share a producer (people typo the wine name, not the producer). Cases where
+// the producer itself is typo'd are missed by this scan — a future producer-
+// dedup pass is the right fix there.
+//
+// Query: minScore (default 0.6), limit (default 50, max 200)
+// Returns: { clusters: [{ score, wines: [{ wine, bottleCount }] }], scannedCount }
+router.get('/duplicate-clusters', async (req, res) => {
+  try {
+    const minScore = Math.max(0, Math.min(1, parseFloat(req.query.minScore) || 0.6));
+    const limit = Math.max(1, Math.min(200, parseInt(req.query.limit) || 50));
+
+    // Fetch every wine — small projection so we don't pull the world.
+    // Sort by producer so we can stream-group instead of building a large map.
+    const wines = await WineDefinition.find({})
+      .select('name producer appellation image type country region')
+      .populate('country', 'name')
+      .populate('region', 'name')
+      .lean();
+
+    // Group by normalised producer
+    const byProducer = new Map();
+    for (const wine of wines) {
+      const key = normalizeString(wine.producer || '');
+      if (!key) continue;
+      let group = byProducer.get(key);
+      if (!group) { group = []; byProducer.set(key, group); }
+      group.push(wine);
+    }
+
+    // Union-find over wine _ids
+    const parent = new Map();
+    const find = (id) => {
+      let p = parent.get(id);
+      if (p === id) return id;
+      p = find(p);
+      parent.set(id, p);
+      return p;
+    };
+    const union = (a, b) => {
+      const ra = find(a), rb = find(b);
+      if (ra !== rb) parent.set(ra, rb);
+    };
+
+    // Score pairs within each producer group
+    const edgeScore = new Map(); // "a|b" -> best score (so we can keep cluster score later)
+    for (const group of byProducer.values()) {
+      if (group.length < 2) continue;
+      for (let i = 0; i < group.length; i++) {
+        const a = group[i];
+        const aId = String(a._id);
+        if (!parent.has(aId)) parent.set(aId, aId);
+        for (let j = i + 1; j < group.length; j++) {
+          const b = group[j];
+          const bId = String(b._id);
+          if (!parent.has(bId)) parent.set(bId, bId);
+          const score = scoreWineMatch(
+            { name: a.name, producer: a.producer, appellation: a.appellation },
+            { name: b.name, producer: b.producer, appellation: b.appellation },
+            { redistribute: false }
+          );
+          if (score >= minScore) {
+            union(aId, bId);
+            const key = aId < bId ? `${aId}|${bId}` : `${bId}|${aId}`;
+            edgeScore.set(key, score);
+          }
+        }
+      }
+    }
+
+    // Bucket wines by cluster root
+    const clusters = new Map();
+    for (const id of parent.keys()) {
+      const root = find(id);
+      let bucket = clusters.get(root);
+      if (!bucket) { bucket = { wineIds: [], score: 0 }; clusters.set(root, bucket); }
+      bucket.wineIds.push(id);
+    }
+
+    // Drop singletons (a wine in its own cluster isn't a duplicate)
+    // Compute cluster score = max pairwise score among any edge in the cluster
+    const wineById = new Map(wines.map(w => [String(w._id), w]));
+    const result = [];
+    for (const [, bucket] of clusters) {
+      if (bucket.wineIds.length < 2) continue;
+      let best = 0;
+      for (let i = 0; i < bucket.wineIds.length; i++) {
+        for (let j = i + 1; j < bucket.wineIds.length; j++) {
+          const a = bucket.wineIds[i], b = bucket.wineIds[j];
+          const key = a < b ? `${a}|${b}` : `${b}|${a}`;
+          const s = edgeScore.get(key) || 0;
+          if (s > best) best = s;
+        }
+      }
+      result.push({
+        score: Math.round(best * 100) / 100,
+        wineIds: bucket.wineIds,
+      });
+    }
+
+    // Sort clusters by best score desc and trim
+    result.sort((a, b) => b.score - a.score);
+    const trimmed = result.slice(0, limit);
+
+    // Look up bottle counts in one aggregate
+    const allClusterWineIds = trimmed.flatMap(c => c.wineIds);
+    const bottleCounts = new Map();
+    if (allClusterWineIds.length > 0) {
+      const counts = await Bottle.aggregate([
+        { $match: { wineDefinition: { $in: allClusterWineIds.map(id => new mongoose.Types.ObjectId(id)) } } },
+        { $group: { _id: '$wineDefinition', count: { $sum: 1 } } },
+      ]);
+      for (const c of counts) bottleCounts.set(String(c._id), c.count);
+    }
+
+    res.json({
+      scannedCount: wines.length,
+      producerGroupCount: byProducer.size,
+      totalClusters: result.length,
+      clusters: trimmed.map(c => ({
+        score: c.score,
+        wines: c.wineIds.map(id => {
+          const w = wineById.get(id);
+          return { ...w, bottleCount: bottleCounts.get(id) || 0 };
+        }),
+      })),
+    });
+  } catch (err) {
+    console.error('Duplicate cluster scan error:', err);
+    res.status(500).json({ error: 'Failed to scan for duplicates' });
+  }
+});
+
 router.get('/duplicates', async (req, res) => {
   try {
     const { name, producer, appellation, threshold = 0.75 } = req.query;

@@ -8,6 +8,7 @@ import {
   adminAssignImageToWine,
 } from '../api/admin';
 import Modal from '../components/Modal';
+import WineDuplicatesModal from '../components/WineDuplicatesModal';
 import { WINE_TYPES } from '../config/wineTypes';
 import GrapePicker from '../components/GrapePicker';
 import ImageUpload from '../components/ImageUpload';
@@ -59,6 +60,9 @@ function AdminWines() {
   const [mergeTarget, setMergeTarget] = useState(null);
   const [merging, setMerging] = useState(false);
   const [mergeError, setMergeError] = useState(null);
+
+  // Registry-wide duplicate scanner
+  const [showDuplicatesScanner, setShowDuplicatesScanner] = useState(false);
 
   // Taxonomy
   const [countries, setCountries] = useState([]);
@@ -323,9 +327,14 @@ function AdminWines() {
           <h1>{t('admin.wines.title')}</h1>
           {!loading && <p className="page-subtitle">{total.toLocaleString()} {t('admin.wines.wineDefinitions')}</p>}
         </div>
-        <button className="btn btn-primary" onClick={openCreate}>
-          {t('admin.wines.newWine')}
-        </button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button className="btn btn-secondary" onClick={() => setShowDuplicatesScanner(true)} title="Scan the wine registry for likely duplicates">
+            Find duplicates
+          </button>
+          <button className="btn btn-primary" onClick={openCreate}>
+            {t('admin.wines.newWine')}
+          </button>
+        </div>
       </div>
 
       {/* Filter bar */}
@@ -748,6 +757,14 @@ function AdminWines() {
             </button>
           </div>
         </Modal>
+      )}
+
+      {showDuplicatesScanner && (
+        <WineDuplicatesModal
+          apiFetch={apiFetch}
+          onClose={() => setShowDuplicatesScanner(false)}
+          onMerged={fetchWines}
+        />
       )}
     </div>
   );
