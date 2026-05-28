@@ -8,7 +8,8 @@ const { requireAuth } = require('../middleware/auth');
 const { checkIsSuperAdmin } = require('../middleware/superAdmin');
 const { logAudit } = require('../services/audit');
 const rateLimitsConfig = require('../config/rateLimits');
-const { sendVerificationEmail, sendPasswordResetEmail, EMAIL_VERIFICATION_ENABLED } = require('../services/mailgun');
+const { sendVerificationEmail, sendPasswordResetEmail, sendAccountLockoutAlert, EMAIL_VERIFICATION_ENABLED } = require('../services/mailgun');
+const { isAccountLocked, recordLoginFailure, resetLoginAttempts } = require('../utils/loginAttempts');
 const PendingShare = require('../models/PendingShare');
 const Cellar = require('../models/Cellar');
 const { createNotification } = require('../services/notifications');
@@ -231,12 +232,40 @@ router.post('/login', authLimiter, async (req, res) => {
     const DUMMY_HASH = '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy';
     const isMatch = await bcrypt.compare(password, user ? user.password : DUMMY_HASH);
 
+    // Per-account brute-force protection. A locked account behaves IDENTICALLY
+    // to a wrong-password response — same 401, same generic message, same
+    // latency (bcrypt already ran above). This deprives a credential-stuffing
+    // attacker of any feedback signal about whether they've tripped the lock.
+    if (user && isAccountLocked(user)) {
+      logAudit(req, 'auth.login.locked',
+        { type: 'user', id: user._id },
+        { username: user.username }
+      );
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
     if (!user) {
       logAudit(req, 'auth.login.failed', {}, { identifier: username });
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
     if (!isMatch) {
+      // Record failure, check if it crossed the lockout threshold, fire alert
+      // email (deduped) if this is a new lockout event. Non-blocking: any
+      // failure in the email path is logged but doesn't affect the response.
+      const { lockedNow, shouldSendEmail } = recordLoginFailure(user);
+      try { await user.save(); } catch (err) { console.warn('Failed to persist login-failure counter:', err.message); }
+      if (lockedNow) {
+        logAudit(req, 'auth.account_locked',
+          { type: 'user', id: user._id },
+          { username: user.username, threshold: rateLimitsConfig.get().accountLockout.threshold }
+        );
+      }
+      if (shouldSendEmail) {
+        sendAccountLockoutAlert(user.email, user.username).catch(err =>
+          console.warn('Failed to send account-lockout alert:', err.message)
+        );
+      }
       logAudit(req, 'auth.login.failed',
         { type: 'user', id: user._id },
         { username: user.username }
@@ -255,6 +284,12 @@ router.post('/login', authLimiter, async (req, res) => {
         code: 'EMAIL_NOT_VERIFIED',
         email: user.email
       });
+    }
+
+    // Successful login: clear any failed-attempt counter the user had built up.
+    // Save errors here are non-fatal — the login itself succeeded.
+    if (resetLoginAttempts(user)) {
+      try { await user.save(); } catch (err) { console.warn('Failed to reset login-attempt counter:', err.message); }
     }
 
     const accessToken = await issueTokens(user, res, { rememberMe: rememberMe !== false });
@@ -539,6 +574,10 @@ router.post('/reset-password', authLimiter, async (req, res) => {
     user.passwordResetTokenHash = null;
     user.passwordResetExpiresAt = null;
     user.refreshTokenHash = null; // Invalidate all existing sessions
+    // Successful password reset is the user's explicit recovery signal —
+    // clear any brute-force lockout state too. Otherwise a locked user
+    // would still be locked after resetting their password.
+    resetLoginAttempts(user);
 
     await user.save();
 

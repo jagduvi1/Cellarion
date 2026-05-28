@@ -398,4 +398,64 @@ async function sendDiscussionReplyEmail(toEmail, recipientName, recipientId, rep
   });
 }
 
-module.exports = { sendVerificationEmail, sendPasswordResetEmail, sendDrinkWindowDigest, sendRecommendationEmail, sendCellarInviteEmail, sendDiscussionReplyEmail, EMAIL_VERIFICATION_ENABLED };
+/**
+ * Notify a user that their account just got locked after too many failed
+ * login attempts (per-account brute-force protection). Deliberately vague
+ * about source IPs — those are usually rotating residential proxies and
+ * say nothing useful to an end user. The CTA is "reset your password if
+ * it wasn't you" because that's the recovery path that also clears the
+ * lockout.
+ *
+ * Dedupe is handled upstream in utils/loginAttempts.js — this function is
+ * only called once per dedupe window.
+ *
+ * @param {string} toEmail
+ * @param {string} username
+ */
+async function sendAccountLockoutAlert(toEmail, username) {
+  if (!EMAIL_VERIFICATION_ENABLED) return;
+
+  const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+  const resetUrl = `${frontendUrl}/forgot-password`;
+
+  await mg.messages.create(DOMAIN, {
+    from: FROM,
+    to: [toEmail],
+    subject: 'Cellarion: suspicious login activity on your account',
+    text: [
+      `Hello ${username},`,
+      '',
+      'We noticed a high number of failed login attempts on your Cellarion account in a short window of time. As a precaution, the account has been temporarily locked.',
+      '',
+      'If this was you (forgotten password, typing the wrong one), you can wait the cooldown period and try again — or reset your password right away to regain access immediately:',
+      '',
+      resetUrl,
+      '',
+      'If this was NOT you, someone may be trying to guess your password. We strongly recommend resetting it via the link above. The reset link will also clear the lock immediately.',
+      '',
+      'You do not need to take any action if you recognise the attempts as your own.',
+    ].join('\n'),
+    html: `
+      <div style="font-family:sans-serif;max-width:520px;margin:0 auto;color:#2a2a2a;">
+        <p>Hello <strong>${escapeHtml(username)}</strong>,</p>
+        <p>We noticed a <strong>high number of failed login attempts</strong> on your Cellarion account in a short window of time. As a precaution, the account has been temporarily locked.</p>
+        <p>If this was you (forgotten password, typing the wrong one), you can wait the cooldown period and try again — or reset your password right away to regain access immediately.</p>
+        <p style="margin:2rem 0;">
+          <a href="${resetUrl}"
+             style="background:#7B9E88;color:#0d0d0d;padding:12px 28px;
+                    border-radius:4px;text-decoration:none;font-weight:600;
+                    display:inline-block;">
+            Reset password
+          </a>
+        </p>
+        <p>If this was <strong>NOT</strong> you, someone may be trying to guess your password. We strongly recommend resetting it via the link above. The reset link will also clear the lock immediately.</p>
+        <hr style="border:none;border-top:1px solid #ddd;margin:2rem 0;" />
+        <p style="color:#9A9484;font-size:0.85em;">
+          You do not need to take any action if you recognise the attempts as your own.
+        </p>
+      </div>
+    `
+  });
+}
+
+module.exports = { sendVerificationEmail, sendPasswordResetEmail, sendDrinkWindowDigest, sendRecommendationEmail, sendCellarInviteEmail, sendDiscussionReplyEmail, sendAccountLockoutAlert, EMAIL_VERIFICATION_ENABLED };
