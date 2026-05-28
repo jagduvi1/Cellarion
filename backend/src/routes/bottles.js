@@ -19,6 +19,7 @@ const { resolveRating } = require('../utils/ratingUtils');
 const { embedSinglePair } = require('../services/embeddingJob');
 const { CONSUMED_STATUSES, WINE_POPULATE } = require('../config/constants');
 const { checkRestockGap, resolveRestockAlerts } = require('../services/restockChecker');
+const { gatherPriceWarnings } = require('../services/priceWarnings');
 const { stripHtml, isSafeUrl } = require('../utils/sanitize');
 const { parseAndValidateVintage } = require('../utils/validation');
 const { toNormalized } = require('../utils/ratingUtils');
@@ -461,7 +462,25 @@ router.post('/', async (req, res) => {
     // Fire-and-forget: auto-resolve any restock alerts for this wine
     resolveRestockAlerts(req.user.id, wineDefinition, bottle._id).catch(() => {});
 
-    res.status(201).json({ bottle });
+    // Non-blocking sanity warnings on the entered price. Surfaced in the
+    // response so the form can highlight a likely mistake (100×, cents-as-
+    // units, etc.) without rejecting the save. See utils/priceValidation.
+    let priceWarnings = [];
+    if (typeof price === 'number' && price > 0) {
+      try {
+        priceWarnings = await gatherPriceWarnings({
+          price,
+          currency: currency || 'USD',
+          userId: cellarDoc.user,
+          wineDefinitionId: wineDefinition,
+          vintage: canonicalVintage,
+        });
+      } catch (err) {
+        console.warn('Price-warning gather failed (non-fatal):', err.message);
+      }
+    }
+
+    res.status(201).json({ bottle, priceWarnings });
   } catch (error) {
     console.error('Create bottle error:', error);
     res.status(500).json({ error: 'Failed to create bottle' });

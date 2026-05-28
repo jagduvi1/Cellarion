@@ -29,6 +29,8 @@ const { extractAiExplanation } = require('../utils/jsonExtract');
 const { getMaxPosition } = require('../utils/rackGeometry');
 const { planRackCreations, placeBottlesInRack, VALID_ANCHORS, DEFAULT_ANCHOR } = require('../utils/rackImport');
 const { RACK_TYPES } = require('../models/Rack');
+const { validatePriceSanity } = require('../utils/priceValidation');
+const { computeUserMediansByCurrency } = require('../services/priceWarnings');
 const { runConcurrent } = require('../utils/concurrency');
 const WineRequest = require('../models/WineRequest');
 const ImportSession = require('../models/ImportSession');
@@ -351,6 +353,25 @@ router.post('/validate', async (req, res) => {
       results.push(result);
     }
 
+    // ── Per-item price sanity warnings (non-blocking) ────────────────────────
+    // Computes the user's per-currency median ONCE from the active cellar
+    // and reuses it for every row, instead of querying per-bottle.
+    // Wine-vintage market price is skipped here (matches resolve later when
+    // the user picks a candidate). See utils/priceValidation.
+    const userMedians = await computeUserMediansByCurrency(cellar.user);
+    for (const r of results) {
+      const price = Number(r.item?.price);
+      if (!isFinite(price) || price <= 0) continue;
+      const currency = (r.item?.currency || 'USD').toUpperCase();
+      const m = userMedians[currency];
+      r.priceWarnings = validatePriceSanity({
+        price,
+        currency,
+        userMedianPrice:  m?.median ?? null,
+        userMedianSample: m?.sample ?? 0,
+      });
+    }
+
     res.json({
       cellarId,
       results,
@@ -360,7 +381,8 @@ router.post('/validate', async (req, res) => {
         fuzzy: results.filter(r => r.status === 'fuzzy').length,
         aiMatch: results.filter(r => r.status === 'ai_match').length,
         noMatch: results.filter(r => r.status === 'no_match').length,
-        errors: results.filter(r => r.status === 'error').length
+        errors: results.filter(r => r.status === 'error').length,
+        priceWarnings: results.filter(r => r.priceWarnings?.length).length
       }
     });
   } catch (error) {

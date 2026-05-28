@@ -920,3 +920,38 @@
     overflow: hidden;
   }
 }
+
+/* Non-blocking price sanity warnings rendered under the price input */
+.price-warnings {
+  list-style: none;
+  padding: 0;
+  margin: 0.4rem 0 0;
+}
+
+.price-warning {
+  font-size: 0.8rem;
+  padding: 0.35rem 0.6rem;
+  border-radius: 4px;
+  margin-top: 0.25rem;
+  line-height: 1.35;
+}
+
+.price-warning--warning {
+  background: rgba(191, 138, 46, 0.12);
+  color: #8a5a00;
+  border-left: 3px solid #bf8a2e;
+}
+
+.price-warning--info {
+  background: rgba(0, 99, 199, 0.08);
+  color: #1a4d80;
+  border-left: 3px solid #4c8edf;
+}
+
+[data-theme="dark"] .price-warning--warning {
+  color: #e0a850;
+}
+
+[data-theme="dark"] .price-warning--info {
+  color: #6fa6e6;
+}

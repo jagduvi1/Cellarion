@@ -5,6 +5,7 @@ import { validateImport, confirmImport } from '../api/bottles';
 import { searchWines } from '../api/wines';
 import { getRacks } from '../api/racks';
 import { parseAndMap, parseJSON, summariseRacks, getDefaultRackConfig, getDefaultAnchor } from '../utils/importMappers';
+import { describePriceWarning } from '../utils/priceValidation';
 import { getTotalSlots } from '../utils/rackLayouts';
 import { TYPE_DIMENSIONS } from '../components/racks/RackTypeSelector';
 import AnchorPicker from './import/AnchorPicker';
@@ -1137,7 +1138,21 @@ function ImportBottles() {
               <span className="summary-label">Imported</span>
             </div>
           )}
+          {(summary?.priceWarnings || 0) > 0 && (
+            <div className="summary-stat">
+              <span className="summary-number summary-warn">{summary.priceWarnings}</span>
+              <span className="summary-label">Price warnings</span>
+            </div>
+          )}
         </div>
+
+        {/* Price sanity banner — surfaces fat-finger / 100×-too-high / cents-as-units mistakes */}
+        {(summary?.priceWarnings || 0) > 0 && (
+          <div className="import-price-warning-banner">
+            <strong>⚠️ {summary.priceWarnings} bottle{summary.priceWarnings === 1 ? '' : 's'} have unusual prices.</strong>
+            {' '}Hover the highlighted price tags below to see why. Common causes: typing extra zeros, prices entered in cents, or wrong currency.
+          </div>
+        )}
 
         {/* Bulk actions */}
         <div className="review-actions">
@@ -1296,7 +1311,17 @@ function ImportBottles() {
                       )}
                     </td>
                     <td className="col-details">
-                      {r.item.price && <span className="detail-tag">{r.item.price} {r.item.currency}</span>}
+                      {r.item.price && (
+                        <span
+                          className={`detail-tag${r.priceWarnings?.length ? ' detail-tag--warn' : ''}`}
+                          title={r.priceWarnings?.length
+                            ? r.priceWarnings.map(describePriceWarning).join('\n')
+                            : undefined}
+                        >
+                          {r.priceWarnings?.length ? '⚠️ ' : ''}
+                          {r.item.price} {r.item.currency}
+                        </span>
+                      )}
                       {r.item.rating && <span className="detail-tag">Rating: {r.item.rating}</span>}
                       {r.item.bottleSize && r.item.bottleSize !== '750ml' && (
                         <span className="detail-tag">{r.item.bottleSize}</span>

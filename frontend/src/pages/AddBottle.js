@@ -5,6 +5,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { searchWines, findOrCreateWine, identifyWineByText } from '../api/wines';
 import useLabelScanner from '../hooks/useLabelScanner';
 import { CURRENCIES } from '../config/currencies';
+import { validatePriceSanity } from '../utils/priceValidation';
 import ImageUpload from '../components/ImageUpload';
 import RatingInput from '../components/RatingInput';
 import WineImage from '../components/WineImage';
@@ -687,6 +688,22 @@ function AddBottle() {
                   onChange={(e) => setBottleData({ ...bottleData, price: e.target.value })}
                   placeholder="0.00"
                 />
+                {(() => {
+                  const warns = validatePriceSanity({
+                    price: parseFloat(bottleData.price),
+                    currency: bottleData.currency || 'USD',
+                  });
+                  if (warns.length === 0) return null;
+                  return (
+                    <ul className="price-warnings">
+                      {warns.map(w => (
+                        <li key={w.code} className={`price-warning price-warning--${w.severity}`}>
+                          {t(`addBottle.priceWarning.${w.code}`, w.context)}
+                        </li>
+                      ))}
+                    </ul>
+                  );
+                })()}
               </div>
 
               <div className="form-group">

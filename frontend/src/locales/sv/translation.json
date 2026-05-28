@@ -288,6 +288,12 @@
   "addBottle": {
     "title": "Lägg till flaska",
     "backToCellar": "← Tillbaka till källare",
+    "priceWarning": {
+      "absoluteCap": "Ovanligt högt — över det normala maxpriset {{cap}} {{currency}} per flaska. Dubbelkolla innan du sparar.",
+      "userOutlier": "{{ratio}}× högre än din typiska flaska ({{median}} {{currency}}). Felskrivning?",
+      "aboveMarket": "{{ratio}}× det registrerade marknadspriset ({{marketPrice}} {{currency}}) för detta vin och denna årgång.",
+      "possiblyCents": "Ser ut som cent — om du menade {{ifCents}} {{currency}}, dividera med 100."
+    },
     "stepSelectWine": "Välj vin",
     "stepBottleDetails": "Flaskdetaljer",
     "searchForWine": "Sök efter ett vin",
