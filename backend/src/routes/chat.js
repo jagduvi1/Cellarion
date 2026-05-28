@@ -251,7 +251,16 @@ router.post('/stream', requireAuth, chatBurstLimiter, async (req, res) => {
   // SSE max-duration timer — bounds worst-case Anthropic spend if a tool-use
   // loop runs away with a stuck client. Cleared on normal completion, on
   // client disconnect, and on any error path via the finally below.
-  const maxMs = rateLimitsConfig.get().chatStreamMaxMs;
+  //
+  // Inline clamp: the value flows from rateLimitsConfig which is settable
+  // by admins through the rate-limits admin UI (so CodeQL sees a req.body →
+  // setTimeout taint path — js/resource-exhaustion). The clamp keeps the
+  // effective timeout in [5s, 5min] regardless of what the config says,
+  // so a misconfigured or hostile admin can't disable the safeguard.
+  const SSE_MIN_MS = 5_000;
+  const SSE_MAX_MS = 5 * 60 * 1000;
+  const cfgMs = Number(rateLimitsConfig.get().chatStreamMaxMs);
+  const maxMs = Math.max(SSE_MIN_MS, Math.min(isFinite(cfgMs) ? cfgMs : 90_000, SSE_MAX_MS));
   let timeoutFired = false;
   const sseTimer = setTimeout(() => {
     timeoutFired = true;
