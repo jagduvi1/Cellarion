@@ -119,6 +119,10 @@ export const adminAssignImageToWine = (apiFetch, id, data) =>
 export const adminImportWines = (apiFetch, body) =>
   apiFetch('/api/admin/import/wines', { method: 'POST', body });
 
+// ── Security summary (used by SuperAdmin nav badge) ───────────────────────────
+export const adminGetSecuritySummary = (apiFetch) =>
+  apiFetch('/api/admin/security/summary');
+
 // ── Settings (rate limits — used by SuperAdmin) ───────────────────────────────
 export const adminGetRateLimits = (apiFetch) =>
   apiFetch('/api/admin/settings/rate-limits');

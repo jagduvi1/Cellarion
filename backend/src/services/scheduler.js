@@ -2,6 +2,7 @@ const cron = require('node-cron');
 const { runDrinkWindowCheck } = require('./drinkWindowNotifier');
 const { runCellarValueSnapshots } = require('./cellarValueSnapshotJob');
 const { runUserDeletionJob } = require('./userDeletionJob');
+const { runSecurityAlertCheck } = require('./securityAlertJob');
 
 /**
  * Start all scheduled cron jobs.
@@ -38,7 +39,18 @@ function startScheduler() {
     }
   });
 
-  console.log('[scheduler] Cron jobs registered (drink-window daily 06:00 UTC, value-snapshot weekly Sun 01:00 UTC, user-deletion daily 03:00 UTC)');
+  // Security spike check: every 15 minutes. Cheap audit-log query, emails
+  // only when thresholds are crossed (with 4h cooldown per spike type).
+  cron.schedule('*/15 * * * *', async () => {
+    try {
+      const result = await runSecurityAlertCheck();
+      if (result?.sent) console.log('[scheduler] Security alert sent:', result.triggers);
+    } catch (err) {
+      console.error('[scheduler] Security alert check failed:', err);
+    }
+  });
+
+  console.log('[scheduler] Cron jobs registered (drink-window daily 06:00 UTC, value-snapshot weekly Sun 01:00 UTC, user-deletion daily 03:00 UTC, security-spike every 15 min)');
 }
 
 module.exports = { startScheduler };
