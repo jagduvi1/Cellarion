@@ -2079,6 +2079,7 @@
     "holdingTimeNote": "Tid från inköpsdatum till konsumtionsdatum.",
     "cellarSize": "Källarstorlek-fördelning",
     "cellarSizeNote": "Antal källare per flaskantal.",
+    "cellarSizeOther": "okategoriserad",
     "bottleSize": "Flaskstorlek"
   },
   "wineLists": {

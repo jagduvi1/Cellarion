@@ -227,28 +227,35 @@
   font-size: 0.85rem;
 }
 
-/* ── Monthly bar chart ── */
+/* ── Monthly bar chart ──
+   Each column (.admin-stats-bar-wrap) stretches to fill the chart's fixed
+   height; the bar lives at the bottom and grows upward as a % of that
+   column. Earlier version used align-items: flex-end on the outer flex which
+   sized each column to its content — so the bar's height:X% resolved against
+   an unsized parent and collapsed to 0. */
 .admin-stats-bars {
   display: flex;
-  align-items: flex-end;
+  align-items: stretch;
   gap: 0.3rem;
-  padding: 0.5rem 0 0;
+  padding: 1.25rem 0 0;
 }
 
 .admin-stats-bar-wrap {
   flex: 1;
   display: flex;
   flex-direction: column;
-  align-items: center;
+  justify-content: flex-end;
+  align-items: stretch;
   gap: 0.25rem;
   min-width: 0;
+  position: relative;
 }
 
 .admin-stats-bar {
   width: 100%;
   background: var(--accent);
   border-radius: 3px 3px 0 0;
-  min-height: 1px;
+  min-height: 4px;
   position: relative;
   transition: opacity 0.15s;
   opacity: 0.85;
@@ -267,18 +274,14 @@
   color: var(--text-secondary);
   white-space: nowrap;
   pointer-events: none;
-  opacity: 0;
-  transition: opacity 0.15s;
-}
-
-.admin-stats-bar-wrap:hover .admin-stats-bar-value {
-  opacity: 1;
+  font-variant-numeric: tabular-nums;
 }
 
 .admin-stats-bar-label {
   font-size: 0.7rem;
   color: var(--text-secondary);
   font-variant-numeric: tabular-nums;
+  text-align: center;
 }
 
 /* ── Horizontal stacked bar (maturity, rating distribution) ── */
