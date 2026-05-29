@@ -479,8 +479,13 @@ const REGISTRY = [
 
 /** Deep-merge plain-object export fragments (so e.g. priceTracking.requests and
  *  priceTracking.skips from two entries combine instead of overwriting). */
+const PROTO_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
 function deepMerge(target, source) {
   for (const [k, v] of Object.entries(source)) {
+    // Guard against prototype pollution. Fragment keys are hardcoded in this
+    // file (not user input), so this is defence-in-depth — but it keeps the
+    // helper safe for any future caller and satisfies static analysis.
+    if (PROTO_KEYS.has(k)) continue;
     if (v && typeof v === 'object' && !Array.isArray(v) && target[k] && typeof target[k] === 'object' && !Array.isArray(target[k])) {
       deepMerge(target[k], v);
     } else {
