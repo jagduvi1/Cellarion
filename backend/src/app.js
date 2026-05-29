@@ -224,6 +224,10 @@ app.use((req, res) => {
 // eslint-disable-next-line no-unused-vars
 app.use((err, req, res, next) => {
   console.error(err);
+  // If the response has already started (e.g. an SSE/stream route threw mid-
+  // flight), we can't set a status/body — hand off to Express's default handler
+  // which closes the connection.
+  if (res.headersSent) return next(err);
   const status = err.status || err.statusCode || 500;
   // In production, never leak internal error messages to the client
   const message = process.env.NODE_ENV === 'production' && status >= 500

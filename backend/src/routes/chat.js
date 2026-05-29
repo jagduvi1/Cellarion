@@ -15,6 +15,7 @@ const express = require('express');
 const mongoose = require('mongoose');
 const rateLimit = require('express-rate-limit');
 const { requireAuth } = require('../middleware/auth');
+const asyncHandler = require('../utils/asyncHandler');
 const aiChat = require('../services/aiChat');
 const aiConfig = require('../config/aiConfig');
 const ChatUsage = require('../models/ChatUsage');
@@ -193,7 +194,7 @@ router.get('/usage', requireAuth, async (req, res) => {
 // ---------------------------------------------------------------------------
 // POST /api/chat (non-streaming)
 // ---------------------------------------------------------------------------
-router.post('/', requireAuth, chatBurstLimiter, async (req, res) => {
+router.post('/', requireAuth, chatBurstLimiter, asyncHandler(async (req, res) => {
   const validated = await validateAndCheckLimit(req, res);
   if (!validated) return;
 
@@ -226,12 +227,12 @@ router.post('/', requireAuth, chatBurstLimiter, async (req, res) => {
     console.error('[chat] Error:', err);
     res.status(500).json({ error: 'Failed to generate recommendation' });
   }
-});
+}));
 
 // ---------------------------------------------------------------------------
 // POST /api/chat/stream (streaming SSE)
 // ---------------------------------------------------------------------------
-router.post('/stream', requireAuth, chatBurstLimiter, async (req, res) => {
+router.post('/stream', requireAuth, chatBurstLimiter, asyncHandler(async (req, res) => {
   // ── Concurrency cap ────────────────────────────────────────────────────
   // Reserve a slot BEFORE doing any DB / Anthropic work, so a user at the
   // cap gets a clean 429 instead of triggering a refunded debit. Released
@@ -316,6 +317,6 @@ router.post('/stream', requireAuth, chatBurstLimiter, async (req, res) => {
     clearTimeout(sseTimer);
     streamLimiter.release(req.user.id, streamSlotId);
   }
-});
+}));
 
 module.exports = router;
