@@ -329,8 +329,11 @@ async function searchBottles(query, {
   const VALID_TYPES = ['red', 'white', 'rosé', 'sparkling', 'dessert', 'fortified'];
   const filters = [];
 
-  // Scope to cellar
-  if (cellarId) filters.push(`cellarId = "${cellarId}"`);
+  // Scope to cellar. cellarId is server-set/access-checked, but strip any
+  // double-quote defensively so it can never break out of the filter string.
+  // (We strip rather than drop on invalid input — dropping would un-scope the
+  // search and leak across cellars.)
+  if (cellarId) filters.push(`cellarId = "${String(cellarId).replace(/"/g, '')}"`);
   // Status filter: active (exclude consumed), consumed (only consumed), or all
   if (statusFilter === 'active') {
     filters.push(`status NOT IN ["${CONSUMED_STATUSES.join('","')}"]`);
@@ -361,9 +364,11 @@ async function searchBottles(query, {
     if (validIds.length === 1) filters.push(`grapeIds = "${validIds[0]}"`);
     else if (validIds.length > 1) filters.push(`grapeIds IN ["${validIds.join('","')}"]`);
   }
-  // Vintage: single or comma-separated
+  // Vintage: single or comma-separated. Only alphanumeric tokens (years / NV /
+  // Unknown) are allowed — this drops anything containing a double-quote or
+  // other special char that could inject into the Meili filter string.
   if (vintage) {
-    const vintages = String(vintage).split(',').map(v => v.trim()).filter(Boolean);
+    const vintages = String(vintage).split(',').map(v => v.trim()).filter(v => /^[A-Za-z0-9]+$/.test(v));
     if (vintages.length === 1) filters.push(`vintage = "${vintages[0]}"`);
     else if (vintages.length > 1) filters.push(`vintage IN ["${vintages.join('","')}"]`);
   }

@@ -13,6 +13,21 @@ function isValidId(id) {
   return typeof id === 'string' && mongoose.isValidObjectId(id);
 }
 
+/**
+ * Coerce a query/body value that is meant to be a string into one.
+ *
+ * Express query params can arrive as arrays or objects (e.g. `?search[$gt]=`
+ * yields `{ $gt: '' }`). Calling `.trim()` / `escapeRegex()` on those throws a
+ * 500. This returns the value only when it is genuinely a string, otherwise ''
+ * — so a malformed param simply behaves like "no value" instead of crashing.
+ *
+ * @param {*} value
+ * @returns {string}
+ */
+function coerceStringQuery(value) {
+  return typeof value === 'string' ? value : '';
+}
+
 // Lower bound: oldest plausible drinkable vintage. Tightening this to ~1900
 // keeps obvious typos like "1001" out of the maturity queue without
 // excluding fortified/aged wines that occasionally surface from old cellars.
@@ -66,4 +81,4 @@ function parseAndValidateVintage(raw, { now = new Date() } = {}) {
   return { ok: true, value: String(year) };
 }
 
-module.exports = { isValidId, parseAndValidateVintage, MIN_VINTAGE_YEAR };
+module.exports = { isValidId, coerceStringQuery, parseAndValidateVintage, MIN_VINTAGE_YEAR };
