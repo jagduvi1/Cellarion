@@ -1,0 +1,11 @@
+[Unit]
+Description=Weekly Cellarion backup integrity check
+
+[Timer]
+# Sundays at 04:30 local time (after the nightly backup has run).
+OnCalendar=Sun *-*-* 04:30:00
+RandomizedDelaySec=30min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

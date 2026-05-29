@@ -68,16 +68,53 @@ restic -r "$RESTIC_REPOSITORY" snapshots   # verify a snapshot exists
 
 ---
 
-## Schedule it (nightly)
+## Schedule it (systemd timer — recommended)
 
-**cron** (`crontab -e`) — every night at 03:30:
+Backups run on the **host** (not in a container), so the backup credentials and
+the restic encryption key never live inside the app stack — a compromise of the
+app can't reach or delete your backups. A **systemd timer** is the most robust
+way to schedule it: proper logging (`journalctl`), status (`systemctl status`),
+it won't overlap runs, and it catches up a missed run after a reboot.
+
+The unit files are versioned in [`scripts/backup/systemd/`](../scripts/backup/systemd):
+`cellarion-backup.{service,timer}` (nightly) and `cellarion-backup-check.{service,timer}` (weekly `restic check`).
+
+```bash
+cd scripts/backup/systemd
+
+# 1. Point the units at your checkout path (edit /opt/cellarion if you cloned elsewhere)
+#    The two .service files contain WorkingDirectory= and ExecStart= lines to fix.
+sed -i "s#/opt/cellarion#$(cd ../../.. && pwd)#g" cellarion-backup.service cellarion-backup-check.service
+
+# 2. Install + enable
+sudo cp cellarion-backup.service cellarion-backup.timer \
+        cellarion-backup-check.service cellarion-backup-check.timer /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now cellarion-backup.timer cellarion-backup-check.timer
+
+# 3. Verify
+systemctl list-timers 'cellarion-*'          # next/last run times
+sudo systemctl start cellarion-backup.service # run one now (optional)
+journalctl -u cellarion-backup.service -n 50  # see the log
 ```
-30 3 * * * /path/to/cellarion/scripts/backup/backup.sh >> /var/log/cellarion-backup.log 2>&1
+
+> Runs as `root` by default (needed for `docker exec`). To run as a non-root user,
+> add them to the `docker` group and change `User=` in both `.service` files.
+
+<details>
+<summary>Alternative: plain cron (less robust, no integrity check)</summary>
+
+```bash
+crontab -e
+# nightly backup at 03:30
+30 3 * * * /opt/cellarion/scripts/backup/backup.sh >> /var/log/cellarion-backup.log 2>&1
+# weekly integrity check, Sundays 04:30
+30 4 * * 0 /opt/cellarion/scripts/backup/check.sh  >> /var/log/cellarion-backup.log 2>&1
 ```
-Or a **systemd timer** if you prefer (see `man systemd.timer`).
+</details>
 
 ### Get alerted on failure (do this)
-A silently-broken backup is how people discover they had none. Create a free check at [healthchecks.io](https://healthchecks.io), set its ping URL as `HEALTHCHECK_URL` in `backup.env`, and it emails/Slacks you if a nightly run misses or fails.
+A silently-broken backup is how people discover they had none. Create a free check at [healthchecks.io](https://healthchecks.io), set its ping URL as `HEALTHCHECK_URL` in `backup.env`, and it emails/Slacks you if a nightly run misses or fails. (Add a second check and set `HEALTHCHECK_CHECK_URL` to get alerted if the weekly integrity check finds corruption.)
 
 ---
 
@@ -99,7 +136,7 @@ restic -r "$RESTIC_REPOSITORY" snapshots
 
 ## Recommended extras
 
-- **Weekly integrity check** (catches silent bit-rot): `restic -r "$RESTIC_REPOSITORY" check` — add a weekly cron line.
+- **Weekly integrity check** (catches silent bit-rot): handled by `check.sh` + the `cellarion-backup-check.timer` installed above — it runs `restic check` weekly and alerts via `HEALTHCHECK_CHECK_URL`.
 - **Off-provider 2nd copy** (true 3-2-1): set `B2_*` in `backup.env` (e.g. a Backblaze B2 bucket); `backup.sh` will `restic copy` each snapshot there so a Hetzner-account problem can't wipe everything.
 - **Hetzner Cloud Backups** (the +20% VM-image feature) as a bonus "whole-machine undo" — convenient, but treat it as secondary: it's a crash-consistent disk image (riskier for a live DB) stored at the same provider, so it does **not** replace these logical backups.
 
