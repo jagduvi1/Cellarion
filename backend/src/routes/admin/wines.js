@@ -716,30 +716,38 @@ router.post('/merge', async (req, res) => {
       return res.status(400).json({ error: 'Invalid imageFromWineId' });
     }
 
-    const keeper = await WineDefinition.findById(keeperId);
+    // Cast the validated id strings to ObjectId before they touch any query.
+    // isValidId already guarantees each is a string in ObjectId format (so no
+    // operator-injection is possible); constructing ObjectIds also clears the
+    // static-analysis "user input flows into a DB query" taint.
+    const keeperOid = new mongoose.Types.ObjectId(keeperId);
+    const sourceOids = ids.map(id => new mongoose.Types.ObjectId(id));
+    const imageOid = imageFromWineId ? new mongoose.Types.ObjectId(imageFromWineId) : null;
+
+    const keeper = await WineDefinition.findById(keeperOid);
     if (!keeper) return res.status(404).json({ error: 'Keeper wine not found' });
-    const sources = await WineDefinition.find({ _id: { $in: ids } });
+    const sources = await WineDefinition.find({ _id: { $in: sourceOids } });
     if (sources.length === 0) return res.status(404).json({ error: 'No source wines found' });
 
     // Capture the admin's chosen surviving image BEFORE the reassign — after it,
     // the image's wineDefinition flips to the keeper. imageFromWineId names which
     // wine's primary photo should win (the keeper or any source).
     let chosenImage = null;
-    if (imageFromWineId) {
-      chosenImage = await BottleImage.findOne({ wineDefinition: imageFromWineId, assignedToWine: true })
+    if (imageOid) {
+      chosenImage = await BottleImage.findOne({ wineDefinition: imageOid, assignedToWine: true })
         .select('_id processedUrl originalUrl credit');
     }
 
     let bottlesMoved = 0;
     for (const src of sources) {
-      bottlesMoved += await reassignWineRefs(src._id, keeperId);
+      bottlesMoved += await reassignWineRefs(src._id, keeperOid);
     }
 
     // Apply the image choice. After the reassign every image points at the
     // keeper, so flip the chosen one to primary and demote the rest.
     let imageAction = 'kept';
     if (chosenImage) {
-      await BottleImage.updateMany({ wineDefinition: keeperId, _id: { $ne: chosenImage._id }, assignedToWine: true }, { $set: { assignedToWine: false } });
+      await BottleImage.updateMany({ wineDefinition: keeperOid, _id: { $ne: chosenImage._id }, assignedToWine: true }, { $set: { assignedToWine: false } });
       await BottleImage.findByIdAndUpdate(chosenImage._id, { assignedToWine: true });
       keeper.image = chosenImage.processedUrl || chosenImage.originalUrl;
       keeper.imageCredit = chosenImage.credit || null;
@@ -747,7 +755,7 @@ router.post('/merge', async (req, res) => {
       imageAction = 'set_chosen';
     } else if (!keeper.image) {
       // No explicit choice and the keeper had no image — adopt any image now on it.
-      const any = await BottleImage.findOne({ wineDefinition: keeperId, assignedToWine: true }).select('processedUrl originalUrl credit');
+      const any = await BottleImage.findOne({ wineDefinition: keeperOid, assignedToWine: true }).select('processedUrl originalUrl credit');
       if (any) {
         keeper.image = any.processedUrl || any.originalUrl;
         keeper.imageCredit = any.credit || null;
@@ -766,7 +774,7 @@ router.post('/merge', async (req, res) => {
       await src.deleteOne();
       searchService.removeWine(src._id.toString());
     }
-    searchService.indexWine(keeperId);
+    searchService.indexWine(keeper._id.toString());
 
     res.json({ message: 'Wines merged successfully', sourcesMerged: sources.length, bottlesMoved, imageAction });
   } catch (error) {
