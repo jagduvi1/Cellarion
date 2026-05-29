@@ -131,6 +131,14 @@ const userSchema = new mongoose.Schema({
     type: String,
     default: null
   },
+  // Absolute session deadline: a refresh token can be rotated only until this
+  // time, after which re-login is forced regardless of activity. Set at session
+  // start (login/register) and preserved across rotations. null = no cap yet
+  // (legacy sessions; backfilled on next refresh).
+  refreshTokenExpiresAt: {
+    type: Date,
+    default: null
+  },
   // Per-account brute-force lockout state. Incremented on each failed login,
   // reset on success or successful password reset. Surfaced via the lockout
   // checks in utils/loginAttempts.js — the login handler treats a locked
@@ -366,6 +374,7 @@ userSchema.methods.toJSON = function() {
   const obj = this.toObject();
   delete obj.password;
   delete obj.refreshTokenHash;
+  delete obj.refreshTokenExpiresAt;
   delete obj.emailVerificationTokenHash;
   delete obj.emailVerificationExpiresAt;
   delete obj.passwordResetTokenHash;

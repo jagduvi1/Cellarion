@@ -122,11 +122,21 @@ const buildCookieOptions = (rememberMe) => {
   return refreshCookieOptions;
 };
 
-// Issue both tokens: access token in body, refresh token in httpOnly cookie
-const issueTokens = async (user, res, { rememberMe } = {}) => {
+// Absolute refresh-token lifetime: a session may be rotated for at most this
+// long before re-login is forced, regardless of refresh activity. Bounds how
+// long a stolen-but-rotated refresh token stays usable.
+const REFRESH_ABSOLUTE_LIFETIME_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+
+// Issue both tokens: access token in body, refresh token in httpOnly cookie.
+// preserveLifetime=true (rotation via /refresh) keeps the existing absolute
+// deadline; otherwise (login/register/re-auth) a fresh 30-day deadline is set.
+const issueTokens = async (user, res, { rememberMe, preserveLifetime = false } = {}) => {
   const accessToken = generateAccessToken(user);
   const refreshToken = generateRefreshToken();
   user.setRefreshToken(refreshToken);
+  if (!preserveLifetime) {
+    user.refreshTokenExpiresAt = new Date(Date.now() + REFRESH_ABSOLUTE_LIFETIME_MS);
+  }
   await user.save();
   res.cookie('refreshToken', refreshToken, buildCookieOptions(rememberMe));
   return accessToken;
@@ -421,8 +431,20 @@ router.post('/refresh', refreshLimiter, async (req, res) => {
       return res.status(401).json({ error: 'Invalid or expired refresh token' });
     }
 
-    // Rotate: issue new pair (invalidates the old refresh token hash)
-    const accessToken = await issueTokens(user, res);
+    // Enforce the absolute session deadline. Rotation must NOT extend it, so an
+    // attacker who keeps rotating a stolen token is still cut off after the cap.
+    if (user.refreshTokenExpiresAt && Date.now() > user.refreshTokenExpiresAt.getTime()) {
+      user.refreshTokenHash = null;
+      user.refreshTokenExpiresAt = null;
+      await user.save();
+      res.clearCookie('refreshToken', refreshCookieOptions);
+      return res.status(401).json({ error: 'Session expired, please log in again' });
+    }
+
+    // Rotate: issue new pair (invalidates the old refresh token hash). Preserve
+    // the existing deadline when set; backfill legacy sessions (null) so every
+    // session eventually gets an absolute cap.
+    const accessToken = await issueTokens(user, res, { preserveLifetime: !!user.refreshTokenExpiresAt });
 
     res.json({ token: accessToken });
   } catch (error) {

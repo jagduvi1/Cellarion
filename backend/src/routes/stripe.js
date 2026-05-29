@@ -1,6 +1,7 @@
 const express = require('express');
 const { requireAuth } = require('../middleware/auth');
 const User = require('../models/User');
+const StripeWebhookEvent = require('../models/StripeWebhookEvent');
 const { logAudit } = require('../services/audit');
 
 const router = express.Router();
@@ -120,6 +121,22 @@ router.post('/webhook', async (req, res) => {
     return res.status(400).json({ error: 'Invalid webhook' });
   }
 
+  // Idempotency: claim this event.id via a unique index before handling it.
+  // A duplicate-key error means Stripe already delivered this event and we
+  // processed it — ack with 200 and skip so a redelivery can't re-apply a
+  // plan change. A non-duplicate DB error shouldn't block billing, so we log
+  // it and fall through to handle the event (claimed stays false).
+  let claimed = false;
+  try {
+    await StripeWebhookEvent.create({ eventId: event.id, type: event.type });
+    claimed = true;
+  } catch (err) {
+    if (err.code === 11000) {
+      return res.json({ received: true, duplicate: true });
+    }
+    console.error('[stripe] idempotency record failed (handling anyway):', err.message);
+  }
+
   try {
     switch (event.type) {
       case 'checkout.session.completed': {
@@ -183,7 +200,15 @@ router.post('/webhook', async (req, res) => {
     }
   } catch (err) {
     console.error(`[stripe] Error handling ${event.type}:`, err.message);
-    // Still return 200 so Stripe doesn't retry
+    // The handler did not complete (transient Stripe-API or DB error). Roll
+    // back the idempotency claim so a Stripe retry — or a manual dashboard
+    // replay — can reprocess this event, and return 5xx to actually trigger
+    // that retry. Leaving the claim in place + a 200 here would permanently
+    // lose the event (the dedup row would short-circuit every redelivery).
+    if (claimed) {
+      await StripeWebhookEvent.deleteOne({ eventId: event.id }).catch(() => {});
+    }
+    return res.status(500).json({ error: 'Webhook handler failed' });
   }
 
   res.json({ received: true });

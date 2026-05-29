@@ -65,28 +65,34 @@ router.get('/wine-search', async (req, res) => {
 
     const regex = new RegExp(escapeRegex(q), 'i');
 
-    // Search user's bottles (via wine definition name)
-    const bottles = await Bottle.find({ user: req.user.id, status: 'active' })
-      .populate({ path: 'wineDefinition', match: { $or: [{ name: regex }, { producer: regex }] }, select: 'name producer type' })
-      .select('vintage wineDefinition')
+    // Resolve matching wine definitions first, then fetch only the user's
+    // bottles for those wines (capped). Avoids the previous pattern of loading
+    // the user's ENTIRE active-bottle collection into memory on every keystroke
+    // just to filter it down to 10.
+    const matchedWines = await WineDefinition.find({ $or: [{ name: regex }, { producer: regex }] })
+      .select('name producer type')
+      .limit(200)
       .lean();
+    const matchedWineIds = matchedWines.map(w => w._id);
+
+    const bottles = matchedWineIds.length
+      ? await Bottle.find({ user: req.user.id, status: 'active', wineDefinition: { $in: matchedWineIds } })
+          .populate({ path: 'wineDefinition', select: 'name producer type' })
+          .select('vintage wineDefinition')
+          .limit(10)
+          .lean()
+      : [];
 
     const matchedBottles = bottles
       .filter(b => b.wineDefinition)
-      .slice(0, 10)
       .map(b => ({
         _id: b._id,
         vintage: b.vintage,
         wine: b.wineDefinition
       }));
 
-    // Search wine register
-    const wines = await WineDefinition.find({
-      $or: [{ name: regex }, { producer: regex }]
-    })
-      .select('name producer type')
-      .limit(10)
-      .lean();
+    // Wine register results (already capped)
+    const wines = matchedWines.slice(0, 10);
 
     res.json({ bottles: matchedBottles, wines });
   } catch (err) {

@@ -180,4 +180,20 @@ describe('parsePagination', () => {
     expect(result.page).toBe(10000);
     expect(result.offset).toBe(499950);
   });
+
+  test('pathological page is clamped to maxOffset to avoid huge .skip()', () => {
+    const result = parsePagination({ page: '999999999', limit: '200' });
+    // (page-1)*limit would be ~2e11; clamped to the default maxOffset.
+    expect(result.offset).toBe(1000000);
+  });
+
+  test('pathological offset is clamped to maxOffset', () => {
+    const result = parsePagination({ offset: '200000000000', limit: '50' });
+    expect(result.offset).toBe(1000000);
+  });
+
+  test('custom maxOffset clamps the offset', () => {
+    const result = parsePagination({ offset: '50000', limit: '50' }, { maxOffset: 10000 });
+    expect(result.offset).toBe(10000);
+  });
 });
