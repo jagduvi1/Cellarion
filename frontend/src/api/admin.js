@@ -24,6 +24,16 @@ export const adminMergeWine = (apiFetch, sourceId, targetId) =>
     body: JSON.stringify({ targetId }),
   });
 
+// "Golden record" merge: absorb every sourceIds wine into keeperId in one call.
+// The keeper's composed field values are saved separately (adminSaveWine) first;
+// imageFromWineId names which wine's photo the merged record should keep.
+export const adminMergeCluster = (apiFetch, { keeperId, sourceIds, imageFromWineId }) =>
+  apiFetch('/api/admin/wines/merge', {
+    method: 'POST',
+    headers: J,
+    body: JSON.stringify({ keeperId, sourceIds, imageFromWineId }),
+  });
+
 export const adminGetWineDuplicateClusters = (apiFetch, { minScore = 0.6, limit = 50 } = {}) =>
   apiFetch(`/api/admin/wines/duplicate-clusters?minScore=${minScore}&limit=${limit}`);
 
