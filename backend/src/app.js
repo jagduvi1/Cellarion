@@ -91,7 +91,10 @@ app.use('/api/admin/wine-requests', express.json({ limit: '5mb' }));
 app.use('/api/wines/scan-label', express.json({ limit: '300kb' }));
 app.use('/api/wines/find-or-create', express.json({ limit: '5mb' }));
 app.use('/api/bottles/import/sessions', express.json({ limit: '5mb' }));
-app.use('/api/bottles/import', express.json({ limit: '2mb' }));
+// /confirm posts the whole selected batch in one request (rack placement is
+// coordinated batch-wide), so the limit must hold a large import — up to
+// MAX_IMPORT_SIZE (2000) items with notes. 8mb leaves comfortable headroom.
+app.use('/api/bottles/import', express.json({ limit: '8mb' }));
 app.use('/api/blog/admin/posts', express.json({ limit: '2mb' }));
 app.use('/api/wine-lists', express.json({ limit: '1mb' }));
 app.use(express.json({ limit: '10kb' }));

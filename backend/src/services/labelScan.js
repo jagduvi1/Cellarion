@@ -11,7 +11,13 @@ function getClient() {
   }
   const sdk = require('@anthropic-ai/sdk');
   const Anthropic = sdk.default ?? sdk;
-  return new Anthropic({ apiKey });
+  // maxRetries lets the SDK transparently wait out 429 / 529 (overloaded) /
+  // 5xx with exponential backoff that honors the `retry-after` header, instead
+  // of failing the call. This is what keeps a large bottle import (1000+) going
+  // when Anthropic briefly rate-limits us — each AI call waits and continues
+  // rather than aborting. The per-call wait stays bounded so a single import
+  // chunk request can't hang indefinitely.
+  return new Anthropic({ apiKey, maxRetries: 4 });
 }
 
 /**

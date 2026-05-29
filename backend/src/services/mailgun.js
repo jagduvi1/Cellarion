@@ -127,6 +127,10 @@ async function sendPasswordResetEmail(toEmail, username, token) {
  */
 async function sendDrinkWindowDigest(toEmail, username, bottles, userId) {
   if (!EMAIL_VERIFICATION_ENABLED || !bottles.length) return;
+  // userId is required to build a working one-click unsubscribe link (GDPR
+  // right to object). Fail loudly rather than ship an email whose unsubscribe
+  // token resolves to "undefined" and is rejected by the unsubscribe route.
+  if (!userId) throw new Error('sendDrinkWindowDigest: userId is required for the unsubscribe link');
 
   const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
   const { createUnsubscribeToken } = require('../utils/unsubscribe');

@@ -24,10 +24,16 @@ const IMPORT_EXACT_THRESHOLD = 0.95;
 // Minimum composite similarity score for a candidate to be considered a fuzzy match
 const IMPORT_FUZZY_THRESHOLD = 0.65;
 
-// Maximum number of items allowed in a single import batch
-const MAX_IMPORT_SIZE = 500;
+// Maximum number of items allowed in a single import. Validation is chunked
+// client-side (VALIDATE_BATCH_SIZE), so this primarily caps the one-shot
+// /confirm request, whose batch-wide rack-placement coordination needs the
+// full set in a single call. Sized for large real-world cellars (1000+).
+const MAX_IMPORT_SIZE = 2000;
 
-// Maximum concurrent AI identification requests during import (stay under rate limits)
+// Maximum concurrent AI identification requests during import. Combined with
+// the SDK's retry/backoff (see labelScan getClient), this keeps us under
+// Anthropic's rate limits while letting throttled calls wait and continue
+// rather than aborting the import.
 const AI_CONCURRENCY = 5;
 
 // ─── Prompt length limits ────────────────────────────────────────────────────

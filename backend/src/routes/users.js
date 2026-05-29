@@ -29,6 +29,8 @@ const ImportSession = require('../models/ImportSession');
 const SupportTicket = require('../models/SupportTicket');
 const WineReport = require('../models/WineReport');
 const WishlistItem = require('../models/WishlistItem');
+const PriceTrackingRequest = require('../models/PriceTrackingRequest');
+const PriceTrackingSkip = require('../models/PriceTrackingSkip');
 const { requireAuth, requireRole } = require('../middleware/auth');
 const { logAudit } = require('../services/audit');
 const { stripHtml, escapeRegex } = require('../utils/sanitize');
@@ -386,7 +388,8 @@ router.get('/me/export', requireAuth, async (req, res) => {
       restockAlerts, wineLists, pendingSharesSent,
       discussions, discussionReplies, reviewVotes, discussionReactions, discussionWatches,
       discussionReads, follows, chatUsage, importSessions, supportTickets,
-      discussionReports, wineReports, wishlistItems
+      discussionReports, wineReports, wishlistItems,
+      priceTrackingRequests, priceTrackingSkips
     ] = await Promise.all([
       Bottle.find({ user: userId }).limit(EXPORT_MAX).lean(),
       Cellar.find({ $or: [{ user: userId }, { 'members.user': userId }], deletedAt: null }).limit(EXPORT_MAX).lean(),
@@ -412,10 +415,12 @@ router.get('/me/export', requireAuth, async (req, res) => {
         .populate('follower', 'username').populate('following', 'username').lean(),
       ChatUsage.find({ userId: userId }).select('date promptTokens completionTokens').limit(EXPORT_MAX).lean(),
       ImportSession.find({ user: userId }).select('cellar status results positionAnchor rackConfigs defaultCurrency createdAt').limit(EXPORT_MAX).lean(),
-      SupportTicket.find({ user: userId }).select('category subject status createdAt').limit(EXPORT_MAX).lean(),
+      SupportTicket.find({ user: userId }).select('category subject message status adminResponse respondedAt createdAt').limit(EXPORT_MAX).lean(),
       DiscussionReport.find({ user: userId }).select('discussion reply reason createdAt').limit(EXPORT_MAX).lean(),
       WineReport.find({ user: userId }).select('wineDefinition reason status createdAt').limit(EXPORT_MAX).lean(),
-      WishlistItem.find({ user: userId }).limit(EXPORT_MAX).lean()
+      WishlistItem.find({ user: userId }).limit(EXPORT_MAX).lean(),
+      PriceTrackingRequest.find({ 'requesters.user': userId }).select('wineDefinition vintage requesters createdAt').limit(EXPORT_MAX).lean(),
+      PriceTrackingSkip.find({ skippedBy: userId }).select('wineDefinition vintage reason skippedAt').limit(EXPORT_MAX).lean()
     ]);
 
     // Note which collections hit the cap so the user (and ops) know it happened.
@@ -429,7 +434,7 @@ router.get('/me/export', requireAuth, async (req, res) => {
       restockAlerts, wineLists, pendingSharesSent, discussions, discussionReplies,
       reviewVotes, discussionReactions, discussionWatches, discussionReads,
       follows, chatUsage, importSessions, supportTickets, discussionReports,
-      wineReports, wishlistItems,
+      wineReports, wishlistItems, priceTrackingRequests, priceTrackingSkips,
     })) {
       if (arr.length >= EXPORT_MAX) truncated[name] = EXPORT_MAX;
     }
@@ -570,9 +575,31 @@ router.get('/me/export', requireAuth, async (req, res) => {
       supportTickets: supportTickets.map(t => ({
         category: t.category,
         subject: t.subject,
+        message: t.message,
         status: t.status,
+        adminResponse: t.adminResponse,
+        respondedAt: t.respondedAt,
         createdAt: t.createdAt
       })),
+      priceTracking: {
+        // Only this user's requester entry is included — the shared doc may
+        // hold other users' notes, which are not this user's personal data.
+        requests: priceTrackingRequests.map(pt => {
+          const mine = (pt.requesters || []).find(r => (r.user?.toString?.() || r.user) === userId);
+          return {
+            wineDefinition: pt.wineDefinition,
+            vintage: pt.vintage,
+            note: mine?.note,
+            requestedAt: mine?.requestedAt
+          };
+        }),
+        skips: priceTrackingSkips.map(s => ({
+          wineDefinition: s.wineDefinition,
+          vintage: s.vintage,
+          reason: s.reason,
+          skippedAt: s.skippedAt
+        }))
+      },
       reports: {
         discussions: discussionReports.map(r => ({ reason: r.reason, createdAt: r.createdAt })),
         wines: wineReports.map(r => ({ reason: r.reason, status: r.status, createdAt: r.createdAt }))
