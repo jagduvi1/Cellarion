@@ -668,4 +668,111 @@ router.post('/:id/merge', async (req, res) => {
   }
 });
 
+// Reassign every reference from one source wine to the keeper. Idempotent
+// (updateMany by wineDefinition) and does NOT delete the source, so it's safe
+// to re-run after a partial failure. Returns the number of bottles moved.
+async function reassignWineRefs(sourceId, keeperId) {
+  const bottleRes = await Bottle.updateMany({ wineDefinition: sourceId }, { $set: { wineDefinition: keeperId } });
+  await Promise.all([
+    BottleImage.updateMany({ wineDefinition: sourceId }, { $set: { wineDefinition: keeperId } }),
+    WineVintageProfile.updateMany({ wineDefinition: sourceId }, { $set: { wineDefinition: keeperId } }),
+    WineVintagePrice.updateMany({ wineDefinition: sourceId }, { $set: { wineDefinition: keeperId } }),
+    WineReport.updateMany({ wineDefinition: sourceId }, { $set: { wineDefinition: keeperId } }),
+    Discussion.updateMany({ wineDefinition: sourceId }, { $set: { wineDefinition: keeperId } }),
+    DiscussionReply.updateMany({ wineDefinition: sourceId }, { $set: { wineDefinition: keeperId } }),
+    WineEmbedding.deleteMany({ wineDefinition: sourceId }),
+    // Reviews have a unique (author, wineDefinition) index — on a real dup-key
+    // collision the source author already reviewed the keeper, so drop the
+    // source's duplicate review. Re-throw anything that isn't a dup-key error.
+    Review.updateMany({ wineDefinition: sourceId }, { $set: { wineDefinition: keeperId } })
+      .catch(err => { if (err.code === 11000) return Review.deleteMany({ wineDefinition: sourceId }); throw err; }),
+  ]);
+  return bottleRes.modifiedCount || 0;
+}
+
+// POST /api/admin/wines/merge — "golden record" merge.
+// Absorbs every wine in sourceIds INTO keeperId: reassigns all references,
+// sets the admin-chosen surviving image, then deletes the sources. The keeper's
+// own fields are composed separately by the client (PUT /:id) before this call.
+//
+// No DB transaction: this deployment runs a standalone mongod (no replica set),
+// so we rely on idempotent reassigns + deleting sources LAST. A failure mid-way
+// leaves the sources intact and the operation safely re-runnable.
+router.post('/merge', async (req, res) => {
+  try {
+    const { keeperId, sourceIds, imageFromWineId } = req.body;
+
+    if (!isValidId(keeperId)) {
+      return res.status(400).json({ error: 'A valid keeperId is required' });
+    }
+    if (!Array.isArray(sourceIds) || sourceIds.length === 0) {
+      return res.status(400).json({ error: 'sourceIds must be a non-empty array' });
+    }
+    const ids = [...new Set(sourceIds.filter(id => isValidId(id) && id !== keeperId))];
+    if (ids.length === 0) {
+      return res.status(400).json({ error: 'No valid source ids (distinct from the keeper) provided' });
+    }
+    if (imageFromWineId != null && !isValidId(imageFromWineId)) {
+      return res.status(400).json({ error: 'Invalid imageFromWineId' });
+    }
+
+    const keeper = await WineDefinition.findById(keeperId);
+    if (!keeper) return res.status(404).json({ error: 'Keeper wine not found' });
+    const sources = await WineDefinition.find({ _id: { $in: ids } });
+    if (sources.length === 0) return res.status(404).json({ error: 'No source wines found' });
+
+    // Capture the admin's chosen surviving image BEFORE the reassign — after it,
+    // the image's wineDefinition flips to the keeper. imageFromWineId names which
+    // wine's primary photo should win (the keeper or any source).
+    let chosenImage = null;
+    if (imageFromWineId) {
+      chosenImage = await BottleImage.findOne({ wineDefinition: imageFromWineId, assignedToWine: true })
+        .select('_id processedUrl originalUrl credit');
+    }
+
+    let bottlesMoved = 0;
+    for (const src of sources) {
+      bottlesMoved += await reassignWineRefs(src._id, keeperId);
+    }
+
+    // Apply the image choice. After the reassign every image points at the
+    // keeper, so flip the chosen one to primary and demote the rest.
+    let imageAction = 'kept';
+    if (chosenImage) {
+      await BottleImage.updateMany({ wineDefinition: keeperId, _id: { $ne: chosenImage._id }, assignedToWine: true }, { $set: { assignedToWine: false } });
+      await BottleImage.findByIdAndUpdate(chosenImage._id, { assignedToWine: true });
+      keeper.image = chosenImage.processedUrl || chosenImage.originalUrl;
+      keeper.imageCredit = chosenImage.credit || null;
+      await keeper.save();
+      imageAction = 'set_chosen';
+    } else if (!keeper.image) {
+      // No explicit choice and the keeper had no image — adopt any image now on it.
+      const any = await BottleImage.findOne({ wineDefinition: keeperId, assignedToWine: true }).select('processedUrl originalUrl credit');
+      if (any) {
+        keeper.image = any.processedUrl || any.originalUrl;
+        keeper.imageCredit = any.credit || null;
+        await keeper.save();
+        imageAction = 'adopted';
+      }
+    }
+
+    // Delete sources LAST.
+    for (const src of sources) {
+      logAudit(req, 'admin.wine.merge', { type: 'wine', id: src._id }, {
+        sourceName: src.name, sourceProducer: src.producer,
+        keeperId: keeper._id, keeperName: keeper.name, keeperProducer: keeper.producer,
+        bottlesMoved, imageAction, golden: true,
+      });
+      await src.deleteOne();
+      searchService.removeWine(src._id.toString());
+    }
+    searchService.indexWine(keeperId);
+
+    res.json({ message: 'Wines merged successfully', sourcesMerged: sources.length, bottlesMoved, imageAction });
+  } catch (error) {
+    console.error('Golden merge error:', error);
+    res.status(500).json({ error: 'Failed to merge wines' });
+  }
+});
+
 module.exports = router;

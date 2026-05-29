@@ -181,9 +181,9 @@ function ClusterCard({ cluster, apiFetch, onMerged, onOpenCompare }) {
             className="btn btn-secondary"
             onClick={onOpenCompare}
             style={{ padding: '0.25rem 0.65rem', fontSize: '0.8rem' }}
-            title="Open side-by-side comparison with all fields editable"
+            title="Compose the surviving wine field-by-field, then merge"
           >
-            Compare &amp; edit
+            Compare &amp; merge
           </button>
         </div>
       </div>
