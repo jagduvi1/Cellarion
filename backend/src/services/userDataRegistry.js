@@ -134,9 +134,16 @@ const REGISTRY = [
   },
   {
     model: BottleImage, category: 'personal-data', userFields: ['uploadedBy', 'reviewedBy'],
-    // reviewedBy (an admin/somm reviewer ref on OTHER users' images) is a
-    // contributor-ref follow-up, not the deleting user's data.
-    purge: (ctx) => BottleImage.deleteMany({ uploadedBy: ctx.userId }),
+    // An image the user promoted to a SHARED wine (assignedToWine) backs the
+    // WineDefinition.image that OTHER users see, so it must NOT be deleted on
+    // the uploader's account deletion — anonymise it (re-point uploadedBy to the
+    // [deleted] sentinel, like forum content) so the shared wine image survives
+    // and stays managed. Only the user's own non-shared images are hard-deleted.
+    // (reviewedBy on others' images is a contributor-ref follow-up.)
+    purge: (ctx) => [
+      BottleImage.deleteMany({ uploadedBy: ctx.userId, assignedToWine: { $ne: true } }),
+      BottleImage.updateMany({ uploadedBy: ctx.userId, assignedToWine: true }, { $set: { uploadedBy: ctx.deletedUserId } }),
+    ],
     exportFragment: async (ctx) => ({
       images: markTrunc(ctx, 'images', await BottleImage.find({ uploadedBy: ctx.userId }).limit(EXPORT_MAX).lean())
         .map(i => ({ originalUrl: i.originalUrl, processedUrl: i.processedUrl, uploadedAt: i.createdAt })),
