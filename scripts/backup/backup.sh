@@ -37,10 +37,36 @@ log() { echo "[backup] $(date -Is) $*"; }
 ping_fail() {
   [ -n "$HEALTHCHECK_URL" ] && curl -fsS -m 10 --retry 3 "${HEALTHCHECK_URL%/}/fail" >/dev/null 2>&1 || true
 }
-trap 'ping_fail' ERR
+
+# Write a one-document status report into Mongo so SuperAdmin can show backup
+# health (the app reads this; it never touches the repo). Scalars only. Needs jq.
+record_status() {
+  local status="$1" err="${2:-}" now count latest size latestJs errClean
+  now="$(date -Is)"
+  count="$(restic snapshots --json 2>/dev/null | jq 'length' 2>/dev/null || echo null)"
+  latest="$(restic snapshots --json 2>/dev/null | jq -r 'sort_by(.time)|last|.time // empty' 2>/dev/null || echo '')"
+  size="$(restic stats --json --mode raw-data 2>/dev/null | jq '.total_size // null' 2>/dev/null || echo null)"
+  latestJs="null"; [ -n "$latest" ] && latestJs="new Date('$latest')"
+  errClean="$(printf '%s' "$err" | tr -d "'\"\\\\" | head -c 300)"
+  docker exec -i "$MONGO_CONTAINER" mongosh "$MONGO_DB" --quiet --eval "
+    db.backupstatuses.replaceOne({ _id: 'latest' }, {
+      _id: 'latest', status: '$status', lastRunAt: new Date('$now'),
+      durationSec: ${SECONDS}, snapshotCount: ${count:-null},
+      latestSnapshotTime: ${latestJs}, repoSizeBytes: ${size:-null},
+      host: '$(hostname | tr -d "'")', repo: '$(printf '%s' "$RESTIC_REPOSITORY" | tr -d "'")',
+      error: '$errClean'
+    }, { upsert: true });
+  " >/dev/null 2>&1 || log "warning: could not record backup status to Mongo"
+}
+
+on_err() {
+  trap - ERR   # prevent re-entry if a call below also fails
+  record_status failed "backup.sh failed — check the backup log"
+  ping_fail
+}
 
 STAGE="$(mktemp -d)"
-trap 'rm -rf "$STAGE"; ping_fail' ERR
+trap 'on_err' ERR
 trap 'rm -rf "$STAGE"' EXIT
 
 log "dumping MongoDB '$MONGO_DB' from $MONGO_CONTAINER…"
@@ -71,6 +97,9 @@ if [ -n "${B2_RESTIC_REPOSITORY:-}" ]; then
   restic -r "$B2_RESTIC_REPOSITORY" copy --from-repo "$RESTIC_REPOSITORY" --tag cellarion
   restic -r "$B2_RESTIC_REPOSITORY" forget --tag cellarion --keep-daily "$KEEP_DAILY" --keep-weekly "$KEEP_WEEKLY" --keep-monthly "$KEEP_MONTHLY" --prune
 fi
+
+log "recording status for SuperAdmin…"
+record_status ok
 
 log "backup complete."
 [ -n "$HEALTHCHECK_URL" ] && curl -fsS -m 10 --retry 3 "${HEALTHCHECK_URL%/}" >/dev/null 2>&1 || true

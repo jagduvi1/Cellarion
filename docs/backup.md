@@ -20,9 +20,10 @@ The tooling (`scripts/backup/`) uses [**restic**](https://restic.net): **encrypt
 
 ### 1. Install restic
 ```bash
-sudo apt-get update && sudo apt-get install -y restic curl
+sudo apt-get update && sudo apt-get install -y restic curl jq
 restic self-update   # get the latest
 ```
+(`jq` is used to record the backup-status report that SuperAdmin reads.)
 
 ### 2. Give the VM SSH access to the Storage Box
 Storage Boxes speak SSH/SFTP on **port 23**. Create a key and register it:
@@ -101,6 +102,24 @@ restic -r "$RESTIC_REPOSITORY" snapshots
 - **Weekly integrity check** (catches silent bit-rot): `restic -r "$RESTIC_REPOSITORY" check` — add a weekly cron line.
 - **Off-provider 2nd copy** (true 3-2-1): set `B2_*` in `backup.env` (e.g. a Backblaze B2 bucket); `backup.sh` will `restic copy` each snapshot there so a Hetzner-account problem can't wipe everything.
 - **Hetzner Cloud Backups** (the +20% VM-image feature) as a bonus "whole-machine undo" — convenient, but treat it as secondary: it's a crash-consistent disk image (riskier for a live DB) stored at the same provider, so it does **not** replace these logical backups.
+
+## Seeing backups in the app (SuperAdmin → Backups)
+
+After each run, `backup.sh` writes a small **status report into Mongo** (last run,
+ok/failed, snapshot count, latest snapshot time, repo size). **SuperAdmin → Backups**
+shows it with a green **OK** / amber **STALE** / red **FAILED** badge, so you can
+confirm at a glance that backups exist and are fresh.
+
+By design the **app only reads this report** — it has no access to the backup
+repository or its credentials. That keeps backups isolated from the app, so a
+compromise of the app can't read or delete them. (The report is a side-channel,
+not repo access.)
+
+You get **two** layers of failure alerting:
+1. **In-app** — the SuperAdmin badge turns red/amber on a failed or stale backup.
+2. **Push** — `HEALTHCHECK_URL` (healthchecks.io) emails/Slacks you if a run fails
+   *or is missed entirely* (cron didn't fire). Set it up — the in-app badge only
+   helps if someone looks.
 
 ## Notes & security
 - `backup.env` holds secrets → it's gitignored, `chmod 600`, never committed.

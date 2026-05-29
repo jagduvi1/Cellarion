@@ -12,12 +12,14 @@ import TabSettings from './TabSettings';
 import TabAI from './TabAI';
 import TabCellars from './TabCellars';
 import TabImport from './TabImport';
+import TabBackups from './TabBackups';
 import '../SuperAdmin.css';
 
 const TABS = [
   { id: 'overview',   label: 'Overview' },
   { id: 'services',   label: 'Services' },
   { id: 'database',   label: 'Database' },
+  { id: 'backups',    label: 'Backups' },
   { id: 'users',      label: 'Users' },
   { id: 'audit',      label: 'Audit Log' },
   { id: 'cellars',    label: 'Deleted Cellars' },
@@ -148,6 +150,7 @@ export default function SuperAdmin() {
         {tab === 'overview'   && <TabOverview />}
         {tab === 'services'   && <TabServices />}
         {tab === 'database'   && <TabDatabase />}
+        {tab === 'backups'    && <TabBackups />}
         {tab === 'users'      && <TabUsers />}
         {tab === 'audit'      && <TabAudit />}
         {tab === 'cellars'    && <TabCellars />}
