@@ -57,7 +57,9 @@ router.post('/test', async (req, res) => {
     res.json({ ok: true });
   } catch (err) {
     if (err.statusCode === 410 || err.statusCode === 404) {
-      await PushSubscription.deleteOne({ user: req.user.id, endpoint: String(req.body.endpoint) });
+      // Best-effort cleanup of the dead subscription — a failure here must not
+      // turn into an unhandled rejection (this runs inside the catch block).
+      await PushSubscription.deleteOne({ user: req.user.id, endpoint: String(req.body.endpoint) }).catch(() => {});
       return res.status(410).json({ error: 'Subscription expired. Please re-register this device.' });
     }
     console.error('Test push error:', err);
