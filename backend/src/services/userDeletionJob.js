@@ -2,141 +2,12 @@
  * User deletion job — runs daily via the scheduler.
  *
  * Finds users whose 7-day cooling-off period has expired and permanently
- * deletes their accounts along with all user-linked data across every model.
+ * deletes their accounts. The erasure of every user-linked model lives in
+ * services/userDataRegistry.js (the single source of truth shared with the
+ * data-export route), so deletion and export can never drift apart.
  */
 const User = require('../models/User');
-const Bottle = require('../models/Bottle');
-const BottleImage = require('../models/BottleImage');
-const Cellar = require('../models/Cellar');
-const CellarLayout = require('../models/CellarLayout');
-const CellarValueSnapshot = require('../models/CellarValueSnapshot');
-const ChatUsage = require('../models/ChatUsage');
-const Discussion = require('../models/Discussion');
-const DiscussionReply = require('../models/DiscussionReply');
-const DiscussionReaction = require('../models/DiscussionReaction');
-const DiscussionWatch = require('../models/DiscussionWatch');
-const DiscussionRead = require('../models/DiscussionRead');
-const DiscussionReport = require('../models/DiscussionReport');
-const Follow = require('../models/Follow');
-const ImportSession = require('../models/ImportSession');
-const JournalEntry = require('../models/JournalEntry');
-const Notification = require('../models/Notification');
-const PendingShare = require('../models/PendingShare');
-const PriceTrackingSkip = require('../models/PriceTrackingSkip');
-const PriceTrackingRequest = require('../models/PriceTrackingRequest');
-const PushSubscription = require('../models/PushSubscription');
-const Rack = require('../models/Rack');
-const Recommendation = require('../models/Recommendation');
-const RestockAlert = require('../models/RestockAlert');
-const Review = require('../models/Review');
-const ReviewVote = require('../models/ReviewVote');
-const SupportTicket = require('../models/SupportTicket');
-const WineList = require('../models/WineList');
-const WineReport = require('../models/WineReport');
-const WineRequest = require('../models/WineRequest');
-const WineVintagePrice = require('../models/WineVintagePrice');
-const WineVintageProfile = require('../models/WineVintageProfile');
-const WishlistItem = require('../models/WishlistItem');
-const AuditLog = require('../models/AuditLog');
-const BlogPost = require('../models/BlogPost');
-const { getOrCreateDeletedUser } = require('../utils/deletedUser');
-
-/**
- * Delete all data linked to a single user.
- * Called after the 7-day cooling-off period has expired.
- */
-async function purgeUserData(userId, userEmail) {
-  // Get cellar IDs for cascade cleanup
-  const cellarIds = await Cellar.distinct('_id', { user: userId });
-
-  // Forum content gets anonymised (re-pointed at a sentinel "[deleted]" user)
-  // rather than hard-deleted. Reasoning: a thread someone replied to is part
-  // of a multi-party conversation — deleting just one author's posts breaks
-  // it for everyone else. Anonymising severs the personal-data link (GDPR-
-  // compliant, art. 17 right to erasure) while keeping the conversation
-  // intact. Reactions, watches, reports stay hard-deleted (they're personal-
-  // data-only with no community value).
-  const deletedUserId = await getOrCreateDeletedUser();
-
-  await Promise.all([
-    // Core wine data
-    Bottle.deleteMany({ user: userId }),
-    BottleImage.deleteMany({ uploadedBy: userId }),
-    Cellar.deleteMany({ user: userId }),
-    Rack.deleteMany({ cellar: { $in: cellarIds } }),
-    CellarLayout.deleteMany({ cellar: { $in: cellarIds } }),
-    WineList.deleteMany({ user: userId }),
-    WishlistItem.deleteMany({ user: userId }),
-
-    // Forum content: anonymise (preserve conversations for other users)
-    Discussion.updateMany({ author: userId }, { $set: { author: deletedUserId } }),
-    DiscussionReply.updateMany({ author: userId }, { $set: { author: deletedUserId } }),
-
-    // Personal-data-only forum collections: hard-delete
-    DiscussionReaction.deleteMany({ user: userId }),
-    DiscussionWatch.deleteMany({ user: userId }),
-    DiscussionRead.deleteMany({ user: userId }),
-
-    // Social & engagement (non-forum)
-    ReviewVote.deleteMany({ user: userId }),
-    Review.deleteMany({ author: userId }),
-    Follow.deleteMany({ $or: [{ follower: userId }, { following: userId }] }),
-    Recommendation.deleteMany({ $or: [{ sender: userId }, { recipient: userId }] }),
-
-    // Journal & alerts
-    JournalEntry.deleteMany({ user: userId }),
-    RestockAlert.deleteMany({ user: userId }),
-    Notification.deleteMany({ user: userId }),
-
-    // Requests & reports
-    WineRequest.deleteMany({ user: userId }),
-    WineReport.deleteMany({ user: userId }),
-    DiscussionReport.deleteMany({ user: userId }),
-    SupportTicket.deleteMany({ user: userId }),
-
-    // Import & usage
-    ImportSession.deleteMany({ user: userId }),
-    ChatUsage.deleteMany({ userId: userId }),
-    PushSubscription.deleteMany({ user: userId }),
-    CellarValueSnapshot.deleteMany({ user: userId }),
-    PriceTrackingSkip.deleteMany({ skippedBy: userId }),
-
-    // Price-tracking opt-in requests are a shared per-(wine,vintage) singleton;
-    // pull just this user's requester entry (with their free-text note) out of
-    // the shared doc rather than deleting the whole record. Empty docs left
-    // behind are cleaned up after this batch (see below).
-    PriceTrackingRequest.updateMany(
-      { 'requesters.user': userId },
-      { $pull: { requesters: { user: userId } } }
-    ),
-
-    // Invites (sent and received by email)
-    PendingShare.deleteMany({ $or: [{ invitedBy: userId }, { email: userEmail }] }),
-
-    // Remove user from shared cellars
-    Cellar.updateMany(
-      { 'members.user': userId },
-      { $pull: { members: { user: userId } } }
-    ),
-
-    // Clear user references on somm-contributed data (preserve the data itself)
-    WineVintagePrice.updateMany({ setBy: userId }, { $unset: { setBy: '', sommNotes: '' } }),
-    WineVintageProfile.updateMany({ setBy: userId }, { $unset: { setBy: '', setAt: '' } }),
-
-    // Reassign blog posts to null author (preserve published content)
-    BlogPost.updateMany({ author: userId }, { $unset: { author: '' } }),
-
-    // Audit log — keep for compliance but anonymise actor
-    AuditLog.updateMany(
-      { 'actor.userId': userId },
-      { $set: { 'actor.userId': null, 'actor.ipAddress': null } }
-    ),
-  ]);
-
-  // A PriceTrackingRequest with no requesters left is an orphan (a valid one
-  // always has ≥1). Sequenced after the $pull above so it sees the result.
-  await PriceTrackingRequest.deleteMany({ requesters: { $size: 0 } });
-}
+const { purgeUserData } = require('./userDataRegistry');
 
 async function runUserDeletionJob() {
   const now = new Date();
@@ -162,4 +33,5 @@ async function runUserDeletionJob() {
   console.log(`[user-deletion] Completed ${usersToDelete.length} deletion(s)`);
 }
 
+// Re-exported for backward compatibility with existing importers.
 module.exports = { runUserDeletionJob, purgeUserData };
