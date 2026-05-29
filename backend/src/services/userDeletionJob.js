@@ -119,7 +119,7 @@ async function purgeUserData(userId, userEmail) {
     // Audit log — keep for compliance but anonymise actor
     AuditLog.updateMany(
       { 'actor.userId': userId },
-      { $set: { 'actor.userId': null, 'actor.ip': null } }
+      { $set: { 'actor.userId': null, 'actor.ipAddress': null } }
     ),
   ]);
 }

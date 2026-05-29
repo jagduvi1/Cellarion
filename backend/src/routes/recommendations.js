@@ -19,7 +19,7 @@ router.get('/', async (req, res) => {
   try {
     const { limit, offset: skip } = parsePagination(req.query, { limit: 20, maxLimit: 50 });
 
-    const query = { recipient: new mongoose.Types.ObjectId(req.user.id) };
+    const query = { recipient: req.user.id };
 
     const [items, total] = await Promise.all([
       Recommendation.find(query)
@@ -44,7 +44,7 @@ router.get('/sent', async (req, res) => {
   try {
     const { limit, offset: skip } = parsePagination(req.query, { limit: 20, maxLimit: 50 });
 
-    const query = { sender: new mongoose.Types.ObjectId(req.user.id) };
+    const query = { sender: req.user.id };
 
     const [items, total] = await Promise.all([
       Recommendation.find(query)
