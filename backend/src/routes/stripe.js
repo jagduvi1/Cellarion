@@ -1,6 +1,7 @@
 const express = require('express');
 const { requireAuth } = require('../middleware/auth');
 const User = require('../models/User');
+const StripeWebhookEvent = require('../models/StripeWebhookEvent');
 const { logAudit } = require('../services/audit');
 
 const router = express.Router();
@@ -118,6 +119,20 @@ router.post('/webhook', async (req, res) => {
     // part of the verification failed (timestamp tolerance vs. signature
     // mismatch). Log the detail server-side instead.
     return res.status(400).json({ error: 'Invalid webhook' });
+  }
+
+  // Idempotency: claim this event.id via a unique index before handling it.
+  // A duplicate-key error means Stripe already delivered this event and we
+  // processed it — ack with 200 and skip so a redelivery can't re-apply a
+  // plan change. A non-duplicate DB error shouldn't block billing, so we log
+  // it and fall through to handle the event.
+  try {
+    await StripeWebhookEvent.create({ eventId: event.id, type: event.type });
+  } catch (err) {
+    if (err.code === 11000) {
+      return res.json({ received: true, duplicate: true });
+    }
+    console.error('[stripe] idempotency record failed (handling anyway):', err.message);
   }
 
   try {

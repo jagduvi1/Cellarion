@@ -316,9 +316,13 @@ router.get('/:id/history', async (req, res) => {
     }
 
     if (!usedMeili) {
+      // Cap the fallback fetch at the same ceiling as the Meili path (10k) so a
+      // cellar with a huge consumed history can't load the entire collection
+      // into memory on every request.
       bottles = await Bottle.find(filter)
         .populate(WINE_POPULATE)
         .sort({ consumedAt: -1 })
+        .limit(10000)
         .lean();
 
       // In-memory text search fallback
@@ -1046,6 +1050,10 @@ router.get('/:id/export', async (req, res) => {
     const cellar = await Cellar.findOne({ _id: req.params.id, user: req.user.id, deletedAt: null });
     if (!cellar) return res.status(403).json({ error: 'Not authorized — only the cellar owner can export' });
 
+    // Bound worst-case memory: a single response can't materialise more than
+    // CELLAR_EXPORT_MAX bottles. Far above any real cellar; a hit is flagged in
+    // the payload (_truncated) so an outlier knows to contact support.
+    const CELLAR_EXPORT_MAX = 50000;
     const [bottles, racks] = await Promise.all([
       Bottle.find({ cellar: req.params.id })
         .populate({
@@ -1056,6 +1064,7 @@ router.get('/:id/export', async (req, res) => {
           ],
           select: 'name producer type appellation country region'
         })
+        .limit(CELLAR_EXPORT_MAX)
         .lean(),
       Rack.find({ cellar: req.params.id, deletedAt: null }).lean()
     ]);
@@ -1134,7 +1143,12 @@ router.get('/:id/export', async (req, res) => {
 
     logAudit(req, 'cellar.export', { type: 'cellar', id: cellar._id }, { bottleCount: items.length });
 
-    res.json({ cellarName: cellar.name, exportedAt: new Date().toISOString(), bottles: items });
+    const payload = { cellarName: cellar.name, exportedAt: new Date().toISOString(), bottles: items };
+    if (items.length >= CELLAR_EXPORT_MAX) {
+      payload._truncated = CELLAR_EXPORT_MAX;
+      console.warn(`[cellars.export] truncation hit for cellar ${req.params.id} (${CELLAR_EXPORT_MAX})`);
+    }
+    res.json(payload);
   } catch (error) {
     console.error('Export cellar error:', error);
     res.status(500).json({ error: 'Export failed' });
