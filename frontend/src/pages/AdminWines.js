@@ -8,6 +8,7 @@ import {
   adminAssignImageToWine,
 } from '../api/admin';
 import Modal from '../components/Modal';
+import Drawer from '../components/Drawer';
 import WineDuplicatesModal from '../components/WineDuplicatesModal';
 import { WINE_TYPES } from '../config/wineTypes';
 import GrapePicker from '../components/GrapePicker';
@@ -37,7 +38,17 @@ function AdminWines() {
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
   const [filters, setFilters] = useState({ type: '', sort: 'name' });
+  const [pageSize, setPageSize] = useState(50);
   const [loading, setLoading] = useState(true);
+  const [listError, setListError] = useState(null);
+
+  // Transient action-feedback toasts (no global toast system in this app).
+  const [toasts, setToasts] = useState([]);
+  const pushToast = useCallback((message, type = 'success') => {
+    const id = Date.now() + Math.random();
+    setToasts(ts => [...ts, { id, message, type }]);
+    setTimeout(() => setToasts(ts => ts.filter(x => x.id !== id)), 3500);
+  }, []);
 
   const [showForm, setShowForm] = useState(false);
   const [editWine, setEditWine] = useState(null);
@@ -87,24 +98,28 @@ function AdminWines() {
 
   const fetchWines = useCallback(async () => {
     setLoading(true);
+    setListError(null);
     try {
-      const params = new URLSearchParams({ page, limit: 50 });
+      const params = new URLSearchParams({ page, limit: pageSize });
       if (search) params.set('search', search);
       if (filters.type) params.set('type', filters.type);
       params.set('sort', filters.sort);
       const res = await adminGetWines(apiFetch, params);
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (res.ok) {
-        setWines(data.wines);
-        setTotal(data.total);
-        setPages(data.pages);
+        setWines(data.wines || []);
+        setTotal(data.total || 0);
+        setPages(data.pages || 1);
+      } else {
+        setListError(data.error || `Failed to load wines (${res.status})`);
       }
     } catch (err) {
       console.error('Failed to fetch wines:', err);
+      setListError('Failed to load wines — check your connection and retry.');
     } finally {
       setLoading(false);
     }
-  }, [apiFetch, page, search, filters]);
+  }, [apiFetch, page, search, filters, pageSize]);
 
   useEffect(() => {
     fetchWines();
@@ -218,6 +233,8 @@ function AdminWines() {
       const res = await adminSaveWine(apiFetch, payload, editWine?._id);
       const data = await res.json();
       if (res.ok) {
+        const name = data.wine?.name || payload.name;
+        pushToast(editWine ? `Saved “${name}”` : `Created “${name}”`);
         closeForm();
         fetchWines();
       } else {
@@ -241,6 +258,7 @@ function AdminWines() {
       const res = await adminDeleteWine(apiFetch, deleteCandidate._id);
       const data = await res.json();
       if (res.ok) {
+        pushToast(`Deleted “${deleteCandidate.name}”`);
         setDeleteCandidate(null);
         fetchWines();
       } else if (data.bottleCount) {
@@ -300,6 +318,7 @@ function AdminWines() {
       const res = await adminMergeWine(apiFetch, mergeSource._id, mergeTarget._id);
       const data = await res.json();
       if (res.ok) {
+        pushToast(`Merged into “${mergeTarget.name}”`);
         closeMergeModal();
         fetchWines();
       } else {
@@ -375,12 +394,22 @@ function AdminWines() {
 
       {error && <div className="alert alert-error">{error}</div>}
 
-      {/* Create / Edit form */}
+      {/* Create / Edit drawer */}
       {showForm && (
-        <div className="card wine-form-card">
-          <h2>{editWine ? t('admin.wines.editWineTitle') : t('admin.wines.addWineTitle')}</h2>
+        <Drawer
+          title={editWine ? t('admin.wines.editWineTitle') : t('admin.wines.addWineTitle')}
+          onClose={closeForm}
+          footer={
+            <>
+              <button type="button" className="btn btn-secondary" onClick={closeForm}>{t('common.cancel')}</button>
+              <button type="submit" form="wine-form" className="btn btn-primary" disabled={submitting}>
+                {submitting ? t('common.saving') : editWine ? t('admin.wines.saveBtn') : t('admin.wines.createBtn')}
+              </button>
+            </>
+          }
+        >
           {formError && <div className="alert alert-error">{formError}</div>}
-          <form onSubmit={handleSubmit}>
+          <form id="wine-form" onSubmit={handleSubmit}>
             <div className="wine-form-grid">
               <div className="form-group">
                 <label>{t('admin.wines.nameLabel')}</label>
@@ -389,6 +418,7 @@ function AdminWines() {
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                   required
+                  autoFocus
                 />
               </div>
               <div className="form-group">
@@ -561,20 +591,8 @@ function AdminWines() {
                 </div>
               )}
             </div>
-            <div className="form-actions">
-              <button type="submit" className="btn btn-primary" disabled={submitting}>
-                {submitting
-                  ? t('common.saving')
-                  : editWine
-                    ? t('admin.wines.saveBtn')
-                    : t('admin.wines.createBtn')}
-              </button>
-              <button type="button" className="btn btn-secondary" onClick={closeForm}>
-                {t('common.cancel')}
-              </button>
-            </div>
           </form>
-        </div>
+        </Drawer>
       )}
 
       {/* Wine list */}
@@ -582,10 +600,34 @@ function AdminWines() {
         <span>{t('admin.wines.totalCount', { count: total })}</span>
       </div>
 
+      {listError && !loading && (
+        <div className="alert alert-error wines-error">
+          <span>{listError}</span>
+          <button type="button" className="btn btn-secondary btn-small" onClick={fetchWines}>Retry</button>
+        </div>
+      )}
+
       {loading ? (
-        <div className="loading">{t('common.loading')}</div>
-      ) : wines.length === 0 ? (
-        <div className="empty-state"><p>{t('admin.wines.noWines')}</p></div>
+        <div className="wines-table-wrap">
+          {Array.from({ length: 8 }).map((_, i) => (
+            <div key={i} className="wine-skeleton-row" aria-hidden="true">
+              <span className="wine-list-thumb wine-list-thumb--empty" />
+              <span className="skeleton-bar" style={{ flex: 3 }} />
+              <span className="skeleton-bar" style={{ flex: 1 }} />
+            </div>
+          ))}
+        </div>
+      ) : listError ? null : wines.length === 0 ? (
+        <div className="empty-state">
+          {hasActiveFilters ? (
+            <>
+              <p>No wines match your search or filters.</p>
+              <button type="button" className="btn btn-secondary" onClick={clearFilters}>{t('common.clear')}</button>
+            </>
+          ) : (
+            <p>{t('admin.wines.noWines')}</p>
+          )}
+        </div>
       ) : (
         <div className="wines-table-wrap">
           <table className="wines-table">
@@ -611,7 +653,11 @@ function AdminWines() {
                       ? <img src={imgSrc} alt={wine.name} className="wine-list-thumb" />
                       : <span className="wine-list-thumb wine-list-thumb--empty" />}
                   </td>
-                  <td className="wine-name">{wine.name}</td>
+                  <td className="wine-name">
+                    <button type="button" className="wine-name-link" onClick={() => openEdit(wine)} title="Edit this wine">
+                      {wine.name}
+                    </button>
+                  </td>
                   <td>{wine.producer}</td>
                   <td>{wine.country?.name || '—'}</td>
                   <td>{wine.region?.name || '—'}</td>
@@ -644,23 +690,24 @@ function AdminWines() {
       )}
 
       {/* Pagination */}
-      {pages > 1 && (
-        <div className="pagination">
-          <button
-            className="btn btn-secondary"
-            disabled={page <= 1}
-            onClick={() => setPage(p => p - 1)}
-          >
-            {t('common.previous')}
-          </button>
-          <span>{t('admin.audit.page', { current: page, total: pages })}</span>
-          <button
-            className="btn btn-secondary"
-            disabled={page >= pages}
-            onClick={() => setPage(p => p + 1)}
-          >
-            {t('common.next')}
-          </button>
+      {!loading && !listError && total > 0 && (
+        <div className="pagination wines-pagination">
+          <span className="pagination-range">
+            Showing {((page - 1) * pageSize) + 1}–{Math.min(page * pageSize, total)} of {total.toLocaleString()}
+          </span>
+          <div className="pagination-controls">
+            <label className="page-size">
+              Per page{' '}
+              <select value={pageSize} onChange={(e) => { setPageSize(Number(e.target.value)); setPage(1); }}>
+                {[50, 100, 200].map(n => <option key={n} value={n}>{n}</option>)}
+              </select>
+            </label>
+            <button className="btn btn-secondary btn-small" disabled={page <= 1} onClick={() => setPage(1)}>« First</button>
+            <button className="btn btn-secondary btn-small" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>{t('common.previous')}</button>
+            <span className="pagination-page">{t('admin.audit.page', { current: page, total: pages })}</span>
+            <button className="btn btn-secondary btn-small" disabled={page >= pages} onClick={() => setPage(p => p + 1)}>{t('common.next')}</button>
+            <button className="btn btn-secondary btn-small" disabled={page >= pages} onClick={() => setPage(pages)}>Last »</button>
+          </div>
         </div>
       )}
       {/* Delete confirmation modal */}
@@ -765,6 +812,15 @@ function AdminWines() {
           onClose={() => setShowDuplicatesScanner(false)}
           onMerged={fetchWines}
         />
+      )}
+
+      {/* Action-feedback toasts */}
+      {toasts.length > 0 && (
+        <div className="toast-stack" role="status" aria-live="polite">
+          {toasts.map(tt => (
+            <div key={tt.id} className={`toast toast--${tt.type}`}>{tt.message}</div>
+          ))}
+        </div>
       )}
     </div>
   );
