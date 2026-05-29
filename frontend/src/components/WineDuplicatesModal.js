@@ -1,7 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
 import Modal from './Modal';
 import WineImage from './WineImage';
+import WineClusterCompareModal from './WineClusterCompareModal';
 import { adminGetWineDuplicateClusters, adminMergeWine } from '../api/admin';
+import './WineModalThumbs.css';
 
 /**
  * Registry-wide duplicate scanner for admin users. Shows clusters of
@@ -21,6 +23,7 @@ function WineDuplicatesModal({ apiFetch, onClose, onMerged }) {
   const [error, setError] = useState(null);
   const [minScore, setMinScore] = useState(0.6);
   const [meta, setMeta] = useState(null);
+  const [compareCluster, setCompareCluster] = useState(null);
 
   const scan = useCallback(async (score = minScore) => {
     setScanning(true);
@@ -54,6 +57,14 @@ function WineDuplicatesModal({ apiFetch, onClose, onMerged }) {
     setClusters(prev => prev
       .map(c => ({ ...c, wines: c.wines.filter(w => String(w._id) !== sourceId) }))
       .filter(c => c.wines.length >= 2));
+    onMerged?.();
+  };
+
+  // The compare modal merges N-1 wines into the keeper in one go and returns
+  // the full list of cluster wine ids — only the keeper survives.
+  const handleClusterMerged = (allClusterIds) => {
+    const idSet = new Set(allClusterIds.map(String));
+    setClusters(prev => prev.filter(c => !c.wines.some(w => idSet.has(String(w._id)))));
     onMerged?.();
   };
 
@@ -103,15 +114,25 @@ function WineDuplicatesModal({ apiFetch, onClose, onMerged }) {
               cluster={cluster}
               apiFetch={apiFetch}
               onMerged={handleMerged}
+              onOpenCompare={() => setCompareCluster(cluster)}
             />
           ))}
         </div>
+      )}
+
+      {compareCluster && (
+        <WineClusterCompareModal
+          cluster={compareCluster}
+          apiFetch={apiFetch}
+          onClose={() => setCompareCluster(null)}
+          onMerged={handleClusterMerged}
+        />
       )}
     </Modal>
   );
 }
 
-function ClusterCard({ cluster, apiFetch, onMerged }) {
+function ClusterCard({ cluster, apiFetch, onMerged, onOpenCompare }) {
   const [targetId, setTargetId] = useState(null);
   const [merging, setMerging] = useState(null); // sourceId being merged
   const [error, setError] = useState(null);
@@ -149,11 +170,22 @@ function ClusterCard({ cluster, apiFetch, onMerged }) {
       padding: 12,
       background: 'var(--bg-secondary, #fafafa)',
     }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, gap: 8 }}>
         <strong>{cluster.wines[0]?.producer}</strong>
-        <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary, #888)' }}>
-          {Math.round(cluster.score * 100)}% match
-        </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary, #888)' }}>
+            {Math.round(cluster.score * 100)}% match
+          </span>
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={onOpenCompare}
+            style={{ padding: '0.25rem 0.65rem', fontSize: '0.8rem' }}
+            title="Open side-by-side comparison with all fields editable"
+          >
+            Compare &amp; edit
+          </button>
+        </div>
       </div>
 
       {error && <div className="alert alert-error" style={{ marginBottom: 8 }}>{error}</div>}

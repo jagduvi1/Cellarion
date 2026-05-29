@@ -1,5 +1,6 @@
 import Modal from './Modal';
 import WineImage from './WineImage';
+import './WineModalThumbs.css';
 
 /**
  * Shown when the backend's find-or-create returns soft-zone candidates —
