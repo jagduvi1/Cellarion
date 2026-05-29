@@ -361,19 +361,42 @@ function ImportBottles() {
     const allResults = [];
     let combinedSummary = null;
 
+    // Validate one chunk, riding out transient failures and rate limits
+    // (HTTP 429 / 5xx) with capped exponential backoff rather than aborting the
+    // whole import. Honors a Retry-After header when present. Resolves with the
+    // parsed JSON on success and only throws after retries are exhausted or on a
+    // non-retryable error — so a 1000+ bottle import waits through brief AI rate
+    // limits and continues instead of failing mid-way.
+    const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+    const validateBatch = async (batch) => {
+      const MAX_RETRIES = 5;
+      for (let attempt = 0; ; attempt++) {
+        let res;
+        try {
+          res = await validateImport(apiFetch, { cellarId, items: batch });
+        } catch (netErr) {
+          if (attempt >= MAX_RETRIES) throw netErr;
+          await sleep(Math.min(1000 * 2 ** attempt, 15000));
+          continue;
+        }
+        if (res.ok) return res.json();
+        if ((res.status === 429 || res.status >= 500) && attempt < MAX_RETRIES) {
+          const retryAfter = parseInt(res.headers.get('retry-after') || '', 10);
+          const waitMs = Number.isNaN(retryAfter) ? Math.min(1000 * 2 ** attempt, 15000) : retryAfter * 1000;
+          await sleep(waitMs);
+          continue;
+        }
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || `Validation failed (HTTP ${res.status})`);
+      }
+    };
+
     try {
       for (let offset = 0; offset < total; offset += VALIDATE_BATCH_SIZE) {
         // Re-index each batch so indices match their position in parsedItems
         const batch = parsedItems.slice(offset, offset + VALIDATE_BATCH_SIZE);
 
-        const res = await validateImport(apiFetch, { cellarId, items: batch });
-        const data = await res.json();
-
-        if (!res.ok) {
-          setError(data.error || 'Validation failed');
-          setValidating(false);
-          return;
-        }
+        const data = await validateBatch(batch);
 
         // Shift batch-local indices back to global indices
         const shifted = data.results.map(r => ({ ...r, index: r.index + offset }));
@@ -404,7 +427,7 @@ function ImportBottles() {
       setSelections(autoSelections);
       setStep('review');
     } catch (err) {
-      setError('Network error during validation');
+      setError(err.message || 'Network error during validation');
     } finally {
       setValidating(false);
     }

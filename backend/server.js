@@ -8,6 +8,20 @@ if (missingEnv.length > 0) {
   process.exit(1);
 }
 
+// Reject weak / placeholder JWT secrets. Every access token is HS256-signed
+// with this single symmetric key, and the project is open-source — so a
+// deployment shipping a short or well-known default secret lets an attacker
+// forge tokens for any user/role. Presence alone is not enough.
+const JWT_PLACEHOLDERS = new Set([
+  'change-me-to-a-strong-random-string',
+  'dev-secret-change-me-in-production',
+  'changeme', 'change-me', 'secret', 'your-secret-key', 'your_jwt_secret',
+]);
+if (process.env.JWT_SECRET.length < 32 || JWT_PLACEHOLDERS.has(process.env.JWT_SECRET.trim().toLowerCase())) {
+  console.error('FATAL: JWT_SECRET is too weak. Use a random string of at least 32 characters, e.g. `openssl rand -hex 32`.');
+  process.exit(1);
+}
+
 if (!process.env.MAILGUN_API_KEY || !process.env.MAILGUN_DOMAIN) {
   console.warn('Warning: MAILGUN_API_KEY / MAILGUN_DOMAIN not set — email verification disabled.');
 }

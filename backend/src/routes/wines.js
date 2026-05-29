@@ -1,6 +1,5 @@
 const express = require('express');
 const mongoose = require('mongoose');
-const rateLimit = require('express-rate-limit');
 const WineDefinition = require('../models/WineDefinition');
 const Discussion = require('../models/Discussion');
 const searchService = require('../services/search');
@@ -11,28 +10,11 @@ const { generateWineKey, combinedSimilarity } = require('../utils/normalize');
 const { parsePagination } = require('../utils/pagination');
 const { isValidId } = require('../utils/validation');
 const { submitUrls } = require('../services/indexNow');
-const rateLimitsConfig = require('../config/rateLimits');
-const { logAudit } = require('../services/audit');
+const aiBurstLimiter = require('../middleware/aiBurstLimiter');
 
 const REMBG_URL = process.env.REMBG_URL || 'http://rembg:5000';
 
 const router = express.Router();
-
-// Per-user burst limiter on Anthropic-backed wine endpoints. Keyed on
-// req.user.id (not IP) so a scripted attacker rotating IPs can't bypass.
-// Per-IP apiLimiter still runs alongside. /scan-label, /identify-text,
-// /ai-info share one bucket because they share one Anthropic budget.
-const aiBurstLimiter = rateLimit({
-  windowMs: 60 * 1000,
-  max: () => rateLimitsConfig.get().aiBurst.max,
-  keyGenerator: (req) => String(req.user?.id || ''),
-  standardHeaders: true,
-  legacyHeaders: false,
-  handler: (req, res) => {
-    logAudit(req, 'system.rate_limit_exceeded', {}, { limiter: 'ai-burst', userId: req.user?.id });
-    res.status(429).json({ error: 'Too many AI requests in a short time. Please wait a minute and try again.' });
-  },
-});
 
 const USER_SEARCH_LIMIT = 10;
 

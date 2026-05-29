@@ -169,7 +169,8 @@ async function processUser(user, isFirstRun) {
       await sendDrinkWindowDigest(
         user.email,
         user.displayName || user.username,
-        uniqueAlerts
+        uniqueAlerts,
+        user._id
       );
     } catch (err) {
       console.error(`[drinkWindowNotifier] Email failed for ${user._id}:`, err.message);

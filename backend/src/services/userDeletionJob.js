@@ -23,6 +23,7 @@ const JournalEntry = require('../models/JournalEntry');
 const Notification = require('../models/Notification');
 const PendingShare = require('../models/PendingShare');
 const PriceTrackingSkip = require('../models/PriceTrackingSkip');
+const PriceTrackingRequest = require('../models/PriceTrackingRequest');
 const PushSubscription = require('../models/PushSubscription');
 const Rack = require('../models/Rack');
 const Recommendation = require('../models/Recommendation');
@@ -100,6 +101,15 @@ async function purgeUserData(userId, userEmail) {
     CellarValueSnapshot.deleteMany({ user: userId }),
     PriceTrackingSkip.deleteMany({ skippedBy: userId }),
 
+    // Price-tracking opt-in requests are a shared per-(wine,vintage) singleton;
+    // pull just this user's requester entry (with their free-text note) out of
+    // the shared doc rather than deleting the whole record. Empty docs left
+    // behind are cleaned up after this batch (see below).
+    PriceTrackingRequest.updateMany(
+      { 'requesters.user': userId },
+      { $pull: { requesters: { user: userId } } }
+    ),
+
     // Invites (sent and received by email)
     PendingShare.deleteMany({ $or: [{ invitedBy: userId }, { email: userEmail }] }),
 
@@ -122,6 +132,10 @@ async function purgeUserData(userId, userEmail) {
       { $set: { 'actor.userId': null, 'actor.ipAddress': null } }
     ),
   ]);
+
+  // A PriceTrackingRequest with no requesters left is an orphan (a valid one
+  // always has ≥1). Sequenced after the $pull above so it sees the result.
+  await PriceTrackingRequest.deleteMany({ requesters: { $size: 0 } });
 }
 
 async function runUserDeletionJob() {

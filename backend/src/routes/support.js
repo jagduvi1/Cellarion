@@ -9,37 +9,42 @@ const VALID_CATEGORIES = ['bug', 'help', 'feature', 'other'];
 
 // POST /api/support — submit a support ticket
 router.post('/', requireAuth, async (req, res) => {
-  const { category, subject, message } = req.body;
+  try {
+    const { category, subject, message } = req.body;
 
-  if (!VALID_CATEGORIES.includes(category)) {
-    return res.status(400).json({ error: 'Invalid category' });
-  }
-  if (!subject || !subject.trim()) {
-    return res.status(400).json({ error: 'Subject is required' });
-  }
-  if (!message || !message.trim()) {
-    return res.status(400).json({ error: 'Message is required' });
-  }
-  if (subject.trim().length > 200) {
-    return res.status(400).json({ error: 'Subject must be 200 characters or fewer' });
-  }
-  if (message.trim().length > 5000) {
-    return res.status(400).json({ error: 'Message must be 5000 characters or fewer' });
-  }
+    if (!VALID_CATEGORIES.includes(category)) {
+      return res.status(400).json({ error: 'Invalid category' });
+    }
+    if (!subject || !subject.trim()) {
+      return res.status(400).json({ error: 'Subject is required' });
+    }
+    if (!message || !message.trim()) {
+      return res.status(400).json({ error: 'Message is required' });
+    }
+    if (subject.trim().length > 200) {
+      return res.status(400).json({ error: 'Subject must be 200 characters or fewer' });
+    }
+    if (message.trim().length > 5000) {
+      return res.status(400).json({ error: 'Message must be 5000 characters or fewer' });
+    }
 
-  const ticket = await SupportTicket.create({
-    user: req.user.id,
-    category,
-    subject: stripHtml(subject),
-    message: stripHtml(message)
-  });
+    const ticket = await SupportTicket.create({
+      user: req.user.id,
+      category,
+      subject: stripHtml(subject),
+      message: stripHtml(message)
+    });
 
-  logAudit(req, 'support.ticket.created', { type: 'SupportTicket', id: ticket._id }, {
-    category,
-    subject: subject.trim()
-  });
+    logAudit(req, 'support.ticket.created', { type: 'SupportTicket', id: ticket._id }, {
+      category,
+      subject: subject.trim()
+    });
 
-  res.status(201).json({ ticket });
+    res.status(201).json({ ticket });
+  } catch (err) {
+    console.error('Create support ticket error:', err);
+    res.status(500).json({ error: 'Failed to submit support ticket' });
+  }
 });
 
 // GET /api/support/my — list the authenticated user's own tickets
