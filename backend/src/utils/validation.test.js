@@ -1,4 +1,33 @@
-const { isValidId, parseAndValidateVintage } = require('./validation');
+const { isValidId, coerceStringQuery, parseAndValidateVintage } = require('./validation');
+const { escapeRegex } = require('./sanitize');
+
+describe('coerceStringQuery', () => {
+  it('returns the string unchanged', () => {
+    expect(coerceStringQuery('hello')).toBe('hello');
+    expect(coerceStringQuery('')).toBe('');
+  });
+  it('returns "" for the object/array shapes Express produces for ?x[$gt]=', () => {
+    expect(coerceStringQuery({ $gt: '' })).toBe('');
+    expect(coerceStringQuery(['a', 'b'])).toBe('');
+    expect(coerceStringQuery(undefined)).toBe('');
+    expect(coerceStringQuery(null)).toBe('');
+    expect(coerceStringQuery(123)).toBe('');
+  });
+});
+
+describe('escapeRegex (total)', () => {
+  it('escapes regex metacharacters', () => {
+    expect(escapeRegex('a.b*c')).toBe('a\\.b\\*c');
+    expect(escapeRegex('(x)[y]')).toBe('\\(x\\)\\[y\\]');
+  });
+  it('never throws on non-string input (coerces to "")', () => {
+    expect(escapeRegex(undefined)).toBe('');
+    expect(escapeRegex(null)).toBe('');
+    // String({...}) is '[object Object]' — the [ and ] get escaped like any literal.
+    expect(escapeRegex({ $gt: '' })).toBe('\\[object Object\\]');
+    expect(() => escapeRegex(['a'])).not.toThrow();
+  });
+});
 
 describe('isValidId', () => {
   it('accepts a valid 24-char hex string', () => {

@@ -44,9 +44,13 @@ function isSafeUrl(url) {
 /**
  * Escapes special regex characters in a user-supplied string so it can
  * be safely used inside `new RegExp(...)` for literal matching.
+ *
+ * Total by design: coerces non-strings (including the object/array shapes
+ * Express produces for `?x[$gt]=` query params) to a string first, so callers
+ * can't crash it with a 500. null/undefined become ''.
  */
 function escapeRegex(str) {
-  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return String(str ?? '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 module.exports = { stripHtml, isSafeUrl, escapeRegex };

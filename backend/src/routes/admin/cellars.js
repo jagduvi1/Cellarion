@@ -5,7 +5,7 @@ const Rack = require('../../models/Rack');
 const Bottle = require('../../models/Bottle');
 const { logAudit } = require('../../services/audit');
 const { parsePagination } = require('../../utils/pagination');
-const { isValidId } = require('../../utils/validation');
+const { isValidId, coerceStringQuery } = require('../../utils/validation');
 const { escapeRegex } = require('../../utils/sanitize');
 
 const router = express.Router();
@@ -20,9 +20,9 @@ router.get('/deleted', async (req, res) => {
     const { limit, offset } = parsePagination(req.query, { limit: 50, maxLimit: 200 });
 
     const filter = { deletedAt: { $ne: null } };
-    if (req.query.search) {
-      const escaped = escapeRegex(req.query.search.trim());
-      filter.name = new RegExp(escaped, 'i');
+    const search = coerceStringQuery(req.query.search).trim();
+    if (search) {
+      filter.name = new RegExp(escapeRegex(search), 'i');
     }
 
     const [cellars, total] = await Promise.all([

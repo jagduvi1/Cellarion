@@ -20,6 +20,11 @@ router.post('/', requireAuth, async (req, res) => {
     if (!VALID_REASONS.includes(reason)) {
       return res.status(400).json({ error: 'Invalid reason' });
     }
+    // duplicateOfId is optional, but if supplied it must be a valid ObjectId —
+    // otherwise it was persisted unchecked (CastError 500 + a dangling ref).
+    if (duplicateOfId != null && duplicateOfId !== '' && !mongoose.Types.ObjectId.isValid(duplicateOfId)) {
+      return res.status(400).json({ error: 'Invalid duplicateOfId' });
+    }
     if (details && details.trim().length > 2000) {
       return res.status(400).json({ error: 'Details must be 2000 characters or fewer' });
     }
@@ -44,7 +49,7 @@ router.post('/', requireAuth, async (req, res) => {
       wineDefinition: wineDefinitionId,
       reason,
       details: details ? stripHtml(details) : undefined,
-      duplicateOf: duplicateOfId || undefined
+      duplicateOf: (duplicateOfId && mongoose.Types.ObjectId.isValid(duplicateOfId)) ? duplicateOfId : undefined
     });
 
     logAudit(req, 'wine.report.created', { type: 'WineReport', id: report._id }, {
