@@ -80,6 +80,10 @@ router.patch('/rate-limits', async (req, res) => {
     }
 
     const updated = {
+      // Spread previous first so groups not exposed by this handler
+      // (aiBurst, imageUploadBurst, and any future groups) survive the
+      // wholesale rateLimitsConfig.set() below instead of being dropped.
+      ...previous,
       api:   { max: api?.max   ?? previous.api.max   },
       write: { max: write?.max ?? previous.write.max },
       auth:  { max: auth?.max  ?? previous.auth.max  },
