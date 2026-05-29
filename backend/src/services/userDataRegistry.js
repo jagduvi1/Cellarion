@@ -59,6 +59,12 @@ const WineVintageProfile = require('../models/WineVintageProfile');
 const WishlistItem = require('../models/WishlistItem');
 const AuditLog = require('../models/AuditLog');
 const BlogPost = require('../models/BlogPost');
+const WineDefinition = require('../models/WineDefinition');
+const Country = require('../models/Country');
+const Region = require('../models/Region');
+const Grape = require('../models/Grape');
+const Appellation = require('../models/Appellation');
+const SiteConfig = require('../models/SiteConfig');
 const { getOrCreateDeletedUser } = require('../utils/deletedUser');
 
 const EXPORT_MAX = 50000;
@@ -76,17 +82,6 @@ function markTrunc(ctx, key, arr, cap = EXPORT_MAX) {
  * decision, not an oversight. Items marked "follow-up" are tracked gaps.
  */
 const EXCLUDED = {
-  // Shared taxonomy / registry — admin-managed, survives user deletion. Their
-  // required `createdBy` ref is left pointing at the deleted user (a dangling
-  // contributor ref, not the user's personal data). Cleaning these needs a
-  // sentinel-reassign strategy — tracked as a separate "contributor reference
-  // integrity" follow-up.
-  Appellation: 'creator-ref only (createdBy); shared taxonomy — contributor-ref cleanup is a follow-up',
-  Country: 'creator-ref only (createdBy); shared taxonomy — contributor-ref cleanup is a follow-up',
-  Grape: 'creator-ref only (createdBy); shared taxonomy — contributor-ref cleanup is a follow-up',
-  Region: 'creator-ref only (createdBy); shared taxonomy — contributor-ref cleanup is a follow-up',
-  WineDefinition: 'creator-ref only (createdBy); shared registry — contributor-ref cleanup is a follow-up',
-  SiteConfig: 'creator-ref only (updatedBy, nullable); global config — contributor-ref cleanup is a follow-up',
   // No user reference at all.
   ExchangeRateSnapshot: 'no user reference (daily FX rates)',
   StripeWebhookEvent: 'no user reference (idempotency ledger, TTL)',
@@ -99,11 +94,11 @@ const REGISTRY = [
     model: User,
     category: 'personal-data',
     userFields: ['_id', 'discussionBan.bannedBy'],
-    // The account row is removed by runUserDeletionJob AFTER purgeUserData.
-    // discussionBan.bannedBy on OTHER users' docs (an admin ref) is a
-    // contributor-ref follow-up, not the deleting user's data.
-    purge: null,
-    note: 'account row deleted by runUserDeletionJob; bannedBy on others is a contributor-ref follow-up',
+    // The account row itself is removed by runUserDeletionJob AFTER purgeUserData.
+    // Here we only clear this user's admin ref (discussionBan.bannedBy) off OTHER
+    // users' records so it doesn't dangle when the issuing admin is deleted.
+    purge: (ctx) => User.updateMany({ 'discussionBan.bannedBy': ctx.userId }, { $unset: { 'discussionBan.bannedBy': '' } }),
+    note: 'account row deleted by runUserDeletionJob; purge only clears bannedBy on other users',
     exportFragment: async (ctx) => {
       const u = ctx.user;
       return {
@@ -139,10 +134,11 @@ const REGISTRY = [
     // the uploader's account deletion — anonymise it (re-point uploadedBy to the
     // [deleted] sentinel, like forum content) so the shared wine image survives
     // and stays managed. Only the user's own non-shared images are hard-deleted.
-    // (reviewedBy on others' images is a contributor-ref follow-up.)
+    // Also clear this user's reviewedBy ref off OTHER users' images.
     purge: (ctx) => [
       BottleImage.deleteMany({ uploadedBy: ctx.userId, assignedToWine: { $ne: true } }),
       BottleImage.updateMany({ uploadedBy: ctx.userId, assignedToWine: true }, { $set: { uploadedBy: ctx.deletedUserId } }),
+      BottleImage.updateMany({ reviewedBy: ctx.userId }, { $unset: { reviewedBy: '' } }),
     ],
     exportFragment: async (ctx) => ({
       images: markTrunc(ctx, 'images', await BottleImage.find({ uploadedBy: ctx.userId }).limit(EXPORT_MAX).lean())
@@ -236,8 +232,11 @@ const REGISTRY = [
   },
   {
     model: DiscussionReport, category: 'personal-data', userFields: ['user', 'resolvedBy'],
-    // resolvedBy (moderator ref on OTHER users' reports) is a contributor-ref follow-up.
-    purge: (ctx) => DiscussionReport.deleteMany({ user: ctx.userId }),
+    purge: (ctx) => [
+      DiscussionReport.deleteMany({ user: ctx.userId }),
+      // Clear this user's moderator ref off OTHER users' reports.
+      DiscussionReport.updateMany({ resolvedBy: ctx.userId }, { $unset: { resolvedBy: '' } }),
+    ],
     exportFragment: async (ctx) => ({
       reports: { discussions: markTrunc(ctx, 'discussionReports', await DiscussionReport.find({ user: ctx.userId }).select('discussion reply reason createdAt').limit(EXPORT_MAX).lean())
         .map(r => ({ reason: r.reason, createdAt: r.createdAt })) },
@@ -247,10 +246,10 @@ const REGISTRY = [
   // ── Reviews & votes ─────────────────────────────────────────────────────
   {
     model: Review, category: 'shared-content', userFields: ['author'],
-    // NOTE: hard-deleted (current behaviour preserved). Whether public reviews
-    // should instead be anonymised like forum content is a product/policy
-    // decision tracked as a follow-up.
-    purge: (ctx) => Review.deleteMany({ author: ctx.userId }),
+    // Anonymised (re-pointed to the [deleted] sentinel) like forum content, so
+    // the public review + rating and other users' votes on it survive erasure.
+    // (Indexes on author are non-unique, so collapsing to one sentinel is safe.)
+    purge: (ctx) => Review.updateMany({ author: ctx.userId }, { $set: { author: ctx.deletedUserId } }),
     exportFragment: async (ctx) => ({ reviews: markTrunc(ctx, 'reviews', await Review.find({ author: ctx.userId }).limit(EXPORT_MAX).lean()) }),
   },
   {
@@ -285,7 +284,13 @@ const REGISTRY = [
   },
   {
     model: Recommendation, category: 'personal-data', userFields: ['sender', 'recipient'],
-    purge: (ctx) => Recommendation.deleteMany({ $or: [{ sender: ctx.userId }, { recipient: ctx.userId }] }),
+    // Anonymise the departing user's side instead of deleting, so the OTHER
+    // party keeps the recommendation: a recipient keeps a from-[deleted] rec,
+    // and a sender keeps a to-[deleted] entry in their sent list.
+    purge: (ctx) => [
+      Recommendation.updateMany({ sender: ctx.userId }, { $set: { sender: ctx.deletedUserId } }),
+      Recommendation.updateMany({ recipient: ctx.userId }, { $set: { recipient: ctx.deletedUserId } }),
+    ],
     exportFragment: async (ctx) => {
       const [sent, received] = await Promise.all([
         Recommendation.find({ sender: ctx.userId }).limit(EXPORT_MAX).populate('wine', 'name producer').lean(),
@@ -335,12 +340,18 @@ const REGISTRY = [
   // ── Requests & reports ──────────────────────────────────────────────────
   {
     model: WineRequest, category: 'shared-content', userFields: ['user', 'resolvedBy'],
-    purge: (ctx) => WineRequest.deleteMany({ user: ctx.userId }),
+    purge: (ctx) => [
+      WineRequest.deleteMany({ user: ctx.userId }),
+      WineRequest.updateMany({ resolvedBy: ctx.userId }, { $unset: { resolvedBy: '' } }),
+    ],
     exportFragment: async (ctx) => ({ wineRequests: markTrunc(ctx, 'wineRequests', await WineRequest.find({ user: ctx.userId }).limit(EXPORT_MAX).lean()) }),
   },
   {
     model: WineReport, category: 'shared-content', userFields: ['user', 'resolvedBy'],
-    purge: (ctx) => WineReport.deleteMany({ user: ctx.userId }),
+    purge: (ctx) => [
+      WineReport.deleteMany({ user: ctx.userId }),
+      WineReport.updateMany({ resolvedBy: ctx.userId }, { $unset: { resolvedBy: '' } }),
+    ],
     exportFragment: async (ctx) => ({
       reports: { wines: markTrunc(ctx, 'wineReports', await WineReport.find({ user: ctx.userId }).select('wineDefinition reason status createdAt').limit(EXPORT_MAX).lean())
         .map(r => ({ reason: r.reason, status: r.status, createdAt: r.createdAt })) },
@@ -348,8 +359,11 @@ const REGISTRY = [
   },
   {
     model: SupportTicket, category: 'personal-data', userFields: ['user', 'respondedBy'],
-    // respondedBy (staff ref on OTHER users' tickets) is a contributor-ref follow-up.
-    purge: (ctx) => SupportTicket.deleteMany({ user: ctx.userId }),
+    purge: (ctx) => [
+      SupportTicket.deleteMany({ user: ctx.userId }),
+      // Clear this user's staff ref off OTHER users' tickets.
+      SupportTicket.updateMany({ respondedBy: ctx.userId }, { $unset: { respondedBy: '' } }),
+    ],
     exportFragment: async (ctx) => ({
       supportTickets: markTrunc(ctx, 'supportTickets', await SupportTicket.find({ user: ctx.userId }).select('category subject message status adminResponse respondedAt createdAt').limit(EXPORT_MAX).lean())
         .map(t => ({ category: t.category, subject: t.subject, message: t.message, status: t.status, adminResponse: t.adminResponse, respondedAt: t.respondedAt, createdAt: t.createdAt })),
@@ -462,6 +476,49 @@ const REGISTRY = [
     purge: (ctx) => BlogPost.updateMany({ author: ctx.userId }, { $unset: { author: '' } }),
     exportFragment: null,
     note: 'authored public content (preserved, author unset on delete); portability is a follow-up',
+  },
+
+  // ── Shared taxonomy / registry: reassign the contributor ref ────────────
+  // These documents are admin-managed shared data that survives the user's
+  // deletion. They carry only a creator/editor ref to the departing user; we
+  // re-point it to the [deleted] sentinel so the ref doesn't dangle (createdBy
+  // is `required`, so it can't be unset). Not exported — not the user's data.
+  {
+    model: WineDefinition, category: 'creator-ref', userFields: ['createdBy'],
+    purge: (ctx) => WineDefinition.updateMany({ createdBy: ctx.userId }, { $set: { createdBy: ctx.deletedUserId } }),
+    exportFragment: null,
+    note: 'shared registry; required createdBy reassigned to [deleted] on erasure',
+  },
+  {
+    model: Country, category: 'creator-ref', userFields: ['createdBy'],
+    purge: (ctx) => Country.updateMany({ createdBy: ctx.userId }, { $set: { createdBy: ctx.deletedUserId } }),
+    exportFragment: null,
+    note: 'shared taxonomy; required createdBy reassigned to [deleted] on erasure',
+  },
+  {
+    model: Region, category: 'creator-ref', userFields: ['createdBy'],
+    purge: (ctx) => Region.updateMany({ createdBy: ctx.userId }, { $set: { createdBy: ctx.deletedUserId } }),
+    exportFragment: null,
+    note: 'shared taxonomy; required createdBy reassigned to [deleted] on erasure',
+  },
+  {
+    model: Grape, category: 'creator-ref', userFields: ['createdBy'],
+    purge: (ctx) => Grape.updateMany({ createdBy: ctx.userId }, { $set: { createdBy: ctx.deletedUserId } }),
+    exportFragment: null,
+    note: 'shared taxonomy; required createdBy reassigned to [deleted] on erasure',
+  },
+  {
+    model: Appellation, category: 'creator-ref', userFields: ['createdBy'],
+    purge: (ctx) => Appellation.updateMany({ createdBy: ctx.userId }, { $set: { createdBy: ctx.deletedUserId } }),
+    exportFragment: null,
+    note: 'shared taxonomy; required createdBy reassigned to [deleted] on erasure',
+  },
+  {
+    model: SiteConfig, category: 'creator-ref', userFields: ['updatedBy'],
+    // updatedBy is nullable — clear it (don't reassign).
+    purge: (ctx) => SiteConfig.updateMany({ updatedBy: ctx.userId }, { $unset: { updatedBy: '' } }),
+    exportFragment: null,
+    note: 'global config; nullable updatedBy cleared on erasure',
   },
 
   // ── Audit log: keep for compliance, anonymise the actor ─────────────────
