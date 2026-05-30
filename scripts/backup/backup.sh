@@ -40,23 +40,42 @@ ping_fail() {
 
 # Write a one-document status report into Mongo so SuperAdmin can show backup
 # health (the app reads this; it never touches the repo). Scalars only. Needs jq.
+#
+# The document is built with `jq` (which safely JSON-encodes every value) and
+# handed to mongosh as DATA through an env var. The --eval script below is a
+# CONSTANT string with no shell expansion, so no value is ever concatenated into
+# a command — there is no shell/command-injection surface.
 record_status() {
-  local status="$1" err="${2:-}" now count latest size latestJs errClean
+  local status="$1" err="${2:-}" now count latest size doc
   now="$(date -Is)"
   count="$(restic snapshots --json 2>/dev/null | jq 'length' 2>/dev/null || echo null)"
   latest="$(restic snapshots --json 2>/dev/null | jq -r 'sort_by(.time)|last|.time // empty' 2>/dev/null || echo '')"
   size="$(restic stats --json --mode raw-data 2>/dev/null | jq '.total_size // null' 2>/dev/null || echo null)"
-  latestJs="null"; [ -n "$latest" ] && latestJs="new Date('$latest')"
-  errClean="$(printf '%s' "$err" | tr -d "'\"\\\\" | head -c 300)"
-  docker exec -i "$MONGO_CONTAINER" mongosh "$MONGO_DB" --quiet --eval "
-    db.backupstatuses.replaceOne({ _id: 'latest' }, {
-      _id: 'latest', status: '$status', lastRunAt: new Date('$now'),
-      durationSec: ${SECONDS}, snapshotCount: ${count:-null},
-      latestSnapshotTime: ${latestJs}, repoSizeBytes: ${size:-null},
-      host: '$(hostname | tr -d "'")', repo: '$(printf '%s' "$RESTIC_REPOSITORY" | tr -d "'")',
-      error: '$errClean'
-    }, { upsert: true });
-  " >/dev/null 2>&1 || log "warning: could not record backup status to Mongo"
+
+  doc="$(jq -n \
+    --arg     status            "$status" \
+    --arg     lastRunAt         "$now" \
+    --argjson durationSec       "${SECONDS:-0}" \
+    --argjson snapshotCount     "${count:-null}" \
+    --arg     latestSnapshotTime "$latest" \
+    --argjson repoSizeBytes     "${size:-null}" \
+    --arg     host              "$(hostname)" \
+    --arg     repo              "$RESTIC_REPOSITORY" \
+    --arg     error             "$err" \
+    '{status:$status, lastRunAt:$lastRunAt, durationSec:$durationSec,
+      snapshotCount:$snapshotCount, latestSnapshotTime:$latestSnapshotTime,
+      repoSizeBytes:$repoSizeBytes, host:$host, repo:$repo,
+      error:($error[0:300])}' 2>/dev/null)" \
+    || { log "warning: could not build status document (is jq installed?)"; return 0; }
+
+  STATUS_JSON="$doc" docker exec -i -e STATUS_JSON "$MONGO_CONTAINER" \
+    mongosh "$MONGO_DB" --quiet --eval '
+      const s = JSON.parse(process.env.STATUS_JSON);
+      s._id = "latest";
+      s.lastRunAt = s.lastRunAt ? new Date(s.lastRunAt) : new Date();
+      s.latestSnapshotTime = s.latestSnapshotTime ? new Date(s.latestSnapshotTime) : null;
+      db.backupstatuses.replaceOne({ _id: "latest" }, s, { upsert: true });
+    ' >/dev/null 2>&1 || log "warning: could not record backup status to Mongo"
 }
 
 on_err() {
