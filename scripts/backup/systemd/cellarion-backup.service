@@ -1,0 +1,19 @@
+[Unit]
+Description=Cellarion nightly backup (MongoDB + uploaded images -> restic/Storage Box)
+Documentation=https://github.com/jagduvi1/Cellarion/blob/main/docs/backup.md
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+# --- EDIT THIS PATH --- to wherever you checked out Cellarion on the VM.
+# (The same path appears in cellarion-backup-check.service.)
+WorkingDirectory=/opt/cellarion/scripts/backup
+ExecStart=/opt/cellarion/scripts/backup/backup.sh
+# backup.sh runs `docker exec`, so it needs Docker access. Root is simplest;
+# alternatively set this to a user that is a member of the `docker` group.
+User=root
+# Don't let a slow upload hang forever — fail (and alert) after 2h instead.
+TimeoutStartSec=2h
+Nice=10
+IOSchedulingClass=idle

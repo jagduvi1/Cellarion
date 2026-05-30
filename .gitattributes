@@ -1,0 +1,8 @@
+# Shell scripts must always check out with LF endings — CRLF breaks the
+# shebang and `set` parsing when they run on the Linux server.
+*.sh text eol=lf
+
+# systemd unit files are deployed on the Linux host; force LF so the
+# directives parse cleanly.
+*.service text eol=lf
+*.timer   text eol=lf

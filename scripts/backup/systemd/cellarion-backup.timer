@@ -1,0 +1,13 @@
+[Unit]
+Description=Run the Cellarion backup nightly
+
+[Timer]
+# Every night at 03:30 local time.
+OnCalendar=*-*-* 03:30:00
+# Spread load / avoid the exact-minute thundering herd.
+RandomizedDelaySec=15min
+# If the VM was off at 03:30, run as soon as it's back up (don't skip a day).
+Persistent=true
+
+[Install]
+WantedBy=timers.target

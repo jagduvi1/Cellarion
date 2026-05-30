@@ -1,0 +1,14 @@
+[Unit]
+Description=Cellarion weekly backup integrity check (restic check)
+Documentation=https://github.com/jagduvi1/Cellarion/blob/main/docs/backup.md
+After=docker.service
+
+[Service]
+Type=oneshot
+# --- EDIT THIS PATH --- must match cellarion-backup.service.
+WorkingDirectory=/opt/cellarion/scripts/backup
+ExecStart=/opt/cellarion/scripts/backup/check.sh
+User=root
+TimeoutStartSec=2h
+Nice=15
+IOSchedulingClass=idle

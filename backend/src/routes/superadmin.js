@@ -12,6 +12,7 @@ const WineRequest = require('../models/WineRequest');
 const Rack = require('../models/Rack');
 const WineEmbedding = require('../models/WineEmbedding');
 const ChatUsage = require('../models/ChatUsage');
+const BackupStatus = require('../models/BackupStatus');
 const embeddingJob = require('../services/embeddingJob');
 const vectorStore = require('../services/vectorStore');
 const aiConfig = require('../config/aiConfig');
@@ -352,6 +353,27 @@ router.get('/users', async (req, res) => {
   } catch (error) {
     console.error('[superadmin] users error:', error);
     res.status(500).json({ error: 'Failed to load users' });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// GET /api/superadmin/backups
+// Backup health as REPORTED by the backup job (scripts/backup/backup.sh).
+// The app only reads this report — it never accesses the backup repo or its
+// credentials, so a compromise of the app can't reach the backups.
+// ---------------------------------------------------------------------------
+router.get('/backups', async (req, res) => {
+  try {
+    const doc = await BackupStatus.findById('latest').lean();
+    if (!doc) return res.json({ configured: false });
+    const lastRunAt = doc.lastRunAt ? new Date(doc.lastRunAt) : null;
+    const ageHours = lastRunAt ? (Date.now() - lastRunAt.getTime()) / 3600000 : null;
+    // Daily schedule → never-run or older than ~26h counts as stale.
+    const stale = ageHours == null || ageHours > 26;
+    res.json({ configured: true, stale, ageHours, ...doc });
+  } catch (error) {
+    console.error('[superadmin] backups error:', error);
+    res.status(500).json({ error: 'Failed to load backup status' });
   }
 });
 
