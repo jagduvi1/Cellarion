@@ -3,6 +3,7 @@ const mongoose = require('mongoose');
 const { requireAuth, requireRole } = require('../../middleware/auth');
 const AuditLog = require('../../models/AuditLog');
 const { parsePagination } = require('../../utils/pagination');
+const { SECURITY_EVENT_ACTIONS } = require('../../services/securityAlertJob');
 
 const router = express.Router();
 
@@ -12,12 +13,18 @@ router.use(requireAuth, requireRole('admin'));
 // GET /api/admin/audit - Full audit log with filtering and pagination
 router.get('/', async (req, res) => {
   try {
-    const { action, userId, from, to } = req.query;
+    const { action, userId, from, to, security } = req.query;
     const { limit, offset, page } = parsePagination(req.query, { limit: 50, maxLimit: 200 });
 
     const filter = {};
 
-    if (action) {
+    // `security=1` restricts to the exact set of security-relevant actions that
+    // drive the SuperAdmin nav badge (failed logins, account lockouts, rate-limit
+    // hits). Single source of truth: SECURITY_EVENT_ACTIONS. Takes precedence
+    // over the free-text `action` filter so the toggle is unambiguous.
+    if (security === '1' || security === 'true') {
+      filter.action = { $in: SECURITY_EVENT_ACTIONS };
+    } else if (action) {
       if (typeof action !== 'string' || !/^[\w.]+$/.test(action)) {
         return res.status(400).json({ error: 'Invalid action filter' });
       }

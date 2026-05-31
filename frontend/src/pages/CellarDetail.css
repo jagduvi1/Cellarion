@@ -632,6 +632,62 @@
   background: var(--color-primary-light);
 }
 
+/* ── Group-identical toggle (sits left of the view toggles) ── */
+.group-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  height: 32px;
+  padding: 0 0.6rem;
+  margin-right: auto;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  color: var(--color-text-muted);
+  font-size: 0.8rem;
+  font-family: var(--font-body);
+  transition: border-color var(--transition-fast), color var(--transition-fast);
+}
+.group-toggle-btn:hover {
+  border-color: var(--color-text-secondary);
+  color: var(--color-text-secondary);
+}
+.group-toggle-btn.active {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+  background: var(--color-primary-light);
+}
+
+/* ── Expanded bottle-group header (full-width across the grid/list) ── */
+.bottle-group-bar {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  background: var(--color-primary-light);
+  border-left: 3px solid var(--color-primary);
+  border-radius: var(--radius-sm);
+  font-size: 0.85rem;
+  color: var(--color-text);
+}
+.bottle-group-collapse {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: 0.2rem 0.6rem;
+  cursor: pointer;
+  font-size: 0.8rem;
+  white-space: nowrap;
+  font-family: var(--font-body);
+  color: var(--color-text);
+}
+.bottle-group-collapse:hover {
+  background: var(--color-primary-light);
+}
+
 /* ── Image credit tooltip ── */
 .bottle-img-wrap,
 .bottle-grid-image-wrap {
