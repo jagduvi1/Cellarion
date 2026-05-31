@@ -16,22 +16,35 @@ const ACTION_OPTIONS = [
   'superadmin.access',
 ];
 
+// Security-relevant actions — keep in sync with SECURITY_EVENT_ACTIONS on the
+// backend (services/securityAlertJob.js). Drives the "Security events only"
+// toggle and highlights these rows in the table.
+const SECURITY_ACTIONS = new Set([
+  'system.rate_limit_exceeded',
+  'auth.account_locked',
+  'auth.login.failed',
+]);
+
 export default function TabAudit() {
   const { apiFetch } = useAuth();
   const [actionFilter, setActionFilter] = useState('');
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
+  const [securityOnly, setSecurityOnly] = useState(false);
   const [page, setPage] = useState(0);
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  const load = useCallback(async (action, from, to, p) => {
+  const load = useCallback(async (action, from, to, p, secOnly) => {
     setLoading(true);
     setError(null);
     try {
       const params = new URLSearchParams({ limit: PAGE_SIZE, offset: p * PAGE_SIZE });
-      if (action) params.set('action', action);
+      // Security toggle overrides the action filter (backend ignores `action`
+      // when `security=1`), so don't send both.
+      if (secOnly) params.set('security', '1');
+      else if (action) params.set('action', action);
       if (from)   params.set('from', from);
       if (to)     params.set('to', to);
       const res = await apiFetch(`/api/admin/audit?${params}`);
@@ -47,31 +60,49 @@ export default function TabAudit() {
     }
   }, [apiFetch]);
 
-  useEffect(() => { load(actionFilter, fromDate, toDate, page); }, [page]); // eslint-disable-line
+  useEffect(() => { load(actionFilter, fromDate, toDate, page, securityOnly); }, [page]); // eslint-disable-line
 
   const handleSearch = (e) => {
     e.preventDefault();
     setPage(0);
-    load(actionFilter, fromDate, toDate, 0);
+    load(actionFilter, fromDate, toDate, 0, securityOnly);
+  };
+
+  const toggleSecurity = () => {
+    const next = !securityOnly;
+    setSecurityOnly(next);
+    setPage(0);
+    load(actionFilter, fromDate, toDate, 0, next);
   };
 
   const clearFilters = () => {
     setActionFilter('');
     setFromDate('');
     setToDate('');
+    setSecurityOnly(false);
     setPage(0);
-    load('', '', '', 0);
+    load('', '', '', 0, false);
   };
 
-  const hasFilters = actionFilter || fromDate || toDate;
+  const hasFilters = actionFilter || fromDate || toDate || securityOnly;
 
   return (
     <>
       <form className="sa-filter-row" onSubmit={handleSearch}>
+        <button
+          type="button"
+          className={`sa-btn ${securityOnly ? 'active' : ''}`}
+          onClick={toggleSecurity}
+          title="Show only failed logins, account lockouts and rate-limit hits"
+        >
+          {securityOnly ? '🛡 Security only: ON' : '🛡 Security events only'}
+        </button>
         <select
           className="sa-input"
-          style={{ width: 'auto' }}
+          style={{ width: 'auto', opacity: securityOnly ? 0.5 : 1 }}
           value={actionFilter}
+          disabled={securityOnly}
+          title={securityOnly ? 'Disabled while “Security events only” is on' : undefined}
           onChange={e => setActionFilter(e.target.value)}
         >
           <option value="">All actions</option>
@@ -125,10 +156,14 @@ export default function TabAudit() {
                   </tr>
                 </thead>
                 <tbody>
-                  {(data?.logs || []).map(log => (
-                    <tr key={log._id}>
+                  {(data?.logs || []).map(log => {
+                    const isSecurity = SECURITY_ACTIONS.has(log.action);
+                    return (
+                    <tr key={log._id} style={isSecurity ? { background: 'rgba(192,57,43,0.10)' } : undefined}>
                       <td className="mono">{fmtDate(log.timestamp)}</td>
-                      <td className={`mono ${actionClass(log.action)}`}>{log.action}</td>
+                      <td className={`mono ${actionClass(log.action)}`} style={isSecurity ? { color: 'var(--sa-danger, #c0392b)', fontWeight: 600 } : undefined}>
+                        {isSecurity && '⚠ '}{log.action}
+                      </td>
                       <td className="mono">
                         {log.actor?.userId?.username || log.actor?.userId?.email || '—'}
                         {log.actor?.role && log.actor.role !== 'anonymous' && (
@@ -140,9 +175,10 @@ export default function TabAudit() {
                         {log.detail ? JSON.stringify(log.detail).slice(0, 120) : ''}
                       </td>
                     </tr>
-                  ))}
+                    );
+                  })}
                   {(!data?.logs?.length) && (
-                    <tr><td colSpan={5}><div className="sa-empty">No entries found</div></td></tr>
+                    <tr><td colSpan={5}><div className="sa-empty">{securityOnly ? 'No security events found' : 'No entries found'}</div></td></tr>
                   )}
                 </tbody>
               </table>

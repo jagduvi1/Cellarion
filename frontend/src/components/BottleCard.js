@@ -17,11 +17,14 @@ const MATURITY_LABELS = {
  * Renders a single bottle in either list or card (grid) view.
  * Props: bottle, rackMap, cellarId, viewMode ('list' | 'card')
  */
-function BottleCard({ bottle, rackMap, cellarId, viewMode }) {
+function BottleCard({ bottle, rackMap, cellarId, viewMode, groupCount = 1, onClick }) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { user } = useAuth();
-  const rackInfo = rackMap.get(bottle._id);
+  const isGroup = groupCount > 1;
+  // A collapsed group spans multiple bottles (possibly in different racks), so a
+  // single rack badge would be misleading — suppress it until the group expands.
+  const rackInfo = isGroup ? null : rackMap?.get(bottle._id);
   const rackNavPref = user?.preferences?.rackNavigation || 'auto';
   const imgSrc = bottle.defaultImageUrl || bottle.wineDefinition?.image || bottle.pendingImageUrl;
   const credit = bottle.defaultImageUrl ? null : bottle.wineDefinition?.imageCredit;
@@ -30,18 +33,21 @@ function BottleCard({ bottle, rackMap, cellarId, viewMode }) {
   const displayProducer = bottle.wineDefinition?.producer || bottle.pendingWineRequest?.producer;
   const maturityInfo = bottle.maturityStatus ? MATURITY_LABELS[bottle.maturityStatus] : null;
 
-  const handleClick = () => navigate(`/cellars/${cellarId}/bottles/${bottle._id}`);
+  // onClick overrides navigation — used to expand a collapsed group instead.
+  const handleClick = onClick || (() => navigate(`/cellars/${cellarId}/bottles/${bottle._id}`));
   const handleKey = e => e.key === 'Enter' && handleClick();
 
   if (viewMode === 'card') {
     return (
       <div
-        className="bottle-grid-card"
+        className={`bottle-grid-card${isGroup ? ' bottle-grid-card--stacked' : ''}`}
         onClick={handleClick}
         role="button"
         tabIndex={0}
         onKeyDown={handleKey}
+        title={isGroup ? `${groupCount} identical bottles — click to expand` : undefined}
       >
+        {isGroup && <span className="bottle-count-badge">×{groupCount}</span>}
         <div className="bottle-grid-image-wrap">
           {imgSrc ? (
             <>
@@ -95,11 +101,12 @@ function BottleCard({ bottle, rackMap, cellarId, viewMode }) {
   // list view (default)
   return (
     <div
-      className="bottle-card"
+      className={`bottle-card${isGroup ? ' bottle-card--stacked' : ''}`}
       onClick={handleClick}
       role="button"
       tabIndex={0}
       onKeyDown={handleKey}
+      title={isGroup ? `${groupCount} identical bottles — click to expand` : undefined}
     >
       {imgSrc ? (
         <div className="bottle-img-wrap">
@@ -117,7 +124,10 @@ function BottleCard({ bottle, rackMap, cellarId, viewMode }) {
       )}
 
       <div className="bottle-info">
-        <div className="bottle-name">{displayName}</div>
+        <div className="bottle-name">
+          {displayName}
+          {isGroup && <span className="bottle-count-pill">×{groupCount}</span>}
+        </div>
         <div className="bottle-meta">
           <span className="bottle-producer">{displayProducer}</span>
           {bottle.vintage && <span className="bottle-vintage">{bottle.vintage}</span>}
@@ -144,7 +154,7 @@ function BottleCard({ bottle, rackMap, cellarId, viewMode }) {
         </div>
       </div>
 
-      <span className="bottle-chevron" aria-hidden="true">›</span>
+      <span className="bottle-chevron" aria-hidden="true">{isGroup ? '⊕' : '›'}</span>
     </div>
   );
 }

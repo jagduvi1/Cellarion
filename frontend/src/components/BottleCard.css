@@ -200,6 +200,7 @@
 
 /* ── Card grid-mode ── */
 .bottle-grid-card {
+  position: relative;
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
@@ -287,4 +288,51 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* ── Grouped identical bottles (same wine + vintage) ── */
+/* Count badge — overlaid (card grid) and inline (list). */
+.bottle-count-badge {
+  position: absolute;
+  top: 0.4rem;
+  left: 0.4rem;
+  z-index: 2;
+  background: var(--color-primary);
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 0.1rem 0.45rem;
+  border-radius: var(--radius-full);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+}
+.bottle-count-pill {
+  display: inline-block;
+  margin-left: 0.4rem;
+  background: var(--color-primary);
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 0.02rem 0.4rem;
+  border-radius: var(--radius-full);
+  vertical-align: middle;
+}
+/* "Stacked" shadow so a collapsed group reads as several bottles. box-shadow
+   isn't affected by overflow:hidden, so this survives the card clipping. */
+.bottle-grid-card--stacked {
+  box-shadow:
+    3px 3px 0 0 var(--color-surface), 3px 3px 0 1px var(--color-border),
+    6px 6px 0 0 var(--color-surface), 6px 6px 0 1px var(--color-border),
+    var(--shadow-card);
+}
+.bottle-grid-card--stacked:hover {
+  box-shadow:
+    3px 3px 0 0 var(--color-surface), 3px 3px 0 1px var(--color-border),
+    6px 6px 0 0 var(--color-surface), 6px 6px 0 1px var(--color-border),
+    var(--shadow-card-hover);
+}
+.bottle-card--stacked {
+  box-shadow:
+    2px 2px 0 0 var(--color-surface), 2px 2px 0 1px var(--color-border),
+    4px 4px 0 0 var(--color-surface), 4px 4px 0 1px var(--color-border),
+    var(--shadow-sm);
 }

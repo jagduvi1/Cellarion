@@ -436,6 +436,12 @@ router.get('/:id', async (req, res) => {
     // Pagination — default 30, max 200; skip defaults to 0
     const { limit, offset: skip } = parsePagination(req.query, { limit: 30, maxLimit: 200 });
 
+    // Optional grouping: collapse identical bottles (same wine + same vintage)
+    // into one entry. Paginates over GROUPS and nests the member bottles so the
+    // client can expand ("split") a group without another request. Opt-in via
+    // ?group=1 so existing callers (add-bottle exclude flow, etc.) are unaffected.
+    const grouped = req.query.group === '1' || req.query.group === 'true';
+
     const { isValidObjectId } = mongoose;
     const sortField = sort.startsWith('-') ? sort.substring(1) : sort;
     const sortDir = sort.startsWith('-') ? -1 : 1;
@@ -556,7 +562,9 @@ router.get('/:id', async (req, res) => {
       const canSortInDb_ = directSortFields.includes(sortField);
       const needsInMemoryFilter = !!(search || minRating || maxRating || maturityFilter);
       const needsInMemorySort = !canSortInDb_;
-      canPaginateInDb = !needsInMemoryFilter && !needsInMemorySort;
+      // Grouping needs every matching bottle in memory before it can collapse
+      // duplicates, so it disables DB-level pagination.
+      canPaginateInDb = !needsInMemoryFilter && !needsInMemorySort && !grouped;
 
       let query = Bottle.find(filter).populate(WINE_POPULATE);
       if (canSortInDb_) query = query.sort({ [sortField]: sortDir });
@@ -653,8 +661,28 @@ router.get('/:id', async (req, res) => {
       }
     }
 
-    // Paginate (for paths that didn't paginate in DB)
-    if (!canPaginateInDb) {
+    // Group identical bottles (same wine + vintage), or paginate normally.
+    // `bottles` is fully filtered + sorted here; grouping preserves that order.
+    let groupsForPage = null;
+    if (grouped) {
+      const groupMap = new Map();
+      const order = [];
+      for (const b of bottles) {
+        const wineId = b.wineDefinition?._id
+          ? b.wineDefinition._id.toString()
+          : (b.wineDefinition ? b.wineDefinition.toString() : `none:${b._id}`);
+        // Group by wine + vintage + bottle size, so a magnum and a 750ml of the
+        // same wine/vintage stay as separate groups.
+        const key = `${wineId}::${b.vintage || 'NV'}::${b.bottleSize || '750ml'}`;
+        let arr = groupMap.get(key);
+        if (!arr) { arr = []; groupMap.set(key, arr); order.push(key); }
+        arr.push(b);
+      }
+      totalCount = order.length;                      // total = number of groups
+      const pageKeys = order.slice(skip, skip + limit);
+      groupsForPage = pageKeys.map(key => ({ key, bottles: groupMap.get(key) }));
+      bottles = groupsForPage.flatMap(g => g.bottles); // flatten so image attach below works
+    } else if (!canPaginateInDb) {
       totalCount = bottles.length;
       bottles = bottles.slice(skip, skip + limit);
     }
@@ -694,6 +722,17 @@ router.get('/:id', async (req, res) => {
       defaultImageUrl: b.defaultImage ? (defaultImageMap[b.defaultImage.toString()] || null) : null,
       ...(maturityStatusMap ? { maturityStatus: maturityStatusMap.get(b._id.toString()) || null } : {})
     }));
+
+    // When grouping, re-nest the image-resolved bottles into their groups so the
+    // response is one entry per (wine + vintage) carrying its member bottles.
+    let responseItems = bottleItems;
+    if (grouped && groupsForPage) {
+      const itemById = new Map(bottleItems.map(it => [it._id.toString(), it]));
+      responseItems = groupsForPage.map(g => {
+        const members = g.bottles.map(b => itemById.get(b._id.toString())).filter(Boolean);
+        return { key: g.key, count: members.length, bottles: members };
+      });
+    }
 
     // ── Facets: two queries for smart cascading ──
     // 1. baseFacets: unfiltered — shows ALL options so users can always add more selections
@@ -766,10 +805,11 @@ router.get('/:id', async (req, res) => {
       cellar: { ...cellar, userRole: role, userColor: getUserColor(cellar, req.user.id) },
       bottles: {
         total: totalCount,
-        count: bottleItems.length,
+        count: responseItems.length,
         limit,
         skip,
-        items: bottleItems
+        grouped,
+        items: responseItems
       },
       ...(facets ? { facets, baseFacets, facetMeta } : {})
     });

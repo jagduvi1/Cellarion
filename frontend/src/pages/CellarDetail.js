@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, lazy, Suspense } from 'react';
+import { useState, useEffect, useRef, lazy, Suspense, Fragment } from 'react';
 import { useParams, Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
@@ -54,6 +54,12 @@ function CellarDetail() {
   const [facets, setFacets] = useState(null);
   const [baseFacets, setBaseFacets] = useState(null);
   const [facetMeta, setFacetMeta] = useState(null);
+  // Collapse identical bottles (same wine + vintage) into one card. Defaults on;
+  // persisted per browser. Server-side grouped (see ?group=1) so counts are
+  // correct across pagination.
+  const [grouped, setGrouped] = useState(() => {
+    try { return localStorage.getItem('cellarion_bottle_group') !== '0'; } catch { return true; }
+  });
 
   // Debounce the search input — only send the API call after the user stops typing
   const [debouncedSearch, setDebouncedSearch] = useState(filters.search);
@@ -81,7 +87,7 @@ function CellarDetail() {
 
   useEffect(() => {
     fetchCellarData(0);
-  }, [id, filterKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [id, filterKey, grouped]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     fetchStatistics();
@@ -105,6 +111,7 @@ function CellarDetail() {
       });
       params.set('limit', BOTTLES_PER_PAGE);
       params.set('skip', skip);
+      if (grouped) params.set('group', '1');
       const res = await getCellar(apiFetch, id, params);
       const data = await res.json();
       if (res.ok) {
@@ -131,6 +138,14 @@ function CellarDetail() {
   };
 
   const loadMore = () => fetchCellarData(bottles.length);
+
+  const toggleGrouped = () => {
+    setGrouped(g => {
+      const next = !g;
+      try { localStorage.setItem('cellarion_bottle_group', next ? '1' : '0'); } catch {}
+      return next;
+    });
+  };
 
   const fetchStatistics = async () => {
     try {
@@ -581,6 +596,8 @@ function CellarDetail() {
               hasMore={bottles.length < bottlesTotal}
               loadingMore={bottlesLoading}
               onLoadMore={loadMore}
+              grouped={grouped}
+              onToggleGrouped={toggleGrouped}
             />
           )}
         </div>
@@ -636,20 +653,38 @@ function CellarDetail() {
 }
 
 // ── Bottle list (list or card view) ──
-function BottlesList({ bottles, rackMap, cellarId, hasMore, loadingMore, onLoadMore }) {
+function BottlesList({ bottles, rackMap, cellarId, hasMore, loadingMore, onLoadMore, grouped, onToggleGrouped }) {
   const { t } = useTranslation();
   const [viewMode, setViewMode] = useState(() => {
     try { return localStorage.getItem('cellarion_bottle_view') || 'list'; } catch { return 'list'; }
   });
+  const [expandedGroups, setExpandedGroups] = useState(() => new Set());
 
   const setView = (mode) => {
     setViewMode(mode);
     try { localStorage.setItem('cellarion_bottle_view', mode); } catch {}
   };
 
+  const toggleGroup = (key) => {
+    setExpandedGroups(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+  };
+
   return (
     <>
       <div className="bottles-view-toggle">
+        <button
+          type="button"
+          className={`group-toggle-btn ${grouped ? 'active' : ''}`}
+          onClick={onToggleGrouped}
+          title="Group identical bottles (same wine & vintage) into one card"
+          aria-pressed={grouped}
+        >
+          {grouped ? '▣ Grouped' : '▢ Group'}
+        </button>
         <button
           className={`view-toggle-btn ${viewMode === 'list' ? 'active' : ''}`}
           onClick={() => setView('list')}
@@ -669,15 +704,48 @@ function BottlesList({ bottles, rackMap, cellarId, hasMore, loadingMore, onLoadM
       </div>
 
       <div className={viewMode === 'list' ? 'bottles-list' : 'bottles-grid'}>
-        {bottles.map(bottle => (
-          <BottleCard
-            key={bottle._id}
-            bottle={bottle}
-            rackMap={rackMap}
-            cellarId={cellarId}
-            viewMode={viewMode}
-          />
-        ))}
+        {bottles.map(item => {
+          // Grouped response: item = { key, count, bottles: [...] }
+          if (grouped && item && Array.isArray(item.bottles)) {
+            const rep = item.bottles[0];
+            if (item.count === 1) {
+              return (
+                <BottleCard key={rep._id} bottle={rep} rackMap={rackMap} cellarId={cellarId} viewMode={viewMode} />
+              );
+            }
+            if (!expandedGroups.has(item.key)) {
+              return (
+                <BottleCard
+                  key={item.key}
+                  bottle={rep}
+                  rackMap={rackMap}
+                  cellarId={cellarId}
+                  viewMode={viewMode}
+                  groupCount={item.count}
+                  onClick={() => toggleGroup(item.key)}
+                />
+              );
+            }
+            const wineName = rep.wineDefinition?.name || rep.pendingWineRequest?.wineName || 'Unknown Wine';
+            return (
+              <Fragment key={item.key}>
+                <div className="bottle-group-bar">
+                  <span><strong>{wineName}</strong> · {rep.vintage || 'NV'} · {item.count} bottles</span>
+                  <button type="button" className="bottle-group-collapse" onClick={() => toggleGroup(item.key)}>
+                    Collapse ▲
+                  </button>
+                </div>
+                {item.bottles.map(b => (
+                  <BottleCard key={b._id} bottle={b} rackMap={rackMap} cellarId={cellarId} viewMode={viewMode} />
+                ))}
+              </Fragment>
+            );
+          }
+          // Ungrouped response: item = bottle
+          return (
+            <BottleCard key={item._id} bottle={item} rackMap={rackMap} cellarId={cellarId} viewMode={viewMode} />
+          );
+        })}
       </div>
 
       {hasMore && (
