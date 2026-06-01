@@ -114,6 +114,24 @@ function buildEmbeddingText(wine, vintage) {
   if (grapeNames)          lines.push(`Grapes: ${grapeNames}`);
   if (wine.appellation)    lines.push(`Appellation: ${wine.appellation}`);
   if (wine.classification) lines.push(`Classification: ${wine.classification}`);
+
+  // Fold in the AI tasting/style profile when present, so the embedding encodes
+  // taste & pairing — not just identity. The structured descriptors (not the
+  // prose) are used here: they're compact, comparable, and embed cleanly. When
+  // a wine has no profile yet, the text is unchanged (so its hash/vector stay
+  // stable until enrichment runs).
+  const ap = wine.aiProfile;
+  if (ap) {
+    const style = [
+      ap.body && `${ap.body}-bodied`,
+      ap.tannin && `${ap.tannin} tannin`,
+      ap.acidity && `${ap.acidity} acidity`,
+      ap.sweetness,
+    ].filter(Boolean).join(', ');
+    if (style)                       lines.push(`Style: ${style}`);
+    if (ap.flavors?.length)          lines.push(`Flavours: ${ap.flavors.join(', ')}`);
+    if (ap.foodPairings?.length)     lines.push(`Pairs with: ${ap.foodPairings.join(', ')}`);
+  }
   return lines.join('\n');
 }
 

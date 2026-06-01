@@ -777,6 +777,147 @@ function PriceSuggestPromptPanel({ prompt, apiFetch }) {
   );
 }
 
+function EnrichmentModelPanel({ currentModel, apiFetch }) {
+  const [selected, setSelected] = useState(currentModel || 'claude-sonnet-4-6');
+  const [saving, setSaving]     = useState(false);
+  const [msg, setMsg]           = useState(null);
+
+  const isDirty = selected !== currentModel;
+
+  const save = async () => {
+    setSaving(true);
+    setMsg(null);
+    try {
+      const res = await apiFetch('/api/superadmin/ai/enrichment-model', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model: selected }),
+      });
+      if (!res.ok) {
+        const d = await res.json();
+        setMsg({ ok: false, text: d.error || 'Save failed' });
+      } else {
+        setMsg({ ok: true, text: 'Saved — takes effect on next enrichment run' });
+      }
+    } catch {
+      setMsg({ ok: false, text: 'Network error' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const tierColor = { economy: 'var(--sa-accent)', standard: 'var(--sa-accent2)', premium: '#c9a84c' };
+
+  return (
+    <div className="sa-panel" style={{ marginTop: 16 }}>
+      <div className="sa-panel-header">
+        <span className="sa-panel-title">Wine Enrichment — AI Model</span>
+        <button className="sa-btn" onClick={save} disabled={saving || !isDirty}>
+          {saving ? 'Saving...' : 'Save'}
+        </button>
+      </div>
+      <div className="sa-panel-body">
+        <div style={{ fontSize: 11, color: 'var(--sa-text-dim)', marginBottom: 12 }}>
+          Model used to generate each wine's AI tasting/style profile (body, tannin, flavours, food pairings, description). This is a knowledge-recall task — Sonnet is recommended over Haiku for richer, more accurate profiles.
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {CHAT_MODELS.map(m => (
+            <label
+              key={m.id}
+              style={{
+                display: 'flex', alignItems: 'flex-start', gap: 10,
+                padding: '8px 12px', borderRadius: 4,
+                border: `1px solid ${selected === m.id ? 'var(--sa-accent)' : 'var(--sa-border)'}`,
+                background: selected === m.id ? 'rgba(123,158,136,0.06)' : 'transparent',
+                cursor: 'pointer',
+              }}
+            >
+              <input
+                type="radio"
+                name="enrichmentModel"
+                value={m.id}
+                checked={selected === m.id}
+                onChange={() => setSelected(m.id)}
+                style={{ marginTop: 2, accentColor: 'var(--sa-accent)', flexShrink: 0 }}
+              />
+              <div style={{ flex: 1 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
+                  <span style={{ fontWeight: 600, fontSize: 12, color: 'var(--sa-text)' }}>{m.name}</span>
+                  <span style={{ fontSize: 10, color: tierColor[m.tier], border: `1px solid ${tierColor[m.tier]}`, borderRadius: 3, padding: '1px 5px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    {m.tier}
+                  </span>
+                  {m.id === currentModel && <span style={{ fontSize: 10, color: 'var(--sa-accent)', marginLeft: 'auto' }}>● active</span>}
+                </div>
+                <div style={{ fontSize: 11, color: 'var(--sa-text-dim)', marginBottom: 2 }}>{m.description}</div>
+                <div style={{ fontSize: 10, color: 'var(--sa-text-dim)', fontFamily: 'monospace' }}>
+                  Input: {m.inputPrice} / M &nbsp;·&nbsp; Output: {m.outputPrice} / M tokens
+                </div>
+              </div>
+            </label>
+          ))}
+        </div>
+        {msg && (
+          <div style={{ marginTop: 12, fontSize: 11, color: msg.ok ? 'var(--sa-accent)' : 'var(--sa-danger)' }}>{msg.text}</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function EnrichmentPromptPanel({ prompt, apiFetch }) {
+  const [val, setVal] = useState(prompt || '');
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState(null);
+
+  const save = async () => {
+    setSaving(true);
+    setMsg(null);
+    try {
+      const res = await apiFetch('/api/superadmin/ai/enrichment-prompt', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: val }),
+      });
+      if (!res.ok) {
+        const d = await res.json();
+        setMsg({ ok: false, text: d.error || 'Save failed' });
+      } else {
+        setMsg({ ok: true, text: 'Saved — takes effect on next enrichment run' });
+      }
+    } catch {
+      setMsg({ ok: false, text: 'Network error' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="sa-panel" style={{ marginTop: 16 }}>
+      <div className="sa-panel-header">
+        <span className="sa-panel-title">Wine Enrichment — AI Prompt</span>
+        <button className="sa-btn" onClick={save} disabled={saving || !val.trim()}>{saving ? 'Saving...' : 'Save'}</button>
+      </div>
+      <div className="sa-panel-body">
+        <div style={{ fontSize: 11, color: 'var(--sa-text-dim)', marginBottom: 8 }}>
+          Prompt sent to Claude to generate each wine's tasting/style profile. Must request a JSON object with body, tannin, acidity, sweetness, flavors[], foodPairings[], description, confidence. Use <code style={{ background: 'var(--sa-bg)', padding: '1px 4px', borderRadius: 2 }}>{'{{name}}'}</code>, <code style={{ background: 'var(--sa-bg)', padding: '1px 4px', borderRadius: 2 }}>{'{{producer}}'}</code>, <code style={{ background: 'var(--sa-bg)', padding: '1px 4px', borderRadius: 2 }}>{'{{region}}'}</code>, <code style={{ background: 'var(--sa-bg)', padding: '1px 4px', borderRadius: 2 }}>{'{{grapes}}'}</code> (and country/appellation/classification/type/vintage) placeholders.
+        </div>
+        <textarea
+          value={val}
+          onChange={e => setVal(e.target.value)}
+          rows={16}
+          style={{ width: '100%', background: 'var(--sa-bg)', border: '1px solid var(--sa-border)', color: 'var(--sa-text)', padding: '8px', borderRadius: 3, fontFamily: 'monospace', fontSize: 12, lineHeight: 1.5, resize: 'vertical', boxSizing: 'border-box' }}
+        />
+        <div style={{ marginTop: 6, display: 'flex', gap: 8, alignItems: 'center' }}>
+          <span style={{ fontSize: 11, color: 'var(--sa-text-dim)' }}>{val.length} / 6000 chars</span>
+          {msg && (
+            <span style={{ fontSize: 11, color: msg.ok ? 'var(--sa-accent)' : 'var(--sa-danger)' }}>{msg.text}</span>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ChatLimitsPanel({ limits, apiFetch }) {
   const [vals, setVals] = useState({ free: limits.free ?? 5, supporter: limits.supporter ?? 50, patron: limits.patron ?? -1 });
   const [saving, setSaving] = useState(false);
@@ -954,6 +1095,10 @@ export default function TabAI() {
   const [jobMode, setJobMode] = useState('incremental');
   const [jobBusy, setJobBusy] = useState(false);
   const [jobMsg, setJobMsg] = useState(null);
+  const [enrichMode, setEnrichMode] = useState('incremental');
+  const [enrichLimit, setEnrichLimit] = useState('');
+  const [enrichBusy, setEnrichBusy] = useState(false);
+  const [enrichMsg, setEnrichMsg] = useState(null);
 
   async function startJob() {
     setJobBusy(true); setJobMsg(null);
@@ -975,11 +1120,42 @@ export default function TabAI() {
     finally { setJobBusy(false); }
   }
 
+  async function startEnrich() {
+    setEnrichBusy(true); setEnrichMsg(null);
+    try {
+      const limitNum = parseInt(enrichLimit, 10);
+      const payload = { mode: enrichMode };
+      if (Number.isInteger(limitNum) && limitNum > 0) payload.limit = limitNum;
+      const res = await apiFetch('/api/admin/ai/enrich/start', { method: 'POST', body: JSON.stringify(payload) });
+      const body = await res.json().catch(() => ({}));
+      setEnrichMsg(body.message || body.error || 'Job started');
+      reload();
+    } catch (e) { setEnrichMsg(e.message || 'Error'); }
+    finally { setEnrichBusy(false); }
+  }
+
+  async function stopEnrich() {
+    setEnrichBusy(true); setEnrichMsg(null);
+    try {
+      const res = await apiFetch('/api/admin/ai/enrich/stop', { method: 'POST' });
+      const body = await res.json().catch(() => ({}));
+      setEnrichMsg(body.message || 'Stop requested');
+      reload();
+    } catch (e) { setEnrichMsg(e.message || 'Error'); }
+    finally { setEnrichBusy(false); }
+  }
+
   if (loading) return <div className="sa-loading">Loading AI pipeline stats...</div>;
   if (error)   return <div className="sa-error">Error: {error}</div>;
   if (!data)   return null;
 
   const { configured, config, job, collection, embeddings } = data;
+  const enrichJob = data.enrichmentJob || {};
+  const enrichCoverage = data.enrichment || { totalWines: 0, enrichedWines: 0 };
+  const enrichPct = enrichJob.total > 0 ? Math.round((enrichJob.done / enrichJob.total) * 100) : 0;
+  const enrichRunning = enrichJob.status === 'running' || enrichJob.status === 'stopping';
+  const coveragePct = enrichCoverage.totalWines > 0
+    ? Math.round((enrichCoverage.enrichedWines / enrichCoverage.totalWines) * 100) : 0;
 
   const jobPct = job.total > 0 ? Math.round((job.done / job.total) * 100) : 0;
   const jobStatusColor =
@@ -1223,6 +1399,114 @@ export default function TabAI() {
           </div>
         </div>
       </div>
+      {/* Wine enrichment (AI tasting/style profiles) */}
+      <div className="sa-grid-2">
+        <div className="sa-panel">
+          <div className="sa-panel-header">
+            <span className="sa-panel-title">Wine Enrichment Job</span>
+            <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+              <select
+                value={enrichMode}
+                onChange={e => setEnrichMode(e.target.value)}
+                disabled={enrichRunning || enrichBusy}
+                style={{ fontSize: 11, padding: '2px 4px', background: '#1a1a1a', color: '#ccc', border: '1px solid #444', borderRadius: 3 }}
+              >
+                <option value="incremental">Incremental (missing only)</option>
+                <option value="full">Full re-enrich</option>
+              </select>
+              <input
+                type="number"
+                min="1"
+                placeholder="max (e.g. 5)"
+                value={enrichLimit}
+                onChange={e => setEnrichLimit(e.target.value)}
+                disabled={enrichRunning || enrichBusy}
+                title="Limit how many wines to enrich this run (blank = all). Use a small number for a cheap test."
+                style={{ width: 80, fontSize: 11, padding: '2px 4px', background: '#1a1a1a', color: '#ccc', border: '1px solid #444', borderRadius: 3 }}
+              />
+              {!enrichRunning ? (
+                <button className="sa-btn" onClick={startEnrich} disabled={enrichBusy}>Start</button>
+              ) : (
+                <button className="sa-btn" onClick={stopEnrich} disabled={enrichBusy}>Stop</button>
+              )}
+              <button className="sa-btn" onClick={reload}>Refresh</button>
+            </div>
+          </div>
+          <div className="sa-panel-body">
+            {enrichMsg && <div className="sa-error" style={{ marginBottom: 8, fontSize: 11 }}>{enrichMsg}</div>}
+            <div className="sa-kv">
+              <div className="sa-kv-row">
+                <span className="sa-kv-key">Status</span>
+                <span className={`sa-kv-val ${enrichJob.status === 'running' ? 'warn' : enrichJob.status === 'done' ? 'accent' : enrichJob.status === 'error' ? 'danger' : ''}`}>{(enrichJob.status || 'idle').toUpperCase()}</span>
+              </div>
+              <div className="sa-kv-row">
+                <span className="sa-kv-key">Mode</span>
+                <span className="sa-kv-val">{enrichJob.mode || '—'}</span>
+              </div>
+              <div className="sa-kv-row">
+                <span className="sa-kv-key">Model</span>
+                <span className="sa-kv-val">{enrichJob.model || config.enrichmentModel || '—'}</span>
+              </div>
+              <div className="sa-kv-row">
+                <span className="sa-kv-key">Progress</span>
+                <span className="sa-kv-val">{enrichJob.done || 0}/{enrichJob.total || 0}</span>
+              </div>
+              <div className="sa-kv-row">
+                <span className="sa-kv-key">Enriched</span>
+                <span className="sa-kv-val accent">{num(enrichJob.enriched || 0)}</span>
+              </div>
+              <div className="sa-kv-row">
+                <span className="sa-kv-key">Skipped</span>
+                <span className="sa-kv-val">{num(enrichJob.skipped || 0)}</span>
+              </div>
+              <div className="sa-kv-row">
+                <span className="sa-kv-key">Errors</span>
+                <span className={`sa-kv-val ${enrichJob.errors > 0 ? 'danger' : ''}`}>{num(enrichJob.errors || 0)}</span>
+              </div>
+              <div className="sa-kv-row">
+                <span className="sa-kv-key">Started</span>
+                <span className="sa-kv-val mono">{enrichJob.startedAt ? ago(enrichJob.startedAt) : '—'}</span>
+              </div>
+            </div>
+            {enrichRunning && (
+              <div style={{ marginTop: 12 }}>
+                <div className="sa-bar-label"><span>Enrichment progress</span><span>{enrichPct}%</span></div>
+                <div className="sa-bar-track"><div className="sa-bar-fill warn" style={{ width: `${enrichPct}%` }} /></div>
+              </div>
+            )}
+            {enrichJob.lastError && (
+              <div className="sa-error" style={{ marginTop: 10, fontSize: 11 }}>Last error: {enrichJob.lastError}</div>
+            )}
+          </div>
+        </div>
+
+        <div className="sa-panel">
+          <div className="sa-panel-header"><span className="sa-panel-title">Profile Coverage</span></div>
+          <div className="sa-panel-body">
+            <div className="sa-kv">
+              <div className="sa-kv-row">
+                <span className="sa-kv-key">Wines with AI profile</span>
+                <span className="sa-kv-val accent">{num(enrichCoverage.enrichedWines)}</span>
+              </div>
+              <div className="sa-kv-row">
+                <span className="sa-kv-key">Total wines</span>
+                <span className="sa-kv-val">{num(enrichCoverage.totalWines)}</span>
+              </div>
+              <div className="sa-kv-row">
+                <span className="sa-kv-key">Coverage</span>
+                <span className="sa-kv-val">{coveragePct}%</span>
+              </div>
+            </div>
+            <div style={{ marginTop: 12 }}>
+              <div className="sa-bar-track"><div className="sa-bar-fill accent" style={{ width: `${coveragePct}%` }} /></div>
+            </div>
+            <div style={{ marginTop: 12, fontSize: 11, color: 'var(--sa-text-dim)' }}>
+              Enrichment writes each wine's AI tasting profile. After it runs, start an <strong>incremental</strong> embedding job to fold the new profiles into the search vectors.
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* Chat event log (errors / fallbacks) */}
       {data.chatEventLog?.length > 0 && (
         <div className="sa-panel" style={{ marginBottom: 16 }}>
@@ -1281,6 +1565,8 @@ export default function TabAI() {
       <MaturitySuggestPromptPanel prompt={config.maturitySuggestPrompt || ''} apiFetch={apiFetch} />
       <PriceSuggestModelPanel currentModel={config.priceSuggestModel || 'claude-haiku-4-5-20251001'} apiFetch={apiFetch} />
       <PriceSuggestPromptPanel prompt={config.priceSuggestPrompt || ''} apiFetch={apiFetch} />
+      <EnrichmentModelPanel currentModel={config.enrichmentModel || 'claude-sonnet-4-6'} apiFetch={apiFetch} />
+      <EnrichmentPromptPanel prompt={config.enrichmentPrompt || ''} apiFetch={apiFetch} />
       <ChatLimitsPanel limits={config.chatDailyLimits || {}} apiFetch={apiFetch} />
       <ChatUsagePanel />
     </>

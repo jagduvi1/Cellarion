@@ -169,6 +169,32 @@ Rules:
 - Never invent a price — if uncertain, return null
 - Return {"error":"unknown"} ONLY if the wine is completely unrecognisable`;
 
+const DEFAULT_ENRICHMENT_PROMPT =
+`You are a master sommelier writing a concise tasting/style profile for a wine, to help match it against other wines and to show to the wine's owner.
+
+Wine: {{name}}
+Producer: {{producer}}
+Vintage: {{vintage}}
+Country: {{country}}
+Region: {{region}}
+Appellation: {{appellation}}
+Classification: {{classification}}
+Type: {{type}}
+Grapes: {{grapes}}
+
+Base the profile on what you genuinely know about this wine, producer, appellation, and grapes. Be factual and conservative — describe the wine's typical character, not marketing hyperbole. If you don't recognise the specific wine, infer a sensible profile from its grapes, region, and type, and lower your confidence accordingly.
+
+Return ONLY a raw JSON object (no markdown, no code fences, no extra text):
+{"body":"light|medium|full|null","tannin":"low|medium|high|null","acidity":"low|medium|high|null","sweetness":"dry|off-dry|sweet|null","flavors":["3-6 short flavour/aroma descriptors"],"foodPairings":["2-4 classic food pairings"],"description":"2-3 sentence plain-language tasting note for the owner","confidence":0.0}
+
+Rules:
+- body/tannin/acidity/sweetness: use one of the listed values, or null if not applicable (e.g. tannin for a white wine should usually be "low" or null).
+- flavors: concrete aromas/flavours (e.g. "dark cherry", "tobacco", "citrus zest"). Avoid vague words like "nice" or "complex".
+- foodPairings: real dishes/categories (e.g. "grilled lamb", "hard cheese", "roast chicken").
+- description: 2-3 sentences, warm but not pretentious. Light Markdown allowed (bold a key flavour at most). No headings, lists, or tables.
+- confidence: 1.0 = you know this exact wine well, 0.7 = confident from producer + style, 0.5 = grape/region knowledge only, 0.3 = rough inference.
+- Never invent awards, scores, or specific vintages' weather. If the wine is completely unrecognisable and its grapes/region are unknown, return {"error":"unknown"}.`;
+
 // Models that are known to work reliably for text chat.
 // Any value stored in DB that isn't in this list falls back to the default.
 const VALID_CHAT_MODELS = [
@@ -218,6 +244,10 @@ const defaults = {
   maturitySuggestModel: 'claude-haiku-4-5-20251001',
   priceSuggestPrompt: DEFAULT_PRICE_SUGGEST_PROMPT,
   priceSuggestModel: 'claude-haiku-4-5-20251001',
+  // Wine enrichment (AI tasting/style profile). Defaults to Sonnet because this
+  // is a knowledge-recall task where the quality gap over Haiku is meaningful.
+  enrichmentPrompt: DEFAULT_ENRICHMENT_PROMPT,
+  enrichmentModel: 'claude-sonnet-4-6',
 };
 
 let cache = { ...defaults };
@@ -248,6 +278,8 @@ async function load() {
         maturitySuggestModel:  VALID_CHAT_MODELS.includes(doc.value.maturitySuggestModel) ? doc.value.maturitySuggestModel : defaults.maturitySuggestModel,
         priceSuggestPrompt:    doc.value.priceSuggestPrompt   ?? defaults.priceSuggestPrompt,
         priceSuggestModel:     VALID_CHAT_MODELS.includes(doc.value.priceSuggestModel) ? doc.value.priceSuggestModel : defaults.priceSuggestModel,
+        enrichmentPrompt:      doc.value.enrichmentPrompt     ?? defaults.enrichmentPrompt,
+        enrichmentModel:       VALID_CHAT_MODELS.includes(doc.value.enrichmentModel) ? doc.value.enrichmentModel : defaults.enrichmentModel,
       };
     }
   } catch (err) {
@@ -263,4 +295,4 @@ function set(value) {
   cache = { ...defaults, ...value };
 }
 
-module.exports = { load, get, set, defaults, DEFAULT_SYSTEM_PROMPT, DEFAULT_LABEL_SCAN_PROMPT, DEFAULT_IMPORT_LOOKUP_PROMPT, DEFAULT_TEXT_SEARCH_PROMPT, DEFAULT_MATURITY_SUGGEST_PROMPT, DEFAULT_PRICE_SUGGEST_PROMPT, VALID_CHAT_MODELS };
+module.exports = { load, get, set, defaults, DEFAULT_SYSTEM_PROMPT, DEFAULT_LABEL_SCAN_PROMPT, DEFAULT_IMPORT_LOOKUP_PROMPT, DEFAULT_TEXT_SEARCH_PROMPT, DEFAULT_MATURITY_SUGGEST_PROMPT, DEFAULT_PRICE_SUGGEST_PROMPT, DEFAULT_ENRICHMENT_PROMPT, VALID_CHAT_MODELS };

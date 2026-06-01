@@ -14,6 +14,7 @@ const WineEmbedding = require('../models/WineEmbedding');
 const ChatUsage = require('../models/ChatUsage');
 const BackupStatus = require('../models/BackupStatus');
 const embeddingJob = require('../services/embeddingJob');
+const enrichmentJob = require('../services/enrichmentJob');
 const vectorStore = require('../services/vectorStore');
 const aiConfig = require('../config/aiConfig');
 const aiChat = require('../services/aiChat');
@@ -385,6 +386,13 @@ router.get('/ai', async (req, res) => {
   try {
     const cfg = aiConfig.get();
     const jobStatus = embeddingJob.getStatus();
+    const enrichStatus = enrichmentJob.getStatus();
+
+    // Wine-enrichment coverage (how many wines have an AI profile)
+    const [totalWines, enrichedWines] = await Promise.all([
+      WineDefinition.countDocuments(),
+      WineDefinition.countDocuments({ 'aiProfile.description': { $ne: null } }),
+    ]);
 
     // WineEmbedding stats from MongoDB
     const [totalEmbeddings, byStatusRaw, byModelRaw, latestEmbedding] = await Promise.all([
@@ -413,6 +421,8 @@ router.get('/ai', async (req, res) => {
       },
       config: cfg,
       job: jobStatus,
+      enrichmentJob: enrichStatus,
+      enrichment: { totalWines, enrichedWines },
       collection: collectionInfo,
       embeddings: {
         total: totalEmbeddings,
@@ -662,6 +672,52 @@ router.patch('/ai/price-suggest-model', async (req, res) => {
   } catch (error) {
     console.error('[superadmin] price-suggest-model error:', error);
     res.status(500).json({ error: 'Failed to save price suggest model' });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// PATCH /api/superadmin/ai/enrichment-prompt
+// ---------------------------------------------------------------------------
+router.patch('/ai/enrichment-prompt', async (req, res) => {
+  const { prompt } = req.body;
+  if (typeof prompt !== 'string' || !prompt.trim()) {
+    return res.status(400).json({ error: 'prompt must be a non-empty string' });
+  }
+  if (prompt.length > SCAN_PROMPT_MAX_LENGTH) {
+    return res.status(400).json({ error: `prompt must be ${SCAN_PROMPT_MAX_LENGTH} characters or fewer` });
+  }
+  try {
+    const current = aiConfig.get();
+    const updated = { ...current, enrichmentPrompt: prompt.trim() };
+    await updateSiteConfig('aiConfig', updated, req.user.id);
+    aiConfig.set(updated);
+    res.json({ enrichmentPrompt: updated.enrichmentPrompt });
+  } catch (error) {
+    console.error('[superadmin] enrichment-prompt error:', error);
+    res.status(500).json({ error: 'Failed to save enrichment prompt' });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// PATCH /api/superadmin/ai/enrichment-model
+// ---------------------------------------------------------------------------
+router.patch('/ai/enrichment-model', async (req, res) => {
+  const { model } = req.body;
+  const { VALID_CHAT_MODELS } = aiConfig;
+
+  if (!model || !VALID_CHAT_MODELS.includes(model)) {
+    return res.status(400).json({ error: `model must be one of: ${VALID_CHAT_MODELS.join(', ')}` });
+  }
+
+  try {
+    const current = aiConfig.get();
+    const updated = { ...current, enrichmentModel: model };
+    await updateSiteConfig('aiConfig', updated, req.user.id);
+    aiConfig.set(updated);
+    res.json({ enrichmentModel: model });
+  } catch (error) {
+    console.error('[superadmin] enrichment-model error:', error);
+    res.status(500).json({ error: 'Failed to save enrichment model' });
   }
 });
 
