@@ -1227,11 +1227,22 @@
   cursor: help;
 }
 
+.bd-ai-group {
+  margin-bottom: 0.75rem;
+}
+.bd-ai-group-label {
+  display: block;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-text-muted, #888);
+  margin-bottom: 0.35rem;
+}
 .bd-ai-chips {
   display: flex;
   flex-wrap: wrap;
   gap: 0.4rem;
-  margin-bottom: 0.85rem;
 }
 
 .bd-ai-chip {

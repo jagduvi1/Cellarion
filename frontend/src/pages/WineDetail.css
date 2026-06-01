@@ -7,6 +7,7 @@
 /* ── AI tasting profile (shared visual language with BottleDetail's bd-ai-*) ── */
 .bd-ai-profile {
   margin-top: 1rem;
+  padding: 1.25rem 1.5rem;
 }
 .bd-ai-profile__header {
   display: flex;
@@ -31,11 +32,22 @@
   color: var(--color-primary);
   cursor: help;
 }
+.bd-ai-group {
+  margin-bottom: 0.75rem;
+}
+.bd-ai-group-label {
+  display: block;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-text-muted, #888);
+  margin-bottom: 0.35rem;
+}
 .bd-ai-chips {
   display: flex;
   flex-wrap: wrap;
   gap: 0.4rem;
-  margin-bottom: 0.85rem;
 }
 .bd-ai-chip {
   font-size: 0.75rem;

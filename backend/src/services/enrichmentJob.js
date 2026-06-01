@@ -52,8 +52,14 @@ function requestStop() {
   }
 }
 
+// Sleep for a bounded number of milliseconds. The duration is clamped to a
+// fixed [0, MAX_BATCH_DELAY_MS] integer range here so a config value can never
+// drive an unbounded / hostile timer (defends the setTimeout sink).
+const MAX_BATCH_DELAY_MS = 2000;
 function sleep(ms) {
-  return new Promise(resolve => setTimeout(resolve, ms));
+  const n = Number(ms);
+  const bounded = Number.isFinite(n) ? Math.min(Math.max(Math.trunc(n), 0), MAX_BATCH_DELAY_MS) : 0;
+  return new Promise(resolve => setTimeout(resolve, bounded));
 }
 
 // ── Main job logic ─────────────────────────────────────────────────────────
@@ -121,7 +127,7 @@ async function runJob(cfg) {
 
     // Small pause between Claude calls — the SDK already retries 429/529, this
     // just smooths the request rate. Reuses the same knob as embedding batches.
-    const delayMs = Math.min(cfg.embeddingBatchDelayMs ?? 0, 2000);
+    const delayMs = Math.min(Math.max(Math.trunc(Number(cfg.embeddingBatchDelayMs) || 0), 0), MAX_BATCH_DELAY_MS);
 
     for (const wine of wines) {
       if (stopRequested) {
