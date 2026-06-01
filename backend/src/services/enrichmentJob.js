@@ -52,14 +52,12 @@ function requestStop() {
   }
 }
 
-// Sleep for a bounded number of milliseconds. The duration is clamped to a
-// fixed [0, MAX_BATCH_DELAY_MS] integer range here so a config value can never
-// drive an unbounded / hostile timer (defends the setTimeout sink).
-const MAX_BATCH_DELAY_MS = 2000;
-function sleep(ms) {
-  const n = Number(ms);
-  const bounded = Number.isFinite(n) ? Math.min(Math.max(Math.trunc(n), 0), MAX_BATCH_DELAY_MS) : 0;
-  return new Promise(resolve => setTimeout(resolve, bounded));
+// Fixed pause between Claude calls during the batch — a small constant so the
+// request rate is smooth. It is a hardcoded literal (NOT derived from config or
+// any request input), so no user-controlled value can ever reach setTimeout.
+const BATCH_PAUSE_MS = 250;
+function sleep() {
+  return new Promise(resolve => setTimeout(resolve, BATCH_PAUSE_MS));
 }
 
 // ── Main job logic ─────────────────────────────────────────────────────────
@@ -125,10 +123,6 @@ async function runJob(cfg) {
     job.total = wines.length;
     console.log(`[enrichmentJob] Starting ${job.mode} job: ${job.total} wines${job.limit ? ` (capped at ${job.limit})` : ''}, model=${job.model}`);
 
-    // Small pause between Claude calls — the SDK already retries 429/529, this
-    // just smooths the request rate. Reuses the same knob as embedding batches.
-    const delayMs = Math.min(Math.max(Math.trunc(Number(cfg.embeddingBatchDelayMs) || 0), 0), MAX_BATCH_DELAY_MS);
-
     for (const wine of wines) {
       if (stopRequested) {
         job.status = 'idle';
@@ -186,7 +180,7 @@ async function runJob(cfg) {
       }
 
       job.done++;
-      if (delayMs > 0) await sleep(delayMs);
+      await sleep();
     }
 
     job.status = 'done';
