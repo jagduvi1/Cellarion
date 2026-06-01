@@ -1,4 +1,6 @@
-const { MeiliSearch } = require('meilisearch');
+// meilisearch-js v0.50+ renamed the client export `MeiliSearch` → `Meilisearch`.
+// Alias it back to MeiliSearch locally so the rest of this file is unchanged.
+const { Meilisearch: MeiliSearch } = require('meilisearch');
 const WineDefinition = require('../models/WineDefinition');
 const Bottle = require('../models/Bottle');
 const Discussion = require('../models/Discussion');
@@ -94,12 +96,41 @@ async function initialize() {
     isAvailable = true;
     console.log(`Meilisearch connected: ${url}`);
 
-    await fullSync();
-    await fullSyncBottles();
-    await fullSyncDiscussions();
+    // Only do a full sync when an index is actually empty (first boot, or after
+    // the meili-data volume is wiped). Meilisearch persists documents on its
+    // volume, so on a normal restart the data is already there — re-uploading
+    // the whole catalog every boot is wasteful. Live data changes are kept in
+    // sync incrementally by indexWine/indexBottle/indexDiscussion. Set
+    // MEILI_FORCE_REINDEX=1 to force a rebuild (e.g. after a settings change).
+    await syncIfNeeded(index, fullSync, 'wines');
+    await syncIfNeeded(bottlesIndex, fullSyncBottles, 'bottles');
+    await syncIfNeeded(discussionsIndex, fullSyncDiscussions, 'discussions');
   } catch (err) {
     isAvailable = false;
     console.warn(`Meilisearch unavailable (${url}): ${err.message}. Falling back to MongoDB search.`);
+  }
+}
+
+// Run `syncFn` only if `idx` has no documents yet (or a rebuild is forced).
+const FORCE_REINDEX = process.env.MEILI_FORCE_REINDEX === '1' || process.env.MEILI_FORCE_REINDEX === 'true';
+async function syncIfNeeded(idx, syncFn, label) {
+  try {
+    if (FORCE_REINDEX) {
+      console.log(`Meilisearch: MEILI_FORCE_REINDEX set — rebuilding '${label}'`);
+      await syncFn();
+      return;
+    }
+    const stats = await idx.getStats();
+    if (!stats || stats.numberOfDocuments === 0) {
+      console.log(`Meilisearch: '${label}' index empty — running initial sync`);
+      await syncFn();
+    } else {
+      console.log(`Meilisearch: '${label}' already populated (${stats.numberOfDocuments} docs) — skipping sync`);
+    }
+  } catch (err) {
+    // If the stats check fails for any reason, sync to be safe (correctness > speed).
+    console.warn(`Meilisearch: could not check '${label}' stats (${err.message}) — running sync`);
+    await syncFn();
   }
 }
 

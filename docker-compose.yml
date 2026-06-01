@@ -17,7 +17,7 @@ services:
       retries: 5
 
   meilisearch:
-    image: getmeili/meilisearch:v1.6
+    image: getmeili/meilisearch:v1.45.1
     container_name: cellarion-meilisearch
     restart: unless-stopped
     environment:
@@ -36,7 +36,7 @@ services:
       retries: 5
 
   qdrant:
-    image: qdrant/qdrant:v1.9.0
+    image: qdrant/qdrant:v1.18.1
     container_name: cellarion-qdrant
     restart: unless-stopped
     volumes:
