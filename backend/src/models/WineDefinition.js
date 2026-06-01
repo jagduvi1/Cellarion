@@ -83,6 +83,24 @@ const wineDefinitionSchema = new mongoose.Schema({
       default: 0
     }
   },
+  // AI-generated tasting/style profile. Vintage-neutral (describes the wine's
+  // general character). Produced by the enrichment job (services/enrichmentJob.js)
+  // via Claude. Used two ways: (1) the structured descriptors are folded into the
+  // embedding text (services/embedding.js) so similarity search understands taste,
+  // not just identity; (2) `description` is shown on the bottle page. Clearly
+  // labelled AI-generated in the UI and gated on confidence.
+  aiProfile: {
+    body:         { type: String, default: null, trim: true },  // light | medium | full
+    tannin:       { type: String, default: null, trim: true },  // low | medium | high (reds)
+    acidity:      { type: String, default: null, trim: true },  // low | medium | high
+    sweetness:    { type: String, default: null, trim: true },  // dry | off-dry | sweet
+    flavors:      { type: [String], default: [] },              // e.g. ['dark cherry', 'tar']
+    foodPairings: { type: [String], default: [] },              // e.g. ['braised beef']
+    description:  { type: String, default: null, trim: true },  // short markdown prose for display
+    confidence:   { type: Number, default: null },             // 0..1 — how sure the AI is
+    model:        { type: String, default: null, trim: true }, // model that produced it
+    generatedAt:  { type: Date,   default: null },             // when it was generated
+  },
   // Normalized key for deduplication
   normalizedKey: {
     type: String,

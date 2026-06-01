@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import ReactMarkdown from 'react-markdown';
+import rehypeSanitize from 'rehype-sanitize';
 import { useAuth } from '../contexts/AuthContext';
 import { fromNormalized } from '../utils/ratingUtils';
 import Layout from '../components/Layout';
@@ -189,6 +191,57 @@ export default function WineDetail() {
           )}
         </div>
       </div>
+
+      {/* AI tasting profile (generated, vintage-neutral) — public, no login needed */}
+      {wine.aiProfile?.description && (
+        <div className="wd-card bd-ai-profile">
+          <div className="bd-ai-profile__header">
+            <h2>{t('wineDetail.tastingProfile', 'Tasting profile')}</h2>
+          </div>
+
+          {(() => {
+            const ap = wine.aiProfile;
+            const structure = [
+              ap.body && `${ap.body}-bodied`,
+              ap.tannin && `${ap.tannin} tannin`,
+              ap.acidity && `${ap.acidity} acidity`,
+              ap.sweetness,
+            ].filter(Boolean);
+            const flavours = ap.flavors || [];
+            return (
+              <>
+                {structure.length > 0 && (
+                  <div className="bd-ai-group">
+                    <span className="bd-ai-group-label">{t('wineDetail.structure', 'Structure')}</span>
+                    <div className="bd-ai-chips">
+                      {structure.map((c, i) => <span key={`s${i}`} className="bd-ai-chip bd-ai-chip--style">{c}</span>)}
+                    </div>
+                  </div>
+                )}
+                {flavours.length > 0 && (
+                  <div className="bd-ai-group">
+                    <span className="bd-ai-group-label">{t('wineDetail.flavours', 'Flavours')}</span>
+                    <div className="bd-ai-chips">
+                      {flavours.map((f, i) => <span key={`f${i}`} className="bd-ai-chip">{f}</span>)}
+                    </div>
+                  </div>
+                )}
+              </>
+            );
+          })()}
+
+          <div className="bd-ai-prose">
+            <ReactMarkdown rehypePlugins={[rehypeSanitize]}>{wine.aiProfile.description}</ReactMarkdown>
+          </div>
+
+          {wine.aiProfile.foodPairings?.length > 0 && (
+            <div className="bd-ai-pairings">
+              <span className="bd-ai-pairings__label">{t('wineDetail.pairsWith', 'Pairs with')}:</span>
+              {wine.aiProfile.foodPairings.join(' · ')}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* CTA banner for non-authenticated visitors */}
       {!user && (

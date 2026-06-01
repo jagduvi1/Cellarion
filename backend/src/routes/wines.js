@@ -334,7 +334,7 @@ router.post('/ai-info', requireAuth, aiBurstLimiter, async (req, res) => {
 
 // GET /api/wines/:idOrSlug/public — Public wine detail (no auth required)
 // Accepts both ObjectId and slug. Used for shared links and social previews.
-const PUBLIC_PROJECTION = 'name producer slug country region appellation grapes type image communityRating classification';
+const PUBLIC_PROJECTION = 'name producer slug country region appellation grapes type image communityRating classification aiProfile';
 
 router.get('/:idOrSlug/public', async (req, res) => {
   try {

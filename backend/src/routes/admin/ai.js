@@ -12,6 +12,7 @@ const express = require('express');
 const { requireAuth, requireRole } = require('../../middleware/auth');
 const aiConfig = require('../../config/aiConfig');
 const embeddingJob = require('../../services/embeddingJob');
+const enrichmentJob = require('../../services/enrichmentJob');
 const vectorStore = require('../../services/vectorStore');
 const { logAudit } = require('../../services/audit');
 const { updateSiteConfig } = require('../../utils/siteConfig');
@@ -124,6 +125,38 @@ router.post('/embed/stop', async (req, res) => {
   } catch (err) {
     console.error('[admin/ai] POST embed/stop error:', err);
     res.status(500).json({ error: 'Failed to stop embedding job' });
+  }
+});
+
+// ── Enrichment job (AI tasting/style profiles) ─────────────────────────────
+
+// POST /api/admin/ai/enrich/start
+router.post('/enrich/start', async (req, res) => {
+  try {
+    const mode = req.body.mode === 'full' ? 'full' : 'incremental';
+    const rawLimit = parseInt(req.body.limit, 10);
+    const limit = Number.isInteger(rawLimit) && rawLimit > 0 ? Math.min(rawLimit, 100000) : 0;
+    await enrichmentJob.start({ mode, limit });
+    logAudit(req, 'admin.ai.enrich.start', {}, { mode, limit });
+    res.json({ message: `Enrichment job started (${mode} mode${limit ? `, max ${limit}` : ''})`, status: enrichmentJob.getStatus() });
+  } catch (err) {
+    if (err.message === 'A job is already running') {
+      return res.status(409).json({ error: err.message });
+    }
+    console.error('[admin/ai] POST enrich/start error:', err);
+    res.status(500).json({ error: err.message || 'Failed to start enrichment job' });
+  }
+});
+
+// POST /api/admin/ai/enrich/stop
+router.post('/enrich/stop', async (req, res) => {
+  try {
+    enrichmentJob.requestStop();
+    logAudit(req, 'admin.ai.enrich.stop', {}, {});
+    res.json({ message: 'Stop requested', status: enrichmentJob.getStatus() });
+  } catch (err) {
+    console.error('[admin/ai] POST enrich/stop error:', err);
+    res.status(500).json({ error: 'Failed to stop enrichment job' });
   }
 });
 

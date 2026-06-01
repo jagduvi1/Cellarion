@@ -1196,3 +1196,91 @@
   font-size: 0.85rem;
 }
 
+/* ── AI tasting profile ── */
+.bd-ai-profile {
+  margin-top: 1rem;
+}
+
+.bd-ai-profile__header {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 0.75rem;
+}
+
+.bd-ai-profile__header h2 {
+  margin: 0;
+  font-size: 1.05rem;
+  color: var(--color-text);
+  font-family: var(--font-heading);
+}
+
+.bd-ai-tag {
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 0.12rem 0.45rem;
+  border-radius: var(--radius-full);
+  background: var(--color-primary-light);
+  color: var(--color-primary);
+  cursor: help;
+}
+
+.bd-ai-group {
+  margin-bottom: 0.75rem;
+}
+.bd-ai-group-label {
+  display: block;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-text-muted, #888);
+  margin-bottom: 0.35rem;
+}
+.bd-ai-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.bd-ai-chip {
+  font-size: 0.75rem;
+  padding: 0.2rem 0.6rem;
+  border-radius: var(--radius-full);
+  background: var(--color-surface-raised, #f3f3f3);
+  color: var(--color-text-secondary);
+  border: 1px solid var(--color-border);
+}
+
+.bd-ai-chip--style {
+  background: var(--color-primary-light);
+  color: var(--color-primary);
+  border-color: transparent;
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+.bd-ai-prose {
+  font-size: 0.92rem;
+  line-height: 1.6;
+  color: var(--color-text);
+}
+
+.bd-ai-prose p {
+  margin: 0 0 0.5rem;
+}
+
+.bd-ai-pairings {
+  margin-top: 0.85rem;
+  font-size: 0.85rem;
+  color: var(--color-text-secondary);
+}
+
+.bd-ai-pairings__label {
+  font-weight: 600;
+  color: var(--color-text);
+  margin-right: 0.35rem;
+}
+
