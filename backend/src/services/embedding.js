@@ -2,7 +2,11 @@
  * Voyage AI embedding service.
  *
  * Wraps the Voyage AI REST API (/v1/embeddings) using Node's built-in fetch.
- * voyage-4-lite produces 1 024-dimensional vectors.
+ * Default model is voyage-4-large at 2048 dimensions — Voyage's best
+ * general-purpose retrieval quality. The output dimension is requested
+ * explicitly (output_dimension) and must match the Qdrant collection size
+ * (VOYAGE_DIMENSION). Changing either requires a fresh collection / full
+ * re-embed (bump aiConfig.vectorIndex).
  *
  * Throttle strategy
  * -----------------
@@ -13,8 +17,8 @@
  */
 
 const VOYAGE_API_URL = 'https://api.voyageai.com/v1/embeddings';
-const VOYAGE_DIMENSION = 1024;
-const DEFAULT_MODEL = 'voyage-4-lite';
+const VOYAGE_DIMENSION = 2048;
+const DEFAULT_MODEL = 'voyage-4-large';
 
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
@@ -45,7 +49,7 @@ async function embed(texts, { model = DEFAULT_MODEL, maxRetries = 6 } = {}) {
         'Authorization': `Bearer ${apiKey}`,
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({ input: texts, model })
+      body: JSON.stringify({ input: texts, model, output_dimension: VOYAGE_DIMENSION })
     });
 
     if (res.ok) {

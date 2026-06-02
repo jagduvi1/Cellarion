@@ -126,12 +126,16 @@ async function runJob(cfg) {
     // Ensure the Qdrant collection exists before we start
     await vectorStore.ensureCollection(vectorIndex);
 
-    // Full mode: wipe existing WineEmbedding records for this model+version
+    // Full mode: drop + recreate the Qdrant collection (this also resizes it to
+    // the current VOYAGE_DIMENSION if the embedding model changed), and wipe ALL
+    // WineEmbedding bookkeeping for this index version — across every model, not
+    // just the current one — so stale records from a previous model (e.g. after
+    // switching voyage-4-lite -> voyage-4-large) don't linger as orphans.
     if (job.mode === 'full') {
       await vectorStore.dropCollection(vectorIndex);
       await vectorStore.ensureCollection(vectorIndex);
-      await WineEmbedding.deleteMany({ model, indexVersion: vectorIndex });
-      console.log(`[embeddingJob] Full mode — cleared collection wines_${vectorIndex}`);
+      await WineEmbedding.deleteMany({ indexVersion: vectorIndex });
+      console.log(`[embeddingJob] Full mode — cleared collection wines_${vectorIndex} and all its embedding records`);
     }
 
     const pairs = await collectPairs();
