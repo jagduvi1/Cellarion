@@ -54,12 +54,8 @@ function CellarDetail() {
   const [facets, setFacets] = useState(null);
   const [baseFacets, setBaseFacets] = useState(null);
   const [facetMeta, setFacetMeta] = useState(null);
-  // Collapse identical bottles (same wine + vintage) into one card. Defaults on;
-  // persisted per browser. Server-side grouped (see ?group=1) so counts are
-  // correct across pagination.
-  const [grouped, setGrouped] = useState(() => {
-    try { return localStorage.getItem('cellarion_bottle_group') !== '0'; } catch { return true; }
-  });
+  // Identical bottles (same wine + vintage + size) are always collapsed into one
+  // card. Server-side grouped (see ?group=1) so counts are correct across pagination.
 
   // Debounce the search input — only send the API call after the user stops typing
   const [debouncedSearch, setDebouncedSearch] = useState(filters.search);
@@ -87,7 +83,7 @@ function CellarDetail() {
 
   useEffect(() => {
     fetchCellarData(0);
-  }, [id, filterKey, grouped]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [id, filterKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     fetchStatistics();
@@ -111,7 +107,7 @@ function CellarDetail() {
       });
       params.set('limit', BOTTLES_PER_PAGE);
       params.set('skip', skip);
-      if (grouped) params.set('group', '1');
+      params.set('group', '1');
       const res = await getCellar(apiFetch, id, params);
       const data = await res.json();
       if (res.ok) {
@@ -138,14 +134,6 @@ function CellarDetail() {
   };
 
   const loadMore = () => fetchCellarData(bottles.length);
-
-  const toggleGrouped = () => {
-    setGrouped(g => {
-      const next = !g;
-      try { localStorage.setItem('cellarion_bottle_group', next ? '1' : '0'); } catch {}
-      return next;
-    });
-  };
 
   const fetchStatistics = async () => {
     try {
@@ -596,8 +584,6 @@ function CellarDetail() {
               hasMore={bottles.length < bottlesTotal}
               loadingMore={bottlesLoading}
               onLoadMore={loadMore}
-              grouped={grouped}
-              onToggleGrouped={toggleGrouped}
             />
           )}
         </div>
@@ -653,7 +639,7 @@ function CellarDetail() {
 }
 
 // ── Bottle list (list or card view) ──
-function BottlesList({ bottles, rackMap, cellarId, hasMore, loadingMore, onLoadMore, grouped, onToggleGrouped }) {
+function BottlesList({ bottles, rackMap, cellarId, hasMore, loadingMore, onLoadMore }) {
   const { t } = useTranslation();
   const [viewMode, setViewMode] = useState(() => {
     try { return localStorage.getItem('cellarion_bottle_view') || 'list'; } catch { return 'list'; }
@@ -677,15 +663,6 @@ function BottlesList({ bottles, rackMap, cellarId, hasMore, loadingMore, onLoadM
     <>
       <div className="bottles-view-toggle">
         <button
-          type="button"
-          className={`group-toggle-btn ${grouped ? 'active' : ''}`}
-          onClick={onToggleGrouped}
-          title="Group identical bottles (same wine & vintage) into one card"
-          aria-pressed={grouped}
-        >
-          {grouped ? '▣ Grouped' : '▢ Group'}
-        </button>
-        <button
           className={`view-toggle-btn ${viewMode === 'list' ? 'active' : ''}`}
           onClick={() => setView('list')}
           aria-label="List view"
@@ -706,7 +683,7 @@ function BottlesList({ bottles, rackMap, cellarId, hasMore, loadingMore, onLoadM
       <div className={viewMode === 'list' ? 'bottles-list' : 'bottles-grid'}>
         {bottles.map(item => {
           // Grouped response: item = { key, count, bottles: [...] }
-          if (grouped && item && Array.isArray(item.bottles)) {
+          if (item && Array.isArray(item.bottles)) {
             const rep = item.bottles[0];
             if (item.count === 1) {
               return (
@@ -741,7 +718,7 @@ function BottlesList({ bottles, rackMap, cellarId, hasMore, loadingMore, onLoadM
               </Fragment>
             );
           }
-          // Ungrouped response: item = bottle
+          // Defensive fallback: a plain bottle item (responses are always grouped)
           return (
             <BottleCard key={item._id} bottle={item} rackMap={rackMap} cellarId={cellarId} viewMode={viewMode} />
           );
