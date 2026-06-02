@@ -575,12 +575,6 @@
   font-size: 0.77rem;
 }
 
-.bd-price-history-empty {
-  display: flex;
-  flex-direction: column;
-  gap: 0.3rem;
-}
-
 /* Report wine */
 .bd-report-wine {
   margin-top: 12px;
@@ -1152,46 +1146,55 @@
   justify-content: flex-end;
 }
 
-/* Price-tracking opt-in card inside the Price Evolution section */
-.price-tracking-toggle {
+/* Compact pill that opens the price-tracking popup, inside the Price Evolution section */
+.price-tracking-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
   margin-top: 0.75rem;
-  padding: 0.75rem 0.9rem;
+  padding: 0.35rem 0.75rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
   background: var(--color-surface-raised);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-full);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
 }
-.price-tracking-toggle__row {
-  display: flex;
-  gap: 0.75rem;
-  align-items: flex-start;
-  flex-wrap: wrap;
-}
-.price-tracking-toggle__text {
-  flex: 1 1 220px;
-  min-width: 0;
-}
-.price-tracking-toggle__label {
-  font-weight: 600;
-  font-size: 0.92rem;
+.price-tracking-trigger:hover {
+  background: var(--color-surface-hover);
   color: var(--color-text);
 }
-.price-tracking-toggle__hint {
-  margin-top: 0.25rem;
-  font-size: 0.8rem;
-  color: var(--color-text-muted);
-  line-height: 1.35;
+.price-tracking-trigger--active {
+  color: var(--color-primary);
+  border-color: var(--color-primary);
 }
-.price-tracking-toggle__count {
-  margin-top: 0.35rem;
-  font-size: 0.78rem;
+.price-tracking-trigger__icon {
+  font-size: 0.95rem;
+  line-height: 1;
+}
+
+/* Body of the price-tracking popup */
+.price-tracking-modal__label {
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: var(--color-text);
+}
+.price-tracking-modal__hint {
+  margin-top: 0.5rem;
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+  line-height: 1.45;
+}
+.price-tracking-modal__count {
+  margin-top: 0.5rem;
+  font-size: 0.82rem;
   color: var(--color-text-muted);
   font-style: italic;
 }
-.price-tracking-toggle__btn {
-  flex: 0 0 auto;
-}
-.price-tracking-toggle__error {
-  margin-top: 0.5rem;
+.price-tracking-modal__error {
+  margin-top: 0.6rem;
   color: var(--color-danger, #b00);
   font-size: 0.85rem;
 }

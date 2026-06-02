@@ -188,11 +188,11 @@ function ViewDetails({ bottle, rackInfo, cellarId, vintageProfile, priceHistory,
               {t('bottleDetail.reportPrice')}
             </button>
           )}
-          <PriceTrackingToggle
-            bottleId={bottle._id}
-            vintage={bottle.vintage}
-            hasHistory={!!(priceHistory && priceHistory.length > 0)}
-          />
+          {/* Only offer price tracking while there's no price yet — once a
+              sommelier has set one, the request is moot and we hide the button. */}
+          {!(priceHistory && priceHistory.length > 0) && (
+            <PriceTrackingToggle bottleId={bottle._id} vintage={bottle.vintage} />
+          )}
         </div>
       )}
 

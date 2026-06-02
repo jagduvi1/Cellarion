@@ -408,8 +408,6 @@
     "noRatingOption": "— no rating —",
     "noteOptional": "Note (optional)",
     "notePlaceholder": "How was it? Any tasting notes?",
-    "noPriceData": "No market price data yet.",
-    "sommelierAddPricing": "Market-price tracking is opt-in — use the toggle below to request it.",
     "reportPrice": "Report incorrect price",
     "maturityPhaseEarly": "Early drinking",
     "maturityPhasePeak": "Optimal maturity ⭐",
@@ -943,8 +941,10 @@
   },
 
   "priceTracking": {
+    "trigger": "Track market price",
+    "triggerRequested": "Tracking requested",
+    "modalTitle": "Market price tracking",
     "statusRequested": "Market price tracking requested",
-    "statusHistoryOnly": "Price tracking is no longer active",
     "statusNotRequested": "Track market price for this wine",
     "hintRequested": "A sommelier will research and add a price. You will be notified when it is set.",
     "hintGuidance": "Only worth requesting for bottles with a real secondary-market value — Bordeaux Premier Cru, Burgundy Grand Cru, age-worthy collectibles. Everyday wines usually don't have reliable market data.",
