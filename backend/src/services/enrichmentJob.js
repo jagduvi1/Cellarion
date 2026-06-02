@@ -20,9 +20,11 @@
  * embedSinglePair means this only does real work when the text actually changed.
  */
 
+const mongoose = require('mongoose');
 const aiConfig = require('../config/aiConfig');
 const { suggestProfile } = require('./labelScan');
 const { embedSinglePair } = require('./embeddingJob');
+const { isValidId } = require('../utils/validation');
 const WineDefinition = require('../models/WineDefinition');
 const Bottle = require('../models/Bottle');
 
@@ -235,10 +237,16 @@ async function enrichWine(wine, model) {
  * @param {string|object} wineDefId
  */
 async function enrichWineById(wineDefId) {
+  // Validate + cast the (caller-supplied) id to a real ObjectId before it touches
+  // the query, so a non-id value can never shape the database lookup. The cast
+  // value (idStr/oid), never the raw input, is used everywhere below.
+  const idStr = String(wineDefId);
+  if (!isValidId(idStr)) return;
+  const oid = new mongoose.Types.ObjectId(idStr);
   try {
     if (!process.env.ANTHROPIC_API_KEY) return;
     if (job.status === 'running') return; // batch job will handle it
-    const wine = await WineDefinition.findById(wineDefId)
+    const wine = await WineDefinition.findById(oid)
       .populate('country', 'name')
       .populate('region', 'name')
       .populate('grapes', 'name')
@@ -246,9 +254,9 @@ async function enrichWineById(wineDefId) {
     if (!wine) return;
     if (wine.aiProfile && wine.aiProfile.description) return; // already enriched
     await enrichWine(wine, aiConfig.get().enrichmentModel);
-    console.log(`[enrichmentJob] Auto-enriched new wine: ${wine.name}`);
+    console.log('[enrichmentJob] Auto-enriched new wine: %s', wine.name);
   } catch (err) {
-    console.warn(`[enrichmentJob] enrichWineById failed (${wineDefId}):`, err.message);
+    console.warn('[enrichmentJob] enrichWineById failed (%s): %s', idStr, err.message);
   }
 }
 
