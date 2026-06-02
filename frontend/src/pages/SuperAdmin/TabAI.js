@@ -1103,8 +1103,16 @@ export default function TabAI() {
   async function startJob() {
     setJobBusy(true); setJobMsg(null);
     try {
-      const res = await apiFetch('/api/admin/ai/embed/start', { method: 'POST', body: JSON.stringify({ mode: jobMode }) });
-      setJobMsg(res.message || 'Job started');
+      // Content-Type header is required — without it Express's express.json()
+      // skips parsing the body, so req.body.mode is undefined and the backend
+      // silently defaults to 'incremental' regardless of the dropdown.
+      const res = await apiFetch('/api/admin/ai/embed/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode: jobMode }),
+      });
+      const body = await res.json().catch(() => ({}));
+      setJobMsg(body.message || body.error || 'Job started');
       reload();
     } catch (e) { setJobMsg(e.message || 'Error'); }
     finally { setJobBusy(false); }
@@ -1114,7 +1122,8 @@ export default function TabAI() {
     setJobBusy(true); setJobMsg(null);
     try {
       const res = await apiFetch('/api/admin/ai/embed/stop', { method: 'POST' });
-      setJobMsg(res.message || 'Stop requested');
+      const body = await res.json().catch(() => ({}));
+      setJobMsg(body.message || 'Stop requested');
       reload();
     } catch (e) { setJobMsg(e.message || 'Error'); }
     finally { setJobBusy(false); }
@@ -1126,7 +1135,11 @@ export default function TabAI() {
       const limitNum = parseInt(enrichLimit, 10);
       const payload = { mode: enrichMode };
       if (Number.isInteger(limitNum) && limitNum > 0) payload.limit = limitNum;
-      const res = await apiFetch('/api/admin/ai/enrich/start', { method: 'POST', body: JSON.stringify(payload) });
+      const res = await apiFetch('/api/admin/ai/enrich/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
       const body = await res.json().catch(() => ({}));
       setEnrichMsg(body.message || body.error || 'Job started');
       reload();
