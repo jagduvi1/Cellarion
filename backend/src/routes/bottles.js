@@ -17,6 +17,7 @@ const { logAudit } = require('../services/audit');
 const { getOrCreateDailySnapshot, getSnapshotForDate } = require('../utils/exchangeRates');
 const { resolveRating } = require('../utils/ratingUtils');
 const { embedSinglePair } = require('../services/embeddingJob');
+const { enrichWineById } = require('../services/enrichmentJob');
 const { CONSUMED_STATUSES, WINE_POPULATE } = require('../config/constants');
 const { checkRestockGap, resolveRestockAlerts } = require('../services/restockChecker');
 const { gatherPriceWarnings } = require('../services/priceWarnings');
@@ -458,6 +459,12 @@ router.post('/', async (req, res) => {
 
     // Fire-and-forget: embed this (wine, vintage) pair for AI chat
     embedSinglePair(wineDefinition, bottle.vintage).catch(err => console.error('Failed to embed wine-vintage pair after bottle creation:', err.message));
+
+    // Fire-and-forget: if this wine has no AI tasting profile yet (e.g. a brand-
+    // new wine the user just created), generate one — which also re-embeds the
+    // wine so Qdrant carries the taste data. No-op if already enriched / a batch
+    // enrichment job is running / AI isn't configured.
+    enrichWineById(wineDefinition).catch(() => {});
 
     // Fire-and-forget: auto-resolve any restock alerts for this wine
     resolveRestockAlerts(req.user.id, wineDefinition, bottle._id).catch(() => {});

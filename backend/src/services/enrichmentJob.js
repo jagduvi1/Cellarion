@@ -14,14 +14,19 @@
  * incremental (default) – only enrich wines that have no aiProfile yet
  * full                  – re-enrich every wine, overwriting existing profiles
  *
- * Note: enrichment does NOT re-embed. After it runs, the next embedding job
- * (incremental) detects the changed embedding text via textHash and re-embeds
- * the affected wines automatically.
+ * After a profile is written, the wine's active (wine, vintage) pairs are
+ * re-embedded immediately (embedSinglePair) so the new taste data reaches Qdrant
+ * without a separate manual embedding job. The textHash check inside
+ * embedSinglePair means this only does real work when the text actually changed.
  */
 
+const mongoose = require('mongoose');
 const aiConfig = require('../config/aiConfig');
 const { suggestProfile } = require('./labelScan');
+const { embedSinglePair } = require('./embeddingJob');
+const { isValidId } = require('../utils/validation');
 const WineDefinition = require('../models/WineDefinition');
+const Bottle = require('../models/Bottle');
 
 // ── In-memory job state ────────────────────────────────────────────────────
 
@@ -132,47 +137,9 @@ async function runJob(cfg) {
       }
 
       try {
-        const { data, debugReason } = await suggestProfile({
-          name: wine.name,
-          producer: wine.producer,
-          vintage: 'NV', // vintage-neutral profile
-          country: wine.country?.name,
-          region: wine.region?.name,
-          appellation: wine.appellation,
-          classification: wine.classification,
-          type: wine.type,
-          grapes: (wine.grapes || []).map(g => g.name).filter(Boolean),
-        });
-
-        if (!data) {
-          // ai_unknown / no_api_key / rate_limit / exception — count, keep going
-          job.skipped++;
-          if (debugReason && !debugReason.startsWith('ai_unknown')) {
-            job.lastError = debugReason;
-          }
-        } else {
-          await WineDefinition.updateOne(
-            { _id: wine._id },
-            {
-              $set: {
-                aiProfile: {
-                  body:         data.body ?? null,
-                  tannin:       data.tannin ?? null,
-                  acidity:      data.acidity ?? null,
-                  sweetness:    data.sweetness ?? null,
-                  flavors:      Array.isArray(data.flavors) ? data.flavors.slice(0, 10) : [],
-                  foodPairings: Array.isArray(data.foodPairings) ? data.foodPairings.slice(0, 8) : [],
-                  description:  typeof data.description === 'string' ? data.description.trim() : null,
-                  confidence:   typeof data.confidence === 'number' ? data.confidence : null,
-                  model:        job.model,
-                  generatedAt:  new Date(),
-                },
-                updatedAt: new Date(),
-              },
-            }
-          );
-          job.enriched++;
-        }
+        const result = await enrichWine(wine, job.model);
+        if (result === 'enriched') job.enriched++;
+        else job.skipped++;
       } catch (err) {
         job.errors++;
         job.lastError = err.message;
@@ -194,4 +161,103 @@ async function runJob(cfg) {
   }
 }
 
-module.exports = { start, requestStop, getStatus };
+// ── Single-wine enrichment (shared by the batch loop + bottle-add hook) ──────
+
+/**
+ * Enrich one wine: ask Claude for a vintage-neutral tasting profile, store it on
+ * the WineDefinition, then re-embed the wine's active vintages so the new taste
+ * data reaches Qdrant immediately.
+ *
+ * @param {object} wine   – populated WineDefinition (country/region/grapes names)
+ * @param {string} model  – embedding/enrichment model label to stamp on the profile
+ * @returns {'enriched'|'skipped'}
+ */
+async function enrichWine(wine, model) {
+  const { data, debugReason } = await suggestProfile({
+    name: wine.name,
+    producer: wine.producer,
+    vintage: 'NV', // vintage-neutral profile
+    country: wine.country?.name,
+    region: wine.region?.name,
+    appellation: wine.appellation,
+    classification: wine.classification,
+    type: wine.type,
+    grapes: (wine.grapes || []).map(g => g.name).filter(Boolean),
+  });
+
+  if (!data) {
+    // ai_unknown / no_api_key / rate_limit / exception — surface non-trivial reasons
+    if (debugReason && !debugReason.startsWith('ai_unknown')) job.lastError = debugReason;
+    return 'skipped';
+  }
+
+  await WineDefinition.updateOne(
+    { _id: wine._id },
+    {
+      $set: {
+        aiProfile: {
+          body:         data.body ?? null,
+          tannin:       data.tannin ?? null,
+          acidity:      data.acidity ?? null,
+          sweetness:    data.sweetness ?? null,
+          flavors:      Array.isArray(data.flavors) ? data.flavors.slice(0, 10) : [],
+          foodPairings: Array.isArray(data.foodPairings) ? data.foodPairings.slice(0, 8) : [],
+          description:  typeof data.description === 'string' ? data.description.trim() : null,
+          confidence:   typeof data.confidence === 'number' ? data.confidence : null,
+          model:        model || aiConfig.get().enrichmentModel,
+          generatedAt:  new Date(),
+        },
+        updatedAt: new Date(),
+      },
+    }
+  );
+
+  // Re-embed this wine's active vintages so the new profile reaches Qdrant
+  // immediately. embedSinglePair is a no-op when the text/hash is unchanged and
+  // self-skips during a batch embedding job. Best-effort — never fail enrichment.
+  try {
+    const vintages = await Bottle.distinct('vintage', { wineDefinition: wine._id, status: 'active' });
+    for (const v of vintages) {
+      await embedSinglePair(wine._id, v).catch(() => {});
+    }
+  } catch (embedErr) {
+    console.warn(`[enrichmentJob] re-embed after enrich failed (${wine._id}):`, embedErr.message);
+  }
+
+  return 'enriched';
+}
+
+/**
+ * Fire-and-forget enrichment for a single wine by id — used when a brand-new
+ * wine is created so it gets a tasting profile (and updated embedding) without
+ * waiting for the next batch run. Skips silently if the wine already has a
+ * profile, AI isn't configured, or a batch enrichment job is currently running
+ * (that job will cover it). Never throws.
+ *
+ * @param {string|object} wineDefId
+ */
+async function enrichWineById(wineDefId) {
+  // Validate + cast the (caller-supplied) id to a real ObjectId before it touches
+  // the query, so a non-id value can never shape the database lookup. The cast
+  // value (idStr/oid), never the raw input, is used everywhere below.
+  const idStr = String(wineDefId);
+  if (!isValidId(idStr)) return;
+  const oid = new mongoose.Types.ObjectId(idStr);
+  try {
+    if (!process.env.ANTHROPIC_API_KEY) return;
+    if (job.status === 'running') return; // batch job will handle it
+    const wine = await WineDefinition.findById(oid)
+      .populate('country', 'name')
+      .populate('region', 'name')
+      .populate('grapes', 'name')
+      .lean();
+    if (!wine) return;
+    if (wine.aiProfile && wine.aiProfile.description) return; // already enriched
+    await enrichWine(wine, aiConfig.get().enrichmentModel);
+    console.log('[enrichmentJob] Auto-enriched new wine: %s', wine.name);
+  } catch (err) {
+    console.warn('[enrichmentJob] enrichWineById failed (%s): %s', idStr, err.message);
+  }
+}
+
+module.exports = { start, requestStop, getStatus, enrichWineById };
