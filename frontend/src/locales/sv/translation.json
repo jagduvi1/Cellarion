@@ -408,8 +408,6 @@
     "noRatingOption": "— inget betyg —",
     "noteOptional": "Anteckning (valfritt)",
     "notePlaceholder": "Hur smakade det? Några smaknoteringar?",
-    "noPriceData": "Inga marknadsprisdata ännu.",
-    "sommelierAddPricing": "Marknadsprisbevakning är opt-in — använd reglaget nedan för att begära den.",
     "reportPrice": "Rapportera felaktigt pris",
     "maturityPhaseEarly": "Tidig drickning",
     "maturityPhasePeak": "Optimal mognad ⭐",
@@ -943,8 +941,10 @@
   },
 
   "priceTracking": {
+    "trigger": "Bevaka marknadspris",
+    "triggerRequested": "Bevakning begärd",
+    "modalTitle": "Marknadsprisbevakning",
     "statusRequested": "Marknadsprisbevakning begärd",
-    "statusHistoryOnly": "Prisbevakning är inte längre aktiv",
     "statusNotRequested": "Bevaka marknadspris för detta vin",
     "hintRequested": "En sommelier kommer att undersöka och lägga till ett pris. Du meddelas när det är satt.",
     "hintGuidance": "Bara värt att begära för flaskor med riktigt andrahandsvärde — Bordeaux Premier Cru, Burgundy Grand Cru, lagringsvärda samlarviner. Vardagsviner har sällan tillförlitlig marknadsdata.",

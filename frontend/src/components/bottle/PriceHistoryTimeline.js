@@ -10,13 +10,10 @@ function PriceHistoryTimeline({ history, rates, userCurrency }) {
   if (history === null) {
     return <span className="bd-no-dates">{t('bottleDetail.loadingMaturity')}</span>;
   }
+  // No price data: render nothing here — the "Track market price" button below
+  // (PriceTrackingToggle) is the only thing we want to show in the empty state.
   if (history.length === 0) {
-    return (
-      <div className="bd-price-history-empty">
-        <span className="bd-no-dates">{t('bottleDetail.noPriceData')}</span>
-        <span className="bd-maturity-note">{t('bottleDetail.sommelierAddPricing')}</span>
-      </div>
-    );
+    return null;
   }
 
   const latest = history[0];
