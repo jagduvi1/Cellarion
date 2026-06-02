@@ -225,7 +225,7 @@ Rules:
 
 const defaults = {
   chatEnabled: true,
-  embeddingModel: 'voyage-4-lite',
+  embeddingModel: 'voyage-4-large',
   vectorIndex: 'v1',
   chatTopK: 50,
   chatMaxResults: 5,
@@ -281,6 +281,24 @@ async function load() {
         enrichmentPrompt:      doc.value.enrichmentPrompt     ?? defaults.enrichmentPrompt,
         enrichmentModel:       VALID_CHAT_MODELS.includes(doc.value.enrichmentModel) ? doc.value.enrichmentModel : defaults.enrichmentModel,
       };
+
+      // One-time migration: a stored config from before the embedding-quality
+      // upgrade pins the old voyage-4-lite model. Force it to the new default
+      // (voyage-4-large @ 2048 dims) and persist, so every instance self-corrects
+      // on boot instead of silently embedding at the old quality. A full embedding
+      // job then rebuilds the wines_v1 collection at the new dimension.
+      if (cache.embeddingModel === 'voyage-4-lite') {
+        cache.embeddingModel = defaults.embeddingModel; // voyage-4-large
+        try {
+          await SiteConfig.updateOne(
+            { key: 'aiConfig' },
+            { $set: { 'value.embeddingModel': cache.embeddingModel } }
+          );
+          console.log('[aiConfig] Migrated stored embeddingModel to voyage-4-large (run a FULL embedding job to rebuild vectors at 2048 dims)');
+        } catch (e) {
+          console.warn('[aiConfig] Could not persist embedding-model migration:', e.message);
+        }
+      }
     }
   } catch (err) {
     console.warn('[aiConfig] Could not load from DB, using defaults:', err.message);

@@ -90,23 +90,21 @@ Every row should say `healthy` or `running` (give Meilisearch a minute if it say
 
 Then open **https://cellarion.app** in your browser and try a search — it should work.
 
-## Step 8 — Rebuild the AI vector index (for AI chat / similar wines)
-Qdrant came up empty, so AI features are blank until you rebuild the vectors. In your browser:
+## Step 8 — (Optional but recommended) Generate AI tasting profiles FIRST
+This release adds AI tasting profiles, which also enrich the search vectors. Generate them **before** the embedding job (Step 9) so the vectors include the taste data in a single pass — otherwise you'd embed twice. Costs Claude tokens, so test small first.
 
-1. Log in as the super admin.
-2. Go to **SuperAdmin → AI & Embeddings**.
-3. Under **Embedding Job**, choose **Incremental**, click **Start**.
-4. Wait for it to finish (watch the progress). AI chat / similar-wines work again once it's done.
+1. Log in as the super admin → **SuperAdmin → AI & Embeddings → Wine Enrichment Job**.
+2. Set **max** to `5`, click **Start** — enriches just 5 wines so you can check quality + cost.
+3. Happy? Run it again with **max** blank to enrich the whole catalogue (takes a while — runs in the background on the server).
 
----
+## Step 9 — Rebuild the AI vector index (FULL — required this release)
+Qdrant is empty after the upgrade, **and** this release switched the embedding model to `voyage-4-large` at 2048 dimensions — so you must run a **Full re-embed** (not Incremental). Full mode drops and recreates the Qdrant collection at the new dimension and rebuilds every vector. (Incremental would skip wines that look "already embedded" and leave the collection empty/wrong-sized.)
 
-## (Optional) Step 9 — Generate the new AI tasting profiles
-This release adds AI tasting profiles on wine pages. They don't exist until you generate them (this costs Claude tokens, so test small first):
+1. **SuperAdmin → AI & Embeddings → Embedding Job**.
+2. Choose **Full re-embed**, click **Start**.
+3. Wait for it to finish (watch the progress). AI chat / similar-wines work again once it's done.
 
-1. **SuperAdmin → AI & Embeddings → Wine Enrichment Job**.
-2. Set **max** to `5`, click **Start** — this enriches just 5 wines so you can check the result + cost.
-3. Happy with it? Run it again with **max** blank to do the whole catalog.
-4. Then run an **Incremental Embedding Job** again (step 8) so the new taste data feeds search.
+> After this one-time full rebuild, normal day-to-day use is **Incremental** again — Full is only needed because the model/dimension changed.
 
 ---
 
