@@ -9,7 +9,7 @@ import './Restock.css';
 function computeRestock(stats) {
   if (!stats) return [];
 
-  const { overview, byType, byRegion, byCountry, byGrape, allProducers, consumedByType, consumedByRegion, consumedByCountry, consumedByGrape, consumedByProducer, pace } = stats;
+  const { overview, byType, byRegion, byCountry, byGrape, allGrapes, allRegions, allProducers, consumedByType, consumedByRegion, consumedByCountry, consumedByGrape, consumedByProducer, pace } = stats;
 
   // Estimate months of consumption data (from pace or fallback to 12)
   const consumptionMonths = pace?.avgOutputPerYear > 0
@@ -37,10 +37,12 @@ function computeRestock(stats) {
     }
   }
 
-  // By region
-  if (byRegion && consumedByRegion) {
+  // By region — use the full (untruncated) region list so low-count regions
+  // with consumption history report real stock instead of 0.
+  const regionList = allRegions || byRegion;
+  if (regionList && consumedByRegion) {
     const regionStock = {};
-    for (const r of byRegion) regionStock[r.name] = r.count;
+    for (const r of regionList) regionStock[r.name] = r.count;
 
     for (const [name, consumed] of Object.entries(consumedByRegion)) {
       const stock = regionStock[name] || 0;
@@ -81,10 +83,13 @@ function computeRestock(stats) {
     }
   }
 
-  // By grape
-  if (byGrape && consumedByGrape) {
+  // By grape — use the full (untruncated) grape list so low-count grapes with
+  // consumption history report real stock instead of 0 (the bug where a newly
+  // added bottle of an uncommon grape still showed "out of stock").
+  const grapeList = allGrapes || byGrape;
+  if (grapeList && consumedByGrape) {
     const grapeStock = {};
-    for (const g of byGrape) grapeStock[g.name] = g.count;
+    for (const g of grapeList) grapeStock[g.name] = g.count;
 
     for (const [name, consumed] of Object.entries(consumedByGrape)) {
       const stock = grapeStock[name] || 0;

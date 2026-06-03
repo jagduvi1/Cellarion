@@ -355,6 +355,12 @@ async function computeOverview({ activeBottles, consumedBottles, cellars, target
     pace,
     topProducers: Object.entries(byProducer).sort((a, b) => b[1] - a[1]).slice(0, 10).map(([name, count]) => ({ name, count })),
     allProducers: Object.entries(byProducer).sort((a, b) => b[1] - a[1]).map(([name, count]) => ({ name, count })),
+    // Full (untruncated) grape/region breakdowns. byGrape/byRegion above are
+    // capped at the top 15 for the Statistics charts; Smart Restock needs the
+    // complete list so low-count categories with consumption history report
+    // their real stock instead of 0 (mirrors topProducers vs allProducers).
+    allGrapes: Object.entries(byGrape).sort((a, b) => b[1] - a[1]).map(([name, count]) => ({ name, count })),
+    allRegions: Object.entries(byRegion).sort((a, b) => b[1] - a[1]).map(([name, count]) => ({ name, count })),
   };
 }
 
@@ -380,7 +386,7 @@ function buildEmptyStats(currency) {
     joyPerDollar: [],
     regretSignal: { surprises: [], disappointments: [], avgDelta: null, count: 0 },
     pace: { avgIntakePerYear: 0, avgOutputPerYear: 0, netPerYear: 0, runway: null },
-    topProducers: [],
+    topProducers: [], allProducers: [], allGrapes: [], allRegions: [],
   };
 }
 
