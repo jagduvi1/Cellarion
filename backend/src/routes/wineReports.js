@@ -34,14 +34,17 @@ router.post('/', requireAuth, async (req, res) => {
       return res.status(404).json({ error: 'Wine not found' });
     }
 
-    // Prevent duplicate reports from the same user for the same wine
+    // Prevent duplicate reports of the SAME issue from the same user, but allow
+    // separate pending reports for different reasons on the same wine (e.g. a
+    // wrong price AND an incorrect tasting profile).
     const existing = await WineReport.findOne({
       user: req.user.id,
       wineDefinition: wineDefinitionId,
+      reason,
       status: 'pending'
     });
     if (existing) {
-      return res.status(409).json({ error: 'You already have a pending report for this wine' });
+      return res.status(409).json({ error: 'You already have a pending report of this type for this wine' });
     }
 
     const report = await WineReport.create({
