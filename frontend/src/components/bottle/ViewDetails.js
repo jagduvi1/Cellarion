@@ -95,8 +95,9 @@ function ViewDetails({ bottle, rackInfo, cellarId, vintageProfile, priceHistory,
         )}
       </div>
 
-      {/* Sommelier maturity section — not shown for NV */}
-      {bottle.vintage && bottle.vintage !== 'NV' && (
+      {/* Sommelier maturity section — shown for NV too (somms can set a drink
+          window for non-vintage sparkling); only hidden for unknown vintages */}
+      {bottle.vintage && bottle.vintage !== 'Unknown' && (
         <div className="bd-section">
           <span className="bd-section-label">{t('bottleDetail.sommMaturity')}</span>
           {!vintageProfile ? (
