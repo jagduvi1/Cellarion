@@ -424,6 +424,16 @@ function BottleDetail() {
               {wine.aiProfile.foodPairings.join(' · ')}
             </div>
           )}
+
+          <div className="bd-report-wine">
+            <button
+              type="button"
+              className="btn-report-wine"
+              onClick={() => { setReportDefaultReason('wrong_tasting_profile'); setReportWineOpen(true); }}
+            >
+              {t('bottleDetail.reportTastingProfile', 'Report tasting profile')}
+            </button>
+          </div>
         </div>
       )}
 

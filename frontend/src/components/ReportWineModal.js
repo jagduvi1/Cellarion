@@ -8,6 +8,7 @@ const REASONS = [
   { value: 'wrong_info', label: 'Wrong information (name, producer, region, etc.)' },
   { value: 'duplicate', label: 'Duplicate wine entry' },
   { value: 'wrong_price', label: 'Wrong or inaccurate market price' },
+  { value: 'wrong_tasting_profile', label: 'Incorrect tasting profile (structure, flavours, pairings)' },
   { value: 'inappropriate', label: 'Inappropriate content' },
   { value: 'other', label: 'Other' },
 ];

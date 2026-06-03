@@ -6,6 +6,8 @@ import './AdminWineReports.css';
 const REASON_LABELS = {
   wrong_info: 'Wrong Info',
   duplicate: 'Duplicate',
+  wrong_price: 'Wrong Price',
+  wrong_tasting_profile: 'Tasting Profile',
   inappropriate: 'Inappropriate',
   other: 'Other',
 };
