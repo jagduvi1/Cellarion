@@ -253,7 +253,6 @@ function AdminStats() {
         <h2>{t('adminStats.section.subscriptions')}</h2>
         <div className="admin-stats-cards">
           <StatCard label={t('adminStats.paidUsers')}          value={fmt(plans.paidUsers)} />
-          <StatCard label={t('adminStats.trialEligible')}      value={fmt(plans.trialEligibleUsers)} />
           <StatCard label={t('adminStats.expiringIn7d')}       value={fmt(plans.expiringIn7d)} sublabel={`${fmt(plans.expiringIn30d)} ${t('adminStats.in30Days')}`} accent={plans.expiringIn7d > 0 ? 'warn' : null} />
           <StatCard label={t('adminStats.withStripeCustomer')} value={fmt(plans.withStripeCustomer)} />
         </div>

@@ -342,7 +342,7 @@ router.get('/users', async (req, res) => {
 
     const [users, total] = await Promise.all([
       User.find(filter)
-        .select('username email roles plan planStartedAt planExpiresAt trialEligible createdAt emailVerified')
+        .select('username email roles plan planStartedAt planExpiresAt createdAt emailVerified')
         .sort({ createdAt: -1 })
         .skip(offset)
         .limit(limit)

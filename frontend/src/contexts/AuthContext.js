@@ -251,18 +251,6 @@ export const AuthProvider = ({ children }) => {
   // updatePreferences (uses apiFetch for auto-refresh)
   // ------------------------------------------------------------------
 
-  const startTrial = async () => {
-    try {
-      const response = await apiFetch('/api/users/trial', { method: 'POST' });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || 'Failed to start trial');
-      setUser(data.user);
-      return { success: true };
-    } catch (error) {
-      return { success: false, error: error.message };
-    }
-  };
-
   const updatePreferences = async (prefs) => {
     try {
       const response = await apiFetch('/api/users/preferences', {
@@ -288,7 +276,6 @@ export const AuthProvider = ({ children }) => {
     logout,
     verifyEmail,
     updatePreferences,
-    startTrial,
     apiFetch,
     setUser
   };

@@ -363,11 +363,10 @@ async function _computeGlobalStatsUncached({ excludeAdmins = false } = {}) {
 
   const in7d  = new Date(Date.now() + 7 * 86400000);
   const in30d = new Date(Date.now() + 30 * 86400000);
-  const [paidUsers, expiringIn7d, expiringIn30d, trialEligibleUsers, withStripeCustomer] = await Promise.all([
+  const [paidUsers, expiringIn7d, expiringIn30d, withStripeCustomer] = await Promise.all([
     User.countDocuments({ ...userMatch, plan: { $ne: 'free' } }),
     User.countDocuments({ ...userMatch, planExpiresAt: { $gte: new Date(), $lte: in7d } }),
     User.countDocuments({ ...userMatch, planExpiresAt: { $gte: new Date(), $lte: in30d } }),
-    User.countDocuments({ ...userMatch, trialEligible: true, plan: 'free' }),
     User.countDocuments({ ...userMatch, stripeCustomerId: { $ne: null } }),
   ]);
 
@@ -668,7 +667,6 @@ async function _computeGlobalStatsUncached({ excludeAdmins = false } = {}) {
     plans: {
       distribution: planDistribution,
       paidUsers,
-      trialEligibleUsers,
       expiringIn7d,
       expiringIn30d,
       withStripeCustomer,
