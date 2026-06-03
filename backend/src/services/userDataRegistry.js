@@ -86,6 +86,7 @@ const EXCLUDED = {
   ExchangeRateSnapshot: 'no user reference (daily FX rates)',
   StripeWebhookEvent: 'no user reference (idempotency ledger, TTL)',
   WineEmbedding: 'no user reference (references WineDefinition only)',
+  WineNotDuplicate: 'no user reference (admin-confirmed distinct wine pairs; actor in AuditLog)',
 };
 
 const REGISTRY = [

@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import Modal from './Modal';
 import WineImage from './WineImage';
 import WineClusterCompareModal from './WineClusterCompareModal';
-import { adminGetWineDuplicateClusters, adminMergeWine } from '../api/admin';
+import { adminGetWineDuplicateClusters, adminMergeWine, adminDismissDuplicateCluster, adminUndismissDuplicateCluster } from '../api/admin';
 import './WineModalThumbs.css';
 
 /**
@@ -24,10 +24,12 @@ function WineDuplicatesModal({ apiFetch, onClose, onMerged }) {
   const [minScore, setMinScore] = useState(0.6);
   const [meta, setMeta] = useState(null);
   const [compareCluster, setCompareCluster] = useState(null);
+  const [pendingUndo, setPendingUndo] = useState(null); // last "not duplicates" action, for one-level undo
 
   const scan = useCallback(async (score = minScore) => {
     setScanning(true);
     setError(null);
+    setPendingUndo(null);
     try {
       const res = await adminGetWineDuplicateClusters(apiFetch, { minScore: score, limit: 50 });
       const data = await res.json();
@@ -68,6 +70,35 @@ function WineDuplicatesModal({ apiFetch, onClose, onMerged }) {
     onMerged?.();
   };
 
+  // Stable identity for a cluster (its set of wine ids) — used to add/remove it
+  // from the list without relying on array index or object reference.
+  const clusterKey = (c) => c.wines.map(w => String(w._id)).sort().join(',');
+
+  // "Not duplicates": persist the decision, drop the cluster, offer one undo.
+  const handleDismiss = async (cluster) => {
+    const wineIds = cluster.wines.map(w => String(w._id));
+    setError(null);
+    setClusters(prev => prev.filter(c => clusterKey(c) !== clusterKey(cluster))); // optimistic
+    try {
+      const res = await adminDismissDuplicateCluster(apiFetch, wineIds);
+      if (!res.ok) throw new Error();
+      setPendingUndo({ cluster, wineIds });
+      setMeta(m => m ? { ...m, totalClusters: Math.max(0, (m.totalClusters || 0) - 1) } : m);
+    } catch {
+      setClusters(prev => [cluster, ...prev]); // restore on failure
+      setError('Failed to mark as not duplicates');
+    }
+  };
+
+  const handleUndo = async () => {
+    if (!pendingUndo) return;
+    const { cluster, wineIds } = pendingUndo;
+    setPendingUndo(null);
+    setClusters(prev => [cluster, ...prev]);
+    setMeta(m => m ? { ...m, totalClusters: (m.totalClusters || 0) + 1 } : m);
+    try { await adminUndismissDuplicateCluster(apiFetch, wineIds); } catch { /* re-scan reflects truth */ }
+  };
+
   return (
     <Modal title="Scan registry for duplicate wines" onClose={onClose} showClose wide>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12, flexWrap: 'wrap' }}>
@@ -94,6 +125,27 @@ function WineDuplicatesModal({ apiFetch, onClose, onMerged }) {
 
       {error && <div className="alert alert-error" style={{ marginBottom: 12 }}>{error}</div>}
 
+      {pendingUndo && (
+        <div style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
+          padding: '0.5rem 0.75rem', marginBottom: 12, borderRadius: 6,
+          background: 'var(--bg-secondary, #f4f4f4)', border: '1px solid var(--border, #e5e5e5)',
+          fontSize: '0.85rem',
+        }}>
+          <span>
+            Marked <strong>{pendingUndo.cluster.wines[0]?.producer}</strong> as not duplicates — it won’t reappear in future scans.
+          </span>
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={handleUndo}
+            style={{ padding: '0.25rem 0.65rem', fontSize: '0.8rem', flexShrink: 0 }}
+          >
+            Undo
+          </button>
+        </div>
+      )}
+
       {scanning && !clusters && (
         <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-secondary, #888)' }}>
           Scanning registry… this can take a few seconds.
@@ -115,6 +167,7 @@ function WineDuplicatesModal({ apiFetch, onClose, onMerged }) {
               apiFetch={apiFetch}
               onMerged={handleMerged}
               onOpenCompare={() => setCompareCluster(cluster)}
+              onDismiss={() => handleDismiss(cluster)}
             />
           ))}
         </div>
@@ -132,7 +185,7 @@ function WineDuplicatesModal({ apiFetch, onClose, onMerged }) {
   );
 }
 
-function ClusterCard({ cluster, apiFetch, onMerged, onOpenCompare }) {
+function ClusterCard({ cluster, apiFetch, onMerged, onOpenCompare, onDismiss }) {
   const [targetId, setTargetId] = useState(null);
   const [merging, setMerging] = useState(null); // sourceId being merged
   const [error, setError] = useState(null);
@@ -176,6 +229,16 @@ function ClusterCard({ cluster, apiFetch, onMerged, onOpenCompare }) {
           <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary, #888)' }}>
             {Math.round(cluster.score * 100)}% match
           </span>
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={onDismiss}
+            disabled={!!merging}
+            style={{ padding: '0.25rem 0.65rem', fontSize: '0.8rem' }}
+            title="These are different wines — stop showing this cluster in future scans"
+          >
+            Not duplicates
+          </button>
           <button
             type="button"
             className="btn btn-secondary"

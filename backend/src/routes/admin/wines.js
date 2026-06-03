@@ -20,6 +20,7 @@ const Review = require('../../models/Review');
 const Discussion = require('../../models/Discussion');
 const DiscussionReply = require('../../models/DiscussionReply');
 const WineEmbedding = require('../../models/WineEmbedding');
+const WineNotDuplicate = require('../../models/WineNotDuplicate');
 const vectorStore = require('../../services/vectorStore');
 const { embedSinglePair } = require('../../services/embeddingJob');
 const searchService = require('../../services/search');
@@ -219,6 +220,11 @@ router.get('/duplicate-clusters', async (req, res) => {
       if (ra !== rb) parent.set(ra, rb);
     };
 
+    // Pairs an admin has confirmed are NOT the same wine — skip these edges so
+    // they stop resurfacing on every scan. Keyed canonically as "smaller|larger".
+    const notDup = await WineNotDuplicate.find({}).select('wineA wineB').lean();
+    const dismissed = new Set(notDup.map(d => `${d.wineA}|${d.wineB}`));
+
     // Score pairs within each producer group
     const edgeScore = new Map(); // "a|b" -> best score (so we can keep cluster score later)
     for (const group of byProducer.values()) {
@@ -231,6 +237,8 @@ router.get('/duplicate-clusters', async (req, res) => {
           const b = group[j];
           const bId = String(b._id);
           if (!parent.has(bId)) parent.set(bId, bId);
+          const key = aId < bId ? `${aId}|${bId}` : `${bId}|${aId}`;
+          if (dismissed.has(key)) continue; // admin marked these as not duplicates
           const score = scoreWineMatch(
             { name: a.name, producer: a.producer, appellation: a.appellation },
             { name: b.name, producer: b.producer, appellation: b.appellation },
@@ -238,7 +246,6 @@ router.get('/duplicate-clusters', async (req, res) => {
           );
           if (score >= minScore) {
             union(aId, bId);
-            const key = aId < bId ? `${aId}|${bId}` : `${bId}|${aId}`;
             edgeScore.set(key, score);
           }
         }
@@ -305,6 +312,64 @@ router.get('/duplicate-clusters', async (req, res) => {
   } catch (err) {
     console.error('Duplicate cluster scan error:', err);
     res.status(500).json({ error: 'Failed to scan for duplicates' });
+  }
+});
+
+// All canonical unordered pairs (wineA < wineB by hex) from a set of wine ids,
+// as ObjectIds — used to record / remove "not duplicate" decisions.
+function buildWinePairs(ids) {
+  const pairs = [];
+  for (let i = 0; i < ids.length; i++) {
+    for (let j = i + 1; j < ids.length; j++) {
+      const [a, b] = ids[i] < ids[j] ? [ids[i], ids[j]] : [ids[j], ids[i]];
+      pairs.push({ wineA: new mongoose.Types.ObjectId(a), wineB: new mongoose.Types.ObjectId(b) });
+    }
+  }
+  return pairs;
+}
+
+// POST /api/admin/wines/dismiss-duplicates — mark a cluster's wines as NOT the
+// same wine. Records every pair so the duplicate scanner stops surfacing them.
+// Body: { wineIds: [id, id, ...] } (the cluster's wine ids)
+router.post('/dismiss-duplicates', async (req, res) => {
+  try {
+    const ids = [...new Set((Array.isArray(req.body?.wineIds) ? req.body.wineIds : []).filter(isValidId))];
+    if (ids.length < 2) {
+      return res.status(400).json({ error: 'wineIds must contain at least 2 valid, distinct ids' });
+    }
+    const pairs = buildWinePairs(ids);
+    await WineNotDuplicate.bulkWrite(
+      pairs.map(p => ({
+        updateOne: {
+          filter: { wineA: p.wineA, wineB: p.wineB },
+          update: { $setOnInsert: { wineA: p.wineA, wineB: p.wineB } },
+          upsert: true,
+        },
+      })),
+      { ordered: false }
+    );
+    logAudit(req, 'admin.wine.dismissDuplicates', { type: 'wine', id: ids[0] }, { wineIds: ids, pairs: pairs.length });
+    res.json({ message: 'Marked as not duplicates', pairsRecorded: pairs.length });
+  } catch (error) {
+    console.error('Dismiss duplicates error:', error);
+    res.status(500).json({ error: 'Failed to mark as not duplicates' });
+  }
+});
+
+// DELETE /api/admin/wines/dismiss-duplicates — undo the above for a cluster.
+// Body: { wineIds: [id, id, ...] }
+router.delete('/dismiss-duplicates', async (req, res) => {
+  try {
+    const ids = [...new Set((Array.isArray(req.body?.wineIds) ? req.body.wineIds : []).filter(isValidId))];
+    if (ids.length < 2) {
+      return res.status(400).json({ error: 'wineIds must contain at least 2 valid, distinct ids' });
+    }
+    const result = await WineNotDuplicate.deleteMany({ $or: buildWinePairs(ids) });
+    logAudit(req, 'admin.wine.undismissDuplicates', { type: 'wine', id: ids[0] }, { wineIds: ids });
+    res.json({ message: 'Restored', pairsRemoved: result.deletedCount || 0 });
+  } catch (error) {
+    console.error('Undismiss duplicates error:', error);
+    res.status(500).json({ error: 'Failed to restore' });
   }
 });
 
@@ -528,6 +593,8 @@ router.delete('/:id', async (req, res) => {
 
     // Remove from search index (fire-and-forget)
     searchService.removeWine(req.params.id);
+    // Drop any "not duplicate" decisions referencing this wine (fire-and-forget)
+    WineNotDuplicate.deleteMany({ $or: [{ wineA: req.params.id }, { wineB: req.params.id }] }).catch(() => {});
 
     res.json({ message: 'Wine deleted successfully' });
   } catch (error) {
@@ -611,6 +678,8 @@ router.post('/:id/merge', async (req, res) => {
       // Delete the source's vectors from Qdrant + WineEmbedding (deleting the
       // bookkeeping rows alone would orphan the actual vectors in Qdrant).
       purgeSourceVectors(sourceId),
+      // Drop any "not duplicate" decisions referencing the disappearing source.
+      WineNotDuplicate.deleteMany({ $or: [{ wineA: sourceId }, { wineB: sourceId }] }),
     ]);
 
     const bottlesMoved = results[0].modifiedCount || 0;
@@ -752,6 +821,8 @@ async function reassignWineRefs(sourceId, keeperId) {
     DiscussionReply.updateMany({ wineDefinition: sourceId }, { $set: { wineDefinition: keeperId } }),
     // Delete the source's vectors from Qdrant too, not just the bookkeeping rows.
     purgeSourceVectors(sourceId),
+    // Drop any "not duplicate" decisions referencing the disappearing source.
+    WineNotDuplicate.deleteMany({ $or: [{ wineA: sourceId }, { wineB: sourceId }] }),
     // Reviews have a unique (author, wineDefinition) index — on a real dup-key
     // collision the source author already reviewed the keeper, so drop the
     // source's duplicate review. Re-throw anything that isn't a dup-key error.
