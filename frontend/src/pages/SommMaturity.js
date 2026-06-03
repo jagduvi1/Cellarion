@@ -138,13 +138,17 @@ function ProfileCard({ profile, isPending, onSaved, onReset }) {
   const [err,       setErr]       = useState(null);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
 
+  // For an NV profile not yet migrated to relative (offset) mode, start the
+  // window blank so the somm enters durations fresh rather than stale years
+  // that would fail the 0–100 offset validation.
+  const seed = (isNv && !profile.relative) ? {} : profile;
   const [form, setForm] = useState({
-    earlyFrom:  profile.earlyFrom  || '',
-    earlyUntil: profile.earlyUntil || '',
-    peakFrom:   profile.peakFrom   || '',
-    peakUntil:  profile.peakUntil  || '',
-    lateFrom:   profile.lateFrom   || '',
-    lateUntil:  profile.lateUntil  || '',
+    earlyFrom:  seed.earlyFrom  || '',
+    earlyUntil: seed.earlyUntil || '',
+    peakFrom:   seed.peakFrom   || '',
+    peakUntil:  seed.peakUntil  || '',
+    lateFrom:   seed.lateFrom   || '',
+    lateUntil:  seed.lateUntil  || '',
     sommNotes:  profile.sommNotes  || ''
   });
 
