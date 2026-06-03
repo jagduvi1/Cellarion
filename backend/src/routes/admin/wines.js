@@ -20,6 +20,8 @@ const Review = require('../../models/Review');
 const Discussion = require('../../models/Discussion');
 const DiscussionReply = require('../../models/DiscussionReply');
 const WineEmbedding = require('../../models/WineEmbedding');
+const vectorStore = require('../../services/vectorStore');
+const { embedSinglePair } = require('../../services/embeddingJob');
 const searchService = require('../../services/search');
 const { logAudit } = require('../../services/audit');
 const { submitUrls } = require('../../services/indexNow');
@@ -606,7 +608,9 @@ router.post('/:id/merge', async (req, res) => {
         { wineDefinition: sourceId },
         { $set: { wineDefinition: targetId } }
       ),
-      WineEmbedding.deleteMany({ wineDefinition: sourceId }),
+      // Delete the source's vectors from Qdrant + WineEmbedding (deleting the
+      // bookkeeping rows alone would orphan the actual vectors in Qdrant).
+      purgeSourceVectors(sourceId),
     ]);
 
     const bottlesMoved = results[0].modifiedCount || 0;
@@ -639,6 +643,10 @@ router.post('/:id/merge', async (req, res) => {
       }
     }
 
+    // Carry the source's AI tasting profile to the keeper if the keeper has none,
+    // so the re-embed below encodes taste/style instead of losing it on merge.
+    await inheritAiProfileIfMissing(target, [source]);
+
     logAudit(req, 'admin.wine.merge',
       { type: 'wine', id: source._id },
       {
@@ -657,6 +665,10 @@ router.post('/:id/merge', async (req, res) => {
     // Target was mutated if we adopted the image; re-index so search sees it
     if (imageAction === 'adopted_from_source') searchService.indexWine(targetId);
 
+    // Re-embed the keeper's vintages (it just absorbed the source's bottles and
+    // possibly its profile) so semantic search reflects the merged wine.
+    reembedKeeper(targetId);
+
     res.json({
       message: 'Wines merged successfully',
       bottlesMoved,
@@ -667,6 +679,64 @@ router.post('/:id/merge', async (req, res) => {
     res.status(500).json({ error: 'Failed to merge wines' });
   }
 });
+
+// ── Merge embedding / enrichment consistency helpers ─────────────────────────
+
+// Delete a merged-away source's vectors from BOTH Qdrant and the WineEmbedding
+// bookkeeping. Deleting the rows alone would orphan the real vectors in Qdrant
+// (and discard the point ids needed to ever target them), so we delete the
+// Qdrant points first — grouped by the index version (collection) they live in —
+// then drop the rows. Best-effort: a Qdrant hiccup must not fail the merge.
+async function purgeSourceVectors(sourceId) {
+  try {
+    const embs = await WineEmbedding.find({ wineDefinition: sourceId })
+      .select('qdrantPointId indexVersion').lean();
+    const byIndex = new Map();
+    for (const e of embs) {
+      if (!e.qdrantPointId) continue;
+      if (!byIndex.has(e.indexVersion)) byIndex.set(e.indexVersion, []);
+      byIndex.get(e.indexVersion).push(e.qdrantPointId);
+    }
+    for (const [indexVersion, ids] of byIndex) {
+      await vectorStore.deletePoints(indexVersion, ids).catch(() => {});
+    }
+  } catch (err) {
+    console.warn(`[merge] purge source vectors failed (${sourceId}):`, err.message);
+  }
+  await WineEmbedding.deleteMany({ wineDefinition: sourceId });
+}
+
+// If the keeper has no AI tasting profile, inherit the best one (highest
+// confidence) from the wines being merged in, so the keeper's re-embedding still
+// encodes taste/style instead of dropping to identity-only text. Free — no AI
+// call. No-op when the keeper is already enriched or no source has a profile.
+async function inheritAiProfileIfMissing(keeper, sources) {
+  if (keeper.aiProfile?.description) return;
+  const donor = sources
+    .filter(w => w.aiProfile?.description)
+    .sort((a, b) => (b.aiProfile.confidence ?? 0) - (a.aiProfile.confidence ?? 0))[0];
+  if (!donor) return;
+  const profile = typeof donor.aiProfile.toObject === 'function'
+    ? donor.aiProfile.toObject()
+    : donor.aiProfile;
+  keeper.aiProfile = profile;
+  await WineDefinition.updateOne({ _id: keeper._id }, { $set: { aiProfile: profile } });
+}
+
+// Re-embed every active vintage the keeper now owns so the vector store reflects
+// the merged-in bottles (and any inherited profile). Mirrors the bottle-add hook:
+// embedSinglePair is a no-op when the text is unchanged and self-skips while a
+// batch embedding job is running. Fire-and-forget; never throws.
+async function reembedKeeper(keeperId) {
+  try {
+    const vintages = await Bottle.distinct('vintage', { wineDefinition: keeperId, status: 'active' });
+    for (const v of vintages) {
+      await embedSinglePair(keeperId, v).catch(() => {});
+    }
+  } catch (err) {
+    console.warn(`[merge] re-embed keeper failed (${keeperId}):`, err.message);
+  }
+}
 
 // Reassign every reference from one source wine to the keeper. Idempotent
 // (updateMany by wineDefinition) and does NOT delete the source, so it's safe
@@ -680,7 +750,8 @@ async function reassignWineRefs(sourceId, keeperId) {
     WineReport.updateMany({ wineDefinition: sourceId }, { $set: { wineDefinition: keeperId } }),
     Discussion.updateMany({ wineDefinition: sourceId }, { $set: { wineDefinition: keeperId } }),
     DiscussionReply.updateMany({ wineDefinition: sourceId }, { $set: { wineDefinition: keeperId } }),
-    WineEmbedding.deleteMany({ wineDefinition: sourceId }),
+    // Delete the source's vectors from Qdrant too, not just the bookkeeping rows.
+    purgeSourceVectors(sourceId),
     // Reviews have a unique (author, wineDefinition) index — on a real dup-key
     // collision the source author already reviewed the keeper, so drop the
     // source's duplicate review. Re-throw anything that isn't a dup-key error.
@@ -764,6 +835,10 @@ router.post('/merge', async (req, res) => {
       }
     }
 
+    // Carry the best source AI tasting profile to the keeper if it has none, so
+    // the re-embed below encodes taste/style instead of losing it on merge.
+    await inheritAiProfileIfMissing(keeper, sources);
+
     // Delete sources LAST.
     for (const src of sources) {
       logAudit(req, 'admin.wine.merge', { type: 'wine', id: src._id }, {
@@ -775,6 +850,9 @@ router.post('/merge', async (req, res) => {
       searchService.removeWine(src._id.toString());
     }
     searchService.indexWine(keeper._id.toString());
+
+    // Re-embed the keeper's vintages so semantic search reflects the merged wine.
+    reembedKeeper(keeper._id);
 
     res.json({ message: 'Wines merged successfully', sourcesMerged: sources.length, bottlesMoved, imageAction });
   } catch (error) {
