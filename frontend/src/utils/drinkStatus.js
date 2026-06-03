@@ -1,12 +1,18 @@
+import { resolveWindow } from './maturityUtils';
+
 const CURRENT_YEAR = new Date().getFullYear();
 
 /**
  * Derive the current maturity phase from a 3-phase reviewed WineVintageProfile.
- * Returns null if the profile is not ready, or an object { status, label }.
+ * For relative (NV) profiles the window is resolved against the bottle's anchor
+ * year first. Returns null if the profile is not ready, or { status, label }.
+ *
+ * @param {object} profile
+ * @param {number} [anchorYear] - the bottle's purchase year (for relative/NV profiles)
  */
-export function getMaturityStatus(profile) {
+export function getMaturityStatus(profile, anchorYear) {
   if (!profile || profile.status !== 'reviewed') return null;
-  const { earlyFrom, earlyUntil, peakFrom, peakUntil, lateFrom, lateUntil } = profile;
+  const { earlyFrom, earlyUntil, peakFrom, peakUntil, lateFrom, lateUntil } = resolveWindow(profile, anchorYear);
 
   // Need at least one window boundary to classify
   if (!earlyFrom && !peakFrom && !peakUntil) return null;

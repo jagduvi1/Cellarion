@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { getMaturityStatus } from '../../utils/drinkStatus';
+import { bottleAnchorYear } from '../../utils/maturityUtils';
 import { convertAmountHistorical } from '../../utils/currency';
 import { buildRackUrl } from '../../utils/rackNavigation';
 import safeUrl from '../../utils/safeUrl';
@@ -15,7 +16,13 @@ import PriceTrackingToggle from './PriceTrackingToggle';
 function ViewDetails({ bottle, rackInfo, cellarId, vintageProfile, priceHistory, rates, userCurrency, canEdit, hasImage, onEdit, onSuggestGrapes, onRemove, onReportWine }) {
   const { t } = useTranslation();
   const { user } = useAuth();
-  const maturityStatus = getMaturityStatus(vintageProfile);
+  const anchorYear = bottleAnchorYear(bottle);
+  const maturityStatus = getMaturityStatus(vintageProfile, anchorYear);
+  const isNv = bottle.vintage === 'NV';
+  // An NV window is only meaningful once a somm has saved it in relative mode
+  // (offsets from purchase). An old absolute-year NV profile would be stale, so
+  // treat it as still awaiting review rather than showing wrong years.
+  const maturityReviewed = vintageProfile?.status === 'reviewed' && (!isNv || vintageProfile.relative);
   const [showSommNotes, setShowSommNotes] = useState(false);
   const wine = bottle.wineDefinition;
   const grapes = wine?.grapes || [];
@@ -102,7 +109,7 @@ function ViewDetails({ bottle, rackInfo, cellarId, vintageProfile, priceHistory,
           <span className="bd-section-label">{t('bottleDetail.sommMaturity')}</span>
           {!vintageProfile ? (
             <span className="bd-no-dates">{t('bottleDetail.loadingMaturity')}</span>
-          ) : vintageProfile.status === 'pending' ? (
+          ) : !maturityReviewed ? (
             <div className="bd-maturity-pending">
               <span className="maturity-badge maturity-badge--pending">{t('bottleDetail.awaitingSommelier')}</span>
               <span className="bd-maturity-note">
@@ -116,7 +123,7 @@ function ViewDetails({ bottle, rackInfo, cellarId, vintageProfile, priceHistory,
                   {maturityStatus.label}
                 </span>
               )}
-              <MaturityPhaseTable profile={vintageProfile} />
+              <MaturityPhaseTable profile={vintageProfile} anchorYear={anchorYear} />
               {vintageProfile.sommNotes && (
                 <div className="bd-somm-notes-toggle">
                   <button

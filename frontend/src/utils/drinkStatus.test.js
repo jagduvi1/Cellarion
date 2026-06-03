@@ -117,3 +117,24 @@ describe('getMaturityStatus', () => {
     expect(result.status).toBe('declining');
   });
 });
+
+// ─── getMaturityStatus — relative (NV) profiles ──────────────────────────────
+
+describe('getMaturityStatus — relative (NV) profiles', () => {
+  const CURRENT_YEAR = new Date().getFullYear();
+
+  // Offsets in years after the bottle's anchor: early 0–2, peak 2–4, late 4–6.
+  const nvProfile = {
+    status: 'reviewed',
+    relative: true,
+    earlyFrom: 0, earlyUntil: 2,
+    peakFrom: 2, peakUntil: 4,
+    lateFrom: 4, lateUntil: 6,
+  };
+
+  test('same NV profile classifies differently per bottle anchor (purchase) year', () => {
+    expect(getMaturityStatus(nvProfile, CURRENT_YEAR).status).toBe('early');
+    expect(getMaturityStatus(nvProfile, CURRENT_YEAR - 3).status).toBe('peak');
+    expect(getMaturityStatus(nvProfile, CURRENT_YEAR - 7).status).toBe('declining');
+  });
+});
