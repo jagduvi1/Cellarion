@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
-import { adminChangeUserPlan, adminResetUserTrial, adminChangeUserRoles } from '../../api/admin';
+import { adminChangeUserPlan, adminChangeUserRoles } from '../../api/admin';
 import { PLAN_NAMES, PLANS } from '../../config/plans';
 import { fmtDate, PlanBadge, RoleBadge } from './helpers';
 
@@ -166,26 +166,6 @@ export default function TabUsers() {
     finally { setUpdating(prev => ({ ...prev, [userId + '_plan']: false })); }
   }
 
-  async function resetTrial(userId) {
-    setUpdating(prev => ({ ...prev, [userId + '_trial']: true }));
-    try {
-      const res = await adminResetUserTrial(apiFetch, userId);
-      const body = await res.json();
-      if (res.ok) {
-        setData(prev => prev ? {
-          ...prev,
-          users: prev.users.map(u => u._id === userId
-            ? { ...u, trialEligible: body.user.trialEligible }
-            : u
-          ),
-        } : prev);
-      } else {
-        setError(body.error || 'Failed to reset trial');
-      }
-    } catch { setError('Network error'); }
-    finally { setUpdating(prev => ({ ...prev, [userId + '_trial']: false })); }
-  }
-
   async function changeRoles(userId, newRoles) {
     setUpdating(prev => ({ ...prev, [userId + '_roles']: true }));
     try {
@@ -247,7 +227,6 @@ export default function TabUsers() {
                     <th>Email</th>
                     <th>Plan</th>
                     <th>Expires</th>
-                    <th>Trial</th>
                     <th>Roles</th>
                     <th>Verified</th>
                     <th>Joined</th>
@@ -266,21 +245,6 @@ export default function TabUsers() {
                         />
                       </td>
                       <td><ExpiryCell planExpiresAt={u.planExpiresAt} /></td>
-                      <td>
-                        {u.trialEligible
-                          ? <span className="sa-badge ok">eligible</span>
-                          : (
-                            <button
-                              className="sa-btn"
-                              style={{ fontSize: 10, padding: '1px 6px' }}
-                              disabled={updating[u._id + '_trial']}
-                              onClick={() => resetTrial(u._id)}
-                            >
-                              Reset
-                            </button>
-                          )
-                        }
-                      </td>
                       <td>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                           <div style={{ display: 'flex', gap: 3 }}>

@@ -7,26 +7,14 @@ import './Plans.css';
 
 function Supporter() {
   const { t } = useTranslation();
-  const { user, apiFetch, startTrial } = useAuth();
-  const [trialLoading, setTrialLoading] = useState(false);
-  const [trialError, setTrialError] = useState(null);
+  const { user, apiFetch } = useAuth();
+  const [actionError, setActionError] = useState(null);
   const [checkoutLoading, setCheckoutLoading] = useState(null);
 
   const userPlan = user?.plan || 'free';
   const userExpiresAt = user?.planExpiresAt || null;
   const planExpired = userExpiresAt && Date.now() > new Date(userExpiresAt).getTime();
   const hasStripeSubscription = !!user?.stripeSubscriptionId;
-
-  const isPatronActive = userPlan === 'patron' && !planExpired;
-  const canTrial = !isPatronActive && user?.trialEligible === true;
-
-  async function handleStartTrial() {
-    setTrialLoading(true);
-    setTrialError(null);
-    const result = await startTrial();
-    setTrialLoading(false);
-    if (!result.success) setTrialError(result.error);
-  }
 
   async function handleCheckout(plan) {
     setCheckoutLoading(plan);
@@ -36,11 +24,11 @@ function Supporter() {
       if (data.url) {
         window.location.href = data.url;
       } else {
-        setTrialError(data.error || t('supporter.checkoutError'));
+        setActionError(data.error || t('supporter.checkoutError'));
         setCheckoutLoading(null);
       }
     } catch {
-      setTrialError(t('supporter.checkoutError'));
+      setActionError(t('supporter.checkoutError'));
       setCheckoutLoading(null);
     }
   }
@@ -51,7 +39,7 @@ function Supporter() {
       const data = await res.json();
       if (data.url) window.location.href = data.url;
     } catch {
-      setTrialError(t('supporter.portalError'));
+      setActionError(t('supporter.portalError'));
     }
   }
 
@@ -111,7 +99,7 @@ function Supporter() {
               <ul className="plans-feature-list">
                 {plan.featureList.map((feature, i) => (
                   <li key={i} className="plans-feature-item">
-                    <span className="plans-feature-check">{'\u2713'}</span>
+                    <span className="plans-feature-check">{'✓'}</span>
                     {feature}
                   </li>
                 ))}
@@ -129,19 +117,7 @@ function Supporter() {
                 </div>
               )}
 
-              {planKey === 'patron' && canTrial && !isCurrent && (
-                <div className="plans-trial-wrap">
-                  <button
-                    className="btn btn-secondary plans-trial-btn"
-                    onClick={handleStartTrial}
-                    disabled={trialLoading}
-                  >
-                    {trialLoading ? t('common.saving') : t('supporter.tryPatron')}
-                  </button>
-                </div>
-              )}
-
-              {trialError && isCurrent && <p className="plans-trial-error">{trialError}</p>}
+              {actionError && isCurrent && <p className="plans-trial-error">{actionError}</p>}
             </div>
           );
         })}

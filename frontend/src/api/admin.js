@@ -107,9 +107,6 @@ export const adminChangeUserPlan = (apiFetch, userId, plan, expiresInDays) =>
     body: JSON.stringify({ plan, expiresInDays }),
   });
 
-export const adminResetUserTrial = (apiFetch, userId) =>
-  apiFetch(`/api/admin/users/${userId}/trial-eligible`, { method: 'PATCH', headers: J });
-
 export const adminChangeUserRoles = (apiFetch, userId, roles) =>
   apiFetch(`/api/admin/users/${userId}/roles`, {
     method: 'PATCH',
