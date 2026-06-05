@@ -36,17 +36,23 @@ const wineVintageProfileSchema = new mongoose.Schema({
     index: true
   },
 
-  // Phase 1 — Early drinking
-  earlyFrom:  { type: Number, min: 1900, max: 2200 },
-  earlyUntil: { type: Number, min: 1900, max: 2200 },
+  // When true (used for NV / non-vintage wines), the six phase numbers below are
+  // year-OFFSETS after each bottle's purchase year — not absolute calendar years
+  // — so the drink window recalculates per bottle (NV has no vintage to anchor
+  // to). Resolved to absolute years at read time (see utils/maturityUtils).
+  relative: { type: Boolean, default: false },
+
+  // Phase 1 — Early drinking (absolute year, or year-offset when `relative`)
+  earlyFrom:  { type: Number, min: 0, max: 2200 },
+  earlyUntil: { type: Number, min: 0, max: 2200 },
 
   // Phase 2 — Optimal maturity / peak
-  peakFrom:   { type: Number, min: 1900, max: 2200 },
-  peakUntil:  { type: Number, min: 1900, max: 2200 },
+  peakFrom:   { type: Number, min: 0, max: 2200 },
+  peakUntil:  { type: Number, min: 0, max: 2200 },
 
   // Phase 3 — Late maturity / tertiary
-  lateFrom:   { type: Number, min: 1900, max: 2200 },
-  lateUntil:  { type: Number, min: 1900, max: 2200 },
+  lateFrom:   { type: Number, min: 0, max: 2200 },
+  lateUntil:  { type: Number, min: 0, max: 2200 },
 
   // Optional notes from the somm
   sommNotes: {

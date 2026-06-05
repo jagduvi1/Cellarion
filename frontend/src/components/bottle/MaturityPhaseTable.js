@@ -1,7 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import { getMaturityPhases, isPhaseActive } from '../../utils/maturityUtils';
 
-function MaturityPhaseTable({ profile }) {
+function MaturityPhaseTable({ profile, anchorYear }) {
   const { t } = useTranslation();
   const CURRENT_YEAR = new Date().getFullYear();
 
@@ -9,7 +9,7 @@ function MaturityPhaseTable({ profile }) {
     early: t('bottleDetail.maturityPhaseEarly'),
     peak:  t('bottleDetail.maturityPhasePeak'),
     late:  t('bottleDetail.maturityPhaseLate'),
-  });
+  }, anchorYear);
 
   if (phases.length === 0) return null;
 

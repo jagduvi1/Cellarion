@@ -1,36 +1,63 @@
+const WINDOW_FIELDS = ['earlyFrom', 'earlyUntil', 'peakFrom', 'peakUntil', 'lateFrom', 'lateUntil'];
+
+/**
+ * Resolve a profile's drink window to absolute calendar years.
+ *
+ * For `relative` profiles (NV / non-vintage wines) the stored numbers are
+ * year-offsets after the bottle's anchor year, so we add the anchor; otherwise
+ * the numbers are already absolute years and the anchor is ignored.
+ *
+ * @param {object} profile - vintage profile (may have `relative: true`)
+ * @param {number} [anchorYear] - the bottle's purchase year (see bottleAnchorYear)
+ * @returns {{earlyFrom, earlyUntil, peakFrom, peakUntil, lateFrom, lateUntil}}
+ */
+export function resolveWindow(profile, anchorYear) {
+  const rel = !!(profile?.relative) && Number.isFinite(anchorYear);
+  const out = {};
+  for (const f of WINDOW_FIELDS) {
+    const v = profile?.[f];
+    out[f] = (v === null || v === undefined) ? v : (rel ? v + anchorYear : v);
+  }
+  return out;
+}
+
+/**
+ * The year a relative (NV) window is measured from for a given bottle: its
+ * purchase year, falling back to when it was added to the cellar.
+ *
+ * @param {object} bottle
+ * @returns {number|null}
+ */
+export function bottleAnchorYear(bottle) {
+  const d = bottle?.purchaseDate || bottle?.createdAt;
+  if (!d) return null;
+  const y = new Date(d).getFullYear();
+  return Number.isFinite(y) ? y : null;
+}
+
 /**
  * Build the array of maturity phases from a vintage profile, filtering out
- * phases that have neither a `from` nor `until` value.
+ * phases that have neither a `from` nor `until` value. Windows are resolved to
+ * absolute years using anchorYear (only relevant for relative/NV profiles).
  *
- * @param {object} profile - Vintage profile with earlyFrom/earlyUntil, peakFrom/peakUntil, lateFrom/lateUntil and vintage
+ * @param {object} profile
  * @param {{ early: string, peak: string, late: string }} labels - Translated phase labels
+ * @param {number} [anchorYear] - the bottle's purchase year (for relative profiles)
  * @returns {Array<{ label: string, cls: string, from: number|undefined, until: number|undefined, vintageInt: number }>}
  */
-export function getMaturityPhases(profile, labels) {
-  const vintageInt = parseInt(profile.vintage);
+export function getMaturityPhases(profile, labels, anchorYear) {
+  const w = resolveWindow(profile, anchorYear);
+  // The "years" column is measured from the anchor for relative (NV) windows,
+  // and from the vintage year for normal vintage wines.
+  const base = profile?.relative ? anchorYear : parseInt(profile.vintage);
 
   const phases = [
-    {
-      label: labels.early,
-      cls:   'early',
-      from:  profile.earlyFrom,
-      until: profile.earlyUntil,
-    },
-    {
-      label: labels.peak,
-      cls:   'peak',
-      from:  profile.peakFrom,
-      until: profile.peakUntil,
-    },
-    {
-      label: labels.late,
-      cls:   'late',
-      from:  profile.lateFrom,
-      until: profile.lateUntil,
-    },
+    { label: labels.early, cls: 'early', from: w.earlyFrom, until: w.earlyUntil },
+    { label: labels.peak,  cls: 'peak',  from: w.peakFrom,  until: w.peakUntil },
+    { label: labels.late,  cls: 'late',  from: w.lateFrom,  until: w.lateUntil },
   ].filter(p => p.from || p.until);
 
-  return phases.map(p => ({ ...p, vintageInt }));
+  return phases.map(p => ({ ...p, vintageInt: base }));
 }
 
 /**

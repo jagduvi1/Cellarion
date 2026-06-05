@@ -42,6 +42,15 @@ function yearsFromVintage(vintageInt, from, until) {
   return `${fYrs} yrs`;
 }
 
+// For NV (relative) profiles the entered numbers ARE years-after-purchase, so
+// show them directly; for vintage wines, compute the span from the vintage.
+function phaseYrs(isNv, vintageInt, from, until) {
+  if (!isNv) return yearsFromVintage(vintageInt, from, until);
+  if (from === '' || from === undefined || from === null) return '';
+  const u = (until === '' || until === undefined || until === null) ? null : until;
+  return u !== null ? `${from}–${u} yrs` : `${from} yrs`;
+}
+
 function SommMaturity() {
   const { t } = useTranslation();
   const { apiFetch } = useAuth();
@@ -119,6 +128,7 @@ function ProfileCard({ profile, isPending, onSaved, onReset }) {
   const { apiFetch } = useAuth();
   const wine       = profile.wineDefinition;
   const vintageInt = parseInt(profile.vintage);
+  const isNv       = profile.vintage === 'NV';
 
   const [expanded,  setExpanded]  = useState(isPending);
   const [saving,    setSaving]    = useState(false);
@@ -128,13 +138,17 @@ function ProfileCard({ profile, isPending, onSaved, onReset }) {
   const [err,       setErr]       = useState(null);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
 
+  // For an NV profile not yet migrated to relative (offset) mode, start the
+  // window blank so the somm enters durations fresh rather than stale years
+  // that would fail the 0–100 offset validation.
+  const seed = (isNv && !profile.relative) ? {} : profile;
   const [form, setForm] = useState({
-    earlyFrom:  profile.earlyFrom  || '',
-    earlyUntil: profile.earlyUntil || '',
-    peakFrom:   profile.peakFrom   || '',
-    peakUntil:  profile.peakUntil  || '',
-    lateFrom:   profile.lateFrom   || '',
-    lateUntil:  profile.lateUntil  || '',
+    earlyFrom:  seed.earlyFrom  || '',
+    earlyUntil: seed.earlyUntil || '',
+    peakFrom:   seed.peakFrom   || '',
+    peakUntil:  seed.peakUntil  || '',
+    lateFrom:   seed.lateFrom   || '',
+    lateUntil:  seed.lateUntil  || '',
     sommNotes:  profile.sommNotes  || ''
   });
 
@@ -215,7 +229,7 @@ function ProfileCard({ profile, isPending, onSaved, onReset }) {
     }
   };
 
-  const phase = getMaturityPhase(profile);
+  const phase = isNv ? null : getMaturityPhase(profile);
 
   return (
     <div className={`somm-card ${expanded ? 'expanded' : ''}`}>
@@ -252,7 +266,9 @@ function ProfileCard({ profile, isPending, onSaved, onReset }) {
           <div className="somm-form-hint-row">
             <p className="somm-form-hint">
               {t('somm.maturity.phaseHint')}
-              {!isNaN(vintageInt) && ` (${t('somm.maturity.vintageLabel')} ${vintageInt})`}
+              {isNv
+                ? ` — ${t('somm.maturity.nvHint', 'non-vintage: enter years after purchase')}`
+                : (!isNaN(vintageInt) ? ` (${t('somm.maturity.vintageLabel')} ${vintageInt})` : '')}
             </p>
             <button
               type="button"
@@ -277,14 +293,14 @@ function ProfileCard({ profile, isPending, onSaved, onReset }) {
               <div className="somm-phase-label somm-phase-label--early">
                 <span className="somm-phase-name">{t('somm.maturity.phaseEarly')}</span>
                 <span className="somm-phase-yrs">
-                  {yearsFromVintage(vintageInt, form.earlyFrom, form.earlyUntil)}
+                  {phaseYrs(isNv, vintageInt, form.earlyFrom, form.earlyUntil)}
                 </span>
               </div>
               <div className="somm-phase-inputs">
                 <div className="somm-range-field">
                   <label>{t('somm.maturity.fromLabel')}</label>
                   <input
-                    type="number" min="1900" max="2200"
+                    type="number" min={isNv ? '0' : '1900'} max={isNv ? '100' : '2200'}
                     placeholder={!isNaN(vintageInt) ? String(vintageInt + 2) : 'Year'}
                     value={form.earlyFrom} onChange={set('earlyFrom')}
                   />
@@ -293,7 +309,7 @@ function ProfileCard({ profile, isPending, onSaved, onReset }) {
                 <div className="somm-range-field">
                   <label>{t('somm.maturity.untilLabel')}</label>
                   <input
-                    type="number" min="1900" max="2200"
+                    type="number" min={isNv ? '0' : '1900'} max={isNv ? '100' : '2200'}
                     placeholder={!isNaN(vintageInt) ? String(vintageInt + 5) : 'Year'}
                     value={form.earlyUntil} onChange={set('earlyUntil')}
                   />
@@ -306,14 +322,14 @@ function ProfileCard({ profile, isPending, onSaved, onReset }) {
               <div className="somm-phase-label somm-phase-label--peak">
                 <span className="somm-phase-name">{t('somm.maturity.phasePeak')}</span>
                 <span className="somm-phase-yrs">
-                  {yearsFromVintage(vintageInt, form.peakFrom, form.peakUntil)}
+                  {phaseYrs(isNv, vintageInt, form.peakFrom, form.peakUntil)}
                 </span>
               </div>
               <div className="somm-phase-inputs">
                 <div className="somm-range-field">
                   <label>{t('somm.maturity.fromLabel')}</label>
                   <input
-                    type="number" min="1900" max="2200"
+                    type="number" min={isNv ? '0' : '1900'} max={isNv ? '100' : '2200'}
                     placeholder={!isNaN(vintageInt) ? String(vintageInt + 6) : 'Year'}
                     value={form.peakFrom} onChange={set('peakFrom')}
                   />
@@ -322,7 +338,7 @@ function ProfileCard({ profile, isPending, onSaved, onReset }) {
                 <div className="somm-range-field">
                   <label>{t('somm.maturity.untilLabel')}</label>
                   <input
-                    type="number" min="1900" max="2200"
+                    type="number" min={isNv ? '0' : '1900'} max={isNv ? '100' : '2200'}
                     placeholder={!isNaN(vintageInt) ? String(vintageInt + 15) : 'Year'}
                     value={form.peakUntil} onChange={set('peakUntil')}
                   />
@@ -335,14 +351,14 @@ function ProfileCard({ profile, isPending, onSaved, onReset }) {
               <div className="somm-phase-label somm-phase-label--late">
                 <span className="somm-phase-name">{t('somm.maturity.phaseLate')}</span>
                 <span className="somm-phase-yrs">
-                  {yearsFromVintage(vintageInt, form.lateFrom, form.lateUntil)}
+                  {phaseYrs(isNv, vintageInt, form.lateFrom, form.lateUntil)}
                 </span>
               </div>
               <div className="somm-phase-inputs">
                 <div className="somm-range-field">
                   <label>{t('somm.maturity.fromLabel')}</label>
                   <input
-                    type="number" min="1900" max="2200"
+                    type="number" min={isNv ? '0' : '1900'} max={isNv ? '100' : '2200'}
                     placeholder={!isNaN(vintageInt) ? String(vintageInt + 16) : 'Year'}
                     value={form.lateFrom} onChange={set('lateFrom')}
                   />
@@ -351,7 +367,7 @@ function ProfileCard({ profile, isPending, onSaved, onReset }) {
                 <div className="somm-range-field">
                   <label>{t('somm.maturity.untilLabel')}</label>
                   <input
-                    type="number" min="1900" max="2200"
+                    type="number" min={isNv ? '0' : '1900'} max={isNv ? '100' : '2200'}
                     placeholder={!isNaN(vintageInt) ? String(vintageInt + 22) : 'Year'}
                     value={form.lateUntil} onChange={set('lateUntil')}
                   />
@@ -362,7 +378,7 @@ function ProfileCard({ profile, isPending, onSaved, onReset }) {
           </div>{/* /.somm-phases */}
 
           {/* Live preview */}
-          <MaturityPreview form={form} vintageInt={vintageInt} />
+          <MaturityPreview form={form} vintageInt={vintageInt} isNv={isNv} />
 
           <div className="form-group" style={{ marginTop: '1rem' }}>
             <label>{t('somm.maturity.sommNotes')} <span className="somm-year-hint">{t('somm.maturity.sommNotesOptional')}</span></label>
@@ -409,8 +425,11 @@ function ProfileCard({ profile, isPending, onSaved, onReset }) {
 }
 
 // ── Live preview component ────────────────────────────────────────────────────
-function MaturityPreview({ form, vintageInt }) {
+function MaturityPreview({ form, vintageInt, isNv }) {
   const { t } = useTranslation();
+  // NV windows are per-bottle (offsets from purchase), so there's no single
+  // wine-level "status today" to preview here.
+  if (isNv) return null;
   const mock = {
     status:     'reviewed',
     earlyFrom:  form.earlyFrom  ? parseInt(form.earlyFrom)  : null,

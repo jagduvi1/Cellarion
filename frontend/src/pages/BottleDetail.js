@@ -106,15 +106,18 @@ function BottleDetail() {
             setCommunityRating(wineObj.communityRating);
           }
         }
-        // Fetch the sommelier maturity profile for this wine+vintage. Skip
-        // for non-vintage / unknown bottles since calendar-year windows
-        // and historical pricing don't apply to them.
+        // Fetch the sommelier maturity profile. NV bottles (non-vintage
+        // Champagne / Cap Classique blends) get a profile too — somms can set a
+        // drink window for them — so we fetch it for NV as well; only truly
+        // unknown vintages are skipped. Price history stays vintage-specific.
         const wine = data.bottle?.wineDefinition;
         const vintage = data.bottle?.vintage;
-        if (wine?._id && vintage && vintage !== 'NV' && vintage !== 'Unknown') {
+        if (wine?._id && vintage && vintage !== 'Unknown') {
           fetchVintageProfile(wine._id, vintage);
-          fetchPriceHistory(wine._id, vintage);
-          fetchRates().then(r => { if (r) setRates(r); });
+          if (vintage !== 'NV') {
+            fetchPriceHistory(wine._id, vintage);
+            fetchRates().then(r => { if (r) setRates(r); });
+          }
         }
       } else {
         setError(data.error || 'Failed to load bottle');

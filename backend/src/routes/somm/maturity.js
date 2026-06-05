@@ -96,14 +96,18 @@ router.put('/:id', requireSommOrAdmin, async (req, res) => {
     }
 
     // Parse all year fields
+    // NV wines store the window as year-offsets after each bottle's purchase
+    // year (relative), since there's no vintage to anchor absolute years to.
+    const isNv = profile.vintage === 'NV';
+    const [lo, hi] = isNv ? [0, 100] : [1900, 2200];
     const years = {};
     for (const field of PHASE_FIELDS) {
       const yr = parseYear(req.body[field]);
       if (yr !== null && isNaN(yr)) {
-        return res.status(400).json({ error: `Invalid year for ${field}` });
+        return res.status(400).json({ error: `Invalid value for ${field}` });
       }
-      if (yr !== null && (yr < 1900 || yr > 2200)) {
-        return res.status(400).json({ error: `Year out of range for ${field}` });
+      if (yr !== null && (yr < lo || yr > hi)) {
+        return res.status(400).json({ error: isNv ? `${field} must be between 0 and 100 years` : `Year out of range for ${field}` });
       }
       years[field] = yr;
     }
@@ -132,6 +136,7 @@ router.put('/:id', requireSommOrAdmin, async (req, res) => {
       profile.sommNotes = req.body.sommNotes ? req.body.sommNotes.trim() : '';
     }
 
+    profile.relative = isNv;
     profile.status = 'reviewed';
     profile.setBy  = req.user.id;
     profile.setAt  = new Date();
