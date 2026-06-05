@@ -231,8 +231,7 @@ async function enrichWine(wine, model) {
  * Fire-and-forget enrichment for a single wine by id — used when a brand-new
  * wine is created so it gets a tasting profile (and updated embedding) without
  * waiting for the next batch run. Skips silently if the wine already has a
- * profile, AI isn't configured, or a batch enrichment job is currently running
- * (that job will cover it). Never throws.
+ * profile or AI isn't configured. Never throws.
  *
  * @param {string|object} wineDefId
  */
@@ -244,8 +243,14 @@ async function enrichWineById(wineDefId) {
   if (!isValidId(idStr)) return;
   const oid = new mongoose.Types.ObjectId(idStr);
   try {
-    if (!process.env.ANTHROPIC_API_KEY) return;
-    if (job.status === 'running') return; // batch job will handle it
+    if (!process.env.ANTHROPIC_API_KEY) {
+      console.warn('[enrichmentJob] enrichWineById skipped: ANTHROPIC_API_KEY not configured');
+      return;
+    }
+    // Intentionally NOT skipped while a batch job runs: a batch snapshots its
+    // wine list at start, so a just-created wine isn't covered by it — skipping
+    // here would leave new wines permanently un-enriched. The already-enriched
+    // guard below prevents redundant work.
     const wine = await WineDefinition.findById(oid)
       .populate('country', 'name')
       .populate('region', 'name')
