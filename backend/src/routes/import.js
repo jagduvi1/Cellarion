@@ -1,6 +1,7 @@
 const express = require('express');
 const mongoose = require('mongoose');
 const { requireAuth } = require('../middleware/auth');
+const aiBurstLimiter = require('../middleware/aiBurstLimiter');
 const Bottle = require('../models/Bottle');
 const Cellar = require('../models/Cellar');
 const Rack = require('../models/Rack');
@@ -168,7 +169,7 @@ async function findWineMatches(item) {
  * Body: { cellarId, items: [{ wineName, producer, country, ... }] }
  * Response: { results: [{ index, item, status, matches: [{ wine, score }] }] }
  */
-router.post('/validate', async (req, res) => {
+router.post('/validate', aiBurstLimiter, async (req, res) => {
   try {
     const { cellarId, items } = req.body;
 

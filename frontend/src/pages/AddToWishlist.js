@@ -102,8 +102,13 @@ function AddToWishlist() {
     let cancelled = false;
     (async () => {
       try {
-        const wine = await getWine(apiFetch, restock.wineId);
-        if (!cancelled && wine) {
+        // getWine returns the raw fetch Response — parse the body and check
+        // res.ok before using it (a Response object is always truthy).
+        const res = await getWine(apiFetch, restock.wineId);
+        if (cancelled || !res.ok) return;
+        const data = await res.json();
+        const wine = data.wine || data;
+        if (!cancelled && wine?._id) {
           setSelectedWine(wine);
           if (restock.vintage) setVintage(restock.vintage);
         }

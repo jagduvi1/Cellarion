@@ -18,6 +18,27 @@ const { createNotification } = require('./notifications');
 const { sendDrinkWindowDigest, EMAIL_VERIFICATION_ENABLED } = require('./mailgun');
 
 /**
+ * Whether the daily drink-window email digest should be sent to this user.
+ *
+ * The opt-in lives at `preferences.notifications.drinkWindow.email` — there is
+ * NO top-level `notifications.email` flag (see utils/notifications.js). Reading
+ * the wrong leaf previously evaluated to `undefined` for everyone and silently
+ * disabled the entire digest. Extracted as a pure, testable predicate so that
+ * regression is caught by a unit test rather than only in production.
+ *
+ * @param {object} user  Lean user doc with preferences.notifications + emailVerified
+ * @param {boolean} emailVerificationEnabled  Whether the email channel is configured
+ * @returns {boolean}
+ */
+function shouldSendDigestEmail(user, emailVerificationEnabled = EMAIL_VERIFICATION_ENABLED) {
+  return Boolean(
+    user?.preferences?.notifications?.drinkWindow?.email &&
+    emailVerificationEnabled &&
+    user?.emailVerified
+  );
+}
+
+/**
  * Main entry point — called by the scheduler once daily.
  */
 async function runDrinkWindowCheck() {
@@ -163,8 +184,8 @@ async function processUser(user, isFirstRun) {
     await createNotification(user._id, type, title, message, link);
   }
 
-  // Send email digest if opted in
-  if (user.preferences?.notifications?.email && EMAIL_VERIFICATION_ENABLED && user.emailVerified) {
+  // Send email digest if opted in (preferences.notifications.drinkWindow.email).
+  if (shouldSendDigestEmail(user)) {
     try {
       await sendDrinkWindowDigest(
         user.email,
@@ -207,4 +228,4 @@ function buildNotification(alert) {
   }
 }
 
-module.exports = { runDrinkWindowCheck };
+module.exports = { runDrinkWindowCheck, shouldSendDigestEmail };

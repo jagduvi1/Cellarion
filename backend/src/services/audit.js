@@ -13,7 +13,10 @@ const logger = pino({
 /**
  * Fire-and-forget audit log entry.
  *
- * @param {object} req   - Express request (for actor + userAgent)
+ * @param {object|null} req - Express request (for actor + userAgent). Pass
+ *                            null for system-initiated events with no request
+ *                            (e.g. Stripe webhooks, scheduled jobs) — the actor
+ *                            is then recorded as 'system'.
  * @param {string} action - Dot-separated action name, e.g. 'bottle.add'
  * @param {object} resource - { type, id, cellarId } — what was acted on
  * @param {object} detail   - Action-specific payload (wineName, email, etc.)
@@ -21,14 +24,14 @@ const logger = pino({
 function logAudit(req, action, resource = {}, detail = {}) {
   const entry = {
     actor: {
-      userId:    req.user?.id    || null,
-      role:      req.user?.roles?.[0]  || 'anonymous',
+      userId:    req?.user?.id    || null,
+      role:      req?.user?.roles?.[0]  || (req ? 'anonymous' : 'system'),
       ipAddress: getClientIp(req)
     },
     action,
     resource,
     detail,
-    userAgent: req.headers?.['user-agent']
+    userAgent: req?.headers?.['user-agent']
   };
 
   // Structured stdout log — visible in docker logs

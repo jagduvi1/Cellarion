@@ -142,4 +142,4 @@ async function incrementCred(userId, eventType) {
   }
 }
 
-module.exports = { POINT_VALUES, CATEGORY_MAP, TIERS, getTier, getSpecialty, incrementCred };
+module.exports = { POINT_VALUES, CATEGORY_MAP, TIERS, PLAN_RANK, getTier, getSpecialty, incrementCred };
