@@ -18,12 +18,15 @@ const searchService = require('./search');
 const { generateWineKey, normalizeString, resolveGrapeName } = require('../utils/normalize');
 const { scoreAllMatches } = require('./wineMatching');
 
-// Auto-match when combined score >= SIMILARITY_THRESHOLD.
+// Auto-match when combined score >= SIMILARITY_THRESHOLD (near-identical — e.g.
+// token-order or punctuation differences the exact normalizedKey match missed).
 // In the SOFT_ZONE_MIN..SIMILARITY_THRESHOLD band, surface candidates to the
-// user instead of silently creating a new wine. Below SOFT_ZONE_MIN we trust
-// that none of the existing wines are remotely the same and create.
-const SIMILARITY_THRESHOLD = 0.75;
-const SOFT_ZONE_MIN = 0.50;
+// user ("did you mean one of these?") instead of silently creating a new wine.
+// Below SOFT_ZONE_MIN the wines aren't close enough to be worth asking, so we
+// just create. The soft-zone floor is deliberately high: a "did you mean?"
+// prompt for a loose match (e.g. a Brut vs a Blanc de Blancs at ~50%) is noise.
+const SIMILARITY_THRESHOLD = 0.95;
+const SOFT_ZONE_MIN = 0.85;
 const SOFT_ZONE_TOP_N = 5;
 const POPULATE = ['country', 'region', 'grapes'];
 
