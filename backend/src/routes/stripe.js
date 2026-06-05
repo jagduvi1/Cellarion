@@ -3,6 +3,7 @@ const { requireAuth } = require('../middleware/auth');
 const User = require('../models/User');
 const StripeWebhookEvent = require('../models/StripeWebhookEvent');
 const { logAudit } = require('../services/audit');
+const { PLAN_RANK } = require('../utils/cellarCred');
 
 const router = express.Router();
 
@@ -22,6 +23,39 @@ function planFromPriceId(priceId) {
   if (priceId === process.env.STRIPE_SUPPORTER_PRICE_ID) return 'supporter';
   if (priceId === process.env.STRIPE_PATRON_PRICE_ID) return 'patron';
   return null;
+}
+
+/**
+ * Apply a Stripe-granted plan WITHOUT clobbering a higher-rank or unexpired
+ * non-Stripe grant (admin grants and Cellar-Cred tier rewards write the same
+ * `plan`/`planExpiresAt` fields — see utils/cellarCred.js, which already uses
+ * this max-rank guard). The Stripe subscription id is always recorded so a
+ * later cancellation can be matched to it.
+ *
+ * @returns {object} the audit-friendly { from, to } plan transition
+ */
+async function applyStripePlan(userId, plan, subscriptionId) {
+  const user = await User.findById(userId).select('plan planExpiresAt');
+  if (!user) return null;
+
+  const currentRank = PLAN_RANK[user.plan] ?? 0;
+  const newRank = PLAN_RANK[plan] ?? 0;
+  const planExpired = user.planExpiresAt && new Date(user.planExpiresAt) < new Date();
+
+  const update = { stripeSubscriptionId: subscriptionId };
+  // Only let the paid plan take effect if it's at least as high as the current
+  // plan, or the current (time-limited admin/Cellar-Cred) grant has expired —
+  // never downgrade an existing higher grant just because a lower sub started.
+  if (newRank >= currentRank || planExpired) {
+    update.plan = plan;
+    // Stamp the start only on a real change/re-activation, not on every routine
+    // subscription.updated (renewals, payment-method changes) — planStartedAt
+    // is a display value and shouldn't jump on each webhook.
+    if (plan !== user.plan || planExpired) update.planStartedAt = new Date();
+    update.planExpiresAt = null; // an active subscription has no expiry
+  }
+  await User.findByIdAndUpdate(userId, update);
+  return { from: user.plan, to: update.plan || user.plan };
 }
 
 // ── POST /api/stripe/checkout — Create a Stripe Checkout Session ──
@@ -146,13 +180,12 @@ router.post('/webhook', async (req, res) => {
           const userId = sub.metadata?.userId;
           const plan = sub.metadata?.plan;
           if (userId && plan) {
-            await User.findByIdAndUpdate(userId, {
-              plan,
-              planStartedAt: new Date(),
-              planExpiresAt: null,
-              stripeSubscriptionId: sub.id
-            });
-            console.log(`[stripe] User ${userId} upgraded to ${plan}`);
+            const change = await applyStripePlan(userId, plan, sub.id);
+            if (change) {
+              logAudit(null, 'stripe.plan.changed', { type: 'user', id: userId },
+                { event: 'checkout.session.completed', eventId: event.id, ...change });
+              console.log(`[stripe] User ${userId} subscribed to ${plan} (effective: ${change.to})`);
+            }
           }
         }
         break;
@@ -167,11 +200,16 @@ router.post('/webhook', async (req, res) => {
           const priceId = sub.items?.data?.[0]?.price?.id;
           const plan = planFromPriceId(priceId);
           if (plan) {
-            await User.findByIdAndUpdate(userId, {
-              plan,
-              planExpiresAt: null,
-              stripeSubscriptionId: sub.id
-            });
+            const change = await applyStripePlan(userId, plan, sub.id);
+            if (change) {
+              logAudit(null, 'stripe.plan.changed', { type: 'user', id: userId },
+                { event: 'customer.subscription.updated', eventId: event.id, ...change });
+            }
+          } else {
+            // Active subscription whose price doesn't map to any known plan —
+            // a price-list drift or misconfigured env var. Surface it instead
+            // of silently leaving the user on a stale plan.
+            console.warn(`[stripe] Active subscription ${sub.id} for user ${userId} maps to no known plan (price ${sub.items?.data?.[0]?.price?.id})`);
           }
         } else if (sub.status === 'past_due' || sub.status === 'unpaid') {
           // Keep current plan but log the issue
@@ -183,14 +221,33 @@ router.post('/webhook', async (req, res) => {
       case 'customer.subscription.deleted': {
         const sub = event.data.object;
         const userId = sub.metadata?.userId;
-        if (userId) {
-          await User.findByIdAndUpdate(userId, {
-            plan: 'free',
-            planExpiresAt: null,
-            stripeSubscriptionId: null
-          });
-          console.log(`[stripe] User ${userId} downgraded to free (subscription cancelled)`);
+        if (!userId) break;
+
+        // Reconcile rather than blindly downgrade. Only revoke entitlement when
+        // THIS Stripe subscription is the one currently in effect, and preserve
+        // an unexpired non-Stripe grant (admin / Cellar-Cred set planExpiresAt
+        // in the future; an active Stripe plan keeps it null). This prevents a
+        // cancelled/failed card from wiping an admin-granted or earned plan,
+        // and a stale redelivery after a re-subscribe from downgrading the
+        // newer subscription.
+        const user = await User.findById(userId).select('plan planExpiresAt stripeSubscriptionId');
+        if (!user) break;
+
+        if (user.stripeSubscriptionId !== sub.id) {
+          console.log(`[stripe] Ignoring deletion of ${sub.id} for user ${userId} — current sub is ${user.stripeSubscriptionId || 'none'}`);
+          break;
         }
+
+        const hasUnexpiredGrant = user.planExpiresAt && new Date(user.planExpiresAt) > new Date();
+        const update = { stripeSubscriptionId: null };
+        if (!hasUnexpiredGrant) {
+          update.plan = 'free';
+          update.planExpiresAt = null;
+        }
+        await User.findByIdAndUpdate(userId, update);
+        logAudit(null, 'stripe.plan.changed', { type: 'user', id: userId },
+          { event: 'customer.subscription.deleted', eventId: event.id, from: user.plan, to: update.plan || user.plan });
+        console.log(`[stripe] User ${userId} subscription ${sub.id} cancelled (plan now: ${update.plan || user.plan})`);
         break;
       }
 
