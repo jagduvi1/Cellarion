@@ -16,6 +16,11 @@ export default defineConfig({
   },
   build: {
     outDir: 'dist',
+    // Don't inline Vite's modulePreload polyfill — it's emitted as an inline
+    // <script>, which the strict CSP in index.html (script-src 'self' …, with
+    // no 'unsafe-inline'/hash/nonce) would block. All target browsers support
+    // <link rel="modulepreload"> natively, so the polyfill is unnecessary.
+    modulePreload: { polyfill: false },
   },
   esbuild: {
     loader: 'jsx',

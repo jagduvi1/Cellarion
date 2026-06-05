@@ -1,12 +1,13 @@
 /* eslint-disable no-restricted-globals */
 
-const CACHE_NAME = 'cellarion-v3';
+const CACHE_NAME = 'cellarion-v4';
 const API_CACHE_NAME = 'cellarion-api-v1';
 
 // App shell files to pre-cache on install
+// Only truly static, un-hashed assets are precached. The HTML shell ('/' and
+// '/index.html') is deliberately NOT precached — it maps to build-hashed
+// bundles, so a frozen shell would request deleted assets (404) after a deploy.
 const PRECACHE_URLS = [
-  '/',
-  '/index.html',
   '/offline.html',
   '/manifest.json'
 ];
@@ -110,18 +111,12 @@ self.addEventListener('fetch', (event) => {
   // Skip other API requests — always go to network
   if (url.pathname.startsWith('/api/')) return;
 
-  // Navigation requests (HTML pages): network-first with offline fallback
+  // Navigation requests (HTML pages): always network-first, NEVER cached. The
+  // SPA shell references build-hashed bundles, so a cached shell would request
+  // deleted assets (404) after a deploy. Fall back to offline.html only offline.
   if (request.mode === 'navigate') {
     event.respondWith(
-      fetch(request)
-        .then((response) => {
-          if (response.ok) {
-            const clone = response.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
-          }
-          return response;
-        })
-        .catch(() => caches.match('/offline.html'))
+      fetch(request).catch(() => caches.match('/offline.html'))
     );
     return;
   }
