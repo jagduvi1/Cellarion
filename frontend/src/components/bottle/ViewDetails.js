@@ -14,7 +14,7 @@ import MaturityPhaseTable from './MaturityPhaseTable';
 import PriceHistoryTimeline from './PriceHistoryTimeline';
 import PriceTrackingToggle from './PriceTrackingToggle';
 
-function ViewDetails({ bottle, rackInfo, cellarId, vintageProfile, priceHistory, rates, userCurrency, canEdit, hasImage, onEdit, onSuggestGrapes, onRemove, onReportWine }) {
+function ViewDetails({ bottle, rackInfo, cellarId, vintageProfile, priceHistory, currentRelease, rates, userCurrency, canEdit, hasImage, onEdit, onSuggestGrapes, onRemove, onReportWine }) {
   const { t } = useTranslation();
   const { user } = useAuth();
   const anchorYear = bottleAnchorYear(bottle);
@@ -63,6 +63,43 @@ function ViewDetails({ bottle, rackInfo, cellarId, vintageProfile, priceHistory,
                   > &asymp; {c.toLocaleString()} {userCurrency}</span>
                 ) : null;
               })()}
+            </span>
+          </div>
+        )}
+        {currentRelease && (
+          <div className="bd-detail-item">
+            <span className="bd-detail-label">{t('bottleDetail.currentRelease', 'Current release')}</span>
+            <span className="bd-detail-value">
+              {currentRelease.medianPrice.toLocaleString()} {currentRelease.currency}
+              {currentRelease.vintage && (
+                <span className="bd-detail-converted"> &middot; {currentRelease.vintage}</span>
+              )}
+              {(() => {
+                const c = convertAmountHistorical(currentRelease.medianPrice, currentRelease.currency, userCurrency, null, rates);
+                return c !== null ? (
+                  <span className="bd-detail-converted"> &asymp; {c.toLocaleString()} {userCurrency}</span>
+                ) : null;
+              })()}
+              {bottle.price > 0 && currentRelease.currency === bottle.currency && (() => {
+                const pct = Math.round(((currentRelease.medianPrice - bottle.price) / bottle.price) * 100);
+                if (!isFinite(pct) || pct === 0) return null;
+                return (
+                  <span
+                    style={{ color: pct >= 0 ? '#2D7A45' : '#C0504D' }}
+                    title={t('bottleDetail.currentReleaseDeltaTooltip', 'Current release vs what you paid')}
+                  > {pct >= 0 ? '+' : ''}{pct}%</span>
+                );
+              })()}
+              <span
+                className="bd-detail-converted"
+                title={t('bottleDetail.currentReleaseTooltip', 'Estimated from what Cellarion users paid for the latest vintage of this wine (standard 750 ml), in this currency. A replacement-price guide, not a secondary-market valuation.')}
+              >
+                {currentRelease.confidence === 'firm'
+                  ? ` · ${currentRelease.sampleSize} ${currentRelease.sampleSize === 1
+                      ? t('bottleDetail.buyerOne', 'buyer')
+                      : t('bottleDetail.buyerOther', 'buyers')}`
+                  : ` · ${t('bottleDetail.indicativePrice', 'indicative')}`}
+              </span>
             </span>
           </div>
         )}

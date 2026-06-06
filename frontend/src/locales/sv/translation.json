@@ -375,6 +375,12 @@
     "ratingLabel": "Betyg",
     "pricePaid": "Betalat pris",
     "priceAtEntryTooltip": "Omräknat till den valutakurs som registrerades när priset angavs",
+    "currentRelease": "Aktuell utgåva",
+    "currentReleaseTooltip": "Uppskattat utifrån vad Cellarion-användare betalat för den senaste årgången av detta vin (standard 750 ml), i denna valuta. En vägledning för återanskaffningspris, inte en värdering på andrahandsmarknaden.",
+    "currentReleaseDeltaTooltip": "Aktuell utgåva jämfört med vad du betalade",
+    "buyerOne": "köpare",
+    "buyerOther": "köpare",
+    "indicativePrice": "preliminärt",
     "sommMaturity": "Lagring & mognad",
     "loadingMaturity": "Laddar…",
     "awaitingSommelier": "Väntar på personalens granskning",
@@ -980,6 +986,8 @@
     "imperial": "Imperial"
   },
   "statistics": {
+    "replacementValue": "Ungef. återanskaffningsvärde",
+    "vsPaid": "mot betalat",
     "title": "Samlingsanalys",
     "subtitleFull": "Fullständig överblick över {{cellars}} källare · {{countries}} länder · {{grapes}} druvsorter",
     "subtitleFull_other": "Fullständig överblick över {{cellars}} källare · {{countries}} länder · {{grapes}} druvsorter",

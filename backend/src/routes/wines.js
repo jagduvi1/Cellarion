@@ -6,10 +6,12 @@ const searchService = require('../services/search');
 const { requireAuth, optionalAuth } = require('../middleware/auth');
 const { scanLabelFull, identifyWineFromQuery } = require('../services/labelScan');
 const { findOrCreateWine } = require('../services/findOrCreateWine');
-const { generateWineKey, combinedSimilarity } = require('../utils/normalize');
+const { generateWineKey } = require('../utils/normalize');
+const { findBestMatch } = require('../services/wineMatching');
 const { parsePagination } = require('../utils/pagination');
 const { isValidId } = require('../utils/validation');
 const { submitUrls } = require('../services/indexNow');
+const { getReleaseCurve } = require('../services/communityPrice');
 const aiBurstLimiter = require('../middleware/aiBurstLimiter');
 
 const REMBG_URL = process.env.REMBG_URL || 'http://rembg:5000';
@@ -218,20 +220,15 @@ router.post('/scan-label', requireAuth, aiBurstLimiter, async (req, res) => {
           }
         }
 
-        let bestMatch = null;
-        let bestScore = 0;
-        for (const candidate of candidates) {
-          const nameSim = combinedSimilarity(extracted.name, candidate.name);
-          const prodSim = combinedSimilarity(extracted.producer, candidate.producer);
-          let appSim = 1.0;
-          if (extracted.appellation && candidate.appellation) {
-            appSim = combinedSimilarity(extracted.appellation, candidate.appellation);
-          } else if (extracted.appellation || candidate.appellation) {
-            appSim = 0.5;
-          }
-          const score = nameSim * 0.45 + prodSim * 0.45 + appSim * 0.10;
-          if (score > bestScore) { bestScore = score; bestMatch = candidate; }
-        }
+        // Use the shared scorer so scan-label, find-or-create and import all
+        // dedup with one implementation. redistribute:false preserves this
+        // path's historical "neither side has an appellation → full weight"
+        // behaviour (matching find-or-create).
+        const { bestMatch, bestScore } = findBestMatch(
+          { name: extracted.name, producer: extracted.producer, appellation: extracted.appellation },
+          candidates,
+          { redistribute: false }
+        );
 
         if (bestScore >= 0.75 && bestMatch) {
           match = { wine: bestMatch, confidence: Math.round(bestScore * 100) / 100 };
@@ -355,6 +352,39 @@ router.get('/:idOrSlug/public', async (req, res) => {
   } catch (error) {
     console.error('Get public wine error:', error);
     res.status(500).json({ error: 'Failed to get wine' });
+  }
+});
+
+// GET /api/wines/:idOrSlug/community-prices?currency=SEK
+// Per-vintage community release-price curve (what users actually paid) for one
+// currency, newest vintage first. Public, unattributed product data — never
+// converted across currencies. Returns { currency, currentRelease, curve }.
+router.get('/:idOrSlug/community-prices', async (req, res) => {
+  try {
+    const { idOrSlug } = req.params;
+    const currency = String(req.query.currency || 'USD').toUpperCase().slice(0, 10);
+    const filter = isValidId(idOrSlug)
+      ? { _id: idOrSlug }
+      : { slug: String(idOrSlug).toLowerCase() };
+
+    const wine = await WineDefinition.findOne(filter).select('_id').lean();
+    if (!wine) return res.status(404).json({ error: 'Wine not found' });
+
+    const curve = await getReleaseCurve(wine._id, currency);
+    const currentRelease = curve.length
+      ? {
+          vintage: curve[0].vintage,
+          medianPrice: curve[0].medianPrice,
+          currency: curve[0].currency,
+          sampleSize: curve[0].sampleSize,
+          confidence: curve[0].confidence,
+        }
+      : null;
+
+    res.json({ currency, currentRelease, curve });
+  } catch (error) {
+    console.error('Get community prices error:', error);
+    res.status(500).json({ error: 'Failed to get community prices' });
   }
 });
 

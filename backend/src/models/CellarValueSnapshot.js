@@ -16,8 +16,14 @@ const cellarValueSnapshotSchema = new mongoose.Schema({
     required: true
   },
   totalValue: {
-    type: Number, // stored in USD as canonical currency
+    type: Number, // cost basis (what the user paid), in USD as canonical currency
     required: true
+  },
+  // Estimated replacement value (what it'd cost to rebuy), in USD. Resolved per
+  // bottle as secondary ?? currentRelease ?? paid (see services/valuation.js).
+  // Optional for back-compat with snapshots created before Phase 1.
+  replacementValue: {
+    type: Number
   },
   bottleCount: {
     type: Number,

@@ -102,14 +102,22 @@ router.get('/value-history', async (req, res) => {
       const dateSnapshots = byDate[date] || [];
       const rates = rateMap.get(date) || fallbackRates;
 
+      const conv = (usd) => {
+        if (targetCurrency === 'USD' || !rates) return usd;
+        const c = convertCurrency(usd, 'USD', targetCurrency, rates);
+        return c != null ? c : usd;
+      };
+
       let totalValue = 0;
+      let replacementValue = 0;
+      let hasReplacement = false; // pre-Phase-1 snapshots have no replacementValue
       const cellarEntries = dateSnapshots.map(s => {
-        let value = s.totalValue;
-        if (targetCurrency !== 'USD' && rates) {
-          const converted = convertCurrency(s.totalValue, 'USD', targetCurrency, rates);
-          if (converted != null) value = converted;
-        }
+        const value = conv(s.totalValue);
         totalValue += value;
+        if (s.replacementValue != null) {
+          hasReplacement = true;
+          replacementValue += conv(s.replacementValue);
+        }
         return {
           cellarId: s.cellar.toString(),
           name: cellarNames[s.cellar.toString()] || 'Cellar',
@@ -121,6 +129,9 @@ router.get('/value-history', async (req, res) => {
       result.push({
         date,
         totalValue: Math.round(totalValue * 100) / 100,
+        // null (not 0) for dates with no replacement data → the chart draws a
+        // gap instead of a misleading zero line.
+        replacementValue: hasReplacement ? Math.round(replacementValue * 100) / 100 : null,
         cellars: cellarEntries
       });
     }
@@ -130,11 +141,16 @@ router.get('/value-history', async (req, res) => {
     const changeAbsolute = Math.round((latest - first) * 100) / 100;
     const changePercent = first > 0 ? Math.round(((latest - first) / first) * 1000) / 10 : 0;
 
+    // Latest replacement total (newest point that has one).
+    const latestReplacement = [...result].reverse()
+      .find(p => p.replacementValue != null)?.replacementValue ?? null;
+
     res.json({
       valueHistory: {
         currency: targetCurrency,
         snapshots: result,
         latestTotal: latest,
+        latestReplacement,
         changePercent,
         changeAbsolute
       }

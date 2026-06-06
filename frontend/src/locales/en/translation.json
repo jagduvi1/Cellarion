@@ -375,6 +375,12 @@
     "ratingLabel": "Rating",
     "pricePaid": "Price paid",
     "priceAtEntryTooltip": "Converted at the exchange rate recorded when this price was entered",
+    "currentRelease": "Current release",
+    "currentReleaseTooltip": "Estimated from what Cellarion users paid for the latest vintage of this wine (standard 750 ml), in this currency. A replacement-price guide, not a secondary-market valuation.",
+    "currentReleaseDeltaTooltip": "Current release vs what you paid",
+    "buyerOne": "buyer",
+    "buyerOther": "buyers",
+    "indicativePrice": "indicative",
     "sommMaturity": "Aging & Maturity",
     "loadingMaturity": "Loading…",
     "awaitingSommelier": "Awaiting staff review",
@@ -980,6 +986,8 @@
     "imperial": "Imperial"
   },
   "statistics": {
+    "replacementValue": "Est. replacement value",
+    "vsPaid": "vs paid",
     "title": "Collection Analytics",
     "subtitleFull": "Complete insights across {{cellars}} cellar · {{countries}} countries · {{grapes}} grape varieties",
     "subtitleFull_other": "Complete insights across {{cellars}} cellars · {{countries}} countries · {{grapes}} grape varieties",

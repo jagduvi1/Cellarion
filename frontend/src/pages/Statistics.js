@@ -249,6 +249,25 @@ function Statistics() {
                 </span>
               )}
             </h2>
+            {valueHistory.latestReplacement != null && (
+              <p style={{ margin: '0 0 10px', fontSize: 13, color: '#9A9484' }}>
+                {t('statistics.replacementValue', 'Est. replacement value')}:{' '}
+                <strong style={{ color: '#C9A24B' }}>
+                  {fmtCurrency(valueHistory.latestReplacement, valueHistory.currency)}
+                </strong>
+                {valueHistory.latestTotal > 0 && (() => {
+                  const pct = Math.round(
+                    ((valueHistory.latestReplacement - valueHistory.latestTotal) / valueHistory.latestTotal) * 100
+                  );
+                  if (!isFinite(pct) || pct === 0) return null;
+                  return (
+                    <span style={{ color: pct >= 0 ? '#2D7A45' : '#C0504D' }}>
+                      {' '}{pct >= 0 ? '+' : ''}{pct}% {t('statistics.vsPaid', 'vs paid')}
+                    </span>
+                  );
+                })()}
+              </p>
+            )}
             <ValueOverTimeChart
               snapshots={valueHistory.snapshots}
               currency={valueHistory.currency}

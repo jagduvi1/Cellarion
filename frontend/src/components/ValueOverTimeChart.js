@@ -56,9 +56,11 @@ export default function ValueOverTimeChart({ snapshots, currency }) {
   // with keys for 'total' and each cellar name
   const cellarNames = new Set();
   const hasMultipleCellars = snapshots.some(s => s.cellars?.length > 1);
+  const hasReplacement = snapshots.some(s => s.replacementValue != null && s.replacementValue > 0);
 
   const data = snapshots.map(s => {
     const point = { date: formatDateLabel(s.date), totalValue: s.totalValue };
+    if (hasReplacement) point.replacementValue = s.replacementValue;
     if (hasMultipleCellars) {
       for (const c of (s.cellars || [])) {
         const name = c.name || 'Cellar';
@@ -70,6 +72,7 @@ export default function ValueOverTimeChart({ snapshots, currency }) {
   });
 
   const cellarList = [...cellarNames];
+  const showLegend = hasMultipleCellars || hasReplacement;
 
   return (
     <div className="value-chart-container">
@@ -90,7 +93,7 @@ export default function ValueOverTimeChart({ snapshots, currency }) {
             width={80}
           />
           <Tooltip content={<CustomTooltip currency={currency} />} />
-          {hasMultipleCellars && (
+          {showLegend && (
             <Legend
               wrapperStyle={{ fontSize: 11, color: '#9A9484', paddingTop: 8 }}
             />
@@ -98,12 +101,25 @@ export default function ValueOverTimeChart({ snapshots, currency }) {
           <Line
             type="monotone"
             dataKey="totalValue"
-            name="Total"
+            name={hasReplacement ? 'Paid' : 'Total'}
             stroke="#7B9E88"
             strokeWidth={2.5}
             dot={data.length <= 12}
             activeDot={{ r: 4 }}
           />
+          {hasReplacement && (
+            <Line
+              type="monotone"
+              dataKey="replacementValue"
+              name="Replacement"
+              stroke="#C9A24B"
+              strokeWidth={2.5}
+              strokeDasharray="5 3"
+              dot={data.length <= 12}
+              activeDot={{ r: 4 }}
+              connectNulls
+            />
+          )}
           {hasMultipleCellars && cellarList.map((name, i) => (
             <Line
               key={name}

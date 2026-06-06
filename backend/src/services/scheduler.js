@@ -1,6 +1,7 @@
 const cron = require('node-cron');
 const { runDrinkWindowCheck } = require('./drinkWindowNotifier');
 const { runCellarValueSnapshots } = require('./cellarValueSnapshotJob');
+const { runCommunityPriceAggregation } = require('./communityPriceJob');
 const { runUserDeletionJob } = require('./userDeletionJob');
 const { runSecurityAlertCheck } = require('./securityAlertJob');
 
@@ -29,6 +30,17 @@ function startScheduler() {
     }
   });
 
+  // Community release-price aggregation: weekly on Sunday at 02:00 UTC
+  // (after the value snapshots). Cheap; release prices are stable.
+  cron.schedule('0 2 * * 0', async () => {
+    console.log('[scheduler] Running community price aggregation…');
+    try {
+      await runCommunityPriceAggregation();
+    } catch (err) {
+      console.error('[scheduler] Community price aggregation failed:', err);
+    }
+  });
+
   // User account deletion: daily at 03:00 UTC (after 7-day cooling-off)
   cron.schedule('0 3 * * *', async () => {
     console.log('[scheduler] Running user deletion job…');
@@ -50,7 +62,7 @@ function startScheduler() {
     }
   });
 
-  console.log('[scheduler] Cron jobs registered (drink-window daily 06:00 UTC, value-snapshot weekly Sun 01:00 UTC, user-deletion daily 03:00 UTC, security-spike every 15 min)');
+  console.log('[scheduler] Cron jobs registered (drink-window daily 06:00 UTC, value-snapshot weekly Sun 01:00 UTC, community-price weekly Sun 02:00 UTC, user-deletion daily 03:00 UTC, security-spike every 15 min)');
 }
 
 module.exports = { startScheduler };
