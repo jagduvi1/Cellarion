@@ -1,4 +1,5 @@
 const User = require('../models/User');
+const { escapeRegex } = require('./sanitize');
 
 // Match @<username> tokens in body text. Allowed username chars mirror the
 // ones the registration flow accepts: letters, digits, dot, hyphen, underscore.
@@ -33,7 +34,7 @@ async function extractMentions(body, excludeUserId = null) {
 
   // Mongoose username field is unique but stored as-typed. Match
   // case-insensitively via a single $in regex.
-  const regexes = [...usernames].map(u => new RegExp(`^${u.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i'));
+  const regexes = [...usernames].map(u => new RegExp(`^${escapeRegex(u)}$`, 'i'));
   const users = await User.find({ username: { $in: regexes } }).select('_id').lean();
 
   const ids = users
