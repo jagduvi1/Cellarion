@@ -73,11 +73,13 @@ async function runCommunityPriceAggregation() {
 
   let upserted = 0;
   let removed = 0;
+  const processedPairs = new Set(); // `${wine}|${currency}` recomputed this run
 
   for (const row of rows) {
     const { wine, currency } = row._id;
     const cur = String(currency || 'USD').toUpperCase();
     const cap = capFor(cur);
+    processedPairs.add(`${wine}|${cur}`);
 
     // Reduce each owner's bottles to one cleaned representative price, per vintage.
     // Skip 'NV' — non-vintage wines have no release-price progression to track.
@@ -129,6 +131,22 @@ async function runCommunityPriceAggregation() {
       vintage: { $nin: validVintages },
     });
     removed += del.deletedCount || 0;
+  }
+
+  // Reconcile orphans: a (wine, currency) that lost ALL its backing bottles
+  // drops out of `rows` entirely, so the per-group cleanup above never runs for
+  // it. Sweep any stored pair we didn't recompute this run.
+  const existingPairs = await CommunityWinePrice.aggregate([
+    { $group: { _id: { wine: '$wineDefinition', currency: '$currency' } } },
+  ]);
+  for (const e of existingPairs) {
+    if (!processedPairs.has(`${e._id.wine}|${e._id.currency}`)) {
+      const del = await CommunityWinePrice.deleteMany({
+        wineDefinition: e._id.wine,
+        currency: e._id.currency,
+      });
+      removed += del.deletedCount || 0;
+    }
   }
 
   console.log(
