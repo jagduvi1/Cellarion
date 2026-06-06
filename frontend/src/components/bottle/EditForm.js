@@ -5,6 +5,7 @@ import { updateBottle, setBottleDefaultImage } from '../../api/bottles';
 import { toInputDate } from '../../utils/drinkStatus';
 import { API_URL } from '../../api/apiConstants';
 import { CURRENCIES } from '../../config/currencies';
+import { BOTTLE_SIZES, bottleSizeLabel, normalizeBottleSize } from '../../config/bottleSizes';
 import RatingInput from '../RatingInput';
 
 const ImageUpload = lazy(() => import('../ImageUpload'));
@@ -23,7 +24,7 @@ function EditForm({ bottle, onSaved, onCancel, onImageUploaded }) {
     // If bottle has a price, keep stored currency (price and currency must stay in sync).
     // If no price yet, default to user's preference so they don't have to change it every time.
     currency:         bottle.price ? (bottle.currency || 'USD') : (user?.preferences?.currency || bottle.currency || 'USD'),
-    bottleSize:       bottle.bottleSize || '750ml',
+    bottleSize:       normalizeBottleSize(bottle.bottleSize) || bottle.bottleSize || '750ml',
     purchaseDate:     toInputDate(bottle.purchaseDate),
     purchaseLocation: bottle.purchaseLocation || '',
     purchaseUrl:      bottle.purchaseUrl || '',
@@ -100,10 +101,12 @@ function EditForm({ bottle, onSaved, onCancel, onImageUploaded }) {
         <div className="form-group">
           <label>{t('addBottle.bottleSize')}</label>
           <select value={form.bottleSize} onChange={set('bottleSize')}>
-            <option>375ml (Half)</option>
-            <option>750ml (Standard)</option>
-            <option>1.5L (Magnum)</option>
-            <option>3L (Double Magnum)</option>
+            {!BOTTLE_SIZES.some((s) => s.code === form.bottleSize) && form.bottleSize && (
+              <option value={form.bottleSize}>{bottleSizeLabel(form.bottleSize, t)}</option>
+            )}
+            {BOTTLE_SIZES.map((s) => (
+              <option key={s.code} value={s.code}>{bottleSizeLabel(s.code, t)}</option>
+            ))}
           </select>
         </div>
 

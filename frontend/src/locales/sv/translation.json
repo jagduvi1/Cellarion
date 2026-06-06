@@ -657,12 +657,26 @@
       "applyGrapesNote": "Välj de druvsorter som ska läggas till för det här vinet. Okända namn kan läggas till i taxonomin först.",
       "applyGrapesLabel": "Druvor att lägga till"
     },
+    "bottleSizes": {
+      "normalizeAll": "Normalisera alla",
+      "stored": "Lagrat värde",
+      "count": "Flaskor",
+      "status": "Status",
+      "remapTo": "Mappa om till",
+      "choose": "Välj…",
+      "apply": "Tillämpa",
+      "unrecognized": "okänt",
+      "intro": "{{count}} icke-standardvärde(n) används.",
+      "normalized": "{{count}} flaska/flaskor normaliserade.",
+      "remapped": "{{count}} flaska/flaskor ommappade."
+    },
     "taxonomy": {
       "title": "Admin: Taxonomihantering",
       "countries": "Länder",
       "regions": "Regioner",
       "appellations": "Appellationer",
       "grapes": "Druvor",
+      "bottleSizes": "Flaskstorlekar",
       "addCountry": "+ Lägg till land",
       "addRegion": "+ Lägg till region",
       "addAppellation": "+ Lägg till appellation",
@@ -955,6 +969,16 @@
     "saving": "Sparar…"
   },
 
+  "bottleSizeNames": {
+    "split": "Split",
+    "half": "Halvflaska",
+    "halfLitre": "Halvliter",
+    "clavelin": "Clavelin",
+    "standard": "Standard",
+    "magnum": "Magnum",
+    "doubleMagnum": "Dubbelmagnum",
+    "imperial": "Imperial"
+  },
   "statistics": {
     "title": "Samlingsanalys",
     "subtitleFull": "Fullständig överblick över {{cellars}} källare · {{countries}} länder · {{grapes}} druvsorter",

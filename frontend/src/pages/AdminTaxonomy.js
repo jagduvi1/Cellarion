@@ -7,6 +7,7 @@ import {
 } from '../api/admin';
 import GrapePicker from '../components/GrapePicker';
 import ConfirmModal from '../components/ConfirmModal';
+import BottleSizesAdmin from '../components/BottleSizesAdmin';
 import './AdminTaxonomy.css';
 
 function AdminTaxonomy() {
@@ -74,6 +75,7 @@ function AdminTaxonomy() {
   };
 
   const fetchItems = async () => {
+    if (activeTab === 'bottleSizes') { setItems([]); setLoading(false); return; }
     setLoading(true);
     setError(null);
     try {
@@ -591,11 +593,13 @@ function AdminTaxonomy() {
 
   const isEditing = !!editItem;
 
+  const isBottleSizes = activeTab === 'bottleSizes';
+
   return (
     <div className="admin-taxonomy-page">
       <div className="page-header">
         <h1>{t('admin.taxonomy.title')}</h1>
-        {!isEditing && (
+        {!isEditing && !isBottleSizes && (
           <button onClick={() => { setShowForm(!showForm); setFormData({}); }} className="btn btn-primary">
             {showForm ? t('common.cancel') : addBtnLabel}
           </button>
@@ -603,7 +607,7 @@ function AdminTaxonomy() {
       </div>
 
       <div className="tabs">
-        {['countries', 'regions', 'appellations', 'grapes'].map(tab => (
+        {['countries', 'regions', 'appellations', 'grapes', 'bottleSizes'].map(tab => (
           <button
             key={tab}
             className={`tab ${activeTab === tab ? 'active' : ''}`}
@@ -616,7 +620,9 @@ function AdminTaxonomy() {
 
       {error && <div className="alert alert-error">{error}</div>}
 
-      {showForm && !isEditing && (
+      {isBottleSizes && <BottleSizesAdmin apiFetch={apiFetch} />}
+
+      {!isBottleSizes && showForm && !isEditing && (
         <div className="card create-form">
           <h2>{addBtnLabel}</h2>
           <form onSubmit={handleCreate}>
@@ -629,7 +635,7 @@ function AdminTaxonomy() {
         </div>
       )}
 
-      {isEditing && (
+      {!isBottleSizes && isEditing && (
         <div className="card create-form">
           <h2>{t('admin.taxonomy.editTitle', { name: editItem.name })}</h2>
           <form onSubmit={handleUpdate}>
@@ -642,7 +648,7 @@ function AdminTaxonomy() {
         </div>
       )}
 
-      {loading ? (
+      {!isBottleSizes && (loading ? (
         <div className="loading">{t('common.loading')}</div>
       ) : (
         <div className="items-list">
@@ -670,7 +676,7 @@ function AdminTaxonomy() {
             ))
           )}
         </div>
-      )}
+      ))}
 
       {confirmDelete && (
         <ConfirmModal

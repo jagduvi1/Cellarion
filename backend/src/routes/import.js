@@ -13,6 +13,7 @@ const { logAudit } = require('../services/audit');
 const { getOrCreateDailySnapshot } = require('../utils/exchangeRates');
 const { resolveRating } = require('../utils/ratingUtils');
 const { normalizeString } = require('../utils/normalize');
+const { normalizeBottleSize, DEFAULT_SIZE } = require('../config/bottleSizes');
 const searchService = require('../services/search');
 const { identifyWineFromText } = require('../services/labelScan');
 const { findOrCreateWine } = require('../services/findOrCreateWine');
@@ -621,7 +622,7 @@ router.post('/confirm', async (req, res) => {
             price: item.price || undefined,
             currency: item.currency || defaultCurrency,
             priceSetAt,
-            bottleSize: item.bottleSize || '750ml',
+            bottleSize: normalizeBottleSize(item.bottleSize) || DEFAULT_SIZE,
             purchaseDate: item.purchaseDate || undefined,
             purchaseLocation: stripHtml(item.purchaseLocation),
             location: stripHtml(item.location),
@@ -703,7 +704,7 @@ router.post('/confirm', async (req, res) => {
           price: item.price || undefined,
           currency: item.currency || defaultCurrency,
           priceSetAt,
-          bottleSize: item.bottleSize || '750ml',
+          bottleSize: normalizeBottleSize(item.bottleSize) || DEFAULT_SIZE,
           purchaseDate: item.purchaseDate || undefined,
           purchaseLocation: stripHtml(item.purchaseLocation),
           location: stripHtml(item.location),
