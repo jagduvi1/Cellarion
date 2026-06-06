@@ -42,6 +42,7 @@ function BottleDetail() {
   const [rackInfo, setRackInfo] = useState(null);
   const [vintageProfile, setVintageProfile] = useState(null);
   const [priceHistory, setPriceHistory] = useState(null);
+  const [currentRelease, setCurrentRelease] = useState(null);
   const [rates, setRates] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -84,6 +85,7 @@ function BottleDetail() {
         setBottle(data.bottle);
         setUserRole(data.userRole);
         setCellarColor(data.cellarColor || null);
+        setCurrentRelease(data.currentRelease || null);
         // Only fetch rack info for active bottles
         if (data.bottle.status === 'active') fetchRackInfo();
         if (data.pendingImageUrl) {
@@ -368,6 +370,7 @@ function BottleDetail() {
           cellarId={cellarId}
           vintageProfile={vintageProfile}
           priceHistory={priceHistory}
+          currentRelease={currentRelease}
           rates={rates}
           userCurrency={user?.preferences?.currency || 'USD'}
           canEdit={canEdit}

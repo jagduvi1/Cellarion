@@ -21,7 +21,8 @@ const { enrichWineById } = require('../services/enrichmentJob');
 const { CONSUMED_STATUSES, WINE_POPULATE } = require('../config/constants');
 const { checkRestockGap, resolveRestockAlerts } = require('../services/restockChecker');
 const { gatherPriceWarnings } = require('../services/priceWarnings');
-const { stripHtml, isSafeUrl } = require('../utils/sanitize');
+const { getCurrentRelease } = require('../services/communityPrice');
+const { stripHtml, isSafeUrl, escapeRegex } = require('../utils/sanitize');
 const { parseAndValidateVintage } = require('../utils/validation');
 const { toNormalized } = require('../utils/ratingUtils');
 const { classifyMaturity, buildProfileMap } = require('../utils/maturityUtils');
@@ -197,7 +198,7 @@ router.get('/', async (req, res) => {
       // Producer is a free-text field on WineDefinition; match case-insensitively
       // with an anchored regex so chart segments that pass the exact value
       // (e.g. "Château Margaux") find that producer's bottles.
-      const escaped = String(producer).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const escaped = escapeRegex(producer);
       wdFilter.producer = new RegExp(`^${escaped}$`, 'i');
     }
 
@@ -533,8 +534,17 @@ router.get('/:id', requireBottleAccess('viewer'), async (req, res) => {
       }
     }
 
+    // Community "current release" price for this wine in the bottle's currency —
+    // the replacement-value signal for ordinary bottles. Null when there's no
+    // community data in that currency yet. Never converted across currencies.
+    let currentRelease = null;
+    const wineId = bottle.wineDefinition && (bottle.wineDefinition._id || bottle.wineDefinition);
+    if (wineId) {
+      currentRelease = await getCurrentRelease(wineId, bottle.currency);
+    }
+
     const ucEntry = cellar.userColors?.find(uc => uc.user.toString() === req.user.id.toString());
-    res.json({ bottle: bottleObj, userRole: role, cellarColor: ucEntry?.color || null, pendingImageUrl, defaultImageUrl });
+    res.json({ bottle: bottleObj, userRole: role, cellarColor: ucEntry?.color || null, pendingImageUrl, defaultImageUrl, currentRelease });
   } catch (error) {
     console.error('Get bottle error:', error);
     res.status(500).json({ error: 'Failed to get bottle' });
