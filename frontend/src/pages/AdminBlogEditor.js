@@ -11,6 +11,7 @@ import Underline from '@tiptap/extension-underline';
 import TextAlign from '@tiptap/extension-text-align';
 import Placeholder from '@tiptap/extension-placeholder';
 import { getAdminBlogPost, createBlogPost, updateBlogPost } from '../api/blog';
+import { apiJson } from '../utils/apiJson';
 import './AdminBlogEditor.css';
 
 function AdminBlogEditor() {
@@ -97,11 +98,10 @@ function AdminBlogEditor() {
 
     try {
       if (isNew) {
-        const res = await createBlogPost(apiFetch, data);
-        const result = await res.json();
+        const result = await apiJson(createBlogPost(apiFetch, data));
         navigate(`/admin/blog/${result.post._id}`);
       } else {
-        await updateBlogPost(apiFetch, id, data);
+        await apiJson(updateBlogPost(apiFetch, id, data));
       }
       if (publishOverride === 'published') {
         alert(t('blog.editor.published'));
