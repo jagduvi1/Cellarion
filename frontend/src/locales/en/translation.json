@@ -663,12 +663,26 @@
       "applyGrapesNote": "Select the grape varieties to add to this wine. Unrecognised names can be added to the taxonomy first.",
       "applyGrapesLabel": "Grapes to add"
     },
+    "bottleSizes": {
+      "normalizeAll": "Normalize all",
+      "stored": "Stored value",
+      "count": "Bottles",
+      "status": "Status",
+      "remapTo": "Remap to",
+      "choose": "Choose…",
+      "apply": "Apply",
+      "unrecognized": "unrecognized",
+      "intro": "{{count}} non-standard value(s) in use.",
+      "normalized": "{{count}} bottle(s) normalized.",
+      "remapped": "{{count}} bottle(s) remapped."
+    },
     "taxonomy": {
       "title": "Admin: Taxonomy Management",
       "countries": "Countries",
       "regions": "Regions",
       "appellations": "Appellations",
       "grapes": "Grapes",
+      "bottleSizes": "Bottle Sizes",
       "addCountry": "+ Add country",
       "addRegion": "+ Add region",
       "addAppellation": "+ Add appellation",
@@ -961,6 +975,16 @@
     "saving": "Saving…"
   },
 
+  "bottleSizeNames": {
+    "split": "Split",
+    "half": "Half",
+    "halfLitre": "Half-litre",
+    "clavelin": "Clavelin",
+    "standard": "Standard",
+    "magnum": "Magnum",
+    "doubleMagnum": "Double Magnum",
+    "imperial": "Imperial"
+  },
   "statistics": {
     "replacementValue": "Est. replacement value",
     "vsPaid": "vs paid",

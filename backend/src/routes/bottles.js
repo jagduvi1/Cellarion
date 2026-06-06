@@ -24,6 +24,7 @@ const { gatherPriceWarnings } = require('../services/priceWarnings');
 const { getCurrentRelease } = require('../services/communityPrice');
 const { stripHtml, isSafeUrl, escapeRegex } = require('../utils/sanitize');
 const { parseAndValidateVintage } = require('../utils/validation');
+const { normalizeBottleSize, DEFAULT_SIZE } = require('../config/bottleSizes');
 const { toNormalized } = require('../utils/ratingUtils');
 const { classifyMaturity, buildProfileMap } = require('../utils/maturityUtils');
 const { parsePagination } = require('../utils/pagination');
@@ -404,7 +405,7 @@ router.post('/', async (req, res) => {
       price,
       currency: currency || 'USD',
       priceSetAt,
-      bottleSize: bottleSize || '750ml',
+      bottleSize: normalizeBottleSize(bottleSize) || DEFAULT_SIZE,
       purchaseDate: purchaseDate || new Date(),
       purchaseLocation: stripHtml(purchaseLocation),
       purchaseUrl,
@@ -570,6 +571,11 @@ router.put('/:id', requireBottleAccess('editor'), async (req, res) => {
       const vintageCheck = parseAndValidateVintage(req.body.vintage);
       if (!vintageCheck.ok) return res.status(400).json({ error: vintageCheck.error });
       req.body.vintage = vintageCheck.value;
+    }
+
+    // Canonicalize bottle size on the way in (e.g. '1.5L (Magnum)' → '1500ml').
+    if (req.body.bottleSize !== undefined) {
+      req.body.bottleSize = normalizeBottleSize(req.body.bottleSize) || DEFAULT_SIZE;
     }
 
     // Update allowed fields — diff old vs new for the audit log

@@ -5,6 +5,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { searchWines, findOrCreateWine, identifyWineByText } from '../api/wines';
 import useLabelScanner from '../hooks/useLabelScanner';
 import { CURRENCIES } from '../config/currencies';
+import { BOTTLE_SIZES, bottleSizeLabel } from '../config/bottleSizes';
 import { validatePriceSanity } from '../utils/priceValidation';
 import ImageUpload from '../components/ImageUpload';
 import RatingInput from '../components/RatingInput';
@@ -33,7 +34,7 @@ function AddBottle() {
     vintage: '',
     price: '',
     currency: user?.preferences?.currency || 'USD',
-    bottleSize: '750ml (Standard)',
+    bottleSize: '750ml',
     purchaseDate: '',
     purchaseLocation: '',
     purchaseUrl: '',
@@ -736,10 +737,9 @@ function AddBottle() {
                   value={bottleData.bottleSize}
                   onChange={(e) => setBottleData({ ...bottleData, bottleSize: e.target.value })}
                 >
-                  <option>375ml (Half)</option>
-                  <option>750ml (Standard)</option>
-                  <option>1.5L (Magnum)</option>
-                  <option>3L (Double Magnum)</option>
+                  {BOTTLE_SIZES.map((s) => (
+                    <option key={s.code} value={s.code}>{bottleSizeLabel(s.code, t)}</option>
+                  ))}
                 </select>
               </div>
 

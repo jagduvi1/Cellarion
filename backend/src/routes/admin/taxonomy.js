@@ -9,6 +9,8 @@ const Appellation = require('../../models/Appellation');
 const searchService = require('../../services/search');
 const { logAudit } = require('../../services/audit');
 const { isValidId } = require('../../utils/validation');
+const { distinctSizes, normalizeAll, remap } = require('../../services/bottleSizeMaintenance');
+const { BOTTLE_SIZES } = require('../../config/bottleSizes');
 
 const router = express.Router();
 
@@ -506,6 +508,48 @@ router.delete('/appellations/:id', async (req, res) => {
   } catch (error) {
     console.error('Delete appellation error:', error);
     res.status(500).json({ error: 'Failed to delete appellation' });
+  }
+});
+
+// ===== BOTTLE SIZES =====
+
+// GET /api/admin/taxonomy/bottle-sizes - Distinct stored sizes + counts,
+// plus the canonical reference list for the UI.
+router.get('/bottle-sizes', async (req, res) => {
+  try {
+    const sizes = await distinctSizes();
+    res.json({ sizes, canonical: BOTTLE_SIZES });
+  } catch (error) {
+    console.error('List bottle sizes error:', error);
+    res.status(500).json({ error: 'Failed to list bottle sizes' });
+  }
+});
+
+// POST /api/admin/taxonomy/bottle-sizes/remap - Bulk-remap one stored value
+// to a canonical code. Body: { from, to }
+router.post('/bottle-sizes/remap', async (req, res) => {
+  try {
+    const result = await remap(req.body.from, req.body.to);
+    logAudit(req, 'admin.bottleSize.remap',
+      { from: result.from, to: result.to },
+      { modified: result.modified }
+    );
+    res.json(result);
+  } catch (error) {
+    res.status(400).json({ error: error.message || 'Remap failed' });
+  }
+});
+
+// POST /api/admin/taxonomy/bottle-sizes/normalize-all - Normalize every bottle
+// to its canonical code in one pass.
+router.post('/bottle-sizes/normalize-all', async (req, res) => {
+  try {
+    const result = await normalizeAll();
+    logAudit(req, 'admin.bottleSize.normalizeAll', {}, result);
+    res.json(result);
+  } catch (error) {
+    console.error('Normalize bottle sizes error:', error);
+    res.status(500).json({ error: 'Failed to normalize bottle sizes' });
   }
 });
 
