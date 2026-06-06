@@ -5,6 +5,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { getMaturityStatus } from '../../utils/drinkStatus';
 import { bottleAnchorYear } from '../../utils/maturityUtils';
 import { convertAmountHistorical } from '../../utils/currency';
+import { bottleSizeLabel } from '../../config/bottleSizes';
 import { buildRackUrl } from '../../utils/rackNavigation';
 import safeUrl from '../../utils/safeUrl';
 import RatingDisplay from '../RatingDisplay';
@@ -37,7 +38,7 @@ function ViewDetails({ bottle, rackInfo, cellarId, vintageProfile, priceHistory,
         {bottle.bottleSize && (
           <div className="bd-detail-item">
             <span className="bd-detail-label">{t('bottleDetail.size')}</span>
-            <span className="bd-detail-value">{bottle.bottleSize}</span>
+            <span className="bd-detail-value">{bottleSizeLabel(bottle.bottleSize, t)}</span>
           </div>
         )}
         {bottle.rating && (
