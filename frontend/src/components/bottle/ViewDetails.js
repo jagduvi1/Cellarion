@@ -79,6 +79,16 @@ function ViewDetails({ bottle, rackInfo, cellarId, vintageProfile, priceHistory,
                   <span className="bd-detail-converted"> &asymp; {c.toLocaleString()} {userCurrency}</span>
                 ) : null;
               })()}
+              {bottle.price > 0 && currentRelease.currency === bottle.currency && (() => {
+                const pct = Math.round(((currentRelease.medianPrice - bottle.price) / bottle.price) * 100);
+                if (!isFinite(pct) || pct === 0) return null;
+                return (
+                  <span
+                    style={{ color: pct >= 0 ? '#2D7A45' : '#C0504D' }}
+                    title={t('bottleDetail.currentReleaseDeltaTooltip', 'Current release vs what you paid')}
+                  > {pct >= 0 ? '+' : ''}{pct}%</span>
+                );
+              })()}
               <span
                 className="bd-detail-converted"
                 title={t('bottleDetail.currentReleaseTooltip', 'Estimated from what Cellarion users paid for the latest vintage of this wine (standard 750 ml), in this currency. A replacement-price guide, not a secondary-market valuation.')}

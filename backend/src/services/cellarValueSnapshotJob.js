@@ -10,6 +10,7 @@ const Bottle = require('../models/Bottle');
 const CellarValueSnapshot = require('../models/CellarValueSnapshot');
 const { CONSUMED_STATUSES } = require('../config/constants');
 const { getOrCreateDailySnapshot, convertCurrency } = require('../utils/exchangeRates');
+const { resolveReplacementForBottles } = require('./valuation');
 
 async function runCellarValueSnapshots() {
   const today = new Date().toISOString().slice(0, 10);
@@ -30,45 +31,42 @@ async function runCellarValueSnapshots() {
       const cellars = await Cellar.find({ user: userId, deletedAt: null }).select('_id').lean();
       const cellarIds = cellars.map(c => c._id);
 
+      // All active bottles in one pass: cost basis (price), replacement value
+      // (resolved estimate), and bottle count.
       const bottles = await Bottle.find({
         user: userId,
         cellar: { $in: cellarIds },
-        status: { $nin: CONSUMED_STATUSES },
-        price: { $gt: 0 }
-      }).select('cellar price currency').lean();
+        status: { $nin: CONSUMED_STATUSES }
+      }).select('cellar price currency wineDefinition vintage').lean();
+
+      // Replacement estimate per bottle (secondary ?? currentRelease ?? paid).
+      const replMap = await resolveReplacementForBottles(bottles);
+
+      // Convert any amount to USD using today's rates (falls back to the raw
+      // amount if rates are unavailable).
+      const toUsd = (amount, currency) => {
+        const from = currency || 'USD';
+        if (from === 'USD' || !todayRates) return amount;
+        const converted = convertCurrency(amount, from, 'USD', todayRates);
+        return converted != null ? converted : amount;
+      };
 
       // Group by cellar
       const byCellar = {};
       for (const cid of cellarIds) {
-        byCellar[cid.toString()] = { totalValue: 0, bottleCount: 0 };
+        byCellar[cid.toString()] = { totalValue: 0, replacementValue: 0, bottleCount: 0 };
       }
 
       for (const b of bottles) {
         const cid = b.cellar.toString();
-        if (!byCellar[cid]) byCellar[cid] = { totalValue: 0, bottleCount: 0 };
+        if (!byCellar[cid]) byCellar[cid] = { totalValue: 0, replacementValue: 0, bottleCount: 0 };
 
-        let usdValue = b.price;
-        const fromCurrency = b.currency || 'USD';
-        if (fromCurrency !== 'USD' && todayRates) {
-          const converted = convertCurrency(b.price, fromCurrency, 'USD', todayRates);
-          if (converted != null) usdValue = converted;
-        }
-
-        byCellar[cid].totalValue += usdValue;
         byCellar[cid].bottleCount++;
-      }
 
-      // Also count bottles without price for bottleCount
-      const allBottles = await Bottle.find({
-        user: userId,
-        cellar: { $in: cellarIds },
-        status: { $nin: CONSUMED_STATUSES }
-      }).select('cellar').lean();
+        if (b.price > 0) byCellar[cid].totalValue += toUsd(b.price, b.currency);
 
-      const countByCellar = {};
-      for (const b of allBottles) {
-        const cid = b.cellar.toString();
-        countByCellar[cid] = (countByCellar[cid] || 0) + 1;
+        const repl = replMap.get(b._id.toString());
+        if (repl) byCellar[cid].replacementValue += toUsd(repl.amount, repl.currency);
       }
 
       // Upsert snapshots
@@ -83,7 +81,8 @@ async function runCellarValueSnapshots() {
                 cellar: cid,
                 date: today,
                 totalValue: Math.round((byCellar[key]?.totalValue || 0) * 100) / 100,
-                bottleCount: countByCellar[key] || 0
+                replacementValue: Math.round((byCellar[key]?.replacementValue || 0) * 100) / 100,
+                bottleCount: byCellar[key]?.bottleCount || 0
               }
             },
             upsert: true
