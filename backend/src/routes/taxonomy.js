@@ -28,6 +28,28 @@ const limiter = rateLimit({
 });
 router.use(limiter);
 
+// Server-side cache for the list endpoints. They aggregate wine counts over
+// the whole registry and only change on admin taxonomy/wine edits; clients
+// already get Cache-Control max-age=3600, this stops each cold client from
+// re-running the aggregation.
+const listCache = new Map(); // key -> { at, body }
+const LIST_CACHE_TTL_MS = 10 * 60 * 1000;
+
+function getCachedList(key) {
+  const entry = listCache.get(key);
+  return entry && Date.now() - entry.at < LIST_CACHE_TTL_MS ? entry.body : null;
+}
+
+/** Count wines per value of `field` in one aggregation (vs one countDocuments per taxon). */
+async function countWinesBy(field, { unwind = false } = {}) {
+  const pipeline = [
+    ...(unwind ? [{ $unwind: `$${field}` }] : [{ $match: { [field]: { $ne: null } } }]),
+    { $group: { _id: `$${field}`, count: { $sum: 1 } } },
+  ];
+  const rows = await WineDefinition.aggregate(pipeline);
+  return new Map(rows.map(r => [String(r._id), r.count]));
+}
+
 // Shared wine projection for public lists
 const WINE_PROJECTION = 'name producer slug type appellation region country image communityRating';
 
@@ -36,19 +58,27 @@ const WINE_PROJECTION = 'name producer slug type appellation region country imag
 // GET /api/taxonomy/countries — list all countries that have ≥MIN_WINES wines
 router.get('/countries', async (req, res) => {
   try {
-    const countries = await Country.find({ slug: { $exists: true, $ne: null } })
-      .select('name slug code description')
-      .sort({ name: 1 })
-      .lean();
+    res.set('Cache-Control', 'public, max-age=3600');
+    const cached = getCachedList('countries');
+    if (cached) return res.json(cached);
+
+    const [countries, countByCountry] = await Promise.all([
+      Country.find({ slug: { $exists: true, $ne: null } })
+        .select('name slug code description')
+        .sort({ name: 1 })
+        .lean(),
+      countWinesBy('country'),
+    ]);
 
     const result = [];
     for (const c of countries) {
-      const count = await WineDefinition.countDocuments({ country: c._id });
+      const count = countByCountry.get(String(c._id)) || 0;
       if (count >= MIN_WINES) result.push({ ...c, wineCount: count });
     }
 
-    res.set('Cache-Control', 'public, max-age=3600');
-    res.json({ countries: result, total: result.length });
+    const body = { countries: result, total: result.length };
+    listCache.set('countries', { at: Date.now(), body });
+    res.json(body);
   } catch (err) {
     console.error('[taxonomy] countries list error:', err);
     res.status(500).json({ error: 'Failed to fetch countries' });
@@ -96,20 +126,28 @@ router.get('/countries/:slug', async (req, res) => {
 // GET /api/taxonomy/regions — list all regions with ≥MIN_WINES wines
 router.get('/regions', async (req, res) => {
   try {
-    const regions = await Region.find({ slug: { $exists: true, $ne: null } })
-      .select('name slug description country')
-      .populate('country', 'name slug')
-      .sort({ name: 1 })
-      .lean();
+    res.set('Cache-Control', 'public, max-age=3600');
+    const cached = getCachedList('regions');
+    if (cached) return res.json(cached);
+
+    const [regions, countByRegion] = await Promise.all([
+      Region.find({ slug: { $exists: true, $ne: null } })
+        .select('name slug description country')
+        .populate('country', 'name slug')
+        .sort({ name: 1 })
+        .lean(),
+      countWinesBy('region'),
+    ]);
 
     const result = [];
     for (const r of regions) {
-      const count = await WineDefinition.countDocuments({ region: r._id });
+      const count = countByRegion.get(String(r._id)) || 0;
       if (count >= MIN_WINES) result.push({ ...r, wineCount: count });
     }
 
-    res.set('Cache-Control', 'public, max-age=3600');
-    res.json({ regions: result, total: result.length });
+    const body = { regions: result, total: result.length };
+    listCache.set('regions', { at: Date.now(), body });
+    res.json(body);
   } catch (err) {
     console.error('[taxonomy] regions list error:', err);
     res.status(500).json({ error: 'Failed to fetch regions' });
@@ -156,19 +194,27 @@ router.get('/regions/:slug', async (req, res) => {
 // GET /api/taxonomy/grapes — list all grapes with ≥MIN_WINES wines
 router.get('/grapes', async (req, res) => {
   try {
-    const grapes = await Grape.find({ slug: { $exists: true, $ne: null } })
-      .select('name slug color description')
-      .sort({ name: 1 })
-      .lean();
+    res.set('Cache-Control', 'public, max-age=3600');
+    const cached = getCachedList('grapes');
+    if (cached) return res.json(cached);
+
+    const [grapes, countByGrape] = await Promise.all([
+      Grape.find({ slug: { $exists: true, $ne: null } })
+        .select('name slug color description')
+        .sort({ name: 1 })
+        .lean(),
+      countWinesBy('grapes', { unwind: true }),
+    ]);
 
     const result = [];
     for (const g of grapes) {
-      const count = await WineDefinition.countDocuments({ grapes: g._id });
+      const count = countByGrape.get(String(g._id)) || 0;
       if (count >= MIN_WINES) result.push({ ...g, wineCount: count });
     }
 
-    res.set('Cache-Control', 'public, max-age=3600');
-    res.json({ grapes: result, total: result.length });
+    const body = { grapes: result, total: result.length };
+    listCache.set('grapes', { at: Date.now(), body });
+    res.json(body);
   } catch (err) {
     console.error('[taxonomy] grapes list error:', err);
     res.status(500).json({ error: 'Failed to fetch grapes' });

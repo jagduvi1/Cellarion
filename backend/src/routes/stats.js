@@ -11,6 +11,15 @@ const { getOrCreateDailySnapshot, getSnapshotsForDates, convertCurrency } = requ
 const router = express.Router();
 router.use(requireAuth);
 
+// Short server-side cache for the overview. Computing it loads the user's
+// entire bottle set, so without a cache every page visit recomputes from
+// scratch. Two cheap indexed counts act as the invalidation probe — adds,
+// deletes, consumes and undos all change one of them, so only pure edits
+// (price/rating tweaks) can be served stale, bounded by the TTL.
+const overviewCache = new Map(); // userId -> { at, key, totalCount, activeCount, stats }
+const OVERVIEW_TTL_MS = 2 * 60 * 1000;
+const OVERVIEW_CACHE_MAX_ENTRIES = 5000;
+
 // GET /api/stats/overview — collection analytics (all authenticated users)
 router.get('/overview', async (req, res) => {
   try {
@@ -28,16 +37,39 @@ router.get('/overview', async (req, res) => {
       return res.json({ stats: buildEmptyStats(targetCurrency) });
     }
 
+    const scope = { user: req.user.id, cellar: { $in: cellarIds } };
+    const cacheKey = `${targetCurrency}:${targetRatingScale}`;
+    const cached = overviewCache.get(req.user.id);
+    if (cached && cached.key === cacheKey && Date.now() - cached.at < OVERVIEW_TTL_MS) {
+      const [totalCount, activeCount] = await Promise.all([
+        Bottle.countDocuments(scope),
+        Bottle.countDocuments({ ...scope, status: { $nin: CONSUMED_STATUSES } }),
+      ]);
+      if (totalCount === cached.totalCount && activeCount === cached.activeCount) {
+        return res.json({ stats: cached.stats });
+      }
+    }
+
     const [activeBottles, consumedBottles] = await Promise.all([
-      Bottle.find({ user: req.user.id, cellar: { $in: cellarIds }, status: { $nin: CONSUMED_STATUSES } })
+      Bottle.find({ ...scope, status: { $nin: CONSUMED_STATUSES } })
         .populate(WINE_POPULATE_LIST)
         .lean(),
-      Bottle.find({ user: req.user.id, cellar: { $in: cellarIds }, status: { $in: CONSUMED_STATUSES } })
+      Bottle.find({ ...scope, status: { $in: CONSUMED_STATUSES } })
         .populate(WINE_POPULATE_LIST)
         .lean(),
     ]);
 
     const stats = await computeOverview({ activeBottles, consumedBottles, cellars, targetCurrency, targetRatingScale });
+
+    if (overviewCache.size >= OVERVIEW_CACHE_MAX_ENTRIES) overviewCache.clear();
+    overviewCache.set(req.user.id, {
+      at: Date.now(),
+      key: cacheKey,
+      totalCount: activeBottles.length + consumedBottles.length,
+      activeCount: activeBottles.length,
+      stats,
+    });
+
     res.json({ stats });
   } catch (error) {
     console.error('Stats overview error:', error);
