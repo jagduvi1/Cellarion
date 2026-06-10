@@ -96,6 +96,7 @@ async function processUser(user, isFirstRun) {
 
   const currentYear = new Date().getFullYear();
   const alerts = []; // { bottleId, name, vintage, status, notifType }
+  const seedOps = []; // first-run status seeds, flushed as one bulkWrite
 
   for (const bottle of bottles) {
     const maturityStatus = classifyMaturity(bottle, profileMap);
@@ -122,11 +123,16 @@ async function processUser(user, isFirstRun) {
     const effectiveStatus = notifType === 'ending' ? 'ending' : maturityStatus;
 
     if (isFirstRun) {
-      // Silent seed: record the current status without sending notifications
-      await Bottle.updateOne(
-        { _id: bottle._id },
-        { $set: { drinkWindowNotifiedStatus: effectiveStatus, drinkWindowNotifiedAt: new Date() } }
-      );
+      // Silent seed: record the current status without sending notifications.
+      // Collected into one bulkWrite per user — the first run touches every
+      // bottle in the system, and one awaited updateOne per bottle made the
+      // seed take hours at scale.
+      seedOps.push({
+        updateOne: {
+          filter: { _id: bottle._id },
+          update: { $set: { drinkWindowNotifiedStatus: effectiveStatus, drinkWindowNotifiedAt: new Date() } },
+        },
+      });
       continue;
     }
 
@@ -157,6 +163,10 @@ async function processUser(user, isFirstRun) {
       { _id: bottle._id },
       { $set: { drinkWindowNotifiedStatus: effectiveStatus, drinkWindowNotifiedAt: new Date() } }
     );
+  }
+
+  if (seedOps.length > 0) {
+    await Bottle.bulkWrite(seedOps, { ordered: false });
   }
 
   if (alerts.length === 0) return 0;

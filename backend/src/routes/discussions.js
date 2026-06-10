@@ -15,7 +15,7 @@ const { sanitizeForumHtml, visibleTextLength } = require('../utils/sanitizeHtml'
 const { logAudit } = require('../services/audit');
 const { incrementCred } = require('../utils/cellarCred');
 const { submitUrls: submitToIndexNow } = require('../services/indexNow');
-const { createNotification } = require('../services/notifications');
+const { createNotification, createNotifications } = require('../services/notifications');
 const { extractMentions } = require('../utils/mentionParser');
 const searchService = require('../services/search');
 const { sendDiscussionReplyEmail, EMAIL_VERIFICATION_ENABLED } = require('../services/mailgun');
@@ -785,29 +785,35 @@ router.post('/:idOrSlug/replies', requireAuth, async (req, res) => {
       }
     }
 
+    // Collect every recipient first, then deliver in ONE batch — a popular
+    // thread can have hundreds of watchers, and per-recipient
+    // createNotification calls fan out 3 queries + push HTTPS calls each,
+    // all inside this request handler.
+    const notificationItems = [];
+
     if (String(discussion.author) !== selfId) {
       notified.add(String(discussion.author));
-      createNotification(
-        discussion.author,
-        'discussion_reply',
-        'New reply to your discussion',
-        `${replierName} replied to "${discussion.title}"`,
+      notificationItems.push({
+        userId: discussion.author,
+        type: 'discussion_reply',
+        title: 'New reply to your discussion',
+        message: `${replierName} replied to "${discussion.title}"`,
         link,
-        'communityReply'
-      );
+        category: 'communityReply',
+      });
       maybeEmail(discussion.author, 'communityReply', 'reply');
     }
 
     if (quotedAuthorId && String(quotedAuthorId) !== selfId && !notified.has(String(quotedAuthorId))) {
       notified.add(String(quotedAuthorId));
-      createNotification(
-        quotedAuthorId,
-        'discussion_reply',
-        `${replierName} quoted you`,
-        `In "${discussion.title}"`,
+      notificationItems.push({
+        userId: quotedAuthorId,
+        type: 'discussion_reply',
+        title: `${replierName} quoted you`,
+        message: `In "${discussion.title}"`,
         link,
-        'communityReply'
-      );
+        category: 'communityReply',
+      });
       maybeEmail(quotedAuthorId, 'communityReply', 'quote');
     }
 
@@ -815,14 +821,14 @@ router.post('/:idOrSlug/replies', requireAuth, async (req, res) => {
     for (const uid of mentionedIds) {
       if (notified.has(uid)) continue;
       notified.add(uid);
-      createNotification(
-        uid,
-        'discussion_mention',
-        `${replierName} mentioned you`,
-        `In "${discussion.title}"`,
+      notificationItems.push({
+        userId: uid,
+        type: 'discussion_mention',
+        title: `${replierName} mentioned you`,
+        message: `In "${discussion.title}"`,
         link,
-        'communityMention'
-      );
+        category: 'communityMention',
+      });
       maybeEmail(uid, 'communityMention', 'mention');
     }
 
@@ -837,15 +843,21 @@ router.post('/:idOrSlug/replies', requireAuth, async (req, res) => {
       const uid = w.user.toString();
       if (uid === selfId || notified.has(uid)) continue;
       notified.add(uid);
-      createNotification(
-        uid,
-        'discussion_reply',
-        `New reply in "${discussion.title}"`,
-        `${replierName} replied — you're following this thread`,
+      notificationItems.push({
+        userId: uid,
+        type: 'discussion_reply',
+        title: `New reply in "${discussion.title}"`,
+        message: `${replierName} replied — you're following this thread`,
         link,
-        'communityFollow'
-      );
+        category: 'communityFollow',
+      });
     }
+
+    // Fire-and-forget, same as the old per-recipient calls — delivery must
+    // never block or fail the reply create.
+    createNotifications(notificationItems).catch(err =>
+      console.error('[discussions] reply notification batch failed:', err.message)
+    );
 
     logAudit(req, 'discussion_reply.create', { type: 'discussion_reply', id: reply._id }, { discussion: discussion._id });
 
