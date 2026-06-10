@@ -10,6 +10,7 @@ const Bottle = require('../models/Bottle');
 const { logAudit } = require('../services/audit');
 const { isValidId } = require('../utils/validation');
 const { generateWineListPdf } = require('../services/wineListPdf');
+const { stripImageMetadata } = require('../services/imageSanitizer');
 
 const router = express.Router();
 
@@ -271,6 +272,16 @@ router.post('/:id/logo', requireAuth, logoUpload.single('logo'), async (req, res
     const wineList = await WineList.findOne({ _id: req.params.id, user: req.user.id });
     if (!wineList) return res.status(404).json({ error: 'Wine list not found' });
     if (!req.file) return res.status(400).json({ error: 'No logo file provided' });
+
+    // Re-encode in place to strip EXIF/GPS metadata — logos shot on a phone
+    // embed location, and the file ends up in shared/public PDFs.
+    try {
+      await stripImageMetadata(req.file.path);
+    } catch (err) {
+      console.error('Logo sanitization failed:', err.message);
+      try { fs.unlinkSync(req.file.path); } catch { /* already gone */ }
+      return res.status(400).json({ error: 'Logo could not be processed — the file may be corrupt or too large' });
+    }
 
     wineList.branding = wineList.branding || {};
     wineList.branding.logoUrl = `wine-list-logos/${req.file.filename}`;
