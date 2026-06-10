@@ -2,7 +2,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const sharp = require('sharp');
-const { stripImageMetadata } = require('./imageSanitizer');
+const { stripImageMetadata, hasStrippableMetadata } = require('./imageSanitizer');
 
 // sharp caches open file descriptors, which blocks the temp-dir cleanup on
 // Windows (EBUSY on unlink). The cache is irrelevant for these tests.
@@ -79,16 +79,49 @@ describe('stripImageMetadata', () => {
     }
   });
 
-  it('rejects a file that is not a decodable image', async () => {
+  it('chooses the output format from the decoded content, not the (lying) extension', async () => {
+    // A transparent PNG uploaded with Content-Type image/jpeg gets a .jpg
+    // filename — encoding it as JPEG would flatten the alpha channel onto
+    // black. The sanitizer must keep it PNG.
+    const file = path.join(dir, 'mislabeled.jpg');
+    await sharp({
+      create: { width: 6, height: 6, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } },
+    })
+      .png()
+      .withMetadata({ exif: { IFD0: { Make: 'TestCam' } } })
+      .toFile(file);
+
+    await stripImageMetadata(file);
+
+    const after = await sharp(file).metadata();
+    expect(after.format).toBe('png');
+    expect(after.hasAlpha).toBe(true);
+    expect(after.exif).toBeUndefined();
+  });
+
+  it('rejects a file that is not a decodable image without touching it', async () => {
     const file = path.join(dir, 'fake.jpg');
     await fs.promises.writeFile(file, 'definitely not an image');
     await expect(stripImageMetadata(file)).rejects.toThrow();
+    expect((await fs.promises.readFile(file)).toString()).toBe('definitely not an image');
   });
 
-  it('rejects unsupported extensions without touching the file', async () => {
+  it('rejects decodable but unsupported formats (gif)', async () => {
     const file = path.join(dir, 'anim.gif');
-    await fs.promises.writeFile(file, 'GIF89a');
-    await expect(stripImageMetadata(file)).rejects.toThrow(/unsupported image extension/i);
-    expect((await fs.promises.readFile(file)).toString()).toBe('GIF89a');
+    await sharp({
+      create: { width: 4, height: 4, channels: 3, background: { r: 9, g: 9, b: 9 } },
+    })
+      .gif()
+      .toFile(file);
+    await expect(stripImageMetadata(file)).rejects.toThrow(/unsupported image format/i);
+  });
+
+  it('hasStrippableMetadata: true for EXIF-bearing files, false after stripping', async () => {
+    const file = path.join(dir, 'probe.jpg');
+    await createJpegWithExif(file);
+    expect(await hasStrippableMetadata(file)).toBe(true);
+
+    await stripImageMetadata(file);
+    expect(await hasStrippableMetadata(file)).toBe(false);
   });
 });

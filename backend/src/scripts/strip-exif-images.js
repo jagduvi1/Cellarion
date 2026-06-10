@@ -1,19 +1,24 @@
 /**
  * One-off backfill: strip EXIF/GPS metadata from already-uploaded images.
  *
- * Re-encodes every image in /app/uploads/originals and
- * /app/uploads/wine-list-logos in place (filenames and URLs are unchanged).
- * Processed PNGs in /app/uploads/processed are skipped — rembg re-encodes
- * them via PIL, which already drops all metadata.
+ * Re-encodes images in /app/uploads/originals and /app/uploads/wine-list-logos
+ * in place (filenames and URLs are unchanged). Processed PNGs in
+ * /app/uploads/processed are skipped — rembg re-encodes them via PIL, which
+ * already drops all metadata.
  *
- * Idempotent — re-running re-encodes already-clean files to the same clean
- * result. No database access needed. Run inside the backend container:
+ * Idempotent: files with no strippable metadata are SKIPPED, so re-running
+ * never pushes already-clean JPEGs through another lossy re-encode
+ * generation. No database access needed. Run inside the backend container:
  *   docker exec cellarion-backend node src/scripts/strip-exif-images.js
+ *
+ * Note: this cleans the bytes on DISK. Copies already fetched by browsers or
+ * proxies live under a 1-year immutable Cache-Control and keep their EXIF
+ * until those caches expire or the URLs change.
  */
 
 const fs = require('fs');
 const path = require('path');
-const { stripImageMetadata } = require('../services/imageSanitizer');
+const { stripImageMetadata, hasStrippableMetadata } = require('../services/imageSanitizer');
 
 const DIRS = [
   '/app/uploads/originals',
@@ -43,6 +48,12 @@ const IMAGE_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png', '.webp']);
         continue;
       }
       try {
+        // Skip files with nothing to strip — JPEG re-encoding is lossy, so a
+        // re-run must not degrade already-clean photos.
+        if (!(await hasStrippableMetadata(filePath))) {
+          skipped++;
+          continue;
+        }
         await stripImageMetadata(filePath);
         stripped++;
       } catch (err) {
@@ -54,6 +65,6 @@ const IMAGE_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png', '.webp']);
     }
   }
 
-  console.log(`[strip-exif-images] done: ${stripped} stripped, ${failed} failed, ${skipped} skipped`);
+  console.log(`[strip-exif-images] done: ${stripped} stripped, ${failed} failed, ${skipped} skipped (already clean or not an image)`);
   process.exit(failed > 0 ? 1 : 0);
 })();

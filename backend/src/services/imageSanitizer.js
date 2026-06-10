@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 const sharp = require('sharp');
 
 /**
@@ -20,12 +21,11 @@ const sharp = require('sharp');
 // limit fails closed.
 const MAX_PIXELS = 8000 * 8000;
 
-const FORMAT_BY_EXT = {
-  '.jpg': 'jpeg',
-  '.jpeg': 'jpeg',
-  '.png': 'png',
-  '.webp': 'webp',
-};
+// Formats we re-encode. The DECODED format decides the output, not the file
+// extension — the extension comes from the client-declared Content-Type and
+// can lie (a PNG uploaded as image/jpeg must stay PNG, or a JPEG encode
+// would flatten its alpha channel onto black).
+const SUPPORTED_FORMATS = new Set(['jpeg', 'png', 'webp']);
 
 /**
  * Re-encode an image file in place, dropping all metadata.
@@ -34,26 +34,39 @@ const FORMAT_BY_EXT = {
  *   strips them unless .withMetadata() is requested.
  * - .rotate() bakes the EXIF orientation into the pixels first, so photos
  *   don't render sideways once the orientation tag is gone.
- * - The ICC colour profile is kept: it describes the colour space, not the
- *   photographer, and dropping it would shift colours on wide-gamut photos.
+ * - The ICC colour profile is kept for RGB images (it describes the colour
+ *   space, not the photographer). CMYK inputs are converted to sRGB instead —
+ *   keeping a CMYK profile yields CMYK JPEGs that browsers render badly.
+ * - Animated WebP keeps its animation ({ animated: true } decodes all frames
+ *   and the webp encoder writes them back).
+ * - The replace is ATOMIC: encode to a temp file in the same directory, then
+ *   rename over the original. A crash mid-write can never corrupt the
+ *   existing file, and concurrent readers (static serving, rembg, the
+ *   backfill running against a live container) always see either the old or
+ *   the new complete bytes.
  *
- * Throws if the file cannot be decoded (corrupt or not really an image) or
- * exceeds MAX_PIXELS — callers should respond 400 and delete the file.
+ * Throws if the file cannot be decoded (corrupt / not really an image), is
+ * an unsupported format, or exceeds MAX_PIXELS — callers should respond 400
+ * and delete the file.
  */
 async function stripImageMetadata(filePath) {
-  const ext = path.extname(filePath).toLowerCase();
-  const format = FORMAT_BY_EXT[ext];
-  if (!format) {
-    throw new Error(`Unsupported image extension: ${ext}`);
-  }
-
   // Read into memory first — sharp can hold the input file handle open
-  // (notably for WebP), which breaks the in-place overwrite on Windows.
-  // Uploads are capped at 10MB, so buffering is fine.
+  // (notably for WebP), which breaks the overwrite on Windows. Uploads are
+  // capped at 10MB, so buffering is fine.
   const input = await fs.promises.readFile(filePath);
-  const pipeline = sharp(input, { limitInputPixels: MAX_PIXELS })
-    .rotate()
-    .keepIccProfile();
+
+  const meta = await sharp(input, { limitInputPixels: MAX_PIXELS }).metadata();
+  if (!SUPPORTED_FORMATS.has(meta.format)) {
+    throw new Error(`Unsupported image format: ${meta.format || 'unknown'}`);
+  }
+  const format = meta.format;
+  const animated = format === 'webp' && (meta.pages || 1) > 1;
+  const isCmyk = meta.space === 'cmyk';
+
+  let pipeline = sharp(input, { limitInputPixels: MAX_PIXELS, animated }).rotate();
+  if (!isCmyk) {
+    pipeline = pipeline.keepIccProfile();
+  }
 
   let buffer;
   if (format === 'jpeg') {
@@ -64,7 +77,29 @@ async function stripImageMetadata(filePath) {
     buffer = await pipeline.webp({ quality: 90 }).toBuffer();
   }
 
-  await fs.promises.writeFile(filePath, buffer);
+  // Atomic replace: temp file in the same directory + rename.
+  const tmpPath = path.join(
+    path.dirname(filePath),
+    `.${path.basename(filePath)}.${crypto.randomUUID()}.tmp`
+  );
+  try {
+    await fs.promises.writeFile(tmpPath, buffer);
+    await fs.promises.rename(tmpPath, filePath);
+  } catch (err) {
+    await fs.promises.unlink(tmpPath).catch(() => {});
+    throw err;
+  }
 }
 
-module.exports = { stripImageMetadata, MAX_PIXELS };
+/**
+ * True when the file carries metadata worth stripping. Used by the backfill
+ * script to skip already-clean files — re-encoding is lossy for JPEG, so a
+ * re-run must not put clean files through another generation.
+ */
+async function hasStrippableMetadata(filePath) {
+  const input = await fs.promises.readFile(filePath);
+  const meta = await sharp(input, { limitInputPixels: MAX_PIXELS }).metadata();
+  return !!(meta.exif || meta.xmp || meta.iptc || (meta.orientation && meta.orientation !== 1));
+}
+
+module.exports = { stripImageMetadata, hasStrippableMetadata, MAX_PIXELS };
