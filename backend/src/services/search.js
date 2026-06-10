@@ -102,35 +102,69 @@ async function initialize() {
     // the whole catalog every boot is wasteful. Live data changes are kept in
     // sync incrementally by indexWine/indexBottle/indexDiscussion. Set
     // MEILI_FORCE_REINDEX=1 to force a rebuild (e.g. after a settings change).
-    await syncIfNeeded(index, fullSync, 'wines');
-    await syncIfNeeded(bottlesIndex, fullSyncBottles, 'bottles');
-    await syncIfNeeded(discussionsIndex, fullSyncDiscussions, 'discussions');
+    //
+    // The syncs run in the BACKGROUND: a full catalog upload takes minutes at
+    // scale and initialize() is awaited before app.listen — blocking boot (and
+    // the container healthcheck) on it would make first-boot/recovery deploys
+    // fail. Search may briefly return partial results during an initial sync.
+    (async () => {
+      await syncIfNeeded(index, fullSync, 'wines');
+      await syncIfNeeded(bottlesIndex, fullSyncBottles, 'bottles');
+      await syncIfNeeded(discussionsIndex, fullSyncDiscussions, 'discussions');
+    })().catch(err => console.error(`Meilisearch initial sync failed: ${err.message}`));
   } catch (err) {
     isAvailable = false;
     console.warn(`Meilisearch unavailable (${url}): ${err.message}. Falling back to MongoDB search.`);
   }
 }
 
+// While an index's INITIAL sync is in flight (first boot / wiped volume),
+// searches against it must fail so callers take their MongoDB fallback —
+// callers like the cellar route treat zero Meili hits as authoritative, and
+// a half-built index would confidently return empty results for minutes.
+const initialSyncing = { wines: false, bottles: false, discussions: false };
+
+function assertIndexReady(label) {
+  if (initialSyncing[label]) {
+    throw new Error(`Meilisearch '${label}' index initial sync in progress`);
+  }
+}
+
 // Run `syncFn` only if `idx` has no documents yet (or a rebuild is forced).
 const FORCE_REINDEX = process.env.MEILI_FORCE_REINDEX === '1' || process.env.MEILI_FORCE_REINDEX === 'true';
-async function syncIfNeeded(idx, syncFn, label) {
+const SYNC_CHECK_MAX_RETRIES = 5;
+async function syncIfNeeded(idx, syncFn, label, attempt = 0) {
   try {
     if (FORCE_REINDEX) {
       console.log(`Meilisearch: MEILI_FORCE_REINDEX set — rebuilding '${label}'`);
-      await syncFn();
+      initialSyncing[label] = true;
+      try { await syncFn(); } finally { initialSyncing[label] = false; }
       return;
     }
     const stats = await idx.getStats();
     if (!stats || stats.numberOfDocuments === 0) {
       console.log(`Meilisearch: '${label}' index empty — running initial sync`);
-      await syncFn();
+      initialSyncing[label] = true;
+      try { await syncFn(); } finally { initialSyncing[label] = false; }
     } else {
       console.log(`Meilisearch: '${label}' already populated (${stats.numberOfDocuments} docs) — skipping sync`);
     }
   } catch (err) {
-    // If the stats check fails for any reason, sync to be safe (correctness > speed).
-    console.warn(`Meilisearch: could not check '${label}' stats (${err.message}) — running sync`);
-    await syncFn();
+    // Fail CLOSED on the stats check: a transient error must not trigger a
+    // full catalog re-upload — at scale that is the most expensive operation
+    // in the system, and it used to fire exactly when Meilisearch was
+    // struggling. But an EMPTY index whose stats keep erroring would stay
+    // empty forever, so retry the check a few times (covers Meili still
+    // warming up at boot) before giving up loudly.
+    if (attempt < SYNC_CHECK_MAX_RETRIES) {
+      const delayMs = 30_000 * (attempt + 1);
+      console.warn(`Meilisearch: could not check '${label}' stats (${err.message}) — retrying in ${delayMs / 1000}s (${attempt + 1}/${SYNC_CHECK_MAX_RETRIES})`);
+      setTimeout(() => {
+        syncIfNeeded(idx, syncFn, label, attempt + 1).catch(() => {});
+      }, delayMs).unref?.();
+    } else {
+      console.error(`Meilisearch: '${label}' stats check failed ${SYNC_CHECK_MAX_RETRIES} times (${err.message}) — giving up; set MEILI_FORCE_REINDEX=1 if the index is empty`);
+    }
   }
 }
 
@@ -152,23 +186,44 @@ function buildDocument(wine) {
   };
 }
 
+// Stream a query through buildDoc into chunked addDocuments calls. Loading a
+// whole collection into one array + one HTTP payload OOMs Node and exceeds
+// Meilisearch's payload limit once the catalog is large; a cursor keeps
+// memory flat at CHUNK documents.
+const SYNC_CHUNK_SIZE = 2000;
+async function syncViaCursor(query, buildDoc, idx, label) {
+  let batch = [];
+  let total = 0;
+  const cursor = query.cursor();
+  for await (const doc of cursor) {
+    batch.push(buildDoc(doc));
+    if (batch.length >= SYNC_CHUNK_SIZE) {
+      await idx.addDocuments(batch, { primaryKey: 'id' });
+      total += batch.length;
+      batch = [];
+    }
+  }
+  if (batch.length > 0) {
+    await idx.addDocuments(batch, { primaryKey: 'id' });
+    total += batch.length;
+  }
+  console.log(`Meilisearch: synced ${total} ${label}`);
+}
+
 async function fullSync() {
   if (!isAvailable) return;
 
   try {
-    const wines = await WineDefinition.find()
-      .populate('country', 'name')
-      .populate('region', 'name')
-      .populate('grapes', 'name')
-      .lean();
-
-    const documents = wines.map(buildDocument);
-
-    if (documents.length > 0) {
-      await index.addDocuments(documents, { primaryKey: 'id' });
-    }
-
-    console.log(`Meilisearch: synced ${documents.length} wines`);
+    await syncViaCursor(
+      WineDefinition.find()
+        .populate('country', 'name')
+        .populate('region', 'name')
+        .populate('grapes', 'name')
+        .lean(),
+      buildDocument,
+      index,
+      'wines'
+    );
   } catch (err) {
     console.error(`Meilisearch full sync failed: ${err.message}`);
   }
@@ -206,6 +261,7 @@ async function search(query, { countryId, regionId, type, grapeIds, limit = 50, 
   if (!isAvailable) {
     throw new Error('Meilisearch is not available');
   }
+  assertIndexReady('wines');
 
   // Build filter array using Meilisearch array syntax (each element is ANDed).
   // Validate IDs as hex ObjectIds and type against an allowlist to prevent injection.
@@ -278,17 +334,12 @@ async function fullSyncBottles() {
 
   try {
     // Sync ALL bottles (active + consumed) so history search works too
-    const bottles = await Bottle.find()
-      .populate(WINE_POPULATE)
-      .lean();
-
-    const documents = bottles.map(buildBottleDocument);
-
-    if (documents.length > 0) {
-      await bottlesIndex.addDocuments(documents, { primaryKey: 'id' });
-    }
-
-    console.log(`Meilisearch: synced ${documents.length} bottles`);
+    await syncViaCursor(
+      Bottle.find().populate(WINE_POPULATE).lean(),
+      buildBottleDocument,
+      bottlesIndex,
+      'bottles'
+    );
   } catch (err) {
     console.error(`Meilisearch bottle full sync failed: ${err.message}`);
   }
@@ -355,6 +406,7 @@ async function searchBottles(query, {
   if (!isAvailable) {
     throw new Error('Meilisearch is not available');
   }
+  assertIndexReady('bottles');
 
   const isObjectId = (v) => /^[a-f0-9]{24}$/i.test(String(v));
   const VALID_TYPES = ['red', 'white', 'rosé', 'sparkling', 'dessert', 'fortified'];
@@ -491,33 +543,46 @@ async function fullSyncDiscussions() {
   if (!isAvailable) return;
 
   try {
-    const discussions = await Discussion.find()
+    const DiscussionReply = require('../models/DiscussionReply');
+    let batch = [];
+    let total = 0;
+
+    // Per chunk: fetch reply texts for just this chunk's discussions (one
+    // $in query per chunk — batched, not N+1, and never the whole replies
+    // collection in memory at once).
+    const flush = async () => {
+      if (batch.length === 0) return;
+      const ids = batch.map(d => d._id);
+      const replies = await DiscussionReply.find({ discussion: { $in: ids }, isDeleted: { $ne: true } })
+        .sort({ discussion: 1, createdAt: 1 })
+        .select('discussion body')
+        .lean();
+      const repliesByDiscussion = new Map();
+      for (const r of replies) {
+        const key = r.discussion.toString();
+        if (!repliesByDiscussion.has(key)) repliesByDiscussion.set(key, []);
+        repliesByDiscussion.get(key).push(stripHtml(r.body || ''));
+      }
+      const documents = batch.map(d =>
+        buildDiscussionDocument(d, repliesByDiscussion.get(d._id.toString()) || [])
+      );
+      await discussionsIndex.addDocuments(documents, { primaryKey: 'id' });
+      total += documents.length;
+      batch = [];
+    };
+
+    const cursor = Discussion.find()
       .populate('author', 'username displayName')
       .populate({ path: 'wineDefinition', select: 'name producer' })
-      .lean();
-
-    // Bulk-fetch reply texts so we don't hit N+1 on the full sync.
-    const DiscussionReply = require('../models/DiscussionReply');
-    const allReplies = await DiscussionReply.find({ isDeleted: { $ne: true } })
-      .sort({ discussion: 1, createdAt: 1 })
-      .select('discussion body')
-      .lean();
-    const repliesByDiscussion = new Map();
-    for (const r of allReplies) {
-      const key = r.discussion.toString();
-      if (!repliesByDiscussion.has(key)) repliesByDiscussion.set(key, []);
-      repliesByDiscussion.get(key).push(stripHtml(r.body || ''));
+      .lean()
+      .cursor();
+    for await (const d of cursor) {
+      batch.push(d);
+      if (batch.length >= 500) await flush();
     }
+    await flush();
 
-    const documents = discussions.map(d =>
-      buildDiscussionDocument(d, repliesByDiscussion.get(d._id.toString()) || [])
-    );
-
-    if (documents.length > 0) {
-      await discussionsIndex.addDocuments(documents, { primaryKey: 'id' });
-    }
-
-    console.log(`Meilisearch: synced ${documents.length} discussions (with reply content)`);
+    console.log(`Meilisearch: synced ${total} discussions (with reply content)`);
   } catch (err) {
     console.error(`Meilisearch discussion full sync failed: ${err.message}`);
   }
@@ -563,6 +628,7 @@ async function searchDiscussions(query, { category, limit = 20, offset = 0 } = {
   if (!isAvailable) {
     throw new Error('Meilisearch is not available');
   }
+  assertIndexReady('discussions');
 
   const VALID_CATEGORIES = ['tasting-notes', 'food-pairing', 'recommendations', 'cellar-tips', 'general'];
   const filters = [];
