@@ -817,40 +817,47 @@ router.post('/:idOrSlug/replies', requireAuth, async (req, res) => {
       maybeEmail(quotedAuthorId, 'communityReply', 'quote');
     }
 
-    const mentionedIds = await extractMentions(cleanBody, req.user.id);
-    for (const uid of mentionedIds) {
-      if (notified.has(uid)) continue;
-      notified.add(uid);
-      notificationItems.push({
-        userId: uid,
-        type: 'discussion_mention',
-        title: `${replierName} mentioned you`,
-        message: `In "${discussion.title}"`,
-        link,
-        category: 'communityMention',
-      });
-      maybeEmail(uid, 'communityMention', 'mention');
-    }
+    // Mention/watcher resolution is best-effort: the reply is already saved,
+    // so a failure here must not 500 the request or lose the OP/quote
+    // notifications already collected above.
+    try {
+      const mentionedIds = await extractMentions(cleanBody, req.user.id);
+      for (const uid of mentionedIds) {
+        if (notified.has(uid)) continue;
+        notified.add(uid);
+        notificationItems.push({
+          userId: uid,
+          type: 'discussion_mention',
+          title: `${replierName} mentioned you`,
+          message: `In "${discussion.title}"`,
+          link,
+          category: 'communityMention',
+        });
+        maybeEmail(uid, 'communityMention', 'mention');
+      }
 
-    // Watchers — anyone following this thread who isn't already covered.
-    // Lower-priority notification ("There's a new reply on a thread you
-    // follow") so the title differs from the OP-owns-the-thread case.
-    // Push delivery is gated per-user via the 'communityFollow' category;
-    // no email channel for this category by design (would be too noisy).
-    const watchers = await DiscussionWatch.find({ discussion: discussion._id })
-      .select('user').lean();
-    for (const w of watchers) {
-      const uid = w.user.toString();
-      if (uid === selfId || notified.has(uid)) continue;
-      notified.add(uid);
-      notificationItems.push({
-        userId: uid,
-        type: 'discussion_reply',
-        title: `New reply in "${discussion.title}"`,
-        message: `${replierName} replied — you're following this thread`,
-        link,
-        category: 'communityFollow',
-      });
+      // Watchers — anyone following this thread who isn't already covered.
+      // Lower-priority notification ("There's a new reply on a thread you
+      // follow") so the title differs from the OP-owns-the-thread case.
+      // Push delivery is gated per-user via the 'communityFollow' category;
+      // no email channel for this category by design (would be too noisy).
+      const watchers = await DiscussionWatch.find({ discussion: discussion._id })
+        .select('user').lean();
+      for (const w of watchers) {
+        const uid = w.user.toString();
+        if (uid === selfId || notified.has(uid)) continue;
+        notified.add(uid);
+        notificationItems.push({
+          userId: uid,
+          type: 'discussion_reply',
+          title: `New reply in "${discussion.title}"`,
+          message: `${replierName} replied — you're following this thread`,
+          link,
+          category: 'communityFollow',
+        });
+      }
+    } catch (err) {
+      console.error('[discussions] mention/watcher resolution failed:', err.message);
     }
 
     // Fire-and-forget, same as the old per-recipient calls — delivery must

@@ -77,9 +77,11 @@ async function runCommunityPriceAggregation() {
 
   let upserted = 0;
   let removed = 0;
+  let groups = 0; // rows seen — the cursor has no .length
   const processedPairs = new Set(); // `${wine}|${currency}` recomputed this run
 
   for await (const row of rowCursor) {
+    groups++;
     const { wine, currency } = row._id;
     const cur = String(currency || 'USD').toUpperCase();
     const cap = capFor(cur);
@@ -154,10 +156,10 @@ async function runCommunityPriceAggregation() {
   }
 
   console.log(
-    `[communityPrice] Aggregated ${rows.length} wine/currency group(s): ` +
+    `[communityPrice] Aggregated ${groups} wine/currency group(s): ` +
     `${upserted} price(s) upserted, ${removed} stale removed`
   );
-  return { groups: rows.length, upserted, removed };
+  return { groups, upserted, removed };
 }
 
 module.exports = { runCommunityPriceAggregation };

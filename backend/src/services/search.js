@@ -118,28 +118,53 @@ async function initialize() {
   }
 }
 
+// While an index's INITIAL sync is in flight (first boot / wiped volume),
+// searches against it must fail so callers take their MongoDB fallback —
+// callers like the cellar route treat zero Meili hits as authoritative, and
+// a half-built index would confidently return empty results for minutes.
+const initialSyncing = { wines: false, bottles: false, discussions: false };
+
+function assertIndexReady(label) {
+  if (initialSyncing[label]) {
+    throw new Error(`Meilisearch '${label}' index initial sync in progress`);
+  }
+}
+
 // Run `syncFn` only if `idx` has no documents yet (or a rebuild is forced).
 const FORCE_REINDEX = process.env.MEILI_FORCE_REINDEX === '1' || process.env.MEILI_FORCE_REINDEX === 'true';
-async function syncIfNeeded(idx, syncFn, label) {
+const SYNC_CHECK_MAX_RETRIES = 5;
+async function syncIfNeeded(idx, syncFn, label, attempt = 0) {
   try {
     if (FORCE_REINDEX) {
       console.log(`Meilisearch: MEILI_FORCE_REINDEX set — rebuilding '${label}'`);
-      await syncFn();
+      initialSyncing[label] = true;
+      try { await syncFn(); } finally { initialSyncing[label] = false; }
       return;
     }
     const stats = await idx.getStats();
     if (!stats || stats.numberOfDocuments === 0) {
       console.log(`Meilisearch: '${label}' index empty — running initial sync`);
-      await syncFn();
+      initialSyncing[label] = true;
+      try { await syncFn(); } finally { initialSyncing[label] = false; }
     } else {
       console.log(`Meilisearch: '${label}' already populated (${stats.numberOfDocuments} docs) — skipping sync`);
     }
   } catch (err) {
-    // Fail CLOSED: a transient stats error must not trigger a full catalog
-    // re-upload — at scale that is the most expensive operation in the
-    // system, and it used to fire exactly when Meilisearch was struggling.
-    // Incremental indexing continues regardless; force with MEILI_FORCE_REINDEX.
-    console.warn(`Meilisearch: could not check '${label}' stats (${err.message}) — skipping sync (set MEILI_FORCE_REINDEX=1 to force)`);
+    // Fail CLOSED on the stats check: a transient error must not trigger a
+    // full catalog re-upload — at scale that is the most expensive operation
+    // in the system, and it used to fire exactly when Meilisearch was
+    // struggling. But an EMPTY index whose stats keep erroring would stay
+    // empty forever, so retry the check a few times (covers Meili still
+    // warming up at boot) before giving up loudly.
+    if (attempt < SYNC_CHECK_MAX_RETRIES) {
+      const delayMs = 30_000 * (attempt + 1);
+      console.warn(`Meilisearch: could not check '${label}' stats (${err.message}) — retrying in ${delayMs / 1000}s (${attempt + 1}/${SYNC_CHECK_MAX_RETRIES})`);
+      setTimeout(() => {
+        syncIfNeeded(idx, syncFn, label, attempt + 1).catch(() => {});
+      }, delayMs).unref?.();
+    } else {
+      console.error(`Meilisearch: '${label}' stats check failed ${SYNC_CHECK_MAX_RETRIES} times (${err.message}) — giving up; set MEILI_FORCE_REINDEX=1 if the index is empty`);
+    }
   }
 }
 
@@ -236,6 +261,7 @@ async function search(query, { countryId, regionId, type, grapeIds, limit = 50, 
   if (!isAvailable) {
     throw new Error('Meilisearch is not available');
   }
+  assertIndexReady('wines');
 
   // Build filter array using Meilisearch array syntax (each element is ANDed).
   // Validate IDs as hex ObjectIds and type against an allowlist to prevent injection.
@@ -380,6 +406,7 @@ async function searchBottles(query, {
   if (!isAvailable) {
     throw new Error('Meilisearch is not available');
   }
+  assertIndexReady('bottles');
 
   const isObjectId = (v) => /^[a-f0-9]{24}$/i.test(String(v));
   const VALID_TYPES = ['red', 'white', 'rosé', 'sparkling', 'dessert', 'fortified'];
@@ -601,6 +628,7 @@ async function searchDiscussions(query, { category, limit = 20, offset = 0 } = {
   if (!isAvailable) {
     throw new Error('Meilisearch is not available');
   }
+  assertIndexReady('discussions');
 
   const VALID_CATEGORIES = ['tasting-notes', 'food-pairing', 'recommendations', 'cellar-tips', 'general'];
   const filters = [];

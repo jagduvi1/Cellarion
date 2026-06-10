@@ -51,23 +51,33 @@ async function runDrinkWindowCheck() {
   }).select('_id email username displayName preferences.notifications emailVerified').lean();
 
   let totalNotified = 0;
+  let failedUsers = 0;
 
   for (const user of users) {
     try {
       const count = await processUser(user, isFirstRun);
       totalNotified += count;
     } catch (err) {
+      failedUsers++;
       console.error(`[drinkWindowNotifier] Error for user ${user._id}:`, err.message);
     }
   }
 
   if (isFirstRun) {
-    await SiteConfig.findOneAndUpdate(
-      { key: 'drinkWindowNotifierSeeded' },
-      { $set: { key: 'drinkWindowNotifierSeeded', value: new Date().toISOString() } },
-      { upsert: true }
-    );
-    console.log(`[drinkWindowNotifier] First run — seeded ${users.length} users' bottles (no notifications sent)`);
+    // Only persist the seeded marker when EVERY user seeded. A user whose
+    // seed bulkWrite failed has no recorded statuses — marking the run
+    // seeded anyway would treat all their at-peak bottles as fresh
+    // transitions on the next run and spam them with notifications.
+    if (failedUsers === 0) {
+      await SiteConfig.findOneAndUpdate(
+        { key: 'drinkWindowNotifierSeeded' },
+        { $set: { key: 'drinkWindowNotifierSeeded', value: new Date().toISOString() } },
+        { upsert: true }
+      );
+      console.log(`[drinkWindowNotifier] First run — seeded ${users.length} users' bottles (no notifications sent)`);
+    } else {
+      console.error(`[drinkWindowNotifier] First-run seed incomplete (${failedUsers} user(s) failed) — marker not set, will re-seed next run`);
+    }
   } else {
     console.log(`[drinkWindowNotifier] Sent ${totalNotified} notification(s)`);
   }
