@@ -10,17 +10,33 @@ router.use(requireAuth);
 // GET /api/notifications - fetch the 30 most recent notifications for the current user
 router.get('/', async (req, res) => {
   try {
-    const notifications = await Notification.find({ user: req.user.id })
-      .sort({ createdAt: -1 })
-      .limit(30)
-      .lean();
-
-    const unreadCount = notifications.filter(n => !n.read).length;
+    const [notifications, unreadCount] = await Promise.all([
+      Notification.find({ user: req.user.id })
+        .sort({ createdAt: -1 })
+        .limit(30)
+        .lean(),
+      // Count across ALL rows, not just the returned page — older unread
+      // notifications outside the 30 most recent still count.
+      Notification.countDocuments({ user: req.user.id, read: false }),
+    ]);
 
     res.json({ notifications, unreadCount });
   } catch (error) {
     console.error('Get notifications error:', error);
     res.status(500).json({ error: 'Failed to get notifications' });
+  }
+});
+
+// GET /api/notifications/unread-count - lightweight badge poll. The client
+// polls this instead of the full list so each tick is one indexed count
+// instead of 30 serialized documents.
+router.get('/unread-count', async (req, res) => {
+  try {
+    const unreadCount = await Notification.countDocuments({ user: req.user.id, read: false });
+    res.json({ unreadCount });
+  } catch (error) {
+    console.error('Get unread count error:', error);
+    res.status(500).json({ error: 'Failed to get unread count' });
   }
 });
 

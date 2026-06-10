@@ -254,6 +254,9 @@ const userSchema = new mongoose.Schema({
 // Sparse index so verify-email lookup is efficient; sparse avoids bloat after verification
 userSchema.index({ emailVerificationTokenHash: 1 }, { sparse: true });
 userSchema.index({ passwordResetTokenHash: 1 }, { sparse: true });
+// Every /api/auth/refresh resolves the session via this hash — without the
+// index it is a full collection scan per token refresh (one per session ~15min)
+userSchema.index({ refreshTokenHash: 1 }, { sparse: true });
 
 // Heal legacy notification-pref shapes before save. Old docs stored
 // `drinkWindow: false` (single boolean); the current schema expects

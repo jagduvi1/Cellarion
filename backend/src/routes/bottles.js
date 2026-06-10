@@ -18,7 +18,7 @@ const { getOrCreateDailySnapshot, getSnapshotForDate } = require('../utils/excha
 const { resolveRating } = require('../utils/ratingUtils');
 const { embedSinglePair } = require('../services/embeddingJob');
 const { enrichWineById } = require('../services/enrichmentJob');
-const { CONSUMED_STATUSES, WINE_POPULATE } = require('../config/constants');
+const { CONSUMED_STATUSES, WINE_POPULATE, WINE_POPULATE_LIST } = require('../config/constants');
 const { checkRestockGap, resolveRestockAlerts } = require('../services/restockChecker');
 const { gatherPriceWarnings } = require('../services/priceWarnings');
 const { getCurrentRelease } = require('../services/communityPrice');
@@ -216,7 +216,7 @@ router.get('/', async (req, res) => {
     const needsInMemoryFilter = !!(search || minRating || maturityFilter);
     const canPaginateInDb = canSortInDb && !needsInMemoryFilter;
 
-    let query = Bottle.find(filter).populate(WINE_POPULATE);
+    let query = Bottle.find(filter).populate(WINE_POPULATE_LIST);
     if (canSortInDb) query = query.sort({ [sortField]: sortDir });
     if (canPaginateInDb) query = query.skip(skip).limit(limit);
     let bottles = await query.lean();

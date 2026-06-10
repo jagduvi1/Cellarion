@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { buildRackUrl } from '../utils/rackNavigation';
@@ -159,4 +160,7 @@ function BottleCard({ bottle, rackMap, cellarId, viewMode, groupCount = 1, onCli
   );
 }
 
-export default BottleCard;
+// Memoized: CellarDetail accumulates load-more pages into one list, and every
+// search keystroke re-renders the page — without memo, hundreds of cards
+// re-render per keystroke even though their props are unchanged.
+export default memo(BottleCard);

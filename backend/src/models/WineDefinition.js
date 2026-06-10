@@ -143,6 +143,15 @@ wineDefinitionSchema.index({ country: 1, type: 1 });
 wineDefinitionSchema.index({ country: 1, region: 1 });
 wineDefinitionSchema.index({ type: 1, createdAt: -1 });
 
+// Public taxonomy discovery pages filter by one taxon and sort by name —
+// without these, mongod blocking-sorts every matching wine per page view.
+// The grapes index is multikey; its prefix also serves the taxonomy
+// count queries ({ grapes: id }).
+wineDefinitionSchema.index({ country: 1, name: 1 });
+wineDefinitionSchema.index({ region: 1, name: 1 });
+wineDefinitionSchema.index({ grapes: 1, name: 1 });
+wineDefinitionSchema.index({ type: 1, name: 1 });
+
 // Update timestamp on save
 wineDefinitionSchema.pre('save', function(next) {
   this.updatedAt = Date.now();

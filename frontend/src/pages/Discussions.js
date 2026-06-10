@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, lazy, Suspense } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
@@ -6,7 +6,9 @@ import { getDiscussions, createDiscussion } from '../api/discussions';
 import DiscussionCard from '../components/DiscussionCard';
 import CategoryBadge, { CATEGORY_LABELS } from '../components/CategoryBadge';
 import CommunityCTA from '../components/CommunityCTA';
-import DiscussionComposer from '../components/DiscussionComposer';
+// Lazy: the rich-text composer pulls in tiptap/prosemirror (~120 kB gzip) —
+// read-only visitors (and crawlers) should not download an editor.
+const DiscussionComposer = lazy(() => import('../components/DiscussionComposer'));
 import Modal from '../components/Modal';
 import WineSearchPicker from '../components/WineSearchPicker';
 import SEOHead from '../components/SEOHead';
@@ -285,14 +287,16 @@ function Discussions() {
 
             <div className="form-group">
               <label className="form-label">{t('discussions.body')}</label>
-              <DiscussionComposer
-                value={form.body}
-                onChange={(html) => setForm(f => ({ ...f, body: html }))}
-                onTextLengthChange={setBodyTextLength}
-                placeholder={t('discussions.bodyPlaceholder')}
-                maxVisibleLength={BODY_VISIBLE_MAX}
-                minHeight={160}
-              />
+              <Suspense fallback={<div className="loading">{t('common.loading')}</div>}>
+                <DiscussionComposer
+                  value={form.body}
+                  onChange={(html) => setForm(f => ({ ...f, body: html }))}
+                  onTextLengthChange={setBodyTextLength}
+                  placeholder={t('discussions.bodyPlaceholder')}
+                  maxVisibleLength={BODY_VISIBLE_MAX}
+                  minHeight={160}
+                />
+              </Suspense>
             </div>
 
             <div className="form-group">

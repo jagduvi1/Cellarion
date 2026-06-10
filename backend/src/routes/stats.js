@@ -4,7 +4,7 @@ const Cellar = require('../models/Cellar');
 const Bottle = require('../models/Bottle');
 const User = require('../models/User');
 const CellarValueSnapshot = require('../models/CellarValueSnapshot');
-const { CONSUMED_STATUSES, WINE_POPULATE } = require('../config/constants');
+const { CONSUMED_STATUSES, WINE_POPULATE_LIST } = require('../config/constants');
 const { computeOverview, buildEmptyStats } = require('../services/statsService');
 const { getOrCreateDailySnapshot, getSnapshotsForDates, convertCurrency } = require('../utils/exchangeRates');
 
@@ -30,10 +30,10 @@ router.get('/overview', async (req, res) => {
 
     const [activeBottles, consumedBottles] = await Promise.all([
       Bottle.find({ user: req.user.id, cellar: { $in: cellarIds }, status: { $nin: CONSUMED_STATUSES } })
-        .populate(WINE_POPULATE)
+        .populate(WINE_POPULATE_LIST)
         .lean(),
       Bottle.find({ user: req.user.id, cellar: { $in: cellarIds }, status: { $in: CONSUMED_STATUSES } })
-        .populate(WINE_POPULATE)
+        .populate(WINE_POPULATE_LIST)
         .lean(),
     ]);
 

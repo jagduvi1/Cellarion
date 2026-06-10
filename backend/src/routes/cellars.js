@@ -16,7 +16,7 @@ const { createNotification } = require('../services/notifications');
 const { sendCellarInviteEmail, EMAIL_VERIFICATION_ENABLED } = require('../services/mailgun');
 const { toNormalized } = require('../utils/ratingUtils');
 const { classifyMaturity, buildProfileMap } = require('../utils/maturityUtils');
-const { CONSUMED_STATUSES, MS_PER_DAY, WINE_POPULATE } = require('../config/constants');
+const { CONSUMED_STATUSES, MS_PER_DAY, WINE_POPULATE_LIST } = require('../config/constants');
 const mongoose = require('mongoose');
 const { parsePagination } = require('../utils/pagination');
 const searchService = require('../services/search');
@@ -304,7 +304,7 @@ router.get('/:id/history', async (req, res) => {
         }
 
         bottles = await Bottle.find({ _id: { $in: matchingIds } })
-          .populate(WINE_POPULATE).lean();
+          .populate(WINE_POPULATE_LIST).lean();
 
         // Preserve Meilisearch sort order
         const idOrder = new Map(matchingIds.map((id, i) => [id, i]));
@@ -320,7 +320,7 @@ router.get('/:id/history', async (req, res) => {
       // cellar with a huge consumed history can't load the entire collection
       // into memory on every request.
       bottles = await Bottle.find(filter)
-        .populate(WINE_POPULATE)
+        .populate(WINE_POPULATE_LIST)
         .sort({ consumedAt: -1 })
         .limit(10000)
         .lean();
@@ -451,6 +451,22 @@ router.get('/:id', async (req, res) => {
       ? String(grapes).split(',').map(g => g.trim()).filter(isValidObjectId)
       : [];
 
+    // Build the exclusion set once for both paths. ?excludePlaced=1 resolves
+    // rack-placed bottles server-side — the slot pickers previously sent every
+    // placed bottle ID in the query string, which overflows the URL length
+    // limit once a few hundred bottles are placed.
+    const excludeSet = new Set(exclude ? String(exclude).split(',').filter(isValidObjectId) : []);
+    if (req.query.excludePlaced === '1' || req.query.excludePlaced === 'true') {
+      const racks = await Rack.find({ cellar: req.params.id, deletedAt: null })
+        .select('slots.bottle')
+        .lean();
+      for (const rack of racks) {
+        for (const slot of rack.slots || []) {
+          if (slot.bottle) excludeSet.add(slot.bottle.toString());
+        }
+      }
+    }
+
     // Whether we need in-memory post-processing that neither Meilisearch nor MongoDB can do
     const needsMaturity = !!(maturityFilter || sortField === 'maturity');
     const MATURITY_RANK = { declining: 0, late: 1, peak: 2, early: 3, 'not-ready': 4 };
@@ -491,14 +507,13 @@ router.get('/:id', async (req, res) => {
 
         // Exclude specific bottle IDs if requested
         let idsToFetch = matchingIds;
-        if (exclude) {
-          const excludeSet = new Set(String(exclude).split(',').filter(isValidObjectId));
+        if (excludeSet.size > 0) {
           idsToFetch = matchingIds.filter(id => !excludeSet.has(id));
         }
 
         // Fetch just the matching bottles from MongoDB (by ID) — much smaller query
         bottles = await Bottle.find({ _id: { $in: idsToFetch } })
-          .populate(WINE_POPULATE)
+          .populate(WINE_POPULATE_LIST)
           .lean();
 
         // Preserve Meilisearch's sort order
@@ -519,9 +534,8 @@ router.get('/:id', async (req, res) => {
         status: { $nin: CONSUMED_STATUSES }
       };
 
-      if (exclude) {
-        const excludeIds = String(exclude).split(',').filter(isValidObjectId);
-        if (excludeIds.length > 0) filter._id = { $nin: excludeIds };
+      if (excludeSet.size > 0) {
+        filter._id = { $nin: [...excludeSet] };
       }
       // Vintage: single or comma-separated
       if (vintage) {
@@ -566,7 +580,7 @@ router.get('/:id', async (req, res) => {
       // duplicates, so it disables DB-level pagination.
       canPaginateInDb = !needsInMemoryFilter && !needsInMemorySort && !grouped;
 
-      let query = Bottle.find(filter).populate(WINE_POPULATE);
+      let query = Bottle.find(filter).populate(WINE_POPULATE_LIST);
       if (canSortInDb_) query = query.sort({ [sortField]: sortDir });
       if (canPaginateInDb) query = query.skip(skip).limit(limit);
       bottles = await query.lean();
