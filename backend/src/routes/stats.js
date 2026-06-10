@@ -1,15 +1,40 @@
 const express = require('express');
+const mongoose = require('mongoose');
 const { requireAuth } = require('../middleware/auth');
 const Cellar = require('../models/Cellar');
 const Bottle = require('../models/Bottle');
 const User = require('../models/User');
 const CellarValueSnapshot = require('../models/CellarValueSnapshot');
-const { CONSUMED_STATUSES, WINE_POPULATE } = require('../config/constants');
+const { CONSUMED_STATUSES, WINE_POPULATE_LIST } = require('../config/constants');
 const { computeOverview, buildEmptyStats } = require('../services/statsService');
 const { getOrCreateDailySnapshot, getSnapshotsForDates, convertCurrency } = require('../utils/exchangeRates');
 
 const router = express.Router();
 router.use(requireAuth);
+
+// Short server-side cache for the overview. Computing it loads the user's
+// entire bottle set, so without a cache every page visit recomputes from
+// scratch. The invalidation probe is one cheap indexed aggregation producing
+// a per-cellar {count, max(updatedAt)} signature: adds, deletes, consumes,
+// edits (pre-save bumps updatedAt) and bottle moves between cellars all
+// change it. Residual staleness (≤TTL): writes that bypass save() middleware,
+// and cellar renames.
+const overviewCache = new Map(); // userId -> { at, key, signature, stats }
+const OVERVIEW_TTL_MS = 2 * 60 * 1000;
+const OVERVIEW_CACHE_MAX_ENTRIES = 5000;
+
+// Per-cellar bottle signature for cache invalidation. Aggregation pipelines
+// bypass Mongoose casting, so the user id is cast explicitly (cellarIds are
+// already ObjectIds from Cellar.find).
+async function bottleSignature(userId, cellarIds) {
+  const rows = await Bottle.aggregate([
+    { $match: { user: new mongoose.Types.ObjectId(String(userId)), cellar: { $in: cellarIds } } },
+    { $group: { _id: '$cellar', n: { $sum: 1 }, u: { $max: '$updatedAt' } } },
+    { $sort: { _id: 1 } },
+  ]);
+  const cellarPart = cellarIds.map(String).sort().join(',');
+  return `${cellarPart}|${rows.map(r => `${r._id}:${r.n}:${r.u ? new Date(r.u).getTime() : 0}`).join(';')}`;
+}
 
 // GET /api/stats/overview — collection analytics (all authenticated users)
 router.get('/overview', async (req, res) => {
@@ -28,16 +53,36 @@ router.get('/overview', async (req, res) => {
       return res.json({ stats: buildEmptyStats(targetCurrency) });
     }
 
+    const scope = { user: req.user.id, cellar: { $in: cellarIds } };
+    const cacheKey = `${targetCurrency}:${targetRatingScale}`;
+    const cached = overviewCache.get(req.user.id);
+    let signature = null;
+    if (cached && cached.key === cacheKey && Date.now() - cached.at < OVERVIEW_TTL_MS) {
+      signature = await bottleSignature(req.user.id, cellarIds);
+      if (signature === cached.signature) {
+        return res.json({ stats: cached.stats });
+      }
+    }
+
     const [activeBottles, consumedBottles] = await Promise.all([
-      Bottle.find({ user: req.user.id, cellar: { $in: cellarIds }, status: { $nin: CONSUMED_STATUSES } })
-        .populate(WINE_POPULATE)
+      Bottle.find({ ...scope, status: { $nin: CONSUMED_STATUSES } })
+        .populate(WINE_POPULATE_LIST)
         .lean(),
-      Bottle.find({ user: req.user.id, cellar: { $in: cellarIds }, status: { $in: CONSUMED_STATUSES } })
-        .populate(WINE_POPULATE)
+      Bottle.find({ ...scope, status: { $in: CONSUMED_STATUSES } })
+        .populate(WINE_POPULATE_LIST)
         .lean(),
     ]);
 
     const stats = await computeOverview({ activeBottles, consumedBottles, cellars, targetCurrency, targetRatingScale });
+
+    if (overviewCache.size >= OVERVIEW_CACHE_MAX_ENTRIES) overviewCache.clear();
+    overviewCache.set(req.user.id, {
+      at: Date.now(),
+      key: cacheKey,
+      signature: signature || await bottleSignature(req.user.id, cellarIds),
+      stats,
+    });
+
     res.json({ stats });
   } catch (error) {
     console.error('Stats overview error:', error);

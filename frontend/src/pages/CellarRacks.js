@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef, lazy, Suspense } from 'react';
 import { useParams, Link, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
@@ -9,7 +9,9 @@ import { getPlacedBottleIds } from '../utils/rackUtils';
 import { getTotalSlots, getModularTotalSlots } from '../utils/rackLayouts';
 import RackRenderer from '../components/racks/RackRenderer';
 import ShelfView from '../components/racks/ShelfView';
-import ShelfView3D from '../components/racks/ShelfView3D';
+// Lazy: ShelfView3D pulls in three.js (~250 kB gzip) — only load it when the
+// user actually switches to the 3D view, not on every visit to the racks page.
+const ShelfView3D = lazy(() => import('../components/racks/ShelfView3D'));
 import RackTypeSelector, { TYPE_DIMENSIONS } from '../components/racks/RackTypeSelector';
 import RatingInput from '../components/RatingInput';
 import WineImage from '../components/WineImage';
@@ -372,7 +374,13 @@ function CellarRacks() {
                 highlightPos: highlightPos?.rackId === rack._id ? highlightPos.position : null,
                 onSlotClick: handleClick,
               };
-              if (viewMode === '3d') return <ShelfView3D {...commonProps} />;
+              if (viewMode === '3d') {
+                return (
+                  <Suspense fallback={<div className="loading">{t('common.loading')}</div>}>
+                    <ShelfView3D {...commonProps} />
+                  </Suspense>
+                );
+              }
               return <ShelfView {...commonProps} />;
             })()
           ) : (
@@ -651,9 +659,9 @@ function EmptySlotContent({ position, apiFetch, cellarId, placedBottleIds, onAss
     try {
       const params = new URLSearchParams({ limit: '30' });
       if (term) params.set('search', term);
-      // Tell backend to exclude placed bottles so the limit applies to unplaced ones
-      const excludeIds = [...placedBottleIds].join(',');
-      if (excludeIds) params.set('exclude', excludeIds);
+      // The backend excludes rack-placed bottles itself — sending every placed
+      // bottle ID in the query string overflows the URL limit on big cellars.
+      params.set('excludePlaced', '1');
       const res = await getCellar(apiFetch, cellarId, params.toString());
       const data = await res.json();
       if (res.ok) {
@@ -661,7 +669,7 @@ function EmptySlotContent({ position, apiFetch, cellarId, placedBottleIds, onAss
       }
     } catch { /* ignore */ }
     setLoading(false);
-  }, [apiFetch, cellarId, placedBottleIds]);
+  }, [apiFetch, cellarId]);
 
   // Load initial results on mount
   useEffect(() => { fetchBottles(''); }, [fetchBottles]);

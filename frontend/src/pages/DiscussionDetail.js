@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, lazy, Suspense } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
@@ -16,7 +16,9 @@ import Modal from '../components/Modal';
 import ConfirmModal from '../components/ConfirmModal';
 import CommunityCTA from '../components/CommunityCTA';
 import SEOHead from '../components/SEOHead';
-import DiscussionComposer from '../components/DiscussionComposer';
+// Lazy: the rich-text composer pulls in tiptap/prosemirror (~120 kB gzip) —
+// read-only visitors (and crawlers) should not download an editor.
+const DiscussionComposer = lazy(() => import('../components/DiscussionComposer'));
 import WatchThreadButton from '../components/WatchThreadButton';
 import ParticipantStack from '../components/ParticipantStack';
 import JumpToReplyButton from '../components/JumpToReplyButton';
@@ -462,14 +464,16 @@ function DiscussionDetail() {
           )}
           <form onSubmit={handleSubmitReply}>
             <div ref={replyTextareaRef}>
-              <DiscussionComposer
-                value={replyBody}
-                onChange={setReplyBody}
-                onTextLengthChange={setReplyTextLength}
-                placeholder={t('discussions.replyPlaceholder')}
-                maxVisibleLength={REPLY_VISIBLE_MAX}
-                minHeight={100}
-              />
+              <Suspense fallback={<div className="loading">{t('common.loading')}</div>}>
+                <DiscussionComposer
+                  value={replyBody}
+                  onChange={setReplyBody}
+                  onTextLengthChange={setReplyTextLength}
+                  placeholder={t('discussions.replyPlaceholder')}
+                  maxVisibleLength={REPLY_VISIBLE_MAX}
+                  minHeight={100}
+                />
+              </Suspense>
             </div>
             {replyWine ? (
               <div className="discussion-detail__reply-wine">
@@ -501,13 +505,15 @@ function DiscussionDetail() {
       {editingReply && (
         <Modal title={t('discussions.editReply')} onClose={() => setEditingReply(null)}>
           <form onSubmit={handleEditReply}>
-            <DiscussionComposer
-              value={editBody}
-              onChange={setEditBody}
-              onTextLengthChange={setEditTextLength}
-              maxVisibleLength={REPLY_VISIBLE_MAX}
-              minHeight={140}
-            />
+            <Suspense fallback={<div className="loading">{t('common.loading')}</div>}>
+              <DiscussionComposer
+                value={editBody}
+                onChange={setEditBody}
+                onTextLengthChange={setEditTextLength}
+                maxVisibleLength={REPLY_VISIBLE_MAX}
+                minHeight={140}
+              />
+            </Suspense>
             <div className="discussions__create-actions">
               <button type="button" className="btn btn-secondary" onClick={() => setEditingReply(null)}>{t('common.cancel')}</button>
               <button type="submit" className="btn btn-primary" disabled={editTextLength < 1}>{t('common.save')}</button>

@@ -17,6 +17,19 @@ const router = express.Router();
 // All routes require admin role
 router.use(requireAuth, requireRole('admin'));
 
+// Public taxonomy lists are served from a 10-minute server-side cache —
+// drop it after any successful admin mutation so renames/deletions show up
+// immediately instead of after the TTL.
+const { clearTaxonomyListCache } = require('../taxonomy');
+router.use((req, res, next) => {
+  if (req.method !== 'GET') {
+    res.on('finish', () => {
+      if (res.statusCode < 400) clearTaxonomyListCache();
+    });
+  }
+  next();
+});
+
 // ===== COUNTRIES =====
 
 // GET /api/admin/taxonomy/countries - List all countries

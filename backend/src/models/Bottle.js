@@ -140,6 +140,12 @@ bottleSchema.index({ cellar: 1, vintage: 1 }); // For filtering by vintage
 bottleSchema.index({ cellar: 1, rating: 1 }); // For filtering by rating
 bottleSchema.index({ user: 1, vintage: 1 }); // For user-wide vintage queries
 bottleSchema.index({ cellar: 1, status: 1 });       // For active/history filtering
+// Serve the default newest-first list sort from the index. The status filter
+// is a $nin (range), so an index ending in createdAt after status cannot serve
+// the sort — cellar/user equality + createdAt order with status as a residual
+// filter avoids a blocking in-memory SORT over every bottle per page view.
+bottleSchema.index({ cellar: 1, createdAt: -1 });
+bottleSchema.index({ user: 1, createdAt: -1 });
 
 // Update timestamp on save
 bottleSchema.pre('save', function(next) {

@@ -49,11 +49,13 @@ const rackSchema = new mongoose.Schema({
 
 rackSchema.index({ cellar: 1, name: 1 }, { unique: true, partialFilterExpression: { deletedAt: null } });
 rackSchema.index({ rfidTag: 1 }, { unique: true, sparse: true });
-// TTL: auto-purge soft-deleted racks after 30 days
-rackSchema.index(
-  { deletedAt: 1 },
-  { expireAfterSeconds: 30 * 24 * 60 * 60, partialFilterExpression: { deletedAt: { $ne: null } } }
-);
+// NOTE: no TTL auto-purge of soft-deleted racks. The previous index used
+// partialFilterExpression { deletedAt: { $ne: null } }, which MongoDB rejects
+// ($ne is unsupported in partial indexes), so syncIndexes failed every boot
+// and the index never existed — the purge has never actually run. Re-adding it
+// needs (a) the supported predicate { deletedAt: { $type: 'date' } } AND (b) a
+// cascade that clears bottle rack references first, or TTL deletion would
+// orphan them (see CODE_AUDIT — same class as the cellar-purge finding).
 
 module.exports = mongoose.model('Rack', rackSchema);
 module.exports.RACK_TYPES = RACK_TYPES;

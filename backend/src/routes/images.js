@@ -11,6 +11,7 @@ const Cellar = require('../models/Cellar');
 const { getClientIp } = require('../utils/clientIp');
 const { getCellarRole } = require('../utils/cellarAccess');
 const { processImage } = require('../services/imageProcessor');
+const { stripImageMetadata } = require('../services/imageSanitizer');
 const { stripHtml } = require('../utils/sanitize');
 const { isValidId } = require('../utils/validation');
 const rateLimitsConfig = require('../config/rateLimits');
@@ -207,7 +208,20 @@ router.post('/upload', requireAuth, imageUploadLimiter, upload.single('image'), 
       : null;
 
     if (wineDefinitionId && !mongoose.isValidObjectId(String(wineDefinitionId))) {
+      safeUnlink(req.file.path);
       return res.status(400).json({ error: 'Invalid wine definition ID' });
+    }
+
+    // Re-encode in place to strip EXIF/GPS and other metadata before the
+    // file becomes reachable under /api/uploads (phone photos embed the
+    // owner's location). Decode failure also catches files that slipped
+    // past the header checks.
+    try {
+      await stripImageMetadata(req.file.path);
+    } catch (err) {
+      console.error('Image sanitization failed:', err.message);
+      safeUnlink(req.file.path);
+      return res.status(400).json({ error: 'Image could not be processed — the file may be corrupt or too large' });
     }
 
     const image = new BottleImage({

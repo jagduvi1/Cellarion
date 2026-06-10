@@ -3,7 +3,10 @@ services:
     image: mongo:7
     container_name: cellarion-mongo
     restart: unless-stopped
-    command: ["mongod", "--wiredTigerCacheSizeGB", "0.5"]
+    # WiredTiger cache must stay well under the container limit (512M below) —
+    # cache + connection/aggregation overhead beyond the limit gets the
+    # container OOM-killed under load. ~50% of the limit is the safe ratio.
+    command: ["mongod", "--wiredTigerCacheSizeGB", "0.25"]
     volumes:
       - mongo-data:/data/db
     deploy:
@@ -86,7 +89,11 @@ services:
     deploy:
       resources:
         limits:
-          memory: 384M
+          # Stopgap until the full-cellar-hydration endpoints move to
+          # aggregation: a few concurrent big-cellar page loads peak well
+          # past 384M. Sized for the current 4GB host alongside the other
+          # services' caps.
+          memory: 640M
     depends_on:
       mongo:
         condition: service_healthy

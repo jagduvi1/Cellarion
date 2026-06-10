@@ -135,20 +135,29 @@ async function cleanupOrphanedImages() {
     const ORIGINALS_DIR = path.join(UPLOADS_ROOT, 'originals');
     if (!fs.existsSync(ORIGINALS_DIR)) return;
 
-    const files = fs.readdirSync(ORIGINALS_DIR);
-    const dbImages = await BottleImage.find({}, 'originalUrl').lean();
+    // originalUrl is null for approved/rejected images (their file was already
+    // deleted) — path.basename(null) used to throw here, which silently
+    // disabled the orphan sweep forever once any image had been moderated.
+    const files = await fs.promises.readdir(ORIGINALS_DIR);
+    const dbImages = await BottleImage.find({ originalUrl: { $ne: null } }, 'originalUrl').lean();
     const knownFiles = new Set(dbImages.map(img => path.basename(img.originalUrl)));
 
     let removed = 0;
     for (const file of files) {
       if (knownFiles.has(file)) continue;
 
-      // Only remove files older than 1 hour to avoid racing with in-progress uploads
+      // Only remove files older than 1 hour to avoid racing with in-progress
+      // uploads. Async fs — the sync walk held the event loop for the whole
+      // directory scan, freezing the API every hour as uploads accumulate.
       const filePath = path.join(ORIGINALS_DIR, file);
-      const stat = fs.statSync(filePath);
-      if (Date.now() - stat.mtimeMs > 60 * 60 * 1000) {
-        fs.unlinkSync(filePath);
-        removed++;
+      try {
+        const stat = await fs.promises.stat(filePath);
+        if (Date.now() - stat.mtimeMs > 60 * 60 * 1000) {
+          await fs.promises.unlink(filePath);
+          removed++;
+        }
+      } catch {
+        // File vanished mid-sweep (e.g. processed and cleaned) — fine
       }
     }
     if (removed > 0) {

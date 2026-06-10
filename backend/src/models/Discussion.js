@@ -74,6 +74,12 @@ discussionSchema.index({ isPinned: -1, lastActivityAt: -1 });
 discussionSchema.index({ category: 1, isPinned: -1, lastActivityAt: -1 });
 // User's discussions
 discussionSchema.index({ author: 1, createdAt: -1 });
+// "Newest" tab sort
+discussionSchema.index({ isPinned: -1, createdAt: -1 });
+// "Most replies" tab sort
+discussionSchema.index({ isPinned: -1, replyCount: -1, lastActivityAt: -1 });
+// Wine-page discussions panel (public, crawler-visited)
+discussionSchema.index({ wineDefinition: 1, isPinned: -1, lastActivityAt: -1 });
 
 // Generate slug from title + last 6 of ObjectId on insert. The ObjectId suffix
 // gives collision-resistance without needing a uniqueness retry loop.

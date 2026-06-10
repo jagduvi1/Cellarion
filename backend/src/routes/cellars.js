@@ -16,7 +16,7 @@ const { createNotification } = require('../services/notifications');
 const { sendCellarInviteEmail, EMAIL_VERIFICATION_ENABLED } = require('../services/mailgun');
 const { toNormalized } = require('../utils/ratingUtils');
 const { classifyMaturity, buildProfileMap } = require('../utils/maturityUtils');
-const { CONSUMED_STATUSES, MS_PER_DAY, WINE_POPULATE } = require('../config/constants');
+const { CONSUMED_STATUSES, MS_PER_DAY, WINE_POPULATE_LIST } = require('../config/constants');
 const mongoose = require('mongoose');
 const { parsePagination } = require('../utils/pagination');
 const searchService = require('../services/search');
@@ -28,6 +28,102 @@ const router = express.Router();
 function getUserColor(cellar, userId) {
   const entry = cellar.userColors?.find(uc => uc.user.toString() === userId.toString());
   return entry?.color || null;
+}
+
+// Group key parts default like the JS grouping path: missing/empty vintage →
+// 'NV', missing/empty bottleSize → '750ml'. $ifNull alone misses empty strings.
+function groupPartExpr(field, fallback) {
+  return {
+    $let: {
+      vars: { v: { $ifNull: [`$${field}`, fallback] } },
+      in: { $cond: [{ $eq: ['$$v', ''] }, fallback, '$$v'] },
+    },
+  };
+}
+
+/**
+ * DB-side grouping for the default cellar page (?group=1, no filters).
+ *
+ * The JS grouping path must load and populate the ENTIRE cellar to render 30
+ * groups — on every page view and every search keystroke. This groups bottles
+ * by (wine, vintage, bottleSize) and paginates over groups inside MongoDB,
+ * then populates only the returned page's members.
+ *
+ * Aggregation pipelines bypass Mongoose casting, so ids are cast explicitly.
+ */
+async function loadGroupedBottlePage({ cellarId, excludeSet, sortField, sortDir, skip, limit }) {
+  const { ObjectId } = mongoose.Types;
+  const match = {
+    cellar: new ObjectId(String(cellarId)),
+    status: { $nin: CONSUMED_STATUSES },
+  };
+  if (excludeSet.size > 0) {
+    match._id = { $nin: [...excludeSet].map(id => new ObjectId(id)) };
+  }
+  const groupId = {
+    // Bottles without a wine stay singleton groups (keyed by their own _id)
+    wine: { $ifNull: ['$wineDefinition', '$_id'] },
+    vintage: groupPartExpr('vintage', 'NV'),
+    size: groupPartExpr('bottleSize', '750ml'),
+  };
+
+  const [pageGroups, countResult] = await Promise.all([
+    Bottle.aggregate([
+      { $match: match },
+      { $sort: { [sortField]: sortDir } },
+      // $first/$push follow the preceding $sort within each group, so the
+      // group's sortVal is its best-ranked member and members stay sorted.
+      // wineRef keeps the RAW reference (null when absent) so the group key
+      // below can distinguish "no wine" from a real (possibly dangling) ref.
+      {
+        $group: {
+          _id: groupId,
+          sortVal: { $first: `$${sortField}` },
+          wineRef: { $first: '$wineDefinition' },
+          memberIds: { $push: '$_id' },
+        },
+      },
+      // _id as tiebreaker: $skip/$limit pagination over groups re-runs this
+      // pipeline per page, and tied sortVals (e.g. sort=rating where most
+      // groups are unrated) have no stable order without it — pages would
+      // show duplicate groups and silently skip others.
+      { $sort: { sortVal: sortDir, _id: 1 } },
+      { $skip: skip },
+      { $limit: limit },
+    ]).allowDiskUse(true),
+    Bottle.aggregate([
+      { $match: match },
+      { $group: { _id: groupId } },
+      { $count: 'total' },
+    ]).allowDiskUse(true),
+  ]);
+
+  const memberIds = pageGroups.flatMap(g => g.memberIds);
+  const docs = await Bottle.find({ _id: { $in: memberIds } })
+    .populate(WINE_POPULATE_LIST)
+    .lean();
+  const byId = new Map(docs.map(d => [d._id.toString(), d]));
+
+  const groupsForPage = pageGroups
+    .map(g => {
+      const members = g.memberIds.map(id => byId.get(id.toString())).filter(Boolean);
+      // Key format matches the JS grouping path and is built from the GROUP
+      // identity (not a populated member, which can be missing if a bottle
+      // was deleted between the aggregation and the populate): vintage/size
+      // in g._id already carry the NV/750ml defaults.
+      const wineId = g.wineRef ? String(g.wineRef) : `none:${String(g.memberIds[0])}`;
+      const key = `${wineId}::${g._id.vintage}::${g._id.size}`;
+      return { key, bottles: members };
+    })
+    // A group can lose all members to the populate race above — emitting it
+    // empty would hand the client a card with no bottle to render.
+    .filter(g => g.bottles.length > 0);
+
+  return {
+    groupsForPage,
+    bottles: groupsForPage.flatMap(g => g.bottles),
+    totalCount: countResult[0]?.total || 0,
+  };
 }
 
 // All routes require authentication
@@ -304,7 +400,7 @@ router.get('/:id/history', async (req, res) => {
         }
 
         bottles = await Bottle.find({ _id: { $in: matchingIds } })
-          .populate(WINE_POPULATE).lean();
+          .populate(WINE_POPULATE_LIST).lean();
 
         // Preserve Meilisearch sort order
         const idOrder = new Map(matchingIds.map((id, i) => [id, i]));
@@ -320,7 +416,7 @@ router.get('/:id/history', async (req, res) => {
       // cellar with a huge consumed history can't load the entire collection
       // into memory on every request.
       bottles = await Bottle.find(filter)
-        .populate(WINE_POPULATE)
+        .populate(WINE_POPULATE_LIST)
         .sort({ consumedAt: -1 })
         .limit(10000)
         .lean();
@@ -451,6 +547,22 @@ router.get('/:id', async (req, res) => {
       ? String(grapes).split(',').map(g => g.trim()).filter(isValidObjectId)
       : [];
 
+    // Build the exclusion set once for both paths. ?excludePlaced=1 resolves
+    // rack-placed bottles server-side — the slot pickers previously sent every
+    // placed bottle ID in the query string, which overflows the URL length
+    // limit once a few hundred bottles are placed.
+    const excludeSet = new Set(exclude ? String(exclude).split(',').filter(isValidObjectId) : []);
+    if (req.query.excludePlaced === '1' || req.query.excludePlaced === 'true') {
+      const racks = await Rack.find({ cellar: req.params.id, deletedAt: null })
+        .select('slots.bottle')
+        .lean();
+      for (const rack of racks) {
+        for (const slot of rack.slots || []) {
+          if (slot.bottle) excludeSet.add(slot.bottle.toString());
+        }
+      }
+    }
+
     // Whether we need in-memory post-processing that neither Meilisearch nor MongoDB can do
     const needsMaturity = !!(maturityFilter || sortField === 'maturity');
     const MATURITY_RANK = { declining: 0, late: 1, peak: 2, early: 3, 'not-ready': 4 };
@@ -461,8 +573,23 @@ router.get('/:id', async (req, res) => {
     let bottles;
     let totalCount;
     let canPaginateInDb;
+    let groupsForPage = null;
 
-    if (searchService.getIsAvailable() && hasMeiliFilters) {
+    // ── HOT PATH: the default grouped cellar page (no filters, DB-sortable) ──
+    // Group + paginate inside MongoDB instead of hydrating the whole cellar.
+    const groupedInDb = grouped
+      && !hasMeiliFilters
+      && !minRating && !maxRating && !maturityFilter
+      && ['createdAt', 'vintage', 'price', 'rating'].includes(sortField);
+    if (groupedInDb) {
+      ({ groupsForPage, bottles, totalCount } = await loadGroupedBottlePage({
+        cellarId: req.params.id, excludeSet, sortField, sortDir, skip, limit,
+      }));
+      usedMeili = false;
+      canPaginateInDb = false;
+    }
+
+    if (!groupedInDb && searchService.getIsAvailable() && hasMeiliFilters) {
       // ── PRIMARY PATH: Meilisearch handles search + filters ──
       try {
         const meiliResult = await searchService.searchBottles(search || '', {
@@ -491,14 +618,13 @@ router.get('/:id', async (req, res) => {
 
         // Exclude specific bottle IDs if requested
         let idsToFetch = matchingIds;
-        if (exclude) {
-          const excludeSet = new Set(String(exclude).split(',').filter(isValidObjectId));
+        if (excludeSet.size > 0) {
           idsToFetch = matchingIds.filter(id => !excludeSet.has(id));
         }
 
         // Fetch just the matching bottles from MongoDB (by ID) — much smaller query
         bottles = await Bottle.find({ _id: { $in: idsToFetch } })
-          .populate(WINE_POPULATE)
+          .populate(WINE_POPULATE_LIST)
           .lean();
 
         // Preserve Meilisearch's sort order
@@ -512,16 +638,15 @@ router.get('/:id', async (req, res) => {
       }
     }
 
-    if (!usedMeili) {
+    if (!usedMeili && !groupedInDb) {
       // ── FALLBACK PATH: MongoDB + in-memory (when Meilisearch unavailable) ──
       const filter = {
         cellar: req.params.id,
         status: { $nin: CONSUMED_STATUSES }
       };
 
-      if (exclude) {
-        const excludeIds = String(exclude).split(',').filter(isValidObjectId);
-        if (excludeIds.length > 0) filter._id = { $nin: excludeIds };
+      if (excludeSet.size > 0) {
+        filter._id = { $nin: [...excludeSet] };
       }
       // Vintage: single or comma-separated
       if (vintage) {
@@ -566,7 +691,7 @@ router.get('/:id', async (req, res) => {
       // duplicates, so it disables DB-level pagination.
       canPaginateInDb = !needsInMemoryFilter && !needsInMemorySort && !grouped;
 
-      let query = Bottle.find(filter).populate(WINE_POPULATE);
+      let query = Bottle.find(filter).populate(WINE_POPULATE_LIST);
       if (canSortInDb_) query = query.sort({ [sortField]: sortDir });
       if (canPaginateInDb) query = query.skip(skip).limit(limit);
       bottles = await query.lean();
@@ -663,8 +788,8 @@ router.get('/:id', async (req, res) => {
 
     // Group identical bottles (same wine + vintage), or paginate normally.
     // `bottles` is fully filtered + sorted here; grouping preserves that order.
-    let groupsForPage = null;
-    if (grouped) {
+    // (Skipped when the DB-grouped hot path already produced groupsForPage.)
+    if (grouped && !groupsForPage) {
       const groupMap = new Map();
       const order = [];
       for (const b of bottles) {
@@ -682,7 +807,7 @@ router.get('/:id', async (req, res) => {
       const pageKeys = order.slice(skip, skip + limit);
       groupsForPage = pageKeys.map(key => ({ key, bottles: groupMap.get(key) }));
       bottles = groupsForPage.flatMap(g => g.bottles); // flatten so image attach below works
-    } else if (!canPaginateInDb) {
+    } else if (!canPaginateInDb && !groupsForPage) {
       totalCount = bottles.length;
       bottles = bottles.slice(skip, skip + limit);
     }

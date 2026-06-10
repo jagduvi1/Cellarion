@@ -1,6 +1,12 @@
 const Notification = require('../models/Notification');
 const PushSubscription = require('../models/PushSubscription');
 const User = require('../models/User');
+const { runConcurrent } = require('../utils/concurrency');
+
+// Max simultaneous web-push HTTPS calls per batch — a popular thread can have
+// hundreds of watchers; an uncapped burst stampedes the event loop and the
+// push service.
+const PUSH_CONCURRENCY = 10;
 
 let webpush;
 const VAPID_CONFIGURED = !!(process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY);
@@ -42,55 +48,87 @@ const PUSH_PREF_PATH = {
  *   per-category prefs.
  */
 async function createNotification(userId, type, title, message, link = null, category) {
+  return createNotifications([{ userId, type, title, message, link, category }]);
+}
+
+// Push-preference gate: category-specific when the caller named one,
+// otherwise permissive ("any push toggle enabled") so legacy callers that
+// haven't been migrated to pass a category keep working.
+function pushAllowedFor(prefs, category) {
+  if (!prefs) return false;
+  const prefKey = category ? PUSH_PREF_PATH[category] : null;
+  if (prefKey) return !!prefs[prefKey]?.push;
+  return Object.values(PUSH_PREF_PATH).some(k => !!prefs[k]?.push);
+}
+
+async function sendToSubscription(sub, payload) {
   try {
-    await Notification.create({ user: userId, type, title, message, link });
+    await webpush.sendNotification({ endpoint: sub.endpoint, keys: sub.keys }, payload);
   } catch (err) {
-    console.error('[notifications] Failed to create notification:', err.message);
+    // 410 Gone = subscription expired; clean it up
+    if (err.statusCode === 410 || err.statusCode === 404) {
+      await PushSubscription.deleteOne({ _id: sub._id });
+    }
+  }
+}
+
+/**
+ * Batch variant for fan-out callers — one forum reply can notify hundreds of
+ * watchers. One insertMany for the in-app rows, one prefs query and one
+ * subscription query for ALL recipients, and push delivery capped at
+ * PUSH_CONCURRENCY instead of an unbounded burst of per-recipient queries
+ * and HTTPS calls inside the request handler.
+ *
+ * @param {Array<{userId, type, title, message, link?, category?}>} items
+ */
+async function createNotifications(items) {
+  if (!items || items.length === 0) return;
+
+  try {
+    await Notification.insertMany(
+      items.map(i => ({ user: i.userId, type: i.type, title: i.title, message: i.message, link: i.link || null })),
+      { ordered: false }
+    );
+  } catch (err) {
+    console.error('[notifications] Failed to create notifications:', err.message);
   }
 
   // Web push — fire and forget
   if (!VAPID_CONFIGURED) return;
   try {
-    const user = await User.findById(userId).select('preferences.notifications').lean();
-    const prefs = user?.preferences?.notifications;
-    if (!prefs) return;
+    const userIds = [...new Set(items.map(i => String(i.userId)))];
+    const users = await User.find({ _id: { $in: userIds } })
+      .select('preferences.notifications')
+      .lean();
+    const prefsById = new Map(users.map(u => [String(u._id), u.preferences?.notifications]));
 
-    // Category-specific gate when the caller named one — otherwise permissive.
-    let pushAllowed;
-    const prefKey = category ? PUSH_PREF_PATH[category] : null;
-    if (prefKey) {
-      pushAllowed = !!prefs[prefKey]?.push;
-    } else {
-      // Legacy / uncategorised path: fire if any of the known push toggles
-      // are on. Avoids silently dropping notifications for callers that
-      // haven't been migrated to pass a category yet.
-      pushAllowed = Object.values(PUSH_PREF_PATH).some(k => !!prefs[k]?.push);
-    }
-    if (!pushAllowed) return;
+    const allowed = items.filter(i => pushAllowedFor(prefsById.get(String(i.userId)), i.category));
+    if (allowed.length === 0) return;
 
-    const subs = await PushSubscription.find({ user: userId }).lean();
+    const allowedIds = [...new Set(allowed.map(i => String(i.userId)))];
+    const subs = await PushSubscription.find({ user: { $in: allowedIds } }).lean();
     if (subs.length === 0) return;
 
-    const payload = JSON.stringify({ title, message, link, tag: type });
+    const subsByUser = new Map();
+    for (const sub of subs) {
+      const key = String(sub.user);
+      if (!subsByUser.has(key)) subsByUser.set(key, []);
+      subsByUser.get(key).push(sub);
+    }
 
-    await Promise.allSettled(
-      subs.map(async (sub) => {
-        try {
-          await webpush.sendNotification(
-            { endpoint: sub.endpoint, keys: sub.keys },
-            payload
-          );
-        } catch (err) {
-          // 410 Gone = subscription expired; clean it up
-          if (err.statusCode === 410 || err.statusCode === 404) {
-            await PushSubscription.deleteOne({ _id: sub._id });
-          }
-        }
-      })
-    );
+    const tasks = [];
+    for (const item of allowed) {
+      const userSubs = subsByUser.get(String(item.userId));
+      if (!userSubs) continue;
+      const payload = JSON.stringify({ title: item.title, message: item.message, link: item.link || null, tag: item.type });
+      for (const sub of userSubs) {
+        tasks.push(() => sendToSubscription(sub, payload));
+      }
+    }
+    await runConcurrent(tasks, PUSH_CONCURRENCY);
   } catch (err) {
     console.error('[notifications] Push dispatch error:', err.message);
   }
 }
 
-module.exports = { createNotification };
+module.exports = { createNotification, createNotifications };

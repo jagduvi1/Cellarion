@@ -16,6 +16,20 @@ const WINE_POPULATE = [
   { path: 'pendingWineRequest', select: 'wineName producer' }
 ];
 
+// List/stats variant of WINE_POPULATE: excludes the heavy fields no list view
+// or aggregate reads (aiProfile alone is several KB of prose per wine). A page
+// of 30 bottles ships the same card data at a fraction of the payload. Detail
+// routes (GET /api/bottles/:id etc.) keep the full WINE_POPULATE — the bottle
+// page renders aiProfile.
+const WINE_POPULATE_LIST = [
+  {
+    path: 'wineDefinition',
+    select: '-aiProfile -normalizedKey -lwin -productNumber -productNumberShort -createdBy',
+    populate: ['country', 'region', 'grapes']
+  },
+  { path: 'pendingWineRequest', select: 'wineName producer' }
+];
+
 // ─── Import thresholds ───────────────────────────────────────────────────────
 
 // Composite similarity score at or above which a match is considered exact
@@ -70,6 +84,7 @@ module.exports = {
   CONSUMED_STATUSES,
   MS_PER_DAY,
   WINE_POPULATE,
+  WINE_POPULATE_LIST,
   IMPORT_EXACT_THRESHOLD,
   IMPORT_FUZZY_THRESHOLD,
   MAX_IMPORT_SIZE,

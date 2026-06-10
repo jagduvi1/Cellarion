@@ -31,7 +31,11 @@ async function runCommunityPriceAggregation() {
   // locales rather than an exact string. Legacy bottles with no size set
   // (Mongoose default is '750ml') are treated as standard.
   const STANDARD_750 = /^\s*750\s*ml/i;
-  const rows = await Bottle.aggregate([
+  // Cursor + allowDiskUse: the nested $push stages accumulate every priced
+  // bottle in the system — without disk use the $group aborts at Mongo's
+  // 100MB stage limit, and materializing all rows at once holds the whole
+  // price universe in Node memory.
+  const rowCursor = Bottle.aggregate([
     {
       $match: {
         status: { $nin: CONSUMED_STATUSES },
@@ -69,13 +73,15 @@ async function runCommunityPriceAggregation() {
         vintages: { $push: { vintage: '$_id.vintage', owners: '$owners' } },
       },
     },
-  ]);
+  ]).allowDiskUse(true).cursor();
 
   let upserted = 0;
   let removed = 0;
+  let groups = 0; // rows seen — the cursor has no .length
   const processedPairs = new Set(); // `${wine}|${currency}` recomputed this run
 
-  for (const row of rows) {
+  for await (const row of rowCursor) {
+    groups++;
     const { wine, currency } = row._id;
     const cur = String(currency || 'USD').toUpperCase();
     const cap = capFor(cur);
@@ -150,10 +156,10 @@ async function runCommunityPriceAggregation() {
   }
 
   console.log(
-    `[communityPrice] Aggregated ${rows.length} wine/currency group(s): ` +
+    `[communityPrice] Aggregated ${groups} wine/currency group(s): ` +
     `${upserted} price(s) upserted, ${removed} stale removed`
   );
-  return { groups: rows.length, upserted, removed };
+  return { groups, upserted, removed };
 }
 
 module.exports = { runCommunityPriceAggregation };
