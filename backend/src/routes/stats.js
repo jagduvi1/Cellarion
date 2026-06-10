@@ -1,4 +1,5 @@
 const express = require('express');
+const mongoose = require('mongoose');
 const { requireAuth } = require('../middleware/auth');
 const Cellar = require('../models/Cellar');
 const Bottle = require('../models/Bottle');
@@ -13,12 +14,27 @@ router.use(requireAuth);
 
 // Short server-side cache for the overview. Computing it loads the user's
 // entire bottle set, so without a cache every page visit recomputes from
-// scratch. Two cheap indexed counts act as the invalidation probe — adds,
-// deletes, consumes and undos all change one of them, so only pure edits
-// (price/rating tweaks) can be served stale, bounded by the TTL.
-const overviewCache = new Map(); // userId -> { at, key, totalCount, activeCount, stats }
+// scratch. The invalidation probe is one cheap indexed aggregation producing
+// a per-cellar {count, max(updatedAt)} signature: adds, deletes, consumes,
+// edits (pre-save bumps updatedAt) and bottle moves between cellars all
+// change it. Residual staleness (≤TTL): writes that bypass save() middleware,
+// and cellar renames.
+const overviewCache = new Map(); // userId -> { at, key, signature, stats }
 const OVERVIEW_TTL_MS = 2 * 60 * 1000;
 const OVERVIEW_CACHE_MAX_ENTRIES = 5000;
+
+// Per-cellar bottle signature for cache invalidation. Aggregation pipelines
+// bypass Mongoose casting, so the user id is cast explicitly (cellarIds are
+// already ObjectIds from Cellar.find).
+async function bottleSignature(userId, cellarIds) {
+  const rows = await Bottle.aggregate([
+    { $match: { user: new mongoose.Types.ObjectId(String(userId)), cellar: { $in: cellarIds } } },
+    { $group: { _id: '$cellar', n: { $sum: 1 }, u: { $max: '$updatedAt' } } },
+    { $sort: { _id: 1 } },
+  ]);
+  const cellarPart = cellarIds.map(String).sort().join(',');
+  return `${cellarPart}|${rows.map(r => `${r._id}:${r.n}:${r.u ? new Date(r.u).getTime() : 0}`).join(';')}`;
+}
 
 // GET /api/stats/overview — collection analytics (all authenticated users)
 router.get('/overview', async (req, res) => {
@@ -40,12 +56,10 @@ router.get('/overview', async (req, res) => {
     const scope = { user: req.user.id, cellar: { $in: cellarIds } };
     const cacheKey = `${targetCurrency}:${targetRatingScale}`;
     const cached = overviewCache.get(req.user.id);
+    let signature = null;
     if (cached && cached.key === cacheKey && Date.now() - cached.at < OVERVIEW_TTL_MS) {
-      const [totalCount, activeCount] = await Promise.all([
-        Bottle.countDocuments(scope),
-        Bottle.countDocuments({ ...scope, status: { $nin: CONSUMED_STATUSES } }),
-      ]);
-      if (totalCount === cached.totalCount && activeCount === cached.activeCount) {
+      signature = await bottleSignature(req.user.id, cellarIds);
+      if (signature === cached.signature) {
         return res.json({ stats: cached.stats });
       }
     }
@@ -65,8 +79,7 @@ router.get('/overview', async (req, res) => {
     overviewCache.set(req.user.id, {
       at: Date.now(),
       key: cacheKey,
-      totalCount: activeBottles.length + consumedBottles.length,
-      activeCount: activeBottles.length,
+      signature: signature || await bottleSignature(req.user.id, cellarIds),
       stats,
     });
 

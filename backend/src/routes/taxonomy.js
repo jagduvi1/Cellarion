@@ -42,12 +42,30 @@ function getCachedList(key) {
 
 /** Count wines per value of `field` in one aggregation (vs one countDocuments per taxon). */
 async function countWinesBy(field, { unwind = false } = {}) {
-  const pipeline = [
-    ...(unwind ? [{ $unwind: `$${field}` }] : [{ $match: { [field]: { $ne: null } } }]),
-    { $group: { _id: `$${field}`, count: { $sum: 1 } } },
-  ];
+  const pipeline = unwind
+    ? [
+        // $setUnion dedups the array first: the old countDocuments({grapes: id})
+        // counted a wine once however many times the grape appeared in its
+        // array; a bare $unwind would count every occurrence.
+        { $project: { values: { $setUnion: [`$${field}`, []] } } },
+        { $unwind: '$values' },
+        { $group: { _id: '$values', count: { $sum: 1 } } },
+      ]
+    : [
+        { $match: { [field]: { $ne: null } } },
+        { $group: { _id: `$${field}`, count: { $sum: 1 } } },
+      ];
   const rows = await WineDefinition.aggregate(pipeline);
   return new Map(rows.map(r => [String(r._id), r.count]));
+}
+
+/**
+ * Drop the cached list bodies. Called by the admin taxonomy routes after any
+ * mutation so renames/deletions don't keep serving on the public lists for
+ * the full cache TTL.
+ */
+function clearTaxonomyListCache() {
+  listCache.clear();
 }
 
 // Shared wine projection for public lists
@@ -284,3 +302,4 @@ router.get('/wine-types/:type', async (req, res) => {
 });
 
 module.exports = router;
+module.exports.clearTaxonomyListCache = clearTaxonomyListCache;

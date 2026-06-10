@@ -73,8 +73,21 @@ async function loadGroupedBottlePage({ cellarId, excludeSet, sortField, sortDir,
       { $sort: { [sortField]: sortDir } },
       // $first/$push follow the preceding $sort within each group, so the
       // group's sortVal is its best-ranked member and members stay sorted.
-      { $group: { _id: groupId, sortVal: { $first: `$${sortField}` }, memberIds: { $push: '$_id' } } },
-      { $sort: { sortVal: sortDir } },
+      // wineRef keeps the RAW reference (null when absent) so the group key
+      // below can distinguish "no wine" from a real (possibly dangling) ref.
+      {
+        $group: {
+          _id: groupId,
+          sortVal: { $first: `$${sortField}` },
+          wineRef: { $first: '$wineDefinition' },
+          memberIds: { $push: '$_id' },
+        },
+      },
+      // _id as tiebreaker: $skip/$limit pagination over groups re-runs this
+      // pipeline per page, and tied sortVals (e.g. sort=rating where most
+      // groups are unrated) have no stable order without it — pages would
+      // show duplicate groups and silently skip others.
+      { $sort: { sortVal: sortDir, _id: 1 } },
       { $skip: skip },
       { $limit: limit },
     ]).allowDiskUse(true),
@@ -91,17 +104,20 @@ async function loadGroupedBottlePage({ cellarId, excludeSet, sortField, sortDir,
     .lean();
   const byId = new Map(docs.map(d => [d._id.toString(), d]));
 
-  const groupsForPage = pageGroups.map(g => {
-    const members = g.memberIds.map(id => byId.get(id.toString())).filter(Boolean);
-    const first = members[0];
-    // Key format must match the JS grouping path — the client treats it as
-    // the stable group identity.
-    const wineId = first?.wineDefinition?._id
-      ? first.wineDefinition._id.toString()
-      : (first?.wineDefinition ? String(first.wineDefinition) : `none:${first?._id}`);
-    const key = `${wineId}::${first?.vintage || 'NV'}::${first?.bottleSize || '750ml'}`;
-    return { key, bottles: members };
-  });
+  const groupsForPage = pageGroups
+    .map(g => {
+      const members = g.memberIds.map(id => byId.get(id.toString())).filter(Boolean);
+      // Key format matches the JS grouping path and is built from the GROUP
+      // identity (not a populated member, which can be missing if a bottle
+      // was deleted between the aggregation and the populate): vintage/size
+      // in g._id already carry the NV/750ml defaults.
+      const wineId = g.wineRef ? String(g.wineRef) : `none:${String(g.memberIds[0])}`;
+      const key = `${wineId}::${g._id.vintage}::${g._id.size}`;
+      return { key, bottles: members };
+    })
+    // A group can lose all members to the populate race above — emitting it
+    // empty would hand the client a card with no bottle to render.
+    .filter(g => g.bottles.length > 0);
 
   return {
     groupsForPage,
