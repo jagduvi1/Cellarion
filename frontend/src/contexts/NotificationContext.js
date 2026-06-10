@@ -92,9 +92,11 @@ export function NotificationProvider({ children }) {
     fetchNotifications();
     intervalRef.current = setInterval(pollUnreadCount, 60_000);
 
-    // Catch up when the tab becomes active again — the interval skips
-    // while document.hidden, so this is the "resume" signal.
-    const handleWake = () => pollUnreadCount();
+    // Full refetch when the tab becomes active again. The count probe alone
+    // can't see net-zero changes (one read on another device while a new
+    // notification arrives keeps the count equal), so waking is the moment
+    // we resynchronize the actual list — same self-heal the old code had.
+    const handleWake = () => { if (!document.hidden) fetchNotifications(); };
     window.addEventListener('focus', handleWake);
     document.addEventListener('visibilitychange', handleWake);
 
