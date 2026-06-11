@@ -283,9 +283,14 @@ async function generateWineListPdf(wineList, bottleMap, opts = {}) {
   return doc;
 }
 
+// Server-generated logo URLs are always `wine-list-logos/<uuid>.<ext>` — anything
+// else (in particular anything with path separators or dots beyond the extension)
+// is rejected before it reaches path.join, as defense in depth against traversal.
+const LOGO_URL_PATTERN = /^wine-list-logos\/[a-f0-9-]+\.(jpg|png|webp)$/;
+
 function renderHeader(doc, branding, scheme, fontBold, fontItalic, contentWidth, margin, qrBuffer) {
   // Logo
-  if (branding.logoUrl) {
+  if (branding.logoUrl && LOGO_URL_PATTERN.test(branding.logoUrl)) {
     try {
       const logoPath = path.join('/app/uploads', branding.logoUrl);
       if (fs.existsSync(logoPath)) {

@@ -66,6 +66,7 @@ const Grape = require('../models/Grape');
 const Appellation = require('../models/Appellation');
 const SiteConfig = require('../models/SiteConfig');
 const { getOrCreateDeletedUser } = require('../utils/deletedUser');
+const { deleteLogoFilesFor } = require('./wineListLogos');
 
 const EXPORT_MAX = 50000;
 const AUDIT_MAX = 1000;
@@ -176,7 +177,12 @@ const REGISTRY = [
   },
   {
     model: WineList, category: 'personal-data', userFields: ['user'],
-    purge: (ctx) => WineList.deleteMany({ user: ctx.userId }),
+    // Uploaded restaurant logos are user content too — unlink them from disk
+    // before the docs (and with them the only references) are deleted.
+    purge: async (ctx) => {
+      await deleteLogoFilesFor(WineList, { user: ctx.userId });
+      return WineList.deleteMany({ user: ctx.userId });
+    },
     exportFragment: async (ctx) => ({
       wineLists: markTrunc(ctx, 'wineLists', await WineList.find({ user: ctx.userId }).select('name cellar structureMode branding layout createdAt updatedAt').limit(EXPORT_MAX).lean())
         .map(wl => ({ name: wl.name, structureMode: wl.structureMode, branding: wl.branding, layout: wl.layout, createdAt: wl.createdAt })),
