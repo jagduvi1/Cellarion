@@ -491,6 +491,9 @@ router.post('/', async (req, res) => {
 
     res.status(201).json({ bottle, priceWarnings });
   } catch (error) {
+    if (error.name === 'ValidationError') {
+      return res.status(400).json({ error: error.message });
+    }
     console.error('Create bottle error:', error);
     res.status(500).json({ error: 'Failed to create bottle' });
   }
@@ -651,6 +654,9 @@ router.put('/:id', requireBottleAccess('editor'), async (req, res) => {
   } catch (error) {
     if (error.name === 'VersionError') {
       return res.status(409).json({ error: 'This bottle was modified by another request. Please refresh and try again.' });
+    }
+    if (error.name === 'ValidationError') {
+      return res.status(400).json({ error: error.message });
     }
     console.error('Update bottle error:', error);
     res.status(500).json({ error: 'Failed to update bottle' });
