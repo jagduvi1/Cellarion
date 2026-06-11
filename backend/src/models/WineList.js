@@ -1,18 +1,45 @@
 const mongoose = require('mongoose');
 
+// An entry is a wine on the menu, not a physical bottle: it is keyed by
+// wine + vintage + bottle size so duplicates of the same wine in the cellar
+// collapse into one line, and the line survives individual bottles being
+// consumed as long as stock remains.
 const entrySchema = new mongoose.Schema({
-  bottle: {
+  wine: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'Bottle',
+    ref: 'WineDefinition',
     required: true
+  },
+  vintage: {
+    type: String,
+    default: 'NV',
+    trim: true,
+    maxlength: [20, 'Vintage too long']
+  },
+  bottleSize: {
+    type: String,
+    default: '750ml',
+    trim: true,
+    maxlength: [20, 'Bottle size too long']
   },
   listPrice: {
     type: Number,
     min: [0, 'Price cannot be negative']
   },
+  // Available by the glass — glassPrice is only rendered when this is on
+  byGlass: {
+    type: Boolean,
+    default: false
+  },
   glassPrice: {
     type: Number,
     min: [0, 'Glass price cannot be negative']
+  },
+  // True once the user overrides the suggested glass price; recalculations
+  // from the glass pricing rule leave manual prices alone
+  glassPriceManual: {
+    type: Boolean,
+    default: false
   },
   sortOrder: {
     type: Number,
@@ -149,7 +176,8 @@ const wineListSchema = new mongoose.Schema({
       enum: ['serif', 'sans-serif'],
       default: 'serif'
     },
-    showGlassPrice: { type: Boolean, default: false },
+    // Glass pricing rule: suggested glass price =
+    // listPrice / glassesPerBottle × (1 + glassMarkup/100), rounded
     glassesPerBottle: {
       type: Number,
       default: 6,
@@ -161,6 +189,17 @@ const wineListSchema = new mongoose.Schema({
       default: 0,
       min: [-100, 'Markup cannot be less than -100%'],
     },
+    // Round suggested glass prices to the nearest 1, 5 or 10
+    glassRounding: {
+      type: String,
+      enum: ['1', '5', '10'],
+      default: '1'
+    },
+    // Lead the menu with a "Wines by the Glass" section collecting all
+    // byGlass entries (they also stay in their regular sections)
+    glassSectionFirst: { type: Boolean, default: false },
+    // Drop entries from the rendered list while their cellar stock is zero
+    hideOutOfStock: { type: Boolean, default: false },
     currency: {
       type: String,
       default: 'USD',

@@ -2,7 +2,7 @@ const express = require('express');
 const rateLimit = require('express-rate-limit');
 const WineList = require('../models/WineList');
 const { generateWineListPdf } = require('../services/wineListPdf');
-const { loadBottleMap } = require('../services/wineListData');
+const { loadWineMap } = require('../services/wineListData');
 const { getClientIp } = require('../utils/clientIp');
 
 const router = express.Router();
@@ -28,13 +28,13 @@ router.get('/:shareToken/pdf', async (req, res) => {
     });
     if (!wineList) return res.status(404).json({ error: 'Wine list not found or not published' });
 
-    const bottleMap = await loadBottleMap(wineList);
+    const wineMap = await loadWineMap(wineList);
 
     // Build the public URL for QR code (self-referencing)
     const base = process.env.FRONTEND_URL || `${req.protocol}://${req.get('host')}`;
     const publicUrl = `${base}/api/wine-lists/public/${req.params.shareToken}/pdf`;
 
-    const pdfStream = await generateWineListPdf(wineList, bottleMap, { publicUrl });
+    const pdfStream = await generateWineListPdf(wineList, wineMap, { publicUrl });
 
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(wineList.name || 'wine-list')}.pdf"`);
