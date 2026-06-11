@@ -149,6 +149,17 @@ export const adminImportWines = (apiFetch, body) =>
 export const adminGetSecuritySummary = (apiFetch) =>
   apiFetch('/api/admin/security/summary');
 
+// ── Announcement banner (SuperAdmin) ──────────────────────────────────────────
+export const superadminGetAnnouncement = (apiFetch) =>
+  apiFetch('/api/superadmin/announcement');
+
+export const superadminSaveAnnouncement = (apiFetch, data) =>
+  apiFetch('/api/superadmin/announcement', {
+    method: 'PATCH',
+    headers: J,
+    body: JSON.stringify(data),
+  });
+
 // ── Settings (rate limits — used by SuperAdmin) ───────────────────────────────
 export const adminGetRateLimits = (apiFetch) =>
   apiFetch('/api/admin/settings/rate-limits');

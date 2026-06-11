@@ -2121,6 +2121,9 @@
     "cellarSizeOther": "uncategorised",
     "bottleSize": "Bottle size"
   },
+  "announcement": {
+    "dismiss": "Dismiss"
+  },
   "wineLists": {
     "title": "Wine Lists",
     "newWineList": "New Wine List",
