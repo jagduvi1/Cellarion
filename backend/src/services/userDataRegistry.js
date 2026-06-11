@@ -24,8 +24,6 @@
  * ctx = { userId, userEmail, cellarIds, deletedUserId, user, EXPORT_MAX,
  *         AUDIT_MAX, truncated }
  */
-const fs = require('fs');
-const path = require('path');
 const User = require('../models/User');
 const Bottle = require('../models/Bottle');
 const BottleImage = require('../models/BottleImage');
@@ -68,6 +66,7 @@ const Grape = require('../models/Grape');
 const Appellation = require('../models/Appellation');
 const SiteConfig = require('../models/SiteConfig');
 const { getOrCreateDeletedUser } = require('../utils/deletedUser');
+const { deleteLogoFilesFor } = require('./wineListLogos');
 
 const EXPORT_MAX = 50000;
 const AUDIT_MAX = 1000;
@@ -181,13 +180,7 @@ const REGISTRY = [
     // Uploaded restaurant logos are user content too — unlink them from disk
     // before the docs (and with them the only references) are deleted.
     purge: async (ctx) => {
-      const lists = await WineList.find({ user: ctx.userId, 'branding.logoUrl': { $ne: null } })
-        .select('branding.logoUrl').lean();
-      for (const wl of lists) {
-        if (!wl.branding?.logoUrl) continue;
-        const file = path.join('/app/uploads/wine-list-logos', path.basename(wl.branding.logoUrl));
-        try { fs.unlinkSync(file); } catch { /* already gone */ }
-      }
+      await deleteLogoFilesFor(WineList, { user: ctx.userId });
       return WineList.deleteMany({ user: ctx.userId });
     },
     exportFragment: async (ctx) => ({
