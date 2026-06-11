@@ -13,6 +13,7 @@ import TabAI from './TabAI';
 import TabCellars from './TabCellars';
 import TabImport from './TabImport';
 import TabBackups from './TabBackups';
+import TabAnnouncement from './TabAnnouncement';
 import '../SuperAdmin.css';
 
 const TABS = [
@@ -25,6 +26,7 @@ const TABS = [
   { id: 'cellars',    label: 'Deleted Cellars' },
   { id: 'import',     label: 'Import Wines' },
   { id: 'ai',         label: 'AI & Embeddings' },
+  { id: 'announcement', label: 'Announcement' },
   { id: 'settings',   label: 'Settings' },
 ];
 
@@ -156,6 +158,7 @@ export default function SuperAdmin() {
         {tab === 'cellars'    && <TabCellars />}
         {tab === 'import'     && <TabImport />}
         {tab === 'ai'         && <TabAI />}
+        {tab === 'announcement' && <TabAnnouncement />}
         {tab === 'settings'   && <TabSettings />}
       </div>
 

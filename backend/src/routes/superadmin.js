@@ -17,6 +17,7 @@ const embeddingJob = require('../services/embeddingJob');
 const enrichmentJob = require('../services/enrichmentJob');
 const vectorStore = require('../services/vectorStore');
 const aiConfig = require('../config/aiConfig');
+const announcementConfig = require('../config/announcement');
 const aiChat = require('../services/aiChat');
 const { updateSiteConfig } = require('../utils/siteConfig');
 const { parsePagination } = require('../utils/pagination');
@@ -813,6 +814,49 @@ router.get('/chat-usage', async (req, res) => {
   } catch (error) {
     console.error('[superadmin] chat-usage error:', error);
     res.status(500).json({ error: 'Failed to load chat usage' });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// GET /api/superadmin/announcement
+// Current site-wide announcement banner config
+// ---------------------------------------------------------------------------
+router.get('/announcement', (req, res) => {
+  res.json({ config: announcementConfig.get() });
+});
+
+// ---------------------------------------------------------------------------
+// PATCH /api/superadmin/announcement
+// Set/clear the banner shown to all users (e.g. planned maintenance notice)
+// ---------------------------------------------------------------------------
+router.patch('/announcement', async (req, res) => {
+  const { enabled, message, messageSv, type } = req.body;
+  if (typeof enabled !== 'boolean') {
+    return res.status(400).json({ error: 'enabled must be a boolean' });
+  }
+  if (typeof message !== 'string' || (enabled && !message.trim())) {
+    return res.status(400).json({ error: 'message is required when the banner is enabled' });
+  }
+  if (message.length > 500 || (typeof messageSv === 'string' && messageSv.length > 500)) {
+    return res.status(400).json({ error: 'messages must be 500 characters or fewer' });
+  }
+  if (!['info', 'warning'].includes(type)) {
+    return res.status(400).json({ error: 'type must be info or warning' });
+  }
+  try {
+    const updated = {
+      enabled,
+      message: message.trim(),
+      messageSv: typeof messageSv === 'string' ? messageSv.trim() : '',
+      type,
+    };
+    const doc = await updateSiteConfig('announcement', updated, req.user.id);
+    // updatedAt doubles as the dismissal version on the client
+    announcementConfig.set({ ...updated, updatedAt: doc.updatedAt.toISOString() });
+    res.json({ config: announcementConfig.get() });
+  } catch (error) {
+    console.error('[superadmin] announcement error:', error);
+    res.status(500).json({ error: 'Failed to save announcement' });
   }
 });
 

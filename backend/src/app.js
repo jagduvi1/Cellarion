@@ -8,6 +8,7 @@ const cookieParser = require('cookie-parser');
 const { getClientIp } = require('./utils/clientIp');
 const { requireAuth } = require('./middleware/auth');
 const healthRoute = require('./routes/health');
+const siteRoute = require('./routes/site');
 const authRoute = require('./routes/auth');
 const usersRoute = require('./routes/users');
 const winesRoute = require('./routes/wines');
@@ -59,6 +60,7 @@ const taxonomyRoute = require('./routes/taxonomy');
 const stripeRoute = require('./routes/stripe');
 const rateLimitsConfig = require('./config/rateLimits');
 const aiConfig = require('./config/aiConfig');
+const announcementConfig = require('./config/announcement');
 const { logAudit } = require('./services/audit');
 
 const app = express();
@@ -168,6 +170,7 @@ app.use('/api/uploads', (req, res, next) => {
 
 // Routes
 app.use('/api/health', healthRoute);
+app.use('/api/site', siteRoute);
 app.use('/api/auth', authRoute);
 app.use('/api/users', usersRoute);
 app.use('/api/wines', winesRoute);
@@ -244,6 +247,11 @@ rateLimitsConfig.load().catch(err =>
 // Load AI feature-flag configuration from DB on startup
 aiConfig.load().catch(err =>
   console.warn('[aiConfig] Startup load failed, using defaults:', err.message)
+);
+
+// Load the site announcement banner from DB on startup
+announcementConfig.load().catch(err =>
+  console.warn('[announcement] Startup load failed, using defaults:', err.message)
 );
 
 module.exports = app;
