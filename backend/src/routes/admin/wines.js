@@ -21,6 +21,7 @@ const Discussion = require('../../models/Discussion');
 const DiscussionReply = require('../../models/DiscussionReply');
 const WineEmbedding = require('../../models/WineEmbedding');
 const WineNotDuplicate = require('../../models/WineNotDuplicate');
+const WineList = require('../../models/WineList');
 const vectorStore = require('../../services/vectorStore');
 const { embedSinglePair } = require('../../services/embeddingJob');
 const searchService = require('../../services/search');
@@ -680,6 +681,8 @@ router.post('/:id/merge', async (req, res) => {
       purgeSourceVectors(sourceId),
       // Drop any "not duplicate" decisions referencing the disappearing source.
       WineNotDuplicate.deleteMany({ $or: [{ wineA: sourceId }, { wineB: sourceId }] }),
+      // Wine list entries reference the wine directly — re-point them too
+      reassignWineListEntries(sourceId, targetId),
     ]);
 
     const bottlesMoved = results[0].modifiedCount || 0;
@@ -807,12 +810,34 @@ async function reembedKeeper(keeperId) {
   }
 }
 
+// Wine list entries reference WineDefinition directly (wine+vintage+size key),
+// so a merge must re-point them or the wine silently vanishes from published
+// menus and PDFs. Idempotent like the other reassigns. A list that already had
+// an entry for the keeper may end up with two entries for the same wine — the
+// owner sees both in the editor and can remove one; vanishing silently is the
+// failure mode we must avoid.
+function reassignWineListEntries(sourceId, keeperId) {
+  return Promise.all([
+    WineList.updateMany(
+      { 'autoGroupEntries.wine': sourceId },
+      { $set: { 'autoGroupEntries.$[e].wine': keeperId } },
+      { arrayFilters: [{ 'e.wine': sourceId }] }
+    ),
+    WineList.updateMany(
+      { 'sections.entries.wine': sourceId },
+      { $set: { 'sections.$[].entries.$[e].wine': keeperId } },
+      { arrayFilters: [{ 'e.wine': sourceId }] }
+    ),
+  ]);
+}
+
 // Reassign every reference from one source wine to the keeper. Idempotent
 // (updateMany by wineDefinition) and does NOT delete the source, so it's safe
 // to re-run after a partial failure. Returns the number of bottles moved.
 async function reassignWineRefs(sourceId, keeperId) {
   const bottleRes = await Bottle.updateMany({ wineDefinition: sourceId }, { $set: { wineDefinition: keeperId } });
   await Promise.all([
+    reassignWineListEntries(sourceId, keeperId),
     BottleImage.updateMany({ wineDefinition: sourceId }, { $set: { wineDefinition: keeperId } }),
     WineVintageProfile.updateMany({ wineDefinition: sourceId }, { $set: { wineDefinition: keeperId } }),
     WineVintagePrice.updateMany({ wineDefinition: sourceId }, { $set: { wineDefinition: keeperId } }),

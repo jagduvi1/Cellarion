@@ -2,6 +2,7 @@ const PDFDocument = require('pdfkit');
 const QRCode = require('qrcode');
 const fs = require('fs');
 const path = require('path');
+const { entryKey } = require('./wineListData');
 
 // Page dimensions (points, 72pt = 1 inch)
 const PAGE_SIZES = {
@@ -92,7 +93,7 @@ function buildSections(wineList, wineMap) {
 }
 
 function resolveEntry(entry, wineMap, layout = {}) {
-  const key = `${entry.wine}|${entry.vintage || 'NV'}|${entry.bottleSize || '750ml'}`;
+  const key = entryKey(entry);
   const info = wineMap.get(key);
   if (!info) return null; // wine no longer in the registry
   if (layout.hideOutOfStock && info.stock === 0) return null;
@@ -382,13 +383,12 @@ function renderWineEntry(doc, wine, opts) {
   doc.font(fontBold).fontSize(9.5).fillColor(scheme.text);
   doc.text(displayName, indent, y, { width: nameColWidth, lineBreak: false });
 
-  let priceText = '';
-  if (wine.price != null) {
-    priceText = `${currencySymbol}${wine.price.toFixed(0)}`;
-    if (wine.glassPrice != null) {
-      priceText += ` / ${currencySymbol}${wine.glassPrice.toFixed(0)} ${glassLabel}`;
-    }
-  }
+  // A wine can be glass-only (no bottle price known) — render whichever
+  // prices exist rather than gating the glass price on the bottle price
+  const priceParts = [];
+  if (wine.price != null) priceParts.push(`${currencySymbol}${wine.price.toFixed(0)}`);
+  if (wine.glassPrice != null) priceParts.push(`${currencySymbol}${wine.glassPrice.toFixed(0)} ${glassLabel}`);
+  const priceText = priceParts.join(' / ');
   if (priceText) {
     doc.font(font).fontSize(9.5).fillColor(scheme.text);
     doc.text(priceText, margin + contentWidth - priceColWidth, y, {
