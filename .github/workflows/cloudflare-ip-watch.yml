@@ -1,0 +1,92 @@
+name: Cloudflare IP watch
+
+# Opens a GitHub issue when Cloudflare's published IP ranges change, so the
+# Hetzner Cloud Firewall allowlist for ports 80/443 can be updated before a new
+# Cloudflare edge range starts getting blocked (which shows up as the site being
+# intermittently unreachable for SOME visitors). See
+# docs/security-origin-lockdown.md. Free: public repos get unlimited Actions.
+
+on:
+  schedule:
+    - cron: '17 6 * * 1'   # Mondays 06:17 UTC — Cloudflare changes rarely
+  workflow_dispatch: {}     # allow a manual run from the Actions tab
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Compare Cloudflare ranges to the committed baseline
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          curl -fsS --retry 3 https://www.cloudflare.com/ips-v4 -o /tmp/v4.raw
+          curl -fsS --retry 3 https://www.cloudflare.com/ips-v6 -o /tmp/v6.raw
+
+          # Normalise both sides: drop comments (#...) and blank lines, sort.
+          # The ips-v4 response has no trailing newline, so a bare `cat v4 v6`
+          # would glue the last v4 range onto the first v6 range — the `echo`
+          # inserts the missing separator.
+          strip() { grep -vE '^[[:space:]]*(#|$)' "$1" | tr -d '\r' | sort -u; }
+          { cat /tmp/v4.raw; echo; cat /tmp/v6.raw; } | strip /dev/stdin > /tmp/current.txt
+          strip .github/cloudflare-ips.txt > /tmp/baseline.txt
+
+          if diff -q /tmp/baseline.txt /tmp/current.txt >/dev/null; then
+            echo "Cloudflare IP ranges unchanged — nothing to do."
+            exit 0
+          fi
+
+          echo "Cloudflare IP ranges CHANGED."
+          added=$(comm -13 /tmp/baseline.txt /tmp/current.txt || true)
+          removed=$(comm -23 /tmp/baseline.txt /tmp/current.txt || true)
+          # `paste -d` treats the delimiter as a CYCLED character list, so ', '
+          # would alternate comma/space — join on comma then space them out.
+          csv() { tr -d '\r' < "$1" | grep -vE '^[[:space:]]*$' | paste -sd',' - | sed 's/,/, /g'; }
+          v4_csv=$(csv /tmp/v4.raw)
+          v6_csv=$(csv /tmp/v6.raw)
+
+          # Idempotent: ensure the label exists, then don't pile up duplicate issues.
+          gh label create cloudflare-ips --color FF6633 \
+            --description "Cloudflare IP range change — update the firewall allowlist" 2>/dev/null || true
+          open_count=$(gh issue list --label cloudflare-ips --state open --json number --jq 'length')
+          if [ "$open_count" != "0" ]; then
+            echo "An open cloudflare-ips issue already exists — not opening a duplicate."
+            exit 0
+          fi
+
+          {
+            echo "Cloudflare's published IP ranges have changed. Update the **Hetzner Cloud Firewall** inbound rules for ports **80 and 443** so legitimate visitors aren't blocked (see \`docs/security-origin-lockdown.md\`)."
+            echo
+            echo "## :heavy_plus_sign: Added — you MUST add these to the firewall"
+            echo '```'
+            echo "${added:-(none)}"
+            echo '```'
+            echo "## :heavy_minus_sign: Removed — safe to drop"
+            echo '```'
+            echo "${removed:-(none)}"
+            echo '```'
+            echo "## Current full list (paste-ready for Hetzner)"
+            echo "**IPv4:**"
+            echo '```'
+            echo "$v4_csv"
+            echo '```'
+            echo "**IPv6:**"
+            echo '```'
+            echo "$v6_csv"
+            echo '```'
+            echo
+            echo "When done: update \`.github/cloudflare-ips.txt\` to the current list (commit) and close this issue."
+            echo "_Source: https://www.cloudflare.com/ips-v4 + https://www.cloudflare.com/ips-v6_"
+          } > /tmp/body.md
+
+          gh issue create \
+            --title "Cloudflare IP ranges changed — update Hetzner firewall" \
+            --label cloudflare-ips \
+            --body-file /tmp/body.md
