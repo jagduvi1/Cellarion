@@ -13,6 +13,9 @@ export const createWineList = (apiFetch, data) =>
 export const getWineList = (apiFetch, id) =>
   apiFetch(`/api/wine-lists/${id}`);
 
+export const getCellarWines = (apiFetch, cellarId) =>
+  apiFetch(`/api/wine-lists/cellar-wines?cellar=${cellarId}`);
+
 export const updateWineList = (apiFetch, id, data) =>
   apiFetch(`/api/wine-lists/${id}`, {
     method: 'PUT',

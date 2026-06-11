@@ -477,6 +477,47 @@
   font-weight: 600;
 }
 
+.wle-stock-badge {
+  display: inline-block;
+  margin-left: 0.5rem;
+  padding: 0.05rem 0.4rem;
+  border-radius: 10px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  background: var(--color-bg-secondary, #f0f0f0);
+  color: var(--color-text-secondary, #666);
+}
+
+.wle-stock-badge.out {
+  background: var(--color-danger);
+  color: #fff;
+}
+
+.wle-glass-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.8rem;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.wle-price-suggested {
+  font-style: italic;
+  opacity: 0.85;
+}
+
+.wle-glass-calc h4 {
+  margin: 0 0 0.25rem;
+}
+
+.wle-glass-calc-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+  flex-wrap: wrap;
+}
+
 .wle-margin-pos {
   color: var(--color-success);
   font-weight: 600;

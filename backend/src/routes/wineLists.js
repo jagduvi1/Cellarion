@@ -6,12 +6,11 @@ const multer = require('multer');
 const { requireAuth } = require('../middleware/auth');
 const WineList = require('../models/WineList');
 const Cellar = require('../models/Cellar');
-const Bottle = require('../models/Bottle');
 const { logAudit } = require('../services/audit');
 const { isValidId } = require('../utils/validation');
 const { generateWineListPdf } = require('../services/wineListPdf');
 const { stripImageMetadata } = require('../services/imageSanitizer');
-const { loadBottleMap } = require('../services/wineListData');
+const { loadWineMap, loadCellarWines, entryKey, allEntries } = require('../services/wineListData');
 const { LOGO_DIR, ensureLogoDir, deleteLogoFile } = require('../services/wineListLogos');
 
 const router = express.Router();
@@ -74,6 +73,27 @@ router.get('/', requireAuth, async (req, res) => {
   }
 });
 
+// GET /api/wine-lists/cellar-wines?cellar=:cellarId — distinct wines in the
+// cellar (active bottles grouped by wine + vintage + size, with stock and
+// average purchase price) for the editor's picker
+router.get('/cellar-wines', requireAuth, async (req, res) => {
+  try {
+    const { cellar: cellarId } = req.query;
+    if (!cellarId || !mongoose.Types.ObjectId.isValid(cellarId)) {
+      return res.status(400).json({ error: 'Valid cellar ID is required' });
+    }
+
+    const cellar = await requireCellarOwner(req.user.id, cellarId);
+    if (!cellar) return res.status(403).json({ error: 'Not authorized' });
+
+    const wines = await loadCellarWines(cellarId);
+    res.json(wines);
+  } catch (error) {
+    console.error('Cellar wines error:', error);
+    res.status(500).json({ error: 'Failed to load cellar wines' });
+  }
+});
+
 // POST /api/wine-lists — create a new wine list
 router.post('/', requireAuth, async (req, res) => {
   try {
@@ -100,14 +120,23 @@ router.post('/', requireAuth, async (req, res) => {
   }
 });
 
-// GET /api/wine-lists/:id — get wine list details
+// GET /api/wine-lists/:id — get wine list details.
+// resolvedWines carries the populated wine + live stock for every entry, so
+// the editor can label entries whose wine has no active bottles left (those
+// are absent from the cellar-wines picker data).
 router.get('/:id', requireAuth, async (req, res) => {
   try {
     if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
     const wineList = await WineList.findOne({ _id: req.params.id, user: req.user.id });
     if (!wineList) return res.status(404).json({ error: 'Wine list not found' });
 
-    res.json(wineList);
+    const wineMap = await loadWineMap(wineList);
+    const resolvedWines = [...wineMap.entries()].map(([key, v]) => {
+      const [, vintage, bottleSize] = key.split('|');
+      return { key, wine: v.wine, vintage, bottleSize, stock: v.stock, avgPrice: v.avgPrice };
+    });
+
+    res.json({ ...wineList.toObject(), resolvedWines });
   } catch (error) {
     console.error('Get wine list error:', error);
     res.status(500).json({ error: 'Failed to load wine list' });
@@ -149,6 +178,9 @@ router.put('/:id', requireAuth, async (req, res) => {
   } catch (error) {
     if (error.name === 'VersionError') {
       return res.status(409).json({ error: 'Wine list was modified by another request. Please refresh and try again.' });
+    }
+    if (error.name === 'ValidationError' || error.name === 'CastError') {
+      return res.status(400).json({ error: 'Invalid wine list data' });
     }
     console.error('Update wine list error:', error);
     res.status(500).json({ error: 'Failed to update wine list' });
@@ -221,7 +253,7 @@ router.get('/:id/preview-pdf', requireAuth, async (req, res) => {
     const wineList = await WineList.findOne({ _id: req.params.id, user: req.user.id });
     if (!wineList) return res.status(404).json({ error: 'Wine list not found' });
 
-    const bottleMap = await loadBottleMap(wineList);
+    const wineMap = await loadWineMap(wineList);
 
     // Build public URL for QR code if published
     let publicUrl = null;
@@ -230,7 +262,7 @@ router.get('/:id/preview-pdf', requireAuth, async (req, res) => {
       publicUrl = `${base}/api/wine-lists/public/${wineList.shareToken}/pdf`;
     }
 
-    const pdfStream = await generateWineListPdf(wineList, bottleMap, { publicUrl });
+    const pdfStream = await generateWineListPdf(wineList, wineMap, { publicUrl });
 
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(wineList.name || 'wine-list')}.pdf"`);
@@ -284,48 +316,27 @@ router.get('/:id/stats', requireAuth, async (req, res) => {
     const wineList = await WineList.findOne({ _id: req.params.id, user: req.user.id });
     if (!wineList) return res.status(404).json({ error: 'Wine list not found' });
 
-    const bottleMap = await loadBottleMap(wineList);
+    const wineMap = await loadWineMap(wineList);
 
-    // Collect all entries from both modes
-    const entries = wineList.structureMode === 'custom'
-      ? (wineList.sections || []).flatMap(s => s.entries || [])
-      : (wineList.autoGroupEntries || []);
-
-    // Count stock per wineDefinition in this cellar
-    const activeBottles = await Bottle.find({
-      cellar: wineList.cellar,
-      status: 'active',
-    }).select('wineDefinition price').lean();
-
-    // Build stock counts: wineDefinitionId → { count, avgPurchasePrice }
-    const stockMap = new Map();
-    for (const b of activeBottles) {
-      const wdId = b.wineDefinition?.toString();
-      if (!wdId) continue;
-      if (!stockMap.has(wdId)) stockMap.set(wdId, { count: 0, totalCost: 0, pricedCount: 0 });
-      const s = stockMap.get(wdId);
-      s.count++;
-      if (b.price != null) {
-        s.totalCost += b.price;
-        s.pricedCount++;
-      }
-    }
-
-    // Build stats per wine list entry
+    // Build stats per distinct wine on the list. Out-of-stock wines stay
+    // visible with stockCount 0 — that's the restock warning, not a reason
+    // to hide the row.
     const stats = [];
+    const seen = new Set();
     let totalRevenue = 0;
     let totalCost = 0;
 
-    for (const entry of entries) {
-      const bottle = bottleMap.get(entry.bottle.toString());
-      if (!bottle || bottle.status !== 'active') continue;
+    for (const entry of allEntries(wineList)) {
+      const key = entryKey(entry);
+      if (seen.has(key)) continue;
+      seen.add(key);
 
-      const wine = bottle.wineDefinition || {};
-      const wdId = wine._id?.toString();
-      const stock = wdId ? stockMap.get(wdId) : null;
-      const stockCount = stock?.count || 0;
-      const avgCost = stock?.pricedCount > 0 ? stock.totalCost / stock.pricedCount : null;
-      const listPrice = entry.listPrice != null ? entry.listPrice : bottle.price;
+      const info = wineMap.get(key);
+      if (!info) continue; // wine no longer in the registry
+
+      const stockCount = info.stock;
+      const avgCost = info.avgPrice;
+      const listPrice = entry.listPrice != null ? entry.listPrice : avgCost;
       const margin = (avgCost != null && listPrice != null && avgCost > 0)
         ? Math.round(((listPrice - avgCost) / avgCost) * 100)
         : null;
@@ -334,10 +345,13 @@ router.get('/:id/stats', requireAuth, async (req, res) => {
       if (avgCost != null) totalCost += avgCost * stockCount;
 
       stats.push({
-        bottleId: bottle._id,
-        wineName: wine.name || 'Unknown',
-        producer: wine.producer || '',
-        vintage: bottle.vintage || 'NV',
+        key,
+        wineName: info.wine.name || 'Unknown',
+        producer: info.wine.producer || '',
+        vintage: entry.vintage || 'NV',
+        bottleSize: entry.bottleSize || '750ml',
+        byGlass: !!entry.byGlass,
+        glassPrice: entry.byGlass && entry.glassPrice != null ? Math.round(entry.glassPrice) : null,
         stockCount,
         purchasePrice: avgCost != null ? Math.round(avgCost) : null,
         listPrice: listPrice != null ? Math.round(listPrice) : null,

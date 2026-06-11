@@ -1,8 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { getWineList, updateWineList, publishWineList, unpublishWineList, uploadWineListLogo, getWineListStats, previewWineListPdf } from '../api/wineLists';
-import { getCellar } from '../api/cellars';
+import { getWineList, updateWineList, publishWineList, unpublishWineList, uploadWineListLogo, getWineListStats, previewWineListPdf, getCellarWines } from '../api/wineLists';
 import './WineListEditor.css';
 
 const API_BASE = import.meta.env.VITE_API_URL || '';
@@ -10,51 +9,71 @@ const API_BASE = import.meta.env.VITE_API_URL || '';
 const LANGUAGE_OPTIONS = [
   { value: 'en', label: 'English' },
   { value: 'sv', label: 'Svenska' },
-  { value: 'fr', label: 'Fran\u00e7ais' },
+  { value: 'fr', label: 'Français' },
   { value: 'de', label: 'Deutsch' },
-  { value: 'es', label: 'Espa\u00f1ol' },
+  { value: 'es', label: 'Español' },
   { value: 'it', label: 'Italiano' },
 ];
+
+/** Canonical key for an entry or picker item: wine + vintage + bottle size. */
+const keyOf = (e) =>
+  `${e.wine?._id || e.wine}|${e.vintage || 'NV'}|${e.bottleSize || '750ml'}`;
+
+/** Suggested glass price from the list's glass pricing rule. */
+const suggestGlassPrice = (listPrice, layout = {}) => {
+  if (listPrice == null) return null;
+  const glasses = layout.glassesPerBottle || 6;
+  const markup = layout.glassMarkup || 0;
+  const step = parseInt(layout.glassRounding || '1', 10) || 1;
+  const raw = (listPrice / glasses) * (1 + markup / 100);
+  return Math.max(step, Math.round(raw / step) * step);
+};
 
 function WineListEditor() {
   const { id: cellarId, listId } = useParams();
   const { apiFetch } = useAuth();
 
   const [wineList, setWineList] = useState(null);
-  const [bottles, setBottles] = useState([]);
+  const [wines, setWines] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [activeTab, setActiveTab] = useState('bottles');
+  const [activeTab, setActiveTab] = useState('wines');
   const [error, setError] = useState(null);
   const [bulkPercent, setBulkPercent] = useState('');
   const [stats, setStats] = useState(null);
   const [statsLoading, setStatsLoading] = useState(false);
   const [showQuickStart, setShowQuickStart] = useState(false);
-  const [bottleSearch, setBottleSearch] = useState('');
+  const [wineSearch, setWineSearch] = useState('');
 
-  // Load wine list and cellar bottles
+  // Load wine list and the cellar's distinct wines
   const fetchData = useCallback(async () => {
     try {
-      const [wlRes, cellarRes] = await Promise.all([
+      const [wlRes, winesRes] = await Promise.all([
         getWineList(apiFetch, listId),
-        getCellar(apiFetch, cellarId, 'limit=500'),
+        getCellarWines(apiFetch, cellarId),
       ]);
       const wlData = await wlRes.json();
-      const cellarData = await cellarRes.json();
+      const winesData = await winesRes.json();
 
       if (!wlRes.ok) { setError(wlData.error || 'Failed to load wine list'); return; }
-      if (!cellarRes.ok) { setError(cellarData.error || 'Failed to load cellar'); return; }
+      if (!winesRes.ok) { setError(winesData.error || 'Failed to load cellar wines'); return; }
 
-      setWineList(wlData);
-      // cellarData.bottles is { total, count, items: [...] } — already excludes consumed
-      const activeBottles = cellarData.bottles?.items || [];
-      setBottles(activeBottles);
+      // Wines already on the list but out of stock are absent from the
+      // picker data — merge them in (stock 0) so their entries stay editable.
+      const { resolvedWines, ...list } = wlData;
+      const pickerKeys = new Set(winesData.map(keyOf));
+      const extras = (resolvedWines || [])
+        .filter(rw => !pickerKeys.has(rw.key))
+        .map(rw => ({ wine: rw.wine, vintage: rw.vintage, bottleSize: rw.bottleSize, stock: rw.stock, avgPrice: rw.avgPrice }));
+
+      setWineList(list);
+      setWines([...winesData, ...extras]);
 
       // Show quick-start if this is a fresh wine list (no entries yet)
-      const hasEntries = wlData.structureMode === 'custom'
-        ? (wlData.sections || []).some(s => (s.entries || []).length > 0)
-        : (wlData.autoGroupEntries || []).length > 0;
-      if (!hasEntries && activeBottles.length > 0) {
+      const hasEntries = list.structureMode === 'custom'
+        ? (list.sections || []).some(s => (s.entries || []).length > 0)
+        : (list.autoGroupEntries || []).length > 0;
+      if (!hasEntries && winesData.length > 0) {
         setShowQuickStart(true);
       }
     } catch {
@@ -81,16 +100,192 @@ function WineListEditor() {
     if (activeTab === 'dashboard') loadStats();
   }, [activeTab, loadStats]);
 
-  // --- Quick start: add all bottles with their cellar prices ---
+  // --- Entry helpers ---
+  const makeEntry = useCallback((item, sortOrder) => ({
+    wine: item.wine._id,
+    vintage: item.vintage,
+    bottleSize: item.bottleSize,
+    listPrice: item.avgPrice != null ? Math.round(item.avgPrice) : null,
+    byGlass: false,
+    glassPrice: null,
+    glassPriceManual: false,
+    sortOrder,
+  }), []);
+
+  const getEntries = () => {
+    if (wineList.structureMode === 'custom') {
+      return (wineList.sections || []).flatMap(s => s.entries || []);
+    }
+    return wineList.autoGroupEntries || [];
+  };
+
+  const getEntry = (key) => getEntries().find(e => keyOf(e) === key);
+  const isSelected = (key) => getEntries().some(e => keyOf(e) === key);
+
+  /** Apply `mutate(entry)` to every entry, in whichever mode is active. */
+  const updateEntries = (mutate) => {
+    if (wineList.structureMode === 'custom') {
+      const sections = (wineList.sections || []).map(s => ({
+        ...s,
+        entries: (s.entries || []).map(e => mutate({ ...e })),
+      }));
+      setWineList({ ...wineList, sections });
+    } else {
+      const entries = (wineList.autoGroupEntries || []).map(e => mutate({ ...e }));
+      setWineList({ ...wineList, autoGroupEntries: entries });
+    }
+  };
+
+  const updateEntry = (key, mutate) => {
+    updateEntries(e => (keyOf(e) === key ? mutate(e) : e));
+  };
+
+  const toggleWine = (item) => {
+    const key = keyOf(item);
+    if (wineList.structureMode === 'custom') {
+      const sections = wineList.sections?.length
+        ? wineList.sections.map(s => ({ ...s, entries: [...(s.entries || [])] }))
+        : [{ title: 'Wines', sortOrder: 0, entries: [] }];
+      let removed = false;
+      for (const section of sections) {
+        const idx = section.entries.findIndex(e => keyOf(e) === key);
+        if (idx >= 0) { section.entries.splice(idx, 1); removed = true; break; }
+      }
+      if (!removed) {
+        sections[0].entries.push(makeEntry(item, sections[0].entries.length));
+      }
+      setWineList({ ...wineList, sections });
+    } else {
+      const entries = [...(wineList.autoGroupEntries || [])];
+      const idx = entries.findIndex(e => keyOf(e) === key);
+      if (idx >= 0) entries.splice(idx, 1);
+      else entries.push(makeEntry(item, entries.length));
+      setWineList({ ...wineList, autoGroupEntries: entries });
+    }
+  };
+
+  const selectAllWines = () => {
+    const entries = wines.map((item, i) => {
+      // Keep existing entries (with their prices) — only add what's missing
+      return getEntry(keyOf(item)) || makeEntry(item, i);
+    });
+    if (wineList.structureMode === 'custom') {
+      const sections = wineList.sections?.length ? [...wineList.sections] : [{ title: 'Wines', sortOrder: 0, entries: [] }];
+      const otherSectionKeys = new Set(
+        sections.slice(1).flatMap(s => (s.entries || []).map(keyOf))
+      );
+      sections[0] = { ...sections[0], entries: entries.filter(e => !otherSectionKeys.has(keyOf(e))) };
+      setWineList({ ...wineList, sections });
+    } else {
+      setWineList({ ...wineList, autoGroupEntries: entries });
+    }
+  };
+
+  const deselectAllWines = () => {
+    if (wineList.structureMode === 'custom') {
+      const sections = (wineList.sections || []).map(s => ({ ...s, entries: [] }));
+      setWineList({ ...wineList, sections });
+    } else {
+      setWineList({ ...wineList, autoGroupEntries: [] });
+    }
+  };
+
+  // --- Quick start: add every distinct wine with its average price ---
   const handleQuickStart = () => {
-    const entries = bottles.map((b, i) => ({
-      bottle: b._id,
-      listPrice: b.price || null,
-      glassPrice: null,
-      sortOrder: i,
-    }));
+    const entries = wines.map((item, i) => makeEntry(item, i));
     setWineList(prev => ({ ...prev, autoGroupEntries: entries, structureMode: 'auto' }));
     setShowQuickStart(false);
+  };
+
+  // --- Prices ---
+  const layout = wineList?.layout || {};
+
+  const setListPrice = (key, value) => {
+    const numVal = value === '' ? null : parseFloat(value);
+    updateEntry(key, e => {
+      e.listPrice = numVal;
+      // Suggested glass prices follow the bottle price until overridden
+      if (e.byGlass && !e.glassPriceManual) {
+        e.glassPrice = suggestGlassPrice(numVal, layout);
+      }
+      return e;
+    });
+  };
+
+  const setGlassPrice = (key, value) => {
+    const numVal = value === '' ? null : parseFloat(value);
+    updateEntry(key, e => {
+      e.glassPrice = numVal;
+      e.glassPriceManual = true;
+      return e;
+    });
+  };
+
+  const toggleByGlass = (key) => {
+    updateEntry(key, e => {
+      e.byGlass = !e.byGlass;
+      if (e.byGlass && !e.glassPriceManual) {
+        e.glassPrice = suggestGlassPrice(e.listPrice, layout);
+      }
+      return e;
+    });
+  };
+
+  // --- Bulk price adjustment ---
+  const applyBulkPriceAdjust = () => {
+    const pct = parseFloat(bulkPercent);
+    if (isNaN(pct)) return;
+    const multiplier = 1 + pct / 100;
+
+    const avgPriceByKey = new Map(wines.map(w => [keyOf(w), w.avgPrice]));
+    updateEntries(e => {
+      const base = e.listPrice != null ? e.listPrice : (avgPriceByKey.get(keyOf(e)) ?? null);
+      e.listPrice = base != null ? Math.round(base * multiplier) : null;
+      if (e.byGlass) {
+        e.glassPrice = e.glassPriceManual
+          ? (e.glassPrice != null ? Math.round(e.glassPrice * multiplier) : e.glassPrice)
+          : suggestGlassPrice(e.listPrice, layout);
+      }
+      return e;
+    });
+  };
+
+  // --- Glass pricing rule ---
+  const recalcGlassPrices = (resetManual) => {
+    updateEntries(e => {
+      if (!e.byGlass) return e;
+      if (resetManual || !e.glassPriceManual) {
+        e.glassPrice = suggestGlassPrice(e.listPrice, layout);
+        if (resetManual) e.glassPriceManual = false;
+      }
+      return e;
+    });
+  };
+
+  // --- Custom sections ---
+  const addSection = () => {
+    const sections = [...(wineList.sections || [])];
+    sections.push({ title: 'New Section', sortOrder: sections.length, entries: [] });
+    setWineList({ ...wineList, sections });
+  };
+
+  const updateSectionTitle = (idx, title) => {
+    const sections = [...(wineList.sections || [])];
+    sections[idx] = { ...sections[idx], title };
+    setWineList({ ...wineList, sections });
+  };
+
+  const removeSection = (idx) => {
+    const sections = [...(wineList.sections || [])];
+    sections.splice(idx, 1);
+    setWineList({ ...wineList, sections });
+  };
+
+  const moveSectionEntry = (sectionIdx, entryIdx, targetSectionIdx) => {
+    const sections = (wineList.sections || []).map(s => ({ ...s, entries: [...(s.entries || [])] }));
+    const [entry] = sections[sectionIdx].entries.splice(entryIdx, 1);
+    sections[targetSectionIdx].entries.push(entry);
+    setWineList({ ...wineList, sections });
   };
 
   // --- Save handler ---
@@ -117,190 +312,6 @@ function WineListEditor() {
       alert('Save failed');
     } finally {
       setSaving(false);
-    }
-  };
-
-  // --- Entry helpers ---
-  const getEntries = () => {
-    if (wineList.structureMode === 'custom') {
-      return (wineList.sections || []).flatMap(s => s.entries || []);
-    }
-    return wineList.autoGroupEntries || [];
-  };
-
-  const isBottleSelected = (bottleId) => {
-    return getEntries().some(e => e.bottle === bottleId);
-  };
-
-  const toggleBottle = (bottle) => {
-    const bottleId = bottle._id;
-    if (wineList.structureMode === 'custom') {
-      const updated = { ...wineList };
-      if (!updated.sections || updated.sections.length === 0) {
-        updated.sections = [{ title: 'Wines', sortOrder: 0, entries: [] }];
-      }
-      const section = updated.sections[0];
-      const idx = section.entries.findIndex(e => e.bottle === bottleId);
-      if (idx >= 0) {
-        section.entries.splice(idx, 1);
-      } else {
-        section.entries.push({
-          bottle: bottleId,
-          listPrice: bottle.price || null,
-          glassPrice: null,
-          sortOrder: section.entries.length,
-        });
-      }
-      setWineList({ ...updated });
-    } else {
-      const entries = [...(wineList.autoGroupEntries || [])];
-      const idx = entries.findIndex(e => e.bottle === bottleId);
-      if (idx >= 0) {
-        entries.splice(idx, 1);
-      } else {
-        entries.push({
-          bottle: bottleId,
-          listPrice: bottle.price || null,
-          glassPrice: null,
-          sortOrder: entries.length,
-        });
-      }
-      setWineList({ ...wineList, autoGroupEntries: entries });
-    }
-  };
-
-  const selectAllBottles = () => {
-    const entries = bottles.map((b, i) => ({
-      bottle: b._id,
-      listPrice: b.price || null,
-      glassPrice: null,
-      sortOrder: i,
-    }));
-    if (wineList.structureMode === 'custom') {
-      const sections = wineList.sections?.length ? [...wineList.sections] : [{ title: 'Wines', sortOrder: 0, entries: [] }];
-      sections[0] = { ...sections[0], entries };
-      setWineList({ ...wineList, sections });
-    } else {
-      setWineList({ ...wineList, autoGroupEntries: entries });
-    }
-  };
-
-  const deselectAllBottles = () => {
-    if (wineList.structureMode === 'custom') {
-      const sections = (wineList.sections || []).map(s => ({ ...s, entries: [] }));
-      setWineList({ ...wineList, sections });
-    } else {
-      setWineList({ ...wineList, autoGroupEntries: [] });
-    }
-  };
-
-  const updateEntryPrice = (bottleId, field, value) => {
-    const numVal = value === '' ? null : parseFloat(value);
-    if (wineList.structureMode === 'custom') {
-      const updated = { ...wineList };
-      for (const section of updated.sections || []) {
-        const entry = section.entries.find(e => e.bottle === bottleId);
-        if (entry) { entry[field] = numVal; break; }
-      }
-      setWineList({ ...updated });
-    } else {
-      const entries = [...(wineList.autoGroupEntries || [])];
-      const entry = entries.find(e => e.bottle === bottleId);
-      if (entry) entry[field] = numVal;
-      setWineList({ ...wineList, autoGroupEntries: entries });
-    }
-  };
-
-  const getEntryPrice = (bottleId, field) => {
-    const entries = getEntries();
-    const entry = entries.find(e => e.bottle === bottleId);
-    return entry ? entry[field] : null;
-  };
-
-  // --- Custom sections ---
-  const addSection = () => {
-    const sections = [...(wineList.sections || [])];
-    sections.push({ title: 'New Section', sortOrder: sections.length, entries: [] });
-    setWineList({ ...wineList, sections });
-  };
-
-  const updateSectionTitle = (idx, title) => {
-    const sections = [...(wineList.sections || [])];
-    sections[idx] = { ...sections[idx], title };
-    setWineList({ ...wineList, sections });
-  };
-
-  const removeSection = (idx) => {
-    const sections = [...(wineList.sections || [])];
-    sections.splice(idx, 1);
-    setWineList({ ...wineList, sections });
-  };
-
-  const moveSectionEntry = (sectionIdx, entryIdx, targetSectionIdx) => {
-    const sections = [...(wineList.sections || [])];
-    const [entry] = sections[sectionIdx].entries.splice(entryIdx, 1);
-    sections[targetSectionIdx].entries.push(entry);
-    setWineList({ ...wineList, sections });
-  };
-
-  // --- Bulk price adjustment ---
-  const applyBulkPriceAdjust = () => {
-    const pct = parseFloat(bulkPercent);
-    if (isNaN(pct)) return;
-    const multiplier = 1 + pct / 100;
-
-    // Look up bottle purchase price for entries that have no listPrice yet
-    const bottlePriceMap = new Map(bottles.map(b => [b._id, b.price]));
-    const adjustPrice = (entry) => {
-      const base = entry.listPrice != null ? entry.listPrice : (bottlePriceMap.get(entry.bottle) || null);
-      return base != null ? Math.round(base * multiplier) : null;
-    };
-
-    if (wineList.structureMode === 'custom') {
-      const updated = { ...wineList };
-      for (const section of updated.sections || []) {
-        for (const entry of section.entries || []) {
-          entry.listPrice = adjustPrice(entry);
-          if (entry.glassPrice != null) entry.glassPrice = Math.round(entry.glassPrice * multiplier);
-        }
-      }
-      setWineList({ ...updated });
-    } else {
-      const entries = (wineList.autoGroupEntries || []).map(e => ({
-        ...e,
-        listPrice: adjustPrice(e),
-        glassPrice: e.glassPrice != null ? Math.round(e.glassPrice * multiplier) : e.glassPrice,
-      }));
-      setWineList({ ...wineList, autoGroupEntries: entries });
-    }
-  };
-
-  // --- Calculate glass prices ---
-  const calculateGlassPrices = () => {
-    const layout = wineList.layout || {};
-    const glasses = layout.glassesPerBottle || 6;
-    const markup = layout.glassMarkup || 0;
-    const multiplier = (1 + markup / 100) / glasses;
-
-    const calcGlass = (entry) => {
-      if (entry.listPrice == null) return null;
-      return Math.round(entry.listPrice * multiplier);
-    };
-
-    if (wineList.structureMode === 'custom') {
-      const updated = { ...wineList };
-      for (const section of updated.sections || []) {
-        for (const entry of section.entries || []) {
-          entry.glassPrice = calcGlass(entry);
-        }
-      }
-      setWineList({ ...updated });
-    } else {
-      const entries = (wineList.autoGroupEntries || []).map(e => ({
-        ...e,
-        glassPrice: calcGlass(e),
-      }));
-      setWineList({ ...wineList, autoGroupEntries: entries });
     }
   };
 
@@ -364,17 +375,17 @@ function WineListEditor() {
     return `${API_BASE}/api/wine-lists/public/${wineList.shareToken}/pdf`;
   };
 
-  // --- Filtered bottles for search ---
-  const filteredBottles = bottles.filter(b => {
-    if (!bottleSearch) return true;
-    const wine = b.wineDefinition || {};
-    const search = bottleSearch.toLowerCase();
+  // --- Filtered wines for search ---
+  const filteredWines = wines.filter(item => {
+    if (!wineSearch) return true;
+    const wine = item.wine || {};
+    const search = wineSearch.toLowerCase();
     return (
       (wine.name || '').toLowerCase().includes(search) ||
       (wine.producer || '').toLowerCase().includes(search) ||
       (wine.region?.name || '').toLowerCase().includes(search) ||
       (wine.country?.name || '').toLowerCase().includes(search) ||
-      (b.vintage || '').toLowerCase().includes(search)
+      (item.vintage || '').toLowerCase().includes(search)
     );
   });
 
@@ -383,9 +394,14 @@ function WineListEditor() {
   if (!wineList) return <div className="alert alert-error">Wine list not found</div>;
 
   const branding = wineList.branding || {};
-  const layout = wineList.layout || {};
   const selectedCount = getEntries().length;
-  const tabs = ['bottles', 'branding', 'layout', 'dashboard', 'share'];
+  const tabs = ['wines', 'branding', 'layout', 'dashboard', 'share'];
+  const winesByKey = new Map(wines.map(w => [keyOf(w), w]));
+
+  const renderVintageSize = (vintage, bottleSize) => {
+    const v = vintage || 'NV';
+    return bottleSize && bottleSize !== '750ml' ? `${v} (${bottleSize})` : v;
+  };
 
   return (
     <div className="wle-page">
@@ -413,11 +429,11 @@ function WineListEditor() {
         <div className="wle-quickstart">
           <div className="wle-quickstart-content">
             <strong>Quick start</strong>
-            <p>Add all {bottles.length} bottles from your cellar and use their current prices as a starting point?</p>
+            <p>Add all {wines.length} wines from your cellar and use their purchase prices as a starting point?</p>
           </div>
           <div className="wle-quickstart-actions">
             <button className="btn btn-primary" onClick={handleQuickStart}>
-              Add all bottles
+              Add all wines
             </button>
             <button className="btn btn-secondary" onClick={() => setShowQuickStart(false)}>
               I'll pick manually
@@ -435,15 +451,15 @@ function WineListEditor() {
             onClick={() => setActiveTab(tab)}
           >
             {tab === 'dashboard' ? 'Dashboard' : tab.charAt(0).toUpperCase() + tab.slice(1)}
-            {tab === 'bottles' && selectedCount > 0 && (
+            {tab === 'wines' && selectedCount > 0 && (
               <span className="wle-tab-count">{selectedCount}</span>
             )}
           </button>
         ))}
       </div>
 
-      {/* ── Bottles tab ── */}
-      {activeTab === 'bottles' && (
+      {/* ── Wines tab ── */}
+      {activeTab === 'wines' && (
         <div className="wle-section">
           {/* Structure mode toggle */}
           <div className="wle-mode-toggle">
@@ -522,16 +538,15 @@ function WineListEditor() {
                     <button className="btn btn-small btn-danger" onClick={() => removeSection(sIdx)}>Remove</button>
                   </div>
                   {(section.entries || []).length === 0 && (
-                    <p className="text-muted-sm">No bottles in this section yet. Select bottles below.</p>
+                    <p className="text-muted-sm">No wines in this section yet. Select wines below.</p>
                   )}
                   {(section.entries || []).map((entry, eIdx) => {
-                    const bottle = bottles.find(b => b._id === entry.bottle);
-                    if (!bottle) return null;
-                    const wine = bottle.wineDefinition || {};
+                    const item = winesByKey.get(keyOf(entry));
+                    const wine = item?.wine || {};
                     return (
-                      <div key={entry.bottle} className="wle-entry-row">
+                      <div key={keyOf(entry)} className="wle-entry-row">
                         <span className="wle-entry-name">
-                          {wine.name || 'Unknown'} {bottle.vintage || 'NV'}
+                          {wine.name || 'Unknown'} {renderVintageSize(entry.vintage, entry.bottleSize)}
                           {wine.producer && <span className="text-muted-sm"> — {wine.producer}</span>}
                         </span>
                         {wineList.sections.length > 1 && (
@@ -572,65 +587,79 @@ function WineListEditor() {
               </div>
             )}
             <div className="wle-select-actions">
-              <button className="btn btn-small btn-secondary" onClick={selectAllBottles}>Select all</button>
+              <button className="btn btn-small btn-secondary" onClick={selectAllWines}>Select all</button>
               {selectedCount > 0 && (
-                <button className="btn btn-small btn-secondary" onClick={deselectAllBottles}>Deselect all</button>
+                <button className="btn btn-small btn-secondary" onClick={deselectAllWines}>Deselect all</button>
               )}
             </div>
           </div>
 
-          {/* Bottle search */}
+          {/* Wine search */}
           <div className="wle-bottle-search">
             <input
               type="text"
-              placeholder="Search bottles..."
-              value={bottleSearch}
-              onChange={e => setBottleSearch(e.target.value)}
+              placeholder="Search wines..."
+              value={wineSearch}
+              onChange={e => setWineSearch(e.target.value)}
               className="search-input"
             />
-            <span className="text-muted-sm">{selectedCount} of {bottles.length} selected</span>
+            <span className="text-muted-sm">{selectedCount} of {wines.length} selected</span>
           </div>
 
-          {/* Bottle selection list */}
+          {/* Wine selection list */}
           <div className="wle-bottle-list">
-            {filteredBottles.map(bottle => {
-              const wine = bottle.wineDefinition || {};
-              const selected = isBottleSelected(bottle._id);
+            {filteredWines.map(item => {
+              const key = keyOf(item);
+              const wine = item.wine || {};
+              const selected = isSelected(key);
+              const entry = selected ? getEntry(key) : null;
               return (
-                <div key={bottle._id} className={`wle-bottle-row ${selected ? 'selected' : ''}`}>
+                <div key={key} className={`wle-bottle-row ${selected ? 'selected' : ''}`}>
                   <label className="wle-bottle-check">
                     <input
                       type="checkbox"
                       checked={selected}
-                      onChange={() => toggleBottle(bottle)}
+                      onChange={() => toggleWine(item)}
                     />
                     <span className="wle-bottle-info">
-                      <strong>{wine.name || 'Unknown'}</strong> {bottle.vintage || 'NV'}
+                      <strong>{wine.name || 'Unknown'}</strong> {renderVintageSize(item.vintage, item.bottleSize)}
+                      <span className={`wle-stock-badge ${item.stock === 0 ? 'out' : ''}`}>
+                        {item.stock === 0 ? 'Out of stock' : `× ${item.stock}`}
+                      </span>
                       <span className="text-muted-sm">
                         {[wine.producer, wine.region?.name, wine.country?.name].filter(Boolean).join(' — ')}
                       </span>
                     </span>
                   </label>
-                  {selected && (
+                  {selected && entry && (
                     <div className="wle-price-inputs">
                       <input
                         type="number"
                         min="0"
                         step="1"
                         placeholder="Bottle price"
-                        value={getEntryPrice(bottle._id, 'listPrice') ?? ''}
-                        onChange={e => updateEntryPrice(bottle._id, 'listPrice', e.target.value)}
+                        value={entry.listPrice ?? ''}
+                        onChange={e => setListPrice(key, e.target.value)}
                         className="wle-price-input"
                       />
-                      {layout.showGlassPrice && (
+                      <label className="wle-glass-toggle" title="Also available by the glass">
+                        <input
+                          type="checkbox"
+                          checked={entry.byGlass || false}
+                          onChange={() => toggleByGlass(key)}
+                        />
+                        <span aria-hidden="true">🍷</span> Glass
+                      </label>
+                      {entry.byGlass && (
                         <input
                           type="number"
                           min="0"
                           step="1"
                           placeholder="Glass price"
-                          value={getEntryPrice(bottle._id, 'glassPrice') ?? ''}
-                          onChange={e => updateEntryPrice(bottle._id, 'glassPrice', e.target.value)}
-                          className="wle-price-input"
+                          value={entry.glassPrice ?? ''}
+                          onChange={e => setGlassPrice(key, e.target.value)}
+                          className={`wle-price-input ${entry.glassPriceManual ? '' : 'wle-price-suggested'}`}
+                          title={entry.glassPriceManual ? 'Manually set price' : 'Suggested from the glass pricing rule — edit to override'}
                         />
                       )}
                     </div>
@@ -638,10 +667,10 @@ function WineListEditor() {
                 </div>
               );
             })}
-            {filteredBottles.length === 0 && bottles.length > 0 && (
-              <p className="empty-state">No bottles match your search.</p>
+            {filteredWines.length === 0 && wines.length > 0 && (
+              <p className="empty-state">No wines match your search.</p>
             )}
-            {bottles.length === 0 && (
+            {wines.length === 0 && (
               <p className="empty-state">No active bottles in this cellar.</p>
             )}
           </div>
@@ -774,55 +803,90 @@ function WineListEditor() {
               />
             </div>
           </div>
+
           <label className="wle-checkbox">
             <input
               type="checkbox"
-              checked={layout.showGlassPrice || false}
+              checked={layout.hideOutOfStock || false}
               onChange={e => setWineList({
                 ...wineList,
-                layout: { ...layout, showGlassPrice: e.target.checked }
+                layout: { ...layout, hideOutOfStock: e.target.checked }
               })}
             />
-            Show glass prices
+            Hide wines that are out of stock
           </label>
-          {layout.showGlassPrice && (
-            <div className="wle-glass-calc">
-              <div className="wle-glass-calc-fields">
-                <div className="form-group">
-                  <label>Glasses per bottle</label>
-                  <input
-                    type="number"
-                    min="1"
-                    max="20"
-                    value={layout.glassesPerBottle || 6}
-                    onChange={e => setWineList({
-                      ...wineList,
-                      layout: { ...layout, glassesPerBottle: parseInt(e.target.value) || 6 }
-                    })}
-                    style={{ width: '80px' }}
-                  />
-                </div>
-                <div className="form-group">
-                  <label>Glass markup %</label>
-                  <input
-                    type="number"
-                    value={layout.glassMarkup || 0}
-                    onChange={e => setWineList({
-                      ...wineList,
-                      layout: { ...layout, glassMarkup: parseFloat(e.target.value) || 0 }
-                    })}
-                    style={{ width: '80px' }}
-                  />
-                </div>
-                <button className="btn btn-small btn-secondary" onClick={calculateGlassPrices}>
-                  Calculate glass prices
-                </button>
+          <label className="wle-checkbox">
+            <input
+              type="checkbox"
+              checked={layout.glassSectionFirst || false}
+              onChange={e => setWineList({
+                ...wineList,
+                layout: { ...layout, glassSectionFirst: e.target.checked }
+              })}
+            />
+            Lead with a &ldquo;Wines by the Glass&rdquo; section
+          </label>
+
+          <div className="wle-glass-calc">
+            <h4>Glass pricing rule</h4>
+            <p className="text-muted-sm">
+              Suggested glass price = bottle price / glasses per bottle, plus markup.
+              Wines marked &ldquo;Glass&rdquo; get this suggestion automatically — prices you
+              type yourself are never overwritten.
+            </p>
+            <div className="wle-glass-calc-fields">
+              <div className="form-group">
+                <label>Glasses per bottle</label>
+                <input
+                  type="number"
+                  min="1"
+                  max="20"
+                  value={layout.glassesPerBottle || 6}
+                  onChange={e => setWineList({
+                    ...wineList,
+                    layout: { ...layout, glassesPerBottle: parseInt(e.target.value) || 6 }
+                  })}
+                  style={{ width: '80px' }}
+                />
               </div>
-              <p className="text-muted-sm">
-                Formula: (bottle price / {layout.glassesPerBottle || 6}) {layout.glassMarkup ? `\u00d7 ${(1 + (layout.glassMarkup || 0) / 100).toFixed(2)}` : ''} = glass price
-              </p>
+              <div className="form-group">
+                <label>Glass markup %</label>
+                <input
+                  type="number"
+                  value={layout.glassMarkup || 0}
+                  onChange={e => setWineList({
+                    ...wineList,
+                    layout: { ...layout, glassMarkup: parseFloat(e.target.value) || 0 }
+                  })}
+                  style={{ width: '80px' }}
+                />
+              </div>
+              <div className="form-group">
+                <label>Round to nearest</label>
+                <select
+                  value={layout.glassRounding || '1'}
+                  onChange={e => setWineList({
+                    ...wineList,
+                    layout: { ...layout, glassRounding: e.target.value }
+                  })}
+                  className="filter-select"
+                  style={{ width: '80px' }}
+                >
+                  <option value="1">1</option>
+                  <option value="5">5</option>
+                  <option value="10">10</option>
+                </select>
+              </div>
             </div>
-          )}
+            <div className="wle-glass-calc-actions">
+              <button className="btn btn-small btn-secondary" onClick={() => recalcGlassPrices(false)}>
+                Recalculate suggested prices
+              </button>
+              <button className="btn btn-small btn-secondary" onClick={() => recalcGlassPrices(true)}>
+                Reset all to rule
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -859,22 +923,24 @@ function WineListEditor() {
                     <th>Stock</th>
                     <th>Cost</th>
                     <th>List price</th>
+                    <th>Glass</th>
                     <th>Margin</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {stats.entries.map((entry, i) => (
-                    <tr key={i}>
+                  {stats.entries.map((entry) => (
+                    <tr key={entry.key}>
                       <td>
                         <strong>{entry.wineName}</strong>
                         {entry.producer && <span className="text-muted-sm"> — {entry.producer}</span>}
                       </td>
-                      <td>{entry.vintage}</td>
+                      <td>{renderVintageSize(entry.vintage, entry.bottleSize)}</td>
                       <td className={entry.stockCount === 0 ? 'wle-stock-zero' : ''}>
                         {entry.stockCount}
                       </td>
                       <td>{entry.purchasePrice != null ? `${layout.currencySymbol || '$'}${entry.purchasePrice}` : '—'}</td>
                       <td>{entry.listPrice != null ? `${layout.currencySymbol || '$'}${entry.listPrice}` : '—'}</td>
+                      <td>{entry.glassPrice != null ? `${layout.currencySymbol || '$'}${entry.glassPrice}` : '—'}</td>
                       <td className={entry.marginPercent != null ? (entry.marginPercent >= 0 ? 'wle-margin-pos' : 'wle-margin-neg') : ''}>
                         {entry.marginPercent != null ? `${entry.marginPercent}%` : '—'}
                       </td>
