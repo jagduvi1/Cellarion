@@ -24,6 +24,8 @@
  * ctx = { userId, userEmail, cellarIds, deletedUserId, user, EXPORT_MAX,
  *         AUDIT_MAX, truncated }
  */
+const fs = require('fs');
+const path = require('path');
 const User = require('../models/User');
 const Bottle = require('../models/Bottle');
 const BottleImage = require('../models/BottleImage');
@@ -176,7 +178,18 @@ const REGISTRY = [
   },
   {
     model: WineList, category: 'personal-data', userFields: ['user'],
-    purge: (ctx) => WineList.deleteMany({ user: ctx.userId }),
+    // Uploaded restaurant logos are user content too — unlink them from disk
+    // before the docs (and with them the only references) are deleted.
+    purge: async (ctx) => {
+      const lists = await WineList.find({ user: ctx.userId, 'branding.logoUrl': { $ne: null } })
+        .select('branding.logoUrl').lean();
+      for (const wl of lists) {
+        if (!wl.branding?.logoUrl) continue;
+        const file = path.join('/app/uploads/wine-list-logos', path.basename(wl.branding.logoUrl));
+        try { fs.unlinkSync(file); } catch { /* already gone */ }
+      }
+      return WineList.deleteMany({ user: ctx.userId });
+    },
     exportFragment: async (ctx) => ({
       wineLists: markTrunc(ctx, 'wineLists', await WineList.find({ user: ctx.userId }).select('name cellar structureMode branding layout createdAt updatedAt').limit(EXPORT_MAX).lean())
         .map(wl => ({ name: wl.name, structureMode: wl.structureMode, branding: wl.branding, layout: wl.layout, createdAt: wl.createdAt })),
