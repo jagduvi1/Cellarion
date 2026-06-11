@@ -245,7 +245,7 @@ function CellarDetail() {
                           className="more-menu-item"
                           onClick={() => setMoreOpen(false)}
                         >
-                          <span aria-hidden="true">📋</span> Wine Lists
+                          <span aria-hidden="true">📋</span> {t('cellarDetail.wineLists')}
                         </Link>
                       )}
                       <Link
@@ -423,8 +423,8 @@ function CellarDetail() {
               <Link to={`/cellars/${id}/wine-lists`} className="overview-link-card">
                 <span className="overview-link-icon" aria-hidden="true">📋</span>
                 <div>
-                  <strong>Wine Lists</strong>
-                  <span>Create PDF menus</span>
+                  <strong>{t('cellarDetail.wineLists')}</strong>
+                  <span>{t('cellarDetail.wineListsDesc')}</span>
                 </div>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="9 18 15 12 9 6"/></svg>
               </Link>

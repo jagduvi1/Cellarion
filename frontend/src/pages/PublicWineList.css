@@ -1,0 +1,35 @@
+.pwl-page {
+  min-height: 100vh;
+  background: #f4f1ea;
+}
+
+.pwl-status {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 60vh;
+  font-size: 1rem;
+  color: #666;
+}
+
+.pwl-actions {
+  display: flex;
+  justify-content: center;
+  padding: 0 0 3rem;
+  background: #f4f1ea;
+}
+
+.pwl-pdf-link {
+  display: inline-block;
+  padding: 0.5rem 1.25rem;
+  border: 1px solid #999;
+  border-radius: 4px;
+  color: #444;
+  text-decoration: none;
+  font-size: 0.9rem;
+  background: #fff;
+}
+
+.pwl-pdf-link:hover {
+  background: #f0ede5;
+}

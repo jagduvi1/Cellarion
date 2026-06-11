@@ -67,6 +67,7 @@ const WineTypeDetail       = lazy(() => import('./pages/WineTypeDetail'));
 const Help                 = lazy(() => import('./pages/Help'));
 const WineLists            = lazy(() => import('./pages/WineLists'));
 const WineListEditor       = lazy(() => import('./pages/WineListEditor'));
+const PublicWineList       = lazy(() => import('./pages/PublicWineList'));
 
 function AppRoutes() {
   const { user, loading } = useAuth();
@@ -329,6 +330,7 @@ function AppRoutes() {
         />
 
         {/* Public content — no auth required */}
+        <Route path="/menu/:token" element={<PublicWineList />} />
         <Route path="/wines/:idOrSlug" element={<WineDetail />} />
         <Route path="/wines/type/:type" element={<WineTypeDetail />} />
         <Route path="/regions/:slug" element={<RegionDetail />} />

@@ -11,7 +11,7 @@ const { isValidId } = require('../utils/validation');
 const { generateWineListPdf } = require('../services/wineListPdf');
 const { stripImageMetadata } = require('../services/imageSanitizer');
 const { loadWineMap, loadCellarWines, entryKey, allEntries } = require('../services/wineListData');
-const { LOGO_DIR, ensureLogoDir, deleteLogoFile } = require('../services/wineListLogos');
+const { LOGO_DIR, ensureLogoDir, deleteLogoFile, copyLogoFile } = require('../services/wineListLogos');
 
 const router = express.Router();
 
@@ -110,6 +110,14 @@ router.post('/', requireAuth, async (req, res) => {
       structureMode: req.body.structureMode || 'auto',
     });
 
+    // Inherit the user's currency so a Swedish list doesn't start life in $
+    if (typeof req.body.currency === 'string' && req.body.currency.trim()) {
+      wineList.layout.currency = req.body.currency.trim().slice(0, 10);
+    }
+    if (typeof req.body.currencySymbol === 'string' && req.body.currencySymbol.trim()) {
+      wineList.layout.currencySymbol = req.body.currencySymbol.trim().slice(0, 5);
+    }
+
     await wineList.save();
     logAudit(req, 'winelist.create', { type: 'winelist', id: wineList._id, cellarId }, { name });
 
@@ -204,6 +212,36 @@ router.delete('/:id', requireAuth, async (req, res) => {
   }
 });
 
+// POST /api/wine-lists/:id/duplicate — copy a list (e.g. Spring → Summer menu)
+router.post('/:id/duplicate', requireAuth, async (req, res) => {
+  try {
+    if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
+    const source = await WineList.findOne({ _id: req.params.id, user: req.user.id }).lean();
+    if (!source) return res.status(404).json({ error: 'Wine list not found' });
+
+    const { _id, shareToken, shareTokenCreatedAt, createdAt, updatedAt, __v, ...rest } = source;
+
+    // The copy gets its own logo FILE, not just the same URL — otherwise
+    // deleting or re-uploading on either list unlinks the other's logo
+    if (rest.branding?.logoUrl) {
+      rest.branding = { ...rest.branding, logoUrl: copyLogoFile(rest.branding.logoUrl) };
+    }
+
+    const copy = new WineList({
+      ...rest,
+      name: `${source.name} (copy)`.slice(0, 200),
+      isPublished: false,
+    });
+    await copy.save();
+
+    logAudit(req, 'winelist.duplicate', { type: 'winelist', id: copy._id, cellarId: copy.cellar }, { sourceId: source._id });
+    res.status(201).json(copy);
+  } catch (error) {
+    console.error('Duplicate wine list error:', error);
+    res.status(500).json({ error: 'Failed to duplicate wine list' });
+  }
+});
+
 // POST /api/wine-lists/:id/publish — generate token and publish
 router.post('/:id/publish', requireAuth, async (req, res) => {
   try {
@@ -255,11 +293,14 @@ router.get('/:id/preview-pdf', requireAuth, async (req, res) => {
 
     const wineMap = await loadWineMap(wineList);
 
-    // Build public URL for QR code if published
+    // Build public URL for QR code if published — points at the web menu.
+    // /menu is a frontend route; without FRONTEND_URL fall back to the
+    // self-referencing PDF URL (valid on whatever host serves the API).
     let publicUrl = null;
     if (wineList.isPublished && wineList.shareToken) {
-      const base = process.env.FRONTEND_URL || 'http://localhost:5000';
-      publicUrl = `${base}/api/wine-lists/public/${wineList.shareToken}/pdf`;
+      publicUrl = process.env.FRONTEND_URL
+        ? `${process.env.FRONTEND_URL}/menu/${wineList.shareToken}`
+        : `${req.protocol}://${req.get('host')}/api/wine-lists/public/${wineList.shareToken}/pdf`;
     }
 
     const pdfStream = await generateWineListPdf(wineList, wineMap, { publicUrl });
