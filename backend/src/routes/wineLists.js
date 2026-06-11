@@ -11,7 +11,7 @@ const { isValidId } = require('../utils/validation');
 const { generateWineListPdf } = require('../services/wineListPdf');
 const { stripImageMetadata } = require('../services/imageSanitizer');
 const { loadWineMap, loadCellarWines, entryKey, allEntries } = require('../services/wineListData');
-const { LOGO_DIR, ensureLogoDir, deleteLogoFile } = require('../services/wineListLogos');
+const { LOGO_DIR, ensureLogoDir, deleteLogoFile, copyLogoFile } = require('../services/wineListLogos');
 
 const router = express.Router();
 
@@ -220,6 +220,13 @@ router.post('/:id/duplicate', requireAuth, async (req, res) => {
     if (!source) return res.status(404).json({ error: 'Wine list not found' });
 
     const { _id, shareToken, shareTokenCreatedAt, createdAt, updatedAt, __v, ...rest } = source;
+
+    // The copy gets its own logo FILE, not just the same URL — otherwise
+    // deleting or re-uploading on either list unlinks the other's logo
+    if (rest.branding?.logoUrl) {
+      rest.branding = { ...rest.branding, logoUrl: copyLogoFile(rest.branding.logoUrl) };
+    }
+
     const copy = new WineList({
       ...rest,
       name: `${source.name} (copy)`.slice(0, 200),
@@ -286,11 +293,14 @@ router.get('/:id/preview-pdf', requireAuth, async (req, res) => {
 
     const wineMap = await loadWineMap(wineList);
 
-    // Build public URL for QR code if published — points at the web menu
+    // Build public URL for QR code if published — points at the web menu.
+    // /menu is a frontend route; without FRONTEND_URL fall back to the
+    // self-referencing PDF URL (valid on whatever host serves the API).
     let publicUrl = null;
     if (wineList.isPublished && wineList.shareToken) {
-      const base = process.env.FRONTEND_URL || `${req.protocol}://${req.get('host')}`;
-      publicUrl = `${base}/menu/${wineList.shareToken}`;
+      publicUrl = process.env.FRONTEND_URL
+        ? `${process.env.FRONTEND_URL}/menu/${wineList.shareToken}`
+        : `${req.protocol}://${req.get('host')}/api/wine-lists/public/${wineList.shareToken}/pdf`;
     }
 
     const pdfStream = await generateWineListPdf(wineList, wineMap, { publicUrl });

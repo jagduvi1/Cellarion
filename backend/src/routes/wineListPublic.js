@@ -29,7 +29,7 @@ router.get('/:shareToken', async (req, res) => {
     const wineList = await WineList.findOne({
       shareToken: req.params.shareToken,
       isPublished: true,
-    });
+    }).lean();
     if (!wineList) return res.status(404).json({ error: 'Wine list not found or not published' });
 
     const wineMap = await loadWineMap(wineList);
@@ -87,9 +87,13 @@ router.get('/:shareToken/pdf', async (req, res) => {
     const wineMap = await loadWineMap(wineList);
 
     // QR code on the printed PDF points at the web menu, which is what a
-    // phone wants — the PDF itself stays one tap away from there.
-    const base = process.env.FRONTEND_URL || `${req.protocol}://${req.get('host')}`;
-    const publicUrl = `${base}/menu/${req.params.shareToken}`;
+    // phone wants — the PDF itself stays one tap away from there. /menu is a
+    // frontend route, so without FRONTEND_URL we cannot know a host that
+    // serves it — fall back to the self-referencing PDF URL, which is valid
+    // on whatever host handled this request.
+    const publicUrl = process.env.FRONTEND_URL
+      ? `${process.env.FRONTEND_URL}/menu/${req.params.shareToken}`
+      : `${req.protocol}://${req.get('host')}/api/wine-lists/public/${req.params.shareToken}/pdf`;
 
     const pdfStream = await generateWineListPdf(wineList, wineMap, { publicUrl });
 

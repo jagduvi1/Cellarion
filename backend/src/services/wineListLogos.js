@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 
 const LOGO_DIR = '/app/uploads/wine-list-logos';
 
@@ -29,4 +30,22 @@ async function deleteLogoFilesFor(WineList, filter) {
   }
 }
 
-module.exports = { LOGO_DIR, ensureLogoDir, deleteLogoFile, deleteLogoFilesFor };
+/**
+ * Copy a stored logo file under a fresh name and return the new logoUrl —
+ * used when duplicating a wine list, so the copy never shares a file with
+ * the original (deleting one would break the other). Returns null when the
+ * source file is missing.
+ */
+function copyLogoFile(logoUrl) {
+  if (!logoUrl) return null;
+  const ext = path.extname(logoUrl);
+  const newName = `${crypto.randomUUID()}${ext}`;
+  try {
+    fs.copyFileSync(path.join(LOGO_DIR, path.basename(logoUrl)), path.join(LOGO_DIR, newName));
+    return `wine-list-logos/${newName}`;
+  } catch {
+    return null; // source gone — the duplicate simply has no logo
+  }
+}
+
+module.exports = { LOGO_DIR, ensureLogoDir, deleteLogoFile, deleteLogoFilesFor, copyLogoFile };

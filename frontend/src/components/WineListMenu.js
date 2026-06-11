@@ -31,13 +31,12 @@ function WineListMenu({ branding = {}, layout = {}, language = 'en', sections = 
     fontFamily,
   };
 
+  // A wine can be glass-only (no bottle price) — render whichever prices exist
   const renderPrice = (wine) => {
-    if (wine.price == null) return null;
-    let text = `${currencySymbol}${Math.round(wine.price)}`;
-    if (wine.glassPrice != null) {
-      text += ` / ${currencySymbol}${Math.round(wine.glassPrice)} ${glassLabel}`;
-    }
-    return text;
+    const parts = [];
+    if (wine.price != null) parts.push(`${currencySymbol}${Math.round(wine.price)}`);
+    if (wine.glassPrice != null) parts.push(`${currencySymbol}${Math.round(wine.glassPrice)} ${glassLabel}`);
+    return parts.length ? parts.join(' / ') : null;
   };
 
   return (
@@ -58,6 +57,7 @@ function WineListMenu({ branding = {}, layout = {}, language = 'en', sections = 
               const grapes = (wine.grapes || []).slice(0, 3).join(', ');
               const producerRegion = [wine.producer, wine.region].filter(Boolean).join(' — ');
               const details = [producerRegion, grapes].filter(Boolean).join(' · ');
+              const priceText = renderPrice(wine);
               return (
                 <li key={wine.key || j} className="wlm-wine">
                   <div className="wlm-wine-row">
@@ -65,7 +65,7 @@ function WineListMenu({ branding = {}, layout = {}, language = 'en', sections = 
                       {wine.name}, {wine.vintage || 'NV'}{sizeSuffix}
                     </span>
                     <span className="wlm-wine-dots" aria-hidden="true" />
-                    {renderPrice(wine) && <span className="wlm-wine-price">{renderPrice(wine)}</span>}
+                    {priceText && <span className="wlm-wine-price">{priceText}</span>}
                   </div>
                   {details && <div className="wlm-wine-details">{details}</div>}
                 </li>

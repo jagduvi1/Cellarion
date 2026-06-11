@@ -110,7 +110,10 @@ function WineListEditor() {
   useEffect(() => { fetchData(); }, [fetchData]);
 
   // --- Autosave -------------------------------------------------------------
-  const payloadJson = wineList ? JSON.stringify(buildPayload(wineList)) : null;
+  const payloadJson = useMemo(
+    () => (wineList ? JSON.stringify(buildPayload(wineList)) : null),
+    [wineList]
+  );
 
   const save = useCallback(async (json) => {
     if (savingRef.current) return; // in flight — the post-save tick reschedules
@@ -160,6 +163,18 @@ function WineListEditor() {
     return () => window.removeEventListener('beforeunload', onBeforeUnload);
   }, [saveState]);
 
+  // Flush pending edits on unmount — beforeunload doesn't fire for in-app
+  // router navigation, and the debounce timer is cleared by its own cleanup,
+  // so without this a price typed right before clicking "back" is lost.
+  const payloadRef = useRef(null);
+  payloadRef.current = payloadJson;
+  useEffect(() => () => {
+    const pending = payloadRef.current;
+    if (pending && pending !== lastSavedRef.current && pending !== lastErrorRef.current) {
+      save(pending); // fire-and-forget; the request outlives the component
+    }
+  }, [save]);
+
   const handleSave = () => { if (payloadJson) save(payloadJson); };
 
   // Load stats when dashboard tab is opened
@@ -199,6 +214,11 @@ function WineListEditor() {
   const getEntry = (key) => getEntries().find(e => keyOf(e) === key);
   const isSelected = (key) => getEntries().some(e => keyOf(e) === key);
 
+  // Custom-mode render order is sortOrder, not array order — keep them in
+  // lockstep after every add/remove so the editor never shows one order and
+  // the PDF/menu another
+  const renumber = (entries) => entries.map((e, i) => ({ ...e, sortOrder: i }));
+
   /** Apply `mutate(entry)` to every entry, in whichever mode is active. */
   const updateEntries = (mutate) => {
     if (wineList.structureMode === 'custom') {
@@ -231,7 +251,7 @@ function WineListEditor() {
       if (!removed) {
         sections[0].entries.push(makeEntry(item, sections[0].entries.length));
       }
-      setWineList({ ...wineList, sections });
+      setWineList({ ...wineList, sections: sections.map(s => ({ ...s, entries: renumber(s.entries) })) });
     } else {
       const entries = [...(wineList.autoGroupEntries || [])];
       const idx = entries.findIndex(e => keyOf(e) === key);
@@ -248,10 +268,10 @@ function WineListEditor() {
       const otherSectionKeys = new Set(
         sections.slice(1).flatMap(s => (s.entries || []).map(keyOf))
       );
-      sections[0] = { ...sections[0], entries: entries.filter(e => !otherSectionKeys.has(keyOf(e))) };
+      sections[0] = { ...sections[0], entries: renumber(entries.filter(e => !otherSectionKeys.has(keyOf(e)))) };
       setWineList({ ...wineList, sections });
     } else {
-      setWineList({ ...wineList, autoGroupEntries: entries });
+      setWineList({ ...wineList, autoGroupEntries: renumber(entries) });
     }
   };
 
@@ -377,7 +397,7 @@ function WineListEditor() {
     const sections = (wineList.sections || []).map(s => ({ ...s, entries: [...(s.entries || [])] }));
     const [entry] = sections[sectionIdx].entries.splice(entryIdx, 1);
     sections[targetSectionIdx].entries.push(entry);
-    setWineList({ ...wineList, sections });
+    setWineList({ ...wineList, sections: sections.map(s => ({ ...s, entries: renumber(s.entries) })) });
   };
 
   // --- Publish/Unpublish ---
