@@ -98,4 +98,28 @@ describe('buildReleaseCurve', () => {
     expect(curve[0].sampleSize).toBe(1);
     expect(curve[0].medianPrice).toBe(560);
   });
+
+  // Real-world regression (Paolo Scavino Barolo, SEK): users mis-attached an
+  // entry-level wine (240) and a cru (2899) to the classico. The pollution
+  // itself widens the tolerance band — at 4× both slipped through; the 3×
+  // band must catch both while keeping the genuine 399–1199 spread.
+  test('mis-attached bottlings are flagged while genuine spread survives (3× band)', () => {
+    const curve = buildReleaseCurve([
+      { vintage: '2013', ownerPrices: [240] },   // entry-level wine money
+      { vintage: '2016', ownerPrices: [2899] },  // cru/riserva money
+      { vintage: '2018', ownerPrices: [1199] },
+      { vintage: '2019', ownerPrices: [399] },
+      { vintage: '2020', ownerPrices: [769] },
+      { vintage: '2021', ownerPrices: [419, 834] },
+      { vintage: '2022', ownerPrices: [899] },
+    ]);
+    const byVintage = Object.fromEntries(curve.map((c) => [c.vintage, c.suspect]));
+    expect(byVintage['2013']).toBe(true);
+    expect(byVintage['2016']).toBe(true);
+    expect(byVintage['2018']).toBe(false);
+    expect(byVintage['2019']).toBe(false);
+    expect(byVintage['2020']).toBe(false);
+    expect(byVintage['2021']).toBe(false);
+    expect(byVintage['2022']).toBe(false);
+  });
 });

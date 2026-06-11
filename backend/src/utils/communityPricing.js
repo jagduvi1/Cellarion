@@ -19,10 +19,13 @@
 // >= this many distinct owners promotes a vintage from 'indicative' to 'firm'.
 const FIRM_MIN_OWNERS = 3;
 // A vintage is flagged suspect if its price is > SUSPECT_BAND× or < 1/SUSPECT_BAND×
-// the wine's typical price (median across vintages) in the same currency. Wide
-// enough to allow real good-vs-poor-vintage swings (~3×) while catching decimal/
-// zero typos (e.g. 5600 entered for 560).
-const SUSPECT_BAND = 4;
+// the wine's typical price (median across vintages) in the same currency.
+// Release prices of the same bottling are stable across vintages (good-vs-poor
+// years move them well under 2×), so 3× still leaves real swings untouched
+// while catching decimal/zero typos AND the commonest pollution in practice:
+// a different bottling mis-attached to the wine (a cru priced 4× the classico,
+// or an entry-level wine at a quarter of it).
+const SUSPECT_BAND = 3;
 
 /** Median of a non-empty numeric array. Returns null for empty input. */
 function median(values) {

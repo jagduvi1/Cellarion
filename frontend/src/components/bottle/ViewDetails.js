@@ -80,7 +80,10 @@ function ViewDetails({ bottle, rackInfo, cellarId, vintageProfile, priceHistory,
                   <span className="bd-detail-converted"> &asymp; {c.toLocaleString()} {userCurrency}</span>
                 ) : null;
               })()}
-              {bottle.price > 0 && currentRelease.currency === bottle.currency && (() => {
+              {/* The % delta only shows at 'firm' confidence (≥3 owners) — a
+                  single owner's price shouldn't shout "+125%" at people. The
+                  indicative price itself still displays, with its label. */}
+              {bottle.price > 0 && currentRelease.currency === bottle.currency && currentRelease.confidence === 'firm' && (() => {
                 const pct = Math.round(((currentRelease.medianPrice - bottle.price) / bottle.price) * 100);
                 if (!isFinite(pct) || pct === 0) return null;
                 return (
