@@ -8,13 +8,18 @@ permissions:
   contents: read
   packages: write
 
+# GitHub forces JS actions onto Node 24 from 2026-06-16; opt in now so any
+# incompatibility surfaces on our schedule, not mid-release
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
