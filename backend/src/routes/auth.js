@@ -228,8 +228,11 @@ router.post('/login', authLimiter, async (req, res) => {
   try {
     const { username, password, rememberMe } = req.body;
 
-    // Validate input
-    if (!username || !password) {
+    // Validate input — require strings. Without the type check, an object like
+    // {"$ne":null} passes the truthiness test, then `.toLowerCase()` throws a
+    // 500 (and a NoSQL operator would otherwise reach the query). Coercing to
+    // string both fixes the crash and neutralises operator injection.
+    if (typeof username !== 'string' || typeof password !== 'string' || !username || !password) {
       return res.status(400).json({ error: 'Username and password are required' });
     }
 

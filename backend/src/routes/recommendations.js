@@ -14,6 +14,9 @@ const { escapeRegex } = require('../utils/sanitize');
 const router = express.Router();
 router.use(requireAuth);
 
+// Max external-email recommendations one user can send per rolling 24h.
+const EMAIL_RECOMMENDATION_DAILY_CAP = 20;
+
 // GET /api/recommendations — list recommendations received by the current user
 router.get('/', async (req, res) => {
   try {
@@ -101,10 +104,24 @@ router.post('/', async (req, res) => {
       recipientUser = await User.findById(recipientId).select('username displayName email');
       if (!recipientUser) return res.status(404).json({ error: 'Recipient user not found' });
     } else if (recipientEmail) {
-      // Check if the email belongs to an existing user
+      if (typeof recipientEmail !== 'string') {
+        return res.status(400).json({ error: 'Invalid email address' });
+      }
       const emailTrimmed = recipientEmail.trim().toLowerCase();
       if (!/^[^\s@]+@[^\s@.]+(?:\.[^\s@.]+)+$/.test(emailTrimmed)) {
         return res.status(400).json({ error: 'Invalid email address' });
+      }
+      // Per-user daily cap on external-email recommendations — without it any
+      // authed user is an open spam relay (arbitrary recipient + free-text
+      // note), gated only by the shared per-IP write limiter.
+      const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+      const sentToday = await Recommendation.countDocuments({
+        sender: req.user.id,
+        recipientEmail: { $ne: null },
+        createdAt: { $gte: dayAgo },
+      });
+      if (sentToday >= EMAIL_RECOMMENDATION_DAILY_CAP) {
+        return res.status(429).json({ error: 'Daily limit for emailed recommendations reached. Try again tomorrow.' });
       }
       recipientUser = await User.findOne({ email: emailTrimmed }).select('username displayName email');
     }
@@ -123,6 +140,15 @@ router.post('/', async (req, res) => {
       .populate('recipient', 'username displayName')
       .populate('wine', 'name producer appellation country region image')
       .lean();
+
+    // Don't turn the response into an email→account oracle: when the caller
+    // sent to an email (rather than picking a known user by id), never reveal
+    // whether that email matched a user. In-app delivery to a matched user
+    // still happens below; the response just doesn't disclose the identity.
+    if (!recipientId && recipientEmail) {
+      populated.recipient = null;
+      populated.recipientEmail = recipientEmail.trim().toLowerCase();
+    }
 
     // Send in-app notification to recipient if they are a user
     if (recipientUser) {

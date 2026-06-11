@@ -260,7 +260,16 @@ router.put('/:id/assign-to-wine', async (req, res) => {
       return res.status(400).json({ error: 'Only approved images can be assigned to a wine' });
     }
 
-    const wineDefId = req.body.wineDefinitionId || image.wineDefinition;
+    // wineDefinitionId comes from the request body — validate it as an ObjectId
+    // before it flows into updateMany/findByIdAndUpdate filters. Without this,
+    // {"$ne":null} would clear the official-image flag platform-wide.
+    let wineDefId = image.wineDefinition;
+    if (req.body.wineDefinitionId !== undefined) {
+      if (!isValidId(req.body.wineDefinitionId)) {
+        return res.status(400).json({ error: 'Invalid wineDefinitionId' });
+      }
+      wineDefId = req.body.wineDefinitionId;
+    }
     if (!wineDefId) {
       return res.status(400).json({ error: 'No wine definition to assign to' });
     }

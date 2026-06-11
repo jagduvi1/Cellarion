@@ -78,11 +78,31 @@ router.post('/', async (req, res) => {
     const safeEndpoint = String(endpoint);
     const safeKeys = { p256dh: String(keys.p256dh), auth: String(keys.auth) };
 
-    await PushSubscription.findOneAndUpdate(
-      { endpoint: safeEndpoint },
-      { $set: { user: req.user.id, endpoint: safeEndpoint, keys: safeKeys } },
-      { upsert: true, new: true }
-    );
+    // Scope the upsert to the caller so the common path (a user re-subscribing
+    // their own device) can't be turned into an IDOR by filtering on endpoint
+    // alone. `endpoint` is globally unique, so the legitimate
+    // browser-switches-account case surfaces as E11000 and is taken over below.
+    // Taking over is acceptable: push payloads are encrypted to `keys.p256dh`,
+    // which only the real browser holds, so a stolen endpoint can't be used to
+    // READ a victim's notifications — at worst it stops delivery (nuisance).
+    try {
+      await PushSubscription.findOneAndUpdate(
+        { user: req.user.id, endpoint: safeEndpoint },
+        { $set: { user: req.user.id, endpoint: safeEndpoint, keys: safeKeys } },
+        { upsert: true, new: true }
+      );
+    } catch (err) {
+      if (err.code === 11000) {
+        // Endpoint already registered to a different account — take it over
+        // for this device (the previous owner's browser will re-register).
+        await PushSubscription.updateOne(
+          { endpoint: safeEndpoint },
+          { $set: { user: req.user.id, keys: safeKeys } }
+        );
+      } else {
+        throw err;
+      }
+    }
 
     logAudit(req, 'pushSubscription.create', { type: 'pushSubscription' });
     res.json({ ok: true });

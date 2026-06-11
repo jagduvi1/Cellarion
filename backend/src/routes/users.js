@@ -264,8 +264,16 @@ router.get('/public/:userId', requireAuth, async (req, res) => {
 
     if (!user) return res.status(404).json({ error: 'User not found' });
 
+    // Respect profileVisibility: a private profile is only viewable by its
+    // owner. The /search sibling already filters on 'public'; this endpoint
+    // must not become a private-profile read oracle by ObjectId enumeration.
+    const isOwner = req.user.id === req.params.userId;
+    if (user.profileVisibility === 'private' && !isOwner) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
     // Check if current user follows this user
-    const isFollowing = req.user.id !== req.params.userId
+    const isFollowing = !isOwner
       ? !!(await Follow.findOne({ follower: req.user.id, following: req.params.userId }))
       : false;
 
