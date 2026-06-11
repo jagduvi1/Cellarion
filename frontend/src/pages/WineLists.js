@@ -1,11 +1,14 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
-import { getWineLists, createWineList, deleteWineList } from '../api/wineLists';
+import { getWineLists, createWineList, deleteWineList, duplicateWineList } from '../api/wineLists';
+import { getCurrencySymbol } from '../config/currencies';
 import Modal from '../components/Modal';
 import './WineLists.css';
 
 function WineLists() {
+  const { t } = useTranslation();
   const { id: cellarId } = useParams();
   const { apiFetch, user } = useAuth();
   const navigate = useNavigate();
@@ -23,6 +26,9 @@ function WineLists() {
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleting, setDeleting] = useState(false);
 
+  // Duplicate
+  const [duplicatingId, setDuplicatingId] = useState(null);
+
   const fetchLists = useCallback(async () => {
     try {
       const res = await getWineLists(apiFetch, cellarId);
@@ -30,14 +36,14 @@ function WineLists() {
       if (res.ok) {
         setLists(data);
       } else {
-        setError(data.error || 'Failed to load wine lists');
+        setError(data.error || t('wineLists.saveFailed'));
       }
     } catch {
-      setError('Network error');
+      setError(t('wineLists.networkError'));
     } finally {
       setLoading(false);
     }
-  }, [apiFetch, cellarId]);
+  }, [apiFetch, cellarId, t]);
 
   useEffect(() => { fetchLists(); }, [fetchLists]);
 
@@ -46,15 +52,21 @@ function WineLists() {
     if (!newName.trim()) return;
     setCreating(true);
     try {
-      const res = await createWineList(apiFetch, { cellar: cellarId, name: newName.trim() });
+      // New lists start in the user's currency instead of defaulting to $
+      const currency = user?.preferences?.currency;
+      const res = await createWineList(apiFetch, {
+        cellar: cellarId,
+        name: newName.trim(),
+        ...(currency ? { currency, currencySymbol: getCurrencySymbol(currency) } : {}),
+      });
       const data = await res.json();
       if (res.ok) {
         navigate(`/cellars/${cellarId}/wine-lists/${data._id}/edit`);
       } else {
-        alert(data.error || 'Failed to create wine list');
+        alert(data.error || t('wineLists.saveFailed'));
       }
     } catch {
-      alert('Network error');
+      alert(t('wineLists.networkError'));
     } finally {
       setCreating(false);
     }
@@ -70,12 +82,29 @@ function WineLists() {
         setDeleteTarget(null);
       } else {
         const data = await res.json();
-        alert(data.error || 'Failed to delete');
+        alert(data.error || t('wineLists.saveFailed'));
       }
     } catch {
-      alert('Network error');
+      alert(t('wineLists.networkError'));
     } finally {
       setDeleting(false);
+    }
+  };
+
+  const handleDuplicate = async (list) => {
+    setDuplicatingId(list._id);
+    try {
+      const res = await duplicateWineList(apiFetch, list._id);
+      const data = await res.json();
+      if (res.ok) {
+        navigate(`/cellars/${cellarId}/wine-lists/${data._id}/edit`);
+      } else {
+        alert(data.error || t('wineLists.saveFailed'));
+      }
+    } catch {
+      alert(t('wineLists.networkError'));
+    } finally {
+      setDuplicatingId(null);
     }
   };
 
@@ -86,11 +115,11 @@ function WineLists() {
     <div className="wine-lists-page">
       <div className="wine-lists-header">
         <div className="wine-lists-header-top">
-          <Link to={`/cellars/${cellarId}`} className="back-link">&larr; Back to cellar</Link>
-          <h1>Wine Lists</h1>
+          <Link to={`/cellars/${cellarId}`} className="back-link">&larr; {t('wineLists.backToCellar')}</Link>
+          <h1>{t('wineLists.title')}</h1>
         </div>
         <button className="btn btn-primary" onClick={() => setShowCreate(true)}>
-          + New Wine List
+          + {t('wineLists.newWineList')}
         </button>
       </div>
 
@@ -98,13 +127,13 @@ function WineLists() {
         <div className="card create-form">
           <form onSubmit={handleCreate}>
             <div className="form-group">
-              <label htmlFor="wl-name">Wine list name</label>
+              <label htmlFor="wl-name">{t('wineLists.nameLabel')}</label>
               <input
                 id="wl-name"
                 type="text"
                 value={newName}
                 onChange={e => setNewName(e.target.value)}
-                placeholder="e.g. Spring Menu 2026"
+                placeholder={t('wineLists.namePlaceholder')}
                 maxLength={200}
                 autoFocus
                 required
@@ -112,10 +141,10 @@ function WineLists() {
             </div>
             <div className="form-actions">
               <button type="submit" className="btn btn-primary" disabled={creating}>
-                {creating ? 'Creating...' : 'Create'}
+                {creating ? t('wineLists.creating') : t('wineLists.create')}
               </button>
               <button type="button" className="btn btn-secondary" onClick={() => { setShowCreate(false); setNewName(''); }}>
-                Cancel
+                {t('wineLists.cancel')}
               </button>
             </div>
           </form>
@@ -124,7 +153,7 @@ function WineLists() {
 
       {lists.length === 0 && !showCreate ? (
         <div className="empty-state">
-          <p>No wine lists yet. Create one to generate a PDF menu for your restaurant.</p>
+          <p>{t('wineLists.emptyState')}</p>
         </div>
       ) : (
         <div className="wine-lists-grid">
@@ -134,19 +163,26 @@ function WineLists() {
                 <h3>{list.name}</h3>
                 <div className="wine-list-meta">
                   <span className={`status-badge ${list.isPublished ? 'published' : 'draft'}`}>
-                    {list.isPublished ? 'Published' : 'Draft'}
+                    {list.isPublished ? t('wineLists.published') : t('wineLists.draft')}
                   </span>
                   <span className="text-muted-sm">
-                    Updated {new Date(list.updatedAt).toLocaleDateString()}
+                    {new Date(list.updatedAt).toLocaleDateString()}
                   </span>
                 </div>
               </div>
               <div className="wine-list-card-actions">
                 <Link to={`/cellars/${cellarId}/wine-lists/${list._id}/edit`} className="btn btn-small btn-primary">
-                  Edit
+                  {t('wineLists.edit')}
                 </Link>
+                <button
+                  className="btn btn-small btn-secondary"
+                  onClick={() => handleDuplicate(list)}
+                  disabled={duplicatingId === list._id}
+                >
+                  {duplicatingId === list._id ? t('wineLists.duplicating') : t('wineLists.duplicate')}
+                </button>
                 <button className="btn btn-small btn-danger" onClick={() => setDeleteTarget(list)}>
-                  Delete
+                  {t('wineLists.delete')}
                 </button>
               </div>
             </div>
@@ -155,13 +191,13 @@ function WineLists() {
       )}
 
       {deleteTarget && (
-        <Modal title="Delete Wine List" onClose={() => setDeleteTarget(null)}>
-          <p>Are you sure you want to delete &ldquo;{deleteTarget.name}&rdquo;? This cannot be undone.</p>
+        <Modal title={t('wineLists.deleteTitle')} onClose={() => setDeleteTarget(null)}>
+          <p>{t('wineLists.deleteConfirm')}</p>
           <div className="form-actions">
             <button className="btn btn-danger" onClick={handleDelete} disabled={deleting}>
-              {deleting ? 'Deleting...' : 'Delete'}
+              {deleting ? t('wineLists.deleting') : t('wineLists.delete')}
             </button>
-            <button className="btn btn-secondary" onClick={() => setDeleteTarget(null)}>Cancel</button>
+            <button className="btn btn-secondary" onClick={() => setDeleteTarget(null)}>{t('wineLists.cancel')}</button>
           </div>
         </Modal>
       )}

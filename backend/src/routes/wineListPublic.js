@@ -1,16 +1,18 @@
 const express = require('express');
 const rateLimit = require('express-rate-limit');
 const WineList = require('../models/WineList');
-const { generateWineListPdf } = require('../services/wineListPdf');
+const { generateWineListPdf, buildSections } = require('../services/wineListPdf');
 const { loadWineMap } = require('../services/wineListData');
 const { getClientIp } = require('../utils/clientIp');
 
 const router = express.Router();
 
-// Rate limiter: 30 requests per 15 min per IP
+// Rate limiter: 120 requests per 15 min per IP. Generous on purpose — a full
+// restaurant's guests often share one NAT'd IP, and each menu view is a
+// single request (responses are also cached 5 min downstream).
 const publicPdfLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 30,
+  max: 120,
   keyGenerator: (req) => getClientIp(req),
   standardHeaders: true,
   legacyHeaders: false,
@@ -18,6 +20,60 @@ const publicPdfLimiter = rateLimit({
 });
 
 router.use(publicPdfLimiter);
+
+// GET /api/wine-lists/public/:shareToken — published list as JSON for the
+// public web menu (/menu/:shareToken). Strips inventory data: guests see the
+// menu, not the stock counts.
+router.get('/:shareToken', async (req, res) => {
+  try {
+    const wineList = await WineList.findOne({
+      shareToken: req.params.shareToken,
+      isPublished: true,
+    });
+    if (!wineList) return res.status(404).json({ error: 'Wine list not found or not published' });
+
+    const wineMap = await loadWineMap(wineList);
+    const sections = buildSections(wineList, wineMap).map(s => ({
+      title: s.title,
+      isGlassSection: !!s.isGlassSection,
+      wines: s.wines.map(w => ({
+        name: w.name,
+        producer: w.producer,
+        vintage: w.vintage,
+        bottleSize: w.bottleSize,
+        country: w.country,
+        region: w.region,
+        grapes: w.grapes,
+        type: w.type,
+        price: w.price,
+        glassPrice: w.glassPrice,
+      })),
+    }));
+
+    const branding = wineList.branding || {};
+    const layout = wineList.layout || {};
+    res.setHeader('Cache-Control', 'public, max-age=300'); // 5 min cache
+    res.json({
+      name: wineList.name,
+      language: wineList.language || 'en',
+      branding: {
+        restaurantName: branding.restaurantName || '',
+        tagline: branding.tagline || '',
+        logoUrl: branding.logoUrl || null,
+        footerText: branding.footerText || '',
+      },
+      layout: {
+        colorScheme: layout.colorScheme || 'classic',
+        fontFamily: layout.fontFamily || 'serif',
+        currencySymbol: layout.currencySymbol || '$',
+      },
+      sections,
+    });
+  } catch (error) {
+    console.error('Public wine list error:', error);
+    res.status(500).json({ error: 'Failed to load wine list' });
+  }
+});
 
 // GET /api/wine-lists/public/:shareToken/pdf — public PDF download
 router.get('/:shareToken/pdf', async (req, res) => {
@@ -30,9 +86,10 @@ router.get('/:shareToken/pdf', async (req, res) => {
 
     const wineMap = await loadWineMap(wineList);
 
-    // Build the public URL for QR code (self-referencing)
+    // QR code on the printed PDF points at the web menu, which is what a
+    // phone wants — the PDF itself stays one tap away from there.
     const base = process.env.FRONTEND_URL || `${req.protocol}://${req.get('host')}`;
-    const publicUrl = `${base}/api/wine-lists/public/${req.params.shareToken}/pdf`;
+    const publicUrl = `${base}/menu/${req.params.shareToken}`;
 
     const pdfStream = await generateWineListPdf(wineList, wineMap, { publicUrl });
 

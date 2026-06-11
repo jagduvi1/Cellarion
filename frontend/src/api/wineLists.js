@@ -26,6 +26,9 @@ export const updateWineList = (apiFetch, id, data) =>
 export const deleteWineList = (apiFetch, id) =>
   apiFetch(`/api/wine-lists/${id}`, { method: 'DELETE' });
 
+export const duplicateWineList = (apiFetch, id) =>
+  apiFetch(`/api/wine-lists/${id}/duplicate`, { method: 'POST' });
+
 export const publishWineList = (apiFetch, id) =>
   apiFetch(`/api/wine-lists/${id}/publish`, { method: 'POST' });
 
