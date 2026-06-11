@@ -8,6 +8,7 @@ const AuditLog = require('../models/AuditLog');
 const BottleImage = require('../models/BottleImage');
 const WineDefinition = require('../models/WineDefinition');
 const WineList = require('../models/WineList');
+const { deleteLogoFilesFor } = require('../services/wineListLogos');
 const PendingShare = require('../models/PendingShare');
 const { getCellarRole } = require('../utils/cellarAccess');
 const { logAudit } = require('../services/audit');
@@ -1028,7 +1029,10 @@ router.delete('/:id', async (req, res) => {
     // Cascade soft-delete to all racks in this cellar
     await Rack.updateMany({ cellar: cellar._id }, { deletedAt: now });
 
-    // Delete wine lists for this cellar (hard delete — no soft-delete for wine lists)
+    // Delete wine lists for this cellar (hard delete — no soft-delete for
+    // wine lists). Unlink their uploaded logo files first: the docs hold the
+    // only references, and orphaned logos would stay publicly fetchable.
+    await deleteLogoFilesFor(WineList, { cellar: cellar._id });
     await WineList.deleteMany({ cellar: cellar._id });
 
     // Bottles are preserved — they remain in history via their status field

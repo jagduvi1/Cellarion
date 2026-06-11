@@ -2,7 +2,6 @@ const express = require('express');
 const mongoose = require('mongoose');
 const crypto = require('crypto');
 const fs = require('fs');
-const path = require('path');
 const multer = require('multer');
 const { requireAuth } = require('../middleware/auth');
 const WineList = require('../models/WineList');
@@ -13,13 +12,12 @@ const { isValidId } = require('../utils/validation');
 const { generateWineListPdf } = require('../services/wineListPdf');
 const { stripImageMetadata } = require('../services/imageSanitizer');
 const { loadBottleMap } = require('../services/wineListData');
+const { LOGO_DIR, ensureLogoDir, deleteLogoFile } = require('../services/wineListLogos');
 
 const router = express.Router();
 
 // --- Logo upload setup ---
-const LOGO_DIR = '/app/uploads/wine-list-logos';
-// Ensure logo directory exists on startup
-try { fs.mkdirSync(LOGO_DIR, { recursive: true }); } catch { /* Docker volume may already exist */ }
+ensureLogoDir();
 const logoStorage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, LOGO_DIR),
   filename: (req, file, cb) => {
@@ -46,13 +44,6 @@ async function requireCellarOwner(userId, cellarId) {
   if (!mongoose.Types.ObjectId.isValid(cellarId)) return null;
   const cellar = await Cellar.findOne({ _id: cellarId, user: userId, deletedAt: null });
   return cellar;
-}
-
-/** Delete a stored logo file, ignoring missing files. */
-function deleteLogoFile(logoUrl) {
-  if (!logoUrl) return;
-  const filename = path.basename(logoUrl);
-  try { fs.unlinkSync(path.join(LOGO_DIR, filename)); } catch { /* already gone */ }
 }
 
 // =====================================================================
@@ -146,6 +137,8 @@ router.put('/:id', requireAuth, async (req, res) => {
       }
     }
     if (req.body.branding !== undefined) {
+      // Guard against `branding: null` — the restore below must never throw
+      if (!wineList.branding) wineList.branding = {};
       wineList.branding.logoUrl = storedLogoUrl;
     }
 
