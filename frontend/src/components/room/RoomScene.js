@@ -175,17 +175,45 @@ export default function RoomScene({
       if (isGroupMember || isAlsoSelected) {
         const ref = rackRefsMap.current[rpId];
         if (ref) {
-          ref.position.x += dx;
-          ref.position.z += dz;
+          // Clamp each member to the room during the live drag, mirroring the
+          // per-member clamp applied on drop. Without this, members visibly
+          // pass through walls mid-drag and then jump on release.
+          let nx = ref.position.x + dx;
+          let nz = ref.position.z + dz;
+          const rack = rackMap[rpId];
+          if (rack) {
+            const clamped = clampToRoom(nx, nz, rack, rp, roomDimensions);
+            nx = clamped.x;
+            nz = clamped.z;
+          }
+          ref.position.x = nx;
+          ref.position.z = nz;
         }
       }
     });
-  }, [rackPlacements]);
+  }, [rackPlacements, rackMap, roomDimensions]);
 
   const handleDragStart = useCallback(() => {
     setIsDragging(true);
     if (controlsRef.current) controlsRef.current.enabled = false;
   }, []);
+
+  // Safety net: whenever a drag is active, the next pointer release anywhere
+  // re-enables camera controls — even if the rack's own pointerup never fired
+  // (released off-canvas) or the rack unmounted mid-drag.
+  useEffect(() => {
+    if (!isDragging) return;
+    const reenable = () => {
+      setIsDragging(false);
+      if (controlsRef.current) controlsRef.current.enabled = true;
+    };
+    window.addEventListener('pointerup', reenable);
+    window.addEventListener('pointercancel', reenable);
+    return () => {
+      window.removeEventListener('pointerup', reenable);
+      window.removeEventListener('pointercancel', reenable);
+    };
+  }, [isDragging]);
 
   // Keep a ref to rackPlacements so drag-end reads current positions
   const rackPlacementsRef = useRef(rackPlacements);
@@ -401,8 +429,11 @@ export default function RoomScene({
             onDragStart={handleDragStart}
             onDragEnd={(newPos) => handleDragEnd(rack._id, newPos)}
             onSnapPosition={(px, pz) => computeSnapPosition(rack._id, px, pz)}
-            onBottleClick={(slot) => onBottleClick?.(rack._id, slot)}
-            onEmptySlotClick={(slotPos) => onEmptySlotClick?.(rack._id, slotPos)}
+            // Keep these undefined when the parent passes no handler so the
+            // bottle/empty-slot cursor + click affordance is suppressed
+            // (no dead clicks in edit mode or for read-only viewers).
+            onBottleClick={onBottleClick ? (slot) => onBottleClick(rack._id, slot) : undefined}
+            onEmptySlotClick={onEmptySlotClick ? (slotPos) => onEmptySlotClick(rack._id, slotPos) : undefined}
             highlightBottleId={highlightBottleId}
           />
         );
