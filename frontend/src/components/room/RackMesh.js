@@ -139,7 +139,7 @@ function Bottle({ position, wineType, slot, onBottleClick, highlighted, scale = 
         geometry={bottleGeo}
         castShadow
         onClick={handleClick}
-        onPointerOver={(e) => { e.stopPropagation(); document.body.style.cursor = 'pointer'; }}
+        onPointerOver={(e) => { if (onBottleClick) { e.stopPropagation(); document.body.style.cursor = 'pointer'; } }}
         onPointerOut={() => { document.body.style.cursor = ''; }}
       >
         <meshPhysicalMaterial
@@ -572,16 +572,18 @@ export default function RackMesh({
   }, [rack._id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Cleanup drag listeners if component unmounts during an active drag
+  // (e.g. the rack is removed/undone mid-drag). RoomScene also re-enables
+  // OrbitControls on the next pointer release as a safety net.
   useEffect(() => {
-    const domEl = gl.domElement;
     return () => {
       if (dragListenersRef.current) {
-        domEl.removeEventListener('pointermove', dragListenersRef.current.onMove);
-        domEl.removeEventListener('pointerup', dragListenersRef.current.onUp);
+        window.removeEventListener('pointermove', dragListenersRef.current.onMove);
+        window.removeEventListener('pointerup', dragListenersRef.current.onUp);
+        window.removeEventListener('pointercancel', dragListenersRef.current.onUp);
         dragListenersRef.current = null;
       }
     };
-  }, [gl.domElement]);
+  }, []);
 
   const rackType = rack.type || 'grid';
 
@@ -605,7 +607,10 @@ export default function RackMesh({
   const baseInnerW = scaledLayout ? scaledLayout.innerW : displayCols * CELL_W;
   const baseInnerH = scaledLayout ? scaledLayout.innerH : displayRows * CELL_H;
   const defaultWidth = baseInnerW + PANEL_THICK * 2;
-  const width = widthOverride || defaultWidth;
+  // x-rack is square by construction; honouring a stray widthOverride (e.g.
+  // left over from a rack that was switched to x-rack after a width was set)
+  // would stretch the slot grid and X-beams out of alignment, so ignore it.
+  const width = rackType === 'x-rack' ? defaultWidth : (widthOverride || defaultWidth);
   const hasShelfBack = rackType === 'shelf' && (rack.typeConfig?.backCols || 0) > 0;
   const depth = depthOverride || (hasShelfBack ? RACK_DEPTH * 1.7 : RACK_DEPTH);
   const innerW = (width - PANEL_THICK * 2);
@@ -719,20 +724,26 @@ export default function RackMesh({
       if (groupRef.current) {
         onDragEnd?.([groupRef.current.position.x, position[1], groupRef.current.position.z]);
       }
-      gl.domElement.removeEventListener('pointermove', onMove);
-      gl.domElement.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onUp);
       dragListenersRef.current = null;
     };
 
     // Remove any stale listeners before adding new ones
     if (dragListenersRef.current) {
-      gl.domElement.removeEventListener('pointermove', dragListenersRef.current.onMove);
-      gl.domElement.removeEventListener('pointerup', dragListenersRef.current.onUp);
+      window.removeEventListener('pointermove', dragListenersRef.current.onMove);
+      window.removeEventListener('pointerup', dragListenersRef.current.onUp);
+      window.removeEventListener('pointercancel', dragListenersRef.current.onUp);
     }
     dragListenersRef.current = { onMove, onUp };
 
-    gl.domElement.addEventListener('pointermove', onMove);
-    gl.domElement.addEventListener('pointerup', onUp);
+    // Listen on window (not the canvas) so a pointer release outside the canvas
+    // — over a side panel, the header, or off-window — still ends the drag.
+    // pointercancel covers touch/pen interruptions.
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+    window.addEventListener('pointercancel', onUp);
   };
 
   const handleClick = (e) => { if (isEditMode) return; e.stopPropagation(); onClick?.(e.shiftKey); };
