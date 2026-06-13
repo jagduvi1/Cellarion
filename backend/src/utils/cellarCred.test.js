@@ -1,4 +1,10 @@
-const { getTier, getSpecialty, POINT_VALUES, CATEGORY_MAP } = require('./cellarCred');
+jest.mock('../models/User', () => ({
+  findByIdAndUpdate: jest.fn(),
+  updateOne: jest.fn(),
+}));
+
+const User = require('../models/User');
+const { getTier, getSpecialty, POINT_VALUES, CATEGORY_MAP, incrementCred } = require('./cellarCred');
 
 describe('getTier', () => {
   it('returns newcomer for 0', () => expect(getTier(0)).toBe('newcomer'));
@@ -42,5 +48,57 @@ describe('constants', () => {
     for (const cat of Object.values(CATEGORY_MAP)) {
       expect(validCategories).toContain(cat);
     }
+  });
+});
+
+describe('incrementCred — no plan rewards', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  it('recomputes the badge tier but never grants a plan when crossing a threshold', async () => {
+    // User who, after this increment, has crossed the connoisseur threshold (>=300)
+    User.findByIdAndUpdate.mockResolvedValue({
+      contribution: {
+        totalScore: 305,
+        categories: { curator: 0, photographer: 305, critic: 0, community: 0 },
+        tier: 'enthusiast',        // stale — should be bumped to connoisseur
+        specialty: 'photographer', // unchanged
+        rewardsGranted: [],
+      },
+      plan: 'free',
+      planExpiresAt: null,
+    });
+    User.updateOne.mockResolvedValue({});
+
+    await incrementCred('user123', 'image_approved');
+
+    expect(User.updateOne).toHaveBeenCalledTimes(1);
+    const [, updateOp] = User.updateOne.mock.calls[0];
+    const set = updateOp.$set || {};
+
+    // Badge still recomputed
+    expect(set['contribution.tier']).toBe('connoisseur');
+    // But the subscription is left completely alone
+    expect(set).not.toHaveProperty('plan');
+    expect(set).not.toHaveProperty('planStartedAt');
+    expect(set).not.toHaveProperty('planExpiresAt');
+    expect(updateOp).not.toHaveProperty('$addToSet'); // no rewardsGranted writes
+  });
+
+  it('is a no-op write when neither tier nor specialty changes', async () => {
+    User.findByIdAndUpdate.mockResolvedValue({
+      contribution: {
+        totalScore: 40,
+        categories: { curator: 0, photographer: 40, critic: 0, community: 0 },
+        tier: 'contributor',
+        specialty: 'photographer',
+        rewardsGranted: [],
+      },
+      plan: 'free',
+      planExpiresAt: null,
+    });
+
+    await incrementCred('user123', 'image_approved');
+
+    expect(User.updateOne).not.toHaveBeenCalled();
   });
 });
