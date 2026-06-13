@@ -1035,6 +1035,11 @@ router.delete('/:id', async (req, res) => {
     await deleteLogoFilesFor(WineList, { cellar: cellar._id });
     await WineList.deleteMany({ cellar: cellar._id });
 
+    // The 3D room layout is intentionally NOT removed here: this is a
+    // reversible soft-delete (restorable for 30 days) and CellarLayout has no
+    // soft-delete, so deleting it would lose the user's rack arrangement on
+    // restore. It is hard-deleted on the permanent-delete path instead.
+
     // Bottles are preserved — they remain in history via their status field
 
     logAudit(req, 'cellar.delete',

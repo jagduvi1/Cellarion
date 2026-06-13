@@ -109,12 +109,21 @@ function getBottleGeometry() {
 // orientation; back-row bottles get flipNeck=true. The two rows then meet
 // neck-to-neck at the shelf's depth centerline — matching how bottles
 // actually lie in a Vintec/Transtherm cabinet.
+// Restore the default document cursor if a hover-cursor mesh unmounts while
+// hovered. R3F doesn't fire onPointerOut on unmount, so without this the
+// page-wide 'pointer' cursor can get stuck (e.g. after Ctrl+Z removes a rack
+// under a stationary cursor).
+function useResetCursorOnUnmount() {
+  useEffect(() => () => { document.body.style.cursor = ''; }, []);
+}
+
 function Bottle({ position, wineType, slot, onBottleClick, highlighted, scale = 1, flipNeck = false }) {
   const glassColor = GLASS_COLORS[wineType] || GLASS_COLORS.red;
   const wineColor = WINE_COLORS[wineType] || WINE_COLORS.red;
   const foilColor = FOIL_COLORS[wineType] || FOIL_COLORS.red;
   const emissive = EMISSIVE_COLORS[wineType] || EMISSIVE_COLORS.red;
   const bottleGeo = useMemo(() => getBottleGeometry(), []);
+  useResetCursorOnUnmount();
 
   const handleClick = (e) => {
     e.stopPropagation();
@@ -185,6 +194,7 @@ function Bottle({ position, wineType, slot, onBottleClick, highlighted, scale = 
 // front face. For shelf racks, the caller passes an absolute z (the cubby
 // opening for that row) and useAbsoluteZ=true so we don't double-offset.
 function EmptySlot({ position, slotPosition, onClick, isBack, useAbsoluteZ = false }) {
+  useResetCursorOnUnmount();
   const zBase = useAbsoluteZ
     ? (position[2] || 0)
     : RACK_DEPTH / 2 - 0.005 + (position[2] || 0);
@@ -351,8 +361,11 @@ function computeShelfSlotPositions(rows, cols, backCols, width, height, bpc = 1,
   // Per-bottle z step when a cubby holds more than one bottle (front-to-back).
   const Z_STEP = 0.03;
   // Keep the staggered back row inside the side panels (fixes overflow when
-  // backCols approaches cols).
+  // backCols approaches cols) and the per-bottle stagger inside the cabinet
+  // depth (a high bottlesPerCell would otherwise push bottles out the open
+  // back); for extreme configs bottles pile at the limit rather than escape.
   const xLimit = width / 2 - BOTTLE_RADIUS;
+  const clampZ = (z) => Math.max(-halfDepth + 0.005, Math.min(halfDepth - 0.005, z));
   let pos = 1;
   for (let r = 0; r < rows; r++) {
     const y = height / 2 - cH / 2 - r * cH;
@@ -363,8 +376,8 @@ function computeShelfSlotPositions(rows, cols, backCols, width, height, bpc = 1,
           position: pos++,
           x,
           y,
-          z: frontEmptyZ - b * Z_STEP,
-          bottleZ: frontBottleZ - b * Z_STEP,
+          z: clampZ(frontEmptyZ - b * Z_STEP),
+          bottleZ: clampZ(frontBottleZ - b * Z_STEP),
           isBack: false,
           flipNeck: hasBack, // front-row bottles face into the shelf
           row: r,
@@ -379,8 +392,8 @@ function computeShelfSlotPositions(rows, cols, backCols, width, height, bpc = 1,
             position: pos++,
             x,
             y,
-            z: backEmptyZ + b * Z_STEP,
-            bottleZ: backBottleZ + b * Z_STEP,
+            z: clampZ(backEmptyZ + b * Z_STEP),
+            bottleZ: clampZ(backBottleZ + b * Z_STEP),
             isBack: true,
             flipNeck: false,
             row: r,
@@ -424,10 +437,10 @@ function PullOutShelfRow({
   row,
   isPulled,
   plankY,
+  rackHeight,
   innerW,
   shelfDepth,
   depth,
-  cH,
   woodTex,
   shelfColor,
   frameColor,
@@ -438,6 +451,7 @@ function PullOutShelfRow({
   onEmptySlotClick,
   highlightBottleId,
 }) {
+  useResetCursorOnUnmount();
   const groupRef = useRef();
   const targetZ = isPulled ? depth * PULL_OUT_FRACTION : 0;
   useFrame((_, delta) => {
@@ -450,9 +464,12 @@ function PullOutShelfRow({
 
   // Pull-handle: a small wooden bar at the front of the shelf row that the
   // user can click to slide it forward. Hovering changes the cursor.
+  // The bottom row has no plank, so derive its handle Y from the rack's actual
+  // bottom panel (rackHeight) rather than a fixed offset that floated the
+  // handle below the floor.
   const handleY = plankY != null
     ? plankY + 0.012
-    : -0.5; // bottom row — handle just above the floor panel
+    : -rackHeight / 2 + PANEL_THICK + 0.012;
   // Place the handle at the cabinet's actual front face so it's reachable
   // before the shelf is pulled, and remains reachable after for retracting.
   const handleZ = depth / 2 - 0.005;
@@ -636,7 +653,15 @@ export default function RackMesh({
   }, [rack.isModular, rack.modules, rackType, rack.rows, rack.cols, rack.typeConfig]);
 
   const slotPositions = useMemo(() => {
-    if (scaledLayout) return scaledLayout.positions;
+    if (scaledLayout) {
+      // The scaled positions are in base metres. Scale x so the bottle grid
+      // tracks the frame when a widthOverride stretches/shrinks it (there is
+      // no height override, so y is left as-is).
+      const sx = scaledLayout.innerW ? innerW / scaledLayout.innerW : 1;
+      return sx === 1
+        ? scaledLayout.positions
+        : scaledLayout.positions.map(p => ({ ...p, x: p.x * sx }));
+    }
     if (rackType === 'x-rack') return computeXRackSlotPositions(rack.typeConfig?.bottlesPerSection || 10, innerW, innerH);
     if (rackType === 'hex') return computeHexSlotPositions(rack.rows || 4, rack.cols || 4, innerW, innerH);
     if (rackType === 'triangle') return computeTriangleSlotPositions(rack.cols || 1, innerW, innerH);
@@ -657,6 +682,12 @@ export default function RackMesh({
     box.dispose();
     return edges;
   }, [width, height, depth, rackScale]);
+
+  // Dispose the previous EdgesGeometry when the rack is resized (the memo
+  // rebuilds on size/scale change) and on unmount. R3F never disposes a
+  // geometry passed via the `geometry` prop, so without this it leaks a GPU
+  // buffer per resize.
+  useEffect(() => () => edgesGeom.dispose(), [edgesGeom]);
 
   // ── Drag logic ─────────────────────────────────────────
   // Use a ref for the drag plane so it can be set to the rack's y-elevation
@@ -891,10 +922,10 @@ export default function RackMesh({
               row={r}
               isPulled={pulledShelfRow === r}
               plankY={plankY}
+              rackHeight={height}
               innerW={innerW}
               shelfDepth={shelfDepth}
               depth={depth}
-              cH={CELL_H}
               woodTex={woodTex}
               shelfColor={shelfColor}
               frameColor={frameColor}

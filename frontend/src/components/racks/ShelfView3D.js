@@ -33,11 +33,14 @@ export default function ShelfView3D({ rack, activePosition, highlightPos, onSlot
   // passing through it. The camera then aims at the rack's visual centre
   // (y = height/2) so top and bottom shelves get equal screen real estate.
   const maxDim = Math.max(width, height, depth);
-  // Distance needed to fit the rack's height in a 45° vertical FOV (with
-  // a 1.35× margin for comfort): H / (2 * tan(22.5°)) ≈ H * 1.21.
-  const fitDistance = height * 1.35 + depth * 0.5;
+  // Distance needed to frame the rack. Account for BOTH the vertical extent
+  // (height) and the horizontal extent (width) so wide-short racks aren't
+  // clipped left/right on load. width * 0.85 conservatively covers the
+  // horizontal fit at a 45° vertical FOV across typical canvas aspect ratios.
+  const fitDistance = Math.max(height * 1.35, width * 0.85) + depth * 0.5;
   const camPos = useMemo(() => ([
-    width * 0.55,
+    // Cap the sideways offset so very wide racks stay centred.
+    Math.min(width * 0.55, fitDistance * 0.5),
     height * 0.65,           // slight elevation above the rack centre
     fitDistance,
   ]), [width, height, fitDistance]);
