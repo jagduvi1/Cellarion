@@ -264,7 +264,7 @@ export default function RoomScene({
   }, [rackPlacements, rackMap, roomDimensions]);
 
   // Texture repeats — memoized to avoid cloning on every render
-  const { wallTexN, wallTexS, wallTexW, wallTexE, floorTex, ceilTex } = useMemo(() => {
+  const roomTextures = useMemo(() => {
     const wN = wallTexture.clone(); wN.repeat.set(rw / 2, rh / 2);
     const wS = wallTexture.clone(); wS.repeat.set(rw / 2, rh / 2);
     const wW = wallTexture.clone(); wW.repeat.set(rd / 2, rh / 2);
@@ -273,6 +273,21 @@ export default function RoomScene({
     const ce = ceilingTexture.clone(); ce.repeat.set(rw / 4, rd / 4);
     return { wallTexN: wN, wallTexS: wS, wallTexW: wW, wallTexE: wE, floorTex: fl, ceilTex: ce };
   }, [wallTexture, floorTexture, ceilingTexture, rw, rd, rh]);
+  const { wallTexN, wallTexS, wallTexW, wallTexE, floorTex, ceilTex } = roomTextures;
+
+  // Dispose the previous set of cloned textures when the room is resized (the
+  // memo re-clones on rw/rd/rh change) and on unmount — each clone is its own
+  // GPU texture, so without this they leak on every dimension tweak.
+  useEffect(() => () => {
+    Object.values(roomTextures).forEach(t => t.dispose());
+  }, [roomTextures]);
+
+  // Dispose the base canvas textures when the scene unmounts.
+  useEffect(() => () => {
+    wallTexture.dispose();
+    floorTexture.dispose();
+    ceilingTexture.dispose();
+  }, [wallTexture, floorTexture, ceilingTexture]);
 
   return (
     <>

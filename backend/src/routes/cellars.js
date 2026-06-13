@@ -8,6 +8,7 @@ const AuditLog = require('../models/AuditLog');
 const BottleImage = require('../models/BottleImage');
 const WineDefinition = require('../models/WineDefinition');
 const WineList = require('../models/WineList');
+const CellarLayout = require('../models/CellarLayout');
 const { deleteLogoFilesFor } = require('../services/wineListLogos');
 const PendingShare = require('../models/PendingShare');
 const { getCellarRole } = require('../utils/cellarAccess');
@@ -1034,6 +1035,11 @@ router.delete('/:id', async (req, res) => {
     // only references, and orphaned logos would stay publicly fetchable.
     await deleteLogoFilesFor(WineList, { cellar: cellar._id });
     await WineList.deleteMany({ cellar: cellar._id });
+
+    // Remove the 3D room layout (one doc per cellar; not soft-deleted) so it
+    // isn't orphaned referencing deleted racks. Matches the account-deletion
+    // cascade in userDataRegistry.
+    await CellarLayout.deleteMany({ cellar: cellar._id });
 
     // Bottles are preserved — they remain in history via their status field
 
