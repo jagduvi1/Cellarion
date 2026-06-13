@@ -65,11 +65,22 @@ router.post('/', async (req, res) => {
     const urlErr = validateUrl(sourceUrl);
     if (urlErr) return res.status(400).json({ error: urlErr });
 
+    // Bound the free-text/image fields so a single request can't persist a
+    // multi-MB string (the route's body limit is 5mb) and bloat the admin queue.
+    const trimmedName = wineName.trim();
+    const trimmedImage = image ? String(image).trim() : '';
+    if (trimmedName.length > 300) {
+      return res.status(400).json({ error: 'Wine name must be 300 characters or fewer' });
+    }
+    if (trimmedImage.length > 500000) {
+      return res.status(400).json({ error: 'Image reference is too large' });
+    }
+
     const wineRequest = new WineRequest({
       requestType: 'new_wine',
-      wineName: wineName.trim(),
+      wineName: trimmedName,
       sourceUrl: sourceUrl.trim(),
-      image: image?.trim() || null,
+      image: trimmedImage || null,
       user: req.user.id,
       status: 'pending'
     });

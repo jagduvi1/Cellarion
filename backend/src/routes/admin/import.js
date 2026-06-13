@@ -265,21 +265,25 @@ router.post('/wines', csvUpload.single('file'), async (req, res) => {
         ? { $or: [{ normalizedKey }, { 'lwin.lwin7': mapped.lwin7 }] }
         : { normalizedKey };
 
+      // Wrap user-derived CSV values in $literal: in an aggregation update
+      // pipeline a string beginning with '$' is otherwise evaluated as a field
+      // path / system variable (the code itself relies on $$NOW), so a crafted
+      // cell like "$createdBy" could copy another field's value into name/etc.
       const setFields = {
-        name: { $ifNull: ['$name', mapped.name] },
-        producer: { $ifNull: ['$producer', mapped.producer] },
+        name: { $ifNull: ['$name', { $literal: mapped.name }] },
+        producer: { $ifNull: ['$producer', { $literal: mapped.producer }] },
         country: { $ifNull: ['$country', countryId] },
-        type: { $ifNull: ['$type', mapped.type] },
-        normalizedKey: { $ifNull: ['$normalizedKey', normalizedKey] },
+        type: { $ifNull: ['$type', { $literal: mapped.type }] },
+        normalizedKey: { $ifNull: ['$normalizedKey', { $literal: normalizedKey }] },
         createdBy: { $ifNull: ['$createdBy', userId] },
         createdAt: { $ifNull: ['$createdAt', '$$NOW'] },
         updatedAt: '$$NOW',
       };
 
       if (regionId) setFields.region = { $ifNull: ['$region', regionId] };
-      if (mapped.appellation) setFields.appellation = { $ifNull: ['$appellation', mapped.appellation] };
-      if (mapped.classification) setFields.classification = { $ifNull: ['$classification', mapped.classification] };
-      if (mapped.lwin7) setFields['lwin.lwin7'] = { $ifNull: ['$lwin.lwin7', mapped.lwin7] };
+      if (mapped.appellation) setFields.appellation = { $ifNull: ['$appellation', { $literal: mapped.appellation }] };
+      if (mapped.classification) setFields.classification = { $ifNull: ['$classification', { $literal: mapped.classification }] };
+      if (mapped.lwin7) setFields['lwin.lwin7'] = { $ifNull: ['$lwin.lwin7', { $literal: mapped.lwin7 }] };
 
       return {
         updateOne: {

@@ -127,6 +127,12 @@ if (indexNowKey) {
   });
 }
 
+// The Stripe webhook authenticates via signature + idempotency and is delivered
+// from Stripe's small IP pool, so per-IP limiting only risks 429-ing legitimate
+// billing bursts (or a dashboard "resend all"). Exempt it — same spirit as the
+// sitemap/OG/public-wine-list routes that are mounted before the limiters.
+const isStripeWebhook = (req) => req.originalUrl.split('?')[0] === '/api/stripe/webhook';
+
 // Global API rate limiter — default 200 requests per 15 min per IP (admin-configurable)
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -134,6 +140,7 @@ const apiLimiter = rateLimit({
   keyGenerator: (req) => rateLimitKey(req),
   standardHeaders: true,
   legacyHeaders: false,
+  skip: isStripeWebhook,
   handler: (req, res) => {
     logAudit(req, 'system.rate_limit_exceeded', {}, { limiter: 'api', limit: rateLimitsConfig.get().api.max });
     res.status(429).json({ error: 'Too many requests, please try again later' });
@@ -148,7 +155,7 @@ const writeLimiter = rateLimit({
   keyGenerator: (req) => rateLimitKey(req),
   standardHeaders: true,
   legacyHeaders: false,
-  skip: (req) => req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS',
+  skip: (req) => isStripeWebhook(req) || req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS',
   handler: (req, res) => {
     logAudit(req, 'system.rate_limit_exceeded', {}, { limiter: 'write', limit: rateLimitsConfig.get().write.max });
     res.status(429).json({ error: 'Too many write requests, please try again later' });
