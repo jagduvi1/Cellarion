@@ -161,7 +161,11 @@ function ProfileCard({ profile, isPending, onSaved, onReset }) {
     try {
       const body = { sommNotes: form.sommNotes };
       ['earlyFrom', 'earlyUntil', 'peakFrom', 'peakUntil', 'lateFrom', 'lateUntil'].forEach(f => {
-        body[f] = form[f] ? parseInt(form[f]) : null;
+        // Treat 0 as a real value — for NV wines an offset of 0 means "drink
+        // from purchase", which is common. A plain `form[f] ? … : null` would
+        // drop a numeric 0 (e.g. from an AI suggestion) to null.
+        const v = form[f];
+        body[f] = (v === '' || v === null || v === undefined) ? null : parseInt(v);
       });
 
       const res = await apiFetch(`/api/somm/maturity/${profile._id}`, {

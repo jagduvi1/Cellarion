@@ -636,6 +636,60 @@ function MaturitySuggestPromptPanel({ prompt, apiFetch }) {
   );
 }
 
+function MaturitySuggestPromptNvPanel({ prompt, apiFetch }) {
+  const [val, setVal] = useState(prompt || '');
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState(null);
+
+  const save = async () => {
+    setSaving(true);
+    setMsg(null);
+    try {
+      const res = await apiFetch('/api/superadmin/ai/maturity-suggest-prompt-nv', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: val }),
+      });
+      if (!res.ok) {
+        const d = await res.json();
+        setMsg({ ok: false, text: d.error || 'Save failed' });
+      } else {
+        setMsg({ ok: true, text: 'Saved — takes effect immediately' });
+      }
+    } catch {
+      setMsg({ ok: false, text: 'Network error' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="sa-panel" style={{ marginTop: 16 }}>
+      <div className="sa-panel-header">
+        <span className="sa-panel-title">Maturity Suggest (Non-Vintage) — AI Prompt</span>
+        <button className="sa-btn" onClick={save} disabled={saving || !val.trim()}>{saving ? 'Saving...' : 'Save'}</button>
+      </div>
+      <div className="sa-panel-body">
+        <div style={{ fontSize: 11, color: 'var(--sa-text-dim)', marginBottom: 8 }}>
+          Used instead of the prompt above when the wine is <strong>non-vintage (NV)</strong>. It must ask for the window as <strong>whole years after purchase</strong> (offsets like 0, 2, 5), not calendar years — that's how NV drink windows are stored. Use <code style={{ background: 'var(--sa-bg)', padding: '1px 4px', borderRadius: 2 }}>{'{{name}}'}</code>, <code style={{ background: 'var(--sa-bg)', padding: '1px 4px', borderRadius: 2 }}>{'{{producer}}'}</code>, <code style={{ background: 'var(--sa-bg)', padding: '1px 4px', borderRadius: 2 }}>{'{{country}}'}</code>, <code style={{ background: 'var(--sa-bg)', padding: '1px 4px', borderRadius: 2 }}>{'{{region}}'}</code>, <code style={{ background: 'var(--sa-bg)', padding: '1px 4px', borderRadius: 2 }}>{'{{appellation}}'}</code>, <code style={{ background: 'var(--sa-bg)', padding: '1px 4px', borderRadius: 2 }}>{'{{type}}'}</code>, <code style={{ background: 'var(--sa-bg)', padding: '1px 4px', borderRadius: 2 }}>{'{{grapes}}'}</code> placeholders ({'{{vintage}}'} is not used for NV).
+        </div>
+        <textarea
+          value={val}
+          onChange={e => setVal(e.target.value)}
+          rows={14}
+          style={{ width: '100%', background: 'var(--sa-bg)', border: '1px solid var(--sa-border)', color: 'var(--sa-text)', padding: '8px', borderRadius: 3, fontFamily: 'monospace', fontSize: 12, lineHeight: 1.5, resize: 'vertical', boxSizing: 'border-box' }}
+        />
+        <div style={{ marginTop: 6, display: 'flex', gap: 8, alignItems: 'center' }}>
+          <span style={{ fontSize: 11, color: 'var(--sa-text-dim)' }}>{val.length} / 6000 chars</span>
+          {msg && (
+            <span style={{ fontSize: 11, color: msg.ok ? 'var(--sa-accent)' : 'var(--sa-danger)' }}>{msg.text}</span>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function PriceSuggestModelPanel({ currentModel, apiFetch }) {
   const [selected, setSelected] = useState(currentModel || 'claude-haiku-4-5-20251001');
   const [saving, setSaving]     = useState(false);
@@ -1576,6 +1630,7 @@ export default function TabAI() {
       <ImportLookupPromptPanel prompt={config.importLookupPrompt || ''} apiFetch={apiFetch} />
       <MaturitySuggestModelPanel currentModel={config.maturitySuggestModel || 'claude-haiku-4-5-20251001'} apiFetch={apiFetch} />
       <MaturitySuggestPromptPanel prompt={config.maturitySuggestPrompt || ''} apiFetch={apiFetch} />
+      <MaturitySuggestPromptNvPanel prompt={config.maturitySuggestPromptNv || ''} apiFetch={apiFetch} />
       <PriceSuggestModelPanel currentModel={config.priceSuggestModel || 'claude-haiku-4-5-20251001'} apiFetch={apiFetch} />
       <PriceSuggestPromptPanel prompt={config.priceSuggestPrompt || ''} apiFetch={apiFetch} />
       <EnrichmentModelPanel currentModel={config.enrichmentModel || 'claude-sonnet-4-6'} apiFetch={apiFetch} />
