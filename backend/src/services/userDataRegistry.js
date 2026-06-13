@@ -308,7 +308,9 @@ const REGISTRY = [
     // party keeps the recommendation: a recipient keeps a from-[deleted] rec,
     // and a sender keeps a to-[deleted] entry in their sent list.
     purge: (ctx) => [
-      Recommendation.updateMany({ sender: ctx.userId }, { $set: { sender: ctx.deletedUserId } }),
+      // Scrub the external recipient's email (third-party PII the departing user
+      // supplied) while anonymising the sender side.
+      Recommendation.updateMany({ sender: ctx.userId }, { $set: { sender: ctx.deletedUserId }, $unset: { recipientEmail: '' } }),
       Recommendation.updateMany({ recipient: ctx.userId }, { $set: { recipient: ctx.deletedUserId } }),
     ],
     exportFragment: async (ctx) => {
@@ -544,7 +546,13 @@ const REGISTRY = [
   // ── Audit log: keep for compliance, anonymise the actor ─────────────────
   {
     model: AuditLog, category: 'personal-data', userFields: ['actor.userId'],
-    purge: (ctx) => AuditLog.updateMany({ 'actor.userId': ctx.userId }, { $set: { 'actor.userId': null, 'actor.ipAddress': null } }),
+    // Also scrub identifier PII the free-form detail can carry — registration/
+    // login events embed { username, email }. $unset only touches docs that
+    // actually have those keys, so it's safe across the heterogeneous detail shapes.
+    purge: (ctx) => AuditLog.updateMany(
+      { 'actor.userId': ctx.userId },
+      { $set: { 'actor.userId': null, 'actor.ipAddress': null }, $unset: { 'detail.email': '', 'detail.username': '' } }
+    ),
     exportFragment: async (ctx) => ({
       activityLog: markTrunc(ctx, 'activityLog', await AuditLog.find({ 'actor.userId': ctx.userId }).sort({ timestamp: -1 }).limit(AUDIT_MAX).lean(), AUDIT_MAX)
         .map(a => ({ action: a.action, timestamp: a.timestamp, detail: a.detail })),

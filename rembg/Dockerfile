@@ -7,13 +7,24 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libgl1 libglib2.0-0 curl \
     && rm -rf /var/lib/apt/lists/*
 
+# Run as a non-root user. rembg decodes untrusted user images (Pillow), so a
+# decoder RCE must not land as root in-container. gunicorn binds :5000 (a
+# non-privileged port), so no extra capability is needed.
+RUN useradd --create-home --uid 10001 appuser
+ENV U2NET_HOME=/home/appuser/.u2net
+
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Pre-download the u2net model so container startup is fast
-RUN python -c "from rembg import new_session; new_session('u2net')"
+# Pre-download the u2net model so container startup is fast. Land it in the
+# non-root user's model dir (U2NET_HOME) so it is readable at runtime.
+RUN mkdir -p $U2NET_HOME && python -c "from rembg import new_session; new_session('u2net')"
 
 COPY app.py .
+
+# Hand /app and the model cache to the runtime user, then drop privileges.
+RUN chown -R appuser:appuser /app $U2NET_HOME
+USER appuser
 
 EXPOSE 5000
 
