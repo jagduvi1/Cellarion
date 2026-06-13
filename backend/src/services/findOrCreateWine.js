@@ -93,11 +93,18 @@ async function findOrCreateGrapes(names, userId) {
  * @param {boolean} [opts.confirmCreate=false] - Skip soft-zone candidate return and create directly
  */
 async function findOrCreateWine({ name, producer, country, region, appellation, type, grapes }, userId, { confirmCreate = false } = {}) {
-  const trimmedName = name.trim();
-  const trimmedProducer = producer.trim();
+  // Cap stored/compared field lengths at this single create chokepoint (covers
+  // the find-or-create route, CSV import, and label-scan). This bounds both the
+  // fuzzy-match cost and the persisted document size WITHOUT a schema maxlength
+  // validator — a validator re-runs on every .save() (full-document validation)
+  // and would make legacy rows that predate the cap un-editable.
+  const MAX_FIELD = 200;
+  const trimmedName = name.trim().slice(0, MAX_FIELD);
+  const trimmedProducer = producer.trim().slice(0, MAX_FIELD);
+  const trimmedAppellation = (typeof appellation === 'string' ? appellation.trim() : '').slice(0, MAX_FIELD);
 
   // 1. Exact match by normalizedKey
-  const normalizedKey = generateWineKey(trimmedName, trimmedProducer, appellation);
+  const normalizedKey = generateWineKey(trimmedName, trimmedProducer, trimmedAppellation);
   let wine = await WineDefinition.findOne({ normalizedKey }).populate(POPULATE);
   if (wine) return { wine, created: false };
 
@@ -129,7 +136,7 @@ async function findOrCreateWine({ name, producer, country, region, appellation, 
 
   if (candidates.length > 0) {
     const ranked = scoreAllMatches(
-      { name: trimmedName, producer: trimmedProducer, appellation },
+      { name: trimmedName, producer: trimmedProducer, appellation: trimmedAppellation },
       candidates,
       { redistribute: false }
     );
@@ -170,7 +177,7 @@ async function findOrCreateWine({ name, producer, country, region, appellation, 
     producer: trimmedProducer,
     country: countryDoc._id,
     region: regionDoc?._id || null,
-    appellation: appellation?.trim() || null,
+    appellation: trimmedAppellation || null,
     type: wineType,
     grapes: grapeIds,
     normalizedKey,

@@ -50,7 +50,13 @@ async function runDrinkWindowCheck() {
   // `drinkWindow: { $ne: false }` matched every user (an object is never === false)
   // and the master opt-out did nothing — check the `.enabled` leaf instead.
   const users = await User.find({
-    'preferences.notifications.drinkWindow.enabled': { $ne: false }
+    // Exclude both opt-out shapes: the current object form ({ enabled: false })
+    // AND a legacy scalar `drinkWindow: false` from the pre-object schema (whose
+    // `.enabled` leaf is absent, so the leaf predicate alone would re-include it).
+    $and: [
+      { 'preferences.notifications.drinkWindow.enabled': { $ne: false } },
+      { 'preferences.notifications.drinkWindow': { $ne: false } }
+    ]
   }).select('_id email username displayName preferences.notifications emailVerified').lean();
 
   let totalNotified = 0;
