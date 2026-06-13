@@ -6,12 +6,14 @@ const wineDefinitionSchema = new mongoose.Schema({
     type: String,
     required: [true, 'Wine name is required'],
     trim: true,
+    maxlength: [200, 'Wine name must be 200 characters or fewer'],
     index: true
   },
   producer: {
     type: String,
     required: [true, 'Producer is required'],
     trim: true,
+    maxlength: [200, 'Producer must be 200 characters or fewer'],
     index: true
   },
   productNumber: {
@@ -40,7 +42,8 @@ const wineDefinitionSchema = new mongoose.Schema({
   },
   appellation: {
     type: String,
-    trim: true
+    trim: true,
+    maxlength: [200, 'Appellation must be 200 characters or fewer']
   },
   classification: {
     type: String,

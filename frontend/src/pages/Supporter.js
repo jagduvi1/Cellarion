@@ -23,6 +23,11 @@ function Supporter() {
       const data = await res.json();
       if (data.url) {
         window.location.href = data.url;
+      } else if (data.code === 'subscription_exists') {
+        // Already subscribed — send them to the portal to change/cancel rather
+        // than creating a second subscription (the backend blocks that with 409).
+        setCheckoutLoading(null);
+        handleManageSubscription();
       } else {
         setActionError(data.error || t('supporter.checkoutError'));
         setCheckoutLoading(null);
@@ -109,10 +114,12 @@ function Supporter() {
                 <div className="plans-trial-wrap">
                   <button
                     className="btn btn-primary plans-trial-btn"
-                    onClick={() => handleCheckout(planKey)}
+                    onClick={() => hasStripeSubscription ? handleManageSubscription() : handleCheckout(planKey)}
                     disabled={checkoutLoading === planKey}
                   >
-                    {checkoutLoading === planKey ? t('common.saving') : t('supporter.subscribe')}
+                    {checkoutLoading === planKey
+                      ? t('common.saving')
+                      : hasStripeSubscription ? t('supporter.changePlan') : t('supporter.subscribe')}
                   </button>
                 </div>
               )}

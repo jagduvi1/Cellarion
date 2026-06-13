@@ -8,7 +8,7 @@ const { logAudit } = require('../services/audit');
 const { createNotification } = require('../services/notifications');
 const { sendRecommendationEmail, EMAIL_VERIFICATION_ENABLED } = require('../services/mailgun');
 const { parsePagination } = require('../utils/pagination');
-const { isValidId } = require('../utils/validation');
+const { isValidId, coerceStringQuery } = require('../utils/validation');
 const { escapeRegex } = require('../utils/sanitize');
 
 const router = express.Router();
@@ -248,7 +248,7 @@ router.delete('/:id', async (req, res) => {
 // GET /api/recommendations/friends — search following list for friend picker
 router.get('/friends', async (req, res) => {
   try {
-    const q = (req.query.q || '').trim();
+    const q = coerceStringQuery(req.query.q).trim();
     const { limit } = parsePagination(req.query, { limit: 10, maxLimit: 20 });
 
     // Get users the current user follows

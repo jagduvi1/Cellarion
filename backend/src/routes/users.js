@@ -35,7 +35,7 @@ const { requireAuth, requireRole } = require('../middleware/auth');
 const { buildUserExport } = require('../services/userDataRegistry');
 const { logAudit } = require('../services/audit');
 const { stripHtml, escapeRegex } = require('../utils/sanitize');
-const { isValidId } = require('../utils/validation');
+const { isValidId, coerceStringQuery } = require('../utils/validation');
 
 const router = express.Router();
 
@@ -221,7 +221,7 @@ router.patch('/profile', requireAuth, async (req, res) => {
 // GET /api/users/search - Search for public users by username or display name
 router.get('/search', requireAuth, async (req, res) => {
   try {
-    const q = (req.query.q || '').trim();
+    const q = coerceStringQuery(req.query.q).trim();
     if (!q || q.length < 2) {
       return res.status(400).json({ error: 'Search query must be at least 2 characters' });
     }
@@ -402,6 +402,12 @@ router.delete('/me', requireAuth, async (req, res) => {
 
     user.deletionRequestedAt = now;
     user.deletionScheduledFor = scheduledFor;
+    // Revoke refresh sessions on the deletion request so a refresh token captured
+    // before deletion can't keep minting access tokens through the 7-day window.
+    // The user simply re-authenticates to use the account (or to cancel the
+    // deletion) — matching change-password / password-reset, which also clear it.
+    user.refreshTokenHash = null;
+    user.refreshTokenExpiresAt = null;
     await user.save();
 
     // Clean up pending cellar invites sent by this user

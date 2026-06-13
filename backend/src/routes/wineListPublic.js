@@ -3,7 +3,7 @@ const rateLimit = require('express-rate-limit');
 const WineList = require('../models/WineList');
 const { generateWineListPdf, buildSections } = require('../services/wineListPdf');
 const { loadWineMap } = require('../services/wineListData');
-const { getClientIp } = require('../utils/clientIp');
+const { rateLimitKey } = require('../utils/clientIp');
 
 const router = express.Router();
 
@@ -13,7 +13,7 @@ const router = express.Router();
 const publicPdfLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 120,
-  keyGenerator: (req) => getClientIp(req),
+  keyGenerator: (req) => rateLimitKey(req),
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many requests, please try again later' },

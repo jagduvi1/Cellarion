@@ -157,10 +157,17 @@ services:
     image: ghcr.io/umami-software/umami:postgresql-latest
     container_name: cellarion-umami
     restart: unless-stopped
+    # Opt-in: only starts with `docker compose --profile analytics up`. It is
+    # useless without the build-time VITE_UMAMI_* vars anyway, so keeping it down
+    # by default lets us drop the weak fallback secrets that used to ship here.
+    # Set strong UMAMI_DB_PASSWORD / UMAMI_APP_SECRET in .env before enabling the
+    # profile (an empty password makes Postgres/Umami fail to start — fail-closed,
+    # and never a guessable committed default). Matches docker-compose.prod.yml.
+    profiles: ["analytics"]
     environment:
-      - DATABASE_URL=postgresql://umami:${UMAMI_DB_PASSWORD:-umami}@umami-db:5432/umami
+      - DATABASE_URL=postgresql://umami:${UMAMI_DB_PASSWORD}@umami-db:5432/umami
       - DATABASE_TYPE=postgresql
-      - APP_SECRET=${UMAMI_APP_SECRET:-replace-with-random-string-in-production}
+      - APP_SECRET=${UMAMI_APP_SECRET}
     deploy:
       resources:
         limits:
@@ -184,10 +191,11 @@ services:
     image: postgres:16-alpine
     container_name: cellarion-umami-db
     restart: unless-stopped
+    profiles: ["analytics"]
     environment:
       - POSTGRES_DB=umami
       - POSTGRES_USER=umami
-      - POSTGRES_PASSWORD=${UMAMI_DB_PASSWORD:-umami}
+      - POSTGRES_PASSWORD=${UMAMI_DB_PASSWORD}
     volumes:
       - umami-db-data:/var/lib/postgresql/data
     deploy:

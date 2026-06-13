@@ -45,9 +45,12 @@ async function runDrinkWindowCheck() {
   const seeded = await SiteConfig.findOne({ key: 'drinkWindowNotifierSeeded' }).lean();
   const isFirstRun = !seeded;
 
-  // All users with drink-window notifications not explicitly turned off
+  // All users with drink-window notifications not explicitly turned off. The
+  // preference is an OBJECT ({ enabled, email, push }), so the old
+  // `drinkWindow: { $ne: false }` matched every user (an object is never === false)
+  // and the master opt-out did nothing — check the `.enabled` leaf instead.
   const users = await User.find({
-    'preferences.notifications.drinkWindow': { $ne: false }
+    'preferences.notifications.drinkWindow.enabled': { $ne: false }
   }).select('_id email username displayName preferences.notifications emailVerified').lean();
 
   let totalNotified = 0;
@@ -201,7 +204,11 @@ async function processUser(user, isFirstRun) {
   for (const alert of uniqueAlerts) {
     const { title, message, type } = buildNotification(alert);
     const link = `/cellars/${alert.cellarId}?search=${encodeURIComponent(alert.name)}`;
-    await createNotification(user._id, type, title, message, link);
+    // Pass the 'drinkWindow' category so the push gate honours the opt-in
+    // drinkWindow.push preference. Without it, createNotification falls back to
+    // the permissive "any push toggle on" path and pushes even when the user
+    // left drinkWindow.push (default false) off.
+    await createNotification(user._id, type, title, message, link, 'drinkWindow');
   }
 
   // Send email digest if opted in (preferences.notifications.drinkWindow.email).

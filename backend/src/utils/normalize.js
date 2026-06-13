@@ -61,38 +61,48 @@ const generateWineKey = (name, producer, appellation = '') => {
 
 /**
  * Calculate Levenshtein distance between two strings
- * Used for fuzzy matching / similarity scoring
+ * Used for fuzzy matching / similarity scoring.
+ *
+ * Uses two rolling rows (the shorter string as the inner dimension) so memory
+ * is O(min(m, n)) rather than the O(m·n) full matrix — this keeps a pathological
+ * input from allocating hundreds of MB even if length caps upstream were bypassed.
  */
 const levenshteinDistance = (str1, str2) => {
-  const m = str1.length;
-  const n = str2.length;
+  let m = str1.length;
+  let n = str2.length;
+  if (m === 0) return n;
+  if (n === 0) return m;
 
-  // Create distance matrix
-  const dp = Array(m + 1)
-    .fill(null)
-    .map(() => Array(n + 1).fill(0));
+  // Keep the shorter string as the column (inner) dimension.
+  if (n > m) { [str1, str2] = [str2, str1]; [m, n] = [n, m]; }
 
-  // Initialize base cases
-  for (let i = 0; i <= m; i++) dp[i][0] = i;
-  for (let j = 0; j <= n; j++) dp[0][j] = j;
+  let prev = new Array(n + 1);
+  let curr = new Array(n + 1);
+  for (let j = 0; j <= n; j++) prev[j] = j;
 
-  // Fill matrix
   for (let i = 1; i <= m; i++) {
+    curr[0] = i;
     for (let j = 1; j <= n; j++) {
       if (str1[i - 1] === str2[j - 1]) {
-        dp[i][j] = dp[i - 1][j - 1];
+        curr[j] = prev[j - 1];
       } else {
-        dp[i][j] = Math.min(
-          dp[i - 1][j] + 1,     // deletion
-          dp[i][j - 1] + 1,     // insertion
-          dp[i - 1][j - 1] + 1  // substitution
+        curr[j] = Math.min(
+          prev[j] + 1,       // deletion
+          curr[j - 1] + 1,   // insertion
+          prev[j - 1] + 1    // substitution
         );
       }
     }
+    const tmp = prev; prev = curr; curr = tmp;
   }
 
-  return dp[m][n];
+  return prev[n];
 };
+
+// Strings longer than this are never a genuine fuzzy-duplicate of a wine
+// name/producer; the route and schema already cap input length, so this is
+// defense-in-depth bounding the O(m·n) edit-distance cost.
+const MAX_COMPARE_LEN = 256;
 
 /**
  * Calculate similarity score between two strings (0-1)
@@ -101,10 +111,13 @@ const levenshteinDistance = (str1, str2) => {
 const calculateSimilarity = (str1, str2) => {
   if (!str1 || !str2) return 0;
 
-  const normalized1 = normalizeString(str1);
-  const normalized2 = normalizeString(str2);
+  let normalized1 = normalizeString(str1);
+  let normalized2 = normalizeString(str2);
 
   if (normalized1 === normalized2) return 1;
+
+  if (normalized1.length > MAX_COMPARE_LEN) normalized1 = normalized1.slice(0, MAX_COMPARE_LEN);
+  if (normalized2.length > MAX_COMPARE_LEN) normalized2 = normalized2.slice(0, MAX_COMPARE_LEN);
 
   const maxLength = Math.max(normalized1.length, normalized2.length);
   if (maxLength === 0) return 1;

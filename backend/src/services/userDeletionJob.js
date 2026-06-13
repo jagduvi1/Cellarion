@@ -9,12 +9,34 @@
 const User = require('../models/User');
 const { purgeUserData } = require('./userDataRegistry');
 
+// Lazy, memoised Stripe client — only needed when a deleted user had a customer.
+let _stripe;
+function getStripe() {
+  if (!_stripe) _stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+  return _stripe;
+}
+
+/**
+ * Delete the user's Stripe customer object at final erasure (it holds their
+ * email + userId metadata). Best-effort: a Stripe error must not block the
+ * account deletion, and we only attempt it when Stripe is actually configured.
+ */
+async function deleteStripeCustomer(customerId) {
+  if (!customerId || !process.env.STRIPE_SECRET_KEY) return;
+  try {
+    await getStripe().customers.del(customerId);
+    console.log(`[user-deletion] Deleted Stripe customer ${customerId}`);
+  } catch (err) {
+    console.error(`[user-deletion] Failed to delete Stripe customer ${customerId}:`, err.message);
+  }
+}
+
 async function runUserDeletionJob() {
   const now = new Date();
 
   const usersToDelete = await User.find({
     deletionScheduledFor: { $lte: now, $ne: null }
-  }).select('_id email').lean();
+  }).select('_id email stripeCustomerId').lean();
 
   if (usersToDelete.length === 0) return;
 
@@ -23,6 +45,7 @@ async function runUserDeletionJob() {
   for (const user of usersToDelete) {
     try {
       await purgeUserData(user._id, user.email);
+      await deleteStripeCustomer(user.stripeCustomerId);
       await User.deleteOne({ _id: user._id });
       console.log(`[user-deletion] Deleted user ${user._id}`);
     } catch (err) {

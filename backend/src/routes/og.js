@@ -16,6 +16,22 @@ const { stripHtml } = require('../utils/sanitize');
 const WINE_TYPES = ['red', 'white', 'rosé', 'sparkling', 'dessert', 'fortified'];
 const MIN_WINES = 3;
 
+/**
+ * Serialize a JSON-LD object for safe embedding inside a <script
+ * type="application/ld+json"> block. JSON.stringify does NOT escape `<`/`>`/`&`,
+ * so a user-controlled field containing `</script>` (e.g. a wine name) could
+ * otherwise break out of the script element. Escaping these as \uXXXX keeps the
+ * JSON valid and the parsed data intact while making breakout impossible. (The
+ * global CSP already blocks inline-script execution; this is defense-in-depth +
+ * correct structured data for non-CSP crawlers.)
+ */
+function serializeJsonLd(obj) {
+  return JSON.stringify(obj)
+    .replace(/</g, '\\u003c')
+    .replace(/>/g, '\\u003e')
+    .replace(/&/g, '\\u0026');
+}
+
 const router = express.Router();
 
 const ogLimiter = rateLimit({
@@ -204,7 +220,7 @@ router.get('/wines/:idOrSlug', ogLimiter, async (req, res) => {
   <meta name="twitter:description" content="${esc(description)}" />
   <meta name="twitter:image" content="${esc(imageUrl)}" />
   <link rel="canonical" href="${esc(pageUrl)}" />
-  <script type="application/ld+json">${JSON.stringify(jsonLd)}</script>
+  <script type="application/ld+json">${serializeJsonLd(jsonLd)}</script>
 </head>
 <body>
   <header>
@@ -297,7 +313,7 @@ router.get('/blog/:slug', ogLimiter, async (req, res) => {
   <meta name="twitter:description" content="${esc(metaDescription)}" />
   ${post.coverImage ? `<meta name="twitter:image" content="${esc(post.coverImage)}" />` : ''}
   <link rel="canonical" href="${esc(postUrl)}" />
-  <script type="application/ld+json">${JSON.stringify(jsonLd)}</script>
+  <script type="application/ld+json">${serializeJsonLd(jsonLd)}</script>
 </head>
 <body>
   <nav><a href="${esc(SITE_URL)}/blog">Cellarion Blog</a> / ${esc(post.title)}</nav>
@@ -392,7 +408,7 @@ function taxonomyHtml({ title, description, metaDescription, pageUrl, itemType, 
   <link rel="canonical" href="${esc(pageUrl)}" />
   <link rel="alternate" hrefLang="en" href="${esc(pageUrl)}" />
   <link rel="alternate" hrefLang="x-default" href="${esc(pageUrl)}" />
-  <script type="application/ld+json">${JSON.stringify(jsonLd)}</script>
+  <script type="application/ld+json">${serializeJsonLd(jsonLd)}</script>
 </head>
 <body>
   <header>
@@ -694,7 +710,7 @@ router.get('/community/discussions', ogLimiter, async (req, res) => {
   <meta name="twitter:title" content="${esc(title)}" />
   <meta name="twitter:description" content="${esc(metaDescription)}" />
   <link rel="canonical" href="${esc(pageUrl)}" />
-  <script type="application/ld+json">${JSON.stringify(jsonLd)}</script>
+  <script type="application/ld+json">${serializeJsonLd(jsonLd)}</script>
 </head>
 <body>
   <header><h1>Wine Discussions</h1></header>
@@ -821,7 +837,7 @@ router.get('/community/discussions/:idOrSlug', ogLimiter, async (req, res) => {
   <meta name="twitter:title" content="${esc(discussion.title)}" />
   <meta name="twitter:description" content="${esc(metaDescription)}" />
   <link rel="canonical" href="${esc(pageUrl)}" />
-  <script type="application/ld+json">${JSON.stringify(jsonLd)}</script>
+  <script type="application/ld+json">${serializeJsonLd(jsonLd)}</script>
 </head>
 <body>
   <nav><a href="${esc(SITE_URL)}/community/discussions">Discussions</a> / ${esc(cat)}</nav>

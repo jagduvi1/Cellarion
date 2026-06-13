@@ -183,6 +183,7 @@
     "currentTag": "Din nivå",
     "allFeaturesNote": "Alla funktioner är tillgängliga på varje nivå. Supporternivåer låser upp fler Cellar Chat-frågor och hjälper till att finansiera utvecklingen.",
     "subscribe": "Prenumerera",
+    "changePlan": "Byt plan",
     "manageSubscription": "Hantera prenumeration",
     "checkoutError": "Kunde inte starta betalningen. Försök igen.",
     "portalError": "Kunde inte öppna prenumerationshantering. Försök igen.",
