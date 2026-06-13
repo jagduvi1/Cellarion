@@ -118,10 +118,17 @@ export default function CellarRoom() {
       ]);
 
       const cellarData = await cellarRes.json();
+
+      // Check every response before consuming. A failed racks/layout fetch
+      // must surface an error — NOT fall through to auto-populate, which would
+      // discard the real saved layout and (on a later Save) clobber it.
+      if (!cellarRes.ok) { setError(cellarData.error || 'Failed to load cellar'); return; }
+      if (!racksRes.ok) { setError('Failed to load racks for this cellar'); return; }
+      if (!layoutRes.ok) { setError('Failed to load the room layout'); return; }
+
       const racksData = await racksRes.json();
       const layoutData = await layoutRes.json();
 
-      if (!cellarRes.ok) { setError(cellarData.error); return; }
       setCellar(cellarData.cellar);
       setRacks(racksData.racks || []);
 
@@ -137,13 +144,17 @@ export default function CellarRoom() {
         setLayout(filtered);
         savedLayoutRef.current = JSON.stringify(filtered);
       } else {
-        // Auto-populate: place all racks in a line
-        const autoPlace = (racksData.racks || []).map((r, i) => ({
-          rack: r._id,
-          position: { x: -3 + i * 1.5, y: 0, z: -3 },
-          rotation: 0,
-          wall: 'north',
-        }));
+        // No layout doc yet — auto-populate by placing all racks in a line,
+        // clamped inside the room so none poke through the walls.
+        const autoPlace = (racksData.racks || []).map((r, i) => {
+          const clamped = clampToRoom(-3 + i * 1.5, -3, r, {}, DEFAULT_DIMENSIONS);
+          return {
+            rack: r._id,
+            position: { x: clamped.x, y: 0, z: clamped.z },
+            rotation: 0,
+            wall: 'north',
+          };
+        });
         const autoLayout = {
           cellar: id,
           roomDimensions: DEFAULT_DIMENSIONS,
