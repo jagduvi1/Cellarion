@@ -4,8 +4,9 @@ import { useThree, useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import {
   BOTTLE_RADIUS, CELL_W, CELL_H, RACK_DEPTH, WOOD_THICK, PANEL_THICK,
-  getDisplayDims,
+  getDisplayDims, buildScaledLayout,
 } from '../../utils/roomConstants';
+import { getTotalSlots, getModularTotalSlots } from '../../utils/rackLayouts';
 
 // ── Bright, visible wine colors by type ──────────────────
 const GLASS_COLORS = {
@@ -319,58 +320,72 @@ function computeTriangleSlotPositions(cols, width, height) {
 // Standard two-deep storage: both rows at the same shelf height, both with
 // necks toward the viewer; the back row is positioned deeper in the rack and
 // staggered in x so its necks peek between the front bottles.
-function computeShelfSlotPositions(rows, cols, backCols, width, height) {
+//
+// `depth` is the rack's actual frame depth (honours depthOverride) so the
+// bottle bases and empty-ring openings track the cabinet instead of being
+// pinned to the default depth. `bpc` (bottlesPerCell) renders multiple
+// bottles per cubby, stacked slightly in z, matching the backend's
+// 1..cells*bpc slot numbering (rackLayouts.shelfLayout).
+function computeShelfSlotPositions(rows, cols, backCols, width, height, bpc = 1, depth = RACK_DEPTH) {
   const positions = [];
   const cW = width / cols;
   const cH = height / rows;
   const hasBack = backCols > 0;
+  const halfDepth = depth / 2;
   // For a shelf with a back row, bottles lie neck-to-neck at the shelf
   // centerline:
   //   - Front row: BASE near the cabinet front (+Z), NECK pointing -Z toward
   //     the centerline. Rotation flipped via flipNeck=true.
   //   - Back row:  BASE near the cabinet back (-Z), NECK pointing +Z toward
   //     the centerline. Default rotation.
-  // A bottle's local +Y axis has length 0.285 (LatheGeometry). To get its
-  // neck end ~0.025 from the centerline (small gap between rows), the base
-  // sits at ±0.26 give or take.
-  const frontBottleZ = hasBack ? 0.26 : -0.08;
-  const backBottleZ  = -0.26;
-  // Empty-slot ring positions: place them at the cubby openings so users
-  // see where to drop a bottle. For neck-to-neck shelves the openings are
-  // at the FRONT face for front-row slots and the BACK face for back-row.
-  // These are absolute z within the rack, used with EmptySlot's
-  // `useAbsoluteZ` so they sit exactly at the cubby openings instead of
-  // being offset further by RACK_DEPTH/2.
-  const rackHalfDepth = hasBack ? (RACK_DEPTH * 1.7) / 2 : RACK_DEPTH / 2;
-  const frontEmptyZ = rackHalfDepth - 0.005;
-  const backEmptyZ  = -rackHalfDepth + 0.005;
+  // A bottle's local +Y axis has length 0.285 (LatheGeometry); its base sits
+  // ~0.029 in from the cabinet face so the neck stops short of the centerline.
+  const frontBottleZ = hasBack ? (halfDepth - 0.029) : -0.08;
+  const backBottleZ  = -(halfDepth - 0.029);
+  // Empty-slot ring positions sit at the cubby openings (front face for the
+  // front row, back face for the back row) so users see where to drop a
+  // bottle. These are absolute z within the rack, used with EmptySlot's
+  // `useAbsoluteZ`.
+  const frontEmptyZ = halfDepth - 0.005;
+  const backEmptyZ  = -halfDepth + 0.005;
+  // Per-bottle z step when a cubby holds more than one bottle (front-to-back).
+  const Z_STEP = 0.03;
+  // Keep the staggered back row inside the side panels (fixes overflow when
+  // backCols approaches cols).
+  const xLimit = width / 2 - BOTTLE_RADIUS;
   let pos = 1;
   for (let r = 0; r < rows; r++) {
     const y = height / 2 - cH / 2 - r * cH;
     for (let c = 0; c < cols; c++) {
-      positions.push({
-        position: pos++,
-        x: -width / 2 + cW / 2 + c * cW,
-        y,
-        z: frontEmptyZ,
-        bottleZ: frontBottleZ,
-        isBack: false,
-        flipNeck: hasBack, // front-row bottles face into the shelf
-        row: r,
-      });
+      const x = -width / 2 + cW / 2 + c * cW;
+      for (let b = 0; b < bpc; b++) {
+        positions.push({
+          position: pos++,
+          x,
+          y,
+          z: frontEmptyZ - b * Z_STEP,
+          bottleZ: frontBottleZ - b * Z_STEP,
+          isBack: false,
+          flipNeck: hasBack, // front-row bottles face into the shelf
+          row: r,
+        });
+      }
     }
     if (hasBack) {
       for (let c = 0; c < backCols; c++) {
-        positions.push({
-          position: pos++,
-          x: -width / 2 + cW / 2 + (c + 0.5) * cW,
-          y,
-          z: backEmptyZ,
-          bottleZ: backBottleZ,
-          isBack: true,
-          flipNeck: false,
-          row: r,
-        });
+        const x = Math.max(-xLimit, Math.min(xLimit, -width / 2 + cW / 2 + (c + 0.5) * cW));
+        for (let b = 0; b < bpc; b++) {
+          positions.push({
+            position: pos++,
+            x,
+            y,
+            z: backEmptyZ + b * Z_STEP,
+            bottleZ: backBottleZ + b * Z_STEP,
+            isBack: true,
+            flipNeck: false,
+            row: r,
+          });
+        }
       }
     }
   }
@@ -573,17 +588,30 @@ export default function RackMesh({
   // Compute display grid dimensions per type
   const { displayRows, displayCols } = getDisplayDims(rack);
 
+  // Cube and modular racks have irregular internal layouts. Reuse the 2D
+  // layout engine (rackLayouts.js — source of truth for slot numbering) and
+  // scale its coordinates into 3D metres so bottles land in the right cells
+  // and the frame is sized to the true footprint.
+  const useScaled = rack.isModular || rackType === 'cube';
+  const scaledLayout = useMemo(
+    () => (useScaled ? buildScaledLayout(rack) : null),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [useScaled, rack.isModular, rack.modules, rack.type, rack.rows, rack.cols, rack.typeConfig]
+  );
+
   // Default computed size; overrides allow matching real-world dimensions
   // scaleOverride applies uniform scaling via a Three.js group transform
   const rackScale = scaleOverride || 1;
-  const defaultWidth = displayCols * CELL_W + PANEL_THICK * 2;
+  const baseInnerW = scaledLayout ? scaledLayout.innerW : displayCols * CELL_W;
+  const baseInnerH = scaledLayout ? scaledLayout.innerH : displayRows * CELL_H;
+  const defaultWidth = baseInnerW + PANEL_THICK * 2;
   const width = widthOverride || defaultWidth;
   const hasShelfBack = rackType === 'shelf' && (rack.typeConfig?.backCols || 0) > 0;
   const depth = depthOverride || (hasShelfBack ? RACK_DEPTH * 1.7 : RACK_DEPTH);
-  const height = displayRows * CELL_H + PANEL_THICK * 2;
   const innerW = (width - PANEL_THICK * 2);
+  const innerH = baseInnerH;
+  const height = innerH + PANEL_THICK * 2;
   const effectiveCellW = innerW / displayCols;
-  const innerH = displayRows * CELL_H;
   const rotRad = (rotation * Math.PI) / 180;
 
   const woodTex = useMemo(() => getWoodTexture(), []);
@@ -594,39 +622,28 @@ export default function RackMesh({
     return m;
   }, [rack.slots]);
 
-  // Accurate total slot count per type (including bottlesPerCell multiplier)
+  // Accurate total slot count per type — reuses the same helpers the 2D rack
+  // view uses, so the label always matches the backend's real capacity
+  // (handles per-module types, cube, and shelf bottlesPerCell correctly).
   const totalSlots = useMemo(() => {
-    const bpc = rack.typeConfig?.bottlesPerCell || 1;
-    if (rack.isModular) {
-      return (rack.modules || []).reduce((sum, m) => sum + (m.rows || 1) * (m.cols || 1), 0);
-    }
-    switch (rackType) {
-      case 'x-rack': { return 4 * (rack.typeConfig?.bottlesPerSection || 10); }
-      case 'hex': {
-        let t = 0;
-        for (let r = 0; r < (rack.rows || 4); r++) t += (r % 2 === 0) ? (rack.cols || 4) : Math.max(1, (rack.cols || 4) - 1);
-        return t;
-      }
-      case 'triangle': { const b = Math.max(1, rack.cols || 1); return (b * (b + 1)) / 2; }
-      case 'stack': return rack.rows || 4;
-      case 'shelf': {
-        const backCols = rack.typeConfig?.backCols || 0;
-        return displayRows * (displayCols + backCols) * bpc;
-      }
-      default: return displayRows * displayCols;
-    }
-  }, [rack.isModular, rack.modules, rack.typeConfig, rackType, rack.rows, rack.cols, displayRows, displayCols]);
+    if (rack.isModular) return getModularTotalSlots(rack.modules || []);
+    return getTotalSlots(rackType, rack.rows || 4, rack.cols || 4, rack.typeConfig);
+  }, [rack.isModular, rack.modules, rackType, rack.rows, rack.cols, rack.typeConfig]);
 
   const slotPositions = useMemo(() => {
+    if (scaledLayout) return scaledLayout.positions;
     if (rackType === 'x-rack') return computeXRackSlotPositions(rack.typeConfig?.bottlesPerSection || 10, innerW, innerH);
     if (rackType === 'hex') return computeHexSlotPositions(rack.rows || 4, rack.cols || 4, innerW, innerH);
     if (rackType === 'triangle') return computeTriangleSlotPositions(rack.cols || 1, innerW, innerH);
     if (rackType === 'stack') return computeStackSlotPositions(rack.rows || 4, innerH);
     if (rackType === 'shelf') return computeShelfSlotPositions(
-      displayRows, displayCols, rack.typeConfig?.backCols || 0, innerW, innerH
+      displayRows, displayCols, rack.typeConfig?.backCols || 0, innerW, innerH,
+      rack.typeConfig?.bottlesPerCell || 1, depth
     );
     return computeSlotPositions(displayRows, displayCols, innerW, innerH);
-  }, [rackType, rack.rows, rack.cols, displayRows, displayCols, innerW, innerH, rack.typeConfig?.backCols]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scaledLayout, rackType, rack.rows, rack.cols, displayRows, displayCols, innerW, innerH, depth,
+      rack.typeConfig?.backCols, rack.typeConfig?.bottlesPerCell, rack.typeConfig?.bottlesPerSection]);
 
   const edgesGeom = useMemo(() => {
     const sw = width * rackScale, sh = height * rackScale, sd = depth * rackScale;
@@ -753,8 +770,10 @@ export default function RackMesh({
 
       {/* ── Type-specific internal structure ─────────── */}
 
-      {/* Grid / hex / cube / stack / triangle: shelves + scallops + rails */}
-      {rackType !== 'x-rack' && rackType !== 'shelf' && (
+      {/* Grid / hex / stack / triangle: shelves + scallops + rails. Cube and
+          modular racks have irregular internal layouts (driven by the scaled
+          2D layout), so the simple per-row planks/scallops don't apply. */}
+      {rackType !== 'x-rack' && rackType !== 'shelf' && rackType !== 'cube' && !rack.isModular && (
         <>
           {/* Shelves between rows (thin planks) */}
           {Array.from({ length: Math.max(displayRows - 1, 0) }).map((_, i) => {
@@ -896,15 +915,15 @@ export default function RackMesh({
           ) : (
             <EmptySlot
               key={pos}
-              position={[x, y, z]}
+              // Shelf positions encode an absolute z (cubby opening for their
+              // row). Other types use z=0; place their ring at the actual
+              // cabinet front face (depth-aware) so it tracks the opening even
+              // when depthOverride resizes the cabinet.
+              position={[x, y, rackType === 'shelf' ? z : (depth / 2 - 0.005)]}
               slotPosition={pos}
               onClick={onEmptySlotClick}
               isBack={isBack}
-              // Shelf positions encode an absolute z (cubby opening for
-              // their row); other types use z=0 and need the front-face
-              // offset. Skip the offset for shelf so rings don't end up
-              // floating outside the cabinet in the room view.
-              useAbsoluteZ={rackType === 'shelf'}
+              useAbsoluteZ
             />
           );
         })
