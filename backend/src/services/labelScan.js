@@ -289,7 +289,15 @@ async function suggestDrinkWindow({ name, producer, vintage, country, region, ap
 
   const qualityTier = classifyQualityTier({ name, appellation });
 
-  const prompt = aiConfig.get().maturitySuggestPrompt
+  // NV wines have no vintage to anchor calendar years to — their window is
+  // stored as offsets after each bottle's purchase year. Use the offset-based
+  // prompt so the suggestion matches the NV form (years after purchase), not
+  // absolute calendar years. The {{vintage}} token is absent from the NV
+  // template, so leaving it in the replace chain is a harmless no-op.
+  const isNv = vintage === 'NV';
+  const template = isNv ? aiConfig.get().maturitySuggestPromptNv : aiConfig.get().maturitySuggestPrompt;
+
+  const prompt = template
     .replace('{{name}}', name || '')
     .replace('{{producer}}', producer || '')
     .replace('{{vintage}}', vintage || '')

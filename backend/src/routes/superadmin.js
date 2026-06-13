@@ -608,6 +608,31 @@ router.patch('/ai/maturity-suggest-prompt', async (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
+// PATCH /api/superadmin/ai/maturity-suggest-prompt-nv
+// Non-vintage variant of the maturity suggest prompt (asks for year-offsets
+// after purchase instead of calendar years).
+// ---------------------------------------------------------------------------
+router.patch('/ai/maturity-suggest-prompt-nv', async (req, res) => {
+  const { prompt } = req.body;
+  if (typeof prompt !== 'string' || !prompt.trim()) {
+    return res.status(400).json({ error: 'prompt must be a non-empty string' });
+  }
+  if (prompt.length > SCAN_PROMPT_MAX_LENGTH) {
+    return res.status(400).json({ error: `prompt must be ${SCAN_PROMPT_MAX_LENGTH} characters or fewer` });
+  }
+  try {
+    const current = aiConfig.get();
+    const updated = { ...current, maturitySuggestPromptNv: prompt.trim() };
+    await updateSiteConfig('aiConfig', updated, req.user.id);
+    aiConfig.set(updated);
+    res.json({ maturitySuggestPromptNv: updated.maturitySuggestPromptNv });
+  } catch (error) {
+    console.error('[superadmin] maturity-suggest-prompt-nv error:', error);
+    res.status(500).json({ error: 'Failed to save NV maturity suggest prompt' });
+  }
+});
+
+// ---------------------------------------------------------------------------
 // PATCH /api/superadmin/ai/maturity-suggest-model
 // ---------------------------------------------------------------------------
 router.patch('/ai/maturity-suggest-model', async (req, res) => {

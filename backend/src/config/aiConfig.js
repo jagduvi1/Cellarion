@@ -127,6 +127,53 @@ Rules:
   - 0.4 = rough estimate
 - Never invent aging data`;
 
+// Non-vintage variant. NV wines have no vintage to anchor calendar years to —
+// their drink window is stored as whole-year OFFSETS after each bottle's
+// purchase year (see WineVintageProfile.relative). This prompt must therefore
+// ask for offsets ("years after purchase"), never calendar years, or the
+// suggestion is unusable for the maturity queue's NV form.
+const DEFAULT_MATURITY_SUGGEST_PROMPT_NV =
+`You are a master sommelier with deep knowledge of wine aging potential. The wine below is NON-VINTAGE (it has no vintage year), so express the drinking window as WHOLE YEARS AFTER THE OWNER ACQUIRES THE BOTTLE — not as calendar years. 0 means "drink on release / right after purchase", 3 means "three years after purchase".
+
+Wine: {{name}}
+Producer: {{producer}}
+Country: {{country}}
+Region: {{region}}
+Appellation: {{appellation}}
+Type: {{type}}
+Grapes: {{grapes}}
+QualityTier: {{qualityTier}}
+# (one of: unclassified, entry-level, mid-tier, prestige)
+
+Consider:
+- The wine style and type — most non-vintage wines (NV Champagne, NV sparkling, everyday blends) are made for early, consistent drinking and are released ready to drink.
+- The grape varieties and their realistic aging potential in this style.
+- The quality tier and any single-vineyard or prestige signal in the name — a prestige NV cuvée may hold and improve for a few extra years; an entry-level NV wine should be drunk young.
+- Regional norms, but do NOT assume prestige based on region alone.
+
+Critical rules:
+- This is a NON-VINTAGE wine. Do NOT output calendar years. Every value is a whole number of years after purchase (0–100).
+- Most non-vintage wines are best within 0–3 years of purchase. Bias strongly toward early drinking.
+- Only extend the window beyond ~5 years after purchase if the style genuinely supports it (e.g. prestige NV Champagne, tawny or other NV fortified, serious vin-de-garde blends) AND sommNotes justifies why.
+- You can almost always estimate a sensible window for a non-vintage wine from its type and style. Return {"error":"unknown"} ONLY if you cannot tell what kind of wine this is at all.
+
+Return ONLY a raw JSON object (no markdown, no code fences, no extra text):
+{"earlyFrom":N,"earlyUntil":N,"peakFrom":N,"peakUntil":N,"lateFrom":N,"lateUntil":N,"sommNotes":"brief explanation of your reasoning","confidence":0.0}
+
+Rules:
+- All values are WHOLE YEARS AFTER PURCHASE (e.g. 0, 2, 5 — never a calendar year like 2026)
+- earlyFrom is the first year after purchase the wine is enjoyable — usually 0 for non-vintage wines
+- Phases must not overlap: earlyUntil < peakFrom, peakUntil < lateFrom
+- For wines meant to drink young, use short windows and set the late phase to null
+- If a phase does not apply, set both its from and until to null
+- sommNotes: 1–2 sentences, factual and conservative
+- confidence:
+  - 1.0 = well-known non-vintage wine with an established house style
+  - 0.7 = known producer / known style
+  - 0.5 = type/grape knowledge only
+  - 0.4 = rough estimate
+- Never invent aging data`;
+
 const DEFAULT_PRICE_SUGGEST_PROMPT =
 `You are a wine market expert specialising in the European wine market. Given the wine details below, estimate its current market value.
 
@@ -241,6 +288,7 @@ const defaults = {
   importLookupPrompt: DEFAULT_IMPORT_LOOKUP_PROMPT,
   importLookupModel: 'claude-haiku-4-5-20251001',
   maturitySuggestPrompt: DEFAULT_MATURITY_SUGGEST_PROMPT,
+  maturitySuggestPromptNv: DEFAULT_MATURITY_SUGGEST_PROMPT_NV,
   maturitySuggestModel: 'claude-haiku-4-5-20251001',
   priceSuggestPrompt: DEFAULT_PRICE_SUGGEST_PROMPT,
   priceSuggestModel: 'claude-haiku-4-5-20251001',
@@ -275,6 +323,7 @@ async function load() {
         importLookupPrompt:    doc.value.importLookupPrompt   ?? defaults.importLookupPrompt,
         importLookupModel:     VALID_CHAT_MODELS.includes(doc.value.importLookupModel) ? doc.value.importLookupModel : defaults.importLookupModel,
         maturitySuggestPrompt: doc.value.maturitySuggestPrompt ?? defaults.maturitySuggestPrompt,
+        maturitySuggestPromptNv: doc.value.maturitySuggestPromptNv ?? defaults.maturitySuggestPromptNv,
         maturitySuggestModel:  VALID_CHAT_MODELS.includes(doc.value.maturitySuggestModel) ? doc.value.maturitySuggestModel : defaults.maturitySuggestModel,
         priceSuggestPrompt:    doc.value.priceSuggestPrompt   ?? defaults.priceSuggestPrompt,
         priceSuggestModel:     VALID_CHAT_MODELS.includes(doc.value.priceSuggestModel) ? doc.value.priceSuggestModel : defaults.priceSuggestModel,
@@ -313,4 +362,4 @@ function set(value) {
   cache = { ...defaults, ...value };
 }
 
-module.exports = { load, get, set, defaults, DEFAULT_SYSTEM_PROMPT, DEFAULT_LABEL_SCAN_PROMPT, DEFAULT_IMPORT_LOOKUP_PROMPT, DEFAULT_TEXT_SEARCH_PROMPT, DEFAULT_MATURITY_SUGGEST_PROMPT, DEFAULT_PRICE_SUGGEST_PROMPT, DEFAULT_ENRICHMENT_PROMPT, VALID_CHAT_MODELS };
+module.exports = { load, get, set, defaults, DEFAULT_SYSTEM_PROMPT, DEFAULT_LABEL_SCAN_PROMPT, DEFAULT_IMPORT_LOOKUP_PROMPT, DEFAULT_TEXT_SEARCH_PROMPT, DEFAULT_MATURITY_SUGGEST_PROMPT, DEFAULT_MATURITY_SUGGEST_PROMPT_NV, DEFAULT_PRICE_SUGGEST_PROMPT, DEFAULT_ENRICHMENT_PROMPT, VALID_CHAT_MODELS };
