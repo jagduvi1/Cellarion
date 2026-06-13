@@ -773,7 +773,7 @@ async function purgeSourceVectors(sourceId) {
       await vectorStore.deletePoints(indexVersion, ids).catch(() => {});
     }
   } catch (err) {
-    console.warn(`[merge] purge source vectors failed (${sourceId}):`, err.message);
+    console.warn('[merge] purge source vectors failed (%s):', sourceId, err.message);
   }
   await WineEmbedding.deleteMany({ wineDefinition: sourceId });
 }
@@ -806,7 +806,7 @@ async function reembedKeeper(keeperId) {
       await embedSinglePair(keeperId, v).catch(() => {});
     }
   } catch (err) {
-    console.warn(`[merge] re-embed keeper failed (${keeperId}):`, err.message);
+    console.warn('[merge] re-embed keeper failed (%s):', keeperId, err.message);
   }
 }
 
