@@ -2,8 +2,13 @@
  * Cellar Cred — contribution score and badge system.
  *
  * Users earn points for approved contributions (wine requests, images,
- * reviews, forum activity). Points accumulate into tiers that unlock
- * temporary plan upgrades and display badges on profiles and posts.
+ * reviews, forum activity). Points accumulate into tiers that display
+ * badges on profiles and posts.
+ *
+ * Cellar Cred does NOT change a user's subscription plan. Every feature is
+ * free for all tiers, so contribution no longer grants supporter/patron — the
+ * tiers below are purely cosmetic badges. Plans are set only via Stripe
+ * (routes/stripe.js) or an admin grant (routes/admin/users.js).
  */
 
 const User = require('../models/User');
@@ -45,12 +50,9 @@ const TIERS = [
   { name: 'newcomer',     threshold:   0 },
 ];
 
-// ── Plan rewards per tier (one-time) ────────────────────────────────────────
-const TIER_REWARDS = {
-  contributor: { plan: 'supporter', durationDays: 30 },
-  connoisseur: { plan: 'patron',   durationDays: 30 },
-};
-
+// Plan ranking — retained because routes/stripe.js imports it to compare an
+// incoming Stripe plan against the user's current grant. Cellar Cred itself no
+// longer grants plans (see module header).
 const PLAN_RANK = { free: 0, supporter: 1, patron: 2 };
 
 /** Return the tier name for a given total score. */
@@ -84,8 +86,8 @@ function getSpecialty(categories) {
 }
 
 /**
- * Atomically increment a user's contribution score and recompute tier/specialty.
- * Grants one-time plan rewards on tier-up. Fire-and-forget safe.
+ * Atomically increment a user's contribution score and recompute the
+ * tier/specialty badge. Does not touch the subscription plan. Fire-and-forget safe.
  */
 async function incrementCred(userId, eventType) {
   const points = POINT_VALUES[eventType];
@@ -100,45 +102,21 @@ async function incrementCred(userId, eventType) {
   const user = await User.findByIdAndUpdate(
     userId,
     { $inc: inc },
-    { new: true, select: 'contribution plan planExpiresAt' }
+    { new: true, select: 'contribution' }
   );
   if (!user) return;
 
   const newTier = getTier(user.contribution.totalScore);
   const newSpecialty = getSpecialty(user.contribution.categories);
 
+  // Recompute the cosmetic badge fields only. Cellar Cred no longer grants
+  // plan upgrades — crossing a tier changes the badge, not the subscription.
   const updates = {};
   if (newTier !== user.contribution.tier) updates['contribution.tier'] = newTier;
   if (newSpecialty !== user.contribution.specialty) updates['contribution.specialty'] = newSpecialty;
 
-  // Check for all unclaimed tier rewards (handles tier-jumping, e.g. 0 → 100 skips contributor)
-  const granted = user.contribution.rewardsGranted || [];
-  const rewardTiers = Object.keys(TIER_REWARDS);
-  for (const rewardTier of rewardTiers) {
-    if (granted.includes(rewardTier)) continue;
-    const tierThreshold = TIERS.find(t => t.name === rewardTier)?.threshold || Infinity;
-    if (user.contribution.totalScore < tierThreshold) continue;
-
-    const reward = TIER_REWARDS[rewardTier];
-    const currentRank = PLAN_RANK[updates.plan || user.plan] || 0;
-    const rewardRank = PLAN_RANK[reward.plan] || 0;
-    const planExpired = user.planExpiresAt && new Date(user.planExpiresAt) < new Date();
-
-    if (rewardRank > currentRank || planExpired) {
-      updates.plan = reward.plan;
-      updates.planStartedAt = new Date();
-      updates.planExpiresAt = new Date(Date.now() + reward.durationDays * 24 * 60 * 60 * 1000);
-    }
-    if (!updates.$addToSet) updates.$addToSet = { 'contribution.rewardsGranted': { $each: [] } };
-    updates.$addToSet['contribution.rewardsGranted'].$each.push(rewardTier);
-  }
-
   if (Object.keys(updates).length > 0) {
-    const { $addToSet, ...setFields } = updates;
-    const updateOp = {};
-    if (Object.keys(setFields).length > 0) updateOp.$set = setFields;
-    if ($addToSet) updateOp.$addToSet = $addToSet;
-    await User.updateOne({ _id: userId }, updateOp);
+    await User.updateOne({ _id: userId }, { $set: updates });
   }
 }
 
