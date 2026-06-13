@@ -15,6 +15,15 @@ import './CellarRoom.css';
 
 const DEFAULT_DIMENSIONS = { width: 10, depth: 10, height: 3 };
 
+// True when a keyboard event originates from an editable field, so global
+// shortcuts (arrow-move, Ctrl+Z/Y) don't hijack typing in the room's inputs.
+function isTypingTarget(e) {
+  const el = e.target;
+  if (!el) return false;
+  const tag = el.tagName;
+  return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || el.isContentEditable;
+}
+
 export default function CellarRoom() {
   const { t } = useTranslation();
   const { id } = useParams();
@@ -176,29 +185,38 @@ export default function CellarRoom() {
     setSaving(true);
     setSaveError(null);
     try {
-      // Sanitize placements: ensure rack is a plain ID string, strip unknown fields
+      // Clamp a value to the schema range (a single out-of-range field would
+      // otherwise fail server validation and block the whole layout save).
+      const clamp = (v, lo, hi, fallback = 0) => {
+        const n = Number(v);
+        if (!Number.isFinite(n)) return fallback;
+        return Math.max(lo, Math.min(hi, n));
+      };
+
+      // Sanitize placements: ensure rack is a plain ID string, strip unknown
+      // fields, and clamp every numeric field to its CellarLayout schema range.
       const cleanPlacements = layout.rackPlacements.map(rp => {
         const clean = {
           rack: rp.rack?._id || rp.rack,
           position: {
-            x: Number(rp.position?.x) || 0,
-            y: Number(rp.position?.y) || 0,
-            z: Number(rp.position?.z) || 0,
+            x: clamp(rp.position?.x, -100, 100),
+            y: clamp(rp.position?.y, -10, 50),
+            z: clamp(rp.position?.z, -100, 100),
           },
           rotation: rp.rotation || 0,
           wall: rp.wall || 'none',
         };
-        if (rp.group) clean.group = rp.group;
-        if (rp.widthOverride) clean.widthOverride = Number(rp.widthOverride);
-        if (rp.depthOverride) clean.depthOverride = Number(rp.depthOverride);
-        if (rp.scaleOverride) clean.scaleOverride = Number(rp.scaleOverride);
+        if (rp.group) clean.group = String(rp.group).slice(0, 50);
+        if (rp.widthOverride) clean.widthOverride = clamp(rp.widthOverride, 0.1, 5, 1);
+        if (rp.depthOverride) clean.depthOverride = clamp(rp.depthOverride, 0.1, 2, 1);
+        if (rp.scaleOverride) clean.scaleOverride = clamp(rp.scaleOverride, 0.5, 5, 1);
         return clean;
       });
 
       const cleanDims = {
-        width: Number(layout.roomDimensions?.width) || 10,
-        depth: Number(layout.roomDimensions?.depth) || 10,
-        height: Number(layout.roomDimensions?.height) || 3,
+        width: clamp(layout.roomDimensions?.width, 2, 50, 10),
+        depth: clamp(layout.roomDimensions?.depth, 2, 50, 10),
+        height: clamp(layout.roomDimensions?.height, 2, 10, 3),
       };
 
       const res = await saveCellarLayout(apiFetch, {
@@ -272,7 +290,12 @@ export default function CellarRoom() {
 
   const handleDimensionChange = useCallback((field, value) => {
     setLayoutWithHistory(prev => {
-      const newDims = { ...prev.roomDimensions, [field]: Math.max(2, Math.min(50, Number(value) || 2)) };
+      // Clamp to the schema's per-field range (height caps at 10, width/depth
+      // at 50). Typed/pasted values bypass the input's HTML max, so without
+      // this an out-of-range height fails server validation and blocks the
+      // entire layout save.
+      const maxForField = field === 'height' ? 10 : 50;
+      const newDims = { ...prev.roomDimensions, [field]: Math.max(2, Math.min(maxForField, Number(value) || 2)) };
       // Clamp all racks that would end up outside the new room boundaries
       const clampedPlacements = prev.rackPlacements.map(rp => {
         const rpId = rp.rack?._id || rp.rack;
@@ -609,6 +632,7 @@ export default function CellarRoom() {
         case 'ArrowDown':  dz = STEP; break;
         default: return;
       }
+      if (isTypingTarget(e)) return; // don't move racks while typing in a field
       e.preventDefault();
       setLayoutWithHistory(prev => {
         // Collect all IDs to move: selected + their group members
@@ -653,6 +677,7 @@ export default function CellarRoom() {
   useEffect(() => {
     const handleUndoRedo = (e) => {
       if (!isEditMode) return;
+      if (isTypingTarget(e)) return; // let inputs keep native text undo/redo
       const isUndo = (e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey;
       const isRedo = (e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey));
       if (!isUndo && !isRedo) return;
@@ -709,22 +734,34 @@ export default function CellarRoom() {
     if (!hasUnsavedChanges) return;
 
     const currentPath = window.location.pathname + window.location.search;
+    // Normalize any URL form (relative path, absolute path, or full href) to
+    // pathname+search so the comparison is apples-to-apples.
+    const toPath = (url) => {
+      try {
+        const u = new URL(url, window.location.origin);
+        return u.pathname + u.search;
+      } catch {
+        return String(url);
+      }
+    };
 
     // Monkey-patch pushState to intercept all client-side navigation
     const origPushState = window.history.pushState.bind(window.history);
     window.history.pushState = function (state, title, url) {
-      if (hasUnsavedRef.current && url && url !== currentPath) {
-        setPendingNavPath(url);
+      const target = url != null ? toPath(url) : currentPath;
+      if (hasUnsavedRef.current && url != null && target !== currentPath) {
+        setPendingNavPath(target);
         return; // Block the navigation
       }
       origPushState(state, title, url);
     };
 
-    // Intercept browser back/forward
-    window.history.pushState(null, '', window.location.href);
+    // Seed a sentinel history entry via the NATIVE pushState (not the patched
+    // one — otherwise it blocks its own seed and pops a spurious dialog).
+    origPushState(null, '', window.location.href);
     const handlePopState = () => {
       if (hasUnsavedRef.current) {
-        window.history.pushState(null, '', window.location.href);
+        origPushState(null, '', window.location.href);
         setPendingNavPath('__back__');
       }
     };
@@ -1015,8 +1052,12 @@ export default function CellarRoom() {
                   }
                 }}
                 onRackDragEnd={handleRackDragEnd}
-                onBottleClick={handleBottleClick}
-                onEmptySlotClick={handleEmptySlotClick}
+                // Pass undefined when the click would be a no-op so bottles /
+                // empty rings don't show a pointer cursor or swallow clicks:
+                // bottles are non-interactive in edit mode; empty rings only
+                // for editors in view mode.
+                onBottleClick={isEditMode ? undefined : handleBottleClick}
+                onEmptySlotClick={(!canEdit || isEditMode) ? undefined : handleEmptySlotClick}
                 focusTarget={focusTarget}
                 highlightBottleId={highlightBottleId}
               />

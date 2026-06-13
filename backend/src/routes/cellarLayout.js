@@ -62,10 +62,14 @@ router.put('/', requireCellarAccess('editor'), async (req, res) => {
     res.json({ layout });
   } catch (err) {
     console.error('Save cellar layout error:', err.message, err.errors ? JSON.stringify(err.errors) : '');
-    const msg = err.name === 'ValidationError'
-      ? `Validation: ${Object.values(err.errors || {}).map(e => e.message).join(', ')}`
-      : 'Failed to save cellar layout';
-    res.status(500).json({ error: msg });
+    // A ValidationError is bad client input (out-of-range position/scale/etc.),
+    // not a server fault — report it as 400 so it isn't counted as a 5xx outage
+    // and clients don't treat it as a retryable transient error.
+    if (err.name === 'ValidationError') {
+      const msg = `Validation: ${Object.values(err.errors || {}).map(e => e.message).join(', ')}`;
+      return res.status(400).json({ error: msg });
+    }
+    res.status(500).json({ error: 'Failed to save cellar layout' });
   }
 });
 
