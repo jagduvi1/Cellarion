@@ -3,6 +3,7 @@ const { requireAuth, requireRole } = require('../../middleware/auth');
 const Cellar = require('../../models/Cellar');
 const Rack = require('../../models/Rack');
 const Bottle = require('../../models/Bottle');
+const CellarLayout = require('../../models/CellarLayout');
 const { logAudit } = require('../../services/audit');
 const { parsePagination } = require('../../utils/pagination');
 const { isValidId, coerceStringQuery } = require('../../utils/validation');
@@ -91,6 +92,9 @@ router.delete('/:id', async (req, res) => {
     const [rackResult, bottleResult] = await Promise.all([
       Rack.deleteMany({ cellar: cellar._id }),
       Bottle.deleteMany({ cellar: cellar._id }),
+      // Hard-delete the 3D room layout here (the permanent path) so it isn't
+      // orphaned; the reversible soft-delete leaves it intact for restore.
+      CellarLayout.deleteMany({ cellar: cellar._id }),
     ]);
 
     await cellar.deleteOne();

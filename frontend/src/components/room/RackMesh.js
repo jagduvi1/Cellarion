@@ -361,8 +361,11 @@ function computeShelfSlotPositions(rows, cols, backCols, width, height, bpc = 1,
   // Per-bottle z step when a cubby holds more than one bottle (front-to-back).
   const Z_STEP = 0.03;
   // Keep the staggered back row inside the side panels (fixes overflow when
-  // backCols approaches cols).
+  // backCols approaches cols) and the per-bottle stagger inside the cabinet
+  // depth (a high bottlesPerCell would otherwise push bottles out the open
+  // back); for extreme configs bottles pile at the limit rather than escape.
   const xLimit = width / 2 - BOTTLE_RADIUS;
+  const clampZ = (z) => Math.max(-halfDepth + 0.005, Math.min(halfDepth - 0.005, z));
   let pos = 1;
   for (let r = 0; r < rows; r++) {
     const y = height / 2 - cH / 2 - r * cH;
@@ -373,8 +376,8 @@ function computeShelfSlotPositions(rows, cols, backCols, width, height, bpc = 1,
           position: pos++,
           x,
           y,
-          z: frontEmptyZ - b * Z_STEP,
-          bottleZ: frontBottleZ - b * Z_STEP,
+          z: clampZ(frontEmptyZ - b * Z_STEP),
+          bottleZ: clampZ(frontBottleZ - b * Z_STEP),
           isBack: false,
           flipNeck: hasBack, // front-row bottles face into the shelf
           row: r,
@@ -389,8 +392,8 @@ function computeShelfSlotPositions(rows, cols, backCols, width, height, bpc = 1,
             position: pos++,
             x,
             y,
-            z: backEmptyZ + b * Z_STEP,
-            bottleZ: backBottleZ + b * Z_STEP,
+            z: clampZ(backEmptyZ + b * Z_STEP),
+            bottleZ: clampZ(backBottleZ + b * Z_STEP),
             isBack: true,
             flipNeck: false,
             row: r,
@@ -650,7 +653,15 @@ export default function RackMesh({
   }, [rack.isModular, rack.modules, rackType, rack.rows, rack.cols, rack.typeConfig]);
 
   const slotPositions = useMemo(() => {
-    if (scaledLayout) return scaledLayout.positions;
+    if (scaledLayout) {
+      // The scaled positions are in base metres. Scale x so the bottle grid
+      // tracks the frame when a widthOverride stretches/shrinks it (there is
+      // no height override, so y is left as-is).
+      const sx = scaledLayout.innerW ? innerW / scaledLayout.innerW : 1;
+      return sx === 1
+        ? scaledLayout.positions
+        : scaledLayout.positions.map(p => ({ ...p, x: p.x * sx }));
+    }
     if (rackType === 'x-rack') return computeXRackSlotPositions(rack.typeConfig?.bottlesPerSection || 10, innerW, innerH);
     if (rackType === 'hex') return computeHexSlotPositions(rack.rows || 4, rack.cols || 4, innerW, innerH);
     if (rackType === 'triangle') return computeTriangleSlotPositions(rack.cols || 1, innerW, innerH);

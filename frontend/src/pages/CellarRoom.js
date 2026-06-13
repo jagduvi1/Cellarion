@@ -131,9 +131,9 @@ export default function CellarRoom() {
       // Check every response before consuming. A failed racks/layout fetch
       // must surface an error — NOT fall through to auto-populate, which would
       // discard the real saved layout and (on a later Save) clobber it.
-      if (!cellarRes.ok) { setError(cellarData.error || 'Failed to load cellar'); return; }
-      if (!racksRes.ok) { setError('Failed to load racks for this cellar'); return; }
-      if (!layoutRes.ok) { setError('Failed to load the room layout'); return; }
+      if (!cellarRes.ok) { setError(cellarData.error || t('room.loadCellarError', 'Failed to load cellar')); return; }
+      if (!racksRes.ok) { setError(t('room.loadRacksError', 'Failed to load racks for this cellar')); return; }
+      if (!layoutRes.ok) { setError(t('room.loadLayoutError', 'Failed to load the room layout')); return; }
 
       const racksData = await racksRes.json();
       const layoutData = await layoutRes.json();
