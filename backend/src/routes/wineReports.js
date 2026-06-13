@@ -34,12 +34,17 @@ router.post('/', requireAuth, async (req, res) => {
       return res.status(404).json({ error: 'Wine not found' });
     }
 
+    // Use a typed ObjectId in the queries below so a user-supplied value can
+    // never be interpreted as a query operator (NoSQL injection). Safe — the
+    // id was validated as a real ObjectId above.
+    const wineRef = new mongoose.Types.ObjectId(wineDefinitionId);
+
     // Prevent duplicate reports of the SAME issue from the same user, but allow
     // separate pending reports for different reasons on the same wine (e.g. a
     // wrong price AND an incorrect tasting profile).
     const existing = await WineReport.findOne({
       user: req.user.id,
-      wineDefinition: wineDefinitionId,
+      wineDefinition: wineRef,
       reason,
       status: 'pending'
     });
@@ -49,7 +54,7 @@ router.post('/', requireAuth, async (req, res) => {
 
     const report = await WineReport.create({
       user: req.user.id,
-      wineDefinition: wineDefinitionId,
+      wineDefinition: wineRef,
       reason,
       details: details ? stripHtml(details) : undefined,
       duplicateOf: (duplicateOfId && mongoose.Types.ObjectId.isValid(duplicateOfId)) ? duplicateOfId : undefined
