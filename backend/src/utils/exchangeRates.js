@@ -8,7 +8,7 @@ const ExchangeRateSnapshot = require('../models/ExchangeRateSnapshot');
  */
 function fetchExchangeRates() {
   return new Promise((resolve) => {
-    https.get('https://open.er-api.com/v6/latest/USD', (res) => {
+    const req = https.get('https://open.er-api.com/v6/latest/USD', (res) => {
       let raw = '';
       res.on('data', chunk => { raw += chunk; });
       res.on('end', () => {
@@ -19,7 +19,11 @@ function fetchExchangeRates() {
           resolve(null);
         }
       });
-    }).on('error', () => resolve(null));
+    });
+    req.on('error', () => resolve(null));
+    // Hard outbound timeout: without it a DNS blackhole / TCP stall on the
+    // third-party API hangs the awaiting request handler up to the OS timeout.
+    req.setTimeout(5000, () => { req.destroy(); resolve(null); });
   });
 }
 
@@ -28,14 +32,22 @@ function fetchExchangeRates() {
  * if one does not exist yet. At most one outbound rate-fetch per calendar day.
  * Returns null if rates are unavailable — callers degrade gracefully.
  */
+let lastFailedFetchAt = 0;
+const NEGATIVE_CACHE_MS = 5 * 60 * 1000; // back off from a failing upstream
+
 async function getOrCreateDailySnapshot() {
   const today = new Date().toISOString().slice(0, 10); // 'YYYY-MM-DD'
 
   const existing = await ExchangeRateSnapshot.findOne({ date: today }).lean();
   if (existing) return existing;
 
+  // Negative cache: if a fetch failed recently, don't re-attempt for a few
+  // minutes. Otherwise every price-related request while the upstream is down
+  // opens a fresh socket and waits out the timeout.
+  if (Date.now() - lastFailedFetchAt < NEGATIVE_CACHE_MS) return null;
+
   const rates = await fetchExchangeRates();
-  if (!rates) return null;
+  if (!rates) { lastFailedFetchAt = Date.now(); return null; }
 
   // Upsert handles concurrent requests on the same day
   return ExchangeRateSnapshot.findOneAndUpdate(

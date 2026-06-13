@@ -22,6 +22,21 @@ if (process.env.JWT_SECRET.length < 32 || JWT_PLACEHOLDERS.has(process.env.JWT_S
   process.exit(1);
 }
 
+// Reject weak / placeholder MEILI_MASTER_KEY the same way. The key authenticates
+// every request to Meilisearch; a deployment copying .env.example verbatim would
+// otherwise boot with a publicly-known master key. Meili itself requires >=16
+// chars in production mode — match that floor and block the shipped placeholders.
+const MEILI_PLACEHOLDERS = new Set([
+  'change-me-to-a-strong-random-string',
+  'change-me-in-production',
+  'masterkey', 'change-me', 'changeme',
+]);
+const meiliKey = process.env.MEILI_MASTER_KEY.trim();
+if (meiliKey.length < 16 || MEILI_PLACEHOLDERS.has(meiliKey.toLowerCase())) {
+  console.error('FATAL: MEILI_MASTER_KEY is too weak. Use a random string of at least 16 characters, e.g. `openssl rand -hex 16`.');
+  process.exit(1);
+}
+
 if (!process.env.MAILGUN_API_KEY || !process.env.MAILGUN_DOMAIN) {
   console.warn('Warning: MAILGUN_API_KEY / MAILGUN_DOMAIN not set — email verification disabled.');
 }
@@ -70,7 +85,13 @@ connectDB().then(async () => {
   // Start scheduled jobs (drink-window notifier, value snapshots)
   startScheduler();
 
-  app.listen(PORT, () => {
+  const server = app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
   });
+  // Bound how long a single request may take to arrive so a slow/stalled client
+  // (or a slowloris) can't tie up a socket indefinitely. These cap REQUEST
+  // receipt, not response duration, so streaming responses (Cellar Chat SSE)
+  // are unaffected — they send their request quickly and stream the reply.
+  server.requestTimeout = 120000; // 2 min to receive the full request
+  server.headersTimeout = 65000;  // 65s to receive request headers
 });

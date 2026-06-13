@@ -14,6 +14,26 @@ function safeUploadPath(relativePart) {
   return resolved;
 }
 
+/**
+ * Best-effort unlink of a BottleImage's on-disk files (original + processed).
+ * Used by GDPR erasure so the underlying files don't outlive the DB rows that
+ * are their only reference. Never throws — a missing file or transient error
+ * must not abort the surrounding deletion.
+ */
+async function unlinkImageFiles(image) {
+  if (!image) return;
+  for (const url of [image.originalUrl, image.processedUrl]) {
+    if (!url || typeof url !== 'string' || !url.startsWith('/api/uploads/')) continue;
+    try {
+      await fs.promises.unlink(safeUploadPath(url.replace('/api/uploads/', '')));
+    } catch (err) {
+      if (err.code !== 'ENOENT') {
+        console.warn(`[images] could not unlink ${url}:`, err.message);
+      }
+    }
+  }
+}
+
 async function processImage(imageId) {
   const image = await BottleImage.findById(imageId);
   if (!image || image.status !== 'uploaded') return;
@@ -168,4 +188,4 @@ async function cleanupOrphanedImages() {
   }
 }
 
-module.exports = { processImage, reprocessAllImages, cleanupOrphanedImages, safeUploadPath };
+module.exports = { processImage, reprocessAllImages, cleanupOrphanedImages, safeUploadPath, unlinkImageFiles };

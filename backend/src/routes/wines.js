@@ -267,6 +267,15 @@ router.post('/find-or-create', requireAuth, async (req, res) => {
   if (!country?.trim()) {
     return res.status(400).json({ error: 'country is required' });
   }
+  // Cap the free-text fields that feed the O(m·n) fuzzy-match scorer. Without
+  // this, a multi-MB name/producer (the body limit here is 5mb) would drive a
+  // huge Levenshtein computation against every candidate — an authenticated DoS.
+  const MAX_WINE_FIELD = 200;
+  for (const [field, value] of Object.entries({ name, producer, appellation })) {
+    if (typeof value === 'string' && value.length > MAX_WINE_FIELD) {
+      return res.status(400).json({ error: `${field} must be ${MAX_WINE_FIELD} characters or fewer` });
+    }
+  }
 
   try {
     const result = await findOrCreateWine(

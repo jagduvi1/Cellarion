@@ -4,6 +4,13 @@ from flask import Flask, request, send_file, jsonify
 from rembg import remove
 from PIL import Image
 
+# Defense-in-depth against decompression-bomb images: cap decoded pixels so a
+# small compressed payload can't expand to hundreds of millions of pixels and
+# exhaust memory / tie up this single-worker service. ~8000x8000 matches the
+# backend's MAX_PIXELS. PIL raises DecompressionBombError above 2x this, caught
+# by the handler below and returned as an error rather than crashing the worker.
+Image.MAX_IMAGE_PIXELS = 64_000_000
+
 app = Flask(__name__)
 
 

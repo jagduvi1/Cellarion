@@ -92,6 +92,30 @@ async function stripImageMetadata(filePath) {
 }
 
 /**
+ * Buffer variant of stripImageMetadata for in-memory pipelines (e.g. the
+ * base64 remove-bg preview, which never writes a file). Validates the input
+ * decodes and is within MAX_PIXELS — fails CLOSED, throwing on oversized,
+ * corrupt or unsupported input — then returns a re-encoded, metadata-stripped
+ * buffer. Throwing callers should respond 400.
+ */
+async function sanitizeImageBuffer(input) {
+  const meta = await sharp(input, { limitInputPixels: MAX_PIXELS }).metadata();
+  if (!SUPPORTED_FORMATS.has(meta.format)) {
+    throw new Error(`Unsupported image format: ${meta.format || 'unknown'}`);
+  }
+  const format = meta.format;
+  const animated = format === 'webp' && (meta.pages || 1) > 1;
+  const isCmyk = meta.space === 'cmyk';
+
+  let pipeline = sharp(input, { limitInputPixels: MAX_PIXELS, animated }).rotate();
+  if (!isCmyk) pipeline = pipeline.keepIccProfile();
+
+  if (format === 'jpeg') return pipeline.jpeg({ quality: 90 }).toBuffer();
+  if (format === 'png') return pipeline.png().toBuffer();
+  return pipeline.webp({ quality: 90 }).toBuffer();
+}
+
+/**
  * True when the file carries metadata worth stripping. Used by the backfill
  * script to skip already-clean files — re-encoding is lossy for JPEG, so a
  * re-run must not put clean files through another generation.
@@ -102,4 +126,4 @@ async function hasStrippableMetadata(filePath) {
   return !!(meta.exif || meta.xmp || meta.iptc || (meta.orientation && meta.orientation !== 1));
 }
 
-module.exports = { stripImageMetadata, hasStrippableMetadata, MAX_PIXELS };
+module.exports = { stripImageMetadata, sanitizeImageBuffer, hasStrippableMetadata, MAX_PIXELS };

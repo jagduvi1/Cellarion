@@ -13,7 +13,7 @@ const { isAccountLocked, recordLoginFailure, resetLoginAttempts } = require('../
 const PendingShare = require('../models/PendingShare');
 const Cellar = require('../models/Cellar');
 const { createNotification } = require('../services/notifications');
-const { getClientIp } = require('../utils/clientIp');
+const { rateLimitKey } = require('../utils/clientIp');
 
 /**
  * Resolve any pending cellar shares for a newly registered / verified user.
@@ -57,7 +57,7 @@ const router = express.Router();
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: () => rateLimitsConfig.get().auth.max,
-  keyGenerator: (req) => getClientIp(req),
+  keyGenerator: (req) => rateLimitKey(req),
   standardHeaders: true,
   legacyHeaders: false,
   handler: (req, res) => {
@@ -70,7 +70,7 @@ const authLimiter = rateLimit({
 const forgotLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 5,
-  keyGenerator: (req) => getClientIp(req),
+  keyGenerator: (req) => rateLimitKey(req),
   standardHeaders: true,
   legacyHeaders: false,
   handler: (req, res) => {
@@ -82,7 +82,7 @@ const forgotLimiter = rateLimit({
 const resendLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 5,
-  keyGenerator: (req) => getClientIp(req),
+  keyGenerator: (req) => rateLimitKey(req),
   standardHeaders: true,
   legacyHeaders: false,
   handler: (req, res) => {
@@ -150,6 +150,16 @@ router.post('/register', authLimiter, async (req, res) => {
     // Validate input
     if (!username || !email || !password) {
       return res.status(400).json({ error: 'Username, email, and password are required' });
+    }
+
+    // Constrain the username: 3–30 chars, and only letters/numbers/._- . This
+    // blocks an email-shaped username (login resolves username OR email, so a
+    // username like "victim@example.com" could shadow that email's login) and
+    // caps length. Enforced at registration only, so existing accounts that
+    // predate the rule aren't broken on unrelated saves.
+    const uname = typeof username === 'string' ? username.trim() : '';
+    if (uname.length < 3 || uname.length > 30 || !/^[a-z0-9_.-]+$/i.test(uname)) {
+      return res.status(400).json({ error: 'Username must be 3–30 characters and use only letters, numbers, dots, underscores, or hyphens.' });
     }
 
     if (!consentPrivacyPolicy || !consentDataProcessing) {
@@ -407,7 +417,7 @@ router.post('/resend-verification', resendLimiter, async (req, res) => {
 const refreshLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 30,
-  keyGenerator: (req) => getClientIp(req),
+  keyGenerator: (req) => rateLimitKey(req),
   standardHeaders: true,
   legacyHeaders: false,
   handler: (req, res) => {

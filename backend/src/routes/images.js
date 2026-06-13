@@ -8,10 +8,10 @@ const { upload, ORIGINALS_DIR } = require('../config/upload');
 const BottleImage = require('../models/BottleImage');
 const Bottle = require('../models/Bottle');
 const Cellar = require('../models/Cellar');
-const { getClientIp } = require('../utils/clientIp');
+const { rateLimitKey } = require('../utils/clientIp');
 const { getCellarRole } = require('../utils/cellarAccess');
 const { processImage } = require('../services/imageProcessor');
-const { stripImageMetadata } = require('../services/imageSanitizer');
+const { stripImageMetadata, sanitizeImageBuffer } = require('../services/imageSanitizer');
 const { stripHtml } = require('../utils/sanitize');
 const { isValidId } = require('../utils/validation');
 const rateLimitsConfig = require('../config/rateLimits');
@@ -38,7 +38,7 @@ const MAX_IMAGES_PER_BOTTLE = 20;
 const bgRemovalLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 5,
-  keyGenerator: (req) => req.user?.id || getClientIp(req),
+  keyGenerator: (req) => req.user?.id || rateLimitKey(req),
   standardHeaders: true,
   legacyHeaders: false,
   handler: (req, res) => {
@@ -350,8 +350,11 @@ router.get('/:id', requireAuth, async (req, res) => {
       authorized = true;
     }
 
-    // Image is approved (visible to all authenticated users)
-    if (!authorized && image.status === 'approved') {
+    // Image is approved AND public (visible to all authenticated users). An
+    // approved-but-private image stays restricted to its uploader / bottle-owner
+    // / cellar members handled below — matches the list endpoints, which gate on
+    // { status: 'approved', visibility: 'public' }.
+    if (!authorized && image.status === 'approved' && image.visibility === 'public') {
       authorized = true;
     }
 
@@ -396,9 +399,20 @@ router.post('/remove-bg-preview', requireAuth, bgRemovalLimiter, async (req, res
     const base64Data = image.replace(/^data:image\/\w+;base64,/, '');
     const buffer = Buffer.from(base64Data, 'base64');
 
+    // Fail-closed pixel/format guard + metadata strip before handing the image
+    // to the single-worker rembg service. Without it a small compressed payload
+    // can decode to a 100M+ pixel "decompression bomb" that ties up rembg for
+    // the full timeout (DoS). Mirrors the /upload path, which sanitises on disk.
+    let safeBuffer;
+    try {
+      safeBuffer = await sanitizeImageBuffer(buffer);
+    } catch {
+      return res.status(400).json({ error: 'Image is too large or not a valid JPEG, PNG, or WebP' });
+    }
+
     const REMBG_URL = process.env.REMBG_URL || 'http://rembg:5000';
     const formData = new FormData();
-    const blob = new Blob([buffer], { type: 'image/jpeg' });
+    const blob = new Blob([safeBuffer], { type: 'image/jpeg' });
     formData.append('image', blob, 'input.jpg');
 
     const response = await fetch(`${REMBG_URL}/remove-bg`, {

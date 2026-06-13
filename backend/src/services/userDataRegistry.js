@@ -67,6 +67,7 @@ const Appellation = require('../models/Appellation');
 const SiteConfig = require('../models/SiteConfig');
 const { getOrCreateDeletedUser } = require('../utils/deletedUser');
 const { deleteLogoFilesFor } = require('./wineListLogos');
+const { unlinkImageFiles } = require('./imageProcessor');
 
 const EXPORT_MAX = 50000;
 const AUDIT_MAX = 1000;
@@ -137,11 +138,23 @@ const REGISTRY = [
     // [deleted] sentinel, like forum content) so the shared wine image survives
     // and stays managed. Only the user's own non-shared images are hard-deleted.
     // Also clear this user's reviewedBy ref off OTHER users' images.
-    purge: (ctx) => [
-      BottleImage.deleteMany({ uploadedBy: ctx.userId, assignedToWine: { $ne: true } }),
-      BottleImage.updateMany({ uploadedBy: ctx.userId, assignedToWine: true }, { $set: { uploadedBy: ctx.deletedUserId } }),
-      BottleImage.updateMany({ reviewedBy: ctx.userId }, { $unset: { reviewedBy: '' } }),
-    ],
+    // Unlink the on-disk files (originals + processed PNGs) for the user's own
+    // non-shared images BEFORE deleting the docs — those docs are the only
+    // reference to the files, so deleting them first would orphan the files on
+    // disk forever. Shared (assignedToWine) images are anonymised, not deleted,
+    // so their files are kept. Returned as a single self-contained promise so
+    // the inner DB ops are awaited (an async fn returning an *array* would not
+    // await the queries inside it).
+    purge: async (ctx) => {
+      const own = await BottleImage.find({ uploadedBy: ctx.userId, assignedToWine: { $ne: true } })
+        .select('originalUrl processedUrl').lean();
+      for (const img of own) await unlinkImageFiles(img);
+      await Promise.all([
+        BottleImage.deleteMany({ uploadedBy: ctx.userId, assignedToWine: { $ne: true } }),
+        BottleImage.updateMany({ uploadedBy: ctx.userId, assignedToWine: true }, { $set: { uploadedBy: ctx.deletedUserId } }),
+        BottleImage.updateMany({ reviewedBy: ctx.userId }, { $unset: { reviewedBy: '' } }),
+      ]);
+    },
     exportFragment: async (ctx) => ({
       images: markTrunc(ctx, 'images', await BottleImage.find({ uploadedBy: ctx.userId }).limit(EXPORT_MAX).lean())
         .map(i => ({ originalUrl: i.originalUrl, processedUrl: i.processedUrl, uploadedAt: i.createdAt })),

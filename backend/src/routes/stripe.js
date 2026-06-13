@@ -74,8 +74,22 @@ router.post('/checkout', requireAuth, async (req, res) => {
       return res.status(500).json({ error: 'Stripe price not configured for this plan' });
     }
 
-    const user = await User.findById(req.user.id).select('email stripeCustomerId');
+    const user = await User.findById(req.user.id).select('email stripeCustomerId stripeSubscriptionId');
     if (!user) return res.status(404).json({ error: 'User not found' });
+
+    // Guard against a second concurrent subscription (double-billing). A user
+    // who already has an active subscription must change plans through the
+    // Customer Portal, where Stripe enforces one subscription per customer and
+    // handles proration. Creating another Checkout Session here would bill the
+    // card twice and orphan the first subscription — applyStripePlan overwrites
+    // stripeSubscriptionId on the next checkout.session.completed, so the first
+    // sub's later cancellation no longer matches and never downgrades the user.
+    if (user.stripeSubscriptionId) {
+      return res.status(409).json({
+        error: 'You already have an active subscription. Use the billing portal to change your plan.',
+        code: 'subscription_exists'
+      });
+    }
 
     const s = getStripe();
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
@@ -89,6 +103,25 @@ router.post('/checkout', requireAuth, async (req, res) => {
       });
       customerId = customer.id;
       await User.findByIdAndUpdate(req.user.id, { stripeCustomerId: customerId });
+    } else {
+      // Defense-in-depth for the double-click / two-tab race, where the
+      // checkout.session.completed webhook has not yet populated
+      // stripeSubscriptionId: ask Stripe directly whether this customer already
+      // has a live subscription. Best-effort — a transient API error must never
+      // block a legitimate first checkout.
+      try {
+        const existing = await s.subscriptions.list({ customer: customerId, status: 'all', limit: 10 });
+        const hasLive = existing.data.some((sub) =>
+          ['active', 'trialing', 'past_due', 'unpaid'].includes(sub.status));
+        if (hasLive) {
+          return res.status(409).json({
+            error: 'You already have an active subscription. Use the billing portal to change your plan.',
+            code: 'subscription_exists'
+          });
+        }
+      } catch (e) {
+        console.warn('[stripe] could not verify existing subscriptions (proceeding):', e.message);
+      }
     }
 
     const session = await s.checkout.sessions.create({

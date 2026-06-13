@@ -5,7 +5,7 @@ const helmet = require('helmet');
 const path = require('path');
 const rateLimit = require('express-rate-limit');
 const cookieParser = require('cookie-parser');
-const { getClientIp } = require('./utils/clientIp');
+const { rateLimitKey } = require('./utils/clientIp');
 const { requireAuth } = require('./middleware/auth');
 const healthRoute = require('./routes/health');
 const siteRoute = require('./routes/site');
@@ -131,7 +131,7 @@ if (indexNowKey) {
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: () => rateLimitsConfig.get().api.max,
-  keyGenerator: (req) => getClientIp(req),
+  keyGenerator: (req) => rateLimitKey(req),
   standardHeaders: true,
   legacyHeaders: false,
   handler: (req, res) => {
@@ -145,7 +145,7 @@ app.use('/api/', apiLimiter);
 const writeLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: () => rateLimitsConfig.get().write.max,
-  keyGenerator: (req) => getClientIp(req),
+  keyGenerator: (req) => rateLimitKey(req),
   standardHeaders: true,
   legacyHeaders: false,
   skip: (req) => req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS',

@@ -89,8 +89,9 @@ router.get('/', async (req, res) => {
       }
     ];
 
-    // Free-text search on wine name or producer
-    if (search && search.trim()) {
+    // Free-text search on wine name or producer. Guard the type: an object/array
+    // query param (?search[$gt]=) would otherwise throw on .trim() → 500.
+    if (typeof search === 'string' && search.trim()) {
       const escaped = escapeRegex(search.trim());
       pipeline.push({
         $match: {

@@ -6,7 +6,7 @@ const Country = require('../models/Country');
 const Region = require('../models/Region');
 const Grape = require('../models/Grape');
 const Discussion = require('../models/Discussion');
-const { getClientIp } = require('../utils/clientIp');
+const { rateLimitKey } = require('../utils/clientIp');
 
 const WINE_TYPES = ['red', 'white', 'rosé', 'sparkling', 'dessert', 'fortified'];
 const MIN_WINES = 3;
@@ -18,7 +18,7 @@ const SITE_URL = process.env.FRONTEND_URL || 'https://cellarion.app';
 const sitemapLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 30,
-  keyGenerator: (req) => getClientIp(req),
+  keyGenerator: (req) => rateLimitKey(req),
   standardHeaders: true,
   legacyHeaders: false
 });

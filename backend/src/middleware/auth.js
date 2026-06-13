@@ -32,13 +32,14 @@ const requireAuth = async (req, res, next) => {
 
     next();
   } catch (error) {
-    if (error.name === 'JsonWebTokenError') {
-      return res.status(401).json({ error: 'Invalid token' });
-    }
     if (error.name === 'TokenExpiredError') {
       return res.status(401).json({ error: 'Token expired' });
     }
-    return res.status(500).json({ error: 'Authentication error' });
+    // Any other verification failure (JsonWebTokenError, NotBeforeError,
+    // malformed/garbage token, etc.) is an authentication failure — never a 500.
+    // No token is ever accepted on this path; a 500 here only masks auth
+    // failures as server errors in monitoring.
+    return res.status(401).json({ error: 'Invalid token' });
   }
 };
 
