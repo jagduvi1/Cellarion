@@ -18,16 +18,16 @@ function CommunityDiscussions() {
         {user && (
           <div className="review-feed__section-tabs">
             <Link
-              to="/community"
-              className={`review-feed__section-tab ${location.pathname === '/community' ? 'active' : ''}`}
-            >
-              {t('discussions.reviews')}
-            </Link>
-            <Link
               to="/community/discussions"
               className={`review-feed__section-tab ${location.pathname.startsWith('/community/discussions') ? 'active' : ''}`}
             >
               {t('discussions.discussions')}
+            </Link>
+            <Link
+              to="/community"
+              className={`review-feed__section-tab ${location.pathname === '/community' ? 'active' : ''}`}
+            >
+              {t('discussions.reviews')}
             </Link>
           </div>
         )}

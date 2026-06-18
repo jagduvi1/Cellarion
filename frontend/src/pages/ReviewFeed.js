@@ -85,16 +85,16 @@ function ReviewFeed() {
         <h1>{t('reviewFeed.community')}</h1>
         <div className="review-feed__section-tabs">
           <Link
-            to="/community"
-            className={`review-feed__section-tab ${location.pathname === '/community' ? 'active' : ''}`}
-          >
-            {t('reviewFeed.reviews')}
-          </Link>
-          <Link
             to="/community/discussions"
             className={`review-feed__section-tab ${location.pathname.startsWith('/community/discussions') ? 'active' : ''}`}
           >
             {t('reviewFeed.discussions')}
+          </Link>
+          <Link
+            to="/community"
+            className={`review-feed__section-tab ${location.pathname === '/community' ? 'active' : ''}`}
+          >
+            {t('reviewFeed.reviews')}
           </Link>
         </div>
       </div>
