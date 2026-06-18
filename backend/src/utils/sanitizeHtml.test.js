@@ -1,4 +1,4 @@
-const { sanitizeForumHtml, visibleTextLength, ALLOWED_TAGS } = require('./sanitizeHtml');
+const { sanitizeForumHtml, visibleTextLength, sanitizeBlogHtml, extractFaqFromHtml, ALLOWED_TAGS } = require('./sanitizeHtml');
 
 describe('sanitizeForumHtml', () => {
   test('returns empty string for non-string input', () => {
@@ -124,5 +124,89 @@ describe('visibleTextLength', () => {
     expect(visibleTextLength('')).toBe(0);
     expect(visibleTextLength('<p></p>')).toBe(0);
     expect(visibleTextLength('<p>   </p>')).toBe(0);
+  });
+});
+
+describe('sanitizeBlogHtml', () => {
+  test('returns empty string for non-string input', () => {
+    expect(sanitizeBlogHtml(null)).toBe('');
+    expect(sanitizeBlogHtml(undefined)).toBe('');
+    expect(sanitizeBlogHtml(42)).toBe('');
+  });
+
+  test('preserves heading structure (h2/h3/h4) — the whole point of the fix', () => {
+    const out = sanitizeBlogHtml('<h2>Storage</h2><h3>Temperature</h3><h4>Detail</h4>');
+    expect(out).toContain('<h2>Storage</h2>');
+    expect(out).toContain('<h3>Temperature</h3>');
+    expect(out).toContain('<h4>Detail</h4>');
+  });
+
+  test('preserves lists, blockquotes, and inline formatting', () => {
+    const out = sanitizeBlogHtml('<ul><li>a</li></ul><ol><li>b</li></ol><blockquote>q</blockquote><p><strong>x</strong> <em>y</em></p>');
+    expect(out).toContain('<ul><li>a</li></ul>');
+    expect(out).toContain('<ol><li>b</li></ol>');
+    expect(out).toContain('<blockquote>q</blockquote>');
+    expect(out).toContain('<strong>x</strong>');
+  });
+
+  test('preserves images with src/alt (forum sanitizer strips these)', () => {
+    const out = sanitizeBlogHtml('<img src="https://cellarion.app/x.jpg" alt="bottle" width="800" />');
+    expect(out).toContain('<img');
+    expect(out).toContain('src="https://cellarion.app/x.jpg"');
+    expect(out).toContain('alt="bottle"');
+  });
+
+  test('demotes in-content <h1> to <h2> (single top-level h1 on the page)', () => {
+    const out = sanitizeBlogHtml('<h1>Should become h2</h1>');
+    expect(out).toContain('<h2>Should become h2</h2>');
+    expect(out).not.toContain('<h1>');
+  });
+
+  test('strips <script>, event handlers, style, and <iframe>', () => {
+    const out = sanitizeBlogHtml('<h2 onclick="x" style="color:red">T</h2><script>alert(1)</script><iframe src="//evil"></iframe>');
+    expect(out).toContain('<h2>T</h2>');
+    expect(out).not.toContain('onclick');
+    expect(out).not.toContain('style');
+    expect(out).not.toContain('<script');
+    expect(out).not.toContain('<iframe');
+  });
+
+  test('strips dangerous URL schemes on links and images', () => {
+    expect(sanitizeBlogHtml('<a href="javascript:alert(1)">x</a>')).not.toContain('javascript');
+    expect(sanitizeBlogHtml('<img src="javascript:alert(1)">')).not.toContain('javascript');
+  });
+});
+
+describe('extractFaqFromHtml', () => {
+  test('returns [] for non-string or content with no questions', () => {
+    expect(extractFaqFromHtml(null)).toEqual([]);
+    expect(extractFaqFromHtml('<h2>Storage tips</h2><p>Keep it cool.</p>')).toEqual([]);
+  });
+
+  test('pairs question-style headings with the following body text', () => {
+    const html = '<h2>How long does wine age?</h2><p>It depends on the wine.</p><h2>Where to store it?</h2><p>A cool, dark place.</p>';
+    const faqs = extractFaqFromHtml(html);
+    expect(faqs).toHaveLength(2);
+    expect(faqs[0]).toEqual({ question: 'How long does wine age?', answer: 'It depends on the wine.' });
+    expect(faqs[1].question).toBe('Where to store it?');
+    expect(faqs[1].answer).toBe('A cool, dark place.');
+  });
+
+  test('ignores non-question headings and stops the answer at the next heading', () => {
+    const html = '<h2>Intro</h2><p>ignored</p><h3>Is it free?</h3><p>Yes.</p><h3>Pricing</h3><p>n/a</p>';
+    const faqs = extractFaqFromHtml(html);
+    expect(faqs).toHaveLength(1);
+    expect(faqs[0].question).toBe('Is it free?');
+    expect(faqs[0].answer).toBe('Yes.');
+  });
+
+  test('decodes entities and collapses whitespace in extracted text', () => {
+    const faqs = extractFaqFromHtml('<h2>Tom &amp; Jerry?</h2><p>Cheese\n\n  &amp;  wine.</p>');
+    expect(faqs[0].question).toBe('Tom & Jerry?');
+    expect(faqs[0].answer).toBe('Cheese & wine.');
+  });
+
+  test('skips questions with no answer body', () => {
+    expect(extractFaqFromHtml('<h2>Empty?</h2><h2>Also empty?</h2>')).toEqual([]);
   });
 });

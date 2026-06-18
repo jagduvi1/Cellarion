@@ -59,10 +59,108 @@ function visibleTextLength(html) {
   return text.replace(/\s+/g, ' ').trim().length;
 }
 
+// ── Blog content ─────────────────────────────────────────────────────────────
+// Blog posts are admin-authored in a rich-text (TipTap) editor and rendered on
+// the SPA via DOMPurify. The crawler-facing OG page needs the SAME structure —
+// headings, lists, images — so AI engines and search bots get a real document
+// outline instead of a flat text blob. Richer allowlist than the forum, but
+// still strips <script>, event handlers, and dangerous URL schemes.
+const ALLOWED_TAGS_BLOG = [
+  'h2', 'h3', 'h4', 'p', 'br', 'hr', 'strong', 'em', 's', 'u',
+  'blockquote', 'ul', 'ol', 'li', 'a', 'img', 'code', 'pre',
+  'figure', 'figcaption', 'table', 'thead', 'tbody', 'tr', 'th', 'td'
+];
+
+const SANITIZE_OPTIONS_BLOG = {
+  allowedTags: ALLOWED_TAGS_BLOG,
+  allowedAttributes: {
+    a: ['href', 'title', 'target', 'rel'],
+    img: ['src', 'alt', 'width', 'height'],
+    th: ['colspan', 'rowspan'],
+    td: ['colspan', 'rowspan']
+  },
+  allowedSchemes: ['http', 'https', 'mailto'],
+  disallowedTagsMode: 'discard',
+  // Demote any in-content <h1> to <h2> so the rendered OG page keeps a single
+  // top-level <h1> (the post title from the template).
+  transformTags: {
+    h1: 'h2'
+  }
+};
+
+/**
+ * Sanitize blog post HTML for the crawler-facing OG page, preserving document
+ * structure (headings, lists, images, tables) so search/AI engines can extract
+ * it. Returns HTML safe to embed in the server-rendered page.
+ */
+function sanitizeBlogHtml(html) {
+  if (typeof html !== 'string') return '';
+  return sanitize(html, SANITIZE_OPTIONS_BLOG);
+}
+
+// Longest FAQ answer we put in JSON-LD — keeps the structured data tidy; the
+// full prose still lives in the visible page body.
+const FAQ_ANSWER_MAX = 1200;
+
+// Plain text from HTML without ReDoS risk and without throwing on long input
+// (unlike utils/sanitize.stripHtml, which caps at 10k). Decodes the handful of
+// entities a rich-text editor emits so JSON-LD carries clean text, then
+// collapses whitespace.
+function htmlToText(html) {
+  if (typeof html !== 'string') return '';
+  let out = '';
+  let depth = 0;
+  for (let i = 0; i < html.length; i++) {
+    const ch = html[i];
+    if (ch === '<') depth++;
+    else if (ch === '>') { if (depth > 0) depth--; }
+    else if (depth === 0) out += ch;
+  }
+  return out
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&#39;|&#x27;|&apos;/g, "'")
+    .replace(/&quot;/g, '"')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&amp;/g, '&')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
+ * Build FAQ Q&A pairs from question-style headings (h2–h4 whose visible text
+ * ends with "?") and the body that follows each, up to the next heading. The
+ * caller emits FAQPage JSON-LD only when there are enough pairs to be
+ * meaningful. Pass sanitizeBlogHtml() output — input must be well-formed HTML.
+ */
+function extractFaqFromHtml(html) {
+  if (typeof html !== 'string') return [];
+  const headingRe = /<(h[2-4])\b[^>]*>([\s\S]*?)<\/\1>/gi;
+  const heads = [];
+  let m;
+  while ((m = headingRe.exec(html)) !== null) {
+    heads.push({ start: m.index, end: headingRe.lastIndex, text: htmlToText(m[2]) });
+  }
+  const faqs = [];
+  for (let i = 0; i < heads.length; i++) {
+    const question = heads[i].text;
+    if (!question.endsWith('?')) continue;
+    const sliceEnd = (i + 1 < heads.length) ? heads[i + 1].start : html.length;
+    let answer = htmlToText(html.slice(heads[i].end, sliceEnd));
+    if (!answer) continue;
+    if (answer.length > FAQ_ANSWER_MAX) answer = answer.slice(0, FAQ_ANSWER_MAX - 1).trim() + '…';
+    faqs.push({ question, answer });
+  }
+  return faqs;
+}
+
 module.exports = {
   sanitizeForumHtml,
   visibleTextLength,
+  sanitizeBlogHtml,
+  extractFaqFromHtml,
   ALLOWED_TAGS,
+  ALLOWED_TAGS_BLOG,
   ALLOWED_ATTRIBUTES,
   ALLOWED_SCHEMES
 };

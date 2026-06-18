@@ -11,7 +11,7 @@ const DiscussionReply = require('../models/DiscussionReply');
 const helpContent = require('../data/helpContent');
 const { fromNormalized } = require('../utils/ratingUtils');
 const { isValidId } = require('../utils/validation');
-const { sanitizeForumHtml } = require('../utils/sanitizeHtml');
+const { sanitizeForumHtml, sanitizeBlogHtml, extractFaqFromHtml } = require('../utils/sanitizeHtml');
 const { stripHtml } = require('../utils/sanitize');
 
 const WINE_TYPES = ['red', 'white', 'rosé', 'sparkling', 'dessert', 'fortified'];
@@ -596,28 +596,55 @@ router.get('/blog/:slug', ogLimiter, async (req, res) => {
     const publishedDate = post.publishedAt ? new Date(post.publishedAt).toISOString().split('T')[0] : '';
     const modifiedDate = post.updatedAt ? new Date(post.updatedAt).toISOString().split('T')[0] : '';
 
-    // Strip HTML tags from content for a text-only body
-    const textContent = post.content.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+    // Render the article body as structured HTML (headings, lists, images) so
+    // AI/search engines get a real document outline — not a flat, truncated text
+    // blob. sanitizeBlogHtml strips scripts/handlers/dangerous schemes.
+    const safeContent = sanitizeBlogHtml(post.content || '');
 
-    const jsonLd = {
-      '@context': 'https://schema.org',
-      '@type': 'BlogPosting',
-      headline: post.title,
-      description: metaDescription,
-      datePublished: post.publishedAt,
-      dateModified: post.updatedAt,
-      author: post.author?.username
-        ? { '@type': 'Person', name: post.author.username }
-        : { '@type': 'Organization', name: 'Cellarion', url: SITE_URL },
-      publisher: {
-        '@type': 'Organization',
-        name: 'Cellarion',
-        url: SITE_URL,
-        logo: { '@type': 'ImageObject', url: `${SITE_URL}/cellarion-logo.jpg` }
+    // Auto-derive a FAQ from any question-style headings in the post. Emitted as
+    // FAQPage JSON-LD only when there are ≥2 pairs — the Q&A is visible in the
+    // body above, so the markup matches the page (Google's FAQ requirement).
+    const faqs = extractFaqFromHtml(safeContent);
+
+    const graph = [
+      {
+        '@type': 'BlogPosting',
+        headline: post.title,
+        description: metaDescription,
+        datePublished: post.publishedAt,
+        dateModified: post.updatedAt,
+        author: post.author?.username
+          ? { '@type': 'Person', name: post.author.username }
+          : { '@type': 'Organization', name: 'Cellarion', url: SITE_URL },
+        publisher: {
+          '@type': 'Organization',
+          name: 'Cellarion',
+          url: SITE_URL,
+          logo: { '@type': 'ImageObject', url: `${SITE_URL}/cellarion-logo.jpg` }
+        },
+        mainEntityOfPage: { '@type': 'WebPage', '@id': postUrl },
+        ...(post.coverImage ? { image: post.coverImage } : {})
       },
-      mainEntityOfPage: { '@type': 'WebPage', '@id': postUrl },
-      ...(post.coverImage ? { image: post.coverImage } : {})
-    };
+      {
+        '@type': 'BreadcrumbList',
+        itemListElement: [
+          { '@type': 'ListItem', position: 1, name: 'Cellarion', item: SITE_URL },
+          { '@type': 'ListItem', position: 2, name: 'Blog', item: `${SITE_URL}/blog` },
+          { '@type': 'ListItem', position: 3, name: post.title, item: postUrl }
+        ]
+      }
+    ];
+    if (faqs.length >= 2) {
+      graph.push({
+        '@type': 'FAQPage',
+        mainEntity: faqs.map(({ question, answer }) => ({
+          '@type': 'Question',
+          name: question,
+          acceptedAnswer: { '@type': 'Answer', text: answer }
+        }))
+      });
+    }
+    const jsonLd = { '@context': 'https://schema.org', '@graph': graph };
 
     const html = `<!DOCTYPE html>
 <html lang="en">
@@ -649,7 +676,7 @@ router.get('/blog/:slug', ogLimiter, async (req, res) => {
       ${post.tags?.length ? `<p>Tags: ${post.tags.map(t => esc(t)).join(', ')}</p>` : ''}
     </header>
     ${post.coverImage ? `<img src="${esc(post.coverImage)}" alt="${esc(post.title)}" width="800" />` : ''}
-    <div>${textContent.slice(0, 5000)}</div>
+    <div>${safeContent}</div>
   </article>
   <footer>
     <p><a href="${esc(SITE_URL)}/blog">Back to blog</a> · <a href="${esc(SITE_URL)}">Cellarion</a></p>
