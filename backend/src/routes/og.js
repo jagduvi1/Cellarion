@@ -8,6 +8,7 @@ const Region = require('../models/Region');
 const Grape = require('../models/Grape');
 const Discussion = require('../models/Discussion');
 const DiscussionReply = require('../models/DiscussionReply');
+const helpContent = require('../data/helpContent');
 const { fromNormalized } = require('../utils/ratingUtils');
 const { isValidId } = require('../utils/validation');
 const { sanitizeForumHtml } = require('../utils/sanitizeHtml');
@@ -43,6 +44,238 @@ const ogLimiter = rateLimit({
 
 const SITE_URL = process.env.FRONTEND_URL || 'https://cellarion.app';
 const API_URL = process.env.BACKEND_URL || process.env.FRONTEND_URL || 'https://cellarion.app';
+
+// ── Landing-page copy ────────────────────────────────────────────────────────
+// Mirrors the marketing copy in frontend/src/locales/en/translation.json under
+// the `landing.*` keys. The backend Docker image does NOT bundle the frontend
+// locale files, so the crawler-facing copy is duplicated here. The bare "/" is
+// the page AI engines and search bots judge first — without this they'd get the
+// empty SPA shell (no schema, no FAQ, no prose). Keep this in sync with the SPA:
+// if you change the landing copy or FAQ in translation.json, update it here too.
+const LANDING = {
+  metaTitle: 'Cellarion — Wine Cellar App | Track Your Wine Collection Online',
+  metaDescription: 'Track your wine collection with Cellarion. Log every bottle, visualise racks, get drink-window alerts, and share cellars with friends. Free wine cellar app at cellarion.app.',
+  heroHeadline: 'Your wine cellar, beautifully organised.',
+  heroSubline: 'The modern way to track your wine collection. Log every bottle, visualise your racks, get drink-window alerts at the perfect moment, and share cellars with friends — all in one private, ad-free app.',
+  aboutTitle: 'What is Cellarion?',
+  aboutText: 'Cellarion is a wine cellar management app for collectors, restaurants, and weekend enthusiasts. Track every bottle in your collection — vintage, producer, region, price, personal rating, and tasting notes. Organise wines across cellars and racks, get drink-window alerts so you never miss a wine\'s peak, and share cellars with friends. Free to use at cellarion.app.',
+  featuresTitle: 'Everything your cellar needs',
+  features: [
+    ['Bottle Tracking', 'Log every bottle in your collection — vintage, producer, region, price, personal rating, and tasting notes, all in one place.'],
+    ['Cellar & Rack Management', 'Organize bottles across multiple cellars and visualize your physical racks on an interactive grid. Know exactly where each bottle lives.'],
+    ['Drink Window Alerts', 'Get notified when a bottle is approaching its peak or past it. Never open a great wine too early — or too late.'],
+    ['Rich Statistics', 'Explore your cellar with charts and maps — breakdown by country, grape, value, drink status, and more.'],
+    ['Smart Wine Search', 'Fuzzy matching and deduplication so you always find the right wine, even with a typo.'],
+    ['Share Your Cellar', 'Invite friends or colleagues to browse or co-manage a cellar. Granular role-based access keeps you in control.'],
+    ['Label Scanning', 'Snap a photo of the label and we\'ll fill in the details. Background removal keeps bottle images clean and beautiful.'],
+    ['Import & Export', 'Bring your existing collection in via CSV. A structured wine registry shared across users ensures clean, consistent data.'],
+  ],
+  whyTitle: 'Why wine lovers choose Cellarion',
+  why: [
+    ['Free to use', 'All core features are free at cellarion.app — no credit card, no trial, no upsell pop-ups. We don\'t sell ads either.'],
+    ['No lock-in', 'Your collection is yours. Export everything to JSON or CSV with one click, any time. If you ever leave, you walk out with all your data.'],
+    ['Private by design', 'No third-party trackers, no data sold to wine merchants. Just a clean app that stays out of your way.'],
+    ['GDPR-compliant', 'Hosted on European infrastructure. Full data export, account deletion, and a one-click email opt-out built in from day one.'],
+  ],
+  // Visible Q&A below MUST match this FAQ verbatim — the rendered page shows
+  // exactly these pairs, so the FAQPage JSON-LD and visible text never diverge.
+  faqs: [
+    ['What is Cellarion?', 'Cellarion is a wine cellar management app that helps you track every bottle in your collection. Log vintage, producer, region, price, personal rating, and tasting notes; organise bottles across cellars and racks; get drink-window alerts when wines approach their peak; and share cellars with friends or co-managers. It\'s free to use at cellarion.app.'],
+    ['How do I track my wine collection with Cellarion?', 'You log each bottle with its vintage, producer, region, price, personal rating, and tasting notes. Bottles live inside named cellars and can be placed on customisable racks for visual organisation. Cellarion automatically calculates drink windows, tracks consumption history, and gives you statistics across your whole collection.'],
+    ['What is a drink window in wine?', 'A drink window is the period during which a wine is at its best — typically a range of years bracketing the wine\'s peak maturity. Cellarion classifies every vintage as Not Ready, Early, Peak, Late, or Declining based on producer notes and vintage data, so you know which bottles to drink soon and which to keep cellaring.'],
+    ['Is Cellarion really free?', 'Yes. All core features at cellarion.app are free — track unlimited bottles, organise cellars, get drink-window alerts, share with friends, and export your data anytime. There are no credit-card prompts, no premium tiers gating basic functionality, and we don\'t sell ads or your data.'],
+    ['How do I import wines from Vivino or CellarTracker?', 'Cellarion supports CSV import. Export your collection from Vivino, CellarTracker, or any spreadsheet, then upload the CSV in Cellarion\'s import tool. The shared wine registry deduplicates entries automatically so your data stays clean and consistent across the whole catalogue.'],
+    ['Can I export my data and leave any time?', 'Yes — your data is yours. Cellarion includes a one-click data export that gives you everything as JSON, plus CSV import and export for bottles. You can delete your account from Settings with a 7-day cooling-off window. Hosted data lives on European infrastructure under GDPR.'],
+  ],
+};
+
+// GET /og/home — Server-rendered landing page for crawlers. Nginx routes the
+// bare "/" for crawler user-agents here so AI engines and search bots see the
+// full pitch, FAQ, and JSON-LD (WebSite + Organization + SoftwareApplication +
+// FAQPage) instead of the empty SPA shell. Real users still get the SPA.
+router.get('/home', ogLimiter, (req, res) => {
+  try {
+    const pageUrl = `${SITE_URL}/`;
+    const logo = `${SITE_URL}/cellarion-logo.jpg`;
+
+    const jsonLd = {
+      '@context': 'https://schema.org',
+      '@graph': [
+        {
+          '@type': 'WebSite',
+          '@id': `${SITE_URL}/#website`,
+          url: SITE_URL,
+          name: 'Cellarion',
+          description: LANDING.metaDescription,
+          inLanguage: ['en', 'sv'],
+        },
+        {
+          '@type': 'Organization',
+          '@id': `${SITE_URL}/#organization`,
+          name: 'Cellarion',
+          url: SITE_URL,
+          logo,
+          sameAs: ['https://github.com/jagduvi1/Cellarion'],
+        },
+        {
+          '@type': 'SoftwareApplication',
+          '@id': `${SITE_URL}/#app`,
+          name: 'Cellarion',
+          description: LANDING.metaDescription,
+          applicationCategory: 'LifestyleApplication',
+          operatingSystem: 'Web',
+          url: SITE_URL,
+          offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
+        },
+        {
+          '@type': 'FAQPage',
+          '@id': `${SITE_URL}/#faq`,
+          mainEntity: LANDING.faqs.map(([q, a]) => ({
+            '@type': 'Question',
+            name: q,
+            acceptedAnswer: { '@type': 'Answer', text: a },
+          })),
+        },
+      ],
+    };
+
+    const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>${esc(LANDING.metaTitle)}</title>
+  <meta name="description" content="${esc(LANDING.metaDescription)}" />
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="${esc(LANDING.metaTitle)}" />
+  <meta property="og:description" content="${esc(LANDING.metaDescription)}" />
+  <meta property="og:image" content="${esc(logo)}" />
+  <meta property="og:url" content="${esc(pageUrl)}" />
+  <meta property="og:site_name" content="Cellarion" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="${esc(LANDING.metaTitle)}" />
+  <meta name="twitter:description" content="${esc(LANDING.metaDescription)}" />
+  <meta name="twitter:image" content="${esc(logo)}" />
+  <link rel="canonical" href="${esc(pageUrl)}" />
+  <link rel="alternate" hreflang="en" href="${esc(pageUrl)}" />
+  <link rel="alternate" hreflang="x-default" href="${esc(pageUrl)}" />
+  <script type="application/ld+json">${serializeJsonLd(jsonLd)}</script>
+</head>
+<body>
+  <header>
+    <h1>${esc(LANDING.heroHeadline)}</h1>
+    <p>${esc(LANDING.heroSubline)}</p>
+  </header>
+  <main>
+    <section>
+      <h2>${esc(LANDING.aboutTitle)}</h2>
+      <p>${esc(LANDING.aboutText)}</p>
+    </section>
+    <section>
+      <h2>${esc(LANDING.featuresTitle)}</h2>
+      ${LANDING.features.map(([title, desc]) => `<h3>${esc(title)}</h3><p>${esc(desc)}</p>`).join('\n      ')}
+    </section>
+    <section>
+      <h2>${esc(LANDING.whyTitle)}</h2>
+      ${LANDING.why.map(([title, desc]) => `<h3>${esc(title)}</h3><p>${esc(desc)}</p>`).join('\n      ')}
+    </section>
+    <section>
+      <h2>Frequently asked questions</h2>
+      ${LANDING.faqs.map(([q, a]) => `<h3>${esc(q)}</h3><p>${esc(a)}</p>`).join('\n      ')}
+    </section>
+  </main>
+  <footer>
+    <p>Get started free at <a href="${esc(pageUrl)}">Cellarion</a> — track your wine collection, get drink-window alerts, and share cellars with friends. <a href="https://github.com/jagduvi1/Cellarion">Open source on GitHub</a>.</p>
+  </footer>
+</body>
+</html>`;
+
+    res.set('Content-Type', 'text/html; charset=utf-8');
+    res.set('Cache-Control', 'public, max-age=3600');
+    res.send(html);
+  } catch (err) {
+    console.error('[og] home page error:', err.message);
+    res.status(500).send('Error generating page');
+  }
+});
+
+// GET /og/help — Server-rendered help & guide page for crawlers. Built from
+// backend/src/data/helpContent.js (the single source of truth shared with the
+// help AI), so it stays in sync without duplicating copy. Nginx routes the
+// "/help" SPA route for crawler user-agents here.
+router.get('/help', ogLimiter, (req, res) => {
+  try {
+    const pageUrl = `${SITE_URL}/help`;
+    const title = 'Help & Guide';
+    const metaDescription = 'How to use Cellarion: managing cellars and bottles, label scanning, sharing, racks, drink-window recommendations, import/export, and more.';
+    const sections = helpContent.sections || [];
+
+    const jsonLd = {
+      '@context': 'https://schema.org',
+      '@graph': [
+        {
+          '@type': 'FAQPage',
+          mainEntity: sections.map(s => ({
+            '@type': 'Question',
+            name: s.title,
+            acceptedAnswer: {
+              '@type': 'Answer',
+              text: (s.details && s.details.length > 0) ? s.details.join(' ') : s.summary,
+            },
+          })),
+        },
+        {
+          '@type': 'BreadcrumbList',
+          itemListElement: [
+            { '@type': 'ListItem', position: 1, name: 'Cellarion', item: SITE_URL },
+            { '@type': 'ListItem', position: 2, name: title, item: pageUrl },
+          ],
+        },
+      ],
+    };
+
+    const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>${esc(title)} — Cellarion</title>
+  <meta name="description" content="${esc(metaDescription)}" />
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="${esc(title)} — Cellarion" />
+  <meta property="og:description" content="${esc(metaDescription)}" />
+  <meta property="og:image" content="${esc(SITE_URL)}/cellarion-logo.jpg" />
+  <meta property="og:url" content="${esc(pageUrl)}" />
+  <meta property="og:site_name" content="Cellarion" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="${esc(title)} — Cellarion" />
+  <meta name="twitter:description" content="${esc(metaDescription)}" />
+  <link rel="canonical" href="${esc(pageUrl)}" />
+  <script type="application/ld+json">${serializeJsonLd(jsonLd)}</script>
+</head>
+<body>
+  <nav><a href="${esc(SITE_URL)}">Cellarion</a> / ${esc(title)}</nav>
+  <header>
+    <h1>${esc(title)}</h1>
+    <p>${esc(metaDescription)}</p>
+  </header>
+  <main>
+    ${sections.map(s => `<section><h2>${esc(s.title)}</h2><p>${esc(s.summary)}</p>${
+      (s.details && s.details.length > 0) ? `<ul>${s.details.map(d => `<li>${esc(d)}</li>`).join('')}</ul>` : ''
+    }</section>`).join('\n    ')}
+  </main>
+  <footer>
+    <p><a href="${esc(SITE_URL)}">Cellarion</a> — track your wine collection, get drink-window alerts, and share cellars with friends.</p>
+  </footer>
+</body>
+</html>`;
+
+    res.set('Content-Type', 'text/html; charset=utf-8');
+    res.set('Cache-Control', 'public, max-age=3600');
+    res.send(html);
+  } catch (err) {
+    console.error('[og] help page error:', err.message);
+    res.status(500).send('Error generating page');
+  }
+});
 
 // GET /og/wines/:idOrSlug — Full server-rendered HTML for search engine crawlers.
 // Nginx routes crawler user-agents here; real users get the SPA.
@@ -251,6 +484,97 @@ router.get('/wines/:idOrSlug', ogLimiter, async (req, res) => {
     res.send(html);
   } catch (err) {
     console.error('[og] wine page error:', err.message);
+    res.status(500).send('Error generating page');
+  }
+});
+
+// GET /og/blog — Server-rendered blog index for crawlers. Nginx routes the bare
+// "/blog" SPA route for crawler user-agents here; individual posts are handled
+// by /og/blog/:slug below.
+router.get('/blog', ogLimiter, async (req, res) => {
+  try {
+    const posts = await BlogPost.find({ status: 'published' })
+      .sort({ publishedAt: -1 })
+      .select('title slug excerpt metaDescription publishedAt')
+      .limit(50)
+      .lean();
+
+    const pageUrl = `${SITE_URL}/blog`;
+    const title = 'Cellarion Blog';
+    const metaDescription = 'Wine cellar tips, storage and serving guides, drink-window advice, and product updates from Cellarion.';
+
+    const jsonLd = {
+      '@context': 'https://schema.org',
+      '@graph': [
+        {
+          '@type': 'CollectionPage',
+          name: title,
+          description: metaDescription,
+          url: pageUrl,
+          isPartOf: { '@type': 'WebSite', '@id': `${SITE_URL}/#website` },
+          mainEntity: {
+            '@type': 'ItemList',
+            numberOfItems: posts.length,
+            itemListElement: posts.map((p, i) => ({
+              '@type': 'ListItem',
+              position: i + 1,
+              url: `${SITE_URL}/blog/${p.slug}`,
+              name: p.title,
+            })),
+          },
+        },
+        {
+          '@type': 'BreadcrumbList',
+          itemListElement: [
+            { '@type': 'ListItem', position: 1, name: 'Cellarion', item: SITE_URL },
+            { '@type': 'ListItem', position: 2, name: title, item: pageUrl },
+          ],
+        },
+      ],
+    };
+
+    const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>${esc(title)}</title>
+  <meta name="description" content="${esc(metaDescription)}" />
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="${esc(title)}" />
+  <meta property="og:description" content="${esc(metaDescription)}" />
+  <meta property="og:image" content="${esc(SITE_URL)}/cellarion-logo.jpg" />
+  <meta property="og:url" content="${esc(pageUrl)}" />
+  <meta property="og:site_name" content="Cellarion" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="${esc(title)}" />
+  <meta name="twitter:description" content="${esc(metaDescription)}" />
+  <link rel="canonical" href="${esc(pageUrl)}" />
+  <script type="application/ld+json">${serializeJsonLd(jsonLd)}</script>
+</head>
+<body>
+  <nav><a href="${esc(SITE_URL)}">Cellarion</a> / ${esc(title)}</nav>
+  <header>
+    <h1>${esc(title)}</h1>
+    <p>${esc(metaDescription)}</p>
+  </header>
+  <main>
+    ${posts.length === 0 ? '<p>No posts yet.</p>' : `<ul>${posts.map(p => {
+      const desc = p.metaDescription || p.excerpt || '';
+      const date = p.publishedAt ? new Date(p.publishedAt).toISOString().split('T')[0] : '';
+      return `<li><a href="${esc(`${SITE_URL}/blog/${p.slug}`)}"><strong>${esc(p.title)}</strong></a>${date ? ` — <time datetime="${esc(date)}">${esc(date)}</time>` : ''}${desc ? `<br/><small>${esc(desc)}</small>` : ''}</li>`;
+    }).join('')}</ul>`}
+  </main>
+  <footer>
+    <p><a href="${esc(SITE_URL)}">Cellarion</a> — your wine cellar, beautifully organised.</p>
+  </footer>
+</body>
+</html>`;
+
+    res.set('Content-Type', 'text/html; charset=utf-8');
+    res.set('Cache-Control', 'public, max-age=3600');
+    res.send(html);
+  } catch (err) {
+    console.error('[og] blog index error:', err.message);
     res.status(500).send('Error generating page');
   }
 });
