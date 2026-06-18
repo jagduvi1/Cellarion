@@ -118,7 +118,7 @@ function Layout({ children }) {
                   {t('nav.myRequests')}
                 </Link>
                 <Link
-                  to="/community"
+                  to="/community/discussions"
                   className={`nav-link ${isActive('/community') ? 'active' : ''}`}
                   data-guide="nav-community"
                 >
@@ -246,7 +246,7 @@ function Layout({ children }) {
         {user && mobileMenuOpen && (
           <div className="mobile-menu">
             <div className="mobile-menu-section">
-              <Link to="/community" className={`mobile-menu-link ${isActive('/community') ? 'active' : ''}`} onClick={closeMenu}>Community</Link>
+              <Link to="/community/discussions" className={`mobile-menu-link ${isActive('/community') ? 'active' : ''}`} onClick={closeMenu}>Community</Link>
               <Link to="/wishlist" className={`mobile-menu-link ${isActive('/wishlist') ? 'active' : ''}`} onClick={closeMenu}>Wishlist</Link>
               <Link to="/recommendations" className={`mobile-menu-link ${isActive('/recommendations') ? 'active' : ''}`} onClick={closeMenu}>Recommendations</Link>
               <Link to="/journal" className={`mobile-menu-link ${isActive('/journal') ? 'active' : ''}`} onClick={closeMenu}>Journal</Link>
@@ -321,7 +321,7 @@ function Layout({ children }) {
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
             <span>Cellars</span>
           </Link>
-          <Link to="/community" className={`bottom-nav-item ${isActive('/community') ? 'active' : ''}`} onClick={closeMenu}>
+          <Link to="/community/discussions" className={`bottom-nav-item ${isActive('/community') ? 'active' : ''}`} onClick={closeMenu}>
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
             <span>Community</span>
           </Link>
