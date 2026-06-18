@@ -361,7 +361,7 @@ router.get('/wines/:idOrSlug', ogLimiter, async (req, res) => {
     const ratingPhrase = hasRating
       ? ` Cellarion users rate it ${fromNormalized(wine.communityRating.averageNormalized, '5').toFixed(1)} out of 5 across ${wine.communityRating.reviewCount} ${wine.communityRating.reviewCount === 1 ? 'review' : 'reviews'}.`
       : '';
-    const proseParagraph = `${wine.name} is a ${typeWord} produced by ${wine.producer}${placeWords ? ` in ${placeWords}` : ''}.${classificationPhrase} ${grapesPhrase}${drinkPhrase}${ratingPhrase} Track this wine and manage your cellar with Cellarion — open-source, self-hostable, free.`.replace(/\s+/g, ' ').trim();
+    const proseParagraph = `${wine.name} is a ${typeWord} produced by ${wine.producer}${placeWords ? ` in ${placeWords}` : ''}.${classificationPhrase} ${grapesPhrase}${drinkPhrase}${ratingPhrase} Track this wine and manage your cellar with Cellarion — the free, open-source wine app at cellarion.app.`.replace(/\s+/g, ' ').trim();
 
     // Per-wine FAQ — only emit a question when the underlying data exists. AI engines
     // love quoting Q&A pairs verbatim; this is what shows up in chat answers.
