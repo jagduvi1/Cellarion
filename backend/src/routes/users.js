@@ -422,29 +422,40 @@ router.get('/me/full-export', requireAuth, async (req, res) => {
   const scope = parseExportScope(req, res);
   if (scope === null) return;
   try {
-    const user = await User.findById(req.user.id);
-    if (!user) return res.status(404).json({ error: 'User not found' });
-
-    // Weekly limit (per account, survives restarts — unlike the in-memory IP limiter).
-    if (user.lastImageExportAt) {
-      const elapsed = Date.now() - new Date(user.lastImageExportAt).getTime();
-      if (elapsed < IMAGE_EXPORT_COOLDOWN_MS) {
-        return res.status(429).json({
-          error: 'Full exports with images are limited to once per week.',
-          nextAvailableAt: new Date(new Date(user.lastImageExportAt).getTime() + IMAGE_EXPORT_COOLDOWN_MS),
-        });
-      }
+    // Atomically CLAIM the weekly allowance before the expensive build, so two
+    // concurrent requests (double-click / refresh) can't both pass a check and
+    // kick off two large archive builds. The conditional matches only when no
+    // image export has run inside the window; a null result means the slot is
+    // already taken (or the user is gone). This replaces a non-atomic
+    // check-then-set that was bypassable under concurrency.
+    const now = new Date();
+    const cutoff = new Date(now.getTime() - IMAGE_EXPORT_COOLDOWN_MS);
+    const claimed = await User.findOneAndUpdate(
+      { _id: req.user.id, $or: [{ lastImageExportAt: null }, { lastImageExportAt: { $lte: cutoff } }] },
+      { $set: { lastImageExportAt: now } },
+      { new: false } // pre-update doc, so we can read (and refund) the prior timestamp
+    );
+    if (!claimed) {
+      const u = await User.findById(req.user.id).select('lastImageExportAt');
+      if (!u) return res.status(404).json({ error: 'User not found' });
+      return res.status(429).json({
+        error: 'Full exports with images are limited to once per week.',
+        nextAvailableAt: new Date(new Date(u.lastImageExportAt).getTime() + IMAGE_EXPORT_COOLDOWN_MS),
+      });
     }
 
     const result = await buildCellarDataExport(req.user.id, scope);
-    if (!result) return res.status(404).json({ error: 'No cellar found for that selection' });
 
-    // Consume the weekly allowance up front — before the expensive stream — so a
-    // double-click or refresh can't kick off two large archive builds. Only count
-    // it when there are actually image files to bundle (a data-only archive is cheap).
-    if (result.imageCount > 0) {
-      user.lastImageExportAt = new Date();
-      await user.save();
+    // Refund the allowance when there was nothing chargeable — no cellar, or a
+    // data-only archive with no image files (preserving the prior "only count
+    // exports that bundle images" behaviour). Guarded on our own timestamp so a
+    // later legitimate claim is never clobbered.
+    if (!result || result.imageCount === 0) {
+      await User.updateOne(
+        { _id: req.user.id, lastImageExportAt: now },
+        { $set: { lastImageExportAt: claimed.lastImageExportAt } }
+      );
+      if (!result) return res.status(404).json({ error: 'No cellar found for that selection' });
     }
 
     logAudit(req, 'user.full_export', { type: 'user', id: req.user.id }, { scope, images: result.imageCount });

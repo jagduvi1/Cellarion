@@ -182,7 +182,7 @@ router.post('/register', authLimiter, async (req, res) => {
       password,
       roles: ['user'],
       gdprConsent: {
-        privacyPolicy: { accepted: true, acceptedAt: new Date(), version: '2026-03' },
+        privacyPolicy: { accepted: true, acceptedAt: new Date(), version: '2026-06' },
         dataProcessing: { accepted: true, acceptedAt: new Date() }
       }
     });

@@ -52,6 +52,11 @@ const { CONSUMED_STATUSES } = require('../config/constants');
 
 const EXPORT_SCHEMA = 'cellarion-export@1';
 const MAX_IMAGES_PER_BOTTLE = 20;
+// Import-side DoS bounds: a crafted data.json must not be able to drive unbounded
+// sequential DB work (one cellar + per-bottle wine resolution / saves each).
+// Generous vs any real migration; the export side caps at EXPORT_MAX = 50000.
+const MAX_IMPORT_CELLARS = 100;
+const MAX_IMPORT_BOTTLES = 50000;
 
 // ── Pure helpers (unit-tested without a DB) ──────────────────────────────────
 
@@ -59,6 +64,17 @@ function badRequest(message) {
   const e = new Error(message);
   e.status = 400;
   return e;
+}
+
+/** Reject pathologically large imports up front, before any DB work. */
+function enforceImportLimits(cellars) {
+  if (cellars.length > MAX_IMPORT_CELLARS) {
+    throw badRequest(`Import has too many cellars (${cellars.length}; max ${MAX_IMPORT_CELLARS})`);
+  }
+  const totalBottles = cellars.reduce((n, c) => n + (Array.isArray(c.bottles) ? c.bottles.length : 0), 0);
+  if (totalBottles > MAX_IMPORT_BOTTLES) {
+    throw badRequest(`Import has too many bottles (${totalBottles}; max ${MAX_IMPORT_BOTTLES})`);
+  }
 }
 
 /**
@@ -91,12 +107,15 @@ function parseCellarExport(input) {
       bottles: Array.isArray(c.bottles) ? c.bottles : [],
     }));
     if (cellars.length === 0) throw badRequest('Export contains no cellars');
+    enforceImportLimits(cellars);
     return { cellars };
   }
 
   const bottles = Array.isArray(doc) ? doc : (Array.isArray(doc.bottles) ? doc.bottles : null);
   if (bottles) {
-    return { cellars: [{ cellarName: 'Imported cellar', description: '', racks: [], layout: null, bottles }] };
+    const cellars = [{ cellarName: 'Imported cellar', description: '', racks: [], layout: null, bottles }];
+    enforceImportLimits(cellars);
+    return { cellars };
   }
 
   throw badRequest('Unrecognised export format');
@@ -759,4 +778,6 @@ module.exports = {
   clearCellarContents,
   EXPORT_SCHEMA,
   MAX_IMAGES_PER_BOTTLE,
+  MAX_IMPORT_CELLARS,
+  MAX_IMPORT_BOTTLES,
 };

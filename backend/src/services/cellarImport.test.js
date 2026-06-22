@@ -25,6 +25,8 @@ const {
   exportBottleToItem,
   attachMaturity,
   EXPORT_SCHEMA,
+  MAX_IMPORT_CELLARS,
+  MAX_IMPORT_BOTTLES,
 } = require('./cellarImport');
 const WineVintageProfile = require('../models/WineVintageProfile');
 
@@ -97,6 +99,23 @@ describe('parseCellarExport', () => {
 
   test('throws 400-tagged errors', () => {
     try { parseCellarExport('nope'); } catch (e) { expect(e.status).toBe(400); }
+  });
+
+  test('rejects an import with too many cellars (DoS bound)', () => {
+    const cellars = Array.from({ length: MAX_IMPORT_CELLARS + 1 }, (_, i) => ({ cellarName: `C${i}`, bottles: [] }));
+    expect(() => parseCellarExport({ cellars })).toThrow(/too many cellars/i);
+  });
+
+  test('rejects an import with too many bottles in total (DoS bound)', () => {
+    const bottles = Array.from({ length: MAX_IMPORT_BOTTLES + 1 }, () => ({ wineName: 'W' }));
+    expect(() => parseCellarExport({ cellars: [{ cellarName: 'C', bottles }] })).toThrow(/too many bottles/i);
+    // Same bound applies to the legacy flat {bottles:[]} shape.
+    expect(() => parseCellarExport({ bottles })).toThrow(/too many bottles/i);
+  });
+
+  test('allows an import right at the bottle limit', () => {
+    const bottles = Array.from({ length: 3 }, () => ({ wineName: 'W' }));
+    expect(parseCellarExport({ cellars: [{ cellarName: 'C', bottles }] }).cellars[0].bottles).toHaveLength(3);
   });
 });
 

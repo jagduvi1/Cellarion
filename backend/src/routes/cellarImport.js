@@ -29,6 +29,9 @@ router.use(requireAuth);
 // buffered). A data-only JSON is tiny; the cap mainly guards the image ZIP.
 const MAX_UPLOAD_BYTES = 200 * 1024 * 1024; // 200 MB
 const MAX_TARGET_NAME = 100;
+// Bound the number of buffered ZIP entries (alongside the total-byte cap) so a
+// crafted archive with a huge count of tiny files can't blow up the entries Map.
+const MAX_ZIP_ENTRIES = 20000;
 
 const uploadImport = multer({
   storage: multer.memoryStorage(),
@@ -67,6 +70,7 @@ function readExportZip(buffer) {
       if (err) return reject(Object.assign(new Error('Could not read ZIP archive'), { status: 400 }));
       const entries = new Map();
       let total = 0;
+      let kept = 0;
       let settled = false;
       const fail = (e) => { if (!settled) { settled = true; reject(e); } };
 
@@ -76,6 +80,9 @@ function readExportZip(buffer) {
         const name = entry.fileName;
         if (/\/$/.test(name)) return zip.readEntry(); // directory
         if (name !== 'data.json' && !name.startsWith('images/')) return zip.readEntry();
+        if (++kept > MAX_ZIP_ENTRIES) {
+          return fail(Object.assign(new Error('Archive has too many files'), { status: 400 }));
+        }
         zip.openReadStream(entry, (e, stream) => {
           if (e) return fail(Object.assign(new Error('Corrupt ZIP entry'), { status: 400 }));
           const chunks = [];
