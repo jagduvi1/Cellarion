@@ -115,7 +115,12 @@ router.get('/home', ogLimiter, (req, res) => {
           name: 'Cellarion',
           url: SITE_URL,
           logo,
-          sameAs: ['https://github.com/jagduvi1/Cellarion'],
+          // Off-site profiles that corroborate the entity for search / LLMs.
+          // Add new owned profiles here as they go live (directories, socials).
+          sameAs: [
+            'https://github.com/jagduvi1/Cellarion',
+            'https://play.google.com/store/apps/details?id=app.cellarion.twa',
+          ],
         },
         {
           '@type': 'SoftwareApplication',
@@ -123,8 +128,9 @@ router.get('/home', ogLimiter, (req, res) => {
           name: 'Cellarion',
           description: LANDING.metaDescription,
           applicationCategory: 'LifestyleApplication',
-          operatingSystem: 'Web',
+          operatingSystem: 'Web, Android',
           url: SITE_URL,
+          downloadUrl: 'https://play.google.com/store/apps/details?id=app.cellarion.twa',
           // High-signal entity field for LLMs/Google — reuses the visible feature
           // names so the structured data never diverges from the page copy.
           featureList: LANDING.features.map(([title]) => title),

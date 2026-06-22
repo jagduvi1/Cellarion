@@ -15,6 +15,7 @@
 - [Grapes](https://cellarion.app/grapes/)
 
 ## Key facts
+- Platforms: a web app that runs in any browser, plus an Android app on Google Play (https://play.google.com/store/apps/details?id=app.cellarion.twa). iPhone users can install it to the home screen as a web app.
 - Free to use: all core features are free at cellarion.app — no credit card, no ads, no selling of data.
 - No lock-in: export your entire collection to JSON or CSV at any time.
 - Open source: https://github.com/jagduvi1/Cellarion (AGPL-3.0).

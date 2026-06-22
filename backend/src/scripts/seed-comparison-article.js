@@ -60,7 +60,7 @@ const CONTENT = `
   </thead>
   <tbody>
     <tr><td>Price</td><td>Free (core features)</td><td>Free (optional paid tiers)</td><td>Free (earns via marketplace)</td><td>Free tier + paid premium</td></tr>
-    <tr><td>Platform</td><td>Web app (installable PWA)</td><td>Web, iOS, Android</td><td>iOS, Android (web)</td><td>iOS, Android, web</td></tr>
+    <tr><td>Platform</td><td>Web + Android (Google Play); installable PWA</td><td>Web, iOS, Android</td><td>iOS, Android (web)</td><td>iOS, Android, web</td></tr>
     <tr><td>Best for</td><td>Privately tracking &amp; organising your own cellar</td><td>Serious collectors &amp; community tasting notes</td><td>Discovering &amp; buying wine</td><td>High-end collectors wanting a premium app</td></tr>
     <tr><td>Bottle &amp; rack inventory</td><td>Yes — cellars + customisable racks</td><td>Yes — deep inventory</td><td>Basic</td><td>Yes</td></tr>
     <tr><td>3D cellar / rack view</td><td>Yes (free)</td><td>No</td><td>No</td><td>Yes (premium)</td></tr>
@@ -78,7 +78,7 @@ const CONTENT = `
 
 <h2>Cellarion — best free, privacy-first cellar manager</h2>
 <p><a href="/">Cellarion</a> is a modern wine cellar app focused on tracking and organising the collection you own. You log every bottle (vintage, producer, region, price, rating, tasting notes), arrange them across cellars and customisable racks, and see your cellar as an interactive grid or a to-scale <strong>3D room view</strong>. It sends <a href="/help">drink-window alerts</a> when a wine nears its peak, scans labels with AI, and includes a grounded AI cellar chat that recommends bottles you actually have in stock.</p>
-<p>Its stand-out is openness: it is <strong>free</strong>, <strong>open-source (AGPL-3.0)</strong>, GDPR-compliant and EU-hosted, and it lets you export everything — CSV plus a full JSON/ZIP archive with your images — in one click, so there is no lock-in. You can even self-host it. The trade-off: it is a web app (an installable PWA) rather than a native iOS/Android app, and it is a younger product than CellarTracker, so its community of tasting notes is smaller.</p>
+<p>Its stand-out is openness: it is <strong>free</strong>, <strong>open-source (AGPL-3.0)</strong>, GDPR-compliant and EU-hosted, and it lets you export everything — CSV plus a full JSON/ZIP archive with your images — in one click, so there is no lock-in. You can even self-host it. Cellarion runs in any browser and as an <a href="https://play.google.com/store/apps/details?id=app.cellarion.twa">Android app on Google Play</a>; iPhone users can install it to the home screen as a web app (PWA). The main trade-off is that it is a younger product than CellarTracker, so its community of tasting notes is smaller, and there is no separate native iOS app yet.</p>
 <p><strong>Choose Cellarion if</strong> you want a clean, free, private way to track and visualise your own cellar — and the ability to take your data with you. <a href="/blog">More guides on the Cellarion blog →</a></p>
 
 <h2>CellarTracker — best for serious collectors and tasting notes</h2>
