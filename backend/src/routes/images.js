@@ -232,7 +232,11 @@ router.post('/upload', requireAuth, imageUploadLimiter, upload.single('image'), 
     // failure must never block the upload.
     let contentHash = null;
     try {
-      contentHash = hashImageBytes(fs.readFileSync(req.file.path));
+      // Re-derive the path from the fixed uploads dir + basename so it's provably
+      // confined there (multer already names the file with a random UUID; this also
+      // satisfies static path-injection analysis).
+      const storedPath = path.join(ORIGINALS_DIR, path.basename(req.file.path));
+      contentHash = hashImageBytes(fs.readFileSync(storedPath));
     } catch (err) {
       console.warn('Image content-hash failed (non-fatal):', err.message);
     }
