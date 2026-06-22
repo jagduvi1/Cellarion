@@ -1,5 +1,7 @@
 import { JSON_HEADERS } from './apiConstants';
 
+export const listCellars = (apiFetch) => apiFetch('/api/cellars');
+
 export const getCellar = (apiFetch, id, params = '') =>
   apiFetch(`/api/cellars/${id}${params ? `?${params}` : ''}`);
 

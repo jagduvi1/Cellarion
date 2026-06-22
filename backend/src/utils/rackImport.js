@@ -48,10 +48,23 @@ function computeRackPosition({
   rackRows, rackCols,
   rackType, bottlesPerCell, backCols,
   layer, slotInLayer,
+  internalSlot,
   anchor = DEFAULT_ANCHOR
 }) {
   if (!VALID_ANCHORS.includes(anchor)) {
     return { error: `Invalid anchor: ${anchor}` };
+  }
+
+  // A Cellarion-native export already carries the resolved internal slot index
+  // (top-left, row-major) in `position`, for EVERY rack type. Treat it as
+  // identity and never re-interpret it as a grid slot or a shelf number — that
+  // is what makes shelf / x-rack / hex / … placements round-trip on re-import.
+  // (Third-party CSVs never set this flag, so their shelf-number/grid semantics
+  // below are untouched.)
+  if (internalSlot && position !== undefined && position !== null && position !== '') {
+    const p = parseInt(position, 10);
+    if (isNaN(p) || p < 1) return { error: 'Invalid position' };
+    return { position: p };
   }
 
   const cols = parseInt(rackCols, 10);
@@ -284,6 +297,7 @@ function placeBottlesInRack(rack, items, anchor) {
       col: it.item.col,
       layer: it.item.layer,
       slotInLayer: it.item.slotInLayer,
+      internalSlot: it.item.internalSlot,
       rackRows: rack.rows,
       rackCols: rack.cols,
       rackType: rack.type,

@@ -1,4 +1,6 @@
 const express = require('express');
+const fs = require('fs');
+const archiver = require('archiver');
 const mongoose = require('mongoose');
 const User = require('../models/User');
 const Cellar = require('../models/Cellar');
@@ -33,6 +35,8 @@ const PriceTrackingRequest = require('../models/PriceTrackingRequest');
 const PriceTrackingSkip = require('../models/PriceTrackingSkip');
 const { requireAuth, requireRole } = require('../middleware/auth');
 const { buildUserExport } = require('../services/userDataRegistry');
+const { buildCellarDataExport, EXPORT_README } = require('../services/cellarExport');
+const { safeUploadPath } = require('../services/imageProcessor');
 const { logAudit } = require('../services/audit');
 const { stripHtml, escapeRegex } = require('../utils/sanitize');
 const { isValidId, coerceStringQuery } = require('../utils/validation');
@@ -368,6 +372,174 @@ router.get('/me/export', requireAuth, async (req, res) => {
   } catch (error) {
     console.error('Data export error:', error);
     res.status(500).json({ error: 'Failed to export data' });
+  }
+});
+
+// ── Cellar portability export ────────────────────────────────────────────────
+// "Take your cellars with you." A user can pull one owned cellar (or all of
+// them) out of Cellarion as an import-ready document, optionally bundled with
+// the image files they uploaded. Anti-lock-in, made concrete.
+//
+// Two endpoints share one builder:
+//   /me/data-export   → JSON only, no rate limit (cheap)
+//   /me/full-export   → ZIP (data.json + your own images + README), max 1×/week
+const IMAGE_EXPORT_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000;
+
+// Parse the ?cellar= scope: 'all' (default) or a cellar ObjectId. Responds 400
+// and returns null on a malformed id so the caller can bail.
+function parseExportScope(req, res) {
+  const raw = coerceStringQuery(req.query.cellar).trim();
+  const scope = raw || 'all';
+  if (scope !== 'all' && !isValidId(scope)) {
+    res.status(400).json({ error: 'Invalid cellar id' });
+    return null;
+  }
+  return scope;
+}
+
+// GET /api/users/me/data-export?cellar=<id|all> — cellar data as JSON (no files)
+router.get('/me/data-export', requireAuth, async (req, res) => {
+  const scope = parseExportScope(req, res);
+  if (scope === null) return;
+  try {
+    const result = await buildCellarDataExport(req.user.id, scope);
+    if (!result) return res.status(404).json({ error: 'No cellar found for that selection' });
+
+    logAudit(req, 'user.cellar_data_export', { type: 'user', id: req.user.id }, { scope, bottles: result.payload.bottleCount });
+
+    res.setHeader('Content-Disposition', 'attachment; filename="cellarion-data-export.json"');
+    res.setHeader('Content-Type', 'application/json');
+    res.json(result.payload);
+  } catch (error) {
+    console.error('Cellar data export error:', error);
+    res.status(500).json({ error: 'Failed to export data' });
+  }
+});
+
+// GET /api/users/me/full-export?cellar=<id|all> — ZIP of data + the user's own
+// uploaded image files. Rate-limited to once per week (the archive can be large).
+router.get('/me/full-export', requireAuth, async (req, res) => {
+  const scope = parseExportScope(req, res);
+  if (scope === null) return;
+  try {
+    const user = await User.findById(req.user.id);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    // Weekly limit (per account, survives restarts — unlike the in-memory IP limiter).
+    if (user.lastImageExportAt) {
+      const elapsed = Date.now() - new Date(user.lastImageExportAt).getTime();
+      if (elapsed < IMAGE_EXPORT_COOLDOWN_MS) {
+        return res.status(429).json({
+          error: 'Full exports with images are limited to once per week.',
+          nextAvailableAt: new Date(new Date(user.lastImageExportAt).getTime() + IMAGE_EXPORT_COOLDOWN_MS),
+        });
+      }
+    }
+
+    const result = await buildCellarDataExport(req.user.id, scope);
+    if (!result) return res.status(404).json({ error: 'No cellar found for that selection' });
+
+    // Consume the weekly allowance up front — before the expensive stream — so a
+    // double-click or refresh can't kick off two large archive builds. Only count
+    // it when there are actually image files to bundle (a data-only archive is cheap).
+    if (result.imageCount > 0) {
+      user.lastImageExportAt = new Date();
+      await user.save();
+    }
+
+    logAudit(req, 'user.full_export', { type: 'user', id: req.user.id }, { scope, images: result.imageCount });
+
+    res.setHeader('Content-Disposition', 'attachment; filename="cellarion-export.zip"');
+    res.setHeader('Content-Type', 'application/zip');
+
+    const archive = archiver('zip', { zlib: { level: 6 } });
+    archive.on('warning', (err) => {
+      if (err.code !== 'ENOENT') console.warn('[full-export] archive warning:', err.message);
+    });
+    archive.on('error', (err) => {
+      console.error('[full-export] archive error:', err.message);
+      // Headers are already sent once piping starts, so we can only tear down.
+      if (!res.headersSent) res.status(500).json({ error: 'Failed to build archive' });
+      else res.destroy(err);
+    });
+    archive.pipe(res);
+
+    archive.append(JSON.stringify(result.payload, null, 2), { name: 'data.json' });
+    archive.append(EXPORT_README, { name: 'README.md' });
+
+    // Append each on-disk file. safeUploadPath blocks path traversal; a missing
+    // file is skipped (the DB row can outlive a file that failed to write).
+    for (const file of result.imageFiles) {
+      let diskPath;
+      try {
+        diskPath = safeUploadPath(file.relPath);
+      } catch {
+        continue;
+      }
+      if (fs.existsSync(diskPath)) archive.file(diskPath, { name: file.archivePath });
+    }
+
+    await archive.finalize();
+  } catch (error) {
+    console.error('Full export error:', error);
+    if (!res.headersSent) res.status(500).json({ error: 'Failed to export' });
+  }
+});
+
+// GET /api/users/me/export-summary?cellar=<id|all> — a preview of exactly what an
+// export of this scope contains (counts + image byte size) plus the weekly image-
+// archive lock state. Powers the "see your total export" panel before download.
+// Reuses buildCellarDataExport so the numbers always match the real download.
+router.get('/me/export-summary', requireAuth, async (req, res) => {
+  const scope = parseExportScope(req, res);
+  if (scope === null) return;
+  try {
+    const user = await User.findById(req.user.id).select('lastImageExportAt');
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    const result = await buildCellarDataExport(req.user.id, scope);
+    if (!result) return res.status(404).json({ error: 'No cellar found for that selection' });
+    const { payload } = result;
+
+    // Rack count + how many cellars carry a 3D room layout, from the payload.
+    let rackCount = 0;
+    let layoutCount = 0;
+    for (const c of payload.cellars) {
+      rackCount += (c.racks || []).length;
+      if (c.layout) layoutCount++;
+    }
+
+    // Sum on-disk bytes of the user's own image files (best-effort — a DB row can
+    // outlive a missing file; safeUploadPath blocks traversal). Bounded by the
+    // export's image cap.
+    let imageBytes = 0;
+    for (const file of result.imageFiles) {
+      try {
+        imageBytes += fs.statSync(safeUploadPath(file.relPath)).size;
+      } catch { /* missing or blocked file — skip */ }
+    }
+
+    const nextAvailableAt = user.lastImageExportAt
+      ? new Date(new Date(user.lastImageExportAt).getTime() + IMAGE_EXPORT_COOLDOWN_MS)
+      : null;
+    const imageExportLocked = !!nextAvailableAt && nextAvailableAt.getTime() > Date.now();
+
+    res.json({
+      scope: payload.scope,
+      cellarCount: payload.cellarCount,
+      bottleCount: payload.bottleCount,
+      rackCount,
+      layoutCount,
+      reviewCount: payload.reviewCount,
+      imageCount: payload.imageCount,
+      maturityCount: payload.maturityCount,
+      imageBytes,
+      imageExportLocked,
+      nextAvailableAt,
+    });
+  } catch (error) {
+    console.error('Export summary error:', error);
+    res.status(500).json({ error: 'Failed to summarise export' });
   }
 });
 

@@ -22,6 +22,7 @@ const mongoose = require('mongoose');
 const { parsePagination } = require('../utils/pagination');
 const searchService = require('../services/search');
 const { isValidId } = require('../utils/validation');
+const { mapBottlesForExport } = require('../services/cellarExport');
 
 const router = express.Router();
 
@@ -1243,77 +1244,11 @@ router.get('/:id/export', async (req, res) => {
       Rack.find({ cellar: req.params.id, deletedAt: null }).lean()
     ]);
 
-    // Build map: bottleId → { rackName, rackPosition, rackRow, rackCol }
-    const bottleRackMap = new Map();
-    for (const rack of racks) {
-      for (const slot of rack.slots || []) {
-        const row = Math.ceil(slot.position / rack.cols);
-        const col = ((slot.position - 1) % rack.cols) + 1;
-        bottleRackMap.set(slot.bottle.toString(), {
-          rackName: rack.name,
-          rackPosition: slot.position,
-          rackRow: row,
-          rackCol: col
-        });
-      }
-    }
-
-    const items = bottles.map(b => {
-      const wine = b.wineDefinition || {};
-      const item = {
-        wineName: wine.name || '',
-        producer: wine.producer || '',
-        vintage: b.vintage || 'NV',
-        country: wine.country?.name || '',
-        region: wine.region?.name || '',
-        appellation: wine.appellation || '',
-        type: wine.type || '',
-        bottleSize: b.bottleSize || '750ml',
-        dateAdded: b.createdAt ? b.createdAt.toISOString().slice(0, 10) : undefined,
-      };
-
-      // User-entered pricing
-      if (b.price != null) {
-        item.price = b.price;
-        item.currency = b.currency || 'USD';
-      }
-
-      // User-entered purchase info
-      if (b.purchaseDate) item.purchaseDate = b.purchaseDate.toISOString().slice(0, 10);
-      if (b.purchaseLocation) item.purchaseLocation = b.purchaseLocation;
-      if (b.purchaseUrl) item.purchaseUrl = b.purchaseUrl;
-      if (b.location) item.location = b.location;
-      if (b.notes) item.notes = b.notes;
-
-      // User-entered rating
-      if (b.rating != null) {
-        item.rating = b.rating;
-        item.ratingScale = b.ratingScale || '5';
-      }
-
-      // Rack placement
-      const rackInfo = bottleRackMap.get(b._id.toString());
-      if (rackInfo) {
-        item.rackName = rackInfo.rackName;
-        item.rackPosition = rackInfo.rackPosition;
-        item.rackRow = rackInfo.rackRow;
-        item.rackCol = rackInfo.rackCol;
-      }
-
-      // Consumed / history bottles
-      if (b.status && b.status !== 'active') {
-        item.addToHistory = true;
-        item.consumedReason = b.consumedReason || b.status;
-        if (b.consumedAt) item.consumedAt = b.consumedAt.toISOString().slice(0, 10);
-        if (b.consumedNote) item.consumedNote = b.consumedNote;
-        if (b.consumedRating != null) {
-          item.consumedRating = b.consumedRating;
-          item.consumedRatingScale = b.consumedRatingScale || '5';
-        }
-      }
-
-      return item;
-    });
+    // Import-aligned bottle items (shared with the account-wide cellar export
+    // in services/cellarExport.js). No image references here — this endpoint
+    // deliberately omits images; the full export under /api/users/me bundles
+    // the user's own image files.
+    const items = mapBottlesForExport(bottles, racks);
 
     logAudit(req, 'cellar.export', { type: 'cellar', id: cellar._id }, { bottleCount: items.length });
 

@@ -101,16 +101,25 @@ function Cellars() {
       <div className="cellars-header">
         <div className="cellars-header-top">
           <h1>{t('cellars.title')}</h1>
-          <button
-            onClick={() => {
-          
-              setShowCreateForm(!showCreateForm);
-            }}
-            className="btn btn-primary btn-small cellars-desktop-create"
-            data-guide="create-cellar"
-          >
-            {showCreateForm ? t('common.cancel') : `+ ${t('cellars.newCellar')}`}
-          </button>
+          <div style={{ display: 'flex', gap: '0.5rem' }}>
+            <Link
+              to="/import-cellar"
+              className="btn btn-secondary btn-small cellars-desktop-create"
+              title="Import a cellar export (.json or .zip)"
+            >
+              {t('cellars.import', 'Import')}
+            </Link>
+            <button
+              onClick={() => {
+
+                setShowCreateForm(!showCreateForm);
+              }}
+              className="btn btn-primary btn-small cellars-desktop-create"
+              data-guide="create-cellar"
+            >
+              {showCreateForm ? t('common.cancel') : `+ ${t('cellars.newCellar')}`}
+            </button>
+          </div>
         </div>
         {cellars.length > 0 && (
           <p className="cellars-subtitle">

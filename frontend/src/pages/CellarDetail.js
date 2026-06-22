@@ -2,12 +2,11 @@ import { useState, useEffect, useRef, lazy, Suspense, Fragment } from 'react';
 import { useParams, Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
-import { getCellar, getCellarStatistics, exportCellar } from '../api/cellars';
+import { getCellar, getCellarStatistics } from '../api/cellars';
 import { getRacks } from '../api/racks';
 import { getCellarLayout } from '../api/cellarLayout';
 import BottleCard from '../components/BottleCard';
 import BottleFilterModal from '../components/BottleFilterModal';
-import downloadBlob from '../utils/downloadBlob';
 import './CellarDetail.css';
 
 // Lazy-load modals — they are heavy and only needed on user interaction
@@ -267,49 +266,13 @@ function CellarDetail() {
                         </Link>
                       )}
                       {cellar.userRole === 'owner' && (
-                        <button
+                        <Link
+                          to={`/export-cellar?cellar=${id}`}
                           className="more-menu-item"
-                          onClick={async () => {
-                            setMoreOpen(false);
-                            try {
-                              const res = await exportCellar(apiFetch, id);
-                              const data = await res.json();
-                              if (!res.ok) { alert(data.error || 'Export failed'); return; }
-                              downloadBlob(JSON.stringify(data.bottles, null, 2), `${data.cellarName || 'cellar'}-export.json`, 'application/json');
-                            } catch { alert('Export failed'); }
-                          }}
+                          onClick={() => setMoreOpen(false)}
                         >
-                          <span aria-hidden="true">📤</span> Export (JSON)
-                        </button>
-                      )}
-                      {cellar.userRole === 'owner' && (
-                        <button
-                          className="more-menu-item"
-                          onClick={async () => {
-                            setMoreOpen(false);
-                            try {
-                              const res = await exportCellar(apiFetch, id);
-                              const data = await res.json();
-                              if (!res.ok) { alert(data.error || 'Export failed'); return; }
-                              const bottles = data.bottles;
-                              if (bottles.length === 0) { alert('No bottles to export'); return; }
-                              const cols = ['wineName','producer','vintage','country','region','appellation','type',
-                                'price','currency','bottleSize','purchaseDate','purchaseLocation','location',
-                                'notes','rating','ratingScale','drinkFrom','drinkBefore',
-                                'rackName','rackPosition','rackRow','rackCol','dateAdded',
-                                'addToHistory','consumedReason','consumedAt','consumedNote','consumedRating','consumedRatingScale'];
-                              const escape = v => {
-                                if (v == null || v === '') return '';
-                                const s = String(v);
-                                return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s.replace(/"/g, '""')}"` : s;
-                              };
-                              const csv = [cols.join(','), ...bottles.map(b => cols.map(c => escape(b[c])).join(','))].join('\n');
-                              downloadBlob(csv, `${data.cellarName || 'cellar'}-export.csv`, 'text/csv');
-                            } catch { alert('Export failed'); }
-                          }}
-                        >
-                          <span aria-hidden="true">📄</span> Export (CSV)
-                        </button>
+                          <span aria-hidden="true">📤</span> Export
+                        </Link>
                       )}
                       {cellar.userRole === 'owner' && (
                         <Link

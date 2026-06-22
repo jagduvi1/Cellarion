@@ -248,6 +248,14 @@ const userSchema = new mongoose.Schema({
   deletionScheduledFor: {
     type: Date,
     default: null
+  },
+  // Last time the user pulled a full export with image files. Used to enforce a
+  // once-per-week limit on that endpoint (the archive can be hundreds of MB).
+  // Stored on the account so the limit survives restarts and is per-user, not
+  // per-IP like the global rate limiters.
+  lastImageExportAt: {
+    type: Date,
+    default: null
   }
 });
 
