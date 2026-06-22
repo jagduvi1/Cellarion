@@ -168,7 +168,7 @@ function Settings() {
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState(null);
 
-  // Data export state
+  // Data export state (full GDPR data dump)
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState(null);
 
@@ -635,6 +635,25 @@ function Settings() {
         {exportError && <div className="alert alert-error" style={{ marginTop: '0.75rem' }}>{exportError}</div>}
         <p className="settings-hint" style={{ marginTop: '1rem' }}>
           Read our <a href="/privacy">Privacy Policy</a> to learn how your data is processed and what rights you have.
+        </p>
+      </div>
+
+      {/* ── Take your cellars with you (portability / anti-lock-in) ── */}
+      <div className="card settings-card">
+        <h2 className="settings-section-title">Take your cellars with you</h2>
+        <p className="settings-hint">
+          Export one cellar or all of them — bottles, rack placements, 3D room layout, reviews,
+          maturity data and the images you uploaded yourself — in a format you can import into any
+          Cellarion instance. Your data is yours; we never lock it in.
+        </p>
+
+        <div className="settings-actions" style={{ marginTop: '1rem' }}>
+          <Link to="/export-cellar" className="btn btn-secondary">Export your cellars →</Link>
+        </div>
+
+        <p className="settings-hint" style={{ marginTop: '1rem' }}>
+          Moving in from another Cellarion instance? <Link to="/import-cellar">Import a cellar export</Link> to
+          recreate your cellars, bottles and images here.
         </p>
       </div>
 

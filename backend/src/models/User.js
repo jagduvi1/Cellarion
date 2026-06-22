@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
+const { CURRENT_PRIVACY_POLICY_VERSION } = require('../config/legal');
 
 const userSchema = new mongoose.Schema({
   username: {
@@ -248,6 +249,14 @@ const userSchema = new mongoose.Schema({
   deletionScheduledFor: {
     type: Date,
     default: null
+  },
+  // Last time the user pulled a full export with image files. Used to enforce a
+  // once-per-week limit on that endpoint (the archive can be hundreds of MB).
+  // Stored on the account so the limit survives restarts and is per-user, not
+  // per-IP like the global rate limiters.
+  lastImageExportAt: {
+    type: Date,
+    default: null
   }
 });
 
@@ -379,6 +388,11 @@ userSchema.methods.toJSON = function() {
   delete obj.passwordResetTokenHash;
   delete obj.passwordResetExpiresAt;
   delete obj.stripeCustomerId;
+  // True when the user hasn't accepted the current privacy-policy version (older
+  // version, never recorded, or not accepted at all) — the client prompts them to
+  // review and acknowledge the update. Derived, never stored.
+  const pp = obj.gdprConsent?.privacyPolicy;
+  obj.requiresPolicyReconsent = !pp?.accepted || (pp?.version || null) !== CURRENT_PRIVACY_POLICY_VERSION;
   return obj;
 };
 

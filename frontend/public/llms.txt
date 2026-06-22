@@ -1,0 +1,27 @@
+# Cellarion
+
+> Cellarion is a free wine cellar management app at https://cellarion.app for tracking your wine collection. Log every bottle (vintage, producer, region, price, rating, tasting notes), organise wines across cellars and customisable racks with an interactive grid and a 3D room view, get drink-window alerts when a wine reaches its peak, scan labels with AI, search a shared wine registry, and share cellars with friends. It is open source (AGPL-3.0) and GDPR-first, with one-click data export, full account deletion, and no lock-in.
+
+## Start here
+- [Home](https://cellarion.app/): what Cellarion is, the full feature list, and FAQ.
+- [Help](https://cellarion.app/help): how to track a wine collection, drink windows, racks, sharing, import/export.
+- [Blog](https://cellarion.app/blog): guides on wine storage, ageing, drink windows, and cellar management.
+- [Community](https://cellarion.app/community): discussions among wine collectors and enthusiasts.
+
+## Browse the wine catalogue
+- [Wines](https://cellarion.app/wines/)
+- [Regions](https://cellarion.app/regions/)
+- [Countries](https://cellarion.app/countries/)
+- [Grapes](https://cellarion.app/grapes/)
+
+## Key facts
+- Platforms: a web app that runs in any browser, plus an Android app on Google Play (https://play.google.com/store/apps/details?id=app.cellarion.twa). iPhone users can install it to the home screen as a web app.
+- Free to use: all core features are free at cellarion.app — no credit card, no ads, no selling of data.
+- No lock-in: export your entire collection to JSON or CSV at any time.
+- Open source: https://github.com/jagduvi1/Cellarion (AGPL-3.0).
+- Privacy: GDPR-compliant, European hosting, cookieless analytics. See https://cellarion.app/privacy.
+- Compares to: Vivino, CellarTracker, InVintory — Cellarion is free, open-source, privacy-first, and exports your data without lock-in.
+
+## More
+- [Privacy policy](https://cellarion.app/privacy)
+- [Sitemap](https://cellarion.app/sitemap.xml)

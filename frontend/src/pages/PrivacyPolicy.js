@@ -19,7 +19,7 @@ function PrivacyPolicy() {
       </Helmet>
       <div className="privacy-container">
         <h1>Privacy Policy</h1>
-        <p className="privacy-updated">Last updated: March 2026 — Version 2026-03</p>
+        <p className="privacy-updated">Last updated: June 2026 — Version 2026-06</p>
 
         <p>
           Cellarion ("we", "us", or "our") operates the Cellarion wine cellar management
@@ -87,18 +87,38 @@ function PrivacyPolicy() {
             </tr>
             <tr>
               <td>Anthropic (Claude API)</td>
-              <td>Wine label scanning and AI features</td>
-              <td>Bottle label images, wine metadata</td>
+              <td>Wine label scanning and AI cellar chat</td>
+              <td>Bottle label images, wine metadata, chat messages</td>
               <td>US</td>
             </tr>
             <tr>
-              <td>Meilisearch</td>
-              <td>Wine search engine</td>
-              <td>Wine definitions (not user-specific data)</td>
-              <td>Self-hosted</td>
+              <td>Voyage AI</td>
+              <td>Text embeddings that power AI cellar chat / similarity search</td>
+              <td>Chat query text and wine metadata</td>
+              <td>US</td>
+            </tr>
+            <tr>
+              <td>Stripe</td>
+              <td>Subscription billing and payment processing</td>
+              <td>Email, name, and payment details (entered with and stored by Stripe)</td>
+              <td>US/EU</td>
+            </tr>
+            <tr>
+              <td>Cloudflare</td>
+              <td>CDN, DNS, and DDoS / bot protection for cellarion.app</td>
+              <td>IP address and request metadata for traffic reaching the site</td>
+              <td>Global (EU/US)</td>
             </tr>
           </tbody>
         </table>
+        <p>
+          The following components run on Cellarion's own infrastructure and are not third-party
+          sub-processors: <strong>Meilisearch</strong> (wine search), <strong>Qdrant</strong>
+          (vector storage for AI cellar chat), <strong>rembg</strong> (image background removal),
+          and <strong>Umami</strong> (privacy-friendly, cookieless usage analytics). Self-hosted
+          Cellarion instances run all of these themselves; the hosted cellarion.app additionally
+          uses Stripe, Voyage AI and Cloudflare as noted above.
+        </p>
 
         <h2>6. Data security</h2>
         <p>
@@ -138,15 +158,17 @@ function PrivacyPolicy() {
         <p>
           Cellarion uses a single httpOnly authentication cookie to keep you logged in.
           This cookie is strictly necessary for the service to function and does not require
-          separate consent. No tracking, analytics, or advertising cookies are used.
+          separate consent. On the hosted cellarion.app, Cloudflare may also set a strictly-necessary
+          security cookie to distinguish humans from bots. No tracking, analytics, or advertising
+          cookies are used (our Umami analytics is cookieless).
         </p>
 
         <h2>10. International data transfers</h2>
         <p>
-          Some of our sub-processors (Mailgun, Anthropic) are based in the United States.
-          Where personal data is transferred outside the EU/EEA, we ensure appropriate
-          safeguards are in place, such as Standard Contractual Clauses (SCCs) or the
-          EU-US Data Privacy Framework.
+          Some of our sub-processors (Mailgun, Anthropic, Voyage AI, Stripe, Cloudflare) are based in
+          or route traffic through the United States. Where personal data is transferred outside the
+          EU/EEA, we ensure appropriate safeguards are in place, such as Standard Contractual Clauses
+          (SCCs) or the EU-US Data Privacy Framework.
         </p>
 
         <h2>11. Changes to this policy</h2>

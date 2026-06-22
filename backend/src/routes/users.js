@@ -1,4 +1,6 @@
 const express = require('express');
+const fs = require('fs');
+const archiver = require('archiver');
 const mongoose = require('mongoose');
 const User = require('../models/User');
 const Cellar = require('../models/Cellar');
@@ -33,7 +35,10 @@ const PriceTrackingRequest = require('../models/PriceTrackingRequest');
 const PriceTrackingSkip = require('../models/PriceTrackingSkip');
 const { requireAuth, requireRole } = require('../middleware/auth');
 const { buildUserExport } = require('../services/userDataRegistry');
+const { buildCellarDataExport, EXPORT_README } = require('../services/cellarExport');
+const { safeUploadPath } = require('../services/imageProcessor');
 const { logAudit } = require('../services/audit');
+const { CURRENT_PRIVACY_POLICY_VERSION } = require('../config/legal');
 const { stripHtml, escapeRegex } = require('../utils/sanitize');
 const { isValidId, coerceStringQuery } = require('../utils/validation');
 
@@ -52,6 +57,37 @@ router.get('/profile', requireAuth, async (req, res) => {
   } catch (error) {
     console.error('Get profile error:', error);
     res.status(500).json({ error: 'Failed to get profile' });
+  }
+});
+
+// POST /api/users/me/accept-policy - Record the user re-accepting the current
+// privacy policy after a version bump (GDPR re-consent on material change).
+router.post('/me/accept-policy', requireAuth, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    // Path-setter creates intermediate objects safely (a legacy user may have no
+    // gdprConsent sub-document at all) and tracks the nested change for save().
+    // A policy version bump also covers expanded data-processing terms (new
+    // sub-processors), so refresh BOTH consents together — exactly as
+    // registration stamps them — so the dataProcessing timestamp doesn't stay
+    // frozen at the pre-update date and the consent record stays truthful.
+    const now = new Date();
+    user.set('gdprConsent.privacyPolicy.accepted', true);
+    user.set('gdprConsent.privacyPolicy.acceptedAt', now);
+    user.set('gdprConsent.privacyPolicy.version', CURRENT_PRIVACY_POLICY_VERSION);
+    user.set('gdprConsent.dataProcessing.accepted', true);
+    user.set('gdprConsent.dataProcessing.acceptedAt', now);
+    await user.save();
+
+    logAudit(req, 'user.policy.reconsent', { type: 'user', id: req.user.id },
+      { version: CURRENT_PRIVACY_POLICY_VERSION });
+
+    res.json({ user: user.toJSON() });
+  } catch (error) {
+    console.error('Accept policy error:', error);
+    res.status(500).json({ error: 'Failed to record consent' });
   }
 });
 
@@ -368,6 +404,185 @@ router.get('/me/export', requireAuth, async (req, res) => {
   } catch (error) {
     console.error('Data export error:', error);
     res.status(500).json({ error: 'Failed to export data' });
+  }
+});
+
+// ── Cellar portability export ────────────────────────────────────────────────
+// "Take your cellars with you." A user can pull one owned cellar (or all of
+// them) out of Cellarion as an import-ready document, optionally bundled with
+// the image files they uploaded. Anti-lock-in, made concrete.
+//
+// Two endpoints share one builder:
+//   /me/data-export   → JSON only, no rate limit (cheap)
+//   /me/full-export   → ZIP (data.json + your own images + README), max 1×/week
+const IMAGE_EXPORT_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000;
+
+// Parse the ?cellar= scope: 'all' (default) or a cellar ObjectId. Responds 400
+// and returns null on a malformed id so the caller can bail.
+function parseExportScope(req, res) {
+  const raw = coerceStringQuery(req.query.cellar).trim();
+  const scope = raw || 'all';
+  if (scope !== 'all' && !isValidId(scope)) {
+    res.status(400).json({ error: 'Invalid cellar id' });
+    return null;
+  }
+  return scope;
+}
+
+// GET /api/users/me/data-export?cellar=<id|all> — cellar data as JSON (no files)
+router.get('/me/data-export', requireAuth, async (req, res) => {
+  const scope = parseExportScope(req, res);
+  if (scope === null) return;
+  try {
+    const result = await buildCellarDataExport(req.user.id, scope);
+    if (!result) return res.status(404).json({ error: 'No cellar found for that selection' });
+
+    logAudit(req, 'user.cellar_data_export', { type: 'user', id: req.user.id }, { scope, bottles: result.payload.bottleCount });
+
+    res.setHeader('Content-Disposition', 'attachment; filename="cellarion-data-export.json"');
+    res.setHeader('Content-Type', 'application/json');
+    res.json(result.payload);
+  } catch (error) {
+    console.error('Cellar data export error:', error);
+    res.status(500).json({ error: 'Failed to export data' });
+  }
+});
+
+// GET /api/users/me/full-export?cellar=<id|all> — ZIP of data + the user's own
+// uploaded image files. Rate-limited to once per week (the archive can be large).
+router.get('/me/full-export', requireAuth, async (req, res) => {
+  const scope = parseExportScope(req, res);
+  if (scope === null) return;
+  try {
+    // Atomically CLAIM the weekly allowance before the expensive build, so two
+    // concurrent requests (double-click / refresh) can't both pass a check and
+    // kick off two large archive builds. The conditional matches only when no
+    // image export has run inside the window; a null result means the slot is
+    // already taken (or the user is gone). This replaces a non-atomic
+    // check-then-set that was bypassable under concurrency.
+    const now = new Date();
+    const cutoff = new Date(now.getTime() - IMAGE_EXPORT_COOLDOWN_MS);
+    const claimed = await User.findOneAndUpdate(
+      { _id: req.user.id, $or: [{ lastImageExportAt: null }, { lastImageExportAt: { $lte: cutoff } }] },
+      { $set: { lastImageExportAt: now } },
+      { new: false } // pre-update doc, so we can read (and refund) the prior timestamp
+    );
+    if (!claimed) {
+      const u = await User.findById(req.user.id).select('lastImageExportAt');
+      if (!u) return res.status(404).json({ error: 'User not found' });
+      return res.status(429).json({
+        error: 'Full exports with images are limited to once per week.',
+        nextAvailableAt: new Date(new Date(u.lastImageExportAt).getTime() + IMAGE_EXPORT_COOLDOWN_MS),
+      });
+    }
+
+    const result = await buildCellarDataExport(req.user.id, scope);
+
+    // Refund the allowance when there was nothing chargeable — no cellar, or a
+    // data-only archive with no image files (preserving the prior "only count
+    // exports that bundle images" behaviour). Guarded on our own timestamp so a
+    // later legitimate claim is never clobbered.
+    if (!result || result.imageCount === 0) {
+      await User.updateOne(
+        { _id: req.user.id, lastImageExportAt: now },
+        { $set: { lastImageExportAt: claimed.lastImageExportAt } }
+      );
+      if (!result) return res.status(404).json({ error: 'No cellar found for that selection' });
+    }
+
+    logAudit(req, 'user.full_export', { type: 'user', id: req.user.id }, { scope, images: result.imageCount });
+
+    res.setHeader('Content-Disposition', 'attachment; filename="cellarion-export.zip"');
+    res.setHeader('Content-Type', 'application/zip');
+
+    const archive = archiver('zip', { zlib: { level: 6 } });
+    archive.on('warning', (err) => {
+      if (err.code !== 'ENOENT') console.warn('[full-export] archive warning:', err.message);
+    });
+    archive.on('error', (err) => {
+      console.error('[full-export] archive error:', err.message);
+      // Headers are already sent once piping starts, so we can only tear down.
+      if (!res.headersSent) res.status(500).json({ error: 'Failed to build archive' });
+      else res.destroy(err);
+    });
+    archive.pipe(res);
+
+    archive.append(JSON.stringify(result.payload, null, 2), { name: 'data.json' });
+    archive.append(EXPORT_README, { name: 'README.md' });
+
+    // Append each on-disk file. safeUploadPath blocks path traversal; a missing
+    // file is skipped (the DB row can outlive a file that failed to write).
+    for (const file of result.imageFiles) {
+      let diskPath;
+      try {
+        diskPath = safeUploadPath(file.relPath);
+      } catch {
+        continue;
+      }
+      if (fs.existsSync(diskPath)) archive.file(diskPath, { name: file.archivePath });
+    }
+
+    await archive.finalize();
+  } catch (error) {
+    console.error('Full export error:', error);
+    if (!res.headersSent) res.status(500).json({ error: 'Failed to export' });
+  }
+});
+
+// GET /api/users/me/export-summary?cellar=<id|all> — a preview of exactly what an
+// export of this scope contains (counts + image byte size) plus the weekly image-
+// archive lock state. Powers the "see your total export" panel before download.
+// Reuses buildCellarDataExport so the numbers always match the real download.
+router.get('/me/export-summary', requireAuth, async (req, res) => {
+  const scope = parseExportScope(req, res);
+  if (scope === null) return;
+  try {
+    const user = await User.findById(req.user.id).select('lastImageExportAt');
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    const result = await buildCellarDataExport(req.user.id, scope);
+    if (!result) return res.status(404).json({ error: 'No cellar found for that selection' });
+    const { payload } = result;
+
+    // Rack count + how many cellars carry a 3D room layout, from the payload.
+    let rackCount = 0;
+    let layoutCount = 0;
+    for (const c of payload.cellars) {
+      rackCount += (c.racks || []).length;
+      if (c.layout) layoutCount++;
+    }
+
+    // Sum on-disk bytes of the user's own image files (best-effort — a DB row can
+    // outlive a missing file; safeUploadPath blocks traversal). Bounded by the
+    // export's image cap.
+    let imageBytes = 0;
+    for (const file of result.imageFiles) {
+      try {
+        imageBytes += fs.statSync(safeUploadPath(file.relPath)).size;
+      } catch { /* missing or blocked file — skip */ }
+    }
+
+    const nextAvailableAt = user.lastImageExportAt
+      ? new Date(new Date(user.lastImageExportAt).getTime() + IMAGE_EXPORT_COOLDOWN_MS)
+      : null;
+    const imageExportLocked = !!nextAvailableAt && nextAvailableAt.getTime() > Date.now();
+
+    res.json({
+      scope: payload.scope,
+      cellarCount: payload.cellarCount,
+      bottleCount: payload.bottleCount,
+      rackCount,
+      layoutCount,
+      reviewCount: payload.reviewCount,
+      imageCount: payload.imageCount,
+      maturityCount: payload.maturityCount,
+      imageBytes,
+      imageExportLocked,
+      nextAvailableAt,
+    });
+  } catch (error) {
+    console.error('Export summary error:', error);
+    res.status(500).json({ error: 'Failed to summarise export' });
   }
 });
 

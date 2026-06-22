@@ -56,6 +56,15 @@ const bottleImageSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
+  // SHA-256 (hex) of the stored image file bytes (the cropped image, or the
+  // original when there is no crop). Set on import so a cellar export re-imported
+  // by the same user reuses an already-stored identical image instead of writing
+  // a duplicate copy to disk (see services/cellarImport.js).
+  // Sparse: legacy/live-upload images don't have it and shouldn't bloat the index.
+  contentHash: {
+    type: String,
+    default: null
+  },
   createdAt: {
     type: Date,
     default: Date.now
@@ -69,6 +78,8 @@ const bottleImageSchema = new mongoose.Schema({
 bottleImageSchema.index({ status: 1, createdAt: -1 });
 bottleImageSchema.index({ bottle: 1, status: 1 });
 bottleImageSchema.index({ wineDefinition: 1, assignedToWine: 1 });
+// Dedup lookup on import: "does this user already have this exact image?"
+bottleImageSchema.index({ uploadedBy: 1, contentHash: 1 }, { sparse: true });
 
 bottleImageSchema.pre('save', function(next) {
   this.updatedAt = Date.now();

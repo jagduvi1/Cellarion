@@ -1,7 +1,20 @@
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 const { PROCESSED_DIR } = require('../config/upload');
 const BottleImage = require('../models/BottleImage');
+
+/**
+ * SHA-256 (hex) of an image's bytes — the dedup key stored on BottleImage.contentHash.
+ * Hash the file we KEEP and EXPORT (the cropped/processed image when it exists,
+ * else the original), so a cellar export re-imported by the same user matches an
+ * image they already have and is reused instead of being written again. Used by
+ * the live upload path, the processor, and the backfill migration so all images
+ * carry a hash on the same basis as services/cellarImport.js.
+ */
+function hashImageBytes(buffer) {
+  return crypto.createHash('sha256').update(buffer).digest('hex');
+}
 
 const REMBG_URL = process.env.REMBG_URL || 'http://rembg:5000';
 const UPLOADS_ROOT = '/app/uploads';
@@ -19,11 +32,30 @@ function safeUploadPath(relativePart) {
  * Used by GDPR erasure so the underlying files don't outlive the DB rows that
  * are their only reference. Never throws — a missing file or transient error
  * must not abort the surrounding deletion.
+ *
+ * Reference-safe: import-time content dedup (services/cellarImport.js) can point
+ * TWO BottleImage docs at the same file on disk (so we don't re-store an image
+ * the user already has). Before unlinking a file we therefore check whether any
+ * OTHER BottleImage still references that URL, and skip the unlink if so — so
+ * deleting one doc never orphans another doc's still-needed file. When the image
+ * has no other references (the common case), behaviour is unchanged.
  */
 async function unlinkImageFiles(image) {
   if (!image) return;
   for (const url of [image.originalUrl, image.processedUrl]) {
     if (!url || typeof url !== 'string' || !url.startsWith('/api/uploads/')) continue;
+    try {
+      const stillReferenced = await BottleImage.countDocuments({
+        _id: { $ne: image._id },
+        $or: [{ originalUrl: url }, { processedUrl: url }],
+      });
+      if (stillReferenced > 0) continue; // another image doc shares this file — keep it
+    } catch (err) {
+      // If the reference check fails, fall through and unlink as before — the
+      // pre-dedup behaviour. Shared files are rare; orphaning a file is worse
+      // than the (very unlikely) case of removing a still-referenced one.
+      console.warn(`[images] reference check failed for ${url}:`, err.message);
+    }
     try {
       await fs.promises.unlink(safeUploadPath(url.replace('/api/uploads/', '')));
     } catch (err) {
@@ -71,9 +103,13 @@ async function processImage(imageId) {
 
     fs.writeFileSync(processedPath, resultBuffer);
 
-    // Update document
+    // Update document. The processed (cropped) image is now the version we keep
+    // and export, so the dedup hash is computed from it (overriding the
+    // original-bytes hash stamped at upload) — keeping it consistent with what a
+    // cellar export carries and re-imports.
     image.processedUrl = `/api/uploads/processed/${processedFilename}`;
     image.status = 'processed';
+    image.contentHash = hashImageBytes(resultBuffer);
     await image.save();
 
     console.log(`Image ${imageId} processed successfully`);
@@ -188,4 +224,4 @@ async function cleanupOrphanedImages() {
   }
 }
 
-module.exports = { processImage, reprocessAllImages, cleanupOrphanedImages, safeUploadPath, unlinkImageFiles };
+module.exports = { processImage, reprocessAllImages, cleanupOrphanedImages, safeUploadPath, unlinkImageFiles, hashImageBytes };

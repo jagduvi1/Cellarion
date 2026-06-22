@@ -10,7 +10,7 @@ const Bottle = require('../models/Bottle');
 const Cellar = require('../models/Cellar');
 const { rateLimitKey } = require('../utils/clientIp');
 const { getCellarRole } = require('../utils/cellarAccess');
-const { processImage } = require('../services/imageProcessor');
+const { processImage, hashImageBytes } = require('../services/imageProcessor');
 const { stripImageMetadata, sanitizeImageBuffer } = require('../services/imageSanitizer');
 const { stripHtml } = require('../utils/sanitize');
 const { isValidId } = require('../utils/validation');
@@ -224,13 +224,31 @@ router.post('/upload', requireAuth, imageUploadLimiter, upload.single('image'), 
       return res.status(400).json({ error: 'Image could not be processed — the file may be corrupt or too large' });
     }
 
+    // Content hash of the stored bytes, so a later cellar export re-imported by
+    // this user dedups against the image they already have instead of writing a
+    // copy (see services/cellarImport.js). Stamped from the original here; once
+    // background removal finishes, processImage refreshes it from the cropped
+    // bytes (the version that actually gets exported). Best-effort — a hash
+    // failure must never block the upload.
+    let contentHash = null;
+    try {
+      // Re-derive the path from the fixed uploads dir + basename so it's provably
+      // confined there (multer already names the file with a random UUID; this also
+      // satisfies static path-injection analysis).
+      const storedPath = path.join(ORIGINALS_DIR, path.basename(req.file.path));
+      contentHash = hashImageBytes(fs.readFileSync(storedPath));
+    } catch (err) {
+      console.warn('Image content-hash failed (non-fatal):', err.message);
+    }
+
     const image = new BottleImage({
       bottle: bottleId || null,
       wineDefinition: wineDefinitionId ? String(wineDefinitionId) : null,
       uploadedBy: req.user.id,
       originalUrl: `/api/uploads/originals/${req.file.filename}`,
       status: 'uploaded',
-      credit: sanitizedCredit || null
+      credit: sanitizedCredit || null,
+      contentHash
     });
 
     await image.save();

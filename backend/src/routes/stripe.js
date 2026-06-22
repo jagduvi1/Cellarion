@@ -42,11 +42,19 @@ async function applyStripePlan(userId, plan, subscriptionId) {
   const newRank = PLAN_RANK[plan] ?? 0;
   const planExpired = user.planExpiresAt && new Date(user.planExpiresAt) < new Date();
 
+  // A Stripe-granted plan always leaves planExpiresAt null (set below); a
+  // time-limited admin / Cellar-Cred grant sets planExpiresAt in the future. So
+  // an UNEXPIRED planExpiresAt is the only thing that should hold off this
+  // webhook — and only while that grant outranks the incoming Stripe plan. When
+  // the current plan is itself the Stripe entitlement (planExpiresAt null), the
+  // webhook is authoritative for the user's own subscription and MUST honour a
+  // paid-tier DOWNGRADE (patron → supporter), not only an upgrade. The previous
+  // `newRank >= currentRank` guard silently dropped every downgrade, leaving the
+  // user on the higher tier they no longer pay for.
+  const activeGrantOutranks = !!user.planExpiresAt && !planExpired && currentRank > newRank;
+
   const update = { stripeSubscriptionId: subscriptionId };
-  // Only let the paid plan take effect if it's at least as high as the current
-  // plan, or the current (time-limited admin/Cellar-Cred) grant has expired —
-  // never downgrade an existing higher grant just because a lower sub started.
-  if (newRank >= currentRank || planExpired) {
+  if (!activeGrantOutranks) {
     update.plan = plan;
     // Stamp the start only on a real change/re-activation, not on every routine
     // subscription.updated (renewals, payment-method changes) — planStartedAt
@@ -305,3 +313,5 @@ router.post('/webhook', async (req, res) => {
 });
 
 module.exports = router;
+// Exported for unit tests (the webhook handlers above are exercised in Docker).
+module.exports.applyStripePlan = applyStripePlan;

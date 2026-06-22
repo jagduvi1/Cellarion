@@ -6,6 +6,7 @@ import { NotificationProvider } from './contexts/NotificationContext';
 import { ThemeProvider } from './contexts/ThemeContext';
 import Layout from './components/Layout';
 import ProtectedRoute from './components/ProtectedRoute';
+import ReconsentModal from './components/ReconsentModal';
 import Analytics from './components/Analytics';
 import './styles/common.css';
 
@@ -20,6 +21,8 @@ const Cellars         = lazy(() => import('./pages/Cellars'));
 const CellarDetail    = lazy(() => import('./pages/CellarDetail'));
 const AddBottle       = lazy(() => import('./pages/AddBottle'));
 const ImportBottles   = lazy(() => import('./pages/ImportBottles'));
+const ImportCellar    = lazy(() => import('./pages/ImportCellar'));
+const ExportCellar    = lazy(() => import('./pages/ExportCellar'));
 const CellarRacks     = lazy(() => import('./pages/CellarRacks'));
 const BottleDetail    = lazy(() => import('./pages/BottleDetail'));
 const CellarHistory   = lazy(() => import('./pages/CellarHistory'));
@@ -81,6 +84,7 @@ function AppRoutes() {
   }
 
   return (
+    <>
     <Suspense fallback={null}>
       <Routes>
         {/* Public routes */}
@@ -121,6 +125,22 @@ function AppRoutes() {
           element={
             <ProtectedRoute>
               <Layout><ImportBottles /></Layout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/import-cellar"
+          element={
+            <ProtectedRoute>
+              <Layout><ImportCellar /></Layout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/export-cellar"
+          element={
+            <ProtectedRoute>
+              <Layout><ExportCellar /></Layout>
             </ProtectedRoute>
           }
         />
@@ -454,6 +474,8 @@ function AppRoutes() {
         <Route path="*" element={<Navigate to={user ? '/cellars' : '/login'} replace />} />
       </Routes>
     </Suspense>
+    <ReconsentModal />
+    </>
   );
 }
 

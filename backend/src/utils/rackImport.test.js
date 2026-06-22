@@ -102,6 +102,39 @@ describe('computeRackPosition', () => {
     });
   });
 
+  // A Cellarion-native export carries the already-resolved internal slot index in
+  // `position` for EVERY rack type, flagged with internalSlot. It must be treated
+  // as identity — never re-interpreted as a shelf number — so placements survive
+  // an export→import round-trip on shelf/x-rack/hex/… racks.
+  describe('internalSlot (Cellarion-native export round-trip)', () => {
+    test('shelf rack: internal slot is identity, NOT a shelf number', () => {
+      // Without the flag a shelf treats position 11 as shelf 11 → slot 111…
+      expect(computeRackPosition({
+        position: 11, rackType: 'shelf', rackRows: 18, rackCols: 6, backCols: 5,
+      })).toEqual({ position: 111 });
+      // …with the flag it round-trips to the exact internal slot 11.
+      expect(computeRackPosition({
+        position: 11, internalSlot: true, rackType: 'shelf', rackRows: 18, rackCols: 6, backCols: 5,
+      })).toEqual({ position: 11 });
+    });
+
+    test('grid rack: internal slot is identity too', () => {
+      expect(computeRackPosition({ position: 7, internalSlot: true, rackType: 'grid', rackCols: 6 }))
+        .toEqual({ position: 7 });
+    });
+
+    test('coerces a numeric string and rejects junk', () => {
+      expect(computeRackPosition({ position: '11', internalSlot: true, rackType: 'shelf', rackCols: 6 }))
+        .toEqual({ position: 11 });
+      expect(computeRackPosition({ position: 0, internalSlot: true, rackType: 'shelf' }).error).toBeDefined();
+    });
+
+    test('ignored when no position is supplied (falls through to row/col)', () => {
+      expect(computeRackPosition({ internalSlot: true, row: 2, col: 1, rackCols: 6 }))
+        .toEqual({ position: 7 });
+    });
+  });
+
   test('rejects invalid anchor', () => {
     expect(computeRackPosition({ row: 1, col: 1, rackCols: 6, anchor: 'sideways' }).error)
       .toMatch(/anchor/);
@@ -416,6 +449,27 @@ describe('placeBottlesInRack (orchestration)', () => {
     expect(unplaced).toHaveLength(0);
     const positions = placements.map(p => p.position).sort((a, b) => a - b);
     expect(positions).toEqual([45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55]);
+  });
+
+  test('Cellarion shelf rack: internalSlot items round-trip to their exact slots', () => {
+    // The regression for the export→import bug: a Cellarion export stores the
+    // internal slot index (e.g. 111, 112, 113) and flags it internalSlot. These
+    // must land back on the SAME slots, not be re-read as shelf numbers.
+    const rack = {
+      type: 'shelf', rows: 18, cols: 6, typeConfig: { bottlesPerCell: 1, backCols: 5 },
+      slots: [], maxPosition: 198
+    };
+    const items = [
+      { item: { rackPosition: 111, internalSlot: true }, bottleId: 'a', sourceIndex: 0 },
+      { item: { rackPosition: 112, internalSlot: true }, bottleId: 'b', sourceIndex: 1 },
+      { item: { rackPosition: 113, internalSlot: true }, bottleId: 'c', sourceIndex: 2 },
+    ];
+    const { placements, unplaced } = placeBottlesInRack(rack, items, 'top-left');
+    expect(unplaced).toHaveLength(0);
+    const placementOf = (id) => placements.find(p => p.bottle === id).position;
+    expect(placementOf('a')).toBe(111);
+    expect(placementOf('b')).toBe(112);
+    expect(placementOf('c')).toBe(113);
   });
 
   test('Oeno shelf rack: 12th bottle on a full shelf spills into the next shelf', () => {

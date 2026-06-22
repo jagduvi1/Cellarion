@@ -25,6 +25,7 @@ Allow: /countries/
 Allow: /grapes/
 Allow: /help
 Allow: /privacy
+Allow: /community
 Allow: /api/sitemap.xml
 Allow: /api/blog
 Allow: /api/taxonomy/
@@ -71,6 +72,7 @@ Allow: /countries/
 Allow: /grapes/
 Allow: /help
 Allow: /privacy
+Allow: /community
 Allow: /api/sitemap.xml
 Allow: /api/blog
 Allow: /api/taxonomy/

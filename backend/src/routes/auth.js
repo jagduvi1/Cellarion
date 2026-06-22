@@ -7,6 +7,7 @@ const User = require('../models/User');
 const { requireAuth } = require('../middleware/auth');
 const { checkIsSuperAdmin } = require('../middleware/superAdmin');
 const { logAudit } = require('../services/audit');
+const { CURRENT_PRIVACY_POLICY_VERSION } = require('../config/legal');
 const rateLimitsConfig = require('../config/rateLimits');
 const { sendVerificationEmail, sendPasswordResetEmail, sendAccountLockoutAlert, EMAIL_VERIFICATION_ENABLED } = require('../services/mailgun');
 const { isAccountLocked, recordLoginFailure, resetLoginAttempts } = require('../utils/loginAttempts');
@@ -182,7 +183,7 @@ router.post('/register', authLimiter, async (req, res) => {
       password,
       roles: ['user'],
       gdprConsent: {
-        privacyPolicy: { accepted: true, acceptedAt: new Date(), version: '2026-03' },
+        privacyPolicy: { accepted: true, acceptedAt: new Date(), version: CURRENT_PRIVACY_POLICY_VERSION },
         dataProcessing: { accepted: true, acceptedAt: new Date() }
       }
     });

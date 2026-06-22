@@ -115,7 +115,12 @@ router.get('/home', ogLimiter, (req, res) => {
           name: 'Cellarion',
           url: SITE_URL,
           logo,
-          sameAs: ['https://github.com/jagduvi1/Cellarion'],
+          // Off-site profiles that corroborate the entity for search / LLMs.
+          // Add new owned profiles here as they go live (directories, socials).
+          sameAs: [
+            'https://github.com/jagduvi1/Cellarion',
+            'https://play.google.com/store/apps/details?id=app.cellarion.twa',
+          ],
         },
         {
           '@type': 'SoftwareApplication',
@@ -123,8 +128,12 @@ router.get('/home', ogLimiter, (req, res) => {
           name: 'Cellarion',
           description: LANDING.metaDescription,
           applicationCategory: 'LifestyleApplication',
-          operatingSystem: 'Web',
+          operatingSystem: 'Web, Android',
           url: SITE_URL,
+          downloadUrl: 'https://play.google.com/store/apps/details?id=app.cellarion.twa',
+          // High-signal entity field for LLMs/Google — reuses the visible feature
+          // names so the structured data never diverges from the page copy.
+          featureList: LANDING.features.map(([title]) => title),
           offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
         },
         {
@@ -305,10 +314,24 @@ router.get('/wines/:idOrSlug', ogLimiter, async (req, res) => {
 
     const slugOrId = wine.slug || wine._id;
 
-    // Keep title under 60 chars for SEO — drop " — Cellarion" suffix if needed
+    // Keep the SEO <title> readable and ~under 60 chars: append the " — Cellarion"
+    // brand when it fits, else use the bare wine title, else truncate on a word
+    // boundary with an ellipsis. (The old logic sliced mid-word at 57 and dropped
+    // the brand for any 48–57-char title.)
     const fullTitle = `${wine.name} — ${wine.producer}`;
-    const pageTitle = fullTitle.length > 47 ? fullTitle.slice(0, 57) : fullTitle;
-    const titleTag = pageTitle.length > 47 ? pageTitle : `${pageTitle} — Cellarion`;
+    const pageTitle = fullTitle; // og:/twitter: title — the clean wine name
+    const BRAND = ' — Cellarion';
+    const TITLE_MAX = 60;
+    let titleTag;
+    if (fullTitle.length + BRAND.length <= TITLE_MAX) {
+      titleTag = fullTitle + BRAND;
+    } else if (fullTitle.length <= TITLE_MAX) {
+      titleTag = fullTitle;
+    } else {
+      const cut = fullTitle.slice(0, TITLE_MAX - 1);
+      const lastSpace = cut.lastIndexOf(' ');
+      titleTag = (lastSpace > 30 ? cut.slice(0, lastSpace) : cut).trimEnd() + '…';
+    }
     const details = [
       wine.type && wine.type.charAt(0).toUpperCase() + wine.type.slice(1),
       wine.appellation,
