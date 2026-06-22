@@ -267,6 +267,26 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  // ------------------------------------------------------------------
+  // acceptPolicy — record re-consent after a privacy-policy version bump
+  // ------------------------------------------------------------------
+
+  const acceptPolicy = async () => {
+    try {
+      const response = await apiFetch('/api/users/me/accept-policy', { method: 'POST' });
+      let data = null;
+      try { data = await response.json(); } catch { /* non-JSON body (e.g. proxy 502) */ }
+      if (!response.ok) {
+        throw new Error((data && data.error) || "Couldn't save your acknowledgement. Please try again.");
+      }
+      // Refreshed user has requiresPolicyReconsent === false → modal unmounts.
+      if (data?.user) setUser(data.user);
+      return { success: true };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  };
+
   const value = {
     user,
     token,
@@ -276,6 +296,7 @@ export const AuthProvider = ({ children }) => {
     logout,
     verifyEmail,
     updatePreferences,
+    acceptPolicy,
     apiFetch,
     setUser
   };

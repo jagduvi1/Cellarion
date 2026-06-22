@@ -6,6 +6,7 @@ import { NotificationProvider } from './contexts/NotificationContext';
 import { ThemeProvider } from './contexts/ThemeContext';
 import Layout from './components/Layout';
 import ProtectedRoute from './components/ProtectedRoute';
+import ReconsentModal from './components/ReconsentModal';
 import Analytics from './components/Analytics';
 import './styles/common.css';
 
@@ -83,6 +84,7 @@ function AppRoutes() {
   }
 
   return (
+    <>
     <Suspense fallback={null}>
       <Routes>
         {/* Public routes */}
@@ -472,6 +474,8 @@ function AppRoutes() {
         <Route path="*" element={<Navigate to={user ? '/cellars' : '/login'} replace />} />
       </Routes>
     </Suspense>
+    <ReconsentModal />
+    </>
   );
 }
 

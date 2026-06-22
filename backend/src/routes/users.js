@@ -38,6 +38,7 @@ const { buildUserExport } = require('../services/userDataRegistry');
 const { buildCellarDataExport, EXPORT_README } = require('../services/cellarExport');
 const { safeUploadPath } = require('../services/imageProcessor');
 const { logAudit } = require('../services/audit');
+const { CURRENT_PRIVACY_POLICY_VERSION } = require('../config/legal');
 const { stripHtml, escapeRegex } = require('../utils/sanitize');
 const { isValidId, coerceStringQuery } = require('../utils/validation');
 
@@ -56,6 +57,37 @@ router.get('/profile', requireAuth, async (req, res) => {
   } catch (error) {
     console.error('Get profile error:', error);
     res.status(500).json({ error: 'Failed to get profile' });
+  }
+});
+
+// POST /api/users/me/accept-policy - Record the user re-accepting the current
+// privacy policy after a version bump (GDPR re-consent on material change).
+router.post('/me/accept-policy', requireAuth, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    // Path-setter creates intermediate objects safely (a legacy user may have no
+    // gdprConsent sub-document at all) and tracks the nested change for save().
+    // A policy version bump also covers expanded data-processing terms (new
+    // sub-processors), so refresh BOTH consents together — exactly as
+    // registration stamps them — so the dataProcessing timestamp doesn't stay
+    // frozen at the pre-update date and the consent record stays truthful.
+    const now = new Date();
+    user.set('gdprConsent.privacyPolicy.accepted', true);
+    user.set('gdprConsent.privacyPolicy.acceptedAt', now);
+    user.set('gdprConsent.privacyPolicy.version', CURRENT_PRIVACY_POLICY_VERSION);
+    user.set('gdprConsent.dataProcessing.accepted', true);
+    user.set('gdprConsent.dataProcessing.acceptedAt', now);
+    await user.save();
+
+    logAudit(req, 'user.policy.reconsent', { type: 'user', id: req.user.id },
+      { version: CURRENT_PRIVACY_POLICY_VERSION });
+
+    res.json({ user: user.toJSON() });
+  } catch (error) {
+    console.error('Accept policy error:', error);
+    res.status(500).json({ error: 'Failed to record consent' });
   }
 });
 
