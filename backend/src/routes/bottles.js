@@ -809,7 +809,14 @@ router.post('/:id/move', requireBottleAccess('owner'), async (req, res) => {
     }
 
     // Destination must be an active cellar the user OWNS (v1: own cellars only).
-    const destCellar = await Cellar.findOne({ _id: toCellarId, user: req.user.id, deletedAt: null });
+    // Cast the (already isValidObjectId-checked) id to an ObjectId so the query
+    // value can never be a user-supplied operator object (defence-in-depth + keeps
+    // static NoSQL-injection analysis happy).
+    const destCellar = await Cellar.findOne({
+      _id: new mongoose.Types.ObjectId(String(toCellarId)),
+      user: req.user.id,
+      deletedAt: null,
+    });
     if (!destCellar) return res.status(404).json({ error: 'Destination cellar not found' });
 
     const now = new Date();
