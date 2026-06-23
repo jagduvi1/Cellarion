@@ -597,6 +597,11 @@
     "reasonGifted": "Gifted",
     "reasonSold": "Sold",
     "reasonOther": "Other",
+    "journey": {
+      "title": "History",
+      "added": "Added to {{cellar}}",
+      "moved": "Moved to {{cellar}}"
+    },
     "vintageLabel": "Vintage:",
     "paidLabel": "Paid:",
     "atConsumption": "at consumption",
@@ -617,11 +622,30 @@
       "bottleUpdate": "Updated bottle",
       "bottleConsume": "Consumed bottle",
       "bottleDelete": "Deleted bottle",
+      "bottleMoveOut": "Moved bottle out",
+      "bottleMoveIn": "Moved bottle in",
       "cellarDelete": "Deleted cellar",
       "cellarShareAdd": "Shared cellar",
       "cellarShareUpdate": "Changed share role",
       "cellarShareRemove": "Removed share"
     }
+  },
+
+  "moveBottle": {
+    "action": "Move to another cellar",
+    "title": "Move to another cellar",
+    "intro": "Choose a cellar to move this bottle to. All its details and history are kept — it will arrive unplaced.",
+    "destinationLabel": "Destination cellar",
+    "selectCellar": "Select a cellar…",
+    "noOtherCellars": "You don't have another cellar to move this to.",
+    "moveButton": "Move bottle",
+    "moving": "Moving…",
+    "loading": "Loading cellars…",
+    "loadError": "Couldn't load your cellars.",
+    "moveError": "Couldn't move the bottle. Please try again.",
+    "movedTitle": "Bottle moved",
+    "movedInfo": "This bottle was moved to {{cellar}}.",
+    "backToCellar": "Back to cellar"
   },
 
   "admin": {

@@ -1,5 +1,14 @@
 const mongoose = require('mongoose');
 
+// One entry per cellar the bottle has lived in, in chronological order. The
+// cellar name is snapshotted so the journey survives a later rename/delete of
+// that cellar. _id disabled — these are value records, not addressable docs.
+const cellarHistorySchema = new mongoose.Schema({
+  cellar:     { type: mongoose.Schema.Types.ObjectId, ref: 'Cellar' },
+  cellarName: { type: String, trim: true },
+  enteredAt:  { type: Date, default: Date.now }
+}, { _id: false });
+
 const bottleSchema = new mongoose.Schema({
   cellar: {
     type: mongoose.Schema.Types.ObjectId,
@@ -123,6 +132,12 @@ const bottleSchema = new mongoose.Schema({
   // Drink-window notification tracking — set by the daily notifier job
   drinkWindowNotifiedStatus: { type: String, default: null },
   drinkWindowNotifiedAt:     { type: Date,   default: null },
+  // When the bottle entered its CURRENT cellar (updated when it's moved between
+  // cellars). createdAt stays the original acquisition/added date.
+  addedToCellarAt: { type: Date, default: Date.now },
+  // Append-only journey across cellars (see cellarHistorySchema). Powers the
+  // per-bottle history timeline; each move pushes a new entry.
+  cellarHistory: { type: [cellarHistorySchema], default: [] },
   createdAt: {
     type: Date,
     default: Date.now

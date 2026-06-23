@@ -374,6 +374,10 @@ function buildBottle({ cellarId, ownerId, item, canonicalVintage, wineDefinition
     notes: stripHtml(item.notes),
   });
   if (item.dateAdded) bottle.createdAt = new Date(item.dateAdded);
+  // "In this cellar since" = the added date. cellarHistory is seeded by the
+  // backfill migration / on first move (avoids re-keying it through the
+  // overwrite staging-swap).
+  bottle.addedToCellarAt = bottle.createdAt;
   return bottle;
 }
 

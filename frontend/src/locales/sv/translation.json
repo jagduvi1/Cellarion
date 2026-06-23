@@ -597,6 +597,11 @@
     "reasonGifted": "Bortgiven",
     "reasonSold": "Såld",
     "reasonOther": "Övrigt",
+    "journey": {
+      "title": "Historik",
+      "added": "Tillagd i {{cellar}}",
+      "moved": "Flyttad till {{cellar}}"
+    },
     "vintageLabel": "Årgång:",
     "paidLabel": "Betalt:",
     "atConsumption": "vid drickning",
@@ -617,11 +622,30 @@
       "bottleUpdate": "Flaska uppdaterad",
       "bottleConsume": "Flaska konsumerad",
       "bottleDelete": "Flaska borttagen",
+      "bottleMoveOut": "Flaska flyttad ut",
+      "bottleMoveIn": "Flaska flyttad in",
       "cellarDelete": "Källare borttagen",
       "cellarShareAdd": "Källare delad",
       "cellarShareUpdate": "Delningsroll ändrad",
       "cellarShareRemove": "Delning borttagen"
     }
+  },
+
+  "moveBottle": {
+    "action": "Flytta till en annan källare",
+    "title": "Flytta till en annan källare",
+    "intro": "Välj en källare att flytta den här flaskan till. Alla detaljer och historik behålls — den hamnar oplacerad.",
+    "destinationLabel": "Målkällare",
+    "selectCellar": "Välj en källare…",
+    "noOtherCellars": "Du har ingen annan källare att flytta den till.",
+    "moveButton": "Flytta flaska",
+    "moving": "Flyttar…",
+    "loading": "Laddar källare…",
+    "loadError": "Kunde inte ladda dina källare.",
+    "moveError": "Kunde inte flytta flaskan. Försök igen.",
+    "movedTitle": "Flaska flyttad",
+    "movedInfo": "Den här flaskan flyttades till {{cellar}}.",
+    "backToCellar": "Tillbaka till källaren"
   },
 
   "admin": {

@@ -1287,3 +1287,42 @@
   margin-right: 0.35rem;
 }
 
+
+/* ── Bottle journey: discreet history footer at the bottom of the bottle info ── */
+.bottle-journey {
+  max-width: 640px;
+  margin: 0.5rem auto 1.5rem;
+  padding-top: 0.85rem;
+  border-top: 1px solid var(--color-border-light, var(--color-border, #eee));
+}
+.bottle-journey-title {
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-text-muted, #999);
+  margin: 0 0 0.6rem;
+}
+.bottle-journey-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+.bottle-journey-item {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+.bottle-journey-icon { font-size: 0.78rem; opacity: 0.7; flex-shrink: 0; }
+.bottle-journey-text { color: var(--color-text-secondary, #666); }
+.bottle-journey-date {
+  margin-left: auto;
+  font-size: 0.74rem;
+  color: var(--color-text-muted, #999);
+  white-space: nowrap;
+}
