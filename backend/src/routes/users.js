@@ -92,7 +92,10 @@ router.post('/me/accept-policy', requireAuth, async (req, res) => {
 });
 
 // PATCH /api/users/preferences - Update current user's preferences
-const ALLOWED_CURRENCIES = ['USD', 'EUR', 'GBP', 'SEK', 'NOK', 'DKK', 'CHF', 'CAD', 'AUD'];
+// Source of truth lives in config/currencies.js (kept in sync with the frontend
+// currency picker) — the previous inline list had drifted and rejected NZD/JPY/
+// HKD/SGD/ZAR that the UI offered.
+const { SUPPORTED_CURRENCIES: ALLOWED_CURRENCIES } = require('../config/currencies');
 const ALLOWED_LANGUAGES = ['en', 'sv'];
 const ALLOWED_RATING_SCALES = ['5', '20', '100'];
 const ALLOWED_RACK_NAV = ['auto', 'room', 'rack'];
