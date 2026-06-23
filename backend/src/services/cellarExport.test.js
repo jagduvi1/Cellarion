@@ -75,6 +75,30 @@ describe('mapBottlesForExport', () => {
     expect(item).not.toHaveProperty('rackCol');
   });
 
+  test('exports the cellar journey (names + dates only) and addedToCellarAt', () => {
+    const bottles = [{
+      _id: oid('b1'), vintage: 'NV', wineDefinition: { name: 'W' },
+      addedToCellarAt: new Date('2026-03-05T00:00:00Z'),
+      cellarHistory: [
+        { cellar: oid('cA'), cellarName: 'Cellar A', enteredAt: new Date('2026-01-02T00:00:00Z') },
+        { cellar: oid('cB'), cellarName: 'Cellar B', enteredAt: new Date('2026-03-05T00:00:00Z') },
+      ],
+    }];
+    const [item] = mapBottlesForExport(bottles, []);
+    expect(item.addedToCellarAt).toBe('2026-03-05T00:00:00.000Z');
+    expect(item.cellarHistory).toEqual([
+      { cellarName: 'Cellar A', enteredAt: '2026-01-02T00:00:00.000Z' },
+      { cellarName: 'Cellar B', enteredAt: '2026-03-05T00:00:00.000Z' },
+    ]);
+    expect(item.cellarHistory[0]).not.toHaveProperty('cellar'); // instance-local id is dropped
+  });
+
+  test('omits journey fields when the bottle has none', () => {
+    const [item] = mapBottlesForExport([{ _id: oid('b1'), vintage: 'NV', wineDefinition: { name: 'W' } }], []);
+    expect(item).not.toHaveProperty('cellarHistory');
+    expect(item).not.toHaveProperty('addedToCellarAt');
+  });
+
   test('flags consumed bottles for the history importer', () => {
     const bottles = [{
       _id: oid('b1'),

@@ -91,6 +91,17 @@ function mapBottlesForExport(bottles, racks, imagesByBottle = new Map(), reviews
       dateAdded: b.createdAt ? b.createdAt.toISOString().slice(0, 10) : undefined,
     };
 
+    // Cellar journey (added → moved between cellars). Cellar names + dates only —
+    // the cellar ObjectIds are instance-local and don't transfer — so the
+    // per-bottle history survives an export → import round-trip.
+    if (b.addedToCellarAt) item.addedToCellarAt = b.addedToCellarAt.toISOString();
+    if (Array.isArray(b.cellarHistory) && b.cellarHistory.length) {
+      item.cellarHistory = b.cellarHistory.map((h) => ({
+        cellarName: h.cellarName || '',
+        enteredAt: h.enteredAt ? h.enteredAt.toISOString() : undefined,
+      }));
+    }
+
     // User-entered pricing
     if (b.price != null) {
       item.price = b.price;

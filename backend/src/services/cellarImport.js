@@ -173,6 +173,8 @@ function exportBottleToItem(b) {
     rating: b.rating,
     ratingScale: b.ratingScale,
     dateAdded: b.dateAdded,
+    addedToCellarAt: b.addedToCellarAt,
+    cellarHistory: Array.isArray(b.cellarHistory) ? b.cellarHistory : undefined,
     addToHistory: !!b.addToHistory,
     consumedReason: b.consumedReason,
     consumedAt: b.consumedAt,
@@ -374,10 +376,17 @@ function buildBottle({ cellarId, ownerId, item, canonicalVintage, wineDefinition
     notes: stripHtml(item.notes),
   });
   if (item.dateAdded) bottle.createdAt = new Date(item.dateAdded);
-  // "In this cellar since" = the added date. cellarHistory is seeded by the
-  // backfill migration / on first move (avoids re-keying it through the
-  // overwrite staging-swap).
-  bottle.addedToCellarAt = bottle.createdAt;
+  // Restore the cellar journey from the export when present (names + dates only —
+  // no live cellar refs, which is all the timeline needs, and keeps it clear of
+  // the overwrite staging-swap). Otherwise seed "in this cellar since = added date";
+  // cellarHistory is then filled by the first move / the backfill migration.
+  if (item.addedToCellarAt) bottle.addedToCellarAt = new Date(item.addedToCellarAt);
+  else bottle.addedToCellarAt = bottle.createdAt;
+  if (Array.isArray(item.cellarHistory) && item.cellarHistory.length) {
+    bottle.cellarHistory = item.cellarHistory
+      .filter((h) => h && h.cellarName)
+      .map((h) => ({ cellarName: String(h.cellarName).slice(0, 200), enteredAt: h.enteredAt ? new Date(h.enteredAt) : undefined }));
+  }
   return bottle;
 }
 
