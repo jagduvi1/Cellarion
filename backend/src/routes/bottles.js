@@ -418,6 +418,10 @@ router.post('/', async (req, res) => {
     // Allow backdating the "added" date for cellar migration
     if (dateAdded) bottle.createdAt = new Date(dateAdded);
 
+    // Seed the cellar journey: the bottle enters this cellar at its added date.
+    bottle.addedToCellarAt = bottle.createdAt;
+    bottle.cellarHistory = [{ cellar: cellarDoc._id, cellarName: cellarDoc.name, enteredAt: bottle.createdAt }];
+
     // Allow creating bottles directly as consumed (add to history)
     if (addToHistory) {
       const reason = consumedReason || 'drank';
@@ -781,6 +785,83 @@ router.post('/:id/consume', requireBottleAccess('editor'), async (req, res) => {
   } catch (error) {
     console.error('Consume bottle error:', error);
     res.status(500).json({ error: 'Failed to consume bottle' });
+  }
+});
+
+// POST /api/bottles/:id/move - Move an active bottle to another cellar you own.
+// v1: own-cellars-only + active bottles only; the bottle lands UNPLACED in the
+// destination (freed from any source rack slot). All bottle data is kept —
+// createdAt (acquisition date) is preserved; addedToCellarAt + cellarHistory are
+// updated. requireBottleAccess('owner') enforces you own the SOURCE cellar.
+router.post('/:id/move', requireBottleAccess('owner'), async (req, res) => {
+  try {
+    const { bottle, cellar: sourceCellar } = req;
+    const { toCellarId } = req.body;
+
+    if (!toCellarId || !mongoose.isValidObjectId(toCellarId)) {
+      return res.status(400).json({ error: 'Invalid destination cellar' });
+    }
+    if (String(toCellarId) === String(sourceCellar._id)) {
+      return res.status(400).json({ error: 'Bottle is already in that cellar' });
+    }
+    if (bottle.status !== 'active') {
+      return res.status(400).json({ error: 'Only active bottles can be moved' });
+    }
+
+    // Destination must be an active cellar the user OWNS (v1: own cellars only).
+    // Cast the (already isValidObjectId-checked) id to an ObjectId so the query
+    // value can never be a user-supplied operator object (defence-in-depth + keeps
+    // static NoSQL-injection analysis happy).
+    const destCellar = await Cellar.findOne({
+      _id: new mongoose.Types.ObjectId(String(toCellarId)),
+      user: req.user.id,
+      deletedAt: null,
+    });
+    if (!destCellar) return res.status(404).json({ error: 'Destination cellar not found' });
+
+    const now = new Date();
+    // Backfill the origin entry for bottles created before cellarHistory existed
+    // (or imported), so the journey reads "added → moved", not just "moved".
+    if (bottle.cellarHistory.length === 0) {
+      bottle.cellarHistory.push({
+        cellar: sourceCellar._id, cellarName: sourceCellar.name,
+        enteredAt: bottle.addedToCellarAt || bottle.createdAt
+      });
+    }
+    bottle.cellar = destCellar._id;
+    bottle.addedToCellarAt = now;
+    bottle.cellarHistory.push({ cellar: destCellar._id, cellarName: destCellar.name, enteredAt: now });
+    // Commit the move FIRST — if it hits an optimistic-concurrency conflict the
+    // source rack is still untouched, so we never orphan a slot.
+    await bottle.save();
+
+    // Now free the bottle from its old rack slot — it arrives unplaced. A failure
+    // here would only leave a stale slot that self-heals on the next rack render,
+    // never a bottle knocked out of its rack while still in the old cellar.
+    await removeFromRacks(bottle._id);
+
+    // Re-index so search reflects the new cellar.
+    searchService.indexBottle(bottle._id);
+    await bottle.populate(WINE_POPULATE);
+
+    // Audit BOTH cellars so the move is followable from either side's audit log.
+    const wineName = bottle.wineDefinition?.name;
+    logAudit(req, 'bottle.move.out',
+      { type: 'bottle', id: bottle._id, cellarId: sourceCellar._id },
+      { toCellarId: destCellar._id, toCellarName: destCellar.name, wineName, vintage: bottle.vintage }
+    );
+    logAudit(req, 'bottle.move.in',
+      { type: 'bottle', id: bottle._id, cellarId: destCellar._id },
+      { fromCellarId: sourceCellar._id, fromCellarName: sourceCellar.name, wineName, vintage: bottle.vintage }
+    );
+
+    res.json({ bottle });
+  } catch (error) {
+    if (error.name === 'VersionError') {
+      return res.status(409).json({ error: 'This bottle was modified by another request. Please refresh and try again.' });
+    }
+    console.error('Move bottle error:', error);
+    res.status(500).json({ error: 'Failed to move bottle' });
   }
 });
 

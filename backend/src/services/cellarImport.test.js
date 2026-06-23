@@ -198,6 +198,14 @@ describe('exportBottleToItem', () => {
     expect(item.reviews).toEqual(reviews);
   });
 
+  test('carries the cellar journey through (addedToCellarAt + cellarHistory)', () => {
+    const cellarHistory = [{ cellarName: 'A', enteredAt: '2026-01-02T00:00:00.000Z' }, { cellarName: 'B', enteredAt: '2026-03-05T00:00:00.000Z' }];
+    const item = exportBottleToItem({ wineName: 'W', addedToCellarAt: '2026-03-05T00:00:00.000Z', cellarHistory });
+    expect(item.addedToCellarAt).toBe('2026-03-05T00:00:00.000Z');
+    expect(item.cellarHistory).toEqual(cellarHistory);
+    expect(exportBottleToItem({ wineName: 'W' }).cellarHistory).toBeUndefined();
+  });
+
   test('carries the maturity window through, defaulting to null when absent', () => {
     const maturity = { peakFrom: 2026, peakUntil: 2032, sommNotes: 'hold' };
     expect(exportBottleToItem({ wineName: 'W', maturity }).maturity).toEqual(maturity);

@@ -37,6 +37,13 @@ export const undoBottle = (apiFetch, id) =>
     method: 'POST',
   });
 
+export const moveBottle = (apiFetch, id, toCellarId) =>
+  apiFetch(`/api/bottles/${id}/move`, {
+    method: 'POST',
+    headers: JSON_HEADERS,
+    body: JSON.stringify({ toCellarId }),
+  });
+
 export const updateConsumedRating = (apiFetch, id, data) =>
   apiFetch(`/api/bottles/${id}/consumed-rating`, {
     method: 'PUT',

@@ -18,10 +18,12 @@ import HeroImage from '../components/bottle/HeroImage';
 import ConsumedDetails from '../components/bottle/ConsumedDetails';
 import EditForm from '../components/bottle/EditForm';
 import ViewDetails from '../components/bottle/ViewDetails';
+import BottleJourney from '../components/BottleJourney';
 import './BottleDetail.css';
 
 // Lazy-load heavy components only needed on user interaction
 const ReportWineModal = lazy(() => import('../components/ReportWineModal'));
+const MoveBottleModal = lazy(() => import('../components/MoveBottleModal'));
 const ReviewForm = lazy(() => import('../components/ReviewForm'));
 const ConsumeModal = lazy(() => import('../components/ConsumeModal').then(m => ({ default: m.ConsumeModal })));
 const SuggestGrapesModal = lazy(() => import('../components/SuggestGrapesModal').then(m => ({ default: m.SuggestGrapesModal })));
@@ -48,6 +50,7 @@ function BottleDetail() {
   const [error, setError] = useState(null);
   const [editing, setEditing] = useState(false);
   const [consumeOpen, setConsumeOpen] = useState(false);
+  const [moveOpen, setMoveOpen] = useState(false);
   const [mistakeOpen, setMistakeOpen] = useState(false);
   const [mistakeBusy, setMistakeBusy] = useState(false);
   const [suggestGrapesOpen, setSuggestGrapesOpen] = useState(false);
@@ -266,6 +269,13 @@ function BottleDetail() {
   const isConsumed = bottle?.status && bottle.status !== 'active';
   const canEdit = !isConsumed && (userRole === 'owner' || userRole === 'editor');
   const canEditConsumed = isConsumed && (userRole === 'owner' || userRole === 'editor');
+  // v1: move only active bottles, and only between cellars you own.
+  const canMove = !isConsumed && userRole === 'owner';
+
+  const handleMoved = () => {
+    setMoveOpen(false);
+    navigate(`/cellars/${cellarId}`); // stay with the source cellar — back to its list
+  };
 
   return (
     <div className="bottle-detail-page">
@@ -289,6 +299,12 @@ function BottleDetail() {
                     <span className="bd-btn-label">{t('bottleDetail.removeBottle')}</span>
                   </button>
                 </>
+              )}
+              {canMove && (
+                <button className="btn btn-secondary btn-small" onClick={() => setMoveOpen(true)}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M5 9l-3 3 3 3"/><path d="M9 5l3-3 3 3"/><path d="M15 19l-3 3-3-3"/><path d="M19 9l3 3-3 3"/><path d="M2 12h20"/><path d="M12 2v20"/></svg>
+                  <span className="bd-btn-label">{t('moveBottle.action')}</span>
+                </button>
               )}
             </div>
           )}
@@ -571,6 +587,9 @@ function BottleDetail() {
         </div>
       )}
 
+      {/* ── Cellar journey: discreet history footer (added → moved → consumed) ── */}
+      {!editing && <BottleJourney bottle={bottle} />}
+
       <Suspense fallback={null}>
         {consumeOpen && (
           <ConsumeModal
@@ -578,6 +597,16 @@ function BottleDetail() {
             defaultRatingScale={user?.preferences?.ratingScale || '5'}
             onConfirm={handleConsumeConfirm}
             onCancel={() => setConsumeOpen(false)}
+          />
+        )}
+
+        {moveOpen && bottle && (
+          <MoveBottleModal
+            bottleId={bottle._id}
+            currentCellarId={cellarId}
+            wineLabel={displayName}
+            onClose={() => setMoveOpen(false)}
+            onMoved={handleMoved}
           />
         )}
 

@@ -16,6 +16,8 @@ const ACTION_LABEL_KEYS = {
   'bottle.update':       'cellarAudit.actions.bottleUpdate',
   'bottle.consume':      'cellarAudit.actions.bottleConsume',
   'bottle.delete':       'cellarAudit.actions.bottleDelete',
+  'bottle.move.out':     'cellarAudit.actions.bottleMoveOut',
+  'bottle.move.in':      'cellarAudit.actions.bottleMoveIn',
   'cellar.delete':       'cellarAudit.actions.cellarDelete',
   'cellar.share.add':    'cellarAudit.actions.cellarShareAdd',
   'cellar.share.update': 'cellarAudit.actions.cellarShareUpdate',
@@ -27,6 +29,8 @@ const ACTION_ICONS = {
   'bottle.update':       '✏️',
   'bottle.consume':      '🍷',
   'bottle.delete':       '🗑️',
+  'bottle.move.out':     '📤',
+  'bottle.move.in':      '📥',
   'cellar.delete':       '🗑️',
   'cellar.share.add':    '🔗',
   'cellar.share.update': '🔄',
@@ -50,6 +54,12 @@ function formatDetail(action, detail) {
   }
   if (action === 'bottle.consume' && detail.reason) {
     return detail.reason;
+  }
+  if (action === 'bottle.move.out' || action === 'bottle.move.in') {
+    const wine = detail.wineName ? `${detail.wineName}${detail.vintage ? ` · ${detail.vintage}` : ''} ` : '';
+    return action === 'bottle.move.out'
+      ? `${wine}→ ${detail.toCellarName || '—'}`
+      : `${wine}← ${detail.fromCellarName || '—'}`;
   }
   if (action === 'cellar.share.add') {
     return `${detail.sharedWith} as ${detail.role}`;
