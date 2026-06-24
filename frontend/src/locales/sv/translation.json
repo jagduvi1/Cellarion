@@ -175,20 +175,25 @@
 
   "supporter": {
     "title": "Stöd Cellarion",
-    "subtitle": "Alla nivåer ger full tillgång till alla funktioner. Supportrar hjälper till att hålla Cellarion gratis och får mer Cellar Chat.",
+    "subtitle": "Cellarion är gratis och öppen källkod — alla funktioner är tillgängliga för alla. Om du gillar appen kan du bidra för att hjälpa till att finansiera utvecklingen.",
     "yourTier": "Din nuvarande nivå:",
     "expires": "Giltigt till:",
     "noExpiry": "Inget utgångsdatum",
     "expired": "Utgånget",
     "currentTag": "Din nivå",
-    "allFeaturesNote": "Alla funktioner är tillgängliga på varje nivå. Supporternivåer låser upp fler Cellar Chat-frågor och hjälper till att finansiera utvecklingen.",
+    "allFeaturesNote": "Alla funktioner är gratis för alla. Att stödja är en frivillig donation som inte låser upp något extra — den finansierar bara utvecklingen.",
     "subscribe": "Prenumerera",
     "changePlan": "Byt plan",
     "manageSubscription": "Hantera prenumeration",
     "checkoutError": "Kunde inte starta betalningen. Försök igen.",
     "portalError": "Kunde inte öppna prenumerationshantering. Försök igen.",
     "free": "Gratis",
-    "month": "månad"
+    "month": "månad",
+    "everythingFree": "Allt är gratis. Det finns inga betalspärrade funktioner — alla får all statistik, obegränsade källare, Cellar Chat och alla andra funktioner.",
+    "donateExplain": "Att stödja Cellarion låser inte upp något extra. Du gör det helt enkelt för att du gillar appen och vill hjälpa till att hålla den igång och förbättra den. Du får vårt varma tack — varken mer eller mindre.",
+    "alreadySupporting": "Du stödjer Cellarion just nu — tack! 💛 Du kan ändra eller avsluta ditt bidrag när som helst.",
+    "supportAmount": "Stöd {{amount}}/mån",
+    "openSourceNote": "Cellarion är öppen källkod (AGPL-3.0). Ditt stöd finansierar drift, utveckling och nya funktioner."
   },
 
   "cellars": {

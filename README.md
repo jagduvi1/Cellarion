@@ -450,7 +450,7 @@ The AI chat feature requires three services working together:
 
 When all three are configured, users can ask natural-language questions about their collection (food pairings, occasion picks, cellar insights). The system only surfaces wines the user actually owns — no hallucinated recommendations.
 
-Daily usage quotas are configurable per subscription plan.
+A single daily usage quota — the same for every user, regardless of plan — is configurable by SuperAdmins (default 50 questions/day).
 
 ### Email Verification
 

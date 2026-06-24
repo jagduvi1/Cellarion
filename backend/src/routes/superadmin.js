@@ -445,25 +445,24 @@ router.get('/ai', async (req, res) => {
 
 
 // ---------------------------------------------------------------------------
-// PATCH /api/superadmin/ai/chat-limits
-// Update per-plan daily chat limits stored in aiConfig
+// PATCH /api/superadmin/ai/chat-limit
+// Update the global daily Cellar Chat limit (questions per user per day).
+// Applies to every user regardless of plan. -1 = unlimited.
 // ---------------------------------------------------------------------------
-router.patch('/ai/chat-limits', async (req, res) => {
-  const { free, supporter, patron } = req.body;
-  const parse = (v) => parseInt(v, 10);
-  const vals = { free: parse(free), supporter: parse(supporter), patron: parse(patron) };
-  if (Object.values(vals).some(v => isNaN(v) || v < 0)) {
-    return res.status(400).json({ error: 'Each limit must be a non-negative integer' });
+router.patch('/ai/chat-limit', async (req, res) => {
+  const limit = parseInt(req.body.limit, 10);
+  if (!Number.isInteger(limit) || limit < -1) {
+    return res.status(400).json({ error: 'limit must be an integer of -1 (unlimited) or greater' });
   }
   try {
     const current = aiConfig.get();
-    const updated = { ...current, chatDailyLimits: vals };
+    const updated = { ...current, chatDailyLimit: limit };
     await updateSiteConfig('aiConfig', updated, req.user.id);
     aiConfig.set(updated);
-    res.json({ chatDailyLimits: vals });
+    res.json({ chatDailyLimit: limit });
   } catch (error) {
-    console.error('[superadmin] chat-limits error:', error);
-    res.status(500).json({ error: 'Failed to save chat limits' });
+    console.error('[superadmin] chat-limit error:', error);
+    res.status(500).json({ error: 'Failed to save chat limit' });
   }
 });
 

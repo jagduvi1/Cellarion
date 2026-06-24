@@ -1,9 +1,13 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
-import { PLANS, PLAN_NAMES, formatChatQuota } from '../config/plans';
+import { PLANS } from '../config/plans';
 import { createCheckout, createPortal } from '../api/stripe';
 import './Plans.css';
+
+// Donation tiers, in ascending order. Everything in Cellarion is free — these
+// are voluntary contributions that unlock nothing extra.
+const DONATE_TIERS = ['supporter', 'patron'];
 
 function Supporter() {
   const { t } = useTranslation();
@@ -11,9 +15,6 @@ function Supporter() {
   const [actionError, setActionError] = useState(null);
   const [checkoutLoading, setCheckoutLoading] = useState(null);
 
-  const userPlan = user?.plan || 'free';
-  const userExpiresAt = user?.planExpiresAt || null;
-  const planExpired = userExpiresAt && Date.now() > new Date(userExpiresAt).getTime();
   const hasStripeSubscription = !!user?.stripeSubscriptionId;
 
   async function handleCheckout(plan) {
@@ -24,7 +25,7 @@ function Supporter() {
       if (data.url) {
         window.location.href = data.url;
       } else if (data.code === 'subscription_exists') {
-        // Already subscribed — send them to the portal to change/cancel rather
+        // Already supporting — send them to the portal to change/cancel rather
         // than creating a second subscription (the backend blocks that with 409).
         setCheckoutLoading(null);
         handleManageSubscription();
@@ -48,19 +49,6 @@ function Supporter() {
     }
   }
 
-  function formatExpiry(expiresAt) {
-    if (!expiresAt) return t('supporter.noExpiry');
-    if (Date.now() > new Date(expiresAt).getTime()) return t('supporter.expired');
-    return new Date(expiresAt).toLocaleDateString(undefined, {
-      year: 'numeric', month: 'long', day: 'numeric'
-    });
-  }
-
-  function formatPrice(price) {
-    if (price === 0) return t('supporter.free');
-    return `$${price.toFixed(2)} / ${t('supporter.month')}`;
-  }
-
   return (
     <div className="plans-page">
       <div className="plans-header">
@@ -68,77 +56,40 @@ function Supporter() {
         <p className="plans-subtitle">{t('supporter.subtitle')}</p>
       </div>
 
-      {/* Current tier banner */}
-      <div className={`plans-current-banner plans-current-banner--${userPlan}`}>
-        <span className="plans-current-label">{t('supporter.yourTier')}</span>
-        <span className={`plans-badge plans-badge--${userPlan}`}>{PLANS[userPlan]?.label || userPlan}</span>
-        <span className="plans-current-expiry">
-          {planExpired
-            ? <span className="plans-expiry--expired">{t('supporter.expired')}</span>
-            : <>{t('supporter.expires')} {formatExpiry(userExpiresAt)}</>
-          }
-        </span>
-      </div>
+      <div className="donate-card">
+        <p className="donate-lead">{t('supporter.everythingFree')}</p>
+        <p className="donate-body">{t('supporter.donateExplain')}</p>
 
-      {/* Comparison table */}
-      <div className="plans-grid">
-        {PLAN_NAMES.map(planKey => {
-          const plan = PLANS[planKey];
-          const isCurrent = userPlan === planKey && !planExpired;
-          return (
-            <div
-              key={planKey}
-              className={`plans-card ${isCurrent ? 'plans-card--current' : ''}`}
-            >
-              {isCurrent && (
-                <div className="plans-card-current-tag">{t('supporter.currentTag')}</div>
-              )}
-              <div className="plans-card-header">
-                <h2 className={`plans-card-name plans-card-name--${planKey}`}>{plan.label}</h2>
-                <p className="plans-card-price">{formatPrice(plan.price)}</p>
-                <p className="plans-card-desc">{plan.description}</p>
-                <p className="plans-card-chat">
-                  Cellar Chat: <strong>{formatChatQuota(plan.chatQuota, plan.chatPeriod)}</strong>
-                </p>
-              </div>
-              <ul className="plans-feature-list">
-                {plan.featureList.map((feature, i) => (
-                  <li key={i} className="plans-feature-item">
-                    <span className="plans-feature-check">{'✓'}</span>
-                    {feature}
-                  </li>
-                ))}
-              </ul>
-
-              {planKey !== 'free' && !isCurrent && (
-                <div className="plans-trial-wrap">
-                  <button
-                    className="btn btn-primary plans-trial-btn"
-                    onClick={() => hasStripeSubscription ? handleManageSubscription() : handleCheckout(planKey)}
-                    disabled={checkoutLoading === planKey}
-                  >
-                    {checkoutLoading === planKey
-                      ? t('common.saving')
-                      : hasStripeSubscription ? t('supporter.changePlan') : t('supporter.subscribe')}
-                  </button>
-                </div>
-              )}
-
-              {actionError && isCurrent && <p className="plans-trial-error">{actionError}</p>}
+        {hasStripeSubscription ? (
+          <>
+            <p className="donate-thanks">{t('supporter.alreadySupporting')}</p>
+            <div className="plans-manage-wrap">
+              <button className="btn btn-secondary" onClick={handleManageSubscription}>
+                {t('supporter.manageSubscription')}
+              </button>
             </div>
-          );
-        })}
+          </>
+        ) : (
+          <div className="donate-buttons">
+            {DONATE_TIERS.map(key => (
+              <button
+                key={key}
+                className="btn btn-primary donate-btn"
+                onClick={() => handleCheckout(key)}
+                disabled={checkoutLoading === key}
+              >
+                {checkoutLoading === key
+                  ? t('common.saving')
+                  : t('supporter.supportAmount', { amount: `$${PLANS[key].price.toFixed(2)}` })}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {actionError && <p className="plans-trial-error">{actionError}</p>}
+
+        <p className="donate-note">{t('supporter.openSourceNote')}</p>
       </div>
-
-      {hasStripeSubscription && (
-        <div className="plans-manage-wrap">
-          <button className="btn btn-secondary" onClick={handleManageSubscription}>
-            {t('supporter.manageSubscription')}
-          </button>
-        </div>
-      )}
-
-      <p className="plans-admin-note">{t('supporter.allFeaturesNote')}</p>
     </div>
   );
 }
