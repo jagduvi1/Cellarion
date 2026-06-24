@@ -972,8 +972,8 @@ function EnrichmentPromptPanel({ prompt, apiFetch }) {
   );
 }
 
-function ChatLimitsPanel({ limits, apiFetch }) {
-  const [vals, setVals] = useState({ free: limits.free ?? 5, supporter: limits.supporter ?? 50, patron: limits.patron ?? -1 });
+function ChatLimitPanel({ limit, apiFetch }) {
+  const [val, setVal] = useState(limit ?? 50);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState(null);
 
@@ -981,10 +981,10 @@ function ChatLimitsPanel({ limits, apiFetch }) {
     setSaving(true);
     setMsg(null);
     try {
-      const res = await apiFetch('/api/superadmin/ai/chat-limits', {
+      const res = await apiFetch('/api/superadmin/ai/chat-limit', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(vals),
+        body: JSON.stringify({ limit: parseInt(val, 10) }),
       });
       if (!res.ok) {
         const d = await res.json();
@@ -1002,27 +1002,25 @@ function ChatLimitsPanel({ limits, apiFetch }) {
   return (
     <div className="sa-panel" style={{ marginTop: 16 }}>
       <div className="sa-panel-header">
-        <span className="sa-panel-title">Cellar Chat — Weekly Limits</span>
+        <span className="sa-panel-title">Cellar Chat — Daily Limit</span>
         <button className="sa-btn" onClick={save} disabled={saving}>{saving ? 'Saving...' : 'Save'}</button>
       </div>
       <div className="sa-panel-body">
         <div style={{ fontSize: 11, color: 'var(--sa-text-dim)', marginBottom: 12 }}>
-          Max questions per user per rolling 7-day window. Use -1 for unlimited.
+          Max Cellar Chat questions per user per UTC day. Applies to everyone, regardless of plan. Use -1 for unlimited.
         </div>
         <div className="sa-kv">
-          {[['free', 'Enthusiast (free)'], ['supporter', 'Supporter ($1.50)'], ['patron', 'Patron ($5.50)']].map(([key, label]) => (
-            <div className="sa-kv-row" key={key}>
-              <span className="sa-kv-key">{label}</span>
-              <input
-                type="number"
-                min="0"
-                max="999"
-                value={vals[key]}
-                onChange={e => setVals(v => ({ ...v, [key]: e.target.value }))}
-                style={{ width: 70, background: 'var(--sa-bg)', border: '1px solid var(--sa-border)', color: 'var(--sa-text)', padding: '2px 6px', borderRadius: 3, fontFamily: 'monospace', fontSize: 12 }}
-              />
-            </div>
-          ))}
+          <div className="sa-kv-row">
+            <span className="sa-kv-key">Questions / day</span>
+            <input
+              type="number"
+              min="-1"
+              max="9999"
+              value={val}
+              onChange={e => setVal(e.target.value)}
+              style={{ width: 70, background: 'var(--sa-bg)', border: '1px solid var(--sa-border)', color: 'var(--sa-text)', padding: '2px 6px', borderRadius: 3, fontFamily: 'monospace', fontSize: 12 }}
+            />
+          </div>
         </div>
         {msg && (
           <div style={{ marginTop: 10, fontSize: 11, color: msg.ok ? 'var(--sa-accent)' : 'var(--sa-danger)' }}>{msg.text}</div>
@@ -1635,7 +1633,7 @@ export default function TabAI() {
       <PriceSuggestPromptPanel prompt={config.priceSuggestPrompt || ''} apiFetch={apiFetch} />
       <EnrichmentModelPanel currentModel={config.enrichmentModel || 'claude-sonnet-4-6'} apiFetch={apiFetch} />
       <EnrichmentPromptPanel prompt={config.enrichmentPrompt || ''} apiFetch={apiFetch} />
-      <ChatLimitsPanel limits={config.chatDailyLimits || {}} apiFetch={apiFetch} />
+      <ChatLimitPanel limit={config.chatDailyLimit ?? 50} apiFetch={apiFetch} />
       <ChatUsagePanel />
     </>
   );

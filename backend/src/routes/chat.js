@@ -1,14 +1,13 @@
 /**
  * Cellar Chat routes.
  *
- * POST /api/chat         – ask a question (non-streaming); rate-limited by supporter tier quota
+ * POST /api/chat         – ask a question (non-streaming); rate-limited by the daily quota
  * POST /api/chat/stream  – ask a question (streaming SSE); same rate limiting
  * GET  /api/chat/usage   – return current usage + limit for the current user
  *
- * All tiers use a rolling 7-day window:
- *   Enthusiast (free): 5 questions / week
- *   Supporter:         50 questions / week
- *   Patron:            unlimited
+ * Every user gets the same daily allowance, regardless of plan: a single global
+ * limit (aiConfig.chatDailyLimit, default 50/day, -1 = unlimited) over a rolling
+ * UTC-day window. Tuned by SuperAdmin via PATCH /api/superadmin/ai/chat-limit.
  */
 
 const express = require('express');
@@ -20,7 +19,6 @@ const aiChat = require('../services/aiChat');
 const aiConfig = require('../config/aiConfig');
 const ChatUsage = require('../models/ChatUsage');
 const User = require('../models/User');
-const { getPlanConfig } = require('../config/plans');
 const { logAudit } = require('../services/audit');
 const rateLimitsConfig = require('../config/rateLimits');
 const { ConcurrentStreamLimiter } = require('../utils/concurrentStreams');
@@ -28,10 +26,10 @@ const { ConcurrentStreamLimiter } = require('../utils/concurrentStreams');
 const router = express.Router();
 
 // ── Per-user chat protections ────────────────────────────────────────────────
-// The tier-based weekly chatQuota (config/plans.js) is the SPEND cap.
+// The global daily chat limit (aiConfig.chatDailyLimit) is the SPEND cap.
 // These two limits are about BURST behaviour within that cap — they catch
 // scripted abuse (5 chats in 5 seconds; 50 concurrent SSE streams) that the
-// weekly quota can't react to fast enough to bound Anthropic spend.
+// daily quota can't react to fast enough to bound Anthropic spend.
 
 // Burst limit: at most N chats per user per minute. Keyed on req.user.id so
 // it survives IP rotation. Per-IP apiLimiter still runs alongside.
@@ -58,32 +56,23 @@ function todayUTC() {
   return new Date().toISOString().slice(0, 10);
 }
 
-// Returns the UTC date string for N days ago
-function daysAgoUTC(n) {
-  const d = new Date();
-  d.setUTCDate(d.getUTCDate() - n);
-  return d.toISOString().slice(0, 10);
-}
-
 // Returns a Date set to 90 days from now (retained for usage reporting)
 function expiresAt() {
   return new Date(Date.now() + 90 * 24 * 60 * 60 * 1000);
 }
 
 /**
- * Returns { limit, used, period } for the given plan.
- * Window size depends on the plan's chatPeriod ('daily' or 'weekly').
- * Patron (-1) = unlimited.
+ * Returns { limit, used, period } for the current user.
+ * The same global daily limit applies to everyone (aiConfig.chatDailyLimit;
+ * -1 = unlimited) over a rolling UTC-day window.
  */
-async function getUsageForPlan(userId, plan) {
-  const config = getPlanConfig(plan);
-  const limit = config.chatQuota; // -1 = unlimited
-  const period = config.chatPeriod || 'weekly';
+async function getChatUsage(userId) {
+  const limit = aiConfig.get().chatDailyLimit; // -1 = unlimited
+  const period = 'daily';
 
-  const startDate = period === 'daily' ? daysAgoUTC(0) : daysAgoUTC(6);
   const docs = await ChatUsage.find({
     userId,
-    date: { $gte: startDate },
+    date: { $gte: todayUTC() },
   }).lean();
   const used = docs.reduce((sum, d) => sum + (d.count || 0), 0);
   return { limit, used, period };
@@ -129,9 +118,9 @@ async function validateAndCheckLimit(req, res) {
   const plan = req.user.plan || 'free';
   const date = todayUTC();
 
-  const { limit, used: usedBefore, period } = await getUsageForPlan(req.user.id, plan);
+  const { limit, used: usedBefore, period } = await getChatUsage(req.user.id);
 
-  // limit === -1 means unlimited (patron tier)
+  // limit === -1 means unlimited
   if (limit !== -1 && usedBefore >= limit) {
     res.status(429).json({
       error: `You've reached your ${period} limit of ${limit} question${limit === 1 ? '' : 's'}. Try again ${period === 'daily' ? 'tomorrow' : 'in a few days'}.`,
@@ -182,9 +171,8 @@ async function validateAndCheckLimit(req, res) {
 // ---------------------------------------------------------------------------
 router.get('/usage', requireAuth, async (req, res) => {
   try {
-    const plan = req.user.plan || 'free';
-    const { limit, used, period } = await getUsageForPlan(req.user.id, plan);
-    res.json({ used, limit, plan, period });
+    const { limit, used, period } = await getChatUsage(req.user.id);
+    res.json({ used, limit, plan: req.user.plan || 'free', period });
   } catch (err) {
     console.error('[chat] usage error:', err);
     res.status(500).json({ error: 'Failed to load usage' });

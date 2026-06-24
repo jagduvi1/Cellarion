@@ -2,7 +2,6 @@ import {
   PLANS,
   PLAN_NAMES,
   getPlanConfig,
-  formatChatQuota,
 } from './plans';
 
 // ---------------------------------------------------------------------------
@@ -27,21 +26,18 @@ describe('getPlanConfig', () => {
     const config = getPlanConfig('free');
     expect(config.label).toBe('Enthusiast');
     expect(config.price).toBe(0);
-    expect(config.chatQuota).toBe(5);
   });
 
   it('returns correct config for supporter tier', () => {
     const config = getPlanConfig('supporter');
     expect(config.label).toBe('Supporter');
     expect(config.price).toBe(1.5);
-    expect(config.chatQuota).toBe(50);
   });
 
   it('returns correct config for patron tier', () => {
     const config = getPlanConfig('patron');
     expect(config.label).toBe('Patron');
     expect(config.price).toBe(5.5);
-    expect(config.chatQuota).toBe(-1);
   });
 
   it('falls back to free for unknown plan', () => {
@@ -73,27 +69,5 @@ describe('getPlanConfig', () => {
       expect(typeof config.description).toBe('string');
       expect(config.description.length).toBeGreaterThan(0);
     });
-  });
-});
-
-// ---------------------------------------------------------------------------
-// formatChatQuota
-// ---------------------------------------------------------------------------
-describe('formatChatQuota', () => {
-  it('returns "Unlimited" for -1', () => {
-    expect(formatChatQuota(-1)).toBe('Unlimited');
-  });
-
-  it('returns "5 / week" for 5 with weekly period', () => {
-    expect(formatChatQuota(5)).toBe('5 / week');
-    expect(formatChatQuota(5, 'weekly')).toBe('5 / week');
-  });
-
-  it('returns "50 / day" for 50 with daily period', () => {
-    expect(formatChatQuota(50, 'daily')).toBe('50 / day');
-  });
-
-  it('defaults to weekly when period omitted', () => {
-    expect(formatChatQuota(50)).toBe('50 / week');
   });
 });

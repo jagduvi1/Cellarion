@@ -14,7 +14,8 @@
  * chatMaxResults       – max wines shown in the final AI answer
  * embeddingBatchDelayMs– ms to sleep between embedding calls during batch jobs
  *                        (helps stay within Voyage free-tier 3 RPM)
- * chatDailyLimits      – max questions per user per day, keyed by plan name
+ * chatDailyLimit       – max Cellar Chat questions per user per day (applies to
+ *                        everyone; -1 = unlimited)
  * chatSystemPrompt     – system prompt sent to Claude on every chat request
  * chatModelFallback    – model to retry with on 529 overloaded (null = no fallback)
  */
@@ -279,7 +280,7 @@ const defaults = {
   chatMaxTokens: 800,
   chatMaxHistoryTurns: 10,
   embeddingBatchDelayMs: 500,
-  chatDailyLimits: { free: 5, supporter: 50, patron: -1 },
+  chatDailyLimit: 50,
   chatModel: 'claude-haiku-4-5-20251001',
   chatModelFallback: null,
   chatSystemPrompt: DEFAULT_SYSTEM_PROMPT,
@@ -314,7 +315,7 @@ async function load() {
         chatMaxTokens:         doc.value.chatMaxTokens        ?? defaults.chatMaxTokens,
         chatMaxHistoryTurns:   doc.value.chatMaxHistoryTurns  ?? defaults.chatMaxHistoryTurns,
         embeddingBatchDelayMs: doc.value.embeddingBatchDelayMs ?? defaults.embeddingBatchDelayMs,
-        chatDailyLimits:       doc.value.chatDailyLimits      ?? defaults.chatDailyLimits,
+        chatDailyLimit:        doc.value.chatDailyLimit       ?? defaults.chatDailyLimit,
         chatModel:             VALID_CHAT_MODELS.includes(doc.value.chatModel) ? doc.value.chatModel : defaults.chatModel,
         chatModelFallback:     VALID_CHAT_MODELS.includes(doc.value.chatModelFallback) ? doc.value.chatModelFallback : defaults.chatModelFallback,
         chatSystemPrompt:      doc.value.chatSystemPrompt     ?? defaults.chatSystemPrompt,

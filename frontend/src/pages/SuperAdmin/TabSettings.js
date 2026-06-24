@@ -252,7 +252,7 @@ function ChatLimitsPanel({ apiFetch }) {
   return (
     <PanelShell
       title="Cellar Chat abuse controls"
-      intro="Per-user throttles on /api/chat — guards Anthropic spend against scripted bursts inside a single user's tier quota. The SSE per-stream timeout is hardcoded at 90s (not editable) as a system safety bound."
+      intro="Per-user throttles on /api/chat — guards Anthropic spend against scripted bursts inside a single user's daily quota. The SSE per-stream timeout is hardcoded at 90s (not editable) as a system safety bound."
       saving={saving} onSave={save} msg={msg}
     >
       <NumberField

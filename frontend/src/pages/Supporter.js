@@ -1,9 +1,58 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
-import { PLANS, PLAN_NAMES, formatChatQuota } from '../config/plans';
+import { PLANS } from '../config/plans';
 import { createCheckout, createPortal } from '../api/stripe';
 import './Plans.css';
+
+const GITHUB_URL = 'https://github.com/jagduvi1/Cellarion';
+
+/**
+ * Shared support call-to-action — rendered both at the top (compact, the first
+ * thing you see) and inside the bottom donate card (the last thing you see).
+ * `compact` drops the reassurance line so the top instance stays punchy.
+ */
+function DonateActions({ compact, hasStripeSubscription, checkoutLoading, onCheckout, onManage, actionError, t }) {
+  if (hasStripeSubscription) {
+    return (
+      <>
+        <p className="donate-thanks">{t('supporter.alreadySupporting')}</p>
+        <div className="plans-manage-wrap">
+          <button className="btn btn-secondary" onClick={onManage}>
+            {t('supporter.manageSubscription')}
+          </button>
+        </div>
+        {actionError && <p className="plans-trial-error">{actionError}</p>}
+      </>
+    );
+  }
+  return (
+    <>
+      <div className="donate-buttons">
+        <button
+          className="btn btn-primary donate-btn"
+          onClick={() => onCheckout('supporter')}
+          disabled={checkoutLoading === 'supporter'}
+        >
+          {checkoutLoading === 'supporter'
+            ? t('common.saving')
+            : t('supporter.supporterCta', { amount: `$${PLANS.supporter.price.toFixed(2)}` })}
+        </button>
+        <button
+          className="btn btn-secondary donate-btn"
+          onClick={() => onCheckout('patron')}
+          disabled={checkoutLoading === 'patron'}
+        >
+          {checkoutLoading === 'patron'
+            ? t('common.saving')
+            : t('supporter.patronCta', { amount: `$${PLANS.patron.price.toFixed(2)}` })}
+        </button>
+      </div>
+      {!compact && <p className="donate-reassure">{t('supporter.reassure')}</p>}
+      {actionError && <p className="plans-trial-error">{actionError}</p>}
+    </>
+  );
+}
 
 function Supporter() {
   const { t } = useTranslation();
@@ -11,9 +60,6 @@ function Supporter() {
   const [actionError, setActionError] = useState(null);
   const [checkoutLoading, setCheckoutLoading] = useState(null);
 
-  const userPlan = user?.plan || 'free';
-  const userExpiresAt = user?.planExpiresAt || null;
-  const planExpired = userExpiresAt && Date.now() > new Date(userExpiresAt).getTime();
   const hasStripeSubscription = !!user?.stripeSubscriptionId;
 
   async function handleCheckout(plan) {
@@ -24,7 +70,7 @@ function Supporter() {
       if (data.url) {
         window.location.href = data.url;
       } else if (data.code === 'subscription_exists') {
-        // Already subscribed — send them to the portal to change/cancel rather
+        // Already supporting — send them to the portal to change/cancel rather
         // than creating a second subscription (the backend blocks that with 409).
         setCheckoutLoading(null);
         handleManageSubscription();
@@ -48,97 +94,84 @@ function Supporter() {
     }
   }
 
-  function formatExpiry(expiresAt) {
-    if (!expiresAt) return t('supporter.noExpiry');
-    if (Date.now() > new Date(expiresAt).getTime()) return t('supporter.expired');
-    return new Date(expiresAt).toLocaleDateString(undefined, {
-      year: 'numeric', month: 'long', day: 'numeric'
-    });
-  }
+  // Qualitative "where your support goes" buckets — no tier buys anything different.
+  const buckets = [
+    { icon: '🖥️', label: t('supporter.whereHosting'), desc: t('supporter.whereHostingDesc') },
+    { icon: '✨', label: t('supporter.whereAI'), desc: t('supporter.whereAIDesc') },
+    { icon: '🛠️', label: t('supporter.whereDev'), desc: t('supporter.whereDevDesc') },
+  ];
 
-  function formatPrice(price) {
-    if (price === 0) return t('supporter.free');
-    return `$${price.toFixed(2)} / ${t('supporter.month')}`;
-  }
+  const actionProps = {
+    hasStripeSubscription,
+    checkoutLoading,
+    onCheckout: handleCheckout,
+    onManage: handleManageSubscription,
+    actionError,
+    t,
+  };
 
   return (
     <div className="plans-page">
       <div className="plans-header">
-        <h1>{t('supporter.title')}</h1>
-        <p className="plans-subtitle">{t('supporter.subtitle')}</p>
-      </div>
-
-      {/* Current tier banner */}
-      <div className={`plans-current-banner plans-current-banner--${userPlan}`}>
-        <span className="plans-current-label">{t('supporter.yourTier')}</span>
-        <span className={`plans-badge plans-badge--${userPlan}`}>{PLANS[userPlan]?.label || userPlan}</span>
-        <span className="plans-current-expiry">
-          {planExpired
-            ? <span className="plans-expiry--expired">{t('supporter.expired')}</span>
-            : <>{t('supporter.expires')} {formatExpiry(userExpiresAt)}</>
-          }
-        </span>
-      </div>
-
-      {/* Comparison table */}
-      <div className="plans-grid">
-        {PLAN_NAMES.map(planKey => {
-          const plan = PLANS[planKey];
-          const isCurrent = userPlan === planKey && !planExpired;
-          return (
-            <div
-              key={planKey}
-              className={`plans-card ${isCurrent ? 'plans-card--current' : ''}`}
-            >
-              {isCurrent && (
-                <div className="plans-card-current-tag">{t('supporter.currentTag')}</div>
-              )}
-              <div className="plans-card-header">
-                <h2 className={`plans-card-name plans-card-name--${planKey}`}>{plan.label}</h2>
-                <p className="plans-card-price">{formatPrice(plan.price)}</p>
-                <p className="plans-card-desc">{plan.description}</p>
-                <p className="plans-card-chat">
-                  Cellar Chat: <strong>{formatChatQuota(plan.chatQuota, plan.chatPeriod)}</strong>
-                </p>
-              </div>
-              <ul className="plans-feature-list">
-                {plan.featureList.map((feature, i) => (
-                  <li key={i} className="plans-feature-item">
-                    <span className="plans-feature-check">{'✓'}</span>
-                    {feature}
-                  </li>
-                ))}
-              </ul>
-
-              {planKey !== 'free' && !isCurrent && (
-                <div className="plans-trial-wrap">
-                  <button
-                    className="btn btn-primary plans-trial-btn"
-                    onClick={() => hasStripeSubscription ? handleManageSubscription() : handleCheckout(planKey)}
-                    disabled={checkoutLoading === planKey}
-                  >
-                    {checkoutLoading === planKey
-                      ? t('common.saving')
-                      : hasStripeSubscription ? t('supporter.changePlan') : t('supporter.subscribe')}
-                  </button>
-                </div>
-              )}
-
-              {actionError && isCurrent && <p className="plans-trial-error">{actionError}</p>}
-            </div>
-          );
-        })}
-      </div>
-
-      {hasStripeSubscription && (
-        <div className="plans-manage-wrap">
-          <button className="btn btn-secondary" onClick={handleManageSubscription}>
-            {t('supporter.manageSubscription')}
-          </button>
+        <h1>
+          <span className="support-emoji" aria-hidden="true">🍷 </span>
+          {t('supporter.title')}
+        </h1>
+        <p className="plans-subtitle support-subtitle">{t('supporter.subtitle')}</p>
+        <div className="support-chips">
+          <span className="support-chip support-chip--license">{t('supporter.licenseChip')}</span>
+          <a
+            className="support-chip support-chip--link"
+            href={GITHUB_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            <span className="support-chip-glyph" aria-hidden="true">{'</>'}</span>
+            {t('supporter.viewSource')} →
+          </a>
         </div>
-      )}
+      </div>
 
-      <p className="plans-admin-note">{t('supporter.allFeaturesNote')}</p>
+      {/* Top CTA — the first thing you see */}
+      <div className="donate-top">
+        <DonateActions compact {...actionProps} />
+      </div>
+
+      {/* Prose: free + costs */}
+      <div className="support-card">
+        <h2 className="support-h2">
+          <span className="support-h2-icon" aria-hidden="true">🔓</span>
+          {t('supporter.freeHeading')}
+        </h2>
+        <p className="support-p">{t('supporter.freeBody')}</p>
+
+        <h2 className="support-h2">
+          <span className="support-h2-icon" aria-hidden="true">🧾</span>
+          {t('supporter.costsHeading')}
+        </h2>
+        <p className="support-p">{t('supporter.costsBody')}</p>
+      </div>
+
+      {/* Where your support goes */}
+      <p className="support-eyebrow">{t('supporter.whereEyebrow')}</p>
+      <div className="support-goes">
+        {buckets.map((b, i) => (
+          <div className="support-goes-row" key={i}>
+            <span className="support-goes-icon" aria-hidden="true">{b.icon}</span>
+            <span className="support-goes-label">{b.label}</span>
+            <span className="support-goes-desc">{b.desc}</span>
+          </div>
+        ))}
+      </div>
+      <p className="support-goes-caption">{t('supporter.whereCaption')}</p>
+
+      {/* Bottom donate card — the last thing you see */}
+      <div className="donate-card donate-card--accent">
+        <p className="donate-lead">{t('supporter.donateLead')}</p>
+        <p className="donate-body">{t('supporter.donateBody')}</p>
+        <DonateActions {...actionProps} />
+        <p className="donate-note">{t('supporter.donateNote')}</p>
+      </div>
     </div>
   );
 }

@@ -18,8 +18,8 @@ const defaults = {
     emailDedupMs: 60 * 60 * 1000,   // send at most one lockout email per hour
   },
   // Per-user burst limit on /api/chat — protects Anthropic budget against
-  // scripted abuse from inside a single user's tier-quota allowance. The
-  // tier quota (config/plans.js chatQuota) is the cap; this is the speed
+  // scripted abuse from inside a single user's daily-quota allowance. The
+  // daily quota (aiConfig.chatDailyLimit) is the cap; this is the speed
   // limit. Default 5 chats/min/user is generous for human use and catches
   // scripted bursts.
   chatBurst: { max: 5, windowMs: 60 * 1000 },

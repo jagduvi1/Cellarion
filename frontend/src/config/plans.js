@@ -3,16 +3,15 @@
  * Used to gate UI elements without extra API calls.
  * Keep in sync with the backend config.
  *
- * All tiers have full access to every feature. The only difference is
- * the Cellar Chat quota.
+ * Every tier is functionally identical — all features (including the daily
+ * Cellar Chat allowance) are free for everyone. The paid tiers are purely
+ * voluntary donations to fund development; they unlock nothing extra.
  */
 export const PLANS = {
   free: {
     label: 'Enthusiast',
     description: 'Full access to every feature — completely free.',
     price: 0,
-    chatQuota: 5,
-    chatPeriod: 'weekly',
     featureList: [
       'Unlimited cellars & shared members',
       'Bottle tracking (vintages, ratings, notes)',
@@ -24,31 +23,27 @@ export const PLANS = {
       'Drink-window alerts',
       'Rack management',
       'Wine requests',
-      'Cellar Chat (5 questions / week)',
+      'Cellar Chat',
     ],
   },
   supporter: {
     label: 'Supporter',
-    description: 'Support Cellarion and get more Cellar Chat.',
+    description: 'Chip in to help fund development — no extra features, just our thanks.',
     price: 1.5,
-    chatQuota: 50,
-    chatPeriod: 'daily',
     featureList: [
-      'Everything in Enthusiast',
-      'Cellar Chat (50 questions / day)',
+      'Everything in Enthusiast (all features are free)',
       'Support independent development',
+      'Our heartfelt thanks',
     ],
   },
   patron: {
     label: 'Patron',
-    description: 'Maximum support with unlimited Cellar Chat.',
+    description: 'Support Cellarion at a higher level — no extra features, just bigger thanks.',
     price: 5.5,
-    chatQuota: -1,
-    chatPeriod: 'daily',
     featureList: [
-      'Everything in Supporter',
-      'Cellar Chat (unlimited)',
-      'Priority support',
+      'Everything in Enthusiast (all features are free)',
+      'Support independent development even more',
+      'Our heartfelt thanks',
     ],
   },
 };
@@ -58,13 +53,4 @@ export const PLAN_NAMES = Object.keys(PLANS);
 /** Returns the plan config for the given plan name, falling back to 'free'. */
 export function getPlanConfig(plan) {
   return PLANS[plan] || PLANS.free;
-}
-
-/**
- * Returns a human-readable chat quota string.
- * e.g. formatChatQuota(5) => "5 / week", formatChatQuota(-1) => "Unlimited"
- */
-export function formatChatQuota(n, period = 'weekly') {
-  if (n === -1) return 'Unlimited';
-  return `${n} / ${period === 'daily' ? 'day' : 'week'}`;
 }
