@@ -1,5 +1,5 @@
 .plans-page {
-  max-width: 900px;
+  max-width: 720px;
   margin: 0 auto;
 }
 
@@ -209,13 +209,21 @@
 
 /* ── Donation card ── */
 .donate-card {
-  max-width: 560px;
-  margin: 0 auto;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   padding: 1.75rem;
   background: var(--color-bg);
   text-align: center;
+}
+
+/* Warm accent rule on the focal CTA card */
+.donate-card--accent {
+  border-top: 3px solid var(--color-accent);
+}
+
+/* Top CTA — the support buttons shown directly under the header */
+.donate-top {
+  margin: 0.5rem 0 1.75rem;
 }
 
 .donate-lead {
@@ -256,4 +264,161 @@
   font-size: 0.78rem;
   color: var(--color-input-placeholder);
   line-height: 1.5;
+}
+
+.donate-reassure {
+  margin: 0.75rem 0 0;
+  text-align: center;
+  font-size: 0.78rem;
+  color: var(--color-text-muted);
+}
+
+/* ── Support page: header open-source chips ── */
+.support-emoji {
+  font-style: normal;
+}
+
+.support-subtitle {
+  max-width: 62ch;
+  line-height: 1.5;
+}
+
+.support-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
+.support-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.25rem 0.7rem;
+  border-radius: 20px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.support-chip--license {
+  background: rgba(var(--color-primary-rgb), 0.12);
+  color: var(--color-primary);
+}
+
+.support-chip--link {
+  border: 1px solid var(--color-border);
+  color: var(--color-text-secondary);
+  text-decoration: none;
+  transition: border-color 0.15s, color 0.15s;
+}
+
+.support-chip--link:hover {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
+.support-chip-glyph {
+  font-family: monospace;
+}
+
+/* ── Support page: prose card ── */
+.support-card {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg);
+  padding: 1.75rem;
+  margin: 1.5rem 0;
+  text-align: left;
+}
+
+.support-h2 {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.support-h2:not(:first-child) {
+  margin-top: 1.5rem;
+}
+
+.support-h2-icon {
+  flex-shrink: 0;
+  width: 1.6em;
+  text-align: center;
+}
+
+.support-p {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--color-text-muted);
+  line-height: 1.55;
+}
+
+/* ── Support page: where your support goes ── */
+.support-eyebrow {
+  margin: 2rem 0 0.5rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.support-goes {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.support-goes-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.4rem 0.75rem;
+  padding: 0.85rem 1rem;
+  transition: background 0.15s;
+}
+
+.support-goes-row + .support-goes-row {
+  border-top: 1px solid var(--color-border);
+}
+
+.support-goes-row:hover {
+  background: rgba(var(--color-primary-rgb), 0.04);
+}
+
+.support-goes-icon {
+  flex-shrink: 0;
+  width: 2rem;
+  height: 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(var(--color-primary-rgb), 0.08);
+  border-radius: var(--radius-md);
+  font-size: 1rem;
+}
+
+.support-goes-label {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.support-goes-desc {
+  margin-left: auto;
+  font-size: 0.82rem;
+  color: var(--color-text-secondary);
+}
+
+.support-goes-caption {
+  margin: 0.5rem 0 0;
+  font-size: 0.78rem;
+  color: var(--color-input-placeholder);
 }

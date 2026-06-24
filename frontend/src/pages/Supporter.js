@@ -5,9 +5,54 @@ import { PLANS } from '../config/plans';
 import { createCheckout, createPortal } from '../api/stripe';
 import './Plans.css';
 
-// Donation tiers, in ascending order. Everything in Cellarion is free — these
-// are voluntary contributions that unlock nothing extra.
-const DONATE_TIERS = ['supporter', 'patron'];
+const GITHUB_URL = 'https://github.com/jagduvi1/Cellarion';
+
+/**
+ * Shared support call-to-action — rendered both at the top (compact, the first
+ * thing you see) and inside the bottom donate card (the last thing you see).
+ * `compact` drops the reassurance line so the top instance stays punchy.
+ */
+function DonateActions({ compact, hasStripeSubscription, checkoutLoading, onCheckout, onManage, actionError, t }) {
+  if (hasStripeSubscription) {
+    return (
+      <>
+        <p className="donate-thanks">{t('supporter.alreadySupporting')}</p>
+        <div className="plans-manage-wrap">
+          <button className="btn btn-secondary" onClick={onManage}>
+            {t('supporter.manageSubscription')}
+          </button>
+        </div>
+        {actionError && <p className="plans-trial-error">{actionError}</p>}
+      </>
+    );
+  }
+  return (
+    <>
+      <div className="donate-buttons">
+        <button
+          className="btn btn-primary donate-btn"
+          onClick={() => onCheckout('supporter')}
+          disabled={checkoutLoading === 'supporter'}
+        >
+          {checkoutLoading === 'supporter'
+            ? t('common.saving')
+            : t('supporter.supporterCta', { amount: `$${PLANS.supporter.price.toFixed(2)}` })}
+        </button>
+        <button
+          className="btn btn-secondary donate-btn"
+          onClick={() => onCheckout('patron')}
+          disabled={checkoutLoading === 'patron'}
+        >
+          {checkoutLoading === 'patron'
+            ? t('common.saving')
+            : t('supporter.patronCta', { amount: `$${PLANS.patron.price.toFixed(2)}` })}
+        </button>
+      </div>
+      {!compact && <p className="donate-reassure">{t('supporter.reassure')}</p>}
+      {actionError && <p className="plans-trial-error">{actionError}</p>}
+    </>
+  );
+}
 
 function Supporter() {
   const { t } = useTranslation();
@@ -49,46 +94,83 @@ function Supporter() {
     }
   }
 
+  // Qualitative "where your support goes" buckets — no tier buys anything different.
+  const buckets = [
+    { icon: '🖥️', label: t('supporter.whereHosting'), desc: t('supporter.whereHostingDesc') },
+    { icon: '✨', label: t('supporter.whereAI'), desc: t('supporter.whereAIDesc') },
+    { icon: '🛠️', label: t('supporter.whereDev'), desc: t('supporter.whereDevDesc') },
+  ];
+
+  const actionProps = {
+    hasStripeSubscription,
+    checkoutLoading,
+    onCheckout: handleCheckout,
+    onManage: handleManageSubscription,
+    actionError,
+    t,
+  };
+
   return (
     <div className="plans-page">
       <div className="plans-header">
-        <h1>{t('supporter.title')}</h1>
-        <p className="plans-subtitle">{t('supporter.subtitle')}</p>
+        <h1>
+          <span className="support-emoji" aria-hidden="true">🍷 </span>
+          {t('supporter.title')}
+        </h1>
+        <p className="plans-subtitle support-subtitle">{t('supporter.subtitle')}</p>
+        <div className="support-chips">
+          <span className="support-chip support-chip--license">{t('supporter.licenseChip')}</span>
+          <a
+            className="support-chip support-chip--link"
+            href={GITHUB_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            <span className="support-chip-glyph" aria-hidden="true">{'</>'}</span>
+            {t('supporter.viewSource')} →
+          </a>
+        </div>
       </div>
 
-      <div className="donate-card">
-        <p className="donate-lead">{t('supporter.everythingFree')}</p>
-        <p className="donate-body">{t('supporter.donateExplain')}</p>
+      {/* Top CTA — the first thing you see */}
+      <div className="donate-top">
+        <DonateActions compact {...actionProps} />
+      </div>
 
-        {hasStripeSubscription ? (
-          <>
-            <p className="donate-thanks">{t('supporter.alreadySupporting')}</p>
-            <div className="plans-manage-wrap">
-              <button className="btn btn-secondary" onClick={handleManageSubscription}>
-                {t('supporter.manageSubscription')}
-              </button>
-            </div>
-          </>
-        ) : (
-          <div className="donate-buttons">
-            {DONATE_TIERS.map(key => (
-              <button
-                key={key}
-                className="btn btn-primary donate-btn"
-                onClick={() => handleCheckout(key)}
-                disabled={checkoutLoading === key}
-              >
-                {checkoutLoading === key
-                  ? t('common.saving')
-                  : t('supporter.supportAmount', { amount: `$${PLANS[key].price.toFixed(2)}` })}
-              </button>
-            ))}
+      {/* Prose: free + costs */}
+      <div className="support-card">
+        <h2 className="support-h2">
+          <span className="support-h2-icon" aria-hidden="true">🔓</span>
+          {t('supporter.freeHeading')}
+        </h2>
+        <p className="support-p">{t('supporter.freeBody')}</p>
+
+        <h2 className="support-h2">
+          <span className="support-h2-icon" aria-hidden="true">🧾</span>
+          {t('supporter.costsHeading')}
+        </h2>
+        <p className="support-p">{t('supporter.costsBody')}</p>
+      </div>
+
+      {/* Where your support goes */}
+      <p className="support-eyebrow">{t('supporter.whereEyebrow')}</p>
+      <div className="support-goes">
+        {buckets.map((b, i) => (
+          <div className="support-goes-row" key={i}>
+            <span className="support-goes-icon" aria-hidden="true">{b.icon}</span>
+            <span className="support-goes-label">{b.label}</span>
+            <span className="support-goes-desc">{b.desc}</span>
           </div>
-        )}
+        ))}
+      </div>
+      <p className="support-goes-caption">{t('supporter.whereCaption')}</p>
 
-        {actionError && <p className="plans-trial-error">{actionError}</p>}
-
-        <p className="donate-note">{t('supporter.openSourceNote')}</p>
+      {/* Bottom donate card — the last thing you see */}
+      <div className="donate-card donate-card--accent">
+        <p className="donate-lead">{t('supporter.donateLead')}</p>
+        <p className="donate-body">{t('supporter.donateBody')}</p>
+        <DonateActions {...actionProps} />
+        <p className="donate-note">{t('supporter.donateNote')}</p>
       </div>
     </div>
   );

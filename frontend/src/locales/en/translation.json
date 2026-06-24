@@ -174,8 +174,8 @@
   },
 
   "supporter": {
-    "title": "Support Cellarion",
-    "subtitle": "Cellarion is free and open-source — every feature is available to everyone. If you enjoy it, you can chip in to help fund development.",
+    "title": "Cellarion is free, and open-source. Here's what keeps it running.",
+    "subtitle": "Every feature is free for everyone, forever — no paywalls, nothing locked. But the servers and AI behind the app cost real money. If Cellarion has earned a place in your cellar, you're warmly invited to help split the tab.",
     "yourTier": "Your current tier:",
     "expires": "Valid until:",
     "noExpiry": "No expiry (indefinite)",
@@ -189,11 +189,27 @@
     "portalError": "Could not open subscription management. Please try again.",
     "free": "Free",
     "month": "month",
-    "everythingFree": "Everything is free. There are no paywalled features — everyone gets all analytics, unlimited cellars, Cellar Chat, and every other feature.",
-    "donateExplain": "Supporting Cellarion doesn't unlock anything extra. You'd be doing it simply because you enjoy the app and want to help keep it running and improving. You get our heartfelt thanks — nothing more, nothing less.",
-    "alreadySupporting": "You're currently supporting Cellarion — thank you! 💛 You can change or cancel your contribution anytime.",
-    "supportAmount": "Support {{amount}}/mo",
-    "openSourceNote": "Cellarion is open-source (AGPL-3.0). Your support funds hosting, development, and new features."
+    "licenseChip": "AGPL-3.0",
+    "viewSource": "View source on GitHub",
+    "freeHeading": "No paywall. Nothing to upsell.",
+    "freeBody": "Cellarion is open-source under the AGPL-3.0 license, and every feature is free for everyone — unlimited cellars, all the stats, drink-window alerts, and 50 Cellar Chat questions a day. Supporting unlocks nothing extra, because nothing is locked: supporters and free users get the exact same app.",
+    "costsHeading": "What your support actually pays for",
+    "costsBody": "Behind the scenes there's a server running around the clock, the cellarion.app domain, and the paid AI that powers Cellar Chat — Anthropic Claude answers your questions and Voyage handles the wine-matching behind them. Those bills arrive every month and grow as more people pour a glass and start chatting.",
+    "whereEyebrow": "Where your support goes",
+    "whereHosting": "Hosting",
+    "whereHostingDesc": "Server + domain, online 24/7",
+    "whereAI": "AI",
+    "whereAIDesc": "Claude + Voyage power Cellar Chat",
+    "whereDev": "Development",
+    "whereDevDesc": "Bug fixes & what's next",
+    "whereCaption": "Honest, qualitative buckets — no tier buys anything different.",
+    "donateLead": "Want to help split the tab?",
+    "donateBody": "Same app, same features either way — just our genuine thanks.",
+    "supporterCta": "Support · {{amount}}/mo",
+    "patronCta": "Become a Patron · {{amount}}/mo",
+    "reassure": "Cancel anytime · same app either way 💛",
+    "alreadySupporting": "💛 You're supporting Cellarion — thank you! You can change or cancel anytime.",
+    "donateNote": "Payments are handled securely by Stripe. Cellarion stays free and open whether you support or not."
   },
 
   "cellars": {
