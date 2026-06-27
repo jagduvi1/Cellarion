@@ -22,6 +22,7 @@
 
 const mongoose = require('mongoose');
 const { generateWineKey } = require('./utils/normalize');
+const { ensurePendingVintageProfile } = require('./utils/vintageProfile');
 
 const User = require('./models/User');
 const Country = require('./models/Country');
@@ -231,6 +232,8 @@ async function seed() {
           notes: spec.notes
         });
       }
+      // Mirror the add-bottle flow: surface this wine+vintage in the somm queue.
+      await ensurePendingVintageProfile(wine._id, spec.vintage);
       console.log(`  Bottles: ${spec.wine} ${spec.vintage} ×${spec.count}`);
     }
   }
