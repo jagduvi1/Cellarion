@@ -26,6 +26,10 @@ const WishlistItem = require('../../models/WishlistItem');
 const PriceTrackingRequest = require('../../models/PriceTrackingRequest');
 const PriceTrackingSkip = require('../../models/PriceTrackingSkip');
 const CommunityWinePrice = require('../../models/CommunityWinePrice');
+const JournalEntry = require('../../models/JournalEntry');
+const Recommendation = require('../../models/Recommendation');
+const RestockAlert = require('../../models/RestockAlert');
+const WineRequest = require('../../models/WineRequest');
 const vectorStore = require('../../services/vectorStore');
 const { embedSinglePair } = require('../../services/embeddingJob');
 const searchService = require('../../services/search');
@@ -869,6 +873,15 @@ async function mergePriceTrackingRequesters(sourceDoc, keeperId) {
   if (changed) await keeperReq.save();
 }
 
+// Re-point the source wine inside RestockAlert.similarWineIds[] (an array ref).
+// $addToSet the keeper first (while the source still matches the filter), then
+// $pull the source — so the keeper isn't duplicated if it was already present.
+// Idempotent: a re-run finds no remaining source entries to match.
+async function reassignRestockSimilar(sourceId, keeperId) {
+  await RestockAlert.updateMany({ similarWineIds: sourceId }, { $addToSet: { similarWineIds: keeperId } });
+  await RestockAlert.updateMany({ similarWineIds: sourceId }, { $pull: { similarWineIds: sourceId } });
+}
+
 // Reassign every reference from one source wine to the keeper. Idempotent
 // (updateMany by wineDefinition) and does NOT delete the source, so it's safe
 // to re-run after a partial failure. Returns the number of bottles moved.
@@ -893,9 +906,10 @@ async function reassignWineRefs(sourceId, keeperId) {
     Review.updateMany({ wineDefinition: sourceId }, { $set: { wineDefinition: keeperId } })
       .catch(err => { if (err.code === 11000) return Review.deleteMany({ wineDefinition: sourceId }); throw err; }),
     // Wishlist items: re-point so a user who wishlisted the source wine doesn't
-    // end up pointing at a deleted one. Keyed by (user, vintage) so a user who
-    // wanted both wines (or several vintages) keeps distinct rows without dupes.
-    reassignKeyedRefs(WishlistItem, sourceId, keeperId, ['user', 'vintage']),
+    // end up pointing at a deleted one. No unique index here, so a plain re-point
+    // is safe; a user who wanted both merged wines may briefly see two rows —
+    // prefer a removable dupe over silent loss (same policy as wine-list entries).
+    WishlistItem.updateMany({ wineDefinition: sourceId }, { $set: { wineDefinition: keeperId } }),
     // Price-tracking opt-ins (unique wineDefinition+vintage): merge requesters on
     // collision so nobody loses their notification; otherwise move the request.
     reassignKeyedRefs(PriceTrackingRequest, sourceId, keeperId, ['vintage'], mergePriceTrackingRequesters),
@@ -905,6 +919,21 @@ async function reassignWineRefs(sourceId, keeperId) {
     // from bottles). Re-pointing a stale median would be wrong — just drop the
     // source's; the job rebuilds the keeper's from the now-merged bottle set.
     CommunityWinePrice.deleteMany({ wineDefinition: sourceId }),
+    // Remaining WineDefinition references that use a non-`wineDefinition` field
+    // name — re-point so they don't dangle when the source wine is deleted. None
+    // has a unique index on the wine ref, so a plain updateMany is safe.
+    // JournalEntry holds the wine ref nested in pairings[].wine (not top-level),
+    // so it needs an arrayFilter like the wine-list entries above.
+    JournalEntry.updateMany(
+      { 'pairings.wine': sourceId },
+      { $set: { 'pairings.$[e].wine': keeperId } },
+      { arrayFilters: [{ 'e.wine': sourceId }] }
+    ),
+    Recommendation.updateMany({ wine: sourceId }, { $set: { wine: keeperId } }),
+    RestockAlert.updateMany({ wine: sourceId }, { $set: { wine: keeperId } }),
+    reassignRestockSimilar(sourceId, keeperId),
+    WineReport.updateMany({ duplicateOf: sourceId }, { $set: { duplicateOf: keeperId } }),
+    WineRequest.updateMany({ linkedWineDefinition: sourceId }, { $set: { linkedWineDefinition: keeperId } }),
   ]);
   return bottleRes.modifiedCount || 0;
 }
