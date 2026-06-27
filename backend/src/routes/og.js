@@ -11,7 +11,7 @@ const DiscussionReply = require('../models/DiscussionReply');
 const helpContent = require('../data/helpContent');
 const { fromNormalized } = require('../utils/ratingUtils');
 const { isValidId } = require('../utils/validation');
-const { sanitizeForumHtml, sanitizeBlogHtml, extractFaqFromHtml } = require('../utils/sanitizeHtml');
+const { sanitizeForumHtml, sanitizeBlogHtml, extractFaqFromHtml, extractHowToFromHtml } = require('../utils/sanitizeHtml');
 const { stripHtml } = require('../utils/sanitize');
 
 const WINE_TYPES = ['red', 'white', 'rosé', 'sparkling', 'dessert', 'fortified'];
@@ -629,6 +629,12 @@ router.get('/blog/:slug', ogLimiter, async (req, res) => {
     // body above, so the markup matches the page (Google's FAQ requirement).
     const faqs = extractFaqFromHtml(safeContent);
 
+    // Auto-derive HowTo steps from "Step N" <h2> headings in the post. Emitted as
+    // HowTo JSON-LD only when there are ≥2 steps — the steps are visible in the
+    // body, so the structured data matches the page. This is the high-signal
+    // format AI answer engines quote for "how do I…" procedural queries.
+    const howToSteps = extractHowToFromHtml(safeContent);
+
     const graph = [
       {
         '@type': 'BlogPosting',
@@ -657,6 +663,19 @@ router.get('/blog/:slug', ogLimiter, async (req, res) => {
         ]
       }
     ];
+    if (howToSteps.length >= 2) {
+      graph.push({
+        '@type': 'HowTo',
+        name: post.title,
+        description: metaDescription,
+        step: howToSteps.map((s, i) => ({
+          '@type': 'HowToStep',
+          position: i + 1,
+          name: s.name,
+          text: s.text
+        }))
+      });
+    }
     if (faqs.length >= 2) {
       graph.push({
         '@type': 'FAQPage',

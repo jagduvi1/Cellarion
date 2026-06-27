@@ -154,11 +154,53 @@ function extractFaqFromHtml(html) {
   return faqs;
 }
 
+// Longest HowToStep body we put in JSON-LD — same budget as an FAQ answer.
+const HOWTO_STEP_MAX = 1200;
+// A step section is a top-level <h2> whose visible text opens with "Step <n>"
+// (e.g. "Step 1 — Create a cellar"). The numbering prefix is stripped from the
+// emitted step name. Only <h2> is scanned so a step's own <h3>/<h4> sub-headings
+// stay inside the step body instead of splitting it.
+const HOWTO_STEP_PREFIX_RE = /^step\s+\d+\s*[—:.)\-]*\s*/i;
+
+/**
+ * Build ordered HowTo steps from "Step N" <h2> headings and the body that
+ * follows each, up to the next <h2>. The caller emits schema.org HowTo JSON-LD
+ * only when there are >=2 steps — the same threshold the FAQ extractor uses, and
+ * the visible steps live in the page body so the markup matches the page. Pass
+ * sanitizeBlogHtml() output — input must be well-formed HTML.
+ */
+function extractHowToFromHtml(html) {
+  if (typeof html !== 'string') return [];
+  const headingRe = /<h2\b[^>]*>([\s\S]*?)<\/h2>/gi;
+  const heads = [];
+  let m;
+  while ((m = headingRe.exec(html)) !== null) {
+    heads.push({ start: m.index, end: headingRe.lastIndex, text: htmlToText(m[1]) });
+  }
+  const steps = [];
+  for (let i = 0; i < heads.length; i++) {
+    if (!HOWTO_STEP_PREFIX_RE.test(heads[i].text)) continue;
+    const name = heads[i].text.replace(HOWTO_STEP_PREFIX_RE, '').trim() || heads[i].text;
+    const sliceEnd = (i + 1 < heads.length) ? heads[i + 1].start : html.length;
+    // A step body can span several blocks (paragraphs, list items, a sub-heading).
+    // htmlToText() just drops tags, so turn block boundaries into spaces first —
+    // otherwise "</p><h3>A</h3>" collapses to a run-on word.
+    const body = html.slice(heads[i].end, sliceEnd)
+      .replace(/<\/(p|li|h3|h4|blockquote|tr|div)>|<br\s*\/?>/gi, ' ');
+    let text = htmlToText(body);
+    if (!text) text = name; // a heading-only step still describes an action
+    if (text.length > HOWTO_STEP_MAX) text = text.slice(0, HOWTO_STEP_MAX - 1).trim() + '…';
+    steps.push({ name, text });
+  }
+  return steps;
+}
+
 module.exports = {
   sanitizeForumHtml,
   visibleTextLength,
   sanitizeBlogHtml,
   extractFaqFromHtml,
+  extractHowToFromHtml,
   ALLOWED_TAGS,
   ALLOWED_TAGS_BLOG,
   ALLOWED_ATTRIBUTES,

@@ -1,4 +1,4 @@
-const { sanitizeForumHtml, visibleTextLength, sanitizeBlogHtml, extractFaqFromHtml, ALLOWED_TAGS } = require('./sanitizeHtml');
+const { sanitizeForumHtml, visibleTextLength, sanitizeBlogHtml, extractFaqFromHtml, extractHowToFromHtml, ALLOWED_TAGS } = require('./sanitizeHtml');
 
 describe('sanitizeForumHtml', () => {
   test('returns empty string for non-string input', () => {
@@ -208,5 +208,54 @@ describe('extractFaqFromHtml', () => {
 
   test('skips questions with no answer body', () => {
     expect(extractFaqFromHtml('<h2>Empty?</h2><h2>Also empty?</h2>')).toEqual([]);
+  });
+});
+
+describe('extractHowToFromHtml', () => {
+  test('returns [] for non-string or content with no Step headings', () => {
+    expect(extractHowToFromHtml(null)).toEqual([]);
+    expect(extractHowToFromHtml('<h2>Why track wine?</h2><p>Because it helps.</p>')).toEqual([]);
+  });
+
+  test('builds ordered steps from "Step N" headings, stripping the numbering prefix', () => {
+    const html =
+      '<h2>Step 1 — Create a cellar</h2><p>Name your cellar.</p>' +
+      '<h2>Step 2 — Add bottles</h2><p>Log each bottle.</p>';
+    const steps = extractHowToFromHtml(html);
+    expect(steps).toHaveLength(2);
+    expect(steps[0]).toEqual({ name: 'Create a cellar', text: 'Name your cellar.' });
+    expect(steps[1]).toEqual({ name: 'Add bottles', text: 'Log each bottle.' });
+  });
+
+  test('accepts colon, period, and hyphen separators after the step number', () => {
+    const html =
+      '<h2>Step 1: Sign up</h2><p>Make an account.</p>' +
+      '<h2>Step 2. Add a rack</h2><p>Define the grid.</p>' +
+      '<h2>Step 3 - Place bottles</h2><p>Drop them in.</p>';
+    const steps = extractHowToFromHtml(html);
+    expect(steps.map(s => s.name)).toEqual(['Sign up', 'Add a rack', 'Place bottles']);
+  });
+
+  test('ignores non-step h2 sections and keeps a step\'s own sub-headings in its body', () => {
+    const html =
+      '<h2>Introduction</h2><p>ignored</p>' +
+      '<h2>Step 1 — Set up</h2><p>Do this.</p><h3>A detail</h3><p>And this.</p>' +
+      '<h2>Frequently asked questions</h2><h3>Is it free?</h3><p>Yes.</p>';
+    const steps = extractHowToFromHtml(html);
+    expect(steps).toHaveLength(1);
+    expect(steps[0].name).toBe('Set up');
+    // The <h3> sub-heading and its text stay inside the step body (h3 is not a boundary).
+    expect(steps[0].text).toBe('Do this. A detail And this.');
+  });
+
+  test('does not treat FAQ question headings as steps (only h2 "Step N" matches)', () => {
+    const html = '<h2>How do I start?</h2><p>Sign up.</p><h2>Where are bottles?</h2><p>In cellars.</p>';
+    expect(extractHowToFromHtml(html)).toEqual([]);
+  });
+
+  test('falls back to the heading as text for a heading-only step', () => {
+    const html = '<h2>Step 1 — Open the app</h2><h2>Step 2 — Sign in</h2><p>Enter credentials.</p>';
+    const steps = extractHowToFromHtml(html);
+    expect(steps[0]).toEqual({ name: 'Open the app', text: 'Open the app' });
   });
 });
