@@ -6,6 +6,12 @@ const WineVintageProfile = require('../models/WineVintageProfile');
 const WineRequest = require('../models/WineRequest');
 const BottleImage = require('../models/BottleImage');
 const Rack = require('../models/Rack');
+const AuditLog = require('../models/AuditLog');
+
+// How far back the audit log retains entries (auth.login.success included).
+// Login-based retention figures are bounded by this window. Mirrors the TTL in
+// models/AuditLog.js so the UI can caption "within the last N days".
+const AUDIT_WINDOW_DAYS = parseInt(process.env.AUDIT_TTL_DAYS || '90', 10);
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -39,15 +45,17 @@ const _cache = new Map();  // key: excludeAdmins flag ('true' | 'false') → { a
  * Returns an anonymised payload safe to surface to admins.
  *
  * @param {object}  [options]
- * @param {boolean} [options.excludeAdmins=false]
- *        When true, all per-user data (bottles, cellars, user counts, plans,
- *        engagement, image uploads, wine requests, racks) is filtered to
- *        exclude any user with the 'admin' role.
+ * @param {boolean} [options.excludeAdmins=true]
+ *        When true (the default), all per-user data (bottles, cellars, user
+ *        counts, plans, engagement, retention, image uploads, wine requests,
+ *        racks) is filtered to exclude any user with the 'admin' role — so the
+ *        dashboard reflects real customers, not our own test/admin accounts.
+ *        Pass false explicitly to include admins.
  * @param {boolean} [options.force=false]
  *        When true, bypass the in-memory cache and recompute fresh.
  * @returns {Promise<object>}
  */
-async function computeGlobalStats({ excludeAdmins = false, force = false } = {}) {
+async function computeGlobalStats({ excludeAdmins = true, force = false } = {}) {
   const cacheKey = String(!!excludeAdmins);
   if (!force) {
     const hit = _cache.get(cacheKey);
@@ -60,7 +68,7 @@ async function computeGlobalStats({ excludeAdmins = false, force = false } = {})
   return { ...data, fromCache: false };
 }
 
-async function _computeGlobalStatsUncached({ excludeAdmins = false } = {}) {
+async function _computeGlobalStatsUncached({ excludeAdmins = true } = {}) {
   const currentYear = new Date().getFullYear();
   const since30 = new Date(Date.now() - 30 * 86400000);
   const since90 = new Date(Date.now() - 90 * 86400000);
@@ -352,6 +360,73 @@ async function _computeGlobalStatsUncached({ excludeAdmins = false } = {}) {
     engagementWindow(since30),
     engagementWindow(since90),
   ]);
+
+  // ── Retention / returning users ──────────────────────────────────────────
+  // "Returning" = a genuine repeat user, not a sign-up who poked around once.
+  // Derived RETROACTIVELY from activity so it works across all history: a user
+  // is returning if they added or consumed bottles on >=2 distinct calendar
+  // days (4+ days = "core"/power users). Counting distinct days, not events, so
+  // adding 50 bottles in one sitting still counts as a single session. The
+  // login-based figures further below are derived from the audit log (no new
+  // per-user field stored) and so are likewise retroactive — bounded only by
+  // the audit TTL window. The activity metric is the headline because it spans
+  // all history and isn't undercounted by long-lived refresh-token sessions.
+  const returningRaw = await safeAggregate(Bottle, [
+    { $match: bottleMatch },
+    { $project: {
+      user: 1,
+      addedDay: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } },
+      consumedDay: { $cond: [
+        { $ne: ['$consumedAt', null] },
+        { $dateToString: { format: '%Y-%m-%d', date: '$consumedAt' } },
+        null,
+      ]},
+    }},
+    // Distinct activity days per bottle (drop the null when not consumed).
+    { $project: { user: 1, days: { $setDifference: [['$addedDay', '$consumedDay'], [null]] } } },
+    { $unwind: '$days' },
+    { $group: { _id: { user: '$user', day: '$days' } } },     // dedupe user×day
+    { $group: { _id: '$_id.user', activeDays: { $sum: 1 } } }, // days per user
+    { $group: {
+      _id: null,
+      usersWithActivity: { $sum: 1 },
+      returningUsers:    { $sum: { $cond: [{ $gte: ['$activeDays', 2] }, 1, 0] } },
+      // Power users: active on 4+ distinct days — a stickier engagement tier
+      // (subset of returningUsers).
+      coreUsers:         { $sum: { $cond: [{ $gte: ['$activeDays', 4] }, 1, 0] } },
+    }},
+  ]);
+  const ret = returningRaw[0] || { usersWithActivity: 0, returningUsers: 0, coreUsers: 0 };
+  const returningUsers = ret.returningUsers;
+  const coreUsers = ret.coreUsers;
+  const singleSessionUsers = Math.max(0, ret.usersWithActivity - returningUsers);
+
+  // Login-based signals, derived from the AUDIT LOG (action 'auth.login.success')
+  // rather than a per-user field — so we store NO new personal data for this
+  // feature (data minimisation) and the numbers are retroactive. Login audit
+  // entries record the user in `resource.id` (actor is anonymous at login time,
+  // pre-auth). Bounded by the audit TTL (AUDIT_WINDOW_DAYS), so "repeat logins"
+  // means within that window. Persistent refresh-token sessions don't re-hit
+  // /login, so these undercount the most loyal users by design — the
+  // activity-based metric above is the headline for exactly that reason.
+  const loginAuditMatch = {
+    action: 'auth.login.success',
+    'resource.id': excludeAdmins && adminIds.length
+      ? { $ne: null, $nin: adminIds }
+      : { $ne: null },
+  };
+  const loginAgg = await safeAggregate(AuditLog, [
+    { $match: loginAuditMatch },
+    { $group: { _id: '$resource.id', logins: { $sum: 1 }, lastAt: { $max: '$timestamp' } } },
+    { $group: {
+      _id: null,
+      loginUsers:       { $sum: 1 },
+      repeatLoginUsers: { $sum: { $cond: [{ $gte: ['$logins', 2] }, 1, 0] } },
+      loggedIn30d:      { $sum: { $cond: [{ $gte: ['$lastAt', since30] }, 1, 0] } },
+      loggedIn7d:       { $sum: { $cond: [{ $gte: ['$lastAt', since7d] }, 1, 0] } },
+    }},
+  ]);
+  const login = loginAgg[0] || { loginUsers: 0, repeatLoginUsers: 0, loggedIn30d: 0, loggedIn7d: 0 };
 
   // ── Plans / subscriptions ───────────────────────────────────────────────
   const planDistribution = await safeAggregate(User, [
@@ -663,6 +738,23 @@ async function _computeGlobalStatsUncached({ excludeAdmins = false } = {}) {
       activeUsers7d,
       activeUsers30d,
       activeUsers90d,
+    },
+    retention: {
+      // Retroactive, activity-based (works across all history).
+      returningUsers,
+      coreUsers,
+      singleSessionUsers,
+      usersWithActivity: ret.usersWithActivity,
+      returningPct: pct(returningUsers, ret.usersWithActivity),
+      corePct: pct(coreUsers, ret.usersWithActivity),
+      // Login-based, from the audit log — bounded by the audit TTL window.
+      // null when the TTL is disabled (AUDIT_TTL_DAYS<=0): the audit log is then
+      // retained indefinitely, so the figures cover all recorded history.
+      loginWindowDays:  AUDIT_WINDOW_DAYS > 0 ? AUDIT_WINDOW_DAYS : null,
+      loginUsers:       login.loginUsers,
+      repeatLoginUsers: login.repeatLoginUsers,
+      loggedIn30d:      login.loggedIn30d,
+      loggedIn7d:       login.loggedIn7d,
     },
     plans: {
       distribution: planDistribution,

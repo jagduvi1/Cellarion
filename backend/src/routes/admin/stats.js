@@ -11,15 +11,17 @@ router.use(requireAuth, requireRole('admin'));
 // All figures are anonymised — no PII is included.
 //
 // Query params:
-//   excludeAdmins=true — filter out all users with the 'admin' role from
-//                       every per-user statistic. Useful for a customer-only
-//                       view that ignores test/admin data.
+//   excludeAdmins=false — INCLUDE users with the 'admin' role. Admins are
+//                       excluded by DEFAULT so the dashboard reflects real
+//                       customers, not our own test/admin data. Pass false to
+//                       opt back into the admin-inclusive view.
 //   force=true        — bypass the 5-minute in-memory cache and recompute
 //                       fresh. Used by the page's Refresh button.
 router.get('/global', async (req, res) => {
   try {
-    const excludeAdmins = req.query.excludeAdmins === 'true' || req.query.excludeAdmins === '1';
-    const force         = req.query.force         === 'true' || req.query.force         === '1';
+    // Default: exclude admins. Only an explicit 'false'/'0' includes them.
+    const excludeAdmins = req.query.excludeAdmins !== 'false' && req.query.excludeAdmins !== '0';
+    const force         = req.query.force === 'true' || req.query.force === '1';
     const stats = await computeGlobalStats({ excludeAdmins, force });
     res.json(stats);
   } catch (error) {

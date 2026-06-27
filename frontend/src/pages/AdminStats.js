@@ -105,7 +105,9 @@ function AdminStats() {
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [excludeAdmins, setExcludeAdmins] = useState(false);
+  // Admins are excluded by default so the dashboard reflects real customers,
+  // not our own test/admin accounts. Uncheck the toggle to include them.
+  const [excludeAdmins, setExcludeAdmins] = useState(true);
 
   const fetchStats = useCallback(async ({ force = false } = {}) => {
     setLoading(true);
@@ -146,7 +148,7 @@ function AdminStats() {
   if (!stats) return null;
 
   const {
-    overview, activity, engagement, plans, maturity, ratings, vintage, trends, library,
+    overview, activity, engagement, retention, plans, maturity, ratings, vintage, trends, library,
     byType, topCountries, topRegions, topGrapes, topProducers, topWines,
     topExpensiveBottles, priceByCurrency, holdingTime, byBottleSize, cellarSizeDistribution,
   } = stats;
@@ -214,6 +216,52 @@ function AdminStats() {
           <StatCard tooltip={t('adminStats.engagementTooltip')} label={t('adminStats.activeUsers90d')} value={fmt(engagement.activeUsers90d)} sublabel={t('adminStats.in90Days')} />
         </div>
       </section>
+
+      {/* ── Retention / returning users ── */}
+      {retention && (
+        <section>
+          <h2>{t('adminStats.section.retention')}</h2>
+          <p className="admin-stats-section-note">
+            {retention.loginWindowDays
+              ? t('adminStats.retentionNote', { days: retention.loginWindowDays })
+              : t('adminStats.retentionNoteAllTime')}
+          </p>
+          <div className="admin-stats-cards">
+            <StatCard
+              accent="ok"
+              label={t('adminStats.returningUsers')}
+              value={fmt(retention.returningUsers)}
+              sublabel={`${fmtPct(retention.returningPct)} ${t('adminStats.ofActiveUsers')}`}
+              tooltip={t('adminStats.returningTooltip')}
+            />
+            <StatCard
+              accent="ok"
+              label={t('adminStats.coreUsers')}
+              value={fmt(retention.coreUsers)}
+              sublabel={`${fmtPct(retention.corePct)} ${t('adminStats.ofActiveUsers')}`}
+              tooltip={t('adminStats.coreTooltip')}
+            />
+            <StatCard
+              label={t('adminStats.singleSessionUsers')}
+              value={fmt(retention.singleSessionUsers)}
+              sublabel={t('adminStats.singleSessionSub')}
+              tooltip={t('adminStats.singleSessionTooltip')}
+            />
+            <StatCard
+              label={t('adminStats.loggedIn30d')}
+              value={fmt(retention.loggedIn30d)}
+              sublabel={`${fmt(retention.loggedIn7d)} ${t('adminStats.loggedIn7d')}`}
+              tooltip={t('adminStats.loginAuditTooltip')}
+            />
+            <StatCard
+              label={t('adminStats.repeatLoginUsers')}
+              value={fmt(retention.repeatLoginUsers)}
+              sublabel={`${fmt(retention.loginUsers)} ${t('adminStats.loginUsers')}`}
+              tooltip={t('adminStats.loginAuditTooltip')}
+            />
+          </div>
+        </section>
+      )}
 
       {/* ── Activity (30/90d) ── */}
       <section>
@@ -283,6 +331,22 @@ function AdminStats() {
         <p className="admin-stats-section-note">
           {t('adminStats.maturityNote', { coverage: maturity.coveragePct })}
         </p>
+        <div className="admin-stats-cards">
+          <StatCard
+            accent="ok"
+            label={t('adminStats.maturityHave')}
+            value={fmt(maturity.bottlesWithProfile)}
+            sublabel={`${fmtPct(maturity.coveragePct)} ${t('adminStats.ofActiveBottles')}`}
+            tooltip={t('adminStats.maturityHaveTooltip')}
+          />
+          <StatCard
+            accent={maturity.noProfile > maturity.bottlesWithProfile ? 'warn' : null}
+            label={t('adminStats.maturityMissing')}
+            value={fmt(maturity.noProfile)}
+            sublabel={t('adminStats.maturityMissingSub')}
+            tooltip={t('adminStats.maturityMissingTooltip')}
+          />
+        </div>
         <div className="admin-stats-panel">
           {maturity.bottlesWithProfile > 0 ? (
             <>
