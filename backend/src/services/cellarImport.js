@@ -48,6 +48,7 @@ const { resolveRating } = require('../utils/ratingUtils');
 const { normalizeBottleSize, DEFAULT_SIZE } = require('../config/bottleSizes');
 const { stripHtml } = require('../utils/sanitize');
 const { parseAndValidateVintage } = require('../utils/validation');
+const { ensurePendingVintageProfile } = require('../utils/vintageProfile');
 const { CONSUMED_STATUSES } = require('../config/constants');
 
 const EXPORT_SCHEMA = 'cellarion-export@1';
@@ -598,6 +599,7 @@ async function buildCellarContents({ cellarId, ownerId, userId, cellar, items, i
   const createdActiveIds = [];
   const pendingPlacements = [];
   const seenMaturity = new Set(); // wine+vintage pairs already reconstituted
+  const seenPendingProfile = new Set(); // wine+vintage pairs already queued for a somm
 
   for (let i = 0; i < items.length; i++) {
     const item = items[i];
@@ -647,6 +649,19 @@ async function buildCellarContents({ cellarId, ownerId, userId, cellar, items, i
       await attachImages(bottle, imagesByIndex[i], userId, getFileBuffer, result);
       await attachReviews(bottle, item.reviews, userId, wine.wineDefinitionId, result);
       await attachMaturity(item.maturity, wine.wineDefinitionId, canonicalVintage, result, seenMaturity);
+
+      // Seed the sommelier maturity queue for resolved wines that didn't carry a
+      // reviewed window in the export (attachMaturity only restores existing
+      // curated data). Mirrors the hand-add / CSV-import behaviour so imported
+      // wines surface for a somm. Idempotent ($setOnInsert never clobbers the
+      // reviewed profile above) and deduped per wine+vintage.
+      if (wine.wineDefinitionId) {
+        const pk = `${wine.wineDefinitionId}:${canonicalVintage}`;
+        if (!seenPendingProfile.has(pk)) {
+          seenPendingProfile.add(pk);
+          await ensurePendingVintageProfile(wine.wineDefinitionId, canonicalVintage);
+        }
+      }
 
       const hasPlacement = item.rackName && (item.rackPosition || (item.row && item.col));
       if (hasPlacement && bottle.status === 'active') {

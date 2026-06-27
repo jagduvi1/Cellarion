@@ -6,7 +6,6 @@ const Bottle = require('../models/Bottle');
 const Cellar = require('../models/Cellar');
 const Rack = require('../models/Rack');
 const WineDefinition = require('../models/WineDefinition');
-const WineVintageProfile = require('../models/WineVintageProfile');
 const Country = require('../models/Country');
 const { getCellarRole } = require('../utils/cellarAccess');
 const { logAudit } = require('../services/audit');
@@ -27,6 +26,7 @@ const {
 } = require('../config/constants');
 const { stripHtml, escapeRegex } = require('../utils/sanitize');
 const { parseAndValidateVintage } = require('../utils/validation');
+const { ensurePendingVintageProfile } = require('../utils/vintageProfile');
 const { extractAiExplanation } = require('../utils/jsonExtract');
 const { getMaxPosition } = require('../utils/rackGeometry');
 const { planRackCreations, placeBottlesInRack, VALID_ANCHORS, DEFAULT_ANCHOR } = require('../utils/rackImport');
@@ -746,17 +746,9 @@ router.post('/confirm', async (req, res) => {
           pendingPlacements.push({ rackName: String(item.rackName), item, bottleId: bottle._id, sourceIndex: i });
         }
 
-        // Auto-create pending WineVintageProfile for every bottle except
-        // "Unknown" (no calendar year to recommend a window for). Vintage
-        // was validated at the top of the iteration.
-        if (canonicalVintage !== 'Unknown') {
-          const wineDefId = wineDoc._id;
-          WineVintageProfile.findOneAndUpdate(
-            { wineDefinition: wineDefId, vintage: canonicalVintage },
-            { $setOnInsert: { wineDefinition: wineDefId, vintage: canonicalVintage, status: 'pending' } },
-            { upsert: true, new: false }
-          ).catch(err => console.error('Failed to upsert WineVintageProfile during import:', err.message));
-        }
+        // Seed the sommelier maturity queue for this wine+vintage (no-op for
+        // "Unknown"). Fire-and-forget — best-effort relative to the import.
+        ensurePendingVintageProfile(wineDoc._id, canonicalVintage);
       } catch (err) {
         errors.push({ index: i, reason: err.message });
       }

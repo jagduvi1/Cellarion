@@ -27,6 +27,7 @@ const { parseAndValidateVintage } = require('../utils/validation');
 const { normalizeBottleSize, DEFAULT_SIZE } = require('../config/bottleSizes');
 const { toNormalized } = require('../utils/ratingUtils');
 const { classifyMaturity, buildProfileMap } = require('../utils/maturityUtils');
+const { ensurePendingVintageProfile } = require('../utils/vintageProfile');
 const { parsePagination } = require('../utils/pagination');
 const mongoose = require('mongoose');
 const searchService = require('../services/search');
@@ -441,22 +442,9 @@ router.post('/', async (req, res) => {
     // Index in Meilisearch (fire-and-forget) — skip if added directly as consumed
     if (!addToHistory) searchService.indexBottle(bottle._id);
 
-    // Auto-create a pending WineVintageProfile for every bottle except
-    // "Unknown" — there's nothing for a somm to recommend a window for if
-    // the year itself is unknown. NV does get a profile so somms can
-    // attach drinking notes to non-vintage Champagne and sparkling blends.
-    if (canonicalVintage !== 'Unknown') {
-      try {
-        await WineVintageProfile.findOneAndUpdate(
-          { wineDefinition: wineDoc._id, vintage: canonicalVintage },
-          { $setOnInsert: { wineDefinition: wineDoc._id, vintage: canonicalVintage, status: 'pending' } },
-          { upsert: true, new: false }
-        );
-      } catch (profileErr) {
-        // Non-fatal: log but don't fail the bottle creation
-        console.warn('WineVintageProfile upsert warning:', profileErr.message);
-      }
-    }
+    // Seed the sommelier maturity queue for this wine+vintage (no-op for
+    // "Unknown"; NV is included). Shared by every add/import path.
+    await ensurePendingVintageProfile(wineDoc._id, canonicalVintage);
 
     logAudit(req, addToHistory ? 'bottle.addToHistory' : 'bottle.add',
       { type: 'bottle', id: bottle._id, cellarId: cellarDoc._id },

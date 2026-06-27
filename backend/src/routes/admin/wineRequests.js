@@ -11,6 +11,7 @@ const { stripHtml } = require('../../utils/sanitize');
 const { incrementCred } = require('../../utils/cellarCred');
 const { parsePagination } = require('../../utils/pagination');
 const { isValidId } = require('../../utils/validation');
+const { ensurePendingVintageProfile } = require('../../utils/vintageProfile');
 
 const router = express.Router();
 
@@ -169,11 +170,23 @@ router.put('/:id/resolve', async (req, res) => {
     // Backfill any bottles that were imported while waiting for this wine
     let backfilledCount = 0;
     if (wineRequest.requestType === 'new_wine') {
+      // Capture the distinct vintages BEFORE the update unsets pendingWineRequest
+      // — needed to seed the maturity queue once the wine is known.
+      const pendingVintages = await Bottle.distinct('vintage', { pendingWineRequest: wineRequest._id });
+
       const result = await Bottle.updateMany(
         { pendingWineRequest: wineRequest._id },
         { $set: { wineDefinition: linkedWine._id }, $unset: { pendingWineRequest: '' } }
       );
       backfilledCount = result.modifiedCount || 0;
+
+      // Now that these bottles have a real wineDefinition, put each wine+vintage
+      // into the sommelier maturity queue — mirroring the hand-add and matched-
+      // import paths. Without this, wines that entered via an import "request"
+      // never surfaced for a somm to set a drink window.
+      for (const vintage of pendingVintages) {
+        await ensurePendingVintageProfile(linkedWine._id, vintage);
+      }
     }
 
     let notifMsg;
