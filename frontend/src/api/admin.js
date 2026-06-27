@@ -218,12 +218,15 @@ export const adminDismissWineReport = (apiFetch, id, data) =>
   });
 
 // ── Global stats (admin overview across all users) ───────────────────────────
-export const adminGetGlobalStats = (apiFetch, { excludeAdmins = false, force = false } = {}) => {
+// Admins are excluded by DEFAULT (the dashboard should reflect real customers).
+// Always send the flag explicitly so unchecking the toggle (include admins)
+// sends excludeAdmins=false rather than omitting it and falling back to the
+// server default of true.
+export const adminGetGlobalStats = (apiFetch, { excludeAdmins = true, force = false } = {}) => {
   const params = new URLSearchParams();
-  if (excludeAdmins) params.set('excludeAdmins', 'true');
-  if (force)         params.set('force', 'true');
-  const qs = params.toString();
-  return apiFetch(`/api/admin/stats/global${qs ? `?${qs}` : ''}`);
+  params.set('excludeAdmins', excludeAdmins ? 'true' : 'false');
+  if (force) params.set('force', 'true');
+  return apiFetch(`/api/admin/stats/global?${params.toString()}`);
 };
 
 // ── Settings (contact email) ──────────────────────────────────────────────────
