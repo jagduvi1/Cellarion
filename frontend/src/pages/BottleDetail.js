@@ -549,12 +549,18 @@ function BottleDetail() {
         <div className="bd-mobile-actions">
           <button className="bd-mobile-action-btn bd-mobile-action-edit" onClick={() => setEditing(true)}>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-            {t('bottleDetail.editDetails')}
+            {t('bottleDetail.editDetailsShort')}
           </button>
           <button className="bd-mobile-action-btn bd-mobile-action-consume" onClick={() => setConsumeOpen(true)}>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M8 2h8l4 10H4L8 2z"/><path d="M12 12v6"/><path d="M8 22h8"/></svg>
-            {t('bottleDetail.removeBottle')}
+            {t('bottleDetail.removeBottleShort')}
           </button>
+          {canMove && (
+            <button className="bd-mobile-action-btn bd-mobile-action-move" onClick={() => setMoveOpen(true)}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M5 9l-3 3 3 3"/><path d="M9 5l3-3 3 3"/><path d="M15 19l-3 3-3-3"/><path d="M19 9l3 3-3 3"/><path d="M2 12h20"/><path d="M12 2v20"/></svg>
+              {t('moveBottle.actionShort')}
+            </button>
+          )}
         </div>
       )}
 
