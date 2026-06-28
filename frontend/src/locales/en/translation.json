@@ -417,7 +417,9 @@
     "premiumFeatureDesc": "Track how the market value of this wine changes over time. Available on the Premium plan.",
     "agingMaturityPremiumDesc": "See expert aging windows and maturity phases for this vintage. Available on the Premium plan.",
     "editDetails": "Edit Details",
+    "editDetailsShort": "Edit",
     "removeBottle": "Remove Bottle",
+    "removeBottleShort": "Remove",
     "mistakeLink": "Added by mistake?",
     "mistakeTitle": "Remove as a mistake?",
     "mistakeBody": "This will permanently remove the bottle as if it had never been added. It will not appear in your stats, history, or search. This cannot be undone.",
@@ -654,6 +656,7 @@
 
   "moveBottle": {
     "action": "Move to another cellar",
+    "actionShort": "Move",
     "title": "Move to another cellar",
     "intro": "Choose a cellar to move this bottle to. All its details and history are kept — it will arrive unplaced.",
     "destinationLabel": "Destination cellar",

@@ -417,7 +417,9 @@
     "premiumFeatureDesc": "Följ hur marknadsvärdet på detta vin förändras över tid. Tillgänglig i Premium-planen.",
     "agingMaturityPremiumDesc": "Se expertens lagringsfönster och mognadsfaser för denna årgång. Tillgänglig i Premium-planen.",
     "editDetails": "Redigera detaljer",
+    "editDetailsShort": "Redigera",
     "removeBottle": "Ta bort flaska",
+    "removeBottleShort": "Ta bort",
     "mistakeLink": "Tillagd av misstag?",
     "mistakeTitle": "Ta bort som misstag?",
     "mistakeBody": "Detta tar permanent bort flaskan som om den aldrig lagts till. Den syns inte i statistik, historik eller sökning. Detta kan inte ångras.",
@@ -654,6 +656,7 @@
 
   "moveBottle": {
     "action": "Flytta till en annan källare",
+    "actionShort": "Flytta",
     "title": "Flytta till en annan källare",
     "intro": "Välj en källare att flytta den här flaskan till. Alla detaljer och historik behålls — den hamnar oplacerad.",
     "destinationLabel": "Målkällare",
