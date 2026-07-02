@@ -24,8 +24,7 @@ const bottleSchema = new mongoose.Schema({
   },
   wineDefinition: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'WineDefinition',
-    index: true
+    ref: 'WineDefinition'
   },
   // User-chosen default image — shown first in the bottle's image carousel
   defaultImage: {

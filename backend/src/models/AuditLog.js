@@ -5,8 +5,7 @@ const ttlDays = parseInt(process.env.AUDIT_TTL_DAYS || '90', 10); // default 90 
 const auditLogSchema = new mongoose.Schema({
   timestamp: {
     type: Date,
-    default: Date.now,
-    index: true
+    default: Date.now
   },
   actor: {
     userId: {
@@ -40,12 +39,17 @@ const auditLogSchema = new mongoose.Schema({
 // Index for per-user queries
 auditLogSchema.index({ 'actor.userId': 1, timestamp: -1 });
 
-// TTL: auto-delete old entries if AUDIT_TTL_DAYS is set
+// TTL: auto-delete old entries if AUDIT_TTL_DAYS is set. The timestamp field
+// must not also declare a plain index — two indexes with the same key pattern
+// but different options make createIndexes fail with IndexOptionsConflict,
+// which would silently prevent the TTL index (and expiry) from being created.
 if (ttlDays > 0) {
   auditLogSchema.index(
     { timestamp: 1 },
     { expireAfterSeconds: ttlDays * 86400 }
   );
+} else {
+  auditLogSchema.index({ timestamp: 1 });
 }
 
 module.exports = mongoose.model('AuditLog', auditLogSchema);

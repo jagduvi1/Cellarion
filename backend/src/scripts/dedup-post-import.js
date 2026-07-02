@@ -61,7 +61,7 @@ function isSubsetMatch(backupNameTokens, lwinNameTokens, producerTokens, appella
   // (e.g. "Riesling", "Shiraz", "Blanc" would only have 1 novel token → rejected)
   if (novelTokens.length < 2) return false;
 
-  // LWIN name tokens must cover at least 50% of the backup name's tokens.
+  // LWIN name tokens must cover at least 60% of the backup name's tokens.
   // Prevents short phrases like "Brut Nature" (2 tokens) from matching a
   // long specific wine like "Blanc de Blancs Brut Nature" (5 tokens).
   if (backupNameTokens.size > 0 && lwinNameTokens.size / backupNameTokens.size < 0.6) return false;
