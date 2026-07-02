@@ -239,11 +239,13 @@ router.put('/regions/:id', async (req, res) => {
       region.normalizedName = normalizeString(name);
     }
 
-    if (parentRegion !== undefined) {
-      if (parentRegion && !isValidId(parentRegion)) {
+    if (parentRegion) {
+      if (!isValidId(parentRegion)) {
         return res.status(400).json({ error: 'Invalid parentRegion' });
       }
-      region.parentRegion = parentRegion || null;
+      region.parentRegion = parentRegion;
+    } else if (parentRegion !== undefined) {
+      region.parentRegion = null;
     }
 
     // Rebuild hierarchy when the name OR parent changed — its last element is
