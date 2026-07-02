@@ -240,6 +240,9 @@ router.put('/regions/:id', async (req, res) => {
     }
 
     if (parentRegion !== undefined) {
+      if (parentRegion && !isValidId(parentRegion)) {
+        return res.status(400).json({ error: 'Invalid parentRegion' });
+      }
       region.parentRegion = parentRegion || null;
     }
 

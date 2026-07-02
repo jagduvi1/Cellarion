@@ -215,7 +215,7 @@ router.put('/:id/slots/:position', async (req, res) => {
     const position = parseInt(req.params.position, 10);
     if (isNaN(position)) return res.status(400).json({ error: 'Invalid position' });
     const { bottleId } = req.body;
-    if (!bottleId) return res.status(400).json({ error: 'bottleId required' });
+    if (!isValidId(bottleId)) return res.status(400).json({ error: 'Valid bottleId required' });
 
     const rack = await Rack.findOne({ _id: req.params.id, deletedAt: null });
     if (!rack) return res.status(404).json({ error: 'Rack not found' });
