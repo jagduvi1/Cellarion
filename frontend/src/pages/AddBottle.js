@@ -197,7 +197,8 @@ function AddBottle() {
     setError(null);
   }, []);
 
-  // Debounce search: wait 300ms after the user stops typing before firing.
+  // Explicit search (Enter key or button — deliberately not fired per
+  // keystroke, since each search also triggers a paid AI identification).
   // Runs both fuzzy search and AI identification in parallel so the AI can
   // correctly distinguish similar wines (e.g. single vineyard vs generic).
   const handleSearch = useCallback(() => {

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import WineImage from '../components/WineImage';
@@ -59,18 +59,24 @@ function SommMaturity() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
+  // Latest-wins guard: a slow response for the previous tab must not
+  // overwrite the list for the tab the user is now viewing.
+  const fetchSeq = useRef(0);
+
   const fetchProfiles = useCallback(async () => {
+    const seq = ++fetchSeq.current;
     setLoading(true);
     setError(null);
     try {
       const res = await apiFetch(`/api/somm/maturity?status=${tab}`);
       const data = await res.json();
+      if (seq !== fetchSeq.current) return;
       if (res.ok) setProfiles(data.profiles);
       else setError(data.error || 'Failed to load profiles');
     } catch {
-      setError('Network error');
+      if (seq === fetchSeq.current) setError('Network error');
     } finally {
-      setLoading(false);
+      if (seq === fetchSeq.current) setLoading(false);
     }
   }, [apiFetch, tab]);
 

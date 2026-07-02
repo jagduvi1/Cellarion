@@ -5,7 +5,6 @@ import { useAuth } from '../contexts/AuthContext';
 import { getCellar } from '../api/cellars';
 import { getRacks, deleteRack, updateSlot, clearSlot, createRack, updateRack } from '../api/racks';
 import { consumeBottle } from '../api/bottles';
-import { getPlacedBottleIds } from '../utils/rackUtils';
 import { getTotalSlots, getModularTotalSlots } from '../utils/rackLayouts';
 import RackRenderer from '../components/racks/RackRenderer';
 import ShelfView from '../components/racks/ShelfView';
@@ -110,9 +109,6 @@ function CellarRacks() {
       }, 100);
     }
   }, [focusRackId, racks]);
-
-  // Compute set of bottle IDs already placed in any rack
-  const placedBottleIds = useMemo(() => getPlacedBottleIds(racks), [racks]);
 
   const fetchAll = async () => {
     try {
@@ -430,7 +426,6 @@ function CellarRacks() {
                 position={activePopup.position}
                 apiFetch={apiFetch}
                 cellarId={id}
-                placedBottleIds={placedBottleIds}
                 onAssign={(pos, bottleId) => handleAssign(activePopup.rackId, pos, bottleId)}
                 onClose={() => setActivePopup(null)}
               />
@@ -646,7 +641,7 @@ function NewRackForm({ newRack, setNewRack, onTypeChange, onSubmit, saving }) {
 }
 
 // ---- Content for empty slot: pick a bottle to place ----
-function EmptySlotContent({ position, apiFetch, cellarId, placedBottleIds, onAssign, onClose }) {
+function EmptySlotContent({ position, apiFetch, cellarId, onAssign, onClose }) {
   const { t } = useTranslation();
   const [search, setSearch] = useState('');
   const [results, setResults] = useState([]);
