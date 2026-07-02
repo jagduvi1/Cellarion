@@ -99,7 +99,8 @@ router.get('/', async (req, res) => {
     const { status } = req.query;
     const filter = { user: req.user.id };
 
-    const validStatuses = ['pending', 'approved', 'rejected'];
+    // Must match the WineRequest schema enum — resolve sets 'resolved', not 'approved'
+    const validStatuses = ['pending', 'resolved', 'rejected'];
     if (status) {
       if (!validStatuses.includes(status)) {
         return res.status(400).json({ error: `Invalid status filter. Must be one of: ${validStatuses.join(', ')}` });

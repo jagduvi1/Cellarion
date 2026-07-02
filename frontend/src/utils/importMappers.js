@@ -316,6 +316,49 @@ export function detectDelimiter(text) {
   return ',';
 }
 
+// ── Shared row-mapper helpers ───────────────────────────────────────────────
+
+/**
+ * Build a header-tolerant accessor over a parsed CSV row: get(keys) returns
+ * the first non-empty value among the given header names (each also tried
+ * lowercased), trimmed — or '' when none match.
+ */
+function makeGetter(row) {
+  return (keys) => {
+    for (const k of keys) {
+      const val = row[k] || row[k.toLowerCase()];
+      if (val) return val.trim();
+    }
+    return '';
+  };
+}
+
+/**
+ * Infer a rating scale from the rating's magnitude: >20 → 100-point,
+ * >5 → 20-point, otherwise (including NaN) 5-point.
+ */
+function inferRatingScale(rating) {
+  return rating > 20 ? '100' : rating > 5 ? '20' : '5';
+}
+
+/**
+ * Rack-mapping fields shared by the Vivino/CellarTracker/generic mappers,
+ * returned as an object to spread into the mapped row. The generic mapper
+ * additionally overrides rackName/rackPosition from combined
+ * "Rack_Location"-style columns when present.
+ */
+function mapRackFields(get) {
+  return {
+    rackName: get(['Rack', 'rack', 'Rack Name', 'rackName']) || undefined,
+    rackPosition: parseInt(get(['Rack Position', 'rackPosition', 'Position', 'Slot']), 10) || undefined,
+    row: parseInt(get(['Row', 'row', 'Bin Row', 'BinRow', 'Rack Row']), 10) || undefined,
+    col: parseInt(get(['Col', 'col', 'Column', 'column', 'Bin Col', 'BinCol', 'Rack Col']), 10) || undefined,
+    rackRows: parseInt(get(['Rack Rows', 'RackRows', 'rackRows', 'Rack Height']), 10) || undefined,
+    rackCols: parseInt(get(['Rack Cols', 'RackCols', 'rackCols', 'Rack Columns', 'Rack Width']), 10) || undefined,
+    rackType: get(['Rack Type', 'RackType', 'rackType']) || undefined,
+  };
+}
+
 // ── Vivino Mapper ───────────────────────────────────────────────────────────
 
 function mapWineType(typeStr) {
@@ -335,13 +378,7 @@ function mapVivinoRow(row) {
   // "Wine name", "Winery", "Vintage", "Country", "Region", "Appellation",
   // "Wine type", "Price", "Currency", "Rating", "Note", "Quantity",
   // "Purchase date", "Store name", "Bottle size"
-  const get = (keys) => {
-    for (const k of keys) {
-      const val = row[k] || row[k.toLowerCase()];
-      if (val) return val.trim();
-    }
-    return '';
-  };
+  const get = makeGetter(row);
 
   const rating = parseLocaleNumber(get(['Rating', 'My Rating', 'rating']));
   const price = parseLocaleNumber(get(['Price', 'price', 'Purchase Price']));
@@ -363,40 +400,29 @@ function mapVivinoRow(row) {
     purchaseLocation: get(['Store name', 'Store', 'store', 'Purchase Location']),
     notes: get(['Note', 'Notes', 'note', 'notes', 'Tasting Note', 'Review']),
     rating: isNaN(rating) ? undefined : rating,
-    ratingScale: rating > 20 ? '100' : rating > 5 ? '20' : '5',
+    ratingScale: inferRatingScale(rating),
     location: get(['Location', 'location', 'Bin', 'bin']),
-    rackName: get(['Rack', 'rack', 'Rack Name', 'rackName']) || undefined,
-    rackPosition: parseInt(get(['Rack Position', 'rackPosition', 'Position', 'Slot']), 10) || undefined,
-    row: parseInt(get(['Row', 'row', 'Bin Row', 'BinRow', 'Rack Row']), 10) || undefined,
-    col: parseInt(get(['Col', 'col', 'Column', 'column', 'Bin Col', 'BinCol', 'Rack Col']), 10) || undefined,
-    rackRows: parseInt(get(['Rack Rows', 'RackRows', 'rackRows', 'Rack Height']), 10) || undefined,
-    rackCols: parseInt(get(['Rack Cols', 'RackCols', 'rackCols', 'Rack Columns', 'Rack Width']), 10) || undefined,
-    rackType: get(['Rack Type', 'RackType', 'rackType']) || undefined,
+    ...mapRackFields(get),
   };
 }
 
 // ── CellarTracker Mapper ────────────────────────────────────────────────────
 
 function mapCellarTrackerRow(row) {
-  const get = (keys) => {
-    for (const k of keys) {
-      const val = row[k] || row[k.toLowerCase()];
-      if (val) return val.trim();
-    }
-    return '';
-  };
+  const get = makeGetter(row);
 
   // CellarTracker uses "Wine" which often includes producer in the name
   let wineName = get(['Wine', 'wine', 'WineName']);
   let producer = get(['Producer', 'producer']);
 
-  // If producer is empty, try to extract from Wine field
-  // CellarTracker format often: "Producer Wine Name Vintage"
+  // If producer is empty, fall back to the first word of the Wine field.
+  // CellarTracker's "Wine" column usually leads with the producer
+  // ("Producer Wine Name"), so this is a crude best-effort guess — wrong
+  // for multi-word producers ("Château Margaux" → "Château"), but it gives
+  // the import matcher something rather than nothing.
   if (!producer && wineName) {
-    // Try to split on common patterns
     const parts = wineName.split(/\s+/);
     if (parts.length > 2) {
-      // Heuristic: first word(s) before the wine type keywords
       producer = parts[0];
     }
   }
@@ -407,7 +433,7 @@ function mapCellarTrackerRow(row) {
 
   return {
     wineName: get(['Wine', 'wine', 'WineName']),
-    producer: producer || get(['Producer', 'producer']),
+    producer,
     vintage: get(['Vintage', 'vintage', 'Year']) || 'NV',
     country: get(['Country', 'country', 'Locale']),
     region: get(['Region', 'region', 'Sub-Region']),
@@ -421,28 +447,16 @@ function mapCellarTrackerRow(row) {
     purchaseLocation: get(['Store', 'store', 'StoreName', 'Purchase Location', 'Vendor']),
     notes: get(['Notes', 'notes', 'MyNotes', 'Tasting Notes', 'Review']),
     rating: isNaN(ctRating) ? undefined : ctRating,
-    ratingScale: ctRating > 20 ? '100' : ctRating > 5 ? '20' : '5',
+    ratingScale: inferRatingScale(ctRating),
     location: get(['Location', 'location', 'Bin', 'bin']),
-    rackName: get(['Rack', 'rack', 'Rack Name', 'rackName']) || undefined,
-    rackPosition: parseInt(get(['Rack Position', 'rackPosition', 'Position', 'Slot']), 10) || undefined,
-    row: parseInt(get(['Row', 'row', 'Bin Row', 'BinRow', 'Rack Row']), 10) || undefined,
-    col: parseInt(get(['Col', 'col', 'Column', 'column', 'Bin Col', 'BinCol', 'Rack Col']), 10) || undefined,
-    rackRows: parseInt(get(['Rack Rows', 'RackRows', 'rackRows', 'Rack Height']), 10) || undefined,
-    rackCols: parseInt(get(['Rack Cols', 'RackCols', 'rackCols', 'Rack Columns', 'Rack Width']), 10) || undefined,
-    rackType: get(['Rack Type', 'RackType', 'rackType']) || undefined,
+    ...mapRackFields(get),
   };
 }
 
 // ── Generic CSV Mapper ──────────────────────────────────────────────────────
 
 function mapGenericRow(row) {
-  const get = (keys) => {
-    for (const k of keys) {
-      const val = row[k] || row[k.toLowerCase()];
-      if (val) return val.trim();
-    }
-    return '';
-  };
+  const get = makeGetter(row);
 
   const price = parseLocaleNumber(get(['Price', 'price', 'Cost', 'cost']));
   const rating = parseLocaleNumber(get(['Rating', 'rating', 'Score', 'score']));
@@ -451,6 +465,7 @@ function mapGenericRow(row) {
   // Combined rack+position columns like Oeno's "Rack_Location" = "M2-11"
   const combined = get(['Rack_Location', 'Rack Location', 'RackLocation', 'Bin Location', 'BinLocation']);
   const parsedRack = parseCombinedRackLocation(combined);
+  const rackFields = mapRackFields(get);
 
   return {
     wineName: get(['Wine', 'wine', 'Wine Name', 'WineName', 'Name', 'name']),
@@ -468,15 +483,13 @@ function mapGenericRow(row) {
     purchaseLocation: get(['Store', 'store', 'Purchase Location', 'Vendor', 'vendor']),
     notes: get(['Notes', 'notes', 'Note', 'note', 'Comments', 'comments']),
     rating: isNaN(rating) ? undefined : rating,
-    ratingScale: rating > 20 ? '100' : rating > 5 ? '20' : '5',
+    ratingScale: inferRatingScale(rating),
     location: get(['Location', 'location', 'Bin', 'bin']),
-    rackName: parsedRack?.rackName || get(['Rack', 'rack', 'Rack Name', 'rackName']) || undefined,
-    rackPosition: parsedRack?.rackPosition || parseInt(get(['Rack Position', 'rackPosition', 'Position', 'Slot']), 10) || undefined,
-    row: parseInt(get(['Row', 'row', 'Bin Row', 'BinRow', 'Rack Row']), 10) || undefined,
-    col: parseInt(get(['Col', 'col', 'Column', 'column', 'Bin Col', 'BinCol', 'Rack Col']), 10) || undefined,
-    rackRows: parseInt(get(['Rack Rows', 'RackRows', 'rackRows', 'Rack Height']), 10) || undefined,
-    rackCols: parseInt(get(['Rack Cols', 'RackCols', 'rackCols', 'Rack Columns', 'Rack Width']), 10) || undefined,
-    rackType: get(['Rack Type', 'RackType', 'rackType']) || undefined,
+    ...rackFields,
+    // Generic-only: combined "Rack_Location"-style columns take precedence
+    // over the shared rack aliases for rackName/rackPosition.
+    rackName: parsedRack?.rackName || rackFields.rackName,
+    rackPosition: parsedRack?.rackPosition || rackFields.rackPosition,
   };
 }
 
@@ -535,7 +548,12 @@ function tryParseDate(str) {
     return `${str.trim()}-01-01`;
   }
   const d = new Date(str);
-  return isNaN(d.getTime()) ? undefined : d.toISOString().slice(0, 10);
+  if (isNaN(d.getTime())) return undefined;
+  // Format from LOCAL date parts. Non-ISO strings ("10/30/2024") parse as
+  // local midnight, so rendering via toISOString() (UTC) would shift the
+  // date by a day for any user east of UTC.
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
 /**

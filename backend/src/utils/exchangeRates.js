@@ -87,8 +87,11 @@ async function getSnapshotsForDates(dates) {
  * @returns {number|null}
  */
 function convertCurrency(amount, from, to, rates) {
-  if (!amount || !from || !to || !rates) return null;
+  if (!amount || !from || !to) return null;
+  // Same-currency is a no-op even without a rates map — callers legitimately
+  // pass rates=null when no snapshot exists, and USD→USD must still work.
   if (from === to) return amount;
+  if (!rates) return null;
   const fromRate = rates[from];
   const toRate   = rates[to];
   if (!fromRate || !toRate) return null;

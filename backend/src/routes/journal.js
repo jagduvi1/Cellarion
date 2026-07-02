@@ -2,6 +2,7 @@ const express = require('express');
 const { requireAuth } = require('../middleware/auth');
 const JournalEntry = require('../models/JournalEntry');
 const Bottle = require('../models/Bottle');
+const User = require('../models/User');
 const WineDefinition = require('../models/WineDefinition');
 const { logAudit } = require('../services/audit');
 const { createNotification } = require('../services/notifications');
@@ -192,9 +193,11 @@ router.post('/', async (req, res) => {
       .populate(POPULATE_PAIRINGS)
       .lean();
 
-    // Notify tagged Cellarion users (if entry is public)
+    // Notify tagged Cellarion users (if entry is public). req.user only
+    // carries JWT claims (id/roles/plan) — the name must come from the DB.
     if (populated.visibility === 'public' && populated.people?.length > 0) {
-      const senderName = req.user.displayName || req.user.username || 'Someone';
+      const sender = await User.findById(req.user.id).select('username displayName').lean();
+      const senderName = sender?.displayName || sender?.username || 'Someone';
       for (const person of populated.people) {
         if (person.user && person.user._id?.toString() !== req.user.id) {
           createNotification(

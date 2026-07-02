@@ -6,6 +6,13 @@
  * with a reason — so adding a new user-linked model can't slip through without
  * a conscious decision about erasure + portability.
  */
+// services/search.js eagerly requires the ESM-only `meilisearch` package,
+// which Jest can't parse — mock it (same pattern as cellarImport.test.js).
+jest.mock('./search', () => ({
+  removeBottles: jest.fn(),
+  indexDiscussion: jest.fn(),
+}));
+
 const fs = require('fs');
 const path = require('path');
 const { REGISTRY, EXCLUDED, registeredModelNames } = require('./userDataRegistry');

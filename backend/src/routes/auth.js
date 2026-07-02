@@ -148,8 +148,10 @@ router.post('/register', authLimiter, async (req, res) => {
   try {
     const { username, email, password, consentPrivacyPolicy, consentDataProcessing } = req.body;
 
-    // Validate input
-    if (!username || !email || !password) {
+    // Validate input — require strings so a non-string email (number, object)
+    // fails with a 400 instead of throwing on .toLowerCase() (same guard as login)
+    if (typeof username !== 'string' || typeof email !== 'string' || typeof password !== 'string'
+        || !username || !email || !password) {
       return res.status(400).json({ error: 'Username, email, and password are required' });
     }
 
@@ -381,7 +383,9 @@ router.get('/verify-email', async (req, res) => {
 router.post('/resend-verification', resendLimiter, async (req, res) => {
   const { email } = req.body;
 
-  if (!email) {
+  // String check for the same reason as login/register: .toLowerCase() on a
+  // non-string body value must be a 400, not a 500.
+  if (typeof email !== 'string' || !email) {
     return res.status(400).json({ error: 'Email is required' });
   }
 
@@ -558,7 +562,7 @@ router.post('/forgot-password', forgotLimiter, async (req, res) => {
   // Always return the same message to prevent email enumeration
   const genericResponse = { message: 'If that email exists, a password reset link has been sent.' };
 
-  if (!email) {
+  if (typeof email !== 'string' || !email) {
     return res.status(400).json({ error: 'Email is required' });
   }
 

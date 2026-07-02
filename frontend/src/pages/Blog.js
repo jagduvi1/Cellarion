@@ -23,11 +23,17 @@ function Blog() {
   const fetchPosts = useCallback(async () => {
     setLoading(true);
     try {
+      // apiFetch doesn't throw on non-2xx — an error body ({error}) has no
+      // posts array, and rendering would crash on posts.length.
       const res = await getBlogPosts(apiFetch, { page, tag: activeTag || undefined });
       const data = await res.json();
-      setPosts(data.posts);
-      setTotal(data.total);
-      setPages(data.pages);
+      if (!res.ok) {
+        setPosts([]);
+        return;
+      }
+      setPosts(data.posts || []);
+      setTotal(data.total || 0);
+      setPages(data.pages || 1);
     } catch {
       setPosts([]);
     } finally {
@@ -39,7 +45,7 @@ function Blog() {
     try {
       const res = await getBlogTags(apiFetch);
       const data = await res.json();
-      setTags(data.tags);
+      setTags(res.ok ? (data.tags || []) : []);
     } catch {
       setTags([]);
     }

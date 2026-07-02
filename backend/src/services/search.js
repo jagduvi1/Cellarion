@@ -372,6 +372,18 @@ async function removeBottle(bottleId) {
   }
 }
 
+// Batch removal — one Meilisearch call for many ids (used by GDPR erasure,
+// where a user may own thousands of bottles).
+async function removeBottles(bottleIds) {
+  if (!isAvailable || !bottleIds || bottleIds.length === 0) return;
+
+  try {
+    await bottlesIndex.deleteDocuments(bottleIds.map(id => id.toString()));
+  } catch (err) {
+    console.error(`Meilisearch remove ${bottleIds.length} bottles failed: ${err.message}`);
+  }
+}
+
 async function bulkIndexBottles(bottleIds) {
   if (!isAvailable || !bottleIds || bottleIds.length === 0) return;
 
@@ -662,6 +674,7 @@ module.exports = {
   search,
   indexBottle,
   removeBottle,
+  removeBottles,
   bulkIndexBottles,
   searchBottles,
   indexDiscussion,

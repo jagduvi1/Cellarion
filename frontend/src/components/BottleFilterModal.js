@@ -63,7 +63,10 @@ function FilterSection({ label, icon, children, defaultExpanded = true }) {
   );
 }
 
-function BottleFilterModal({ filters, onApply, onClose, facets, baseFacets, facetMeta, bottlesTotal }) {
+// showRatingMaturity: pages whose backend endpoint doesn't support the
+// rating/maturity filters (e.g. consumed history) hide those controls —
+// rendering them would silently do nothing.
+function BottleFilterModal({ filters, onApply, onClose, facets, baseFacets, facetMeta, bottlesTotal, showRatingMaturity = true }) {
   const { t } = useTranslation();
 
   // baseFacets = all options in the cellar (unfiltered) — used to LIST available pills
@@ -233,6 +236,7 @@ function BottleFilterModal({ filters, onApply, onClose, facets, baseFacets, face
         })()}
 
         {/* Rating + Maturity — side by side */}
+        {showRatingMaturity && (
         <div className="bfm-dropdowns-row">
           <div className="bfm-dropdown-group">
             <label className="bfm-dropdown-label">{t('cellarDetail.allRatings')}</label>
@@ -264,6 +268,7 @@ function BottleFilterModal({ filters, onApply, onClose, facets, baseFacets, face
             </select>
           </div>
         </div>
+        )}
       </div>
 
       <div className="bfm-footer">

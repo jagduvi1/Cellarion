@@ -143,7 +143,7 @@ router.post('/checkout', requireAuth, async (req, res) => {
       }
     });
 
-    logAudit(req, 'stripe.checkout_created', { plan });
+    logAudit(req, 'stripe.checkout_created', {}, { plan });
     res.json({ url: session.url });
   } catch (error) {
     console.error('Stripe checkout error:', error.message);

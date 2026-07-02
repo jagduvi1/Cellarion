@@ -312,12 +312,15 @@ async function embedSinglePair(wineDefId, vintage) {
 
     await vectorStore.ensureCollection(vectorIndex);
 
-    // Before creating new point, delete old one if it exists
+    // Embed FIRST, then delete the stale point (same order as the batch job).
+    // Deleting before the embed exists would leave the wine missing from
+    // vector search if the Voyage call below throws.
+    const vector = await embedSingle(text, { model });
+
     if (existing?.qdrantPointId) {
       await vectorStore.deletePoints(vectorIndex, [existing.qdrantPointId]).catch(() => {});
     }
 
-    const vector = await embedSingle(text, { model });
     const pointId = randomUUID();
 
     await vectorStore.upsertPoints(vectorIndex, [{

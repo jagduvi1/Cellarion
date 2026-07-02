@@ -1,4 +1,4 @@
-import { useState, useEffect, lazy, Suspense } from 'react';
+import { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
@@ -49,26 +49,39 @@ export default function Journal() {
   const [occasion, setOccasion] = useState('');
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
 
+  // Debounce typing (350ms, same as CellarHistory) so the search box doesn't
+  // fire a request per keystroke.
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(search), 350);
+    return () => clearTimeout(timer);
+  }, [search]);
+
+  // Latest-wins guard: without it, a slow response for a stale query can
+  // overwrite the list for the query the user currently sees.
+  const fetchSeq = useRef(0);
+
   useEffect(() => {
     fetchEntries();
-  }, [search, occasion]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [debouncedSearch, occasion]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const fetchEntries = async () => {
+    const seq = ++fetchSeq.current;
     setLoading(true);
     try {
       const params = new URLSearchParams();
-      if (search) params.set('q', search);
+      if (debouncedSearch) params.set('q', debouncedSearch);
       if (occasion) params.set('occasion', occasion);
       params.set('limit', '50');
 
       const res = await getJournalEntries(apiFetch, params.toString());
-      if (res.ok) {
+      if (res.ok && seq === fetchSeq.current) {
         const data = await res.json();
         setEntries(data.items || []);
         setTotal(data.total || 0);
       }
     } catch { /* ignore */ }
-    setLoading(false);
+    if (seq === fetchSeq.current) setLoading(false);
   };
 
   const handleDelete = async (id) => {

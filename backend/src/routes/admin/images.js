@@ -92,11 +92,13 @@ router.put('/:id/approve', async (req, res) => {
     // Award Cellar Cred to the uploader
     incrementCred(image.uploadedBy, 'image_approved').catch(() => {});
 
-    // Auto-assign as wine image if public and the wine doesn't already have one
+    // Resolve the wine for the notification label regardless of visibility —
+    // private approvals should still name the wine (the reject path does).
     const wineDefId = image.wineDefinition;
-    let approvedWine = null;
+    const approvedWine = wineDefId ? await WineDefinition.findById(wineDefId) : null;
+
+    // Auto-assign as wine image if public and the wine doesn't already have one
     if (visibility === 'public' && wineDefId) {
-      approvedWine = await WineDefinition.findById(wineDefId);
       if (approvedWine && !approvedWine.image) {
         await BottleImage.updateMany(
           { wineDefinition: wineDefId, assignedToWine: true },

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
@@ -59,27 +59,45 @@ function Bottles() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Reset page when filters change so a new filter starts at the top
-  useEffect(() => { setPage(0); }, [searchParams]);
+  // Reset page when filters change so a new filter starts at the top. The
+  // reset lands one render AFTER the filter change, so derive the effective
+  // page for the current render — otherwise removing a chip while on page N
+  // fires a request with the new filters but the stale offset, and its
+  // response can arrive after (and clobber) the correct page-0 one.
+  const filtersKey = searchParams.toString();
+  const pageFiltersRef = useRef(filtersKey);
+  const effectivePage = pageFiltersRef.current === filtersKey ? page : 0;
+  useEffect(() => {
+    if (pageFiltersRef.current !== filtersKey) {
+      pageFiltersRef.current = filtersKey;
+      setPage(0);
+    }
+  }, [filtersKey]);
+
+  // Latest-wins guard for out-of-order responses between page changes.
+  const loadSeq = useRef(0);
 
   const load = useCallback(async () => {
+    const seq = ++loadSeq.current;
     setLoading(true);
     setError(null);
     try {
       const res = await listBottles(apiFetch, {
         ...filters,
         limit: PAGE_SIZE,
-        offset: page * PAGE_SIZE,
+        offset: effectivePage * PAGE_SIZE,
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || 'Failed to load bottles');
-      setData(json.bottles || { items: [], total: 0, count: 0 });
+      if (seq === loadSeq.current) {
+        setData(json.bottles || { items: [], total: 0, count: 0 });
+      }
     } catch (err) {
-      setError(err.message);
+      if (seq === loadSeq.current) setError(err.message);
     } finally {
-      setLoading(false);
+      if (seq === loadSeq.current) setLoading(false);
     }
-  }, [apiFetch, filters, page]);
+  }, [apiFetch, filters, effectivePage]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -98,7 +116,6 @@ function Bottles() {
   // received, so we don't need an extra taxonomy fetch.
   const chipLabels = useMemo(() => {
     const labels = {};
-    const sample = data.items[0]?.wineDefinition;
     if (filters.type) labels.type = `Type: ${TYPE_LABELS[filters.type] || filters.type}`;
     if (filters.country) {
       const name = data.items.find(b => b.wineDefinition?.country?._id === filters.country)
@@ -131,8 +148,6 @@ function Bottles() {
     if (filters.consumedYear) labels.consumedYear = `Consumed: ${filters.consumedYear}`;
     if (filters.status) labels.status = `Status: ${STATUS_LABELS[filters.status] || filters.status}`;
     return labels;
-    // sample is only referenced so the linter sees we read data
-    // eslint-disable-next-line no-unused-vars
   }, [filters, data.items]);
 
   const chips = Object.entries(chipLabels);

@@ -27,26 +27,35 @@ function ImageUpload({ bottleId, wineDefinitionId, credit, onUploadComplete, onP
       attempts++;
       try {
         const res = await apiFetch(`/api/images/${imageId}`);
-        const data = await res.json();
-        if (!res.ok) return;
-
-        const img = data.image;
-        if (img.status === 'processed' || img.status === 'approved') {
-          setImages(prev => prev.map(p =>
-            p.id === imageId
-              ? { ...p, processedSrc: img.processedUrl, status: 'processed' }
-              : p
-          ));
-          if (onProcessingComplete && img.processedUrl) {
-            const url = img.processedUrl.startsWith('http')
-              ? img.processedUrl
-              : `${API_URL}${img.processedUrl}`;
-            onProcessingComplete(url);
+        if (res.ok) {
+          const data = await res.json();
+          const img = data.image;
+          if (img.status === 'processed' || img.status === 'approved') {
+            setImages(prev => prev.map(p =>
+              p.id === imageId
+                ? { ...p, processedSrc: img.processedUrl, status: 'processed' }
+                : p
+            ));
+            if (onProcessingComplete && img.processedUrl) {
+              const url = img.processedUrl.startsWith('http')
+                ? img.processedUrl
+                : `${API_URL}${img.processedUrl}`;
+              onProcessingComplete(url);
+            }
+            delete pollTimers.current[imageId];
+            return;
           }
-          delete pollTimers.current[imageId];
-          return;
-        }
-        if (img.status === 'uploaded' && attempts > 3) {
+          if (img.status === 'uploaded' && attempts > 3) {
+            setImages(prev => prev.map(p =>
+              p.id === imageId ? { ...p, status: 'failed' } : p
+            ));
+            delete pollTimers.current[imageId];
+            return;
+          }
+        } else if (res.status < 500) {
+          // 4xx: image deleted/rejected or auth lost — stop polling and show
+          // the failed state (with its retry button) instead of an endless
+          // "Removing background…" spinner. 5xx falls through to reschedule.
           setImages(prev => prev.map(p =>
             p.id === imageId ? { ...p, status: 'failed' } : p
           ));
@@ -137,7 +146,12 @@ function ImageUpload({ bottleId, wineDefinitionId, credit, onUploadComplete, onP
 
   // --- Camera logic ---
 
+  // Mirrors cameraOpen for the getUserMedia race check below — the promise
+  // may resolve after the user has already closed the viewfinder.
+  const cameraOpenRef = useRef(false);
+
   const stopCamera = useCallback(() => {
+    cameraOpenRef.current = false;
     if (streamRef.current) {
       streamRef.current.getTracks().forEach(track => track.stop());
       streamRef.current = null;
@@ -149,11 +163,20 @@ function ImageUpload({ bottleId, wineDefinitionId, credit, onUploadComplete, onP
   const startCamera = useCallback(async () => {
     setCameraError(null);
     setCameraOpen(true);
+    cameraOpenRef.current = true;
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode, width: { ideal: 1920 }, height: { ideal: 1080 } },
         audio: false
       });
+      // The viewfinder may have been closed while the permission prompt was
+      // up — stop the just-acquired stream or the camera stays on forever.
+      if (!cameraOpenRef.current) {
+        stream.getTracks().forEach(t => t.stop());
+        return;
+      }
+      // Replace (never leak) a previous stream, e.g. after a camera switch.
+      if (streamRef.current) streamRef.current.getTracks().forEach(t => t.stop());
       streamRef.current = stream;
       requestAnimationFrame(() => {
         if (videoRef.current) videoRef.current.srcObject = stream;

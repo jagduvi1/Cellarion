@@ -37,6 +37,7 @@ const { logAudit } = require('../../services/audit');
 const { submitUrls } = require('../../services/indexNow');
 const { isValidId } = require('../../utils/validation');
 const { escapeRegex } = require('../../utils/sanitize');
+const { parsePagination } = require('../../utils/pagination');
 
 const router = express.Router();
 
@@ -46,10 +47,9 @@ router.use(requireAuth, requireRole('admin'));
 // GET /api/admin/wines - List wine definitions
 router.get('/', async (req, res) => {
   try {
-    const { search, type, sort, page = 1, limit = 50 } = req.query;
-    const parsedLimit = parseInt(limit);
-    const parsedPage = parseInt(page);
-    const skip = (parsedPage - 1) * parsedLimit;
+    const { search, type, sort } = req.query;
+    const { limit: parsedLimit, offset: skip, page: parsedPage } =
+      parsePagination(req.query, { limit: 50, maxLimit: 200 });
 
     const sortMap = {
       'name': { name: 1 },
@@ -390,22 +390,36 @@ router.get('/duplicates', async (req, res) => {
       return res.status(400).json({ error: 'Name and producer are required' });
     }
 
-    // Use text search first to narrow down candidates
-    let query = WineDefinition.find();
-
-    // Try to use text search for initial filtering
+    // Candidate gathering. MongoDB rejects $text inside $or unless every
+    // other $or clause is indexed (TEXT-under-OR planner restriction), and
+    // name/producer have no B-tree indexes — so run the text search and the
+    // regex fallback as two separate queries and merge the candidates.
     const searchTerms = `${name} ${producer}`.trim();
-    if (searchTerms) {
-      query = query.or([
-        { $text: { $search: searchTerms } },
-        { name: new RegExp(escapeRegex(name.split(' ')[0]), 'i') },
-        { producer: new RegExp(escapeRegex(producer.split(' ')[0]), 'i') }
-      ]);
-    }
+    const CANDIDATE_LIMIT = 200;
+    const [textHits, regexHits] = await Promise.all([
+      WineDefinition.find({ $text: { $search: searchTerms } })
+        .populate(['country', 'region', 'grapes'])
+        .limit(CANDIDATE_LIMIT),
+      WineDefinition.find({
+        $or: [
+          { name: new RegExp(escapeRegex(name.split(' ')[0]), 'i') },
+          { producer: new RegExp(escapeRegex(producer.split(' ')[0]), 'i') }
+        ]
+      })
+        .populate(['country', 'region', 'grapes'])
+        .limit(CANDIDATE_LIMIT)
+    ]);
 
-    const allWines = await query
-      .populate(['country', 'region', 'grapes'])
-      .limit(200); // Increased limit for better coverage
+    const seenIds = new Set();
+    const allWines = [];
+    for (const wine of [...textHits, ...regexHits]) {
+      const key = wine._id.toString();
+      if (!seenIds.has(key)) {
+        seenIds.add(key);
+        allWines.push(wine);
+      }
+      if (allWines.length >= CANDIDATE_LIMIT) break;
+    }
 
     // Calculate comprehensive similarity scores
     const candidates = allWines
@@ -900,11 +914,9 @@ async function reassignWineRefs(sourceId, keeperId) {
     purgeSourceVectors(sourceId),
     // Drop any "not duplicate" decisions referencing the disappearing source.
     WineNotDuplicate.deleteMany({ $or: [{ wineA: sourceId }, { wineB: sourceId }] }),
-    // Reviews have a unique (author, wineDefinition) index — on a real dup-key
-    // collision the source author already reviewed the keeper, so drop the
-    // source's duplicate review. Re-throw anything that isn't a dup-key error.
-    Review.updateMany({ wineDefinition: sourceId }, { $set: { wineDefinition: keeperId } })
-      .catch(err => { if (err.code === 11000) return Review.deleteMany({ wineDefinition: sourceId }); throw err; }),
+    // Reviews have no unique index on (author, wineDefinition) — a user may
+    // hold several reviews per wine — so a plain re-point cannot collide.
+    Review.updateMany({ wineDefinition: sourceId }, { $set: { wineDefinition: keeperId } }),
     // Wishlist items: re-point so a user who wishlisted the source wine doesn't
     // end up pointing at a deleted one. No unique index here, so a plain re-point
     // is safe; a user who wanted both merged wines may briefly see two rows —

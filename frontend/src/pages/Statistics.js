@@ -54,7 +54,7 @@ function EmptyCollection() {
 // ── Main Statistics Page ──────────────────────────────────────────────────────
 function Statistics() {
   const { t } = useTranslation();
-  const { user, apiFetch } = useAuth();
+  const { apiFetch } = useAuth();
   const navigate = useNavigate();
   const [stats, setStats]  = useState(null);
   const [loading, setLoading] = useState(true);

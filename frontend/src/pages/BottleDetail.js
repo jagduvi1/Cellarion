@@ -103,10 +103,13 @@ function BottleDetail() {
             : `${API_URL}${data.defaultImageUrl}`;
           setDefaultImage(url);
         }
-        // Fetch community reviews for this wine
+        // Fetch community reviews for this wine. Pass the vintage explicitly —
+        // this closure still sees the pre-setBottle (null) state, so reading
+        // `bottle?.vintage` here would silently drop the default
+        // "this vintage" filter on the initial load.
         const wineObj = data.bottle?.wineDefinition;
         if (wineObj?._id) {
-          fetchWineReviews(wineObj._id);
+          fetchWineReviews(wineObj._id, { bottleVintage: data.bottle.vintage });
           if (wineObj.communityRating?.reviewCount > 0) {
             setCommunityRating(wineObj.communityRating);
           }
@@ -139,14 +142,15 @@ function BottleDetail() {
       const audience = opts.audience ?? reviewAudience;
       const vintageFilter = opts.vintage ?? reviewVintage;
       const page = opts.page ?? 1;
+      const bottleVintage = opts.bottleVintage ?? bottle?.vintage;
 
       const params = new URLSearchParams();
       params.set('limit', '10');
       params.set('page', String(page));
       params.set('audience', audience);
 
-      if (vintageFilter === 'this' && bottle?.vintage) {
-        params.set('vintage', bottle.vintage);
+      if (vintageFilter === 'this' && bottleVintage) {
+        params.set('vintage', bottleVintage);
       } else if (vintageFilter !== 'all' && vintageFilter !== 'this') {
         params.set('vintage', vintageFilter);
       }
@@ -394,7 +398,7 @@ function BottleDetail() {
           onEdit={() => setEditing(true)}
           onSuggestGrapes={() => setSuggestGrapesOpen(true)}
           onRemove={() => setConsumeOpen(true)}
-          onReportWine={(reason) => { setReportWineOpen(true); setReportDefaultReason(reason || null); }}
+          onReportWine={(reason) => { setReportWineOpen(true); setReportDefaultReason(typeof reason === 'string' ? reason : null); }}
         />
       )}
 

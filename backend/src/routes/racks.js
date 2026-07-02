@@ -215,7 +215,7 @@ router.put('/:id/slots/:position', async (req, res) => {
     const position = parseInt(req.params.position, 10);
     if (isNaN(position)) return res.status(400).json({ error: 'Invalid position' });
     const { bottleId } = req.body;
-    if (!bottleId) return res.status(400).json({ error: 'bottleId required' });
+    if (!isValidId(bottleId)) return res.status(400).json({ error: 'Valid bottleId required' });
 
     const rack = await Rack.findOne({ _id: req.params.id, deletedAt: null });
     if (!rack) return res.status(404).json({ error: 'Rack not found' });
@@ -235,8 +235,19 @@ router.put('/:id/slots/:position', async (req, res) => {
     const bottle = await Bottle.findOne({ _id: bottleId, cellar: rack.cellar });
     if (!bottle) return res.status(404).json({ error: 'Bottle not found in this cellar' });
 
-    // Remove existing assignment for this position, then add new one
-    rack.slots = rack.slots.filter(s => s.position !== position);
+    // A bottle occupies at most one slot. Clear its placement in any OTHER
+    // rack of this cellar first (this rack is handled in-memory below — an
+    // external update to it would trip optimistic concurrency on save()).
+    await Rack.updateMany(
+      { _id: { $ne: rack._id }, cellar: rack.cellar, 'slots.bottle': bottleId },
+      { $pull: { slots: { bottle: bottleId } } }
+    );
+
+    // Remove the target position's assignment and the bottle's old slot in
+    // this rack (if any), then add the new assignment
+    rack.slots = rack.slots.filter(
+      s => s.position !== position && String(s.bottle) !== String(bottleId)
+    );
     rack.slots.push({ position, bottle: bottleId });
     await rack.save();
 

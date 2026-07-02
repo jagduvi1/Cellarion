@@ -9,7 +9,8 @@ const { parsePagination } = require('../../utils/pagination');
 const { isValidId } = require('../../utils/validation');
 
 const REPORT_STATUSES = ['pending', 'resolved', 'dismissed'];
-const REPORT_REASONS = ['wrong_info', 'duplicate', 'inappropriate', 'wrong_price', 'other'];
+// Keep in sync with the WineReport schema enum (models/WineReport.js)
+const REPORT_REASONS = ['wrong_info', 'duplicate', 'inappropriate', 'wrong_price', 'wrong_tasting_profile', 'other'];
 
 router.use(requireAuth, requireRole('admin'));
 
@@ -32,7 +33,7 @@ router.get('/', async (req, res) => {
         .skip(offset)
         .limit(limit)
         .populate('user', 'username email')
-        .populate('wineDefinition', 'name producer country type')
+        .populate({ path: 'wineDefinition', select: 'name producer country type', populate: { path: 'country', select: 'name' } })
         .populate('duplicateOf', 'name producer')
         .populate('resolvedBy', 'username')
         .lean(),

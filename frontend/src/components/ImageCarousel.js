@@ -8,15 +8,20 @@ function ImageCarousel({ images, size = 'medium', defaultImageId, onSetDefault }
 
   if (!images || images.length === 0) return null;
 
+  // Clamp against a stale index — the images array can shrink between
+  // refreshes (e.g. an image rejected server-side) while a high index is
+  // still in state, and images[currentIndex] would be undefined.
+  const index = Math.min(currentIndex, images.length - 1);
+
   const goToPrev = () => {
-    setCurrentIndex((prev) => (prev === 0 ? images.length - 1 : prev - 1));
+    setCurrentIndex(index === 0 ? images.length - 1 : index - 1);
   };
 
   const goToNext = () => {
-    setCurrentIndex((prev) => (prev === images.length - 1 ? 0 : prev + 1));
+    setCurrentIndex(index === images.length - 1 ? 0 : index + 1);
   };
 
-  const currentImage = images[currentIndex];
+  const currentImage = images[index];
   const src = currentImage.processedUrl || currentImage.originalUrl;
   const fullSrc = src.startsWith('http') ? src : `${API_URL}${src}`;
   const isDefault = defaultImageId && currentImage._id === defaultImageId;
@@ -63,10 +68,10 @@ function ImageCarousel({ images, size = 'medium', defaultImageId, onSetDefault }
               <button
                 key={i}
                 type="button"
-                className={`carousel-dot ${i === currentIndex ? 'active' : ''} ${defaultImageId && img._id === defaultImageId ? 'is-default' : ''}`}
+                className={`carousel-dot ${i === index ? 'active' : ''} ${defaultImageId && img._id === defaultImageId ? 'is-default' : ''}`}
                 onClick={() => setCurrentIndex(i)}
                 aria-label={`Go to image ${i + 1}`}
-                aria-current={i === currentIndex ? 'true' : undefined}
+                aria-current={i === index ? 'true' : undefined}
               />
             ))}
           </div>

@@ -41,8 +41,11 @@ router.get('/queue', requireSommOrAdmin, async (req, res) => {
     const validRequests = requests.filter(r => r.wineDefinition);
     if (validRequests.length === 0) return res.json({ queue: [] });
 
-    // Step 2: latest price snapshot per pair (for staleness display)
+    // Step 2: latest price snapshot per pair (for staleness display).
+    // $last is only meaningful with a defined input order — sort by setAt
+    // first, or "latest" is whatever natural order happens to yield.
     const latestPrices = await WineVintagePrice.aggregate([
+      { $sort: { setAt: 1 } },
       { $group: {
           _id: { wineDefinition: '$wineDefinition', vintage: '$vintage' },
           latestSetAt:    { $last: '$setAt' },

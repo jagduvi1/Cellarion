@@ -33,7 +33,7 @@ const WineReport = require('../models/WineReport');
 const WishlistItem = require('../models/WishlistItem');
 const PriceTrackingRequest = require('../models/PriceTrackingRequest');
 const PriceTrackingSkip = require('../models/PriceTrackingSkip');
-const { requireAuth, requireRole } = require('../middleware/auth');
+const { requireAuth } = require('../middleware/auth');
 const { buildUserExport } = require('../services/userDataRegistry');
 const { buildCellarDataExport, EXPORT_README } = require('../services/cellarExport');
 const { safeUploadPath } = require('../services/imageProcessor');
@@ -343,53 +343,12 @@ router.get('/public/:userId', requireAuth, async (req, res) => {
   }
 });
 
-// GET /api/users/all - Get all users (admin only, paginated)
-router.get('/all', requireAuth, requireRole('admin'), async (req, res) => {
-  try {
-    const page = Math.max(1, parseInt(req.query.page) || 1);
-    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 50));
-    const skip = (page - 1) * limit;
-    const search = req.query.search?.trim();
-
-    const filter = {};
-    if (search) {
-      const escaped = escapeRegex(search);
-      filter.$or = [
-        { username: { $regex: escaped, $options: 'i' } },
-        { email: { $regex: escaped, $options: 'i' } }
-      ];
-    }
-
-    const [users, total] = await Promise.all([
-      User.find(filter)
-        .select('username email roles plan createdAt emailVerified')
-        .sort({ createdAt: -1 })
-        .skip(skip)
-        .limit(limit)
-        .lean(),
-      User.countDocuments(filter)
-    ]);
-
-    res.json({
-      total,
-      page,
-      limit,
-      pages: Math.ceil(total / limit),
-      users
-    });
-  } catch (error) {
-    console.error('Get all users error:', error);
-    res.status(500).json({ error: 'Failed to get users' });
-  }
-});
-
 // GET /api/users/me/export — GDPR data portability: export all user data as JSON
 //
-// Per-collection cap (EXPORT_MAX) bounds worst-case memory if a power user has
-// pathological collection sizes. 50k is generous — a serious collector has
-// ~5-10k bottles, and even the busiest discussion participant has < 5k replies.
-// AuditLog has a tighter cap (1000) because it's high-cardinality activity log.
-const EXPORT_MAX = 50000;
+// Per-collection caps that bound worst-case memory live in
+// services/userDataRegistry.js (EXPORT_MAX there) — the single source of
+// truth shared with the deletion job. The admin user list lives at
+// /api/admin/users (routes/admin/users.js).
 router.get('/me/export', requireAuth, async (req, res) => {
   const userId = req.user.id;
   try {

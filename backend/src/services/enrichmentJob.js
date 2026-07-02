@@ -137,9 +137,12 @@ async function runJob(cfg) {
       }
 
       try {
-        const result = await enrichWine(wine, job.model);
+        const { result, reason } = await enrichWine(wine, job.model);
         if (result === 'enriched') job.enriched++;
-        else job.skipped++;
+        else {
+          job.skipped++;
+          if (reason) job.lastError = reason;
+        }
       } catch (err) {
         job.errors++;
         job.lastError = err.message;
@@ -170,7 +173,10 @@ async function runJob(cfg) {
  *
  * @param {object} wine   – populated WineDefinition (country/region/grapes names)
  * @param {string} model  – embedding/enrichment model label to stamp on the profile
- * @returns {'enriched'|'skipped'}
+ * @returns {{ result: 'enriched'|'skipped', reason: string|null }}
+ *   `reason` carries a non-trivial skip cause; only the batch loop writes it
+ *   to the module-level job state, so a fire-and-forget enrichWineById can't
+ *   pollute the admin job status.
  */
 async function enrichWine(wine, model) {
   const { data, debugReason } = await suggestProfile({
@@ -187,8 +193,8 @@ async function enrichWine(wine, model) {
 
   if (!data) {
     // ai_unknown / no_api_key / rate_limit / exception — surface non-trivial reasons
-    if (debugReason && !debugReason.startsWith('ai_unknown')) job.lastError = debugReason;
-    return 'skipped';
+    const reason = debugReason && !debugReason.startsWith('ai_unknown') ? debugReason : null;
+    return { result: 'skipped', reason };
   }
 
   await WineDefinition.updateOne(
@@ -224,7 +230,7 @@ async function enrichWine(wine, model) {
     console.warn(`[enrichmentJob] re-embed after enrich failed (${wine._id}):`, embedErr.message);
   }
 
-  return 'enriched';
+  return { result: 'enriched', reason: null };
 }
 
 /**

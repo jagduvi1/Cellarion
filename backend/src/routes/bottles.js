@@ -377,14 +377,25 @@ router.post('/', async (req, res) => {
       addToHistory ? resolveRating(consumedRating, consumedRatingScale) : { rating: undefined, ratingScale: undefined, error: null };
     if (consumeRatingError) return res.status(400).json({ error: consumeRatingError });
 
-    // Verify user has editor/owner access to this cellar
+    // Verify user has editor/owner access to this cellar. Soft-deleted cellars
+    // are rejected too — a bottle added there would be invisible everywhere
+    // (all cellar lists filter deletedAt) and effectively lost.
+    if (!mongoose.isValidObjectId(cellar)) {
+      return res.status(400).json({ error: 'Invalid cellar ID' });
+    }
     const cellarDoc = await Cellar.findById(cellar);
+    if (!cellarDoc || cellarDoc.deletedAt) {
+      return res.status(404).json({ error: 'Cellar not found' });
+    }
     const role = getCellarRole(cellarDoc, req.user.id);
     if (!role || role === 'viewer') {
       return res.status(403).json({ error: 'Not authorized to add bottles to this cellar' });
     }
 
     // Verify wine definition exists
+    if (!mongoose.isValidObjectId(wineDefinition)) {
+      return res.status(400).json({ error: 'Invalid wine definition ID' });
+    }
     const wineDoc = await WineDefinition.findById(wineDefinition);
     if (!wineDoc) {
       return res.status(404).json({ error: 'Wine definition not found' });
@@ -507,12 +518,16 @@ router.get('/:id', requireBottleAccess('viewer'), async (req, res) => {
     }
 
     // Include the uploader's own pending image (pre-approval) so they see
-    // it immediately on their bottle — other users see wine?.image after approval
+    // it immediately on their bottle — other users see wine?.image after approval.
+    // Bottles pending a wine request have no wineDefinition; that branch must be
+    // omitted, or `{ wineDefinition: undefined }` matches every document and the
+    // lookup returns a pending image from an unrelated bottle.
+    const pendingImgOr = [{ bottle: bottle._id }];
+    if (bottle.wineDefinition) {
+      pendingImgOr.push({ wineDefinition: bottle.wineDefinition });
+    }
     const pendingImg = await BottleImage.findOne({
-      $or: [
-        { bottle: bottle._id },
-        { wineDefinition: bottle.wineDefinition }
-      ],
+      $or: pendingImgOr,
       uploadedBy: req.user.id,
       status: { $in: ['uploaded', 'processing', 'processed'] }
     }).sort({ createdAt: -1 }).lean();

@@ -74,8 +74,7 @@ const wineListSchema = new mongoose.Schema({
   user: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
-    required: true,
-    index: true
+    required: true
   },
   name: {
     type: String,
@@ -228,9 +227,8 @@ const wineListSchema = new mongoose.Schema({
   }
 }, { optimisticConcurrency: true });
 
-// Indexes
+// Indexes — user-only queries are served by the compound index prefix
 wineListSchema.index({ user: 1, cellar: 1 });
-wineListSchema.index({ user: 1 });
 
 // Update timestamp on save
 wineListSchema.pre('save', function(next) {

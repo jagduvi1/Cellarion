@@ -170,8 +170,10 @@ export default function RackRenderer({
             strokeWidth={3}
           />
 
-          {/* Shelf lines (horizontal) between rows */}
-          <ShelfLines layout={layout} rack={rack} isModular={isModular} />
+          {/* Shelf lines (horizontal) between rows. X-racks have no shelves —
+              their many distinct slot heights would draw spurious planks
+              straight through the diagonal dividers below. */}
+          {!layout.isXRack && <ShelfLines layout={layout} />}
 
           {/* Module separators for cube type */}
           {!isModular && rack.type === 'cube' && <CubeModuleLines rack={rack} layout={layout} />}
@@ -326,7 +328,7 @@ function SlotCircle({ position, cx, cy, R, slot, isActive, isHighlight, onSlotCl
 }
 
 /** Renders horizontal shelf lines between rows for the open-shelf look */
-function ShelfLines({ layout, rack, isModular }) {
+function ShelfLines({ layout }) {
   if (!layout.slots.length) return null;
 
   const R = SLOT_RADIUS;

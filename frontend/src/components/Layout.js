@@ -5,7 +5,6 @@ import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { PLANS } from '../config/plans';
 import NotificationBell from './NotificationBell';
-import SupportModal from './SupportModal';
 import InstallPrompt from './InstallPrompt';
 import AnnouncementBanner from './AnnouncementBanner';
 import './Layout.css';
@@ -22,7 +21,6 @@ function Layout({ children }) {
   const navigate = useNavigate();
   const location = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [supportOpen, setSupportOpen] = useState(false);
 
   const handleLogout = () => {
     logout();
@@ -338,10 +336,6 @@ function Layout({ children }) {
             <span>More</span>
           </button>
         </nav>
-      )}
-
-      {supportOpen && (
-        <SupportModal onClose={() => setSupportOpen(false)} />
       )}
 
     </div>

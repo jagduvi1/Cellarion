@@ -6,6 +6,36 @@ import { getStatsOverview } from '../api/stats';
 import { getRestockAlerts, dismissRestockAlert } from '../api/restockAlerts';
 import './Restock.css';
 
+// Shared restock math for one category dimension: one entry per consumed
+// name, where rate = bottles consumed per month over the consumption window
+// and monthsRemaining = how long the current stock lasts at that rate.
+function buildRestockEntries(category, stockByName, consumedByName, consumptionMonths) {
+  const entries = [];
+  for (const [name, consumed] of Object.entries(consumedByName)) {
+    const stock = stockByName[name] || 0;
+    if (consumed === 0) continue;
+    const rate = consumed / consumptionMonths;
+    const months = stock > 0 ? stock / rate : 0;
+    entries.push({
+      category,
+      name,
+      stock,
+      consumed,
+      rate: Math.round(rate * 10) / 10,
+      monthsRemaining: Math.round(months),
+      status: months < 2 ? 'urgent' : months < 4 ? 'low' : 'healthy'
+    });
+  }
+  return entries;
+}
+
+// Adapter: convert a [{ name, count }] stats list into a name → stock lookup.
+function toStockLookup(list) {
+  const lookup = {};
+  for (const entry of list) lookup[entry.name] = entry.count;
+  return lookup;
+}
+
 function computeRestock(stats) {
   if (!stats) return [];
 
@@ -18,69 +48,27 @@ function computeRestock(stats) {
 
   const categories = [];
 
-  // By wine type
+  // By wine type — deviates from the other categories: it iterates the STOCK
+  // side (byType's keys) rather than the consumed side, so types with
+  // consumption history but absent from byType are omitted, and entry order
+  // follows byType. The adapter below builds a consumed lookup restricted to
+  // byType's keys (in byType's key order) to preserve exactly that.
   if (byType && consumedByType) {
-    for (const [type, stock] of Object.entries(byType)) {
-      const consumed = consumedByType[type] || 0;
-      if (consumed === 0) continue;
-      const rate = consumed / consumptionMonths;
-      const months = stock / rate;
-      categories.push({
-        category: 'type',
-        name: type,
-        stock,
-        consumed,
-        rate: Math.round(rate * 10) / 10,
-        monthsRemaining: Math.round(months),
-        status: months < 2 ? 'urgent' : months < 4 ? 'low' : 'healthy'
-      });
-    }
+    const typeConsumed = {};
+    for (const type of Object.keys(byType)) typeConsumed[type] = consumedByType[type] || 0;
+    categories.push(...buildRestockEntries('type', byType, typeConsumed, consumptionMonths));
   }
 
   // By region — use the full (untruncated) region list so low-count regions
   // with consumption history report real stock instead of 0.
   const regionList = allRegions || byRegion;
   if (regionList && consumedByRegion) {
-    const regionStock = {};
-    for (const r of regionList) regionStock[r.name] = r.count;
-
-    for (const [name, consumed] of Object.entries(consumedByRegion)) {
-      const stock = regionStock[name] || 0;
-      if (consumed === 0) continue;
-      const rate = consumed / consumptionMonths;
-      const months = stock > 0 ? stock / rate : 0;
-      categories.push({
-        category: 'region',
-        name,
-        stock,
-        consumed,
-        rate: Math.round(rate * 10) / 10,
-        monthsRemaining: Math.round(months),
-        status: months < 2 ? 'urgent' : months < 4 ? 'low' : 'healthy'
-      });
-    }
+    categories.push(...buildRestockEntries('region', toStockLookup(regionList), consumedByRegion, consumptionMonths));
   }
 
   // By country
   if (byCountry && consumedByCountry) {
-    const countryStock = {};
-    for (const c of byCountry) countryStock[c.name] = c.count;
-
-    for (const [name, consumed] of Object.entries(consumedByCountry)) {
-      const stock = countryStock[name] || 0;
-      if (consumed === 0) continue;
-      const rate = consumed / consumptionMonths;
-      const months = stock > 0 ? stock / rate : 0;
-      categories.push({
-        category: 'country',
-        name,
-        stock,
-        consumed,
-        rate: Math.round(rate * 10) / 10,
-        monthsRemaining: Math.round(months),
-        status: months < 2 ? 'urgent' : months < 4 ? 'low' : 'healthy'
-      });
-    }
+    categories.push(...buildRestockEntries('country', toStockLookup(byCountry), consumedByCountry, consumptionMonths));
   }
 
   // By grape — use the full (untruncated) grape list so low-count grapes with
@@ -88,46 +76,12 @@ function computeRestock(stats) {
   // added bottle of an uncommon grape still showed "out of stock").
   const grapeList = allGrapes || byGrape;
   if (grapeList && consumedByGrape) {
-    const grapeStock = {};
-    for (const g of grapeList) grapeStock[g.name] = g.count;
-
-    for (const [name, consumed] of Object.entries(consumedByGrape)) {
-      const stock = grapeStock[name] || 0;
-      if (consumed === 0) continue;
-      const rate = consumed / consumptionMonths;
-      const months = stock > 0 ? stock / rate : 0;
-      categories.push({
-        category: 'grape',
-        name,
-        stock,
-        consumed,
-        rate: Math.round(rate * 10) / 10,
-        monthsRemaining: Math.round(months),
-        status: months < 2 ? 'urgent' : months < 4 ? 'low' : 'healthy'
-      });
-    }
+    categories.push(...buildRestockEntries('grape', toStockLookup(grapeList), consumedByGrape, consumptionMonths));
   }
 
   // By producer
   if (allProducers && consumedByProducer) {
-    const producerStock = {};
-    for (const p of allProducers) producerStock[p.name] = p.count;
-
-    for (const [name, consumed] of Object.entries(consumedByProducer)) {
-      const stock = producerStock[name] || 0;
-      if (consumed === 0) continue;
-      const rate = consumed / consumptionMonths;
-      const months = stock > 0 ? stock / rate : 0;
-      categories.push({
-        category: 'producer',
-        name,
-        stock,
-        consumed,
-        rate: Math.round(rate * 10) / 10,
-        monthsRemaining: Math.round(months),
-        status: months < 2 ? 'urgent' : months < 4 ? 'low' : 'healthy'
-      });
-    }
+    categories.push(...buildRestockEntries('producer', toStockLookup(allProducers), consumedByProducer, consumptionMonths));
   }
 
   return categories.sort((a, b) => a.monthsRemaining - b.monthsRemaining);
@@ -181,27 +135,40 @@ export default function Restock() {
   };
   const [dismissed, setDismissed] = useState(getDismissed);
 
+  // localStorage mirrors the dismissed state via the effect below — state
+  // updates stay pure (safe under StrictMode's double-invoked updaters).
+  useEffect(() => {
+    localStorage.setItem('cellarion_restock_dismissed', JSON.stringify(dismissed));
+  }, [dismissed]);
+
   const handleDismissCategory = (category, name) => {
     const key = `${category}:${name}`;
     const item = allCategories.find(c => c.category === category && c.name === name);
-    const updated = { ...dismissed, [key]: item?.stock || 0 };
-    setDismissed(updated);
-    localStorage.setItem('cellarion_restock_dismissed', JSON.stringify(updated));
+    setDismissed(prev => ({ ...prev, [key]: item?.stock || 0 }));
   };
 
+  // Pure predicate — a dismiss only holds while stock hasn't increased.
   const isItemDismissed = (item) => {
     const key = `${item.category}:${item.name}`;
-    if (!(key in dismissed)) return false;
-    // Auto-clear dismiss if stock increased (user bought more)
-    if (item.stock > dismissed[key]) {
-      const updated = { ...dismissed };
-      delete updated[key];
-      setDismissed(updated);
-      localStorage.setItem('cellarion_restock_dismissed', JSON.stringify(updated));
-      return false;
-    }
-    return true;
+    return key in dismissed && item.stock <= dismissed[key];
   };
+
+  // Auto-clear dismisses whose stock has since increased (user bought more).
+  // Runs as an effect, NOT during render: the old in-filter version called
+  // setState/localStorage per item from the same stale snapshot, so clearing
+  // two items in one pass stomped each other's updates.
+  useEffect(() => {
+    const stale = allCategories.filter(item => {
+      const key = `${item.category}:${item.name}`;
+      return key in dismissed && item.stock > dismissed[key];
+    });
+    if (stale.length === 0) return;
+    setDismissed(prev => {
+      const updated = { ...prev };
+      for (const item of stale) delete updated[`${item.category}:${item.name}`];
+      return updated;
+    });
+  }, [allCategories, dismissed]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const filtered = allCategories.filter(c => c.category === view && !isItemDismissed(c));
   const urgent = filtered.filter(c => c.status === 'urgent');

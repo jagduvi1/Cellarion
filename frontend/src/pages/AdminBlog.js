@@ -22,8 +22,12 @@ function AdminBlog() {
     try {
       const res = await getAdminBlogPosts(apiFetch, { page, status: statusFilter || undefined });
       const data = await res.json();
-      setPosts(data.posts);
-      setPages(data.pages);
+      if (!res.ok) {
+        setPosts([]);
+        return;
+      }
+      setPosts(data.posts || []);
+      setPages(data.pages || 1);
     } catch {
       setPosts([]);
     } finally {

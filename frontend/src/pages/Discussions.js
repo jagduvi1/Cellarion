@@ -165,11 +165,9 @@ function Discussions() {
           } : {})
         }}
       />
-      <div className="discussions__header">
-        <h1>{t('discussions.community')}</h1>
-        <span className="discussions__beta-badge">{t('discussions.beta')}</span>
-      </div>
-
+      {/* The page heading lives in the CommunityDiscussions wrapper (the
+          sole place this component is rendered) — a second h1 here would
+          duplicate it. */}
       <form className="discussions__search" onSubmit={handleSearchSubmit} role="search">
         <input
           type="search"

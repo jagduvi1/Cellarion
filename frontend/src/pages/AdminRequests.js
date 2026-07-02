@@ -614,7 +614,7 @@ function AdminRequests() {
                   )}
 
                   <div className="form-group">
-                    <label>{t('admin.requests.adminNotesLabel')} {resolveData.mode === 'reject' && '*'}</label>
+                    <label>{t('admin.requests.adminNotesLabel')} <span className="admin-notes-hint">{t('admin.requests.adminNotesRequiredHint', '(required when rejecting)')}</span></label>
                     <textarea
                       value={resolveData.adminNotes}
                       onChange={(e) => setResolveData({ ...resolveData, adminNotes: e.target.value })}

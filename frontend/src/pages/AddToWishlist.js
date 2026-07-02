@@ -95,22 +95,25 @@ function AddToWishlist() {
     startCamera: startLabelCamera, stopCamera: stopLabelCamera, capturePhoto: captureLabelPhoto
   } = useLabelScanner(apiFetch, { onScanSuccess: handleScanSuccess, onScanError: handleScanError });
 
-  // Pre-select wine when navigating from restock suggestions
+  // Pre-select wine when navigating from restock suggestions (route state)
+  // or from a wine page's "Add to Wishlist" link (?wine=<id> query param).
   useEffect(() => {
     const restock = location.state?.fromRestock;
-    if (!restock?.wineId) return;
+    const wineParam = new URLSearchParams(location.search).get('wine');
+    const wineId = restock?.wineId || wineParam;
+    if (!wineId) return;
     let cancelled = false;
     (async () => {
       try {
         // getWine returns the raw fetch Response — parse the body and check
         // res.ok before using it (a Response object is always truthy).
-        const res = await getWine(apiFetch, restock.wineId);
+        const res = await getWine(apiFetch, wineId);
         if (cancelled || !res.ok) return;
         const data = await res.json();
         const wine = data.wine || data;
         if (!cancelled && wine?._id) {
           setSelectedWine(wine);
-          if (restock.vintage) setVintage(restock.vintage);
+          if (restock?.vintage) setVintage(restock.vintage);
         }
       } catch {
         // Wine definition not found — fall back to normal flow

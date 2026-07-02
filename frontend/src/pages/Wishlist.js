@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { getWishlist, updateWishlistItem, removeWishlistItem } from '../api/wishlist';
@@ -34,7 +34,25 @@ function Wishlist() {
   const [saving, setSaving] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
 
+  // Reset pagination when filters change. The reset lands one render later,
+  // so derive the effective skip for the current render — otherwise a filter
+  // change fires a request with the stale offset whose slow response can
+  // clobber the correct page-0 one.
+  const filtersKey = `${statusFilter}|${sortBy}|${search}`;
+  const skipFiltersRef = useRef(filtersKey);
+  const effectiveSkip = skipFiltersRef.current === filtersKey ? skip : 0;
+  useEffect(() => {
+    if (skipFiltersRef.current !== filtersKey) {
+      skipFiltersRef.current = filtersKey;
+      setSkip(0);
+    }
+  }, [filtersKey]);
+
+  // Latest-wins guard for out-of-order responses.
+  const fetchSeq = useRef(0);
+
   const fetchItems = useCallback(async () => {
+    const seq = ++fetchSeq.current;
     setLoading(true);
     setError(null);
     try {
@@ -42,25 +60,23 @@ function Wishlist() {
       params.set('status', statusFilter);
       params.set('sort', sortBy);
       params.set('limit', LIMIT);
-      params.set('skip', skip);
+      params.set('skip', effectiveSkip);
       if (search.trim()) params.set('search', search.trim());
 
       const res = await getWishlist(apiFetch, params.toString());
       const data = await res.json();
+      if (seq !== fetchSeq.current) return;
       if (!res.ok) { setError(data.error || 'Failed to load wishlist'); return; }
       setItems(data.items || []);
       setTotal(data.total || 0);
     } catch {
-      setError('Network error');
+      if (seq === fetchSeq.current) setError('Network error');
     } finally {
-      setLoading(false);
+      if (seq === fetchSeq.current) setLoading(false);
     }
-  }, [apiFetch, statusFilter, sortBy, search, skip]);
+  }, [apiFetch, statusFilter, sortBy, search, effectiveSkip]);
 
   useEffect(() => { fetchItems(); }, [fetchItems]);
-
-  // Reset pagination when filters change
-  useEffect(() => { setSkip(0); }, [statusFilter, sortBy, search]);
 
   const handleSearchSubmit = (e) => {
     e.preventDefault();

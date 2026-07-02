@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
@@ -23,18 +23,23 @@ export default function Recommendations() {
     fetchItems();
   }, [tab]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Latest-wins guard: a slow response for the previous tab must not
+  // overwrite the list for the tab the user is now viewing.
+  const fetchSeq = useRef(0);
+
   const fetchItems = async () => {
+    const seq = ++fetchSeq.current;
     setLoading(true);
     try {
       const fetcher = tab === 'received' ? getRecommendations : getSentRecommendations;
       const res = await fetcher(apiFetch);
-      if (res.ok) {
+      if (res.ok && seq === fetchSeq.current) {
         const data = await res.json();
         setItems(data.items || []);
         setTotal(data.total || 0);
       }
     } catch { /* ignore */ }
-    setLoading(false);
+    if (seq === fetchSeq.current) setLoading(false);
   };
 
   const handleMarkSeen = async (id) => {

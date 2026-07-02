@@ -7,7 +7,6 @@ import { getCellar } from '../api/cellars';
 import { getRacks, updateSlot, clearSlot } from '../api/racks';
 import { consumeBottle } from '../api/bottles';
 import { getCellarLayout, saveCellarLayout } from '../api/cellarLayout';
-import { getPlacedBottleIds } from '../utils/rackUtils';
 import RoomScene from '../components/room/RoomScene';
 import { getRackHeight, clampToRoom } from '../utils/roomConstants';
 import WineImage from '../components/WineImage';
@@ -673,6 +672,28 @@ export default function CellarRoom() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isEditMode, selectedRackIds]);
 
+  // Undo/redo stack operations — shared by the Ctrl+Z/Y handler and the
+  // toolbar buttons so the two entry points can't drift.
+  const doUndo = useCallback(() => {
+    if (undoStackRef.current.length === 0) return;
+    setLayout(prev => {
+      redoStackRef.current = [...redoStackRef.current, prev];
+      const restored = undoStackRef.current[undoStackRef.current.length - 1];
+      undoStackRef.current = undoStackRef.current.slice(0, -1);
+      return restored;
+    });
+  }, []);
+
+  const doRedo = useCallback(() => {
+    if (redoStackRef.current.length === 0) return;
+    setLayout(prev => {
+      undoStackRef.current = [...undoStackRef.current, prev];
+      const restored = redoStackRef.current[redoStackRef.current.length - 1];
+      redoStackRef.current = redoStackRef.current.slice(0, -1);
+      return restored;
+    });
+  }, []);
+
   // Undo (Ctrl+Z) / Redo (Ctrl+Y or Ctrl+Shift+Z)
   useEffect(() => {
     const handleUndoRedo = (e) => {
@@ -682,26 +703,12 @@ export default function CellarRoom() {
       const isRedo = (e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey));
       if (!isUndo && !isRedo) return;
       e.preventDefault();
-
-      if (isUndo && undoStackRef.current.length > 0) {
-        setLayout(prev => {
-          redoStackRef.current = [...redoStackRef.current, prev];
-          const restored = undoStackRef.current[undoStackRef.current.length - 1];
-          undoStackRef.current = undoStackRef.current.slice(0, -1);
-          return restored;
-        });
-      } else if (isRedo && redoStackRef.current.length > 0) {
-        setLayout(prev => {
-          undoStackRef.current = [...undoStackRef.current, prev];
-          const restored = redoStackRef.current[redoStackRef.current.length - 1];
-          redoStackRef.current = redoStackRef.current.slice(0, -1);
-          return restored;
-        });
-      }
+      if (isUndo) doUndo();
+      else doRedo();
     };
     window.addEventListener('keydown', handleUndoRedo);
     return () => window.removeEventListener('keydown', handleUndoRedo);
-  }, [isEditMode]);
+  }, [isEditMode, doUndo, doRedo]);
 
   // Unsaved changes detection
   const hasUnsavedChanges = useMemo(() => {
@@ -757,11 +764,13 @@ export default function CellarRoom() {
     };
 
     // Seed a sentinel history entry via the NATIVE pushState (not the patched
-    // one — otherwise it blocks its own seed and pops a spurious dialog).
-    origPushState(null, '', window.location.href);
+    // one — otherwise it blocks its own seed and pops a spurious dialog). The
+    // state tag lets the cleanup below recognise and remove it.
+    const SENTINEL = { __roomUnsavedSentinel: true };
+    origPushState(SENTINEL, '', window.location.href);
     const handlePopState = () => {
       if (hasUnsavedRef.current) {
-        origPushState(null, '', window.location.href);
+        origPushState(SENTINEL, '', window.location.href);
         setPendingNavPath('__back__');
       }
     };
@@ -770,6 +779,14 @@ export default function CellarRoom() {
     return () => {
       window.history.pushState = origPushState;
       window.removeEventListener('popstate', handlePopState);
+      // Remove the seeded sentinel when we're still sitting on it (the user
+      // saved). Without this every dirty→clean cycle leaks one duplicate
+      // entry and the Back button appears dead once per cycle. When the
+      // cleanup runs because navigation committed (unmount), the current
+      // entry is the new route — not the sentinel — so this is skipped.
+      if (window.history.state?.__roomUnsavedSentinel) {
+        window.history.go(-1);
+      }
     };
   }, [hasUnsavedChanges]);
 
@@ -814,8 +831,6 @@ export default function CellarRoom() {
   const canEdit = cellar?.userRole !== 'viewer';
   const dims = layout?.roomDimensions || DEFAULT_DIMENSIONS;
   const placements = layout?.rackPlacements || [];
-
-  const placedBottleIds = useMemo(() => getPlacedBottleIds(racks), [racks]);
 
   // Bottle click — show detail panel (dismiss rack info); disabled in edit mode
   const handleBottleClick = useCallback((rackId, slot) => {
@@ -959,16 +974,7 @@ export default function CellarRoom() {
                 </button>
                 <button
                   className="btn btn-secondary btn-small"
-                  onClick={() => {
-                    if (undoStackRef.current.length > 0) {
-                      setLayout(prev => {
-                        redoStackRef.current = [...redoStackRef.current, prev];
-                        const restored = undoStackRef.current[undoStackRef.current.length - 1];
-                        undoStackRef.current = undoStackRef.current.slice(0, -1);
-                        return restored;
-                      });
-                    }
-                  }}
+                  onClick={doUndo}
                   disabled={undoStackRef.current.length === 0}
                   title={t('room.undo', 'Undo (Ctrl+Z)')}
                 >
@@ -976,16 +982,7 @@ export default function CellarRoom() {
                 </button>
                 <button
                   className="btn btn-secondary btn-small"
-                  onClick={() => {
-                    if (redoStackRef.current.length > 0) {
-                      setLayout(prev => {
-                        undoStackRef.current = [...undoStackRef.current, prev];
-                        const restored = redoStackRef.current[redoStackRef.current.length - 1];
-                        redoStackRef.current = redoStackRef.current.slice(0, -1);
-                        return restored;
-                      });
-                    }
-                  }}
+                  onClick={doRedo}
                   disabled={redoStackRef.current.length === 0}
                   title={t('room.redo', 'Redo (Ctrl+Y)')}
                 >
@@ -1419,10 +1416,15 @@ export default function CellarRoom() {
                 hasUnsavedRef.current = false;
                 savedLayoutRef.current = JSON.stringify(layout);
                 setPendingNavPath(null);
+                // Either way the current entry is the sentinel duplicate of
+                // this page. For Back, one step only reaches the identical
+                // room entry — go(-2) skips past it to the real previous
+                // page. For link navigation, replace the sentinel instead of
+                // stacking the target on top of it.
                 if (path === '__back__') {
-                  window.history.back();
+                  window.history.go(-2);
                 } else {
-                  navigate(path);
+                  navigate(path, { replace: true });
                 }
               }}>
                 {t('room.leaveWithoutSaving', 'Leave')}

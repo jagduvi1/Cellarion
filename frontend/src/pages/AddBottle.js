@@ -53,6 +53,7 @@ function AddBottle() {
   });
   const [uploadedImages, setUploadedImages] = useState([]);
   const [showDetails, setShowDetails] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   // ── Scan result state ──
   const [scanResult, setScanResult] = useState(null);  // { extracted, match, labelImage }
@@ -196,7 +197,8 @@ function AddBottle() {
     setError(null);
   }, []);
 
-  // Debounce search: wait 300ms after the user stops typing before firing.
+  // Explicit search (Enter key or button — deliberately not fired per
+  // keystroke, since each search also triggers a paid AI identification).
   // Runs both fuzzy search and AI identification in parallel so the AI can
   // correctly distinguish similar wines (e.g. single vineyard vs generic).
   const handleSearch = useCallback(() => {
@@ -257,6 +259,11 @@ function AddBottle() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    // In-flight guard: the N sequential POSTs below leave a wide window
+    // where a second submit (double-click, Enter+click) would duplicate
+    // every bottle.
+    if (saving) return;
+    setSaving(true);
     setError(null);
 
     try {
@@ -309,6 +316,8 @@ function AddBottle() {
       navigate(`/cellars/${cellarId}`);
     } catch (err) {
       setError('Network error');
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -902,8 +911,8 @@ function AddBottle() {
             )}
 
             <div className="form-actions">
-              <button type="submit" className="btn btn-success">
-                {addToHistory ? t('addBottle.addToHistoryBtn') : t('addBottle.addBottleBtn')}
+              <button type="submit" className="btn btn-success" disabled={saving}>
+                {saving ? t('common.saving', 'Saving…') : addToHistory ? t('addBottle.addToHistoryBtn') : t('addBottle.addBottleBtn')}
               </button>
               <button
                 type="button"

@@ -15,8 +15,22 @@ const connectDB = async () => {
     Review.syncIndexes().catch(err =>
       console.warn('[db] Review.syncIndexes failed:', err.message)
     );
+    // AuditLog: existing DBs hold a plain {timestamp:1} index that conflicts
+    // with the TTL index (same key pattern, different options) and silently
+    // blocked its creation — the sync drops the stale one so TTL expiry works.
+    const AuditLog = require('../models/AuditLog');
+    AuditLog.syncIndexes().catch(err =>
+      console.warn('[db] AuditLog.syncIndexes failed:', err.message)
+    );
+    const WineList = require('../models/WineList');
+    WineList.syncIndexes().catch(err =>
+      console.warn('[db] WineList.syncIndexes failed:', err.message)
+    );
   } catch (error) {
-    console.error('MongoDB Connection Error');
+    // Log the reason (DNS, auth, TLS, bad URI) but mask any credentials
+    // embedded in a mongodb:// URI that error messages may echo back.
+    const msg = String(error.message || error).replace(/\/\/[^@/]*@/, '//<credentials>@');
+    console.error('MongoDB Connection Error:', msg);
     process.exit(1);
   }
 };

@@ -162,6 +162,64 @@ async function scanLabelFull(image, mediaType = 'image/jpeg') {
 }
 
 /**
+ * Shared engine for the JSON-returning Claude text helpers below
+ * (identifyWineFromText / identifyWineFromQuery / suggestDrinkWindow /
+ * suggestPrice / suggestProfile).
+ *
+ * Sends `prompt` as a single user message and returns
+ * { data, debugRaw, debugReason }:
+ *   data        – parsed object, or null if not usable
+ *   debugRaw    – raw string from the model (or error message)
+ *   debugReason – short explanation when data is null
+ *
+ * `validate(parsed)` (optional) may normalise fields in place; it returns an
+ * error-reason string to reject the payload, or null to accept it.
+ * On 429 the call is retried once after waiting out the retry-after header.
+ */
+async function callClaudeJson({ client, model, maxTokens, prompt, validate }) {
+  const apiParams = {
+    model,
+    max_tokens: maxTokens,
+    messages: [
+      { role: 'user', content: prompt }
+    ]
+  };
+
+  let raw = '';
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      const response = await client.messages.create(apiParams);
+      raw = (response.content[0]?.text ?? '').trim();
+      // Strip code fences, then extract only the first balanced {...} so any
+      // trailing explanation text from the model doesn't break JSON.parse.
+      const stripped = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
+      const parsed = JSON.parse(extractFirstJsonObject(stripped));
+
+      if (parsed.error) return { data: null, debugRaw: raw, debugReason: `ai_unknown: ${parsed.error}` };
+      const invalidReason = validate ? validate(parsed) : null;
+      if (invalidReason) return { data: null, debugRaw: raw, debugReason: invalidReason };
+      return { data: parsed, debugRaw: raw, debugReason: null };
+    } catch (err) {
+      if (err.status === 429 && attempt === 1) {
+        // Rate limited — wait for retry-after header (or 15 s) then retry once
+        const waitMs = (parseInt(err.headers?.['retry-after'] ?? '15', 10) + 1) * 1000;
+        await new Promise(r => setTimeout(r, waitMs));
+        continue;
+      }
+      const reason = err.status === 429 ? 'rate_limit_exceeded' : `exception: ${err.message}`;
+      return { data: null, debugRaw: raw || err.message, debugReason: reason };
+    }
+  }
+}
+
+/** Wine-identification responses must include both name and producer. */
+function validateWineIdentity(parsed) {
+  if (!parsed.name || !parsed.producer) return 'missing_name_or_producer_in_response';
+  if (!Array.isArray(parsed.grapes)) parsed.grapes = [];
+  return null;
+}
+
+/**
  * Identify a wine from text data (name, producer, etc.) using Claude.
  * Used by the bottle import flow when no match is found in the library.
  *
@@ -196,39 +254,13 @@ async function identifyWineFromText({ name, producer, vintage, country }) {
     .replace('{{vintage}}', vintageHint)
     .replace('{{country}}', countryHint);
 
-  const apiParams = {
+  return callClaudeJson({
+    client,
     model: aiConfig.get().importLookupModel,
-    max_tokens: 400,
-    messages: [
-      { role: 'user', content: prompt }
-    ]
-  };
-
-  let raw = '';
-  for (let attempt = 1; attempt <= 2; attempt++) {
-    try {
-      const response = await client.messages.create(apiParams);
-      raw = (response.content[0]?.text ?? '').trim();
-      // Strip code fences, then extract only the first balanced {...} so any
-      // trailing explanation text from the model doesn't break JSON.parse.
-      const stripped = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
-      const parsed = JSON.parse(extractFirstJsonObject(stripped));
-
-      if (parsed.error) return { data: null, debugRaw: raw, debugReason: `ai_unknown: ${parsed.error}` };
-      if (!parsed.name || !parsed.producer) return { data: null, debugRaw: raw, debugReason: 'missing_name_or_producer_in_response' };
-      if (!Array.isArray(parsed.grapes)) parsed.grapes = [];
-      return { data: parsed, debugRaw: raw, debugReason: null };
-    } catch (err) {
-      if (err.status === 429 && attempt === 1) {
-        // Rate limited — wait for retry-after header (or 15 s) then retry once
-        const waitMs = (parseInt(err.headers?.['retry-after'] ?? '15', 10) + 1) * 1000;
-        await new Promise(r => setTimeout(r, waitMs));
-        continue;
-      }
-      const reason = err.status === 429 ? 'rate_limit_exceeded' : `exception: ${err.message}`;
-      return { data: null, debugRaw: raw || err.message, debugReason: reason };
-    }
-  }
+    maxTokens: 400,
+    prompt,
+    validate: validateWineIdentity,
+  });
 }
 
 /**
@@ -244,36 +276,13 @@ async function identifyWineFromQuery(query) {
   const { DEFAULT_TEXT_SEARCH_PROMPT } = require('../config/aiConfig');
   const prompt = DEFAULT_TEXT_SEARCH_PROMPT.replace('{{query}}', query.trim());
 
-  const apiParams = {
+  return callClaudeJson({
+    client,
     model: aiConfig.get().importLookupModel,
-    max_tokens: 400,
-    messages: [
-      { role: 'user', content: prompt }
-    ]
-  };
-
-  let raw = '';
-  for (let attempt = 1; attempt <= 2; attempt++) {
-    try {
-      const response = await client.messages.create(apiParams);
-      raw = (response.content[0]?.text ?? '').trim();
-      const stripped = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
-      const parsed = JSON.parse(extractFirstJsonObject(stripped));
-
-      if (parsed.error) return { data: null, debugRaw: raw, debugReason: `ai_unknown: ${parsed.error}` };
-      if (!parsed.name || !parsed.producer) return { data: null, debugRaw: raw, debugReason: 'missing_name_or_producer_in_response' };
-      if (!Array.isArray(parsed.grapes)) parsed.grapes = [];
-      return { data: parsed, debugRaw: raw, debugReason: null };
-    } catch (err) {
-      if (err.status === 429 && attempt === 1) {
-        const waitMs = (parseInt(err.headers?.['retry-after'] ?? '15', 10) + 1) * 1000;
-        await new Promise(r => setTimeout(r, waitMs));
-        continue;
-      }
-      const reason = err.status === 429 ? 'rate_limit_exceeded' : `exception: ${err.message}`;
-      return { data: null, debugRaw: raw || err.message, debugReason: reason };
-    }
-  }
+    maxTokens: 400,
+    prompt,
+    validate: validateWineIdentity,
+  });
 }
 
 /**
@@ -308,34 +317,12 @@ async function suggestDrinkWindow({ name, producer, vintage, country, region, ap
     .replace('{{grapes}}', Array.isArray(grapes) ? grapes.join(', ') : (grapes || ''))
     .replace('{{qualityTier}}', qualityTier);
 
-  const apiParams = {
+  return callClaudeJson({
+    client,
     model: aiConfig.get().maturitySuggestModel,
-    max_tokens: 500,
-    messages: [
-      { role: 'user', content: prompt }
-    ]
-  };
-
-  let raw = '';
-  for (let attempt = 1; attempt <= 2; attempt++) {
-    try {
-      const response = await client.messages.create(apiParams);
-      raw = (response.content[0]?.text ?? '').trim();
-      const stripped = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
-      const parsed = JSON.parse(extractFirstJsonObject(stripped));
-
-      if (parsed.error) return { data: null, debugRaw: raw, debugReason: `ai_unknown: ${parsed.error}` };
-      return { data: parsed, debugRaw: raw, debugReason: null };
-    } catch (err) {
-      if (err.status === 429 && attempt === 1) {
-        const waitMs = (parseInt(err.headers?.['retry-after'] ?? '15', 10) + 1) * 1000;
-        await new Promise(r => setTimeout(r, waitMs));
-        continue;
-      }
-      const reason = err.status === 429 ? 'rate_limit_exceeded' : `exception: ${err.message}`;
-      return { data: null, debugRaw: raw || err.message, debugReason: reason };
-    }
-  }
+    maxTokens: 500,
+    prompt,
+  });
 }
 
 /**
@@ -363,34 +350,12 @@ async function suggestPrice({ name, producer, vintage, country, region, appellat
     .replace('{{grapes}}', Array.isArray(grapes) ? grapes.join(', ') : (grapes || ''))
     .replace('{{qualityTier}}', qualityTier);
 
-  const apiParams = {
+  return callClaudeJson({
+    client,
     model: aiConfig.get().priceSuggestModel,
-    max_tokens: 400,
-    messages: [
-      { role: 'user', content: prompt }
-    ]
-  };
-
-  let raw = '';
-  for (let attempt = 1; attempt <= 2; attempt++) {
-    try {
-      const response = await client.messages.create(apiParams);
-      raw = (response.content[0]?.text ?? '').trim();
-      const stripped = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
-      const parsed = JSON.parse(extractFirstJsonObject(stripped));
-
-      if (parsed.error) return { data: null, debugRaw: raw, debugReason: `ai_unknown: ${parsed.error}` };
-      return { data: parsed, debugRaw: raw, debugReason: null };
-    } catch (err) {
-      if (err.status === 429 && attempt === 1) {
-        const waitMs = (parseInt(err.headers?.['retry-after'] ?? '15', 10) + 1) * 1000;
-        await new Promise(r => setTimeout(r, waitMs));
-        continue;
-      }
-      const reason = err.status === 429 ? 'rate_limit_exceeded' : `exception: ${err.message}`;
-      return { data: null, debugRaw: raw || err.message, debugReason: reason };
-    }
-  }
+    maxTokens: 400,
+    prompt,
+  });
 }
 
 /**
@@ -418,37 +383,18 @@ async function suggestProfile({ name, producer, vintage, country, region, appell
     .replace('{{type}}', type || '')
     .replace('{{grapes}}', Array.isArray(grapes) ? grapes.join(', ') : (grapes || ''));
 
-  const apiParams = {
+  return callClaudeJson({
+    client,
     model: aiConfig.get().enrichmentModel,
-    max_tokens: 700,
-    messages: [
-      { role: 'user', content: prompt }
-    ]
-  };
-
-  let raw = '';
-  for (let attempt = 1; attempt <= 2; attempt++) {
-    try {
-      const response = await client.messages.create(apiParams);
-      raw = (response.content[0]?.text ?? '').trim();
-      const stripped = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
-      const parsed = JSON.parse(extractFirstJsonObject(stripped));
-
-      if (parsed.error) return { data: null, debugRaw: raw, debugReason: `ai_unknown: ${parsed.error}` };
+    maxTokens: 700,
+    prompt,
+    validate: (parsed) => {
       // Normalise arrays so the caller can store them directly.
       if (!Array.isArray(parsed.flavors)) parsed.flavors = [];
       if (!Array.isArray(parsed.foodPairings)) parsed.foodPairings = [];
-      return { data: parsed, debugRaw: raw, debugReason: null };
-    } catch (err) {
-      if (err.status === 429 && attempt === 1) {
-        const waitMs = (parseInt(err.headers?.['retry-after'] ?? '15', 10) + 1) * 1000;
-        await new Promise(r => setTimeout(r, waitMs));
-        continue;
-      }
-      const reason = err.status === 429 ? 'rate_limit_exceeded' : `exception: ${err.message}`;
-      return { data: null, debugRaw: raw || err.message, debugReason: reason };
-    }
-  }
+      return null;
+    },
+  });
 }
 
 module.exports = { scanLabel, scanLabelFull, identifyWineFromText, identifyWineFromQuery, suggestDrinkWindow, suggestPrice, suggestProfile };

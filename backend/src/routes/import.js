@@ -197,9 +197,10 @@ router.post('/validate', aiBurstLimiter, async (req, res) => {
       return res.status(403).json({ error: 'Not authorized to import bottles to this cellar' });
     }
 
-    const isAdmin = req.user.roles && req.user.roles.includes('admin');
-
-    // Build preResults array and validate required fields
+    // Build preResults array and validate required fields. `forceAi` is a
+    // client-side hint sent by the per-row "Look up" button; the pipeline
+    // below already runs AI for every eligible row, so the flag is stripped
+    // here only to keep it out of the stored/echoed item.
     const preResults = [];
     for (let i = 0; i < items.length; i++) {
       const { forceAi, ...item } = items[i];
@@ -1021,7 +1022,11 @@ router.put('/sessions/:id', async (req, res) => {
       return res.status(403).json({ error: 'Not authorized' });
     }
 
-    const { selections, manualWines, positionAnchor, rackConfigs, defaultCurrency } = req.body;
+    const { results, selections, manualWines, positionAnchor, rackConfigs, defaultCurrency } = req.body;
+    // Results change when a per-row AI look-up rewrites a row — persist them
+    // so a resumed session doesn't show stale "No match found" rows whose
+    // selection references a wine absent from the stored matches.
+    if (Array.isArray(results)) session.results = results;
     if (selections !== undefined) session.selections = selections;
     if (manualWines !== undefined) session.manualWines = manualWines;
     if (positionAnchor !== undefined) session.positionAnchor = positionAnchor;
