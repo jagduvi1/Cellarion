@@ -468,283 +468,75 @@ router.patch('/ai/chat-limit', async (req, res) => {
 
 
 // ---------------------------------------------------------------------------
-// PATCH /api/superadmin/ai/system-prompt
+// PATCH /api/superadmin/ai/<*>-prompt and /api/superadmin/ai/<*>-model
+//
+// These settings routes all share the same shape, so they are registered from
+// the route table below. Prompt routes validate a non-empty string within a
+// max length and save the trimmed value into a single aiConfig key; model
+// routes validate against the VALID_CHAT_MODELS allowlist and save a single
+// aiConfig key. The console.error label is the path minus the '/ai/' prefix.
 // ---------------------------------------------------------------------------
-router.patch('/ai/system-prompt', async (req, res) => {
-  const { prompt } = req.body;
-  if (typeof prompt !== 'string' || !prompt.trim()) {
-    return res.status(400).json({ error: 'prompt must be a non-empty string' });
-  }
-  if (prompt.length > SYSTEM_PROMPT_MAX_LENGTH) {
-    return res.status(400).json({ error: `prompt must be ${SYSTEM_PROMPT_MAX_LENGTH} characters or fewer` });
-  }
-  try {
-    const current = aiConfig.get();
-    const updated = { ...current, chatSystemPrompt: prompt.trim() };
-    await updateSiteConfig('aiConfig', updated, req.user.id);
-    aiConfig.set(updated);
-    res.json({ chatSystemPrompt: updated.chatSystemPrompt });
-  } catch (error) {
-    console.error('[superadmin] system-prompt error:', error);
-    res.status(500).json({ error: 'Failed to save system prompt' });
-  }
-});
+function registerPromptRoute(path, configKey, maxLen, saveErrorMsg) {
+  const label = path.slice('/ai/'.length);
+  router.patch(path, async (req, res) => {
+    const { prompt } = req.body;
+    if (typeof prompt !== 'string' || !prompt.trim()) {
+      return res.status(400).json({ error: 'prompt must be a non-empty string' });
+    }
+    if (prompt.length > maxLen) {
+      return res.status(400).json({ error: `prompt must be ${maxLen} characters or fewer` });
+    }
+    try {
+      const current = aiConfig.get();
+      const updated = { ...current, [configKey]: prompt.trim() };
+      await updateSiteConfig('aiConfig', updated, req.user.id);
+      aiConfig.set(updated);
+      res.json({ [configKey]: updated[configKey] });
+    } catch (error) {
+      console.error(`[superadmin] ${label} error:`, error);
+      res.status(500).json({ error: saveErrorMsg });
+    }
+  });
+}
 
-// ---------------------------------------------------------------------------
-// PATCH /api/superadmin/ai/label-scan-prompt
-// ---------------------------------------------------------------------------
-router.patch('/ai/label-scan-prompt', async (req, res) => {
-  const { prompt } = req.body;
-  if (typeof prompt !== 'string' || !prompt.trim()) {
-    return res.status(400).json({ error: 'prompt must be a non-empty string' });
-  }
-  if (prompt.length > SCAN_PROMPT_MAX_LENGTH) {
-    return res.status(400).json({ error: `prompt must be ${SCAN_PROMPT_MAX_LENGTH} characters or fewer` });
-  }
-  try {
-    const current = aiConfig.get();
-    const updated = { ...current, labelScanPrompt: prompt.trim() };
-    await updateSiteConfig('aiConfig', updated, req.user.id);
-    aiConfig.set(updated);
-    res.json({ labelScanPrompt: updated.labelScanPrompt });
-  } catch (error) {
-    console.error('[superadmin] label-scan-prompt error:', error);
-    res.status(500).json({ error: 'Failed to save label scan prompt' });
-  }
-});
+function registerModelRoute(path, configKey, saveErrorMsg) {
+  const label = path.slice('/ai/'.length);
+  router.patch(path, async (req, res) => {
+    const { model } = req.body;
+    const { VALID_CHAT_MODELS } = aiConfig;
 
+    if (!model || !VALID_CHAT_MODELS.includes(model)) {
+      return res.status(400).json({ error: `model must be one of: ${VALID_CHAT_MODELS.join(', ')}` });
+    }
 
-// ---------------------------------------------------------------------------
-// PATCH /api/superadmin/ai/import-lookup-prompt
-// ---------------------------------------------------------------------------
-router.patch('/ai/import-lookup-prompt', async (req, res) => {
-  const { prompt } = req.body;
-  if (typeof prompt !== 'string' || !prompt.trim()) {
-    return res.status(400).json({ error: 'prompt must be a non-empty string' });
-  }
-  if (prompt.length > SCAN_PROMPT_MAX_LENGTH) {
-    return res.status(400).json({ error: `prompt must be ${SCAN_PROMPT_MAX_LENGTH} characters or fewer` });
-  }
-  try {
-    const current = aiConfig.get();
-    const updated = { ...current, importLookupPrompt: prompt.trim() };
-    await updateSiteConfig('aiConfig', updated, req.user.id);
-    aiConfig.set(updated);
-    res.json({ importLookupPrompt: updated.importLookupPrompt });
-  } catch (error) {
-    console.error('[superadmin] import-lookup-prompt error:', error);
-    res.status(500).json({ error: 'Failed to save import lookup prompt' });
-  }
-});
+    try {
+      const current = aiConfig.get();
+      const updated = { ...current, [configKey]: model };
+      await updateSiteConfig('aiConfig', updated, req.user.id);
+      aiConfig.set(updated);
+      res.json({ [configKey]: model });
+    } catch (error) {
+      console.error(`[superadmin] ${label} error:`, error);
+      res.status(500).json({ error: saveErrorMsg });
+    }
+  });
+}
 
-// ---------------------------------------------------------------------------
-// PATCH /api/superadmin/ai/import-lookup-model
-// ---------------------------------------------------------------------------
-router.patch('/ai/import-lookup-model', async (req, res) => {
-  const { model } = req.body;
-  const { VALID_CHAT_MODELS } = aiConfig;
-
-  if (!model || !VALID_CHAT_MODELS.includes(model)) {
-    return res.status(400).json({ error: `model must be one of: ${VALID_CHAT_MODELS.join(', ')}` });
-  }
-
-  try {
-    const current = aiConfig.get();
-    const updated = { ...current, importLookupModel: model };
-    await updateSiteConfig('aiConfig', updated, req.user.id);
-    aiConfig.set(updated);
-    res.json({ importLookupModel: model });
-  } catch (error) {
-    console.error('[superadmin] import-lookup-model error:', error);
-    res.status(500).json({ error: 'Failed to save import lookup model' });
-  }
-});
-
-// ---------------------------------------------------------------------------
-// PATCH /api/superadmin/ai/label-scan-model
-// ---------------------------------------------------------------------------
-router.patch('/ai/label-scan-model', async (req, res) => {
-  const { model } = req.body;
-  const { VALID_CHAT_MODELS } = aiConfig;
-
-  if (!model || !VALID_CHAT_MODELS.includes(model)) {
-    return res.status(400).json({ error: `model must be one of: ${VALID_CHAT_MODELS.join(', ')}` });
-  }
-
-  try {
-    const current = aiConfig.get();
-    const updated = { ...current, labelScanModel: model };
-    await updateSiteConfig('aiConfig', updated, req.user.id);
-    aiConfig.set(updated);
-    res.json({ labelScanModel: model });
-  } catch (error) {
-    console.error('[superadmin] label-scan-model error:', error);
-    res.status(500).json({ error: 'Failed to save label scan model' });
-  }
-});
-
-// ---------------------------------------------------------------------------
-// PATCH /api/superadmin/ai/maturity-suggest-prompt
-// ---------------------------------------------------------------------------
-router.patch('/ai/maturity-suggest-prompt', async (req, res) => {
-  const { prompt } = req.body;
-  if (typeof prompt !== 'string' || !prompt.trim()) {
-    return res.status(400).json({ error: 'prompt must be a non-empty string' });
-  }
-  if (prompt.length > SCAN_PROMPT_MAX_LENGTH) {
-    return res.status(400).json({ error: `prompt must be ${SCAN_PROMPT_MAX_LENGTH} characters or fewer` });
-  }
-  try {
-    const current = aiConfig.get();
-    const updated = { ...current, maturitySuggestPrompt: prompt.trim() };
-    await updateSiteConfig('aiConfig', updated, req.user.id);
-    aiConfig.set(updated);
-    res.json({ maturitySuggestPrompt: updated.maturitySuggestPrompt });
-  } catch (error) {
-    console.error('[superadmin] maturity-suggest-prompt error:', error);
-    res.status(500).json({ error: 'Failed to save maturity suggest prompt' });
-  }
-});
-
-// ---------------------------------------------------------------------------
-// PATCH /api/superadmin/ai/maturity-suggest-prompt-nv
-// Non-vintage variant of the maturity suggest prompt (asks for year-offsets
-// after purchase instead of calendar years).
-// ---------------------------------------------------------------------------
-router.patch('/ai/maturity-suggest-prompt-nv', async (req, res) => {
-  const { prompt } = req.body;
-  if (typeof prompt !== 'string' || !prompt.trim()) {
-    return res.status(400).json({ error: 'prompt must be a non-empty string' });
-  }
-  if (prompt.length > SCAN_PROMPT_MAX_LENGTH) {
-    return res.status(400).json({ error: `prompt must be ${SCAN_PROMPT_MAX_LENGTH} characters or fewer` });
-  }
-  try {
-    const current = aiConfig.get();
-    const updated = { ...current, maturitySuggestPromptNv: prompt.trim() };
-    await updateSiteConfig('aiConfig', updated, req.user.id);
-    aiConfig.set(updated);
-    res.json({ maturitySuggestPromptNv: updated.maturitySuggestPromptNv });
-  } catch (error) {
-    console.error('[superadmin] maturity-suggest-prompt-nv error:', error);
-    res.status(500).json({ error: 'Failed to save NV maturity suggest prompt' });
-  }
-});
-
-// ---------------------------------------------------------------------------
-// PATCH /api/superadmin/ai/maturity-suggest-model
-// ---------------------------------------------------------------------------
-router.patch('/ai/maturity-suggest-model', async (req, res) => {
-  const { model } = req.body;
-  const { VALID_CHAT_MODELS } = aiConfig;
-
-  if (!model || !VALID_CHAT_MODELS.includes(model)) {
-    return res.status(400).json({ error: `model must be one of: ${VALID_CHAT_MODELS.join(', ')}` });
-  }
-
-  try {
-    const current = aiConfig.get();
-    const updated = { ...current, maturitySuggestModel: model };
-    await updateSiteConfig('aiConfig', updated, req.user.id);
-    aiConfig.set(updated);
-    res.json({ maturitySuggestModel: model });
-  } catch (error) {
-    console.error('[superadmin] maturity-suggest-model error:', error);
-    res.status(500).json({ error: 'Failed to save maturity suggest model' });
-  }
-});
-
-// ---------------------------------------------------------------------------
-// PATCH /api/superadmin/ai/price-suggest-prompt
-// ---------------------------------------------------------------------------
-router.patch('/ai/price-suggest-prompt', async (req, res) => {
-  const { prompt } = req.body;
-  if (typeof prompt !== 'string' || !prompt.trim()) {
-    return res.status(400).json({ error: 'prompt must be a non-empty string' });
-  }
-  if (prompt.length > SCAN_PROMPT_MAX_LENGTH) {
-    return res.status(400).json({ error: `prompt must be ${SCAN_PROMPT_MAX_LENGTH} characters or fewer` });
-  }
-  try {
-    const current = aiConfig.get();
-    const updated = { ...current, priceSuggestPrompt: prompt.trim() };
-    await updateSiteConfig('aiConfig', updated, req.user.id);
-    aiConfig.set(updated);
-    res.json({ priceSuggestPrompt: updated.priceSuggestPrompt });
-  } catch (error) {
-    console.error('[superadmin] price-suggest-prompt error:', error);
-    res.status(500).json({ error: 'Failed to save price suggest prompt' });
-  }
-});
-
-// ---------------------------------------------------------------------------
-// PATCH /api/superadmin/ai/price-suggest-model
-// ---------------------------------------------------------------------------
-router.patch('/ai/price-suggest-model', async (req, res) => {
-  const { model } = req.body;
-  const { VALID_CHAT_MODELS } = aiConfig;
-
-  if (!model || !VALID_CHAT_MODELS.includes(model)) {
-    return res.status(400).json({ error: `model must be one of: ${VALID_CHAT_MODELS.join(', ')}` });
-  }
-
-  try {
-    const current = aiConfig.get();
-    const updated = { ...current, priceSuggestModel: model };
-    await updateSiteConfig('aiConfig', updated, req.user.id);
-    aiConfig.set(updated);
-    res.json({ priceSuggestModel: model });
-  } catch (error) {
-    console.error('[superadmin] price-suggest-model error:', error);
-    res.status(500).json({ error: 'Failed to save price suggest model' });
-  }
-});
-
-// ---------------------------------------------------------------------------
-// PATCH /api/superadmin/ai/enrichment-prompt
-// ---------------------------------------------------------------------------
-router.patch('/ai/enrichment-prompt', async (req, res) => {
-  const { prompt } = req.body;
-  if (typeof prompt !== 'string' || !prompt.trim()) {
-    return res.status(400).json({ error: 'prompt must be a non-empty string' });
-  }
-  if (prompt.length > SCAN_PROMPT_MAX_LENGTH) {
-    return res.status(400).json({ error: `prompt must be ${SCAN_PROMPT_MAX_LENGTH} characters or fewer` });
-  }
-  try {
-    const current = aiConfig.get();
-    const updated = { ...current, enrichmentPrompt: prompt.trim() };
-    await updateSiteConfig('aiConfig', updated, req.user.id);
-    aiConfig.set(updated);
-    res.json({ enrichmentPrompt: updated.enrichmentPrompt });
-  } catch (error) {
-    console.error('[superadmin] enrichment-prompt error:', error);
-    res.status(500).json({ error: 'Failed to save enrichment prompt' });
-  }
-});
-
-// ---------------------------------------------------------------------------
-// PATCH /api/superadmin/ai/enrichment-model
-// ---------------------------------------------------------------------------
-router.patch('/ai/enrichment-model', async (req, res) => {
-  const { model } = req.body;
-  const { VALID_CHAT_MODELS } = aiConfig;
-
-  if (!model || !VALID_CHAT_MODELS.includes(model)) {
-    return res.status(400).json({ error: `model must be one of: ${VALID_CHAT_MODELS.join(', ')}` });
-  }
-
-  try {
-    const current = aiConfig.get();
-    const updated = { ...current, enrichmentModel: model };
-    await updateSiteConfig('aiConfig', updated, req.user.id);
-    aiConfig.set(updated);
-    res.json({ enrichmentModel: model });
-  } catch (error) {
-    console.error('[superadmin] enrichment-model error:', error);
-    res.status(500).json({ error: 'Failed to save enrichment model' });
-  }
-});
+// Route table (registration order preserved from the original handlers).
+registerPromptRoute('/ai/system-prompt',        'chatSystemPrompt',   SYSTEM_PROMPT_MAX_LENGTH, 'Failed to save system prompt');
+registerPromptRoute('/ai/label-scan-prompt',    'labelScanPrompt',    SCAN_PROMPT_MAX_LENGTH,   'Failed to save label scan prompt');
+registerPromptRoute('/ai/import-lookup-prompt', 'importLookupPrompt', SCAN_PROMPT_MAX_LENGTH,   'Failed to save import lookup prompt');
+registerModelRoute('/ai/import-lookup-model',   'importLookupModel',  'Failed to save import lookup model');
+registerModelRoute('/ai/label-scan-model',      'labelScanModel',     'Failed to save label scan model');
+registerPromptRoute('/ai/maturity-suggest-prompt', 'maturitySuggestPrompt', SCAN_PROMPT_MAX_LENGTH, 'Failed to save maturity suggest prompt');
+// The -nv route edits the non-vintage variant of the maturity suggest prompt
+// (asks for year-offsets after purchase instead of calendar years).
+registerPromptRoute('/ai/maturity-suggest-prompt-nv', 'maturitySuggestPromptNv', SCAN_PROMPT_MAX_LENGTH, 'Failed to save NV maturity suggest prompt');
+registerModelRoute('/ai/maturity-suggest-model', 'maturitySuggestModel', 'Failed to save maturity suggest model');
+registerPromptRoute('/ai/price-suggest-prompt', 'priceSuggestPrompt', SCAN_PROMPT_MAX_LENGTH,   'Failed to save price suggest prompt');
+registerModelRoute('/ai/price-suggest-model',   'priceSuggestModel',  'Failed to save price suggest model');
+registerPromptRoute('/ai/enrichment-prompt',    'enrichmentPrompt',   SCAN_PROMPT_MAX_LENGTH,   'Failed to save enrichment prompt');
+registerModelRoute('/ai/enrichment-model',      'enrichmentModel',    'Failed to save enrichment model');
 
 // ---------------------------------------------------------------------------
 // PATCH /api/superadmin/ai/chat-model
