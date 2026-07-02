@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import { useParams, Link, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import SEOHead from '../components/SEOHead';
+import Layout from '../components/Layout';
+import { useAuth } from '../contexts/AuthContext';
 import SITE_URL from '../config/siteUrl';
 import { API_URL } from '../api/apiConstants';
 import './TaxonomyDetail.css';
@@ -17,6 +19,10 @@ const TYPE_DESCRIPTIONS = {
 
 export default function WineTypeDetail() {
   const { t } = useTranslation();
+  // Wrap in Layout for logged-in users so they keep the app navbar
+  // (same pattern as WineDetail — these public SEO pages interlink).
+  const { user } = useAuth();
+  const wrap = (node) => (user ? <Layout>{node}</Layout> : node);
   const { type } = useParams();
   const [searchParams, setSearchParams] = useSearchParams();
   const [data, setData] = useState(null);
@@ -36,8 +42,8 @@ export default function WineTypeDetail() {
     return () => { cancelled = true; };
   }, [type, page]);
 
-  if (loading) return <div className="taxonomy-loading">Loading…</div>;
-  if (error || !data) return <div className="taxonomy-error"><p>Wine type not found.</p><Link to="/" className="btn btn-secondary">Home</Link></div>;
+  if (loading) return wrap(<div className="taxonomy-loading">Loading…</div>);
+  if (error || !data) return wrap(<div className="taxonomy-error"><p>Wine type not found.</p><Link to="/" className="btn btn-secondary">Home</Link></div>);
 
   const { wines, total } = data;
   const pages = Math.ceil(total / limit);
@@ -64,7 +70,7 @@ export default function WineTypeDetail() {
     ]
   };
 
-  return (
+  return wrap(
     <div className="taxonomy-page">
       <SEOHead
         title={`${typeLabel} wines — Cellarion`}

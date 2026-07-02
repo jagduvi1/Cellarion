@@ -12,7 +12,11 @@ function CommunityDiscussions() {
   return (
     <div className="review-feed-page">
       <div className="review-feed__header">
-        <h1>{t('discussions.community')}</h1>
+        <h1>
+          {t('discussions.community')}
+          {' '}
+          <span className="discussions__beta-badge">{t('discussions.beta')}</span>
+        </h1>
         {/* Reviews tab is hidden for anonymous visitors — that feed is auth-only
             and would just bounce them back here via /community redirect. */}
         {user && (

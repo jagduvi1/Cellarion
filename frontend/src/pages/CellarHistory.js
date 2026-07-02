@@ -219,6 +219,7 @@ function CellarHistory() {
           baseFacets={baseFacets}
           facetMeta={facetMeta}
           bottlesTotal={total}
+          showRatingMaturity={false}
         />
       )}
 

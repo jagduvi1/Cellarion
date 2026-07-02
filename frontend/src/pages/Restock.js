@@ -181,27 +181,40 @@ export default function Restock() {
   };
   const [dismissed, setDismissed] = useState(getDismissed);
 
+  // localStorage mirrors the dismissed state via the effect below — state
+  // updates stay pure (safe under StrictMode's double-invoked updaters).
+  useEffect(() => {
+    localStorage.setItem('cellarion_restock_dismissed', JSON.stringify(dismissed));
+  }, [dismissed]);
+
   const handleDismissCategory = (category, name) => {
     const key = `${category}:${name}`;
     const item = allCategories.find(c => c.category === category && c.name === name);
-    const updated = { ...dismissed, [key]: item?.stock || 0 };
-    setDismissed(updated);
-    localStorage.setItem('cellarion_restock_dismissed', JSON.stringify(updated));
+    setDismissed(prev => ({ ...prev, [key]: item?.stock || 0 }));
   };
 
+  // Pure predicate — a dismiss only holds while stock hasn't increased.
   const isItemDismissed = (item) => {
     const key = `${item.category}:${item.name}`;
-    if (!(key in dismissed)) return false;
-    // Auto-clear dismiss if stock increased (user bought more)
-    if (item.stock > dismissed[key]) {
-      const updated = { ...dismissed };
-      delete updated[key];
-      setDismissed(updated);
-      localStorage.setItem('cellarion_restock_dismissed', JSON.stringify(updated));
-      return false;
-    }
-    return true;
+    return key in dismissed && item.stock <= dismissed[key];
   };
+
+  // Auto-clear dismisses whose stock has since increased (user bought more).
+  // Runs as an effect, NOT during render: the old in-filter version called
+  // setState/localStorage per item from the same stale snapshot, so clearing
+  // two items in one pass stomped each other's updates.
+  useEffect(() => {
+    const stale = allCategories.filter(item => {
+      const key = `${item.category}:${item.name}`;
+      return key in dismissed && item.stock > dismissed[key];
+    });
+    if (stale.length === 0) return;
+    setDismissed(prev => {
+      const updated = { ...prev };
+      for (const item of stale) delete updated[`${item.category}:${item.name}`];
+      return updated;
+    });
+  }, [allCategories, dismissed]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const filtered = allCategories.filter(c => c.category === view && !isItemDismissed(c));
   const urgent = filtered.filter(c => c.status === 'urgent');

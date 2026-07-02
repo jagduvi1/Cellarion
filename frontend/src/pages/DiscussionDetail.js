@@ -34,8 +34,8 @@ function DiscussionDetail() {
   const navigate = useNavigate();
   const { t } = useTranslation();
   const { apiFetch, user } = useAuth();
-  // Once the discussion has loaded, prefer its canonical _id for write actions
-  // — the URL might be a slug, but the API expects an ObjectId for writes.
+  // The URL may be an ObjectId or a slug — every backend discussion route
+  // resolves both (findDiscussionByIdOrSlug), so it's passed through as-is.
   const id = idOrSlug;
 
   const [discussion, setDiscussion] = useState(null);

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import CellarionLogo from '../components/CellarionLogo';
@@ -14,7 +14,14 @@ function VerifyEmail() {
   const [resendEmail, setResendEmail] = useState('');
   const [resendStatus, setResendStatus] = useState(null); // null | 'sending' | 'sent' | 'error'
 
+  // The token is single-use: StrictMode's dev double-mount would consume it
+  // on the first run and overwrite the success state with "invalid token"
+  // from the second — run exactly once per mount cycle.
+  const ranRef = useRef(false);
   useEffect(() => {
+    if (ranRef.current) return;
+    ranRef.current = true;
+
     const token = searchParams.get('token');
     if (!token) {
       setStatus('error');
