@@ -34,6 +34,163 @@ const CHAT_MODELS = [
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Shared panel building blocks
+// ─────────────────────────────────────────────────────────────────────────────
+
+const tierColor = { economy: 'var(--sa-accent)', standard: 'var(--sa-accent2)', premium: '#c9a84c' };
+
+const codeStyle = { background: 'var(--sa-bg)', padding: '1px 4px', borderRadius: 2 };
+
+const modelRow = (m, groupName, checked, onChange, activeMark) => (
+  <label
+    key={m.id}
+    style={{
+      display: 'flex',
+      alignItems: 'flex-start',
+      gap: 10,
+      padding: '8px 12px',
+      borderRadius: 4,
+      border: `1px solid ${checked ? 'var(--sa-accent)' : 'var(--sa-border)'}`,
+      background: checked ? 'rgba(123,158,136,0.06)' : 'transparent',
+      cursor: 'pointer',
+    }}
+  >
+    <input
+      type="radio"
+      name={groupName}
+      value={m.id}
+      checked={checked}
+      onChange={onChange}
+      style={{ marginTop: 2, accentColor: 'var(--sa-accent)', flexShrink: 0 }}
+    />
+    <div style={{ flex: 1 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
+        <span style={{ fontWeight: 600, fontSize: 12, color: 'var(--sa-text)' }}>{m.name}</span>
+        <span style={{ fontSize: 10, color: tierColor[m.tier], border: `1px solid ${tierColor[m.tier]}`, borderRadius: 3, padding: '1px 5px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+          {m.tier}
+        </span>
+        {activeMark && <span style={{ fontSize: 10, color: 'var(--sa-accent)', marginLeft: 'auto' }}>● active</span>}
+      </div>
+      <div style={{ fontSize: 11, color: 'var(--sa-text-dim)', marginBottom: 2 }}>{m.description}</div>
+      <div style={{ fontSize: 10, color: 'var(--sa-text-dim)', fontFamily: 'monospace' }}>
+        Input: {m.inputPrice} / M &nbsp;·&nbsp; Output: {m.outputPrice} / M tokens
+      </div>
+    </div>
+  </label>
+);
+
+function ModelPickerPanel({ title, endpoint, groupName, intro, currentModel, defaultModel = 'claude-haiku-4-5-20251001', successMsg = 'Saved — takes effect immediately', apiFetch }) {
+  const [selected, setSelected] = useState(currentModel || defaultModel);
+  const [saving, setSaving]     = useState(false);
+  const [msg, setMsg]           = useState(null);
+
+  const isDirty = selected !== currentModel;
+
+  const save = async () => {
+    setSaving(true);
+    setMsg(null);
+    try {
+      const res = await apiFetch(endpoint, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model: selected }),
+      });
+      if (!res.ok) {
+        const d = await res.json();
+        setMsg({ ok: false, text: d.error || 'Save failed' });
+      } else {
+        setMsg({ ok: true, text: successMsg });
+      }
+    } catch {
+      setMsg({ ok: false, text: 'Network error' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="sa-panel" style={{ marginTop: 16 }}>
+      <div className="sa-panel-header">
+        <span className="sa-panel-title">{title}</span>
+        <button className="sa-btn" onClick={save} disabled={saving || !isDirty}>
+          {saving ? 'Saving...' : 'Save'}
+        </button>
+      </div>
+      <div className="sa-panel-body">
+        <div style={{ fontSize: 11, color: 'var(--sa-text-dim)', marginBottom: 12 }}>
+          {intro}
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {CHAT_MODELS.map(m => modelRow(
+            m, groupName,
+            selected === m.id,
+            () => setSelected(m.id),
+            m.id === currentModel
+          ))}
+        </div>
+        {msg && (
+          <div style={{ marginTop: 12, fontSize: 11, color: msg.ok ? 'var(--sa-accent)' : 'var(--sa-danger)' }}>{msg.text}</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function PromptPanel({ title, endpoint, intro, prompt, rows = 14, maxChars = 6000, successMsg = 'Saved — takes effect immediately', apiFetch }) {
+  const [val, setVal] = useState(prompt || '');
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState(null);
+
+  const save = async () => {
+    setSaving(true);
+    setMsg(null);
+    try {
+      const res = await apiFetch(endpoint, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: val }),
+      });
+      if (!res.ok) {
+        const d = await res.json();
+        setMsg({ ok: false, text: d.error || 'Save failed' });
+      } else {
+        setMsg({ ok: true, text: successMsg });
+      }
+    } catch {
+      setMsg({ ok: false, text: 'Network error' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="sa-panel" style={{ marginTop: 16 }}>
+      <div className="sa-panel-header">
+        <span className="sa-panel-title">{title}</span>
+        <button className="sa-btn" onClick={save} disabled={saving || !val.trim()}>{saving ? 'Saving...' : 'Save'}</button>
+      </div>
+      <div className="sa-panel-body">
+        <div style={{ fontSize: 11, color: 'var(--sa-text-dim)', marginBottom: 8 }}>
+          {intro}
+        </div>
+        <textarea
+          value={val}
+          onChange={e => setVal(e.target.value)}
+          rows={rows}
+          style={{ width: '100%', background: 'var(--sa-bg)', border: '1px solid var(--sa-border)', color: 'var(--sa-text)', padding: '8px', borderRadius: 3, fontFamily: 'monospace', fontSize: 12, lineHeight: 1.5, resize: 'vertical', boxSizing: 'border-box' }}
+        />
+        <div style={{ marginTop: 6, display: 'flex', gap: 8, alignItems: 'center' }}>
+          <span style={{ fontSize: 11, color: 'var(--sa-text-dim)' }}>{val.length} / {maxChars} chars</span>
+          {msg && (
+            <span style={{ fontSize: 11, color: msg.ok ? 'var(--sa-accent)' : 'var(--sa-danger)' }}>{msg.text}</span>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Sub-panels
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -69,46 +226,6 @@ function ChatModelPanel({ currentModel, currentFallback, apiFetch }) {
       setSaving(false);
     }
   };
-
-  const tierColor = { economy: 'var(--sa-accent)', standard: 'var(--sa-accent2)', premium: '#c9a84c' };
-
-  const modelRow = (m, groupName, checked, onChange, activeMark) => (
-    <label
-      key={m.id}
-      style={{
-        display: 'flex',
-        alignItems: 'flex-start',
-        gap: 10,
-        padding: '8px 12px',
-        borderRadius: 4,
-        border: `1px solid ${checked ? 'var(--sa-accent)' : 'var(--sa-border)'}`,
-        background: checked ? 'rgba(123,158,136,0.06)' : 'transparent',
-        cursor: 'pointer',
-      }}
-    >
-      <input
-        type="radio"
-        name={groupName}
-        value={m.id}
-        checked={checked}
-        onChange={onChange}
-        style={{ marginTop: 2, accentColor: 'var(--sa-accent)', flexShrink: 0 }}
-      />
-      <div style={{ flex: 1 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
-          <span style={{ fontWeight: 600, fontSize: 12, color: 'var(--sa-text)' }}>{m.name}</span>
-          <span style={{ fontSize: 10, color: tierColor[m.tier], border: `1px solid ${tierColor[m.tier]}`, borderRadius: 3, padding: '1px 5px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-            {m.tier}
-          </span>
-          {activeMark && <span style={{ fontSize: 10, color: 'var(--sa-accent)', marginLeft: 'auto' }}>● active</span>}
-        </div>
-        <div style={{ fontSize: 11, color: 'var(--sa-text-dim)', marginBottom: 2 }}>{m.description}</div>
-        <div style={{ fontSize: 10, color: 'var(--sa-text-dim)', fontFamily: 'monospace' }}>
-          Input: {m.inputPrice} / M &nbsp;·&nbsp; Output: {m.outputPrice} / M tokens
-        </div>
-      </div>
-    </label>
-  );
 
   return (
     <div className="sa-panel" style={{ marginTop: 16 }}>
@@ -159,816 +276,157 @@ function ChatModelPanel({ currentModel, currentFallback, apiFetch }) {
 }
 
 function SystemPromptPanel({ prompt, apiFetch }) {
-  const { DEFAULT_SYSTEM_PROMPT } = { DEFAULT_SYSTEM_PROMPT: '' }; // fallback
-  const [val, setVal] = useState(prompt || '');
-  const [saving, setSaving] = useState(false);
-  const [msg, setMsg] = useState(null);
-
-  const save = async () => {
-    setSaving(true);
-    setMsg(null);
-    try {
-      const res = await apiFetch('/api/superadmin/ai/system-prompt', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: val }),
-      });
-      if (!res.ok) {
-        const d = await res.json();
-        setMsg({ ok: false, text: d.error || 'Save failed' });
-      } else {
-        setMsg({ ok: true, text: 'Saved — takes effect immediately' });
-      }
-    } catch {
-      setMsg({ ok: false, text: 'Network error' });
-    } finally {
-      setSaving(false);
-    }
-  };
-
   return (
-    <div className="sa-panel" style={{ marginTop: 16 }}>
-      <div className="sa-panel-header">
-        <span className="sa-panel-title">Cellar Chat — System Prompt</span>
-        <button className="sa-btn" onClick={save} disabled={saving || !val.trim()}>{saving ? 'Saving...' : 'Save'}</button>
-      </div>
-      <div className="sa-panel-body">
-        <div style={{ fontSize: 11, color: 'var(--sa-text-dim)', marginBottom: 8 }}>
-          This prompt is sent to Claude before every chat message. Takes effect immediately on save.
-        </div>
-        <textarea
-          value={val}
-          onChange={e => setVal(e.target.value)}
-          rows={10}
-          style={{ width: '100%', background: 'var(--sa-bg)', border: '1px solid var(--sa-border)', color: 'var(--sa-text)', padding: '8px', borderRadius: 3, fontFamily: 'monospace', fontSize: 12, lineHeight: 1.5, resize: 'vertical', boxSizing: 'border-box' }}
-        />
-        <div style={{ marginTop: 6, display: 'flex', gap: 8, alignItems: 'center' }}>
-          <span style={{ fontSize: 11, color: 'var(--sa-text-dim)' }}>{val.length} / 4000 chars</span>
-          {msg && (
-            <span style={{ fontSize: 11, color: msg.ok ? 'var(--sa-accent)' : 'var(--sa-danger)' }}>{msg.text}</span>
-          )}
-        </div>
-      </div>
-    </div>
+    <PromptPanel
+      title="Cellar Chat — System Prompt"
+      endpoint="/api/superadmin/ai/system-prompt"
+      intro="This prompt is sent to Claude before every chat message. Takes effect immediately on save."
+      prompt={prompt}
+      rows={10}
+      maxChars={4000}
+      apiFetch={apiFetch}
+    />
   );
 }
 
 function LabelScanPromptPanel({ prompt, apiFetch }) {
-  const [val, setVal] = useState(prompt || '');
-  const [saving, setSaving] = useState(false);
-  const [msg, setMsg] = useState(null);
-
-  const save = async () => {
-    setSaving(true);
-    setMsg(null);
-    try {
-      const res = await apiFetch('/api/superadmin/ai/label-scan-prompt', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: val }),
-      });
-      if (!res.ok) {
-        const d = await res.json();
-        setMsg({ ok: false, text: d.error || 'Save failed' });
-      } else {
-        setMsg({ ok: true, text: 'Saved — takes effect immediately' });
-      }
-    } catch {
-      setMsg({ ok: false, text: 'Network error' });
-    } finally {
-      setSaving(false);
-    }
-  };
-
   return (
-    <div className="sa-panel" style={{ marginTop: 16 }}>
-      <div className="sa-panel-header">
-        <span className="sa-panel-title">Label Scan — AI Prompt</span>
-        <button className="sa-btn" onClick={save} disabled={saving || !val.trim()}>{saving ? 'Saving...' : 'Save'}</button>
-      </div>
-      <div className="sa-panel-body">
-        <div style={{ fontSize: 11, color: 'var(--sa-text-dim)', marginBottom: 8 }}>
-          This prompt is sent to Claude when a user scans a wine label. It controls how wine data is extracted and inferred. Takes effect immediately on save.
-        </div>
-        <textarea
-          value={val}
-          onChange={e => setVal(e.target.value)}
-          rows={14}
-          style={{ width: '100%', background: 'var(--sa-bg)', border: '1px solid var(--sa-border)', color: 'var(--sa-text)', padding: '8px', borderRadius: 3, fontFamily: 'monospace', fontSize: 12, lineHeight: 1.5, resize: 'vertical', boxSizing: 'border-box' }}
-        />
-        <div style={{ marginTop: 6, display: 'flex', gap: 8, alignItems: 'center' }}>
-          <span style={{ fontSize: 11, color: 'var(--sa-text-dim)' }}>{val.length} / 6000 chars</span>
-          {msg && (
-            <span style={{ fontSize: 11, color: msg.ok ? 'var(--sa-accent)' : 'var(--sa-danger)' }}>{msg.text}</span>
-          )}
-        </div>
-      </div>
-    </div>
+    <PromptPanel
+      title="Label Scan — AI Prompt"
+      endpoint="/api/superadmin/ai/label-scan-prompt"
+      intro="This prompt is sent to Claude when a user scans a wine label. It controls how wine data is extracted and inferred. Takes effect immediately on save."
+      prompt={prompt}
+      apiFetch={apiFetch}
+    />
   );
 }
 
 function LabelScanModelPanel({ currentModel, apiFetch }) {
-  const [selected, setSelected] = useState(currentModel || 'claude-haiku-4-5-20251001');
-  const [saving, setSaving]     = useState(false);
-  const [msg, setMsg]           = useState(null);
-
-  const isDirty = selected !== currentModel;
-
-  const save = async () => {
-    setSaving(true);
-    setMsg(null);
-    try {
-      const res = await apiFetch('/api/superadmin/ai/label-scan-model', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ model: selected }),
-      });
-      if (!res.ok) {
-        const d = await res.json();
-        setMsg({ ok: false, text: d.error || 'Save failed' });
-      } else {
-        setMsg({ ok: true, text: 'Saved — takes effect immediately' });
-      }
-    } catch {
-      setMsg({ ok: false, text: 'Network error' });
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const tierColor = { economy: 'var(--sa-accent)', standard: 'var(--sa-accent2)', premium: '#c9a84c' };
-
   return (
-    <div className="sa-panel" style={{ marginTop: 16 }}>
-      <div className="sa-panel-header">
-        <span className="sa-panel-title">Label Scan — AI Model</span>
-        <button className="sa-btn" onClick={save} disabled={saving || !isDirty}>
-          {saving ? 'Saving...' : 'Save'}
-        </button>
-      </div>
-      <div className="sa-panel-body">
-        <div style={{ fontSize: 11, color: 'var(--sa-text-dim)', marginBottom: 12 }}>
-          Model used when scanning wine labels with the camera. Haiku is fast and cheap; Sonnet or Opus may read difficult labels more accurately.
-        </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          {CHAT_MODELS.map(m => (
-            <label
-              key={m.id}
-              style={{
-                display: 'flex', alignItems: 'flex-start', gap: 10,
-                padding: '8px 12px', borderRadius: 4,
-                border: `1px solid ${selected === m.id ? 'var(--sa-accent)' : 'var(--sa-border)'}`,
-                background: selected === m.id ? 'rgba(123,158,136,0.06)' : 'transparent',
-                cursor: 'pointer',
-              }}
-            >
-              <input
-                type="radio"
-                name="labelScanModel"
-                value={m.id}
-                checked={selected === m.id}
-                onChange={() => setSelected(m.id)}
-                style={{ marginTop: 2, accentColor: 'var(--sa-accent)', flexShrink: 0 }}
-              />
-              <div style={{ flex: 1 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
-                  <span style={{ fontWeight: 600, fontSize: 12, color: 'var(--sa-text)' }}>{m.name}</span>
-                  <span style={{ fontSize: 10, color: tierColor[m.tier], border: `1px solid ${tierColor[m.tier]}`, borderRadius: 3, padding: '1px 5px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                    {m.tier}
-                  </span>
-                  {m.id === currentModel && <span style={{ fontSize: 10, color: 'var(--sa-accent)', marginLeft: 'auto' }}>● active</span>}
-                </div>
-                <div style={{ fontSize: 11, color: 'var(--sa-text-dim)', marginBottom: 2 }}>{m.description}</div>
-                <div style={{ fontSize: 10, color: 'var(--sa-text-dim)', fontFamily: 'monospace' }}>
-                  Input: {m.inputPrice} / M &nbsp;·&nbsp; Output: {m.outputPrice} / M tokens
-                </div>
-              </div>
-            </label>
-          ))}
-        </div>
-        {msg && (
-          <div style={{ marginTop: 12, fontSize: 11, color: msg.ok ? 'var(--sa-accent)' : 'var(--sa-danger)' }}>{msg.text}</div>
-        )}
-      </div>
-    </div>
+    <ModelPickerPanel
+      title="Label Scan — AI Model"
+      endpoint="/api/superadmin/ai/label-scan-model"
+      groupName="labelScanModel"
+      intro="Model used when scanning wine labels with the camera. Haiku is fast and cheap; Sonnet or Opus may read difficult labels more accurately."
+      currentModel={currentModel}
+      apiFetch={apiFetch}
+    />
   );
 }
 
 function ImportLookupModelPanel({ currentModel, apiFetch }) {
-  const [selected, setSelected] = useState(currentModel || 'claude-haiku-4-5-20251001');
-  const [saving, setSaving]     = useState(false);
-  const [msg, setMsg]           = useState(null);
-
-  const isDirty = selected !== currentModel;
-
-  const save = async () => {
-    setSaving(true);
-    setMsg(null);
-    try {
-      const res = await apiFetch('/api/superadmin/ai/import-lookup-model', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ model: selected }),
-      });
-      if (!res.ok) {
-        const d = await res.json();
-        setMsg({ ok: false, text: d.error || 'Save failed' });
-      } else {
-        setMsg({ ok: true, text: 'Saved — takes effect immediately' });
-      }
-    } catch {
-      setMsg({ ok: false, text: 'Network error' });
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const tierColor = { economy: 'var(--sa-accent)', standard: 'var(--sa-accent2)', premium: '#c9a84c' };
-
   return (
-    <div className="sa-panel" style={{ marginTop: 16 }}>
-      <div className="sa-panel-header">
-        <span className="sa-panel-title">Import Lookup — AI Model</span>
-        <button className="sa-btn" onClick={save} disabled={saving || !isDirty}>
-          {saving ? 'Saving...' : 'Save'}
-        </button>
-      </div>
-      <div className="sa-panel-body">
-        <div style={{ fontSize: 11, color: 'var(--sa-text-dim)', marginBottom: 12 }}>
-          Model used to identify wines during bottle import when no match is found in the library.
-        </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          {CHAT_MODELS.map(m => (
-            <label
-              key={m.id}
-              style={{
-                display: 'flex', alignItems: 'flex-start', gap: 10,
-                padding: '8px 12px', borderRadius: 4,
-                border: `1px solid ${selected === m.id ? 'var(--sa-accent)' : 'var(--sa-border)'}`,
-                background: selected === m.id ? 'rgba(123,158,136,0.06)' : 'transparent',
-                cursor: 'pointer',
-              }}
-            >
-              <input
-                type="radio"
-                name="importLookupModel"
-                value={m.id}
-                checked={selected === m.id}
-                onChange={() => setSelected(m.id)}
-                style={{ marginTop: 2, accentColor: 'var(--sa-accent)', flexShrink: 0 }}
-              />
-              <div style={{ flex: 1 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
-                  <span style={{ fontWeight: 600, fontSize: 12, color: 'var(--sa-text)' }}>{m.name}</span>
-                  <span style={{ fontSize: 10, color: tierColor[m.tier], border: `1px solid ${tierColor[m.tier]}`, borderRadius: 3, padding: '1px 5px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                    {m.tier}
-                  </span>
-                  {m.id === currentModel && <span style={{ fontSize: 10, color: 'var(--sa-accent)', marginLeft: 'auto' }}>● active</span>}
-                </div>
-                <div style={{ fontSize: 11, color: 'var(--sa-text-dim)', marginBottom: 2 }}>{m.description}</div>
-                <div style={{ fontSize: 10, color: 'var(--sa-text-dim)', fontFamily: 'monospace' }}>
-                  Input: {m.inputPrice} / M &nbsp;·&nbsp; Output: {m.outputPrice} / M tokens
-                </div>
-              </div>
-            </label>
-          ))}
-        </div>
-        {msg && (
-          <div style={{ marginTop: 12, fontSize: 11, color: msg.ok ? 'var(--sa-accent)' : 'var(--sa-danger)' }}>{msg.text}</div>
-        )}
-      </div>
-    </div>
+    <ModelPickerPanel
+      title="Import Lookup — AI Model"
+      endpoint="/api/superadmin/ai/import-lookup-model"
+      groupName="importLookupModel"
+      intro="Model used to identify wines during bottle import when no match is found in the library."
+      currentModel={currentModel}
+      apiFetch={apiFetch}
+    />
   );
 }
 
 function ImportLookupPromptPanel({ prompt, apiFetch }) {
-  const [val, setVal] = useState(prompt || '');
-  const [saving, setSaving] = useState(false);
-  const [msg, setMsg] = useState(null);
-
-  const save = async () => {
-    setSaving(true);
-    setMsg(null);
-    try {
-      const res = await apiFetch('/api/superadmin/ai/import-lookup-prompt', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: val }),
-      });
-      if (!res.ok) {
-        const d = await res.json();
-        setMsg({ ok: false, text: d.error || 'Save failed' });
-      } else {
-        setMsg({ ok: true, text: 'Saved — takes effect immediately' });
-      }
-    } catch {
-      setMsg({ ok: false, text: 'Network error' });
-    } finally {
-      setSaving(false);
-    }
-  };
-
   return (
-    <div className="sa-panel" style={{ marginTop: 16 }}>
-      <div className="sa-panel-header">
-        <span className="sa-panel-title">Import Lookup — AI Prompt</span>
-        <button className="sa-btn" onClick={save} disabled={saving || !val.trim()}>{saving ? 'Saving...' : 'Save'}</button>
-      </div>
-      <div className="sa-panel-body">
-        <div style={{ fontSize: 11, color: 'var(--sa-text-dim)', marginBottom: 8 }}>
-          Prompt sent to Claude when a wine can't be found in the library during import. Use <code style={{ background: 'var(--sa-bg)', padding: '1px 4px', borderRadius: 2 }}>{'{{name}}'}</code>, <code style={{ background: 'var(--sa-bg)', padding: '1px 4px', borderRadius: 2 }}>{'{{producer}}'}</code>, <code style={{ background: 'var(--sa-bg)', padding: '1px 4px', borderRadius: 2 }}>{'{{vintage}}'}</code>, <code style={{ background: 'var(--sa-bg)', padding: '1px 4px', borderRadius: 2 }}>{'{{country}}'}</code> placeholders.
-        </div>
-        <textarea
-          value={val}
-          onChange={e => setVal(e.target.value)}
-          rows={14}
-          style={{ width: '100%', background: 'var(--sa-bg)', border: '1px solid var(--sa-border)', color: 'var(--sa-text)', padding: '8px', borderRadius: 3, fontFamily: 'monospace', fontSize: 12, lineHeight: 1.5, resize: 'vertical', boxSizing: 'border-box' }}
-        />
-        <div style={{ marginTop: 6, display: 'flex', gap: 8, alignItems: 'center' }}>
-          <span style={{ fontSize: 11, color: 'var(--sa-text-dim)' }}>{val.length} / 6000 chars</span>
-          {msg && (
-            <span style={{ fontSize: 11, color: msg.ok ? 'var(--sa-accent)' : 'var(--sa-danger)' }}>{msg.text}</span>
-          )}
-        </div>
-      </div>
-    </div>
+    <PromptPanel
+      title="Import Lookup — AI Prompt"
+      endpoint="/api/superadmin/ai/import-lookup-prompt"
+      intro={<>Prompt sent to Claude when a wine can't be found in the library during import. Use <code style={codeStyle}>{'{{name}}'}</code>, <code style={codeStyle}>{'{{producer}}'}</code>, <code style={codeStyle}>{'{{vintage}}'}</code>, <code style={codeStyle}>{'{{country}}'}</code> placeholders.</>}
+      prompt={prompt}
+      apiFetch={apiFetch}
+    />
   );
 }
 
 function MaturitySuggestModelPanel({ currentModel, apiFetch }) {
-  const [selected, setSelected] = useState(currentModel || 'claude-haiku-4-5-20251001');
-  const [saving, setSaving]     = useState(false);
-  const [msg, setMsg]           = useState(null);
-
-  const isDirty = selected !== currentModel;
-
-  const save = async () => {
-    setSaving(true);
-    setMsg(null);
-    try {
-      const res = await apiFetch('/api/superadmin/ai/maturity-suggest-model', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ model: selected }),
-      });
-      if (!res.ok) {
-        const d = await res.json();
-        setMsg({ ok: false, text: d.error || 'Save failed' });
-      } else {
-        setMsg({ ok: true, text: 'Saved — takes effect immediately' });
-      }
-    } catch {
-      setMsg({ ok: false, text: 'Network error' });
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const tierColor = { economy: 'var(--sa-accent)', standard: 'var(--sa-accent2)', premium: '#c9a84c' };
-
   return (
-    <div className="sa-panel" style={{ marginTop: 16 }}>
-      <div className="sa-panel-header">
-        <span className="sa-panel-title">Maturity Suggest — AI Model</span>
-        <button className="sa-btn" onClick={save} disabled={saving || !isDirty}>
-          {saving ? 'Saving...' : 'Save'}
-        </button>
-      </div>
-      <div className="sa-panel-body">
-        <div style={{ fontSize: 11, color: 'var(--sa-text-dim)', marginBottom: 12 }}>
-          Model used when sommeliers click "Suggest" on the maturity queue to suggest drink window phases.
-        </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          {CHAT_MODELS.map(m => (
-            <label
-              key={m.id}
-              style={{
-                display: 'flex', alignItems: 'flex-start', gap: 10,
-                padding: '8px 12px', borderRadius: 4,
-                border: `1px solid ${selected === m.id ? 'var(--sa-accent)' : 'var(--sa-border)'}`,
-                background: selected === m.id ? 'rgba(123,158,136,0.06)' : 'transparent',
-                cursor: 'pointer',
-              }}
-            >
-              <input
-                type="radio"
-                name="maturitySuggestModel"
-                value={m.id}
-                checked={selected === m.id}
-                onChange={() => setSelected(m.id)}
-                style={{ marginTop: 2, accentColor: 'var(--sa-accent)', flexShrink: 0 }}
-              />
-              <div style={{ flex: 1 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
-                  <span style={{ fontWeight: 600, fontSize: 12, color: 'var(--sa-text)' }}>{m.name}</span>
-                  <span style={{ fontSize: 10, color: tierColor[m.tier], border: `1px solid ${tierColor[m.tier]}`, borderRadius: 3, padding: '1px 5px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                    {m.tier}
-                  </span>
-                  {m.id === currentModel && <span style={{ fontSize: 10, color: 'var(--sa-accent)', marginLeft: 'auto' }}>● active</span>}
-                </div>
-                <div style={{ fontSize: 11, color: 'var(--sa-text-dim)', marginBottom: 2 }}>{m.description}</div>
-                <div style={{ fontSize: 10, color: 'var(--sa-text-dim)', fontFamily: 'monospace' }}>
-                  Input: {m.inputPrice} / M &nbsp;·&nbsp; Output: {m.outputPrice} / M tokens
-                </div>
-              </div>
-            </label>
-          ))}
-        </div>
-        {msg && (
-          <div style={{ marginTop: 12, fontSize: 11, color: msg.ok ? 'var(--sa-accent)' : 'var(--sa-danger)' }}>{msg.text}</div>
-        )}
-      </div>
-    </div>
+    <ModelPickerPanel
+      title="Maturity Suggest — AI Model"
+      endpoint="/api/superadmin/ai/maturity-suggest-model"
+      groupName="maturitySuggestModel"
+      intro={'Model used when sommeliers click "Suggest" on the maturity queue to suggest drink window phases.'}
+      currentModel={currentModel}
+      apiFetch={apiFetch}
+    />
   );
 }
 
 function MaturitySuggestPromptPanel({ prompt, apiFetch }) {
-  const [val, setVal] = useState(prompt || '');
-  const [saving, setSaving] = useState(false);
-  const [msg, setMsg] = useState(null);
-
-  const save = async () => {
-    setSaving(true);
-    setMsg(null);
-    try {
-      const res = await apiFetch('/api/superadmin/ai/maturity-suggest-prompt', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: val }),
-      });
-      if (!res.ok) {
-        const d = await res.json();
-        setMsg({ ok: false, text: d.error || 'Save failed' });
-      } else {
-        setMsg({ ok: true, text: 'Saved — takes effect immediately' });
-      }
-    } catch {
-      setMsg({ ok: false, text: 'Network error' });
-    } finally {
-      setSaving(false);
-    }
-  };
-
   return (
-    <div className="sa-panel" style={{ marginTop: 16 }}>
-      <div className="sa-panel-header">
-        <span className="sa-panel-title">Maturity Suggest — AI Prompt</span>
-        <button className="sa-btn" onClick={save} disabled={saving || !val.trim()}>{saving ? 'Saving...' : 'Save'}</button>
-      </div>
-      <div className="sa-panel-body">
-        <div style={{ fontSize: 11, color: 'var(--sa-text-dim)', marginBottom: 8 }}>
-          Prompt sent to Claude when a sommelier asks AI to suggest drink window phases. Use <code style={{ background: 'var(--sa-bg)', padding: '1px 4px', borderRadius: 2 }}>{'{{name}}'}</code>, <code style={{ background: 'var(--sa-bg)', padding: '1px 4px', borderRadius: 2 }}>{'{{producer}}'}</code>, <code style={{ background: 'var(--sa-bg)', padding: '1px 4px', borderRadius: 2 }}>{'{{vintage}}'}</code>, <code style={{ background: 'var(--sa-bg)', padding: '1px 4px', borderRadius: 2 }}>{'{{country}}'}</code>, <code style={{ background: 'var(--sa-bg)', padding: '1px 4px', borderRadius: 2 }}>{'{{region}}'}</code>, <code style={{ background: 'var(--sa-bg)', padding: '1px 4px', borderRadius: 2 }}>{'{{appellation}}'}</code>, <code style={{ background: 'var(--sa-bg)', padding: '1px 4px', borderRadius: 2 }}>{'{{type}}'}</code>, <code style={{ background: 'var(--sa-bg)', padding: '1px 4px', borderRadius: 2 }}>{'{{grapes}}'}</code> placeholders.
-        </div>
-        <textarea
-          value={val}
-          onChange={e => setVal(e.target.value)}
-          rows={14}
-          style={{ width: '100%', background: 'var(--sa-bg)', border: '1px solid var(--sa-border)', color: 'var(--sa-text)', padding: '8px', borderRadius: 3, fontFamily: 'monospace', fontSize: 12, lineHeight: 1.5, resize: 'vertical', boxSizing: 'border-box' }}
-        />
-        <div style={{ marginTop: 6, display: 'flex', gap: 8, alignItems: 'center' }}>
-          <span style={{ fontSize: 11, color: 'var(--sa-text-dim)' }}>{val.length} / 6000 chars</span>
-          {msg && (
-            <span style={{ fontSize: 11, color: msg.ok ? 'var(--sa-accent)' : 'var(--sa-danger)' }}>{msg.text}</span>
-          )}
-        </div>
-      </div>
-    </div>
+    <PromptPanel
+      title="Maturity Suggest — AI Prompt"
+      endpoint="/api/superadmin/ai/maturity-suggest-prompt"
+      intro={<>Prompt sent to Claude when a sommelier asks AI to suggest drink window phases. Use <code style={codeStyle}>{'{{name}}'}</code>, <code style={codeStyle}>{'{{producer}}'}</code>, <code style={codeStyle}>{'{{vintage}}'}</code>, <code style={codeStyle}>{'{{country}}'}</code>, <code style={codeStyle}>{'{{region}}'}</code>, <code style={codeStyle}>{'{{appellation}}'}</code>, <code style={codeStyle}>{'{{type}}'}</code>, <code style={codeStyle}>{'{{grapes}}'}</code> placeholders.</>}
+      prompt={prompt}
+      apiFetch={apiFetch}
+    />
   );
 }
 
 function MaturitySuggestPromptNvPanel({ prompt, apiFetch }) {
-  const [val, setVal] = useState(prompt || '');
-  const [saving, setSaving] = useState(false);
-  const [msg, setMsg] = useState(null);
-
-  const save = async () => {
-    setSaving(true);
-    setMsg(null);
-    try {
-      const res = await apiFetch('/api/superadmin/ai/maturity-suggest-prompt-nv', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: val }),
-      });
-      if (!res.ok) {
-        const d = await res.json();
-        setMsg({ ok: false, text: d.error || 'Save failed' });
-      } else {
-        setMsg({ ok: true, text: 'Saved — takes effect immediately' });
-      }
-    } catch {
-      setMsg({ ok: false, text: 'Network error' });
-    } finally {
-      setSaving(false);
-    }
-  };
-
   return (
-    <div className="sa-panel" style={{ marginTop: 16 }}>
-      <div className="sa-panel-header">
-        <span className="sa-panel-title">Maturity Suggest (Non-Vintage) — AI Prompt</span>
-        <button className="sa-btn" onClick={save} disabled={saving || !val.trim()}>{saving ? 'Saving...' : 'Save'}</button>
-      </div>
-      <div className="sa-panel-body">
-        <div style={{ fontSize: 11, color: 'var(--sa-text-dim)', marginBottom: 8 }}>
-          Used instead of the prompt above when the wine is <strong>non-vintage (NV)</strong>. It must ask for the window as <strong>whole years after purchase</strong> (offsets like 0, 2, 5), not calendar years — that's how NV drink windows are stored. Use <code style={{ background: 'var(--sa-bg)', padding: '1px 4px', borderRadius: 2 }}>{'{{name}}'}</code>, <code style={{ background: 'var(--sa-bg)', padding: '1px 4px', borderRadius: 2 }}>{'{{producer}}'}</code>, <code style={{ background: 'var(--sa-bg)', padding: '1px 4px', borderRadius: 2 }}>{'{{country}}'}</code>, <code style={{ background: 'var(--sa-bg)', padding: '1px 4px', borderRadius: 2 }}>{'{{region}}'}</code>, <code style={{ background: 'var(--sa-bg)', padding: '1px 4px', borderRadius: 2 }}>{'{{appellation}}'}</code>, <code style={{ background: 'var(--sa-bg)', padding: '1px 4px', borderRadius: 2 }}>{'{{type}}'}</code>, <code style={{ background: 'var(--sa-bg)', padding: '1px 4px', borderRadius: 2 }}>{'{{grapes}}'}</code> placeholders ({'{{vintage}}'} is not used for NV).
-        </div>
-        <textarea
-          value={val}
-          onChange={e => setVal(e.target.value)}
-          rows={14}
-          style={{ width: '100%', background: 'var(--sa-bg)', border: '1px solid var(--sa-border)', color: 'var(--sa-text)', padding: '8px', borderRadius: 3, fontFamily: 'monospace', fontSize: 12, lineHeight: 1.5, resize: 'vertical', boxSizing: 'border-box' }}
-        />
-        <div style={{ marginTop: 6, display: 'flex', gap: 8, alignItems: 'center' }}>
-          <span style={{ fontSize: 11, color: 'var(--sa-text-dim)' }}>{val.length} / 6000 chars</span>
-          {msg && (
-            <span style={{ fontSize: 11, color: msg.ok ? 'var(--sa-accent)' : 'var(--sa-danger)' }}>{msg.text}</span>
-          )}
-        </div>
-      </div>
-    </div>
+    <PromptPanel
+      title="Maturity Suggest (Non-Vintage) — AI Prompt"
+      endpoint="/api/superadmin/ai/maturity-suggest-prompt-nv"
+      intro={<>Used instead of the prompt above when the wine is <strong>non-vintage (NV)</strong>. It must ask for the window as <strong>whole years after purchase</strong> (offsets like 0, 2, 5), not calendar years — that's how NV drink windows are stored. Use <code style={codeStyle}>{'{{name}}'}</code>, <code style={codeStyle}>{'{{producer}}'}</code>, <code style={codeStyle}>{'{{country}}'}</code>, <code style={codeStyle}>{'{{region}}'}</code>, <code style={codeStyle}>{'{{appellation}}'}</code>, <code style={codeStyle}>{'{{type}}'}</code>, <code style={codeStyle}>{'{{grapes}}'}</code> placeholders ({'{{vintage}}'} is not used for NV).</>}
+      prompt={prompt}
+      apiFetch={apiFetch}
+    />
   );
 }
 
 function PriceSuggestModelPanel({ currentModel, apiFetch }) {
-  const [selected, setSelected] = useState(currentModel || 'claude-haiku-4-5-20251001');
-  const [saving, setSaving]     = useState(false);
-  const [msg, setMsg]           = useState(null);
-
-  const isDirty = selected !== currentModel;
-
-  const save = async () => {
-    setSaving(true);
-    setMsg(null);
-    try {
-      const res = await apiFetch('/api/superadmin/ai/price-suggest-model', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ model: selected }),
-      });
-      if (!res.ok) {
-        const d = await res.json();
-        setMsg({ ok: false, text: d.error || 'Save failed' });
-      } else {
-        setMsg({ ok: true, text: 'Saved — takes effect immediately' });
-      }
-    } catch {
-      setMsg({ ok: false, text: 'Network error' });
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const tierColor = { economy: 'var(--sa-accent)', standard: 'var(--sa-accent2)', premium: '#c9a84c' };
-
   return (
-    <div className="sa-panel" style={{ marginTop: 16 }}>
-      <div className="sa-panel-header">
-        <span className="sa-panel-title">Price Suggest — AI Model</span>
-        <button className="sa-btn" onClick={save} disabled={saving || !isDirty}>
-          {saving ? 'Saving...' : 'Save'}
-        </button>
-      </div>
-      <div className="sa-panel-body">
-        <div style={{ fontSize: 11, color: 'var(--sa-text-dim)', marginBottom: 12 }}>
-          Model used when sommeliers click "Suggest" on the price queue to suggest market prices.
-        </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          {CHAT_MODELS.map(m => (
-            <label
-              key={m.id}
-              style={{
-                display: 'flex', alignItems: 'flex-start', gap: 10,
-                padding: '8px 12px', borderRadius: 4,
-                border: `1px solid ${selected === m.id ? 'var(--sa-accent)' : 'var(--sa-border)'}`,
-                background: selected === m.id ? 'rgba(123,158,136,0.06)' : 'transparent',
-                cursor: 'pointer',
-              }}
-            >
-              <input
-                type="radio"
-                name="priceSuggestModel"
-                value={m.id}
-                checked={selected === m.id}
-                onChange={() => setSelected(m.id)}
-                style={{ marginTop: 2, accentColor: 'var(--sa-accent)', flexShrink: 0 }}
-              />
-              <div style={{ flex: 1 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
-                  <span style={{ fontWeight: 600, fontSize: 12, color: 'var(--sa-text)' }}>{m.name}</span>
-                  <span style={{ fontSize: 10, color: tierColor[m.tier], border: `1px solid ${tierColor[m.tier]}`, borderRadius: 3, padding: '1px 5px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                    {m.tier}
-                  </span>
-                  {m.id === currentModel && <span style={{ fontSize: 10, color: 'var(--sa-accent)', marginLeft: 'auto' }}>● active</span>}
-                </div>
-                <div style={{ fontSize: 11, color: 'var(--sa-text-dim)', marginBottom: 2 }}>{m.description}</div>
-                <div style={{ fontSize: 10, color: 'var(--sa-text-dim)', fontFamily: 'monospace' }}>
-                  Input: {m.inputPrice} / M &nbsp;·&nbsp; Output: {m.outputPrice} / M tokens
-                </div>
-              </div>
-            </label>
-          ))}
-        </div>
-        {msg && (
-          <div style={{ marginTop: 12, fontSize: 11, color: msg.ok ? 'var(--sa-accent)' : 'var(--sa-danger)' }}>{msg.text}</div>
-        )}
-      </div>
-    </div>
+    <ModelPickerPanel
+      title="Price Suggest — AI Model"
+      endpoint="/api/superadmin/ai/price-suggest-model"
+      groupName="priceSuggestModel"
+      intro={'Model used when sommeliers click "Suggest" on the price queue to suggest market prices.'}
+      currentModel={currentModel}
+      apiFetch={apiFetch}
+    />
   );
 }
 
 function PriceSuggestPromptPanel({ prompt, apiFetch }) {
-  const [val, setVal] = useState(prompt || '');
-  const [saving, setSaving] = useState(false);
-  const [msg, setMsg] = useState(null);
-
-  const save = async () => {
-    setSaving(true);
-    setMsg(null);
-    try {
-      const res = await apiFetch('/api/superadmin/ai/price-suggest-prompt', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: val }),
-      });
-      if (!res.ok) {
-        const d = await res.json();
-        setMsg({ ok: false, text: d.error || 'Save failed' });
-      } else {
-        setMsg({ ok: true, text: 'Saved — takes effect immediately' });
-      }
-    } catch {
-      setMsg({ ok: false, text: 'Network error' });
-    } finally {
-      setSaving(false);
-    }
-  };
-
   return (
-    <div className="sa-panel" style={{ marginTop: 16 }}>
-      <div className="sa-panel-header">
-        <span className="sa-panel-title">Price Suggest — AI Prompt</span>
-        <button className="sa-btn" onClick={save} disabled={saving || !val.trim()}>{saving ? 'Saving...' : 'Save'}</button>
-      </div>
-      <div className="sa-panel-body">
-        <div style={{ fontSize: 11, color: 'var(--sa-text-dim)', marginBottom: 8 }}>
-          Prompt sent to Claude when a sommelier asks AI to suggest a market price. Use <code style={{ background: 'var(--sa-bg)', padding: '1px 4px', borderRadius: 2 }}>{'{{name}}'}</code>, <code style={{ background: 'var(--sa-bg)', padding: '1px 4px', borderRadius: 2 }}>{'{{producer}}'}</code>, <code style={{ background: 'var(--sa-bg)', padding: '1px 4px', borderRadius: 2 }}>{'{{vintage}}'}</code>, <code style={{ background: 'var(--sa-bg)', padding: '1px 4px', borderRadius: 2 }}>{'{{country}}'}</code>, <code style={{ background: 'var(--sa-bg)', padding: '1px 4px', borderRadius: 2 }}>{'{{region}}'}</code>, <code style={{ background: 'var(--sa-bg)', padding: '1px 4px', borderRadius: 2 }}>{'{{appellation}}'}</code>, <code style={{ background: 'var(--sa-bg)', padding: '1px 4px', borderRadius: 2 }}>{'{{type}}'}</code>, <code style={{ background: 'var(--sa-bg)', padding: '1px 4px', borderRadius: 2 }}>{'{{grapes}}'}</code> placeholders. If a wine has no cellar value, AI should return null for price.
-        </div>
-        <textarea
-          value={val}
-          onChange={e => setVal(e.target.value)}
-          rows={14}
-          style={{ width: '100%', background: 'var(--sa-bg)', border: '1px solid var(--sa-border)', color: 'var(--sa-text)', padding: '8px', borderRadius: 3, fontFamily: 'monospace', fontSize: 12, lineHeight: 1.5, resize: 'vertical', boxSizing: 'border-box' }}
-        />
-        <div style={{ marginTop: 6, display: 'flex', gap: 8, alignItems: 'center' }}>
-          <span style={{ fontSize: 11, color: 'var(--sa-text-dim)' }}>{val.length} / 6000 chars</span>
-          {msg && (
-            <span style={{ fontSize: 11, color: msg.ok ? 'var(--sa-accent)' : 'var(--sa-danger)' }}>{msg.text}</span>
-          )}
-        </div>
-      </div>
-    </div>
+    <PromptPanel
+      title="Price Suggest — AI Prompt"
+      endpoint="/api/superadmin/ai/price-suggest-prompt"
+      intro={<>Prompt sent to Claude when a sommelier asks AI to suggest a market price. Use <code style={codeStyle}>{'{{name}}'}</code>, <code style={codeStyle}>{'{{producer}}'}</code>, <code style={codeStyle}>{'{{vintage}}'}</code>, <code style={codeStyle}>{'{{country}}'}</code>, <code style={codeStyle}>{'{{region}}'}</code>, <code style={codeStyle}>{'{{appellation}}'}</code>, <code style={codeStyle}>{'{{type}}'}</code>, <code style={codeStyle}>{'{{grapes}}'}</code> placeholders. If a wine has no cellar value, AI should return null for price.</>}
+      prompt={prompt}
+      apiFetch={apiFetch}
+    />
   );
 }
 
 function EnrichmentModelPanel({ currentModel, apiFetch }) {
-  const [selected, setSelected] = useState(currentModel || 'claude-sonnet-4-6');
-  const [saving, setSaving]     = useState(false);
-  const [msg, setMsg]           = useState(null);
-
-  const isDirty = selected !== currentModel;
-
-  const save = async () => {
-    setSaving(true);
-    setMsg(null);
-    try {
-      const res = await apiFetch('/api/superadmin/ai/enrichment-model', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ model: selected }),
-      });
-      if (!res.ok) {
-        const d = await res.json();
-        setMsg({ ok: false, text: d.error || 'Save failed' });
-      } else {
-        setMsg({ ok: true, text: 'Saved — takes effect on next enrichment run' });
-      }
-    } catch {
-      setMsg({ ok: false, text: 'Network error' });
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const tierColor = { economy: 'var(--sa-accent)', standard: 'var(--sa-accent2)', premium: '#c9a84c' };
-
   return (
-    <div className="sa-panel" style={{ marginTop: 16 }}>
-      <div className="sa-panel-header">
-        <span className="sa-panel-title">Wine Enrichment — AI Model</span>
-        <button className="sa-btn" onClick={save} disabled={saving || !isDirty}>
-          {saving ? 'Saving...' : 'Save'}
-        </button>
-      </div>
-      <div className="sa-panel-body">
-        <div style={{ fontSize: 11, color: 'var(--sa-text-dim)', marginBottom: 12 }}>
-          Model used to generate each wine's AI tasting/style profile (body, tannin, flavours, food pairings, description). This is a knowledge-recall task — Sonnet is recommended over Haiku for richer, more accurate profiles.
-        </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          {CHAT_MODELS.map(m => (
-            <label
-              key={m.id}
-              style={{
-                display: 'flex', alignItems: 'flex-start', gap: 10,
-                padding: '8px 12px', borderRadius: 4,
-                border: `1px solid ${selected === m.id ? 'var(--sa-accent)' : 'var(--sa-border)'}`,
-                background: selected === m.id ? 'rgba(123,158,136,0.06)' : 'transparent',
-                cursor: 'pointer',
-              }}
-            >
-              <input
-                type="radio"
-                name="enrichmentModel"
-                value={m.id}
-                checked={selected === m.id}
-                onChange={() => setSelected(m.id)}
-                style={{ marginTop: 2, accentColor: 'var(--sa-accent)', flexShrink: 0 }}
-              />
-              <div style={{ flex: 1 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
-                  <span style={{ fontWeight: 600, fontSize: 12, color: 'var(--sa-text)' }}>{m.name}</span>
-                  <span style={{ fontSize: 10, color: tierColor[m.tier], border: `1px solid ${tierColor[m.tier]}`, borderRadius: 3, padding: '1px 5px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                    {m.tier}
-                  </span>
-                  {m.id === currentModel && <span style={{ fontSize: 10, color: 'var(--sa-accent)', marginLeft: 'auto' }}>● active</span>}
-                </div>
-                <div style={{ fontSize: 11, color: 'var(--sa-text-dim)', marginBottom: 2 }}>{m.description}</div>
-                <div style={{ fontSize: 10, color: 'var(--sa-text-dim)', fontFamily: 'monospace' }}>
-                  Input: {m.inputPrice} / M &nbsp;·&nbsp; Output: {m.outputPrice} / M tokens
-                </div>
-              </div>
-            </label>
-          ))}
-        </div>
-        {msg && (
-          <div style={{ marginTop: 12, fontSize: 11, color: msg.ok ? 'var(--sa-accent)' : 'var(--sa-danger)' }}>{msg.text}</div>
-        )}
-      </div>
-    </div>
+    <ModelPickerPanel
+      title="Wine Enrichment — AI Model"
+      endpoint="/api/superadmin/ai/enrichment-model"
+      groupName="enrichmentModel"
+      intro="Model used to generate each wine's AI tasting/style profile (body, tannin, flavours, food pairings, description). This is a knowledge-recall task — Sonnet is recommended over Haiku for richer, more accurate profiles."
+      currentModel={currentModel}
+      defaultModel="claude-sonnet-4-6"
+      successMsg="Saved — takes effect on next enrichment run"
+      apiFetch={apiFetch}
+    />
   );
 }
 
 function EnrichmentPromptPanel({ prompt, apiFetch }) {
-  const [val, setVal] = useState(prompt || '');
-  const [saving, setSaving] = useState(false);
-  const [msg, setMsg] = useState(null);
-
-  const save = async () => {
-    setSaving(true);
-    setMsg(null);
-    try {
-      const res = await apiFetch('/api/superadmin/ai/enrichment-prompt', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: val }),
-      });
-      if (!res.ok) {
-        const d = await res.json();
-        setMsg({ ok: false, text: d.error || 'Save failed' });
-      } else {
-        setMsg({ ok: true, text: 'Saved — takes effect on next enrichment run' });
-      }
-    } catch {
-      setMsg({ ok: false, text: 'Network error' });
-    } finally {
-      setSaving(false);
-    }
-  };
-
   return (
-    <div className="sa-panel" style={{ marginTop: 16 }}>
-      <div className="sa-panel-header">
-        <span className="sa-panel-title">Wine Enrichment — AI Prompt</span>
-        <button className="sa-btn" onClick={save} disabled={saving || !val.trim()}>{saving ? 'Saving...' : 'Save'}</button>
-      </div>
-      <div className="sa-panel-body">
-        <div style={{ fontSize: 11, color: 'var(--sa-text-dim)', marginBottom: 8 }}>
-          Prompt sent to Claude to generate each wine's tasting/style profile. Must request a JSON object with body, tannin, acidity, sweetness, flavors[], foodPairings[], description, confidence. Use <code style={{ background: 'var(--sa-bg)', padding: '1px 4px', borderRadius: 2 }}>{'{{name}}'}</code>, <code style={{ background: 'var(--sa-bg)', padding: '1px 4px', borderRadius: 2 }}>{'{{producer}}'}</code>, <code style={{ background: 'var(--sa-bg)', padding: '1px 4px', borderRadius: 2 }}>{'{{region}}'}</code>, <code style={{ background: 'var(--sa-bg)', padding: '1px 4px', borderRadius: 2 }}>{'{{grapes}}'}</code> (and country/appellation/classification/type/vintage) placeholders.
-        </div>
-        <textarea
-          value={val}
-          onChange={e => setVal(e.target.value)}
-          rows={16}
-          style={{ width: '100%', background: 'var(--sa-bg)', border: '1px solid var(--sa-border)', color: 'var(--sa-text)', padding: '8px', borderRadius: 3, fontFamily: 'monospace', fontSize: 12, lineHeight: 1.5, resize: 'vertical', boxSizing: 'border-box' }}
-        />
-        <div style={{ marginTop: 6, display: 'flex', gap: 8, alignItems: 'center' }}>
-          <span style={{ fontSize: 11, color: 'var(--sa-text-dim)' }}>{val.length} / 6000 chars</span>
-          {msg && (
-            <span style={{ fontSize: 11, color: msg.ok ? 'var(--sa-accent)' : 'var(--sa-danger)' }}>{msg.text}</span>
-          )}
-        </div>
-      </div>
-    </div>
+    <PromptPanel
+      title="Wine Enrichment — AI Prompt"
+      endpoint="/api/superadmin/ai/enrichment-prompt"
+      intro={<>Prompt sent to Claude to generate each wine's tasting/style profile. Must request a JSON object with body, tannin, acidity, sweetness, flavors[], foodPairings[], description, confidence. Use <code style={codeStyle}>{'{{name}}'}</code>, <code style={codeStyle}>{'{{producer}}'}</code>, <code style={codeStyle}>{'{{region}}'}</code>, <code style={codeStyle}>{'{{grapes}}'}</code> (and country/appellation/classification/type/vintage) placeholders.</>}
+      prompt={prompt}
+      rows={16}
+      successMsg="Saved — takes effect on next enrichment run"
+      apiFetch={apiFetch}
+    />
   );
 }
 
