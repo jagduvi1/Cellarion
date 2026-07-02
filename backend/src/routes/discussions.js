@@ -70,13 +70,15 @@ router.get('/', optionalAuth, async (req, res) => {
     const { category, sort, q } = req.query;
     const query = (q || '').toString().trim();
 
+    const validCategory = category && CATEGORIES.includes(category) ? category : null;
+
     const filter = {};
     // $eq forces literal-value comparison even though `category` is already
     // gated by an allowlist (CATEGORIES.includes). CodeQL doesn't recognise
     // Array.includes() as a taint cleanser, so the `$eq` keeps the
     // `js/sql-injection` rule satisfied without changing behaviour.
-    if (category && CATEGORIES.includes(category)) {
-      filter.category = { $eq: category };
+    if (validCategory) {
+      filter.category = { $eq: validCategory };
     }
 
     // Meilisearch path: fuzzy match on title/body/authorName/wineName,
@@ -84,7 +86,7 @@ router.get('/', optionalAuth, async (req, res) => {
     if (query && searchService.getIsAvailable()) {
       try {
         const { ids, estimatedTotalHits } = await searchService.searchDiscussions(query, {
-          category: filter.category,
+          category: validCategory,
           limit,
           offset: skip
         });
@@ -375,9 +377,11 @@ router.get('/:idOrSlug', optionalAuth, async (req, res) => {
 
     // Top participants — distinct reply authors (excluding the OP, who is
     // shown separately as the thread anchor). Capped at 6 with totalCount
-    // for the "+N more" overflow chip.
+    // for the "+N more" overflow chip. Note: `author` is populated above, so
+    // compare against its _id — aggregation pipelines are not casted by
+    // Mongoose, and a populated document never equals a stored ObjectId.
     const participantAgg = await DiscussionReply.aggregate([
-      { $match: { discussion: discussion._id, isDeleted: { $ne: true }, author: { $ne: discussion.author } } },
+      { $match: { discussion: discussion._id, isDeleted: { $ne: true }, author: { $ne: discussion.author?._id ?? null } } },
       { $group: { _id: '$author', firstAt: { $min: '$createdAt' } } },
       { $sort: { firstAt: 1 } }
     ]);

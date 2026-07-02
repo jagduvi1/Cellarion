@@ -220,7 +220,7 @@ router.post('/', async (req, res) => {
         ]
       });
 
-    logAudit(req, 'wishlist.add', { wishlistItemId: item._id, wineDefinitionId });
+    logAudit(req, 'wishlist.add', { type: 'wishlistItem', id: item._id }, { wineDefinitionId });
 
     res.status(201).json({ item: populated });
   } catch (err) {
@@ -249,9 +249,12 @@ router.put('/:id', async (req, res) => {
 
     const { notes, priority, status, vintage } = req.body;
 
+    // null clears a field (mirrors POST's "absent" semantics) — guard before
+    // reading .length, and never store the literal string 'null'.
     if (notes !== undefined) {
-      if (notes.length > 2000) return res.status(400).json({ error: 'Notes must be 2000 characters or less' });
-      item.notes = notes;
+      const safeNotes = notes != null ? String(notes) : '';
+      if (safeNotes.length > 2000) return res.status(400).json({ error: 'Notes must be 2000 characters or less' });
+      item.notes = safeNotes || undefined;
     }
     if (priority !== undefined) {
       if (!['low', 'medium', 'high'].includes(priority)) return res.status(400).json({ error: 'Invalid priority' });
@@ -268,9 +271,9 @@ router.put('/:id', async (req, res) => {
       item.status = status;
     }
     if (vintage !== undefined) {
-      const safeVin = String(vintage);
+      const safeVin = vintage != null ? String(vintage) : '';
       if (safeVin.length > 20) return res.status(400).json({ error: 'Vintage too long' });
-      item.vintage = safeVin;
+      item.vintage = safeVin || undefined;
     }
 
     await item.save();
@@ -285,7 +288,7 @@ router.put('/:id', async (req, res) => {
         ]
       });
 
-    logAudit(req, 'wishlist.update', { wishlistItemId: id });
+    logAudit(req, 'wishlist.update', { type: 'wishlistItem', id });
 
     res.json({ item: populated });
   } catch (err) {
@@ -313,7 +316,7 @@ router.delete('/:id', async (req, res) => {
 
     await item.deleteOne();
 
-    logAudit(req, 'wishlist.remove', { wishlistItemId: id });
+    logAudit(req, 'wishlist.remove', { type: 'wishlistItem', id });
 
     res.json({ message: 'Removed from wishlist' });
   } catch (err) {

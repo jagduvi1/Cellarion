@@ -22,7 +22,7 @@ const USER_SEARCH_LIMIT = 10;
 
 // MongoDB fallback search (used when Meilisearch is unavailable)
 async function mongoSearch(filter, sort, limit, offset, search) {
-  const sortOptions = {};
+  let sortOptions = {};
   const sortField = sort.startsWith('-') ? sort.substring(1) : sort;
   const sortDir = sort.startsWith('-') ? -1 : 1;
 
@@ -37,7 +37,9 @@ async function mongoSearch(filter, sort, limit, offset, search) {
 
   if (search) {
     filter.$text = { $search: search };
-    sortOptions.score = { $meta: 'textScore' };
+    // Relevance first, field sort as tiebreak — MongoDB sorts by key order,
+    // so score must precede the field sort or ranking is effectively ignored.
+    sortOptions = { score: { $meta: 'textScore' }, ...sortOptions };
   }
 
   const query = WineDefinition.find(filter);

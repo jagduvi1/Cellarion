@@ -241,11 +241,14 @@ router.put('/regions/:id', async (req, res) => {
 
     if (parentRegion !== undefined) {
       region.parentRegion = parentRegion || null;
+    }
 
-      // Rebuild hierarchy
+    // Rebuild hierarchy when the name OR parent changed — its last element is
+    // this region's own name, so a rename-only update must refresh it too.
+    if (name || parentRegion !== undefined) {
       const hierarchy = [];
-      if (parentRegion) {
-        const parent = await Region.findById(parentRegion);
+      if (region.parentRegion) {
+        const parent = await Region.findById(region.parentRegion);
         if (parent) {
           hierarchy.push(...parent.hierarchy);
         }

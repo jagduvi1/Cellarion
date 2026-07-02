@@ -150,9 +150,13 @@ router.post('/', async (req, res) => {
       populated.recipientEmail = recipientEmail.trim().toLowerCase();
     }
 
+    // Resolve the sender's name once for both delivery channels. req.user
+    // only carries JWT claims (id/roles/plan) — the name must come from the DB.
+    const senderUser = await User.findById(req.user.id).select('username displayName').lean();
+
     // Send in-app notification to recipient if they are a user
     if (recipientUser) {
-      const senderName = req.user.displayName || req.user.username || 'Someone';
+      const senderName = senderUser?.displayName || senderUser?.username || 'Someone';
       const wineName = wine.name || 'a wine';
       createNotification(
         recipientUser._id,
@@ -165,7 +169,6 @@ router.post('/', async (req, res) => {
 
     // Send email for external (non-user) recipients
     if (!recipientUser && recipientEmail && EMAIL_VERIFICATION_ENABLED) {
-      const senderUser = await User.findById(req.user.id).select('username displayName');
       const senderName = senderUser?.displayName || senderUser?.username || 'A Cellarion user';
       sendRecommendationEmail(
         recipientEmail.trim().toLowerCase(),

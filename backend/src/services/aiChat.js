@@ -14,6 +14,7 @@
  * so — it never invents wines the user doesn't own.
  */
 
+const mongoose = require('mongoose');
 const aiConfig = require('../config/aiConfig');
 const { embedSingle } = require('./embedding');
 const vectorStore = require('./vectorStore');
@@ -82,10 +83,19 @@ async function filterToUserCellar(userId, hits, maxResults, { cellarIds } = {}) 
   if (cellarIds?.length) {
     bottleFilter.cellar = { $in: cellarIds };
   }
+  // Region/country/grapes are refs on the wine definition, so they must be
+  // populated through it — dotted top-level populate paths ('wineDefinition.
+  // region') can't cross the ref boundary and silently assign nothing.
   const bottles = await Bottle.find(bottleFilter)
-    .populate('wineDefinition', 'name producer type appellation region country grapes')
-    .populate('wineDefinition.region', 'name')
-    .populate('wineDefinition.country', 'name')
+    .populate({
+      path: 'wineDefinition',
+      select: 'name producer type appellation region country grapes',
+      populate: [
+        { path: 'region', select: 'name' },
+        { path: 'country', select: 'name' },
+        { path: 'grapes', select: 'name' }
+      ]
+    })
     .lean();
 
   if (!bottles.length) return [];
@@ -171,6 +181,9 @@ async function fetchEnrichmentData(userId, matches) {
 
   const bottles = matches.map(m => m.bottle);
   const wineDefIds = [...new Set(bottles.map(b => b.wineDefinition._id?.toString()).filter(Boolean))];
+  // Aggregation pipelines are not casted by Mongoose — every id (including
+  // the JWT-string userId) must be an ObjectId or the $match finds nothing.
+  const wineDefObjectIds = wineDefIds.map(id => mongoose.Types.ObjectId.createFromHexString(id));
 
   const [profileMap, countResults, priceResults] = await Promise.all([
     // Maturity profiles
@@ -178,13 +191,13 @@ async function fetchEnrichmentData(userId, matches) {
 
     // Bottle counts per (wineDefinition, vintage)
     Bottle.aggregate([
-      { $match: { user: userId, status: 'active', wineDefinition: { $in: wineDefIds.map(id => require('mongoose').Types.ObjectId.createFromHexString(id)) } } },
+      { $match: { user: new mongoose.Types.ObjectId(String(userId)), status: 'active', wineDefinition: { $in: wineDefObjectIds } } },
       { $group: { _id: { wineDefinition: '$wineDefinition', vintage: '$vintage' }, count: { $sum: 1 } } }
     ]),
 
     // Latest market prices
     WineVintagePrice.aggregate([
-      { $match: { wineDefinition: { $in: wineDefIds.map(id => require('mongoose').Types.ObjectId.createFromHexString(id)) } } },
+      { $match: { wineDefinition: { $in: wineDefObjectIds } } },
       { $sort: { setAt: -1 } },
       { $group: { _id: { wineDefinition: '$wineDefinition', vintage: '$vintage' }, price: { $first: '$price' }, currency: { $first: '$currency' } } }
     ]),
@@ -493,54 +506,60 @@ async function chatStream(userId, message, opts, res) {
 
   const client = getClaudeClient();
 
-  // Try primary model, fallback if it fails before any tokens
-  let stream;
-  try {
-    stream = client.messages.stream({ ...callParams, model: cfg.chatModel });
-  } catch (err) {
-    const canFallback = cfg.chatModelFallback && cfg.chatModelFallback !== cfg.chatModel;
-    const isRetryable = [429, 500, 502, 503, 529].includes(err.status)
-      || err.error?.type === 'overloaded_error';
-    if (isRetryable && canFallback) {
-      stream = client.messages.stream({ ...callParams, model: cfg.chatModelFallback });
-    } else {
-      throw err;
-    }
-  }
+  // messages.stream() returns synchronously and reports HTTP failures via the
+  // 'error' event (never by throwing), so the model fallback has to live in
+  // the error handler: retry once on the fallback model if the primary fails
+  // before any tokens were emitted.
+  const canFallback = cfg.chatModelFallback && cfg.chatModelFallback !== cfg.chatModel;
 
   return new Promise((resolve, reject) => {
     let aborted = false;
+    let receivedText = false;
+    let stream;
+
+    const runStream = (model, allowFallback) => {
+      stream = client.messages.stream({ ...callParams, model });
+
+      stream.on('text', (textDelta) => {
+        receivedText = true;
+        if (!aborted) {
+          _sseWrite(res, 'delta', { text: textDelta });
+        }
+      });
+
+      stream.on('finalMessage', (msg) => {
+        if (!aborted) {
+          const usage = {
+            inputTokens:  msg.usage?.input_tokens  ?? 0,
+            outputTokens: msg.usage?.output_tokens ?? 0,
+          };
+          _sseWrite(res, 'done', { usage });
+          res.end();
+        }
+        resolve({ usage: { inputTokens: msg.usage?.input_tokens ?? 0, outputTokens: msg.usage?.output_tokens ?? 0 } });
+      });
+
+      stream.on('error', (err) => {
+        const isRetryable = [429, 500, 502, 503, 529].includes(err.status)
+          || err.error?.type === 'overloaded_error';
+        if (allowFallback && isRetryable && !receivedText && !aborted) {
+          runStream(cfg.chatModelFallback, false);
+          return;
+        }
+        if (!aborted) {
+          _sseWrite(res, 'error', { error: err.message || 'Stream error' });
+          res.end();
+        }
+        reject(err);
+      });
+    };
 
     res.on('close', () => {
       aborted = true;
-      stream.abort?.();
+      stream?.abort?.();
     });
 
-    stream.on('text', (textDelta) => {
-      if (!aborted) {
-        _sseWrite(res, 'delta', { text: textDelta });
-      }
-    });
-
-    stream.on('finalMessage', (msg) => {
-      if (!aborted) {
-        const usage = {
-          inputTokens:  msg.usage?.input_tokens  ?? 0,
-          outputTokens: msg.usage?.output_tokens ?? 0,
-        };
-        _sseWrite(res, 'done', { usage });
-        res.end();
-      }
-      resolve({ usage: { inputTokens: msg.usage?.input_tokens ?? 0, outputTokens: msg.usage?.output_tokens ?? 0 } });
-    });
-
-    stream.on('error', (err) => {
-      if (!aborted) {
-        _sseWrite(res, 'error', { error: err.message || 'Stream error' });
-        res.end();
-      }
-      reject(err);
-    });
+    runStream(cfg.chatModel, canFallback);
   });
 }
 

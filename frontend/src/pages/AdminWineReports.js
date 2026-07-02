@@ -172,8 +172,8 @@ function AdminWineReports() {
                   <h4>Wine details</h4>
                   <p>
                     <strong>Type:</strong> {selected.wineDefinition.type}<br />
-                    {selected.wineDefinition.country && (
-                      <><strong>Country:</strong> {selected.wineDefinition.country}<br /></>
+                    {selected.wineDefinition.country?.name && (
+                      <><strong>Country:</strong> {selected.wineDefinition.country.name}<br /></>
                     )}
                   </p>
                 </div>

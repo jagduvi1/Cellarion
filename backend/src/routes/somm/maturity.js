@@ -114,16 +114,17 @@ router.put('/:id', requireSommOrAdmin, async (req, res) => {
 
     const { earlyFrom, earlyUntil, peakFrom, peakUntil, lateFrom, lateUntil } = years;
 
-    // Ordering validations — only check pairs that are both provided
-    if (earlyFrom && earlyUntil && earlyUntil < earlyFrom)
+    // Ordering validations — only check pairs that are both provided.
+    // Compare against null, not truthiness: 0 is a legitimate NV offset.
+    if (earlyFrom != null && earlyUntil != null && earlyUntil < earlyFrom)
       return res.status(400).json({ error: 'Early "until" must be after early "from"' });
-    if (peakFrom  && peakUntil  && peakUntil  < peakFrom)
+    if (peakFrom  != null && peakUntil  != null && peakUntil  < peakFrom)
       return res.status(400).json({ error: 'Peak "until" must be after peak "from"' });
-    if (lateFrom  && lateUntil  && lateUntil  < lateFrom)
+    if (lateFrom  != null && lateUntil  != null && lateUntil  < lateFrom)
       return res.status(400).json({ error: 'Late "until" must be after late "from"' });
-    if (earlyFrom && peakFrom   && peakFrom   < earlyFrom)
+    if (earlyFrom != null && peakFrom   != null && peakFrom   < earlyFrom)
       return res.status(400).json({ error: 'Peak phase cannot start before early phase' });
-    if (peakFrom  && lateFrom   && lateFrom   < peakFrom)
+    if (peakFrom  != null && lateFrom   != null && lateFrom   < peakFrom)
       return res.status(400).json({ error: 'Late phase cannot start before peak phase' });
 
     // Apply — only update fields that were explicitly sent (null = clear the field)

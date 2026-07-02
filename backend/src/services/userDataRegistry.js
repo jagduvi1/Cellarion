@@ -68,6 +68,7 @@ const SiteConfig = require('../models/SiteConfig');
 const { getOrCreateDeletedUser } = require('../utils/deletedUser');
 const { deleteLogoFilesFor } = require('./wineListLogos');
 const { unlinkImageFiles } = require('./imageProcessor');
+const searchService = require('./search');
 
 const EXPORT_MAX = 50000;
 const AUDIT_MAX = 1000;
@@ -127,7 +128,15 @@ const REGISTRY = [
   // ── Core wine data ──────────────────────────────────────────────────────
   {
     model: Bottle, category: 'personal-data', userFields: ['user'],
-    purge: (ctx) => Bottle.deleteMany({ user: ctx.userId }),
+    // Collect the ids BEFORE deleteMany so the Meilisearch documents (which
+    // carry the user's free-text notes/location) can be removed too — there
+    // is no scheduled resync, so skipping this leaves personal data in the
+    // search index indefinitely.
+    purge: async (ctx) => {
+      const bottleIds = await Bottle.find({ user: ctx.userId }).distinct('_id');
+      await Bottle.deleteMany({ user: ctx.userId });
+      await searchService.removeBottles(bottleIds);
+    },
     exportFragment: async (ctx) => ({ bottles: markTrunc(ctx, 'bottles', await Bottle.find({ user: ctx.userId }).limit(EXPORT_MAX).lean()) }),
   },
   {
@@ -211,7 +220,14 @@ const REGISTRY = [
   // ── Forum content: anonymise (preserve multi-party threads) ─────────────
   {
     model: Discussion, category: 'shared-content', userFields: ['author'],
-    purge: (ctx) => Discussion.updateMany({ author: ctx.userId }, { $set: { author: ctx.deletedUserId } }),
+    // Re-index after anonymisation — the Meilisearch discussions index
+    // denormalises authorName, which would otherwise keep the deleted
+    // user's name until some unrelated event re-indexed the thread.
+    purge: async (ctx) => {
+      const discussionIds = await Discussion.find({ author: ctx.userId }).distinct('_id');
+      await Discussion.updateMany({ author: ctx.userId }, { $set: { author: ctx.deletedUserId } });
+      for (const id of discussionIds) await searchService.indexDiscussion(id);
+    },
     exportFragment: async (ctx) => ({
       discussions: markTrunc(ctx, 'discussions', await Discussion.find({ author: ctx.userId }).select('title category body wineDefinition isPinned isLocked replyCount createdAt updatedAt').limit(EXPORT_MAX).lean())
         .map(d => ({ title: d.title, category: d.category, body: d.body, wineDefinition: d.wineDefinition, isPinned: d.isPinned, isLocked: d.isLocked, replyCount: d.replyCount, createdAt: d.createdAt, updatedAt: d.updatedAt })),

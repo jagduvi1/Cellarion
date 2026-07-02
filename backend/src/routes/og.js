@@ -342,9 +342,15 @@ router.get('/wines/:idOrSlug', ogLimiter, async (req, res) => {
     const fullDesc = `${fullTitle}. ${details}. Discover, track, and manage your wine cellar with Cellarion.`;
     const description = fullDesc.length > 160 ? fullDesc.slice(0, 157) + '...' : fullDesc;
     const pageUrl = `${SITE_URL}/wines/${slugOrId}`;
-    const imageUrl = wine.image
-      ? (wine.image.startsWith('/api/') || wine.image.startsWith('http') ? `${API_URL}${wine.image}` : `${API_URL}/api/uploads/${wine.image}`)
-      : `${SITE_URL}/cellarion-logo.jpg`;
+    // wine.image may be a bare filename, an /api/ path, or (legacy admin data)
+    // an already-absolute URL — the last must not get API_URL prepended.
+    const imageUrl = !wine.image
+      ? `${SITE_URL}/cellarion-logo.jpg`
+      : wine.image.startsWith('http')
+        ? wine.image
+        : wine.image.startsWith('/api/')
+          ? `${API_URL}${wine.image}`
+          : `${API_URL}/api/uploads/${wine.image}`;
 
     const grapeNames = (wine.grapes || []).map(g => g.name).filter(Boolean);
     const hasRating = wine.communityRating?.reviewCount > 0;
@@ -700,7 +706,7 @@ router.get('/blog/:slug', ogLimiter, async (req, res) => {
   ${post.coverImage ? `<meta property="og:image" content="${esc(post.coverImage)}" />` : ''}
   <meta property="og:url" content="${esc(postUrl)}" />
   <meta property="og:site_name" content="Cellarion" />
-  ${publishedDate ? `<meta property="article:published_time" content="${esc(post.publishedAt)}" />` : ''}
+  ${publishedDate ? `<meta property="article:published_time" content="${esc(new Date(post.publishedAt).toISOString())}" />` : ''}
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="${esc(metaTitle)}" />
   <meta name="twitter:description" content="${esc(metaDescription)}" />
@@ -1016,6 +1022,8 @@ router.get('/wine-types/:type', ogLimiter, async (req, res) => {
       .sort({ name: 1 })
       .limit(20)
       .lean();
+
+    if (wines.length < MIN_WINES) return res.status(404).send('Not found');
 
     const pageUrl = `${SITE_URL}/wines/type/${type}`;
     const typeLabel = type.charAt(0).toUpperCase() + type.slice(1);

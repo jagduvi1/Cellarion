@@ -14,10 +14,10 @@ const { getCellarRole } = require('../utils/cellarAccess');
 const { logAudit } = require('../services/audit');
 const { getSnapshotsForDates, getOrCreateDailySnapshot, convertCurrency } = require('../utils/exchangeRates');
 const { createNotification } = require('../services/notifications');
-const { sendCellarInviteEmail, EMAIL_VERIFICATION_ENABLED } = require('../services/mailgun');
+const { sendCellarInviteEmail } = require('../services/mailgun');
 const { toNormalized } = require('../utils/ratingUtils');
 const { classifyMaturity, buildProfileMap } = require('../utils/maturityUtils');
-const { CONSUMED_STATUSES, MS_PER_DAY, WINE_POPULATE_LIST } = require('../config/constants');
+const { CONSUMED_STATUSES, WINE_POPULATE_LIST } = require('../config/constants');
 const mongoose = require('mongoose');
 const { parsePagination } = require('../utils/pagination');
 const searchService = require('../services/search');
@@ -224,7 +224,11 @@ router.get('/:id/statistics', async (req, res) => {
     // Calculate statistics
     const stats = {
       totalBottles: bottles.length,
-      uniqueWines: new Set(bottles.map(b => b.wineDefinition?._id.toString())).size,
+      // Bottles awaiting a wine request have no wineDefinition — exclude them
+      // rather than letting `undefined` count as one extra "unique wine".
+      uniqueWines: new Set(
+        bottles.filter(b => b.wineDefinition?._id).map(b => b.wineDefinition._id.toString())
+      ).size,
       totalValue: 0,
       averagePrice: 0,
       convertedTotal: 0,
@@ -404,9 +408,9 @@ router.get('/:id/history', async (req, res) => {
         bottles = await Bottle.find({ _id: { $in: matchingIds } })
           .populate(WINE_POPULATE_LIST).lean();
 
-        // Preserve Meilisearch sort order
-        const idOrder = new Map(matchingIds.map((id, i) => [id, i]));
-        bottles.sort((a, b) => (idOrder.get(a._id.toString()) ?? 0) - (idOrder.get(b._id.toString()) ?? 0));
+        // History is a chronological view — order newest-consumed-first, same
+        // as the MongoDB fallback below, rather than Meili relevance order.
+        bottles.sort((a, b) => new Date(b.consumedAt || 0) - new Date(a.consumedAt || 0));
         usedMeili = true;
       } catch {
         // Fall through to MongoDB
@@ -612,7 +616,7 @@ router.get('/:id', async (req, res) => {
           // Meilisearch found nothing — short-circuit
           return res.json({
             cellar: { ...cellar, userRole: role, userColor: getUserColor(cellar, req.user.id) },
-            bottles: { count: 0, total: 0, limit, skip, items: [] },
+            bottles: { count: 0, total: 0, limit, skip, grouped, items: [] },
             facets: meiliResult.facetDistribution || null,
             facetMeta: null
           });
@@ -679,7 +683,7 @@ router.get('/:id', async (req, res) => {
         if (matchingWdIds.length === 0) {
           return res.json({
             cellar: { ...cellar, userRole: role, userColor: getUserColor(cellar, req.user.id) },
-            bottles: { count: 0, items: [] }
+            bottles: { count: 0, total: 0, limit, skip, grouped, items: [] }
           });
         }
         filter.wineDefinition = { $in: matchingWdIds };
@@ -786,6 +790,19 @@ router.get('/:id', async (req, res) => {
       } else {
         bottles = bottles.filter(b => maturityStatusMap.get(b._id.toString()) === maturityFilter);
       }
+    }
+
+    // Meilisearch can't sort by maturity (it needs vintage profiles), so the
+    // Meili path arrives here in relevance order — apply the maturity sort
+    // in memory, mirroring the fallback path's comparator.
+    if (sortField === 'maturity' && usedMeili && maturityStatusMap) {
+      bottles.sort((a, b) => {
+        const aStatus = maturityStatusMap.get(a._id.toString());
+        const bStatus = maturityStatusMap.get(b._id.toString());
+        const aVal = aStatus != null ? MATURITY_RANK[aStatus] : 5;
+        const bVal = bStatus != null ? MATURITY_RANK[bStatus] : 5;
+        return (aVal - bVal) * sortDir;
+      });
     }
 
     // Group identical bottles (same wine + vintage), or paginate normally.
@@ -1217,7 +1234,6 @@ router.delete('/:id/members/:userId', async (req, res) => {
   }
 });
 
-// GET /api/cellars/:id/audit - Per-cellar audit log (owner only)
 // GET /api/cellars/:id/export — owner only, no images, no staff-curated data
 router.get('/:id/export', async (req, res) => {
   try {
@@ -1264,6 +1280,7 @@ router.get('/:id/export', async (req, res) => {
   }
 });
 
+// GET /api/cellars/:id/audit - Per-cellar audit log (owner only)
 router.get('/:id/audit', async (req, res) => {
   try {
     if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });

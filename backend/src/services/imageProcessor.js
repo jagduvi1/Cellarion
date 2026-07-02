@@ -160,6 +160,9 @@ async function reprocessAllImages() {
 
       fs.writeFileSync(processedPath, resultBuffer);
       image.processedUrl = `/api/uploads/processed/${processedFilename}`;
+      // The dedup hash must track the bytes of the kept/exported file (see
+      // processImage above) — rembg output is not byte-stable across runs.
+      image.contentHash = hashImageBytes(resultBuffer);
       await image.save();
 
       console.log(`Re-processed ${image._id} successfully`);

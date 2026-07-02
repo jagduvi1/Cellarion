@@ -455,8 +455,10 @@ function ImportBottles() {
     }
   };
 
-  // ── Per-row forced AI search (for fuzzy rows) ────────────────────────────
-  // Skips DB matching entirely and asks AI to identify the wine.
+  // ── Per-row AI look-up (for fuzzy rows) ──────────────────────────────────
+  // Re-validates the row so AI identification gets another attempt (useful
+  // after a transient AI failure). AI only runs when the row has both a wine
+  // name and a producer — the button is hidden otherwise.
 
   const handleAiSearch = async (rowIndex) => {
     const r = results.find(res => res.index === rowIndex);
@@ -1369,7 +1371,7 @@ function ImportBottles() {
                               {isExpanded ? 'Hide' : `${r.matches.length} options`}
                             </button>
                           )}
-                          {r.status === 'fuzzy' && !isSkipped && !isRequested && (
+                          {r.status === 'fuzzy' && r.item.wineName && r.item.producer && !isSkipped && !isRequested && (
                             <button
                               className="btn btn-secondary btn-xs"
                               onClick={() => handleAiSearch(r.index)}

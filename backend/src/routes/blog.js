@@ -151,7 +151,7 @@ router.post('/admin/posts', requireAuth, requireRole('admin'), async (req, res) 
     const post = await BlogPost.create(postData);
     await post.populate('author', 'username');
 
-    logAudit(req, 'blog.create', { postId: post._id, title: post.title, status: post.status });
+    logAudit(req, 'blog.create', { type: 'blogPost', id: post._id }, { title: post.title, status: post.status });
 
     if (post.status === 'published') {
       submitUrls(`/blog/${post.slug}`);
@@ -208,7 +208,7 @@ router.put('/admin/posts/:id', requireAuth, requireRole('admin'), async (req, re
     await post.save();
     await post.populate('author', 'username');
 
-    logAudit(req, 'blog.update', { postId: post._id, title: post.title, status: post.status });
+    logAudit(req, 'blog.update', { type: 'blogPost', id: post._id }, { title: post.title, status: post.status });
 
     if (post.status === 'published') {
       submitUrls(`/blog/${post.slug}`);
@@ -233,7 +233,7 @@ router.delete('/admin/posts/:id', requireAuth, requireRole('admin'), async (req,
     const post = await BlogPost.findByIdAndDelete(req.params.id);
     if (!post) return res.status(404).json({ error: 'Post not found' });
 
-    logAudit(req, 'blog.delete', { postId: post._id, title: post.title });
+    logAudit(req, 'blog.delete', { type: 'blogPost', id: post._id }, { title: post.title });
 
     res.json({ message: 'Post deleted' });
   } catch (err) {

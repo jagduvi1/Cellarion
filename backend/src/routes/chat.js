@@ -118,10 +118,36 @@ async function validateAndCheckLimit(req, res) {
   const plan = req.user.plan || 'free';
   const date = todayUTC();
 
-  const { limit, used: usedBefore, period } = await getChatUsage(req.user.id);
+  const limit = cfg.chatDailyLimit; // -1 = unlimited
+  const period = 'daily';
 
-  // limit === -1 means unlimited
-  if (limit !== -1 && usedBefore >= limit) {
+  // Debit atomically and gate on the post-increment count. A separate
+  // check-then-increment would let N concurrent requests at the limit all
+  // pass; here the increment itself is the gate, refunded on overshoot.
+  // A concurrent first-of-the-day upsert can lose the unique-index race
+  // with E11000 — one retry then hits the existing document.
+  let usage;
+  try {
+    usage = await ChatUsage.findOneAndUpdate(
+      { userId: req.user.id, date },
+      { $inc: { count: 1 }, $setOnInsert: { expiresAt: expiresAt() } },
+      { upsert: true, new: true }
+    );
+  } catch (err) {
+    if (err.code !== 11000) throw err;
+    usage = await ChatUsage.findOneAndUpdate(
+      { userId: req.user.id, date },
+      { $inc: { count: 1 } },
+      { new: true }
+    );
+  }
+  const usedBefore = usage.count - 1;
+
+  if (limit !== -1 && usage.count > limit) {
+    await ChatUsage.findOneAndUpdate(
+      { userId: req.user.id, date },
+      { $inc: { count: -1 } }
+    );
     res.status(429).json({
       error: `You've reached your ${period} limit of ${limit} question${limit === 1 ? '' : 's'}. Try again ${period === 'daily' ? 'tomorrow' : 'in a few days'}.`,
       used: usedBefore,
@@ -130,13 +156,6 @@ async function validateAndCheckLimit(req, res) {
     });
     return null;
   }
-
-  // Pre-debit: increment now to block concurrent requests
-  await ChatUsage.findOneAndUpdate(
-    { userId: req.user.id, date },
-    { $inc: { count: 1 }, $setOnInsert: { expiresAt: expiresAt() } },
-    { upsert: true }
-  );
 
   // Validate and resolve cellar scope
   let cellarIds = null;

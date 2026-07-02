@@ -15,6 +15,7 @@
  * recognises as sanitisation; extracting it into a helper hid the
  * sanitiser from the static analyser.
  */
+const mongoose = require('mongoose');
 const Bottle = require('../models/Bottle');
 const WineVintagePrice = require('../models/WineVintagePrice');
 const { validatePriceSanity } = require('../utils/priceValidation');
@@ -106,8 +107,10 @@ async function computeUserMediansByCurrency(userId) {
   // Inline String() + HEX24 sanitisation — same pattern as gatherPriceWarnings.
   const uidStr = String(userId);
   if (!HEX24.test(uidStr)) return {};
+  // Aggregations are not casted by Mongoose — the id must be an ObjectId or
+  // the $match silently matches nothing.
   const rows = await Bottle.aggregate([
-    { $match: { user: uidStr, price: { $gt: 0 } } },
+    { $match: { user: new mongoose.Types.ObjectId(uidStr), price: { $gt: 0 } } },
     { $sort: { currency: 1, price: 1 } },
     { $group: {
       _id: '$currency',
