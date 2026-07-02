@@ -390,13 +390,14 @@ function mapCellarTrackerRow(row) {
   let wineName = get(['Wine', 'wine', 'WineName']);
   let producer = get(['Producer', 'producer']);
 
-  // If producer is empty, try to extract from Wine field
-  // CellarTracker format often: "Producer Wine Name Vintage"
+  // If producer is empty, fall back to the first word of the Wine field.
+  // CellarTracker's "Wine" column usually leads with the producer
+  // ("Producer Wine Name"), so this is a crude best-effort guess — wrong
+  // for multi-word producers ("Château Margaux" → "Château"), but it gives
+  // the import matcher something rather than nothing.
   if (!producer && wineName) {
-    // Try to split on common patterns
     const parts = wineName.split(/\s+/);
     if (parts.length > 2) {
-      // Heuristic: first word(s) before the wine type keywords
       producer = parts[0];
     }
   }
@@ -407,7 +408,7 @@ function mapCellarTrackerRow(row) {
 
   return {
     wineName: get(['Wine', 'wine', 'WineName']),
-    producer: producer || get(['Producer', 'producer']),
+    producer,
     vintage: get(['Vintage', 'vintage', 'Year']) || 'NV',
     country: get(['Country', 'country', 'Locale']),
     region: get(['Region', 'region', 'Sub-Region']),
@@ -535,7 +536,12 @@ function tryParseDate(str) {
     return `${str.trim()}-01-01`;
   }
   const d = new Date(str);
-  return isNaN(d.getTime()) ? undefined : d.toISOString().slice(0, 10);
+  if (isNaN(d.getTime())) return undefined;
+  // Format from LOCAL date parts. Non-ISO strings ("10/30/2024") parse as
+  // local midnight, so rendering via toISOString() (UTC) would shift the
+  // date by a day for any user east of UTC.
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
 /**

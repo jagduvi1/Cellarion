@@ -25,6 +25,13 @@ const SHELF_LABEL_W = 64;
  */
 export default function ShelfView({ rack, activePosition, highlightPos, onSlotClick }) {
   const [layerMode, setLayerMode] = useState('front');
+  // All hooks must run before the non-shelf early return below, or a rack
+  // type change on a mounted instance breaks the Rules of Hooks.
+  const slotMap = useMemo(() => {
+    const m = {};
+    for (const s of (rack?.slots || [])) m[s.position] = s;
+    return m;
+  }, [rack?.slots]);
 
   if (rack?.type !== 'shelf') {
     return (
@@ -40,11 +47,6 @@ export default function ShelfView({ rack, activePosition, highlightPos, onSlotCl
   const rows = rack.rows || 0;
   const slotsPerShelf = (cols + backCols) * bpc;
   const hasBack = backCols > 0;
-  const slotMap = useMemo(() => {
-    const m = {};
-    for (const s of (rack.slots || [])) m[s.position] = s;
-    return m;
-  }, [rack.slots]);
 
   // Per-shelf positions for the active layer.
   // Display order: highest shelf-NUMBER label at the top of the SVG (matches

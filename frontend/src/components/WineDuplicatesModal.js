@@ -160,9 +160,13 @@ function WineDuplicatesModal({ apiFetch, onClose, onMerged }) {
 
       {clusters?.length > 0 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16, maxHeight: 520, overflowY: 'auto' }}>
-          {clusters.map((cluster, i) => (
+          {clusters.map((cluster) => (
+            // Keyed by cluster identity, NOT index: clusters are removed on
+            // merge/dismiss, and an index key would let the next cluster
+            // inherit this card's state (targetId!) — enabling a merge into
+            // a wine from a different cluster.
             <ClusterCard
-              key={i}
+              key={clusterKey(cluster)}
               cluster={cluster}
               apiFetch={apiFetch}
               onMerged={handleMerged}

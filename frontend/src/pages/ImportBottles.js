@@ -102,8 +102,6 @@ function ImportBottles() {
   // Import step
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState(null);
-  const [rowImporting, setRowImporting] = useState(null); // index of row being individually imported
-  const [retryingRow, setRetryingRow] = useState(null);  // index of row running AI retry
   const [aiSearchingRow, setAiSearchingRow] = useState(null); // index of fuzzy row doing forced AI search
 
   // Session persistence
@@ -196,9 +194,12 @@ function ImportBottles() {
             setSaveStatus('error');
           }
         } else {
-          // Subsequent saves
+          // Subsequent saves. Results are included because the per-row AI
+          // look-up rewrites rows — without persisting them, a resumed
+          // session pairs stale rows with selections that reference wines
+          // missing from the stored matches ("No match found").
           const res = await updateImportSession(af, sid, {
-            selections: sels, manualWines: mw,
+            results: rs, selections: sels, manualWines: mw,
             positionAnchor: pa, rackConfigs: rc, defaultCurrency: ic
           });
           setSaveStatus(res.ok ? 'saved' : 'error');
@@ -433,28 +434,6 @@ function ImportBottles() {
     }
   };
 
-  // ── Per-row AI retry ─────────────────────────────────────────────────────
-
-  const handleRetryAI = async (rowIndex) => {
-    const r = results.find(res => res.index === rowIndex);
-    if (!r) return;
-    setRetryingRow(rowIndex);
-    try {
-      const res = await validateImport(apiFetch, { cellarId, items: [r.item] });
-      const data = await res.json();
-      if (!res.ok || !data.results?.[0]) return;
-      const updated = { ...data.results[0], index: rowIndex };
-      setResults(prev => prev.map(x => x.index === rowIndex ? updated : x));
-      if (updated.status === 'ai_match' && updated.matches.length > 0) {
-        setSelections(prev => ({ ...prev, [rowIndex]: updated.matches[0].wineId }));
-      }
-    } catch {
-      // Non-fatal
-    } finally {
-      setRetryingRow(null);
-    }
-  };
-
   // ── Per-row AI look-up (for fuzzy rows) ──────────────────────────────────
   // Re-validates the row so AI identification gets another attempt (useful
   // after a transient AI failure). AI only runs when the row has both a wine
@@ -644,26 +623,6 @@ function ImportBottles() {
   };
 
   const getImportableCount = () => results.filter(isImportableRow).length;
-
-  // Import a single row immediately; marks it 'imported' so it's excluded from the bulk action
-  const handleImportRow = async (r) => {
-    if (rowImporting !== null || importing) return;
-    setRowImporting(r.index);
-    try {
-      const res = await confirmImport(apiFetch, { cellarId, items: [buildImportItem(r)], positionAnchor, rackConfigs, defaultCurrency: importCurrency });
-      const data = await res.json();
-      if (res.ok && data.created > 0) {
-        // Mark as imported — auto-save will persist this to the session
-        setSelections(prev => ({ ...prev, [r.index]: 'imported' }));
-      } else {
-        setError((data.errors?.[0]?.reason) || data.error || 'Import failed');
-      }
-    } catch {
-      setError('Network error');
-    } finally {
-      setRowImporting(null);
-    }
-  };
 
   const handleImport = async () => {
     setImporting(true);
@@ -1265,7 +1224,6 @@ function ImportBottles() {
                   score: null,
                 } : null);
                 const isExpanded = expandedRow === r.index;
-                const isThisRowImporting = rowImporting === r.index;
 
                 return (
                   <tr
@@ -1378,6 +1336,14 @@ function ImportBottles() {
                               disabled={aiSearchingRow === r.index}
                             >
                               {aiSearchingRow === r.index ? 'Searching…' : 'Look up'}
+                            </button>
+                          )}
+                          {(r.status === 'no_match' || r.status === 'fuzzy') && !isSkipped && !isRequested && (
+                            <button
+                              className="btn btn-secondary btn-xs"
+                              onClick={() => openSearchModal(r.index)}
+                            >
+                              Search library
                             </button>
                           )}
                           {(r.status === 'no_match' || r.status === 'fuzzy') && !isSkipped && !isRequested && (

@@ -298,3 +298,9 @@
     position: static;
   }
 }
+
+.admin-notes-hint {
+  font-weight: normal;
+  font-size: 0.85em;
+  color: var(--text-secondary, #888);
+}

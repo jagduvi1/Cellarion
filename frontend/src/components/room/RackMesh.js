@@ -705,9 +705,12 @@ export default function RackMesh({
     const rackY = position[1];
     floorPlane.current.set(new THREE.Vector3(0, 1, 0), -rackY);
 
+    // intersectPlane returns null on a miss (the target vector is left
+    // untouched) — check the RETURN value, not the always-truthy target,
+    // or a miss reads as a hit at (0,0,0) and corrupts the drag offset.
     const intersection = new THREE.Vector3();
-    raycaster.ray.intersectPlane(floorPlane.current, intersection);
-    if (!intersection) return;
+    const hit = raycaster.ray.intersectPlane(floorPlane.current, intersection);
+    if (!hit) return;
 
     dragOffset.current.set(
       intersection.x - position[0], 0, intersection.z - position[2]
@@ -725,8 +728,8 @@ export default function RackMesh({
       );
       raycaster.setFromCamera(mouse, camera);
       const point = new THREE.Vector3();
-      raycaster.ray.intersectPlane(floorPlane.current, point);
-      if (!point) return;
+      const moveHit = raycaster.ray.intersectPlane(floorPlane.current, point);
+      if (!moveHit) return; // ray missed the drag plane (pointer above horizon)
       let nx = Math.round((point.x - dragOffset.current.x) * 20) / 20;
       let nz = Math.round((point.z - dragOffset.current.z) * 20) / 20;
       if (onSnapPosition) {

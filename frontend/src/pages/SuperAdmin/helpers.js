@@ -59,7 +59,7 @@ export function BarFill({ pct, warn = 70, danger = 90 }) {
   return (
     <div className="sa-bar-wrap">
       <div className="sa-bar-track">
-        <div className="sa-bar-fill" style={{ width: `${Math.min(pct, 100)}%` }} />
+        <div className={`sa-bar-fill ${cls}`} style={{ width: `${Math.min(pct, 100)}%` }} />
       </div>
     </div>
   );

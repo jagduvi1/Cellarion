@@ -115,8 +115,10 @@ function WineListEditor() {
     [wineList]
   );
 
-  const save = useCallback(async (json) => {
-    if (savingRef.current) return; // in flight — the post-save tick reschedules
+  const save = useCallback(async (json, { force = false } = {}) => {
+    // In flight — the post-save tick reschedules. `force` bypasses the guard
+    // for the unmount flush, where no reschedule can ever run again.
+    if (savingRef.current && !force) return;
     savingRef.current = true;
     setSaveState('saving');
     try {
@@ -171,7 +173,10 @@ function WineListEditor() {
   useEffect(() => () => {
     const pending = payloadRef.current;
     if (pending && pending !== lastSavedRef.current && pending !== lastErrorRef.current) {
-      save(pending); // fire-and-forget; the request outlives the component
+      // Fire-and-forget; the request outlives the component. Forced past the
+      // in-flight guard — after unmount nothing can reschedule, so skipping
+      // here would silently drop edits made during an in-flight autosave.
+      save(pending, { force: true });
     }
   }, [save]);
 
@@ -481,7 +486,7 @@ function WineListEditor() {
 
   if (loading) return <div className="loading">Loading...</div>;
   if (error) return <div className="alert alert-error">{error}</div>;
-  if (!wineList) return <div className="alert alert-error">{t('wineLists.title')}</div>;
+  if (!wineList) return <div className="alert alert-error">{t('wineLists.loadFailed')}</div>;
 
   const branding = wineList.branding || {};
   const selectedCount = getEntries().length;

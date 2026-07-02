@@ -694,6 +694,7 @@
       "imageUrlLabel": "Bild-URL",
       "adminNotesLabel": "Adminanteckningar",
       "adminNotesPlaceholder": "Valfria anteckningar till användaren...",
+      "adminNotesRequiredHint": "(krävs vid avslag)",
       "potentialDuplicates": "⚠️ Möjliga dubbletter hittades",
       "match": "% match",
       "useThis": "Använd denna",
@@ -2197,6 +2198,7 @@
   },
   "wineLists": {
     "title": "Vinlistor",
+    "loadFailed": "Kunde inte ladda vinlistan.",
     "newWineList": "Ny vinlista",
     "backToCellar": "Tillbaka till vinkällare",
     "backToWineLists": "Vinlistor",

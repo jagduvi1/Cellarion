@@ -14,7 +14,9 @@ export default function JournalEntryForm({ existing, onClose, onSaved, prefilled
   const { apiFetch, user } = useAuth();
   const isEdit = !!existing;
 
-  const [date, setDate] = useState(existing?.date ? existing.date.split('T')[0] : new Date().toISOString().split('T')[0]);
+  // Default to the LOCAL date — toISOString() is UTC and puts evening
+  // entries on the wrong day (sv-SE locale formats as YYYY-MM-DD).
+  const [date, setDate] = useState(existing?.date ? existing.date.split('T')[0] : new Date().toLocaleDateString('sv-SE'));
   const [title, setTitle] = useState(existing?.title || '');
   const [occasion, setOccasion] = useState(existing?.occasion || 'dinner');
   const [mood, setMood] = useState(existing?.mood || null);

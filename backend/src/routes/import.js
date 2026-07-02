@@ -1022,7 +1022,11 @@ router.put('/sessions/:id', async (req, res) => {
       return res.status(403).json({ error: 'Not authorized' });
     }
 
-    const { selections, manualWines, positionAnchor, rackConfigs, defaultCurrency } = req.body;
+    const { results, selections, manualWines, positionAnchor, rackConfigs, defaultCurrency } = req.body;
+    // Results change when a per-row AI look-up rewrites a row — persist them
+    // so a resumed session doesn't show stale "No match found" rows whose
+    // selection references a wine absent from the stored matches.
+    if (Array.isArray(results)) session.results = results;
     if (selections !== undefined) session.selections = selections;
     if (manualWines !== undefined) session.manualWines = manualWines;
     if (positionAnchor !== undefined) session.positionAnchor = positionAnchor;

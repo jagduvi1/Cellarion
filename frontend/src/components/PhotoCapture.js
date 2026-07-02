@@ -34,7 +34,12 @@ function PhotoCapture({ onCapture, onRemove, processedUrl, processing }) {
 
   // --- Camera ---
 
+  // Mirrors cameraOpen for the getUserMedia race check below — the promise
+  // may resolve after the user has already closed the viewfinder.
+  const cameraOpenRef = useRef(false);
+
   const stopCamera = useCallback(() => {
+    cameraOpenRef.current = false;
     if (streamRef.current) {
       streamRef.current.getTracks().forEach(t => t.stop());
       streamRef.current = null;
@@ -46,11 +51,20 @@ function PhotoCapture({ onCapture, onRemove, processedUrl, processing }) {
   const startCamera = useCallback(async () => {
     setCameraError(null);
     setCameraOpen(true);
+    cameraOpenRef.current = true;
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode, width: { ideal: 1920 }, height: { ideal: 1080 } },
         audio: false
       });
+      // The viewfinder may have been closed while the permission prompt was
+      // up — stop the just-acquired stream or the camera stays on forever.
+      if (!cameraOpenRef.current) {
+        stream.getTracks().forEach(t => t.stop());
+        return;
+      }
+      // Replace (never leak) a previous stream, e.g. after a camera switch.
+      if (streamRef.current) streamRef.current.getTracks().forEach(t => t.stop());
       streamRef.current = stream;
       requestAnimationFrame(() => {
         if (videoRef.current) videoRef.current.srcObject = stream;

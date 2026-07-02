@@ -757,11 +757,13 @@ export default function CellarRoom() {
     };
 
     // Seed a sentinel history entry via the NATIVE pushState (not the patched
-    // one — otherwise it blocks its own seed and pops a spurious dialog).
-    origPushState(null, '', window.location.href);
+    // one — otherwise it blocks its own seed and pops a spurious dialog). The
+    // state tag lets the cleanup below recognise and remove it.
+    const SENTINEL = { __roomUnsavedSentinel: true };
+    origPushState(SENTINEL, '', window.location.href);
     const handlePopState = () => {
       if (hasUnsavedRef.current) {
-        origPushState(null, '', window.location.href);
+        origPushState(SENTINEL, '', window.location.href);
         setPendingNavPath('__back__');
       }
     };
@@ -770,6 +772,14 @@ export default function CellarRoom() {
     return () => {
       window.history.pushState = origPushState;
       window.removeEventListener('popstate', handlePopState);
+      // Remove the seeded sentinel when we're still sitting on it (the user
+      // saved). Without this every dirty→clean cycle leaks one duplicate
+      // entry and the Back button appears dead once per cycle. When the
+      // cleanup runs because navigation committed (unmount), the current
+      // entry is the new route — not the sentinel — so this is skipped.
+      if (window.history.state?.__roomUnsavedSentinel) {
+        window.history.go(-1);
+      }
     };
   }, [hasUnsavedChanges]);
 
@@ -1419,10 +1429,15 @@ export default function CellarRoom() {
                 hasUnsavedRef.current = false;
                 savedLayoutRef.current = JSON.stringify(layout);
                 setPendingNavPath(null);
+                // Either way the current entry is the sentinel duplicate of
+                // this page. For Back, one step only reaches the identical
+                // room entry — go(-2) skips past it to the real previous
+                // page. For link navigation, replace the sentinel instead of
+                // stacking the target on top of it.
                 if (path === '__back__') {
-                  window.history.back();
+                  window.history.go(-2);
                 } else {
-                  navigate(path);
+                  navigate(path, { replace: true });
                 }
               }}>
                 {t('room.leaveWithoutSaving', 'Leave')}

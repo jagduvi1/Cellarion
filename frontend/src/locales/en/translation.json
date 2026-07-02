@@ -694,6 +694,7 @@
       "imageUrlLabel": "Image URL",
       "adminNotesLabel": "Admin Notes",
       "adminNotesPlaceholder": "Optional notes for the user...",
+      "adminNotesRequiredHint": "(required when rejecting)",
       "potentialDuplicates": "⚠️ Potential Duplicates Found",
       "match": "% match",
       "useThis": "Use This",
@@ -2197,6 +2198,7 @@
   },
   "wineLists": {
     "title": "Wine Lists",
+    "loadFailed": "Failed to load wine list.",
     "newWineList": "New Wine List",
     "backToCellar": "Back to cellar",
     "backToWineLists": "Wine Lists",
