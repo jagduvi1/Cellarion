@@ -925,7 +925,17 @@
       "official": "Officiell",
       "officialSet": "Officiell vald",
       "noOfficial": "Ingen officiell",
-      "setOfficial": "Välj som officiell"
+      "setOfficial": "Välj som officiell",
+      "visPublic": "Publik",
+      "visUploaderOnly": "Endast uppladdare",
+      "duplicate": "Dubblett",
+      "duplicateHint": "Exakt samma foto förekommer flera gånger för detta vin – ta bort dubbletterna.",
+      "duplicateCount_one": "{{count}} dubblett",
+      "duplicateCount_other": "{{count}} dubbletter",
+      "removeConfirm": "Ta bort denna bild? Uppladdaren meddelas.",
+      "removeYes": "Ta bort",
+      "removing": "Tar bort…",
+      "reject": "Avvisa"
     },
     "audit": {
       "title": "Aktivitetslogg",
