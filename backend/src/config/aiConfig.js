@@ -38,6 +38,7 @@ confidence: 1.0 = label clearly readable and matches a wine you know well, 0.7 =
 Important rules:
 - Never invent a wine that does not exist. If you can read a producer name or label text, use it exactly — do not guess or substitute a similar-sounding wine.
 - The name field must contain ONLY the wine's own cuvée/vineyard/variety name — never repeat the producer in it (producer "Chard Farm" + name "River Run Pinot Noir", NOT name "Chard Farm River Run Pinot Noir").
+- Production-method terms are NOT part of the name — put "Méthode Cap Classique" / "Cap Classique", "Méthode Traditionnelle", "Metodo Classico" / "Traditional Method" in the appellation field instead (name "Blanc de Blancs" + appellation "Méthode Cap Classique", NOT name "Blanc de Blancs Méthode Cap Classique"). Legally-defined aging classifications that belong to the displayed name (Reserva, Gran Reserva, Riserva, Spätlese, Grosses Gewächs) and dosage words that are part of a cuvée name (e.g. "Brut Premier") stay in the name.
 - Do not hallucinate appellation names, producer names, or grape varieties. Only use names you are confident are real and match what is visible on the label or your knowledge of that specific producer/appellation.
 - If a field is genuinely unknown and cannot be reliably inferred, set it to null rather than guessing.
 - Only return {"error":"cannot read label"} if the image contains no wine label at all.`;
@@ -56,6 +57,7 @@ Rules:
 - Use the wine name and producer exactly as given (correct only obvious typos)
 - The name field must contain ONLY the wine's own cuvée/vineyard/variety name — never prepend or repeat the producer in it. If the given name starts with the producer name, strip that prefix (producer "Penfolds" + name "Penfolds Bin 407" → name "Bin 407")
 - NEVER change the wine into a different wine: do not add a grape variety, cuvée, or vineyard to the name that the given data does not mention, and do not substitute another wine from the same producer. If the given name does not match a wine this producer actually makes, keep the name as given rather than "correcting" it to a similar-sounding wine
+- Production-method terms are NOT part of the name — move "Méthode Cap Classique" / "Cap Classique", "Méthode Traditionnelle", "Metodo Classico" / "Traditional Method" to the appellation field (name "Blanc de Blancs" + appellation "Méthode Cap Classique"). Aging classifications that belong to the displayed name (Reserva, Gran Reserva, Riserva, Spätlese, Grosses Gewächs) and dosage words that are part of a cuvée name (e.g. "Brut Premier") stay in the name
 - Fill in country, region, appellation, type, and grapes from your wine knowledge
 - Country is REQUIRED — always provide a country name; it is never acceptable to return null for country
 - For any other field you are unsure about, use null — do NOT omit the field
@@ -77,6 +79,7 @@ Rules:
 - Extract the wine name and producer from the query
 - The name field must contain ONLY the wine's own cuvée/vineyard/variety name — never prepend or repeat the producer in it (producer "Penfolds" + name "Bin 407", NOT name "Penfolds Bin 407")
 - Do not add a grape variety or cuvée to the name that the query does not mention, and do not substitute a different wine from the same producer
+- Production-method terms are NOT part of the name — move "Méthode Cap Classique" / "Cap Classique", "Méthode Traditionnelle", "Metodo Classico" / "Traditional Method" to the appellation field (name "Blanc de Blancs" + appellation "Méthode Cap Classique"). Aging classifications (Reserva, Gran Reserva, Riserva, Spätlese, Grosses Gewächs) and dosage words that are part of a cuvée name (e.g. "Brut Premier") stay in the name
 - Fill in country, region, appellation, type, and grapes from your wine knowledge
 - Country is REQUIRED — always provide a country name; it is never acceptable to return null for country
 - For any other unknown field use null; use [] for unknown grapes, never null
