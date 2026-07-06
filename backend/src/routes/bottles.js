@@ -192,9 +192,18 @@ router.get('/', async (req, res) => {
       }
       wdFilter.grapes = grapeIds2.length === 1 ? grapeIds2[0] : { $in: grapeIds2 };
     }
+    // 'unknown' is the stats bucket for bottles WITHOUT a wine definition
+    // (typically pending wine requests from an import) — no WineDefinition
+    // ever has that type, so it must match null-wineDefinition bottles
+    // instead of going into the wd pre-query.
+    let includeNoWine = false;
     if (type) {
       const types = String(type).split(',').map(t => t.trim()).filter(Boolean);
-      wdFilter.type = types.length === 1 ? types[0] : { $in: types };
+      includeNoWine = types.includes('unknown');
+      const realTypes = types.filter(t => t !== 'unknown');
+      if (realTypes.length > 0) {
+        wdFilter.type = realTypes.length === 1 ? realTypes[0] : { $in: realTypes };
+      }
     }
     if (producer) {
       // Producer is a free-text field on WineDefinition; match case-insensitively
@@ -206,10 +215,13 @@ router.get('/', async (req, res) => {
 
     if (Object.keys(wdFilter).length > 0) {
       const wdIds = await WineDefinition.find(wdFilter).distinct('_id');
-      if (wdIds.length === 0) {
+      if (wdIds.length === 0 && !includeNoWine) {
         return res.json({ bottles: { count: 0, total: 0, limit, skip, items: [] } });
       }
-      filter.wineDefinition = { $in: wdIds };
+      // $in with null matches bottles whose wineDefinition is null or absent.
+      filter.wineDefinition = includeNoWine ? { $in: [...wdIds, null] } : { $in: wdIds };
+    } else if (includeNoWine) {
+      filter.wineDefinition = null;
     }
 
     const directSortFields = ['createdAt', 'vintage', 'price', 'rating'];
