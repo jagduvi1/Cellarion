@@ -149,6 +149,13 @@ export const adminAssignImageToWine = (apiFetch, id, data) =>
     body: JSON.stringify(data),
   });
 
+// Wine-centric curation: wines with 2+ images, and one-click set-official.
+export const adminGetImagesByWine = (apiFetch, params) =>
+  apiFetch(`/api/admin/images/by-wine?${params}`);
+
+export const adminSetOfficialImage = (apiFetch, id) =>
+  apiFetch(`/api/admin/images/${id}/set-official`, { method: 'PUT' });
+
 // ── Import ────────────────────────────────────────────────────────────────────
 export const adminImportWines = (apiFetch, body) =>
   apiFetch('/api/admin/import/wines', { method: 'POST', body });
