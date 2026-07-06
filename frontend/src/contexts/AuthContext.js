@@ -68,19 +68,32 @@ export const AuthProvider = ({ children }) => {
   // Refresh: called automatically by apiFetch on 401
   // ------------------------------------------------------------------
 
-  const handleRefresh = useCallback(async () => {
-    try {
-      const res = await fetch('/api/auth/refresh', {
-        method: 'POST',
-        credentials: 'include' // sends the httpOnly refresh cookie
-      });
-      if (!res.ok) return null;
-      const data = await res.json();
-      storeToken(data.token);
-      return data.token;
-    } catch {
-      return null;
-    }
+  // Single-flight: the backend ROTATES the refresh token on every /refresh,
+  // so two concurrent calls race — the first rotation invalidates the cookie
+  // and the loser gets a 401, which apiFetch treats as "session dead" and
+  // logs the user out. Parallel 401s (any page firing several requests after
+  // the access token expires) must therefore share one in-flight refresh.
+  const refreshInFlightRef = useRef(null);
+
+  const handleRefresh = useCallback(() => {
+    if (refreshInFlightRef.current) return refreshInFlightRef.current;
+    refreshInFlightRef.current = (async () => {
+      try {
+        const res = await fetch('/api/auth/refresh', {
+          method: 'POST',
+          credentials: 'include' // sends the httpOnly refresh cookie
+        });
+        if (!res.ok) return null;
+        const data = await res.json();
+        storeToken(data.token);
+        return data.token;
+      } catch {
+        return null;
+      } finally {
+        refreshInFlightRef.current = null;
+      }
+    })();
+    return refreshInFlightRef.current;
   }, []);
 
   // ------------------------------------------------------------------
