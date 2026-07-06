@@ -11,24 +11,94 @@ const SLOT_GAP = 8;      // gap between slots
 const PADDING = 20;       // viewBox padding
 const CELL = SLOT_R * 2 + SLOT_GAP;  // centre-to-centre distance
 
+// Extra headroom (in cell heights) inserted above each double-height row,
+// and the amount its top-layer bottles are raised above the base row.
+export const DOUBLE_ROW_HEADROOM = 0.8;
+
+/**
+ * Filter typeConfig.doubleHeightRows down to the entries that actually
+ * contribute top-layer capacity: unique integers in [1, rows], ascending.
+ * A row only fits a top layer when cols > 1. Mirrors backend
+ * rackGeometry.validDoubleHeightRows.
+ */
+export function validDoubleHeightRows(rows, cols, doubleHeightRows) {
+  if (!Array.isArray(doubleHeightRows) || cols <= 1) return [];
+  return [...new Set(doubleHeightRows)]
+    .filter(r => Number.isInteger(r) && r >= 1 && r <= rows)
+    .sort((a, b) => a - b);
+}
+
 // ── Grid ─────────────────────────────────────────────────────────────
-function gridLayout(rows, cols) {
+// POSITION NUMBERING CONTRACT (double-height rows): the base grid keeps
+// positions 1..rows*cols row-major EXACTLY as a plain grid — existing
+// bottles never move. Top-layer positions are APPENDED after rows*cols:
+// iterate valid double-height rows in ascending row order, each contributing
+// cols-1 positions left-to-right (bottles resting in the gaps between base
+// bottles). Example 4x6 grid with doubleHeightRows [2]: base 1..24
+// unchanged, top layer of row 2 = positions 25..29.
+function gridLayout(rows, cols, typeConfig) {
+  const doubles = validDoubleHeightRows(rows, cols, typeConfig?.doubleHeightRows);
+  const doubleSet = new Set(doubles);
+  const extra = CELL * DOUBLE_ROW_HEADROOM;
+
+  // Cumulative headroom: each double row pushes itself and every row below
+  // it down by `extra`, so rows keep their visual identity — only extra
+  // space appears above each double row.
+  const yOffset = new Array(rows);
+  let acc = 0;
+  for (let r = 0; r < rows; r++) {
+    if (doubleSet.has(r + 1)) acc += extra;
+    yOffset[r] = acc;
+  }
+  const rowCy = (r) => PADDING + SLOT_R + r * CELL + (yOffset[r] || 0);
+
   const slots = [];
   let pos = 1;
+  // Base grid: positions 1..rows*cols, row-major — same as a plain grid.
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
       slots.push({
         position: pos++,
         cx: PADDING + SLOT_R + c * CELL,
-        cy: PADDING + SLOT_R + r * CELL,
+        cy: rowCy(r),
       });
     }
   }
+  // Top layer: appended after rows*cols, ascending row order, left-to-right.
+  // Each top bottle sits centred in the gap between two base bottles
+  // (x staggered by half a cell) and raised into the row's headroom.
+  for (const d of doubles) {
+    const r = d - 1;
+    for (let c = 0; c < cols - 1; c++) {
+      slots.push({
+        position: pos++,
+        cx: PADDING + SLOT_R + (c + 0.5) * CELL,
+        cy: rowCy(r) - extra,
+        isTop: true,
+      });
+    }
+  }
+
+  // With double rows, the generic midpoint heuristic in ShelfLines would
+  // draw a plank between a top layer and its base row — emit explicit
+  // shelf positions instead: between row r's bottles and whatever tops
+  // row r+1 (its top layer when double, its base bottles otherwise).
+  let shelfYs;
+  if (doubles.length > 0 && rows > 1) {
+    shelfYs = [];
+    for (let r = 0; r < rows - 1; r++) {
+      const below = rowCy(r) + SLOT_R;
+      const aboveNext = rowCy(r + 1) - (doubleSet.has(r + 2) ? extra : 0) - SLOT_R;
+      shelfYs.push((below + aboveNext) / 2);
+    }
+  }
+
   return {
     totalSlots: slots.length,
+    shelfYs,
     viewBox: {
       width:  PADDING * 2 + cols * CELL - SLOT_GAP,
-      height: PADDING * 2 + rows * CELL - SLOT_GAP,
+      height: PADDING * 2 + rows * CELL - SLOT_GAP + doubles.length * extra,
     },
     slots,
   };
@@ -312,7 +382,7 @@ export function computeLayout(type, rows, cols, typeConfig) {
     case 'cube':     return cubeLayout(rows, cols, typeConfig);
     case 'shelf':    return shelfLayout(rows, cols, typeConfig);
     case 'grid':
-    default:         return gridLayout(rows, cols);
+    default:         return gridLayout(rows, cols, typeConfig);
   }
 }
 
@@ -423,7 +493,13 @@ export function getTotalSlots(type, rows, cols, typeConfig) {
       return cells * bpc;
     }
     case 'grid':
-    default:
-      return rows * cols;
+    default: {
+      // POSITION NUMBERING CONTRACT (double-height rows): base grid keeps
+      // positions 1..rows*cols row-major EXACTLY as a plain grid; top-layer
+      // positions are APPENDED after rows*cols, ascending row order,
+      // cols-1 per double row. Mirrors backend rackGeometry.totalSlots.
+      const doubles = validDoubleHeightRows(rows, cols, typeConfig?.doubleHeightRows);
+      return rows * cols + doubles.length * (cols - 1);
+    }
   }
 }

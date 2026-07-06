@@ -4,9 +4,9 @@ import { useThree, useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import {
   BOTTLE_RADIUS, CELL_W, CELL_H, RACK_DEPTH, WOOD_THICK, PANEL_THICK,
-  getDisplayDims, buildScaledLayout,
+  getDisplayDims, buildScaledLayout, getGridDoubleRows,
 } from '../../utils/roomConstants';
-import { getTotalSlots, getModularTotalSlots } from '../../utils/rackLayouts';
+import { getTotalSlots, getModularTotalSlots, DOUBLE_ROW_HEADROOM } from '../../utils/rackLayouts';
 
 // ── Bright, visible wine colors by type ──────────────────
 const GLASS_COLORS = {
@@ -232,17 +232,56 @@ function DisabledSlotDisc({ position, isBack }) {
 }
 
 // ── Slot positions ───────────────────────────────────────
-function computeSlotPositions(rows, cols, width, height) {
+// Grid (and unknown-type fallback), with optional double-height rows.
+//
+// POSITION NUMBERING CONTRACT (double-height rows): the base grid keeps
+// positions 1..rows*cols row-major EXACTLY as a plain grid — existing
+// bottles never move. Top-layer positions are APPENDED after rows*cols:
+// iterate valid double-height rows in ascending row order, each contributing
+// cols-1 positions left-to-right (x staggered into the gaps between base
+// bottles, y raised into the row's headroom). Example 4x6 grid with
+// doubleHeightRows [2]: base 1..24 unchanged, top layer of row 2 =
+// positions 25..29. Mirrors rackLayouts.gridLayout / backend rackGeometry.
+function computeSlotPositions(rows, cols, width, height, doubleRows = []) {
   const positions = [];
   const cW = width / cols;
-  const cH = height / rows;
+  // `height` includes DOUBLE_ROW_HEADROOM extra cell heights per double
+  // row (see getGridExtraHeight); back the base cell height out of it.
+  const cH = height / (rows + DOUBLE_ROW_HEADROOM * doubleRows.length);
+  const extra = cH * DOUBLE_ROW_HEADROOM;
+  const doubleSet = new Set(doubleRows);
+
+  // Cumulative headroom above each 0-indexed row (3D is y-up, so headroom
+  // above a row pushes the row itself and everything below it down).
+  const yOffset = new Array(rows);
+  let acc = 0;
+  for (let r = 0; r < rows; r++) {
+    if (doubleSet.has(r + 1)) acc += extra;
+    yOffset[r] = acc;
+  }
+  const rowY = (r) => height / 2 - cH / 2 - r * cH - (yOffset[r] || 0);
+
   let pos = 1;
+  // Base grid: positions 1..rows*cols, row-major.
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
       positions.push({
         position: pos++,
         x: -width / 2 + cW / 2 + c * cW,
-        y: height / 2 - cH / 2 - r * cH,
+        y: rowY(r),
+        z: 0,
+      });
+    }
+  }
+  // Top layer: appended after rows*cols, ascending row order, left-to-right
+  // (same X stagger pattern as computeShelfSlotPositions' back row).
+  for (const d of doubleRows) {
+    const r = d - 1;
+    for (let c = 0; c < cols - 1; c++) {
+      positions.push({
+        position: pos++,
+        x: -width / 2 + cW / 2 + (c + 0.5) * cW,
+        y: rowY(r) + extra,
         z: 0,
       });
     }
@@ -625,6 +664,23 @@ export default function RackMesh({
   // Compute display grid dimensions per type
   const { displayRows, displayCols } = getDisplayDims(rack);
 
+  // Double-height rows (grid racks only) — the rack grows taller by
+  // DOUBLE_ROW_HEADROOM cell heights per double row so the top-layer
+  // bottles fit under the plank/top rail above.
+  const doubleRows = useMemo(
+    () => getGridDoubleRows(rack),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [rack.isModular, rack.type, rack.rows, rack.cols, rack.typeConfig?.doubleHeightRows]
+  );
+  const extraRowH = CELL_H * DOUBLE_ROW_HEADROOM;
+  // Cumulative headroom above (and including) 0-indexed row r — shifts that
+  // row's plank/scallops/rail down so they stay under the row's bottles.
+  const headroomAbove = (r) => {
+    let n = 0;
+    for (const d of doubleRows) if (d - 1 <= r) n++;
+    return n * extraRowH;
+  };
+
   // Cube and modular racks have irregular internal layouts. Reuse the 2D
   // layout engine (rackLayouts.js — source of truth for slot numbering) and
   // scale its coordinates into 3D metres so bottles land in the right cells
@@ -640,7 +696,9 @@ export default function RackMesh({
   // scaleOverride applies uniform scaling via a Three.js group transform
   const rackScale = scaleOverride || 1;
   const baseInnerW = scaledLayout ? scaledLayout.innerW : displayCols * CELL_W;
-  const baseInnerH = scaledLayout ? scaledLayout.innerH : displayRows * CELL_H;
+  const baseInnerH = scaledLayout
+    ? scaledLayout.innerH
+    : displayRows * CELL_H + doubleRows.length * extraRowH;
   const defaultWidth = baseInnerW + PANEL_THICK * 2;
   // x-rack is square by construction; honouring a stray widthOverride (e.g.
   // left over from a rack that was switched to x-rack after a width was set)
@@ -693,10 +751,10 @@ export default function RackMesh({
       displayRows, displayCols, rack.typeConfig?.backCols || 0, innerW, innerH,
       rack.typeConfig?.bottlesPerCell || 1, depth
     );
-    return computeSlotPositions(displayRows, displayCols, innerW, innerH);
+    return computeSlotPositions(displayRows, displayCols, innerW, innerH, doubleRows);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scaledLayout, rackType, rack.rows, rack.cols, displayRows, displayCols, innerW, innerH, depth,
-      rack.typeConfig?.backCols, rack.typeConfig?.bottlesPerCell, rack.typeConfig?.bottlesPerSection]);
+      doubleRows, rack.typeConfig?.backCols, rack.typeConfig?.bottlesPerCell, rack.typeConfig?.bottlesPerSection]);
 
   const edgesGeom = useMemo(() => {
     const sw = width * rackScale, sh = height * rackScale, sd = depth * rackScale;
@@ -843,9 +901,12 @@ export default function RackMesh({
           2D layout), so the simple per-row planks/scallops don't apply. */}
       {rackType !== 'x-rack' && rackType !== 'shelf' && rackType !== 'cube' && !rack.isModular && (
         <>
-          {/* Shelves between rows (thin planks) */}
+          {/* Shelves between rows (thin planks). headroomAbove shifts a
+              plank down past the extra headroom of every double-height row
+              above it, so each plank stays directly under its row's bottles
+              (and above the next row's top layer). */}
           {Array.from({ length: Math.max(displayRows - 1, 0) }).map((_, i) => {
-            const sy = height / 2 - PANEL_THICK - (i + 1) * CELL_H;
+            const sy = height / 2 - PANEL_THICK - (i + 1) * CELL_H - headroomAbove(i);
             return (
               <mesh key={`sh-${i}`} position={[0, sy, -depth * 0.05]}>
                 <boxGeometry args={[innerW, WOOD_THICK, shelfDepth]} />
@@ -857,7 +918,7 @@ export default function RackMesh({
           {/* Scallop bumps — wave cradle between bottle positions */}
           {Array.from({ length: displayRows }).map((_, r) => {
             const baseY = r < displayRows - 1
-              ? height / 2 - PANEL_THICK - (r + 1) * CELL_H + WOOD_THICK / 2
+              ? height / 2 - PANEL_THICK - (r + 1) * CELL_H - headroomAbove(r) + WOOD_THICK / 2
               : -height / 2 + PANEL_THICK;
             return Array.from({ length: displayCols + 1 }).map((__, c) => {
               const bx = -innerW / 2 + c * effectiveCellW;
@@ -877,7 +938,7 @@ export default function RackMesh({
           {/* Thin front rail per shelf */}
           {Array.from({ length: displayRows }).map((_, r) => {
             const railY = r < displayRows - 1
-              ? height / 2 - PANEL_THICK - (r + 1) * CELL_H + 0.008
+              ? height / 2 - PANEL_THICK - (r + 1) * CELL_H - headroomAbove(r) + 0.008
               : -height / 2 + PANEL_THICK + 0.008;
             return (
               <mesh key={`rail-${r}`} position={[0, railY, shelfDepth / 2 - depth * 0.05 - 0.003]}>

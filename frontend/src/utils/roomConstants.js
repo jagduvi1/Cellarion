@@ -3,7 +3,10 @@
  * Used by CellarRoom, RoomScene, and RackMesh to avoid duplication.
  */
 
-import { computeLayout, computeModularLayout, CELL_SIZE } from './rackLayouts';
+import {
+  computeLayout, computeModularLayout, CELL_SIZE,
+  validDoubleHeightRows, DOUBLE_ROW_HEADROOM,
+} from './rackLayouts';
 
 // ── Rack physical dimensions (metres) ────────────────────
 export const CELL_W = 0.105;       // cell width
@@ -78,6 +81,24 @@ export function getDisplayDims(rack) {
 }
 
 /**
+ * Valid double-height rows for a simple grid rack (empty for every other
+ * shape). See rackLayouts.validDoubleHeightRows for the filtering rules.
+ */
+export function getGridDoubleRows(rack) {
+  if (rack.isModular || (rack.type || 'grid') !== 'grid') return [];
+  return validDoubleHeightRows(rack.rows || 4, rack.cols || 4, rack.typeConfig?.doubleHeightRows);
+}
+
+/**
+ * Extra inner height (metres) a grid rack needs for its double-height rows:
+ * DOUBLE_ROW_HEADROOM cell heights of headroom above each double row so the
+ * top-layer bottles fit under the shelf/plank above.
+ */
+export function getGridExtraHeight(rack) {
+  return getGridDoubleRows(rack).length * CELL_H * DOUBLE_ROW_HEADROOM;
+}
+
+/**
  * Compute full rack height in metres (outer frame included).
  */
 export function getRackHeight(rack) {
@@ -85,7 +106,7 @@ export function getRackHeight(rack) {
     return buildScaledLayout(rack).innerH + PANEL_THICK * 2;
   }
   const { displayRows } = getDisplayDims(rack);
-  return displayRows * CELL_H + PANEL_THICK * 2;
+  return displayRows * CELL_H + getGridExtraHeight(rack) + PANEL_THICK * 2;
 }
 
 /**

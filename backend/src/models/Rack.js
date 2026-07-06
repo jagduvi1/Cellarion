@@ -36,7 +36,20 @@ const rackSchema = new mongoose.Schema({
     moduleCols: { type: Number, min: 1, max: 10 },
     bottlesPerCell: { type: Number, min: 1, max: 20 },
     bottlesPerSection: { type: Number, min: 1, max: 30 },
-    backCols: { type: Number, min: 0, max: 20 }
+    backCols: { type: Number, min: 0, max: 20 },
+    // Grid racks only: 1-indexed row numbers with headroom for a top layer
+    // of bottles resting in the gaps (cols across + cols-1 on top).
+    // POSITION NUMBERING CONTRACT (double-height rows): the base grid keeps
+    // positions 1..rows*cols row-major EXACTLY as a plain grid — existing
+    // bottles never move. Top-layer positions are APPENDED after rows*cols:
+    // iterate valid double-height rows in ascending row order, each
+    // contributing cols-1 positions left-to-right. Example 4x6 grid with
+    // doubleHeightRows [2]: base 1..24 unchanged, top layer of row 2 =
+    // positions 25..29.
+    // Deliberately NOT on rackModuleSchema above — modular-rack modules
+    // don't support double-height rows (out of scope; Mongoose strips the
+    // key from module typeConfig).
+    doubleHeightRows: { type: [Number], default: undefined }
   },
   // Modular rack fields (used when isModular is true)
   isModular: { type: Boolean, default: false },

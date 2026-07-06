@@ -2,7 +2,9 @@
  * Rack geometry utilities — compute total slot counts per rack type.
  *
  * Each rack type interprets `rows` and `cols` differently:
- *   grid     — rows × cols rectangular grid
+ *   grid     — rows × cols rectangular grid; rows listed in
+ *              typeConfig.doubleHeightRows have headroom for an extra top
+ *              layer of cols-1 bottles resting in the gaps
  *   x-rack   — square with X dividers; 4 triangular sections, each holds bottlesPerSection bottles
  *   hex      — hex honeycomb; alternating row widths (cols, cols-1, …)
  *   triangle — A-frame; base width = cols, each row shrinks by 1
@@ -12,12 +14,42 @@
  */
 
 /**
+ * Filter typeConfig.doubleHeightRows down to the entries that actually
+ * contribute top-layer capacity: unique integers in [1, rows], returned in
+ * ascending order. A row only fits a top layer when cols > 1 (a single
+ * bottle has no gap to rest another bottle in), so cols <= 1 yields [].
+ * Defensive by design — routes reject invalid input with a 400, but racks
+ * whose rows were shrunk after creation may still carry stale entries.
+ *
+ * @param {number} rows
+ * @param {number} cols
+ * @param {Array<number>|undefined} doubleHeightRows 1-indexed row numbers
+ * @returns {Array<number>} valid row numbers, ascending, deduplicated
+ */
+function validDoubleHeightRows(rows, cols, doubleHeightRows) {
+  if (!Array.isArray(doubleHeightRows) || cols <= 1) return [];
+  return [...new Set(doubleHeightRows)]
+    .filter(r => Number.isInteger(r) && r >= 1 && r <= rows)
+    .sort((a, b) => a - b);
+}
+
+/**
  * Total number of valid slot positions for a given rack configuration.
  */
 function totalSlots(type, rows, cols, typeConfig) {
   switch (type) {
-    case 'grid':
-      return rows * cols;
+    case 'grid': {
+      // POSITION NUMBERING CONTRACT (double-height rows): the base grid
+      // keeps positions 1..rows*cols row-major EXACTLY as a plain grid —
+      // existing bottles never move. Top-layer positions are APPENDED after
+      // rows*cols: iterate valid double-height rows in ascending row order,
+      // each contributing cols-1 positions left-to-right (bottles resting
+      // in the gaps between base bottles). Example 4x6 grid with
+      // doubleHeightRows [2]: base 1..24 unchanged, top layer of row 2 =
+      // positions 25..29.
+      const doubles = validDoubleHeightRows(rows, cols, typeConfig?.doubleHeightRows);
+      return rows * cols + doubles.length * (cols - 1);
+    }
 
     case 'x-rack': {
       // Square with X dividers creating 4 triangular sections.
@@ -64,9 +96,11 @@ function totalSlots(type, rows, cols, typeConfig) {
       return cells * bpc;
     }
 
-    default:
-      // Fall back to grid behaviour
-      return rows * cols;
+    default: {
+      // Fall back to grid behaviour (including double-height rows)
+      const doubles = validDoubleHeightRows(rows, cols, typeConfig?.doubleHeightRows);
+      return rows * cols + doubles.length * (cols - 1);
+    }
   }
 }
 
@@ -93,4 +127,4 @@ function getMaxPosition(rack) {
   return totalSlots(rack.type || 'grid', rack.rows, rack.cols, rack.typeConfig);
 }
 
-module.exports = { totalSlots, modularTotalSlots, getMaxPosition };
+module.exports = { totalSlots, modularTotalSlots, getMaxPosition, validDoubleHeightRows };
