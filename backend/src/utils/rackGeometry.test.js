@@ -1,4 +1,4 @@
-const { totalSlots, modularTotalSlots, getMaxPosition } = require('./rackGeometry');
+const { totalSlots, modularTotalSlots, getMaxPosition, validDoubleHeightRows } = require('./rackGeometry');
 
 describe('rackGeometry', () => {
   describe('totalSlots — grid', () => {
@@ -6,6 +6,45 @@ describe('rackGeometry', () => {
       expect(totalSlots('grid', 4, 8)).toBe(32);
       expect(totalSlots('grid', 1, 1)).toBe(1);
       expect(totalSlots('grid', 20, 20)).toBe(400);
+    });
+  });
+
+  describe('totalSlots — grid with double-height rows', () => {
+    // Capacity = rows*cols + validDoubleRows.length * (cols - 1); top-layer
+    // positions are appended after rows*cols (see numbering contract in
+    // rackGeometry.js).
+    it('adds cols-1 top slots per double row (4x6, row 2 → 24 + 5 = 29)', () => {
+      expect(totalSlots('grid', 4, 6, { doubleHeightRows: [2] })).toBe(29);
+    });
+    it('multiple double rows: 4x6 with rows [1,3] → 24 + 2×5 = 34', () => {
+      expect(totalSlots('grid', 4, 6, { doubleHeightRows: [1, 3] })).toBe(34);
+    });
+    it('filters out-of-range and duplicate entries', () => {
+      expect(totalSlots('grid', 4, 6, { doubleHeightRows: [0, 2, 2, 5, 99, -1] })).toBe(29);
+    });
+    it('ignores non-integer entries', () => {
+      expect(totalSlots('grid', 4, 6, { doubleHeightRows: [1.5, '2', null] })).toBe(24);
+    });
+    it('cols = 1 contributes nothing (no gap to rest a bottle in)', () => {
+      expect(totalSlots('grid', 4, 1, { doubleHeightRows: [2] })).toBe(4);
+    });
+    it('empty or missing doubleHeightRows leaves capacity unchanged', () => {
+      expect(totalSlots('grid', 4, 6, { doubleHeightRows: [] })).toBe(24);
+      expect(totalSlots('grid', 4, 6, {})).toBe(24);
+    });
+  });
+
+  describe('validDoubleHeightRows', () => {
+    it('returns ascending unique valid rows', () => {
+      expect(validDoubleHeightRows(4, 6, [3, 1, 3])).toEqual([1, 3]);
+    });
+    it('drops entries outside [1, rows]', () => {
+      expect(validDoubleHeightRows(4, 6, [0, 4, 5])).toEqual([4]);
+    });
+    it('returns [] for non-array input or cols <= 1', () => {
+      expect(validDoubleHeightRows(4, 6, undefined)).toEqual([]);
+      expect(validDoubleHeightRows(4, 6, 'nope')).toEqual([]);
+      expect(validDoubleHeightRows(4, 1, [2])).toEqual([]);
     });
   });
 
@@ -132,6 +171,9 @@ describe('rackGeometry', () => {
     });
     it('x-rack uses bottlesPerSection', () => {
       expect(getMaxPosition({ type: 'x-rack', rows: 1, cols: 1, typeConfig: { bottlesPerSection: 6 } })).toBe(24);
+    });
+    it('grid includes appended double-height top-layer positions', () => {
+      expect(getMaxPosition({ type: 'grid', rows: 4, cols: 6, typeConfig: { doubleHeightRows: [2] } })).toBe(29);
     });
     it('uses modules when isModular is true', () => {
       const rack = {

@@ -146,7 +146,16 @@ function CellarRacks() {
         cols: newRack.cols,
       };
       if (newRack.typeConfig && Object.keys(newRack.typeConfig).length > 0) {
-        payload.typeConfig = newRack.typeConfig;
+        const typeConfig = { ...newRack.typeConfig };
+        // Drop double-height rows outside the final row count — the rows
+        // input may have been lowered after they were typed, and the
+        // backend rejects out-of-range entries with a 400.
+        if (Array.isArray(typeConfig.doubleHeightRows)) {
+          typeConfig.doubleHeightRows = typeConfig.doubleHeightRows
+            .filter(r => r >= 1 && r <= newRack.rows);
+          if (typeConfig.doubleHeightRows.length === 0) delete typeConfig.doubleHeightRows;
+        }
+        payload.typeConfig = typeConfig;
       }
       const res = await createRack(apiFetch, payload);
       const data = await res.json();
@@ -472,11 +481,32 @@ function CellarRacks() {
   );
 }
 
+// Parse a comma-separated "double-height rows" input ("1, 3") into a
+// deduplicated array of positive integers. Range-checking against the row
+// count happens in handleCreateRack (the rows input can change afterwards)
+// and defensively in the layout/geometry helpers.
+function parseDoubleHeightRows(text) {
+  const seen = new Set();
+  return String(text)
+    .split(',')
+    .map(s => parseInt(s.trim(), 10))
+    .filter(n => {
+      if (!Number.isInteger(n) || n < 1 || n > 20 || seen.has(n)) return false;
+      seen.add(n);
+      return true;
+    });
+}
+
 // ---- New rack creation form with type selector ----
 function NewRackForm({ newRack, setNewRack, onTypeChange, onSubmit, saving }) {
   const { t } = useTranslation();
   const dims = TYPE_DIMENSIONS[newRack.type] || TYPE_DIMENSIONS.grid;
   const [showPreview, setShowPreview] = useState(false);
+  // Raw text of the double-height rows input (grid only). Kept as text so
+  // partial input like "1," doesn't fight the parser; cleared when the rack
+  // type changes (the parent resets typeConfig at the same time).
+  const [doubleRowsText, setDoubleRowsText] = useState('');
+  useEffect(() => { setDoubleRowsText(''); }, [newRack.type]);
 
   // Synthetic rack for the preview renderer — empty slots, just the geometry.
   const previewRack = {
@@ -529,6 +559,33 @@ function NewRackForm({ newRack, setNewRack, onTypeChange, onSubmit, saving }) {
               value={newRack.cols}
               onChange={e => setNewRack({ ...newRack, cols: parseInt(e.target.value) || dims.defaultCols })}
             />
+          </div>
+        )}
+
+        {dims.showDoubleHeightRows && (
+          <div className="form-group">
+            <label>{t('racks.doubleHeightRowsLabel', 'Double-height rows')}</label>
+            <input
+              type="text"
+              inputMode="numeric"
+              value={doubleRowsText}
+              placeholder={t('racks.doubleHeightRowsPlaceholder', 'e.g. 1,3')}
+              onChange={e => {
+                const text = e.target.value;
+                setDoubleRowsText(text);
+                const parsed = parseDoubleHeightRows(text);
+                setNewRack({
+                  ...newRack,
+                  typeConfig: {
+                    ...newRack.typeConfig,
+                    doubleHeightRows: parsed.length > 0 ? parsed : undefined,
+                  },
+                });
+              }}
+            />
+            <small style={{ color: 'var(--color-text-muted)', fontSize: '0.75rem' }}>
+              {t('racks.doubleHeightRowsHelp', 'Rows with headroom for bottles resting on top')}
+            </small>
           </div>
         )}
 

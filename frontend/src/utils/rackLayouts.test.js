@@ -1,4 +1,7 @@
-import { computeLayout, computeModularLayout, getModularTotalSlots, getTotalSlots, SLOT_RADIUS } from './rackLayouts';
+import {
+  computeLayout, computeModularLayout, getModularTotalSlots, getTotalSlots,
+  SLOT_RADIUS, validDoubleHeightRows, DOUBLE_ROW_HEADROOM,
+} from './rackLayouts';
 
 describe('computeLayout', () => {
   describe('grid', () => {
@@ -17,6 +20,72 @@ describe('computeLayout', () => {
       const layout = computeLayout('grid', 3, 4);
       const positions = layout.slots.map(s => s.position);
       expect(positions).toEqual([1,2,3,4,5,6,7,8,9,10,11,12]);
+    });
+  });
+
+  describe('grid — double-height rows', () => {
+    // POSITION NUMBERING CONTRACT: base grid keeps positions 1..rows*cols
+    // row-major exactly as a plain grid; top-layer positions are APPENDED
+    // after rows*cols in ascending row order, cols-1 per double row.
+    const CELL = 48; // SLOT_R*2 + SLOT_GAP
+
+    it('appends cols-1 top slots per double row (4x6, row 2 → 29)', () => {
+      const layout = computeLayout('grid', 4, 6, { doubleHeightRows: [2] });
+      expect(layout.totalSlots).toBe(29);
+      expect(layout.slots.map(s => s.position))
+        .toEqual(Array.from({ length: 29 }, (_, i) => i + 1));
+    });
+
+    it('base positions 1..rows*cols keep plain-grid order and x coordinates', () => {
+      const plain = computeLayout('grid', 4, 6);
+      const dbl = computeLayout('grid', 4, 6, { doubleHeightRows: [2] });
+      for (let i = 0; i < 24; i++) {
+        expect(dbl.slots[i].position).toBe(plain.slots[i].position);
+        expect(dbl.slots[i].cx).toBe(plain.slots[i].cx);
+      }
+    });
+
+    it('top-layer slots sit staggered between and above their base row', () => {
+      const layout = computeLayout('grid', 4, 6, { doubleHeightRows: [2] });
+      const baseRow2 = layout.slots.filter(s => s.position >= 7 && s.position <= 12);
+      const tops = layout.slots.filter(s => s.isTop);
+      expect(tops.map(s => s.position)).toEqual([25, 26, 27, 28, 29]);
+      tops.forEach((s, i) => {
+        expect(s.cx).toBeCloseTo((baseRow2[i].cx + baseRow2[i + 1].cx) / 2);
+        expect(s.cy).toBeCloseTo(baseRow2[i].cy - CELL * DOUBLE_ROW_HEADROOM);
+      });
+    });
+
+    it('grows taller per double row; rows below the double row shift down', () => {
+      const plain = computeLayout('grid', 4, 6);
+      const dbl = computeLayout('grid', 4, 6, { doubleHeightRows: [2] });
+      const extra = CELL * DOUBLE_ROW_HEADROOM;
+      expect(dbl.viewBox.height).toBeCloseTo(plain.viewBox.height + extra);
+      expect(dbl.slots[0].cy).toBe(plain.slots[0].cy);            // row 1 unchanged
+      expect(dbl.slots[6].cy).toBeCloseTo(plain.slots[6].cy + extra);   // row 2 shifted
+      expect(dbl.slots[23].cy).toBeCloseTo(plain.slots[23].cy + extra); // row 4 shifted
+    });
+
+    it('emits explicit shelfYs so planks skip the top layers', () => {
+      const layout = computeLayout('grid', 4, 6, { doubleHeightRows: [2] });
+      expect(layout.shelfYs).toHaveLength(3); // rows-1 planks, top layer not counted
+    });
+
+    it('filters invalid rows; cols = 1 contributes nothing', () => {
+      expect(computeLayout('grid', 4, 6, { doubleHeightRows: [0, 99] }).totalSlots).toBe(24);
+      expect(computeLayout('grid', 4, 1, { doubleHeightRows: [2] }).totalSlots).toBe(4);
+    });
+
+    it('getTotalSlots matches computeLayout and the backend formula', () => {
+      const tc = { doubleHeightRows: [1, 3] };
+      expect(getTotalSlots('grid', 4, 6, tc)).toBe(4 * 6 + 2 * (6 - 1));
+      expect(getTotalSlots('grid', 4, 6, tc)).toBe(computeLayout('grid', 4, 6, tc).totalSlots);
+    });
+
+    it('validDoubleHeightRows dedupes, sorts and filters', () => {
+      expect(validDoubleHeightRows(4, 6, [3, 1, 3, 0, 99])).toEqual([1, 3]);
+      expect(validDoubleHeightRows(4, 1, [2])).toEqual([]);
+      expect(validDoubleHeightRows(4, 6, undefined)).toEqual([]);
     });
   });
 
@@ -116,6 +185,7 @@ describe('computeLayout', () => {
   describe('all types have valid coordinates', () => {
     const cases = [
       ['grid', 4, 8, undefined],
+      ['grid', 4, 6, { doubleHeightRows: [1, 3] }],
       ['x-rack', 1, 1, { bottlesPerSection: 6 }],
       ['hex', 4, 5, undefined],
       ['triangle', 1, 5, undefined],
@@ -274,6 +344,7 @@ describe('getTotalSlots', () => {
   it('matches computeLayout for all types', () => {
     const cases = [
       ['grid', 4, 8, undefined],
+      ['grid', 4, 6, { doubleHeightRows: [2, 4] }],
       ['x-rack', 1, 1, { bottlesPerSection: 6 }],
       ['hex', 4, 5, undefined],
       ['triangle', 1, 5, undefined],

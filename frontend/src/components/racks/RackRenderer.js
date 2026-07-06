@@ -370,10 +370,12 @@ function ShelfLines({ layout }) {
     );
   });
 
-  // Scallop bumps between front-row slots only (back row sits above, no plank below it)
+  // Scallop bumps between front-row slots only (back row sits above, no
+  // plank below it). Double-height top-layer slots (isTop) rest on the base
+  // bottles below them, not on a plank — no bumps under those either.
   const rowSlots = {};
   layout.slots.forEach(s => {
-    if (s.isBack) return;
+    if (s.isBack || s.isTop) return;
     const ry = Math.round(s.cy);
     if (!rowSlots[ry]) rowSlots[ry] = [];
     rowSlots[ry].push(s);

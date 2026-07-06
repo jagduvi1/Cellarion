@@ -16,6 +16,39 @@ const router = express.Router();
 
 const MAX_MODULES = 50;
 
+/**
+ * Validate typeConfig.doubleHeightRows: grid racks (non-modular) only,
+ * entries must be integers in [1, rows].
+ *
+ * POSITION NUMBERING CONTRACT (double-height rows): the base grid keeps
+ * positions 1..rows*cols row-major EXACTLY as a plain grid — existing
+ * bottles never move. Top-layer positions are APPENDED after rows*cols:
+ * iterate valid double-height rows in ascending row order, each contributing
+ * cols-1 positions left-to-right. Example 4x6 grid with doubleHeightRows
+ * [2]: base 1..24 unchanged, top layer of row 2 = positions 25..29.
+ * (The capacity math lives in utils/rackGeometry.js; the resize guard below
+ * therefore also catches removing a double row while top-layer bottles are
+ * still placed.)
+ *
+ * @returns {string|null} error message, or null when valid
+ */
+function validateDoubleHeightRows(typeConfig, effectiveType, effectiveRows, effectiveModular) {
+  const dhr = typeConfig?.doubleHeightRows;
+  if (dhr === undefined || dhr === null) return null;
+  if (effectiveModular || (effectiveType || 'grid') !== 'grid') {
+    return 'Double-height rows are only supported on grid racks';
+  }
+  if (!Array.isArray(dhr)) {
+    return 'doubleHeightRows must be an array of row numbers';
+  }
+  for (const r of dhr) {
+    if (!Number.isInteger(r) || r < 1 || r > effectiveRows) {
+      return `doubleHeightRows entries must be whole row numbers between 1 and ${effectiveRows}`;
+    }
+  }
+  return null;
+}
+
 // GET /api/racks/nfc/:id  — resolve a rack ID to its cellar (for NFC tag redirect)
 // Requires auth so only logged-in users can follow NFC links.
 router.get('/nfc/:id', requireAuth, async (req, res) => {
@@ -90,7 +123,11 @@ router.post('/', requireCellarAccess('editor'), async (req, res) => {
       rackData.type = type || 'grid';
       rackData.rows = rows || 4;
       rackData.cols = cols || 8;
-      if (typeConfig) rackData.typeConfig = typeConfig;
+      if (typeConfig) {
+        const dhrError = validateDoubleHeightRows(typeConfig, rackData.type, rackData.rows, false);
+        if (dhrError) return res.status(400).json({ error: dhrError });
+        rackData.typeConfig = typeConfig;
+      }
     }
 
     const rack = new Rack(rackData);
@@ -135,6 +172,18 @@ router.put('/:id', async (req, res) => {
       }
     } else if (type && !RACK_TYPES.includes(type)) {
       return res.status(400).json({ error: `Invalid rack type. Must be one of: ${RACK_TYPES.join(', ')}` });
+    }
+
+    // Validate double-height rows against the rack's effective (post-update)
+    // type/rows — the request may change any subset of the three fields.
+    if (typeConfig !== undefined && typeConfig !== null) {
+      const dhrError = validateDoubleHeightRows(
+        typeConfig,
+        type !== undefined ? type : rack.type,
+        rows !== undefined ? rows : rack.rows,
+        isModular !== undefined ? isModular : rack.isModular
+      );
+      if (dhrError) return res.status(400).json({ error: dhrError });
     }
 
     if (name !== undefined) rack.name = name;
