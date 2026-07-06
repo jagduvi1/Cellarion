@@ -439,6 +439,11 @@ async function searchBottles(query, {
     filters.push(`cellarId = "${cleanScopeIds[0]}"`);
   } else if (cleanScopeIds.length > 1) {
     filters.push(`cellarId IN ["${cleanScopeIds.join('","')}"]`);
+  } else if (scopeIds.length > 0) {
+    // A scope WAS requested but every id stripped to empty — push a filter that
+    // matches nothing rather than no filter at all (which would un-scope the
+    // search and leak across every cellar).
+    filters.push('cellarId = ""');
   }
   // Status filter: active (exclude consumed), consumed (only consumed), or all
   if (statusFilter === 'active') {
