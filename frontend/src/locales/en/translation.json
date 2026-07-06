@@ -672,7 +672,23 @@
     "rateThisBottle": "Rate this bottle",
     "tastingNote": "Tasting note",
     "tastingNotePlaceholder": "How was the wine?",
-    "loadingHistory": "Loading history..."
+    "loadingHistory": "Loading history...",
+    "addToWishlist": "Wishlist",
+    "addingToWishlist": "Adding…",
+    "onWishlist": "On wishlist",
+    "wishlistError": "Try again",
+    "viewBottleAria": "View {{name}}"
+  },
+
+  "cellarScope": {
+    "title": "Choose which cellars to show",
+    "thisCellar": "This cellar",
+    "allCellars": "All cellars",
+    "nCellars_one": "{{count}} cellar",
+    "nCellars_other": "{{count}} cellars",
+    "selectAll": "Select all",
+    "thisCellarOnly": "This cellar only",
+    "current": "Current"
   },
 
   "cellarAudit": {

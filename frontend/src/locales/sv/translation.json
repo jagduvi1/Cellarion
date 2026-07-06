@@ -672,7 +672,23 @@
     "rateThisBottle": "Betygsätt denna flaska",
     "tastingNote": "Smaknotering",
     "tastingNotePlaceholder": "Hur var vinet?",
-    "loadingHistory": "Laddar historik..."
+    "loadingHistory": "Laddar historik...",
+    "addToWishlist": "Önskelista",
+    "addingToWishlist": "Lägger till…",
+    "onWishlist": "På önskelistan",
+    "wishlistError": "Försök igen",
+    "viewBottleAria": "Visa {{name}}"
+  },
+
+  "cellarScope": {
+    "title": "Välj vilka källare som visas",
+    "thisCellar": "Denna källare",
+    "allCellars": "Alla källare",
+    "nCellars_one": "{{count}} källare",
+    "nCellars_other": "{{count}} källare",
+    "selectAll": "Välj alla",
+    "thisCellarOnly": "Endast denna källare",
+    "current": "Aktuell"
   },
 
   "cellarAudit": {

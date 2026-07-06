@@ -5,6 +5,9 @@ import { useAuth } from '../contexts/AuthContext';
 import RatingDisplay from '../components/RatingDisplay';
 import WineImage from '../components/WineImage';
 import BottleFilterModal from '../components/BottleFilterModal';
+import { addToWishlist } from '../api/wishlist';
+import { listCellars, getMultiCellarHistory } from '../api/cellars';
+import CellarScopePicker from '../components/CellarScopePicker';
 import './CellarDetail.css';
 import './CellarHistory.css';
 
@@ -34,6 +37,27 @@ function CellarHistory() {
   const [facetMeta, setFacetMeta] = useState(null);
   const [showFilterModal, setShowFilterModal] = useState(false);
 
+  // ── Cross-cellar scope: which cellars this history view spans (default: this one) ──
+  const [allCellars, setAllCellars] = useState([]);
+  const [scopeIds, setScopeIds] = useState([id]);
+  const scopeKey = scopeIds.join(',');
+  const isMulti = !(scopeIds.length === 1 && scopeIds[0] === id);
+
+  useEffect(() => {
+    listCellars(apiFetch)
+      .then(r => r.json())
+      .then(d => setAllCellars(d.cellars || []))
+      .catch(() => {});
+  }, [apiFetch]);
+
+  // Reset the scope to just this cellar whenever the user navigates to a
+  // different cellar's history.
+  useEffect(() => { setScopeIds([id]); }, [id]);
+
+  // Monotonic fetch token — only the most-recent fetch commits its result, so an
+  // out-of-order response from a superseded scope/filter can't overwrite newer data.
+  const fetchSeq = useRef(0);
+
   // Debounce search
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const searchTimer = useRef(null);
@@ -50,11 +74,15 @@ function CellarHistory() {
     filters.grapes.join(','), filters.vintage.join(',')
   ].join('|');
 
+  // `id` is included so navigating to another cellar whose scope key matches the
+  // current one still refetches; the fetch-seq guard drops the transient
+  // stale-scope response produced by the id→scope-reset.
   useEffect(() => {
     fetchHistory();
-  }, [id, filterKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [id, filterKey, scopeKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const fetchHistory = async () => {
+    const seq = ++fetchSeq.current;
     try {
       const params = new URLSearchParams();
       if (debouncedSearch) params.append('search', debouncedSearch);
@@ -62,12 +90,21 @@ function CellarHistory() {
         if (key === 'search') return;
         if (Array.isArray(val) && val.length > 0) params.append(key, val.join(','));
       });
-      const qs = params.toString();
-      const res = await apiFetch(`/api/cellars/${id}/history${qs ? `?${qs}` : ''}`);
+      const multi = !(scopeIds.length === 1 && scopeIds[0] === id);
+      let res;
+      if (multi) {
+        params.append('cellars', scopeIds.join(','));
+        res = await getMultiCellarHistory(apiFetch, params.toString());
+      } else {
+        const qs = params.toString();
+        res = await apiFetch(`/api/cellars/${id}/history${qs ? `?${qs}` : ''}`);
+      }
       const data = await res.json();
+      // Superseded by a newer fetch — drop this response.
+      if (seq !== fetchSeq.current) return;
       if (!res.ok) { setError(data.error || 'Failed to load history'); return; }
 
-      setCellar(data.cellar);
+      if (data.cellar) setCellar(data.cellar);
       setTotal(data.bottles.length);
       if (data.facets) setFacets(data.facets);
       if (data.baseFacets) setBaseFacets(data.baseFacets);
@@ -82,9 +119,9 @@ function CellarHistory() {
       });
       setGrouped(groups);
     } catch {
-      setError('Network error');
+      if (seq === fetchSeq.current) setError('Network error');
     } finally {
-      setLoading(false);
+      if (seq === fetchSeq.current) setLoading(false);
     }
   };
 
@@ -193,6 +230,14 @@ function CellarHistory() {
             <span className="filter-badge">{activeChips.length}</span>
           )}
         </button>
+        {allCellars.length > 1 && (
+          <CellarScopePicker
+            cellars={allCellars}
+            value={scopeIds}
+            currentCellarId={id}
+            onChange={setScopeIds}
+          />
+        )}
       </div>
 
       {/* Active filter chips */}
@@ -250,7 +295,7 @@ function CellarHistory() {
               </div>
               <div className="history-bottles">
                 {items.map(bottle => (
-                  <HistoryBottleCard key={bottle._id} bottle={bottle} cellarId={id} />
+                  <HistoryBottleCard key={bottle._id} bottle={bottle} cellarId={id} showCellarBadge={isMulti} />
                 ))}
               </div>
             </section>
@@ -268,20 +313,59 @@ function CellarHistory() {
   );
 }
 
-function HistoryBottleCard({ bottle, cellarId }) {
+function HistoryBottleCard({ bottle, cellarId, showCellarBadge = false }) {
   const { t } = useTranslation();
-  const { user } = useAuth();
+  const { apiFetch, user } = useAuth();
   const wine = bottle.wineDefinition;
+  // In the cross-cellar view each row belongs to its own cellar; fall back to
+  // the page's cellar id for the single-cellar view.
+  const linkCellarId = bottle.cellar || cellarId;
+  const cellarBadge = showCellarBadge && bottle.cellarName ? bottle.cellarName : null;
   const consumedDate = bottle.consumedAt
     ? new Date(bottle.consumedAt).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
     : null;
 
+  // One-tap add-to-wishlist: 'idle' → 'saving' → 'added' | 'error'.
+  const [wishState, setWishState] = useState('idle');
+
+  const handleAddToWishlist = async (e) => {
+    // The button is a sibling of the stretched-link overlay (not nested), but
+    // stop the event anyway so a stray bubble can never trigger navigation.
+    e.preventDefault();
+    e.stopPropagation();
+    if (!wine?._id || wishState === 'saving' || wishState === 'added') return;
+    setWishState('saving');
+    try {
+      const res = await addToWishlist(apiFetch, {
+        wineDefinitionId: wine._id,
+        vintage: bottle.vintage || undefined,
+      });
+      // 201 = created, 409 = already on the wishlist — both mean "it's there".
+      setWishState(res.ok || res.status === 409 ? 'added' : 'error');
+    } catch {
+      setWishState('error');
+    }
+  };
+
+  const wishLabel = wishState === 'added'
+    ? t('history.onWishlist')
+    : wishState === 'saving'
+      ? t('history.addingToWishlist')
+      : wishState === 'error'
+        ? t('history.wishlistError')
+        : t('history.addToWishlist');
+
   return (
-    <Link
-      to={`/cellars/${cellarId}/bottles/${bottle._id}`}
-      state={{ fromHistory: true }}
-      className={`history-bottle-card ${bottle.consumedReason || bottle.status}`}
-    >
+    <div className={`history-bottle-card ${bottle.consumedReason || bottle.status}`}>
+      {/* Stretched link: keeps the whole card an openable anchor while the
+          wishlist button lives beside it (no <button> nested inside an <a>). */}
+      <Link
+        to={`/cellars/${linkCellarId}/bottles/${bottle._id}`}
+        state={{ fromHistory: true }}
+        className="history-bottle-card__overlay"
+        aria-label={t('history.viewBottleAria', { name: wine?.name || t('common.unknownWine') })}
+      />
+
       <div className="history-bottle-main">
         <WineImage image={wine?.image} alt={wine?.name} className="history-bottle-image" />
         <div className="history-bottle-info">
@@ -292,8 +376,36 @@ function HistoryBottleCard({ bottle, cellarId }) {
             {consumedDate && <span>· {consumedDate}</span>}
             {bottle.price && <span>· {t('history.paidLabel')} {bottle.price} {bottle.currency}</span>}
           </div>
+          {cellarBadge && (
+            <span className="history-cellar-badge">
+              <span
+                className="history-cellar-badge-dot"
+                style={bottle.cellarColor ? { background: bottle.cellarColor } : undefined}
+                aria-hidden="true"
+              />
+              {cellarBadge}
+            </span>
+          )}
         </div>
-        <svg className="history-bottle-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+        <div className="history-bottle-main-right">
+          {wine?._id && (
+            <button
+              type="button"
+              className={`history-add-wishlist-btn is-${wishState}`}
+              onClick={handleAddToWishlist}
+              disabled={wishState === 'saving' || wishState === 'added'}
+              title={wishState === 'added' ? t('history.onWishlist') : t('history.addToWishlist')}
+            >
+              {wishState === 'added' ? (
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+              ) : (
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+              )}
+              <span className="history-add-wishlist-label">{wishLabel}</span>
+            </button>
+          )}
+          <svg className="history-bottle-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+        </div>
       </div>
 
       {/* Consumption details */}
@@ -308,7 +420,7 @@ function HistoryBottleCard({ bottle, cellarId }) {
           <p className="history-note">"{bottle.consumedNote}"</p>
         )}
       </div>
-    </Link>
+    </div>
   );
 }
 

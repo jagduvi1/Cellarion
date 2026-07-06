@@ -128,6 +128,258 @@ async function loadGroupedBottlePage({ cellarId, excludeSet, sortField, sortDir,
   };
 }
 
+// ── Cross-cellar (multi-select) query engine ──────────────────────────────
+// Powers the "search across several cellars at once" views. Given a set of
+// already-access-checked cellar ids, it mirrors the single-cellar bottle/history
+// routes' search/filter/sort/maturity semantics, MINUS grouping and rack
+// exclusion (both single-cellar concepts). Returns a flat, paginated list; the
+// caller tags each bottle with which cellar it lives in.
+
+// Resolve every cellar the user can read (owned + shared), as lean docs.
+async function resolveAccessibleCellars(userId) {
+  return Cellar.find({
+    $or: [{ user: userId }, { 'members.user': userId }],
+    deletedAt: null,
+  }).lean();
+}
+
+const MATURITY_RANK_MULTI = { declining: 0, late: 1, peak: 2, early: 3, 'not-ready': 4 };
+
+async function queryBottlesAcrossCellars(req, { cellarIds, statusFilter, paginate = true }) {
+  const {
+    search, type, country, region, grapes, vintage,
+    minRating, maxRating, maturity: maturityFilter, sort = '-createdAt',
+  } = req.query;
+  const { limit, offset: skip } = parsePagination(req.query, { limit: 30, maxLimit: 200 });
+  const { isValidObjectId } = mongoose;
+  const sortField = sort.startsWith('-') ? sort.substring(1) : sort;
+  const sortDir = sort.startsWith('-') ? -1 : 1;
+  const grapeIds = grapes
+    ? String(grapes).split(',').map(g => g.trim()).filter(isValidObjectId)
+    : [];
+  const hasMeiliFilters = !!(search || type || country || region || grapes || vintage);
+  const needsMaturity = statusFilter !== 'consumed' && !!(maturityFilter || sortField === 'maturity');
+  const statusMongo = statusFilter === 'consumed'
+    ? { $in: CONSUMED_STATUSES }
+    : { $nin: CONSUMED_STATUSES };
+  const objectIds = cellarIds.map(id => new mongoose.Types.ObjectId(id));
+
+  let bottles;
+  let usedMeili = false;
+
+  // ── PRIMARY: Meilisearch across the cellar set (typo tolerance) ──
+  if (searchService.getIsAvailable() && hasMeiliFilters) {
+    try {
+      const meiliResult = await searchService.searchBottles(search || '', {
+        cellarIds,
+        type: type || undefined,
+        countryId: country || undefined,
+        regionId: region || undefined,
+        grapeIds: grapeIds.length > 0 ? grapeIds : undefined,
+        vintage: vintage || undefined,
+        statusFilter,
+        sort,
+        limit: 10000,
+        offset: 0,
+      });
+      const ids = meiliResult.ids;
+      if (ids.length === 0) {
+        bottles = [];
+      } else {
+        bottles = await Bottle.find({ _id: { $in: ids } }).populate(WINE_POPULATE_LIST).lean();
+        const order = new Map(ids.map((id, i) => [id, i]));
+        bottles.sort((a, b) => (order.get(a._id.toString()) ?? 0) - (order.get(b._id.toString()) ?? 0));
+      }
+      usedMeili = true;
+    } catch {
+      // fall through to MongoDB
+    }
+  }
+
+  // ── FALLBACK: MongoDB + in-memory (Meili unavailable or errored) ──
+  if (!usedMeili) {
+    const filter = { cellar: { $in: objectIds }, status: statusMongo };
+    if (vintage) {
+      const vs = String(vintage).split(',').map(v => v.trim()).filter(Boolean);
+      filter.vintage = vs.length === 1 ? vs[0] : { $in: vs };
+    }
+    const wdFilter = {};
+    if (country) {
+      const ids = String(country).split(',').map(c => c.trim()).filter(isValidObjectId);
+      if (ids.length === 1) wdFilter.country = ids[0];
+      else if (ids.length > 1) wdFilter.country = { $in: ids };
+    }
+    if (region) {
+      const ids = String(region).split(',').map(r => r.trim()).filter(isValidObjectId);
+      if (ids.length === 1) wdFilter.region = ids[0];
+      else if (ids.length > 1) wdFilter.region = { $in: ids };
+    }
+    if (type) {
+      const types = String(type).split(',').map(t => t.trim()).filter(Boolean);
+      wdFilter.type = types.length === 1 ? types[0] : { $in: types };
+    }
+    if (grapeIds.length > 0) wdFilter.grapes = { $in: grapeIds };
+    if (Object.keys(wdFilter).length > 0) {
+      const matchingWdIds = await WineDefinition.find(wdFilter).distinct('_id');
+      if (matchingWdIds.length === 0) return { items: [], total: 0, limit, skip, maturityStatusMap: null };
+      filter.wineDefinition = { $in: matchingWdIds };
+    }
+    bottles = await Bottle.find(filter)
+      .populate(WINE_POPULATE_LIST)
+      // Cap on the field we ultimately order by, so a >10k set keeps the right
+      // slice: newest-consumed for history, newest-added for active bottles.
+      .sort(statusFilter === 'consumed' ? { consumedAt: -1 } : { createdAt: -1 })
+      .limit(10000)
+      .lean();
+    if (search) {
+      const stripAccents = (s) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      const words = stripAccents(search.toLowerCase()).split(/\s+/).filter(Boolean);
+      bottles = bottles.filter(b => {
+        const allText = [
+          b.wineDefinition?.name, b.wineDefinition?.producer, b.notes, b.location, b.consumedNote,
+          b.wineDefinition?.country?.name, b.wineDefinition?.region?.name,
+          b.wineDefinition?.appellation, b.wineDefinition?.type,
+          ...(b.wineDefinition?.grapes || []).map(g => g.name),
+        ].filter(Boolean).map(s => stripAccents(s.toLowerCase())).join(' ');
+        return words.every(word => allText.includes(word));
+      });
+    }
+  }
+
+  // ── Shared post-filters (rating + maturity), applied to both paths ──
+  if (minRating) {
+    const min = parseFloat(minRating);
+    bottles = bottles.filter(b => b.rating && toNormalized(b.rating, b.ratingScale || '5') >= min);
+  }
+  if (maxRating) {
+    const max = parseFloat(maxRating);
+    bottles = bottles.filter(b => b.rating && toNormalized(b.rating, b.ratingScale || '5') <= max);
+  }
+  let maturityStatusMap;
+  if (needsMaturity) {
+    const profileMap = await buildProfileMap(bottles);
+    maturityStatusMap = new Map();
+    for (const b of bottles) maturityStatusMap.set(b._id.toString(), classifyMaturity(b, profileMap));
+  }
+  if (maturityFilter && maturityStatusMap) {
+    bottles = maturityFilter === 'none'
+      ? bottles.filter(b => maturityStatusMap.get(b._id.toString()) == null)
+      : bottles.filter(b => maturityStatusMap.get(b._id.toString()) === maturityFilter);
+  }
+
+  // ── Sort ──
+  if (statusFilter === 'consumed') {
+    // History is a chronological view — newest-consumed first, always.
+    bottles.sort((a, b) => new Date(b.consumedAt || 0) - new Date(a.consumedAt || 0));
+  } else if (sortField === 'name') {
+    bottles.sort((a, b) => {
+      const av = (a.wineDefinition?.name || '').toLowerCase();
+      const bv = (b.wineDefinition?.name || '').toLowerCase();
+      return av < bv ? -sortDir : av > bv ? sortDir : 0;
+    });
+  } else if (sortField === 'maturity' && maturityStatusMap) {
+    bottles.sort((a, b) => {
+      const av = maturityStatusMap.get(a._id.toString());
+      const bv = maturityStatusMap.get(b._id.toString());
+      return ((av != null ? MATURITY_RANK_MULTI[av] : 5) - (bv != null ? MATURITY_RANK_MULTI[bv] : 5)) * sortDir;
+    });
+  } else if (!usedMeili) {
+    // Meili already sorted its supported fields; the Mongo path sorts here.
+    bottles.sort((a, b) => {
+      const av = a[sortField] ?? 0;
+      const bv = b[sortField] ?? 0;
+      return av < bv ? -sortDir : av > bv ? sortDir : 0;
+    });
+  }
+
+  const total = bottles.length;
+  const items = paginate ? bottles.slice(skip, skip + limit) : bottles;
+  return { items, total, limit, skip, maturityStatusMap };
+}
+
+// Attach the same per-bottle image fields the single-cellar /:id route adds, so
+// the cross-cellar bottle list honours user-chosen default images and the
+// uploader's own not-yet-approved photos (BottleCard reads defaultImageUrl /
+// pendingImageUrl). Returns a new array; input bottles are lean.
+async function attachBottleImageUrls(bottles, userId) {
+  if (!bottles.length) return bottles;
+  const bottleIds = bottles.map(b => b._id);
+
+  const pendingImages = await BottleImage.find({
+    bottle: { $in: bottleIds },
+    uploadedBy: userId,
+    status: { $in: ['uploaded', 'processing', 'processed'] },
+  }).sort({ createdAt: -1 }).lean();
+  const pendingByBottle = {};
+  for (const img of pendingImages) {
+    const key = img.bottle.toString();
+    if (!pendingByBottle[key]) pendingByBottle[key] = img.processedUrl || img.originalUrl;
+  }
+
+  const defaultImageIds = bottles.filter(b => b.defaultImage).map(b => b.defaultImage);
+  const defaultImages = defaultImageIds.length > 0
+    ? await BottleImage.find({ _id: { $in: defaultImageIds } }).lean()
+    : [];
+  const defaultImageMap = {};
+  for (const img of defaultImages) {
+    defaultImageMap[img._id.toString()] = img.processedUrl || img.originalUrl;
+  }
+
+  return bottles.map(b => ({
+    ...b,
+    pendingImageUrl: pendingByBottle[b._id.toString()] || null,
+    defaultImageUrl: b.defaultImage ? (defaultImageMap[b.defaultImage.toString()] || null) : null,
+  }));
+}
+
+// Facets + facetMeta across the cellar set, for the shared filter modal.
+async function facetsAcrossCellars(req, { cellarIds, statusFilter }) {
+  const { search, type, country, region, grapes, vintage } = req.query;
+  const { isValidObjectId } = mongoose;
+  const grapeIds = grapes
+    ? String(grapes).split(',').map(g => g.trim()).filter(isValidObjectId)
+    : [];
+  const hasMeiliFilters = !!(search || type || country || region || grapes || vintage);
+  const statusMongo = statusFilter === 'consumed'
+    ? { $in: CONSUMED_STATUSES }
+    : { $nin: CONSUMED_STATUSES };
+
+  let facets = null, baseFacets = null, facetMeta = null;
+  if (searchService.getIsAvailable()) {
+    try {
+      const baseResult = await searchService.searchBottles('', { cellarIds, statusFilter, limit: 0, offset: 0 });
+      baseFacets = baseResult.facetDistribution || null;
+      if (hasMeiliFilters) {
+        const filteredResult = await searchService.searchBottles(search || '', {
+          cellarIds, statusFilter,
+          type: type || undefined, countryId: country || undefined, regionId: region || undefined,
+          grapeIds: grapeIds.length > 0 ? grapeIds : undefined, vintage: vintage || undefined,
+          limit: 0, offset: 0,
+        });
+        facets = filteredResult.facetDistribution || null;
+      } else {
+        facets = baseFacets;
+      }
+    } catch { /* skip facets */ }
+  }
+  if (baseFacets || facets) {
+    const objectIds = cellarIds.map(id => new mongoose.Types.ObjectId(id));
+    const wdIds = await Bottle.find({ cellar: { $in: objectIds }, status: statusMongo }).distinct('wineDefinition');
+    const wds = await WineDefinition.find({ _id: { $in: wdIds } })
+      .populate('country', 'name').populate('region', 'name').populate('grapes', 'name').lean();
+    const countries = {}, regions = {}, grapesMap = {};
+    for (const wd of wds) {
+      if (wd.country?.name && wd.country._id) countries[wd.country.name] = wd.country._id.toString();
+      if (wd.region?.name && wd.region._id) regions[wd.region.name] = wd.region._id.toString();
+      for (const g of (wd.grapes || [])) {
+        if (g.name && g._id) grapesMap[g.name] = g._id.toString();
+      }
+    }
+    facetMeta = { countries, regions, grapes: grapesMap };
+  }
+  return { facets, baseFacets, facetMeta };
+}
+
 // All routes require authentication
 router.use(requireAuth);
 
@@ -182,6 +434,91 @@ router.post('/', async (req, res) => {
     }
     console.error('Create cellar error:', error);
     res.status(500).json({ error: 'Failed to create cellar' });
+  }
+});
+
+// ── Cross-cellar (multi-select) views ──────────────────────────────────────
+// NOTE: these MUST be declared before the "/:id*" routes below, otherwise
+// Express would treat "multi" as an :id. Access is enforced server-side: only
+// cellars the user owns or is a member of are ever searched, so an unknown or
+// unauthorized id in ?cellars is silently dropped (never leaks another user's
+// bottles).
+
+// GET /api/cellars/multi/bottles?cellars=id1,id2,...&search=&type=&...
+// Active bottles across the selected cellars (flat list, no grouping/racks).
+router.get('/multi/bottles', async (req, res) => {
+  try {
+    const requested = String(req.query.cellars || '')
+      .split(',').map(s => s.trim()).filter(isValidId);
+    if (requested.length === 0) return res.status(400).json({ error: 'No cellars selected' });
+
+    const accessible = await resolveAccessibleCellars(req.user.id);
+    const accessibleMap = new Map(accessible.map(c => [c._id.toString(), c]));
+    const cellarIds = [...new Set(requested)].filter(id => accessibleMap.has(id));
+    if (cellarIds.length === 0) return res.status(403).json({ error: 'No accessible cellars selected' });
+
+    const result = await queryBottlesAcrossCellars(req, { cellarIds, statusFilter: 'active' });
+    const { total, limit, skip, maturityStatusMap } = result;
+    let items = result.items;
+    const { facets, baseFacets, facetMeta } = await facetsAcrossCellars(req, { cellarIds, statusFilter: 'active' });
+
+    // Match the single-cellar route's per-bottle enrichment (default/pending
+    // images), then tag each bottle with the cellar it lives in + maturity.
+    items = await attachBottleImageUrls(items, req.user.id);
+    for (const b of items) {
+      if (maturityStatusMap) b.maturityStatus = maturityStatusMap.get(b._id.toString()) || null;
+      const c = accessibleMap.get(String(b.cellar));
+      b.cellarName = c?.name || null;
+      b.cellarColor = c ? getUserColor(c, req.user.id) : null;
+    }
+
+    res.json({
+      cellars: cellarIds.map(id => {
+        const c = accessibleMap.get(id);
+        return { _id: id, name: c.name, userColor: getUserColor(c, req.user.id) };
+      }),
+      bottles: { count: items.length, total, limit, skip, items },
+      facets, baseFacets, facetMeta,
+    });
+  } catch (error) {
+    console.error('Multi-cellar bottles error:', error);
+    res.status(500).json({ error: 'Failed to load bottles' });
+  }
+});
+
+// GET /api/cellars/multi/history?cellars=id1,id2,...&search=&type=&...
+// Consumed/gifted/sold bottles across the selected cellars (newest first).
+router.get('/multi/history', async (req, res) => {
+  try {
+    const requested = String(req.query.cellars || '')
+      .split(',').map(s => s.trim()).filter(isValidId);
+    if (requested.length === 0) return res.status(400).json({ error: 'No cellars selected' });
+
+    const accessible = await resolveAccessibleCellars(req.user.id);
+    const accessibleMap = new Map(accessible.map(c => [c._id.toString(), c]));
+    const cellarIds = [...new Set(requested)].filter(id => accessibleMap.has(id));
+    if (cellarIds.length === 0) return res.status(403).json({ error: 'No accessible cellars selected' });
+
+    const { items } = await queryBottlesAcrossCellars(req, { cellarIds, statusFilter: 'consumed', paginate: false });
+    const { facets, baseFacets, facetMeta } = await facetsAcrossCellars(req, { cellarIds, statusFilter: 'consumed' });
+
+    for (const b of items) {
+      const c = accessibleMap.get(String(b.cellar));
+      b.cellarName = c?.name || null;
+      b.cellarColor = c ? getUserColor(c, req.user.id) : null;
+    }
+
+    res.json({
+      cellars: cellarIds.map(id => {
+        const c = accessibleMap.get(id);
+        return { _id: id, name: c.name, userColor: getUserColor(c, req.user.id) };
+      }),
+      bottles: items,
+      facets, baseFacets, facetMeta,
+    });
+  } catch (error) {
+    console.error('Multi-cellar history error:', error);
+    res.status(500).json({ error: 'Failed to load history' });
   }
 });
 

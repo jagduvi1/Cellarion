@@ -404,6 +404,7 @@ async function bulkIndexBottles(bottleIds) {
 
 async function searchBottles(query, {
   cellarId,
+  cellarIds,
   type,
   countryId,
   regionId,
@@ -424,11 +425,21 @@ async function searchBottles(query, {
   const VALID_TYPES = ['red', 'white', 'rosé', 'sparkling', 'dessert', 'fortified'];
   const filters = [];
 
-  // Scope to cellar. cellarId is server-set/access-checked, but strip any
-  // double-quote defensively so it can never break out of the filter string.
-  // (We strip rather than drop on invalid input — dropping would un-scope the
-  // search and leak across cellars.)
-  if (cellarId) filters.push(`cellarId = "${String(cellarId).replace(/"/g, '')}"`);
+  // Scope to cellar(s). cellarId / cellarIds are server-set/access-checked, but
+  // strip any double-quote defensively so a value can never break out of the
+  // filter string. (We strip rather than drop on invalid input — dropping would
+  // un-scope the search and leak across cellars.)
+  // `cellarIds` (array) scopes across a set of cellars for the cross-cellar view;
+  // `cellarId` (single) is kept for the per-cellar callers.
+  const scopeIds = Array.isArray(cellarIds) && cellarIds.length > 0
+    ? cellarIds
+    : (cellarId ? [cellarId] : []);
+  const cleanScopeIds = scopeIds.map(id => String(id).replace(/"/g, '')).filter(Boolean);
+  if (cleanScopeIds.length === 1) {
+    filters.push(`cellarId = "${cleanScopeIds[0]}"`);
+  } else if (cleanScopeIds.length > 1) {
+    filters.push(`cellarId IN ["${cleanScopeIds.join('","')}"]`);
+  }
   // Status filter: active (exclude consumed), consumed (only consumed), or all
   if (statusFilter === 'active') {
     filters.push(`status NOT IN ["${CONSUMED_STATUSES.join('","')}"]`);
