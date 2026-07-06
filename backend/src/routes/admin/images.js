@@ -2,6 +2,7 @@ const express = require('express');
 const { requireAuth, requireRole } = require('../../middleware/auth');
 const BottleImage = require('../../models/BottleImage');
 const WineDefinition = require('../../models/WineDefinition');
+const Bottle = require('../../models/Bottle');
 const searchService = require('../../services/search');
 const fs = require('fs');
 const { reprocessAllImages, safeUploadPath } = require('../../services/imageProcessor');
@@ -49,6 +50,97 @@ router.get('/', async (req, res) => {
   } catch (error) {
     console.error('Get admin images error:', error);
     res.status(500).json({ error: 'Failed to get images' });
+  }
+});
+
+// GET /api/admin/images/by-wine — wine-centric curation view.
+// Lists wines that have 2+ non-rejected, file-backed images to choose between,
+// with all of each wine's images so an admin can pick the official one.
+router.get('/by-wine', async (req, res) => {
+  try {
+    const { limit, offset, page } = parsePagination(req.query, { limit: 12, maxLimit: 50 });
+
+    // An image belongs to a wine directly (wineDefinition) or via its bottle.
+    const HAS_FILE = { $or: [{ processedUrl: { $ne: null } }, { originalUrl: { $ne: null } }] };
+    const basePipeline = [
+      { $match: { status: { $ne: 'rejected' }, ...HAS_FILE } },
+      { $lookup: { from: 'bottles', localField: 'bottle', foreignField: '_id', as: '_b' } },
+      { $addFields: { effWine: { $ifNull: ['$wineDefinition', { $arrayElemAt: ['$_b.wineDefinition', 0] }] } } },
+      { $match: { effWine: { $ne: null } } },
+      { $group: {
+        _id: '$effWine',
+        imageCount: { $sum: 1 },
+        hasOfficial: { $max: { $cond: ['$assignedToWine', 1, 0] } },
+      } },
+      { $match: { imageCount: { $gte: 2 } } },
+    ];
+
+    const [countRes] = await BottleImage.aggregate([...basePipeline, { $count: 'total' }]);
+    const total = countRes?.total || 0;
+
+    const groups = await BottleImage.aggregate([
+      ...basePipeline,
+      // Wines still missing an official image first, then the most-contested.
+      { $sort: { hasOfficial: 1, imageCount: -1, _id: 1 } },
+      { $skip: offset },
+      { $limit: limit },
+    ]);
+
+    const wineIds = groups.map(g => g._id);
+    const wines = await WineDefinition.find({ _id: { $in: wineIds } })
+      .select('name producer type image imageCredit')
+      .lean();
+    const wineMap = new Map(wines.map(w => [w._id.toString(), w]));
+
+    // Bottles for these wines: their ids link bottle-only images, and their
+    // count is shown per wine.
+    const bottles = await Bottle.find({ wineDefinition: { $in: wineIds } })
+      .select('_id wineDefinition').lean();
+    const bottleToWine = new Map(bottles.map(b => [b._id.toString(), b.wineDefinition.toString()]));
+    const bottleCount = {};
+    for (const b of bottles) {
+      const w = b.wineDefinition.toString();
+      bottleCount[w] = (bottleCount[w] || 0) + 1;
+    }
+
+    const images = await BottleImage.find({
+      status: { $ne: 'rejected' },
+      $and: [
+        HAS_FILE,
+        { $or: [{ wineDefinition: { $in: wineIds } }, { bottle: { $in: bottles.map(b => b._id) } }] },
+      ],
+    })
+      .populate('uploadedBy', 'username')
+      .sort({ assignedToWine: -1, createdAt: -1 })
+      .lean();
+
+    const imagesByWine = new Map();
+    for (const img of images) {
+      const wid = (img.wineDefinition && img.wineDefinition.toString())
+        || (img.bottle && bottleToWine.get(img.bottle.toString()));
+      if (!wid || !wineMap.has(wid)) continue;
+      if (!imagesByWine.has(wid)) imagesByWine.set(wid, []);
+      imagesByWine.get(wid).push(img);
+    }
+
+    const items = groups
+      // Skip wines that no longer exist (deleted with dangling images) — they'd
+      // render as blank, image-less cards.
+      .filter(g => wineMap.has(g._id.toString()) && (imagesByWine.get(g._id.toString()) || []).length > 0)
+      .map(g => {
+        const wid = g._id.toString();
+        return {
+          wine: wineMap.get(wid),
+          imageCount: g.imageCount,
+          bottleCount: bottleCount[wid] || 0,
+          images: imagesByWine.get(wid),
+        };
+      });
+
+    res.json({ items, total, page, limit });
+  } catch (error) {
+    console.error('Get images by-wine error:', error);
+    res.status(500).json({ error: 'Failed to load wines by image' });
   }
 });
 
@@ -330,6 +422,63 @@ router.put('/:id/assign-to-wine', async (req, res) => {
   } catch (error) {
     console.error('Assign image error:', error);
     res.status(500).json({ error: 'Failed to assign image to wine' });
+  }
+});
+
+// PUT /api/admin/images/:id/set-official — one-click "make this the wine's image".
+// Unlike assign-to-wine, this promotes ANY non-rejected image (approving +
+// making it public in the same step), so an admin can curate directly from the
+// by-wine view without a separate approval pass.
+router.put('/:id/set-official', async (req, res) => {
+  try {
+    if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
+    const image = await BottleImage.findById(req.params.id).populate('bottle', 'wineDefinition');
+    if (!image) return res.status(404).json({ error: 'Image not found' });
+    if (image.status === 'rejected') {
+      return res.status(400).json({ error: 'Rejected images cannot be set as official' });
+    }
+
+    const imageUrl = image.processedUrl || image.originalUrl;
+    if (!imageUrl) return res.status(400).json({ error: 'Image has no file to use' });
+
+    const wineDefId = image.wineDefinition || image.bottle?.wineDefinition;
+    if (!wineDefId) return res.status(400).json({ error: 'Image is not linked to a wine' });
+
+    // Demote the wine's current official image, if any (and not this one).
+    await BottleImage.updateMany(
+      { wineDefinition: wineDefId, assignedToWine: true, _id: { $ne: image._id } },
+      { assignedToWine: false }
+    );
+
+    const wasOfficial = image.assignedToWine;
+    image.wineDefinition = wineDefId;
+    image.assignedToWine = true;
+    image.status = 'approved';
+    image.visibility = 'public';
+    if (!image.reviewedBy) {
+      image.reviewedBy = req.user.id;
+      image.reviewedAt = new Date();
+    }
+    // Drop the now-redundant original once a processed version exists, same as
+    // the approve path — imageUrl was resolved above before this nulls it.
+    deleteOriginalFile(image);
+    await image.save();
+
+    await WineDefinition.findByIdAndUpdate(wineDefId, { image: imageUrl, imageCredit: image.credit || null });
+    searchService.indexWine(wineDefId);
+
+    // Reward the uploader the first time their image becomes official.
+    if (!wasOfficial) incrementCred(image.uploadedBy, 'image_assigned_official').catch(() => {});
+
+    logAudit(req, 'admin.image.setOfficial',
+      { type: 'image', id: image._id },
+      { wineDefinitionId: wineDefId }
+    );
+
+    res.json({ ok: true });
+  } catch (error) {
+    console.error('Set official image error:', error);
+    res.status(500).json({ error: 'Failed to set official image' });
   }
 });
 

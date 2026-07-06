@@ -4,11 +4,13 @@ import { useAuth } from '../contexts/AuthContext';
 import { adminGetImages, adminApproveImage, adminRejectImage, adminUnapproveImage, adminAssignImageToWine, adminSetImageVisibility } from '../api/admin';
 import AuthImage from '../components/AuthImage';
 import { API_URL } from '../api/apiConstants';
+import AdminImagesByWine from './AdminImagesByWine';
 import './AdminImages.css';
 
 function AdminImages() {
   const { t } = useTranslation();
   const { apiFetch } = useAuth();
+  const [view, setView] = useState('queue'); // 'queue' | 'byWine'
   const [images, setImages] = useState([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -163,9 +165,27 @@ function AdminImages() {
     <div className="admin-images-page">
       <div className="page-header">
         <h1>{t('admin.images.title')}</h1>
-        <span className="image-count">{t('admin.images.image', { count: total })}</span>
+        {view === 'queue' && <span className="image-count">{t('admin.images.image', { count: total })}</span>}
       </div>
 
+      <div className="admin-images-tabs">
+        <button
+          className={`filter-btn ${view === 'queue' ? 'active' : ''}`}
+          onClick={() => setView('queue')}
+        >
+          {t('admin.images.tabQueue')}
+        </button>
+        <button
+          className={`filter-btn ${view === 'byWine' ? 'active' : ''}`}
+          onClick={() => setView('byWine')}
+        >
+          {t('admin.images.tabByWine')}
+        </button>
+      </div>
+
+      {view === 'byWine' ? (
+        <AdminImagesByWine />
+      ) : (
       <div className="admin-layout">
         {/* Left panel: image list */}
         <div className="images-panel">
@@ -395,6 +415,7 @@ function AdminImages() {
           )}
         </div>
       </div>
+      )}
     </div>
   );
 }

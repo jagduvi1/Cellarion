@@ -912,7 +912,20 @@
       "assigning": "Assigning...",
       "assignBtn": "Assign as Official Image",
       "enterWineId": "Please enter a wine definition ID",
-      "unapprove": "Unapprove"
+      "unapprove": "Unapprove",
+      "tabQueue": "Status queue",
+      "tabByWine": "By wine",
+      "byWineEmpty": "No wines have 2 or more images to choose between yet.",
+      "byWineCount_one": "{{count}} wine with multiple images",
+      "byWineCount_other": "{{count}} wines with multiple images",
+      "bottleCount_one": "{{count}} bottle",
+      "bottleCount_other": "{{count}} bottles",
+      "imageCountLabel_one": "{{count}} image",
+      "imageCountLabel_other": "{{count}} images",
+      "official": "Official",
+      "officialSet": "Official set",
+      "noOfficial": "No official",
+      "setOfficial": "Set as official"
     },
     "audit": {
       "title": "Audit Log",

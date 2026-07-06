@@ -912,7 +912,20 @@
       "assigning": "Tilldelar...",
       "assignBtn": "Tilldela som officiell bild",
       "enterWineId": "Ange ett vindefinitions-ID",
-      "unapprove": "Ångra godkännande"
+      "unapprove": "Ångra godkännande",
+      "tabQueue": "Statuskö",
+      "tabByWine": "Per vin",
+      "byWineEmpty": "Inga viner har två eller fler bilder att välja mellan ännu.",
+      "byWineCount_one": "{{count}} vin med flera bilder",
+      "byWineCount_other": "{{count}} viner med flera bilder",
+      "bottleCount_one": "{{count}} flaska",
+      "bottleCount_other": "{{count}} flaskor",
+      "imageCountLabel_one": "{{count}} bild",
+      "imageCountLabel_other": "{{count}} bilder",
+      "official": "Officiell",
+      "officialSet": "Officiell vald",
+      "noOfficial": "Ingen officiell",
+      "setOfficial": "Välj som officiell"
     },
     "audit": {
       "title": "Aktivitetslogg",
