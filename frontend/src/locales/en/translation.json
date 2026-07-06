@@ -462,6 +462,40 @@
     "suggestGrapesConfirm": "Your suggestion has been submitted for review. Our team will add the verified varieties to the wine registry."
   },
 
+  "bottles": {
+    "title": "All bottles",
+    "loading": "Loading…",
+    "summary": "{{count}} of {{total}} bottles",
+    "backToStats": "← Back to Statistics",
+    "removeFilter": "Remove this filter",
+    "clearAll": "Clear all",
+    "noneForFilters": "No bottles match those filters.",
+    "noneInCellar": "No bottles in your cellars yet.",
+    "prev": "Previous",
+    "next": "Next",
+    "pageOf": "Page {{page}} of {{total}}",
+    "chipType": "Type: {{value}}",
+    "chipCountry": "Country: {{value}}",
+    "chipRegion": "Region: {{value}}",
+    "chipGrape": "Grape: {{value}}",
+    "chipVintage": "Vintage: {{value}}",
+    "chipProducer": "Producer: {{value}}",
+    "chipSize": "Size: {{value}}",
+    "chipRating": "Rating: {{value}}+",
+    "chipMaturity": "Maturity: {{value}}",
+    "chipSearch": "Search: \"{{value}}\"",
+    "chipPurchased": "Purchased: {{value}}",
+    "chipConsumed": "Consumed: {{value}}",
+    "chipStatus": "Status: {{value}}",
+    "status_active": "Active",
+    "status_consumed": "Consumed",
+    "status_all": "All",
+    "status_drank": "Drunk",
+    "status_gifted": "Gifted",
+    "status_sold": "Sold",
+    "status_other": "Other"
+  },
+
   "racks": {
     "title": "Storage Racks",
     "backToCellar": "← Back to Cellar",
@@ -1576,7 +1610,11 @@
     "statusSeen": "Seen",
     "statusAddedToWishlist": "Added to wishlist",
     "delete": "Delete",
-    "confirmDelete": "Delete this recommendation?"
+    "confirmDelete": "Delete this recommendation?",
+    "loadMore": "Load more",
+    "alreadyOnWishlist": "This wine is already on your wishlist.",
+    "addFailed": "Could not add to wishlist. Please try again.",
+    "wineRemoved": "This wine is no longer in the registry"
   },
   "wineDetail": {
     "appellation": "Appellation",
@@ -1671,7 +1709,8 @@
     "promptText": "Would you like to capture this moment in your wine journal?",
     "yesAddEntry": "Yes, add journal entry",
     "notNow": "Not now",
-    "dontAskAgain": "Don't ask again"
+    "dontAskAgain": "Don't ask again",
+    "loadMore": "Load more"
   },
   "restock": {
     "title": "Smart Restock",

@@ -547,6 +547,11 @@ function tryParseDate(str) {
   if (/^\d{4}$/.test(str.trim())) {
     return `${str.trim()}-01-01`;
   }
+  // Already ISO (date-only or full timestamp): keep the calendar date as-is.
+  // Date-only ISO strings parse as UTC midnight, so round-tripping them
+  // through Date would shift the day for users west of UTC.
+  const iso = String(str).trim().match(/^(\d{4}-\d{2}-\d{2})(?:[T\s]|$)/);
+  if (iso) return iso[1];
   const d = new Date(str);
   if (isNaN(d.getTime())) return undefined;
   // Format from LOCAL date parts. Non-ISO strings ("10/30/2024") parse as
@@ -749,12 +754,14 @@ export function parseOenoExport(text) {
       notes: (cells[idx.note] || '').trim(),
       price: isNaN(cost) ? undefined : cost,
       currency: (cells[idx.currency] || '').trim() || undefined,
-      purchaseDate: (cells[idx.purchase] || '').trim() || undefined,
+      purchaseDate: tryParseDate((cells[idx.purchase] || '').trim()),
     };
 
     if (consumedAt) {
       baseItem.addToHistory = true;
-      baseItem.consumedAt = consumedAt;
+      // Normalise like the CSV/JSON paths do — parseOenoExport returns
+      // directly from parseAndMap, so its dates skip the shared fix-up loop.
+      baseItem.consumedAt = tryParseDate(consumedAt);
       baseItem.consumedReason = 'drank';
     }
 
@@ -879,8 +886,10 @@ export function parseAndMap(text, forceFormat) {
   for (const row of rows) {
     const mapped = mapper(row);
 
-    // Fix dates
+    // Normalise dates (mirror parseJSON)
     if (mapped.purchaseDate) mapped.purchaseDate = tryParseDate(mapped.purchaseDate);
+    if (mapped.consumedAt)   mapped.consumedAt   = tryParseDate(mapped.consumedAt);
+    if (mapped.dateAdded)    mapped.dateAdded    = tryParseDate(mapped.dateAdded);
 
     // Skip rows with no wine name and no producer
     if (!mapped.wineName && !mapped.producer) continue;

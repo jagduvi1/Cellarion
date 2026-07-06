@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import {
@@ -74,20 +74,30 @@ function AdminTaxonomy() {
     }
   };
 
+  // Monotonic fetch id: each fetch (tab switch, create/update/delete refresh)
+  // invalidates any still in-flight response, so a slow response for the
+  // previous tab can't render its documents under the new tab.
+  const fetchSeqRef = useRef(0);
+
   const fetchItems = async () => {
+    const seq = ++fetchSeqRef.current;
     if (activeTab === 'bottleSizes') { setItems([]); setLoading(false); return; }
     setLoading(true);
     setError(null);
     try {
       const res = await adminGetTaxonomy(apiFetch, endpoints[activeTab]);
       const data = await res.json();
+      if (seq !== fetchSeqRef.current) return; // stale — a newer fetch superseded this one
       if (res.ok) {
-        setItems(data.countries || data.regions || data.grapes || data.appellations || []);
+        // Index by the tab's expected key so a mismatched response shape
+        // can't populate the list with another tab's documents.
+        setItems(data[activeTab] || []);
       }
     } catch (err) {
+      if (seq !== fetchSeqRef.current) return;
       setError('Failed to load data');
     } finally {
-      setLoading(false);
+      if (seq === fetchSeqRef.current) setLoading(false);
     }
   };
 

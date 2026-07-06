@@ -12,6 +12,8 @@ const FILTER_KEYS = [
   'purchaseYear', 'consumedYear', 'status',
 ];
 
+// English fallbacks — the displayed labels come from the locale files
+// (statistics.typeLabels.* / bottles.status_*) via t() in chipLabels below.
 const TYPE_LABELS = {
   red: 'Red', white: 'White', 'rosé': 'Rosé', sparkling: 'Sparkling',
   dessert: 'Dessert', fortified: 'Fortified',
@@ -116,16 +118,21 @@ function Bottles() {
   // received, so we don't need an extra taxonomy fetch.
   const chipLabels = useMemo(() => {
     const labels = {};
-    if (filters.type) labels.type = `Type: ${TYPE_LABELS[filters.type] || filters.type}`;
+    if (filters.type) {
+      // Reuse the Statistics page's type labels so the chip matches the
+      // chart segment the user clicked.
+      const typeName = t(`statistics.typeLabels.${filters.type}`, TYPE_LABELS[filters.type] || filters.type);
+      labels.type = t('bottles.chipType', 'Type: {{value}}', { value: typeName });
+    }
     if (filters.country) {
       const name = data.items.find(b => b.wineDefinition?.country?._id === filters.country)
         ?.wineDefinition?.country?.name;
-      labels.country = `Country: ${name || filters.country}`;
+      labels.country = t('bottles.chipCountry', 'Country: {{value}}', { value: name || filters.country });
     }
     if (filters.region) {
       const name = data.items.find(b => b.wineDefinition?.region?._id === filters.region)
         ?.wineDefinition?.region?.name;
-      labels.region = `Region: ${name || filters.region}`;
+      labels.region = t('bottles.chipRegion', 'Region: {{value}}', { value: name || filters.region });
     }
     if (filters.grapes) {
       const ids = String(filters.grapes).split(',');
@@ -136,19 +143,22 @@ function Bottles() {
         }
         return id;
       });
-      labels.grapes = `Grape: ${names.join(', ')}`;
+      labels.grapes = t('bottles.chipGrape', 'Grape: {{value}}', { value: names.join(', ') });
     }
-    if (filters.vintage) labels.vintage = `Vintage: ${filters.vintage}`;
-    if (filters.producer) labels.producer = `Producer: ${filters.producer}`;
-    if (filters.bottleSize) labels.bottleSize = `Size: ${filters.bottleSize}`;
-    if (filters.minRating) labels.minRating = `Rating: ${filters.minRating}+`;
-    if (filters.maturity) labels.maturity = `Maturity: ${filters.maturity}`;
-    if (filters.search) labels.search = `Search: "${filters.search}"`;
-    if (filters.purchaseYear) labels.purchaseYear = `Purchased: ${filters.purchaseYear}`;
-    if (filters.consumedYear) labels.consumedYear = `Consumed: ${filters.consumedYear}`;
-    if (filters.status) labels.status = `Status: ${STATUS_LABELS[filters.status] || filters.status}`;
+    if (filters.vintage) labels.vintage = t('bottles.chipVintage', 'Vintage: {{value}}', { value: filters.vintage });
+    if (filters.producer) labels.producer = t('bottles.chipProducer', 'Producer: {{value}}', { value: filters.producer });
+    if (filters.bottleSize) labels.bottleSize = t('bottles.chipSize', 'Size: {{value}}', { value: filters.bottleSize });
+    if (filters.minRating) labels.minRating = t('bottles.chipRating', 'Rating: {{value}}+', { value: filters.minRating });
+    if (filters.maturity) labels.maturity = t('bottles.chipMaturity', 'Maturity: {{value}}', { value: filters.maturity });
+    if (filters.search) labels.search = t('bottles.chipSearch', 'Search: "{{value}}"', { value: filters.search });
+    if (filters.purchaseYear) labels.purchaseYear = t('bottles.chipPurchased', 'Purchased: {{value}}', { value: filters.purchaseYear });
+    if (filters.consumedYear) labels.consumedYear = t('bottles.chipConsumed', 'Consumed: {{value}}', { value: filters.consumedYear });
+    if (filters.status) {
+      const statusName = t(`bottles.status_${filters.status}`, STATUS_LABELS[filters.status] || filters.status);
+      labels.status = t('bottles.chipStatus', 'Status: {{value}}', { value: statusName });
+    }
     return labels;
-  }, [filters, data.items]);
+  }, [filters, data.items, t]);
 
   const chips = Object.entries(chipLabels);
   const total = data.total ?? 0;

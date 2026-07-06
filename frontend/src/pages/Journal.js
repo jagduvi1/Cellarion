@@ -8,6 +8,8 @@ import './Journal.css';
 
 const JournalEntryForm = lazy(() => import('../components/JournalEntryForm'));
 
+const PAGE_SIZE = 50; // backend caps journal pages at 50
+
 const OCCASION_ICONS = {
   dinner: '🍽',
   tasting: '🍷',
@@ -18,18 +20,22 @@ const OCCASION_ICONS = {
   other: '📝'
 };
 
+// Entry dates are date-only values stored as UTC midnight, so format and
+// group them in UTC — local-time methods would show the previous day for
+// users west of UTC.
 function formatDate(dateStr) {
   return new Date(dateStr).toLocaleDateString(undefined, {
     weekday: 'long',
     year: 'numeric',
     month: 'long',
-    day: 'numeric'
+    day: 'numeric',
+    timeZone: 'UTC'
   });
 }
 
 function getMonthKey(dateStr) {
   const d = new Date(dateStr);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
 }
 
 function formatMonth(key) {
@@ -43,6 +49,7 @@ export default function Journal() {
   const [entries, setEntries] = useState([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [formOpen, setFormOpen] = useState(false);
   const [editEntry, setEditEntry] = useState(null);
   const [search, setSearch] = useState('');
@@ -65,23 +72,29 @@ export default function Journal() {
     fetchEntries();
   }, [debouncedSearch, occasion]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const fetchEntries = async () => {
+  const fetchEntries = async (loadMore = false) => {
     const seq = ++fetchSeq.current;
-    setLoading(true);
+    if (loadMore) setLoadingMore(true); else setLoading(true);
     try {
       const params = new URLSearchParams();
       if (debouncedSearch) params.set('q', debouncedSearch);
       if (occasion) params.set('occasion', occasion);
-      params.set('limit', '50');
+      params.set('limit', String(PAGE_SIZE));
+      // Append the next page after what's already shown; entries.length stays
+      // a correct offset even after local deletions shift the server list.
+      if (loadMore) params.set('skip', String(entries.length));
 
       const res = await getJournalEntries(apiFetch, params.toString());
       if (res.ok && seq === fetchSeq.current) {
         const data = await res.json();
-        setEntries(data.items || []);
+        setEntries(prev => loadMore ? [...prev, ...(data.items || [])] : (data.items || []));
         setTotal(data.total || 0);
       }
     } catch { /* ignore */ }
-    if (seq === fetchSeq.current) setLoading(false);
+    if (seq === fetchSeq.current) {
+      setLoading(false);
+      setLoadingMore(false);
+    }
   };
 
   const handleDelete = async (id) => {
@@ -238,6 +251,14 @@ export default function Journal() {
               </div>
             </div>
           ))}
+
+          {entries.length < total && (
+            <div className="journal-load-more" style={{ textAlign: 'center', marginTop: '1rem' }}>
+              <button className="btn btn-secondary" onClick={() => fetchEntries(true)} disabled={loadingMore}>
+                {loadingMore ? t('common.loading') : t('journal.loadMore', 'Load more')}
+              </button>
+            </div>
+          )}
         </div>
       )}
 

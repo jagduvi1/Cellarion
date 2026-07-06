@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import {
@@ -34,6 +34,21 @@ function AdminRequests() {
   const [linkResults, setLinkResults] = useState([]);
   const [linkSearching, setLinkSearching] = useState(false);
   const [aiLookup, setAiLookup] = useState({ loading: false, error: null });
+
+  // Tracks the currently selected request id so slow async chains
+  // (AI lookup, duplicate check) can detect the selection changed
+  // mid-flight and discard their results instead of overwriting the
+  // newly selected request's form.
+  const selectedIdRef = useRef(null);
+  useEffect(() => {
+    selectedIdRef.current = selected?._id ?? null;
+  }, [selected]);
+
+  // Debounce timer + monotonic request id for the duplicate check, so
+  // per-keystroke requests are coalesced and stale responses discarded.
+  const dupTimerRef = useRef(null);
+  const dupReqIdRef = useRef(0);
+  useEffect(() => () => clearTimeout(dupTimerRef.current), []);
 
   useEffect(() => {
     fetchRequests();
@@ -122,17 +137,22 @@ function AdminRequests() {
     }
   };
 
-  const checkDuplicates = async (name, producer) => {
+  const checkDuplicates = (name, producer) => {
+    clearTimeout(dupTimerRef.current);
     if (!name || !producer) return;
-    try {
-      const res = await apiFetch(
-        `/api/admin/wines/duplicates?name=${encodeURIComponent(name)}&producer=${encodeURIComponent(producer)}&threshold=0.75`
-      );
-      const data = await res.json();
-      if (res.ok) setDuplicates(data.candidates);
-    } catch (err) {
-      console.error('Duplicate check failed:', err);
-    }
+    dupTimerRef.current = setTimeout(async () => {
+      const reqId = ++dupReqIdRef.current;
+      try {
+        const res = await apiFetch(
+          `/api/admin/wines/duplicates?name=${encodeURIComponent(name)}&producer=${encodeURIComponent(producer)}&threshold=0.75`
+        );
+        const data = await res.json();
+        if (reqId !== dupReqIdRef.current) return; // stale — a newer check superseded this one
+        if (res.ok) setDuplicates(data.candidates);
+      } catch (err) {
+        console.error('Duplicate check failed:', err);
+      }
+    }, 350);
   };
 
   const handleSelectRequest = (request) => {
@@ -154,6 +174,9 @@ function AdminRequests() {
         image: (request.image && !request.image.startsWith('data:')) ? request.image : ''
       }
     });
+    // Cancel any pending/in-flight duplicate check from the previous request
+    clearTimeout(dupTimerRef.current);
+    dupReqIdRef.current += 1;
     setDuplicates([]);
     setError(null);
     setLinkSearch('');
@@ -162,11 +185,17 @@ function AdminRequests() {
   };
 
   const handleAiLookup = async () => {
+    // Capture the request this lookup was started for — if the admin selects
+    // a different request while the AI chain is in flight, bail silently
+    // instead of overwriting the new request's form with the old data.
+    const requestId = selected._id;
+    const stale = () => selectedIdRef.current !== requestId;
     const query = [selected.wineName, selected.producer].filter(Boolean).join(' ');
     setAiLookup({ loading: true, error: null });
     try {
       const res = await getAiWineInfo(apiFetch, query);
       const data = await res.json();
+      if (stale()) return;
       if (!res.ok || !data.wine) {
         setAiLookup({ loading: false, error: 'Could not identify this wine' });
         return;
@@ -184,6 +213,7 @@ function AdminRequests() {
         newWineData.country = country._id;
         const regRes = await adminGetRegions(apiFetch, country._id);
         const regData = await regRes.json();
+        if (stale()) return;
         if (regRes.ok) {
           setRegions(regData.regions);
           const region = regData.regions.find(r => r.name.toLowerCase() === wine.region?.toLowerCase());
@@ -192,6 +222,7 @@ function AdminRequests() {
           if (region) appParams.set('region', region._id);
           const appRes = await adminGetAppellations(apiFetch, appParams);
           const appData = await appRes.json();
+          if (stale()) return;
           if (appRes.ok) setAppellations(appData.appellations || []);
         }
       }
@@ -207,6 +238,7 @@ function AdminRequests() {
       checkDuplicates(newWineData.name, newWineData.producer);
       setAiLookup({ loading: false, error: null });
     } catch {
+      if (stale()) return;
       setAiLookup({ loading: false, error: 'Network error during lookup' });
     }
   };

@@ -1,7 +1,8 @@
 /**
  * ISO 3166-1 alpha-2 → numeric code lookup.
- * Numeric codes are stored without leading zeros to match the world-atlas
- * TopoJSON feature IDs (which are JSON numbers, e.g. 250 for France, 4 for Afghanistan).
+ * Numeric codes are stored here without leading zeros; NUM_TO_A2 below also
+ * carries the zero-padded 3-character form used by world-atlas TopoJSON
+ * feature IDs (e.g. "004" for Afghanistan, "250" for France).
  *
  * Used by the WorldMapChart to correlate country ISO alpha-2 codes from the
  * stats API with the topology geometry IDs from world-atlas/countries-110m.json.
@@ -52,11 +53,15 @@ const A2_TO_NUM = {
 
 /**
  * Reverse lookup: ISO numeric string → alpha-2.
- * Keys match the string representation of world-atlas TopoJSON feature IDs.
- * e.g. "250" → "FR", "4" → "AF"
+ * world-atlas TopoJSON feature IDs are zero-padded 3-character strings
+ * ("004" for Afghanistan, "032" for Argentina), while the table above stores
+ * codes without leading zeros — so the map carries BOTH forms as keys
+ * ("4" → "AF" and "004" → "AF") and any consumer spelling resolves.
  */
-export const NUM_TO_A2 = Object.fromEntries(
-  Object.entries(A2_TO_NUM).map(([a2, num]) => [num, a2])
-);
+export const NUM_TO_A2 = Object.entries(A2_TO_NUM).reduce((map, [a2, num]) => {
+  map[num] = a2;
+  map[num.padStart(3, '0')] = a2;
+  return map;
+}, {});
 
 export default A2_TO_NUM;

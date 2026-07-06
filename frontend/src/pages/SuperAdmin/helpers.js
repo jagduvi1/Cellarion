@@ -1,5 +1,10 @@
-import { useState, useEffect, useCallback } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
+
+// Bumped by the SuperAdmin shell on manual Refresh / 30s auto-refresh so tabs
+// re-fetch their data in place instead of being remounted (a remount would
+// wipe unsaved edits — half-typed prompts, drafts, rate-limit changes).
+export const RefreshContext = createContext(0);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers
@@ -96,13 +101,22 @@ export function Sparkline({ data }) {
 
 export function useApi(path, { skip = false } = {}) {
   const { apiFetch } = useAuth();
+  const refreshKey = useContext(RefreshContext);
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
+  const loadedPathRef = useRef(null);
 
   const load = useCallback(async () => {
     if (skip) return;
-    setLoading(true);
+    // Re-fetching the same path is a background refresh: keep the previous
+    // data on screen (so panels stay mounted and unsaved edits survive) and
+    // only flip `refreshing`. The initial load — or a new path — shows the
+    // blocking `loading` state as before.
+    const isBackground = loadedPathRef.current === path;
+    if (isBackground) setRefreshing(true);
+    else setLoading(true);
     setError(null);
     try {
       const res = await apiFetch(path);
@@ -111,14 +125,17 @@ export function useApi(path, { skip = false } = {}) {
         throw new Error(body.error || `HTTP ${res.status}`);
       }
       setData(await res.json());
+      loadedPathRef.current = path;
     } catch (e) {
       setError(e.message);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
-  }, [apiFetch, path, skip]);
+    // refreshKey bump (shell Refresh / auto-refresh) recreates load → re-fetch
+  }, [apiFetch, path, skip, refreshKey]);
 
   useEffect(() => { load(); }, [load]);
 
-  return { data, loading, error, reload: load };
+  return { data, loading, refreshing, error, reload: load };
 }

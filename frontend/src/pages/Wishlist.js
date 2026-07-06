@@ -34,6 +34,10 @@ function Wishlist() {
   const [saving, setSaving] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
 
+  // Per-item in-flight guard for the Bought/Undo toggle: a double-click would
+  // otherwise send two PUTs and decrement the total twice.
+  const [togglingIds, setTogglingIds] = useState(() => new Set());
+
   // Reset pagination when filters change. The reset lands one render later,
   // so derive the effective skip for the current render — otherwise a filter
   // change fires a request with the stale offset whose slow response can
@@ -78,12 +82,23 @@ function Wishlist() {
 
   useEffect(() => { fetchItems(); }, [fetchItems]);
 
+  // When the last item of a page is removed (delete / status toggle) but
+  // earlier pages still exist, step back one page instead of stranding the
+  // user on an empty page.
+  useEffect(() => {
+    if (!loading && items.length === 0 && total > 0 && skip > 0) {
+      setSkip(s => Math.max(0, s - LIMIT));
+    }
+  }, [loading, items.length, total, skip]);
+
   const handleSearchSubmit = (e) => {
     e.preventDefault();
     setSearch(searchInput);
   };
 
   const handleToggleStatus = async (item) => {
+    if (togglingIds.has(item._id)) return;
+    setTogglingIds(prev => new Set(prev).add(item._id));
     const newStatus = item.status === 'wanted' ? 'bought' : 'wanted';
     try {
       const res = await updateWishlistItem(apiFetch, item._id, { status: newStatus });
@@ -98,6 +113,12 @@ function Wishlist() {
       }
     } catch {
       setError('Failed to update status');
+    } finally {
+      setTogglingIds(prev => {
+        const next = new Set(prev);
+        next.delete(item._id);
+        return next;
+      });
     }
   };
 
@@ -204,7 +225,7 @@ function Wishlist() {
       {/* List */}
       {loading && items.length === 0 ? (
         <div className="wishlist-loading">Loading...</div>
-      ) : items.length === 0 ? (
+      ) : total === 0 ? (
         <div className="wishlist-empty">
           <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
@@ -246,6 +267,7 @@ function Wishlist() {
                     <button
                       className={`btn btn-small ${item.status === 'wanted' ? 'btn-success' : 'btn-secondary'}`}
                       onClick={() => handleToggleStatus(item)}
+                      disabled={togglingIds.has(item._id)}
                       title={item.status === 'wanted' ? 'Mark as bought' : 'Move back to wanted'}
                     >
                       {item.status === 'wanted' ? 'Bought' : 'Undo'}

@@ -82,13 +82,19 @@ export default function AdminModerators() {
 
   const promote = async (target) => {
     setPending(target._id);
+    setError(null);
     try {
       const newRoles = Array.from(new Set([...(target.roles || ['user']), 'moderator']));
       const res = await adminChangeUserRoles(apiFetch, target._id, newRoles);
+      const data = await res.json().catch(() => ({}));
       if (res.ok) {
         await fetchModerators();
         if (searchQuery) runSearch(searchQuery);
+      } else {
+        setError(data.error || t('adminModerators.failedChange', 'Failed to change role.'));
       }
+    } catch {
+      setError(t('adminModerators.failedChange', 'Failed to change role.'));
     } finally {
       setPending(null);
     }
@@ -96,16 +102,22 @@ export default function AdminModerators() {
 
   const revoke = async (target) => {
     setPending(target._id);
+    setError(null);
     try {
       const newRoles = (target.roles || []).filter(r => r !== 'moderator');
       // The backend requires a non-empty array — fall back to ['user'] if
       // moderator was somehow the only role they had.
       const finalRoles = newRoles.length > 0 ? newRoles : ['user'];
       const res = await adminChangeUserRoles(apiFetch, target._id, finalRoles);
+      const data = await res.json().catch(() => ({}));
       if (res.ok) {
         await fetchModerators();
         if (searchQuery) runSearch(searchQuery);
+      } else {
+        setError(data.error || t('adminModerators.failedChange', 'Failed to change role.'));
       }
+    } catch {
+      setError(t('adminModerators.failedChange', 'Failed to change role.'));
     } finally {
       setPending(null);
       setConfirmRevoke(null);
@@ -113,7 +125,7 @@ export default function AdminModerators() {
   };
 
   const renderUserRow = (u, { isModerator }) => {
-    const isSelf = String(u._id) === String(user.id);
+    const isSelf = String(u._id) === String(user._id);
     const displayName = u.displayName || u.username;
     return (
       <li key={u._id} className="admin-mods__row">

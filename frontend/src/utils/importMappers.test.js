@@ -492,6 +492,23 @@ describe('parseAndMap', () => {
     expect(result.items[0].bottleSize).toBe('750ml');
   });
 
+  it('normalises purchaseDate, consumedAt and dateAdded to ISO dates', () => {
+    const csv = 'wineName,producer,vintage,purchaseDate,consumedAt,dateAdded\n' +
+      'Margaux,Chateau Margaux,2015,10/30/2024,11/26/2024,2024-01-05';
+    const result = parseAndMap(csv);
+    expect(result.items[0].purchaseDate).toBe('2024-10-30');
+    expect(result.items[0].consumedAt).toBe('2024-11-26');
+    expect(result.items[0].dateAdded).toBe('2024-01-05');
+  });
+
+  it('keeps the calendar date of full ISO timestamps (no timezone day-shift)', () => {
+    const json = JSON.stringify([
+      { wineName: 'Margaux', producer: 'CM', consumedAt: '2024-11-26T23:30:00.000Z' },
+    ]);
+    const result = parseJSON(json);
+    expect(result.items[0].consumedAt).toBe('2024-11-26');
+  });
+
   it('maps wine type from Vivino type field', () => {
     const csv = 'Wine name,Winery,Wine type\nBubbly,Domaine,Sparkling';
     const result = parseAndMap(csv);
