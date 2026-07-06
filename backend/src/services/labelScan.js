@@ -261,7 +261,7 @@ async function identifyWineFromText({ name, producer, vintage, country }) {
   return callClaudeJson({
     client,
     model: aiConfig.get().importLookupModel,
-    maxTokens: 400,
+    maxTokens: 800,
     prompt,
     validate: validateWineIdentity,
   });
@@ -283,7 +283,7 @@ async function identifyWineFromQuery(query) {
   return callClaudeJson({
     client,
     model: aiConfig.get().importLookupModel,
-    maxTokens: 400,
+    maxTokens: 800,
     prompt,
     validate: validateWineIdentity,
   });
@@ -324,7 +324,7 @@ async function suggestDrinkWindow({ name, producer, vintage, country, region, ap
   return callClaudeJson({
     client,
     model: aiConfig.get().maturitySuggestModel,
-    maxTokens: 500,
+    maxTokens: 1200,
     prompt,
   });
 }
@@ -357,7 +357,7 @@ async function suggestPrice({ name, producer, vintage, country, region, appellat
   return callClaudeJson({
     client,
     model: aiConfig.get().priceSuggestModel,
-    maxTokens: 400,
+    maxTokens: 800,
     prompt,
   });
 }
@@ -390,7 +390,7 @@ async function suggestProfile({ name, producer, vintage, country, region, appell
   return callClaudeJson({
     client,
     model: aiConfig.get().enrichmentModel,
-    maxTokens: 700,
+    maxTokens: 1400,
     prompt,
     validate: (parsed) => {
       // Normalise arrays so the caller can store them directly.
