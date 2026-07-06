@@ -31,12 +31,13 @@ Use all available information — text on the label, your knowledge of real wine
 - Infer the wine type and grapes from all available clues — appellation rules, producer style, label design, bottle shape, language
 
 Respond with ONLY a raw JSON object (no markdown, no code fences, no extra text):
-{"name":"wine name without vintage year","producer":"producer or winery name","vintage":"4-digit year or null","country":"country","region":"wine region","appellation":"appellation/AOC/DOC/IGT/AVA or null","type":"red|white|rosé|sparkling|dessert|fortified","grapes":["grape varieties"],"confidence":0.0}
+{"name":"wine name WITHOUT the vintage year and WITHOUT the producer name","producer":"producer or winery name","vintage":"4-digit year or null","country":"country","region":"wine region","appellation":"appellation/AOC/DOC/IGT/AVA or null","type":"red|white|rosé|sparkling|dessert|fortified","grapes":["grape varieties"],"confidence":0.0}
 
 confidence: 1.0 = label clearly readable and matches a wine you know well, 0.7 = some fields inferred from appellation/producer knowledge, 0.4 = mostly inferred from limited clues, 0.2 = very uncertain.
 
 Important rules:
 - Never invent a wine that does not exist. If you can read a producer name or label text, use it exactly — do not guess or substitute a similar-sounding wine.
+- The name field must contain ONLY the wine's own cuvée/vineyard/variety name — never repeat the producer in it (producer "Chard Farm" + name "River Run Pinot Noir", NOT name "Chard Farm River Run Pinot Noir").
 - Do not hallucinate appellation names, producer names, or grape varieties. Only use names you are confident are real and match what is visible on the label or your knowledge of that specific producer/appellation.
 - If a field is genuinely unknown and cannot be reliably inferred, set it to null rather than guessing.
 - Only return {"error":"cannot read label"} if the image contains no wine label at all.`;
@@ -53,6 +54,8 @@ Return ONLY a raw JSON object (no markdown, no code fences):
 
 Rules:
 - Use the wine name and producer exactly as given (correct only obvious typos)
+- The name field must contain ONLY the wine's own cuvée/vineyard/variety name — never prepend or repeat the producer in it. If the given name starts with the producer name, strip that prefix (producer "Penfolds" + name "Penfolds Bin 407" → name "Bin 407")
+- NEVER change the wine into a different wine: do not add a grape variety, cuvée, or vineyard to the name that the given data does not mention, and do not substitute another wine from the same producer. If the given name does not match a wine this producer actually makes, keep the name as given rather than "correcting" it to a similar-sounding wine
 - Fill in country, region, appellation, type, and grapes from your wine knowledge
 - Country is REQUIRED — always provide a country name; it is never acceptable to return null for country
 - For any other field you are unsure about, use null — do NOT omit the field
@@ -72,6 +75,8 @@ Return ONLY a raw JSON object (no markdown, no code fences, no extra text):
 
 Rules:
 - Extract the wine name and producer from the query
+- The name field must contain ONLY the wine's own cuvée/vineyard/variety name — never prepend or repeat the producer in it (producer "Penfolds" + name "Bin 407", NOT name "Penfolds Bin 407")
+- Do not add a grape variety or cuvée to the name that the query does not mention, and do not substitute a different wine from the same producer
 - Fill in country, region, appellation, type, and grapes from your wine knowledge
 - Country is REQUIRED — always provide a country name; it is never acceptable to return null for country
 - For any other unknown field use null; use [] for unknown grapes, never null
@@ -102,13 +107,15 @@ Consider:
 - The vintage quality and its effect on aging (structure vs approachability)
 - The producer's known style ONLY if the producer is well-established
 - Regional norms, but do NOT assume prestige based on region alone
+- The likely closure: screw caps (the norm in New Zealand and Australia) age wine reliably and slightly more slowly than cork — never shorten a window because of a screw cap; these wines often reward MORE patience, not less
 
 Critical rules:
-- If the wine is NOT explicitly classified (e.g. Grand Cru, Premier Cru, Cru Classé, Cru Bourgeois officially recognized) AND is not a single-vineyard bottling, assume conservative aging potential and bias strongly toward early drinking.
+- The classification rules below apply to wines from regions WITH formal classification systems (mainly Europe). New World regions (New Zealand, Australia, South Africa, the Americas) have no Grand Cru/Cru Classé system — for these, the ABSENCE of a classification does NOT imply entry-level or early drinking. Judge New World wines by producer reputation, single-vineyard/reserve designations, and realistic regional norms instead: quality New Zealand Pinot Noir (e.g. Central Otago, Martinborough) typically peaks 5–10 years after vintage; quality Australian Cabernet and Shiraz 8–15 years; Hunter Valley Semillon and quality Australian/NZ Riesling can age for decades.
+- If a EUROPEAN wine is NOT explicitly classified (e.g. Grand Cru, Premier Cru, Cru Classé, Cru Bourgeois officially recognized) AND is not a single-vineyard bottling, assume conservative aging potential and bias strongly toward early drinking.
 - Unclassified or entry-level wines rarely exceed 8–10 years total aging.
 - Single-vineyard wines may justify moderately longer aging (10–15 years) even without a formal classification.
 - Do NOT infer Cru Bourgeois, Médoc structure, or long-aging capability unless explicitly stated.
-- If total estimated aging exceeds 15 years, sommNotes MUST explicitly justify why this wine qualifies (quality tier, single vineyard, producer reputation, structure).
+- If total estimated aging exceeds 15 years, sommNotes MUST explicitly justify why this wine qualifies (quality tier, single vineyard, producer reputation, structure, regional track record).
 - If you cannot confidently estimate without making assumptions, return {"error":"unknown"}.
 
 Return ONLY a raw JSON object (no markdown, no code fences, no extra text):
@@ -248,7 +255,9 @@ Rules:
 const VALID_CHAT_MODELS = [
   'claude-haiku-4-5-20251001',
   'claude-sonnet-4-6',
+  'claude-sonnet-5',
   'claude-opus-4-6',
+  'claude-opus-4-8',
 ];
 
 const DEFAULT_SYSTEM_PROMPT =
@@ -282,21 +291,27 @@ const defaults = {
   embeddingBatchDelayMs: 500,
   chatDailyLimit: 50,
   chatModel: 'claude-haiku-4-5-20251001',
-  chatModelFallback: null,
+  // Retry model for 429/529 on the chat path (Sonnet 5: near-Opus quality,
+  // different capacity pool than Haiku).
+  chatModelFallback: 'claude-sonnet-5',
   chatSystemPrompt: DEFAULT_SYSTEM_PROMPT,
+  // Wine identification (label scan / import lookup / text search / maturity)
+  // defaults to Sonnet 5: these results are written into the SHARED registry,
+  // where a hallucinated wine or misnamed entry pollutes every user's search.
+  // The quality gap over Haiku is what keeps ghost wines out.
   labelScanPrompt: DEFAULT_LABEL_SCAN_PROMPT,
-  labelScanModel: 'claude-haiku-4-5-20251001',
+  labelScanModel: 'claude-sonnet-5',
   importLookupPrompt: DEFAULT_IMPORT_LOOKUP_PROMPT,
-  importLookupModel: 'claude-haiku-4-5-20251001',
+  importLookupModel: 'claude-sonnet-5',
   maturitySuggestPrompt: DEFAULT_MATURITY_SUGGEST_PROMPT,
   maturitySuggestPromptNv: DEFAULT_MATURITY_SUGGEST_PROMPT_NV,
-  maturitySuggestModel: 'claude-haiku-4-5-20251001',
+  maturitySuggestModel: 'claude-sonnet-5',
   priceSuggestPrompt: DEFAULT_PRICE_SUGGEST_PROMPT,
   priceSuggestModel: 'claude-haiku-4-5-20251001',
   // Wine enrichment (AI tasting/style profile). Defaults to Sonnet because this
   // is a knowledge-recall task where the quality gap over Haiku is meaningful.
   enrichmentPrompt: DEFAULT_ENRICHMENT_PROMPT,
-  enrichmentModel: 'claude-sonnet-4-6',
+  enrichmentModel: 'claude-sonnet-5',
 };
 
 let cache = { ...defaults };
