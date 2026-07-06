@@ -16,6 +16,7 @@
 
 const mongoose = require('mongoose');
 const aiConfig = require('../config/aiConfig');
+const { textFromResponse, thinkingOff } = require('../utils/aiResponse');
 const { embedSingle } = require('./embedding');
 const vectorStore = require('./vectorStore');
 const Bottle = require('../models/Bottle');
@@ -252,8 +253,8 @@ Reply with ONLY these two lines, no explanation. Always reply in English regardl
   };
 
   try {
-    const response = await client.messages.create({ ...callParams, model: cfg.chatModel });
-    const text = response.content[0]?.text?.trim();
+    const response = await client.messages.create({ ...callParams, model: cfg.chatModel, ...thinkingOff(cfg.chatModel) });
+    const text = textFromResponse(response);
     if (!text) return { searchQuery: message, needsNewSearch: true };
     return parseExpandResult(text, message, hasHistory);
   } catch (err) {
@@ -272,8 +273,8 @@ Reply with ONLY these two lines, no explanation. Always reply in English regardl
     });
     if (isRetryable && canFallback) {
       try {
-        const response = await client.messages.create({ ...callParams, model: cfg.chatModelFallback });
-        const text = response.content[0]?.text?.trim();
+        const response = await client.messages.create({ ...callParams, model: cfg.chatModelFallback, ...thinkingOff(cfg.chatModelFallback) });
+        const text = textFromResponse(response);
         _eventLog[_eventLog.length - 1].fallbackResult = 'ok';
         if (!text) return { searchQuery: message, needsNewSearch: true };
         return parseExpandResult(text, message, hasHistory);
@@ -435,7 +436,7 @@ async function chat(userId, message, opts = {}) {
   const client = getClaudeClient();
   let response;
   try {
-    response = await client.messages.create({ ...callParams, model: cfg.chatModel });
+    response = await client.messages.create({ ...callParams, model: cfg.chatModel, ...thinkingOff(cfg.chatModel) });
   } catch (err) {
     const canFallback = cfg.chatModelFallback && cfg.chatModelFallback !== cfg.chatModel;
     const isRetryable = [429, 500, 502, 503, 529].includes(err.status)
@@ -452,7 +453,7 @@ async function chat(userId, message, opts = {}) {
     if (isRetryable && canFallback) {
       console.warn(`[aiChat] Primary model failed (${cfg.chatModel}, status ${err.status}), retrying with fallback: ${cfg.chatModelFallback}`);
       try {
-        response = await client.messages.create({ ...callParams, model: cfg.chatModelFallback });
+        response = await client.messages.create({ ...callParams, model: cfg.chatModelFallback, ...thinkingOff(cfg.chatModelFallback) });
         _eventLog[_eventLog.length - 1].fallbackResult = 'ok';
       } catch (fbErr) {
         _eventLog[_eventLog.length - 1].fallbackResult = 'failed';
@@ -465,7 +466,7 @@ async function chat(userId, message, opts = {}) {
     }
   }
 
-  const answer = response.content[0]?.text ?? '';
+  const answer = textFromResponse(response);
   const usage = {
     inputTokens:  response.usage?.input_tokens  ?? 0,
     outputTokens: response.usage?.output_tokens ?? 0,
@@ -518,7 +519,7 @@ async function chatStream(userId, message, opts, res) {
     let stream;
 
     const runStream = (model, allowFallback) => {
-      stream = client.messages.stream({ ...callParams, model });
+      stream = client.messages.stream({ ...callParams, model, ...thinkingOff(model) });
 
       stream.on('text', (textDelta) => {
         receivedText = true;
