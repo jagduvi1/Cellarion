@@ -798,15 +798,46 @@ export function parseOenoExport(text) {
 
   // Build per-rack default configs so the picker can pre-fill cabinet shapes
   const oenoRackSpecs = {};
-  for (const [, cab] of cabinetById) {
+  for (const [cabinetId, cab] of cabinetById) {
     const totalColumns = cab.columns.size;
     for (const [columnIndex, col] of cab.columns) {
       const rackName = rackNameFor(cab.label, columnIndex, totalColumns);
+      const rows = Math.min(20, col.maxShelf);
+      const cols = 6;
+      const backCols = 5;
+      const bpc = 1;
+
+      // Convert each layer's disabled slot-in-layer indices to GLOBAL Cellarion
+      // positions, mirroring the backend's computeRackPosition shelf math with
+      // the Oeno bottom-left anchor (shelf 1 = bottom → effectiveShelf =
+      // rows - shelfIndex + 1):
+      //   shelfBase = (effectiveShelf - 1) × (cols + backCols) × bottlesPerCell
+      //   front (layer 1): shelfBase + slotInLayer          (slotInLayer ≤ cols)
+      //   back  (layer 2): shelfBase + cols + slotInLayer   (slotInLayer ≤ backCols)
+      const disabled = new Set();
+      for (const layer of layerById.values()) {
+        if (layer.cabinetId !== cabinetId || layer.columnIndex !== columnIndex) continue;
+        if (layer.disabledSlots.size === 0) continue;
+        // Shelves clamped away by the 20-row cap have no cells to disable
+        if (layer.shelfIndex > rows) continue;
+        const shelfBase = (rows - layer.shelfIndex) * (cols + backCols) * bpc;
+        for (const n of layer.disabledSlots) {
+          if (layer.layerIndex === 1 && n <= cols) {
+            disabled.add(shelfBase + n);
+          } else if (layer.layerIndex === 2 && n <= backCols) {
+            disabled.add(shelfBase + cols + n);
+          }
+        }
+      }
+
       oenoRackSpecs[rackName] = {
         type: 'shelf',
-        rows: Math.min(20, col.maxShelf),
-        cols: 6,
-        typeConfig: { bottlesPerCell: 1, backCols: 5 },
+        rows,
+        cols,
+        typeConfig: { bottlesPerCell: bpc, backCols },
+        ...(disabled.size > 0
+          ? { disabledPositions: [...disabled].sort((a, b) => a - b) }
+          : {}),
       };
     }
   }

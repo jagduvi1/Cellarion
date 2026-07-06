@@ -371,6 +371,14 @@
   margin: 0;
 }
 
+/* ---- Disabled slot popup ---- */
+.slot-disabled-note {
+  padding: 1.25rem 1rem;
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
+  margin: 0;
+}
+
 /* ---- Filled slot: bottle detail ---- */
 .slot-bottle-detail {
   display: flex;

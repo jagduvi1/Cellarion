@@ -278,7 +278,7 @@ function planRackCreations(items) {
  * geometry + existing slots and gets back a list of slot writes + the
  * collection of items that couldn't be placed and why.
  *
- * @param {{type, rows, cols, typeConfig, slots, maxPosition}} rack
+ * @param {{type, rows, cols, typeConfig, slots, maxPosition, disabledPositions?}} rack
  * @param {Array<{item: object, bottleId: any, sourceIndex?: number}>} items
  * @param {string} anchor One of VALID_ANCHORS
  * @returns {{
@@ -320,7 +320,7 @@ function placeBottlesInRack(rack, items, anchor) {
     requests.push({ requestedPosition: result.position, bottleId: it.bottleId, sourceIndex: it.sourceIndex });
   }
 
-  const { placements, unplaced: tooFull } = placeBottles(rack.slots || [], requests, rack.maxPosition);
+  const { placements, unplaced: tooFull } = placeBottles(rack.slots || [], requests, rack.maxPosition, rack.disabledPositions);
 
   for (const t of tooFull) {
     unplaced.push({ sourceIndex: t.sourceIndex, requestedPosition: t.requestedPosition, reason: 'Rack full' });
@@ -354,10 +354,15 @@ function findNextFreeSlot(occupied, requestedPosition, maxPosition) {
  * @param {Array<{requestedPosition: number, bottleId: any, sourceIndex?: number}>} requests
  *        Bottles wanting a slot in this rack, in the order they came from the CSV.
  * @param {number} maxPosition Total addressable slots in this rack.
+ * @param {number[]} [disabledPositions]
+ *        Positions the user marked as unusable. Seeded into the occupied set so
+ *        neither exact placement nor overflow ever lands there — but they are
+ *        NOT placements, so they don't count as bottles placed.
  * @returns {{placements: Array, unplaced: Array}}
  */
-function placeBottles(existingSlots, requests, maxPosition) {
+function placeBottles(existingSlots, requests, maxPosition, disabledPositions) {
   const occupied = new Set((existingSlots || []).map(s => s.position));
+  for (const p of disabledPositions || []) occupied.add(p);
   const placements = [];
   const overflow = [];
 

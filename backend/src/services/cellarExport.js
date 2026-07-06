@@ -360,6 +360,9 @@ async function buildCellarDataExport(userId, scope) {
         rows: r.rows,
         cols: r.cols,
         ...(r.typeConfig ? { typeConfig: r.typeConfig } : {}),
+        ...(Array.isArray(r.disabledPositions) && r.disabledPositions.length > 0
+          ? { disabledPositions: r.disabledPositions }
+          : {}),
       })),
       ...(layout ? { layout } : {}),
       bottles: mapBottlesForExport(

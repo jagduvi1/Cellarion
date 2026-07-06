@@ -33,6 +33,11 @@ export default function ShelfView({ rack, activePosition, highlightPos, onSlotCl
     return m;
   }, [rack?.slots]);
 
+  const disabledSet = useMemo(
+    () => new Set(rack?.disabledPositions || []),
+    [rack?.disabledPositions]
+  );
+
   if (rack?.type !== 'shelf') {
     return (
       <div className="shelf-view-empty">
@@ -142,6 +147,7 @@ export default function ShelfView({ rack, activePosition, highlightPos, onSlotCl
                     cy={cy}
                     slot={s.slot}
                     position={s.position}
+                    disabled={disabledSet.has(s.position)}
                     isActive={activePosition === s.position}
                     isHighlight={highlightPos === s.position}
                     onClick={() => onSlotClick && onSlotClick(s.position, s.slot || null)}
@@ -156,12 +162,44 @@ export default function ShelfView({ rack, activePosition, highlightPos, onSlotCl
   );
 }
 
-function BottleOval({ cx, cy, slot, position, isActive, isHighlight, onClick }) {
+function BottleOval({ cx, cy, slot, position, disabled, isActive, isHighlight, onClick }) {
   const bottle = slot?.bottle;
   const wine = bottle?.wineDefinition;
   const wineType = wine?.type || 'red';
   const colors = bottle ? (WINE_COLORS[wineType] || WINE_COLORS.red) : null;
   const filled = !!bottle;
+
+  // Disabled (unusable) position: greyed oval with a subtle diagonal cross.
+  // Still clickable so editors can re-enable it from the slot popup.
+  if (disabled) {
+    const dx = BOTTLE_RX * 0.5;
+    const dy = BOTTLE_RY * 0.5;
+    return (
+      <g
+        onClick={onClick}
+        onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && onClick?.()}
+        role="button"
+        tabIndex={0}
+        className="shelf-view-bottle disabled"
+        aria-label={`Disabled slot ${position}`}
+        style={{ cursor: 'default' }}
+      >
+        <ellipse
+          cx={cx}
+          cy={cy}
+          rx={BOTTLE_RX}
+          ry={BOTTLE_RY}
+          fill="rgba(90, 74, 56, 0.12)"
+          stroke="#A89880"
+          strokeWidth={1.5}
+        />
+        <line x1={cx - dx} y1={cy - dy} x2={cx + dx} y2={cy + dy}
+          stroke="rgba(90, 74, 56, 0.45)" strokeWidth={1.5} strokeLinecap="round" pointerEvents="none" />
+        <line x1={cx - dx} y1={cy + dy} x2={cx + dx} y2={cy - dy}
+          stroke="rgba(90, 74, 56, 0.45)" strokeWidth={1.5} strokeLinecap="round" pointerEvents="none" />
+      </g>
+    );
+  }
 
   return (
     <g

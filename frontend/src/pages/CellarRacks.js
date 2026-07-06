@@ -3,7 +3,7 @@ import { useParams, Link, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import { getCellar } from '../api/cellars';
-import { getRacks, deleteRack, updateSlot, clearSlot, createRack, updateRack } from '../api/racks';
+import { getRacks, deleteRack, updateSlot, clearSlot, createRack, updateRack, disableSlot, enableSlot } from '../api/racks';
 import { consumeBottle } from '../api/bottles';
 import { getTotalSlots, getModularTotalSlots } from '../utils/rackLayouts';
 import RackRenderer from '../components/racks/RackRenderer';
@@ -219,6 +219,29 @@ function CellarRacks() {
     setActivePopup(null);
   };
 
+  // --- disable / re-enable a slot position ---
+  const handleDisableSlot = async (rackId, position) => {
+    const res = await disableSlot(apiFetch, rackId, position);
+    const data = await res.json();
+    if (res.ok) {
+      setRacks(racks.map(r => r._id === rackId ? data.rack : r));
+    } else {
+      alert(data.error || 'Failed to disable slot');
+    }
+    setActivePopup(null);
+  };
+
+  const handleEnableSlot = async (rackId, position) => {
+    const res = await enableSlot(apiFetch, rackId, position);
+    const data = await res.json();
+    if (res.ok) {
+      setRacks(racks.map(r => r._id === rackId ? data.rack : r));
+    } else {
+      alert(data.error || 'Failed to enable slot');
+    }
+    setActivePopup(null);
+  };
+
   // --- soft-remove bottle via the shared consume endpoint ---
   const handleConsumeSubmit = async (reason, note, rating, consumedRatingScale) => {
     const { bottleId } = consumeModal;
@@ -318,9 +341,10 @@ function CellarRacks() {
               >
                 {r.name}
                 <span className="rack-tab-count">
-                  {r.slots.length}/{r.isModular && r.modules?.length > 0
+                  {r.slots.length}/{(r.isModular && r.modules?.length > 0
                     ? getModularTotalSlots(r.modules)
-                    : getTotalSlots(r.type || 'grid', r.rows, r.cols, r.typeConfig)}
+                    : getTotalSlots(r.type || 'grid', r.rows, r.cols, r.typeConfig))
+                    - (r.disabledPositions?.length || 0)}
                 </span>
               </button>
             ))}
@@ -357,7 +381,9 @@ function CellarRacks() {
           {rack.type === 'shelf' && !rack.isModular && (viewMode === 'shelf' || viewMode === '3d') ? (
             (() => {
               const handleClick = (pos, slotData) => {
-                if (!canEdit && !slotData) return;
+                const isDisabled = (rack.disabledPositions || []).includes(pos);
+                // Viewers can inspect filled or disabled slots, not empty ones
+                if (!canEdit && !slotData && !isDisabled) return;
                 if (activePopup?.rackId === rack._id && activePopup?.position === pos) {
                   setActivePopup(null);
                 } else {
@@ -387,8 +413,9 @@ function CellarRacks() {
               activePosition={activePopup?.position}
               highlightPos={highlightPos?.rackId === rack._id ? highlightPos.position : null}
               onSlotClick={(pos, slotData) => {
-                // Viewers can only inspect filled slots, not interact with empty ones
-                if (!canEdit && !slotData) return;
+                // Viewers can only inspect filled or disabled slots, not interact with empty ones
+                const isDisabled = (rack.disabledPositions || []).includes(pos);
+                if (!canEdit && !slotData && !isDisabled) return;
                 if (activePopup?.rackId === rack._id && activePopup?.position === pos) {
                   setActivePopup(null);
                 } else {
@@ -406,33 +433,47 @@ function CellarRacks() {
       </>}
 
       {/* Page-level fixed slot modal */}
-      {activePopup && (
-        <div className="slot-modal-overlay" onClick={() => setActivePopup(null)} role="dialog" aria-modal="true">
-          <div className="slot-modal" onClick={e => e.stopPropagation()}>
-            {activePopup.slot ? (
-              <FilledSlotContent
-                position={activePopup.position}
-                slot={activePopup.slot}
-                canEdit={canEdit}
-                onRemoveFromRack={() => handleRemoveFromRack(activePopup.rackId, activePopup.position)}
-                onConsume={() => {
-                  setConsumeModal({ bottleId: activePopup.slot.bottle._id });
-                  setActivePopup(null);
-                }}
-                onClose={() => setActivePopup(null)}
-              />
-            ) : (
-              <EmptySlotContent
-                position={activePopup.position}
-                apiFetch={apiFetch}
-                cellarId={id}
-                onAssign={(pos, bottleId) => handleAssign(activePopup.rackId, pos, bottleId)}
-                onClose={() => setActivePopup(null)}
-              />
-            )}
+      {activePopup && (() => {
+        const popupRack = racks.find(r => r._id === activePopup.rackId);
+        const popupDisabled = !activePopup.slot &&
+          (popupRack?.disabledPositions || []).includes(activePopup.position);
+        return (
+          <div className="slot-modal-overlay" onClick={() => setActivePopup(null)} role="dialog" aria-modal="true">
+            <div className="slot-modal" onClick={e => e.stopPropagation()}>
+              {activePopup.slot ? (
+                <FilledSlotContent
+                  position={activePopup.position}
+                  slot={activePopup.slot}
+                  canEdit={canEdit}
+                  onRemoveFromRack={() => handleRemoveFromRack(activePopup.rackId, activePopup.position)}
+                  onConsume={() => {
+                    setConsumeModal({ bottleId: activePopup.slot.bottle._id });
+                    setActivePopup(null);
+                  }}
+                  onClose={() => setActivePopup(null)}
+                />
+              ) : popupDisabled ? (
+                <DisabledSlotContent
+                  position={activePopup.position}
+                  canEdit={canEdit}
+                  onEnable={() => handleEnableSlot(activePopup.rackId, activePopup.position)}
+                  onClose={() => setActivePopup(null)}
+                />
+              ) : (
+                <EmptySlotContent
+                  position={activePopup.position}
+                  apiFetch={apiFetch}
+                  cellarId={id}
+                  canEdit={canEdit}
+                  onAssign={(pos, bottleId) => handleAssign(activePopup.rackId, pos, bottleId)}
+                  onDisable={() => handleDisableSlot(activePopup.rackId, activePopup.position)}
+                  onClose={() => setActivePopup(null)}
+                />
+              )}
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* Consume/remove modal */}
       {consumeModal && (
@@ -641,7 +682,7 @@ function NewRackForm({ newRack, setNewRack, onTypeChange, onSubmit, saving }) {
 }
 
 // ---- Content for empty slot: pick a bottle to place ----
-function EmptySlotContent({ position, apiFetch, cellarId, onAssign, onClose }) {
+function EmptySlotContent({ position, apiFetch, cellarId, canEdit, onAssign, onDisable, onClose }) {
   const { t } = useTranslation();
   const [search, setSearch] = useState('');
   const [results, setResults] = useState([]);
@@ -721,6 +762,34 @@ function EmptySlotContent({ position, apiFetch, cellarId, onAssign, onClose }) {
           ))
         )}
       </div>
+      {canEdit && onDisable && (
+        <div className="slot-popup-actions">
+          <button className="btn btn-secondary btn-small" onClick={onDisable}>
+            {t('racks.disableSlot')}
+          </button>
+        </div>
+      )}
+    </>
+  );
+}
+
+// ---- Content for a disabled (unusable) slot ----
+function DisabledSlotContent({ position, canEdit, onEnable, onClose }) {
+  const { t } = useTranslation();
+  return (
+    <>
+      <div className="slot-popup-header">
+        <span className="slot-popup-title">{t('racks.disabledSlotTitle', { position })}</span>
+        <button className="slot-popup-close" onClick={onClose} aria-label="Close">&times;</button>
+      </div>
+      <p className="slot-disabled-note">{t('racks.disabledSlotNote')}</p>
+      {canEdit && (
+        <div className="slot-popup-actions">
+          <button className="btn btn-secondary btn-small" onClick={onEnable}>
+            {t('racks.enableSlot')}
+          </button>
+        </div>
+      )}
     </>
   );
 }

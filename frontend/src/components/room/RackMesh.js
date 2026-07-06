@@ -217,6 +217,20 @@ function EmptySlot({ position, slotPosition, onClick, isBack, useAbsoluteZ = fal
   );
 }
 
+// ── Disabled slot (small flat dark disc, non-interactive) ────────────
+// Marks a position the user disabled as unusable. Deliberately cheap:
+// one low-segment circle, no ring, no pointer handlers — the hole just
+// reads as intentional. Sized like EmptySlot's ring.
+function DisabledSlotDisc({ position, isBack }) {
+  const r = (isBack ? 0.7 : 1) * (BOTTLE_RADIUS - 0.005);
+  return (
+    <mesh position={position}>
+      <circleGeometry args={[r, 12]} />
+      <meshStandardMaterial color="#3A3229" roughness={0.95} />
+    </mesh>
+  );
+}
+
 // ── Slot positions ───────────────────────────────────────
 function computeSlotPositions(rows, cols, width, height) {
   const positions = [];
@@ -446,6 +460,7 @@ function PullOutShelfRow({
   frameColor,
   rowSlots,
   slotMap,
+  disabledSet,
   onTogglePull,
   onBottleClick,
   onEmptySlotClick,
@@ -495,6 +510,9 @@ function PullOutShelfRow({
         const filled = !!slot;
         const wineType = slot?.bottle?.wineDefinition?.type || 'red';
         const finalBottleZ = bottleZ !== undefined ? bottleZ : (-0.08 + z);
+        if (!filled && disabledSet?.has(pos)) {
+          return <DisabledSlotDisc key={pos} position={[x, y, z]} isBack={isBack} />;
+        }
         if (filled) {
           return (
             <Bottle
@@ -643,6 +661,11 @@ export default function RackMesh({
     (rack.slots || []).forEach(s => { m[s.position] = s; });
     return m;
   }, [rack.slots]);
+
+  const disabledSet = useMemo(
+    () => new Set(rack.disabledPositions || []),
+    [rack.disabledPositions]
+  );
 
   // Accurate total slot count per type — reuses the same helpers the 2D rack
   // view uses, so the label always matches the backend's real capacity
@@ -934,6 +957,7 @@ export default function RackMesh({
               frameColor={frameColor}
               rowSlots={rowSlots}
               slotMap={slotMap}
+              disabledSet={disabledSet}
               onTogglePull={() => setPulledShelfRow(prev => prev === r ? null : r)}
               onBottleClick={onBottleClick}
               onEmptySlotClick={onEmptySlotClick}
@@ -947,6 +971,15 @@ export default function RackMesh({
           const filled = !!slot;
           const wineType = slot?.bottle?.wineDefinition?.type || 'red';
           const finalBottleZ = bottleZ !== undefined ? bottleZ : (-0.08 + z);
+          if (!filled && disabledSet.has(pos)) {
+            return (
+              <DisabledSlotDisc
+                key={pos}
+                position={[x, y, rackType === 'shelf' ? z : (depth / 2 - 0.005)]}
+                isBack={isBack}
+              />
+            );
+          }
           return filled ? (
             <Bottle
               key={pos}
@@ -1010,7 +1043,7 @@ export default function RackMesh({
           }}>
             {rack.name}
             <span style={{ opacity: 0.55, marginLeft: 6, fontSize: '10px', fontWeight: 400 }}>
-              {rack.slots?.length || 0}/{totalSlots}
+              {rack.slots?.length || 0}/{totalSlots - disabledSet.size}
             </span>
           </div>
         </Html>

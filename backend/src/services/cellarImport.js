@@ -309,8 +309,18 @@ async function createRacks(cellarId, userId, cellar, items, result) {
       cols: clampDim(spec?.cols || inf.cols, 1),
     };
     if (spec?.typeConfig) rackData.typeConfig = spec.typeConfig;
+    const rackDoc = new Rack(rackData);
+    // Restore disabled (unusable) positions, clamped to the created geometry.
+    if (Array.isArray(spec?.disabledPositions) && spec.disabledPositions.length > 0) {
+      const rackMax = getMaxPosition(rackDoc);
+      rackDoc.disabledPositions = [...new Set(
+        spec.disabledPositions
+          .map((p) => parseInt(p, 10))
+          .filter((p) => !isNaN(p) && p >= 1 && p <= rackMax)
+      )];
+    }
     try {
-      await new Rack(rackData).save();
+      await rackDoc.save();
       result.racksCreated++;
     } catch (err) {
       console.warn(`[cellarImport] rack "${name}" create failed (non-fatal):`, err.message);
@@ -693,6 +703,7 @@ async function buildCellarContents({ cellarId, ownerId, userId, cellar, items, i
           typeConfig: rack.typeConfig?.toObject ? rack.typeConfig.toObject() : rack.typeConfig,
           slots: rack.slots,
           maxPosition: getMaxPosition(rack),
+          disabledPositions: rack.disabledPositions,
         }, group, anchor);
         for (const pl of placements) rack.slots.push({ position: pl.position, bottle: pl.bottle });
         for (const u of unplaced) result.unplaced.push({ ...u, rackName });
