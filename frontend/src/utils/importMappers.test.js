@@ -426,6 +426,21 @@ describe('parseAndMap', () => {
     expect(result.items[0].producer).toBe('Chateau Margaux');
   });
 
+  it('expands quantity in Cellarion-format CSV (hand-written files)', () => {
+    const csv = 'wineName,producer,vintage,quantity\nMargaux,Chateau Margaux,2015,3\nOpus One,Opus One Winery,2018,1';
+    const result = parseAndMap(csv);
+    expect(result.format).toBe('cellarion');
+    expect(result.items).toHaveLength(4);
+    expect(result.items.filter(i => i.wineName === 'Margaux')).toHaveLength(3);
+    expect(result.items[0].quantity).toBeUndefined();
+  });
+
+  it('accepts capitalized Quantity header in Cellarion-format CSV', () => {
+    const csv = 'wineName,producer,vintage,Quantity\nMargaux,Chateau Margaux,2015,2';
+    const result = parseAndMap(csv);
+    expect(result.items).toHaveLength(2);
+  });
+
   it('returns empty items for empty CSV (header only)', () => {
     const csv = 'Wine name,Winery,Vintage';
     const result = parseAndMap(csv);

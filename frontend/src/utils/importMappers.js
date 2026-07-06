@@ -498,13 +498,20 @@ function mapGenericRow(row) {
 /**
  * Map a row from Cellarion's own CSV export.
  * Headers are already in master format (camelCase), so pass through directly.
+ *
+ * Cellarion exports are one row per bottle and carry no quantity column, but
+ * hand-written files in this format legitimately use one — honor it like the
+ * other mappers do (parseAndMap expands quantity > 1 into individual items).
  */
 function mapCellarionRow(row) {
   const str = (key) => (row[key] || '').trim();
   const num = (key) => { const n = parseLocaleNumber(row[key]); return isNaN(n) ? undefined : n; };
   const int = (key) => { const n = parseInt(row[key], 10); return isNaN(n) ? undefined : n; };
 
+  const qty = parseInt(row.quantity ?? row.Quantity ?? row.qty ?? row.Qty, 10);
+
   return {
+    quantity: isNaN(qty) || qty < 1 ? 1 : qty,
     wineName: str('wineName'),
     producer: str('producer'),
     vintage: str('vintage') || 'NV',
