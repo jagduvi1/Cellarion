@@ -1,14 +1,15 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
-import { adminGetImagesByWine, adminSetOfficialImage } from '../api/admin';
+import { adminGetImagesByWine, adminSetOfficialImage, adminRejectImage } from '../api/admin';
 import AuthImage from '../components/AuthImage';
 import { API_URL } from '../api/apiConstants';
 
 const LIMIT = 12;
 
 // Wine-centric image curation: wines that have 2+ images to choose between,
-// each shown with all its images so an admin can pick the official one.
+// each shown with all its images so an admin can pick the official one, spot
+// duplicates (same photo uploaded/imported more than once), and remove images.
 export default function AdminImagesByWine() {
   const { t } = useTranslation();
   const { apiFetch } = useAuth();
@@ -17,6 +18,7 @@ export default function AdminImagesByWine() {
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState(null);
+  const [confirmRejectId, setConfirmRejectId] = useState(null);
   const [error, setError] = useState(null);
 
   const fetchData = useCallback(async () => {
@@ -64,6 +66,25 @@ export default function AdminImagesByWine() {
     }
   };
 
+  const rejectImage = async (img) => {
+    setBusyId(img._id);
+    setError(null);
+    try {
+      const res = await adminRejectImage(apiFetch, img._id);
+      if (res.ok) {
+        setConfirmRejectId(null);
+        await fetchData();
+      } else {
+        const data = await res.json();
+        setError(data.error || 'Failed to remove image');
+      }
+    } catch {
+      setError('Network error');
+    } finally {
+      setBusyId(null);
+    }
+  };
+
   const totalPages = Math.ceil(total / LIMIT);
 
   if (loading) return <div className="loading">{t('common.loading')}</div>;
@@ -80,6 +101,14 @@ export default function AdminImagesByWine() {
 
           {items.map(({ wine, images, imageCount, bottleCount }) => {
             const hasOfficial = images.some(img => isOfficial(wine, img));
+            // Same photo uploaded/imported more than once → identical content hash.
+            const hashCount = {};
+            for (const im of images) {
+              if (im.contentHash) hashCount[im.contentHash] = (hashCount[im.contentHash] || 0) + 1;
+            }
+            const isDup = (im) => !!im.contentHash && hashCount[im.contentHash] > 1;
+            const dupCount = images.filter(isDup).length;
+
             return (
               <div key={wine._id} className="by-wine-card">
                 <div className="by-wine-head">
@@ -91,6 +120,9 @@ export default function AdminImagesByWine() {
                     {wine.type && <span className={`wine-type-pill ${wine.type}`}>{wine.type}</span>}
                     <span>{t('admin.images.bottleCount', { count: bottleCount })}</span>
                     <span>{t('admin.images.imageCountLabel', { count: imageCount })}</span>
+                    {dupCount > 0 && (
+                      <span className="by-wine-tag by-wine-tag--dup">{t('admin.images.duplicateCount', { count: dupCount })}</span>
+                    )}
                     {hasOfficial
                       ? <span className="by-wine-tag by-wine-tag--ok">{t('admin.images.officialSet')}</span>
                       : <span className="by-wine-tag by-wine-tag--warn">{t('admin.images.noOfficial')}</span>}
@@ -100,8 +132,10 @@ export default function AdminImagesByWine() {
                 <div className="by-wine-gallery">
                   {images.map(img => {
                     const official = isOfficial(wine, img);
+                    const dup = isDup(img);
+                    const busy = busyId === img._id;
                     return (
-                      <div key={img._id} className={`by-wine-img${official ? ' is-official' : ''}`}>
+                      <div key={img._id} className={`by-wine-img${official ? ' is-official' : ''}${dup ? ' is-dup' : ''}`}>
                         <div className="by-wine-thumb">
                           <AuthImage
                             src={`${API_URL}${img.processedUrl || img.originalUrl}`}
@@ -109,25 +143,72 @@ export default function AdminImagesByWine() {
                             onError={(e) => { e.target.style.display = 'none'; }}
                           />
                           {official && <span className="by-wine-star" title={t('admin.images.official')}>★</span>}
+                          {dup && <span className="by-wine-dup-flag" title={t('admin.images.duplicateHint')}>{t('admin.images.duplicate')}</span>}
                         </div>
+
                         <div className="by-wine-img-meta">
                           <span className="by-wine-uploader" title={img.uploadedBy?.username || ''}>
                             {img.uploadedBy?.username || '—'}
                           </span>
-                          <span className={`status-badge status-${img.status}`}>{img.status}</span>
+                          {img.status === 'approved' ? (
+                            <span className={`vis-badge vis-${img.visibility}`}>
+                              {img.visibility === 'public'
+                                ? t('admin.images.visPublic')
+                                : t('admin.images.visUploaderOnly')}
+                            </span>
+                          ) : (
+                            <span className={`status-badge status-${img.status}`}>{img.status}</span>
+                          )}
                         </div>
-                        <button
-                          type="button"
-                          className="btn btn-small btn-primary by-wine-set"
-                          onClick={() => setOfficial(img)}
-                          disabled={official || busyId === img._id}
-                        >
-                          {official
-                            ? t('admin.images.official')
-                            : busyId === img._id
-                              ? t('admin.images.processing')
-                              : t('admin.images.setOfficial')}
-                        </button>
+
+                        <div className="by-wine-img-actions">
+                          {confirmRejectId === img._id ? (
+                            <div className="by-wine-confirm">
+                              <span className="by-wine-confirm-q">{t('admin.images.removeConfirm')}</span>
+                              <div className="by-wine-confirm-btns">
+                                <button
+                                  type="button"
+                                  className="btn btn-small btn-danger"
+                                  onClick={() => rejectImage(img)}
+                                  disabled={busy}
+                                >
+                                  {busy ? t('admin.images.removing') : t('admin.images.removeYes')}
+                                </button>
+                                <button
+                                  type="button"
+                                  className="btn btn-small btn-ghost"
+                                  onClick={() => setConfirmRejectId(null)}
+                                  disabled={busy}
+                                >
+                                  {t('common.cancel', 'Cancel')}
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <>
+                              <button
+                                type="button"
+                                className="btn btn-small btn-primary by-wine-set"
+                                onClick={() => setOfficial(img)}
+                                disabled={official || busy}
+                              >
+                                {official
+                                  ? t('admin.images.official')
+                                  : busy
+                                    ? t('admin.images.processing')
+                                    : t('admin.images.setOfficial')}
+                              </button>
+                              <button
+                                type="button"
+                                className="btn btn-small btn-ghost by-wine-reject"
+                                onClick={() => { setConfirmRejectId(img._id); setError(null); }}
+                                disabled={busy}
+                              >
+                                {t('admin.images.reject')}
+                              </button>
+                            </>
+                          )}
+                        </div>
                       </div>
                     );
                   })}

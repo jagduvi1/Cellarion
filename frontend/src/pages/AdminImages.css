@@ -126,6 +126,73 @@
   width: 100%;
 }
 
+/* Duplicate flag (same photo more than once for a wine) */
+.by-wine-tag--dup {
+  color: var(--color-warning);
+  background: var(--color-warning-bg);
+  border-color: var(--color-warning-border);
+}
+.by-wine-img.is-dup {
+  border-color: var(--color-warning);
+}
+.by-wine-dup-flag {
+  position: absolute;
+  bottom: 4px;
+  left: 4px;
+  font-size: 0.6rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: #fff;
+  background: var(--color-warning);
+  padding: 0.05rem 0.35rem;
+  border-radius: var(--radius-sm);
+}
+
+/* Visibility badge (public vs uploader-only) for approved images */
+.vis-badge {
+  font-size: 0.66rem;
+  font-weight: 700;
+  padding: 0.08rem 0.4rem;
+  border-radius: var(--radius-full);
+  white-space: nowrap;
+}
+.vis-public {
+  color: var(--color-success);
+  background: var(--color-success-bg);
+}
+.vis-private {
+  color: var(--color-warning);
+  background: var(--color-warning-bg);
+}
+
+/* Per-image actions + inline remove confirm */
+.by-wine-img-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.by-wine-img-actions .btn {
+  width: 100%;
+}
+.by-wine-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.by-wine-confirm-q {
+  font-size: 0.7rem;
+  color: var(--color-text-secondary);
+  text-align: center;
+}
+.by-wine-confirm-btns {
+  display: flex;
+  gap: 0.35rem;
+}
+.by-wine-confirm-btns .btn {
+  flex: 1;
+}
+
 .admin-images-page .page-header {
   display: flex;
   align-items: center;

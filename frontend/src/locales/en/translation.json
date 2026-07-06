@@ -925,7 +925,17 @@
       "official": "Official",
       "officialSet": "Official set",
       "noOfficial": "No official",
-      "setOfficial": "Set as official"
+      "setOfficial": "Set as official",
+      "visPublic": "Public",
+      "visUploaderOnly": "Uploader only",
+      "duplicate": "Duplicate",
+      "duplicateHint": "This exact photo appears more than once for this wine — remove the extras.",
+      "duplicateCount_one": "{{count}} duplicate",
+      "duplicateCount_other": "{{count}} duplicates",
+      "removeConfirm": "Remove this image? The uploader is notified.",
+      "removeYes": "Remove",
+      "removing": "Removing…",
+      "reject": "Reject"
     },
     "audit": {
       "title": "Audit Log",
