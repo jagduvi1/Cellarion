@@ -348,6 +348,41 @@ describe('placeBottles', () => {
     ], 5);
     expect(result.placements[0].position).toBe(4);
   });
+
+  test('treats disabled positions as occupied — exact request overflows past them', () => {
+    const result = placeBottles([], [
+      { requestedPosition: 3, bottleId: 'a' },
+    ], 24, [3, 4]);
+    expect(result.placements[0].position).toBe(5);
+    expect(result.placements[0].overflowed).toBe(true);
+  });
+
+  test('overflow scan skips disabled positions', () => {
+    const result = placeBottles([], [
+      { requestedPosition: 1, bottleId: 'a' },
+      { requestedPosition: 1, bottleId: 'b' },
+    ], 24, [2]);
+    const placementOf = (id) => result.placements.find(p => p.bottle === id).position;
+    expect(placementOf('a')).toBe(1);
+    expect(placementOf('b')).toBe(3); // 2 is disabled, not usable for overflow
+  });
+
+  test('disabled positions do not count as bottles placed', () => {
+    const result = placeBottles([], [
+      { requestedPosition: 1, bottleId: 'a' },
+    ], 24, [10, 11, 12]);
+    expect(result.placements).toHaveLength(1);
+    expect(result.placements[0]).toEqual(expect.objectContaining({ position: 1, bottle: 'a' }));
+  });
+
+  test('reports unplaced when only disabled positions remain', () => {
+    const existing = [{ position: 1, bottle: 'pre' }];
+    const result = placeBottles(existing, [
+      { requestedPosition: 2, bottleId: 'a' },
+    ], 3, [2, 3]);
+    expect(result.placements).toHaveLength(0);
+    expect(result.unplaced).toHaveLength(1);
+  });
 });
 
 describe('placeBottlesInRack (orchestration)', () => {
@@ -389,6 +424,16 @@ describe('placeBottlesInRack (orchestration)', () => {
       { item: { rackPosition: 11 }, bottleId: 'a', sourceIndex: 0 },
     ], 'top-left');
     expect(placements[0].position).toBe(12);
+    expect(placements[0].overflowed).toBe(true);
+  });
+
+  test('end-to-end: rack disabledPositions are never assigned', () => {
+    const rack = buildRack({ disabledPositions: [11, 12] });
+    const { placements, unplaced } = placeBottlesInRack(rack, [
+      { item: { rackPosition: 11 }, bottleId: 'a', sourceIndex: 0 },
+    ], 'top-left');
+    expect(unplaced).toHaveLength(0);
+    expect(placements[0].position).toBe(13);
     expect(placements[0].overflowed).toBe(true);
   });
 

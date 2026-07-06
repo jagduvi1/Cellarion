@@ -158,6 +158,12 @@ router.put('/:id', async (req, res) => {
       });
     }
 
+    // Silently drop disabled positions beyond the new maximum — they address
+    // cells that no longer exist after the resize.
+    if ((rack.disabledPositions || []).some(p => p > newMax)) {
+      rack.disabledPositions = rack.disabledPositions.filter(p => p <= newMax);
+    }
+
     await rack.save();
     await rack.populate({
       path: 'slots.bottle',
@@ -232,6 +238,10 @@ router.put('/:id/slots/:position', async (req, res) => {
     const maxPos = getMaxPosition(rack);
     if (position < 1 || position > maxPos) {
       return res.status(400).json({ error: `Position must be 1–${maxPos}` });
+    }
+
+    if ((rack.disabledPositions || []).includes(position)) {
+      return res.status(400).json({ error: 'This slot is disabled' });
     }
 
     // Verify the bottle belongs to this cellar
@@ -345,6 +355,90 @@ router.delete('/:id/slots/:position', async (req, res) => {
   } catch (err) {
     console.error('Clear slot error:', err);
     res.status(500).json({ error: 'Failed to clear slot' });
+  }
+});
+
+// POST /api/racks/:id/slots/:position/disable  — mark a slot as unusable (owner or editor)
+router.post('/:id/slots/:position/disable', async (req, res) => {
+  try {
+    if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
+    const position = parseInt(req.params.position, 10);
+    if (isNaN(position)) return res.status(400).json({ error: 'Invalid position' });
+
+    const rack = await Rack.findOne({ _id: req.params.id, deletedAt: null });
+    if (!rack) return res.status(404).json({ error: 'Rack not found' });
+
+    const cellarDoc = await Cellar.findById(rack.cellar);
+    const role = getCellarRole(cellarDoc, req.user.id);
+    if (!role || role === 'viewer') {
+      return res.status(403).json({ error: 'Not authorized to modify rack slots' });
+    }
+
+    const maxPos = getMaxPosition(rack);
+    if (position < 1 || position > maxPos) {
+      return res.status(400).json({ error: `Position must be 1–${maxPos}` });
+    }
+
+    if (rack.slots.some(s => s.position === position)) {
+      return res.status(409).json({ error: 'This slot is occupied. Clear the slot first.' });
+    }
+
+    // $addToSet semantics — no duplicates
+    if (!rack.disabledPositions.includes(position)) {
+      rack.disabledPositions.push(position);
+      await rack.save();
+    }
+
+    await rack.populate({
+      path: 'slots.bottle',
+      populate: { path: 'wineDefinition', populate: ['country', 'region', 'grapes'] }
+    });
+
+    logAudit(req, 'rack.slot_disable', { type: 'rack', id: rack._id });
+    res.json({ rack });
+  } catch (err) {
+    if (err.name === 'VersionError') {
+      return res.status(409).json({ error: 'This rack was modified by another request. Please refresh and try again.' });
+    }
+    console.error('Disable slot error:', err);
+    res.status(500).json({ error: 'Failed to disable slot' });
+  }
+});
+
+// DELETE /api/racks/:id/slots/:position/disable  — make a disabled slot usable again (owner or editor)
+router.delete('/:id/slots/:position/disable', async (req, res) => {
+  try {
+    if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
+    const position = parseInt(req.params.position, 10);
+    if (isNaN(position)) return res.status(400).json({ error: 'Invalid position' });
+
+    const rack = await Rack.findOne({ _id: req.params.id, deletedAt: null });
+    if (!rack) return res.status(404).json({ error: 'Rack not found' });
+
+    const cellarDoc = await Cellar.findById(rack.cellar);
+    const role = getCellarRole(cellarDoc, req.user.id);
+    if (!role || role === 'viewer') {
+      return res.status(403).json({ error: 'Not authorized to modify rack slots' });
+    }
+
+    if (rack.disabledPositions.includes(position)) {
+      rack.disabledPositions = rack.disabledPositions.filter(p => p !== position);
+      await rack.save();
+    }
+
+    await rack.populate({
+      path: 'slots.bottle',
+      populate: { path: 'wineDefinition', populate: ['country', 'region', 'grapes'] }
+    });
+
+    logAudit(req, 'rack.slot_enable', { type: 'rack', id: rack._id });
+    res.json({ rack });
+  } catch (err) {
+    if (err.name === 'VersionError') {
+      return res.status(409).json({ error: 'This rack was modified by another request. Please refresh and try again.' });
+    }
+    console.error('Enable slot error:', err);
+    res.status(500).json({ error: 'Failed to enable slot' });
   }
 });
 

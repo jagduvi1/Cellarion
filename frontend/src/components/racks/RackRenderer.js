@@ -18,6 +18,10 @@ const ACTIVE_STROKE = '#7A1E2D';
 const WOOD_BG       = '#DCC8A4';
 const WOOD_FRAME    = '#C8AD82';
 const SHELF_COLOR   = '#D4BA94';
+// Disabled (unusable) slots — muted, greyed-out wood tones
+const DISABLED_FILL   = '#BFB09A';
+const DISABLED_STROKE = '#A89880';
+const DISABLED_CROSS  = 'rgba(90, 74, 56, 0.45)';
 
 /** Sub-circle offsets for multi-bottle cells (dx, dy from cell centre) */
 function getSubOffsets(bpc, R) {
@@ -90,6 +94,11 @@ export default function RackRenderer({
     return m;
   }, [rack.slots]);
 
+  const disabledSet = useMemo(
+    () => new Set(rack.disabledPositions || []),
+    [rack.disabledPositions]
+  );
+
   const activePos = activeRackId === rack._id ? activePosition : null;
   const R = SLOT_RADIUS;
 
@@ -104,7 +113,7 @@ export default function RackRenderer({
             ) : rack.type && rack.type !== 'grid' ? (
               <span className="rack-type-badge">{t(`racks.type_${rack.type}`)}</span>
             ) : null}
-            {(rack.slots || []).length}/{layout.totalSlots} {t('racks.filled')}
+            {(rack.slots || []).length}/{layout.totalSlots - disabledSet.size} {t('racks.filled')}
           </span>
         </div>
         <div className="rack-header-actions">
@@ -217,6 +226,7 @@ export default function RackRenderer({
                   position={position}
                   cx={cx} cy={cy} R={isBack && backR ? backR : R}
                   slot={slotMap[position]}
+                  disabled={disabledSet.has(position)}
                   isActive={activePos === position}
                   isHighlight={highlightPos === position}
                   onSlotClick={onSlotClick}
@@ -272,6 +282,7 @@ export default function RackRenderer({
                         cy={cell.cy + off.dy}
                         R={useR}
                         slot={slotMap[pos]}
+                        disabled={disabledSet.has(pos)}
                         isActive={activePos === pos}
                         isHighlight={highlightPos === pos}
                         onSlotClick={onSlotClick}
@@ -289,10 +300,39 @@ export default function RackRenderer({
 }
 
 /** Single slot circle (bpc=1 standard rendering) */
-function SlotCircle({ position, cx, cy, R, slot, isActive, isHighlight, onSlotClick }) {
+function SlotCircle({ position, cx, cy, R, slot, disabled, isActive, isHighlight, onSlotClick }) {
   const wine = slot?.bottle?.wineDefinition;
   const wineType = wine?.type || 'red';
   const colors = slot ? (WINE_COLORS[wineType] || WINE_COLORS.red) : null;
+
+  // Disabled (unusable) position: greyed circle with a subtle diagonal cross.
+  // Still clickable so editors can re-enable it from the slot popup.
+  if (disabled) {
+    const d = R * 0.5;
+    return (
+      <g
+        className="rack-slot-g disabled"
+        onClick={() => onSlotClick(position, null)}
+        onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && onSlotClick(position, null)}
+        role="button"
+        tabIndex={0}
+        aria-label={`Disabled slot ${position}`}
+        style={{ cursor: 'default' }}
+      >
+        <circle
+          cx={cx} cy={cy} r={R}
+          fill={DISABLED_FILL}
+          stroke={DISABLED_STROKE}
+          strokeWidth={1.5}
+          opacity={0.65}
+        />
+        <line x1={cx - d} y1={cy - d} x2={cx + d} y2={cy + d}
+          stroke={DISABLED_CROSS} strokeWidth={1.5} strokeLinecap="round" pointerEvents="none" />
+        <line x1={cx - d} y1={cy + d} x2={cx + d} y2={cy - d}
+          stroke={DISABLED_CROSS} strokeWidth={1.5} strokeLinecap="round" pointerEvents="none" />
+      </g>
+    );
+  }
 
   return (
     <g

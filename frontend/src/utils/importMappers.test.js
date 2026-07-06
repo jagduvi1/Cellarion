@@ -691,6 +691,29 @@ describe('parseOenoExport', () => {
     expect(result.oenoRackSpecs['Main Cellar – Module 4'].rows).toBe(13);
   });
 
+  it('converts per-layer disabled slots to global positions (bottom-anchored shelf math)', () => {
+    const result = parseOenoExport(fixture);
+    // Layer 1001 = column 3, shelf 18 (top shelf of the 18-row rack →
+    // Cellarion shelf 1, shelfBase 0), front layer, slots 5 & 6 disabled
+    // → global positions 5 and 6.
+    expect(result.oenoRackSpecs['Main Cellar – Module 3'].disabledPositions).toEqual([5, 6]);
+    // Racks without disabled slots don't carry the key at all
+    expect(result.oenoRackSpecs['Main Cellar – Module 4'].disabledPositions).toBeUndefined();
+    expect(result.oenoRackSpecs['Wine Fridge'].disabledPositions).toBeUndefined();
+  });
+
+  it('converts back-layer disabled slots with the cols offset', () => {
+    // Move layer 1002 to shelf 17 (back layer) and disable slots 2 and 4.
+    // Shelf 17 in an 18-row rack → effectiveShelf 2 → shelfBase = 1 × 11 = 11;
+    // back layer adds the 6 front cols: 11 + 6 + 2 = 19 and 11 + 6 + 4 = 21.
+    const withBackDisabled = fixture.replace(
+      '10001,Main Cellar,TRANSTHERM,Espace Cellar,3,18,2,1002,0,702,30,2024-07-05,,0',
+      '10001,Main Cellar,TRANSTHERM,Espace Cellar,3,17,2,1002,"2, 4",702,30,2024-07-05,,0'
+    );
+    const result = parseOenoExport(withBackDisabled);
+    expect(result.oenoRackSpecs['Main Cellar – Module 3'].disabledPositions).toEqual([5, 6, 19, 21]);
+  });
+
   it('maps shelved bottles to rackName + shelfNumber + layer + slotInLayer', () => {
     const result = parseOenoExport(fixture);
     const wineA = result.items.find(i => i.wineName === 'Test Wine A');

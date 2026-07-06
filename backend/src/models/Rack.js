@@ -42,6 +42,12 @@ const rackSchema = new mongoose.Schema({
   isModular: { type: Boolean, default: false },
   modules:   { type: [rackModuleSchema], default: [] },
   slots:     [slotSchema],
+  // Positions the user marked as unusable (e.g. Vintec/Oeno cabinets where
+  // bottle shapes mean some shelf positions can't hold a bottle). Stored as
+  // a top-level list of global 1-indexed positions — NOT in slots[] (whose
+  // schema requires a bottle ref) and NOT per-module (global positions cover
+  // modular racks too). Position numbering stays contiguous; these are holes.
+  disabledPositions: { type: [Number], default: [] },
   rfidTag:   { type: String },
   // Soft-delete: set when deleted, null when active
   deletedAt: { type: Date, default: null }

@@ -548,7 +548,11 @@
     "saveRack": "Spara hylla",
     "overlapWarning": "Modulerna överlappar. Flytta isär dem innan du sparar.",
     "nfcLink": "NFC-tagg",
-    "nfcLinked": "NFC kopplad"
+    "nfcLinked": "NFC kopplad",
+    "disableSlot": "Inaktivera plats",
+    "enableSlot": "Aktivera plats",
+    "disabledSlotTitle": "Plats {{position}} — Inaktiverad",
+    "disabledSlotNote": "Den här platsen är markerad som oanvändbar — flaskor kan inte placeras här."
   },
 
   "nfc": {

@@ -431,13 +431,16 @@ router.post('/confirm', async (req, res) => {
       : 'USD';
 
     // Validate user-supplied per-rack configuration.
-    // Shape: { [rackName]: { skip?, type?, rows?, cols?, typeConfig?: {...} } }
+    // Shape: { [rackName]: { skip?, type?, rows?, cols?, typeConfig?: {...}, disabledPositions?: [Number] } }
     // skip — when true, drop this rack from auto-creation AND placement;
     //   bottles referencing it land in the cellar without rack placement
     // type — one of RACK_TYPES (defaults to 'grid' if absent/invalid)
     // rows/cols — clamped to 1..20
     // typeConfig — optional shape config (bottlesPerCell, bottlesPerSection,
     //   moduleRows, moduleCols, backCols), each clamped to model bounds
+    // disabledPositions — global 1-indexed positions marked unusable (e.g.
+    //   Oeno-export cabinets); deduped here, clamped to the created rack's
+    //   capacity at creation time below
     const rackConfigs = {};
     const clampInt = (v, min, max) => {
       const n = parseInt(v, 10);
@@ -475,6 +478,15 @@ router.post('/confirm', async (req, res) => {
           if (bps !== undefined) tc.bottlesPerSection = bps;
           if (bc !== undefined) tc.backCols = bc;
           if (Object.keys(tc).length > 0) entry.typeConfig = tc;
+        }
+
+        if (Array.isArray(cfg.disabledPositions)) {
+          const dp = [...new Set(
+            cfg.disabledPositions
+              .map(p => parseInt(p, 10))
+              .filter(p => !isNaN(p) && p >= 1)
+          )];
+          if (dp.length > 0) entry.disabledPositions = dp;
         }
 
         rackConfigs[String(name)] = entry;
@@ -532,6 +544,12 @@ router.post('/confirm', async (req, res) => {
           };
           if (override?.typeConfig) rackData.typeConfig = override.typeConfig;
           const rack = new Rack(rackData);
+          // Disabled positions beyond the created geometry address cells that
+          // don't exist — drop them rather than storing dead entries.
+          if (override?.disabledPositions?.length) {
+            const rackMax = getMaxPosition(rack);
+            rack.disabledPositions = override.disabledPositions.filter(p => p <= rackMax);
+          }
           await rack.save();
           createdRacks.push({ name, type: safeType, rows, cols, typeConfig: override?.typeConfig });
           logAudit(req, 'rack.create', { type: 'rack', id: rack._id }, { source: 'import', name });
@@ -792,7 +810,8 @@ router.post('/confirm', async (req, res) => {
               // .toObject() shape is what the helper expects.
               typeConfig: rack.typeConfig?.toObject ? rack.typeConfig.toObject() : rack.typeConfig,
               slots: rack.slots,
-              maxPosition: getMaxPosition(rack)
+              maxPosition: getMaxPosition(rack),
+              disabledPositions: rack.disabledPositions
             },
             group,
             positionAnchor

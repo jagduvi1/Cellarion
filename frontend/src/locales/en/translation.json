@@ -548,7 +548,11 @@
     "saveRack": "Save Rack",
     "overlapWarning": "Modules are overlapping. Move them apart before saving.",
     "nfcLink": "NFC Tag",
-    "nfcLinked": "NFC Linked"
+    "nfcLinked": "NFC Linked",
+    "disableSlot": "Disable slot",
+    "enableSlot": "Enable slot",
+    "disabledSlotTitle": "Slot {{position}} — Disabled",
+    "disabledSlotNote": "This slot is marked as unusable — bottles can't be placed here."
   },
 
   "nfc": {
