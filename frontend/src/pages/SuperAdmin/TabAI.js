@@ -11,24 +11,32 @@ const CHAT_MODELS = [
     id: 'claude-haiku-4-5-20251001',
     name: 'Claude Haiku 4.5',
     description: 'Fast & affordable — recommended for Cellar Chat',
-    inputPrice: '$0.80',
-    outputPrice: '$4.00',
+    inputPrice: '$1.00',
+    outputPrice: '$5.00',
     tier: 'economy',
   },
   {
     id: 'claude-sonnet-4-6',
     name: 'Claude Sonnet 4.6',
-    description: 'Latest Sonnet — high quality at standard price',
+    description: 'Previous-generation Sonnet — high quality at standard price',
     inputPrice: '$3.00',
     outputPrice: '$15.00',
     tier: 'standard',
   },
   {
-    id: 'claude-opus-4-6',
-    name: 'Claude Opus 4.6',
+    id: 'claude-sonnet-5',
+    name: 'Claude Sonnet 5',
+    description: 'Near-Opus quality — recommended for wine identification & profiles ($2/$10 intro until Aug 2026)',
+    inputPrice: '$3.00',
+    outputPrice: '$15.00',
+    tier: 'standard',
+  },
+  {
+    id: 'claude-opus-4-8',
+    name: 'Claude Opus 4.8',
     description: 'Most capable — best for complex palate matching',
-    inputPrice: '$15.00',
-    outputPrice: '$75.00',
+    inputPrice: '$5.00',
+    outputPrice: '$25.00',
     tier: 'premium',
   },
 ];
@@ -409,7 +417,7 @@ function EnrichmentModelPanel({ currentModel, apiFetch }) {
       groupName="enrichmentModel"
       intro="Model used to generate each wine's AI tasting/style profile (body, tannin, flavours, food pairings, description). This is a knowledge-recall task — Sonnet is recommended over Haiku for richer, more accurate profiles."
       currentModel={currentModel}
-      defaultModel="claude-sonnet-4-6"
+      defaultModel="claude-sonnet-5"
       successMsg="Saved — takes effect on next enrichment run"
       apiFetch={apiFetch}
     />
@@ -1089,16 +1097,16 @@ export default function TabAI() {
       )}
       <ChatModelPanel currentModel={config.chatModel} currentFallback={config.chatModelFallback || null} apiFetch={apiFetch} />
       <SystemPromptPanel prompt={config.chatSystemPrompt || ''} apiFetch={apiFetch} />
-      <LabelScanModelPanel currentModel={config.labelScanModel || 'claude-haiku-4-5-20251001'} apiFetch={apiFetch} />
+      <LabelScanModelPanel currentModel={config.labelScanModel || 'claude-sonnet-5'} apiFetch={apiFetch} />
       <LabelScanPromptPanel prompt={config.labelScanPrompt || ''} apiFetch={apiFetch} />
-      <ImportLookupModelPanel currentModel={config.importLookupModel || 'claude-haiku-4-5-20251001'} apiFetch={apiFetch} />
+      <ImportLookupModelPanel currentModel={config.importLookupModel || 'claude-sonnet-5'} apiFetch={apiFetch} />
       <ImportLookupPromptPanel prompt={config.importLookupPrompt || ''} apiFetch={apiFetch} />
-      <MaturitySuggestModelPanel currentModel={config.maturitySuggestModel || 'claude-haiku-4-5-20251001'} apiFetch={apiFetch} />
+      <MaturitySuggestModelPanel currentModel={config.maturitySuggestModel || 'claude-sonnet-5'} apiFetch={apiFetch} />
       <MaturitySuggestPromptPanel prompt={config.maturitySuggestPrompt || ''} apiFetch={apiFetch} />
       <MaturitySuggestPromptNvPanel prompt={config.maturitySuggestPromptNv || ''} apiFetch={apiFetch} />
       <PriceSuggestModelPanel currentModel={config.priceSuggestModel || 'claude-haiku-4-5-20251001'} apiFetch={apiFetch} />
       <PriceSuggestPromptPanel prompt={config.priceSuggestPrompt || ''} apiFetch={apiFetch} />
-      <EnrichmentModelPanel currentModel={config.enrichmentModel || 'claude-sonnet-4-6'} apiFetch={apiFetch} />
+      <EnrichmentModelPanel currentModel={config.enrichmentModel || 'claude-sonnet-5'} apiFetch={apiFetch} />
       <EnrichmentPromptPanel prompt={config.enrichmentPrompt || ''} apiFetch={apiFetch} />
       <ChatLimitPanel limit={config.chatDailyLimit ?? 50} apiFetch={apiFetch} />
       <ChatUsagePanel />
