@@ -408,10 +408,11 @@ function buildBottle({ cellarId, ownerId, item, canonicalVintage, wineDefinition
  *  the processed file when it exists and keep an original ONLY when there is no
  *  processed version — we never re-introduce a pre-crop original alongside a
  *  cropped one. Older exports that still carry both are normalised the same way. */
-async function attachImages(bottle, images, userId, getFileBuffer, result) {
+async function attachImages(bottle, images, userId, getFileBuffer, result, dedupCache) {
   if (!Array.isArray(images) || images.length === 0) return;
   let firstImageId = null;
   let count = 0;
+  const wineKey = bottle.wineDefinition ? bottle.wineDefinition.toString() : null;
 
   for (const img of images) {
     if (count >= MAX_IMAGES_PER_BOTTLE) break;
@@ -425,6 +426,20 @@ async function attachImages(bottle, images, userId, getFileBuffer, result) {
     if (!primaryBuf) continue;
 
     const hash = crypto.createHash('sha256').update(primaryBuf).digest('hex');
+
+    // Same photo already attached to this wine earlier in THIS import (e.g.
+    // several bottles sharing one label photo) → reuse that single BottleImage
+    // record instead of creating another duplicate registry candidate. It stays
+    // owned by the first bottle so a cellar delete still cleans it up; a later
+    // individual delete of that bottle just falls back to the (byte-identical)
+    // wine image.
+    const cacheKey = (wineKey && dedupCache) ? `${wineKey}:${hash}` : null;
+    if (cacheKey && dedupCache.has(cacheKey)) {
+      if (!firstImageId) firstImageId = dedupCache.get(cacheKey);
+      result.imagesDeduped++;
+      count++;
+      continue;
+    }
 
     let originalUrl = null;
     let processedUrl = null;
@@ -463,6 +478,7 @@ async function attachImages(bottle, images, userId, getFileBuffer, result) {
       contentHash: hash,
     });
     if (deduped) result.imagesDeduped++; else result.imagesAttached++;
+    if (cacheKey) dedupCache.set(cacheKey, doc._id);
     if (!firstImageId) firstImageId = doc._id;
     count++;
   }
@@ -610,6 +626,7 @@ async function buildCellarContents({ cellarId, ownerId, userId, cellar, items, i
   const pendingPlacements = [];
   const seenMaturity = new Set(); // wine+vintage pairs already reconstituted
   const seenPendingProfile = new Set(); // wine+vintage pairs already queued for a somm
+  const wineImageDedup = new Map(); // `${wineId}:${contentHash}` -> reused BottleImage _id
 
   for (let i = 0; i < items.length; i++) {
     const item = items[i];
@@ -656,7 +673,7 @@ async function buildCellarContents({ cellarId, ownerId, userId, cellar, items, i
       result.bottlesCreated++;
       if (bottle.status === 'active') createdActiveIds.push(bottle._id);
 
-      await attachImages(bottle, imagesByIndex[i], userId, getFileBuffer, result);
+      await attachImages(bottle, imagesByIndex[i], userId, getFileBuffer, result, wineImageDedup);
       await attachReviews(bottle, item.reviews, userId, wine.wineDefinitionId, result);
       await attachMaturity(item.maturity, wine.wineDefinitionId, canonicalVintage, result, seenMaturity);
 
