@@ -10,6 +10,7 @@ import {
 import Modal from '../components/Modal';
 import Drawer from '../components/Drawer';
 import WineDuplicatesModal from '../components/WineDuplicatesModal';
+import WineProducerInNameModal from '../components/WineProducerInNameModal';
 import { WINE_TYPES } from '../config/wineTypes';
 import GrapePicker from '../components/GrapePicker';
 import ImageUpload from '../components/ImageUpload';
@@ -74,6 +75,9 @@ function AdminWines() {
 
   // Registry-wide duplicate scanner
   const [showDuplicatesScanner, setShowDuplicatesScanner] = useState(false);
+
+  // Producer-in-name cleanup tool
+  const [showProducerInName, setShowProducerInName] = useState(false);
 
   // Taxonomy
   const [countries, setCountries] = useState([]);
@@ -349,6 +353,9 @@ function AdminWines() {
         <div style={{ display: 'flex', gap: 8 }}>
           <button className="btn btn-secondary" onClick={() => setShowDuplicatesScanner(true)} title="Scan the wine registry for likely duplicates">
             Find duplicates
+          </button>
+          <button className="btn btn-secondary" onClick={() => setShowProducerInName(true)} title={t('admin.wines.producerInName.buttonTitle')}>
+            {t('admin.wines.producerInName.button')}
           </button>
           <button className="btn btn-primary" onClick={openCreate}>
             {t('admin.wines.newWine')}
@@ -811,6 +818,14 @@ function AdminWines() {
           apiFetch={apiFetch}
           onClose={() => setShowDuplicatesScanner(false)}
           onMerged={fetchWines}
+        />
+      )}
+
+      {showProducerInName && (
+        <WineProducerInNameModal
+          apiFetch={apiFetch}
+          onClose={() => setShowProducerInName(false)}
+          onChanged={fetchWines}
         />
       )}
 

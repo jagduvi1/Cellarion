@@ -836,7 +836,26 @@
       "mergeInfo": "\"{{name}}\" has {{count}} bottle(s) referencing it. Choose another wine to reassign them to before deleting.",
       "mergeSearchLabel": "Search for target wine",
       "mergeTarget": "Reassign bottles to:",
-      "mergeBtn": "Merge & Delete"
+      "mergeBtn": "Merge & Delete",
+      "producerInName": {
+        "button": "Producer in name",
+        "buttonTitle": "Find wines whose name starts with their own producer",
+        "title": "Producer in wine name",
+        "intro": "These wines repeat their producer at the start of the name — usually an AI-import artefact. Strip the prefix or delete the entry.",
+        "found_one": "{{count}} wine found",
+        "found_other": "{{count}} wines found",
+        "producerCol": "Producer",
+        "currentNameCol": "Current name",
+        "proposedNameCol": "New name",
+        "bottlesCol": "Bottles",
+        "stripBtn": "Strip",
+        "stripTitle": "Rename the wine to the proposed name",
+        "stripping": "Stripping…",
+        "stripped": "Renamed \"{{from}}\" to \"{{to}}\"",
+        "deleted": "Deleted \"{{name}}\"",
+        "empty": "No wines have their producer in the name.",
+        "networkError": "Network error"
+      }
     },
     "images": {
       "title": "Admin: Image Review",

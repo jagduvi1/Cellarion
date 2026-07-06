@@ -53,6 +53,14 @@ export const adminUndismissDuplicateCluster = (apiFetch, wineIds) =>
     body: JSON.stringify({ wineIds }),
   });
 
+// Wines whose name starts with their own producer (AI-import artefacts).
+export const adminGetProducerInNameWines = (apiFetch, params) =>
+  apiFetch(`/api/admin/wines/producer-in-name?${params}`);
+
+// Remove the wine's own producer prefix from its name.
+export const adminStripProducerFromName = (apiFetch, id) =>
+  apiFetch(`/api/admin/wines/${id}/strip-producer`, { method: 'POST' });
+
 // ── Taxonomy ─────────────────────────────────────────────────────────────────
 export const adminGetTaxonomy = (apiFetch, endpoint) =>
   apiFetch(endpoint);
