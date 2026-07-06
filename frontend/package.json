@@ -1,6 +1,6 @@
 {
   "name": "frontend",
-  "version": "1.67.7",
+  "version": "1.68.0",
   "private": true,
   "type": "module",
   "dependencies": {
