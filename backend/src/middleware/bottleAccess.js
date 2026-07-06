@@ -24,6 +24,10 @@ function requireBottleAccess(minRole = 'viewer') {
       if (!bottle) return res.status(404).json({ error: 'Bottle not found' });
 
       const cellar = await Cellar.findById(bottle.cellar);
+      // A soft-deleted cellar is treated as missing (same response as a
+      // missing cellar, no existence oracle) — its bottles are frozen until
+      // restore/purge.
+      if (cellar && cellar.deletedAt) return res.status(404).json({ error: 'Bottle not found' });
       const role = getCellarRole(cellar, req.user.id);
 
       if (!role) return res.status(404).json({ error: 'Bottle not found' });

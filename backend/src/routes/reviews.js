@@ -167,9 +167,17 @@ router.get('/user/:userId', async (req, res) => {
     if (!isValidId(req.params.userId)) return res.status(400).json({ error: 'Invalid user ID' });
     const { page, limit, offset: skip } = parsePagination(req.query, { limit: REVIEWS_PER_PAGE, maxLimit: REVIEWS_MAX_PER_PAGE });
 
+    // Respect profileVisibility: a private profile's reviews are only viewable
+    // by their owner (mirrors GET /api/users/public/:userId)
+    const isOwner = req.user && req.params.userId === req.user.id;
+    const targetUser = await User.findById(req.params.userId).select('profileVisibility');
+    if (!targetUser || (targetUser.profileVisibility !== 'public' && !isOwner)) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
     // If viewing own profile, show all reviews; otherwise only public
     const filter = { author: req.params.userId };
-    if (req.params.userId !== req.user.id) {
+    if (!isOwner) {
       filter.visibility = 'public';
     }
 

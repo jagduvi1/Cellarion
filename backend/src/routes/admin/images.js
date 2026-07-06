@@ -151,6 +151,24 @@ router.put('/:id/reject', async (req, res) => {
       return res.status(404).json({ error: 'Image not found' });
     }
 
+    // If image was assigned to a wine, remove the assignment BEFORE the file
+    // URLs are nulled below — otherwise WineDefinition.image keeps pointing
+    // at the deleted file (same block as the unapprove route).
+    if (image.assignedToWine && image.wineDefinition) {
+      const wineDefId = image.wineDefinition;
+      image.assignedToWine = false;
+
+      // Clear the wine definition's image if it matches this image
+      const imageUrl = image.processedUrl || image.originalUrl;
+      const wine = await WineDefinition.findById(wineDefId);
+      if (wine && wine.image === imageUrl) {
+        wine.image = null;
+        wine.imageCredit = null;
+        await wine.save();
+        searchService.indexWine(wineDefId);
+      }
+    }
+
     image.status = 'rejected';
     image.reviewedBy = req.user.id;
     image.reviewedAt = new Date();

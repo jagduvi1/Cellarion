@@ -461,11 +461,23 @@ router.post('/link-to-bottle', requireAuth, async (req, res) => {
     if (!bottleId || !imageIds || !Array.isArray(imageIds)) {
       return res.status(400).json({ error: 'bottleId and imageIds array are required' });
     }
+    if (!isValidId(bottleId) || !imageIds.every(id => isValidId(id))) {
+      return res.status(400).json({ error: 'Invalid ID' });
+    }
 
-    // Verify bottle ownership
-    const bottle = await Bottle.findOne({ _id: bottleId, user: req.user.id });
+    // Verify cellar access — bottles are owned by the cellar owner, so shared-cellar
+    // editors must be allowed to link the images they uploaded (mirrors /upload).
+    const bottle = await Bottle.findById(bottleId);
     if (!bottle) {
       return res.status(404).json({ error: 'Bottle not found' });
+    }
+    const cellar = await Cellar.findById(bottle.cellar);
+    if (!cellar) {
+      return res.status(404).json({ error: 'Bottle not found' });
+    }
+    const cellarRole = getCellarRole(cellar, req.user.id);
+    if (!cellarRole || cellarRole === 'viewer') {
+      return res.status(403).json({ error: 'Not authorized to link images to this bottle' });
     }
 
     await BottleImage.updateMany(

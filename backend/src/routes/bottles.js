@@ -754,11 +754,12 @@ router.post('/:id/consume', requireBottleAccess('editor'), async (req, res) => {
       return res.status(400).json({ error: 'Invalid reason' });
     }
 
+    if (note && (typeof note !== 'string' || note.length > 1000)) {
+      return res.status(400).json({ error: 'Note is too long (max 1000 characters)' });
+    }
+
     const { rating: resolvedConsumedRating, ratingScale: resolvedConsumedScale, error: consumeRatingError } = resolveRating(rating, consumedRatingScale);
     if (consumeRatingError) return res.status(400).json({ error: consumeRatingError });
-
-    // Remove from any rack slot so the slot is freed up
-    await removeFromRacks(bottle._id);
 
     bottle.status = reason;
     bottle.consumedAt = new Date();
@@ -770,6 +771,10 @@ router.post('/:id/consume', requireBottleAccess('editor'), async (req, res) => {
     }
 
     await bottle.save();
+
+    // Remove from any rack slot so the slot is freed up — after the save, so a
+    // failed save doesn't leave an active bottle already pulled from its rack
+    await removeFromRacks(bottle._id);
 
     // Remove from Meilisearch (consumed bottles are excluded)
     searchService.indexBottle(bottle._id);
@@ -786,6 +791,9 @@ router.post('/:id/consume', requireBottleAccess('editor'), async (req, res) => {
 
     res.json({ bottle });
   } catch (error) {
+    if (error.name === 'ValidationError') {
+      return res.status(400).json({ error: error.message });
+    }
     console.error('Consume bottle error:', error);
     res.status(500).json({ error: 'Failed to consume bottle' });
   }

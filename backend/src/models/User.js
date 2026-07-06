@@ -136,6 +136,14 @@ const userSchema = new mongoose.Schema({
     type: Date,
     default: null
   },
+  // Whether the session's refresh cookie is persistent (remember-me) or a
+  // browser-session cookie. Set at login and read on rotation paths so
+  // /refresh doesn't silently upgrade a session cookie to persistent.
+  // null = legacy session (treated as persistent).
+  refreshTokenPersistent: {
+    type: Boolean,
+    default: null
+  },
   // Per-account brute-force lockout state. Incremented on each failed login,
   // reset on success or successful password reset. Surfaced via the lockout
   // checks in utils/loginAttempts.js — the login handler treats a locked
@@ -383,6 +391,7 @@ userSchema.methods.toJSON = function() {
   delete obj.password;
   delete obj.refreshTokenHash;
   delete obj.refreshTokenExpiresAt;
+  delete obj.refreshTokenPersistent;
   delete obj.emailVerificationTokenHash;
   delete obj.emailVerificationExpiresAt;
   delete obj.passwordResetTokenHash;

@@ -75,23 +75,23 @@ const bottleSchema = new mongoose.Schema({
   purchaseLocation: {
     type: String,
     trim: true,
-    maxlength: [200, 'Purchase location too long']
+    maxlength: [500, 'Purchase location too long (max 500 characters)']
   },
   purchaseUrl: {
     type: String,
     trim: true,
-    maxlength: [500, 'Purchase URL too long']
+    maxlength: [2048, 'Purchase URL too long (max 2048 characters)']
   },
   // Cellar management
   location: {
     type: String,
     trim: true,
-    maxlength: [200, 'Location too long']
+    maxlength: [500, 'Location too long (max 500 characters)']
   },
   notes: {
     type: String,
     trim: true,
-    maxlength: [2000, 'Notes too long']
+    maxlength: [5000, 'Notes too long (max 5000 characters)']
   },
   rating: {
     type: Number

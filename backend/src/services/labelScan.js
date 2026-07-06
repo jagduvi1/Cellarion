@@ -201,8 +201,12 @@ async function callClaudeJson({ client, model, maxTokens, prompt, validate }) {
       return { data: parsed, debugRaw: raw, debugReason: null };
     } catch (err) {
       if (err.status === 429 && attempt === 1) {
-        // Rate limited — wait for retry-after header (or 15 s) then retry once
-        const waitMs = (parseInt(err.headers?.['retry-after'] ?? '15', 10) + 1) * 1000;
+        // Rate limited — wait for retry-after header (or 15 s) then retry once.
+        // The SDK exposes err.headers as a fetch Headers instance, so read it
+        // via .get(); keep the plain-object lookup as a fallback for SDK
+        // versions/errors that attach a plain map.
+        const retryAfter = err.headers?.get?.('retry-after') ?? err.headers?.['retry-after'];
+        const waitMs = (parseInt(retryAfter ?? '15', 10) + 1) * 1000;
         await new Promise(r => setTimeout(r, waitMs));
         continue;
       }

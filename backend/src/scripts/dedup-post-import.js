@@ -17,6 +17,9 @@
 require('dotenv').config();
 const mongoose = require('mongoose');
 const WineDefinition = require('../models/WineDefinition');
+const WineVintageProfile = require('../models/WineVintageProfile');
+const Bottle = require('../models/Bottle');
+const searchService = require('../services/search');
 const { normalizeString } = require('../utils/normalize');
 
 const APPLY = process.argv.includes('--apply');
@@ -158,8 +161,36 @@ async function run() {
 
   console.log('\nDeleting LWIN duplicates...');
   const ids = toDelete.map(d => d.lwinId);
-  const result = await WineDefinition.deleteMany({ _id: { $in: ids } });
+
+  // Never delete a wine that bottles still reference — that would leave the
+  // bottles pointing at a nonexistent WineDefinition.
+  const referenced = await Bottle.distinct('wineDefinition', { wineDefinition: { $in: ids } });
+  const referencedSet = new Set(referenced.map(id => id.toString()));
+  const deletableIds = ids.filter(id => !referencedSet.has(id.toString()));
+  if (referencedSet.size > 0) {
+    console.log(`Skipping ${referencedSet.size} LWIN wine(s) that still have bottles referencing them.`);
+  }
+
+  const result = await WineDefinition.deleteMany({ _id: { $in: deletableIds } });
   console.log(`Deleted ${result.deletedCount} LWIN wines.`);
+
+  // Clean up the deleted wines' vintage profiles — nothing else removes them.
+  const profileResult = await WineVintageProfile.deleteMany({ wineDefinition: { $in: deletableIds } });
+  if (profileResult.deletedCount > 0) {
+    console.log(`Deleted ${profileResult.deletedCount} WineVintageProfile row(s) for the removed wines.`);
+  }
+
+  // Remove the deleted wines from Meilisearch — there is no automatic resync,
+  // so skipping this leaves ghost entries in the search index.
+  await searchService.initialize();
+  if (searchService.getIsAvailable()) {
+    for (const id of deletableIds) {
+      await searchService.removeWine(id); // logs + swallows per-doc errors itself
+    }
+    console.log(`Removed ${deletableIds.length} wine(s) from the search index.`);
+  } else {
+    console.warn('WARNING: Meilisearch is unavailable — the search index will keep ghost entries for the deleted wines until a manual full sync is run.');
+  }
 
   const remaining = await WineDefinition.countDocuments();
   console.log(`Wines remaining in DB: ${remaining}`);

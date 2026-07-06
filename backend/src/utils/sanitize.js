@@ -7,14 +7,16 @@ const STRIP_HTML_MAX_LEN = 10_000;
 
 function stripHtml(str) {
   if (!str) return str;
-  // Reject excessively long strings to prevent CPU exhaustion (loop bound injection)
-  if (str.length > STRIP_HTML_MAX_LEN) {
-    throw new Error(`Input exceeds maximum allowed length of ${STRIP_HTML_MAX_LEN} characters`);
-  }
+  // Bound the scan to prevent CPU exhaustion (loop bound injection). Process
+  // only the first STRIP_HTML_MAX_LEN chars and drop the rest — never throw:
+  // routes call this on raw body fields BEFORE their length validation, so a
+  // throw here would turn an oversized paste into a generic 500 instead of
+  // the per-field 400 the downstream length checks produce.
+  const bounded = str.length > STRIP_HTML_MAX_LEN ? str.slice(0, STRIP_HTML_MAX_LEN) : str;
   let result = '';
   let depth = 0;
-  for (let i = 0; i < str.length; i++) {
-    const ch = str[i];
+  for (let i = 0; i < bounded.length; i++) {
+    const ch = bounded[i];
     if (ch === '<') {
       depth++;
     } else if (ch === '>') {

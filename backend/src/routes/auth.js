@@ -138,6 +138,14 @@ const issueTokens = async (user, res, { rememberMe, preserveLifetime = false } =
   if (!preserveLifetime) {
     user.refreshTokenExpiresAt = new Date(Date.now() + REFRESH_ABSOLUTE_LIFETIME_MS);
   }
+  // Persist the remember-me choice at session start so rotation paths
+  // (/refresh, /change-password) reissue the same cookie kind instead of
+  // silently upgrading a session cookie to a persistent one.
+  if (rememberMe !== undefined) {
+    user.refreshTokenPersistent = rememberMe;
+  } else {
+    rememberMe = user.refreshTokenPersistent === false ? false : true;
+  }
   await user.save();
   res.cookie('refreshToken', refreshToken, buildCookieOptions(rememberMe));
   return accessToken;

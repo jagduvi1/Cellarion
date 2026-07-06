@@ -544,16 +544,21 @@ router.delete('/:idOrSlug', requireAuth, requireModeratorOrAdmin, async (req, re
     // pointing at deleted documents in the moderation queue otherwise).
     const replyIds = await DiscussionReply.find({ discussion: discussion._id }).select('_id');
     const replyIdList = replyIds.map(r => r._id);
-    DiscussionReaction.deleteMany({ reply: { $in: replyIdList } }).catch(() => {});
-    DiscussionReply.deleteMany({ discussion: discussion._id }).catch(() => {});
-    DiscussionReport.deleteMany({
-      $or: [
-        { discussion: discussion._id },
-        { reply: { $in: replyIdList } }
-      ]
-    }).catch(() => {});
-    DiscussionWatch.deleteMany({ discussion: discussion._id }).catch(() => {});
-    DiscussionRead.deleteMany({ discussion: discussion._id }).catch(() => {});
+    // Await the cleanups BEFORE deleting the parent — if one fails the 500
+    // leaves the discussion intact so the delete can be retried, instead of
+    // permanently orphaning replies/reactions/reports.
+    await Promise.all([
+      DiscussionReaction.deleteMany({ reply: { $in: replyIdList } }),
+      DiscussionReply.deleteMany({ discussion: discussion._id }),
+      DiscussionReport.deleteMany({
+        $or: [
+          { discussion: discussion._id },
+          { reply: { $in: replyIdList } }
+        ]
+      }),
+      DiscussionWatch.deleteMany({ discussion: discussion._id }),
+      DiscussionRead.deleteMany({ discussion: discussion._id })
+    ]);
 
     // Capture the public URL before deletion so we can ping IndexNow afterwards.
     const publicPath = `/community/discussions/${discussion.slug || discussion._id}`;
@@ -888,6 +893,7 @@ router.put('/:discussionId/replies/:replyId', requireAuth, async (req, res) => {
     if (!isValidId(req.params.replyId)) return res.status(400).json({ error: 'Invalid reply ID' });
     const reply = await DiscussionReply.findById(req.params.replyId);
     if (!reply) return res.status(404).json({ error: 'Reply not found' });
+    if (reply.isDeleted) return res.status(400).json({ error: 'Reply has been deleted' });
 
     const isOwner = reply.author.toString() === req.user.id;
     const isMod = isModerator(req.user);

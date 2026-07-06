@@ -68,7 +68,7 @@ const CONTENT = `
     <tr><td>AI label scanning</td><td>Yes</td><td>Limited</td><td>Yes (its core strength)</td><td>Yes</td></tr>
     <tr><td>Community ratings / discovery</td><td>Community + your own notes</td><td>Large community tasting-note database</td><td>Massive crowd ratings</td><td>Curated</td></tr>
     <tr><td>Buy wine (marketplace)</td><td>No</td><td>Price &amp; where-to-buy info</td><td>Yes — built-in marketplace</td><td>Some</td></tr>
-    <tr><td>Data export / no lock-in</td><td>Yes — CSV + full JSON/ZIP, one click</td><td>CSV export</td><td>Limited</td><td>Limited</td></tr>
+    <tr><td>Data export / no lock-in</td><td>Yes — full JSON/ZIP export, one click (CSV import supported)</td><td>CSV export</td><td>Limited</td><td>Limited</td></tr>
     <tr><td>Open source</td><td>Yes (AGPL-3.0)</td><td>No</td><td>No</td><td>No</td></tr>
     <tr><td>Privacy / GDPR</td><td>EU-hosted, GDPR-first, no ads</td><td>Varies</td><td>Ad/marketplace-funded</td><td>Varies</td></tr>
     <tr><td>Self-hostable</td><td>Yes (optional)</td><td>No</td><td>No</td><td>No</td></tr>
@@ -78,7 +78,7 @@ const CONTENT = `
 
 <h2>Cellarion — best free, privacy-first cellar manager</h2>
 <p><a href="/">Cellarion</a> is a modern wine cellar app focused on tracking and organising the collection you own. You log every bottle (vintage, producer, region, price, rating, tasting notes), arrange them across cellars and customisable racks, and see your cellar as an interactive grid or a to-scale <strong>3D room view</strong>. It sends <a href="/help">drink-window alerts</a> when a wine nears its peak, scans labels with AI, and includes a grounded AI cellar chat that recommends bottles you actually have in stock.</p>
-<p>Its stand-out is openness: it is <strong>free</strong>, <strong>open-source (AGPL-3.0)</strong>, GDPR-compliant and EU-hosted, and it lets you export everything — CSV plus a full JSON/ZIP archive with your images — in one click, so there is no lock-in. You can even self-host it. Cellarion runs in any browser and as an <a href="https://play.google.com/store/apps/details?id=app.cellarion.twa">Android app on Google Play</a>; iPhone users can install it to the home screen as a web app (PWA). The main trade-off is that it is a younger product than CellarTracker, so its community of tasting notes is smaller, and there is no separate native iOS app yet.</p>
+<p>Its stand-out is openness: it is <strong>free</strong>, <strong>open-source (AGPL-3.0)</strong>, GDPR-compliant and EU-hosted, and it lets you export everything — a full JSON/ZIP archive including your images — in one click, so there is no lock-in. You can even self-host it. Cellarion runs in any browser and as an <a href="https://play.google.com/store/apps/details?id=app.cellarion.twa">Android app on Google Play</a>; iPhone users can install it to the home screen as a web app (PWA). The main trade-off is that it is a younger product than CellarTracker, so its community of tasting notes is smaller, and there is no separate native iOS app yet.</p>
 <p><strong>Choose Cellarion if</strong> you want a clean, free, private way to track and visualise your own cellar — and the ability to take your data with you. <a href="/blog">More guides on the Cellarion blog →</a></p>
 
 <h2>CellarTracker — best for serious collectors and tasting notes</h2>
@@ -111,10 +111,10 @@ const CONTENT = `
 <p>Yes. Cellarion is free for all core features at cellarion.app — bottle tracking, cellars and racks, drink-window alerts, label scanning and data export — with no ads and no credit card required. CellarTracker is also free to use, with optional paid tiers, and Vivino is free but earns through its marketplace.</p>
 
 <h3>What is the best free alternative to CellarTracker?</h3>
-<p>Cellarion is the closest free, modern alternative to CellarTracker for cellar management. It offers bottle and rack inventory, drink-window alerts and statistics like CellarTracker, adds a 3D cellar view and AI label scanning, and is open-source with one-click CSV and JSON/ZIP export so you are never locked in. You can import an existing CellarTracker CSV into Cellarion to switch.</p>
+<p>Cellarion is the closest free, modern alternative to CellarTracker for cellar management. It offers bottle and rack inventory, drink-window alerts and statistics like CellarTracker, adds a 3D cellar view and AI label scanning, and is open-source with one-click JSON/ZIP export so you are never locked in. You can import an existing CellarTracker CSV into Cellarion to switch.</p>
 
 <h3>Can I export my wine collection and move it to another app?</h3>
-<p>It depends on the app. Cellarion gives you a one-click export of everything as CSV and as a full JSON/ZIP archive (including your images), and is open-source and self-hostable, so there is no lock-in. CellarTracker offers CSV export. Vivino and InVintory have more limited export. If portability matters, Cellarion is the safest choice.</p>
+<p>It depends on the app. Cellarion gives you a one-click export of everything as a full JSON/ZIP archive (including your images), supports CSV import from other apps, and is open-source and self-hostable, so there is no lock-in. CellarTracker offers CSV export. Vivino and InVintory have more limited export. If portability matters, Cellarion is the safest choice.</p>
 
 <h3>Which wine apps have a 3D cellar view?</h3>
 <p>Among these four, Cellarion and InVintory offer a 3D cellar/rack view. Cellarion includes a to-scale 3D room view for free; InVintory offers a 3D virtual cellar on its premium tiers. CellarTracker and Vivino do not have a 3D view.</p>
@@ -145,7 +145,9 @@ async function run() {
     tags: ['wine apps', 'cellar management', 'comparison', 'cellartracker', 'vivino', 'invintory'],
     metaTitle: META_TITLE,
     metaDescription: META_DESCRIPTION,
-    status: PUBLISH ? 'published' : 'draft',
+    // Without --publish, keep an already-published post published (re-running
+    // the seed must never silently flip it back to draft).
+    status: PUBLISH ? 'published' : (existing?.status || 'draft'),
   };
 
   if (existing) {

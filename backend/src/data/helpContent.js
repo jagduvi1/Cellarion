@@ -145,7 +145,7 @@ const sections = [
     details: [
       'Ask for food pairings, what to drink tonight, or wine suggestions from your collection.',
       'The sommelier knows all your bottles, ratings, and notes.',
-      'Usage limits depend on your plan (Free: 4/week, Basic: 20/day, Premium: 50/day).',
+      'Everyone gets the same daily allowance of questions (50 per day by default) — it does not depend on any plan.',
     ],
     tourId: 'use-cellar-chat',
   },
@@ -159,7 +159,7 @@ const sections = [
       'World map showing where your wines come from.',
       'Drink window overview: wines that are ready, still aging, or past peak.',
       'Export your stats as a shareable card image.',
-      'Premium feature — available on the Premium plan.',
+      'Free for everyone — like every Cellarion feature, no paid plan is required.',
     ],
     tourId: 'view-statistics',
   },
@@ -206,7 +206,7 @@ const sections = [
     details: [
       'Currency preference (used for prices and value calculations).',
       'Language selection.',
-      'Rating scale: 5-star, 10-point, 20-point, or 100-point.',
+      'Rating scale: 5-star, 20-point (Davis), or 100-point (Parker).',
       'Push notification preferences and device management.',
       'Profile: username and email.',
     ],
@@ -230,7 +230,7 @@ const sections = [
     summary: 'Blog, plans, support, and NFC tags.',
     details: [
       'Blog (/blog): wine articles and guides.',
-      'Plans (/plans): subscription tiers — Free, Basic, Premium.',
+      'Plans (/plans): supporter tiers — Enthusiast (free), Supporter, and Patron. All tiers are functionally identical: every feature is free for everyone, and the paid tiers are purely voluntary contributions that fund development.',
       'Support (/support): submit support tickets for help.',
       'NFC tags: attach NFC tags to racks — scan with your phone to open the rack directly.',
     ],

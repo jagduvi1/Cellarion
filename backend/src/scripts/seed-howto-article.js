@@ -151,7 +151,9 @@ async function run() {
     tags: ['wine collection', 'cellar management', 'how to', 'wine tracking', 'getting started'],
     metaTitle: META_TITLE,
     metaDescription: META_DESCRIPTION,
-    status: PUBLISH ? 'published' : 'draft',
+    // Without --publish, keep an already-published post published (re-running
+    // the seed must never silently flip it back to draft).
+    status: PUBLISH ? 'published' : (existing?.status || 'draft'),
   };
 
   if (existing) {

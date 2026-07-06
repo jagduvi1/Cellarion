@@ -551,16 +551,19 @@ router.patch('/ai/chat-model', async (req, res) => {
   if (fallbackModel !== undefined && fallbackModel !== null && !VALID_CHAT_MODELS.includes(fallbackModel)) {
     return res.status(400).json({ error: `fallbackModel must be one of: ${VALID_CHAT_MODELS.join(', ')} or null` });
   }
-  if (fallbackModel !== null && fallbackModel === model) {
-    return res.status(400).json({ error: 'fallbackModel must be different from the primary model' });
-  }
 
   try {
     const current = aiConfig.get();
+    // Validate the invariant against the EFFECTIVE pair — an omitted
+    // fallbackModel keeps the stored one, which must not equal the new model.
+    const effectiveFallback = fallbackModel !== undefined ? fallbackModel : current.chatModelFallback;
+    if (effectiveFallback !== null && effectiveFallback !== undefined && effectiveFallback === model) {
+      return res.status(400).json({ error: 'fallbackModel must be different from the primary model' });
+    }
     const updated = {
       ...current,
       chatModel: model,
-      chatModelFallback: fallbackModel !== undefined ? fallbackModel : current.chatModelFallback,
+      chatModelFallback: effectiveFallback,
     };
     await updateSiteConfig('aiConfig', updated, req.user.id);
     aiConfig.set(updated);

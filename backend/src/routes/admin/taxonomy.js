@@ -6,6 +6,7 @@ const Country = require('../../models/Country');
 const Region = require('../../models/Region');
 const Grape = require('../../models/Grape');
 const Appellation = require('../../models/Appellation');
+const WineDefinition = require('../../models/WineDefinition');
 const searchService = require('../../services/search');
 const { logAudit } = require('../../services/audit');
 const { isValidId } = require('../../utils/validation');
@@ -98,6 +99,10 @@ router.put('/countries/:id', async (req, res) => {
     if (description !== undefined) country.description = description;
 
     await country.save();
+    logAudit(req, 'admin.taxonomy.update',
+      { type: 'country', id: country._id },
+      { name: country.name }
+    );
 
     // Resync search index if name changed (denormalized data)
     if (name) searchService.fullSync();
@@ -123,6 +128,14 @@ router.delete('/countries/:id', async (req, res) => {
     if (regionCount > 0) {
       return res.status(400).json({
         error: `Cannot delete country. ${regionCount} region(s) reference it.`
+      });
+    }
+
+    // Check if any wines reference this country
+    const wineCount = await WineDefinition.countDocuments({ country: req.params.id });
+    if (wineCount > 0) {
+      return res.status(400).json({
+        error: `Cannot delete country. ${wineCount} wine(s) reference it.`
       });
     }
 
@@ -274,6 +287,10 @@ router.put('/regions/:id', async (req, res) => {
     await region.populate('country', 'name');
     await region.populate('typicalGrapes', 'name');
     await region.populate('permittedGrapes', 'name');
+    logAudit(req, 'admin.taxonomy.update',
+      { type: 'region', id: region._id },
+      { name: region.name }
+    );
 
     // Resync search index if name changed (denormalized data)
     if (name) searchService.fullSync();
@@ -292,6 +309,22 @@ router.delete('/regions/:id', async (req, res) => {
     const region = await Region.findById(req.params.id);
     if (!region) {
       return res.status(404).json({ error: 'Region not found' });
+    }
+
+    // Check if any wines reference this region
+    const wineCount = await WineDefinition.countDocuments({ region: req.params.id });
+    if (wineCount > 0) {
+      return res.status(400).json({
+        error: `Cannot delete region. ${wineCount} wine(s) reference it.`
+      });
+    }
+
+    // Check if any regions have this region as their parent
+    const childCount = await Region.countDocuments({ parentRegion: req.params.id });
+    if (childCount > 0) {
+      return res.status(400).json({
+        error: `Cannot delete region. ${childCount} region(s) reference it as parent.`
+      });
     }
 
     logAudit(req, 'admin.taxonomy.delete',
@@ -382,6 +415,10 @@ router.put('/grapes/:id', async (req, res) => {
     if (description !== undefined) grape.description = description;
 
     await grape.save();
+    logAudit(req, 'admin.taxonomy.update',
+      { type: 'grape', id: grape._id },
+      { name: grape.name }
+    );
 
     // Resync search index if name changed (denormalized data)
     if (name) searchService.fullSync();
@@ -400,6 +437,24 @@ router.delete('/grapes/:id', async (req, res) => {
     const grape = await Grape.findById(req.params.id);
     if (!grape) {
       return res.status(404).json({ error: 'Grape not found' });
+    }
+
+    // Check if any wines reference this grape
+    const wineCount = await WineDefinition.countDocuments({ grapes: req.params.id });
+    if (wineCount > 0) {
+      return res.status(400).json({
+        error: `Cannot delete grape. ${wineCount} wine(s) reference it.`
+      });
+    }
+
+    // Check if any regions list this grape as typical or permitted
+    const regionCount = await Region.countDocuments({
+      $or: [{ typicalGrapes: req.params.id }, { permittedGrapes: req.params.id }]
+    });
+    if (regionCount > 0) {
+      return res.status(400).json({
+        error: `Cannot delete grape. ${regionCount} region(s) reference it.`
+      });
     }
 
     logAudit(req, 'admin.taxonomy.delete',
@@ -503,6 +558,10 @@ router.put('/appellations/:id', async (req, res) => {
     await appellation.save();
     await appellation.populate('country', 'name');
     await appellation.populate('region', 'name');
+    logAudit(req, 'admin.taxonomy.update',
+      { type: 'appellation', id: appellation._id },
+      { name: appellation.name }
+    );
 
     res.json({ appellation });
   } catch (error) {

@@ -1,5 +1,4 @@
 const User = require('../models/User');
-const { escapeRegex } = require('./sanitize');
 
 // Match @<username> tokens in body text. Allowed username chars mirror the
 // ones the registration flow accepts: letters, digits, dot, hyphen, underscore.
@@ -27,15 +26,22 @@ async function extractMentions(body, excludeUserId = null) {
 
   const usernames = new Set();
   for (const match of body.matchAll(MENTION_RE)) {
-    usernames.add(match[1].toLowerCase());
+    const name = match[1].toLowerCase();
+    usernames.add(name);
+    // The regex greedily swallows trailing sentence punctuation that is also a
+    // valid username char ("thanks @alice." captures "alice."). Also try the
+    // variant with trailing [._-] stripped so the intended user still resolves;
+    // whichever form actually exists in the DB matches below.
+    const stripped = name.replace(/[._-]+$/, '');
+    if (stripped !== name && stripped.length >= 3) usernames.add(stripped);
     if (usernames.size >= MAX_MENTIONS_PER_POST) break;
   }
   if (usernames.size === 0) return [];
 
-  // Mongoose username field is unique but stored as-typed. Match
-  // case-insensitively via a single $in regex.
-  const regexes = [...usernames].map(u => new RegExp(`^${escapeRegex(u)}$`, 'i'));
-  const users = await User.find({ username: { $in: regexes } }).select('_id').lean();
+  // The User schema stores usernames lowercased (lowercase: true) and unique;
+  // extractMentions lowercases too, so a plain string $in matches exactly and
+  // uses the unique index (a case-insensitive regex $in would defeat it).
+  const users = await User.find({ username: { $in: [...usernames] } }).select('_id').lean();
 
   const ids = users
     .map(u => u._id.toString())
