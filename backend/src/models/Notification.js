@@ -24,7 +24,9 @@ const notificationSchema = new mongoose.Schema({
       'drink_window_past',
       'wine_recommendation',
       'journal_mention',
-      'restock_alert'
+      'restock_alert',
+      'price_tracked',
+      'price_tracking_declined'
     ],
     required: true
   },

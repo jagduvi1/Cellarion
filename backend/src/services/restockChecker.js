@@ -1,9 +1,7 @@
 const Bottle = require('../models/Bottle');
-const WineDefinition = require('../models/WineDefinition');
 const WineEmbedding = require('../models/WineEmbedding');
 const RestockAlert = require('../models/RestockAlert');
 const User = require('../models/User');
-const { planHasFeature } = require('../config/plans');
 const { createNotification } = require('./notifications');
 const { CONSUMED_STATUSES } = require('../config/constants');
 
@@ -20,7 +18,6 @@ const TOP_K = 10;
 
 /**
  * Background check after a bottle is consumed.
- * If the user is on a paid plan with restockAlerts enabled:
  *  1. Get the consumed wine's embedding
  *  2. Search for similar wines in Qdrant
  *  3. Check if the user still has any similar bottles in their cellar
@@ -34,13 +31,8 @@ async function checkRestockGap(userId, bottleId, cellarId) {
     if (!embedding || !vectorStore) return;
     if (!process.env.VOYAGE_API_KEY) return;
 
-    // Check user plan and preferences
-    const user = await User.findById(userId).select('plan planExpiresAt username displayName preferences.restockScope').lean();
+    const user = await User.findById(userId).select('username displayName preferences.restockScope').lean();
     if (!user) return;
-
-    const planExpired = user.planExpiresAt && Date.now() > new Date(user.planExpiresAt).getTime();
-    const effectivePlan = planExpired ? 'free' : (user.plan || 'free');
-    if (!planHasFeature(effectivePlan, 'restockAlerts')) return;
 
     // Get the consumed bottle with wine definition
     const bottle = await Bottle.findById(bottleId)

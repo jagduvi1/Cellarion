@@ -144,7 +144,10 @@ router.put('/:id', async (req, res) => {
     if (rows !== undefined) rack.rows = rows;
     if (cols !== undefined) rack.cols = cols;
     if (typeConfig !== undefined) rack.typeConfig = typeConfig;
-    if (rfidTag !== undefined) rack.rfidTag = rfidTag || null;
+    // Unlink must $unset the field, not store null: the unique sparse index on
+    // rfidTag still indexes explicit nulls, so two unlinked racks anywhere in
+    // the DB would collide with E11000.
+    if (rfidTag !== undefined) rack.rfidTag = rfidTag || undefined;
 
     // Validate that existing slots still fit within new dimensions
     const newMax = getMaxPosition(rack);
