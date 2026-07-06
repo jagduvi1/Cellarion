@@ -125,9 +125,9 @@ async function run() {
 
   // Grapes — referenced by WineDefinition.grapes and Region typical/permitted lists
   const usedGrapeIds = new Set([
-    ...(await WineDefinition.distinct('grapes')).map(id => id.toString()),
-    ...(await Region.distinct('typicalGrapes')).map(id => id.toString()),
-    ...(await Region.distinct('permittedGrapes')).map(id => id.toString()),
+    ...(await WineDefinition.distinct('grapes')).filter(Boolean).map(id => id.toString()),
+    ...(await Region.distinct('typicalGrapes')).filter(Boolean).map(id => id.toString()),
+    ...(await Region.distinct('permittedGrapes')).filter(Boolean).map(id => id.toString()),
   ]);
   const allGrapes = await Grape.distinct('_id');
   const unusedGrapeIds = allGrapes.filter(id => !usedGrapeIds.has(id.toString()));
