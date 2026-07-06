@@ -836,7 +836,26 @@
       "mergeInfo": "\"{{name}}\" har {{count}} flaska/flaskor som refererar till det. Välj ett annat vin att flytta dem till innan borttagning.",
       "mergeSearchLabel": "Sök efter målvin",
       "mergeTarget": "Flytta flaskor till:",
-      "mergeBtn": "Slå ihop & ta bort"
+      "mergeBtn": "Slå ihop & ta bort",
+      "producerInName": {
+        "button": "Producent i namnet",
+        "buttonTitle": "Hitta viner vars namn börjar med producentens namn",
+        "title": "Producent i vinnamnet",
+        "intro": "Dessa viner upprepar producenten i början av vinnamnet — oftast en artefakt från AI-import. Ta bort prefixet eller radera posten.",
+        "found_one": "{{count}} vin hittat",
+        "found_other": "{{count}} viner hittade",
+        "producerCol": "Producent",
+        "currentNameCol": "Nuvarande namn",
+        "proposedNameCol": "Nytt namn",
+        "bottlesCol": "Flaskor",
+        "stripBtn": "Ta bort prefix",
+        "stripTitle": "Byt namn på vinet till det föreslagna namnet",
+        "stripping": "Tar bort…",
+        "stripped": "Bytte namn från \"{{from}}\" till \"{{to}}\"",
+        "deleted": "Tog bort \"{{name}}\"",
+        "empty": "Inga viner har producenten i namnet.",
+        "networkError": "Nätverksfel"
+      }
     },
     "images": {
       "title": "Admin: Bildgranskning",

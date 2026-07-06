@@ -38,6 +38,7 @@ const { submitUrls } = require('../../services/indexNow');
 const { isValidId } = require('../../utils/validation');
 const { escapeRegex } = require('../../utils/sanitize');
 const { parsePagination } = require('../../utils/pagination');
+const { stripProducerPrefix } = require('../../utils/producerPrefix');
 
 const router = express.Router();
 
@@ -487,6 +488,72 @@ router.get('/duplicates', async (req, res) => {
   }
 });
 
+// GET /api/admin/wines/producer-in-name — wines whose name starts with their
+// own producer (e.g. producer "Meerlust", name "Meerlust Chardonnay"). Mostly
+// AI-import artefacts; the registry convention is a producer-free name.
+//
+// A field-to-field prefix comparison needs $expr; there's no index for it, so
+// this is a collection scan — fine at the registry's ~3k-doc size. The char
+// right after the prefix must be a separator so producer "Chateau" doesn't
+// flag "Chateauneuf-du-Pape" (mirrors utils/producerPrefix.js).
+//
+// Returns: { wines: [{ _id, producer, name, proposedName, bottleCount, createdAt }], total, page, pages }
+router.get('/producer-in-name', async (req, res) => {
+  try {
+    const { limit: parsedLimit, offset: skip, page: parsedPage } =
+      parsePagination(req.query, { limit: 50, maxLimit: 200 });
+
+    const producerLen = { $strLenCP: { $ifNull: ['$producer', ''] } };
+    const filter = {
+      $expr: {
+        $and: [
+          { $gt: [producerLen, 0] },
+          { $gt: [{ $strLenCP: '$name' }, { $add: [producerLen, 1] }] },
+          { $eq: [{ $indexOfCP: [{ $toLower: '$name' }, { $toLower: { $ifNull: ['$producer', ''] } }] }, 0] },
+          { $in: [{ $substrCP: ['$name', producerLen, 1] }, [' ', '\t', '-', '–', '—']] },
+        ],
+      },
+    };
+
+    const [wines, total] = await Promise.all([
+      WineDefinition.find(filter)
+        .select('name producer createdAt')
+        .sort({ producer: 1, name: 1 })
+        .skip(skip)
+        .limit(parsedLimit)
+        .lean(),
+      WineDefinition.countDocuments(filter),
+    ]);
+
+    // Bottle counts for the page's rows in one aggregate
+    const bottleCounts = new Map();
+    if (wines.length > 0) {
+      const counts = await Bottle.aggregate([
+        { $match: { wineDefinition: { $in: wines.map(w => w._id) } } },
+        { $group: { _id: '$wineDefinition', count: { $sum: 1 } } },
+      ]);
+      for (const c of counts) bottleCounts.set(String(c._id), c.count);
+    }
+
+    res.json({
+      wines: wines.map(w => ({
+        _id: w._id,
+        producer: w.producer,
+        name: w.name,
+        proposedName: stripProducerPrefix(w.name, w.producer),
+        bottleCount: bottleCounts.get(String(w._id)) || 0,
+        createdAt: w.createdAt,
+      })),
+      total,
+      page: parsedPage,
+      pages: Math.ceil(total / parsedLimit),
+    });
+  } catch (error) {
+    console.error('Producer-in-name scan error:', error);
+    res.status(500).json({ error: 'Failed to scan for producer-in-name wines' });
+  }
+});
+
 // GET /api/admin/wines/:id - Get single wine definition
 router.get('/:id', async (req, res) => {
   try {
@@ -623,6 +690,71 @@ router.delete('/:id', async (req, res) => {
   } catch (error) {
     console.error('Delete wine error:', error);
     res.status(500).json({ error: 'Failed to delete wine' });
+  }
+});
+
+// POST /api/admin/wines/:id/strip-producer — remove the wine's own producer
+// prefix from its name (companion to GET /producer-in-name). Recomputes the
+// prefix check server-side so a stale client row can't rename arbitrarily.
+router.post('/:id/strip-producer', async (req, res) => {
+  try {
+    if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
+    const wine = await WineDefinition.findById(req.params.id);
+    if (!wine) {
+      return res.status(404).json({ error: 'Wine not found' });
+    }
+
+    const stripped = stripProducerPrefix(wine.name, wine.producer);
+    if (!stripped) {
+      return res.status(400).json({
+        error: 'Wine name does not start with its producer, or nothing would remain after stripping'
+      });
+    }
+
+    // If the same producer already has a wine with the stripped name, renaming
+    // would create the very duplicate the registry avoids — the admin should
+    // resolve that pair via the duplicates tool instead.
+    const conflict = await WineDefinition.findOne({
+      _id: { $ne: wine._id },
+      producer: new RegExp(`^${escapeRegex(wine.producer)}$`, 'i'),
+      name: new RegExp(`^${escapeRegex(stripped)}$`, 'i'),
+    }).select('name producer');
+    if (conflict) {
+      return res.status(409).json({
+        error: `"${conflict.name}" by ${conflict.producer} already exists — merge these via the duplicates tool instead.`,
+        conflictId: conflict._id,
+      });
+    }
+
+    const from = wine.name;
+    wine.name = stripped;
+    // Same denormalised-field maintenance as the PUT rename path: regenerate
+    // the dedup key; the slug is deliberately NOT regenerated (URL stability).
+    wine.normalizedKey = generateWineKey(wine.name, wine.producer, wine.appellation);
+    await wine.save();
+    await wine.populate(['country', 'region', 'grapes']);
+
+    // Sync to search index (fire-and-forget)
+    searchService.indexWine(wine._id);
+
+    logAudit(req, 'admin.wine.strip_producer',
+      { type: 'wine', id: wine._id },
+      { from, to: wine.name }
+    );
+
+    submitUrls(`/wines/${wine._id}`);
+
+    res.json({ wine });
+  } catch (error) {
+    if (error.code === 11000) {
+      // Unique normalizedKey collision the pre-check missed (e.g. differing
+      // appellation normalisation) — same guidance as the explicit conflict.
+      return res.status(409).json({
+        error: 'Another wine already exists with this name, producer, and appellation combination — merge via the duplicates tool instead.'
+      });
+    }
+    console.error('Strip producer error:', error);
+    res.status(500).json({ error: 'Failed to strip producer from name' });
   }
 });
 
