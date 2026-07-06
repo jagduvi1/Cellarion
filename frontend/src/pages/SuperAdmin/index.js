@@ -14,6 +14,7 @@ import TabCellars from './TabCellars';
 import TabImport from './TabImport';
 import TabBackups from './TabBackups';
 import TabAnnouncement from './TabAnnouncement';
+import { RefreshContext } from './helpers';
 import '../SuperAdmin.css';
 
 const TABS = [
@@ -29,6 +30,14 @@ const TABS = [
   { id: 'announcement', label: 'Announcement' },
   { id: 'settings',   label: 'Settings' },
 ];
+
+// Tabs that refresh in place (useApi re-fetches via RefreshContext) or hold
+// unsaved drafts (announcement, settings) — never remounted by a refresh.
+// The remaining list tabs (users, audit, cellars, import) manage their own
+// fetching and hold no drafts, so they keep the remount-on-refresh behavior.
+const IN_PLACE_REFRESH_TABS = new Set([
+  'overview', 'services', 'database', 'backups', 'ai', 'announcement', 'settings',
+]);
 
 export default function SuperAdmin() {
   const { user, logout, apiFetch } = useAuth();
@@ -147,20 +156,22 @@ export default function SuperAdmin() {
         ))}
       </div>
 
-      {/* Tab content — refreshKey forces remount on manual/auto refresh */}
-      <div className="sa-content" key={`${tab}-${refreshKey}`}>
-        {tab === 'overview'   && <TabOverview />}
-        {tab === 'services'   && <TabServices />}
-        {tab === 'database'   && <TabDatabase />}
-        {tab === 'backups'    && <TabBackups />}
-        {tab === 'users'      && <TabUsers />}
-        {tab === 'audit'      && <TabAudit />}
-        {tab === 'cellars'    && <TabCellars />}
-        {tab === 'import'     && <TabImport />}
-        {tab === 'ai'         && <TabAI />}
-        {tab === 'announcement' && <TabAnnouncement />}
-        {tab === 'settings'   && <TabSettings />}
-      </div>
+      {/* Tab content — see IN_PLACE_REFRESH_TABS for the remount rules. */}
+      <RefreshContext.Provider value={refreshKey}>
+        <div className="sa-content" key={IN_PLACE_REFRESH_TABS.has(tab) ? tab : `${tab}-${refreshKey}`}>
+          {tab === 'overview'   && <TabOverview />}
+          {tab === 'services'   && <TabServices />}
+          {tab === 'database'   && <TabDatabase />}
+          {tab === 'backups'    && <TabBackups />}
+          {tab === 'users'      && <TabUsers />}
+          {tab === 'audit'      && <TabAudit />}
+          {tab === 'cellars'    && <TabCellars />}
+          {tab === 'import'     && <TabImport />}
+          {tab === 'ai'         && <TabAI />}
+          {tab === 'announcement' && <TabAnnouncement />}
+          {tab === 'settings'   && <TabSettings />}
+        </div>
+      </RefreshContext.Provider>
 
       {/* Footer */}
       <div className="sa-footer">

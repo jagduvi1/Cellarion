@@ -29,7 +29,18 @@ const ABSOLUTE_CAP = {
 // trigger on obvious mistakes but not on legitimate trophy bottles.
 const USER_MEDIAN_MULTIPLE   = 50;  // price > 50× user's own median
 const MARKET_MEDIAN_MULTIPLE = 5;   // price > 5× known WineVintagePrice
-const CENTS_HEURISTIC_FLOOR  = 10000; // only suggest cents above this
+
+// Cents-heuristic floor is derived PER CURRENCY (cap ÷ divisor, never below
+// the minimum) so it scales with the currency's magnitude the same way the
+// absolute cap does. A flat 10,000 floor made ordinary JPY (>¥10k ≈ $66) and
+// SEK bottles constantly trip the "did you mean ÷100?" hint. For USD/EUR/GBP/
+// CHF (cap 50,000) the derived floor is exactly the historical 10,000.
+const CENTS_HEURISTIC_FLOOR       = 10000; // minimum floor, and legacy flat value
+const CENTS_HEURISTIC_CAP_DIVISOR = 5;     // floor = max(FLOOR, cap / 5)
+
+function centsHeuristicFloor(cap) {
+  return Math.max(CENTS_HEURISTIC_FLOOR, cap / CENTS_HEURISTIC_CAP_DIVISOR);
+}
 
 /**
  * @param {object} input
@@ -105,8 +116,9 @@ function validatePriceSanity({
 
   // ── Rule 4: looks like cents-as-units (round to 100, large) ─────────────
   // Helpful hint, not a hard signal — many real bottles also satisfy this.
-  // Only fires above 10,000 to suppress noise.
-  if (price >= CENTS_HEURISTIC_FLOOR && price % 100 === 0) {
+  // Only fires above the currency-scaled floor to suppress noise (10,000 for
+  // USD/EUR-magnitude currencies, proportionally higher for JPY/SEK/etc.).
+  if (price >= centsHeuristicFloor(cap) && price % 100 === 0) {
     warnings.push({
       code: 'possiblyCents',
       severity: 'info',
@@ -124,4 +136,6 @@ module.exports = {
   USER_MEDIAN_MULTIPLE,
   MARKET_MEDIAN_MULTIPLE,
   CENTS_HEURISTIC_FLOOR,
+  CENTS_HEURISTIC_CAP_DIVISOR,
+  centsHeuristicFloor,
 };

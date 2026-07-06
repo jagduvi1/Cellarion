@@ -3,6 +3,7 @@ const {
   ABSOLUTE_CAP,
   USER_MEDIAN_MULTIPLE,
   MARKET_MEDIAN_MULTIPLE,
+  centsHeuristicFloor,
 } = require('./priceValidation');
 
 describe('validatePriceSanity', () => {
@@ -159,6 +160,32 @@ describe('validatePriceSanity', () => {
     it('does NOT flag large prices with cents/decimals', () => {
       const w = validatePriceSanity({ price: 25099, currency: 'USD' });
       expect(w.find(x => x.code === 'possiblyCents')).toBeUndefined();
+    });
+
+    it('scales the floor per currency — ordinary JPY/SEK prices do not trip it', () => {
+      // ¥20,000 (~$130) and 15,000 SEK are normal bottle prices, round to 100.
+      // Under the old flat 10,000 floor both fired constantly.
+      const jpy = validatePriceSanity({ price: 20000, currency: 'JPY' });
+      expect(jpy.find(x => x.code === 'possiblyCents')).toBeUndefined();
+      const sek = validatePriceSanity({ price: 15000, currency: 'SEK' });
+      expect(sek.find(x => x.code === 'possiblyCents')).toBeUndefined();
+    });
+
+    it('still flags genuinely huge round JPY/SEK prices', () => {
+      // JPY floor = 7,500,000 / 5 = 1,500,000; SEK floor = 500,000 / 5 = 100,000
+      const jpy = validatePriceSanity({ price: 2000000, currency: 'JPY' });
+      expect(jpy.find(x => x.code === 'possiblyCents')).toBeDefined();
+      const sek = validatePriceSanity({ price: 150000, currency: 'SEK' });
+      expect(sek.find(x => x.code === 'possiblyCents')).toBeDefined();
+    });
+
+    it('keeps the historical 10,000 floor for USD/EUR-magnitude currencies', () => {
+      expect(centsHeuristicFloor(ABSOLUTE_CAP.USD)).toBe(10000);
+      expect(centsHeuristicFloor(ABSOLUTE_CAP.EUR)).toBe(10000);
+      const usd = validatePriceSanity({ price: 10000, currency: 'USD' });
+      expect(usd.find(x => x.code === 'possiblyCents')).toBeDefined();
+      const eur = validatePriceSanity({ price: 9900, currency: 'EUR' });
+      expect(eur.find(x => x.code === 'possiblyCents')).toBeUndefined();
     });
   });
 

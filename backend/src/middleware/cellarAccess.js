@@ -32,7 +32,9 @@ function requireCellarAccess(minRole = 'viewer') {
       }
 
       const cellar = await Cellar.findById(cellarId);
-      if (!cellar) {
+      // A soft-deleted cellar is treated as missing (same response, no
+      // existence oracle) — its contents are frozen until restore/purge.
+      if (!cellar || cellar.deletedAt) {
         return res.status(404).json({ error: 'Cellar not found' });
       }
 

@@ -49,6 +49,10 @@ async function main() {
   const searchService = require('../services/search');
   const { safeUploadPath } = require('../services/imageProcessor');
 
+  // Connect Meilisearch too — without initialize() every removeBottle call
+  // below is a silent no-op (the service's isAvailable flag stays false).
+  await searchService.initialize();
+
   const user = await User.findOne({
     $or: [{ email: userArg.toLowerCase() }, { username: userArg }],
   }).select('username email');
@@ -109,9 +113,16 @@ async function main() {
   );
   console.log(`[purge-user-bottles] Images: ${imgRes.deletedCount} doc(s) + ${filesRemoved} file(s) deleted, ${sharedRes.modifiedCount} shared image(s) detached`);
 
-  // 3. Meilisearch (fire-and-forget per bottle, same as the API route)
-  for (const id of ids) {
-    try { searchService.removeBottle(id); } catch { /* index sync will heal */ }
+  // 3. Meilisearch — awaited per bottle. There is NO automatic index resync:
+  // anything skipped here stays in the index as a ghost entry until someone
+  // runs a manual full sync.
+  if (searchService.getIsAvailable()) {
+    for (const id of ids) {
+      await searchService.removeBottle(id); // logs + swallows per-doc errors itself
+    }
+    console.log(`[purge-user-bottles] Removed ${ids.length} bottle(s) from the search index`);
+  } else {
+    console.warn('[purge-user-bottles] WARNING: Meilisearch is unavailable — the search index will keep ghost entries for these bottles until a manual full sync is run.');
   }
 
   // 4. The bottles themselves

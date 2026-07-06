@@ -59,9 +59,13 @@ export default function StatsCard() {
         title: t('statsCard.shareTitle', 'My Cellarion Stats'),
         files: [file],
       });
-    } catch {
-      // User cancelled or not supported — try download as fallback
-      handleDownload();
+    } catch (err) {
+      // AbortError means the user dismissed the share sheet — that's not a
+      // failure, so don't punish the cancel with a surprise PNG download.
+      if (err?.name !== 'AbortError') {
+        // Sharing genuinely failed / not supported — try download as fallback
+        handleDownload();
+      }
     }
     setExporting(false);
   };

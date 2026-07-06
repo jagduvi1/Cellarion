@@ -462,6 +462,40 @@
     "suggestGrapesConfirm": "Ditt förslag har skickats in för granskning. Vårt team lägger till de verifierade sorterna i vinregistret."
   },
 
+  "bottles": {
+    "title": "Alla flaskor",
+    "loading": "Laddar…",
+    "summary": "{{count}} av {{total}} flaskor",
+    "backToStats": "← Tillbaka till statistik",
+    "removeFilter": "Ta bort det här filtret",
+    "clearAll": "Rensa alla",
+    "noneForFilters": "Inga flaskor matchar de filtren.",
+    "noneInCellar": "Inga flaskor i dina källare ännu.",
+    "prev": "Föregående",
+    "next": "Nästa",
+    "pageOf": "Sida {{page}} av {{total}}",
+    "chipType": "Typ: {{value}}",
+    "chipCountry": "Land: {{value}}",
+    "chipRegion": "Region: {{value}}",
+    "chipGrape": "Druva: {{value}}",
+    "chipVintage": "Årgång: {{value}}",
+    "chipProducer": "Producent: {{value}}",
+    "chipSize": "Storlek: {{value}}",
+    "chipRating": "Betyg: {{value}}+",
+    "chipMaturity": "Mognad: {{value}}",
+    "chipSearch": "Sökning: \"{{value}}\"",
+    "chipPurchased": "Köpt: {{value}}",
+    "chipConsumed": "Konsumerad: {{value}}",
+    "chipStatus": "Status: {{value}}",
+    "status_active": "Aktiva",
+    "status_consumed": "Konsumerade",
+    "status_all": "Alla",
+    "status_drank": "Druckna",
+    "status_gifted": "Bortskänkta",
+    "status_sold": "Sålda",
+    "status_other": "Övriga"
+  },
+
   "racks": {
     "title": "Förvaringshyllor",
     "backToCellar": "← Tillbaka till källare",
@@ -1576,7 +1610,11 @@
     "statusSeen": "Sedd",
     "statusAddedToWishlist": "Tillagd i önskelistan",
     "delete": "Ta bort",
-    "confirmDelete": "Ta bort denna rekommendation?"
+    "confirmDelete": "Ta bort denna rekommendation?",
+    "loadMore": "Ladda fler",
+    "alreadyOnWishlist": "Det här vinet finns redan på din önskelista.",
+    "addFailed": "Kunde inte lägga till på önskelistan. Försök igen.",
+    "wineRemoved": "Det här vinet finns inte längre i registret"
   },
   "wineDetail": {
     "appellation": "Appellation",
@@ -1671,7 +1709,8 @@
     "promptText": "Vill du spara detta ögonblick i din vinjournal?",
     "yesAddEntry": "Ja, lägg till anteckning",
     "notNow": "Inte nu",
-    "dontAskAgain": "Fråga inte igen"
+    "dontAskAgain": "Fråga inte igen",
+    "loadMore": "Ladda fler"
   },
   "restock": {
     "title": "Smart påfyllning",

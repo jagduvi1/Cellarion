@@ -668,8 +668,11 @@ export default function TabAI() {
     finally { setEnrichBusy(false); }
   }
 
+  // Only block on loading/error before the first successful load — background
+  // reloads (job start/stop, shell refresh) keep the panels mounted so
+  // unsaved prompt drafts aren't wiped.
   if (loading) return <div className="sa-loading">Loading AI pipeline stats...</div>;
-  if (error)   return <div className="sa-error">Error: {error}</div>;
+  if (error && !data) return <div className="sa-error">Error: {error}</div>;
   if (!data)   return null;
 
   const { configured, config, job, collection, embeddings } = data;
@@ -689,6 +692,12 @@ export default function TabAI() {
 
   return (
     <>
+      {error && (
+        <div className="sa-error" style={{ marginBottom: 12, fontSize: 11 }}>
+          Refresh failed: {error} — showing last loaded data
+        </div>
+      )}
+
       {/* API keys configured */}
       <div className="sa-services-grid" style={{ marginBottom: 16 }}>
         {[

@@ -10,6 +10,8 @@ import WineImage from '../components/WineImage';
 import ConfirmModal from '../components/ConfirmModal';
 import timeAgo from '../utils/timeAgo';
 
+const PAGE_SIZE = 50; // backend caps recommendation pages at 50
+
 export default function Recommendations() {
   const { t } = useTranslation();
   const { apiFetch } = useAuth();
@@ -17,6 +19,8 @@ export default function Recommendations() {
   const [items, setItems] = useState([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [message, setMessage] = useState(null); // { type: 'info' | 'error', text }
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
 
   useEffect(() => {
@@ -27,19 +31,27 @@ export default function Recommendations() {
   // overwrite the list for the tab the user is now viewing.
   const fetchSeq = useRef(0);
 
-  const fetchItems = async () => {
+  const fetchItems = async (loadMore = false) => {
     const seq = ++fetchSeq.current;
-    setLoading(true);
+    if (loadMore) setLoadingMore(true); else setLoading(true);
     try {
       const fetcher = tab === 'received' ? getRecommendations : getSentRecommendations;
-      const res = await fetcher(apiFetch);
+      // Request pages explicitly — without a limit the backend serves its
+      // default (20) while the tab badge shows the full total.
+      const params = new URLSearchParams();
+      params.set('limit', String(PAGE_SIZE));
+      if (loadMore) params.set('skip', String(items.length));
+      const res = await fetcher(apiFetch, params.toString());
       if (res.ok && seq === fetchSeq.current) {
         const data = await res.json();
-        setItems(data.items || []);
+        setItems(prev => loadMore ? [...prev, ...(data.items || [])] : (data.items || []));
         setTotal(data.total || 0);
       }
     } catch { /* ignore */ }
-    if (seq === fetchSeq.current) setLoading(false);
+    if (seq === fetchSeq.current) {
+      setLoading(false);
+      setLoadingMore(false);
+    }
   };
 
   const handleMarkSeen = async (id) => {
@@ -61,13 +73,21 @@ export default function Recommendations() {
   };
 
   const handleAddToWishlist = async (rec) => {
+    if (!rec.wine?._id) return; // wine was deleted from the registry
+    setMessage(null);
     try {
       const res = await addToWishlist(apiFetch, { wineDefinitionId: rec.wine._id });
       if (res.ok) {
         await updateRecommendationStatus(apiFetch, rec._id, 'added-to-wishlist');
         setItems((prev) => prev.map((r) => r._id === rec._id ? { ...r, status: 'added-to-wishlist' } : r));
+      } else if (res.status === 409) {
+        setMessage({ type: 'info', text: t('recommendations.alreadyOnWishlist', 'This wine is already on your wishlist.') });
+      } else {
+        setMessage({ type: 'error', text: t('recommendations.addFailed', 'Could not add to wishlist. Please try again.') });
       }
-    } catch { /* ignore */ }
+    } catch {
+      setMessage({ type: 'error', text: t('recommendations.addFailed', 'Could not add to wishlist. Please try again.') });
+    }
   };
 
   return (
@@ -88,6 +108,10 @@ export default function Recommendations() {
           {t('recommendations.sent')} {tab === 'sent' && total > 0 ? `(${total})` : ''}
         </button>
       </div>
+
+      {message && (
+        <div className={`alert ${message.type === 'error' ? 'alert-error' : 'alert-info'}`}>{message.text}</div>
+      )}
 
       {loading ? (
         <p className="rec-loading">{t('recommendations.loading')}</p>
@@ -154,6 +178,8 @@ export default function Recommendations() {
                     <button
                       className="btn btn-small btn-primary"
                       onClick={() => handleAddToWishlist(rec)}
+                      disabled={!rec.wine?._id}
+                      title={!rec.wine?._id ? t('recommendations.wineRemoved', 'This wine is no longer in the registry') : undefined}
                     >
                       {t('recommendations.addToWishlist')}
                     </button>
@@ -180,6 +206,14 @@ export default function Recommendations() {
             </li>
           ))}
         </ul>
+      )}
+
+      {!loading && items.length < total && (
+        <div className="rec-load-more" style={{ textAlign: 'center', marginTop: '1rem' }}>
+          <button className="btn btn-secondary" onClick={() => fetchItems(true)} disabled={loadingMore}>
+            {loadingMore ? t('common.loading') : t('recommendations.loadMore', 'Load more')}
+          </button>
+        </div>
       )}
 
       {confirmDeleteId && (

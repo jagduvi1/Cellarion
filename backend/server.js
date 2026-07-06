@@ -41,6 +41,14 @@ if (!process.env.MAILGUN_API_KEY || !process.env.MAILGUN_DOMAIN) {
   console.warn('Warning: MAILGUN_API_KEY / MAILGUN_DOMAIN not set — email verification disabled.');
 }
 
+// Backstop: log unhandled rejections instead of letting Node's default policy
+// kill the process. Individual code paths should still settle their promises —
+// this exists so one missed edge (e.g. an SDK emitting an unlistened event)
+// can't take the whole backend down.
+process.on('unhandledRejection', (reason) => {
+  console.error('[unhandledRejection]', reason);
+});
+
 const fs = require('fs');
 const app = require('./src/app');
 const connectDB = require('./src/config/db');
@@ -58,13 +66,34 @@ const PORT = process.env.PORT || 5000;
 // Connect to MongoDB, initialize search, then start server
 connectDB().then(async () => {
   // Migration: drop old non-partial cellar name index so Mongoose can create the
-  // updated partial one (user_1_name_1 with partialFilterExpression: {deletedAt: null})
+  // updated partial one (user_1_name_1 with partialFilterExpression: {deletedAt: null}).
+  // Only drop when the existing index actually lacks the partial filter — the new
+  // index has the same auto-generated name, so an unconditional drop would remove
+  // and rebuild it on every boot (and briefly lose duplicate-name protection).
   try {
     const mongoose = require('mongoose');
-    await mongoose.connection.collection('cellars').dropIndex('user_1_name_1');
-    console.log('[migration] Dropped old cellar name index — partial index will be created by Mongoose');
+    const cellarIndexes = await mongoose.connection.collection('cellars').indexes();
+    const nameIdx = cellarIndexes.find(i => i.name === 'user_1_name_1');
+    if (nameIdx && !nameIdx.partialFilterExpression) {
+      await mongoose.connection.collection('cellars').dropIndex('user_1_name_1');
+      console.log('[migration] Dropped old cellar name index — partial index will be created by Mongoose');
+    }
   } catch {
-    // Index doesn't exist (first deploy) or already migrated — nothing to do
+    // Collection doesn't exist yet (first deploy) — nothing to do
+  }
+
+  // Migration: remove explicit rfidTag nulls written by the old unlink flow.
+  // The unique sparse index indexes explicit nulls, so a second null would
+  // fail with E11000; the unlink route now $unsets the field instead.
+  try {
+    const mongoose = require('mongoose');
+    const res = await mongoose.connection.collection('racks')
+      .updateMany({ rfidTag: { $type: 'null' } }, { $unset: { rfidTag: 1 } });
+    if (res.modifiedCount > 0) {
+      console.log(`[migration] Unset explicit null rfidTag on ${res.modifiedCount} rack(s)`);
+    }
+  } catch {
+    // Collection doesn't exist yet — nothing to do
   }
 
   try {

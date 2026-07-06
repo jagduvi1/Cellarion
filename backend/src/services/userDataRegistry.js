@@ -136,6 +136,13 @@ const REGISTRY = [
       const bottleIds = await Bottle.find({ user: ctx.userId }).distinct('_id');
       await Bottle.deleteMany({ user: ctx.userId });
       await searchService.removeBottles(bottleIds);
+      // The Rack entry below only purges racks in the user's OWN cellars, so a
+      // deleted bottle placed in ANOTHER owner's cellar would leave a dangling
+      // slot ref in that cellar's racks — pull those slots too.
+      await Rack.updateMany(
+        { 'slots.bottle': { $in: bottleIds } },
+        { $pull: { slots: { bottle: { $in: bottleIds } } } }
+      );
     },
     exportFragment: async (ctx) => ({ bottles: markTrunc(ctx, 'bottles', await Bottle.find({ user: ctx.userId }).limit(EXPORT_MAX).lean()) }),
   },
@@ -171,13 +178,35 @@ const REGISTRY = [
   },
   {
     model: Cellar, category: 'personal-data', userFields: ['user', 'members.user', 'userColors.user'],
-    purge: (ctx) => [
-      Cellar.deleteMany({ user: ctx.userId }),
-      // Remove the user from cellars OWNED BY OTHERS that they were a member of.
-      Cellar.updateMany({ 'members.user': ctx.userId }, { $pull: { members: { user: ctx.userId } } }),
-      // GAP FIX: also pull the matching userColors entry (was left dangling).
-      Cellar.updateMany({ 'userColors.user': ctx.userId }, { $pull: { userColors: { user: ctx.userId } } }),
-    ],
+    purge: async (ctx) => {
+      // GAP FIX: bottles inside the user's cellars that are OWNED BY OTHERS
+      // (legacy data — bottle.user is set to the cellar owner on every current
+      // creation path, but older/moved rows can differ) are missed by the
+      // user-scoped Bottle purge and would survive pointing at a deleted
+      // cellar. Delete them too, cleaning their images + search docs the same
+      // reference-safe way as the Bottle/BottleImage entries: ids collected
+      // before deleteMany, files unlinked before their only referencing docs
+      // go, shared (assignedToWine) images kept with the bottle ref detached.
+      const orphanIds = await Bottle.find({ cellar: { $in: ctx.cellarIds }, user: { $ne: ctx.userId } }).distinct('_id');
+      if (orphanIds.length > 0) {
+        const imgs = await BottleImage.find({ bottle: { $in: orphanIds }, assignedToWine: { $ne: true } })
+          .select('originalUrl processedUrl').lean();
+        for (const img of imgs) await unlinkImageFiles(img);
+        await Promise.all([
+          BottleImage.deleteMany({ bottle: { $in: orphanIds }, assignedToWine: { $ne: true } }),
+          BottleImage.updateMany({ bottle: { $in: orphanIds }, assignedToWine: true }, { $unset: { bottle: '' } }),
+          Bottle.deleteMany({ _id: { $in: orphanIds } }),
+        ]);
+        await searchService.removeBottles(orphanIds);
+      }
+      await Promise.all([
+        Cellar.deleteMany({ user: ctx.userId }),
+        // Remove the user from cellars OWNED BY OTHERS that they were a member of.
+        Cellar.updateMany({ 'members.user': ctx.userId }, { $pull: { members: { user: ctx.userId } } }),
+        // GAP FIX: also pull the matching userColors entry (was left dangling).
+        Cellar.updateMany({ 'userColors.user': ctx.userId }, { $pull: { userColors: { user: ctx.userId } } }),
+      ]);
+    },
     exportFragment: async (ctx) => ({
       cellars: markTrunc(ctx, 'cellars', await Cellar.find({ $or: [{ user: ctx.userId }, { 'members.user': ctx.userId }], deletedAt: null }).limit(EXPORT_MAX).lean()),
     }),

@@ -552,6 +552,15 @@ async function chatStream(userId, message, opts, res) {
         }
         reject(err);
       });
+
+      // An aborted stream emits 'abort' — NOT 'error' — and with no listener
+      // the SDK turns it into an unhandled promise rejection (process-fatal
+      // under Node's default policy). It also means neither 'finalMessage'
+      // nor 'error' fires, so without this the promise never settles and the
+      // caller's finally (concurrency-slot release) never runs.
+      stream.on('abort', () => {
+        resolve({ usage: null, aborted: true });
+      });
     };
 
     res.on('close', () => {

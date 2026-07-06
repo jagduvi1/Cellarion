@@ -447,10 +447,14 @@ async function _computeGlobalStatsUncached({ excludeAdmins = true } = {}) {
 
   // ── Maturity (drink-window phase distribution) ──────────────────────────
   // Joins active bottles to reviewed WineVintageProfile and classifies each
-  // bottle against the current year. Bottles without a reviewed profile, or
-  // with NV vintage, fall into 'noProfile'.
+  // bottle against the current year. NV bottles are EXCLUDED up front (same
+  // filter as the vintage aggregations above): their reviewed profiles store
+  // RELATIVE offsets from each bottle's purchase year (0–100), which cannot
+  // be compared against absolute calendar years — including them misclassified
+  // every somm-reviewed NV bottle as 'declining'. Bottles without a reviewed
+  // profile fall into 'noProfile'.
   const maturityRaw = await safeAggregate(Bottle, [
-    { $match: { ...bottleMatch, status: 'active' } },
+    { $match: { ...bottleMatch, status: 'active', vintage: { $nin: ['NV', null, ''] } } },
     { $lookup: {
       from: 'winevintageprofiles',
       let: { wdId: '$wineDefinition', v: '$vintage' },
@@ -468,6 +472,9 @@ async function _computeGlobalStatsUncached({ excludeAdmins = true } = {}) {
     { $addFields: {
       maturity: {
         // Mirror utils/maturityUtils.js#classifyMaturity exactly:
+        //   - NV bottles return null there; here they are excluded by the
+        //     pipeline's vintage $nin filter instead (their profiles hold
+        //     purchase-relative offsets, not calendar years)
         //   - No profile, or a reviewed profile with no window boundaries
         //     defined, → 'noProfile' (NOT 'peak' — every window boundary in
         //     WineVintageProfile is optional, so partial profiles are real)

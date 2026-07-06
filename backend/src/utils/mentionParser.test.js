@@ -10,14 +10,13 @@ jest.mock('../models/User', () => {
       for (const u of list) fakeUsersByLowerUsername.set(u.username.toLowerCase(), u);
     },
     find: (filter) => {
-      // The parser passes { username: { $in: [/regex/i, ...] } }. We pull the
-      // pattern source out of each regex (it matches `^username$` after escape)
-      // and look it up in the fake map.
-      const regexes = filter?.username?.$in || [];
+      // The parser passes { username: { $in: ['name', ...] } } with plain
+      // lowercased strings (the schema stores usernames lowercased), so we
+      // look each one up in the fake map directly.
+      const names = filter?.username?.$in || [];
       const matched = [];
-      for (const re of regexes) {
-        const lower = re.source.replace(/^\^|\$$/g, '').replace(/\\(.)/g, '$1').toLowerCase();
-        const hit = fakeUsersByLowerUsername.get(lower);
+      for (const name of names) {
+        const hit = fakeUsersByLowerUsername.get(String(name).toLowerCase());
         if (hit) matched.push(hit);
       }
       return {
@@ -75,6 +74,24 @@ describe('extractMentions', () => {
 
   test('drops usernames that do not exist', async () => {
     expect(await extractMentions('hi @alice and @nobody')).toEqual(['a']);
+  });
+
+  test('resolves a mention followed by sentence punctuation', async () => {
+    // The regex captures "alice." — the trailing-punctuation-stripped variant
+    // must also be tried so the intended user still resolves.
+    expect(await extractMentions('thanks @alice.')).toEqual(['a']);
+    expect(await extractMentions('was it @alice_ or someone else')).toEqual(['a']);
+    expect(await extractMentions('ping @alice-')).toEqual(['a']);
+  });
+
+  test('still resolves usernames that legitimately end in punctuation chars', async () => {
+    User.__setUsers([{ _id: 'p', username: 'trailing.' }]);
+    expect(await extractMentions('hi @trailing.')).toEqual(['p']);
+  });
+
+  test('resolves dotted usernames without dropping their inner punctuation', async () => {
+    // "@bob.smith." → capture "bob.smith." → stripped variant "bob.smith" matches
+    expect(await extractMentions('cc @bob.smith.')).toEqual(['b']);
   });
 
   test('dedupes when the same user is mentioned multiple times', async () => {

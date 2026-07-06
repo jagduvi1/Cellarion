@@ -51,12 +51,20 @@ describe('stripHtml', () => {
     expect(stripHtml('<a href="http://evil.com" onclick="steal()">Click me</a>')).toBe('Click me');
   });
 
-  test('throws on strings exceeding 10000 characters', () => {
+  test('truncates strings exceeding 10000 characters instead of throwing', () => {
     const longStr = 'x'.repeat(10_001);
-    expect(() => stripHtml(longStr)).toThrow('exceeds maximum allowed length');
+    expect(() => stripHtml(longStr)).not.toThrow();
+    // Only the first 10,000 chars are processed; the rest is dropped so the
+    // downstream per-field length checks produce their normal 400s.
+    expect(stripHtml(longStr)).toBe('x'.repeat(10_000));
   });
 
-  test('does not throw for strings at exactly 10000 characters', () => {
+  test('drops tags in the truncated tail beyond 10000 characters', () => {
+    const longStr = 'x'.repeat(10_000) + '<script>alert(1)</script>';
+    expect(stripHtml(longStr)).toBe('x'.repeat(10_000));
+  });
+
+  test('handles strings at exactly 10000 characters unchanged', () => {
     const exactStr = 'x'.repeat(10_000);
     expect(() => stripHtml(exactStr)).not.toThrow();
     expect(stripHtml(exactStr)).toBe(exactStr);
