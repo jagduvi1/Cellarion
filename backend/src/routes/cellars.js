@@ -21,7 +21,7 @@ const { CONSUMED_STATUSES, WINE_POPULATE_LIST } = require('../config/constants')
 const mongoose = require('mongoose');
 const { parsePagination } = require('../utils/pagination');
 const searchService = require('../services/search');
-const { isValidId } = require('../utils/validation');
+const { isValidId, coerceStringQuery } = require('../utils/validation');
 const { mapBottlesForExport } = require('../services/cellarExport');
 
 const router = express.Router();
@@ -146,10 +146,19 @@ async function resolveAccessibleCellars(userId) {
 const MATURITY_RANK_MULTI = { declining: 0, late: 1, peak: 2, early: 3, 'not-ready': 4 };
 
 async function queryBottlesAcrossCellars(req, { cellarIds, statusFilter, paginate = true }) {
-  const {
-    search, type, country, region, grapes, vintage,
-    minRating, maxRating, maturity: maturityFilter, sort = '-createdAt',
-  } = req.query;
+  // Coerce every query param to a string up front: Express turns repeated
+  // (?sort=a&sort=b) or bracketed (?search[$gt]=x) params into arrays/objects,
+  // which would blow up sort.startsWith / search.toLowerCase with a 500.
+  const search = coerceStringQuery(req.query.search);
+  const type = coerceStringQuery(req.query.type);
+  const country = coerceStringQuery(req.query.country);
+  const region = coerceStringQuery(req.query.region);
+  const grapes = coerceStringQuery(req.query.grapes);
+  const vintage = coerceStringQuery(req.query.vintage);
+  const minRating = coerceStringQuery(req.query.minRating);
+  const maxRating = coerceStringQuery(req.query.maxRating);
+  const maturityFilter = coerceStringQuery(req.query.maturity);
+  const sort = coerceStringQuery(req.query.sort) || '-createdAt';
   const { limit, offset: skip } = parsePagination(req.query, { limit: 30, maxLimit: 200 });
   const { isValidObjectId } = mongoose;
   const sortField = sort.startsWith('-') ? sort.substring(1) : sort;
@@ -163,6 +172,23 @@ async function queryBottlesAcrossCellars(req, { cellarIds, statusFilter, paginat
     ? { $in: CONSUMED_STATUSES }
     : { $nin: CONSUMED_STATUSES };
   const objectIds = cellarIds.map(id => new mongoose.Types.ObjectId(id));
+
+  // ── HOT PATH: default view (no search/filters, DB-sortable) ──
+  // Paginate inside MongoDB instead of hydrating up to 10k populated bottles to
+  // slice a 30-item page. Mirrors the single-cellar route's canPaginateInDb;
+  // trivially correct here since the cross-cellar view never groups.
+  const canPaginateInDb = paginate
+    && !hasMeiliFilters
+    && !minRating && !maxRating && !maturityFilter
+    && ['createdAt', 'vintage', 'price', 'rating'].includes(sortField);
+  if (canPaginateInDb) {
+    const filter = { cellar: { $in: objectIds }, status: statusMongo };
+    const [pageDocs, totalCount] = await Promise.all([
+      Bottle.find(filter).populate(WINE_POPULATE_LIST).sort({ [sortField]: sortDir }).skip(skip).limit(limit).lean(),
+      Bottle.countDocuments(filter),
+    ]);
+    return { items: pageDocs, total: totalCount, limit, skip, maturityStatusMap: null };
+  }
 
   let bottles;
   let usedMeili = false;
@@ -460,7 +486,11 @@ router.get('/multi/bottles', async (req, res) => {
     const result = await queryBottlesAcrossCellars(req, { cellarIds, statusFilter: 'active' });
     const { total, limit, skip, maturityStatusMap } = result;
     let items = result.items;
-    const { facets, baseFacets, facetMeta } = await facetsAcrossCellars(req, { cellarIds, statusFilter: 'active' });
+    // Facets only change the filter modal, which the client reads on the first
+    // page only — skip the extra Meili + distinct queries on every Load More.
+    const { facets, baseFacets, facetMeta } = skip === 0
+      ? await facetsAcrossCellars(req, { cellarIds, statusFilter: 'active' })
+      : { facets: null, baseFacets: null, facetMeta: null };
 
     // Match the single-cellar route's per-bottle enrichment (default/pending
     // images), then tag each bottle with the cellar it lives in + maturity.
