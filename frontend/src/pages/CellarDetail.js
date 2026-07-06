@@ -2,12 +2,17 @@ import { useState, useEffect, useRef, lazy, Suspense, Fragment } from 'react';
 import { useParams, Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
-import { getCellar, getCellarStatistics } from '../api/cellars';
+import { getCellar, getCellarStatistics, listCellars, getMultiCellarBottles } from '../api/cellars';
 import { getRacks } from '../api/racks';
 import { getCellarLayout } from '../api/cellarLayout';
 import BottleCard from '../components/BottleCard';
 import BottleFilterModal from '../components/BottleFilterModal';
+import CellarScopePicker from '../components/CellarScopePicker';
 import './CellarDetail.css';
+
+// Stable empty rack map for the cross-cellar view (rack placement is per-cellar,
+// so it doesn't apply when several cellars are combined).
+const EMPTY_RACKMAP = new Map();
 
 // Lazy-load modals — they are heavy and only needed on user interaction
 const ShareCellarModal = lazy(() => import('../components/ShareCellarModal'));
@@ -56,6 +61,30 @@ function CellarDetail() {
   // Identical bottles (same wine + vintage + size) are always collapsed into one
   // card. Server-side grouped (see ?group=1) so counts are correct across pagination.
 
+  // ── Cross-cellar scope: which cellars this view spans (default: this one) ──
+  const [allCellars, setAllCellars] = useState([]);
+  const [scopeIds, setScopeIds] = useState([id]);
+  const scopeKey = scopeIds.join(',');
+  // Shape of the bottles CURRENTLY in state (grouped vs flat). Tracked separately
+  // from the live scope selection so a scope change never renders the just-loaded
+  // (old-shape) list through the wrong BottlesList branch before the refetch lands.
+  const [dataIsMulti, setDataIsMulti] = useState(false);
+  // Monotonic fetch token: only the most-recently-started fetch may commit its
+  // result. Guards against out-of-order responses when the scope/filter changes
+  // (or Load More fires) faster than the network replies — a stale response
+  // must never overwrite newer data or append the wrong-shaped page.
+  const fetchSeq = useRef(0);
+
+  useEffect(() => {
+    listCellars(apiFetch)
+      .then(r => r.json())
+      .then(d => setAllCellars(d.cellars || []))
+      .catch(() => {});
+  }, [apiFetch]);
+
+  // Reset scope to just this cellar when navigating to another cellar.
+  useEffect(() => { setScopeIds([id]); }, [id]);
+
   // Debounce the search input — only send the API call after the user stops typing
   const [debouncedSearch, setDebouncedSearch] = useState(filters.search);
   const searchTimer = useRef(null);
@@ -80,9 +109,13 @@ function CellarDetail() {
     filters.minRating, filters.maturity, filters.sort
   ].join('|');
 
+  // Refetch on cellar id, filters, or scope change. `id` is included so an
+  // in-place navigation to another cellar whose scope key happens to match the
+  // current one still refetches; the fetch-seq guard drops the transient
+  // stale-scope response that the id→scope-reset produces.
   useEffect(() => {
     fetchCellarData(0);
-  }, [id, filterKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [id, filterKey, scopeKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     fetchStatistics();
@@ -91,6 +124,7 @@ function CellarDetail() {
 
 
   const fetchCellarData = async (skip) => {
+    const seq = ++fetchSeq.current;
     try {
       if (skip > 0) setBottlesLoading(true);
       const params = new URLSearchParams();
@@ -106,14 +140,27 @@ function CellarDetail() {
       });
       params.set('limit', BOTTLES_PER_PAGE);
       params.set('skip', skip);
-      params.set('group', '1');
-      const res = await getCellar(apiFetch, id, params);
+      const multi = !(scopeIds.length === 1 && scopeIds[0] === id);
+      let res;
+      if (multi) {
+        params.set('cellars', scopeIds.join(','));
+        res = await getMultiCellarBottles(apiFetch, params.toString());
+      } else {
+        params.set('group', '1');
+        res = await getCellar(apiFetch, id, params);
+      }
       const data = await res.json();
+      // A newer fetch started while this one was in flight — drop this response
+      // so it can't overwrite newer data or append a wrong-shaped page.
+      if (seq !== fetchSeq.current) return;
       if (res.ok) {
-        setCellar(data.cellar);
+        if (data.cellar) setCellar(data.cellar);
         setBottlesTotal(data.bottles.total);
         if (skip === 0) {
+          // Set the data + its shape together so BottlesList never sees a
+          // shape/flag mismatch (grouped items rendered as flat, or vice-versa).
           setBottles(data.bottles.items);
+          setDataIsMulti(multi);
           // Update facets on every fetch so cascading filters work
           if (data.facets) setFacets(data.facets);
           if (data.baseFacets) setBaseFacets(data.baseFacets);
@@ -125,10 +172,12 @@ function CellarDetail() {
         setError(data.error || 'Failed to load cellar');
       }
     } catch {
-      setError('Network error');
+      if (seq === fetchSeq.current) setError('Network error');
     } finally {
-      setLoading(false);
-      setBottlesLoading(false);
+      if (seq === fetchSeq.current) {
+        setLoading(false);
+        setBottlesLoading(false);
+      }
     }
   };
 
@@ -484,6 +533,14 @@ function CellarDetail() {
                     <option value="-price">{t('cellarDetail.sortPriceHigh')}</option>
                     <option value="maturity">{t('cellarDetail.sortMaturity')}</option>
                   </select>
+                  {allCellars.length > 1 && (
+                    <CellarScopePicker
+                      cellars={allCellars}
+                      value={scopeIds}
+                      currentCellarId={id}
+                      onChange={setScopeIds}
+                    />
+                  )}
                 </div>
 
                 {activeChips.length > 0 && (
@@ -542,11 +599,12 @@ function CellarDetail() {
           ) : (
             <BottlesList
               bottles={bottles}
-              rackMap={rackMap}
+              rackMap={dataIsMulti ? EMPTY_RACKMAP : rackMap}
               cellarId={id}
               hasMore={bottles.length < bottlesTotal}
               loadingMore={bottlesLoading}
               onLoadMore={loadMore}
+              multi={dataIsMulti}
             />
           )}
         </div>
@@ -602,7 +660,10 @@ function CellarDetail() {
 }
 
 // ── Bottle list (list or card view) ──
-function BottlesList({ bottles, rackMap, cellarId, hasMore, loadingMore, onLoadMore }) {
+// `multi` = cross-cellar view: `bottles` is a flat list (no grouping), each item
+// carries its own `cellar` id + `cellarName` so it links to and is badged with
+// the right cellar.
+function BottlesList({ bottles, rackMap, cellarId, hasMore, loadingMore, onLoadMore, multi = false }) {
   const { t } = useTranslation();
   const [viewMode, setViewMode] = useState(() => {
     try { return localStorage.getItem('cellarion_bottle_view') || 'list'; } catch { return 'list'; }
@@ -645,6 +706,19 @@ function BottlesList({ bottles, rackMap, cellarId, hasMore, loadingMore, onLoadM
 
       <div className={viewMode === 'list' ? 'bottles-list' : 'bottles-grid'}>
         {bottles.map(item => {
+          // Cross-cellar view: flat bottles, each linked to + badged with its cellar.
+          if (multi) {
+            return (
+              <BottleCard
+                key={item._id}
+                bottle={item}
+                rackMap={rackMap}
+                cellarId={item.cellar || cellarId}
+                viewMode={viewMode}
+                showCellarBadge
+              />
+            );
+          }
           // Grouped response: item = { key, count, bottles: [...] }
           if (item && Array.isArray(item.bottles)) {
             const rep = item.bottles[0];

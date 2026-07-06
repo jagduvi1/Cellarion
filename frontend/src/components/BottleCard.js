@@ -18,11 +18,14 @@ const MATURITY_LABELS = {
  * Renders a single bottle in either list or card (grid) view.
  * Props: bottle, rackMap, cellarId, viewMode ('list' | 'card')
  */
-function BottleCard({ bottle, rackMap, cellarId, viewMode, groupCount = 1, onClick }) {
+function BottleCard({ bottle, rackMap, cellarId, viewMode, groupCount = 1, onClick, showCellarBadge = false }) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { user } = useAuth();
   const isGroup = groupCount > 1;
+  // Cross-cellar views tag each bottle with the cellar it lives in.
+  const cellarBadge = showCellarBadge && bottle.cellarName ? bottle.cellarName : null;
+  const cellarBadgeColor = bottle.cellarColor || null;
   // A collapsed group spans multiple bottles (possibly in different racks), so a
   // single rack badge would be misleading — suppress it until the group expands.
   const rackInfo = isGroup ? null : rackMap?.get(bottle._id);
@@ -75,6 +78,11 @@ function BottleCard({ bottle, rackMap, cellarId, viewMode, groupCount = 1, onCli
             )}
           </div>
           <div className="bottle-badges">
+            {cellarBadge && (
+              <span className="cellar-badge" style={cellarBadgeColor ? { '--cellar-badge-color': cellarBadgeColor } : undefined}>
+                <span className="cellar-badge-dot" aria-hidden="true" /> {cellarBadge}
+              </span>
+            )}
             {isPending && (
               <span className="pending-wine-badge">Pending review</span>
             )}
@@ -134,6 +142,11 @@ function BottleCard({ bottle, rackMap, cellarId, viewMode, groupCount = 1, onCli
           {bottle.vintage && <span className="bottle-vintage">{bottle.vintage}</span>}
         </div>
         <div className="bottle-badges">
+          {cellarBadge && (
+            <span className="cellar-badge" style={cellarBadgeColor ? { '--cellar-badge-color': cellarBadgeColor } : undefined}>
+              <span className="cellar-badge-dot" aria-hidden="true" /> {cellarBadge}
+            </span>
+          )}
           {isPending && (
             <span className="pending-wine-badge">Pending review</span>
           )}
@@ -171,7 +184,7 @@ function BottleCard({ bottle, rackMap, cellarId, viewMode, groupCount = 1, onCli
 // values derived from the OTHER compared props (the bottle/group item) — if a
 // future caller closes over unrelated state, that handler must be stabilized
 // with useCallback instead.
-const COMPARED_PROPS = ['bottle', 'rackMap', 'cellarId', 'viewMode', 'groupCount'];
+const COMPARED_PROPS = ['bottle', 'rackMap', 'cellarId', 'viewMode', 'groupCount', 'showCellarBadge'];
 export default memo(BottleCard, (prev, next) =>
   COMPARED_PROPS.every(key => prev[key] === next[key])
 );
