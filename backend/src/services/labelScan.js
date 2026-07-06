@@ -1,6 +1,7 @@
 const ALLOWED_MEDIA_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
 const aiConfig = require('../config/aiConfig');
 const { extractFirstJsonObject } = require('../utils/jsonExtract');
+const { textFromResponse, thinkingOff } = require('../utils/aiResponse');
 
 function getClient() {
   const apiKey = process.env.ANTHROPIC_API_KEY;
@@ -75,7 +76,7 @@ async function scanLabel(image, mediaType = 'image/jpeg') {
     }]
   });
 
-  const query = (response.content[0]?.text ?? '').trim();
+  const query = textFromResponse(response);
   if (!query) {
     const err = new Error('Could not read label');
     err.status = 422;
@@ -104,6 +105,7 @@ async function scanLabelFull(image, mediaType = 'image/jpeg') {
   const response = await client.messages.create({
     model: aiConfig.get().labelScanModel,
     max_tokens: 600,
+    ...thinkingOff(aiConfig.get().labelScanModel),
     messages: [
       // Prime the assistant to start with '{' so it can't add preamble
       {
@@ -122,7 +124,7 @@ async function scanLabelFull(image, mediaType = 'image/jpeg') {
     ]
   });
 
-  const raw = (response.content[0]?.text ?? '').trim();
+  const raw = textFromResponse(response);
 
   // Strip any accidental markdown fences just in case
   const stripped = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
@@ -180,6 +182,7 @@ async function callClaudeJson({ client, model, maxTokens, prompt, validate }) {
   const apiParams = {
     model,
     max_tokens: maxTokens,
+    ...thinkingOff(model),
     messages: [
       { role: 'user', content: prompt }
     ]
@@ -189,7 +192,7 @@ async function callClaudeJson({ client, model, maxTokens, prompt, validate }) {
   for (let attempt = 1; attempt <= 2; attempt++) {
     try {
       const response = await client.messages.create(apiParams);
-      raw = (response.content[0]?.text ?? '').trim();
+      raw = textFromResponse(response);
       // Strip code fences, then extract only the first balanced {...} so any
       // trailing explanation text from the model doesn't break JSON.parse.
       const stripped = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
