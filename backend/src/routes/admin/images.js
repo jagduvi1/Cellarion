@@ -5,7 +5,7 @@ const WineDefinition = require('../../models/WineDefinition');
 const Bottle = require('../../models/Bottle');
 const searchService = require('../../services/search');
 const fs = require('fs');
-const { reprocessAllImages, safeUploadPath } = require('../../services/imageProcessor');
+const { reprocessAllImages, safeUploadPath, unlinkImageFiles } = require('../../services/imageProcessor');
 const { logAudit } = require('../../services/audit');
 const { createNotification } = require('../../services/notifications');
 const { incrementCred } = require('../../utils/cellarCred');
@@ -234,7 +234,9 @@ router.put('/:id/approve', async (req, res) => {
   }
 });
 
-// PUT /api/admin/images/:id/reject
+// PUT /api/admin/images/:id/reject — moderation judgement: the photo itself is
+// unwanted. Notifies the uploader and keeps a rejected tombstone record. For
+// removing redundant duplicates, use DELETE /:id below instead.
 router.put('/:id/reject', async (req, res) => {
   try {
     if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
@@ -261,19 +263,18 @@ router.put('/:id/reject', async (req, res) => {
       }
     }
 
+    // A rejected photo shouldn't stay starred on any bottle — clear the refs so
+    // they fall back to the wine image instead of dangling.
+    await Bottle.updateMany({ defaultImage: image._id }, { $set: { defaultImage: null } });
+
     image.status = 'rejected';
     image.reviewedBy = req.user.id;
     image.reviewedAt = new Date();
 
-    // Delete both original and processed files from disk
-    for (const url of [image.originalUrl, image.processedUrl]) {
-      if (!url) continue;
-      try {
-        fs.unlinkSync(safeUploadPath(url.replace('/api/uploads/', '')));
-      } catch (err) {
-        if (err.code !== 'ENOENT') console.error('Failed to delete image file:', err.message);
-      }
-    }
+    // Delete the files from disk — reference-safe: import dedup can point two
+    // records at the same file, and a shared file must survive for the record
+    // that remains.
+    await unlinkImageFiles(image);
     image.originalUrl = null;
     image.processedUrl = null;
     await image.save();
@@ -306,6 +307,84 @@ router.put('/:id/reject', async (req, res) => {
   } catch (error) {
     console.error('Reject image error:', error);
     res.status(500).json({ error: 'Failed to reject image' });
+  }
+});
+
+// DELETE /api/admin/images/:id — silent housekeeping removal (duplicate cleanup
+// in the by-wine view). Unlike reject, this is not a judgement on the photo:
+// the record is removed entirely, the uploader is NOT notified, and anything
+// still pointing at it — a bottle's starred default image or the wine's
+// official image — is handed over to a byte-identical surviving copy when one
+// exists, so no user visibly loses a photo.
+router.delete('/:id', async (req, res) => {
+  try {
+    if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
+    const image = await BottleImage.findById(req.params.id);
+    if (!image) {
+      return res.status(404).json({ error: 'Image not found' });
+    }
+
+    // Byte-identical surviving copy (duplicates from imports / re-uploads).
+    // Prefer one by the same uploader — in practice duplicates are the same
+    // user re-importing their cellar.
+    let survivor = null;
+    if (image.contentHash) {
+      const candidates = await BottleImage.find({
+        _id: { $ne: image._id },
+        contentHash: image.contentHash,
+        status: { $ne: 'rejected' },
+        $or: [{ processedUrl: { $ne: null } }, { originalUrl: { $ne: null } }],
+      }).sort({ createdAt: 1 }).lean();
+      survivor = candidates.find(c => String(c.uploadedBy) === String(image.uploadedBy)) || candidates[0] || null;
+    }
+
+    // Hand the official-image assignment over to the identical copy (or clear
+    // it) BEFORE the files go away, so WineDefinition.image never points at a
+    // deleted file.
+    if (image.assignedToWine && image.wineDefinition) {
+      const wineDefId = image.wineDefinition;
+      const imageUrl = image.processedUrl || image.originalUrl;
+      const wine = await WineDefinition.findById(wineDefId);
+      if (wine && wine.image === imageUrl) {
+        if (survivor) {
+          // Mirrors the set-official promotion.
+          await BottleImage.updateOne(
+            { _id: survivor._id },
+            { $set: { wineDefinition: wineDefId, assignedToWine: true, status: 'approved', visibility: 'public' } }
+          );
+          wine.image = survivor.processedUrl || survivor.originalUrl;
+          wine.imageCredit = survivor.credit || null;
+        } else {
+          wine.image = null;
+          wine.imageCredit = null;
+        }
+        await wine.save();
+        searchService.indexWine(wineDefId);
+      }
+    }
+
+    // Repoint bottles whose starred (default) image is this record to the
+    // surviving identical copy — or clear it so it falls back to the wine
+    // image instead of dangling.
+    await Bottle.updateMany(
+      { defaultImage: image._id },
+      { $set: { defaultImage: survivor ? survivor._id : null } }
+    );
+
+    // Remove the files (reference-safe: a file shared with another record via
+    // import dedup survives for that record), then drop the record itself.
+    await unlinkImageFiles(image);
+    await image.deleteOne();
+
+    logAudit(req, 'admin.image.delete',
+      { type: 'image', id: image._id },
+      { wineDefinitionId: image.wineDefinition || null, survivorId: survivor ? survivor._id : null }
+    );
+
+    res.json({ ok: true, survivorId: survivor ? survivor._id : null });
+  } catch (error) {
+    console.error('Delete image error:', error);
+    res.status(500).json({ error: 'Failed to delete image' });
   }
 });
 

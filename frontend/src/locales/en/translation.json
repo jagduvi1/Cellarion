@@ -932,7 +932,8 @@
       "duplicateHint": "This exact photo appears more than once for this wine — remove the extras.",
       "duplicateCount_one": "{{count}} duplicate",
       "duplicateCount_other": "{{count}} duplicates",
-      "removeConfirm": "Remove this image? The uploader is notified.",
+      "removeConfirm": "Delete this image? If a bottle uses it, an identical copy takes its place when one exists.",
+      "deleteImage": "Delete",
       "removeYes": "Remove",
       "removing": "Removing…",
       "reject": "Reject"

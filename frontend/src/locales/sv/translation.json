@@ -932,7 +932,8 @@
       "duplicateHint": "Exakt samma foto förekommer flera gånger för detta vin – ta bort dubbletterna.",
       "duplicateCount_one": "{{count}} dubblett",
       "duplicateCount_other": "{{count}} dubbletter",
-      "removeConfirm": "Ta bort denna bild? Uppladdaren meddelas.",
+      "removeConfirm": "Ta bort denna bild? Om en flaska använder den ersätts den med en identisk kopia om en finns.",
+      "deleteImage": "Ta bort",
       "removeYes": "Ta bort",
       "removing": "Tar bort…",
       "reject": "Avvisa"

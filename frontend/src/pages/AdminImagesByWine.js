@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
-import { adminGetImagesByWine, adminSetOfficialImage, adminRejectImage } from '../api/admin';
+import { adminGetImagesByWine, adminSetOfficialImage, adminDeleteImage } from '../api/admin';
 import AuthImage from '../components/AuthImage';
 import { API_URL } from '../api/apiConstants';
 
@@ -66,17 +66,19 @@ export default function AdminImagesByWine() {
     }
   };
 
-  const rejectImage = async (img) => {
+  // Silent housekeeping delete (no uploader notification) — the backend hands
+  // starred/official references over to an identical surviving copy.
+  const deleteImage = async (img) => {
     setBusyId(img._id);
     setError(null);
     try {
-      const res = await adminRejectImage(apiFetch, img._id);
+      const res = await adminDeleteImage(apiFetch, img._id);
       if (res.ok) {
         setConfirmRejectId(null);
         await fetchData();
       } else {
         const data = await res.json();
-        setError(data.error || 'Failed to remove image');
+        setError(data.error || 'Failed to delete image');
       }
     } catch {
       setError('Network error');
@@ -169,7 +171,7 @@ export default function AdminImagesByWine() {
                                 <button
                                   type="button"
                                   className="btn btn-small btn-danger"
-                                  onClick={() => rejectImage(img)}
+                                  onClick={() => deleteImage(img)}
                                   disabled={busy}
                                 >
                                   {busy ? t('admin.images.removing') : t('admin.images.removeYes')}
@@ -204,7 +206,7 @@ export default function AdminImagesByWine() {
                                 onClick={() => { setConfirmRejectId(img._id); setError(null); }}
                                 disabled={busy}
                               >
-                                {t('admin.images.reject')}
+                                {t('admin.images.deleteImage')}
                               </button>
                             </>
                           )}
