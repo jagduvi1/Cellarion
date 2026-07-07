@@ -136,6 +136,11 @@ export const adminApproveImage = (apiFetch, id, data = {}) =>
 export const adminRejectImage = (apiFetch, id) =>
   apiFetch(`/api/admin/images/${id}/reject`, { method: 'PUT' });
 
+// Silent hard-delete (duplicate cleanup) — no uploader notification; starred /
+// official references are handed to an identical surviving copy server-side.
+export const adminDeleteImage = (apiFetch, id) =>
+  apiFetch(`/api/admin/images/${id}`, { method: 'DELETE' });
+
 export const adminSetImageVisibility = (apiFetch, id, visibility) =>
   apiFetch(`/api/admin/images/${id}/visibility`, { method: 'PUT', headers: J, body: JSON.stringify({ visibility }) });
 
