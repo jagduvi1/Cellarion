@@ -1,14 +1,18 @@
 # Cellarion
 
-A self-hosted wine cellar management app built with the MERN stack. Track your bottles, organize them into cellars and racks, search a shared wine registry, get drink-window recommendations, and chat with an AI sommelier about your collection.
+**Cellarion is a hosted wine cellar app — a ready-to-use online service at [cellarion.app](https://cellarion.app).** Create a free account and start tracking your bottles, organizing them into cellars and racks, searching a shared wine registry, getting drink-window recommendations, and chatting with an AI sommelier about your collection. No installation, no server, no setup — just sign up and go. **Every feature is free, forever.**
 
-## Hosted Version
+> **Just want to use Cellarion?** Go to **[cellarion.app](https://cellarion.app)** and sign up. You do **not** need to clone this repository, run Docker, or host anything yourself.
+
+Cellarion is *also* open-source (AGPL-3.0), so if you'd prefer to run your own private instance, you can self-host it. The rest of this README covers self-hosting — see [Quick Start](#quick-start). Most people should just use the hosted service at [cellarion.app](https://cellarion.app).
+
+## Hosted Service (recommended)
 
 Cellarion is live and publicly available at:
 
-👉 https://cellarion.app
+👉 **https://cellarion.app**
 
-Create an account and start using the full hosted service today.
+This is the primary way to use Cellarion. Create an account and start using the full service today — **every feature is free, forever.** No credit card, no trial clock, no paywalled features, nothing to install or maintain.
 
 ## Features
 
@@ -23,7 +27,7 @@ Create an account and start using the full hosted service today.
 - **Cellar sharing** — Invite others to browse or co-manage a cellar with role-based access
 - **Dark mode** — Full light/dark theme with system preference detection
 - **Notifications** — In-app notification bell for wine requests, image approvals, shared cellars, and more
-- **Subscription plans** — Free and Premium tiers with configurable feature limits
+- **Everything free** — Every feature is free for everyone. Optional Supporter and Patron tiers let you chip in to fund development — they unlock nothing extra, just our thanks
 - **Support system** — In-app support tickets and wine quality reports
 - **Internationalization** — i18n support via react-i18next
 - **Sommelier tools** — Dedicated maturity phase and pricing interfaces for sommeliers
@@ -48,7 +52,9 @@ Create an account and start using the full hosted service today.
 
 ---
 
-## Quick Start
+## Self-Hosting (Quick Start)
+
+> This section is only for people who want to run their own private instance. If you just want to use Cellarion, head to **[cellarion.app](https://cellarion.app)** instead — no setup required.
 
 ### Prerequisites
 
@@ -118,7 +124,7 @@ Cellarion/
 │   │   ├── config/
 │   │   │   ├── aiConfig.js         # AI chat feature flags, model config, daily limits
 │   │   │   ├── db.js               # MongoDB connection
-│   │   │   ├── plans.js            # Subscription plan config
+│   │   │   ├── plans.js            # Supporter tier config (all features free)
 │   │   │   └── upload.js           # Multer config
 │   │   ├── middleware/
 │   │   │   ├── auth.js             # JWT + role middleware (requireAuth, requireAdmin, requireSomm)
@@ -217,7 +223,7 @@ Cellarion/
 │   │   │   ├── CellarChat.js       # AI cellar chat interface
 │   │   │   ├── Statistics.js       # Analytics dashboard with charts & world map
 │   │   │   ├── DrinkAlerts.js      # Drink-window alerts by urgency
-│   │   │   ├── Plans.js            # Subscription plan comparison
+│   │   │   ├── Plans.js            # Supporter tiers (all features free)
 │   │   │   ├── Settings.js         # User preferences (currency, language, rating scale)
 │   │   │   ├── SupportPage.js      # Support tickets & wine reports
 │   │   │   ├── SommMaturity.js     # Sommelier maturity phase management
@@ -410,7 +416,7 @@ All wine registry endpoints require a valid JWT. Behaviour differs by role:
 
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/dashboard` | Platform analytics (user counts, plan distribution) |
+| GET | `/dashboard` | Platform analytics (user counts, supporter-tier distribution) |
 | GET/PUT | `/settings` | Rate limits, contact email, AI config |
 | POST | `/embeddings` | Manage embedding jobs |
 
@@ -450,7 +456,7 @@ The AI chat feature requires three services working together:
 
 When all three are configured, users can ask natural-language questions about their collection (food pairings, occasion picks, cellar insights). The system only surfaces wines the user actually owns — no hallucinated recommendations.
 
-A single daily usage quota — the same for every user, regardless of plan — is configurable by SuperAdmins (default 50 questions/day).
+A single daily usage quota — the same for every user, regardless of supporter tier — is configurable by SuperAdmins (default 50 questions/day).
 
 ### Email Verification
 
