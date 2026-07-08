@@ -254,31 +254,43 @@ function CellarRacks() {
   // --- soft-remove bottle via the shared consume endpoint ---
   const handleConsumeSubmit = async (reason, note, rating, consumedRatingScale) => {
     const { bottleId } = consumeModal;
-    const res = await consumeBottle(apiFetch, bottleId, { reason, note, rating, consumedRatingScale });
-    const data = await res.json();
-    if (res.ok) {
-      // Server already cleared the rack slot; update local racks state
-      setRacks(prev => prev.map(r => ({
-        ...r,
-        slots: r.slots.filter(s => {
-          const bid = s.bottle?._id || s.bottle;
-          return bid?.toString() !== bottleId;
-        })
-      })));
-      setConsumeModal(null);
-    } else {
-      alert(data.error || 'Failed to remove bottle');
+    try {
+      const res = await consumeBottle(apiFetch, bottleId, { reason, note, rating, consumedRatingScale });
+      const data = await res.json();
+      if (res.ok) {
+        // Server already cleared the rack slot; update local racks state
+        setRacks(prev => prev.map(r => ({
+          ...r,
+          slots: r.slots.filter(s => {
+            const bid = s.bottle?._id || s.bottle;
+            return bid?.toString() !== bottleId;
+          })
+        })));
+        setConsumeModal(null);
+      } else {
+        alert(data.error || 'Failed to remove bottle');
+      }
+    } catch {
+      // Don't rethrow — ConsumeModal awaits this and must reach setSaving(false)
+      alert('Network error — please try again.');
     }
   };
 
   // --- NFC: save or clear rfidTag on rack ---
   const handleNfcSave = async (rackId, rfidTag) => {
-    const res = await updateRack(apiFetch, rackId, { rfidTag });
-    const data = await res.json();
-    if (res.ok) {
-      setRacks(racks.map(r => r._id === rackId ? { ...r, rfidTag: data.rack.rfidTag } : r));
+    try {
+      const res = await updateRack(apiFetch, rackId, { rfidTag });
+      const data = await res.json();
+      if (res.ok) {
+        setRacks(racks.map(r => r._id === rackId ? { ...r, rfidTag: data.rack.rfidTag } : r));
+        setNfcModal(null);
+      } else {
+        // Keep the modal open so the user can retry instead of silently losing the tag
+        alert(data.error || 'Failed to save NFC tag');
+      }
+    } catch {
+      alert('Network error — please try again.');
     }
-    setNfcModal(null);
   };
 
   if (error) return <div className="alert alert-error">{error}</div>;
@@ -908,8 +920,13 @@ function ConsumeModal({ defaultRatingScale, onSubmit, onCancel }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setSaving(true);
-    await onSubmit(reason, note || undefined, rating || undefined, ratingScale);
-    setSaving(false);
+    try {
+      await onSubmit(reason, note || undefined, rating || undefined, ratingScale);
+    } finally {
+      // Always re-enable the button — a rejected onSubmit must not leave the
+      // modal stuck on "Saving...".
+      setSaving(false);
+    }
   };
 
   return (
