@@ -1,6 +1,7 @@
 const express = require('express');
 const rateLimit = require('express-rate-limit');
 const WineList = require('../models/WineList');
+const Cellar = require('../models/Cellar');
 const { generateWineListPdf, buildSections } = require('../services/wineListPdf');
 const { loadWineMap } = require('../services/wineListData');
 const { rateLimitKey } = require('../utils/clientIp');
@@ -21,6 +22,14 @@ const publicPdfLimiter = rateLimit({
 
 router.use(publicPdfLimiter);
 
+// Wine lists survive their cellar's reversible soft-delete (restorable for
+// 30 days), but the public menu must go dark for that window — a deleted
+// cellar's list staying live would leak data the owner asked to remove.
+async function cellarIsActive(wineList) {
+  const cellar = await Cellar.findById(wineList.cellar).select('deletedAt').lean();
+  return !!cellar && !cellar.deletedAt;
+}
+
 // GET /api/wine-lists/public/:shareToken — published list as JSON for the
 // public web menu (/menu/:shareToken). Strips inventory data: guests see the
 // menu, not the stock counts.
@@ -31,6 +40,7 @@ router.get('/:shareToken', async (req, res) => {
       isPublished: true,
     }).lean();
     if (!wineList) return res.status(404).json({ error: 'Wine list not found or not published' });
+    if (!(await cellarIsActive(wineList))) return res.status(404).json({ error: 'Wine list not found or not published' });
 
     const wineMap = await loadWineMap(wineList);
     const sections = buildSections(wineList, wineMap).map(s => ({
@@ -83,6 +93,7 @@ router.get('/:shareToken/pdf', async (req, res) => {
       isPublished: true,
     });
     if (!wineList) return res.status(404).json({ error: 'Wine list not found or not published' });
+    if (!(await cellarIsActive(wineList))) return res.status(404).json({ error: 'Wine list not found or not published' });
 
     const wineMap = await loadWineMap(wineList);
 

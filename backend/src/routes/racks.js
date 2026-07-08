@@ -222,7 +222,15 @@ router.put('/:id', async (req, res) => {
     logAudit(req, 'rack.update', { type: 'rack', id: rack._id });
     res.json({ rack });
   } catch (err) {
-    if (err.code === 11000) return res.status(409).json({ error: 'A rack with that name already exists in this cellar' });
+    if (err.code === 11000) {
+      // Two unique indexes can throw here — report the right conflict.
+      const isTagConflict = err.keyPattern?.rfidTag || /rfidTag/.test(err.message || '');
+      return res.status(409).json({
+        error: isTagConflict
+          ? 'That NFC tag is already linked to another rack. Unlink it there first.'
+          : 'A rack with that name already exists in this cellar'
+      });
+    }
     if (err.name === 'VersionError') {
       return res.status(409).json({ error: 'This rack was modified by another request. Please refresh and try again.' });
     }
@@ -248,6 +256,12 @@ router.delete('/:id', async (req, res) => {
     if (rack.slots.length > 0) {
       rack.slots = [];
     }
+
+    // Free the NFC tag: the unique rfidTag index has no deletedAt filter, so
+    // a tag left on a soft-deleted rack would block linking it to any new
+    // rack until the retention purge. (Restoring the cellar therefore brings
+    // the rack back without its tag — re-link via NFC settings.)
+    rack.rfidTag = undefined;
 
     rack.deletedAt = new Date();
     await rack.save();

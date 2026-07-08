@@ -7,8 +7,6 @@ const User = require('../models/User');
 const AuditLog = require('../models/AuditLog');
 const BottleImage = require('../models/BottleImage');
 const WineDefinition = require('../models/WineDefinition');
-const WineList = require('../models/WineList');
-const { deleteLogoFilesFor } = require('../services/wineListLogos');
 const PendingShare = require('../models/PendingShare');
 const { getCellarRole } = require('../utils/cellarAccess');
 const { logAudit } = require('../services/audit');
@@ -1414,16 +1412,12 @@ router.delete('/:id', async (req, res) => {
     // Cascade soft-delete to all racks in this cellar
     await Rack.updateMany({ cellar: cellar._id }, { deletedAt: now });
 
-    // Delete wine lists for this cellar (hard delete — no soft-delete for
-    // wine lists). Unlink their uploaded logo files first: the docs hold the
-    // only references, and orphaned logos would stay publicly fetchable.
-    await deleteLogoFilesFor(WineList, { cellar: cellar._id });
-    await WineList.deleteMany({ cellar: cellar._id });
-
-    // The 3D room layout is intentionally NOT removed here: this is a
-    // reversible soft-delete (restorable for 30 days) and CellarLayout has no
-    // soft-delete, so deleting it would lose the user's rack arrangement on
-    // restore. It is hard-deleted on the permanent-delete path instead.
+    // Wine lists and the 3D room layout are intentionally NOT removed here:
+    // this is a reversible soft-delete (restorable for 30 days), so curated
+    // lists (incl. their logo files) and the rack arrangement must survive
+    // for restore. Both are hard-deleted by the permanent-delete cascade
+    // (services/cellarPurge.js) — and the public wine-list routes 404 while
+    // the cellar is soft-deleted, so nothing stays reachable meanwhile.
 
     // Bottles are preserved — they remain in history via their status field
 

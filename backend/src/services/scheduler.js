@@ -3,6 +3,7 @@ const { runDrinkWindowCheck } = require('./drinkWindowNotifier');
 const { runCellarValueSnapshots } = require('./cellarValueSnapshotJob');
 const { runCommunityPriceAggregation } = require('./communityPriceJob');
 const { runUserDeletionJob } = require('./userDeletionJob');
+const { runCellarRetentionPurge } = require('./cellarRetentionJob');
 const { runSecurityAlertCheck } = require('./securityAlertJob');
 
 /**
@@ -51,6 +52,17 @@ function startScheduler() {
     }
   });
 
+  // Cellar/rack retention purge: daily at 04:00 UTC (after user deletion).
+  // Hard-deletes soft-deleted cellars/racks past the promised 30-day window.
+  cron.schedule('0 4 * * *', async () => {
+    console.log('[scheduler] Running cellar retention purge…');
+    try {
+      await runCellarRetentionPurge();
+    } catch (err) {
+      console.error('[scheduler] Cellar retention purge failed:', err);
+    }
+  });
+
   // Security spike check: every 15 minutes. Cheap audit-log query, emails
   // only when thresholds are crossed (with 4h cooldown per spike type).
   cron.schedule('*/15 * * * *', async () => {
@@ -62,7 +74,7 @@ function startScheduler() {
     }
   });
 
-  console.log('[scheduler] Cron jobs registered (drink-window daily 06:00 UTC, value-snapshot weekly Sun 01:00 UTC, community-price weekly Sun 02:00 UTC, user-deletion daily 03:00 UTC, security-spike every 15 min)');
+  console.log('[scheduler] Cron jobs registered (drink-window daily 06:00 UTC, value-snapshot weekly Sun 01:00 UTC, community-price weekly Sun 02:00 UTC, user-deletion daily 03:00 UTC, cellar-retention daily 04:00 UTC, security-spike every 15 min)');
 }
 
 module.exports = { startScheduler };
