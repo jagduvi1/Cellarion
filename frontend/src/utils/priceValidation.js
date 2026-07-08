@@ -19,7 +19,15 @@ export const ABSOLUTE_CAP = {
 
 export const USER_MEDIAN_MULTIPLE   = 50;
 export const MARKET_MEDIAN_MULTIPLE = 5;
-export const CENTS_HEURISTIC_FLOOR  = 10000;
+// Cents-heuristic floor is derived PER CURRENCY (cap ÷ divisor, never below
+// the minimum) — a flat 10,000 floor made ordinary JPY (>¥10k ≈ $66) and SEK
+// bottles constantly trip the "did you mean ÷100?" hint. Mirrors the backend.
+export const CENTS_HEURISTIC_FLOOR       = 10000;
+export const CENTS_HEURISTIC_CAP_DIVISOR = 5;
+
+export function centsHeuristicFloor(cap) {
+  return Math.max(CENTS_HEURISTIC_FLOOR, cap / CENTS_HEURISTIC_CAP_DIVISOR);
+}
 
 /**
  * Pure function — same signature as the backend so the two can never drift
@@ -67,7 +75,7 @@ export function validatePriceSanity({
     }
   }
 
-  if (price >= CENTS_HEURISTIC_FLOOR && price % 100 === 0) {
+  if (price >= centsHeuristicFloor(cap) && price % 100 === 0) {
     warnings.push({
       code: 'possiblyCents',
       severity: 'info',
