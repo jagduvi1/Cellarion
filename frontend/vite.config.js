@@ -11,7 +11,10 @@ export default defineConfig({
     port: 3000,
     host: true,
     proxy: {
-      '/api': 'http://backend:5000',
+      // Bare-metal dev: the backend publishes localhost:5000 (also via the
+      // compose override). Override with BACKEND_PROXY when the backend runs
+      // elsewhere, e.g. BACKEND_PROXY=http://backend:5000 inside a container.
+      '/api': process.env.BACKEND_PROXY || 'http://localhost:5000',
     },
   },
   build: {
