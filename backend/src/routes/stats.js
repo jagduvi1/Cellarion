@@ -46,7 +46,9 @@ router.get('/overview', async (req, res) => {
     const cellars = await Cellar.find({ user: req.user.id, deletedAt: null }).lean();
     const cellarIds = cellars.map(c => c._id);
 
-    const targetCurrency    = dbUser.preferences?.currency       || 'USD';
+    // dbUser can be null: requireAuth only verifies the JWT, so a just-deleted
+    // account with a still-valid access token reaches here.
+    const targetCurrency    = dbUser?.preferences?.currency      || 'USD';
     const targetRatingScale = dbUser?.preferences?.ratingScale  || '5';
 
     if (cellarIds.length === 0) {
@@ -102,7 +104,7 @@ router.get('/value-history', async (req, res) => {
     cutoff.setMonth(cutoff.getMonth() - months);
     const cutoffDate = cutoff.toISOString().slice(0, 10);
 
-    const targetCurrency = dbUser.preferences?.currency || 'USD';
+    const targetCurrency = dbUser?.preferences?.currency || 'USD';
 
     const cellars = await Cellar.find({ user: req.user.id, deletedAt: null }).select('_id name').lean();
     const cellarIds = cellars.map(c => c._id);

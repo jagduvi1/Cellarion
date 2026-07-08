@@ -81,10 +81,23 @@ router.delete('/:userId', async (req, res) => {
   }
 });
 
+// Respect profileVisibility: a private profile's social graph is only
+// viewable by its owner (mirrors GET /api/reviews/user/:userId).
+async function guardProfileVisibility(req, res) {
+  const isOwner = req.user && req.params.userId === req.user.id;
+  const targetUser = await User.findById(req.params.userId).select('profileVisibility');
+  if (!targetUser || (targetUser.profileVisibility !== 'public' && !isOwner)) {
+    res.status(404).json({ error: 'User not found' });
+    return false;
+  }
+  return true;
+}
+
 // GET /api/follows/:userId/followers - List followers
 router.get('/:userId/followers', async (req, res) => {
   try {
     if (!isValidId(req.params.userId)) return res.status(400).json({ error: 'Invalid user ID' });
+    if (!(await guardProfileVisibility(req, res))) return;
     const page = Math.max(1, parseInt(req.query.page, 10) || 1);
     const limit = Math.min(50, Math.max(1, parseInt(req.query.limit, 10) || 20));
     const skip = (page - 1) * limit;
@@ -121,6 +134,7 @@ router.get('/:userId/followers', async (req, res) => {
 router.get('/:userId/following', async (req, res) => {
   try {
     if (!isValidId(req.params.userId)) return res.status(400).json({ error: 'Invalid user ID' });
+    if (!(await guardProfileVisibility(req, res))) return;
     const page = Math.max(1, parseInt(req.query.page, 10) || 1);
     const limit = Math.min(50, Math.max(1, parseInt(req.query.limit, 10) || 20));
     const skip = (page - 1) * limit;
