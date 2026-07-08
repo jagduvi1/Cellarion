@@ -1,4 +1,22 @@
-const { normalizeLegacyNotifications } = require('./User');
+const User = require('./User');
+const { normalizeLegacyNotifications } = User;
+
+describe('toJSON', () => {
+  it('exposes id as a string copy of _id (frontend ownership checks use user.id)', () => {
+    const user = new User({ username: 'alice', email: 'alice@cellarion.app', password: 'x' });
+    const json = user.toJSON();
+    expect(json.id).toBe(user._id.toString());
+    expect(typeof json.id).toBe('string');
+  });
+
+  it('still strips sensitive fields', () => {
+    const user = new User({ username: 'alice', email: 'alice@cellarion.app', password: 'x' });
+    const json = user.toJSON();
+    expect(json.password).toBeUndefined();
+    expect(json.refreshTokenHash).toBeUndefined();
+    expect(json.stripeCustomerId).toBeUndefined();
+  });
+});
 
 describe('normalizeLegacyNotifications', () => {
   it('returns [] when notif is null/undefined', () => {

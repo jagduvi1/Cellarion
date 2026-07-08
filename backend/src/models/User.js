@@ -388,6 +388,9 @@ userSchema.methods.isDiscussionBanned = function() {
 // Remove sensitive fields from JSON responses
 userSchema.methods.toJSON = function() {
   const obj = this.toObject();
+  // toObject() omits the `id` virtual, but the frontend's ownership checks
+  // compare against `user.id` — expose it as a plain string alongside _id.
+  if (obj._id) obj.id = obj._id.toString();
   delete obj.password;
   delete obj.refreshTokenHash;
   delete obj.refreshTokenExpiresAt;
