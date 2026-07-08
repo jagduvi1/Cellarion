@@ -33,10 +33,12 @@ function parseYear(val) {
  */
 router.get('/', requireSommOrAdmin, async (req, res) => {
   try {
+    // Assign literals, not the request value: the status is allowlisted
+    // either way, but assigning the literal keeps user input out of the
+    // query object entirely (and clears static-analysis taint tracking).
     const filter = {};
-    if (req.query.status === 'pending' || req.query.status === 'reviewed') {
-      filter.status = req.query.status;
-    }
+    if (req.query.status === 'pending') filter.status = 'pending';
+    else if (req.query.status === 'reviewed') filter.status = 'reviewed';
     const { limit, offset } = parsePagination(req.query, { limit: 100, maxLimit: 500 });
 
     const [profiles, total] = await Promise.all([
