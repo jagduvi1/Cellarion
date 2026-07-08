@@ -694,7 +694,7 @@ function ImportBottles() {
         <div className="format-cards">
           <div className="format-card">
             <strong>Cellarion JSON</strong>
-            <p>Export from any cellar via &#8943; &rarr; Export Bottles (JSON)</p>
+            <p>Download from any cellar via &#8943; &rarr; Export (JSON). Bottles from all cellars in the file are imported into the cellar you pick here &mdash; to recreate whole cellars with racks and layout, use Import Cellar in Settings instead.</p>
           </div>
           <div className="format-card">
             <strong>Vivino</strong>
