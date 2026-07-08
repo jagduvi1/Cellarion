@@ -23,7 +23,7 @@ This is the primary way to use Cellarion. Create an account and start using the 
 - **Smart search** — Meilisearch-powered fuzzy search with deduplication
 - **AI cellar chat** — Ask questions about your collection — food pairings, occasion picks, cellar checks (powered by Claude + Voyage embeddings + Qdrant)
 - **Label scanning** — Snap a photo of a wine label and let AI fill in the details (Anthropic Vision API)
-- **Import & export** — Bring collections from Vivino, CellarTracker, or generic CSV; export as JSON/CSV
+- **Import & export** — Bring collections from Vivino, CellarTracker, or generic CSV; export as JSON (or ZIP with images)
 - **Cellar sharing** — Invite others to browse or co-manage a cellar with role-based access
 - **Dark mode** — Full light/dark theme with system preference detection
 - **Notifications** — In-app notification bell for wine requests, image approvals, shared cellars, and more
@@ -527,9 +527,9 @@ To import directly into history (already consumed bottles), add:
 }
 ```
 
-### Bottle Export
+### Cellar Export
 
-Cellar owners can export all bottles via the overflow menu (⋯ → Export Bottles). Available in JSON and CSV. The export includes rack placement (`rackName`, `rackPosition`, `rackRow`, `rackCol`) but excludes images and staff-curated data (sommelier drink windows, pricing). The JSON format is directly re-importable.
+Cellar owners can export their data via a cellar's overflow menu (⋯ → Export) or Settings. Available as JSON, or as a ZIP that also includes your uploaded bottle images. The export covers bottles with rack placement (`rackName`, `rackPosition`), rack geometry, the 3D room layout, and your own reviews. The JSON format is directly re-importable.
 
 ---
 

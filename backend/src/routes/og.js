@@ -73,7 +73,7 @@ const LANDING = {
   whyTitle: 'Why wine lovers choose Cellarion',
   why: [
     ['Free to use', 'All core features are free at cellarion.app — no credit card, no trial, no upsell pop-ups. We don\'t sell ads either.'],
-    ['No lock-in', 'Your collection is yours. Export everything to JSON or CSV with one click, any time. If you ever leave, you walk out with all your data.'],
+    ['No lock-in', 'Your collection is yours. Export everything as JSON — or a ZIP with your images — with one click, any time. If you ever leave, you walk out with all your data.'],
     ['Private by design', 'No third-party trackers, no data sold to wine merchants. Just a clean app that stays out of your way.'],
     ['GDPR-compliant', 'Hosted on European infrastructure. Full data export, account deletion, and a one-click email opt-out built in from day one.'],
   ],
@@ -85,7 +85,7 @@ const LANDING = {
     ['What is a drink window in wine?', 'A drink window is the period during which a wine is at its best — typically a range of years bracketing the wine\'s peak maturity. Cellarion classifies every vintage as Not Ready, Early, Peak, Late, or Declining based on producer notes and vintage data, so you know which bottles to drink soon and which to keep cellaring.'],
     ['Is Cellarion really free?', 'Yes. All core features at cellarion.app are free — track unlimited bottles, organise cellars, get drink-window alerts, share with friends, and export your data anytime. There are no credit-card prompts, no premium tiers gating basic functionality, and we don\'t sell ads or your data.'],
     ['How do I import wines from Vivino or CellarTracker?', 'Cellarion supports CSV import. Export your collection from Vivino, CellarTracker, or any spreadsheet, then upload the CSV in Cellarion\'s import tool. The shared wine registry deduplicates entries automatically so your data stays clean and consistent across the whole catalogue.'],
-    ['Can I export my data and leave any time?', 'Yes — your data is yours. Cellarion includes a one-click data export that gives you everything as JSON, plus CSV import and export for bottles. You can delete your account from Settings with a 7-day cooling-off window. Hosted data lives on European infrastructure under GDPR.'],
+    ['Can I export my data and leave any time?', 'Yes — your data is yours. Cellarion includes a one-click data export that gives you everything as JSON (or a ZIP including your uploaded images), plus CSV import for bottles. You can delete your account from Settings with a 7-day cooling-off window. Hosted data lives on European infrastructure under GDPR.'],
   ],
 };
 
