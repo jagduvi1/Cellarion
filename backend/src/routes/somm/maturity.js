@@ -3,6 +3,7 @@ const mongoose = require('mongoose');
 const { requireAuth, requireSommOrAdmin } = require('../../middleware/auth');
 const WineVintageProfile = require('../../models/WineVintageProfile');
 const { isValidId } = require('../../utils/validation');
+const { parsePagination } = require('../../utils/pagination');
 
 const { suggestDrinkWindow } = require('../../services/labelScan');
 
@@ -24,27 +25,41 @@ function parseYear(val) {
  * GET /api/somm/maturity
  * List vintage profiles. Somm/admin only.
  * Query: ?status=pending|reviewed  (default: all)
+ *        ?limit / ?offset — pagination (default 100, max 500)
+ *
+ * Paginated + lean: every added/imported bottle seeds a pending profile, so
+ * this collection grows one row per wine+vintage forever — unpaginated it
+ * deep-populated the whole set into one response per queue visit.
  */
 router.get('/', requireSommOrAdmin, async (req, res) => {
   try {
+    // Assign literals, not the request value: the status is allowlisted
+    // either way, but assigning the literal keeps user input out of the
+    // query object entirely (and clears static-analysis taint tracking).
     const filter = {};
-    if (req.query.status === 'pending' || req.query.status === 'reviewed') {
-      filter.status = req.query.status;
-    }
+    if (req.query.status === 'pending') filter.status = 'pending';
+    else if (req.query.status === 'reviewed') filter.status = 'reviewed';
+    const { limit, offset } = parsePagination(req.query, { limit: 100, maxLimit: 500 });
 
-    const profiles = await WineVintageProfile.find(filter)
-      .populate({
-        path: 'wineDefinition',
-        select: 'name producer type image country region',
-        populate: [
-          { path: 'country', select: 'name' },
-          { path: 'region', select: 'name' }
-        ]
-      })
-      .populate({ path: 'setBy', select: 'username' })
-      .sort({ status: 1, createdAt: -1 }); // pending first, then newest
+    const [profiles, total] = await Promise.all([
+      WineVintageProfile.find(filter)
+        .populate({
+          path: 'wineDefinition',
+          select: 'name producer type image country region',
+          populate: [
+            { path: 'country', select: 'name' },
+            { path: 'region', select: 'name' }
+          ]
+        })
+        .populate({ path: 'setBy', select: 'username' })
+        .sort({ status: 1, createdAt: -1 }) // pending first, then newest
+        .skip(offset)
+        .limit(limit)
+        .lean(),
+      WineVintageProfile.countDocuments(filter),
+    ]);
 
-    res.json({ profiles });
+    res.json({ profiles, total, limit, offset });
   } catch (error) {
     console.error('List maturity profiles error:', error);
     res.status(500).json({ error: 'Failed to load profiles' });

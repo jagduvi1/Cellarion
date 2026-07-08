@@ -219,7 +219,8 @@ function ImportBottles() {
     fuzzy: rs.filter(r => r.status === 'fuzzy').length,
     aiMatch: rs.filter(r => r.status === 'ai_match').length,
     noMatch: rs.filter(r => r.status === 'no_match').length,
-    errors: rs.filter(r => r.status === 'error').length
+    errors: rs.filter(r => r.status === 'error').length,
+    priceWarnings: rs.filter(r => r.priceWarnings?.length).length
   });
 
   // Resume a saved draft session
@@ -664,6 +665,29 @@ function ImportBottles() {
 
   const renderUploadStep = () => (
     <div className="import-upload">
+      {/* Jumped back from review (e.g. via the anchor link) — offer a way
+          back that keeps every match, skip and manual selection instead of
+          forcing a full (AI-spending) re-validation. Also the only path back
+          to review on a resumed session, where parsedItems is empty. */}
+      {results.length > 0 && !validating && (
+        <div className="session-resume-banner">
+          <div className="session-resume-info">
+            <strong>Your matched results are still here</strong>
+            <span className="session-resume-meta">
+              Return to review to keep every match, skip and manual selection.
+              Re-matching below starts the review over.
+            </span>
+          </div>
+          <div className="session-resume-actions">
+            <button
+              className="btn btn-primary btn-sm"
+              onClick={() => setStep('review')}
+            >
+              Return to review
+            </button>
+          </div>
+        </div>
+      )}
       {draftSessions.length > 0 && (
         <div className="session-resume-banner">
           <div className="session-resume-info">

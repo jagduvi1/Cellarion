@@ -630,9 +630,9 @@ export default function TabAI() {
         body: JSON.stringify({ mode: jobMode }),
       });
       const body = await res.json().catch(() => ({}));
-      setJobMsg(body.message || body.error || 'Job started');
+      setJobMsg({ ok: res.ok && !body.error, text: body.message || body.error || 'Job started' });
       reload();
-    } catch (e) { setJobMsg(e.message || 'Error'); }
+    } catch (e) { setJobMsg({ ok: false, text: e.message || 'Error' }); }
     finally { setJobBusy(false); }
   }
 
@@ -641,9 +641,9 @@ export default function TabAI() {
     try {
       const res = await apiFetch('/api/admin/ai/embed/stop', { method: 'POST' });
       const body = await res.json().catch(() => ({}));
-      setJobMsg(body.message || 'Stop requested');
+      setJobMsg({ ok: res.ok && !body.error, text: body.message || body.error || 'Stop requested' });
       reload();
-    } catch (e) { setJobMsg(e.message || 'Error'); }
+    } catch (e) { setJobMsg({ ok: false, text: e.message || 'Error' }); }
     finally { setJobBusy(false); }
   }
 
@@ -659,9 +659,9 @@ export default function TabAI() {
         body: JSON.stringify(payload),
       });
       const body = await res.json().catch(() => ({}));
-      setEnrichMsg(body.message || body.error || 'Job started');
+      setEnrichMsg({ ok: res.ok && !body.error, text: body.message || body.error || 'Job started' });
       reload();
-    } catch (e) { setEnrichMsg(e.message || 'Error'); }
+    } catch (e) { setEnrichMsg({ ok: false, text: e.message || 'Error' }); }
     finally { setEnrichBusy(false); }
   }
 
@@ -670,9 +670,9 @@ export default function TabAI() {
     try {
       const res = await apiFetch('/api/admin/ai/enrich/stop', { method: 'POST' });
       const body = await res.json().catch(() => ({}));
-      setEnrichMsg(body.message || 'Stop requested');
+      setEnrichMsg({ ok: res.ok && !body.error, text: body.message || body.error || 'Stop requested' });
       reload();
-    } catch (e) { setEnrichMsg(e.message || 'Error'); }
+    } catch (e) { setEnrichMsg({ ok: false, text: e.message || 'Error' }); }
     finally { setEnrichBusy(false); }
   }
 
@@ -834,7 +834,7 @@ export default function TabAI() {
             </div>
           </div>
           <div className="sa-panel-body">
-            {jobMsg && <div className={`sa-error`} style={{ marginBottom: 8, fontSize: 11 }}>{jobMsg}</div>}
+            {jobMsg && <div className={jobMsg.ok ? 'sa-success' : 'sa-error'} style={{ marginBottom: 8, fontSize: 11 }}>{jobMsg.text}</div>}
             <div className="sa-kv">
               <div className="sa-kv-row">
                 <span className="sa-kv-key">Status</span>
@@ -973,7 +973,7 @@ export default function TabAI() {
             </div>
           </div>
           <div className="sa-panel-body">
-            {enrichMsg && <div className="sa-error" style={{ marginBottom: 8, fontSize: 11 }}>{enrichMsg}</div>}
+            {enrichMsg && <div className={enrichMsg.ok ? 'sa-success' : 'sa-error'} style={{ marginBottom: 8, fontSize: 11 }}>{enrichMsg.text}</div>}
             <div className="sa-kv">
               <div className="sa-kv-row">
                 <span className="sa-kv-key">Status</span>

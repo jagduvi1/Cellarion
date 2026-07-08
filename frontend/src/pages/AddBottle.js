@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
@@ -54,6 +54,11 @@ function AddBottle() {
   const [uploadedImages, setUploadedImages] = useState([]);
   const [showDetails, setShowDetails] = useState(false);
   const [saving, setSaving] = useState(false);
+  // Bottles already created by earlier attempts of the current submission —
+  // when POST k of N fails, a retry only creates the remaining N−k instead of
+  // duplicating the whole batch. Reset whenever a new wine is selected.
+  const createdBottlesRef = useRef([]);
+  const imagesLinkedRef = useRef(false);
 
   // ── Scan result state ──
   const [scanResult, setScanResult] = useState(null);  // { extracted, match, labelImage }
@@ -92,6 +97,8 @@ function AddBottle() {
   // advance to the bottle-details step. Centralised so all entry paths share
   // the same teardown.
   const applyResolvedWine = useCallback((wine, carriedVintage) => {
+    createdBottlesRef.current = [];
+    imagesLinkedRef.current = false;
     setSelectedWine(wine);
     setBottleData(prev => ({ ...prev, vintage: carriedVintage || '' }));
     setScanResult(null);
@@ -253,8 +260,30 @@ function AddBottle() {
   };
 
   const handleSelectWine = (wine) => {
+    createdBottlesRef.current = [];
+    imagesLinkedRef.current = false;
     setSelectedWine(wine);
     setStep(2);
+  };
+
+  // Link the uploaded images to the first created bottle. Called on full
+  // success and after a partial failure, so bottles that were created keep
+  // their images even when the batch didn't finish.
+  const linkUploadedImages = () => {
+    const first = createdBottlesRef.current[0];
+    if (imagesLinkedRef.current || uploadedImages.length === 0 || !first) return;
+    imagesLinkedRef.current = true;
+    apiFetch('/api/images/link-to-bottle', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        bottleId: first._id,
+        imageIds: uploadedImages.map(img => img._id)
+      })
+    }).catch(err => {
+      imagesLinkedRef.current = false; // let a retry attempt the link again
+      console.error('Failed to link images:', err);
+    });
   };
 
   const handleSubmit = async (e) => {
@@ -265,6 +294,12 @@ function AddBottle() {
     if (saving) return;
     setSaving(true);
     setError(null);
+
+    // A partial failure leaves invisible bottles behind — tell the user
+    // exactly what happened and what a retry will do.
+    const partialError = (msg, done) => done > 0
+      ? `${msg} — ${done} of ${numBottles} bottle${numBottles === 1 ? '' : 's'} ${done === 1 ? 'was' : 'were'} added. Retrying will add only the remaining ${numBottles - done}.`
+      : msg;
 
     try {
       const payload = {
@@ -285,9 +320,11 @@ function AddBottle() {
         } : {})
       };
 
-      // Create N individual bottle records
-      const createdBottles = [];
-      for (let i = 0; i < numBottles; i++) {
+      // Create the bottle records that are still missing. createdBottlesRef
+      // carries the ones a previous, partially-failed attempt already created,
+      // so a retry never duplicates them.
+      const createdBottles = createdBottlesRef.current;
+      for (let i = createdBottles.length; i < numBottles; i++) {
         const res = await apiFetch('/api/bottles', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -296,26 +333,19 @@ function AddBottle() {
 
         const data = await res.json();
         if (!res.ok) {
-          setError(data.error || 'Failed to add bottle');
+          setError(partialError(data.error || 'Failed to add bottle', createdBottles.length));
+          linkUploadedImages();
           return;
         }
         createdBottles.push(data.bottle);
       }
 
       // Link uploaded images to the first bottle
-      if (uploadedImages.length > 0 && createdBottles.length > 0) {
-        apiFetch('/api/images/link-to-bottle', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            bottleId: createdBottles[0]._id,
-            imageIds: uploadedImages.map(img => img._id)
-          })
-        }).catch(err => console.error('Failed to link images:', err));
-      }
+      linkUploadedImages();
       navigate(`/cellars/${cellarId}`);
     } catch (err) {
-      setError('Network error');
+      setError(partialError('Network error', createdBottlesRef.current.length));
+      linkUploadedImages();
     } finally {
       setSaving(false);
     }

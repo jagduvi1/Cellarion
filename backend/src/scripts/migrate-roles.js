@@ -10,7 +10,7 @@ require('dotenv').config();
 const mongoose = require('mongoose');
 
 async function run() {
-  await mongoose.connect(process.env.MONGO_URI || 'mongodb://localhost:27017/wine_cellar');
+  await mongoose.connect(process.env.MONGO_URI || 'mongodb://mongo:27017/winecellar');
   console.log('Connected to MongoDB');
 
   const db = mongoose.connection.db;

@@ -2,7 +2,10 @@ const mongoose = require('mongoose');
 
 /**
  * Tracks daily Cellar Chat usage per user.
- * One document per (userId, date) pair. Auto-expires after 3 days.
+ * One document per (userId, date) pair. Auto-expires after 90 days (set by
+ * the writer in routes/chat.js) — retained that long so the SuperAdmin chat
+ * usage panel can show a meaningful history window. GDPR: usage counters +
+ * token totals only, no message content; purged with the account.
  */
 const chatUsageSchema = new mongoose.Schema({
   userId:       { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },

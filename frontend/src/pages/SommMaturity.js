@@ -55,34 +55,52 @@ function SommMaturity() {
   const { t } = useTranslation();
   const { apiFetch } = useAuth();
   const [profiles, setProfiles] = useState([]);
+  const [total, setTotal] = useState(0);
   const [tab, setTab] = useState('pending');
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState(null);
 
   // Latest-wins guard: a slow response for the previous tab must not
   // overwrite the list for the tab the user is now viewing.
   const fetchSeq = useRef(0);
 
-  const fetchProfiles = useCallback(async () => {
+  const PAGE_SIZE = 100;
+
+  // The queue grows one profile per wine+vintage forever, so the backend
+  // paginates (limit/offset + total) — offset 0 replaces the list, higher
+  // offsets append (Load more).
+  const fetchProfiles = useCallback(async (offset = 0) => {
     const seq = ++fetchSeq.current;
-    setLoading(true);
+    if (offset === 0) setLoading(true); else setLoadingMore(true);
     setError(null);
     try {
-      const res = await apiFetch(`/api/somm/maturity?status=${tab}`);
+      const res = await apiFetch(`/api/somm/maturity?status=${tab}&limit=${PAGE_SIZE}&offset=${offset}`);
       const data = await res.json();
       if (seq !== fetchSeq.current) return;
-      if (res.ok) setProfiles(data.profiles);
-      else setError(data.error || 'Failed to load profiles');
+      if (res.ok) {
+        setProfiles(prev => (offset === 0 ? data.profiles : [...prev, ...data.profiles]));
+        setTotal(data.total ?? data.profiles.length);
+      } else {
+        setError(data.error || 'Failed to load profiles');
+      }
     } catch {
       if (seq === fetchSeq.current) setError('Network error');
     } finally {
-      if (seq === fetchSeq.current) setLoading(false);
+      if (seq === fetchSeq.current) { setLoading(false); setLoadingMore(false); }
     }
   }, [apiFetch, tab]);
 
   useEffect(() => { fetchProfiles(); }, [fetchProfiles]);
 
-  const handleSaved  = (updated) => setProfiles(prev => prev.filter(p => p._id !== updated._id));
+  // Saving flips a pending profile to reviewed, so it leaves the Pending tab;
+  // on the Reviewed tab it stays reviewed and must remain visible — update it
+  // in place instead of dropping it.
+  const handleSaved  = (updated) => setProfiles(prev => (
+    tab === 'reviewed'
+      ? prev.map(p => (p._id === updated._id ? updated : p))
+      : prev.filter(p => p._id !== updated._id)
+  ));
   const handleReset  = (updated) => setProfiles(prev => prev.filter(p => p._id !== updated._id));
 
   return (
@@ -112,17 +130,32 @@ function SommMaturity() {
           {tab === 'pending' ? t('somm.maturity.noPending') : t('somm.maturity.noReviewed')}
         </div>
       ) : (
-        <div className="somm-list">
-          {profiles.map(profile => (
-            <ProfileCard
-              key={profile._id}
-              profile={profile}
-              isPending={tab === 'pending'}
-              onSaved={handleSaved}
-              onReset={handleReset}
-            />
-          ))}
-        </div>
+        <>
+          <div className="somm-list">
+            {profiles.map(profile => (
+              <ProfileCard
+                key={profile._id}
+                profile={profile}
+                isPending={tab === 'pending'}
+                onSaved={handleSaved}
+                onReset={handleReset}
+              />
+            ))}
+          </div>
+          {profiles.length < total && (
+            <div style={{ textAlign: 'center', margin: '1rem 0' }}>
+              <button
+                className="btn btn-secondary"
+                onClick={() => fetchProfiles(profiles.length)}
+                disabled={loadingMore}
+              >
+                {loadingMore
+                  ? t('somm.maturity.loadingProfiles')
+                  : `${t('somm.maturity.loadMore', 'Load more')} (${profiles.length}/${total})`}
+              </button>
+            </div>
+          )}
+        </>
       )}
     </div>
   );
