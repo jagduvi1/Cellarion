@@ -263,7 +263,7 @@ export default function TabUsers() {
                     </tr>
                   ))}
                   {(!data?.users?.length) && (
-                    <tr><td colSpan={8}><div className="sa-empty">No users found</div></td></tr>
+                    <tr><td colSpan={7}><div className="sa-empty">No users found</div></td></tr>
                   )}
                 </tbody>
               </table>

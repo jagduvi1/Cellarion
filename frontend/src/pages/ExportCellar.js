@@ -64,7 +64,13 @@ function ExportCellar() {
       .then(async res => {
         const data = await res.json().catch(() => ({}));
         if (!active) return;
-        if (!res.ok) { setSummary(null); setSummaryError(data.error || 'Could not read this selection'); return; }
+        if (!res.ok) {
+          // The backend reports "no owned cellar in this selection" as a 404
+          // (a brand-new user always hits this) — show the friendly empty
+          // state instead of a raw error.
+          if (res.status === 404) { setSummary({ cellarCount: 0 }); return; }
+          setSummary(null); setSummaryError(data.error || 'Could not read this selection'); return;
+        }
         setSummary(data);
       })
       .catch(() => { if (active) setSummaryError('Could not read this selection'); })
@@ -140,22 +146,24 @@ function ExportCellar() {
           </select>
         </div>
 
-        {/* Total export summary */}
-        <div className="card" style={{ marginTop: '1rem', padding: '1rem', background: 'var(--surface-2, #f7f7f8)' }}>
-          <div style={{ fontWeight: 600, marginBottom: '0.5rem' }}>This export contains</div>
-          {loadingSummary ? (
-            <div className="settings-hint">Calculating…</div>
-          ) : summaryError ? (
-            <div className="alert alert-error">{summaryError}</div>
-          ) : summary ? (
-            <ul style={{ margin: 0, paddingLeft: '1.1rem', lineHeight: 1.8 }}>
-              <li>{summary.cellarCount} cellar{summary.cellarCount === 1 ? '' : 's'} · {summary.bottleCount} bottles · {summary.rackCount} racks</li>
-              <li>{summary.layoutCount > 0 ? `${summary.layoutCount} 3D room layout${summary.layoutCount === 1 ? '' : 's'}` : 'No 3D room layout'}</li>
-              <li>{summary.reviewCount} reviews · {summary.maturityCount} maturity window{summary.maturityCount === 1 ? '' : 's'}</li>
-              <li>{summary.imageCount} of your images{summary.imageCount > 0 ? ` (~${formatBytes(summary.imageBytes)})` : ''}</li>
-            </ul>
-          ) : null}
-        </div>
+        {/* Total export summary (hidden when there is nothing to export yet) */}
+        {!noCellars && (
+          <div className="card" style={{ marginTop: '1rem', padding: '1rem', background: 'var(--surface-2, #f7f7f8)' }}>
+            <div style={{ fontWeight: 600, marginBottom: '0.5rem' }}>This export contains</div>
+            {loadingSummary ? (
+              <div className="settings-hint">Calculating…</div>
+            ) : summaryError ? (
+              <div className="alert alert-error">{summaryError}</div>
+            ) : summary ? (
+              <ul style={{ margin: 0, paddingLeft: '1.1rem', lineHeight: 1.8 }}>
+                <li>{summary.cellarCount} cellar{summary.cellarCount === 1 ? '' : 's'} · {summary.bottleCount} bottles · {summary.rackCount} racks</li>
+                <li>{summary.layoutCount > 0 ? `${summary.layoutCount} 3D room layout${summary.layoutCount === 1 ? '' : 's'}` : 'No 3D room layout'}</li>
+                <li>{summary.reviewCount} reviews · {summary.maturityCount} maturity window{summary.maturityCount === 1 ? '' : 's'}</li>
+                <li>{summary.imageCount} of your images{summary.imageCount > 0 ? ` (~${formatBytes(summary.imageBytes)})` : ''}</li>
+              </ul>
+            ) : null}
+          </div>
+        )}
 
         {noCellars ? (
           <p className="settings-hint" style={{ marginTop: '1rem' }}>
