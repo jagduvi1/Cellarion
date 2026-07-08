@@ -63,9 +63,10 @@ function PanelShell({ title, intro, saving, onSave, msg, children }) {
   );
 }
 
-// All three rate-limit panels load from /rate-limits and PATCH only their own
-// fields, so each Save button is independent. The backend's partial-update
-// behaviour means an unsent group is left untouched.
+// All three rate-limit panels share one /rate-limits load (fetched once in
+// TabSettings and passed down) but PATCH only their own fields, so each Save
+// button is independent. The backend's partial-update behaviour means an
+// unsent group is left untouched.
 function useRateLimits(apiFetch) {
   const [config,   setConfig]   = useState(null);
   const [defaults, setDefaults] = useState(null);
@@ -81,13 +82,12 @@ function useRateLimits(apiFetch) {
   return { config, defaults, error };
 }
 
-function PerIpLimitsPanel({ apiFetch }) {
+function PerIpLimitsPanel({ apiFetch, config, defaults, error }) {
   const LIMITERS = [
     { key: 'api',   label: 'General API'  },
     { key: 'write', label: 'Write actions' },
     { key: 'auth',  label: 'Auth / login'  },
   ];
-  const { config, defaults, error } = useRateLimits(apiFetch);
   const [form,   setForm]   = useState(null);
   const [saving, setSaving] = useState(false);
   const [msg,    setMsg]    = useState(null);
@@ -136,8 +136,7 @@ function PerIpLimitsPanel({ apiFetch }) {
   );
 }
 
-function AccountLockoutPanel({ apiFetch }) {
-  const { config, defaults, error } = useRateLimits(apiFetch);
+function AccountLockoutPanel({ apiFetch, config, defaults, error }) {
   const [form,   setForm]   = useState(null);
   const [saving, setSaving] = useState(false);
   const [msg,    setMsg]    = useState(null);
@@ -217,8 +216,7 @@ function AccountLockoutPanel({ apiFetch }) {
   );
 }
 
-function ChatLimitsPanel({ apiFetch }) {
-  const { config, defaults, error } = useRateLimits(apiFetch);
+function ChatLimitsPanel({ apiFetch, config, defaults, error }) {
   const [form,   setForm]   = useState(null);
   const [saving, setSaving] = useState(false);
   const [msg,    setMsg]    = useState(null);
@@ -344,12 +342,14 @@ function ContactEmailPanel({ apiFetch }) {
 
 export default function TabSettings() {
   const { apiFetch } = useAuth();
+  // Single /rate-limits fetch shared by the three rate-limit panels below.
+  const rateLimits = useRateLimits(apiFetch);
   return (
     <>
       <ContactEmailPanel apiFetch={apiFetch} />
-      <PerIpLimitsPanel apiFetch={apiFetch} />
-      <AccountLockoutPanel apiFetch={apiFetch} />
-      <ChatLimitsPanel apiFetch={apiFetch} />
+      <PerIpLimitsPanel apiFetch={apiFetch} {...rateLimits} />
+      <AccountLockoutPanel apiFetch={apiFetch} {...rateLimits} />
+      <ChatLimitsPanel apiFetch={apiFetch} {...rateLimits} />
     </>
   );
 }
