@@ -228,9 +228,12 @@ const GRAPE_SYNONYMS = {
   'grenache gris':        'Grenache Gris',
 
   // Malbec / Côt
+  // NOTE: 'auxerrois' is deliberately NOT mapped. It is a Malbec synonym only
+  // in Cahors; in Alsace/Lorraine (where the name is far more common on
+  // labels) Auxerrois is a distinct white grape — the mapping silently
+  // corrupted every Alsace Auxerrois auto-created via label scan / AI import.
   'cot':                  'Malbec',
   'cote':                 'Malbec',
-  'auxerrois':            'Malbec',
   'malbeck':              'Malbec',
 
   // Tempranillo synonyms

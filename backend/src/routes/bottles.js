@@ -742,14 +742,25 @@ router.put('/:id/default-image', requireBottleAccess('editor'), async (req, res)
       return res.json({ bottle });
     }
 
-    // Verify the image exists and belongs to this bottle or its wine definition
-    const image = await BottleImage.findOne({
-      _id: imageId,
-      $or: [
-        { bottle: bottle._id },
-        { wineDefinition: bottle.wineDefinition, status: 'approved' }
-      ]
-    });
+    // Cast the user-provided id to a real ObjectId before it touches the
+    // query (a junk string would otherwise throw a CastError → 500; the cast
+    // also clears the user-input-in-query taint for static analysis).
+    if (!mongoose.isValidObjectId(imageId)) {
+      return res.status(400).json({ error: 'Invalid image ID' });
+    }
+    const imageOid = new mongoose.Types.ObjectId(String(imageId));
+
+    // Verify the image exists and belongs to this bottle or its wine
+    // definition. Only add the wine clause when the bottle HAS a wine:
+    // BottleImage.wineDefinition defaults to null, so for a pending-request
+    // bottle (wineDefinition null) the clause would match ANY approved
+    // unattached image in the DB. Also require public visibility, matching
+    // the candidate list the UI offers (images.js /bottle/:bottleId).
+    const orClauses = [{ bottle: bottle._id }];
+    if (bottle.wineDefinition) {
+      orClauses.push({ wineDefinition: bottle.wineDefinition, status: 'approved', visibility: 'public' });
+    }
+    const image = await BottleImage.findOne({ _id: imageOid, $or: orClauses });
 
     if (!image) {
       return res.status(404).json({ error: 'Image not found or not associated with this bottle' });

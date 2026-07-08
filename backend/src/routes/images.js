@@ -155,8 +155,22 @@ function getImageDimensions(filePath) {
 
 const router = express.Router();
 
+// Wrap multer so its errors become 4xx instead of bubbling to the central
+// handler, which returns 500 and masks the reason in production — the user
+// gets zero indication their photo was too big or the wrong format. Same
+// pattern as cellarImport.js's handleUpload.
+function handleImageUpload(req, res, next) {
+  upload.single('image')(req, res, (err) => {
+    if (err) {
+      if (err.code === 'LIMIT_FILE_SIZE') return res.status(413).json({ error: 'Image too large (max 10 MB)' });
+      return res.status(400).json({ error: err.message || 'Invalid image upload' });
+    }
+    next();
+  });
+}
+
 // POST /api/images/upload - Upload image for a bottle or wine definition
-router.post('/upload', requireAuth, imageUploadLimiter, upload.single('image'), async (req, res) => {
+router.post('/upload', requireAuth, imageUploadLimiter, handleImageUpload, async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ error: 'No image file provided' });

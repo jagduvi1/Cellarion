@@ -32,6 +32,7 @@ const Bottle = require('../models/Bottle');
 const BottleImage = require('../models/BottleImage');
 const WineDefinition = require('../models/WineDefinition');
 const { unlinkImageFiles } = require('../services/imageProcessor');
+const searchService = require('../services/search');
 
 const APPLY = process.argv.includes('--apply');
 
@@ -48,6 +49,15 @@ function keeperScore(img, wine) {
 async function main() {
   await mongoose.connect(process.env.MONGO_URI || 'mongodb://mongo:27017/winecellar');
   console.log(`Mode: ${APPLY ? 'APPLY (deleting)' : 'DRY-RUN (no changes; pass --apply to execute)'}\n`);
+  if (APPLY) {
+    // Without initialize() every indexWine below is a silent no-op and the
+    // wines index keeps serving deleted image URLs (no full sync ever runs
+    // against a non-empty index).
+    await searchService.initialize();
+    if (searchService.getIsAvailable?.() === false) {
+      console.warn('Meilisearch unavailable — wine image handovers will not be re-indexed.');
+    }
+  }
 
   // Duplicate groups: same effective wine + same photo bytes + same uploader.
   const groups = await BottleImage.aggregate([
@@ -93,11 +103,12 @@ async function main() {
       );
       totals.repointedBottles += rp.modifiedCount || 0;
 
-      // Official handover: if the wine's image is this record's file, move it
-      // to the keeper (keeper preference makes this rare, but a stale URL or a
-      // drifted assignedToWine flag can still hit it).
-      const loserUrl = loser.processedUrl || loser.originalUrl;
-      if (wine.image && wine.image === loserUrl && keeperUrl) {
+      // Official handover: if the wine's image is EITHER of this record's
+      // files, move it to the keeper. Checking only the preferred URL missed
+      // a wine.image pointing at the loser's originalUrl when a processedUrl
+      // also existed — the file was then deleted, leaving wine.image dangling.
+      const loserUrls = [loser.processedUrl, loser.originalUrl].filter(Boolean);
+      if (wine.image && loserUrls.includes(wine.image) && keeperUrl) {
         wine.image = keeperUrl;
         wine.imageCredit = keeper.credit || null;
         await wine.save();
@@ -109,8 +120,10 @@ async function main() {
           await keeper.save();
         }
         totals.winesUpdated++;
-        // Search reindex intentionally skipped (script runs without Meili
-        // init); the wine doc URL change is picked up on the next full sync.
+        // The wines search index embeds `image` and no full sync ever runs
+        // against a non-empty index — re-index so search stops serving the
+        // deleted file as a broken thumbnail.
+        await searchService.indexWine(wine._id);
       }
 
       await unlinkImageFiles(loser); // reference-safe: shared files survive

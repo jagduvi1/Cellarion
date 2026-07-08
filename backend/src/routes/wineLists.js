@@ -123,6 +123,9 @@ router.post('/', requireAuth, async (req, res) => {
 
     res.status(201).json(wineList);
   } catch (error) {
+    if (error.name === 'ValidationError' || error.name === 'CastError') {
+      return res.status(400).json({ error: error.message });
+    }
     console.error('Create wine list error:', error);
     res.status(500).json({ error: 'Failed to create wine list' });
   }
@@ -314,8 +317,20 @@ router.get('/:id/preview-pdf', requireAuth, async (req, res) => {
   }
 });
 
+// Wrap multer so its errors become 4xx instead of a masked 500 from the
+// central handler (same pattern as cellarImport.js / images.js).
+function handleLogoUpload(req, res, next) {
+  logoUpload.single('logo')(req, res, (err) => {
+    if (err) {
+      if (err.code === 'LIMIT_FILE_SIZE') return res.status(413).json({ error: 'Logo too large (max 5 MB)' });
+      return res.status(400).json({ error: err.message || 'Invalid logo upload' });
+    }
+    next();
+  });
+}
+
 // POST /api/wine-lists/:id/logo — upload restaurant logo
-router.post('/:id/logo', requireAuth, logoUpload.single('logo'), async (req, res) => {
+router.post('/:id/logo', requireAuth, handleLogoUpload, async (req, res) => {
   try {
     if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
     const wineList = await WineList.findOne({ _id: req.params.id, user: req.user.id });
