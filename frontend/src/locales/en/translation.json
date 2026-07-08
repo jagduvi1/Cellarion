@@ -40,7 +40,10 @@
     "price": "Price",
     "currency": "Currency",
     "rating": "Rating",
-    "reason": "Reason"
+    "reason": "Reason",
+    "error": "An error occurred",
+    "optional": "optional",
+    "or": "or"
   },
 
   "nav": {
@@ -129,7 +132,9 @@
       "pushBlocked": "Push notifications are blocked. Enable them in your browser settings.",
       "pushNotConfigured": "Push notifications are not configured on this server.",
       "pushHint": "Push delivers notifications to your device even when Cellarion is closed."
-    }
+    },
+    "defaultRatingScale": "Default Rating Scale",
+    "ratingScaleHint": "Choose which rating scale to use by default when adding ratings. You can always override per bottle."
   },
   "adminModerators": {
     "title": "Forum Moderators",
@@ -147,7 +152,8 @@
     "revokeConfirm": "Remove moderator privileges from {{name}}?",
     "revokeWarning": "They will lose the ability to pin, lock, move or delete discussions, see reports, or ban users.",
     "you": "(you)",
-    "failedLoad": "Failed to load moderators."
+    "failedLoad": "Failed to load moderators.",
+    "failedChange": "Failed to change role."
   },
   "reactions": {
     "addReaction": "Add reaction",
@@ -231,7 +237,8 @@
     "setDefault": "Set as default cellar",
     "removeDefault": "Remove as default cellar",
     "editRole": "Edit",
-    "viewRole": "View"
+    "viewRole": "View",
+    "import": "Import"
   },
 
   "cellarDetail": {
@@ -387,7 +394,14 @@
     "requestWineInstead": "Request a wine",
     "aiCouldNotIdentify": "Could not identify this wine. You can submit a request instead.",
     "aiSearching": "Searching for your wine…",
-    "submitWineRequest": "Submit a wine request"
+    "submitWineRequest": "Submit a wine request",
+    "scanPromptTitle": "Scan the wine label",
+    "scanPromptHint": "Take a photo of the label — we'll identify the wine and add it to the registry if it doesn't exist yet.",
+    "startCamera": "Start Camera",
+    "useCameraInstead": "Use camera instead",
+    "searchManuallyInstead": "No camera? Search manually instead →",
+    "searchBtn": "Search",
+    "searchHint": "Be as specific as possible — include the wine name and producer. We'll check our library first; if no match is found, we'll identify and add the wine."
   },
 
   "bottleDetail": {
@@ -459,7 +473,16 @@
     "suggestGrapesHint": "Separate multiple varieties with commas",
     "suggestGrapesSubmit": "Submit suggestion",
     "suggestGrapesThankYou": "Thanks for contributing!",
-    "suggestGrapesConfirm": "Your suggestion has been submitted for review. Our team will add the verified varieties to the wine registry."
+    "suggestGrapesConfirm": "Your suggestion has been submitted for review. Our team will add the verified varieties to the wine registry.",
+    "addWineImage": "Wine Photo",
+    "backToHistory": "Back to history",
+    "defaultImageHint": "Click the star to choose which image is shown first.",
+    "imageNotice": "Images are reviewed by an admin before being added to the shared wine registry, where they will be visible to all Cellarion users.",
+    "pendingReview": "Pending review",
+    "tastingProfile": "Tasting profile",
+    "structure": "Structure",
+    "flavours": "Flavours",
+    "pairsWith": "Pairs with"
   },
 
   "bottles": {
@@ -555,7 +578,10 @@
     "disableSlot": "Disable slot",
     "enableSlot": "Enable slot",
     "disabledSlotTitle": "Slot {{position}} — Disabled",
-    "disabledSlotNote": "This slot is marked as unusable — bottles can't be placed here."
+    "disabledSlotNote": "This slot is marked as unusable — bottles can't be placed here.",
+    "preview": "Preview",
+    "hidePreview": "Hide preview",
+    "previewLabel": "Preview — this is how the rack will look once created"
   },
 
   "nfc": {
@@ -602,7 +628,23 @@
     "rackWidth": "Width (m)",
     "rackDepth": "Depth (m)",
     "rackScale": "Scale",
-    "removeFromRoom": "Remove"
+    "removeFromRoom": "Remove",
+    "inRack": "In rack",
+    "slot": "slot",
+    "racksSelected": "racks selected",
+    "clearSelection": "Clear",
+    "linkSelected": "Link Selected",
+    "rotateAll": "Rotate All",
+    "shiftClickHint": "Shift+click to add/remove racks",
+    "undo": "Undo (Ctrl+Z)",
+    "redo": "Redo (Ctrl+Y)",
+    "unsavedChangesTitle": "Unsaved Changes",
+    "unsavedChangesMessage": "You have unsaved changes to the room layout. Are you sure you want to leave?",
+    "stayOnPage": "Stay",
+    "leaveWithoutSaving": "Leave",
+    "loadCellarError": "Failed to load cellar",
+    "loadRacksError": "Failed to load racks for this cellar",
+    "loadLayoutError": "Failed to load the room layout"
   },
 
   "wines": {
@@ -646,7 +688,10 @@
     "adminNotes": "Admin Notes:",
     "submitted": "Submitted {{date}}",
     "grapeSuggestion": "Grape suggestion",
-    "suggestedGrapes": "Suggested"
+    "suggestedGrapes": "Suggested",
+    "imageLabel": "Image",
+    "imageUrlPlaceholder": "Paste image URL…",
+    "imageNotice": "Images are reviewed by an admin before being added to the shared wine registry, where they will be visible to all Cellarion users."
   },
 
   "history": {
@@ -677,7 +722,8 @@
     "addingToWishlist": "Adding…",
     "onWishlist": "On wishlist",
     "wishlistError": "Try again",
-    "viewBottleAria": "View {{name}}"
+    "viewBottleAria": "View {{name}}",
+    "noResults": "No bottles match your search."
   },
 
   "cellarScope": {
@@ -770,7 +816,10 @@
       "typeGrapeSuggestion": "Grape suggestion",
       "suggestedGrapes": "Suggested varieties",
       "applyGrapesNote": "Select the grape varieties to add to this wine. Unrecognised names can be added to the taxonomy first.",
-      "applyGrapesLabel": "Grapes to add"
+      "applyGrapesLabel": "Grapes to add",
+      "linkSearchLabel": "Search Wine Registry",
+      "linkSearchPlaceholder": "Search by name or producer…",
+      "selectedId": "Selected ID:"
     },
     "bottleSizes": {
       "normalizeAll": "Normalize all",
@@ -878,7 +927,8 @@
         "deleted": "Deleted \"{{name}}\"",
         "empty": "No wines have their producer in the name.",
         "networkError": "Network error"
-      }
+      },
+      "defaultImageHint": "Click the star to set the default image for this wine."
     },
     "images": {
       "title": "Admin: Image Review",
@@ -936,7 +986,15 @@
       "deleteImage": "Delete",
       "removeYes": "Remove",
       "removing": "Removing…",
-      "reject": "Reject"
+      "reject": "Reject",
+      "approvePublic": "Approve for all",
+      "approvePrivate": "Approve for uploader only",
+      "makePublic": "Make public",
+      "makePrivate": "Make uploader only",
+      "private": "private",
+      "visibilityLabel": "Visibility:",
+      "visibilityPublic": "Public",
+      "visibilityPrivate": "Uploader only"
     },
     "audit": {
       "title": "Audit Log",
@@ -1067,7 +1125,8 @@
       "aiSuggest": "Suggest",
       "aiSuggesting": "Suggesting…",
       "aiSuggestError": "Could not suggest a drink window",
-      "aiSuggestFilled": "Suggestion applied — review and save"
+      "aiSuggestFilled": "Suggestion applied — review and save",
+      "nvHint": "non-vintage: enter years after purchase"
     },
     "prices": {
       "title": "Price Queue",
@@ -1343,7 +1402,8 @@
       "ratingVsPrice": "Rating vs price by type",
       "expectationVsReality": "Expectation vs Reality",
       "surprisedOrDisappointed": "When wines surprised or disappointed you",
-      "mostValuableBottles": "Most Valuable Bottles"
+      "mostValuableBottles": "Most Valuable Bottles",
+      "valueOverTime": "Collection Value Over Time"
     },
 
     "kpi": {
@@ -1698,7 +1758,11 @@
     "backToCellars": "Back to Cellars",
     "wineNotFound": "Wine not found",
     "goToCellarion": "Go to Cellarion",
-    "wines": "Wines"
+    "wines": "Wines",
+    "tastingProfile": "Tasting profile",
+    "structure": "Structure",
+    "flavours": "Flavours",
+    "pairsWith": "Pairs with"
   },
   "statsCard": {
     "title": "Your Cellar Card",
