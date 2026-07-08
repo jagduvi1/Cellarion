@@ -83,6 +83,7 @@ function CellarHistory() {
 
   const fetchHistory = async () => {
     const seq = ++fetchSeq.current;
+    setError(null);
     try {
       const params = new URLSearchParams();
       if (debouncedSearch) params.append('search', debouncedSearch);
@@ -125,7 +126,10 @@ function CellarHistory() {
     }
   };
 
-  if (error) return <div className="alert alert-error">{error}</div>;
+  // Only replace the whole page when nothing has loaded yet; after a successful
+  // load, transient fetch failures render as an inline banner instead.
+  const hasLoadedContent = Object.keys(grouped).length > 0;
+  if (error && !hasLoadedContent) return <div className="alert alert-error">{error}</div>;
 
   const REASON_LABEL_KEYS = {
     drank:  'history.reasonDrank',
@@ -166,6 +170,19 @@ function CellarHistory() {
 
   return (
     <div className="cellar-history-page">
+      {error && (
+        <div className="alert alert-error" role="alert">
+          {error}
+          <button
+            type="button"
+            className="btn btn-small btn-secondary"
+            style={{ marginLeft: '0.75rem' }}
+            onClick={() => setError(null)}
+          >
+            ✕
+          </button>
+        </div>
+      )}
       <div className="history-header">
         <Link to={`/cellars/${id}`} className="back-link">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>

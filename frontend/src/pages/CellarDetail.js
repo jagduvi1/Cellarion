@@ -125,6 +125,7 @@ function CellarDetail() {
 
   const fetchCellarData = async (skip) => {
     const seq = ++fetchSeq.current;
+    setError(null);
     try {
       if (skip > 0) setBottlesLoading(true);
       const params = new URLSearchParams();
@@ -217,7 +218,9 @@ function CellarDetail() {
 
   const canEdit = cellar?.userRole === 'owner' || cellar?.userRole === 'editor';
 
-  if (error) return <div className="alert alert-error">{error}</div>;
+  // Only replace the whole page when we have nothing to show yet; once the
+  // cellar is loaded, transient fetch failures render as an inline banner.
+  if (error && !cellar) return <div className="alert alert-error">{error}</div>;
 
   const h1Style = cellar?.userColor
     ? { '--cellar-color': cellar.userColor }
@@ -226,6 +229,19 @@ function CellarDetail() {
 
   return (
     <div className="cellar-detail-page">
+      {error && (
+        <div className="alert alert-error" role="alert">
+          {error}
+          <button
+            type="button"
+            className="btn btn-small btn-secondary"
+            style={{ marginLeft: '0.75rem' }}
+            onClick={() => setError(null)}
+          >
+            ✕
+          </button>
+        </div>
+      )}
       {/* ── Header — shell renders immediately, details fill in after load ── */}
       <div className="cellar-header">
         <div className="cellar-header-top">

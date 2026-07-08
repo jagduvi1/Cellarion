@@ -35,6 +35,7 @@ export default function WineTypeDetail() {
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
+    setError(null);
     fetch(`${API_URL}/api/taxonomy/wine-types/${encodeURIComponent(type)}?limit=${limit}&offset=${(page - 1) * limit}`)
       .then(r => r.ok ? r.json() : Promise.reject(r.status))
       .then(d => { if (!cancelled) { setData(d); setLoading(false); } })
