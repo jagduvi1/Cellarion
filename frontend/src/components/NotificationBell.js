@@ -1,10 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { useNotifications } from '../contexts/NotificationContext';
 import timeAgo from '../utils/timeAgo';
 import './NotificationBell.css';
 
 export default function NotificationBell() {
+  const { t } = useTranslation();
   const { notifications, unreadCount, markRead, markAllRead } = useNotifications();
   const [open, setOpen] = useState(false);
   const containerRef = useRef(null);
@@ -33,7 +35,7 @@ export default function NotificationBell() {
       <button
         className="notif-trigger"
         onClick={() => setOpen(o => !o)}
-        aria-label="Notifications"
+        aria-label={t('notificationBell.title')}
         aria-expanded={open}
       >
         <svg className="notif-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -48,17 +50,17 @@ export default function NotificationBell() {
       {open && (
         <div className="notif-dropdown">
           <div className="notif-header">
-            <span>Notifications</span>
+            <span>{t('notificationBell.title')}</span>
             {unreadCount > 0 && (
               <button className="notif-mark-all" onClick={markAllRead}>
-                Mark all read
+                {t('notificationBell.markAllRead')}
               </button>
             )}
           </div>
 
           <div className="notif-list">
             {notifications.length === 0 ? (
-              <div className="notif-empty">No notifications</div>
+              <div className="notif-empty">{t('notificationBell.empty')}</div>
             ) : (
               notifications.map(n => (
                 <div

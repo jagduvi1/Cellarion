@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import { getDiscussions, createDiscussion } from '../api/discussions';
 import DiscussionCard from '../components/DiscussionCard';
-import CategoryBadge, { CATEGORY_LABELS } from '../components/CategoryBadge';
+import CategoryBadge, { CATEGORY_SLUGS } from '../components/CategoryBadge';
 import CommunityCTA from '../components/CommunityCTA';
 // Lazy: the rich-text composer pulls in tiptap/prosemirror (~120 kB gzip) —
 // read-only visitors (and crawlers) should not download an editor.
@@ -14,7 +14,7 @@ import WineSearchPicker from '../components/WineSearchPicker';
 import SEOHead from '../components/SEOHead';
 import './Discussions.css';
 
-const CATEGORIES = Object.keys(CATEGORY_LABELS);
+const CATEGORIES = CATEGORY_SLUGS;
 const SORT_KEYS = ['active', 'trending', 'newest', 'most-replies'];
 
 function Discussions() {
@@ -265,7 +265,7 @@ function Discussions() {
                 onChange={e => setForm(f => ({ ...f, category: e.target.value }))}
               >
                 {CATEGORIES.map(cat => (
-                  <option key={cat} value={cat}>{CATEGORY_LABELS[cat]}</option>
+                  <option key={cat} value={cat}>{t(`discussions.categories.${cat}`)}</option>
                 ))}
               </select>
             </div>
