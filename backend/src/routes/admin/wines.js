@@ -31,6 +31,7 @@ const Recommendation = require('../../models/Recommendation');
 const RestockAlert = require('../../models/RestockAlert');
 const WineRequest = require('../../models/WineRequest');
 const vectorStore = require('../../services/vectorStore');
+const { unlinkImageFiles } = require('../../services/imageProcessor');
 const { embedSinglePair } = require('../../services/embeddingJob');
 const searchService = require('../../services/search');
 const { logAudit } = require('../../services/audit');
@@ -657,6 +658,14 @@ router.put('/:id', async (req, res) => {
 });
 
 // DELETE /api/admin/wines/:id - Delete wine definition
+//
+// Refuses while USER-AUTHORED content references the wine (bottles, wishlist
+// items, reviews, discussions/replies, journal pairings, wine-list entries,
+// recommendations) — deleting under those would orphan or silently vanish
+// other people's data; merge re-points references and is the right tool.
+// Registry-side/derived data that only exists FOR the wine (maturity
+// profiles, price snapshots/opt-ins, community prices, embeddings + Qdrant
+// vectors, restock alerts, reports) is cascade-deleted with it.
 router.delete('/:id', async (req, res) => {
   try {
     if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
@@ -664,27 +673,68 @@ router.delete('/:id', async (req, res) => {
     if (!wine) {
       return res.status(404).json({ error: 'Wine not found' });
     }
+    const id = wine._id;
 
-    // Check if any bottles reference this wine
-    const bottleCount = await Bottle.countDocuments({ wineDefinition: req.params.id });
-    if (bottleCount > 0) {
+    const [bottles, wishlistItems, reviews, discussions, discussionReplies, journalEntries, wineLists, recommendations] = await Promise.all([
+      Bottle.countDocuments({ wineDefinition: id }),
+      WishlistItem.countDocuments({ wineDefinition: id }),
+      Review.countDocuments({ wineDefinition: id }),
+      Discussion.countDocuments({ wineDefinition: id }),
+      DiscussionReply.countDocuments({ wineDefinition: id }),
+      JournalEntry.countDocuments({ 'pairings.wine': id }),
+      WineList.countDocuments({ $or: [{ 'sections.entries.wine': id }, { 'autoGroupEntries.wine': id }] }),
+      Recommendation.countDocuments({ wine: id }),
+    ]);
+    const references = { bottles, wishlistItems, reviews, discussions, discussionReplies, journalEntries, wineLists, recommendations };
+    const blocking = Object.entries(references).filter(([, n]) => n > 0);
+    if (blocking.length > 0) {
       return res.status(400).json({
-        error: `Cannot delete wine. ${bottleCount} bottle(s) reference it.`,
-        bottleCount
+        error: `Cannot delete wine. User content references it (${blocking.map(([k, n]) => `${n} ${k}`).join(', ')}). Merge it into another wine instead.`,
+        references,
+        // The admin UI pivots to the merge modal on this field.
+        bottleCount: bottles,
       });
     }
 
+    // Cascade the registry-side/derived data. All idempotent deletes — a
+    // partial failure leaves the wine in place and the delete re-runnable.
+    await Promise.all([
+      WineVintageProfile.deleteMany({ wineDefinition: id }),
+      WineVintagePrice.deleteMany({ wineDefinition: id }),
+      PriceTrackingRequest.deleteMany({ wineDefinition: id }),
+      PriceTrackingSkip.deleteMany({ wineDefinition: id }),
+      CommunityWinePrice.deleteMany({ wineDefinition: id }),
+      RestockAlert.deleteMany({ wine: id }),
+      RestockAlert.updateMany({ similarWineIds: id }, { $pull: { similarWineIds: id } }),
+      WineReport.deleteMany({ wineDefinition: id }),
+      WineReport.updateMany({ duplicateOf: id }, { $unset: { duplicateOf: '' } }),
+      WineRequest.updateMany({ linkedWineDefinition: id }, { $unset: { linkedWineDefinition: '' } }),
+      WineNotDuplicate.deleteMany({ $or: [{ wineA: id }, { wineB: id }] }),
+      // Qdrant points + WineEmbedding bookkeeping rows (same helper as merge).
+      purgeSourceVectors(id),
+    ]);
+
+    // Registry images assigned to this wine. With zero bottles referencing the
+    // wine, an image without a bottle ref has no other home — delete the doc
+    // and its disk files (files first: the doc holds the only reference). An
+    // image still attached to some bottle just loses the wine assignment.
+    const orphanImages = await BottleImage.find({ wineDefinition: id, bottle: null })
+      .select('originalUrl processedUrl').lean();
+    for (const img of orphanImages) await unlinkImageFiles(img);
+    await Promise.all([
+      BottleImage.deleteMany({ wineDefinition: id, bottle: null }),
+      BottleImage.updateMany({ wineDefinition: id }, { $unset: { wineDefinition: '' }, $set: { assignedToWine: false } }),
+    ]);
+
     logAudit(req, 'admin.wine.delete',
       { type: 'wine', id: wine._id },
-      { name: wine.name, producer: wine.producer }
+      { name: wine.name, producer: wine.producer, imagesDeleted: orphanImages.length }
     );
 
     await wine.deleteOne();
 
     // Remove from search index (fire-and-forget)
     searchService.removeWine(req.params.id);
-    // Drop any "not duplicate" decisions referencing this wine (fire-and-forget)
-    WineNotDuplicate.deleteMany({ $or: [{ wineA: req.params.id }, { wineB: req.params.id }] }).catch(() => {});
 
     res.json({ message: 'Wine deleted successfully' });
   } catch (error) {
