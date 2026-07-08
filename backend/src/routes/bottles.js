@@ -231,7 +231,17 @@ router.get('/', async (req, res) => {
 
     let query = Bottle.find(filter).populate(WINE_POPULATE_LIST);
     if (canSortInDb) query = query.sort({ [sortField]: sortDir });
-    if (canPaginateInDb) query = query.skip(skip).limit(limit);
+    if (canPaginateInDb) {
+      query = query.skip(skip).limit(limit);
+    } else {
+      // Fallback (text search / min-rating / maturity filters, or in-memory
+      // sorts) hydrates the set for in-memory processing — cap it like the
+      // cellars.js fallbacks so one request can't load an unbounded
+      // collection. When there's no DB sort to cap on, anchor on newest-added
+      // so the >10k slice is at least deterministic.
+      if (!canSortInDb) query = query.sort({ createdAt: -1 });
+      query = query.limit(10000);
+    }
     let bottles = await query.lean();
     let totalCount = canPaginateInDb ? await Bottle.countDocuments(filter) : null;
 
