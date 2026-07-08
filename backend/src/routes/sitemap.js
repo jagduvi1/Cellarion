@@ -7,6 +7,7 @@ const Region = require('../models/Region');
 const Grape = require('../models/Grape');
 const Discussion = require('../models/Discussion');
 const { rateLimitKey } = require('../utils/clientIp');
+const { countWinesBy } = require('./taxonomy');
 
 const WINE_TYPES = ['red', 'white', 'rosé', 'sparkling', 'dessert', 'fortified'];
 const MIN_WINES = 3;
@@ -14,6 +15,12 @@ const MIN_WINES = 3;
 const router = express.Router();
 
 const SITE_URL = process.env.FRONTEND_URL || 'https://cellarion.app';
+
+// Server-side cache: crawlers ignore Cache-Control per-client, and building
+// the sitemap runs several registry-wide aggregations. Content changes slowly
+// (new wines/posts), so an hour-stale sitemap is fine.
+let sitemapCache = null; // { at, xml }
+const SITEMAP_CACHE_TTL_MS = 60 * 60 * 1000;
 
 const sitemapLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -26,6 +33,12 @@ const sitemapLimiter = rateLimit({
 // GET /sitemap.xml — Dynamic XML sitemap for search engines
 router.get('/', sitemapLimiter, async (req, res) => {
   try {
+    if (sitemapCache && Date.now() - sitemapCache.at < SITEMAP_CACHE_TTL_MS) {
+      res.set('Content-Type', 'application/xml');
+      res.set('Cache-Control', 'public, max-age=3600');
+      return res.send(sitemapCache.xml);
+    }
+
     const posts = await BlogPost.find({ status: 'published' })
       .sort({ publishedAt: -1 })
       .select('slug updatedAt publishedAt')
@@ -82,14 +95,20 @@ router.get('/', sitemapLimiter, async (req, res) => {
     // Taxonomy pages — only include entries that meet the minimum wine threshold
     // so we don't submit empty pages to search engines.
 
-    const [countries, regions, grapes] = await Promise.all([
+    // One aggregation per collection instead of one countDocuments per taxon
+    // (same helper the public taxonomy lists use).
+    const [countries, regions, grapes, countByCountry, countByRegion, countByGrape, countByType] = await Promise.all([
       Country.find({ slug: { $exists: true, $ne: null } }).select('slug updatedAt').lean(),
       Region.find({ slug: { $exists: true, $ne: null } }).select('slug updatedAt').lean(),
-      Grape.find({ slug: { $exists: true, $ne: null } }).select('slug updatedAt').lean()
+      Grape.find({ slug: { $exists: true, $ne: null } }).select('slug updatedAt').lean(),
+      countWinesBy('country'),
+      countWinesBy('region'),
+      countWinesBy('grapes', { unwind: true }),
+      countWinesBy('type'),
     ]);
 
     for (const c of countries) {
-      const count = await WineDefinition.countDocuments({ country: c._id });
+      const count = countByCountry.get(String(c._id)) || 0;
       if (count < MIN_WINES) continue;
       const lastmod = c.updatedAt ? c.updatedAt.toISOString().split('T')[0] : '';
       xml += '  <url>\n';
@@ -101,7 +120,7 @@ router.get('/', sitemapLimiter, async (req, res) => {
     }
 
     for (const r of regions) {
-      const count = await WineDefinition.countDocuments({ region: r._id });
+      const count = countByRegion.get(String(r._id)) || 0;
       if (count < MIN_WINES) continue;
       const lastmod = r.updatedAt ? r.updatedAt.toISOString().split('T')[0] : '';
       xml += '  <url>\n';
@@ -113,7 +132,7 @@ router.get('/', sitemapLimiter, async (req, res) => {
     }
 
     for (const g of grapes) {
-      const count = await WineDefinition.countDocuments({ grapes: g._id });
+      const count = countByGrape.get(String(g._id)) || 0;
       if (count < MIN_WINES) continue;
       const lastmod = g.updatedAt ? g.updatedAt.toISOString().split('T')[0] : '';
       xml += '  <url>\n';
@@ -125,7 +144,7 @@ router.get('/', sitemapLimiter, async (req, res) => {
     }
 
     for (const type of WINE_TYPES) {
-      const count = await WineDefinition.countDocuments({ type });
+      const count = countByType.get(type) || 0;
       if (count < MIN_WINES) continue;
       xml += '  <url>\n';
       xml += `    <loc>${SITE_URL}/wines/type/${type}</loc>\n`;
@@ -158,6 +177,7 @@ router.get('/', sitemapLimiter, async (req, res) => {
 
     xml += '</urlset>';
 
+    sitemapCache = { at: Date.now(), xml };
     res.set('Content-Type', 'application/xml');
     res.set('Cache-Control', 'public, max-age=3600');
     res.send(xml);

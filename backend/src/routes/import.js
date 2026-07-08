@@ -618,6 +618,17 @@ router.post('/confirm', async (req, res) => {
             pendingRequestCache.set(requestKey, wineRequest);
           }
 
+          // Validate rating if provided — the frontend sends rating/ratingScale
+          // for request-wine rows too; dropping them here silently lost the
+          // user's rating on every imported bottle whose wine had to be
+          // requested (mirrors the matched-wine branch below).
+          const { rating: resolvedRating, ratingScale: resolvedScale, error: ratingError } =
+            resolveRating(item.rating, item.ratingScale);
+          if (ratingError) {
+            errors.push({ index: i, reason: ratingError });
+            continue;
+          }
+
           // Validate consumed rating if adding to history
           const { rating: resolvedConsumedRating, ratingScale: resolvedConsumedScale, error: consumeRatingError } =
             item.addToHistory ? resolveRating(item.consumedRating, item.consumedRatingScale) : { rating: undefined, ratingScale: undefined, error: null };
@@ -645,7 +656,9 @@ router.post('/confirm', async (req, res) => {
             purchaseDate: item.purchaseDate || undefined,
             purchaseLocation: stripHtml(item.purchaseLocation),
             location: stripHtml(item.location),
-            notes: stripHtml(item.notes)
+            notes: stripHtml(item.notes),
+            rating: resolvedRating,
+            ratingScale: resolvedScale
           });
 
           if (item.dateAdded) bottle.createdAt = new Date(item.dateAdded);
