@@ -26,7 +26,14 @@ export default function useLabelScanner(apiFetch, { onScanSuccess, onScanError }
   onSuccessRef.current = onScanSuccess;
   onErrorRef.current = onScanError;
 
+  // Mirrors PhotoCapture/ImageUpload's cameraOpenRef guard: getUserMedia can
+  // resolve AFTER the user dismissed the viewfinder (the permission prompt
+  // was up) — without the check the just-acquired stream is stored but never
+  // stopped and the camera light stays on until page unload.
+  const camOpenRef = useRef(false);
+
   const stopCamera = useCallback(() => {
+    camOpenRef.current = false;
     if (labelStreamRef.current) {
       labelStreamRef.current.getTracks().forEach(t => t.stop());
       labelStreamRef.current = null;
@@ -36,11 +43,18 @@ export default function useLabelScanner(apiFetch, { onScanSuccess, onScanError }
 
   const startCamera = useCallback(async () => {
     setLabelCam({ open: true, error: null });
+    camOpenRef.current = true;
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: labelFacing, width: { ideal: 1280 }, height: { ideal: 720 } },
         audio: false
       });
+      if (!camOpenRef.current) {
+        stream.getTracks().forEach(t => t.stop());
+        return;
+      }
+      // Replace (never leak) a previous stream, e.g. after a camera switch.
+      if (labelStreamRef.current) labelStreamRef.current.getTracks().forEach(t => t.stop());
       labelStreamRef.current = stream;
       requestAnimationFrame(() => {
         if (labelVideoRef.current) labelVideoRef.current.srcObject = stream;

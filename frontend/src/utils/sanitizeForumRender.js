@@ -11,10 +11,16 @@ import DOMPurify from 'dompurify';
 const ALLOWED_TAGS = ['p', 'br', 'strong', 'em', 's', 'u', 'blockquote', 'ul', 'ol', 'li', 'a'];
 const ALLOWED_ATTR = ['href', 'title', 'target', 'rel'];
 
+// Dedicated DOMPurify instance: the link-policy hook below is forum policy
+// (forced target=_blank + nofollow). Registering it on the shared singleton
+// would leak it into every other DOMPurify consumer (e.g. BlogPost, where
+// nofollow on internal links is SEO-hostile) depending on module load order.
+const forumPurify = DOMPurify(window);
+
 // Hook: enforce safe link targets. The backend already does this on save
 // (sanitize-html simpleTransform), but we set it again here so any link that
 // somehow bypassed the backend still gets the safety attrs at render time.
-DOMPurify.addHook('afterSanitizeAttributes', (node) => {
+forumPurify.addHook('afterSanitizeAttributes', (node) => {
   if (node.tagName === 'A') {
     node.setAttribute('target', '_blank');
     node.setAttribute('rel', 'noopener noreferrer nofollow');
@@ -25,14 +31,17 @@ DOMPurify.addHook('afterSanitizeAttributes', (node) => {
  * Sanitize HTML for safe `dangerouslySetInnerHTML` rendering. Returns the
  * cleaned HTML string. Use exclusively with content authored through the
  * DiscussionComposer — never with arbitrary user input from elsewhere.
+ *
+ * No USE_PROFILES here: DOMPurify documents that USE_PROFILES REPLACES an
+ * explicit ALLOWED_TAGS/ALLOWED_ATTR config, which would silently disable
+ * this allowlist (the exact bug this comment is guarding against).
  */
 export function sanitizeForumRender(html) {
   if (typeof html !== 'string' || !html) return '';
-  return DOMPurify.sanitize(html, {
+  return forumPurify.sanitize(html, {
     ALLOWED_TAGS,
     ALLOWED_ATTR,
-    ALLOWED_URI_REGEXP: /^(?:(?:https?|mailto):|[^a-z]|[a-z+.-]+(?:[^a-z+.\-:]|$))/i,
-    USE_PROFILES: { html: true }
+    ALLOWED_URI_REGEXP: /^(?:(?:https?|mailto):|[^a-z]|[a-z+.-]+(?:[^a-z+.\-:]|$))/i
   });
 }
 
@@ -48,7 +57,7 @@ export function sanitizeForumRender(html) {
  */
 export function extractForumPlainText(html) {
   if (typeof html !== 'string' || !html) return '';
-  const stripped = DOMPurify.sanitize(html, { ALLOWED_TAGS: [], KEEP_CONTENT: true });
+  const stripped = forumPurify.sanitize(html, { ALLOWED_TAGS: [], KEEP_CONTENT: true });
   return stripped.replace(/\s+/g, ' ').trim();
 }
 

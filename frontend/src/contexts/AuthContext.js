@@ -75,18 +75,31 @@ export const AuthProvider = ({ children }) => {
   // the access token expires) must therefore share one in-flight refresh.
   const refreshInFlightRef = useRef(null);
 
+  // The ref only guards THIS tab, but the refresh cookie is browser-wide and
+  // the backend stores a single rotating token hash — two tabs refreshing at
+  // once (typical after browser session-restore reopens several Cellarion
+  // tabs) race the rotation and the loser is spuriously logged out. The Web
+  // Locks API serializes across tabs of the same origin: the waiter re-runs
+  // with the cookie its predecessor just rotated in, which is valid.
+  const doRefresh = async () => {
+    const res = await fetch('/api/auth/refresh', {
+      method: 'POST',
+      credentials: 'include' // sends the httpOnly refresh cookie
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    storeToken(data.token);
+    return data.token;
+  };
+
   const handleRefresh = useCallback(() => {
     if (refreshInFlightRef.current) return refreshInFlightRef.current;
     refreshInFlightRef.current = (async () => {
       try {
-        const res = await fetch('/api/auth/refresh', {
-          method: 'POST',
-          credentials: 'include' // sends the httpOnly refresh cookie
-        });
-        if (!res.ok) return null;
-        const data = await res.json();
-        storeToken(data.token);
-        return data.token;
+        if (navigator.locks?.request) {
+          return await navigator.locks.request('cellarion-token-refresh', doRefresh);
+        }
+        return await doRefresh(); // pre-Web-Locks browsers: per-tab guard only
       } catch {
         return null;
       } finally {
@@ -94,6 +107,7 @@ export const AuthProvider = ({ children }) => {
       }
     })();
     return refreshInFlightRef.current;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // ------------------------------------------------------------------
