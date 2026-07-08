@@ -2,8 +2,7 @@ const express = require('express');
 const { requireAuth, requireRole } = require('../../middleware/auth');
 const Cellar = require('../../models/Cellar');
 const Rack = require('../../models/Rack');
-const Bottle = require('../../models/Bottle');
-const CellarLayout = require('../../models/CellarLayout');
+const { purgeCellarPermanently } = require('../../services/cellarPurge');
 const { logAudit } = require('../../services/audit');
 const { parsePagination } = require('../../utils/pagination');
 const { isValidId, coerceStringQuery } = require('../../utils/validation');
@@ -89,24 +88,17 @@ router.delete('/:id', async (req, res) => {
       return res.status(404).json({ error: 'Deleted cellar not found' });
     }
 
-    const [rackResult, bottleResult] = await Promise.all([
-      Rack.deleteMany({ cellar: cellar._id }),
-      Bottle.deleteMany({ cellar: cellar._id }),
-      // Hard-delete the 3D room layout here (the permanent path) so it isn't
-      // orphaned; the reversible soft-delete leaves it intact for restore.
-      CellarLayout.deleteMany({ cellar: cellar._id }),
-    ]);
-
-    await cellar.deleteOne();
+    // Full cascade (bottles + images + search docs + layout/snapshots/
+    // sessions/shares/wine lists) — shared with the 30-day retention job.
+    const counts = await purgeCellarPermanently(cellar._id);
 
     logAudit(req, 'cellar.permanent_delete', { cellarId: cellar._id }, {
       name: cellar.name,
       owner: cellar.user,
-      racksDeleted: rackResult.deletedCount,
-      bottlesDeleted: bottleResult.deletedCount,
+      ...counts,
     });
 
-    res.json({ deleted: true, racksDeleted: rackResult.deletedCount, bottlesDeleted: bottleResult.deletedCount });
+    res.json({ deleted: true, ...counts });
   } catch (error) {
     console.error('[admin/cellars] permanent delete error:', error);
     res.status(500).json({ error: 'Failed to permanently delete cellar' });
