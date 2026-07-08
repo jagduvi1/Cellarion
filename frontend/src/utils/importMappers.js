@@ -572,7 +572,9 @@ function tryParseDate(str) {
  * Parse a Cellarion JSON export (or plain array) into master import format.
  *
  * Accepts:
- *   - Cellarion export object: { cellarName, exportedAt, bottles: [...] }
+ *   - Current cellar export (cellarion-export@1): { schema, cellars: [ { cellarName, bottles: [...] } ] }
+ *     \u2014 bottles from all exported cellars are flattened into one list
+ *   - Legacy single-cellar export object: { cellarName, exportedAt, bottles: [...] }
  *   - Plain array of items already in master format
  *
  * @param {string} text - Raw JSON text
@@ -587,7 +589,12 @@ export function parseJSON(text) {
     throw new Error('Invalid JSON file');
   }
 
-  const raw = Array.isArray(parsed) ? parsed : (Array.isArray(parsed.bottles) ? parsed.bottles : null);
+  let raw = Array.isArray(parsed) ? parsed : (Array.isArray(parsed.bottles) ? parsed.bottles : null);
+  if (!raw && Array.isArray(parsed.cellars)) {
+    // cellarion-export@1 (the "Export cellar data" download): bottles are
+    // nested per cellar; their items are already in master format.
+    raw = parsed.cellars.flatMap((c) => (Array.isArray(c?.bottles) ? c.bottles : []));
+  }
   if (!raw) throw new Error('JSON must be an array or a Cellarion export object with a "bottles" array');
 
   const items = [];

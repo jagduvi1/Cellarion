@@ -313,6 +313,50 @@ describe('parseJSON', () => {
     expect(result.format).toBe('cellarion');
   });
 
+  it('parses a cellarion-export@1 object, flattening bottles across cellars', () => {
+    const json = JSON.stringify({
+      schema: 'cellarion-export@1',
+      exportedAt: '2026-07-01T00:00:00.000Z',
+      scope: 'all',
+      cellarCount: 2,
+      bottleCount: 3,
+      cellars: [
+        {
+          cellarName: 'Main Cellar',
+          racks: [{ name: 'Rack A', type: 'grid', rows: 4, cols: 8 }],
+          bottles: [
+            { wineName: 'Margaux', producer: 'Chateau Margaux', vintage: '2015' },
+            { wineName: 'Opus One', producer: 'Opus One Winery', vintage: '2018' },
+          ],
+        },
+        {
+          cellarName: 'Garage',
+          racks: [],
+          bottles: [
+            { wineName: 'Barolo', producer: 'Conterno', vintage: '2019' },
+          ],
+        },
+      ],
+    });
+    const result = parseJSON(json);
+    expect(result.items).toHaveLength(3);
+    expect(result.items.map(i => i.wineName)).toEqual(['Margaux', 'Opus One', 'Barolo']);
+    expect(result.format).toBe('cellarion');
+  });
+
+  it('handles a cellarion-export@1 cellar with a missing bottles array', () => {
+    const json = JSON.stringify({
+      schema: 'cellarion-export@1',
+      cellars: [
+        { cellarName: 'Empty' },
+        { cellarName: 'Full', bottles: [{ wineName: 'Margaux', producer: 'CM' }] },
+      ],
+    });
+    const result = parseJSON(json);
+    expect(result.items).toHaveLength(1);
+    expect(result.items[0].wineName).toBe('Margaux');
+  });
+
   it('expands quantity > 1 into individual items', () => {
     const json = JSON.stringify([
       { wineName: 'Margaux', producer: 'Chateau Margaux', quantity: 3 },
