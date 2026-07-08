@@ -43,6 +43,15 @@ export default function AdminImagesByWine() {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
+  // When a delete / set-official empties the last page but earlier pages still
+  // exist, step back one page instead of stranding the admin on an empty page
+  // (the pagination controls only render in the non-empty branch).
+  useEffect(() => {
+    if (!loading && items.length === 0 && total > 0 && page > 1) {
+      setPage(p => Math.max(1, p - 1));
+    }
+  }, [loading, items.length, total, page]);
+
   // An image is the wine's official one if it's flagged assignedToWine, or its
   // file URL matches the wine's stored image (belt-and-suspenders).
   const isOfficial = (wine, img) => {

@@ -12,6 +12,11 @@
   --sa-accent2: #60a5fa;
   --sa-warn: #facc15;
   --sa-danger: var(--color-danger);
+  /* Semantic aliases used by inline styles in the tab components */
+  --sa-green: var(--sa-accent);
+  --sa-red: var(--sa-danger);
+  --sa-blue: var(--sa-accent2);
+  --sa-gold: var(--sa-warn);
   --sa-muted: var(--color-text-muted);
   --sa-text: var(--color-text);
   --sa-text-dim: var(--color-text-secondary);
@@ -413,6 +418,38 @@
   color: var(--sa-danger);
   font-size: 12px;
   margin-bottom: 12px;
+}
+
+/* ── Success ── */
+.sa-success {
+  padding: 16px;
+  background: var(--color-success-bg);
+  border: 1px solid var(--sa-green);
+  border-radius: var(--sa-radius);
+  color: var(--sa-green);
+  font-size: 12px;
+  margin-bottom: 12px;
+}
+
+/* ── Generic section block (TabBackups) ── */
+.sa-section {
+  margin-top: 16px;
+}
+
+/* ── Big stat tiles (TabImport results) ── */
+.sa-big-number {
+  font-size: 26px;
+  font-weight: bold;
+  font-family: var(--sa-font);
+  color: var(--sa-text);
+  line-height: 1.2;
+}
+.sa-big-label {
+  font-size: 10px;
+  color: var(--sa-text-dim);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-top: 2px;
 }
 
 /* ── Logout bar ── */

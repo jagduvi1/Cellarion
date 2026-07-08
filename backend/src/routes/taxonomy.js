@@ -303,3 +303,5 @@ router.get('/wine-types/:type', async (req, res) => {
 
 module.exports = router;
 module.exports.clearTaxonomyListCache = clearTaxonomyListCache;
+// Shared with sitemap.js — one aggregation instead of one countDocuments per taxon.
+module.exports.countWinesBy = countWinesBy;
