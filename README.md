@@ -431,7 +431,7 @@ Copy `.env.example` to `.env` in the project root and set the required values:
 | `JWT_SECRET` | **Yes** | — | Long random string for signing JWTs |
 | `MEILI_MASTER_KEY` | **Yes** | — | Long random string for Meilisearch auth |
 | `MONGO_URI` | No | `mongodb://mongo:27017/winecellar` | MongoDB connection |
-| `JWT_EXPIRES_IN` | No | `7d` | Token TTL |
+| `ACCESS_TOKEN_EXPIRES_IN` | No | `15m` | Access-token TTL (sessions refresh via a rotating 30-day cookie) |
 | `PORT` | No | `5000` | Backend port |
 | `FRONTEND_URL` | No | `http://localhost` | CORS origin — set to your domain in production |
 | `MEILI_URL` | No | `http://meilisearch:7700` | Meilisearch URL |
