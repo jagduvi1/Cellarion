@@ -40,7 +40,10 @@
     "price": "Pris",
     "currency": "Valuta",
     "rating": "Betyg",
-    "reason": "Anledning"
+    "reason": "Anledning",
+    "error": "Ett fel uppstod",
+    "optional": "valfritt",
+    "or": "eller"
   },
 
   "nav": {
@@ -129,7 +132,9 @@
       "pushBlocked": "Push-aviseringar är blockerade. Aktivera dem i webbläsarens inställningar.",
       "pushNotConfigured": "Push-aviseringar är inte konfigurerade på denna server.",
       "pushHint": "Push levererar aviseringar till din enhet även när Cellarion är stängt."
-    }
+    },
+    "defaultRatingScale": "Standardbetygsskala",
+    "ratingScaleHint": "Välj vilken betygsskala som används som standard när du sätter betyg. Du kan alltid ändra per flaska."
   },
   "adminModerators": {
     "title": "Forum-moderatorer",
@@ -147,7 +152,8 @@
     "revokeConfirm": "Ta bort moderatorbehörighet från {{name}}?",
     "revokeWarning": "Hen förlorar möjligheten att fästa, låsa, flytta eller ta bort diskussioner, se rapporter eller blockera användare.",
     "you": "(du)",
-    "failedLoad": "Kunde inte ladda moderatorerna."
+    "failedLoad": "Kunde inte ladda moderatorerna.",
+    "failedChange": "Kunde inte ändra rollen."
   },
   "reactions": {
     "addReaction": "Lägg till reaktion",
@@ -231,7 +237,8 @@
     "setDefault": "Ange som standardkällare",
     "removeDefault": "Ta bort som standardkällare",
     "editRole": "Redigera",
-    "viewRole": "Visa"
+    "viewRole": "Visa",
+    "import": "Importera"
   },
 
   "cellarDetail": {
@@ -387,7 +394,14 @@
     "requestWineInstead": "Begär ett vin",
     "aiCouldNotIdentify": "Kunde inte identifiera detta vin. Du kan skicka en förfrågan istället.",
     "aiSearching": "Söker efter ditt vin…",
-    "submitWineRequest": "Skicka vinförfrågan"
+    "submitWineRequest": "Skicka vinförfrågan",
+    "scanPromptTitle": "Skanna vinetiketten",
+    "scanPromptHint": "Ta ett foto av etiketten — vi identifierar vinet och lägger till det i registret om det inte redan finns.",
+    "startCamera": "Starta kameran",
+    "useCameraInstead": "Använd kameran istället",
+    "searchManuallyInstead": "Ingen kamera? Sök manuellt istället →",
+    "searchBtn": "Sök",
+    "searchHint": "Var så specifik som möjligt — ange både vinnamn och producent. Vi söker först i vårt bibliotek; om ingen träff hittas identifierar vi vinet och lägger till det."
   },
 
   "bottleDetail": {
@@ -459,7 +473,16 @@
     "suggestGrapesHint": "Separera flera sorter med kommatecken",
     "suggestGrapesSubmit": "Skicka förslag",
     "suggestGrapesThankYou": "Tack för ditt bidrag!",
-    "suggestGrapesConfirm": "Ditt förslag har skickats in för granskning. Vårt team lägger till de verifierade sorterna i vinregistret."
+    "suggestGrapesConfirm": "Ditt förslag har skickats in för granskning. Vårt team lägger till de verifierade sorterna i vinregistret.",
+    "addWineImage": "Vinfoto",
+    "backToHistory": "Tillbaka till historiken",
+    "defaultImageHint": "Klicka på stjärnan för att välja vilken bild som visas först.",
+    "imageNotice": "Bilder granskas av en administratör innan de läggs till i det delade vinregistret, där de visas för alla Cellarion-användare.",
+    "pendingReview": "Väntar på granskning",
+    "tastingProfile": "Smakprofil",
+    "structure": "Struktur",
+    "flavours": "Smaker",
+    "pairsWith": "Passar till"
   },
 
   "bottles": {
@@ -555,7 +578,10 @@
     "disableSlot": "Inaktivera plats",
     "enableSlot": "Aktivera plats",
     "disabledSlotTitle": "Plats {{position}} — Inaktiverad",
-    "disabledSlotNote": "Den här platsen är markerad som oanvändbar — flaskor kan inte placeras här."
+    "disabledSlotNote": "Den här platsen är markerad som oanvändbar — flaskor kan inte placeras här.",
+    "preview": "Förhandsgranska",
+    "hidePreview": "Dölj förhandsgranskning",
+    "previewLabel": "Förhandsgranskning — så här kommer hyllan att se ut när den skapats"
   },
 
   "nfc": {
@@ -602,7 +628,23 @@
     "rackWidth": "Bredd (m)",
     "rackDepth": "Djup (m)",
     "rackScale": "Skala",
-    "removeFromRoom": "Ta bort"
+    "removeFromRoom": "Ta bort",
+    "inRack": "I hylla",
+    "slot": "plats",
+    "racksSelected": "hyllor valda",
+    "clearSelection": "Rensa",
+    "linkSelected": "Länka valda",
+    "rotateAll": "Rotera alla",
+    "shiftClickHint": "Shift+klicka för att lägga till/ta bort hyllor",
+    "undo": "Ångra (Ctrl+Z)",
+    "redo": "Gör om (Ctrl+Y)",
+    "unsavedChangesTitle": "Osparade ändringar",
+    "unsavedChangesMessage": "Du har osparade ändringar i rumslayouten. Är du säker på att du vill lämna sidan?",
+    "stayOnPage": "Stanna",
+    "leaveWithoutSaving": "Lämna",
+    "loadCellarError": "Kunde inte ladda källaren",
+    "loadRacksError": "Kunde inte ladda hyllorna för denna källare",
+    "loadLayoutError": "Kunde inte ladda rumslayouten"
   },
 
   "wines": {
@@ -646,7 +688,10 @@
     "adminNotes": "Adminanteckningar:",
     "submitted": "Skickad {{date}}",
     "grapeSuggestion": "Druvförslag",
-    "suggestedGrapes": "Föreslagna"
+    "suggestedGrapes": "Föreslagna",
+    "imageLabel": "Bild",
+    "imageUrlPlaceholder": "Klistra in bild-URL…",
+    "imageNotice": "Bilder granskas av en administratör innan de läggs till i det delade vinregistret, där de visas för alla Cellarion-användare."
   },
 
   "history": {
@@ -677,7 +722,8 @@
     "addingToWishlist": "Lägger till…",
     "onWishlist": "På önskelistan",
     "wishlistError": "Försök igen",
-    "viewBottleAria": "Visa {{name}}"
+    "viewBottleAria": "Visa {{name}}",
+    "noResults": "Inga flaskor matchar din sökning."
   },
 
   "cellarScope": {
@@ -770,7 +816,10 @@
       "typeGrapeSuggestion": "Druvförslag",
       "suggestedGrapes": "Föreslagna sorter",
       "applyGrapesNote": "Välj de druvsorter som ska läggas till för det här vinet. Okända namn kan läggas till i taxonomin först.",
-      "applyGrapesLabel": "Druvor att lägga till"
+      "applyGrapesLabel": "Druvor att lägga till",
+      "linkSearchLabel": "Sök i vinregistret",
+      "linkSearchPlaceholder": "Sök på namn eller producent…",
+      "selectedId": "Valt ID:"
     },
     "bottleSizes": {
       "normalizeAll": "Normalisera alla",
@@ -878,7 +927,8 @@
         "deleted": "Tog bort \"{{name}}\"",
         "empty": "Inga viner har producenten i namnet.",
         "networkError": "Nätverksfel"
-      }
+      },
+      "defaultImageHint": "Klicka på stjärnan för att välja standardbild för detta vin."
     },
     "images": {
       "title": "Admin: Bildgranskning",
@@ -936,7 +986,15 @@
       "deleteImage": "Ta bort",
       "removeYes": "Ta bort",
       "removing": "Tar bort…",
-      "reject": "Avvisa"
+      "reject": "Avvisa",
+      "approvePublic": "Godkänn för alla",
+      "approvePrivate": "Godkänn endast för uppladdaren",
+      "makePublic": "Gör publik",
+      "makePrivate": "Gör endast för uppladdaren",
+      "private": "privat",
+      "visibilityLabel": "Synlighet:",
+      "visibilityPublic": "Publik",
+      "visibilityPrivate": "Endast uppladdare"
     },
     "audit": {
       "title": "Aktivitetslogg",
@@ -1067,7 +1125,8 @@
       "aiSuggest": "Föreslå",
       "aiSuggesting": "Föreslår…",
       "aiSuggestError": "Kunde inte föreslå ett drickfönster",
-      "aiSuggestFilled": "Förslag tillämpat — granska och spara"
+      "aiSuggestFilled": "Förslag tillämpat — granska och spara",
+      "nvHint": "utan årgång: ange antal år efter inköp"
     },
     "prices": {
       "title": "Priskö",
@@ -1343,7 +1402,8 @@
       "ratingVsPrice": "Betyg kontra pris per typ",
       "expectationVsReality": "Förväntning kontra verklighet",
       "surprisedOrDisappointed": "När viner överraskade eller besvikade dig",
-      "mostValuableBottles": "Mest värdefulla flaskor"
+      "mostValuableBottles": "Mest värdefulla flaskor",
+      "valueOverTime": "Samlingens värde över tid"
     },
 
     "kpi": {
@@ -1698,7 +1758,11 @@
     "backToCellars": "Tillbaka till källare",
     "wineNotFound": "Vin hittades inte",
     "goToCellarion": "Gå till Cellarion",
-    "wines": "Viner"
+    "wines": "Viner",
+    "tastingProfile": "Smakprofil",
+    "structure": "Struktur",
+    "flavours": "Smaker",
+    "pairsWith": "Passar till"
   },
   "statsCard": {
     "title": "Ditt källarkort",
