@@ -104,8 +104,10 @@ router.put('/countries/:id', async (req, res) => {
       { name: country.name }
     );
 
-    // Resync search index if name changed (denormalized data)
-    if (name) searchService.fullSync();
+    // Resync search indexes if name changed (denormalized data). Bottle
+    // documents denormalize taxonomy names too — fullSync() alone rebuilds
+    // only the wines index, leaving cellar search matching the old name.
+    if (name) { searchService.fullSync(); searchService.fullSyncBottles(); }
 
     res.json({ country });
   } catch (error) {
@@ -292,8 +294,10 @@ router.put('/regions/:id', async (req, res) => {
       { name: region.name }
     );
 
-    // Resync search index if name changed (denormalized data)
-    if (name) searchService.fullSync();
+    // Resync search indexes if name changed (denormalized data). Bottle
+    // documents denormalize taxonomy names too — fullSync() alone rebuilds
+    // only the wines index, leaving cellar search matching the old name.
+    if (name) { searchService.fullSync(); searchService.fullSyncBottles(); }
 
     res.json({ region });
   } catch (error) {
@@ -420,8 +424,10 @@ router.put('/grapes/:id', async (req, res) => {
       { name: grape.name }
     );
 
-    // Resync search index if name changed (denormalized data)
-    if (name) searchService.fullSync();
+    // Resync search indexes if name changed (denormalized data). Bottle
+    // documents denormalize taxonomy names too — fullSync() alone rebuilds
+    // only the wines index, leaving cellar search matching the old name.
+    if (name) { searchService.fullSync(); searchService.fullSyncBottles(); }
 
     res.json({ grape });
   } catch (error) {

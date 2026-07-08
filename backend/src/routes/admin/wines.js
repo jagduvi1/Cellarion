@@ -635,8 +635,18 @@ router.put('/:id', async (req, res) => {
     await wine.save();
     await wine.populate(['country', 'region', 'grapes']);
 
-    // Sync to search index (fire-and-forget)
+    // Sync to search index (fire-and-forget). Bottle documents denormalize
+    // wineName/producer/country/region/grape names — without re-indexing
+    // them, cellar search keeps matching the old values indefinitely (no
+    // scheduled resync exists; full-sync only runs on an empty index).
     searchService.indexWine(wine._id);
+    if (name !== undefined || producer !== undefined || country !== undefined ||
+        region !== undefined || appellation !== undefined || grapes !== undefined ||
+        type !== undefined) {
+      Bottle.distinct('_id', { wineDefinition: wine._id })
+        .then(ids => searchService.bulkIndexBottles(ids))
+        .catch(err => console.error('Bottle re-index after wine update failed:', err.message));
+    }
 
     logAudit(req, 'admin.wine.update',
       { type: 'wine', id: wine._id },
@@ -1221,6 +1231,14 @@ router.post('/merge', async (req, res) => {
       searchService.removeWine(src._id.toString());
     }
     searchService.indexWine(keeper._id.toString());
+
+    // Re-index the keeper's bottles: reassignWineRefs re-pointed the sources'
+    // bottles, but their search documents still carry the DELETED source
+    // wine's denormalized name/producer/taxonomy — without this, cellar
+    // search keeps matching/faceting them under the old wine forever.
+    Bottle.distinct('_id', { wineDefinition: keeperOid })
+      .then(ids => searchService.bulkIndexBottles(ids))
+      .catch(err => console.error('Bottle re-index after merge failed:', err.message));
 
     // Re-embed the keeper's vintages so semantic search reflects the merged wine.
     reembedKeeper(keeper._id);
