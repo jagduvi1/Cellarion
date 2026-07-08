@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Link } from 'react-router-dom';
+import { useTranslation, Trans } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import { getWishlist, updateWishlistItem, removeWishlistItem } from '../api/wishlist';
 import Modal from '../components/Modal';
@@ -7,9 +8,10 @@ import './AddBottle.css';
 import WineImage from '../components/WineImage';
 import './Wishlist.css';
 
-const PRIORITY_LABELS = { high: 'High', medium: 'Medium', low: 'Low' };
+const PRIORITY_KEYS = { high: 'wishlist.priorityHigh', medium: 'wishlist.priorityMedium', low: 'wishlist.priorityLow' };
 
 function Wishlist() {
+  const { t } = useTranslation();
   const { apiFetch } = useAuth();
   const [items, setItems] = useState([]);
   const [total, setTotal] = useState(0);
@@ -70,11 +72,11 @@ function Wishlist() {
       const res = await getWishlist(apiFetch, params.toString());
       const data = await res.json();
       if (seq !== fetchSeq.current) return;
-      if (!res.ok) { setError(data.error || 'Failed to load wishlist'); return; }
+      if (!res.ok) { setError(data.error || t('wishlist.failedLoad')); return; }
       setItems(data.items || []);
       setTotal(data.total || 0);
     } catch {
-      if (seq === fetchSeq.current) setError('Network error');
+      if (seq === fetchSeq.current) setError(t('wishlist.networkError'));
     } finally {
       if (seq === fetchSeq.current) setLoading(false);
     }
@@ -112,7 +114,7 @@ function Wishlist() {
         setItems(prev => prev.map(i => i._id === item._id ? data.item : i));
       }
     } catch {
-      setError('Failed to update status');
+      setError(t('wishlist.failedUpdateStatus'));
     } finally {
       setTogglingIds(prev => {
         const next = new Set(prev);
@@ -130,7 +132,7 @@ function Wishlist() {
       setTotal(prev => prev - 1);
       setDeleteConfirm(null);
     } catch {
-      setError('Failed to remove item');
+      setError(t('wishlist.failedRemove'));
     }
   };
 
@@ -151,11 +153,11 @@ function Wishlist() {
         vintage: editVintage
       });
       const data = await res.json();
-      if (!res.ok) { setError(data.error || 'Failed to update'); return; }
+      if (!res.ok) { setError(data.error || t('wishlist.failedUpdate')); return; }
       setItems(prev => prev.map(i => i._id === editItem._id ? data.item : i));
       setEditItem(null);
     } catch {
-      setError('Network error');
+      setError(t('wishlist.networkError'));
     } finally {
       setSaving(false);
     }
@@ -169,12 +171,12 @@ function Wishlist() {
     <div className="wishlist-page">
       <div className="wishlist-header">
         <div>
-          <h1>Wishlist</h1>
-          <p className="wishlist-subtitle">Wines you want to buy</p>
+          <h1>{t('wishlist.title')}</h1>
+          <p className="wishlist-subtitle">{t('wishlist.subtitle')}</p>
         </div>
         <Link to="/wishlist/add" className="btn btn-primary" data-guide="add-wishlist">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-          Add Wine
+          {t('wishlist.addWine')}
         </Link>
       </div>
 
@@ -185,19 +187,19 @@ function Wishlist() {
             className={`wishlist-tab ${statusFilter === 'wanted' ? 'active' : ''}`}
             onClick={() => setStatusFilter('wanted')}
           >
-            Wanted
+            {t('wishlist.tabWanted')}
           </button>
           <button
             className={`wishlist-tab ${statusFilter === 'bought' ? 'active' : ''}`}
             onClick={() => setStatusFilter('bought')}
           >
-            Bought
+            {t('wishlist.tabBought')}
           </button>
           <button
             className={`wishlist-tab ${statusFilter === 'all' ? 'active' : ''}`}
             onClick={() => setStatusFilter('all')}
           >
-            All
+            {t('wishlist.tabAll')}
           </button>
         </div>
 
@@ -205,17 +207,17 @@ function Wishlist() {
           <form onSubmit={handleSearchSubmit} className="wishlist-search-form">
             <input
               type="text"
-              placeholder="Search wines..."
+              placeholder={t('wishlist.searchPlaceholder')}
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
               className="wishlist-search-input"
             />
           </form>
           <select value={sortBy} onChange={(e) => setSortBy(e.target.value)} className="wishlist-sort-select">
-            <option value="newest">Newest first</option>
-            <option value="oldest">Oldest first</option>
-            <option value="name">By name</option>
-            <option value="priority">By priority</option>
+            <option value="newest">{t('wishlist.sortNewest')}</option>
+            <option value="oldest">{t('wishlist.sortOldest')}</option>
+            <option value="name">{t('wishlist.sortName')}</option>
+            <option value="priority">{t('wishlist.sortPriority')}</option>
           </select>
         </div>
       </div>
@@ -224,18 +226,18 @@ function Wishlist() {
 
       {/* List */}
       {loading && items.length === 0 ? (
-        <div className="wishlist-loading">Loading...</div>
+        <div className="wishlist-loading">{t('wishlist.loading')}</div>
       ) : total === 0 ? (
         <div className="wishlist-empty">
           <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
           </svg>
-          <p>{statusFilter === 'wanted' ? 'No wines on your wishlist yet' : statusFilter === 'bought' ? 'No bought wines yet' : 'Your wishlist is empty'}</p>
-          <Link to="/wishlist/add" className="btn btn-primary">Add your first wine</Link>
+          <p>{statusFilter === 'wanted' ? t('wishlist.emptyWanted') : statusFilter === 'bought' ? t('wishlist.emptyBought') : t('wishlist.emptyAll')}</p>
+          <Link to="/wishlist/add" className="btn btn-primary">{t('wishlist.addFirstWine')}</Link>
         </div>
       ) : (
         <>
-          <div className="wishlist-count">{total} {total === 1 ? 'wine' : 'wines'}</div>
+          <div className="wishlist-count">{t('wishlist.wineCount', { count: total })}</div>
           <div className="wishlist-list">
             {items.map(item => {
               const wd = item.wineDefinition;
@@ -248,7 +250,7 @@ function Wishlist() {
                     <div className="wishlist-item-top">
                       <h3 className="wishlist-item-name">{wd?.name}</h3>
                       <span className={`wishlist-priority-badge priority-${item.priority}`}>
-                        {PRIORITY_LABELS[item.priority]}
+                        {t(PRIORITY_KEYS[item.priority])}
                       </span>
                     </div>
                     <p className="wishlist-item-producer">{wd?.producer}</p>
@@ -257,10 +259,10 @@ function Wishlist() {
                       {wd?.region?.name && <span>• {wd.region.name}</span>}
                       {wd?.type && <span className={`wine-type-pill ${wd.type}`}>{wd.type}</span>}
                     </div>
-                    {item.vintage && <span className="wishlist-item-vintage">Vintage: {item.vintage}</span>}
+                    {item.vintage && <span className="wishlist-item-vintage">{t('wishlist.vintageLine', { vintage: item.vintage })}</span>}
                     {item.notes && <p className="wishlist-item-notes">{item.notes}</p>}
                     {item.status === 'bought' && item.boughtAt && (
-                      <span className="wishlist-item-bought-date">Bought {new Date(item.boughtAt).toLocaleDateString()}</span>
+                      <span className="wishlist-item-bought-date">{t('wishlist.boughtOn', { date: new Date(item.boughtAt).toLocaleDateString() })}</span>
                     )}
                   </div>
                   <div className="wishlist-item-actions">
@@ -268,14 +270,14 @@ function Wishlist() {
                       className={`btn btn-small ${item.status === 'wanted' ? 'btn-success' : 'btn-secondary'}`}
                       onClick={() => handleToggleStatus(item)}
                       disabled={togglingIds.has(item._id)}
-                      title={item.status === 'wanted' ? 'Mark as bought' : 'Move back to wanted'}
+                      title={item.status === 'wanted' ? t('wishlist.markBought') : t('wishlist.moveBackWanted')}
                     >
-                      {item.status === 'wanted' ? 'Bought' : 'Undo'}
+                      {item.status === 'wanted' ? t('wishlist.bought') : t('wishlist.undo')}
                     </button>
-                    <button className="btn btn-small btn-ghost" onClick={() => openEdit(item)} title="Edit">
+                    <button className="btn btn-small btn-ghost" onClick={() => openEdit(item)} title={t('wishlist.edit')}>
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
                     </button>
-                    <button className="btn btn-small btn-ghost wishlist-btn-delete" onClick={() => setDeleteConfirm(item)} title="Remove">
+                    <button className="btn btn-small btn-ghost wishlist-btn-delete" onClick={() => setDeleteConfirm(item)} title={t('wishlist.remove')}>
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
                     </button>
                   </div>
@@ -288,11 +290,11 @@ function Wishlist() {
           {total > LIMIT && (
             <div className="wishlist-pagination">
               <button className="btn btn-secondary btn-small" disabled={skip === 0} onClick={() => setSkip(s => Math.max(0, s - LIMIT))}>
-                Previous
+                {t('wishlist.previous')}
               </button>
-              <span className="wishlist-page-info">{skip + 1}–{Math.min(skip + LIMIT, total)} of {total}</span>
+              <span className="wishlist-page-info">{t('wishlist.pageInfo', { from: skip + 1, to: Math.min(skip + LIMIT, total), total })}</span>
               <button className="btn btn-secondary btn-small" disabled={skip + LIMIT >= total} onClick={() => setSkip(s => s + LIMIT)}>
-                Next
+                {t('wishlist.next')}
               </button>
             </div>
           )}
@@ -301,39 +303,45 @@ function Wishlist() {
 
       {/* Edit modal */}
       {editItem && (
-        <Modal title="Edit Wishlist Item" onClose={() => setEditItem(null)}>
+        <Modal title={t('wishlist.editModalTitle')} onClose={() => setEditItem(null)}>
           <div className="form-group">
-            <label>Vintage</label>
-            <input type="text" value={editVintage} onChange={(e) => setEditVintage(e.target.value)} maxLength={20} placeholder="e.g. 2020" />
+            <label>{t('wishlist.vintage')}</label>
+            <input type="text" value={editVintage} onChange={(e) => setEditVintage(e.target.value)} maxLength={20} placeholder={t('wishlist.vintagePlaceholder')} />
           </div>
           <div className="form-group">
-            <label>Priority</label>
+            <label>{t('wishlist.priority')}</label>
             <select value={editPriority} onChange={(e) => setEditPriority(e.target.value)}>
-              <option value="low">Low</option>
-              <option value="medium">Medium</option>
-              <option value="high">High — must buy!</option>
+              <option value="low">{t('wishlist.priorityLow')}</option>
+              <option value="medium">{t('wishlist.priorityMedium')}</option>
+              <option value="high">{t('wishlist.priorityHighOption')}</option>
             </select>
           </div>
           <div className="form-group">
-            <label>Notes</label>
-            <textarea value={editNotes} onChange={(e) => setEditNotes(e.target.value)} rows="3" maxLength={2000} placeholder="Where you tried it, price you saw..." />
+            <label>{t('wishlist.notes')}</label>
+            <textarea value={editNotes} onChange={(e) => setEditNotes(e.target.value)} rows="3" maxLength={2000} placeholder={t('wishlist.notesPlaceholder')} />
           </div>
           <div className="form-actions">
             <button className="btn btn-success" onClick={handleSaveEdit} disabled={saving}>
-              {saving ? 'Saving...' : 'Save'}
+              {saving ? t('wishlist.saving') : t('wishlist.save')}
             </button>
-            <button className="btn btn-secondary" onClick={() => setEditItem(null)}>Cancel</button>
+            <button className="btn btn-secondary" onClick={() => setEditItem(null)}>{t('wishlist.cancel')}</button>
           </div>
         </Modal>
       )}
 
       {/* Delete confirmation */}
       {deleteConfirm && (
-        <Modal title="Remove from Wishlist" onClose={() => setDeleteConfirm(null)}>
-          <p>Remove <strong>{deleteConfirm.wineDefinition?.name}</strong> from your wishlist?</p>
+        <Modal title={t('wishlist.removeModalTitle')} onClose={() => setDeleteConfirm(null)}>
+          <p>
+            <Trans
+              i18nKey="wishlist.removeConfirm"
+              values={{ name: deleteConfirm.wineDefinition?.name }}
+              components={{ 1: <strong /> }}
+            />
+          </p>
           <div className="form-actions">
-            <button className="btn btn-danger" onClick={() => handleDelete(deleteConfirm._id)}>Remove</button>
-            <button className="btn btn-secondary" onClick={() => setDeleteConfirm(null)}>Cancel</button>
+            <button className="btn btn-danger" onClick={() => handleDelete(deleteConfirm._id)}>{t('wishlist.remove')}</button>
+            <button className="btn btn-secondary" onClick={() => setDeleteConfirm(null)}>{t('wishlist.cancel')}</button>
           </div>
         </Modal>
       )}

@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import CellarionLogo from '../components/CellarionLogo';
 import './Login.css';
 
 function VerifyEmail() {
+  const { t } = useTranslation();
   const [searchParams] = useSearchParams();
   const { verifyEmail } = useAuth();
   const navigate = useNavigate();
@@ -25,7 +27,7 @@ function VerifyEmail() {
     const token = searchParams.get('token');
     if (!token) {
       setStatus('error');
-      setErrorMessage('No verification token found in the URL.');
+      setErrorMessage(t('auth.noVerifyToken'));
       return;
     }
 
@@ -35,7 +37,7 @@ function VerifyEmail() {
         setTimeout(() => navigate('/cellars', { replace: true }), 1500);
       } else {
         setStatus('error');
-        setErrorMessage(result.error || 'Verification failed. The link may have expired.');
+        setErrorMessage(result.error || t('auth.verificationFailed'));
       }
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -61,16 +63,16 @@ function VerifyEmail() {
       <div className="login-card">
         <div className="login-header">
           <CellarionLogo size={90} color="var(--color-primary)" showText />
-          <p>Email Verification</p>
+          <p>{t('auth.emailVerification')}</p>
         </div>
 
         {status === 'verifying' && (
-          <div className="alert alert-info">Verifying your email address...</div>
+          <div className="alert alert-info">{t('auth.verifying')}</div>
         )}
 
         {status === 'success' && (
           <div className="alert alert-success">
-            Email verified! Redirecting you to your cellars...
+            {t('auth.verified')}
           </div>
         )}
 
@@ -78,21 +80,21 @@ function VerifyEmail() {
           <>
             <div className="alert alert-error">{errorMessage}</div>
             <p style={{ color: 'var(--color-text-muted)', fontSize: '0.9rem', marginTop: '1.5rem' }}>
-              Enter your email to get a new verification link:
+              {t('auth.enterEmailForNewLink')}
             </p>
             <div className="form-group">
               <input
                 type="email"
-                placeholder="your@email.com"
+                placeholder={t('auth.emailExamplePlaceholder')}
                 value={resendEmail}
                 onChange={e => setResendEmail(e.target.value)}
               />
             </div>
             {resendStatus === 'sent' && (
-              <div className="alert alert-success">New verification link sent. Check your inbox.</div>
+              <div className="alert alert-success">{t('auth.newLinkSent')}</div>
             )}
             {resendStatus === 'error' && (
-              <div className="alert alert-error">Failed to send. Please try again.</div>
+              <div className="alert alert-error">{t('auth.sendFailed')}</div>
             )}
             {resendStatus !== 'sent' && (
               <button
@@ -100,7 +102,7 @@ function VerifyEmail() {
                 onClick={handleResend}
                 disabled={!resendEmail || resendStatus === 'sending'}
               >
-                {resendStatus === 'sending' ? 'Sending...' : 'Resend verification email'}
+                {resendStatus === 'sending' ? t('auth.sending') : t('auth.resendVerification')}
               </button>
             )}
           </>

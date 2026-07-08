@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import { searchWines, getWine, findOrCreateWine, identifyWineByText } from '../api/wines';
 import useLabelScanner from '../hooks/useLabelScanner';
@@ -12,6 +13,7 @@ import { WINE_TYPES } from '../config/wineTypes';
 import './AddToWishlist.css';
 
 function AddToWishlist() {
+  const { t } = useTranslation();
   const { apiFetch } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
@@ -55,7 +57,7 @@ function AddToWishlist() {
     try {
       const res = await findOrCreateWine(apiFetch, { ...wineData, confirmCreate });
       const data = await res.json();
-      if (!res.ok) { setError(data.error || 'Failed to save wine'); return; }
+      if (!res.ok) { setError(data.error || t('addToWishlist.failedSaveWine')); return; }
       if (data.candidates && data.candidates.length > 0) {
         setSoftCandidates(data.candidates);
         setSoftPending({ wineData });
@@ -63,11 +65,11 @@ function AddToWishlist() {
       }
       applyResolvedWine(data.wine);
     } catch {
-      setError('Failed to save wine');
+      setError(t('addToWishlist.failedSaveWine'));
     } finally {
       setFindingWine(false);
     }
-  }, [apiFetch, applyResolvedWine]);
+  }, [apiFetch, applyResolvedWine, t]);
 
   // ── Wishlist item details ──
   const [vintage, setVintage] = useState('');
@@ -166,7 +168,7 @@ function AddToWishlist() {
 
   const handleConfirmManualWine = useCallback(async () => {
     if (!pendingWineData?.name?.trim() || !pendingWineData?.producer?.trim() || !pendingWineData?.country?.trim()) {
-      setError('Name, producer, and country are required');
+      setError(t('addToWishlist.requiredFields'));
       return;
     }
     const grapes = pendingWineData.grapes
@@ -217,11 +219,11 @@ function AddToWishlist() {
     try {
       const res = await identifyWineByText(apiFetch, search.trim());
       const data = await res.json();
-      if (!res.ok) { setAiSearchError(data.error || 'Identification failed'); return; }
-      if (!data.wine) { setAiSearchError('Could not identify this wine'); return; }
+      if (!res.ok) { setAiSearchError(data.error || t('addToWishlist.identificationFailed')); return; }
+      if (!data.wine) { setAiSearchError(t('addToWishlist.couldNotIdentify')); return; }
       setAiResult(data.wine);
     } catch {
-      setAiSearchError('Network error during identification.');
+      setAiSearchError(t('addToWishlist.networkErrorIdentify'));
     } finally {
       setAiSearching(false);
     }
@@ -246,16 +248,16 @@ function AddToWishlist() {
       });
       const data = await res.json();
       if (!res.ok) {
-        setError(data.error || 'Failed to add to wishlist');
+        setError(data.error || t('addToWishlist.failedAdd'));
         return;
       }
-      setSuccess(`${selectedWine.name} added to your wishlist!`);
+      setSuccess(t('addToWishlist.addedSuccess', { name: selectedWine.name }));
       // Reset for adding another
       setTimeout(() => {
         navigate('/wishlist');
       }, 1200);
     } catch {
-      setError('Network error');
+      setError(t('addToWishlist.networkError'));
     } finally {
       setSaving(false);
     }
@@ -270,7 +272,7 @@ function AddToWishlist() {
             {labelCam.error ? (
               <div className="camera-error-overlay">
                 <p>{labelCam.error}</p>
-                <button type="button" className="btn btn-secondary" onClick={stopLabelCamera}>Close</button>
+                <button type="button" className="btn btn-secondary" onClick={stopLabelCamera}>{t('addToWishlist.close')}</button>
               </div>
             ) : (
               <>
@@ -278,20 +280,20 @@ function AddToWishlist() {
                 {labelScanning ? (
                   <div className="label-scan-overlay">
                     <div className="label-scan-spinner" />
-                    <span>Reading label...</span>
+                    <span>{t('addToWishlist.readingLabel')}</span>
                   </div>
                 ) : (
                   <>
                     <div className="camera-overlay">
                       <div className="label-guide-frame" />
-                      <p className="overlay-hint">Frame the wine label</p>
+                      <p className="overlay-hint">{t('addToWishlist.frameLabel')}</p>
                     </div>
                     <div className="camera-controls">
-                      <button type="button" className="camera-btn camera-btn-close" onClick={stopLabelCamera} aria-label="Close camera">&#x2715;</button>
-                      <button type="button" className="camera-btn camera-btn-capture" onClick={captureLabelPhoto} aria-label="Scan label">
+                      <button type="button" className="camera-btn camera-btn-close" onClick={stopLabelCamera} aria-label={t('addToWishlist.closeCamera')}>&#x2715;</button>
+                      <button type="button" className="camera-btn camera-btn-capture" onClick={captureLabelPhoto} aria-label={t('addToWishlist.scanLabel')}>
                         <span className="capture-ring" aria-hidden="true"></span>
                       </button>
-                      <button type="button" className="camera-btn camera-btn-switch" onClick={() => setLabelFacing(f => f === 'environment' ? 'user' : 'environment')} aria-label="Switch camera">&#x27F2;</button>
+                      <button type="button" className="camera-btn camera-btn-switch" onClick={() => setLabelFacing(f => f === 'environment' ? 'user' : 'environment')} aria-label={t('addToWishlist.switchCamera')}>&#x27F2;</button>
                     </div>
                   </>
                 )}
@@ -305,9 +307,9 @@ function AddToWishlist() {
       <div className="add-wishlist-header">
         <Link to="/wishlist" className="back-link">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="15 18 9 12 15 6"/></svg>
-          Back to Wishlist
+          {t('addToWishlist.backToWishlist')}
         </Link>
-        <h1>Add to Wishlist</h1>
+        <h1>{t('addToWishlist.title')}</h1>
       </div>
 
       {error && <div className="alert alert-error">{error}</div>}
@@ -331,7 +333,7 @@ function AddToWishlist() {
                 {scanResult.extracted.confidence != null && (
                   <div style={{ marginBottom: '0.5rem' }}>
                     <span className="scan-confidence">
-                      {Math.round(scanResult.extracted.confidence * 100)}% confident
+                      {t('addToWishlist.confidence', { percent: Math.round(scanResult.extracted.confidence * 100) })}
                     </span>
                   </div>
                 )}
@@ -347,14 +349,14 @@ function AddToWishlist() {
                   <p className="wine-grapes">{scanResult.extracted.grapes.join(', ')}</p>
                 )}
                 {scanResult.extracted.vintage && (
-                  <p className="scan-vintage-note">Vintage detected: {scanResult.extracted.vintage}</p>
+                  <p className="scan-vintage-note">{t('addToWishlist.vintageDetected', { vintage: scanResult.extracted.vintage })}</p>
                 )}
                 <div className="scan-wine-actions">
                   <button type="button" className="btn btn-success" onClick={handleConfirmScan} disabled={findingWine}>
-                    {findingWine ? 'Saving...' : 'Add to Wishlist'}
+                    {findingWine ? t('addToWishlist.saving') : t('addToWishlist.addBtn')}
                   </button>
                   <button type="button" className="btn-not-right" onClick={handleNotRightWine}>
-                    Not the right wine?
+                    {t('addToWishlist.notRightWine')}
                   </button>
                 </div>
               </div>
@@ -371,50 +373,50 @@ function AddToWishlist() {
               )}
               <div className="grid-2">
                 <div className="form-group">
-                  <label>Wine Name *</label>
+                  <label>{t('addToWishlist.wineName')}</label>
                   <input type="text" value={pendingWineData.name}
                     onChange={e => setPendingWineData(p => ({ ...p, name: e.target.value }))} required />
                 </div>
                 <div className="form-group">
-                  <label>Producer *</label>
+                  <label>{t('addToWishlist.producer')}</label>
                   <input type="text" value={pendingWineData.producer}
                     onChange={e => setPendingWineData(p => ({ ...p, producer: e.target.value }))} required />
                 </div>
                 <div className="form-group">
-                  <label>Country *</label>
+                  <label>{t('addToWishlist.country')}</label>
                   <input type="text" value={pendingWineData.country}
                     onChange={e => setPendingWineData(p => ({ ...p, country: e.target.value }))} required />
                 </div>
                 <div className="form-group">
-                  <label>Region</label>
+                  <label>{t('addToWishlist.region')}</label>
                   <input type="text" value={pendingWineData.region}
                     onChange={e => setPendingWineData(p => ({ ...p, region: e.target.value }))} />
                 </div>
                 <div className="form-group">
-                  <label>Appellation</label>
+                  <label>{t('addToWishlist.appellation')}</label>
                   <input type="text" value={pendingWineData.appellation}
                     onChange={e => setPendingWineData(p => ({ ...p, appellation: e.target.value }))} />
                 </div>
                 <div className="form-group">
-                  <label>Type</label>
+                  <label>{t('addToWishlist.type')}</label>
                   <select value={pendingWineData.type}
                     onChange={e => setPendingWineData(p => ({ ...p, type: e.target.value }))}>
                     {WINE_TYPES.map(wt => <option key={wt} value={wt}>{wt}</option>)}
                   </select>
                 </div>
                 <div className="form-group form-group-full">
-                  <label>Grapes</label>
+                  <label>{t('addToWishlist.grapes')}</label>
                   <input type="text" value={pendingWineData.grapes}
                     onChange={e => setPendingWineData(p => ({ ...p, grapes: e.target.value }))}
-                    placeholder="e.g. Cabernet Sauvignon, Merlot" />
+                    placeholder={t('addToWishlist.grapesPlaceholder')} />
                 </div>
               </div>
               <div className="scan-result-actions">
                 <button type="button" className="btn btn-success" onClick={handleConfirmManualWine} disabled={findingWine}>
-                  {findingWine ? 'Saving...' : 'Add to Wishlist'}
+                  {findingWine ? t('addToWishlist.saving') : t('addToWishlist.addBtn')}
                 </button>
                 <button type="button" className="btn btn-ghost" onClick={handleScanReset}>
-                  Search manually
+                  {t('addToWishlist.searchManually')}
                 </button>
               </div>
             </div>
@@ -428,16 +430,16 @@ function AddToWishlist() {
                   <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
                   <circle cx="12" cy="13" r="4"/>
                 </svg>
-                <h2>Snap the label</h2>
+                <h2>{t('addToWishlist.snapLabel')}</h2>
                 <p className="camera-prompt-hint">
-                  Take a photo of the wine label — we'll identify it and add it to your wishlist so you can buy it later.
+                  {t('addToWishlist.cameraHint')}
                 </p>
                 <button type="button" className="btn btn-primary" onClick={startLabelCamera}>
-                  Start Camera
+                  {t('addToWishlist.startCamera')}
                 </button>
               </div>
               <button type="button" className="wine-select-manual-link" onClick={() => setShowTextSearch(true)}>
-                No camera? Search manually instead &rarr;
+                {t('addToWishlist.noCameraSearch')}
               </button>
             </div>
           )}
@@ -446,19 +448,19 @@ function AddToWishlist() {
           {!scanResult && showTextSearch && (
             <>
               <div className="wine-select-manual-header">
-                <h2>Search for a wine</h2>
+                <h2>{t('addToWishlist.searchForWine')}</h2>
                 <button type="button" className="btn-link-muted" onClick={() => { setShowTextSearch(false); setSearch(''); setWines([]); setAiSearchError(null); }}>
-                  &larr; Use camera instead
+                  {t('addToWishlist.useCameraInstead')}
                 </button>
               </div>
               <p className="wine-search-hint">
-                Be as specific as possible — include the wine name and producer.
+                {t('addToWishlist.searchHint')}
               </p>
               <div className="search-section">
                 <div className="search-input-wrapper">
                   <input
                     type="text"
-                    placeholder="e.g. Chateau Margaux 2015"
+                    placeholder={t('addToWishlist.searchPlaceholder')}
                     value={search}
                     onChange={(e) => { setSearch(e.target.value); setWines([]); setAiSearchError(null); setAiResult(null); }}
                     onKeyDown={handleSearchKeyDown}
@@ -466,19 +468,19 @@ function AddToWishlist() {
                     autoFocus
                   />
                   <button type="button" className="btn btn-secondary search-submit-btn" onClick={handleSearch} disabled={loading}>
-                    {loading ? '...' : 'Search'}
+                    {loading ? '...' : t('addToWishlist.searchBtn')}
                   </button>
                 </div>
               </div>
 
-              {loading && <p>Searching...</p>}
+              {loading && <p>{t('addToWishlist.searching')}</p>}
 
               {/* AI result */}
               {aiResult && !aiSearching && (
                 <div className="ai-result-card">
                   <div className="ai-result-badge">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2a4 4 0 0 1 4 4c0 1.95-1.4 3.58-3.25 3.93L12 22"/><path d="M8 6a4 4 0 0 1 8 0"/><path d="M17 12H7"/></svg>
-                    AI found this wine
+                    {t('addToWishlist.aiFound')}
                   </div>
                   <div className="ai-result-wine">
                     {aiResult.image ? (
@@ -503,7 +505,7 @@ function AddToWishlist() {
                   </div>
                   <div className="ai-result-actions">
                     <button type="button" className="btn btn-success" onClick={() => handleSelectWine(aiResult)}>
-                      Use this wine
+                      {t('addToWishlist.useThisWine')}
                     </button>
                   </div>
                 </div>
@@ -527,7 +529,7 @@ function AddToWishlist() {
                           <p className="wine-grapes">{wine.grapes.map(g => g.name).join(', ')}</p>
                         )}
                       </div>
-                      <button className="btn btn-primary btn-small">Select</button>
+                      <button className="btn btn-primary btn-small">{t('addToWishlist.select')}</button>
                     </div>
                   ))}
                 </div>
@@ -543,8 +545,8 @@ function AddToWishlist() {
                     </svg>
                   </div>
                   <div className="ai-search-row-body">
-                    <span className="ai-search-row-title">Can't find your wine?</span>
-                    <span className="ai-search-row-hint">Tap here to identify it with AI</span>
+                    <span className="ai-search-row-title">{t('addToWishlist.cantFind')}</span>
+                    <span className="ai-search-row-hint">{t('addToWishlist.tapToIdentify')}</span>
                   </div>
                   <svg className="ai-search-row-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
                 </div>
@@ -553,7 +555,7 @@ function AddToWishlist() {
               {aiSearching && (
                 <div className="ai-searching-state">
                   <div className="ai-searching-spinner" />
-                  <p>Identifying wine...</p>
+                  <p>{t('addToWishlist.identifying')}</p>
                 </div>
               )}
 
@@ -579,36 +581,36 @@ function AddToWishlist() {
               <span className="selected-wine-bar-producer">{selectedWine.producer}</span>
             </div>
             <button type="button" onClick={() => setSelectedWine(null)} className="btn btn-ghost btn-small">
-              Change
+              {t('addToWishlist.change')}
             </button>
           </div>
 
           <form onSubmit={handleSave}>
             <div className="grid-2" style={{ marginTop: '1.25rem' }}>
               <div className="form-group">
-                <label>Vintage</label>
+                <label>{t('addToWishlist.vintage')}</label>
                 <input
                   type="text"
                   value={vintage}
                   onChange={(e) => setVintage(e.target.value)}
-                  placeholder="e.g. 2020 or NV"
+                  placeholder={t('addToWishlist.vintagePlaceholder')}
                   maxLength={20}
                 />
               </div>
               <div className="form-group">
-                <label>Priority</label>
+                <label>{t('addToWishlist.priority')}</label>
                 <select value={priority} onChange={(e) => setPriority(e.target.value)}>
-                  <option value="low">Low</option>
-                  <option value="medium">Medium</option>
-                  <option value="high">High — must buy!</option>
+                  <option value="low">{t('addToWishlist.priorityLow')}</option>
+                  <option value="medium">{t('addToWishlist.priorityMedium')}</option>
+                  <option value="high">{t('addToWishlist.priorityHigh')}</option>
                 </select>
               </div>
               <div className="form-group form-group-full">
-                <label>Notes</label>
+                <label>{t('addToWishlist.notes')}</label>
                 <textarea
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
-                  placeholder="Where you tried it, what you liked, price you saw..."
+                  placeholder={t('addToWishlist.notesPlaceholder')}
                   rows="3"
                   maxLength={2000}
                 />
@@ -616,10 +618,10 @@ function AddToWishlist() {
             </div>
             <div className="form-actions">
               <button type="submit" className="btn btn-success" disabled={saving}>
-                {saving ? 'Saving...' : 'Add to Wishlist'}
+                {saving ? t('addToWishlist.saving') : t('addToWishlist.addBtn')}
               </button>
               <button type="button" onClick={() => navigate('/wishlist')} className="btn btn-secondary">
-                Cancel
+                {t('addToWishlist.cancel')}
               </button>
             </div>
           </form>

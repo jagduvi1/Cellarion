@@ -1,11 +1,15 @@
+import { useTranslation, Trans } from 'react-i18next';
+
 function Unsubscribed() {
+  const { t } = useTranslation();
   return (
     <div style={{ maxWidth: 480, margin: '4rem auto', padding: '2rem', textAlign: 'center' }}>
-      <h1>Unsubscribed</h1>
-      <p>You have been unsubscribed from every Cellarion email and push notification category.</p>
+      <h1>{t('unsubscribed.title')}</h1>
+      <p>{t('unsubscribed.message')}</p>
       <p>
-        You can re-enable individual categories at any time from{' '}
-        <a href="/settings">Settings</a>.
+        <Trans i18nKey="unsubscribed.reEnable">
+          You can re-enable individual categories at any time from <a href="/settings">Settings</a>.
+        </Trans>
       </p>
     </div>
   );

@@ -8,7 +8,7 @@ import {
   pinDiscussion, lockDiscussion, moveDiscussion,
   reportDiscussion, reportReply
 } from '../api/discussions';
-import CategoryBadge, { CATEGORY_LABELS } from '../components/CategoryBadge';
+import CategoryBadge, { CATEGORY_SLUGS } from '../components/CategoryBadge';
 import ReplyCard from '../components/ReplyCard';
 import WineReferenceCard from '../components/WineReferenceCard';
 import WineSearchPicker from '../components/WineSearchPicker';
@@ -27,7 +27,7 @@ import { isDeletedUser, authorDisplayName } from '../utils/deletedUser';
 import timeAgo from '../utils/timeAgo';
 import './DiscussionDetail.css';
 
-const CATEGORIES = Object.keys(CATEGORY_LABELS);
+const CATEGORIES = CATEGORY_SLUGS;
 
 function DiscussionDetail() {
   const { idOrSlug } = useParams();
@@ -565,7 +565,7 @@ function DiscussionDetail() {
             <label className="form-label">{t('discussions.newCategory')}</label>
             <select className="input" value={moveCategory} onChange={e => setMoveCategory(e.target.value)}>
               {CATEGORIES.map(cat => (
-                <option key={cat} value={cat}>{CATEGORY_LABELS[cat]}</option>
+                <option key={cat} value={cat}>{t(`discussions.categories.${cat}`)}</option>
               ))}
             </select>
           </div>

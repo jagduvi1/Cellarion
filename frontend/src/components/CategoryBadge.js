@@ -1,15 +1,19 @@
+import { useTranslation } from 'react-i18next';
 import './CategoryBadge.css';
 
-const CATEGORY_LABELS = {
-  'tasting-notes': 'Tasting Notes',
-  'food-pairing': 'Food Pairing',
-  'recommendations': 'Recommendations',
-  'cellar-tips': 'Cellar Tips',
-  'general': 'General'
-};
+const CATEGORY_SLUGS = [
+  'tasting-notes',
+  'food-pairing',
+  'recommendations',
+  'cellar-tips',
+  'general'
+];
 
 export default function CategoryBadge({ category, onClick }) {
-  const label = CATEGORY_LABELS[category] || category;
+  const { t } = useTranslation();
+  const label = CATEGORY_SLUGS.includes(category)
+    ? t(`discussions.categories.${category}`)
+    : category;
   const Tag = onClick ? 'button' : 'span';
 
   return (
@@ -23,4 +27,4 @@ export default function CategoryBadge({ category, onClick }) {
   );
 }
 
-export { CATEGORY_LABELS };
+export { CATEGORY_SLUGS };

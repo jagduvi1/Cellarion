@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation, Trans } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import useVersion from '../hooks/useVersion';
 import './Login.css';
@@ -21,6 +22,7 @@ function Login() {
   const [forgotEmail, setForgotEmail] = useState('');
   const [forgotStatus, setForgotStatus] = useState(null); // null | 'sending' | 'sent' | 'error'
 
+  const { t } = useTranslation();
   const { login, register } = useAuth();
   const navigate = useNavigate();
   const appVersion = useVersion();
@@ -98,19 +100,14 @@ function Login() {
   const footer = (
     <footer className="login-footer">
       <p>
-        Cellarion is{' '}
-        <a href="https://github.com/jagduvi1/Cellarion" target="_blank" rel="noopener noreferrer">
-          open source
-        </a>
-        . Have an idea or found a bug?{' '}
-        <a href="https://github.com/jagduvi1/Cellarion/issues" target="_blank" rel="noopener noreferrer">
-          Open an issue on GitHub
-        </a>
-        .
+        <Trans i18nKey="auth.footerOpenSource">
+          Cellarion is <a href="https://github.com/jagduvi1/Cellarion" target="_blank" rel="noopener noreferrer">open source</a>. Have an idea or found a bug? <a href="https://github.com/jagduvi1/Cellarion/issues" target="_blank" rel="noopener noreferrer">Open an issue on GitHub</a>.
+        </Trans>
       </p>
       <p>
-        Need help with your account?{' '}
-        <a href="mailto:support@cellarion.app">Contact support</a>.
+        <Trans i18nKey="auth.footerHelp">
+          Need help with your account? <a href="mailto:support@cellarion.app">Contact support</a>.
+        </Trans>
       </p>
       {appVersion && (
         <p className="login-version">
@@ -135,29 +132,29 @@ function Login() {
               <source srcSet={LOGO_WEBP} type="image/webp" />
               <img src={LOGO_PNG} alt="Cellarion" className="login-logo" width="159" height="128" />
             </picture>
-            <p>Reset your password</p>
+            <p>{t('auth.resetYourPassword')}</p>
           </div>
 
           {forgotStatus === 'sent' ? (
             <>
               <div className="alert alert-success">
-                If that email exists, a reset link has been sent. Check your inbox.
+                {t('auth.forgotSent')}
               </div>
               <button
                 className="btn btn-secondary btn-full"
                 style={{ marginTop: '1rem' }}
                 onClick={() => switchMode('login')}
               >
-                Back to login
+                {t('auth.backToLogin')}
               </button>
             </>
           ) : (
             <form onSubmit={handleForgot}>
               <p style={{ color: 'var(--color-text-secondary)', fontSize: '0.9rem', marginBottom: '1.25rem' }}>
-                Enter your email address and we&apos;ll send you a link to reset your password.
+                {t('auth.forgotIntro')}
               </p>
               <div className="form-group">
-                <label>Email</label>
+                <label>{t('auth.emailLabel')}</label>
                 <input
                   type="email"
                   value={forgotEmail}
@@ -167,14 +164,14 @@ function Login() {
                 />
               </div>
               {forgotStatus === 'error' && (
-                <div className="alert alert-error">Something went wrong. Please try again.</div>
+                <div className="alert alert-error">{t('auth.genericError')}</div>
               )}
               <button
                 type="submit"
                 className="btn btn-primary btn-full"
                 disabled={forgotStatus === 'sending'}
               >
-                {forgotStatus === 'sending' ? 'Sending...' : 'Send reset link'}
+                {forgotStatus === 'sending' ? t('auth.sending') : t('auth.sendResetLink')}
               </button>
               <button
                 type="button"
@@ -182,7 +179,7 @@ function Login() {
                 style={{ marginTop: '0.75rem' }}
                 onClick={() => switchMode('login')}
               >
-                Back to login
+                {t('auth.backToLogin')}
               </button>
             </form>
           )}
@@ -203,13 +200,12 @@ function Login() {
             </picture>
           </div>
           <div className="alert alert-success">
-            <strong>Check your email!</strong>
+            <strong>{t('auth.checkYourEmail')}</strong>
             <br />
-            We sent a verification link to <strong>{registeredEmail}</strong>.
-            Click the link in that email to activate your account.
+            <Trans i18nKey="auth.verificationSentTo" values={{ email: registeredEmail }} components={{ 1: <strong /> }} />
           </div>
           <p style={{ color: 'var(--color-text-secondary)', fontSize: '0.9rem', textAlign: 'center', marginTop: '1rem' }}>
-            Didn&apos;t receive it?{' '}
+            {t('auth.didntReceive')}{' '}
             <button
               className="btn btn-secondary btn-small"
               style={{ display: 'inline', padding: '4px 12px', fontSize: '0.85rem' }}
@@ -219,7 +215,7 @@ function Login() {
                 setMode('login');
               }}
             >
-              Resend verification email
+              {t('auth.resendVerification')}
             </button>
           </p>
         </div>
@@ -236,7 +232,7 @@ function Login() {
             <source srcSet={LOGO_WEBP} type="image/webp" />
             <img src={LOGO_PNG} alt="Cellarion" className="login-logo" />
           </picture>
-          <p>Your personal wine cellar</p>
+          <p>{t('auth.tagline')}</p>
         </div>
 
         <div className="mode-toggle">
@@ -244,13 +240,13 @@ function Login() {
             className={mode === 'login' ? 'active' : ''}
             onClick={() => switchMode('login')}
           >
-            Login
+            {t('auth.login')}
           </button>
           <button
             className={mode === 'register' ? 'active' : ''}
             onClick={() => switchMode('register')}
           >
-            Register
+            {t('auth.register')}
           </button>
         </div>
 
@@ -259,10 +255,10 @@ function Login() {
         {pendingVerificationEmail && (
           <div style={{ marginBottom: '1rem', textAlign: 'center' }}>
             {resendStatus === 'sent' && (
-              <div className="alert alert-success">Verification email resent. Check your inbox.</div>
+              <div className="alert alert-success">{t('auth.verificationResent')}</div>
             )}
             {resendStatus === 'error' && (
-              <div className="alert alert-error">Failed to resend. Please try again.</div>
+              <div className="alert alert-error">{t('auth.resendFailed')}</div>
             )}
             {resendStatus !== 'sent' && (
               <button
@@ -270,7 +266,7 @@ function Login() {
                 onClick={handleResend}
                 disabled={resendStatus === 'sending'}
               >
-                {resendStatus === 'sending' ? 'Sending...' : 'Resend verification email'}
+                {resendStatus === 'sending' ? t('auth.sending') : t('auth.resendVerification')}
               </button>
             )}
           </div>
@@ -278,7 +274,7 @@ function Login() {
 
         <form onSubmit={handleSubmit}>
           <div className="form-group">
-            <label>Username</label>
+            <label>{mode === 'login' ? t('auth.usernameOrEmail') : t('auth.usernameLabel')}</label>
             <input
               type="text"
               value={formData.username}
@@ -289,7 +285,7 @@ function Login() {
           </div>
           {mode === 'register' && (
             <div className="form-group">
-              <label>Email</label>
+              <label>{t('auth.emailLabel')}</label>
               <input
                 type="email"
                 value={formData.email}
@@ -299,7 +295,7 @@ function Login() {
             </div>
           )}
           <div className="form-group">
-            <label>Password</label>
+            <label>{t('auth.passwordLabel')}</label>
             <input
               type="password"
               value={formData.password}
@@ -317,9 +313,9 @@ function Login() {
                   required
                 />
                 <span>
-                  I agree to the{' '}
-                  <a href="/privacy" target="_blank" rel="noopener noreferrer">Privacy Policy</a>
-                  {' '}and consent to the processing of my personal data as described therein.
+                  <Trans i18nKey="auth.consent">
+                    I agree to the <a href="/privacy" target="_blank" rel="noopener noreferrer">Privacy Policy</a> and consent to the processing of my personal data as described therein.
+                  </Trans>
                 </span>
               </label>
             </div>
@@ -332,19 +328,19 @@ function Login() {
                   checked={rememberMe}
                   onChange={(e) => setRememberMe(e.target.checked)}
                 />
-                <span>Remember me</span>
+                <span>{t('auth.rememberMe')}</span>
               </label>
               <button
                 type="button"
                 onClick={() => switchMode('forgot')}
                 className="forgot-link"
               >
-                Forgot password?
+                {t('auth.forgotPassword')}
               </button>
             </div>
           )}
           <button type="submit" className="btn btn-primary btn-full" disabled={loading || (mode === 'register' && !consentAccepted)}>
-            {loading ? 'Loading...' : mode === 'login' ? 'Login' : 'Create Account'}
+            {loading ? t('auth.loading') : mode === 'login' ? t('auth.login') : t('auth.createAccount')}
           </button>
         </form>
       </div>
