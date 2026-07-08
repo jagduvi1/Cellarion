@@ -252,8 +252,13 @@ export default function CellarChat() {
       if (!res.ok) {
         setMessages(prev => prev.filter(m => !m.thinking));
         setError(data.error || 'Something went wrong.');
-        if (res.status === 429) {
-          setUsage(prev => prev ? { ...prev, used: prev.limit } : null);
+        // Two kinds of 429: the daily/period quota carries used/limit in its
+        // body; the per-minute burst limiter doesn't. Only lock the composer
+        // for a real quota exhaustion — burst 429s just show the error above.
+        if (res.status === 429 && data.limit != null && data.used != null) {
+          setUsage(prev => prev
+            ? { ...prev, used: Math.max(data.used, data.limit), limit: data.limit, period: data.period || prev.period }
+            : null);
         }
         return;
       }

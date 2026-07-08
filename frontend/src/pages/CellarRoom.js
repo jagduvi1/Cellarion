@@ -853,11 +853,17 @@ export default function CellarRoom() {
   const handleAssignBottle = useCallback(async (bottleId) => {
     if (!emptySlotTarget) return;
     const { rackId, position } = emptySlotTarget;
-    const res = await updateSlot(apiFetch, rackId, position, { bottleId });
-    const data = await res.json();
-    if (res.ok) {
-      setRacks(prev => prev.map(r => r._id === rackId ? data.rack : r));
-      setEmptySlotTarget(null);
+    try {
+      const res = await updateSlot(apiFetch, rackId, position, { bottleId });
+      const data = await res.json();
+      if (res.ok) {
+        setRacks(prev => prev.map(r => r._id === rackId ? data.rack : r));
+        setEmptySlotTarget(null);
+      } else {
+        alert(data.error || 'Failed to assign');
+      }
+    } catch {
+      alert('Network error — please try again.');
     }
   }, [emptySlotTarget, apiFetch]);
 
@@ -865,31 +871,43 @@ export default function CellarRoom() {
   const handleRemoveFromRack = useCallback(async () => {
     if (!selectedBottle) return;
     const { rackId, slot } = selectedBottle;
-    const res = await clearSlot(apiFetch, rackId, slot.position);
-    const data = await res.json();
-    if (res.ok) {
-      setRacks(prev => prev.map(r => r._id === rackId ? data.rack : r));
-      setSelectedBottle(null);
+    try {
+      const res = await clearSlot(apiFetch, rackId, slot.position);
+      const data = await res.json();
+      if (res.ok) {
+        setRacks(prev => prev.map(r => r._id === rackId ? data.rack : r));
+        setSelectedBottle(null);
+      } else {
+        alert(data.error || 'Failed to remove bottle');
+      }
+    } catch {
+      alert('Network error — please try again.');
     }
   }, [selectedBottle, apiFetch]);
 
   // Consume bottle
   const handleConsumeSubmit = useCallback(async (reason, note, rating, ratingScale) => {
     if (!consumeModal) return;
-    const res = await consumeBottle(apiFetch, consumeModal.bottleId, {
-      reason, note, rating, consumedRatingScale: ratingScale,
-    });
-    const data = await res.json();
-    if (res.ok) {
-      setRacks(prev => prev.map(r => ({
-        ...r,
-        slots: r.slots.filter(s => {
-          const bid = s.bottle?._id || s.bottle;
-          return bid?.toString() !== consumeModal.bottleId;
-        }),
-      })));
-      setConsumeModal(null);
-      setSelectedBottle(null);
+    try {
+      const res = await consumeBottle(apiFetch, consumeModal.bottleId, {
+        reason, note, rating, consumedRatingScale: ratingScale,
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setRacks(prev => prev.map(r => ({
+          ...r,
+          slots: r.slots.filter(s => {
+            const bid = s.bottle?._id || s.bottle;
+            return bid?.toString() !== consumeModal.bottleId;
+          }),
+        })));
+        setConsumeModal(null);
+        setSelectedBottle(null);
+      } else {
+        alert(data.error || 'Failed to remove bottle');
+      }
+    } catch {
+      alert('Network error — please try again.');
     }
   }, [consumeModal, apiFetch]);
 
@@ -1447,8 +1465,13 @@ function RoomConsumeForm({ onSubmit, onCancel, defaultRatingScale, t }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setSaving(true);
-    await onSubmit(reason, note || undefined, rating || undefined, ratingScale);
-    setSaving(false);
+    try {
+      await onSubmit(reason, note || undefined, rating || undefined, ratingScale);
+    } finally {
+      // Always re-enable the button — a rejected onSubmit must not leave the
+      // form stuck on "Saving...".
+      setSaving(false);
+    }
   };
 
   return (
