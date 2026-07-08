@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { listCellars } from '../api/cellars';
@@ -20,22 +20,27 @@ function ImportCellar() {
   const [preview, setPreview] = useState(null); // { cellars:[...], hasImageFiles }
   const [names, setNames] = useState({});       // sourceName -> target name
   const [confirms, setConfirms] = useState({});  // sourceName -> bool (overwrite confirmed)
+  // Lowercased target names the server refused with 409 "not confirmed" —
+  // forces the confirm checkbox even when our owned-names snapshot is stale.
+  const [forcedOverwrites, setForcedOverwrites] = useState(new Set());
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const [result, setResult] = useState(null);
 
-  useEffect(() => {
-    let active = true;
-    listCellars(apiFetch)
-      .then(res => (res.ok ? res.json() : { cellars: [] }))
-      .then(data => {
-        if (!active) return;
-        const owned = (data.cellars || []).filter(c => c.userRole === 'owner');
-        setOwnedNames(new Set(owned.map(c => c.name.toLowerCase())));
-      })
-      .catch(() => {});
-    return () => { active = false; };
+  // Owned cellar names drive the overwrite warnings. Re-fetched after every
+  // successful import and on reset, so re-importing the same file (or a cellar
+  // created in another tab) still shows the confirm checkbox instead of
+  // dead-ending on the backend's 409.
+  const refreshOwnedNames = useCallback(async () => {
+    try {
+      const res = await listCellars(apiFetch);
+      const data = res.ok ? await res.json() : { cellars: [] };
+      const owned = (data.cellars || []).filter(c => c.userRole === 'owner');
+      setOwnedNames(new Set(owned.map(c => c.name.toLowerCase())));
+    } catch { /* keep the previous snapshot */ }
   }, [apiFetch]);
+
+  useEffect(() => { refreshOwnedNames(); }, [refreshOwnedNames]);
 
   const handleFile = async (f) => {
     setFile(f); setError(null); setResult(null); setPreview(null);
@@ -48,7 +53,7 @@ function ImportCellar() {
       setPreview(data);
       const initNames = {}; const initConfirms = {};
       data.cellars.forEach(c => { initNames[c.sourceName] = c.defaultTargetName; initConfirms[c.sourceName] = false; });
-      setNames(initNames); setConfirms(initConfirms);
+      setNames(initNames); setConfirms(initConfirms); setForcedOverwrites(new Set());
     } catch (err) {
       setError(err.message);
     } finally {
@@ -63,12 +68,18 @@ function ImportCellar() {
     return preview.cellars.map(c => {
       const targetName = (names[c.sourceName] ?? c.defaultTargetName ?? '').trim();
       const lc = targetName.toLowerCase();
-      const willOverwrite = !!targetName && ownedNames.has(lc);
+      const willOverwrite = !!targetName && (
+        ownedNames.has(lc) ||
+        forcedOverwrites.has(lc) ||
+        // Server-computed flag from the preview — authoritative for the
+        // unedited default name even if our owned-names snapshot is stale.
+        (!!c.willOverwrite && lc === (c.defaultTargetName || '').trim().toLowerCase())
+      );
       const dup = lc && seen.has(lc);
       if (lc) seen.set(lc, c.sourceName);
       return { ...c, targetName, willOverwrite, dup };
     });
-  }, [preview, names, ownedNames]);
+  }, [preview, names, ownedNames, forcedOverwrites]);
 
   const blocking = useMemo(() => {
     for (const r of rows) {
@@ -86,8 +97,18 @@ function ImportCellar() {
       rows.forEach(r => { targets[r.sourceName] = { targetName: r.targetName, confirmOverwrite: !!confirms[r.sourceName] }; });
       const res = await runCellarImport(apiFetch, file, targets);
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Import failed');
+      if (!res.ok) {
+        // Overwrite refused (409): our owned-names snapshot was stale. Force
+        // the confirm checkbox for that target and refresh the snapshot so
+        // the user can confirm and retry instead of dead-ending.
+        if (res.status === 409 && data.needsConfirm) {
+          setForcedOverwrites(prev => new Set(prev).add(String(data.needsConfirm).toLowerCase()));
+          refreshOwnedNames();
+        }
+        throw new Error(data.error || 'Import failed');
+      }
       setResult(data.results || []);
+      refreshOwnedNames();
     } catch (err) {
       setError(err.message);
     } finally {
@@ -95,7 +116,11 @@ function ImportCellar() {
     }
   };
 
-  const reset = () => { setFile(null); setPreview(null); setNames({}); setConfirms({}); setResult(null); setError(null); };
+  const reset = () => {
+    setFile(null); setPreview(null); setNames({}); setConfirms({});
+    setForcedOverwrites(new Set()); setResult(null); setError(null);
+    refreshOwnedNames();
+  };
 
   return (
     <div className="container" style={{ maxWidth: 760, margin: '0 auto', padding: '1.5rem 1rem' }}>
