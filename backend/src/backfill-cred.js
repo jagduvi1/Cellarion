@@ -79,18 +79,21 @@ async function backfill() {
     const tier = getTier(totalScore);
     const specialty = getSpecialty(categories);
 
+    // Always write — including zero. Skipping totalScore===0 meant users whose
+    // contributions were since deleted/rejected kept a stale nonzero
+    // score/tier/specialty forever, contradicting the idempotency claim.
+    await User.updateOne({ _id: uid }, {
+      $set: {
+        'contribution.totalScore': totalScore,
+        'contribution.categories': categories,
+        'contribution.tier': tier,
+        'contribution.specialty': specialty,
+      }
+    });
     if (totalScore > 0) {
-      await User.updateOne({ _id: uid }, {
-        $set: {
-          'contribution.totalScore': totalScore,
-          'contribution.categories': categories,
-          'contribution.tier': tier,
-          'contribution.specialty': specialty,
-        }
-      });
       console.log(`  ${u.username}: ${totalScore} pts → ${tier}${specialty ? ` (${specialty})` : ''}`);
-      updated++;
     }
+    updated++;
   }
 
   console.log(`\nBackfill complete: ${updated}/${users.length} users updated.`);
