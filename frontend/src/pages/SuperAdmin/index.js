@@ -32,11 +32,13 @@ const TABS = [
 ];
 
 // Tabs that refresh in place (useApi re-fetches via RefreshContext) or hold
-// unsaved drafts (announcement, settings) — never remounted by a refresh.
-// The remaining list tabs (users, audit, cellars, import) manage their own
-// fetching and hold no drafts, so they keep the remount-on-refresh behavior.
+// in-flight work / unsaved drafts (announcement, settings, import) — never
+// remounted by a refresh. Import fetches nothing on mount and holds a selected
+// file, upload progress and result stats, so a remount would only lose state.
+// The remaining list tabs (users, audit, cellars) manage their own fetching
+// and hold no drafts, so they keep the remount-on-refresh behavior.
 const IN_PLACE_REFRESH_TABS = new Set([
-  'overview', 'services', 'database', 'backups', 'ai', 'announcement', 'settings',
+  'overview', 'services', 'database', 'backups', 'import', 'ai', 'announcement', 'settings',
 ]);
 
 export default function SuperAdmin() {

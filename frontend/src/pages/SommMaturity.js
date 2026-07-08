@@ -82,7 +82,14 @@ function SommMaturity() {
 
   useEffect(() => { fetchProfiles(); }, [fetchProfiles]);
 
-  const handleSaved  = (updated) => setProfiles(prev => prev.filter(p => p._id !== updated._id));
+  // Saving flips a pending profile to reviewed, so it leaves the Pending tab;
+  // on the Reviewed tab it stays reviewed and must remain visible — update it
+  // in place instead of dropping it.
+  const handleSaved  = (updated) => setProfiles(prev => (
+    tab === 'reviewed'
+      ? prev.map(p => (p._id === updated._id ? updated : p))
+      : prev.filter(p => p._id !== updated._id)
+  ));
   const handleReset  = (updated) => setProfiles(prev => prev.filter(p => p._id !== updated._id));
 
   return (
