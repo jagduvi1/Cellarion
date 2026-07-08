@@ -255,14 +255,29 @@ router.get('/feed', async (req, res) => {
   }
 });
 
+// Cache the public-profile id list: /discover runs on every ReviewFeed view
+// and this was a whole-users-collection scan (hydrated docs) per request.
+// Visibility toggles are rare; a briefly-stale discover feed is acceptable
+// (the reviews themselves are all visibility:'public' regardless).
+let publicIdsCache = null; // { at, ids }
+const PUBLIC_IDS_CACHE_TTL_MS = 5 * 60 * 1000;
+
+async function getPublicUserIds() {
+  if (publicIdsCache && Date.now() - publicIdsCache.at < PUBLIC_IDS_CACHE_TTL_MS) {
+    return publicIdsCache.ids;
+  }
+  const users = await User.find({ profileVisibility: 'public' }).select('_id').lean();
+  const ids = users.map(u => u._id);
+  publicIdsCache = { at: Date.now(), ids };
+  return ids;
+}
+
 // GET /api/reviews/discover - All recent reviews from public profiles
 router.get('/discover', async (req, res) => {
   try {
     const { page, limit, offset: skip } = parsePagination(req.query, { limit: REVIEWS_PER_PAGE, maxLimit: REVIEWS_MAX_PER_PAGE });
 
-    // Find users with public profiles
-    const publicUsers = await User.find({ profileVisibility: 'public' }).select('_id');
-    const publicIds = publicUsers.map(u => u._id);
+    const publicIds = await getPublicUserIds();
 
     const discoverFilter = { author: { $in: publicIds }, visibility: 'public' };
     const [reviews, total] = await Promise.all([
