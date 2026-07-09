@@ -8,6 +8,7 @@ const { logAudit } = require('../services/audit');
 const { createNotification } = require('../services/notifications');
 const { stripHtml, escapeRegex } = require('../utils/sanitize');
 const { isValidId } = require('../utils/validation');
+const { getCellarRole } = require('../utils/cellarAccess');
 
 const router = express.Router();
 router.use(requireAuth);
@@ -64,6 +65,73 @@ function sanitizeEntry(body) {
   return clean;
 }
 
+/**
+ * Ownership/existence validation for the references sanitizeEntry accepted by
+ * shape alone (audit L-5). Mirrors sanitizeEntry's style: invalid references
+ * are silently dropped (nulled), never a hard 400 — exactly like a malformed
+ * ObjectId already is.
+ *
+ *  - pairings[].bottle must resolve to a bottle the author can access: their
+ *    own bottle, or one in a cellar where they hold any role (getCellarRole,
+ *    same check the bottles routes use). Otherwise a foreign bottle id would
+ *    be populated back as {vintage, wine name/producer/type}.
+ *  - pairings[].wine is a public WineDefinition ref → existence check only.
+ */
+async function validatePairingRefs(clean, userId) {
+  if (!Array.isArray(clean.pairings) || clean.pairings.length === 0) return;
+
+  const bottleIds = [...new Set(clean.pairings.filter(p => p.bottle).map(p => String(p.bottle)))];
+  if (bottleIds.length) {
+    const bottles = await Bottle.find({ _id: { $in: bottleIds } })
+      .select('user cellar')
+      .populate('cellar', 'user members deletedAt')
+      .lean();
+    const accessible = new Set(
+      bottles
+        .filter(b =>
+          String(b.user) === String(userId) ||
+          (b.cellar && !b.cellar.deletedAt && getCellarRole(b.cellar, userId))
+        )
+        .map(b => String(b._id))
+    );
+    for (const p of clean.pairings) {
+      if (p.bottle && !accessible.has(String(p.bottle))) p.bottle = null;
+    }
+  }
+
+  const wineIds = [...new Set(clean.pairings.filter(p => p.wine).map(p => String(p.wine)))];
+  if (wineIds.length) {
+    const wines = await WineDefinition.find({ _id: { $in: wineIds } }).select('_id').lean();
+    const existing = new Set(wines.map(w => String(w._id)));
+    for (const p of clean.pairings) {
+      if (p.wine && !existing.has(String(p.wine))) p.wine = null;
+    }
+  }
+}
+
+/**
+ * Read-time privacy gate for populated people[].user (audit L-5). A private
+ * profile's username/displayName must not be resolvable by tagging its
+ * ObjectId in a journal entry — that would re-open the enumeration oracle
+ * users.js GET /public/:userId closes. Private users (other than the
+ * requester themselves) are reduced to their bare _id; the helper also strips
+ * the profileVisibility field the populate fetched for this decision.
+ * Applied at read time so rows written before this gate are covered too.
+ */
+function redactPeople(entry, requesterId) {
+  if (!entry || !Array.isArray(entry.people)) return entry;
+  entry.people = entry.people.map(p => {
+    const u = p.user;
+    if (!u || typeof u !== 'object' || !u._id) return p;
+    if (u.profileVisibility === 'private' && String(u._id) !== String(requesterId)) {
+      return { ...p, user: { _id: u._id } };
+    }
+    const { profileVisibility, ...visible } = u;
+    return { ...p, user: visible };
+  });
+  return entry;
+}
+
 // GET /api/journal/wine-search — search user's bottles + wine register for the pairing picker
 router.get('/wine-search', async (req, res) => {
   try {
@@ -111,7 +179,9 @@ router.get('/wine-search', async (req, res) => {
 const POPULATE_PAIRINGS = [
   { path: 'pairings.bottle', select: 'vintage wineDefinition', populate: { path: 'wineDefinition', select: 'name producer type' } },
   { path: 'pairings.wine', select: 'name producer type' },
-  { path: 'people.user', select: 'username displayName' }
+  // profileVisibility is fetched ONLY for redactPeople's gate — it is
+  // stripped from every response before send.
+  { path: 'people.user', select: 'username displayName profileVisibility' }
 ];
 
 // GET /api/journal — list the user's own journal entries
@@ -151,7 +221,7 @@ router.get('/', async (req, res) => {
       JournalEntry.countDocuments(query)
     ]);
 
-    res.json({ items, total, limit, skip });
+    res.json({ items: items.map(i => redactPeople(i, req.user.id)), total, limit, skip });
   } catch (err) {
     console.error('Get journal entries error:', err);
     res.status(500).json({ error: 'Failed to load journal entries' });
@@ -166,6 +236,8 @@ router.post('/', async (req, res) => {
     if (!clean.date || isNaN(clean.date.getTime())) {
       return res.status(400).json({ error: 'Valid date is required' });
     }
+
+    await validatePairingRefs(clean, req.user.id);
 
     const entry = await JournalEntry.create({
       user: req.user.id,
@@ -196,7 +268,7 @@ router.post('/', async (req, res) => {
 
     logAudit(req, 'journal.create', { type: 'journal', id: entry._id });
 
-    res.status(201).json({ entry: populated });
+    res.status(201).json({ entry: redactPeople(populated, req.user.id) });
   } catch (err) {
     if (err.status === 400) return res.status(400).json({ error: err.message });
     console.error('Create journal entry error:', err);
@@ -213,6 +285,7 @@ router.put('/:id', async (req, res) => {
     if (!entry) return res.status(404).json({ error: 'Entry not found' });
 
     const clean = sanitizeEntry(req.body);
+    await validatePairingRefs(clean, req.user.id);
     Object.assign(entry, clean);
     await entry.save();
 
@@ -222,7 +295,7 @@ router.put('/:id', async (req, res) => {
 
     logAudit(req, 'journal.update', { type: 'journal', id: entry._id });
 
-    res.json({ entry: populated });
+    res.json({ entry: redactPeople(populated, req.user.id) });
   } catch (err) {
     if (err.status === 400) return res.status(400).json({ error: err.message });
     console.error('Update journal entry error:', err);
