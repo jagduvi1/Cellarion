@@ -237,6 +237,17 @@ export const adminDismissWineReport = (apiFetch, id, data) =>
     body: JSON.stringify(data),
   });
 
+// ── AI budget requests (admin) ────────────────────────────────────────────────
+export const adminGetAiBudgetRequests = (apiFetch, params) =>
+  apiFetch(`/api/admin/ai-budget-requests?${params}`);
+
+export const adminDecideAiBudgetRequest = (apiFetch, id, data) =>
+  apiFetch(`/api/admin/ai-budget-requests/${id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+
 // ── Global stats (admin overview across all users) ───────────────────────────
 // Admins are excluded by DEFAULT (the dashboard should reflect real customers).
 // Always send the flag explicitly so unchecking the toggle (include admins)

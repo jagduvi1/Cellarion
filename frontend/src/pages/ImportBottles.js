@@ -3,6 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useTranslation, Trans } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import { validateImport, confirmImport } from '../api/bottles';
+import { getAiBudgetStatus, requestAiBudgetIncrease } from '../api/aiBudget';
 import { searchWines } from '../api/wines';
 import { getRacks } from '../api/racks';
 import { parseAndMap, parseJSON, summariseRacks, getDefaultRackConfig, getDefaultAnchor, decodeImportBuffer } from '../utils/importMappers';
@@ -129,6 +130,13 @@ function ImportBottles() {
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState(null);
   const [aiSearchingRow, setAiSearchingRow] = useState(null); // index of fuzzy row doing forced AI search
+
+  // AI daily budget (rows with aiSkipped fell back to fuzzy matching).
+  // Status from GET /api/ai-budget/status: { dailyMax, usedToday, override, pendingRequest }
+  const [aiBudgetStatus, setAiBudgetStatus] = useState(null);
+  const [aiBudgetRequestState, setAiBudgetRequestState] = useState('idle'); // 'idle'|'submitting'|'requested'|'error'
+  const [retryingAi, setRetryingAi] = useState(false);
+  const [retryAiProgress, setRetryAiProgress] = useState({ done: 0, total: 0 });
 
   // Session persistence
   const [sessionId, setSessionId] = useState(null);
@@ -474,6 +482,103 @@ function ImportBottles() {
       setError(err.message || t('importBottles.errors.validationNetwork'));
     } finally {
       setValidating(false);
+    }
+  };
+
+  // ── AI daily budget (aiSkipped rows fell back to fuzzy matching) ─────────
+  // When the shared daily AI budget ran out mid-validate, the affected rows
+  // carry aiSkipped: true. The banner explains it, shows today's usage, lets
+  // the user bulk-retry those rows (after the budget reset or an admin-granted
+  // increase) or request a temporary higher limit from the admins.
+
+  const aiSkippedCount = results.filter(r => r.aiSkipped).length;
+  const showAiBudgetBanner = step === 'review' && (aiSkippedCount > 0 || !!summary?.aiBudgetExhausted);
+
+  const refreshAiBudgetStatus = useCallback(() => {
+    getAiBudgetStatus(apiFetch)
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => { if (d) setAiBudgetStatus(d); })
+      .catch(() => {});
+  }, [apiFetch]);
+
+  useEffect(() => {
+    if (showAiBudgetBanner) refreshAiBudgetStatus();
+  }, [showAiBudgetBanner, refreshAiBudgetStatus]);
+
+  // Bulk re-validate ONLY the AI-skipped / unmatched rows, in the same
+  // 25-row batches as handleValidate. Runs the full validate pipeline again
+  // for those rows — with budget available they now get their AI look-up.
+  const handleRetryAiLookups = async () => {
+    const rows = results.filter(r => r.aiSkipped || r.status === 'no_match');
+    if (rows.length === 0 || retryingAi) return;
+
+    setRetryingAi(true);
+    setError(null);
+    setRetryAiProgress({ done: 0, total: rows.length });
+
+    try {
+      const updatedByIndex = new Map();
+      for (let offset = 0; offset < rows.length; offset += VALIDATE_BATCH_SIZE) {
+        const batchRows = rows.slice(offset, offset + VALIDATE_BATCH_SIZE);
+        const res = await validateImport(apiFetch, {
+          cellarId,
+          items: batchRows.map(r => r.item),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || t('importBottles.errors.validationFailed', { status: res.status }));
+
+        // Map batch-local indices back to the rows' original global indices
+        for (const nr of data.results || []) {
+          const orig = batchRows[nr.index];
+          if (orig) updatedByIndex.set(orig.index, { ...nr, index: orig.index });
+        }
+        setRetryAiProgress({ done: Math.min(offset + VALIDATE_BATCH_SIZE, rows.length), total: rows.length });
+      }
+
+      const nextResults = results.map(r => updatedByIndex.get(r.index) || r);
+      setResults(nextResults);
+      setSummary(computeSummary(nextResults));
+
+      // Auto-select rows that now have a match (same rule as handleValidate),
+      // without touching existing manual choices.
+      setSelections(prev => {
+        const next = { ...prev };
+        for (const [idx, r] of updatedByIndex) {
+          if (!next[idx] && (r.status === 'exact' || r.status === 'fuzzy' || r.status === 'ai_match') && r.matches.length > 0) {
+            next[idx] = r.matches[0].wineId;
+          }
+        }
+        return next;
+      });
+
+      refreshAiBudgetStatus();
+    } catch (err) {
+      setError(err.message || t('importBottles.errors.validationNetwork'));
+    } finally {
+      setRetryingAi(false);
+    }
+  };
+
+  // Ask the admins for a temporary daily-limit increase. One pending request
+  // per user — the backend answers 409 if one is already open.
+  const handleRequestAiBudget = async () => {
+    if (aiBudgetRequestState === 'submitting') return;
+    setAiBudgetRequestState('submitting');
+    const pendingRows = results.filter(r => r.aiSkipped || r.status === 'no_match').length;
+    try {
+      const res = await requestAiBudgetIncrease(apiFetch, {
+        // Stored server-side and shown to the reviewing admin.
+        reason: `Importing ${results.length} bottles — ${pendingRows} remaining without an AI look-up`,
+        pendingRows,
+      });
+      if (res.ok || res.status === 409) {
+        setAiBudgetRequestState('requested');
+        setAiBudgetStatus(s => (s ? { ...s, pendingRequest: true } : s));
+        return;
+      }
+      setAiBudgetRequestState('error');
+    } catch {
+      setAiBudgetRequestState('error');
     }
   };
 
@@ -1226,6 +1331,54 @@ function ImportBottles() {
           <div className="import-price-warning-banner">
             <strong>{t('importBottles.review.priceWarningBanner', { count: summary.priceWarnings })}</strong>
             {' '}{t('importBottles.review.priceWarningHint')}
+          </div>
+        )}
+
+        {/* Daily AI budget banner — some rows fell back to fuzzy matching */}
+        {showAiBudgetBanner && (
+          <div className="import-ai-budget-banner">
+            <strong>{t('importBottles.aiBudget.title')}</strong>
+            {' '}{t('importBottles.aiBudget.description', { count: aiSkippedCount })}
+            {aiBudgetStatus && aiBudgetStatus.dailyMax > 0 && (
+              <p className="ai-budget-usage">
+                {t('importBottles.aiBudget.usage', {
+                  used: aiBudgetStatus.usedToday,
+                  max: aiBudgetStatus.dailyMax
+                })}
+                {aiBudgetStatus.override && (
+                  <> {t('importBottles.aiBudget.overrideActive', {
+                    date: new Date(aiBudgetStatus.override.expiresAt).toLocaleDateString()
+                  })}</>
+                )}
+              </p>
+            )}
+            <div className="ai-budget-actions">
+              <button
+                className="btn btn-secondary btn-sm"
+                onClick={handleRetryAiLookups}
+                disabled={retryingAi}
+              >
+                {retryingAi
+                  ? t('importBottles.aiBudget.retrying', { done: retryAiProgress.done, total: retryAiProgress.total })
+                  : t('importBottles.aiBudget.retryButton')}
+              </button>
+              {(aiBudgetStatus?.pendingRequest || aiBudgetRequestState === 'requested') ? (
+                <span className="ai-budget-pending">{t('importBottles.aiBudget.requested')}</span>
+              ) : (
+                <button
+                  className="btn btn-secondary btn-sm"
+                  onClick={handleRequestAiBudget}
+                  disabled={aiBudgetRequestState === 'submitting'}
+                >
+                  {aiBudgetRequestState === 'submitting'
+                    ? t('importBottles.aiBudget.requesting')
+                    : t('importBottles.aiBudget.requestButton')}
+                </button>
+              )}
+            </div>
+            {aiBudgetRequestState === 'error' && (
+              <p className="ai-budget-error">{t('importBottles.aiBudget.requestError')}</p>
+            )}
           </div>
         )}
 
