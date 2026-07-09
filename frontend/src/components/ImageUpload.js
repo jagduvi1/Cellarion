@@ -1,10 +1,12 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import AuthImage from './AuthImage';
 import { API_URL } from '../api/apiConstants';
 import './ImageUpload.css';
 
 function ImageUpload({ bottleId, wineDefinitionId, credit, onUploadComplete, onProcessingComplete }) {
+  const { t } = useTranslation();
   const { apiFetch } = useAuth();
   const [uploading, setUploading] = useState(false);
   const [images, setImages] = useState([]);
@@ -105,11 +107,11 @@ function ImageUpload({ bottleId, wineDefinitionId, credit, onUploadComplete, onP
         if (onUploadComplete) onUploadComplete(data.image);
         pollImage(data.image._id);
       } else {
-        setError(data.error || 'Upload failed');
+        setError(data.error || t('imageUpload.uploadFailed'));
         URL.revokeObjectURL(localSrc);
       }
     } catch (err) {
-      setError('Network error during upload');
+      setError(t('imageUpload.networkError'));
       URL.revokeObjectURL(localSrc);
     } finally {
       setUploading(false);
@@ -183,14 +185,14 @@ function ImageUpload({ bottleId, wineDefinitionId, credit, onUploadComplete, onP
       });
     } catch (err) {
       if (err.name === 'NotAllowedError') {
-        setCameraError('Camera access denied. Please allow camera permissions.');
+        setCameraError(t('camera.accessDenied'));
       } else if (err.name === 'NotFoundError') {
-        setCameraError('No camera found on this device.');
+        setCameraError(t('camera.notFound'));
       } else {
-        setCameraError('Could not access camera: ' + err.message);
+        setCameraError(t('camera.accessErrorDetail', { message: err.message }));
       }
     }
-  }, [facingMode]);
+  }, [facingMode, t]);
 
   const switchCamera = useCallback(() => {
     const newMode = facingMode === 'environment' ? 'user' : 'environment';
@@ -241,21 +243,21 @@ function ImageUpload({ bottleId, wineDefinitionId, credit, onUploadComplete, onP
             {cameraError ? (
               <div className="camera-error-overlay">
                 <p>{cameraError}</p>
-                <button type="button" className="btn btn-secondary" onClick={stopCamera}>Close</button>
+                <button type="button" className="btn btn-secondary" onClick={stopCamera}>{t('common.close')}</button>
               </div>
             ) : (
               <>
                 <video ref={videoRef} autoPlay playsInline muted className="camera-video" />
                 <div className="camera-overlay">
                   <img src="/bottle-overlay.png" alt="" className="bottle-guide" aria-hidden="true" />
-                  <p className="overlay-hint">Place bottle in the center</p>
+                  <p className="overlay-hint">{t('camera.placeBottle')}</p>
                 </div>
                 <div className="camera-controls">
-                  <button type="button" className="camera-btn camera-btn-close" onClick={stopCamera} aria-label="Close camera">✕</button>
-                  <button type="button" className="camera-btn camera-btn-capture" onClick={capturePhoto} aria-label="Take photo">
+                  <button type="button" className="camera-btn camera-btn-close" onClick={stopCamera} aria-label={t('camera.closeCamera')}>✕</button>
+                  <button type="button" className="camera-btn camera-btn-capture" onClick={capturePhoto} aria-label={t('camera.takePhoto')}>
                     <span className="capture-ring" aria-hidden="true"></span>
                   </button>
-                  <button type="button" className="camera-btn camera-btn-switch" onClick={switchCamera} aria-label="Switch camera">⟲</button>
+                  <button type="button" className="camera-btn camera-btn-switch" onClick={switchCamera} aria-label={t('camera.switchCamera')}>⟲</button>
                 </div>
               </>
             )}
@@ -268,7 +270,7 @@ function ImageUpload({ bottleId, wineDefinitionId, credit, onUploadComplete, onP
       <div className="upload-buttons">
         <button type="button" className="btn btn-upload" onClick={startCamera} disabled={uploading || cameraOpen}>
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
-          Take Photo
+          {t('camera.takePhotoButton')}
         </button>
 
         <input
@@ -281,11 +283,11 @@ function ImageUpload({ bottleId, wineDefinitionId, credit, onUploadComplete, onP
         />
         <button type="button" className="btn btn-upload btn-upload-secondary" onClick={() => fileInputRef.current?.click()} disabled={uploading}>
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-          Upload
+          {t('imageUpload.upload')}
         </button>
       </div>
 
-      {uploading && <p className="upload-status">Uploading...</p>}
+      {uploading && <p className="upload-status">{t('imageUpload.uploading')}</p>}
       {error && <div className="upload-error">{error}</div>}
 
       {images.length > 0 && (
@@ -296,34 +298,34 @@ function ImageUpload({ bottleId, wineDefinitionId, credit, onUploadComplete, onP
                 {img.status === 'processed' && img.processedSrc ? (
                   <AuthImage
                     src={img.processedSrc.startsWith('http') ? img.processedSrc : `${API_URL}${img.processedSrc}`}
-                    alt="Processed"
+                    alt={t('imageUpload.processedAlt')}
                     className="preview-img"
                   />
                 ) : (
                   <img
                     src={img.originalSrc}
-                    alt="Original"
+                    alt={t('imageUpload.originalAlt')}
                     className={`preview-img ${img.status === 'processing' ? 'preview-img-dimmed' : ''}`}
                   />
                 )}
                 {img.status === 'processing' && (
                   <div className="preview-overlay">
                     <div className="spinner"></div>
-                    <span>Removing background...</span>
+                    <span>{t('imageUpload.removingBackground')}</span>
                   </div>
                 )}
                 {img.status === 'failed' && (
                   <div className="preview-overlay preview-overlay-failed">
-                    <span>Processing failed</span>
-                    <button type="button" className="btn-retry" onClick={() => retryImage(img.id)}>Retry</button>
+                    <span>{t('imageUpload.processingFailed')}</span>
+                    <button type="button" className="btn-retry" onClick={() => retryImage(img.id)}>{t('imageUpload.retry')}</button>
                   </div>
                 )}
               </div>
               <div className="preview-footer">
-                {img.status === 'processed' && <span className="preview-badge-ok">Ready</span>}
-                {img.status === 'processing' && <span className="preview-badge-processing">Processing</span>}
-                {img.status === 'failed' && <span className="preview-badge-failed">Failed</span>}
-                <button type="button" className="btn-remove" onClick={() => removeImage(img.id)} aria-label="Remove this image">✕ Remove</button>
+                {img.status === 'processed' && <span className="preview-badge-ok">{t('imageUpload.ready')}</span>}
+                {img.status === 'processing' && <span className="preview-badge-processing">{t('imageUpload.processing')}</span>}
+                {img.status === 'failed' && <span className="preview-badge-failed">{t('imageUpload.failed')}</span>}
+                <button type="button" className="btn-remove" onClick={() => removeImage(img.id)} aria-label={t('imageUpload.removeThisImage')}>✕ {t('imageUpload.remove')}</button>
               </div>
             </div>
           ))}
