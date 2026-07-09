@@ -33,7 +33,7 @@ function BottleCard({ bottle, rackMap, cellarId, viewMode, groupCount = 1, onCli
   const imgSrc = bottle.defaultImageUrl || bottle.wineDefinition?.image || bottle.pendingImageUrl;
   const credit = bottle.defaultImageUrl ? null : bottle.wineDefinition?.imageCredit;
   const isPending = !bottle.wineDefinition && !!bottle.pendingWineRequest;
-  const displayName = bottle.wineDefinition?.name || bottle.pendingWineRequest?.wineName || 'Unknown Wine';
+  const displayName = bottle.wineDefinition?.name || bottle.pendingWineRequest?.wineName || t('common.unknownWine');
   const displayProducer = bottle.wineDefinition?.producer || bottle.pendingWineRequest?.producer;
   const maturityInfo = bottle.maturityStatus ? MATURITY_LABELS[bottle.maturityStatus] : null;
 
@@ -49,7 +49,7 @@ function BottleCard({ bottle, rackMap, cellarId, viewMode, groupCount = 1, onCli
         role="button"
         tabIndex={0}
         onKeyDown={handleKey}
-        title={isGroup ? `${groupCount} identical bottles — click to expand` : undefined}
+        title={isGroup ? t('bottleCard.groupTooltip', { count: groupCount }) : undefined}
       >
         {isGroup && <span className="bottle-count-badge">×{groupCount}</span>}
         <div className="bottle-grid-image-wrap">
@@ -84,7 +84,7 @@ function BottleCard({ bottle, rackMap, cellarId, viewMode, groupCount = 1, onCli
               </span>
             )}
             {isPending && (
-              <span className="pending-wine-badge">Pending review</span>
+              <span className="pending-wine-badge">{t('bottleCard.pendingReview')}</span>
             )}
             {maturityInfo && (
               <span className={`maturity-badge ${maturityInfo.cls}`}>{t(maturityInfo.key)}</span>
@@ -115,7 +115,7 @@ function BottleCard({ bottle, rackMap, cellarId, viewMode, groupCount = 1, onCli
       role="button"
       tabIndex={0}
       onKeyDown={handleKey}
-      title={isGroup ? `${groupCount} identical bottles — click to expand` : undefined}
+      title={isGroup ? t('bottleCard.groupTooltip', { count: groupCount }) : undefined}
     >
       {imgSrc ? (
         <div className="bottle-img-wrap">
@@ -148,7 +148,7 @@ function BottleCard({ bottle, rackMap, cellarId, viewMode, groupCount = 1, onCli
             </span>
           )}
           {isPending && (
-            <span className="pending-wine-badge">Pending review</span>
+            <span className="pending-wine-badge">{t('bottleCard.pendingReview')}</span>
           )}
           {maturityInfo && (
             <span className={`maturity-badge ${maturityInfo.cls}`}>{t(maturityInfo.key)}</span>

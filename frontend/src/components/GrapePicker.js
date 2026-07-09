@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import './GrapePicker.css';
 
 /**
@@ -10,6 +11,7 @@ import './GrapePicker.css';
  *   onChange — callback(newSelectedIds[])
  */
 function GrapePicker({ grapes = [], selected = [], onChange }) {
+  const { t } = useTranslation();
   const [search, setSearch] = useState('');
 
   const selectedSet = new Set(selected);
@@ -33,7 +35,7 @@ function GrapePicker({ grapes = [], selected = [], onChange }) {
                 type="button"
                 className="gpw-chip-remove"
                 onClick={() => remove(g._id)}
-                aria-label={`Remove ${g.name}`}
+                aria-label={t('grapePicker.removeGrape', { name: g.name })}
               >
                 ×
               </button>
@@ -46,7 +48,7 @@ function GrapePicker({ grapes = [], selected = [], onChange }) {
       <input
         type="text"
         className="gpw-search"
-        placeholder={`Search ${grapes.length} grape${grapes.length !== 1 ? 's' : ''}…`}
+        placeholder={t('grapePicker.searchPlaceholder', { count: grapes.length })}
         value={search}
         onChange={e => setSearch(e.target.value)}
       />
@@ -55,7 +57,7 @@ function GrapePicker({ grapes = [], selected = [], onChange }) {
       <div className="gpw-options">
         {availableGrapes.length === 0 ? (
           <span className="gpw-empty">
-            {search ? `No grapes match "${search}"` : 'All grapes selected'}
+            {search ? t('grapePicker.noMatch', { search }) : t('grapePicker.allSelected')}
           </span>
         ) : (
           availableGrapes.map(g => (

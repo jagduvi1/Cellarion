@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import './ImageUpload.css'; // reuse camera + button styles
 
 /**
@@ -8,6 +9,7 @@ import './ImageUpload.css'; // reuse camera + button styles
  * ever flows in from outside (avoids js/xss-through-dom taint path).
  */
 function PhotoCapture({ onCapture, onRemove, processedUrl, processing }) {
+  const { t } = useTranslation();
   const [capturedFile, setCapturedFile] = useState(null);
   const [capturedUrl, setCapturedUrl] = useState('');
   const [cameraOpen, setCameraOpen] = useState(false);
@@ -70,11 +72,11 @@ function PhotoCapture({ onCapture, onRemove, processedUrl, processing }) {
         if (videoRef.current) videoRef.current.srcObject = stream;
       });
     } catch (err) {
-      if (err.name === 'NotAllowedError') setCameraError('Camera access denied. Please allow camera permissions.');
-      else if (err.name === 'NotFoundError') setCameraError('No camera found on this device.');
-      else setCameraError('Could not access camera.');
+      if (err.name === 'NotAllowedError') setCameraError(t('camera.accessDenied'));
+      else if (err.name === 'NotFoundError') setCameraError(t('camera.notFound'));
+      else setCameraError(t('camera.accessError'));
     }
-  }, [facingMode]);
+  }, [facingMode, t]);
 
   const switchCamera = useCallback(() => {
     const newMode = facingMode === 'environment' ? 'user' : 'environment';
@@ -133,21 +135,21 @@ function PhotoCapture({ onCapture, onRemove, processedUrl, processing }) {
             {cameraError ? (
               <div className="camera-error-overlay">
                 <p>{cameraError}</p>
-                <button type="button" className="btn btn-secondary" onClick={stopCamera}>Close</button>
+                <button type="button" className="btn btn-secondary" onClick={stopCamera}>{t('common.close')}</button>
               </div>
             ) : (
               <>
                 <video ref={videoRef} autoPlay playsInline muted className="camera-video" />
                 <div className="camera-overlay">
                   <img src="/bottle-overlay.png" alt="" className="bottle-guide" aria-hidden="true" />
-                  <p className="overlay-hint">Place bottle in the center</p>
+                  <p className="overlay-hint">{t('camera.placeBottle')}</p>
                 </div>
                 <div className="camera-controls">
-                  <button type="button" className="camera-btn camera-btn-close" onClick={stopCamera} aria-label="Close camera">✕</button>
-                  <button type="button" className="camera-btn camera-btn-capture" onClick={capturePhoto} aria-label="Take photo">
+                  <button type="button" className="camera-btn camera-btn-close" onClick={stopCamera} aria-label={t('camera.closeCamera')}>✕</button>
+                  <button type="button" className="camera-btn camera-btn-capture" onClick={capturePhoto} aria-label={t('camera.takePhoto')}>
                     <span className="capture-ring" aria-hidden="true"></span>
                   </button>
-                  <button type="button" className="camera-btn camera-btn-switch" onClick={switchCamera} aria-label="Switch camera">⟲</button>
+                  <button type="button" className="camera-btn camera-btn-switch" onClick={switchCamera} aria-label={t('camera.switchCamera')}>⟲</button>
                 </div>
               </>
             )}
@@ -159,23 +161,23 @@ function PhotoCapture({ onCapture, onRemove, processedUrl, processing }) {
       {capturedFile ? (
         <div className="upload-preview-wrapper">
           {processedUrl ? (
-            <img src={processedUrl} alt="Preview" className="upload-preview" />
+            <img src={processedUrl} alt={t('photoCapture.previewAlt')} className="upload-preview" />
           ) : (
-            capturedUrl && <img src={capturedUrl} alt="Preview" className={`upload-preview${processing ? ' preview-img-dimmed' : ''}`} />
+            capturedUrl && <img src={capturedUrl} alt={t('photoCapture.previewAlt')} className={`upload-preview${processing ? ' preview-img-dimmed' : ''}`} />
           )}
           {processing && (
             <div className="preview-overlay">
               <div className="spinner"></div>
-              <span>Removing background…</span>
+              <span>{t('photoCapture.removingBackground')}</span>
             </div>
           )}
-          <button type="button" className="btn-remove-image" onClick={handleRemove} aria-label="Remove image">×</button>
+          <button type="button" className="btn-remove-image" onClick={handleRemove} aria-label={t('photoCapture.removeImage')}>×</button>
         </div>
       ) : (
         <div className="upload-buttons">
           <button type="button" className="btn btn-upload" onClick={startCamera} disabled={cameraOpen}>
             <span className="upload-icon" aria-hidden="true">📷</span>
-            Take Photo
+            {t('camera.takePhotoButton')}
           </button>
           <input
             ref={fileInputRef}
@@ -186,7 +188,7 @@ function PhotoCapture({ onCapture, onRemove, processedUrl, processing }) {
           />
           <button type="button" className="btn btn-upload btn-upload-secondary" onClick={() => fileInputRef.current?.click()}>
             <span className="upload-icon" aria-hidden="true">📁</span>
-            Choose File
+            {t('photoCapture.chooseFile')}
           </button>
         </div>
       )}

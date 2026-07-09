@@ -78,35 +78,35 @@ function Layout({ children }) {
                   className={`nav-link ${isActive('/statistics') ? 'active' : ''}`}
                   data-guide="nav-statistics"
                 >
-                  Analytics
+                  {t('nav.analytics')}
                 </Link>
                 <Link
                   to="/restock"
                   className={`nav-link ${isActive('/restock') ? 'active' : ''}`}
                   data-guide="nav-restock"
                 >
-                  Restock
+                  {t('nav.restock')}
                 </Link>
                 <Link
                   to="/wishlist"
                   className={`nav-link ${isActive('/wishlist') ? 'active' : ''}`}
                   data-guide="nav-wishlist"
                 >
-                  Wishlist
+                  {t('nav.wishlist')}
                 </Link>
                 <Link
                   to="/recommendations"
                   className={`nav-link ${isActive('/recommendations') ? 'active' : ''}`}
                   data-guide="nav-recommendations"
                 >
-                  Recommendations
+                  {t('nav.recommendations')}
                 </Link>
                 <Link
                   to="/journal"
                   className={`nav-link ${isActive('/journal') ? 'active' : ''}`}
                   data-guide="nav-journal"
                 >
-                  Journal
+                  {t('nav.journal')}
                 </Link>
                 <Link
                   to="/wine-requests"
@@ -120,14 +120,14 @@ function Layout({ children }) {
                   className={`nav-link ${isActive('/community') ? 'active' : ''}`}
                   data-guide="nav-community"
                 >
-                  Community
+                  {t('nav.community')}
                 </Link>
                 <Link
                   to="/cellar-chat"
                   className={`nav-link ${isActive('/cellar-chat') ? 'active' : ''}`}
                   data-guide="nav-cellar-chat"
                 >
-                  Cellar Chat
+                  {t('nav.cellarChat')}
                 </Link>
                 <Link
                   to="/blog"
@@ -145,7 +145,7 @@ function Layout({ children }) {
                   to="/support"
                   className={`nav-link ${isActive('/support') ? 'active' : ''}`}
                 >
-                  Support
+                  {t('nav.support')}
                 </Link>
 
                 {(roles.includes('somm') || roles.includes('admin')) && (
@@ -172,9 +172,9 @@ function Layout({ children }) {
                     <Link
                       to="/superadmin"
                       className={`nav-link nav-link--admin ${isActive('/superadmin') ? 'active' : ''}`}
-                      title="System Monitor"
+                      title={t('nav.systemMonitor')}
                     >
-                      System Monitor
+                      {t('nav.systemMonitor')}
                     </Link>
                   </>
                 )}
@@ -186,8 +186,8 @@ function Layout({ children }) {
                     <Link to="/admin/requests" className={`nav-link nav-link--admin ${isActive('/admin/requests') ? 'active' : ''}`}>{t('nav.adminRequests')}</Link>
                     <Link to="/admin/taxonomy" className={`nav-link nav-link--admin ${isActive('/admin/taxonomy') ? 'active' : ''}`}>{t('nav.taxonomy')}</Link>
                     <Link to="/admin/images" className={`nav-link nav-link--admin ${isActive('/admin/images') ? 'active' : ''}`}>{t('nav.imageReview')}</Link>
-                    <Link to="/admin/support" className={`nav-link nav-link--admin ${isActive('/admin/support') ? 'active' : ''}`}>Support Tickets</Link>
-                    <Link to="/admin/wine-reports" className={`nav-link nav-link--admin ${isActive('/admin/wine-reports') ? 'active' : ''}`}>Wine Reports</Link>
+                    <Link to="/admin/support" className={`nav-link nav-link--admin ${isActive('/admin/support') ? 'active' : ''}`}>{t('nav.supportTickets')}</Link>
+                    <Link to="/admin/wine-reports" className={`nav-link nav-link--admin ${isActive('/admin/wine-reports') ? 'active' : ''}`}>{t('nav.wineReports')}</Link>
                     <Link to="/admin/moderators" className={`nav-link nav-link--admin ${isActive('/admin/moderators') ? 'active' : ''}`}>{t('nav.moderators')}</Link>
                     <Link to="/admin/blog" className={`nav-link nav-link--admin ${isActive('/admin/blog') ? 'active' : ''}`}>{t('nav.blogAdmin')}</Link>
                     <Link to="/admin/stats" className={`nav-link nav-link--admin ${isActive('/admin/stats') ? 'active' : ''}`}>{t('nav.adminStats')}</Link>
@@ -200,8 +200,8 @@ function Layout({ children }) {
                 <button
                   className="theme-toggle"
                   onClick={toggleTheme}
-                  aria-label={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`}
-                  title={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`}
+                  aria-label={theme === 'light' ? t('nav.switchToDark') : t('nav.switchToLight')}
+                  title={theme === 'light' ? t('nav.switchToDark') : t('nav.switchToLight')}
                 >
                   {theme === 'light' ? (
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
@@ -214,7 +214,7 @@ function Layout({ children }) {
                   {user.username}
                   {roles.includes('admin') && <span className="badge badge--admin">{t('nav.badge.admin')}</span>}
                   {roles.includes('somm')  && <span className="badge badge--somm">{t('nav.badge.somm')}</span>}
-                  {roles.includes('moderator') && <span className="badge badge--mod">Mod</span>}
+                  {roles.includes('moderator') && <span className="badge badge--mod">{t('nav.badge.mod')}</span>}
                   <span className={`badge badge--plan badge--plan-${user.plan || 'free'}`}>{planLabel}</span>
                 </span>
                 <Link to="/settings" className={`btn-icon-nav ${isActive('/settings') ? 'active' : ''}`} aria-label={t('nav.settings')} data-guide="nav-settings">
@@ -244,21 +244,21 @@ function Layout({ children }) {
         {user && mobileMenuOpen && (
           <div className="mobile-menu">
             <div className="mobile-menu-section">
-              <Link to="/community/discussions" className={`mobile-menu-link ${isActive('/community') ? 'active' : ''}`} onClick={closeMenu}>Community</Link>
-              <Link to="/wishlist" className={`mobile-menu-link ${isActive('/wishlist') ? 'active' : ''}`} onClick={closeMenu}>Wishlist</Link>
-              <Link to="/recommendations" className={`mobile-menu-link ${isActive('/recommendations') ? 'active' : ''}`} onClick={closeMenu}>Recommendations</Link>
-              <Link to="/journal" className={`mobile-menu-link ${isActive('/journal') ? 'active' : ''}`} onClick={closeMenu}>Journal</Link>
-              <Link to="/restock" className={`mobile-menu-link ${isActive('/restock') ? 'active' : ''}`} onClick={closeMenu}>Restock</Link>
+              <Link to="/community/discussions" className={`mobile-menu-link ${isActive('/community') ? 'active' : ''}`} onClick={closeMenu}>{t('nav.community')}</Link>
+              <Link to="/wishlist" className={`mobile-menu-link ${isActive('/wishlist') ? 'active' : ''}`} onClick={closeMenu}>{t('nav.wishlist')}</Link>
+              <Link to="/recommendations" className={`mobile-menu-link ${isActive('/recommendations') ? 'active' : ''}`} onClick={closeMenu}>{t('nav.recommendations')}</Link>
+              <Link to="/journal" className={`mobile-menu-link ${isActive('/journal') ? 'active' : ''}`} onClick={closeMenu}>{t('nav.journal')}</Link>
+              <Link to="/restock" className={`mobile-menu-link ${isActive('/restock') ? 'active' : ''}`} onClick={closeMenu}>{t('nav.restock')}</Link>
               <Link to="/wine-requests" className={`mobile-menu-link ${isActive('/wine-requests') ? 'active' : ''}`} onClick={closeMenu}>{t('nav.myRequests')}</Link>
-              <Link to="/cellar-chat" className={`mobile-menu-link ${isActive('/cellar-chat') ? 'active' : ''}`} onClick={closeMenu}>Cellar Chat</Link>
+              <Link to="/cellar-chat" className={`mobile-menu-link ${isActive('/cellar-chat') ? 'active' : ''}`} onClick={closeMenu}>{t('nav.cellarChat')}</Link>
               <Link to="/blog" className={`mobile-menu-link ${isActive('/blog') ? 'active' : ''}`} onClick={closeMenu}>{t('nav.blog')}</Link>
               <Link to="/supporter" className={`mobile-menu-link ${isActive('/supporter') ? 'active' : ''}`} onClick={closeMenu}>{t('nav.supporter')}</Link>
-              <Link to="/support" className={`mobile-menu-link ${isActive('/support') ? 'active' : ''}`} onClick={closeMenu}>Support</Link>
+              <Link to="/support" className={`mobile-menu-link ${isActive('/support') ? 'active' : ''}`} onClick={closeMenu}>{t('nav.support')}</Link>
             </div>
 
             {(roles.includes('somm') || roles.includes('admin')) && (
               <div className="mobile-menu-section">
-                <div className="mobile-menu-label">Sommelier</div>
+                <div className="mobile-menu-label">{t('nav.sommelier')}</div>
                 <Link to="/somm/maturity" className={`mobile-menu-link ${isActive('/somm/maturity') ? 'active' : ''}`} onClick={closeMenu}>{t('nav.maturityQueue')}</Link>
                 <Link to="/somm/prices" className={`mobile-menu-link ${isActive('/somm/prices') ? 'active' : ''}`} onClick={closeMenu}>{t('nav.priceQueue')}</Link>
               </div>
@@ -266,13 +266,13 @@ function Layout({ children }) {
 
             {roles.includes('admin') && (
               <div className="mobile-menu-section">
-                <div className="mobile-menu-label">Admin</div>
+                <div className="mobile-menu-label">{t('nav.admin')}</div>
                 <Link to="/admin/wines" className={`mobile-menu-link ${isActive('/admin/wines') ? 'active' : ''}`} onClick={closeMenu}>{t('nav.wineLibrary')}</Link>
                 <Link to="/admin/requests" className={`mobile-menu-link ${isActive('/admin/requests') ? 'active' : ''}`} onClick={closeMenu}>{t('nav.adminRequests')}</Link>
                 <Link to="/admin/taxonomy" className={`mobile-menu-link ${isActive('/admin/taxonomy') ? 'active' : ''}`} onClick={closeMenu}>{t('nav.taxonomy')}</Link>
                 <Link to="/admin/images" className={`mobile-menu-link ${isActive('/admin/images') ? 'active' : ''}`} onClick={closeMenu}>{t('nav.imageReview')}</Link>
-                <Link to="/admin/support" className={`mobile-menu-link ${isActive('/admin/support') ? 'active' : ''}`} onClick={closeMenu}>Support Tickets</Link>
-                <Link to="/admin/wine-reports" className={`mobile-menu-link ${isActive('/admin/wine-reports') ? 'active' : ''}`} onClick={closeMenu}>Wine Reports</Link>
+                <Link to="/admin/support" className={`mobile-menu-link ${isActive('/admin/support') ? 'active' : ''}`} onClick={closeMenu}>{t('nav.supportTickets')}</Link>
+                <Link to="/admin/wine-reports" className={`mobile-menu-link ${isActive('/admin/wine-reports') ? 'active' : ''}`} onClick={closeMenu}>{t('nav.wineReports')}</Link>
                 <Link to="/admin/blog" className={`mobile-menu-link ${isActive('/admin/blog') ? 'active' : ''}`} onClick={closeMenu}>{t('nav.blogAdmin')}</Link>
                 <Link to="/admin/stats" className={`mobile-menu-link ${isActive('/admin/stats') ? 'active' : ''}`} onClick={closeMenu}>{t('nav.adminStats')}</Link>
               </div>
@@ -284,12 +284,12 @@ function Layout({ children }) {
                   {user.username}
                   {roles.includes('admin') && <span className="badge badge--admin">{t('nav.badge.admin')}</span>}
                   {roles.includes('somm')  && <span className="badge badge--somm">{t('nav.badge.somm')}</span>}
-                  {roles.includes('moderator') && <span className="badge badge--mod">Mod</span>}
+                  {roles.includes('moderator') && <span className="badge badge--mod">{t('nav.badge.mod')}</span>}
                   <span className={`badge badge--plan badge--plan-${user.plan || 'free'}`}>{planLabel}</span>
                 </span>
               </div>
               <div className="mobile-menu-actions">
-                <button className="theme-toggle" onClick={toggleTheme} aria-label={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`}>
+                <button className="theme-toggle" onClick={toggleTheme} aria-label={theme === 'light' ? t('nav.switchToDark') : t('nav.switchToLight')}>
                   {theme === 'light' ? (
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
                   ) : (
@@ -314,26 +314,26 @@ function Layout({ children }) {
 
       {/* ── Mobile bottom tab bar ── */}
       {user && (
-        <nav className="bottom-nav" aria-label="Main navigation">
+        <nav className="bottom-nav" aria-label={t('nav.mainNavigation')}>
           <Link to="/cellars" className={`bottom-nav-item ${isActive('/cellars') ? 'active' : ''}`} onClick={closeMenu}>
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
-            <span>Cellars</span>
+            <span>{t('nav.cellars')}</span>
           </Link>
           <Link to="/community/discussions" className={`bottom-nav-item ${isActive('/community') ? 'active' : ''}`} onClick={closeMenu}>
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-            <span>Community</span>
+            <span>{t('nav.community')}</span>
           </Link>
           <Link to="/statistics" className={`bottom-nav-item ${isActive('/statistics') ? 'active' : ''}`} onClick={closeMenu}>
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
-            <span>Analytics</span>
+            <span>{t('nav.analytics')}</span>
           </Link>
           <Link to="/settings" className={`bottom-nav-item ${isActive('/settings') ? 'active' : ''}`} onClick={closeMenu}>
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-            <span>Settings</span>
+            <span>{t('nav.settings')}</span>
           </Link>
-          <button className="bottom-nav-item" onClick={() => setMobileMenuOpen(o => !o)} aria-label="More" aria-expanded={mobileMenuOpen}>
+          <button className="bottom-nav-item" onClick={() => setMobileMenuOpen(o => !o)} aria-label={t('nav.more')} aria-expanded={mobileMenuOpen}>
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
-            <span>More</span>
+            <span>{t('nav.more')}</span>
           </button>
         </nav>
       )}

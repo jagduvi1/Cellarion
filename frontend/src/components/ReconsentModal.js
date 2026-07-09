@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import Modal from './Modal';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -16,6 +17,7 @@ import { useAuth } from '../contexts/AuthContext';
  * the full policy the modal links to without it being covered.
  */
 export default function ReconsentModal() {
+  const { t } = useTranslation();
   const { user, acceptPolicy, logout } = useAuth();
   const location = useLocation();
   const [submitting, setSubmitting] = useState(false);
@@ -30,7 +32,7 @@ export default function ReconsentModal() {
     setError('');
     const res = await acceptPolicy();
     if (!res.success) {
-      setError(res.error || 'Something went wrong. Please try again.');
+      setError(res.error || t('auth.genericError'));
       setSubmitting(false);
     }
     // On success the user refreshes with requiresPolicyReconsent === false and
@@ -38,22 +40,21 @@ export default function ReconsentModal() {
   };
 
   return (
-    <Modal title="We've updated our Privacy Policy" onClose={() => {}} trapFocus>
+    <Modal title={t('reconsent.title')} onClose={() => {}} trapFocus>
       <p>
-        We've updated our Privacy Policy, including the third-party services that help run
-        Cellarion. Please review and acknowledge the update to continue.
+        {t('reconsent.body')}
       </p>
       <p>
-        Read the full policy:{' '}
-        <Link to="/privacy" target="_blank" rel="noopener noreferrer">Privacy Policy</Link>.
+        {t('reconsent.readPolicy')}{' '}
+        <Link to="/privacy" target="_blank" rel="noopener noreferrer">{t('reconsent.policyLink')}</Link>.
       </p>
       {error && <p className="error-message" role="alert">{error}</p>}
       <div className="modal-actions">
         <button type="button" className="btn-secondary" onClick={logout} disabled={submitting}>
-          Log out
+          {t('reconsent.logout')}
         </button>
         <button type="button" className="btn-primary" onClick={handleAccept} disabled={submitting}>
-          {submitting ? 'Saving…' : 'I acknowledge the updated policy'}
+          {submitting ? t('common.saving') : t('reconsent.acknowledge')}
         </button>
       </div>
     </Modal>

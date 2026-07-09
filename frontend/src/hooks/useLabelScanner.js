@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
+import i18n from '../i18n';
 
 /**
  * Custom hook that encapsulates label-scan camera logic.
@@ -60,9 +61,9 @@ export default function useLabelScanner(apiFetch, { onScanSuccess, onScanError }
         if (labelVideoRef.current) labelVideoRef.current.srcObject = stream;
       });
     } catch (err) {
-      let msg = 'Could not access camera.';
-      if (err.name === 'NotAllowedError') msg = 'Camera access denied. Please allow camera permissions.';
-      else if (err.name === 'NotFoundError') msg = 'No camera found on this device.';
+      let msg = i18n.t('camera.accessError');
+      if (err.name === 'NotAllowedError') msg = i18n.t('camera.accessDenied');
+      else if (err.name === 'NotFoundError') msg = i18n.t('camera.notFound');
       setLabelCam({ open: true, error: msg });
     }
   }, [labelFacing]);
@@ -108,7 +109,7 @@ export default function useLabelScanner(apiFetch, { onScanSuccess, onScanError }
 
     canvas.toBlob(async (blob) => {
       if (!blob) {
-        setLabelCam({ open: true, error: 'Capture failed. Please try again.' });
+        setLabelCam({ open: true, error: i18n.t('camera.captureFailed') });
         setLabelScanning(false);
         return;
       }
