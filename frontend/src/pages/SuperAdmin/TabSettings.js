@@ -282,6 +282,75 @@ function ChatLimitsPanel({ apiFetch, config, defaults, error }) {
   );
 }
 
+function AiBudgetPanel({ apiFetch, config, defaults, error }) {
+  const [form,   setForm]   = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [msg,    setMsg]    = useState(null);
+
+  useEffect(() => {
+    if (config?.aiDailyBudget && config?.aiImportPerRequestCap && config?.aiGlobalDailyCap) {
+      setForm({
+        daily:      String(config.aiDailyBudget.max),
+        importCap:  String(config.aiImportPerRequestCap.max),
+        globalCap:  String(config.aiGlobalDailyCap.max),
+      });
+    }
+  }, [config]);
+
+  const save = async () => {
+    setSaving(true); setMsg(null);
+    try {
+      const res = await adminSaveRateLimits(apiFetch, {
+        aiDailyBudget:         { max: Number(form.daily) },
+        aiImportPerRequestCap: { max: Number(form.importCap) },
+        aiGlobalDailyCap:      { max: Number(form.globalCap) },
+      });
+      if (!res.ok) { const d = await res.json(); setMsg({ ok: false, text: d.error || 'Save failed' }); }
+      else setMsg({ ok: true, text: 'Saved — takes effect immediately' });
+    } catch { setMsg({ ok: false, text: 'Network error' }); }
+    finally { setSaving(false); }
+  };
+
+  if (error) return null;
+  if (!form) return null;
+
+  return (
+    <PanelShell
+      title="AI daily budget (spend cap)"
+      intro="Shared Anthropic-call budget across label scan, text identify, AI info, import lookups and wine enrichment (chat has its own quota). When a user's budget runs out, imports degrade to fuzzy matching (never fail) and the single-shot AI endpoints return 429 until midnight UTC."
+      saving={saving} onSave={save} msg={msg}
+    >
+      <NumberField
+        label="Per-user daily AI calls"
+        unit="calls / day"
+        hint="0 = unlimited"
+        value={form.daily}
+        defaultValue={defaults?.aiDailyBudget?.max}
+        onChange={v => setForm(f => ({ ...f, daily: v }))}
+        min={0} max={1000000}
+      />
+      <NumberField
+        label="AI lookups per import request"
+        unit="calls / request"
+        hint="frontend validates in batches of 25, so legit clients never hit this"
+        value={form.importCap}
+        defaultValue={defaults?.aiImportPerRequestCap?.max}
+        onChange={v => setForm(f => ({ ...f, importCap: v }))}
+        min={1} max={2000}
+      />
+      <NumberField
+        label="Site-wide daily kill-switch"
+        unit="calls / day"
+        hint="total across all users; 0 = disabled"
+        value={form.globalCap}
+        defaultValue={defaults?.aiGlobalDailyCap?.max}
+        onChange={v => setForm(f => ({ ...f, globalCap: v }))}
+        min={0} max={10000000}
+      />
+    </PanelShell>
+  );
+}
+
 function ContactEmailPanel({ apiFetch }) {
   const [value, setValue] = useState('');
   const [saving, setSaving] = useState(false);
@@ -350,6 +419,7 @@ export default function TabSettings() {
       <PerIpLimitsPanel apiFetch={apiFetch} {...rateLimits} />
       <AccountLockoutPanel apiFetch={apiFetch} {...rateLimits} />
       <ChatLimitsPanel apiFetch={apiFetch} {...rateLimits} />
+      <AiBudgetPanel apiFetch={apiFetch} {...rateLimits} />
     </>
   );
 }

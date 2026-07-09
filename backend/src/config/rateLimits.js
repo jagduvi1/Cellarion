@@ -32,6 +32,27 @@ const defaults = {
   // budget. Vision (scan-label) is the costliest, so 10/min is generous for
   // a human walking through a cellar but still catches scripts.
   aiBurst: { max: 10, windowMs: 60 * 1000 },
+  // Shared per-user DAILY budget of actual Anthropic calls across import
+  // identify, scan-label, identify-text, ai-info, and user-triggered wine
+  // enrichment (SECURITY_AUDIT_2026-07-08 M-2/L-14). aiBurst is the speed
+  // limit; this is the spend cap — chat keeps its own separate quota
+  // (aiConfig.chatDailyLimit). Sized so a legitimate 2,000-bottle import
+  // (~350 AI lookups after dedup + registry-first matching) fits in one day
+  // with headroom. 0 = unlimited. Enforced by services/aiBudget.js; when
+  // exhausted, imports degrade gracefully to fuzzy matching (never error)
+  // and the single-shot AI endpoints return 429 ai_budget_exhausted.
+  aiDailyBudget: { max: 500 },
+  // Cap on AI identify calls a single POST /api/bottles/import/validate
+  // request may fan out (M-2: one request used to mean up to 2,000 Sonnet
+  // calls). The frontend validates in batches of 25 items, so legitimate
+  // clients never come near this. Excess unique wines in one request fall
+  // through to fuzzy matching with aiSkipped: true.
+  aiImportPerRequestCap: { max: 50 },
+  // Site-wide daily kill-switch: total Anthropic calls per UTC day across all
+  // users (tracked as a singleton AiUsage row). Bounds the worst case of many
+  // abusive accounts. 0 = disabled. Same graceful degradation as the per-user
+  // budget when tripped.
+  aiGlobalDailyCap: { max: 20000 },
   // Per-user rolling cap on /api/images/upload. Each upload is up to 10MB and
   // stored on disk; without this cap a logged-in user could script a loop and
   // fill the disk. The per-bottle MAX_IMAGES_PER_BOTTLE cap limits per-resource
@@ -49,6 +70,9 @@ let cache = {
   chatBurst: { ...defaults.chatBurst },
   chatConcurrentStreams: { ...defaults.chatConcurrentStreams },
   aiBurst: { ...defaults.aiBurst },
+  aiDailyBudget: { ...defaults.aiDailyBudget },
+  aiImportPerRequestCap: { ...defaults.aiImportPerRequestCap },
+  aiGlobalDailyCap: { ...defaults.aiGlobalDailyCap },
   imageUploadBurst: { ...defaults.imageUploadBurst },
 };
 
@@ -78,6 +102,15 @@ async function load() {
         aiBurst: {
           max:      doc.value.aiBurst?.max      ?? defaults.aiBurst.max,
           windowMs: doc.value.aiBurst?.windowMs ?? defaults.aiBurst.windowMs,
+        },
+        aiDailyBudget: {
+          max: doc.value.aiDailyBudget?.max ?? defaults.aiDailyBudget.max,
+        },
+        aiImportPerRequestCap: {
+          max: doc.value.aiImportPerRequestCap?.max ?? defaults.aiImportPerRequestCap.max,
+        },
+        aiGlobalDailyCap: {
+          max: doc.value.aiGlobalDailyCap?.max ?? defaults.aiGlobalDailyCap.max,
         },
         imageUploadBurst: {
           max:      doc.value.imageUploadBurst?.max      ?? defaults.imageUploadBurst.max,

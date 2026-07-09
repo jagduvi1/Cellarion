@@ -14,10 +14,28 @@ const { isValidId } = require('../utils/validation');
 const { submitUrls } = require('../services/indexNow');
 const { getReleaseCurve } = require('../services/communityPrice');
 const aiBurstLimiter = require('../middleware/aiBurstLimiter');
+const { tryDebitAi, isRefundableFailure } = require('../services/aiBudget');
 
 const REMBG_URL = process.env.REMBG_URL || 'http://rembg:5000';
 
 const router = express.Router();
+
+/**
+ * 429 for the Anthropic-backed endpoints when the shared per-user daily AI
+ * budget (or the site-wide daily cap) is exhausted. These endpoints have no
+ * non-AI fallback, unlike the import pipeline (which degrades to fuzzy
+ * matching instead). Retry-After points at the next UTC midnight, when the
+ * daily window resets.
+ */
+function sendAiBudgetExhausted(res, debit) {
+  res.set('Retry-After', String(debit.retryAfterSeconds));
+  return res.status(429).json({
+    error: 'Daily AI budget reached. AI features reset at midnight UTC.',
+    code: 'ai_budget_exhausted',
+    scope: debit.reason, // 'user_budget' | 'global_cap'
+    retryAfterSeconds: debit.retryAfterSeconds,
+  });
+}
 
 const USER_SEARCH_LIMIT = 10;
 
@@ -181,6 +199,12 @@ router.post('/scan-label', requireAuth, aiBurstLimiter, async (req, res) => {
   }
   const safeMediaType = `image/${detectImageFormat(safeBuffer) || 'jpeg'}`;
 
+  // Debit the shared daily AI budget BEFORE any expensive work (rembg + the
+  // Claude vision call); refunded below if the scan fails (mirrors chat's
+  // debit-before / refund-on-error pattern).
+  const debit = await tryDebitAi(req.user.id);
+  if (!debit.ok) return sendAiBudgetExhausted(res, debit);
+
   try {
     // 1. Attempt background removal via rembg (non-fatal — falls back to the
     //    sanitized original)
@@ -266,6 +290,7 @@ router.post('/scan-label', requireAuth, aiBurstLimiter, async (req, res) => {
 
     res.json({ extracted, match, labelImage });
   } catch (err) {
+    await debit.refund();
     console.error('Label scan error:', err.message);
     res.status(err.status || 500).json({ error: err.message || 'Label scan failed' });
   }
@@ -333,15 +358,21 @@ router.post('/identify-text', requireAuth, aiBurstLimiter, async (req, res) => {
   const query = typeof req.body.query === 'string' ? req.body.query.trim() : '';
   if (!query) return res.status(400).json({ error: 'query is required' });
 
+  const debit = await tryDebitAi(req.user.id);
+  if (!debit.ok) return sendAiBudgetExhausted(res, debit);
+
   try {
     const result = await identifyWineFromQuery(query);
     if (!result.data) {
+      // Transport-level failures never produced a billable completion
+      if (isRefundableFailure(result.debugReason)) await debit.refund();
       return res.json({ wine: null, reason: result.debugReason });
     }
 
     const { wine, created } = await findOrCreateWine(result.data, req.user.id);
     return res.json({ wine: wine.toObject ? wine.toObject() : wine, created });
   } catch (err) {
+    await debit.refund();
     console.error('Identify text error:', err);
     return res.status(500).json({ error: err.message || 'Failed to identify wine' });
   }
@@ -354,13 +385,19 @@ router.post('/ai-info', requireAuth, aiBurstLimiter, async (req, res) => {
   const query = typeof req.body.query === 'string' ? req.body.query.trim() : '';
   if (!query) return res.status(400).json({ error: 'query is required' });
 
+  const debit = await tryDebitAi(req.user.id);
+  if (!debit.ok) return sendAiBudgetExhausted(res, debit);
+
   try {
     const result = await identifyWineFromQuery(query);
     if (!result.data) {
+      // Transport-level failures never produced a billable completion
+      if (isRefundableFailure(result.debugReason)) await debit.refund();
       return res.json({ wine: null, reason: result.debugReason });
     }
     return res.json({ wine: result.data });
   } catch (err) {
+    await debit.refund();
     console.error('AI info error:', err);
     return res.status(500).json({ error: err.message || 'Failed to get AI wine info' });
   }

@@ -16,7 +16,10 @@ const { normalizeBottleSize, DEFAULT_SIZE } = require('../config/bottleSizes');
 const searchService = require('../services/search');
 const { identifyWineFromText } = require('../services/labelScan');
 const { findOrCreateWine } = require('../services/findOrCreateWine');
-const { scoreWineMatch } = require('../services/wineMatching');
+const { scoreWineMatchVariants, stripProducerPrefix } = require('../services/wineMatching');
+const { tryDebitAi, isRefundableFailure } = require('../services/aiBudget');
+const rateLimitsConfig = require('../config/rateLimits');
+const { generateWineKey } = require('../utils/normalize');
 const {
   CONSUMED_STATUSES,
   IMPORT_EXACT_THRESHOLD,
@@ -46,14 +49,33 @@ const FUZZY_THRESHOLD = IMPORT_FUZZY_THRESHOLD;
 
 /**
  * Score a WineDefinition candidate against an import item.
- * Delegates to the shared wineMatching service.
+ * Delegates to the shared wineMatching service. Variant-aware: import rows
+ * often embed the producer inside the wine name (CellarTracker has no
+ * Producer column), so the scorer takes the max over producer-embedded name
+ * variants — strictly monotonic (only ever raises the score), so existing
+ * matches keep their score and known wines stop being missed.
  */
 function scoreCandidate(candidate, item) {
-  return scoreWineMatch(candidate, {
+  return scoreWineMatchVariants(candidate, {
     name: item.wineName,
     producer: item.producer,
     appellation: item.appellation
   });
+}
+
+/**
+ * Registry-first exact lookup for an import item — step (a) of the AI-saving
+ * cascade. Tries the raw normalizedKey and, when the wine name embeds the
+ * producer as a prefix, the prefix-stripped variant key. One indexed query,
+ * zero AI.
+ */
+async function findExactRegistryWine(item) {
+  if (!item.wineName || !item.producer) return null;
+  const keys = [generateWineKey(item.wineName, item.producer, item.appellation)];
+  const stripped = stripProducerPrefix(item.wineName, item.producer);
+  if (stripped) keys.push(generateWineKey(stripped, item.producer, item.appellation));
+  return WineDefinition.findOne({ normalizedKey: { $in: keys } })
+    .populate(['country', 'region', 'grapes']);
 }
 
 /**
@@ -198,23 +220,26 @@ router.post('/validate', aiBurstLimiter, async (req, res) => {
     }
 
     // Build preResults array and validate required fields. `forceAi` is a
-    // client-side hint sent by the per-row "Look up" button; the pipeline
-    // below already runs AI for every eligible row, so the flag is stripped
-    // here only to keep it out of the stored/echoed item.
+    // client-side hint sent by the per-row "Look up" button: it bypasses the
+    // registry-first cascade below so an explicit user request always gets an
+    // AI attempt (subject to the daily budget). It is stripped from the item
+    // to keep it out of the stored/echoed row.
     const preResults = [];
     for (let i = 0; i < items.length; i++) {
       const { forceAi, ...item } = items[i];
       if (!item.wineName && !item.producer) {
         preResults.push({ index: i, item, errorMsg: 'Wine name or producer is required' });
       } else {
-        preResults.push({ index: i, item, matches: [] });
+        preResults.push({ index: i, item, matches: [], forceAi: forceAi === true });
       }
     }
 
-    // Pass 1: AI identification FIRST for all valid items (deduplicated).
-    // AI is better at distinguishing similar wines (e.g. single vineyard vs
-    // generic Barolo) so it runs before fuzzy matching to produce accurate
-    // wine identity data that the DB match can then use.
+    // Pass 1: AI identification for all valid items (deduplicated), preceded
+    // by a registry-first cascade. AI is better at distinguishing similar
+    // wines (e.g. single vineyard vs generic Barolo), but for wines the
+    // registry ALREADY knows, the AI's canonicalized result would dedup to
+    // the same registry wine anyway — so a confident registry match skips the
+    // AI call with an outcome-identical result (audit M-2 cost defense).
     const aiEligible = process.env.ANTHROPIC_API_KEY
       ? preResults.filter(pr => !pr.errorMsg && pr.item.wineName && pr.item.producer)
       : [];
@@ -224,32 +249,102 @@ router.post('/validate', aiBurstLimiter, async (req, res) => {
     for (const pr of aiEligible) {
       const key = `${normalizeString(pr.item.wineName)}:${normalizeString(pr.item.producer)}`;
       if (!aiKeyMap.has(key)) aiKeyMap.set(key, pr);
+      if (pr.forceAi) aiKeyMap.get(key).forceAi = true; // any row's Look-up button forces the key
+    }
+    const uniquePrs = [...aiKeyMap.values()];
+
+    // ── Pass 1a: registry-first cascade (zero AI for known wines) ──────────
+    // (a) exact normalizedKey match (raw + producer-prefix-stripped variant);
+    // (b) existing fuzzy scorer at the exact threshold (>= 0.95) — at that
+    //     score the AI path's findOrCreateWine would auto-match the same
+    //     registry wine, so skipping AI is outcome-identical;
+    // (c) everything else goes to AI exactly as before.
+    for (const pr of uniquePrs) {
+      if (pr.forceAi) continue;
+      const exactWine = await findExactRegistryWine(pr.item);
+      if (exactWine) {
+        pr.registryWine = { wine: exactWine, score: 1 };
+        continue;
+      }
+      const matches = await findWineMatches(pr.item);
+      pr.preMatches = matches; // reused by Pass 3 if this row ends up on the fuzzy path
+      if (matches.length > 0 && matches[0].score >= EXACT_THRESHOLD) {
+        pr.registryWine = { wine: matches[0].wine, score: matches[0].score };
+      }
     }
 
-    // One AI call per unique wine, throttled to AI_CONCURRENCY at a time
-    const uniquePrs = [...aiKeyMap.values()];
+    // ── Pass 1b: AI fan-out for the remaining unique wines ─────────────────
+    // Guarded by (audit M-2): a per-request fan-out cap, the shared per-user
+    // daily AI budget + global daily cap (debited per actual Anthropic call,
+    // refunded on transport failure), and a client-disconnect check that
+    // stops LAUNCHING new calls once the requester has gone away. All three
+    // degrade gracefully to the fuzzy path (aiSkipped: true) — never an error.
+    const needAi = uniquePrs.filter(pr => !pr.registryWine);
+    const perRequestCap = rateLimitsConfig.get().aiImportPerRequestCap?.max
+      ?? rateLimitsConfig.defaults.aiImportPerRequestCap.max;
+    const aiRun = needAi.slice(0, perRequestCap);
+    for (const pr of needAi.slice(perRequestCap)) pr.aiSkipped = true;
+
+    let aiBudgetExhausted = false;
+    let clientDisconnected = false;
+    // res 'close' fires when the underlying connection closes; writableEnded
+    // distinguishes a premature client disconnect from normal completion.
+    // (req 'close' fires on message completion in Node >= 15, so it can't be
+    // used for disconnect detection here.)
+    res.on('close', () => { if (!res.writableEnded) clientDisconnected = true; });
+
+    const AI_SKIPPED = Symbol('aiSkipped');
     const aiSettled = await runConcurrent(
-      uniquePrs.map(pr => () => identifyWineFromText({
-        name: pr.item.wineName,
-        producer: pr.item.producer,
-        vintage: pr.item.vintage,
-        country: pr.item.country
-      })),
+      aiRun.map(pr => async () => {
+        // Checked at launch time: in-flight calls finish, new ones stop.
+        if (clientDisconnected || aiBudgetExhausted) {
+          pr.aiSkipped = true;
+          return AI_SKIPPED;
+        }
+        const debit = await tryDebitAi(req.user.id);
+        if (!debit.ok) {
+          aiBudgetExhausted = true;
+          pr.aiSkipped = true;
+          return AI_SKIPPED;
+        }
+        try {
+          const result = await identifyWineFromText({
+            name: pr.item.wineName,
+            producer: pr.item.producer,
+            vintage: pr.item.vintage,
+            country: pr.item.country
+          });
+          // A transport-level failure never produced a billable completion —
+          // give the debit back so failed calls don't burn the user's budget.
+          if (!result.data && isRefundableFailure(result.debugReason)) await debit.refund();
+          return result;
+        } catch (err) {
+          await debit.refund();
+          throw err;
+        }
+      }),
       AI_CONCURRENCY
     );
 
-    // Build a key -> AI result lookup
+    // Build a key -> AI result lookup (only wines that actually went to AI)
     const aiByKey = new Map();
-    for (let j = 0; j < uniquePrs.length; j++) {
-      const key = `${normalizeString(uniquePrs[j].item.wineName)}:${normalizeString(uniquePrs[j].item.producer)}`;
+    for (let j = 0; j < aiRun.length; j++) {
+      const key = `${normalizeString(aiRun[j].item.wineName)}:${normalizeString(aiRun[j].item.producer)}`;
       aiByKey.set(key, aiSettled[j]);
     }
 
-    // Attach the shared AI result to every eligible preResult with that key
+    // Attach the shared cascade/AI result to every eligible preResult with
+    // that key (duplicates share the representative's outcome, as before).
     for (const pr of aiEligible) {
       const key = `${normalizeString(pr.item.wineName)}:${normalizeString(pr.item.producer)}`;
+      const rep = aiKeyMap.get(key);
+      if (rep.registryWine) { pr.registryWine = rep.registryWine; continue; }
+      if (rep.preMatches && !pr.preMatches) pr.preMatches = rep.preMatches;
+      if (rep.aiSkipped) { pr.aiSkipped = true; continue; }
       const settled = aiByKey.get(key);
+      if (!settled) continue;
       if (settled.status === 'fulfilled') {
+        if (settled.value === AI_SKIPPED) { pr.aiSkipped = true; continue; }
         pr.aiIdentified = settled.value.data;
         pr.aiDebugRaw    = settled.value.debugRaw;
         pr.aiDebugReason = settled.value.debugReason;
@@ -263,7 +358,7 @@ router.post('/validate', aiBurstLimiter, async (req, res) => {
     // name/producer, which is more accurate than matching raw import data.
     const createdWineCache = new Map(); // normalizedKey -> { wine, created } | { error }
     for (const pr of preResults) {
-      if (!pr.aiIdentified) continue;
+      if (pr.registryWine || !pr.aiIdentified) continue;
       const key = `${normalizeString(pr.aiIdentified.name)}:${normalizeString(pr.aiIdentified.producer)}`;
       if (createdWineCache.has(key)) {
         const cached = createdWineCache.get(key);
@@ -293,10 +388,12 @@ router.post('/validate', aiBurstLimiter, async (req, res) => {
     }
 
     // Pass 3: fuzzy matching fallback for items without AI results
-    // (API key not set, AI failed, or missing name/producer for AI)
+    // (API key not set, AI failed or was budget/cap/disconnect-skipped, or
+    // missing name/producer for AI). Cascade matches from Pass 1a are reused
+    // instead of re-querying.
     for (const pr of preResults) {
-      if (pr.errorMsg || pr.aiWine) continue; // skip errors and AI-matched items
-      const matches = await findWineMatches(pr.item);
+      if (pr.errorMsg || pr.aiWine || pr.registryWine) continue; // skip errors and matched items
+      const matches = pr.preMatches ?? await findWineMatches(pr.item);
       pr.matches = matches;
     }
 
@@ -310,7 +407,24 @@ router.post('/validate', aiBurstLimiter, async (req, res) => {
 
       let status, resultMatches, aiDebug = null;
 
-      if (pr.aiWine) {
+      if (pr.registryWine) {
+        // Registry-first cascade hit (exact key or >= EXACT_THRESHOLD fuzzy):
+        // the registry already knows this wine, so no AI was needed. Treated
+        // as an exact match — same wineId the AI path would have resolved to.
+        const { wine, score } = pr.registryWine;
+        status = 'exact';
+        resultMatches = [{
+          wineId: wine._id,
+          name: wine.name,
+          producer: wine.producer,
+          country: wine.country?.name || null,
+          region: wine.region?.name || null,
+          appellation: wine.appellation || null,
+          type: wine.type,
+          image: wine.image || null,
+          score: Math.round(score * 100) / 100
+        }];
+      } else if (pr.aiWine) {
         // AI successfully identified and found/created the wine
         status = 'ai_match';
         resultMatches = [{
@@ -349,8 +463,9 @@ router.post('/validate', aiBurstLimiter, async (req, res) => {
         status = 'no_match';
         resultMatches = [];
 
-        // Include AI debug info when AI was attempted but failed
-        if (process.env.ANTHROPIC_API_KEY && (pr.item.wineName || pr.item.producer)) {
+        // Include AI debug info when AI was attempted but failed (not when it
+        // was skipped by budget/cap/disconnect — those rows carry aiSkipped)
+        if (!pr.aiSkipped && process.env.ANTHROPIC_API_KEY && (pr.item.wineName || pr.item.producer)) {
           const aiStatus = pr.aiError || pr.aiDebugReason === 'rate_limit_exceeded' ||
             (pr.aiDebugReason && pr.aiDebugReason.startsWith('exception'))
             ? 'failed' : (pr.aiWineError ? 'create_failed' : 'searched');
@@ -363,6 +478,10 @@ router.post('/validate', aiBurstLimiter, async (req, res) => {
 
       const result = { index: pr.index, item: pr.item, status, matches: resultMatches };
       if (aiDebug) result.aiDebug = aiDebug;
+      // Flag rows whose AI identify was skipped (daily budget exhausted,
+      // per-request cap, or client disconnect) — they fell through to the
+      // fuzzy path above. Informational only; the row itself never errors.
+      if (pr.aiSkipped) result.aiSkipped = true;
       results.push(result);
     }
 
@@ -395,7 +514,11 @@ router.post('/validate', aiBurstLimiter, async (req, res) => {
         aiMatch: results.filter(r => r.status === 'ai_match').length,
         noMatch: results.filter(r => r.status === 'no_match').length,
         errors: results.filter(r => r.status === 'error').length,
-        priceWarnings: results.filter(r => r.priceWarnings?.length).length
+        priceWarnings: results.filter(r => r.priceWarnings?.length).length,
+        // Present only when the shared daily AI budget (or the global cap)
+        // ran out mid-import: remaining rows were matched fuzzily instead of
+        // via AI (aiSkipped: true per row). The import still succeeds.
+        ...(aiBudgetExhausted && { aiBudgetExhausted: true })
       }
     });
   } catch (error) {

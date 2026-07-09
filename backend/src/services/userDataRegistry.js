@@ -25,6 +25,7 @@
  *         AUDIT_MAX, truncated }
  */
 const User = require('../models/User');
+const AiUsage = require('../models/AiUsage');
 const Bottle = require('../models/Bottle');
 const BottleImage = require('../models/BottleImage');
 const Cellar = require('../models/Cellar');
@@ -465,6 +466,17 @@ const REGISTRY = [
     exportFragment: async (ctx) => ({
       importSessions: markTrunc(ctx, 'importSessions', await ImportSession.find({ user: ctx.userId }).select('cellar status results positionAnchor rackConfigs defaultCurrency createdAt').limit(EXPORT_MAX).lean())
         .map(s => ({ cellar: s.cellar, status: s.status, rowCount: s.results?.length || 0, positionAnchor: s.positionAnchor, rackConfigs: s.rackConfigs, defaultCurrency: s.defaultCurrency, createdAt: s.createdAt })),
+    }),
+  },
+  {
+    // Same handling as ChatUsage: per-user daily AI-call counters (90-day
+    // TTL). The site-wide kill-switch row has userId: null and is not
+    // personal data — untouched by the per-user purge, as intended.
+    model: AiUsage, category: 'personal-data', userFields: ['userId'],
+    purge: (ctx) => AiUsage.deleteMany({ userId: ctx.userId }),
+    exportFragment: async (ctx) => ({
+      aiUsage: markTrunc(ctx, 'aiUsage', await AiUsage.find({ userId: ctx.userId }).select('date count').limit(EXPORT_MAX).lean())
+        .map(u => ({ date: u.date, count: u.count })),
     }),
   },
   {
