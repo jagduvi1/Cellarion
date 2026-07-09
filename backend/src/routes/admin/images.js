@@ -471,9 +471,14 @@ router.put('/:id/assign-to-wine', async (req, res) => {
       { assignedToWine: false }
     );
 
-    // Set this image as official
+    // Set this image as official. Assigning an image to the public wine page
+    // implicitly publishes it, so flip visibility too — otherwise an
+    // approved-but-private image would be served as the wine detail/og:image
+    // while GET /api/images/wine/:id still hides it (audit L-7; mirrors
+    // set-official below).
     image.assignedToWine = true;
     image.wineDefinition = wineDefId;
+    image.visibility = 'public';
     await image.save();
 
     // Award Cellar Cred for official wine image assignment
