@@ -102,35 +102,78 @@ router.post('/checkout', requireAuth, async (req, res) => {
     const s = getStripe();
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
 
-    // Reuse existing Stripe customer or create one
+    // Reuse existing Stripe customer or create one. Persisting the fresh
+    // customer uses an atomic conditional claim so two concurrent first
+    // checkouts (double-click / two tabs, both reading stripeCustomerId: null)
+    // converge on ONE Stripe customer instead of the last write orphaning the
+    // first — a subscription completed on an overwritten customer would be
+    // invisible to /portal (scoped to the persisted id) and immune to the
+    // customer.subscription.deleted reconcile, so the user could never cancel
+    // it (audit 2026-07-08, L-6).
     let customerId = user.stripeCustomerId;
     if (!customerId) {
       const customer = await s.customers.create({
         email: user.email,
         metadata: { userId: user._id.toString() }
       });
-      customerId = customer.id;
-      await User.findByIdAndUpdate(req.user.id, { stripeCustomerId: customerId });
-    } else {
-      // Defense-in-depth for the double-click / two-tab race, where the
-      // checkout.session.completed webhook has not yet populated
-      // stripeSubscriptionId: ask Stripe directly whether this customer already
-      // has a live subscription. Best-effort — a transient API error must never
-      // block a legitimate first checkout.
-      try {
-        const existing = await s.subscriptions.list({ customer: customerId, status: 'all', limit: 10 });
-        const hasLive = existing.data.some((sub) =>
-          ['active', 'trialing', 'past_due', 'unpaid'].includes(sub.status));
-        if (hasLive) {
-          return res.status(409).json({
-            error: 'You already have an active subscription. Use the billing portal to change your plan.',
-            code: 'subscription_exists'
-          });
+      // Atomic claim: only one concurrent request can flip null → id.
+      const claimed = await User.findOneAndUpdate(
+        { _id: req.user.id, stripeCustomerId: null },
+        { stripeCustomerId: customer.id },
+        { new: true }
+      );
+      if (claimed) {
+        customerId = customer.id;
+      } else {
+        // Lost the race: converge on the customer the winning request
+        // persisted and discard our duplicate. Deletion is safe — the
+        // duplicate is milliseconds old and cannot have a subscription yet —
+        // and best-effort: a leftover subscription-less customer is harmless.
+        const winner = await User.findById(req.user.id).select('stripeCustomerId');
+        if (winner?.stripeCustomerId) {
+          customerId = winner.stripeCustomerId;
+          try {
+            await s.customers.del(customer.id);
+          } catch (e) {
+            console.warn(`[stripe] could not delete duplicate customer ${customer.id} (harmless, no subscription):`, e.message);
+          }
+        } else {
+          // Claim failed yet no persisted id to converge on (user deleted
+          // mid-request or field cleared) — keep the fresh customer so this
+          // checkout still works; there is no duplicate to clean up.
+          customerId = customer.id;
         }
-      } catch (e) {
-        console.warn('[stripe] could not verify existing subscriptions (proceeding):', e.message);
       }
     }
+
+    // Defense-in-depth for the double-click / two-tab race, where the
+    // checkout.session.completed webhook has not yet populated
+    // stripeSubscriptionId: ask Stripe directly whether this customer already
+    // has a live subscription. Runs before EVERY session creation — including
+    // for a just-created/just-claimed customer, so a request that lost the
+    // claim race is re-checked against the customer it converged on.
+    // Best-effort — a transient API error must never block a legitimate
+    // checkout.
+    try {
+      const existing = await s.subscriptions.list({ customer: customerId, status: 'all', limit: 10 });
+      const hasLive = existing.data.some((sub) =>
+        ['active', 'trialing', 'past_due', 'unpaid'].includes(sub.status));
+      if (hasLive) {
+        return res.status(409).json({
+          error: 'You already have an active subscription. Use the billing portal to change your plan.',
+          code: 'subscription_exists'
+        });
+      }
+    } catch (e) {
+      console.warn('[stripe] could not verify existing subscriptions (proceeding):', e.message);
+    }
+
+    // Stripe idempotency key: a double-click / two-tab burst (same user, same
+    // price, same 10-second bucket) replays the FIRST checkout session instead
+    // of creating a second one, while a genuine retry minutes later gets a
+    // fresh key. Safe because concurrent requests converge on one customerId
+    // above, so the replayed request's params match the original's.
+    const idempotencyKey = `checkout:${user._id}:${priceId}:${Math.floor(Date.now() / 10_000)}`;
 
     const session = await s.checkout.sessions.create({
       customer: customerId,
@@ -141,7 +184,7 @@ router.post('/checkout', requireAuth, async (req, res) => {
       subscription_data: {
         metadata: { userId: user._id.toString(), plan }
       }
-    });
+    }, { idempotencyKey });
 
     logAudit(req, 'stripe.checkout_created', {}, { plan });
     res.json({ url: session.url });
