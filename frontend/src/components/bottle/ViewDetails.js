@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
-import { getMaturityStatus } from '../../utils/drinkStatus';
+import { getMaturityStatus, getPersonalWindowStatus } from '../../utils/drinkStatus';
 import { bottleAnchorYear } from '../../utils/maturityUtils';
 import { convertAmountHistorical } from '../../utils/currency';
 import { bottleSizeLabel } from '../../config/bottleSizes';
@@ -19,6 +19,9 @@ function ViewDetails({ bottle, rackInfo, cellarId, vintageProfile, priceHistory,
   const { user } = useAuth();
   const anchorYear = bottleAnchorYear(bottle);
   const maturityStatus = getMaturityStatus(vintageProfile, anchorYear);
+  // The user's OWN drink window (drinkFrom/drinkTo) — takes precedence over
+  // the sommelier profile status when set.
+  const personalWindow = getPersonalWindowStatus(bottle);
   const isNv = bottle.vintage === 'NV';
   // An NV window is only meaningful once a somm has saved it in relative mode
   // (offsets from purchase). An old absolute-year NV profile would be stale, so
@@ -143,6 +146,34 @@ function ViewDetails({ bottle, rackInfo, cellarId, vintageProfile, priceHistory,
         )}
       </div>
 
+      {/* Personal drink window — the user's own drinkFrom/drinkTo. Takes
+          precedence over the sommelier profile status below, so the profile
+          badge is suppressed while this is set. */}
+      {personalWindow && (
+        <div className="bd-section">
+          <span className="bd-section-label">{t('bottleDetail.personalWindow')}</span>
+          <div className="bd-personal-window">
+            <span className={`maturity-badge maturity-badge--${personalWindow.status}`}>
+              {personalWindow.status === 'not-ready'
+                ? t('bottleDetail.personalNotReady', { year: personalWindow.from })
+                : personalWindow.status === 'declining'
+                  ? t('bottleDetail.personalPast')
+                  : t('bottleDetail.personalDrinkNow')}
+            </span>
+            <span className="bd-window-source" title={t('bottleDetail.yourWindowTooltip')}>
+              {t('bottleDetail.yourWindow')}
+            </span>
+            <span className="bd-personal-window-years">
+              {personalWindow.from && personalWindow.to
+                ? `${personalWindow.from}–${personalWindow.to}`
+                : personalWindow.from
+                  ? t('bottleDetail.windowFromYear', { year: personalWindow.from })
+                  : t('bottleDetail.windowUntilYear', { year: personalWindow.to })}
+            </span>
+          </div>
+        </div>
+      )}
+
       {/* Sommelier maturity section — shown for NV too (somms can set a drink
           window for non-vintage sparkling); only hidden for unknown vintages */}
       {bottle.vintage && bottle.vintage !== 'Unknown' && (
@@ -159,7 +190,9 @@ function ViewDetails({ bottle, rackInfo, cellarId, vintageProfile, priceHistory,
             </div>
           ) : (
             <div className="bd-maturity-reviewed">
-              {maturityStatus && (
+              {/* Profile status badge hidden while a personal window is set —
+                  the personal window (above) takes precedence. */}
+              {maturityStatus && !personalWindow && (
                 <span className={`maturity-badge maturity-badge--${maturityStatus.status}`}>
                   {maturityStatus.label}
                 </span>
@@ -203,6 +236,14 @@ function ViewDetails({ bottle, rackInfo, cellarId, vintageProfile, priceHistory,
         <div className="bd-section">
           <span className="bd-section-label">{t('common.notes')}</span>
           <p className="bd-notes">{bottle.notes}</p>
+        </div>
+      )}
+
+      {/* Occasion — personal purpose note, distinct from tasting notes */}
+      {bottle.occasion && (
+        <div className="bd-section">
+          <span className="bd-section-label">{t('bottleDetail.occasion')}</span>
+          <p className="bd-notes"><span aria-hidden="true">{'\u{1F381}'}</span> {bottle.occasion}</p>
         </div>
       )}
 

@@ -1,6 +1,6 @@
 jest.mock('../models/WineVintageProfile', () => ({}));
 
-const { classifyMaturity, maturityLabel } = require('./maturityUtils');
+const { classifyMaturity, classifyPersonalWindow, maturityLabel } = require('./maturityUtils');
 
 // Fix the system clock to 2026 for all tests
 beforeAll(() => {
@@ -237,6 +237,82 @@ describe('classifyMaturity', () => {
       peakFrom: 2025,
     });
     expect(classifyMaturity(bottle, map)).toBe('peak');
+  });
+});
+
+// ─── Personal drink window (bottle.drinkFrom / drinkTo) ──────────────────────
+// System clock is fixed to 2026 above.
+
+describe('classifyPersonalWindow', () => {
+  test('returns null when neither drinkFrom nor drinkTo is set', () => {
+    expect(classifyPersonalWindow({})).toBeNull();
+    expect(classifyPersonalWindow({ drinkFrom: null, drinkTo: null })).toBeNull();
+    expect(classifyPersonalWindow(undefined)).toBeNull();
+  });
+
+  test('classifies not-ready / peak / declining against a full window', () => {
+    expect(classifyPersonalWindow({ drinkFrom: 2028, drinkTo: 2032 })).toBe('not-ready');
+    expect(classifyPersonalWindow({ drinkFrom: 2024, drinkTo: 2028 })).toBe('peak');
+    expect(classifyPersonalWindow({ drinkFrom: 2020, drinkTo: 2024 })).toBe('declining');
+  });
+
+  test('boundary years are inclusive', () => {
+    expect(classifyPersonalWindow({ drinkFrom: 2026, drinkTo: 2026 })).toBe('peak');
+  });
+
+  test('only drinkFrom set: open-ended after the from year', () => {
+    expect(classifyPersonalWindow({ drinkFrom: 2028 })).toBe('not-ready');
+    expect(classifyPersonalWindow({ drinkFrom: 2024 })).toBe('peak');
+  });
+
+  test('only drinkTo set: drinkable now until the to year', () => {
+    expect(classifyPersonalWindow({ drinkTo: 2030 })).toBe('peak');
+    expect(classifyPersonalWindow({ drinkTo: 2024 })).toBe('declining');
+  });
+});
+
+describe('classifyMaturity — personal window precedence', () => {
+  const wdId = 'abc123';
+  const profilePeakNow = {
+    status: 'reviewed',
+    earlyFrom: 2022, earlyUntil: 2024,
+    peakFrom: 2025, peakUntil: 2030,
+  };
+
+  function mapFor(vintage, profile = profilePeakNow) {
+    const map = new Map();
+    map.set(`${wdId}:${vintage}`, profile);
+    return map;
+  }
+
+  test('personal window overrides a reviewed profile (profile says peak, personal says not-ready)', () => {
+    const bottle = { wineDefinition: { _id: wdId }, vintage: 2020, drinkFrom: 2030, drinkTo: 2035 };
+    expect(classifyMaturity(bottle, mapFor(2020))).toBe('not-ready');
+  });
+
+  test('personal window overrides a reviewed profile (profile says peak, personal says declining)', () => {
+    const bottle = { wineDefinition: { _id: wdId }, vintage: 2020, drinkFrom: 2018, drinkTo: 2022 };
+    expect(classifyMaturity(bottle, mapFor(2020))).toBe('declining');
+  });
+
+  test('only drinkFrom set still takes precedence', () => {
+    const bottle = { wineDefinition: { _id: wdId }, vintage: 2020, drinkFrom: 2029 };
+    expect(classifyMaturity(bottle, mapFor(2020))).toBe('not-ready');
+  });
+
+  test('only drinkTo set still takes precedence', () => {
+    const bottle = { wineDefinition: { _id: wdId }, vintage: 2020, drinkTo: 2040 };
+    expect(classifyMaturity(bottle, mapFor(2020))).toBe('peak');
+  });
+
+  test('personal window applies to NV bottles and bottles without a wine definition', () => {
+    expect(classifyMaturity({ vintage: 'NV', drinkFrom: 2024, drinkTo: 2028 }, new Map())).toBe('peak');
+    expect(classifyMaturity({ wineDefinition: null, vintage: 2020, drinkTo: 2024 }, new Map())).toBe('declining');
+  });
+
+  test('no personal window → profile classification unchanged', () => {
+    const bottle = { wineDefinition: { _id: wdId }, vintage: 2020 };
+    expect(classifyMaturity(bottle, mapFor(2020))).toBe('peak');
   });
 });
 
