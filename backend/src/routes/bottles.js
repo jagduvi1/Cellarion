@@ -24,7 +24,7 @@ const { unlinkImageFiles } = require('../services/imageProcessor');
 const { gatherPriceWarnings } = require('../services/priceWarnings');
 const { getCurrentRelease } = require('../services/communityPrice');
 const { stripHtml, isSafeUrl, escapeRegex } = require('../utils/sanitize');
-const { parseAndValidateVintage } = require('../utils/validation');
+const { parseAndValidateVintage, parseDrinkYear } = require('../utils/validation');
 const { normalizeBottleSize, DEFAULT_SIZE } = require('../config/bottleSizes');
 const { toNormalized } = require('../utils/ratingUtils');
 const { classifyMaturity, buildProfileMap } = require('../utils/maturityUtils');
@@ -359,8 +359,11 @@ router.post('/', async (req, res) => {
       purchaseUrl,
       location,
       notes,
+      occasion,
       rating,
       ratingScale,
+      drinkFrom,
+      drinkTo,
       // Migration helpers — let users backdate bottles or add directly to history
       dateAdded,
       addToHistory,
@@ -384,11 +387,22 @@ router.post('/', async (req, res) => {
       if (!isSafeUrl(purchaseUrl)) return res.status(400).json({ error: 'purchaseUrl must be a valid http or https URL' });
     }
     if (notes && notes.length > 5000) return res.status(400).json({ error: 'Notes are too long (max 5000 characters)' });
+    if (occasion && occasion.length > 500) return res.status(400).json({ error: 'Occasion is too long (max 500 characters)' });
     if (location && location.length > 500) return res.status(400).json({ error: 'Location is too long (max 500 characters)' });
     if (purchaseLocation && purchaseLocation.length > 500) return res.status(400).json({ error: 'Purchase location is too long (max 500 characters)' });
 
     const { rating: resolvedRating, ratingScale: resolvedRatingScale, error: ratingError } = resolveRating(rating, ratingScale);
     if (ratingError) return res.status(400).json({ error: ratingError });
+
+    // Personal per-bottle drink window — explicitly provided invalid values
+    // are a 400 (unlike the import pipeline, which drops them silently).
+    const drinkFromCheck = parseDrinkYear(drinkFrom, 'drinkFrom');
+    if (!drinkFromCheck.ok) return res.status(400).json({ error: drinkFromCheck.error });
+    const drinkToCheck = parseDrinkYear(drinkTo, 'drinkTo');
+    if (!drinkToCheck.ok) return res.status(400).json({ error: drinkToCheck.error });
+    if (drinkFromCheck.value !== undefined && drinkToCheck.value !== undefined && drinkFromCheck.value > drinkToCheck.value) {
+      return res.status(400).json({ error: 'drinkFrom cannot be after drinkTo' });
+    }
 
     // Validate add-to-history fields
     if (addToHistory) {
@@ -446,8 +460,11 @@ router.post('/', async (req, res) => {
       purchaseUrl,
       location: stripHtml(location),
       notes: stripHtml(notes),
+      occasion: stripHtml(occasion),
       rating: resolvedRating,
-      ratingScale: resolvedRatingScale
+      ratingScale: resolvedRatingScale,
+      drinkFrom: drinkFromCheck.value,
+      drinkTo: drinkToCheck.value
     });
 
     // Allow backdating the "added" date for cellar migration
@@ -595,6 +612,7 @@ router.put('/:id', requireBottleAccess('editor'), async (req, res) => {
       if (!isSafeUrl(req.body.purchaseUrl)) return res.status(400).json({ error: 'purchaseUrl must be a valid http or https URL' });
     }
     if (req.body.notes && req.body.notes.length > 5000) return res.status(400).json({ error: 'Notes are too long (max 5000 characters)' });
+    if (req.body.occasion && req.body.occasion.length > 500) return res.status(400).json({ error: 'Occasion is too long (max 500 characters)' });
     if (req.body.location && req.body.location.length > 500) return res.status(400).json({ error: 'Location is too long (max 500 characters)' });
     if (req.body.purchaseLocation && req.body.purchaseLocation.length > 500) return res.status(400).json({ error: 'Purchase location is too long (max 500 characters)' });
 
@@ -611,11 +629,29 @@ router.put('/:id', requireBottleAccess('editor'), async (req, res) => {
       req.body.bottleSize = normalizeBottleSize(req.body.bottleSize) || DEFAULT_SIZE;
     }
 
+    // Validate the personal drink-window years before the generic field-diff
+    // loop assigns them. Explicitly provided invalid values → 400; null/''
+    // clears the field. The from<=to check uses effective values so a partial
+    // update can't invert a window against the bottle's stored other half.
+    for (const field of ['drinkFrom', 'drinkTo']) {
+      if (field in req.body) {
+        const check = parseDrinkYear(req.body[field], field);
+        if (!check.ok) return res.status(400).json({ error: check.error });
+        req.body[field] = check.value ?? null;
+      }
+    }
+    const effDrinkFrom = 'drinkFrom' in req.body ? req.body.drinkFrom : bottle.drinkFrom;
+    const effDrinkTo = 'drinkTo' in req.body ? req.body.drinkTo : bottle.drinkTo;
+    if (effDrinkFrom != null && effDrinkTo != null && effDrinkFrom > effDrinkTo) {
+      return res.status(400).json({ error: 'drinkFrom cannot be after drinkTo' });
+    }
+
     // Update allowed fields — diff old vs new for the audit log
     const updateFields = [
       'vintage', 'price', 'currency', 'bottleSize',
       'purchaseDate', 'purchaseLocation', 'purchaseUrl',
-      'location', 'notes', 'rating', 'ratingScale'
+      'location', 'notes', 'occasion', 'rating', 'ratingScale',
+      'drinkFrom', 'drinkTo'
     ];
 
     // Normalize a value to a comparable string (handles Date objects vs ISO strings)
@@ -635,7 +671,7 @@ router.put('/:id', requireBottleAccess('editor'), async (req, res) => {
       return res.status(400).json({ error: 'Send rating together with ratingScale when changing the rating scale' });
     }
 
-    const htmlFields = new Set(['purchaseLocation', 'location', 'notes']);
+    const htmlFields = new Set(['purchaseLocation', 'location', 'notes', 'occasion']);
     const changes = {};
     updateFields.forEach(field => {
       if (req.body[field] !== undefined) {

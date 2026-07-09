@@ -93,6 +93,13 @@ const bottleSchema = new mongoose.Schema({
     trim: true,
     maxlength: [5000, 'Notes too long (max 5000 characters)']
   },
+  // Personal purpose note ("Saving for my 50th birthday", "Gift from Anna") —
+  // distinct from tasting `notes`.
+  occasion: {
+    type: String,
+    trim: true,
+    maxlength: [500, 'Occasion too long (max 500 characters)']
+  },
   rating: {
     type: Number
   },
@@ -101,6 +108,38 @@ const bottleSchema = new mongoose.Schema({
     type: String,
     enum: ['5', '20', '100'],
     default: '5'
+  },
+  // Personal per-bottle drink window (calendar years) — the USER'S OWN intent,
+  // set by hand or imported (e.g. CellarTracker BeginConsume/EndConsume).
+  // Deliberately bottle-level: the shared registry's WineVintageProfile stays
+  // sommelier-curated and is never written by imports.
+  drinkFrom: {
+    type: Number,
+    min: [1900, 'Drink-from year must be 1900 or later'],
+    max: [2200, 'Drink-from year must be 2200 or earlier'],
+    validate: {
+      validator: v => v == null || Number.isInteger(v),
+      message: 'Drink-from must be a whole year'
+    }
+  },
+  drinkTo: {
+    type: Number,
+    min: [1900, 'Drink-to year must be 1900 or later'],
+    max: [2200, 'Drink-to year must be 2200 or earlier'],
+    validate: [
+      {
+        validator: v => v == null || Number.isInteger(v),
+        message: 'Drink-to must be a whole year'
+      },
+      {
+        // Cross-field: runs on save (full-document validation), so it also
+        // catches a drinkFrom edit that would invert an existing window.
+        validator: function(v) {
+          return v == null || this.drinkFrom == null || v >= this.drinkFrom;
+        },
+        message: 'Drink-to year cannot be before drink-from'
+      }
+    ]
   },
   // Bottle lifecycle — 'active' until the user consumes/gifts/sells it
   status: {

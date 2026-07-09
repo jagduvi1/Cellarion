@@ -105,3 +105,38 @@ describe('parseAndValidateVintage', () => {
     expect(parseAndValidateVintage('two thousand', { now }).ok).toBe(false);
   });
 });
+
+describe('parseDrinkYear', () => {
+  const { parseDrinkYear } = require('./validation');
+
+  it('treats undefined/null/empty as "not provided"', () => {
+    expect(parseDrinkYear(undefined)).toEqual({ ok: true, value: undefined });
+    expect(parseDrinkYear(null)).toEqual({ ok: true, value: undefined });
+    expect(parseDrinkYear('')).toEqual({ ok: true, value: undefined });
+  });
+
+  it('accepts integer years in 1900-2200, incl. numeric strings', () => {
+    expect(parseDrinkYear(2035)).toEqual({ ok: true, value: 2035 });
+    expect(parseDrinkYear('2035')).toEqual({ ok: true, value: 2035 });
+    expect(parseDrinkYear(1900)).toEqual({ ok: true, value: 1900 });
+    expect(parseDrinkYear(2200)).toEqual({ ok: true, value: 2200 });
+  });
+
+  it('rejects out-of-range years, incl. the CellarTracker sentinels 1001/9999', () => {
+    expect(parseDrinkYear(1001).ok).toBe(false);
+    expect(parseDrinkYear(9999).ok).toBe(false);
+    expect(parseDrinkYear(1899).ok).toBe(false);
+    expect(parseDrinkYear(2201).ok).toBe(false);
+  });
+
+  it('rejects non-integer values', () => {
+    expect(parseDrinkYear(2020.5).ok).toBe(false);
+    expect(parseDrinkYear('soonish').ok).toBe(false);
+    expect(parseDrinkYear({ evil: true }).ok).toBe(false);
+    expect(parseDrinkYear([2020]).ok).toBe(false);
+  });
+
+  it('labels the error with the field name', () => {
+    expect(parseDrinkYear(9999, 'drinkTo').error).toMatch(/drinkTo/);
+  });
+});

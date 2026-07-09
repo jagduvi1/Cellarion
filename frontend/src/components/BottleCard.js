@@ -36,6 +36,9 @@ function BottleCard({ bottle, rackMap, cellarId, viewMode, groupCount = 1, onCli
   const displayName = bottle.wineDefinition?.name || bottle.pendingWineRequest?.wineName || t('common.unknownWine');
   const displayProducer = bottle.wineDefinition?.producer || bottle.pendingWineRequest?.producer;
   const maturityInfo = bottle.maturityStatus ? MATURITY_LABELS[bottle.maturityStatus] : null;
+  // The backend computes maturityStatus with the bottle's OWN drinkFrom/drinkTo
+  // window taking precedence over the vintage profile — flag the source here.
+  const hasPersonalWindow = Number.isFinite(bottle.drinkFrom) || Number.isFinite(bottle.drinkTo);
 
   // onClick overrides navigation — used to expand a collapsed group instead.
   const handleClick = onClick || (() => navigate(`/cellars/${cellarId}/bottles/${bottle._id}`));
@@ -87,7 +90,15 @@ function BottleCard({ bottle, rackMap, cellarId, viewMode, groupCount = 1, onCli
               <span className="pending-wine-badge">{t('bottleCard.pendingReview')}</span>
             )}
             {maturityInfo && (
-              <span className={`maturity-badge ${maturityInfo.cls}`}>{t(maturityInfo.key)}</span>
+              <span
+                className={`maturity-badge ${maturityInfo.cls}`}
+                title={hasPersonalWindow ? t('bottleCard.yourWindowTooltip') : undefined}
+              >{t(maturityInfo.key)}</span>
+            )}
+            {maturityInfo && hasPersonalWindow && (
+              <span className="maturity-badge maturity-badge--personal" title={t('bottleCard.yourWindowTooltip')}>
+                {t('bottleCard.yourWindow')}
+              </span>
             )}
             {!maturityInfo && bottle.maturityStatus === null && bottle.hasOwnProperty('maturityStatus') && (
               <span className="maturity-badge maturity-badge--none">{t('maturity.noData')}</span>
@@ -151,7 +162,15 @@ function BottleCard({ bottle, rackMap, cellarId, viewMode, groupCount = 1, onCli
             <span className="pending-wine-badge">{t('bottleCard.pendingReview')}</span>
           )}
           {maturityInfo && (
-            <span className={`maturity-badge ${maturityInfo.cls}`}>{t(maturityInfo.key)}</span>
+            <span
+              className={`maturity-badge ${maturityInfo.cls}`}
+              title={hasPersonalWindow ? t('bottleCard.yourWindowTooltip') : undefined}
+            >{t(maturityInfo.key)}</span>
+          )}
+          {maturityInfo && hasPersonalWindow && (
+            <span className="maturity-badge maturity-badge--personal" title={t('bottleCard.yourWindowTooltip')}>
+              {t('bottleCard.yourWindow')}
+            </span>
           )}
           {!maturityInfo && bottle.maturityStatus === null && bottle.hasOwnProperty('maturityStatus') && (
             <span className="maturity-badge maturity-badge--none">{t('maturity.noData')}</span>

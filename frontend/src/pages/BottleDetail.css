@@ -848,6 +848,34 @@
 .maturity-badge--declining { background: var(--color-danger-bg); color: var(--color-danger); border: 1px solid var(--color-danger-border); }
 .maturity-badge--pending   { background: var(--color-surface-raised); color: var(--color-text-muted); border: 1px solid var(--color-border); }
 
+/* ── Personal drink window (bottle.drinkFrom/drinkTo) ── */
+.bd-personal-window {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+/* Small "your window" source chip — distinguishes the personal window from
+   the sommelier profile-based display */
+.bd-window-source {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 10px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  background: var(--color-surface-raised);
+  color: var(--color-text-muted);
+  border: 1px dashed var(--color-border);
+}
+
+.bd-personal-window-years {
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
+}
+
 /* ── Bottle edit image upload ── */
 .bd-image-section {
   border-top: 1px solid var(--color-border);

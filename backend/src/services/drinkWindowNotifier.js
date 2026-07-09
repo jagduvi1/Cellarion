@@ -13,7 +13,7 @@ const Cellar = require('../models/Cellar');
 const Bottle = require('../models/Bottle');
 const SiteConfig = require('../models/SiteConfig');
 const { CONSUMED_STATUSES } = require('../config/constants');
-const { classifyMaturity, buildProfileMap } = require('../utils/maturityUtils');
+const { classifyMaturity, classifyPersonalWindow, buildProfileMap } = require('../utils/maturityUtils');
 const { createNotification } = require('./notifications');
 const { sendDrinkWindowDigest, EMAIL_VERIFICATION_ENABLED } = require('./mailgun');
 
@@ -104,14 +104,21 @@ async function processUser(user, isFirstRun) {
     user: user._id,
     cellar: { $in: cellarIds },
     status: { $nin: CONSUMED_STATUSES },
-    wineDefinition: { $ne: null },
-    vintage: { $ne: 'NV' }
+    // Profile-classified bottles need a wine definition + real vintage; a
+    // bottle with a PERSONAL drink window (drinkFrom/drinkTo) is classified
+    // from that window directly and qualifies regardless (incl. NV).
+    $or: [
+      { wineDefinition: { $ne: null }, vintage: { $ne: 'NV' } },
+      { drinkFrom: { $ne: null } },
+      { drinkTo: { $ne: null } }
+    ]
   }).populate({ path: 'wineDefinition', select: 'name producer' }).lean();
 
   if (bottles.length === 0) return 0;
 
   const profileMap = await buildProfileMap(bottles);
-  if (profileMap.size === 0) return 0;
+  const anyPersonalWindow = bottles.some(b => Number.isFinite(b.drinkFrom) || Number.isFinite(b.drinkTo));
+  if (profileMap.size === 0 && !anyPersonalWindow) return 0;
 
   const currentYear = new Date().getFullYear();
   const alerts = []; // { bottleId, name, vintage, status, notifType }
@@ -125,12 +132,20 @@ async function processUser(user, isFirstRun) {
     const profile = profileMap.get(`${wdId}:${bottle.vintage}`);
     const prevStatus = bottle.drinkWindowNotifiedStatus;
 
+    // When the bottle's PERSONAL window governs the status (same precedence as
+    // classifyMaturity), "ending soon" is measured against its drinkTo year
+    // rather than the profile's peakUntil.
+    const personalGoverns = classifyPersonalWindow(bottle, currentYear) !== null;
+    const windowEnd = personalGoverns
+      ? (Number.isFinite(bottle.drinkTo) ? bottle.drinkTo : null)
+      : profile?.peakUntil;
+
     // Determine notification type based on transition
     let notifType = null;
 
     if (maturityStatus === 'peak' && prevStatus !== 'peak' && prevStatus !== 'ending') {
       notifType = 'peak';
-    } else if (maturityStatus === 'peak' && profile?.peakUntil && (profile.peakUntil - currentYear) <= 1 && prevStatus !== 'ending') {
+    } else if (maturityStatus === 'peak' && windowEnd && (windowEnd - currentYear) <= 1 && prevStatus !== 'ending') {
       notifType = 'ending';
     } else if (maturityStatus === 'declining' && prevStatus !== 'declining') {
       notifType = 'declining';
