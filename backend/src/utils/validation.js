@@ -81,4 +81,41 @@ function parseAndValidateVintage(raw, { now = new Date() } = {}) {
   return { ok: true, value: String(year) };
 }
 
-module.exports = { isValidId, coerceStringQuery, parseAndValidateVintage, MIN_VINTAGE_YEAR };
+// Bounds for the personal per-bottle drink window (Bottle.drinkFrom/drinkTo).
+// Must match the Bottle schema's min/max. The lower bound also re-guards the
+// CellarTracker "unknown" sentinel 1001, the upper bound the sentinel 9999,
+// in case a client didn't strip them.
+const DRINK_YEAR_MIN = 1900;
+const DRINK_YEAR_MAX = 2200;
+
+/**
+ * Parse an optional drink-window boundary year (drinkFrom / drinkTo).
+ *
+ * Returns one of:
+ *   { ok: true,  value: undefined } — not provided (undefined/null/'')
+ *   { ok: true,  value: 2035 }      — valid integer year in bounds
+ *   { ok: false, error: '...' }     — provided but not a whole year in
+ *                                     [DRINK_YEAR_MIN, DRINK_YEAR_MAX]
+ *
+ * Callers decide severity: the bottle routes answer 400 on an explicitly
+ * provided invalid value; the import pipeline drops it silently (a bad
+ * imported year must never fail the row).
+ *
+ * Accepts numbers and numeric strings (CSV-sourced values).
+ */
+function parseDrinkYear(raw, label = 'Drink year') {
+  if (raw === undefined || raw === null || raw === '') return { ok: true, value: undefined };
+  // Only scalar inputs — Number([2020]) coerces to 2020, so an array/object
+  // body value (e.g. ?x[$gt]= shapes) must not sneak through as a year.
+  if (typeof raw !== 'number' && typeof raw !== 'string') {
+    return { ok: false, error: `${label} must be a whole year` };
+  }
+  const n = Number(raw);
+  if (!Number.isInteger(n)) return { ok: false, error: `${label} must be a whole year` };
+  if (n < DRINK_YEAR_MIN || n > DRINK_YEAR_MAX) {
+    return { ok: false, error: `${label} ${n} is out of range (${DRINK_YEAR_MIN}–${DRINK_YEAR_MAX})` };
+  }
+  return { ok: true, value: n };
+}
+
+module.exports = { isValidId, coerceStringQuery, parseAndValidateVintage, parseDrinkYear, MIN_VINTAGE_YEAR, DRINK_YEAR_MIN, DRINK_YEAR_MAX };

@@ -24,8 +24,8 @@ const {
   MAX_IMPORT_SIZE,
   AI_CONCURRENCY,
 } = require('../config/constants');
-const { stripHtml, escapeRegex } = require('../utils/sanitize');
-const { parseAndValidateVintage } = require('../utils/validation');
+const { stripHtml, escapeRegex, sanitizeGrapeNames } = require('../utils/sanitize');
+const { parseAndValidateVintage, parseDrinkYear } = require('../utils/validation');
 const { ensurePendingVintageProfile } = require('../utils/vintageProfile');
 const { extractAiExplanation } = require('../utils/jsonExtract');
 const { getMaxPosition } = require('../utils/rackGeometry');
@@ -271,7 +271,17 @@ router.post('/validate', aiBurstLimiter, async (req, res) => {
         else pr.aiWineError = cached.error;
       } else {
         try {
-          const { wine, created } = await findOrCreateWine(pr.aiIdentified, req.user.id);
+          // Import-supplied grape names (optional `item.grapes`, e.g. from a
+          // CellarTracker export) supplement the AI identification only when
+          // the AI returned no grapes of its own. findOrCreateWine resolves
+          // grape taxonomy (synonyms, find-or-create) and only applies grapes
+          // when it CREATES a wine — matched registry wines are never mutated.
+          const importGrapes = sanitizeGrapeNames(pr.item.grapes);
+          const aiHasGrapes = Array.isArray(pr.aiIdentified.grapes) && pr.aiIdentified.grapes.length > 0;
+          const wineData = (importGrapes.length > 0 && !aiHasGrapes)
+            ? { ...pr.aiIdentified, grapes: importGrapes }
+            : pr.aiIdentified;
+          const { wine, created } = await findOrCreateWine(wineData, req.user.id);
           createdWineCache.set(key, { wine, created });
           pr.aiWine = wine;
           pr.aiWineCreated = created;
@@ -401,6 +411,14 @@ router.post('/validate', aiBurstLimiter, async (req, res) => {
  * Each item must have a confirmed wineDefinition ID.
  *
  * Body: { cellarId, items: [{ wineDefinition, vintage, price, currency, ... }] }
+ * Optional per-item fields (additive — items without them behave as before):
+ *   grapes          — array of grape-name strings; suggestions for NEW wines
+ *                     only (request-wine path → WineRequest.suggestedGrapes);
+ *                     matched registry wines are never mutated
+ *   drinkFrom/drinkTo — integer years (1900–2200, from <= to); stored as the
+ *                     user's own per-bottle drink window (Bottle.drinkFrom/
+ *                     drinkTo — never the shared registry). Invalid values
+ *                     are silently dropped, never failing the row.
  * Response: { created, skipped, errors[] }
  */
 router.post('/confirm', async (req, res) => {
@@ -596,6 +614,21 @@ router.post('/confirm', async (req, res) => {
       try {
         let wineDoc = null;
 
+        // Optional personal drink window (drinkFrom/drinkTo years, e.g.
+        // CellarTracker BeginConsume/EndConsume) — stored on the bottle
+        // itself, never on the shared registry. Invalid values are silently
+        // dropped: a bad imported year must never fail the row. An inverted
+        // pair (from > to) is dropped whole — we can't tell which side is
+        // wrong. undefined fields are simply omitted from the document.
+        const fromCheck = parseDrinkYear(item.drinkFrom, 'drinkFrom');
+        const toCheck = parseDrinkYear(item.drinkTo, 'drinkTo');
+        let drinkFrom = fromCheck.ok ? fromCheck.value : undefined;
+        let drinkTo = toCheck.ok ? toCheck.value : undefined;
+        if (drinkFrom !== undefined && drinkTo !== undefined && drinkFrom > drinkTo) {
+          drinkFrom = undefined;
+          drinkTo = undefined;
+        }
+
         if (item.requestWine) {
           // No match — create a pending WineRequest and bottle without wineDefinition
           if (!item.wineName && !item.producer) {
@@ -607,12 +640,18 @@ router.post('/confirm', async (req, res) => {
           let wineRequest = pendingRequestCache.get(requestKey);
 
           if (!wineRequest) {
+            // Optional import-supplied grape names ride along as suggestions —
+            // the admin sees them when resolving the request and decides which
+            // taxonomy grapes the new wine definition gets (registry integrity:
+            // imports never write taxonomy directly on this path).
+            const suggestedGrapes = sanitizeGrapeNames(item.grapes);
             wineRequest = new WineRequest({
               requestType: 'new_wine',
               wineName: (item.wineName || item.producer || '').trim(),
               producer: (item.producer || '').trim() || undefined,
               user: req.user.id,
-              status: 'pending'
+              status: 'pending',
+              ...(suggestedGrapes.length > 0 ? { suggestedGrapes } : {})
             });
             await wineRequest.save();
             pendingRequestCache.set(requestKey, wineRequest);
@@ -658,7 +697,9 @@ router.post('/confirm', async (req, res) => {
             location: stripHtml(item.location),
             notes: stripHtml(item.notes),
             rating: resolvedRating,
-            ratingScale: resolvedScale
+            ratingScale: resolvedScale,
+            drinkFrom,
+            drinkTo
           });
 
           if (item.dateAdded) bottle.createdAt = new Date(item.dateAdded);
@@ -748,7 +789,9 @@ router.post('/confirm', async (req, res) => {
           location: stripHtml(item.location),
           notes: stripHtml(item.notes),
           rating: resolvedRating,
-          ratingScale: resolvedScale
+          ratingScale: resolvedScale,
+          drinkFrom,
+          drinkTo
         });
 
         // Allow backdating
