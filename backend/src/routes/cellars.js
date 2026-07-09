@@ -560,14 +560,14 @@ router.get('/:id/statistics', async (req, res) => {
       return res.status(404).json({ error: 'Cellar not found' });
     }
 
-    // Only count active bottles in statistics
+    // Only count active bottles in statistics. Lean + the list projection:
+    // this handler only reads scalar fields (wine _id, country.name, type),
+    // so hydrating full documents with the multi-KB aiProfile made this the
+    // heaviest per-request allocation in the file on large cellars.
     const bottles = await Bottle.find({
       cellar: req.params.id,
       status: { $nin: CONSUMED_STATUSES }
-    }).populate({
-      path: 'wineDefinition',
-      populate: ['country', 'region', 'grapes']
-    });
+    }).populate(WINE_POPULATE_LIST).lean();
 
     // Batch-load historical rate snapshots for all priceSetAt dates (one DB query)
     const targetCurrency = req.query.currency || null;
@@ -1368,7 +1368,9 @@ router.patch('/:id/color', async (req, res) => {
     const { color } = req.body; // hex string or null/empty to clear
     const cellar = await Cellar.findById(req.params.id);
     const role = getCellarRole(cellar, req.user.id);
-    if (!role) return res.status(404).json({ error: 'Cellar not found' });
+    // deletedAt: soft-deleted cellars are frozen until restore, like the
+    // sibling PUT/DELETE routes enforce.
+    if (!role || cellar.deletedAt) return res.status(404).json({ error: 'Cellar not found' });
 
     const idx = cellar.userColors.findIndex(
       uc => uc.user.toString() === req.user.id.toString()
@@ -1445,7 +1447,9 @@ router.post('/:id/members', async (req, res) => {
       return res.status(400).json({ error: 'role must be viewer or editor' });
     }
 
-    const cellar = await Cellar.findOne({ _id: req.params.id, user: req.user.id });
+    // deletedAt: null — inviting to a soft-deleted cellar fired invite
+    // emails/notifications pointing at a cellar the invitee can never see.
+    const cellar = await Cellar.findOne({ _id: req.params.id, user: req.user.id, deletedAt: null });
     if (!cellar) return res.status(404).json({ error: 'Cellar not found' });
 
     const normalizedEmail = email.toLowerCase().trim();
@@ -1538,7 +1542,7 @@ router.put('/:id/members/:userId', async (req, res) => {
       return res.status(400).json({ error: 'role must be viewer or editor' });
     }
 
-    const cellar = await Cellar.findOne({ _id: req.params.id, user: req.user.id });
+    const cellar = await Cellar.findOne({ _id: req.params.id, user: req.user.id, deletedAt: null });
     if (!cellar) return res.status(404).json({ error: 'Cellar not found' });
 
     const member = cellar.members.find(m => m.user.toString() === req.params.userId);
@@ -1599,8 +1603,14 @@ router.delete('/:id/members/:userId', async (req, res) => {
 router.get('/:id/export', async (req, res) => {
   try {
     if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
-    const cellar = await Cellar.findOne({ _id: req.params.id, user: req.user.id, deletedAt: null });
-    if (!cellar) return res.status(403).json({ error: 'Not authorized — only the cellar owner can export' });
+    // Distinguish 404 (no such active cellar) from 403 (exists, not owner) —
+    // the single combined lookup told members/stale-id callers it was a
+    // permissions problem either way.
+    const cellar = await Cellar.findOne({ _id: req.params.id, deletedAt: null });
+    if (!cellar) return res.status(404).json({ error: 'Cellar not found' });
+    if (cellar.user.toString() !== req.user.id.toString()) {
+      return res.status(403).json({ error: 'Not authorized — only the cellar owner can export' });
+    }
 
     // Bound worst-case memory: a single response can't materialise more than
     // CELLAR_EXPORT_MAX bottles. Far above any real cellar; a hit is flagged in
@@ -1645,8 +1655,14 @@ router.get('/:id/export', async (req, res) => {
 router.get('/:id/audit', async (req, res) => {
   try {
     if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
-    const cellar = await Cellar.findOne({ _id: req.params.id, user: req.user.id });
-    if (!cellar) return res.status(403).json({ error: 'Not authorized' });
+    // 404 for missing/deleted cellars, 403 only when it exists and the
+    // requester isn't the owner (audit log stays owner-only, and frozen
+    // while soft-deleted like the other cellar views).
+    const cellar = await Cellar.findOne({ _id: req.params.id, deletedAt: null });
+    if (!cellar) return res.status(404).json({ error: 'Cellar not found' });
+    if (cellar.user.toString() !== req.user.id.toString()) {
+      return res.status(403).json({ error: 'Not authorized' });
+    }
 
     const logs = await AuditLog.find({ 'resource.cellarId': req.params.id })
       .sort({ timestamp: -1 })

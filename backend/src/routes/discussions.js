@@ -424,6 +424,13 @@ router.post('/', requireAuth, async (req, res) => {
     if (wineDefinition && !isValidId(wineDefinition)) {
       return res.status(400).json({ error: 'Invalid wine definition ID' });
     }
+    // Verify the wine actually exists (the reply path does the same) — a
+    // stale picker id would create a thread whose wine chip silently never
+    // renders and whose og page omits the wine link.
+    if (wineDefinition) {
+      const wineExists = await WineDefinition.exists({ _id: wineDefinition });
+      if (!wineExists) return res.status(400).json({ error: 'Wine not found' });
+    }
 
     const cleanTitle = stripHtml(title);
     const cleanBody = sanitizeForumHtml(body);
@@ -1169,7 +1176,7 @@ router.post('/:idOrSlug/report', requireAuth, async (req, res) => {
       user: req.user.id,
       discussion: discussion._id,
       reason: String(reason),
-      details: details ? stripHtml(details) : undefined
+      details: details ? stripHtml(String(details)).slice(0, 1000) : undefined
     });
 
     await report.save();
@@ -1200,7 +1207,7 @@ router.post('/:discussionId/replies/:replyId/report', requireAuth, async (req, r
       user: req.user.id,
       reply: reply._id,
       reason: String(reason),
-      details: details ? stripHtml(details) : undefined
+      details: details ? stripHtml(String(details)).slice(0, 1000) : undefined
     });
 
     await report.save();

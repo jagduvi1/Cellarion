@@ -178,13 +178,14 @@ router.post('/', async (req, res) => {
       ).catch(err => console.error('[recommendations] Email send failed:', err.message));
     }
 
-    logAudit(req, 'recommendation.send', {
-      type: 'recommendation',
-      id: rec._id,
-      wineId,
-      recipientId: recipientUser?._id || null,
-      recipientEmail: recipientUser ? null : recipientEmail
-    });
+    // wineId/recipient go in the detail arg — AuditLog.resource is a strict
+    // {type,id,cellarId} subdoc that silently dropped the extra keys. The
+    // recipient EMAIL is deliberately not logged (external-party PII with a
+    // 90-day audit retention; it already lives on the Recommendation doc).
+    logAudit(req, 'recommendation.send',
+      { type: 'recommendation', id: rec._id },
+      { wineId, recipientId: recipientUser?._id || null, externalEmail: !recipientUser }
+    );
 
     res.status(201).json({ recommendation: populated });
   } catch (err) {
@@ -235,11 +236,10 @@ router.delete('/:id', async (req, res) => {
 
     if (!rec) return res.status(404).json({ error: 'Recommendation not found' });
 
-    logAudit(req, 'recommendation.delete', {
-      type: 'recommendation',
-      id: rec._id,
-      wineId: rec.wine
-    });
+    logAudit(req, 'recommendation.delete',
+      { type: 'recommendation', id: rec._id },
+      { wineId: rec.wine }
+    );
 
     res.json({ success: true });
   } catch (err) {
