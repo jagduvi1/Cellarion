@@ -16,6 +16,48 @@ describe('toJSON', () => {
     expect(json.refreshTokenHash).toBeUndefined();
     expect(json.stripeCustomerId).toBeUndefined();
   });
+
+  it('strips failedLoginAttempts and stripeSubscriptionId (I-1 data minimisation)', () => {
+    const user = new User({
+      username: 'alice',
+      email: 'alice@cellarion.app',
+      password: 'x',
+      stripeSubscriptionId: 'sub_123',
+      failedLoginAttempts: { count: 3, firstFailedAt: new Date() }
+    });
+    const json = user.toJSON();
+    expect(json.failedLoginAttempts).toBeUndefined();
+    expect(json.stripeSubscriptionId).toBeUndefined();
+  });
+
+  it('exposes hasStripeSubscription as a derived boolean instead of the raw id', () => {
+    const without = new User({ username: 'a', email: 'a@cellarion.app', password: 'x' });
+    expect(without.toJSON().hasStripeSubscription).toBe(false);
+
+    const withSub = new User({
+      username: 'b', email: 'b@cellarion.app', password: 'x', stripeSubscriptionId: 'sub_123'
+    });
+    expect(withSub.toJSON().hasStripeSubscription).toBe(true);
+  });
+});
+
+describe('BCRYPT_COST (L-1)', () => {
+  it('is exported and set to 12', () => {
+    expect(User.BCRYPT_COST).toBe(12);
+  });
+
+  it('matches the cost of the login route DUMMY_HASH so the timing oracle stays closed', () => {
+    // Parse the literal out of routes/auth.js rather than requiring the module
+    // (the route pulls in mailgun/rate-limit config not needed here). The route
+    // also self-checks at load time and throws on drift.
+    const fs = require('fs');
+    const path = require('path');
+    const bcrypt = require('bcryptjs');
+    const src = fs.readFileSync(path.join(__dirname, '../routes/auth.js'), 'utf8');
+    const match = src.match(/DUMMY_HASH = '(\$2[aby]\$\d{2}\$[./A-Za-z0-9]{53})'/);
+    expect(match).not.toBeNull();
+    expect(bcrypt.getRounds(match[1])).toBe(User.BCRYPT_COST);
+  });
 });
 
 describe('normalizeLegacyNotifications', () => {

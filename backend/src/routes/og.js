@@ -354,6 +354,11 @@ router.get('/wines/:idOrSlug', ogLimiter, async (req, res) => {
 
     const grapeNames = (wine.grapes || []).map(g => g.name).filter(Boolean);
     const hasRating = wine.communityRating?.reviewCount > 0;
+    // Rich-snippet floor (SECURITY_AUDIT_2026-07-08 M-3): reviewCount is the
+    // distinct-author count, and a single-author "aggregate" is not an
+    // aggregate — require at least 2 distinct authors before emitting
+    // schema.org AggregateRating into search-engine structured data.
+    const hasAggregate = wine.communityRating?.reviewCount >= 2;
 
     // Pull the most authoritative vintage profile so we can include real drink-window
     // dates in the prose and FAQ. Prefer reviewed profiles, then most recent vintage.
@@ -419,7 +424,7 @@ router.get('/wines/:idOrSlug', ogLimiter, async (req, res) => {
     // JSON-LD structured data — only use Product type when we have aggregateRating,
     // otherwise Google flags it as invalid (requires offers, review, or aggregateRating).
     const ratingOn5 = hasRating ? fromNormalized(wine.communityRating.averageNormalized, '5') : null;
-    const mainEntity = (hasRating && ratingOn5 != null)
+    const mainEntity = (hasAggregate && ratingOn5 != null)
       ? {
           '@type': 'Product',
           name: wine.name,
