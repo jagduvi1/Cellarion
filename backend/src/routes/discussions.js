@@ -1,4 +1,5 @@
 const express = require('express');
+const mongoose = require('mongoose');
 const { requireAuth, optionalAuth, requireModeratorOrAdmin, isModerator } = require('../middleware/auth');
 const Discussion = require('../models/Discussion');
 const { CATEGORIES } = require('../models/Discussion');
