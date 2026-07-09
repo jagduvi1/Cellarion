@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { useTranslation, Trans } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import { listCellars } from '../api/cellars';
 import { previewCellarImport, runCellarImport } from '../api/cellarImport';
@@ -12,6 +13,7 @@ import { previewCellarImport, runCellarImport } from '../api/cellarImport';
  * - The .zip variant also re-attaches the images the user uploaded themselves.
  */
 function ImportCellar() {
+  const { t } = useTranslation();
   const { apiFetch } = useAuth();
   const navigate = useNavigate();
 
@@ -49,7 +51,7 @@ function ImportCellar() {
     try {
       const res = await previewCellarImport(apiFetch, f);
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Could not read the file');
+      if (!res.ok) throw new Error(data.error || t('importCellar.errorReadFile'));
       setPreview(data);
       const initNames = {}; const initConfirms = {};
       data.cellars.forEach(c => { initNames[c.sourceName] = c.defaultTargetName; initConfirms[c.sourceName] = false; });
@@ -83,12 +85,12 @@ function ImportCellar() {
 
   const blocking = useMemo(() => {
     for (const r of rows) {
-      if (!r.targetName) return 'Every cellar needs a name.';
-      if (r.dup) return `Two cellars would import to the same name "${r.targetName}".`;
-      if (r.willOverwrite && !confirms[r.sourceName]) return `Confirm the overwrite of "${r.targetName}".`;
+      if (!r.targetName) return t('importCellar.blockingNeedName');
+      if (r.dup) return t('importCellar.blockingDupName', { name: r.targetName });
+      if (r.willOverwrite && !confirms[r.sourceName]) return t('importCellar.blockingConfirmOverwrite', { name: r.targetName });
     }
     return null;
-  }, [rows, confirms]);
+  }, [rows, confirms, t]);
 
   const handleImport = async () => {
     setBusy(true); setError(null);
@@ -105,7 +107,7 @@ function ImportCellar() {
           setForcedOverwrites(prev => new Set(prev).add(String(data.needsConfirm).toLowerCase()));
           refreshOwnedNames();
         }
-        throw new Error(data.error || 'Import failed');
+        throw new Error(data.error || t('importCellar.errorImportFailed'));
       }
       setResult(data.results || []);
       refreshOwnedNames();
@@ -124,38 +126,39 @@ function ImportCellar() {
 
   return (
     <div className="container" style={{ maxWidth: 760, margin: '0 auto', padding: '1.5rem 1rem' }}>
-      <h1>Import a cellar</h1>
+      <h1>{t('importCellar.title')}</h1>
       <p className="settings-hint">
-        Import a Cellarion export — the <strong>.json</strong> (bottles, racks &amp; placements) or the
-        <strong> .zip</strong> (which also restores the images you uploaded yourself). Keep a cellar's name
-        to <strong>replace</strong> that cellar, or change it to <strong>create a new one</strong>.
+        <Trans
+          i18nKey="importCellar.intro"
+          components={{ 1: <strong />, 3: <strong />, 5: <strong />, 7: <strong /> }}
+        />
       </p>
 
       {/* Result view */}
       {result && (
         <div className="card settings-card">
-          <h2 className="settings-section-title">Import complete</h2>
+          <h2 className="settings-section-title">{t('importCellar.resultTitle')}</h2>
           {result.map((r, i) => (
             <div key={i} style={{ marginBottom: '1rem' }}>
               <strong>{r.targetName}</strong>{' '}
               <span className="badge" style={{ background: r.mode === 'overwrite' ? '#b45309' : '#15803d', color: '#fff', padding: '0.1rem 0.5rem', borderRadius: 4, fontSize: '0.8rem' }}>
-                {r.mode === 'overwrite' ? 'replaced' : 'created'}
+                {r.mode === 'overwrite' ? t('importCellar.modeReplaced') : t('importCellar.modeCreated')}
               </span>
               <ul style={{ marginTop: '0.5rem' }}>
-                <li>{r.bottlesCreated} bottles, {r.racksCreated} racks{r.layoutImported ? ', 3D room layout' : ''}</li>
-                <li>{r.imagesAttached} images added{r.imagesDeduped ? `, ${r.imagesDeduped} reused (already on file)` : ''}</li>
-                {r.reviewsCreated ? <li>{r.reviewsCreated} reviews restored</li> : null}
-                {r.maturityCreated ? <li>{r.maturityCreated} maturity windows added</li> : null}
-                {r.winesCreated ? <li>{r.winesCreated} new wines added to the registry</li> : null}
-                {r.wineRequests ? <li>{r.wineRequests} wines submitted for review (couldn't auto-create)</li> : null}
-                {r.unplaced?.length ? <li>{r.unplaced.length} bottles couldn't be placed in a rack slot</li> : null}
-                {r.errors?.length ? <li>{r.errors.length} rows skipped (errors)</li> : null}
+                <li>{t('importCellar.resultBottlesRacks', { bottles: r.bottlesCreated, racks: r.racksCreated })}{r.layoutImported ? t('importCellar.resultLayoutSuffix') : ''}</li>
+                <li>{t('importCellar.resultImagesAdded', { count: r.imagesAttached })}{r.imagesDeduped ? t('importCellar.resultImagesDeduped', { count: r.imagesDeduped }) : ''}</li>
+                {r.reviewsCreated ? <li>{t('importCellar.resultReviews', { count: r.reviewsCreated })}</li> : null}
+                {r.maturityCreated ? <li>{t('importCellar.resultMaturity', { count: r.maturityCreated })}</li> : null}
+                {r.winesCreated ? <li>{t('importCellar.resultWines', { count: r.winesCreated })}</li> : null}
+                {r.wineRequests ? <li>{t('importCellar.resultWineRequests', { count: r.wineRequests })}</li> : null}
+                {r.unplaced?.length ? <li>{t('importCellar.resultUnplaced', { count: r.unplaced.length })}</li> : null}
+                {r.errors?.length ? <li>{t('importCellar.resultErrors', { count: r.errors.length })}</li> : null}
               </ul>
             </div>
           ))}
           <div className="settings-actions">
-            <button className="btn btn-primary" onClick={() => navigate('/cellars')}>Go to my cellars</button>
-            <button className="btn btn-secondary" onClick={reset}>Import another</button>
+            <button className="btn btn-primary" onClick={() => navigate('/cellars')}>{t('importCellar.goToCellars')}</button>
+            <button className="btn btn-secondary" onClick={reset}>{t('importCellar.importAnother')}</button>
           </div>
         </div>
       )}
@@ -164,7 +167,7 @@ function ImportCellar() {
       {!result && (
         <div className="card settings-card">
           <div className="form-group">
-            <label htmlFor="import-file">Export file</label>
+            <label htmlFor="import-file">{t('importCellar.fileLabel')}</label>
             <input
               id="import-file"
               type="file"
@@ -175,20 +178,23 @@ function ImportCellar() {
             />
           </div>
 
-          {busy && !preview && <p className="settings-hint">Reading file…</p>}
+          {busy && !preview && <p className="settings-hint">{t('importCellar.readingFile')}</p>}
 
           {preview && (
             <>
               {!preview.hasImageFiles && rows.some(r => r.imageCount > 0) && (
                 <div className="alert" style={{ marginBottom: '1rem' }}>
-                  This is a data-only export — the bottles reference {rows.reduce((n, r) => n + r.imageCount, 0)} images,
-                  but image files aren't included. Upload the <strong>.zip</strong> export to restore images.
+                  <Trans
+                    i18nKey="importCellar.dataOnlyWarning"
+                    values={{ count: rows.reduce((n, r) => n + r.imageCount, 0) }}
+                    components={{ 1: <strong /> }}
+                  />
                 </div>
               )}
 
               {rows.map(r => (
                 <div key={r.sourceName} className="form-group" style={{ borderTop: '1px solid var(--border, #ddd)', paddingTop: '0.75rem' }}>
-                  <label htmlFor={`name-${r.sourceName}`}>Cellar "{r.sourceName}" → import as</label>
+                  <label htmlFor={`name-${r.sourceName}`}>{t('importCellar.importAsLabel', { name: r.sourceName })}</label>
                   <input
                     id={`name-${r.sourceName}`}
                     type="text"
@@ -198,25 +204,28 @@ function ImportCellar() {
                     onChange={e => setNames(prev => ({ ...prev, [r.sourceName]: e.target.value }))}
                   />
                   <div className="settings-hint" style={{ marginTop: '0.35rem' }}>
-                    {r.bottleCount} bottles · {r.rackCount} racks{r.imageCount ? ` · ${r.imageCount} images` : ''}{r.maturityCount ? ` · ${r.maturityCount} maturity windows` : ''}
+                    {t('importCellar.statsBottlesRacks', { bottles: r.bottleCount, racks: r.rackCount })}{r.imageCount ? t('importCellar.statsImages', { count: r.imageCount }) : ''}{r.maturityCount ? t('importCellar.statsMaturity', { count: r.maturityCount }) : ''}
                   </div>
-                  {r.dup && <div className="alert alert-error" style={{ marginTop: '0.5rem' }}>Duplicate target name in this import.</div>}
+                  {r.dup && <div className="alert alert-error" style={{ marginTop: '0.5rem' }}>{t('importCellar.dupTargetName')}</div>}
                   {r.willOverwrite ? (
                     <div className="alert alert-error" style={{ marginTop: '0.5rem' }}>
-                      ⚠ A cellar named <strong>{r.targetName}</strong> already exists. Importing will
-                      <strong> permanently replace its entire contents</strong> (bottles, racks &amp; your images in it).
+                      <Trans
+                        i18nKey="importCellar.overwriteWarning"
+                        values={{ name: r.targetName }}
+                        components={{ 1: <strong />, 3: <strong /> }}
+                      />
                       <label style={{ display: 'block', marginTop: '0.5rem' }}>
                         <input
                           type="checkbox"
                           checked={!!confirms[r.sourceName]}
                           onChange={e => setConfirms(prev => ({ ...prev, [r.sourceName]: e.target.checked }))}
                         />{' '}
-                        Yes, replace the existing "{r.targetName}".
+                        {t('importCellar.overwriteConfirm', { name: r.targetName })}
                       </label>
                     </div>
                   ) : (
                     <div className="settings-hint" style={{ marginTop: '0.35rem', color: '#15803d' }}>
-                      Will create a new cellar.
+                      {t('importCellar.willCreateNew')}
                     </div>
                   )}
                 </div>
@@ -227,9 +236,9 @@ function ImportCellar() {
 
               <div className="settings-actions" style={{ marginTop: '1rem' }}>
                 <button className="btn btn-primary" onClick={handleImport} disabled={busy || !!blocking}>
-                  {busy ? 'Importing…' : 'Import'}
+                  {busy ? t('importCellar.importing') : t('importCellar.importButton')}
                 </button>
-                <button className="btn btn-secondary" onClick={reset} disabled={busy}>Cancel</button>
+                <button className="btn btn-secondary" onClick={reset} disabled={busy}>{t('importCellar.cancel')}</button>
               </div>
             </>
           )}
@@ -239,7 +248,10 @@ function ImportCellar() {
       )}
 
       <p className="settings-hint" style={{ marginTop: '1rem' }}>
-        Don't have an export yet? Create one from <Link to="/settings">Settings → Take your cellars with you</Link>.
+        <Trans
+          i18nKey="importCellar.noExportYet"
+          components={{ 1: <Link to="/settings" /> }}
+        />
       </p>
     </div>
   );

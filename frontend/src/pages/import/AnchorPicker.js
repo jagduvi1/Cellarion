@@ -1,14 +1,17 @@
+import { useTranslation } from 'react-i18next';
+
 const ANCHOR_OPTIONS = [
-  { value: 'top-left',     label: 'Top-left',     sub: 'Default for most apps' },
-  { value: 'top-right',    label: 'Top-right',    sub: '' },
-  { value: 'bottom-left',  label: 'Bottom-left',  sub: 'Oeno / Vintec' },
-  { value: 'bottom-right', label: 'Bottom-right', sub: '' },
+  { value: 'top-left',     labelKey: 'importBottles.anchor.top-left',     subKey: 'importBottles.anchor.subDefault' },
+  { value: 'top-right',    labelKey: 'importBottles.anchor.top-right',    subKey: null },
+  { value: 'bottom-left',  labelKey: 'importBottles.anchor.bottom-left',  subKey: 'importBottles.anchor.subOeno' },
+  { value: 'bottom-right', labelKey: 'importBottles.anchor.bottom-right', subKey: null },
 ];
 
 export default function AnchorPicker({ value, onChange }) {
+  const { t } = useTranslation();
   return (
     <div className="anchor-picker">
-      <div className="anchor-picker-label">Where does slot 1 sit in your physical rack?</div>
+      <div className="anchor-picker-label">{t('importBottles.anchor.question')}</div>
       <div className="anchor-picker-grid">
         {ANCHOR_OPTIONS.map(opt => (
           <button
@@ -18,8 +21,8 @@ export default function AnchorPicker({ value, onChange }) {
             onClick={() => onChange(opt.value)}
           >
             <span className="anchor-dot" aria-hidden="true" />
-            <span className="anchor-label">{opt.label}</span>
-            {opt.sub && <span className="anchor-sub">{opt.sub}</span>}
+            <span className="anchor-label">{t(opt.labelKey)}</span>
+            {opt.subKey && <span className="anchor-sub">{t(opt.subKey)}</span>}
           </button>
         ))}
       </div>
