@@ -15,6 +15,11 @@
 
 const { VOYAGE_DIMENSION } = require('./embedding');
 
+// Outbound timeout: Node fetch has no application-level timeout, so a stalled
+// Qdrant connection would park callers (notably the /api/chat RAG path) until
+// undici's ~300 s default fires. Same AbortSignal pattern as imageProcessor.js.
+const QDRANT_TIMEOUT_MS = 8000;
+
 function qdrantBase() {
   return (process.env.QDRANT_URL || 'http://localhost:6333').replace(/\/$/, '');
 }
@@ -27,11 +32,22 @@ async function qdrantRequest(method, path, body) {
   const url = `${qdrantBase()}${path}`;
   const opts = {
     method,
-    headers: { 'Content-Type': 'application/json' }
+    headers: { 'Content-Type': 'application/json' },
+    signal: AbortSignal.timeout(QDRANT_TIMEOUT_MS)
   };
   if (body !== undefined) opts.body = JSON.stringify(body);
 
-  const res = await fetch(url, opts);
+  let res;
+  try {
+    res = await fetch(url, opts);
+  } catch (err) {
+    // Surface timeouts as the same plain-Error shape callers already handle
+    // for Qdrant connection failures (no .status → generic degrade path).
+    if (err.name === 'TimeoutError' || err.name === 'AbortError') {
+      throw new Error(`Qdrant ${method} ${path} timed out after ${QDRANT_TIMEOUT_MS}ms`);
+    }
+    throw err;
+  }
   const json = await res.json().catch(() => ({}));
 
   if (!res.ok) {
