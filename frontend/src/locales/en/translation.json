@@ -2658,5 +2658,110 @@
     "daysAgo": "{{n}}d ago",
     "monthsAgo": "{{n}}mo ago",
     "yearsAgo": "{{n}}y ago"
+  },
+  "cellarChat": {
+    "title": "Cellar Chat",
+    "newChat": "New chat",
+    "newChatAria": "Start a new conversation",
+    "usagePeriodToday": "today",
+    "usagePeriodWeek": "this week",
+    "allCellars": "All cellars",
+    "selectedCellar": "Selected cellar",
+    "nCellars_one": "{{count}} cellar",
+    "nCellars_other": "{{count}} cellars",
+    "tryAsking": "Try asking…",
+    "categories": {
+      "foodPairing": "Food pairing",
+      "occasion": "Occasion",
+      "cellarCheck": "Cellar check",
+      "moodStyle": "Mood & style"
+    },
+    "prompts": {
+      "food1": "I'm making lamb with rosemary tonight — what should I open?",
+      "food2": "What pairs well with grilled salmon from my cellar?",
+      "food3": "I'm having a cheese board with friends — what do you suggest?",
+      "food4": "What goes with a rich beef stew?",
+      "occasion1": "I need something special for a birthday dinner for two.",
+      "occasion2": "We're celebrating an anniversary — what's the best bottle I have?",
+      "occasion3": "Something easy and relaxed for a summer barbecue.",
+      "occasion4": "What's a good bottle to bring as a gift?",
+      "cellar1": "What's drinking well in my cellar right now?",
+      "cellar2": "Do I have anything that's past its peak and should drink soon?",
+      "cellar3": "What's my most interesting bottle right now?",
+      "cellar4": "Show me something I might have forgotten about.",
+      "mood1": "I want something light and fresh for a weeknight.",
+      "mood2": "Something bold and tannic to go with a steak.",
+      "mood3": "I'm in the mood for something elegant and complex.",
+      "mood4": "What's a good summer evening wine from my cellar?"
+    },
+    "tipLabel": "Tip:",
+    "tipBody": "describe food, occasion, or mood for the best results.",
+    "tipExample": "<1>\"Grilled salmon with herb butter\"</1> works much better than <3>\"white wine\"</3>.",
+    "searchingFor": "Searching for",
+    "thinking": "Thinking…",
+    "searchingCellar": "Searching your cellar…",
+    "errorGeneric": "Something went wrong.",
+    "errorNetwork": "Network error — please try again.",
+    "errorBurst": "Too many chat requests in a short time. Please wait a minute and try again.",
+    "errorQuotaDaily_one": "You've reached your daily limit of {{count}} question. Try again tomorrow.",
+    "errorQuotaDaily_other": "You've reached your daily limit of {{count}} questions. Try again tomorrow.",
+    "errorQuotaWeekly_one": "You've reached your weekly limit of {{count}} question. Try again in a few days.",
+    "errorQuotaWeekly_other": "You've reached your weekly limit of {{count}} questions. Try again in a few days.",
+    "placeholder": "Ask about your cellar… (Enter to send, Shift+Enter for new line)",
+    "placeholderLimitDaily": "Daily limit reached — resets at midnight UTC",
+    "placeholderLimitWeekly": "Weekly limit reached — try again in a few days",
+    "send": "Send"
+  },
+  "userProfile": {
+    "loading": "Loading...",
+    "notFound": "User not found",
+    "failedLoad": "Failed to load profile",
+    "memberSince": "Member since {{date}}",
+    "followers": "Followers",
+    "following": "Following",
+    "reviews": "Reviews",
+    "noReviews": "No reviews yet.",
+    "loadMore": "Load More",
+    "noneYet": "None yet.",
+    "listError": "Couldn't load the list — please try again.",
+    "close": "Close"
+  },
+  "support": {
+    "title": "Support",
+    "newTicket": "+ New Support Ticket",
+    "myTickets": "My Tickets ({{count}})",
+    "myWineReports": "My Wine Reports ({{count}})",
+    "loading": "Loading…",
+    "failedLoad": "Failed to load support history.",
+    "noTickets": "No support tickets yet. Use the button above to get help.",
+    "noReports": "No wine reports yet. Use the \"Report\" button on any wine to flag an issue.",
+    "yourMessage": "Your message",
+    "adminResponse": "Admin response",
+    "awaitingResponse": "Awaiting admin response…",
+    "yourDetails": "Your details",
+    "adminNotes": "Admin notes",
+    "underReview": "Under review…",
+    "category": {
+      "bug": "Bug Report",
+      "help": "Help / Question",
+      "feature": "Feature Request",
+      "other": "Other"
+    },
+    "status": {
+      "open": "Open",
+      "in_progress": "In Progress",
+      "closed": "Closed"
+    },
+    "reason": {
+      "wrong_info": "Wrong Information",
+      "duplicate": "Duplicate Entry",
+      "inappropriate": "Inappropriate Content",
+      "other": "Other"
+    },
+    "reportStatus": {
+      "pending": "Pending",
+      "resolved": "Resolved",
+      "dismissed": "Dismissed"
+    }
   }
 }
