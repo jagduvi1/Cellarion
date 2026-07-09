@@ -17,10 +17,6 @@ export const REACTIONS = [
   { kind: 'pray',      emoji: '🙏', labelKey: 'reactions.pray' }
 ];
 
-// Lookup table for emoji-by-kind; used by ReactionChip to render existing
-// counts without re-iterating the array.
-export const EMOJI_BY_KIND = Object.fromEntries(REACTIONS.map(r => [r.kind, r.emoji]));
-
 /**
  * Floating "+" button that opens the 8-reaction picker. Calls onPick with
  * the chosen kind. Closes on outside click or Escape.

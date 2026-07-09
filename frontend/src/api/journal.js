@@ -3,9 +3,6 @@ import { JSON_HEADERS } from './apiConstants';
 export const getJournalEntries = (apiFetch, params = '') =>
   apiFetch(`/api/journal${params ? `?${params}` : ''}`);
 
-export const getJournalEntry = (apiFetch, id) =>
-  apiFetch(`/api/journal/${id}`);
-
 export const createJournalEntry = (apiFetch, data) =>
   apiFetch('/api/journal', {
     method: 'POST',

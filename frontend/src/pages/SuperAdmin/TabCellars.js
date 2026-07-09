@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
-import { adminPermanentDeleteCellar } from '../../api/admin';
+import { adminGetDeletedCellars, adminRestoreCellar, adminPermanentDeleteCellar } from '../../api/admin';
 import ConfirmModal from '../../components/ConfirmModal';
 import { fmtDate } from './helpers';
 
@@ -28,7 +28,7 @@ export default function TabCellars() {
     try {
       const params = new URLSearchParams({ limit: PAGE_SIZE, offset: p * PAGE_SIZE });
       if (q) params.set('search', q);
-      const res = await apiFetch(`/api/admin/cellars/deleted?${params}`);
+      const res = await adminGetDeletedCellars(apiFetch, params);
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         throw new Error(body.error || `HTTP ${res.status}`);
@@ -57,7 +57,7 @@ export default function TabCellars() {
     setRestoring(prev => ({ ...prev, [cellar._id]: true }));
     setError(null);
     try {
-      const res = await apiFetch(`/api/admin/cellars/${cellar._id}/restore`, { method: 'POST' });
+      const res = await adminRestoreCellar(apiFetch, cellar._id);
       const body = await res.json();
       if (res.ok) {
         setNotices(prev => [...prev, `Restored "${body.cellar.name}"`]);

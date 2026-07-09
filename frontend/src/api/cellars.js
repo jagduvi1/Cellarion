@@ -11,8 +11,8 @@ export const getCellarStatistics = (apiFetch, id, currency) =>
 export const getCellarAudit = (apiFetch, id) =>
   apiFetch(`/api/cellars/${id}/audit`);
 
-export const getCellarHistory = (apiFetch, id) =>
-  apiFetch(`/api/cellars/${id}/history`);
+export const getCellarHistory = (apiFetch, id, params = '') =>
+  apiFetch(`/api/cellars/${id}/history${params ? `?${params}` : ''}`);
 
 // Cross-cellar (multi-select) views. `params` is a URLSearchParams string that
 // must include `cellars=id1,id2,...` plus any search/filter params.
@@ -38,6 +38,3 @@ export const updateCellarColor = (apiFetch, id, color) =>
     headers: JSON_HEADERS,
     body: JSON.stringify({ color }),
   });
-
-export const exportCellar = (apiFetch, id) =>
-  apiFetch(`/api/cellars/${id}/export`);

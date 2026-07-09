@@ -1,5 +1,4 @@
 import React, { createContext, useState, useContext, useEffect, useRef, useCallback } from 'react';
-import { getPlanConfig } from '../config/plans';
 import { createApiFetch } from '../utils/apiFetch';
 import i18n from '../i18n';
 
@@ -11,17 +10,6 @@ export const useAuth = () => {
     throw new Error('useAuth must be used within an AuthProvider');
   }
   return context;
-};
-
-/**
- * Convenience hook that returns plan-related helpers for the current user.
- * Must be used inside an AuthProvider.
- */
-export const usePlan = () => {
-  const { user } = useAuth();
-  const plan = user?.plan || 'free';
-  const config = getPlanConfig(plan);
-  return { plan, config };
 };
 
 export const AuthProvider = ({ children }) => {
