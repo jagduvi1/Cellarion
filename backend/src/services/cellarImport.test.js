@@ -18,17 +18,32 @@ jest.mock('../models/WineVintageProfile', () => ({
   create: jest.fn(),
 }));
 
+// attachImages: mock the model so the sanitize/skip/write logic can be
+// asserted without a live MongoDB; disk writes are spied on instead of
+// hitting /app/uploads (which doesn't exist outside the container).
+jest.mock('../models/BottleImage', () => ({
+  findOne: jest.fn(),
+  create: jest.fn(),
+}));
+
+const fs = require('fs');
+const sharp = require('sharp');
+
 const {
   parseCellarExport,
   archivePathToUrl,
   resolveTargets,
   exportBottleToItem,
   attachMaturity,
+  attachImages,
   EXPORT_SCHEMA,
   MAX_IMPORT_CELLARS,
   MAX_IMPORT_BOTTLES,
 } = require('./cellarImport');
 const WineVintageProfile = require('../models/WineVintageProfile');
+const BottleImage = require('../models/BottleImage');
+
+sharp.cache(false);
 
 describe('parseCellarExport', () => {
   test('accepts the cellar-nested cellarion-export@1 format', () => {
@@ -261,5 +276,120 @@ describe('attachMaturity', () => {
     await attachMaturity({ peakFrom: 2026 }, 'w1', '2018', result, seen); // same key → no-op
     expect(WineVintageProfile.create).toHaveBeenCalledTimes(1);
     expect(result.maturityCreated).toBe(1);
+  });
+});
+
+describe('attachImages sanitization (SECURITY_AUDIT L-13)', () => {
+  // ZIP-extracted bytes are attacker-controlled: every buffer must pass
+  // through sanitizeImageBuffer() (magic-byte check, pixel cap, EXIF/GPS
+  // strip) before fs.writeFileSync — and a bad image must be SKIPPED with a
+  // recorded warning, never fail the import.
+  let writeSpy;
+
+  const freshResult = () => ({
+    imagesAttached: 0, imagesDeduped: 0, imagesSkipped: 0, errors: [],
+  });
+  const freshBottle = () => ({ _id: 'b1', wineDefinition: null, save: jest.fn() });
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    writeSpy = jest.spyOn(fs, 'writeFileSync').mockImplementation(() => {});
+    // No byte-identical image on record → always take the write path.
+    BottleImage.findOne.mockReturnValue({ select: () => ({ lean: () => Promise.resolve(null) }) });
+    BottleImage.create.mockImplementation(async (doc) => ({ _id: 'img1', ...doc }));
+  });
+
+  afterEach(() => writeSpy.mockRestore());
+
+  async function jpegWithExif() {
+    return sharp({
+      create: { width: 8, height: 4, channels: 3, background: { r: 10, g: 20, b: 30 } },
+    })
+      .jpeg()
+      .withMetadata({
+        exif: { IFD0: { Make: 'TestCam' }, GPS: { GPSLatitudeRef: 'N', GPSLongitudeRef: 'E' } },
+      })
+      .toBuffer();
+  }
+
+  test('a bad image is skipped with a per-image warning; the good one is still written', async () => {
+    const good = await jpegWithExif();
+    const files = {
+      'images/good.jpg': good,
+      'images/bad.png': Buffer.from('definitely not an image'),
+    };
+    const result = freshResult();
+
+    await attachImages(
+      freshBottle(),
+      [{ original: 'images/bad.png' }, { original: 'images/good.jpg' }],
+      'u1',
+      (p) => files[p] || null,
+      result,
+      new Map(),
+      3 // sourceIndex of the bottle in the import
+    );
+
+    expect(result.imagesAttached).toBe(1);
+    expect(result.imagesSkipped).toBe(1);
+    expect(result.errors).toHaveLength(1);
+    expect(result.errors[0]).toMatchObject({ index: 3 });
+    expect(result.errors[0].reason).toMatch(/images\/bad\.png/);
+    expect(writeSpy).toHaveBeenCalledTimes(1);       // only the good image reached disk
+    expect(BottleImage.create).toHaveBeenCalledTimes(1);
+  });
+
+  test('the written buffer is sanitized (EXIF/GPS stripped) — not the raw ZIP bytes', async () => {
+    const good = await jpegWithExif();
+    expect((await sharp(good).metadata()).exif).toBeDefined(); // raw bytes DO carry EXIF
+
+    const result = freshResult();
+    await attachImages(
+      freshBottle(), [{ original: 'images/gps.jpg' }], 'u1',
+      () => good, result, new Map(), 0
+    );
+
+    const [writtenPath, writtenBuf] = writeSpy.mock.calls[0];
+    expect(writtenBuf).not.toEqual(good);
+    const meta = await sharp(writtenBuf).metadata();
+    expect(meta.exif).toBeUndefined();
+    expect(meta.format).toBe('jpeg');
+    expect(String(writtenPath)).toMatch(/\.jpg$/);
+  });
+
+  test('the file extension follows the actual bytes, not the archive filename', async () => {
+    // A real JPEG smuggled under a "processed …png" archive name must be
+    // written as .jpg (the sanitizer preserves the decoded format).
+    const jpeg = await jpegWithExif();
+    const result = freshResult();
+
+    await attachImages(
+      freshBottle(), [{ processed: 'images/liar.png' }], 'u1',
+      () => jpeg, result, new Map(), 0
+    );
+
+    const [writtenPath] = writeSpy.mock.calls[0];
+    expect(String(writtenPath)).toMatch(/\.jpg$/);
+    expect(BottleImage.create).toHaveBeenCalledWith(
+      expect.objectContaining({ processedUrl: expect.stringMatching(/\.jpg$/) })
+    );
+    expect(result.imagesAttached).toBe(1);
+  });
+
+  test('all images bad → nothing written, import result still sane', async () => {
+    const result = freshResult();
+    const bottle = freshBottle();
+
+    await attachImages(
+      bottle, [{ original: 'a.jpg' }, { original: 'b.jpg' }], 'u1',
+      () => Buffer.from('junk bytes that are not an image'), result, new Map(), 5
+    );
+
+    expect(result.imagesAttached).toBe(0);
+    expect(result.imagesSkipped).toBe(2);
+    expect(result.errors).toHaveLength(2);
+    expect(writeSpy).not.toHaveBeenCalled();
+    expect(BottleImage.create).not.toHaveBeenCalled();
+    expect(bottle.save).not.toHaveBeenCalled(); // no defaultImage to set
   });
 });

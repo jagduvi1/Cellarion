@@ -19,6 +19,10 @@
 const VOYAGE_API_URL = 'https://api.voyageai.com/v1/embeddings';
 const VOYAGE_DIMENSION = 2048;
 const DEFAULT_MODEL = 'voyage-4-large';
+// Outbound timeout: Node fetch has no application-level timeout, so a stalled
+// Voyage connection would park callers (notably the /api/chat RAG path) until
+// undici's ~300 s default fires. Same AbortSignal pattern as imageProcessor.js.
+const VOYAGE_TIMEOUT_MS = 15000;
 
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
@@ -43,14 +47,25 @@ async function embed(texts, { model = DEFAULT_MODEL, maxRetries = 6 } = {}) {
   let delay = 2000; // ms — initial backoff
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    const res = await fetch(VOYAGE_API_URL, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ input: texts, model, output_dimension: VOYAGE_DIMENSION })
-    });
+    let res;
+    try {
+      res = await fetch(VOYAGE_API_URL, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ input: texts, model, output_dimension: VOYAGE_DIMENSION }),
+        signal: AbortSignal.timeout(VOYAGE_TIMEOUT_MS)
+      });
+    } catch (err) {
+      // Surface timeouts as the same plain-Error shape callers already handle
+      // for Voyage failures (no .status → generic 500 degrade path).
+      if (err.name === 'TimeoutError' || err.name === 'AbortError') {
+        throw new Error(`Voyage AI request timed out after ${VOYAGE_TIMEOUT_MS}ms`);
+      }
+      throw err;
+    }
 
     if (res.ok) {
       const json = await res.json();

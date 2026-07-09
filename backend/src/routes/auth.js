@@ -54,6 +54,17 @@ async function resolvePendingShares(user) {
 
 const router = express.Router();
 
+// Dummy hash compared on login when the identifier matches no account, so the
+// response time is indistinguishable from a real wrong-password compare and
+// cannot be used for account enumeration (L-1). It MUST be generated at
+// User.BCRYPT_COST (12) — a cheaper hash compares ~4x faster and reopens the
+// timing oracle. Regenerate if the cost ever changes:
+//   node -e "console.log(require('bcryptjs').hashSync(require('crypto').randomBytes(32).toString('hex'), 12))"
+const DUMMY_HASH = '$2a$12$KHe5z0O8iNPzEuBLuI.qQOzUxRhCDEIAkNnrno5lWxvC4andqTkfm';
+if (bcrypt.getRounds(DUMMY_HASH) !== User.BCRYPT_COST) {
+  throw new Error(`DUMMY_HASH cost ${bcrypt.getRounds(DUMMY_HASH)} != BCRYPT_COST ${User.BCRYPT_COST} — regenerate DUMMY_HASH in routes/auth.js`);
+}
+
 // Rate limiter for auth endpoints — default 10 per 15 min (admin-configurable)
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -104,15 +115,41 @@ const generateAccessToken = (user) => {
 // Generate opaque refresh token (random bytes) and store its hash on the user
 const generateRefreshToken = () => crypto.randomBytes(64).toString('hex');
 
-// Cookie options for the httpOnly refresh token
+// Secure flag for the refresh cookie (L-22): dedicated COOKIE_SECURE override
+// ('true'/'false'), falling back to the old NODE_ENV inference when unset.
+// Self-hosters serving plain HTTP must set COOKIE_SECURE=false once the image
+// ships with NODE_ENV=production, or the browser will drop the cookie.
+const COOKIE_SECURE = process.env.COOKIE_SECURE
+  ? process.env.COOKIE_SECURE === 'true'
+  : process.env.NODE_ENV === 'production';
+
+// Cookie options for the httpOnly refresh token. path-scoped to /api/auth
+// (L-23) so the 30-day credential only rides on auth endpoints instead of
+// every backend request (uploads, JSON APIs, SSE) where it could land in
+// logs/proxies.
 const refreshCookieBase = {
   httpOnly: true,
-  secure: process.env.NODE_ENV === 'production',
-  sameSite: 'lax'
+  secure: COOKIE_SECURE,
+  sameSite: 'lax',
+  path: '/api/auth'
 };
 
 // Backward-compatible default (7-day persistent cookie)
 const refreshCookieOptions = { ...refreshCookieBase, maxAge: 7 * 24 * 60 * 60 * 1000 };
+
+// Clear the refresh cookie. clearCookie only removes a cookie whose path
+// matches, so we clear BOTH the scoped path and the legacy path '/' — sessions
+// issued before the /api/auth scoping (L-23) still carry a path=/ cookie until
+// their next rotation, and clearing only the scoped variant would silently
+// leave the old credential behind. The legacy clear can be dropped once all
+// pre-scoping sessions have aged out (30-day absolute lifetime).
+// Uses refreshCookieBase (no maxAge): passing maxAge to clearCookie makes
+// Express re-derive a FUTURE expiry, leaving an empty cookie behind instead
+// of deleting it.
+const clearRefreshCookie = (res) => {
+  res.clearCookie('refreshToken', refreshCookieBase);
+  res.clearCookie('refreshToken', { ...refreshCookieBase, path: '/' });
+};
 
 // Build cookie options based on rememberMe preference
 const buildCookieOptions = (rememberMe) => {
@@ -263,7 +300,7 @@ router.post('/login', authLimiter, async (req, res) => {
     });
 
     // Always run bcrypt.compare to prevent timing-based user enumeration
-    const DUMMY_HASH = '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy';
+    // (DUMMY_HASH is defined at module scope, pinned to User.BCRYPT_COST)
     const isMatch = await bcrypt.compare(password, user ? user.password : DUMMY_HASH);
 
     // Per-account brute-force protection. A locked account behaves IDENTICALLY
@@ -453,7 +490,7 @@ router.post('/refresh', refreshLimiter, async (req, res) => {
     const user = await User.findOne({ refreshTokenHash: tokenHash });
 
     if (!user) {
-      res.clearCookie('refreshToken', refreshCookieOptions);
+      clearRefreshCookie(res);
       return res.status(401).json({ error: 'Invalid or expired refresh token' });
     }
 
@@ -463,7 +500,7 @@ router.post('/refresh', refreshLimiter, async (req, res) => {
       user.refreshTokenHash = null;
       user.refreshTokenExpiresAt = null;
       await user.save();
-      res.clearCookie('refreshToken', refreshCookieOptions);
+      clearRefreshCookie(res);
       return res.status(401).json({ error: 'Session expired, please log in again' });
     }
 
@@ -475,7 +512,7 @@ router.post('/refresh', refreshLimiter, async (req, res) => {
     res.json({ token: accessToken });
   } catch (error) {
     console.error('Refresh error:', error);
-    res.clearCookie('refreshToken', refreshCookieOptions);
+    clearRefreshCookie(res);
     res.status(401).json({ error: 'Invalid or expired refresh token' });
   }
 });
@@ -535,7 +572,7 @@ router.post('/logout', requireAuth, async (req, res) => {
       user.refreshTokenHash = null;
       await user.save();
     }
-    res.clearCookie('refreshToken', refreshCookieOptions);
+    clearRefreshCookie(res);
     res.json({ message: 'Logged out' });
   } catch (error) {
     console.error('Logout error:', error);
@@ -634,7 +671,7 @@ router.post('/reset-password', authLimiter, async (req, res) => {
       { username: user.username }
     );
 
-    res.clearCookie('refreshToken', refreshCookieOptions);
+    clearRefreshCookie(res);
     res.status(200).json({ message: 'Password reset successfully. You can now log in with your new password.' });
   } catch (error) {
     if (error.name === 'ValidationError') {
