@@ -27,11 +27,42 @@ router.use(requireAuth);
 
 // The ZIP can hold many images; cap generously but bound memory (entries are
 // buffered). A data-only JSON is tiny; the cap mainly guards the image ZIP.
-const MAX_UPLOAD_BYTES = 200 * 1024 * 1024; // 200 MB
+// Any real export with images beyond this belongs behind the (prod) nginx
+// 50 MB body cap anyway — 64 MB bounds a directly-exposed backend too.
+const MAX_UPLOAD_BYTES = 64 * 1024 * 1024; // 64 MB
+// data.json alone (uploaded raw or extracted from the ZIP) is byte-capped
+// BEFORE JSON.parse: a 50k-bottle export is ~30 MB of JSON, so 32 MB is
+// generous while keeping the synchronous parse (event-loop block) bounded.
+const MAX_DATA_JSON_BYTES = 32 * 1024 * 1024; // 32 MB
 const MAX_TARGET_NAME = 100;
 // Bound the number of buffered ZIP entries (alongside the total-byte cap) so a
 // crafted archive with a huge count of tiny files can't blow up the entries Map.
 const MAX_ZIP_ENTRIES = 20000;
+
+// ── Import-parse concurrency gate ────────────────────────────────────────────
+// JSON.parse of a multi-MB export blocks the event loop and the buffered file
+// sits in memory for the whole request; don't let concurrent uploads stack.
+// Tiny in-process gate: at most MAX_GLOBAL_IMPORTS import/preview requests in
+// flight overall, and 1 per user. Excess requests get an immediate 429 (with a
+// retry hint) rather than queueing forever. In-process state is fine here: the
+// backend runs as a single container/process.
+const MAX_GLOBAL_IMPORTS = 2;
+let globalImports = 0;
+const userImports = new Set(); // user ids with an import/preview in flight
+
+function acquireImportSlot(userId) {
+  if (userImports.has(userId) || globalImports >= MAX_GLOBAL_IMPORTS) return null;
+  userImports.add(userId);
+  globalImports++;
+  return () => { userImports.delete(userId); globalImports--; };
+}
+
+function importBusy(res) {
+  res.set('Retry-After', '10');
+  return res.status(429).json({
+    error: 'Another import is already being processed — please retry in a few seconds',
+  });
+}
 
 const uploadImport = multer({
   storage: multer.memoryStorage(),
@@ -50,7 +81,7 @@ const uploadImport = multer({
 function handleUpload(req, res, next) {
   uploadImport.single('file')(req, res, (err) => {
     if (err) {
-      const msg = err.code === 'LIMIT_FILE_SIZE' ? 'File too large (max 200 MB)' : err.message;
+      const msg = err.code === 'LIMIT_FILE_SIZE' ? 'File too large (max 64 MB)' : err.message;
       return res.status(400).json({ error: msg });
     }
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
@@ -100,6 +131,18 @@ function readExportZip(buffer) {
   });
 }
 
+// data.json must be byte-capped BEFORE the synchronous JSON.parse — the
+// count caps inside parseCellarExport only run after a parse has already
+// paid the memory + event-loop cost (SECURITY_AUDIT_2026-07-08 L-12).
+function assertDataJsonSize(byteLength) {
+  if (byteLength > MAX_DATA_JSON_BYTES) {
+    throw Object.assign(
+      new Error(`Export data is too large (${Math.round(byteLength / (1024 * 1024))} MB of JSON; max 32 MB)`),
+      { status: 413 }
+    );
+  }
+}
+
 // Returns { parsed, getFileBuffer, hasImageFiles } from the uploaded file.
 async function loadUpload(file) {
   const isZip = file.buffer.length >= 4 && file.buffer[0] === 0x50 && file.buffer[1] === 0x4b; // 'PK'
@@ -107,10 +150,12 @@ async function loadUpload(file) {
     const entries = await readExportZip(file.buffer);
     const dataJson = entries.get('data.json');
     if (!dataJson) throw Object.assign(new Error('Archive has no data.json (not a Cellarion export ZIP)'), { status: 400 });
+    assertDataJsonSize(dataJson.length);
     const parsed = parseCellarExport(dataJson.toString('utf8'));
     const hasImageFiles = [...entries.keys()].some((k) => k.startsWith('images/'));
     return { parsed, getFileBuffer: (p) => entries.get(p) || null, hasImageFiles };
   }
+  assertDataJsonSize(file.buffer.length);
   const parsed = parseCellarExport(file.buffer.toString('utf8'));
   return { parsed, getFileBuffer: () => null, hasImageFiles: false };
 }
@@ -122,6 +167,8 @@ async function activeCellarNamesLc(userId) {
 
 // POST /api/cellar-import/preview — parse only, report what would happen.
 router.post('/preview', handleUpload, async (req, res) => {
+  const release = acquireImportSlot(req.user.id);
+  if (!release) return importBusy(res);
   try {
     const { parsed, hasImageFiles } = await loadUpload(req.file);
     const existing = await activeCellarNamesLc(req.user.id);
@@ -150,15 +197,19 @@ router.post('/preview', handleUpload, async (req, res) => {
 
     res.json({ cellars, hasImageFiles });
   } catch (err) {
-    if (err.status === 400) return res.status(400).json({ error: err.message });
+    if (err.status === 400 || err.status === 413) return res.status(err.status).json({ error: err.message });
     console.error('Cellar import preview error:', err);
     res.status(500).json({ error: 'Failed to read export' });
+  } finally {
+    release();
   }
 });
 
 // POST /api/cellar-import — run the import.
 // Body (multipart text field): targets = JSON { [sourceName]: { targetName, confirmOverwrite } }
 router.post('/', handleUpload, async (req, res) => {
+  const release = acquireImportSlot(req.user.id);
+  if (!release) return importBusy(res);
   try {
     const user = await User.findById(req.user.id).select('preferences.currency');
     const { parsed, getFileBuffer } = await loadUpload(req.file);
@@ -211,9 +262,11 @@ router.post('/', handleUpload, async (req, res) => {
 
     res.json({ results });
   } catch (err) {
-    if (err.status === 400) return res.status(400).json({ error: err.message });
+    if (err.status === 400 || err.status === 413) return res.status(err.status).json({ error: err.message });
     console.error('Cellar import error:', err);
     res.status(500).json({ error: 'Import failed' });
+  } finally {
+    release();
   }
 });
 
