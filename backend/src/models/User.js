@@ -3,6 +3,12 @@ const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const { CURRENT_PRIVACY_POLICY_VERSION } = require('../config/legal');
 
+// Single source of truth for the bcrypt work factor. The login route's dummy
+// hash (routes/auth.js) MUST be generated at this same cost — a cheaper dummy
+// compare responds measurably faster for unknown identifiers, reintroducing
+// the timing-based account-enumeration oracle the dummy exists to close (L-1).
+const BCRYPT_COST = 12;
+
 const userSchema = new mongoose.Schema({
   username: {
     type: String,
@@ -319,7 +325,7 @@ userSchema.pre('save', async function(next) {
   }
 
   try {
-    const salt = await bcrypt.genSalt(12);
+    const salt = await bcrypt.genSalt(BCRYPT_COST);
     this.password = await bcrypt.hash(this.password, salt);
     next();
   } catch (error) {
@@ -399,6 +405,12 @@ userSchema.methods.toJSON = function() {
   delete obj.passwordResetTokenHash;
   delete obj.passwordResetExpiresAt;
   delete obj.stripeCustomerId;
+  // Data minimisation (I-1): internal lockout bookkeeping and the raw Stripe
+  // subscription id are never needed client-side. The frontend only needs to
+  // know WHETHER a subscription exists — expose that as a derived boolean.
+  delete obj.failedLoginAttempts;
+  delete obj.stripeSubscriptionId;
+  obj.hasStripeSubscription = !!this.stripeSubscriptionId;
   // True when the user hasn't accepted the current privacy-policy version (older
   // version, never recorded, or not accepted at all) — the client prompts them to
   // review and acknowledge the update. Derived, never stored.
@@ -409,3 +421,4 @@ userSchema.methods.toJSON = function() {
 
 module.exports = mongoose.model('User', userSchema);
 module.exports.normalizeLegacyNotifications = normalizeLegacyNotifications;
+module.exports.BCRYPT_COST = BCRYPT_COST;
