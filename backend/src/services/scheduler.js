@@ -4,6 +4,7 @@ const { runCellarValueSnapshots } = require('./cellarValueSnapshotJob');
 const { runCommunityPriceAggregation } = require('./communityPriceJob');
 const { runUserDeletionJob } = require('./userDeletionJob');
 const { runCellarRetentionPurge } = require('./cellarRetentionJob');
+const { runRecommendationEmailScrub } = require('./recommendationRetentionJob');
 const { runSecurityAlertCheck } = require('./securityAlertJob');
 
 /**
@@ -63,6 +64,18 @@ function startScheduler() {
     }
   });
 
+  // External recipient-email retention scrub: daily at 04:30 UTC (after the
+  // cellar retention purge). Blanks Recommendation.recipientEmail on documents
+  // older than 90 days — third-party PII with no account-based erasure path.
+  cron.schedule('30 4 * * *', async () => {
+    console.log('[scheduler] Running recommendation email retention scrub…');
+    try {
+      await runRecommendationEmailScrub();
+    } catch (err) {
+      console.error('[scheduler] Recommendation email scrub failed:', err);
+    }
+  });
+
   // Security spike check: every 15 minutes. Cheap audit-log query, emails
   // only when thresholds are crossed (with 4h cooldown per spike type).
   cron.schedule('*/15 * * * *', async () => {
@@ -74,7 +87,7 @@ function startScheduler() {
     }
   });
 
-  console.log('[scheduler] Cron jobs registered (drink-window daily 06:00 UTC, value-snapshot weekly Sun 01:00 UTC, community-price weekly Sun 02:00 UTC, user-deletion daily 03:00 UTC, cellar-retention daily 04:00 UTC, security-spike every 15 min)');
+  console.log('[scheduler] Cron jobs registered (drink-window daily 06:00 UTC, value-snapshot weekly Sun 01:00 UTC, community-price weekly Sun 02:00 UTC, user-deletion daily 03:00 UTC, cellar-retention daily 04:00 UTC, recommendation-email-scrub daily 04:30 UTC, security-spike every 15 min)');
 }
 
 module.exports = { startScheduler };

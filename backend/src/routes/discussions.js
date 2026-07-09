@@ -14,7 +14,7 @@ const WineDefinition = require('../models/WineDefinition');
 const { stripHtml } = require('../utils/sanitize');
 const { sanitizeForumHtml, visibleTextLength } = require('../utils/sanitizeHtml');
 const { logAudit } = require('../services/audit');
-const { incrementCred } = require('../utils/cellarCred');
+const { incrementCred, decrementCred } = require('../utils/cellarCred');
 const { submitUrls: submitToIndexNow } = require('../services/indexNow');
 const { createNotification, createNotifications } = require('../services/notifications');
 const { extractMentions } = require('../utils/mentionParser');
@@ -499,8 +499,36 @@ router.delete('/:idOrSlug', requireAuth, requireModeratorOrAdmin, async (req, re
     // filed against the discussion itself AND reports against any of its
     // replies (the reply IDs go away in the next step, leaving orphan reports
     // pointing at deleted documents in the moderation queue otherwise).
-    const replyIds = await DiscussionReply.find({ discussion: discussion._id }).select('_id');
+    const replyIds = await DiscussionReply.find({ discussion: discussion._id }).select('_id author isDeleted');
     const replyIdList = replyIds.map(r => r._id);
+
+    // Collect the Cellar-Cred these documents awarded BEFORE deleting them so
+    // the hard delete reverses the awards symmetrically (L-19): +2 to the
+    // discussion author, +1 per live reply to its author, +1 per non-self
+    // reaction to the reacted reply's author. Soft-deleted replies already had
+    // their reply-created point reversed at soft-delete time, so they are
+    // skipped here — but their reactions were never reversed, so those aren't.
+    const credReversals = new Map(); // userId -> { eventType -> count }
+    const addReversal = (userId, eventType, n = 1) => {
+      if (!userId) return;
+      const key = userId.toString();
+      const events = credReversals.get(key) || {};
+      events[eventType] = (events[eventType] || 0) + n;
+      credReversals.set(key, events);
+    };
+    addReversal(discussion.author, 'discussion_created');
+    const authorByReply = new Map();
+    for (const r of replyIds) {
+      authorByReply.set(r._id.toString(), r.author?.toString());
+      if (!r.isDeleted) addReversal(r.author, 'discussion_reply_created');
+    }
+    const reactionRows = await DiscussionReaction.find({ reply: { $in: replyIdList } }).select('reply user').lean();
+    for (const rx of reactionRows) {
+      const replyAuthor = authorByReply.get(rx.reply?.toString());
+      if (replyAuthor && replyAuthor !== rx.user?.toString()) {
+        addReversal(replyAuthor, 'reply_like_received');
+      }
+    }
     // Await the cleanups BEFORE deleting the parent — if one fails the 500
     // leaves the discussion intact so the delete can be retried, instead of
     // permanently orphaning replies/reactions/reports.
@@ -522,6 +550,14 @@ router.delete('/:idOrSlug', requireAuth, requireModeratorOrAdmin, async (req, re
     const deletedId = discussion._id;
     await Discussion.deleteOne({ _id: discussion._id });
     logAudit(req, 'discussion.delete', { type: 'discussion', id: deletedId });
+
+    // Apply the collected reversals now that the deletes succeeded.
+    // Fire-and-forget like every other cred write; decrementCred clamps at 0.
+    for (const [userId, events] of credReversals) {
+      for (const [eventType, count] of Object.entries(events)) {
+        decrementCred(userId, eventType, count).catch(() => {});
+      }
+    }
 
     // Tell crawlers the URL is gone (ping returns 404 on next crawl → drop from index)
     submitToIndexNow(publicPath);
@@ -657,14 +693,16 @@ router.post('/:idOrSlug/replies', requireAuth, async (req, res) => {
         const snippetBody = quotedPlain.length > 300
           ? quotedPlain.slice(0, 300) + '…'
           : quotedPlain;
+        // authorId is persisted alongside the denormalised name snapshot so
+        // GDPR erasure can find and anonymise quote.authorName on OTHER
+        // users' replies when the quoted author deletes their account (L-17).
+        quotedAuthorId = quotedReply.author?._id || null;
         quoteData = {
           replyId: quotedReply._id,
+          authorId: quotedAuthorId,
           authorName: quotedName,
           body: snippetBody
         };
-        // Track separately — author is needed for the "you were quoted"
-        // notification, but we don't want to persist it on the reply document.
-        quotedAuthorId = quotedReply.author?._id || null;
       }
     }
 
@@ -903,6 +941,13 @@ router.delete('/:discussionId/replies/:replyId', requireAuth, async (req, res) =
     reply.deletedAt = new Date();
     await reply.save();
 
+    // Reverse the +1 the reply's creation awarded (L-19) — a create/delete
+    // cycle nets zero. The isDeleted guard above makes this once-only (there
+    // is no un-delete). Reaction cred is NOT reversed here: reactions stay on
+    // the soft-deleted reply and remain toggleable, so their accounting stays
+    // with the toggle handlers.
+    decrementCred(reply.author.toString(), 'discussion_reply_created').catch(() => {});
+
     logAudit(req, 'discussion_reply.soft_delete', { type: 'discussion_reply', id: reply._id });
 
     // Re-index parent so search drops this reply's content (the index
@@ -965,7 +1010,15 @@ router.post('/:discussionId/replies/:replyId/reactions', requireAuth, async (req
     });
 
     if (existing) {
-      await DiscussionReaction.deleteOne({ _id: existing._id });
+      const del = await DiscussionReaction.deleteOne({ _id: existing._id });
+      // Symmetric cred (L-19): the reaction awarded +1 to the reply author, so
+      // removing it takes the point back — a react/un-react toggle loop nets
+      // zero instead of +1 per cycle (×8 kinds). Guarded by deletedCount so a
+      // concurrent double-un-react can't double-reverse; self-reactions never
+      // awarded cred, so they never reverse it either.
+      if (del.deletedCount > 0 && reply.author.toString() !== req.user.id) {
+        decrementCred(reply.author.toString(), 'reply_like_received').catch(() => {});
+      }
       const counts = await reactionCountsForReply(reply._id);
       return res.json({ reacted: false, kind, reactions: counts });
     }

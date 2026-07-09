@@ -12,6 +12,11 @@ const recommendationSchema = new mongoose.Schema({
     ref: 'User',
     default: null
   },
+  // External (non-user) recipient's address — third-party PII with no account
+  // of its own. Retention is bounded: scrubbed after 90 days by
+  // services/recommendationRetentionJob.js and immediately on sender-account
+  // erasure (services/userDataRegistry.js). Kept until then only so the
+  // sender's "sent" list can show who the recommendation went to.
   recipientEmail: {
     type: String,
     trim: true,

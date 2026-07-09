@@ -153,7 +153,7 @@ export default function Recommendations() {
                       ? <Link to={`/users/${rec.recipient._id}`} className="rec-card__user">
                           {rec.recipient.displayName || rec.recipient.username}
                         </Link>
-                      : <span>{rec.recipientEmail}</span>
+                      : <span>{rec.recipientEmail || '—'}</span>
                     }
                   </span>
                 )}

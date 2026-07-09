@@ -263,8 +263,29 @@ const REGISTRY = [
     }),
   },
   {
-    model: DiscussionReply, category: 'shared-content', userFields: ['author'],
-    purge: (ctx) => DiscussionReply.updateMany({ author: ctx.userId }, { $set: { author: ctx.deletedUserId } }),
+    model: DiscussionReply, category: 'shared-content', userFields: ['author', 'quote.authorId'],
+    // Besides re-pointing the user's own replies to the [deleted] sentinel,
+    // scrub the user's display name from quote snapshots on OTHER users'
+    // replies (L-17): quote.authorName is a denormalised string set at
+    // reply-creation that any anonymous visitor can read. Rows are matched by
+    // quote.authorId; legacy rows created before authorId existed are resolved
+    // through quote.replyId → the user's own reply ids (collected BEFORE the
+    // author re-point runs). Residue: a legacy quote whose quoted reply was
+    // since hard-deleted cannot be attributed and keeps its name snapshot.
+    purge: async (ctx) => {
+      const ownReplyIds = await DiscussionReply.distinct('_id', { author: ctx.userId });
+      await Promise.all([
+        DiscussionReply.updateMany({ author: ctx.userId }, { $set: { author: ctx.deletedUserId } }),
+        DiscussionReply.updateMany(
+          { 'quote.authorId': ctx.userId },
+          { $set: { 'quote.authorName': '[deleted]', 'quote.authorId': ctx.deletedUserId } }
+        ),
+        DiscussionReply.updateMany(
+          { 'quote.authorId': null, 'quote.replyId': { $in: ownReplyIds } },
+          { $set: { 'quote.authorName': '[deleted]' } }
+        ),
+      ]);
+    },
     exportFragment: async (ctx) => ({
       discussionReplies: markTrunc(ctx, 'discussionReplies', await DiscussionReply.find({ author: ctx.userId }).select('discussion body quote wineDefinition isDeleted createdAt updatedAt').limit(EXPORT_MAX).lean())
         .map(r => ({ discussion: r.discussion, body: r.body, quote: r.quote, wineDefinition: r.wineDefinition, isDeleted: r.isDeleted, createdAt: r.createdAt, updatedAt: r.updatedAt })),
@@ -592,11 +613,16 @@ const REGISTRY = [
   {
     model: AuditLog, category: 'personal-data', userFields: ['actor.userId'],
     // Also scrub identifier PII the free-form detail can carry — registration/
-    // login events embed { username, email }. $unset only touches docs that
-    // actually have those keys, so it's safe across the heterogeneous detail shapes.
+    // login events embed { username, email }, and cellar-sharing events embed
+    // the invitee's address as { sharedWith } / { invitedEmail } (L-15). $unset
+    // only touches docs that actually have those keys, so it's safe across the
+    // heterogeneous detail shapes.
     purge: (ctx) => AuditLog.updateMany(
       { 'actor.userId': ctx.userId },
-      { $set: { 'actor.userId': null, 'actor.ipAddress': null }, $unset: { 'detail.email': '', 'detail.username': '' } }
+      {
+        $set: { 'actor.userId': null, 'actor.ipAddress': null },
+        $unset: { 'detail.email': '', 'detail.username': '', 'detail.sharedWith': '', 'detail.invitedEmail': '' },
+      }
     ),
     exportFragment: async (ctx) => ({
       activityLog: markTrunc(ctx, 'activityLog', await AuditLog.find({ 'actor.userId': ctx.userId }).sort({ timestamp: -1 }).limit(AUDIT_MAX).lean(), AUDIT_MAX)

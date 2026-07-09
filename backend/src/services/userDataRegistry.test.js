@@ -16,6 +16,8 @@ jest.mock('./search', () => ({
 const fs = require('fs');
 const path = require('path');
 const { REGISTRY, EXCLUDED, registeredModelNames } = require('./userDataRegistry');
+const DiscussionReply = require('../models/DiscussionReply');
+const AuditLog = require('../models/AuditLog');
 
 describe('userDataRegistry', () => {
   const modelsDir = path.join(__dirname, '..', 'models');
@@ -68,5 +70,81 @@ describe('userDataRegistry', () => {
   test('registry model names are unique', () => {
     const names = registeredModelNames();
     expect(new Set(names).size).toBe(names.length);
+  });
+
+  // L-15: cellar-sharing audit events embed the invitee's email in the
+  // free-form detail — the erasure scrub must blank those too.
+  test('AuditLog purge scrubs detail.sharedWith and detail.invitedEmail (L-15)', async () => {
+    const audit = REGISTRY.find(e => e.model.modelName === 'AuditLog');
+    const updateSpy = jest.spyOn(AuditLog, 'updateMany').mockResolvedValue({});
+
+    try {
+      await audit.purge({ userId: 'u1', deletedUserId: 'del1' });
+      expect(updateSpy).toHaveBeenCalledWith(
+        { 'actor.userId': 'u1' },
+        expect.objectContaining({
+          $set: { 'actor.userId': null, 'actor.ipAddress': null },
+          $unset: expect.objectContaining({
+            'detail.email': '',
+            'detail.username': '',
+            'detail.sharedWith': '',
+            'detail.invitedEmail': '',
+          }),
+        })
+      );
+    } finally {
+      updateSpy.mockRestore();
+    }
+  });
+});
+
+// L-17: a deleted user's display name must not survive erasure inside OTHER
+// users' reply quotes. The purge scrubs quote.authorName by quote.authorId,
+// and resolves legacy quotes (no authorId) through quote.replyId → the user's
+// own reply ids.
+describe('DiscussionReply purge — quote.authorName erasure (L-17)', () => {
+  const entry = REGISTRY.find(e => e.model.modelName === 'DiscussionReply');
+  const ctx = { userId: 'u1', deletedUserId: 'del1' };
+
+  let distinctSpy;
+  let updateSpy;
+
+  beforeEach(() => {
+    distinctSpy = jest.spyOn(DiscussionReply, 'distinct').mockResolvedValue(['r1', 'r2']);
+    updateSpy = jest.spyOn(DiscussionReply, 'updateMany').mockResolvedValue({});
+  });
+
+  afterEach(() => {
+    distinctSpy.mockRestore();
+    updateSpy.mockRestore();
+  });
+
+  test('registers quote.authorId as a user field', () => {
+    expect(entry.userFields).toContain('quote.authorId');
+  });
+
+  test('re-points own replies AND anonymises quotes of the departing user', async () => {
+    await entry.purge(ctx);
+
+    // Own reply ids are collected BEFORE the author re-point (legacy quotes
+    // are resolvable only while author still equals the departing user).
+    expect(distinctSpy).toHaveBeenCalledWith('_id', { author: 'u1' });
+
+    const calls = updateSpy.mock.calls;
+    // 1) own replies re-pointed to the [deleted] sentinel
+    expect(calls).toContainEqual([
+      { author: 'u1' },
+      { $set: { author: 'del1' } },
+    ]);
+    // 2) quotes carrying the user's id: name scrubbed, id re-pointed
+    expect(calls).toContainEqual([
+      { 'quote.authorId': 'u1' },
+      { $set: { 'quote.authorName': '[deleted]', 'quote.authorId': 'del1' } },
+    ]);
+    // 3) legacy quotes (no authorId) resolved via the user's own reply ids
+    expect(calls).toContainEqual([
+      { 'quote.authorId': null, 'quote.replyId': { $in: ['r1', 'r2'] } },
+      { $set: { 'quote.authorName': '[deleted]' } },
+    ]);
   });
 });
