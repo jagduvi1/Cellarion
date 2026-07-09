@@ -34,7 +34,7 @@ router.get('/rate-limits', async (req, res) => {
 // accountLockout.threshold to 9999 effectively turns lockout off).
 router.patch('/rate-limits', async (req, res) => {
   try {
-    const { api, write, auth, accountLockout, chatBurst, chatConcurrentStreams } = req.body;
+    const { api, write, auth, accountLockout, chatBurst, chatConcurrentStreams, aiDailyBudget, aiImportPerRequestCap, aiGlobalDailyCap } = req.body;
 
     const previous = { ...rateLimitsConfig.get() };
 
@@ -75,6 +75,21 @@ router.patch('/rate-limits', async (req, res) => {
       requireIntInRange('chatConcurrentStreams.max', chatConcurrentStreams.max, 1, 50);
     }
 
+    // Shared per-user daily Anthropic-call budget (0 = unlimited)
+    if (aiDailyBudget !== undefined) {
+      requireIntInRange('aiDailyBudget.max', aiDailyBudget.max, 0, 1_000_000);
+    }
+
+    // AI identify fan-out cap per /import/validate request (frontend batches at 25)
+    if (aiImportPerRequestCap !== undefined) {
+      requireIntInRange('aiImportPerRequestCap.max', aiImportPerRequestCap.max, 1, 2000);
+    }
+
+    // Site-wide daily Anthropic-call kill-switch (0 = disabled)
+    if (aiGlobalDailyCap !== undefined) {
+      requireIntInRange('aiGlobalDailyCap.max', aiGlobalDailyCap.max, 0, 10_000_000);
+    }
+
     if (errors.length > 0) {
       return res.status(400).json({ error: errors[0], errors });
     }
@@ -99,6 +114,15 @@ router.patch('/rate-limits', async (req, res) => {
       },
       chatConcurrentStreams: {
         max: chatConcurrentStreams?.max ?? previous.chatConcurrentStreams.max,
+      },
+      aiDailyBudget: {
+        max: aiDailyBudget?.max ?? previous.aiDailyBudget?.max ?? rateLimitsConfig.defaults.aiDailyBudget.max,
+      },
+      aiImportPerRequestCap: {
+        max: aiImportPerRequestCap?.max ?? previous.aiImportPerRequestCap?.max ?? rateLimitsConfig.defaults.aiImportPerRequestCap.max,
+      },
+      aiGlobalDailyCap: {
+        max: aiGlobalDailyCap?.max ?? previous.aiGlobalDailyCap?.max ?? rateLimitsConfig.defaults.aiGlobalDailyCap.max,
       },
     };
 

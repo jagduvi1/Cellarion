@@ -509,7 +509,7 @@ router.post('/', async (req, res) => {
     // new wine the user just created), generate one — which also re-embeds the
     // wine so Qdrant carries the taste data. No-op if already enriched / a batch
     // enrichment job is running / AI isn't configured.
-    enrichWineById(wineDefinition).catch(() => {});
+    enrichWineById(wineDefinition, { budgetUserId: req.user.id }).catch(() => {});
 
     // Fire-and-forget: auto-resolve any restock alerts for this wine
     resolveRestockAlerts(req.user.id, wineDefinition, bottle._id).catch(() => {});

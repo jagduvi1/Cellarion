@@ -25,6 +25,12 @@ jest.mock('../services/labelScan', () => ({
 jest.mock('../services/findOrCreateWine', () => ({ findOrCreateWine: jest.fn() }));
 // Rate limiting is exercised elsewhere; keep this suite about sanitization.
 jest.mock('../middleware/aiBurstLimiter', () => (req, res, next) => next());
+// The daily AI budget (services/aiBudget) hits MongoDB — mocked out here; the
+// budget behaviour itself is covered by wines.aiBudget.test.js.
+jest.mock('../services/aiBudget', () => ({
+  tryDebitAi: jest.fn().mockResolvedValue({ ok: true, refund: jest.fn() }),
+  isRefundableFailure: jest.fn().mockReturnValue(false),
+}));
 
 const http = require('http');
 const express = require('express');

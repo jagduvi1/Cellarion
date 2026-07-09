@@ -22,6 +22,7 @@
 
 const mongoose = require('mongoose');
 const aiConfig = require('../config/aiConfig');
+const { tryDebitAi, isRefundableFailure } = require('./aiBudget');
 const { suggestProfile } = require('./labelScan');
 const { embedSinglePair } = require('./embeddingJob');
 const { isValidId } = require('../utils/validation');
@@ -239,9 +240,18 @@ async function enrichWine(wine, model) {
  * waiting for the next batch run. Skips silently if the wine already has a
  * profile or AI isn't configured. Never throws.
  *
+ * When triggered by a user action (bottle-add), pass `budgetUserId` so the
+ * Anthropic call is debited against that user's shared daily AI budget
+ * (SECURITY_AUDIT_2026-07-08 L-14). Over budget → skip silently (the profile
+ * arrives with the next admin batch run instead — graceful degradation, the
+ * user's own action still succeeds). The admin-run batch job calls
+ * enrichWine() directly and is exempt.
+ *
  * @param {string|object} wineDefId
+ * @param {object}  [opts]
+ * @param {string}  [opts.budgetUserId] – user to debit for this AI call
  */
-async function enrichWineById(wineDefId) {
+async function enrichWineById(wineDefId, { budgetUserId } = {}) {
   // Validate + cast the (caller-supplied) id to a real ObjectId before it touches
   // the query, so a non-id value can never shape the database lookup. The cast
   // value (idStr/oid), never the raw input, is used everywhere below.
@@ -264,7 +274,26 @@ async function enrichWineById(wineDefId) {
       .lean();
     if (!wine) return;
     if (wine.aiProfile && wine.aiProfile.description) return; // already enriched
-    await enrichWine(wine, aiConfig.get().enrichmentModel);
+
+    if (budgetUserId) {
+      const debit = await tryDebitAi(String(budgetUserId));
+      if (!debit.ok) {
+        // Over the shared daily AI budget — skip silently; the next admin
+        // batch run picks the wine up. The triggering action never fails.
+        console.warn('[enrichmentJob] enrichWineById skipped (%s): ai budget exhausted (%s)', idStr, debit.reason);
+        return;
+      }
+      try {
+        const { result, reason } = await enrichWine(wine, aiConfig.get().enrichmentModel);
+        // A transport-level failure never produced a billable completion
+        if (result === 'skipped' && isRefundableFailure(reason)) await debit.refund();
+      } catch (err) {
+        await debit.refund();
+        throw err; // handled by the outer catch below
+      }
+    } else {
+      await enrichWine(wine, aiConfig.get().enrichmentModel);
+    }
     console.log('[enrichmentJob] Auto-enriched new wine: %s', wine.name);
   } catch (err) {
     console.warn('[enrichmentJob] enrichWineById failed (%s): %s', idStr, err.message);
