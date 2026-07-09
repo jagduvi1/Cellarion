@@ -1630,7 +1630,12 @@
     "visibilityPublicHint": "Synlig för alla användare",
     "visibilityPrivateHint": "Bara du kan se detta omdöme",
     "overallImpression": "Helhetsintryck",
-    "privateBadge": "Privat"
+    "privateBadge": "Privat",
+    "deleteReview": "Ta bort omdöme",
+    "deleteTitle": "Ta bort omdömet?",
+    "deleteBody": "Detta tar bort ditt omdöme permanent. Det går inte att ångra.",
+    "deleteError": "Det gick inte att ta bort omdömet — försök igen.",
+    "deleting": "Tar bort…"
   },
   "discussions": {
     "community": "Gemenskap",

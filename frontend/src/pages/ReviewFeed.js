@@ -188,7 +188,12 @@ function ReviewFeed() {
       ) : (
         <div className="review-feed__list">
           {reviews.map(review => (
-            <ReviewCard key={review._id} review={review} showWine />
+            <ReviewCard
+              key={review._id}
+              review={review}
+              showWine
+              onDelete={id => setReviews(prev => prev.filter(r => r._id !== id))}
+            />
           ))}
         </div>
       )}
