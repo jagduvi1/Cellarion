@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import { searchWines } from '../api/wines';
 import './WineSearchPicker.css';
@@ -10,7 +11,8 @@ import './WineSearchPicker.css';
  *   onSelect   – callback(wine | null)
  *   placeholder – input placeholder text
  */
-export default function WineSearchPicker({ selected, onSelect, placeholder = 'Search for a wine...' }) {
+export default function WineSearchPicker({ selected, onSelect, placeholder }) {
+  const { t } = useTranslation();
   const { apiFetch } = useAuth();
   const [query, setQuery] = useState('');
   const [results, setResults] = useState([]);
@@ -94,7 +96,7 @@ export default function WineSearchPicker({ selected, onSelect, placeholder = 'Se
         value={query}
         onChange={(e) => setQuery(e.target.value)}
         onFocus={() => results.length > 0 && setOpen(true)}
-        placeholder={placeholder}
+        placeholder={placeholder || t('wineSearchPicker.placeholder')}
       />
       {loading && <span className="wine-search-picker__spinner" />}
       {open && (results.length > 0 || noResults) && (
@@ -116,7 +118,7 @@ export default function WineSearchPicker({ selected, onSelect, placeholder = 'Se
             </li>
           ))}
           {noResults && (
-            <li className="wine-search-picker__no-results">No wines found</li>
+            <li className="wine-search-picker__no-results">{t('wineSearchPicker.noResults')}</li>
           )}
         </ul>
       )}

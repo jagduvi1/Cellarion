@@ -1,9 +1,11 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import { followUser, unfollowUser } from '../api/follows';
 import './FollowButton.css';
 
 export default function FollowButton({ userId, initialFollowing, onToggle }) {
+  const { t } = useTranslation();
   const { apiFetch } = useAuth();
   const [following, setFollowing] = useState(initialFollowing);
   const [loading, setLoading] = useState(false);
@@ -38,7 +40,7 @@ export default function FollowButton({ userId, initialFollowing, onToggle }) {
       onClick={handleToggle}
       disabled={loading}
     >
-      {following ? 'Following' : 'Follow'}
+      {following ? t('followButton.following') : t('followButton.follow')}
     </button>
   );
 }

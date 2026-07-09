@@ -71,8 +71,27 @@
     "moderators": "Moderators",
     "badge": {
       "admin": "Admin",
-      "somm": "Somm"
-    }
+      "somm": "Somm",
+      "mod": "Mod"
+    },
+    "analytics": "Analytics",
+    "restock": "Restock",
+    "wishlist": "Wishlist",
+    "recommendations": "Recommendations",
+    "journal": "Journal",
+    "community": "Community",
+    "cellarChat": "Cellar Chat",
+    "support": "Support",
+    "supportTickets": "Support Tickets",
+    "wineReports": "Wine Reports",
+    "sommelier": "Sommelier",
+    "admin": "Admin",
+    "cellars": "Cellars",
+    "more": "More",
+    "systemMonitor": "System Monitor",
+    "mainNavigation": "Main navigation",
+    "switchToDark": "Switch to dark mode",
+    "switchToLight": "Switch to light mode"
   },
 
   "auth": {
@@ -2658,5 +2677,76 @@
     "daysAgo": "{{n}}d ago",
     "monthsAgo": "{{n}}mo ago",
     "yearsAgo": "{{n}}y ago"
+  },
+  "bottleCard": {
+    "pendingReview": "Pending review",
+    "groupTooltip": "{{count}} identical bottles — click to expand"
+  },
+  "followButton": {
+    "follow": "Follow",
+    "following": "Following"
+  },
+  "grapePicker": {
+    "removeGrape": "Remove {{name}}",
+    "searchPlaceholder_one": "Search {{count}} grape…",
+    "searchPlaceholder_other": "Search {{count}} grapes…",
+    "noMatch": "No grapes match \"{{search}}\"",
+    "allSelected": "All grapes selected"
+  },
+  "installPrompt": {
+    "message": "Install Cellarion for quick access",
+    "install": "Install",
+    "dismiss": "Dismiss"
+  },
+  "wineSearchPicker": {
+    "placeholder": "Search for a wine...",
+    "noResults": "No wines found"
+  },
+  "errorBoundary": {
+    "title": "Something went wrong",
+    "message": "An unexpected error occurred. Please refresh the page to try again.",
+    "refresh": "Refresh Page"
+  },
+  "reconsent": {
+    "title": "We've updated our Privacy Policy",
+    "body": "We've updated our Privacy Policy, including the third-party services that help run Cellarion. Please review and acknowledge the update to continue.",
+    "readPolicy": "Read the full policy:",
+    "policyLink": "Privacy Policy",
+    "logout": "Log out",
+    "acknowledge": "I acknowledge the updated policy"
+  },
+  "camera": {
+    "accessDenied": "Camera access denied. Please allow camera permissions.",
+    "notFound": "No camera found on this device.",
+    "accessError": "Could not access camera.",
+    "accessErrorDetail": "Could not access camera: {{message}}",
+    "captureFailed": "Capture failed. Please try again.",
+    "placeBottle": "Place bottle in the center",
+    "closeCamera": "Close camera",
+    "takePhoto": "Take photo",
+    "switchCamera": "Switch camera",
+    "takePhotoButton": "Take Photo"
+  },
+  "photoCapture": {
+    "removingBackground": "Removing background…",
+    "previewAlt": "Preview",
+    "removeImage": "Remove image",
+    "chooseFile": "Choose File"
+  },
+  "imageUpload": {
+    "upload": "Upload",
+    "uploading": "Uploading...",
+    "removingBackground": "Removing background...",
+    "processingFailed": "Processing failed",
+    "retry": "Retry",
+    "ready": "Ready",
+    "processing": "Processing",
+    "failed": "Failed",
+    "remove": "Remove",
+    "removeThisImage": "Remove this image",
+    "uploadFailed": "Upload failed",
+    "networkError": "Network error during upload",
+    "processedAlt": "Processed",
+    "originalAlt": "Original"
   }
 }

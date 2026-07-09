@@ -71,8 +71,27 @@
     "moderators": "Moderatorer",
     "badge": {
       "admin": "Admin",
-      "somm": "Somm"
-    }
+      "somm": "Somm",
+      "mod": "Mod"
+    },
+    "analytics": "Statistik",
+    "restock": "Påfyllning",
+    "wishlist": "Önskelista",
+    "recommendations": "Rekommendationer",
+    "journal": "Vinjournal",
+    "community": "Gemenskap",
+    "cellarChat": "Källarchatt",
+    "support": "Support",
+    "supportTickets": "Supportärenden",
+    "wineReports": "Vinrapporter",
+    "sommelier": "Sommelier",
+    "admin": "Admin",
+    "cellars": "Källare",
+    "more": "Mer",
+    "systemMonitor": "Systemövervakning",
+    "mainNavigation": "Huvudnavigering",
+    "switchToDark": "Byt till mörkt läge",
+    "switchToLight": "Byt till ljust läge"
   },
 
   "auth": {
@@ -2658,5 +2677,76 @@
     "daysAgo": "{{n}}d sedan",
     "monthsAgo": "{{n}}mån sedan",
     "yearsAgo": "{{n}}år sedan"
+  },
+  "bottleCard": {
+    "pendingReview": "Väntar på granskning",
+    "groupTooltip": "{{count}} identiska flaskor — klicka för att visa alla"
+  },
+  "followButton": {
+    "follow": "Följ",
+    "following": "Följer"
+  },
+  "grapePicker": {
+    "removeGrape": "Ta bort {{name}}",
+    "searchPlaceholder_one": "Sök bland {{count}} druva…",
+    "searchPlaceholder_other": "Sök bland {{count}} druvor…",
+    "noMatch": "Inga druvor matchar \"{{search}}\"",
+    "allSelected": "Alla druvor är valda"
+  },
+  "installPrompt": {
+    "message": "Installera Cellarion för snabb åtkomst",
+    "install": "Installera",
+    "dismiss": "Stäng"
+  },
+  "wineSearchPicker": {
+    "placeholder": "Sök efter ett vin...",
+    "noResults": "Inga viner hittades"
+  },
+  "errorBoundary": {
+    "title": "Något gick fel",
+    "message": "Ett oväntat fel inträffade. Ladda om sidan för att försöka igen.",
+    "refresh": "Ladda om sidan"
+  },
+  "reconsent": {
+    "title": "Vi har uppdaterat vår integritetspolicy",
+    "body": "Vi har uppdaterat vår integritetspolicy, bland annat kring de tredjepartstjänster som hjälper till att driva Cellarion. Läs igenom och bekräfta uppdateringen för att fortsätta.",
+    "readPolicy": "Läs hela policyn:",
+    "policyLink": "Integritetspolicy",
+    "logout": "Logga ut",
+    "acknowledge": "Jag bekräftar den uppdaterade policyn"
+  },
+  "camera": {
+    "accessDenied": "Kameraåtkomst nekades. Tillåt kamerabehörighet i din webbläsare.",
+    "notFound": "Ingen kamera hittades på den här enheten.",
+    "accessError": "Det gick inte att komma åt kameran.",
+    "accessErrorDetail": "Det gick inte att komma åt kameran: {{message}}",
+    "captureFailed": "Det gick inte att ta bilden. Försök igen.",
+    "placeBottle": "Placera flaskan i mitten",
+    "closeCamera": "Stäng kameran",
+    "takePhoto": "Ta foto",
+    "switchCamera": "Byt kamera",
+    "takePhotoButton": "Ta foto"
+  },
+  "photoCapture": {
+    "removingBackground": "Tar bort bakgrunden…",
+    "previewAlt": "Förhandsvisning",
+    "removeImage": "Ta bort bild",
+    "chooseFile": "Välj fil"
+  },
+  "imageUpload": {
+    "upload": "Ladda upp",
+    "uploading": "Laddar upp...",
+    "removingBackground": "Tar bort bakgrunden...",
+    "processingFailed": "Bearbetningen misslyckades",
+    "retry": "Försök igen",
+    "ready": "Klar",
+    "processing": "Bearbetar",
+    "failed": "Misslyckades",
+    "remove": "Ta bort",
+    "removeThisImage": "Ta bort den här bilden",
+    "uploadFailed": "Uppladdningen misslyckades",
+    "networkError": "Nätverksfel under uppladdningen",
+    "processedAlt": "Bearbetad",
+    "originalAlt": "Original"
   }
 }
