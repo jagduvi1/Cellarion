@@ -2,7 +2,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const sharp = require('sharp');
-const { stripImageMetadata, hasStrippableMetadata } = require('./imageSanitizer');
+const { stripImageMetadata, hasStrippableMetadata, sanitizeImageBuffer, detectImageFormat } = require('./imageSanitizer');
 
 // sharp caches open file descriptors, which blocks the temp-dir cleanup on
 // Windows (EBUSY on unlink). The cache is irrelevant for these tests.
@@ -123,5 +123,35 @@ describe('stripImageMetadata', () => {
 
     await stripImageMetadata(file);
     expect(await hasStrippableMetadata(file)).toBe(false);
+  });
+});
+
+describe('detectImageFormat', () => {
+  async function make(format) {
+    const pipeline = sharp({
+      create: { width: 4, height: 4, channels: 3, background: { r: 1, g: 2, b: 3 } },
+    });
+    if (format === 'jpeg') return pipeline.jpeg().toBuffer();
+    if (format === 'png') return pipeline.png().toBuffer();
+    return pipeline.webp().toBuffer();
+  }
+
+  it('identifies jpeg, png and webp from magic bytes', async () => {
+    expect(detectImageFormat(await make('jpeg'))).toBe('jpeg');
+    expect(detectImageFormat(await make('png'))).toBe('png');
+    expect(detectImageFormat(await make('webp'))).toBe('webp');
+  });
+
+  it('returns null for non-image or too-short input', () => {
+    expect(detectImageFormat(Buffer.from('not an image at all'))).toBeNull();
+    expect(detectImageFormat(Buffer.from('hi'))).toBeNull();
+    expect(detectImageFormat('string')).toBeNull();
+  });
+
+  it('matches the format sanitizeImageBuffer actually produced (format is preserved)', async () => {
+    for (const format of ['jpeg', 'png', 'webp']) {
+      const out = await sanitizeImageBuffer(await make(format));
+      expect(detectImageFormat(out)).toBe(format);
+    }
   });
 });
