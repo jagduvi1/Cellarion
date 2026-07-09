@@ -45,6 +45,7 @@ const AdminImages     = lazy(() => import('./pages/AdminImages'));
 const AdminSupportTickets = lazy(() => import('./pages/AdminSupportTickets'));
 const AdminWineReports    = lazy(() => import('./pages/AdminWineReports'));
 const AdminModerators     = lazy(() => import('./pages/AdminModerators'));
+const AdminModerationReports = lazy(() => import('./pages/AdminModerationReports'));
 const SupportPage     = lazy(() => import('./pages/SupportPage'));
 const SuperAdmin      = lazy(() => import('./pages/SuperAdmin'));
 const CommunityDiscussions = lazy(() => import('./pages/CommunityDiscussions'));
@@ -414,6 +415,15 @@ function AppRoutes() {
           element={
             <ProtectedRoute requireAdmin>
               <Layout><AdminModerators /></Layout>
+            </ProtectedRoute>
+          }
+        />
+        {/* Moderator OR admin — mirrors the backend's requireModeratorOrAdmin */}
+        <Route
+          path="/admin/moderation-reports"
+          element={
+            <ProtectedRoute requireModerator>
+              <Layout><AdminModerationReports /></Layout>
             </ProtectedRoute>
           }
         />

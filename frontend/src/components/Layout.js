@@ -193,6 +193,15 @@ function Layout({ children }) {
                     <Link to="/admin/stats" className={`nav-link nav-link--admin ${isActive('/admin/stats') ? 'active' : ''}`}>{t('nav.adminStats')}</Link>
                   </>
                 )}
+
+                {/* Moderation queue — visible to moderators AND admins,
+                    matching the backend's requireModeratorOrAdmin guard */}
+                {(roles.includes('moderator') || roles.includes('admin')) && (
+                  <>
+                    {!roles.includes('admin') && <div className="navbar-divider" />}
+                    <Link to="/admin/moderation-reports" className={`nav-link nav-link--admin ${isActive('/admin/moderation-reports') ? 'active' : ''}`}>{t('nav.moderationReports')}</Link>
+                  </>
+                )}
               </div>
 
               {/* Desktop right section */}
@@ -275,6 +284,12 @@ function Layout({ children }) {
                 <Link to="/admin/wine-reports" className={`mobile-menu-link ${isActive('/admin/wine-reports') ? 'active' : ''}`} onClick={closeMenu}>{t('nav.wineReports')}</Link>
                 <Link to="/admin/blog" className={`mobile-menu-link ${isActive('/admin/blog') ? 'active' : ''}`} onClick={closeMenu}>{t('nav.blogAdmin')}</Link>
                 <Link to="/admin/stats" className={`mobile-menu-link ${isActive('/admin/stats') ? 'active' : ''}`} onClick={closeMenu}>{t('nav.adminStats')}</Link>
+              </div>
+            )}
+
+            {(roles.includes('moderator') || roles.includes('admin')) && (
+              <div className="mobile-menu-section">
+                <Link to="/admin/moderation-reports" className={`mobile-menu-link ${isActive('/admin/moderation-reports') ? 'active' : ''}`} onClick={closeMenu}>{t('nav.moderationReports')}</Link>
               </div>
             )}
 

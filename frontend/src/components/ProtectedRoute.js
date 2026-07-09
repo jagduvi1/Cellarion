@@ -6,9 +6,11 @@ import { useAuth } from '../contexts/AuthContext';
  * Redirects to login if user is not authenticated.
  * requireAdmin      — user must have the 'admin' role
  * requireSomm       — user must have the 'somm' or 'admin' role
+ * requireModerator  — user must have the 'moderator' or 'admin' role
+ *                     (mirrors the backend's requireModeratorOrAdmin)
  * requireSuperAdmin — user must have isSuperAdmin: true (set server-side by /api/auth/me)
  */
-function ProtectedRoute({ children, requireAdmin = false, requireSomm = false, requireSuperAdmin = false }) {
+function ProtectedRoute({ children, requireAdmin = false, requireSomm = false, requireModerator = false, requireSuperAdmin = false }) {
   const { user, loading } = useAuth();
 
   if (loading) {
@@ -43,6 +45,15 @@ function ProtectedRoute({ children, requireAdmin = false, requireSomm = false, r
       <div style={{ padding: '2rem', textAlign: 'center' }}>
         <h2>Access Denied</h2>
         <p>You need sommelier (or admin) privileges to access this page.</p>
+      </div>
+    );
+  }
+
+  if (requireModerator && !roles.includes('moderator') && !roles.includes('admin')) {
+    return (
+      <div style={{ padding: '2rem', textAlign: 'center' }}>
+        <h2>Access Denied</h2>
+        <p>You need moderator (or admin) privileges to access this page.</p>
       </div>
     );
   }
