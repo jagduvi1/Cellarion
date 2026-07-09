@@ -2756,6 +2756,25 @@
       "capacityLine": "= {{count}} slots",
       "tooSmallSuffix": " — too small for {{count}} bottles"
     },
+    "rackAutoMap": {
+      "hint": "Detected <1>CellarTracker</1> Location/Bin codes. Locations with a consistent bin pattern have been mapped to racks below — check the detected dimensions before importing. Bottles whose bin codes don't fit the pattern keep their location as text instead.",
+      "patternRowCol": "Row/column bin codes (R3C2)",
+      "patternRowColDepth": "Row/column/depth bin codes (R3C2D1)",
+      "patternLetterNumber": "Letter + number bin codes (A12)",
+      "patternSegments": "Segmented bin codes (12-3-4)",
+      "patternSequential": "Numbered bins (147)",
+      "patternGeneric": "Bin codes",
+      "detectedDims_one": "{{rows}} rows × {{cols}} columns detected from {{count}} bin code",
+      "detectedDims_other": "{{rows}} rows × {{cols}} columns detected from {{count}} bin codes",
+      "detectedSeq_one": "sequential slot numbers detected from {{count}} bin code",
+      "detectedSeq_other": "sequential slot numbers detected from {{count}} bin codes",
+      "placed_one": "{{count}} bottle will be placed automatically",
+      "placed_other": "{{count}} bottles will be placed automatically",
+      "unparsed_one": "{{count}} bottle has a bin code we couldn't read — it keeps its location as text",
+      "unparsed_other": "{{count}} bottles have bin codes we couldn't read — they keep their location as text",
+      "keptAsText_one": "{{count}} bottle in {{locations}} has no consistent bin pattern — it keeps its location as text and won't be placed in a rack.",
+      "keptAsText_other": "{{count}} bottles in {{locations}} have no consistent bin pattern — they keep their location as text and won't be placed in a rack."
+    },
     "anchor": {
       "question": "Where does slot 1 sit in your physical rack?",
       "top-left": "Top-left",

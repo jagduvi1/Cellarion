@@ -1303,6 +1303,22 @@
   letter-spacing: 0.04em;
 }
 
+/* CellarTracker Location/Bin auto-map: detected pattern + placement counts */
+.rack-config-automap {
+  margin-top: 0.3rem;
+  font-size: 0.78rem;
+  line-height: 1.4;
+  color: var(--color-text-muted);
+}
+
+.rack-config-automap-pattern {
+  color: var(--color-text);
+}
+
+.rack-automap-fallback {
+  margin-top: 0.75rem;
+}
+
 .rack-config-existing-note {
   font-size: 0.78rem;
   color: var(--color-text-muted);

@@ -36,9 +36,13 @@
  *   grapes        - [string] grape varieties (from Varietal/MasterVarietal)
  *   drinkFrom     - integer drink-window start year, or null
  *   drinkTo       - integer drink-window end year, or null
+ * …and, when a CT Location's bin codes follow a consistent pattern, the rack
+ * fields above are auto-derived per bottle (see applyCtRackAutoMap +
+ * binCodeParser.js). The freeform `location` string is always kept as well.
  */
 
 import { normalizeBottleSize } from '../config/bottleSizes';
+import { analyzeBinGroups } from './binCodeParser';
 
 /**
  * Robust locale-aware number parser. Handles:
@@ -560,11 +564,20 @@ function mapCellarTrackerType(typeStr) {
   return mapWineType(typeStr);
 }
 
-/** Location + Bin joined into Cellarion's freeform location string. */
-function ctLocation(get) {
+/**
+ * Location + Bin joined into Cellarion's freeform location string, plus the
+ * raw pair kept on transient `_ctLocation`/`_ctBin` fields so parseAndMap's
+ * rack auto-map pass (applyCtRackAutoMap) can group bins per Location. The
+ * transient fields are ALWAYS deleted before parseAndMap returns.
+ */
+function ctPlacementFields(get) {
   const location = ctClean(get(['Location', 'location']));
   const bin = ctClean(get(['Bin', 'bin']));
-  return [location, bin].filter(Boolean).join(' / ');
+  return {
+    location: [location, bin].filter(Boolean).join(' / '),
+    _ctLocation: location,
+    _ctBin: bin,
+  };
 }
 
 /**
@@ -677,7 +690,7 @@ function ctCommonFields(get, { sizeKeys = ['Size'] } = {}) {
     appellation: ctClean(get(['Appellation'])) || locale.appellation,
     type: mapCellarTrackerType(get(['Type'])),
     bottleSize: normalizeBottleSize(get(sizeKeys)) || '750ml',
-    location: ctLocation(get),
+    ...ctPlacementFields(get),
     rating,
     ratingScale: rating !== undefined ? '100' : undefined,
     grapes: ctGrapes(get),
@@ -849,7 +862,7 @@ function mapCellarTrackerRow(row) {
     notes: get(['Notes', 'notes', 'MyNotes', 'Tasting Notes', 'Review']),
     rating,
     ratingScale: myRating !== undefined ? '100' : inferRatingScale(legacyRating),
-    location: ctLocation(get),
+    ...ctPlacementFields(get),
     grapes: ctGrapes(get),
     drinkFrom: ctDrinkYear(get(['BeginConsume'])),
     drinkTo: ctDrinkYear(get(['EndConsume'])),
@@ -1291,6 +1304,128 @@ function splitCSVLine(line, delimiter = ',') {
   return fields;
 }
 
+// ── CellarTracker Location/Bin → rack auto-map ─────────────────────────────
+
+/**
+ * Post-pass over the (already quantity-expanded) CellarTracker items:
+ * group them by the transient `_ctLocation` field, run the bin-code parser
+ * (see binCodeParser.js for the pattern families and the 60% / 3-distinct
+ * confidence rule), and — for groups that qualify — emit the SAME rack
+ * fields the rest of the pipeline already understands:
+ *
+ *   rackName            Location name (plus the sub-rack segment for
+ *                       3-segment bins: "Offsite Storage 12")
+ *   row/col             for grid-shaped patterns
+ *   rackPosition        for sequential bins ("147", "BIN3")
+ *   rackPosition+layer+slotInLayer  for R<r>C<c>D<d> with front/back depth
+ *                       (shelf-rack geometry, same trio as the Oeno path)
+ *   rackRows/rackCols(/rackType)    dimension hints for planRackCreations
+ *
+ * The freeform "Location / Bin" text on `item.location` is ALWAYS kept
+ * (belt and braces). Items already carrying rack fields (e.g. an explicit
+ * Rack column via the loose mapper) and consumed/history items are never
+ * touched. Groups that don't qualify keep today's behaviour wholesale.
+ *
+ * The transient `_ctLocation`/`_ctBin` markers are deleted from every item.
+ *
+ * @returns {{
+ *   racks: { [rackName]: { pattern, location, binCount, placedCount,
+ *            unparsedCount, rows?, cols?, backCols?, spec? } },
+ *   textFallback: Array<{ location: string, count: number }>
+ * }}
+ *   `racks` feeds the upload-step preview cards (pattern label + counts;
+ *   `spec` pre-fills the editable rack config). `textFallback` lists
+ *   locations whose bottles keep their location as plain text — whole
+ *   non-qualifying groups, plus the unparsed leftovers of sub-rack groups
+ *   (leftovers of single-rack groups are reported on the rack's own card
+ *   via `unparsedCount` instead).
+ */
+export function applyCtRackAutoMap(items) {
+  const groupIndexes = new Map(); // location -> [item index]
+  items.forEach((item, i) => {
+    if (!item || typeof item !== 'object') return;
+    const loc = (item._ctLocation || '').trim();
+    if (!loc) return;
+    // Never re-place consumed history or items that already carry a rack signal.
+    if (item.addToHistory || item.rackName || item.rackPosition || item.row || item.col) return;
+    if (!groupIndexes.has(loc)) groupIndexes.set(loc, []);
+    groupIndexes.get(loc).push(i);
+  });
+
+  const racks = {};
+  const textFallback = [];
+
+  for (const [loc, idxs] of groupIndexes) {
+    const analysis = analyzeBinGroups(
+      idxs.map((i) => ({ location: loc, bin: items[i]._ctBin || '' }))
+    )[loc];
+
+    if (!analysis?.qualifies) {
+      textFallback.push({ location: loc, count: idxs.length });
+      continue;
+    }
+
+    const isShelf = analysis.inferredBackCols !== undefined;
+
+    for (const p of analysis.placements) {
+      const item = items[idxs[p.index]];
+      const rackName = p.subRack ? `${loc} ${p.subRack}` : loc;
+      const dims = p.subRack
+        ? analysis.subRacks?.[p.subRack]
+        : { rows: analysis.inferredRows, cols: analysis.inferredCols };
+
+      item.rackName = rackName;
+      if (p.row !== undefined) { item.row = p.row; item.col = p.col; }
+      if (p.rackPosition !== undefined) item.rackPosition = p.rackPosition;
+      if (p.layer !== undefined) { item.layer = p.layer; item.slotInLayer = p.slotInLayer; }
+      if (dims?.rows) item.rackRows = dims.rows;
+      if (dims?.cols) item.rackCols = dims.cols;
+      if (isShelf) item.rackType = 'shelf';
+
+      let entry = racks[rackName];
+      if (!entry) {
+        entry = racks[rackName] = {
+          pattern: analysis.pattern,
+          location: loc,
+          binCount: analysis.binCount,
+          placedCount: 0,
+          // Unparsed leftovers can't be attributed to a specific sub-rack,
+          // so per-rack counts only make sense when rack === location.
+          unparsedCount: p.subRack ? 0 : analysis.unparsed.length,
+          rows: dims?.rows,
+          cols: dims?.cols,
+        };
+        if (isShelf) {
+          entry.backCols = analysis.inferredBackCols;
+          entry.spec = {
+            type: 'shelf',
+            rows: dims.rows,
+            cols: dims.cols,
+            typeConfig: { bottlesPerCell: 1, backCols: analysis.inferredBackCols },
+          };
+        } else if (dims?.rows && dims?.cols) {
+          entry.spec = { type: 'grid', rows: dims.rows, cols: dims.cols, typeConfig: {} };
+        }
+        // sequential: no spec — dimensions come from suggestRackDimensions
+        // over the observed maxPosition, exactly like other position imports.
+      }
+      entry.placedCount += 1;
+    }
+
+    // Sub-rack groups report their unparsed leftovers at location level.
+    if (analysis.unparsed.length > 0 && analysis.placements.some((p) => p.subRack)) {
+      textFallback.push({ location: loc, count: analysis.unparsed.length });
+    }
+  }
+
+  for (const item of items) {
+    delete item._ctLocation;
+    delete item._ctBin;
+  }
+
+  return { racks, textFallback };
+}
+
 /**
  * Main entry: parse a file and return mapped items in master format.
  *
@@ -1396,6 +1531,17 @@ export function parseAndMap(text, forceFormat) {
     }
   }
 
+  // CellarTracker Location/Bin → rack auto-map. Runs after quantity
+  // expansion so groups reflect physical bottle counts; also strips the
+  // transient _ctLocation/_ctBin markers from every item.
+  let ctRackAutoMap = null;
+  if (format === 'cellartracker') {
+    const autoMap = applyCtRackAutoMap(items);
+    if (Object.keys(autoMap.racks).length > 0 || autoMap.textFallback.length > 0) {
+      ctRackAutoMap = autoMap;
+    }
+  }
+
   const warnings = [];
   // CellarTracker's browser export defaults to "Only wines on this page" =
   // 25 rows. A file with EXACTLY 25 data rows is very likely truncated.
@@ -1415,6 +1561,7 @@ export function parseAndMap(text, forceFormat) {
     format,
     headers,
     ...(ctTable ? { ctTable } : {}),
+    ...(ctRackAutoMap ? { ctRackAutoMap } : {}),
     ...(warnings.length > 0 ? { warnings } : {}),
   };
 }
@@ -1429,10 +1576,18 @@ export function parseAndMap(text, forceFormat) {
  *     CSV itself (cabinet brand/model → shelf layout). Per-rack overrides
  *     are written directly during parsing, so this function returns a
  *     conservative shelf fallback for any rack that slips through.
+ *   - cellartracker: racks derived from Location/Bin auto-mapping carry the
+ *     pattern-detected geometry in info.ctRackSpec (set from
+ *     ctRackAutoMap.racks[name].spec); sequential-bin racks have no spec and
+ *     fall through to the maxPosition-based grid sizing below.
  *   - everything else: Grid with rows/cols sized to fit the data. No
  *     auto-inferred multi-bottle stacking; users opt in via the picker.
  */
 export function getDefaultRackConfig(format, info) {
+  if (info.ctRackSpec) {
+    // Geometry detected from the CellarTracker bin-code pattern.
+    return info.ctRackSpec;
+  }
   if (format === 'oeno-export' && info.oenoRackSpec) {
     // Cabinet/column-specific spec set during oeno-export parsing.
     return info.oenoRackSpec;
