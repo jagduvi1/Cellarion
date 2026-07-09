@@ -282,7 +282,12 @@
     "removeDefault": "Ta bort som standardkällare",
     "editRole": "Redigera",
     "viewRole": "Visa",
-    "import": "Importera"
+    "import": "Importera",
+    "importTooltip": "Importera en källarexport (.json eller .zip)",
+    "ownedCount_one": "{{count}} egen",
+    "ownedCount_other": "{{count}} egna",
+    "sharedCount_one": "{{count}} delad",
+    "sharedCount_other": "{{count}} delade"
   },
 
   "cellarDetail": {
@@ -356,7 +361,19 @@
     "roomView": "Rumsvy",
     "roomViewDesc": "3D-källarlayout",
     "wineLists": "Vinlistor",
-    "wineListsDesc": "Restaurangmenyer & PDF"
+    "wineListsDesc": "Restaurangmenyer & PDF",
+    "importBottles": "Importera flaskor",
+    "export": "Exportera",
+    "tabBottles": "Flaskor",
+    "tabOverview": "Översikt",
+    "viewRackLayout": "Visa hyllayout",
+    "consumedBottles": "Konsumerade flaskor",
+    "beta": "Beta",
+    "sortBottlesAria": "Sortera flaskor",
+    "removeFilterAria": "Ta bort {{label}}",
+    "groupBottleCount_one": "{{count}} flaska",
+    "groupBottleCount_other": "{{count}} flaskor",
+    "collapseGroup": "Fäll ihop ▲"
   },
 
   "addBottle": {
@@ -445,7 +462,12 @@
     "useCameraInstead": "Använd kameran istället",
     "searchManuallyInstead": "Ingen kamera? Sök manuellt istället →",
     "searchBtn": "Sök",
-    "searchHint": "Var så specifik som möjligt — ange både vinnamn och producent. Vi söker först i vårt bibliotek; om ingen träff hittas identifierar vi vinet och lägger till det."
+    "searchHint": "Var så specifik som möjligt — ange både vinnamn och producent. Vi söker först i vårt bibliotek; om ingen träff hittas identifierar vi vinet och lägger till det.",
+    "identifyFailed": "Identifieringen misslyckades",
+    "identifyNetworkError": "Nätverksfel under identifieringen.",
+    "addFailed": "Kunde inte lägga till flaskan",
+    "partialAdded_one": "{{msg}} — {{count}} av {{total}} flaskor lades till. Vid nytt försök läggs bara de återstående {{remaining}} till.",
+    "partialAdded_other": "{{msg}} — {{count}} av {{total}} flaskor lades till. Vid nytt försök läggs bara de återstående {{remaining}} till."
   },
 
   "bottleDetail": {
@@ -526,7 +548,8 @@
     "tastingProfile": "Smakprofil",
     "structure": "Struktur",
     "flavours": "Smaker",
-    "pairsWith": "Passar till"
+    "pairsWith": "Passar till",
+    "consumeError": "Kunde inte ta bort flaskan"
   },
 
   "bottles": {
@@ -625,7 +648,11 @@
     "disabledSlotNote": "Den här platsen är markerad som oanvändbar — flaskor kan inte placeras här.",
     "preview": "Förhandsgranska",
     "hidePreview": "Dölj förhandsgranskning",
-    "previewLabel": "Förhandsgranskning — så här kommer hyllan att se ut när den skapats"
+    "previewLabel": "Förhandsgranskning — så här kommer hyllan att se ut när den skapats",
+    "viewCompact": "Kompakt",
+    "viewShelf": "Hyllvy",
+    "view3d": "3D",
+    "consumeNotePlaceholder": "Hur var det?"
   },
 
   "nfc": {
@@ -798,7 +825,10 @@
       "cellarShareAdd": "Källare delad",
       "cellarShareUpdate": "Delningsroll ändrad",
       "cellarShareRemove": "Delning borttagen"
-    }
+    },
+    "anonymous": "anonym",
+    "sharedAs": "{{user}} som {{role}}",
+    "roleChanged": "Roll ändrad: {{from}} → {{to}}"
   },
 
   "moveBottle": {
@@ -1259,6 +1289,8 @@
     "noCellars": "Inga källare hittades",
     "noRatedBottles": "Inga betygsatta flaskor ännu",
     "noneYet": "Inga ännu",
+    "valueSeedStarted": "Värdespårningen har startat. Din första datapunkt visas efter att veckans ögonblicksbild har körts.",
+    "valueSeedFirst": "Din första ögonblicksbild är sparad. Trenddata visas efter nästa veckas ögonblicksbild.",
 
     "typeLabels": {
       "red": "Rött",
@@ -1815,6 +1847,21 @@
     "flavours": "Smaker",
     "pairsWith": "Passar till"
   },
+  "taxonomy": {
+    "loading": "Laddar…",
+    "grapeNotFound": "Druvan hittades inte.",
+    "regionNotFound": "Regionen hittades inte.",
+    "countryNotFound": "Landet hittades inte.",
+    "wineTypeNotFound": "Vintypen hittades inte.",
+    "home": "Hem",
+    "noWines": "Inga viner hittades.",
+    "alsoKnownAs": "Även känd som:",
+    "agingPotential": "Lagringspotential:",
+    "typicalGrapes": "Typiska druvor",
+    "regions": "Regioner",
+    "prev": "← Föregående",
+    "next": "Nästa →"
+  },
   "statsCard": {
     "title": "Ditt källarkort",
     "subtitle": "En ögonblicksbild av din vinsamling — ladda ner eller dela den.",
@@ -1891,7 +1938,9 @@
     "yesAddEntry": "Ja, lägg till anteckning",
     "notNow": "Inte nu",
     "dontAskAgain": "Fråga inte igen",
-    "loadMore": "Ladda fler"
+    "loadMore": "Ladda fler",
+    "dish": "Maträtt",
+    "wine": "Vin"
   },
   "restock": {
     "title": "Smart påfyllning",
@@ -2658,5 +2707,110 @@
     "daysAgo": "{{n}}d sedan",
     "monthsAgo": "{{n}}mån sedan",
     "yearsAgo": "{{n}}år sedan"
+  },
+  "cellarChat": {
+    "title": "Källarchatt",
+    "newChat": "Ny chatt",
+    "newChatAria": "Starta en ny konversation",
+    "usagePeriodToday": "idag",
+    "usagePeriodWeek": "den här veckan",
+    "allCellars": "Alla källare",
+    "selectedCellar": "Vald källare",
+    "nCellars_one": "{{count}} källare",
+    "nCellars_other": "{{count}} källare",
+    "tryAsking": "Prova att fråga…",
+    "categories": {
+      "foodPairing": "Mat & vin",
+      "occasion": "Tillfälle",
+      "cellarCheck": "Källarkoll",
+      "moodStyle": "Humör & stil"
+    },
+    "prompts": {
+      "food1": "Jag gör lamm med rosmarin ikväll — vad ska jag öppna?",
+      "food2": "Vad passar till grillad lax från min källare?",
+      "food3": "Jag ska ha ostbricka med vänner — vad föreslår du?",
+      "food4": "Vad passar till en mustig köttgryta?",
+      "occasion1": "Jag behöver något speciellt till en födelsedagsmiddag för två.",
+      "occasion2": "Vi firar bröllopsdag — vilken är den bästa flaskan jag har?",
+      "occasion3": "Något enkelt och avslappnat till en sommargrillning.",
+      "occasion4": "Vilken flaska passar bra att ta med som present?",
+      "cellar1": "Vad dricker bra i min källare just nu?",
+      "cellar2": "Har jag något som passerat sin topp och borde drickas snart?",
+      "cellar3": "Vilken är min mest intressanta flaska just nu?",
+      "cellar4": "Visa mig något jag kanske har glömt bort.",
+      "mood1": "Jag vill ha något lätt och friskt till en vardagskväll.",
+      "mood2": "Något kraftfullt med strama tanniner till en stek.",
+      "mood3": "Jag är sugen på något elegant och komplext.",
+      "mood4": "Vad är ett bra sommarkvällsvin från min källare?"
+    },
+    "tipLabel": "Tips:",
+    "tipBody": "beskriv maten, tillfället eller stämningen för bästa resultat.",
+    "tipExample": "<1>\"Grillad lax med örtsmör\"</1> fungerar mycket bättre än <3>\"vitt vin\"</3>.",
+    "searchingFor": "Söker efter",
+    "thinking": "Tänker…",
+    "searchingCellar": "Söker i din källare…",
+    "errorGeneric": "Något gick fel.",
+    "errorNetwork": "Nätverksfel — försök igen.",
+    "errorBurst": "För många chattförfrågningar på kort tid. Vänta en minut och försök igen.",
+    "errorQuotaDaily_one": "Du har nått din dagsgräns på {{count}} fråga. Försök igen imorgon.",
+    "errorQuotaDaily_other": "Du har nått din dagsgräns på {{count}} frågor. Försök igen imorgon.",
+    "errorQuotaWeekly_one": "Du har nått din veckogräns på {{count}} fråga. Försök igen om några dagar.",
+    "errorQuotaWeekly_other": "Du har nått din veckogräns på {{count}} frågor. Försök igen om några dagar.",
+    "placeholder": "Fråga om din källare… (Enter för att skicka, Shift+Enter för ny rad)",
+    "placeholderLimitDaily": "Dagsgränsen är nådd — återställs vid midnatt UTC",
+    "placeholderLimitWeekly": "Veckogränsen är nådd — försök igen om några dagar",
+    "send": "Skicka"
+  },
+  "userProfile": {
+    "loading": "Laddar...",
+    "notFound": "Användaren hittades inte",
+    "failedLoad": "Kunde inte ladda profilen",
+    "memberSince": "Medlem sedan {{date}}",
+    "followers": "Följare",
+    "following": "Följer",
+    "reviews": "Recensioner",
+    "noReviews": "Inga recensioner än.",
+    "loadMore": "Ladda fler",
+    "noneYet": "Inga än.",
+    "listError": "Kunde inte ladda listan — försök igen.",
+    "close": "Stäng"
+  },
+  "support": {
+    "title": "Support",
+    "newTicket": "+ Nytt supportärende",
+    "myTickets": "Mina ärenden ({{count}})",
+    "myWineReports": "Mina vinrapporter ({{count}})",
+    "loading": "Laddar…",
+    "failedLoad": "Kunde inte ladda supporthistoriken.",
+    "noTickets": "Inga supportärenden än. Använd knappen ovan för att få hjälp.",
+    "noReports": "Inga vinrapporter än. Använd \"Rapportera\"-knappen på ett vin för att flagga ett problem.",
+    "yourMessage": "Ditt meddelande",
+    "adminResponse": "Svar från admin",
+    "awaitingResponse": "Väntar på svar från admin…",
+    "yourDetails": "Dina detaljer",
+    "adminNotes": "Adminanteckningar",
+    "underReview": "Under granskning…",
+    "category": {
+      "bug": "Buggrapport",
+      "help": "Hjälp / Fråga",
+      "feature": "Funktionsönskemål",
+      "other": "Övrigt"
+    },
+    "status": {
+      "open": "Öppet",
+      "in_progress": "Pågår",
+      "closed": "Stängt"
+    },
+    "reason": {
+      "wrong_info": "Felaktig information",
+      "duplicate": "Dubblett",
+      "inappropriate": "Olämpligt innehåll",
+      "other": "Övrigt"
+    },
+    "reportStatus": {
+      "pending": "Väntar",
+      "resolved": "Åtgärdad",
+      "dismissed": "Avvisad"
+    }
   }
 }

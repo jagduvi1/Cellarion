@@ -105,7 +105,7 @@ function Cellars() {
             <Link
               to="/import-cellar"
               className="btn btn-secondary btn-small cellars-desktop-create"
-              title="Import a cellar export (.json or .zip)"
+              title={t('cellars.importTooltip')}
             >
               {t('cellars.import', 'Import')}
             </Link>
@@ -123,7 +123,7 @@ function Cellars() {
         </div>
         {cellars.length > 0 && (
           <p className="cellars-subtitle">
-            {ownedCellars.length} owned{cellars.length > ownedCellars.length ? `, ${cellars.length - ownedCellars.length} shared` : ''}
+            {t('cellars.ownedCount', { count: ownedCellars.length })}{cellars.length > ownedCellars.length ? `, ${t('cellars.sharedCount', { count: cellars.length - ownedCellars.length })}` : ''}
           </p>
         )}
       </div>

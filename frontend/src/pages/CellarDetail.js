@@ -262,7 +262,7 @@ function CellarDetail() {
                   className="btn btn-secondary btn-small btn-more"
                   data-guide="more-menu-btn"
                   onClick={() => setMoreOpen(o => !o)}
-                  aria-label="More actions"
+                  aria-label={t('cellarDetail.moreActions')}
                   aria-haspopup="menu"
                   aria-expanded={moreOpen}
                 >
@@ -327,7 +327,7 @@ function CellarDetail() {
                           data-guide="cellar-import"
                           onClick={() => setMoreOpen(false)}
                         >
-                          <span aria-hidden="true">📥</span> Import Bottles
+                          <span aria-hidden="true">📥</span> {t('cellarDetail.importBottles')}
                         </Link>
                       )}
                       {cellar.userRole === 'owner' && (
@@ -336,7 +336,7 @@ function CellarDetail() {
                           className="more-menu-item"
                           onClick={() => setMoreOpen(false)}
                         >
-                          <span aria-hidden="true">📤</span> Export
+                          <span aria-hidden="true">📤</span> {t('cellarDetail.export')}
                         </Link>
                       )}
                       {cellar.userRole === 'owner' && (
@@ -393,7 +393,7 @@ function CellarDetail() {
           onClick={() => setActiveTab('bottles')}
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
-          Bottles
+          {t('cellarDetail.tabBottles')}
           {statistics && <span className="tab-count">{statistics.totalBottles}</span>}
         </button>
         <button
@@ -401,7 +401,7 @@ function CellarDetail() {
           onClick={() => setActiveTab('overview')}
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
-          Overview
+          {t('cellarDetail.tabOverview')}
         </button>
       </div>
 
@@ -435,14 +435,14 @@ function CellarDetail() {
               <span className="overview-link-icon" aria-hidden="true">🗄️</span>
               <div>
                 <strong>{t('cellarDetail.racks')}</strong>
-                <span>View rack layout</span>
+                <span>{t('cellarDetail.viewRackLayout')}</span>
               </div>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="9 18 15 12 9 6"/></svg>
             </Link>
             <Link to={`/cellars/${id}/room`} className="overview-link-card" data-guide="cellar-room">
               <span className="overview-link-icon" aria-hidden="true">🏠</span>
               <div>
-                <strong>{t('cellarDetail.roomView', 'Room View')} <span className="overview-beta-badge">Beta</span></strong>
+                <strong>{t('cellarDetail.roomView', 'Room View')} <span className="overview-beta-badge">{t('cellarDetail.beta')}</span></strong>
                 <span>{t('cellarDetail.roomViewDesc', '3D cellar layout')}</span>
               </div>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="9 18 15 12 9 6"/></svg>
@@ -461,7 +461,7 @@ function CellarDetail() {
               <span className="overview-link-icon" aria-hidden="true">📖</span>
               <div>
                 <strong>{t('cellarDetail.history')}</strong>
-                <span>Consumed bottles</span>
+                <span>{t('cellarDetail.consumedBottles')}</span>
               </div>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="9 18 15 12 9 6"/></svg>
             </Link>
@@ -537,7 +537,7 @@ function CellarDetail() {
                     value={filters.sort}
                     onChange={e => setFilters({ ...filters, sort: e.target.value })}
                     className="filter-select sort-select"
-                    aria-label="Sort bottles"
+                    aria-label={t('cellarDetail.sortBottlesAria')}
                   >
                     <option value="-createdAt">{t('cellarDetail.sortNewest')}</option>
                     <option value="createdAt">{t('cellarDetail.sortOldest')}</option>
@@ -568,7 +568,7 @@ function CellarDetail() {
                           type="button"
                           className="active-filter-chip-remove"
                           onClick={() => removeChip(chip)}
-                          aria-label={`Remove ${chip.label}`}
+                          aria-label={t('cellarDetail.removeFilterAria', { label: chip.label })}
                         >×</button>
                       </span>
                     ))}
@@ -756,13 +756,13 @@ function BottlesList({ bottles, rackMap, cellarId, hasMore, loadingMore, onLoadM
                 />
               );
             }
-            const wineName = rep.wineDefinition?.name || rep.pendingWineRequest?.wineName || 'Unknown Wine';
+            const wineName = rep.wineDefinition?.name || rep.pendingWineRequest?.wineName || t('common.unknownWine');
             return (
               <Fragment key={item.key}>
                 <div className="bottle-group-bar">
-                  <span><strong>{wineName}</strong> · {rep.vintage || 'NV'} · {item.count} bottles</span>
+                  <span><strong>{wineName}</strong> · {rep.vintage || 'NV'} · {t('cellarDetail.groupBottleCount', { count: item.count })}</span>
                   <button type="button" className="bottle-group-collapse" onClick={() => toggleGroup(item.key)}>
-                    Collapse ▲
+                    {t('cellarDetail.collapseGroup')}
                   </button>
                 </div>
                 {item.bottles.map(b => (

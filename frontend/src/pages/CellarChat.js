@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
+import { useTranslation, Trans } from 'react-i18next';
 import ReactMarkdown from 'react-markdown';
 import rehypeSanitize from 'rehype-sanitize';
 import { useAuth } from '../contexts/AuthContext';
@@ -10,44 +11,24 @@ import './CellarChat.css';
 const SESSION_MESSAGES_KEY = 'cellarChat.messages';
 const SESSION_CONTEXT_KEY = 'cellarChat.wineContext';
 
-// ── Starter prompts by category ──────────────────────────────────────────────
+// ── Starter prompts by category (i18n keys under cellarChat.*) ───────────────
 
 const PROMPT_CATEGORIES = [
   {
-    label: 'Food pairing',
-    prompts: [
-      "I'm making lamb with rosemary tonight — what should I open?",
-      "What pairs well with grilled salmon from my cellar?",
-      "I'm having a cheese board with friends — what do you suggest?",
-      "What goes with a rich beef stew?",
-    ],
+    key: 'foodPairing',
+    promptKeys: ['food1', 'food2', 'food3', 'food4'],
   },
   {
-    label: 'Occasion',
-    prompts: [
-      "I need something special for a birthday dinner for two.",
-      "We're celebrating an anniversary — what's the best bottle I have?",
-      "Something easy and relaxed for a summer barbecue.",
-      "What's a good bottle to bring as a gift?",
-    ],
+    key: 'occasion',
+    promptKeys: ['occasion1', 'occasion2', 'occasion3', 'occasion4'],
   },
   {
-    label: 'Cellar check',
-    prompts: [
-      "What's drinking well in my cellar right now?",
-      "Do I have anything that's past its peak and should drink soon?",
-      "What's my most interesting bottle right now?",
-      "Show me something I might have forgotten about.",
-    ],
+    key: 'cellarCheck',
+    promptKeys: ['cellar1', 'cellar2', 'cellar3', 'cellar4'],
   },
   {
-    label: 'Mood & style',
-    prompts: [
-      "I want something light and fresh for a weeknight.",
-      "Something bold and tannic to go with a steak.",
-      "I'm in the mood for something elegant and complex.",
-      "What's a good summer evening wine from my cellar?",
-    ],
+    key: 'moodStyle',
+    promptKeys: ['mood1', 'mood2', 'mood3', 'mood4'],
   },
 ];
 
@@ -75,9 +56,10 @@ function WineCard({ wine }) {
 }
 
 function ExpandedQueryHint({ text }) {
+  const { t } = useTranslation();
   return (
     <div className="cellar-chat__expanded-query">
-      <span className="cellar-chat__expanded-query-label">Searching for</span>
+      <span className="cellar-chat__expanded-query-label">{t('cellarChat.searchingFor')}</span>
       <span className="cellar-chat__expanded-query-text">{text}</span>
     </div>
   );
@@ -106,30 +88,31 @@ function Message({ msg }) {
 }
 
 function StarterPrompts({ onSelect, disabled }) {
+  const { t } = useTranslation();
   const [openCategory, setOpenCategory] = useState(null);
 
   return (
     <div className="cellar-chat__starters">
-      <div className="cellar-chat__starters-title">Try asking…</div>
+      <div className="cellar-chat__starters-title">{t('cellarChat.tryAsking')}</div>
       <div className="cellar-chat__starters-categories">
         {PROMPT_CATEGORIES.map((cat) => (
-          <div key={cat.label} className="cellar-chat__starter-cat">
+          <div key={cat.key} className="cellar-chat__starter-cat">
             <button
-              className={`cellar-chat__starter-cat-btn${openCategory === cat.label ? ' open' : ''}`}
-              onClick={() => setOpenCategory(openCategory === cat.label ? null : cat.label)}
+              className={`cellar-chat__starter-cat-btn${openCategory === cat.key ? ' open' : ''}`}
+              onClick={() => setOpenCategory(openCategory === cat.key ? null : cat.key)}
             >
-              {cat.label}
+              {t(`cellarChat.categories.${cat.key}`)}
             </button>
-            {openCategory === cat.label && (
+            {openCategory === cat.key && (
               <div className="cellar-chat__starter-prompts">
-                {cat.prompts.map((p) => (
+                {cat.promptKeys.map((p) => (
                   <button
                     key={p}
                     className="cellar-chat__prompt-chip"
-                    onClick={() => { onSelect(p); setOpenCategory(null); }}
+                    onClick={() => { onSelect(t(`cellarChat.prompts.${p}`)); setOpenCategory(null); }}
                     disabled={disabled}
                   >
-                    {p}
+                    {t(`cellarChat.prompts.${p}`)}
                   </button>
                 ))}
               </div>
@@ -138,9 +121,9 @@ function StarterPrompts({ onSelect, disabled }) {
         ))}
       </div>
       <div className="cellar-chat__tip">
-        <strong>Tip:</strong> describe food, occasion, or mood for the best results.
+        <strong>{t('cellarChat.tipLabel')}</strong> {t('cellarChat.tipBody')}
         <br />
-        <em>"Grilled salmon with herb butter"</em> works much better than <em>"white wine"</em>.
+        <Trans i18nKey="cellarChat.tipExample" components={{ 1: <em />, 3: <em /> }} />
       </div>
     </div>
   );
@@ -149,6 +132,7 @@ function StarterPrompts({ onSelect, disabled }) {
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function CellarChat() {
+  const { t } = useTranslation();
   const { apiFetch, user } = useAuth();
   const defaultCellarId = user?.preferences?.defaultCellarId || null;
 
@@ -230,8 +214,8 @@ export default function CellarChat() {
     setLoading(true);
 
     const thinkingText = hasHistory && wineContext
-      ? 'Thinking…'
-      : 'Searching your cellar…';
+      ? t('cellarChat.thinking')
+      : t('cellarChat.searchingCellar');
     setMessages(prev => [...prev, { role: 'assistant', text: thinkingText, thinking: true }]);
 
     try {
@@ -251,14 +235,21 @@ export default function CellarChat() {
 
       if (!res.ok) {
         setMessages(prev => prev.filter(m => !m.thinking));
-        setError(data.error || 'Something went wrong.');
         // Two kinds of 429: the daily/period quota carries used/limit in its
         // body; the per-minute burst limiter doesn't. Only lock the composer
         // for a real quota exhaustion — burst 429s just show the error above.
         if (res.status === 429 && data.limit != null && data.used != null) {
+          setError(t(
+            data.period === 'weekly' ? 'cellarChat.errorQuotaWeekly' : 'cellarChat.errorQuotaDaily',
+            { count: data.limit }
+          ));
           setUsage(prev => prev
             ? { ...prev, used: Math.max(data.used, data.limit), limit: data.limit, period: data.period || prev.period }
             : null);
+        } else if (res.status === 429) {
+          setError(t('cellarChat.errorBurst'));
+        } else {
+          setError(data.error || t('cellarChat.errorGeneric'));
         }
         return;
       }
@@ -281,7 +272,7 @@ export default function CellarChat() {
       ]);
     } catch {
       setMessages(prev => prev.filter(m => !m.thinking));
-      setError('Network error — please try again.');
+      setError(t('cellarChat.errorNetwork'));
     } finally {
       setLoading(false);
     }
@@ -305,7 +296,9 @@ export default function CellarChat() {
     setError(null);
   };
 
-  const usagePeriodLabel = usage?.period === 'weekly' ? 'this week' : 'today';
+  const usagePeriodLabel = usage?.period === 'weekly'
+    ? t('cellarChat.usagePeriodWeek')
+    : t('cellarChat.usagePeriodToday');
   const usageLabel = usage
     ? (usage.limit === -1 ? null : `${usage.used} / ${usage.limit} ${usagePeriodLabel}`)
     : null;
@@ -313,16 +306,16 @@ export default function CellarChat() {
   return (
     <div className="cellar-chat">
       <div className="cellar-chat__header">
-        <h1 className="cellar-chat__title">Cellar Chat</h1>
+        <h1 className="cellar-chat__title">{t('cellarChat.title')}</h1>
         <div className="cellar-chat__header-controls">
           {messages.length > 0 && (
             <button
               className="cellar-chat__new-chat"
               onClick={startNewChat}
               disabled={loading}
-              aria-label="Start a new conversation"
+              aria-label={t('cellarChat.newChatAria')}
             >
-              New chat
+              {t('cellarChat.newChat')}
             </button>
           )}
           {usageLabel && (
@@ -345,10 +338,10 @@ export default function CellarChat() {
               <path d="M2 4h16M5 10h10M8 16h4" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
             </svg>
             {selectedCellarIds.length === 0
-              ? 'All cellars'
+              ? t('cellarChat.allCellars')
               : selectedCellarIds.length === 1
-                ? (cellars.find(c => c._id === selectedCellarIds[0])?.name || 'Selected cellar')
-                : `${selectedCellarIds.length} cellars`}
+                ? (cellars.find(c => c._id === selectedCellarIds[0])?.name || t('cellarChat.selectedCellar'))
+                : t('cellarChat.nCellars', { count: selectedCellarIds.length })}
           </button>
           {cellarPickerOpen && (
             <div className="cellar-chat__scope-dropdown">
@@ -358,7 +351,7 @@ export default function CellarChat() {
                   checked={selectedCellarIds.length === 0}
                   onChange={() => setSelectedCellarIds([])}
                 />
-                <span>All cellars</span>
+                <span>{t('cellarChat.allCellars')}</span>
               </label>
               {cellars.map(c => (
                 <label key={c._id} className="cellar-chat__scope-option">
@@ -399,8 +392,8 @@ export default function CellarChat() {
           className="cellar-chat__input"
           data-guide="chat-input"
           placeholder={atLimit
-            ? (usage?.period === 'weekly' ? 'Weekly limit reached — try again in a few days' : 'Daily limit reached — resets at midnight UTC')
-            : 'Ask about your cellar… (Enter to send, Shift+Enter for new line)'}
+            ? (usage?.period === 'weekly' ? t('cellarChat.placeholderLimitWeekly') : t('cellarChat.placeholderLimitDaily'))
+            : t('cellarChat.placeholder')}
           value={input}
           onChange={e => setInput(e.target.value)}
           onKeyDown={handleKey}
@@ -411,7 +404,7 @@ export default function CellarChat() {
           type="submit"
           className="cellar-chat__send"
           disabled={loading || !input.trim() || atLimit}
-          aria-label="Send"
+          aria-label={t('cellarChat.send')}
         >
           ↑
         </button>
