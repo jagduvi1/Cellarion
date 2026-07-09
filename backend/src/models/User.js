@@ -218,7 +218,6 @@ const userSchema = new mongoose.Schema({
       enum: [null, 'curator', 'photographer', 'critic', 'community', 'allrounder'],
       default: null,
     },
-    rewardsGranted: { type: [String], default: [] },
   },
   profileVisibility: {
     type: String,

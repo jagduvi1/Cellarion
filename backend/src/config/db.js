@@ -26,6 +26,13 @@ const connectDB = async () => {
     WineList.syncIndexes().catch(err =>
       console.warn('[db] WineList.syncIndexes failed:', err.message)
     );
+    // ImportSession: the TTL index dropped its dead {status:'draft'} partial
+    // filter (every session is a draft) — sync replaces the old conflicting
+    // index (same key, different options) on existing databases.
+    const ImportSession = require('../models/ImportSession');
+    ImportSession.syncIndexes().catch(err =>
+      console.warn('[db] ImportSession.syncIndexes failed:', err.message)
+    );
   } catch (error) {
     // Log the reason (DNS, auth, TLS, bad URI) but mask any credentials
     // embedded in a mongodb:// URI that error messages may echo back.

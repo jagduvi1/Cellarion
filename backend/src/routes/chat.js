@@ -2,7 +2,6 @@
  * Cellar Chat routes.
  *
  * POST /api/chat         – ask a question (non-streaming); rate-limited by the daily quota
- * POST /api/chat/stream  – ask a question (streaming SSE); same rate limiting
  * GET  /api/chat/usage   – return current usage + limit for the current user
  *
  * Every user gets the same daily allowance, regardless of plan: a single global
@@ -21,15 +20,14 @@ const ChatUsage = require('../models/ChatUsage');
 const User = require('../models/User');
 const { logAudit } = require('../services/audit');
 const rateLimitsConfig = require('../config/rateLimits');
-const { ConcurrentStreamLimiter } = require('../utils/concurrentStreams');
 
 const router = express.Router();
 
 // ── Per-user chat protections ────────────────────────────────────────────────
 // The global daily chat limit (aiConfig.chatDailyLimit) is the SPEND cap.
-// These two limits are about BURST behaviour within that cap — they catch
-// scripted abuse (5 chats in 5 seconds; 50 concurrent SSE streams) that the
-// daily quota can't react to fast enough to bound Anthropic spend.
+// The burst limit is about BURST behaviour within that cap — it catches
+// scripted abuse (5 chats in 5 seconds) that the daily quota can't react to
+// fast enough to bound Anthropic spend.
 
 // Burst limit: at most N chats per user per minute. Keyed on req.user.id so
 // it survives IP rotation. Per-IP apiLimiter still runs alongside.
@@ -44,12 +42,6 @@ const chatBurstLimiter = rateLimit({
     res.status(429).json({ error: 'Too many chat requests in a short time. Please wait a minute and try again.' });
   },
 });
-
-// Concurrent-stream cap: at most N simultaneous SSE streams per user.
-// Reads max() from config on each acquire so admins can tune live.
-const streamLimiter = new ConcurrentStreamLimiter(
-  () => rateLimitsConfig.get().chatConcurrentStreams.max
-);
 
 // Returns today's UTC date string 'YYYY-MM-DD'
 function todayUTC() {
@@ -233,96 +225,6 @@ router.post('/', requireAuth, chatBurstLimiter, asyncHandler(async (req, res) =>
     if (status === 503) return res.status(503).json({ error: err.message });
     console.error('[chat] Error:', err);
     res.status(500).json({ error: 'Failed to generate recommendation' });
-  }
-}));
-
-// ---------------------------------------------------------------------------
-// POST /api/chat/stream (streaming SSE)
-// ---------------------------------------------------------------------------
-router.post('/stream', requireAuth, chatBurstLimiter, asyncHandler(async (req, res) => {
-  // ── Concurrency cap ────────────────────────────────────────────────────
-  // Reserve a slot BEFORE doing any DB / Anthropic work, so a user at the
-  // cap gets a clean 429 instead of triggering a refunded debit. Released
-  // in the finally below regardless of success/error/timeout.
-  const streamSlotId = streamLimiter.tryAcquire(req.user.id);
-  if (!streamSlotId) {
-    logAudit(req, 'system.rate_limit_exceeded', {}, {
-      limiter: 'chat-concurrent-streams',
-      userId: req.user.id,
-      current: streamLimiter.count(req.user.id),
-    });
-    return res.status(429).json({
-      error: `You already have ${streamLimiter.count(req.user.id)} chats running. Please wait for one to finish.`,
-    });
-  }
-
-  // SSE max-duration timer — bounds worst-case Anthropic spend if a tool-use
-  // loop runs away with a stuck client. Cleared on normal completion, on
-  // client disconnect, and on any error path via the finally below.
-  //
-  // Hardcoded 90s — not admin-tunable. This is a system safety bound on
-  // Anthropic spend, not a tuning knob; making it editable would create a
-  // req.body → setTimeout taint path (CodeQL js/resource-exhaustion).
-  const SSE_MAX_MS = 90_000;
-  let timeoutFired = false;
-  const sseTimer = setTimeout(() => {
-    timeoutFired = true;
-    if (!res.writableEnded) {
-      try { res.write(`event: error\ndata: ${JSON.stringify({ error: 'Stream timed out' })}\n\n`); } catch (_) {}
-      try { res.end(); } catch (_) {}
-    }
-    logAudit(req, 'chat.stream.timeout', { type: 'chat' }, { userId: req.user.id, ms: SSE_MAX_MS });
-  }, SSE_MAX_MS);
-
-  try {
-    const validated = await validateAndCheckLimit(req, res);
-    if (!validated) return;  // validate already sent the response; finally below cleans up
-
-    const { message, useQueryExpansion, history, previousWines, cellarIds, date, usedBefore, limit, period } = validated;
-
-    // Set SSE headers
-    res.setHeader('Content-Type', 'text/event-stream');
-    res.setHeader('Cache-Control', 'no-cache');
-    res.setHeader('Connection', 'keep-alive');
-    res.setHeader('X-Accel-Buffering', 'no'); // prevent nginx buffering
-    res.flushHeaders();
-
-    // Send usage info as the first event so frontend has it immediately
-    res.write(`event: usage\ndata: ${JSON.stringify({ used: usedBefore + 1, limit, period })}\n\n`);
-
-    try {
-      const result = await aiChat.chatStream(req.user.id, message, {
-        useQueryExpansion,
-        history,
-        cellarIds,
-        previousWines,
-      }, res);
-
-      // Track token usage (best-effort)
-      if (result?.usage) {
-        ChatUsage.findOneAndUpdate(
-          { userId: req.user.id, date },
-          { $inc: { inputTokens: result.usage.inputTokens, outputTokens: result.usage.outputTokens } }
-        ).catch(err => console.warn('[chat] token tracking error:', err.message));
-      }
-
-      logAudit(req, 'chat.query', { type: 'chat' });
-    } catch (err) {
-      // Refund the debit
-      await ChatUsage.findOneAndUpdate(
-        { userId: req.user.id, date },
-        { $inc: { count: -1 } }
-      );
-
-      // If headers already flushed and we haven't timed out, send error as SSE event
-      if (!res.writableEnded && !timeoutFired) {
-        res.write(`event: error\ndata: ${JSON.stringify({ error: err.message || 'Failed to generate recommendation' })}\n\n`);
-        res.end();
-      }
-    }
-  } finally {
-    clearTimeout(sseTimer);
-    streamLimiter.release(req.user.id, streamSlotId);
   }
 }));
 

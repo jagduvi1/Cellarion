@@ -238,26 +238,4 @@ const sections = [
   },
 ];
 
-const tours = [
-  { id: 'create-cellar', label: 'Create a new cellar' },
-  { id: 'add-bottle', label: 'Add a bottle to a cellar' },
-  { id: 'scan-label', label: 'Scan a wine label with camera' },
-  { id: 'use-wishlist', label: 'Use the wishlist' },
-  { id: 'share-cellar', label: 'Share a cellar with someone' },
-  { id: 'manage-racks', label: 'Open the rack view' },
-  { id: 'write-journal', label: 'Write a tasting note' },
-  { id: 'use-cellar-chat', label: 'Chat with the AI sommelier' },
-  { id: 'view-statistics', label: 'View analytics' },
-  { id: 'configure-settings', label: 'Change settings' },
-  { id: 'use-restock', label: 'View restock info' },
-  { id: 'get-recommendations', label: 'View recommendations' },
-  { id: 'build-3d-room', label: 'Build a 3D room layout' },
-  { id: 'import-bottles', label: 'Import from CSV/JSON' },
-  { id: 'consume-bottle', label: 'Mark a bottle as consumed' },
-  { id: 'write-review', label: 'Write a wine review' },
-  { id: 'suggest-wine', label: 'Suggest a missing wine' },
-  { id: 'start-discussion', label: 'Start a discussion' },
-  { id: 'view-history', label: 'View consumed bottles' },
-];
-
-module.exports = { sections, tours };
+module.exports = { sections };

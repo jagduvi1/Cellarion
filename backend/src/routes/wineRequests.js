@@ -3,7 +3,6 @@ const { requireAuth } = require('../middleware/auth');
 const { logAudit } = require('../services/audit');
 const WineRequest = require('../models/WineRequest');
 const WineDefinition = require('../models/WineDefinition');
-const { isValidId } = require('../utils/validation');
 
 const router = express.Router();
 
@@ -120,31 +119,6 @@ router.get('/', async (req, res) => {
   } catch (error) {
     console.error('Get wine requests error:', error);
     res.status(500).json({ error: 'Failed to get wine requests' });
-  }
-});
-
-// GET /api/wine-requests/:id - Get single wine request
-router.get('/:id', async (req, res) => {
-  try {
-    if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
-    const wineRequest = await WineRequest.findOne({
-      _id: req.params.id,
-      user: req.user.id
-    })
-      .populate({
-        path: 'linkedWineDefinition',
-        populate: ['country', 'region', 'grapes']
-      })
-      .populate('resolvedBy', 'username');
-
-    if (!wineRequest) {
-      return res.status(404).json({ error: 'Wine request not found' });
-    }
-
-    res.json({ wineRequest });
-  } catch (error) {
-    console.error('Get wine request error:', error);
-    res.status(500).json({ error: 'Failed to get wine request' });
   }
 });
 

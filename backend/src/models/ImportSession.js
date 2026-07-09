@@ -32,9 +32,11 @@ const importSessionSchema = new mongoose.Schema({
   rackConfigs: { type: mongoose.Schema.Types.Mixed, default: {} },
   // Currency applied to bottles whose CSV row has no Currency column.
   defaultCurrency: { type: String, default: 'USD', uppercase: true, trim: true },
+  // Every session is a draft: finishing an import deletes the session rather
+  // than marking it completed, so 'draft' is the only value that ever exists.
   status: {
     type: String,
-    enum: ['draft', 'completed'],
+    enum: ['draft'],
     default: 'draft',
     index: true
   }
@@ -42,8 +44,7 @@ const importSessionSchema = new mongoose.Schema({
 
 // Auto-purge abandoned draft sessions after 7 days
 importSessionSchema.index({ updatedAt: 1 }, {
-  expireAfterSeconds: 7 * 24 * 60 * 60,
-  partialFilterExpression: { status: 'draft' }
+  expireAfterSeconds: 7 * 24 * 60 * 60
 });
 
 module.exports = mongoose.model('ImportSession', importSessionSchema);

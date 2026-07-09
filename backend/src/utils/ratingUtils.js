@@ -85,37 +85,6 @@ function fromNormalized(normalized, targetScale) {
 }
 
 /**
- * Convert a rating value directly from one scale to another.
- * Returns null if value is null/undefined/invalid.
- */
-function convertRating(value, fromScale, toScale) {
-  if (value == null || isNaN(value)) return null;
-  if (fromScale === toScale) return Number(value);
-  return fromNormalized(toNormalized(value, fromScale), toScale);
-}
-
-/**
- * Format a normalized rating delta (difference between two normalized 0-100 scores)
- * in the user's preferred scale.
- *
- * Because the piecewise mapping is non-linear, we convert a delta by mapping
- * two points around the midpoint (50) through the curve and taking their difference.
- * This gives a representative scale-unit size for the delta.
- */
-function formatDelta(normalizedDelta, scale) {
-  if (normalizedDelta == null || isNaN(normalizedDelta)) return '—';
-  const n = Number(normalizedDelta);
-  const mid = 50;
-  const hi = fromNormalized(Math.min(100, mid + Math.abs(n) / 2), scale);
-  const lo = fromNormalized(Math.max(0,   mid - Math.abs(n) / 2), scale);
-  const raw = (hi - lo) * Math.sign(n);
-  const meta = SCALE_META[scale] || SCALE_META['5'];
-  const precision = meta.step < 1 ? 10 : 1;
-  const rounded = Math.round(raw * precision) / precision;
-  return `${rounded.toFixed(meta.step < 1 ? 1 : 0)}${meta.suffix}`;
-}
-
-/**
  * Validate that a value is within the allowed range for a given scale.
  * Returns true if valid, false otherwise.
  */
@@ -144,4 +113,4 @@ function resolveRating(rawRating, rawScale) {
   return { rating: parseFloat(rawRating), ratingScale };
 }
 
-module.exports = { SCALE_META, VALID_SCALES, toNormalized, fromNormalized, convertRating, isValidRating, formatDelta, resolveRating };
+module.exports = { SCALE_META, VALID_SCALES, toNormalized, fromNormalized, isValidRating, resolveRating };

@@ -1,7 +1,6 @@
 const {
   toNormalized,
   fromNormalized,
-  convertRating,
   isValidRating,
   resolveRating,
 } = require('./ratingUtils');
@@ -45,49 +44,6 @@ describe('fromNormalized', () => {
   test('5-star: 0 → 1', () => expect(fromNormalized(0, '5')).toBe(1));
   test('20-pt: 50 → 14.5', () => expect(fromNormalized(50, '20')).toBe(14.5));
   test('20-pt: 0 → 8', () => expect(fromNormalized(0, '20')).toBe(8));
-});
-
-// ── convertRating ──────────────────────────────────────────────────────────────
-describe('convertRating', () => {
-  test('same scale returns same value', () => {
-    expect(convertRating(4, '5', '5')).toBe(4);
-  });
-
-  test('null → null', () => expect(convertRating(null, '5', '100')).toBeNull());
-
-  // Expert-aligned conversions
-  test('5-star 5 → 100-pt 100', () => {
-    expect(convertRating(5, '5', '100')).toBe(100);
-  });
-
-  test('5-star 4 → 100-pt 91 (outstanding)', () => {
-    expect(convertRating(4, '5', '100')).toBe(91);
-  });
-
-  test('5-star 3 → 100-pt 82 (good)', () => {
-    expect(convertRating(3, '5', '100')).toBe(82);
-  });
-
-  test('5-star 2 → 100-pt 75 (average)', () => {
-    expect(convertRating(2, '5', '100')).toBe(75);
-  });
-
-  test('100-pt 92 → 5-star 4.1', () => {
-    expect(convertRating(92, '100', '5')).toBe(4.1);
-  });
-
-  test('100-pt 75 → 5-star 2.0', () => {
-    expect(convertRating(75, '100', '5')).toBe(2);
-  });
-
-  // Round-trip: anchor points should survive losslessly
-  test('round-trip 4★ → Parker → ★', () => {
-    expect(convertRating(convertRating(4, '5', '100'), '100', '5')).toBe(4);
-  });
-
-  test('round-trip 17.5/20 → Parker → /20', () => {
-    expect(convertRating(convertRating(17.5, '20', '100'), '100', '20')).toBe(17.5);
-  });
 });
 
 // ── isValidRating ──────────────────────────────────────────────────────────────

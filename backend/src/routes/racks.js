@@ -9,7 +9,6 @@ const CellarLayout = require('../models/CellarLayout');
 const { getCellarRole } = require('../utils/cellarAccess');
 const { getMaxPosition } = require('../utils/rackGeometry');
 const { isValidId } = require('../utils/validation');
-const searchService = require('../services/search');
 const { logAudit } = require('../services/audit');
 
 const router = express.Router();
@@ -340,52 +339,6 @@ router.put('/:id/slots/:position', async (req, res) => {
     }
     console.error('Assign slot error:', err);
     res.status(500).json({ error: 'Failed to assign slot' });
-  }
-});
-
-// POST /api/racks/:id/slots/:position/consume  — soft-remove the bottle in a slot (owner or editor)
-router.post('/:id/slots/:position/consume', async (req, res) => {
-  try {
-    if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
-    const position = parseInt(req.params.position, 10);
-    if (isNaN(position)) return res.status(400).json({ error: 'Invalid position' });
-
-    const rack = await Rack.findOne({ _id: req.params.id, deletedAt: null });
-    if (!rack) return res.status(404).json({ error: 'Rack not found' });
-
-    const cellarDoc = await Cellar.findById(rack.cellar);
-    const role = getCellarRole(cellarDoc, req.user.id);
-    if (!role || role === 'viewer') {
-      return res.status(403).json({ error: 'Not authorized to consume bottles in this cellar' });
-    }
-
-    const slot = rack.slots.find(s => s.position === position);
-    if (!slot) return res.status(404).json({ error: 'Slot is empty' });
-
-    // Soft-remove the bottle (move to history)
-    const bottle = await Bottle.findById(slot.bottle);
-    if (bottle) {
-      bottle.status = 'drank';
-      bottle.consumedAt = new Date();
-      bottle.consumedReason = 'drank';
-      await bottle.save();
-      searchService.indexBottle(bottle._id);
-    }
-
-    // Remove the slot assignment
-    rack.slots = rack.slots.filter(s => s.position !== position);
-    await rack.save();
-
-    await rack.populate({
-      path: 'slots.bottle',
-      populate: { path: 'wineDefinition', populate: ['country', 'region', 'grapes'] }
-    });
-
-    logAudit(req, 'rack.slot_consume', { type: 'rack', id: rack._id });
-    res.json({ rack });
-  } catch (err) {
-    console.error('Consume slot error:', err);
-    res.status(500).json({ error: 'Failed to consume bottle' });
   }
 });
 

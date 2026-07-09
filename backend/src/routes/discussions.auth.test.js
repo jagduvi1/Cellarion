@@ -27,14 +27,12 @@ function buildApp() {
 
   // Mirror the per-route middleware composition from discussions.js.
   // Public reads (optionalAuth — no token = anonymous, valid token = personalized).
-  app.get('/api/discussions/categories', optionalAuth, ok);
   app.get('/api/discussions', optionalAuth, ok);
   app.get('/api/discussions/:id', optionalAuth, ok);
   app.get('/api/discussions/:id/replies', optionalAuth, ok);
 
   // Auth-required writes.
   app.post('/api/discussions', requireAuth, ok);
-  app.put('/api/discussions/:id', requireAuth, ok);
   app.post('/api/discussions/:id/replies', requireAuth, ok);
   app.put('/api/discussions/:id/replies/:replyId', requireAuth, ok);
   app.delete('/api/discussions/:id/replies/:replyId', requireAuth, ok);
@@ -80,7 +78,6 @@ const userTok = () => tokenFor({ id: 'u-user', roles: ['user'] });
 const modTok  = () => tokenFor({ id: 'u-mod',  roles: ['moderator'] });
 
 const PUBLIC_GETS = [
-  '/api/discussions/categories',
   '/api/discussions',
   '/api/discussions/anyid',
   '/api/discussions/anyid/replies',
@@ -114,7 +111,6 @@ describe('Discussion GETs are publicly readable', () => {
 
 const WRITE_ROUTES = [
   ['POST',   '/api/discussions'],
-  ['PUT',    '/api/discussions/anyid'],
   ['POST',   '/api/discussions/anyid/replies'],
   ['PUT',    '/api/discussions/anyid/replies/r1'],
   ['DELETE', '/api/discussions/anyid/replies/r1'],

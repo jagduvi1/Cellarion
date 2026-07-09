@@ -20,7 +20,6 @@ const mongoose = require('mongoose');
 const { parsePagination } = require('../utils/pagination');
 const searchService = require('../services/search');
 const { isValidId, coerceStringQuery } = require('../utils/validation');
-const { mapBottlesForExport } = require('../services/cellarExport');
 
 const router = express.Router();
 
@@ -1596,58 +1595,6 @@ router.delete('/:id/members/:userId', async (req, res) => {
   } catch (error) {
     console.error('Remove member error:', error);
     res.status(500).json({ error: 'Failed to remove member' });
-  }
-});
-
-// GET /api/cellars/:id/export — owner only, no images, no staff-curated data
-router.get('/:id/export', async (req, res) => {
-  try {
-    if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
-    // Distinguish 404 (no such active cellar) from 403 (exists, not owner) —
-    // the single combined lookup told members/stale-id callers it was a
-    // permissions problem either way.
-    const cellar = await Cellar.findOne({ _id: req.params.id, deletedAt: null });
-    if (!cellar) return res.status(404).json({ error: 'Cellar not found' });
-    if (cellar.user.toString() !== req.user.id.toString()) {
-      return res.status(403).json({ error: 'Not authorized — only the cellar owner can export' });
-    }
-
-    // Bound worst-case memory: a single response can't materialise more than
-    // CELLAR_EXPORT_MAX bottles. Far above any real cellar; a hit is flagged in
-    // the payload (_truncated) so an outlier knows to contact support.
-    const CELLAR_EXPORT_MAX = 50000;
-    const [bottles, racks] = await Promise.all([
-      Bottle.find({ cellar: req.params.id })
-        .populate({
-          path: 'wineDefinition',
-          populate: [
-            { path: 'country', select: 'name' },
-            { path: 'region', select: 'name' }
-          ],
-          select: 'name producer type appellation country region'
-        })
-        .limit(CELLAR_EXPORT_MAX)
-        .lean(),
-      Rack.find({ cellar: req.params.id, deletedAt: null }).lean()
-    ]);
-
-    // Import-aligned bottle items (shared with the account-wide cellar export
-    // in services/cellarExport.js). No image references here — this endpoint
-    // deliberately omits images; the full export under /api/users/me bundles
-    // the user's own image files.
-    const items = mapBottlesForExport(bottles, racks);
-
-    logAudit(req, 'cellar.export', { type: 'cellar', id: cellar._id }, { bottleCount: items.length });
-
-    const payload = { cellarName: cellar.name, exportedAt: new Date().toISOString(), bottles: items };
-    if (items.length >= CELLAR_EXPORT_MAX) {
-      payload._truncated = CELLAR_EXPORT_MAX;
-      console.warn(`[cellars.export] truncation hit for cellar ${req.params.id} (${CELLAR_EXPORT_MAX})`);
-    }
-    res.json(payload);
-  } catch (error) {
-    console.error('Export cellar error:', error);
-    res.status(500).json({ error: 'Export failed' });
   }
 });
 

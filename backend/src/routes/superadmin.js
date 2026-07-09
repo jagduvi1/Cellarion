@@ -6,7 +6,6 @@ const User = require('../models/User');
 const Bottle = require('../models/Bottle');
 const WineDefinition = require('../models/WineDefinition');
 const Cellar = require('../models/Cellar');
-const AuditLog = require('../models/AuditLog');
 const BottleImage = require('../models/BottleImage');
 const WineRequest = require('../models/WineRequest');
 const Rack = require('../models/Rack');
@@ -288,36 +287,6 @@ router.get('/process', (req, res) => {
       frontendUrl: process.env.FRONTEND_URL || 'http://localhost:3000',
     },
   });
-});
-
-// ---------------------------------------------------------------------------
-// GET /api/superadmin/audit?limit=100&action=<filter>
-// Full audit log access (all users, all actions)
-// ---------------------------------------------------------------------------
-router.get('/audit', async (req, res) => {
-  try {
-    const { limit, offset } = parsePagination(req.query, { limit: 100, maxLimit: 500 });
-    const filter = {};
-    const action = coerceStringQuery(req.query.action).trim();
-    if (action) {
-      filter.action = new RegExp(escapeRegex(action), 'i');
-    }
-
-    const [logs, total] = await Promise.all([
-      AuditLog.find(filter)
-        .sort({ timestamp: -1 })
-        .skip(offset)
-        .limit(limit)
-        .populate({ path: 'actor.userId', select: 'username email', model: 'User' })
-        .lean(),
-      AuditLog.countDocuments(filter),
-    ]);
-
-    res.json({ logs, total, limit, offset });
-  } catch (error) {
-    console.error('[superadmin] audit error:', error);
-    res.status(500).json({ error: 'Failed to load audit log' });
-  }
 });
 
 // ---------------------------------------------------------------------------
