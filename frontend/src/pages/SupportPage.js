@@ -1,36 +1,12 @@
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import { getMySupportTickets, getMyWineReports } from '../api/support';
 import SupportModal from '../components/SupportModal';
 import './SupportPage.css';
 
-const CATEGORY_LABELS = {
-  bug: 'Bug Report',
-  help: 'Help / Question',
-  feature: 'Feature Request',
-  other: 'Other',
-};
-
-const STATUS_LABELS = {
-  open: 'Open',
-  in_progress: 'In Progress',
-  closed: 'Closed',
-};
-
-const REASON_LABELS = {
-  wrong_info: 'Wrong Information',
-  duplicate: 'Duplicate Entry',
-  inappropriate: 'Inappropriate Content',
-  other: 'Other',
-};
-
-const REPORT_STATUS_LABELS = {
-  pending: 'Pending',
-  resolved: 'Resolved',
-  dismissed: 'Dismissed',
-};
-
 function SupportPage() {
+  const { t } = useTranslation();
   const { apiFetch } = useAuth();
   const [tab, setTab] = useState('tickets');
   const [tickets, setTickets] = useState([]);
@@ -57,7 +33,7 @@ function SupportPage() {
       if (ticketRes.ok) setTickets(ticketData.tickets || []);
       if (reportRes.ok) setWineReports(reportData.reports || []);
     } catch {
-      setError('Failed to load support history.');
+      setError(t('support.failedLoad'));
     } finally {
       setLoading(false);
     }
@@ -68,9 +44,9 @@ function SupportPage() {
   return (
     <div className="support-page">
       <div className="support-header">
-        <h1>Support</h1>
+        <h1>{t('support.title')}</h1>
         <button className="btn-primary" onClick={() => setShowModal(true)}>
-          + New Support Ticket
+          {t('support.newTicket')}
         </button>
       </div>
 
@@ -79,23 +55,23 @@ function SupportPage() {
           className={tab === 'tickets' ? 'active' : ''}
           onClick={() => setTab('tickets')}
         >
-          My Tickets ({tickets.length})
+          {t('support.myTickets', { count: tickets.length })}
         </button>
         <button
           className={tab === 'reports' ? 'active' : ''}
           onClick={() => setTab('reports')}
         >
-          My Wine Reports ({wineReports.length})
+          {t('support.myWineReports', { count: wineReports.length })}
         </button>
       </div>
 
-      {loading && <p className="support-loading">Loading…</p>}
+      {loading && <p className="support-loading">{t('support.loading')}</p>}
       {error && <p className="support-error">{error}</p>}
 
       {!loading && tab === 'tickets' && (
         <div className="support-list">
           {tickets.length === 0 ? (
-            <p className="support-empty">No support tickets yet. Use the button above to get help.</p>
+            <p className="support-empty">{t('support.noTickets')}</p>
           ) : (
             tickets.map(ticket => (
               <div key={ticket._id} className="support-card">
@@ -108,9 +84,9 @@ function SupportPage() {
                 >
                   <div className="support-card-meta">
                     <span className={`support-badge status-${ticket.status}`}>
-                      {STATUS_LABELS[ticket.status]}
+                      {t(`support.status.${ticket.status}`, ticket.status)}
                     </span>
-                    <span className="support-badge category">{CATEGORY_LABELS[ticket.category]}</span>
+                    <span className="support-badge category">{t(`support.category.${ticket.category}`, ticket.category)}</span>
                     <strong className="support-subject">{ticket.subject}</strong>
                   </div>
                   <span className="support-date">
@@ -121,12 +97,12 @@ function SupportPage() {
                 {expanded === ticket._id && (
                   <div className="support-card-body">
                     <div className="support-message">
-                      <h4>Your message</h4>
+                      <h4>{t('support.yourMessage')}</h4>
                       <p>{ticket.message}</p>
                     </div>
                     {ticket.adminResponse && (
                       <div className="support-response">
-                        <h4>Admin response</h4>
+                        <h4>{t('support.adminResponse')}</h4>
                         <p>{ticket.adminResponse}</p>
                         <span className="support-response-date">
                           {ticket.respondedAt
@@ -136,7 +112,7 @@ function SupportPage() {
                       </div>
                     )}
                     {!ticket.adminResponse && (
-                      <p className="support-awaiting">Awaiting admin response…</p>
+                      <p className="support-awaiting">{t('support.awaitingResponse')}</p>
                     )}
                   </div>
                 )}
@@ -149,7 +125,7 @@ function SupportPage() {
       {!loading && tab === 'reports' && (
         <div className="support-list">
           {wineReports.length === 0 ? (
-            <p className="support-empty">No wine reports yet. Use the "Report" button on any wine to flag an issue.</p>
+            <p className="support-empty">{t('support.noReports')}</p>
           ) : (
             wineReports.map(report => (
               <div key={report._id} className="support-card">
@@ -162,9 +138,9 @@ function SupportPage() {
                 >
                   <div className="support-card-meta">
                     <span className={`support-badge status-${report.status}`}>
-                      {REPORT_STATUS_LABELS[report.status]}
+                      {t(`support.reportStatus.${report.status}`, report.status)}
                     </span>
-                    <span className="support-badge category">{REASON_LABELS[report.reason]}</span>
+                    <span className="support-badge category">{t(`support.reason.${report.reason}`, report.reason)}</span>
                     <strong className="support-subject">
                       {report.wineDefinition?.name}
                       {report.wineDefinition?.producer ? ` — ${report.wineDefinition.producer}` : ''}
@@ -179,18 +155,18 @@ function SupportPage() {
                   <div className="support-card-body">
                     {report.details && (
                       <div className="support-message">
-                        <h4>Your details</h4>
+                        <h4>{t('support.yourDetails')}</h4>
                         <p>{report.details}</p>
                       </div>
                     )}
                     {report.adminNotes && (
                       <div className="support-response">
-                        <h4>Admin notes</h4>
+                        <h4>{t('support.adminNotes')}</h4>
                         <p>{report.adminNotes}</p>
                       </div>
                     )}
                     {report.status === 'pending' && !report.adminNotes && (
-                      <p className="support-awaiting">Under review…</p>
+                      <p className="support-awaiting">{t('support.underReview')}</p>
                     )}
                   </div>
                 )}
