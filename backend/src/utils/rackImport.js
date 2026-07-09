@@ -101,20 +101,23 @@ function computeRackPosition({
     const slotsPerShelf = (cols + back) * bpc;
     const shelfBase = (effectiveShelf - 1) * slotsPerShelf;
 
+    // Layer capacities follow ShelfView's canonical numbering: the front
+    // layer spans cols*bpc positions, the back layer starts at cols*bpc.
+    // (With the default bpc=1 these reduce to the plain cols/back forms.)
     const layerNum = parseInt(layer, 10);
     const slotNum = parseInt(slotInLayer, 10);
     if (!isNaN(layerNum) && !isNaN(slotNum) && slotNum >= 1) {
       if (layerNum === 1) {
-        if (slotNum > cols) {
-          return { error: `front slot ${slotNum} exceeds cols ${cols}` };
+        if (slotNum > cols * bpc) {
+          return { error: `front slot ${slotNum} exceeds front capacity ${cols * bpc}` };
         }
         return { position: shelfBase + slotNum };
       }
       if (layerNum === 2) {
-        if (slotNum > back) {
-          return { error: `back slot ${slotNum} exceeds backCols ${back}` };
+        if (slotNum > back * bpc) {
+          return { error: `back slot ${slotNum} exceeds back capacity ${back * bpc}` };
         }
-        return { position: shelfBase + cols + slotNum };
+        return { position: shelfBase + cols * bpc + slotNum };
       }
       return { error: `invalid layer ${layerNum} (expected 1 or 2)` };
     }
@@ -123,7 +126,15 @@ function computeRackPosition({
   }
 
   // Grid rack (or shelf with row+col input): source is a slot or (row, col).
-  let srcRow, srcCol;
+  //
+  // Row STRIDE differs for shelf racks with back columns / multi-bottle
+  // cells: each shelf row spans (cols + backCols) * bpc positions (ShelfView's
+  // canonical numbering), not `cols` — using `cols` put every row ≥ 2 on the
+  // wrong shelf. Row/col input addresses the FRONT layer, whose width is
+  // cols * bpc. For plain grids both reduce to `cols` (unchanged behavior).
+  const rowStride = isShelf ? (cols + back) * bpc : cols;
+  const frontWidth = isShelf ? cols * bpc : cols;
+  let srcRow, srcCol, colWidth;
 
   if (position !== undefined && position !== null && position !== '') {
     const p = parseInt(position, 10);
@@ -135,16 +146,20 @@ function computeRackPosition({
     if (isNaN(cols) || cols < 1) {
       return { error: 'rackCols is required to transform position with a non-default anchor' };
     }
-    // Expand the source position into (row, col) of its CELL grid.
-    srcRow = Math.ceil(p / cols);
-    srcCol = ((p - 1) % cols) + 1;
+    // Expand the source position into (row, col) of its CELL grid. For a raw
+    // position the col spans the whole stride (front + back), so the mirror
+    // width below is the stride, keeping back-layer slots inside their layer.
+    srcRow = Math.ceil(p / rowStride);
+    srcCol = ((p - 1) % rowStride) + 1;
+    colWidth = rowStride;
   } else {
     srcRow = parseInt(row, 10);
     srcCol = parseInt(col, 10);
     if (isNaN(srcRow) || srcRow < 1) return { error: 'Invalid row' };
     if (isNaN(srcCol) || srcCol < 1) return { error: 'Invalid col' };
     if (isNaN(cols) || cols < 1) return { error: 'rackCols is required to compute position from row/col' };
-    if (srcCol > cols) return { error: `col ${srcCol} exceeds rackCols ${cols}` };
+    if (srcCol > frontWidth) return { error: `col ${srcCol} exceeds row width ${frontWidth}` };
+    colWidth = frontWidth;
   }
 
   // Apply anchor transforms in the cell grid (rows × cols).
@@ -162,10 +177,10 @@ function computeRackPosition({
     if (isNaN(cols) || cols < 1) {
       return { error: 'rackCols is required for right-anchored placement' };
     }
-    effectiveCol = cols - srcCol + 1;
+    effectiveCol = colWidth - srcCol + 1;
   }
 
-  return { position: (effectiveRow - 1) * cols + effectiveCol };
+  return { position: (effectiveRow - 1) * rowStride + effectiveCol };
 }
 
 /**

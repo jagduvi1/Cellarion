@@ -607,3 +607,63 @@ describe('placeBottlesInRack (orchestration)', () => {
     expect(placements[0].position).toBe(9);
   });
 });
+
+// ── Shelf stride with bottlesPerCell > 1 / back columns (audit MED #16) ─────
+// Canonical numbering (ShelfView): each shelf spans (cols + backCols) * bpc
+// positions; the front layer covers the first cols*bpc, the back layer starts
+// at cols*bpc. These pin the importer to that contract.
+describe('shelf racks with bottlesPerCell > 1', () => {
+  const shelf = { rackType: 'shelf', rackRows: 10, rackCols: 6, backCols: 5, bottlesPerCell: 2 };
+  const stride = (6 + 5) * 2; // 22 positions per shelf
+
+  test('front layer slot lands within the front span of its shelf', () => {
+    // shelf 1 (top-anchored), front slot 8 → base 0 + 8
+    expect(computeRackPosition({ ...shelf, position: 1, layer: 1, slotInLayer: 8 }))
+      .toEqual({ position: 8 });
+    // front capacity is cols*bpc = 12, not cols = 6
+    expect(computeRackPosition({ ...shelf, position: 1, layer: 1, slotInLayer: 12 }))
+      .toEqual({ position: 12 });
+    expect(computeRackPosition({ ...shelf, position: 1, layer: 1, slotInLayer: 13 }).error).toBeDefined();
+  });
+
+  test('back layer starts after cols*bpc, not after cols', () => {
+    // shelf 1, back slot 1 → 0 + 6*2 + 1 = 13 (the old math returned 7 — a FRONT cell)
+    expect(computeRackPosition({ ...shelf, position: 1, layer: 2, slotInLayer: 1 }))
+      .toEqual({ position: 13 });
+    // back capacity is backCols*bpc = 10
+    expect(computeRackPosition({ ...shelf, position: 1, layer: 2, slotInLayer: 10 }))
+      .toEqual({ position: 22 });
+    expect(computeRackPosition({ ...shelf, position: 1, layer: 2, slotInLayer: 11 }).error).toBeDefined();
+  });
+
+  test('shelf 2 uses the full (cols+backCols)*bpc stride', () => {
+    expect(computeRackPosition({ ...shelf, position: 2, layer: 1, slotInLayer: 1 }))
+      .toEqual({ position: stride + 1 });
+    expect(computeRackPosition({ ...shelf, position: 2, layer: 2, slotInLayer: 1 }))
+      .toEqual({ position: stride + 12 + 1 });
+  });
+
+  test('row/col input on a shelf rack uses the shelf stride, front-layer width', () => {
+    // row 2, col 3 → (2-1)*22 + 3 = 25 (the old math returned (2-1)*6 + 3 = 9 — shelf 1's back layer)
+    expect(computeRackPosition({ ...shelf, row: 2, col: 3 }))
+      .toEqual({ position: 25 });
+    // col bounded by front width (12)
+    expect(computeRackPosition({ ...shelf, row: 1, col: 12 })).toEqual({ position: 12 });
+    expect(computeRackPosition({ ...shelf, row: 1, col: 13 }).error).toBeDefined();
+  });
+
+  test('bpc=1 shelves keep the historical numbering (regression guard)', () => {
+    const oeno = { rackType: 'shelf', rackRows: 18, rackCols: 6, backCols: 5 };
+    // shelf 11 top-anchored: base (11-1)*11 = 110; front 3 → 113; back 2 → 110+6+2 = 118
+    expect(computeRackPosition({ ...oeno, position: 11, layer: 1, slotInLayer: 3 }))
+      .toEqual({ position: 113 });
+    expect(computeRackPosition({ ...oeno, position: 11, layer: 2, slotInLayer: 2 }))
+      .toEqual({ position: 118 });
+  });
+
+  test('plain grids are untouched by the stride change', () => {
+    expect(computeRackPosition({ row: 2, col: 3, rackCols: 6 })).toEqual({ position: 9 });
+    expect(computeRackPosition({ position: 9, rackCols: 6, rackRows: 4, anchor: 'bottom-left' }))
+      .toEqual({ position: (4 - 2) * 6 + 3 });
+  });
+});
