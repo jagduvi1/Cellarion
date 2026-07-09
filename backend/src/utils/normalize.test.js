@@ -4,7 +4,6 @@ const {
   generateWineKey,
   levenshteinDistance,
   calculateSimilarity,
-  isSimilar,
   generateTrigrams,
   trigramSimilarity,
   tokenSimilarity,
@@ -150,24 +149,6 @@ describe('calculateSimilarity', () => {
 
   test('close strings → high score', () => {
     expect(calculateSimilarity('chardonnay', 'chardonay')).toBeGreaterThan(0.8);
-  });
-});
-
-// ─── isSimilar ───────────────────────────────────────────────────────────────
-
-describe('isSimilar', () => {
-  test('identical strings pass default threshold', () => {
-    expect(isSimilar('merlot', 'merlot')).toBe(true);
-  });
-
-  test('very different strings fail default threshold', () => {
-    expect(isSimilar('merlot', 'riesling')).toBe(false);
-  });
-
-  test('respects custom threshold', () => {
-    // calculateSimilarity for one-char-off should pass 0.5 but may fail 0.99
-    expect(isSimilar('wine', 'wines', 0.5)).toBe(true);
-    expect(isSimilar('wine', 'wines', 0.99)).toBe(false);
   });
 });
 

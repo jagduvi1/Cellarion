@@ -327,7 +327,6 @@ Update the `Host(...)` rule to match your own domain.
 | PUT | `/:id` | Update cellar |
 | DELETE | `/:id` | Delete cellar |
 | GET | `/:id/statistics` | Aggregated stats |
-| GET | `/:id/export` | Export all bottles as JSON (owner only) |
 
 ### Bottles — `/api/bottles` *(auth required)*
 

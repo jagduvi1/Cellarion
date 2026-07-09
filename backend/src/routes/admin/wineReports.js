@@ -47,25 +47,6 @@ router.get('/', async (req, res) => {
   }
 });
 
-// GET /api/admin/wine-reports/:id — get single report
-router.get('/:id', async (req, res) => {
-  try {
-    if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
-    const report = await WineReport.findById(req.params.id)
-      .populate('user', 'username email')
-      .populate('wineDefinition', 'name producer country type appellation')
-      .populate('duplicateOf', 'name producer')
-      .populate('resolvedBy', 'username')
-      .lean();
-
-    if (!report) return res.status(404).json({ error: 'Report not found' });
-    res.json({ report });
-  } catch (err) {
-    console.error('Admin get wine report error:', err);
-    res.status(500).json({ error: 'Failed to get wine report' });
-  }
-});
-
 // PUT /api/admin/wine-reports/:id/resolve — mark a wine report as resolved
 router.put('/:id/resolve', async (req, res) => {
   try {

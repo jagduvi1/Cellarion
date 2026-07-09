@@ -7,10 +7,10 @@
  * so they can stand up their own Cellarion instance and load everything back.
  * This is the anti-lock-in promise made concrete.
  *
- * The per-bottle shape here is deliberately identical to the existing
- * `GET /api/cellars/:id/export` payload (and to the columns the CSV importer
- * understands): wineName/producer/vintage/rackName/rackPosition/… So an export
- * round-trips through the existing import path with no new mapping.
+ * The per-bottle shape is deliberately identical to the columns the CSV
+ * importer understands: wineName/producer/vintage/rackName/rackPosition/…
+ * So an export round-trips through the existing import path with no new
+ * mapping.
  *
  * Image rule: only files where `uploadedBy === the requesting user` are
  * included. Photos other people contributed (e.g. a shared wine's label) are

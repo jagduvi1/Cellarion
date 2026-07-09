@@ -41,23 +41,6 @@ router.get('/', async (req, res) => {
   }
 });
 
-// GET /api/admin/support-tickets/:id — get single ticket
-router.get('/:id', async (req, res) => {
-  try {
-    if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
-    const ticket = await SupportTicket.findById(req.params.id)
-      .populate('user', 'username email')
-      .populate('respondedBy', 'username')
-      .lean();
-
-    if (!ticket) return res.status(404).json({ error: 'Ticket not found' });
-    res.json({ ticket });
-  } catch (err) {
-    console.error('Admin get support ticket error:', err);
-    res.status(500).json({ error: 'Failed to get support ticket' });
-  }
-});
-
 // PUT /api/admin/support-tickets/:id/respond — respond to a ticket
 router.put('/:id/respond', async (req, res) => {
   try {

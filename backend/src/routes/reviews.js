@@ -307,30 +307,6 @@ router.get('/discover', async (req, res) => {
   }
 });
 
-// GET /api/reviews/:id - Single review
-router.get('/:id', async (req, res) => {
-  try {
-    if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid review ID' });
-    const review = await Review.findById(req.params.id)
-      .populate('author', 'username displayName contribution.tier contribution.specialty')
-      .populate({ path: 'wineDefinition', select: 'name producer type', populate: { path: 'country', select: 'name' } });
-
-    if (!review) return res.status(404).json({ error: 'Review not found' });
-
-    // Private reviews only visible to author
-    if (review.visibility === 'private' && review.author._id.toString() !== req.user.id) {
-      return res.status(404).json({ error: 'Review not found' });
-    }
-
-    const vote = await ReviewVote.findOne({ user: req.user.id, review: review._id });
-
-    res.json({ review: { ...review.toObject(), liked: !!vote } });
-  } catch (err) {
-    console.error('Get review error:', err);
-    res.status(500).json({ error: 'Failed to get review' });
-  }
-});
-
 // PUT /api/reviews/:id - Update own review
 router.put('/:id', async (req, res) => {
   try {

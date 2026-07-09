@@ -62,7 +62,6 @@ describe('incrementCred — no plan rewards', () => {
         categories: { curator: 0, photographer: 305, critic: 0, community: 0 },
         tier: 'enthusiast',        // stale — should be bumped to connoisseur
         specialty: 'photographer', // unchanged
-        rewardsGranted: [],
       },
       plan: 'free',
       planExpiresAt: null,
@@ -91,7 +90,6 @@ describe('incrementCred — no plan rewards', () => {
         categories: { curator: 0, photographer: 40, critic: 0, community: 0 },
         tier: 'contributor',
         specialty: 'photographer',
-        rewardsGranted: [],
       },
       plan: 'free',
       planExpiresAt: null,

@@ -119,7 +119,7 @@ const REGISTRY = [
           emailVerified: u.emailVerified,
           gdprConsent: u.gdprConsent,
           createdAt: u.createdAt,
-          contribution: u.contribution || { totalScore: 0, categories: {}, tier: 'newcomer', specialty: null, rewardsGranted: [] },
+          contribution: u.contribution || { totalScore: 0, categories: {}, tier: 'newcomer', specialty: null },
         },
       };
     },

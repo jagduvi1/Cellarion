@@ -55,11 +55,6 @@ async function checkDiscussionBan(req, res) {
   return false;
 }
 
-// GET /api/discussions/categories - Available categories (public)
-router.get('/categories', optionalAuth, (req, res) => {
-  res.json({ categories: CATEGORIES });
-});
-
 // GET /api/discussions - List discussions (public)
 //
 // When `q` is provided we route through Meilisearch for fuzzy text matching;
@@ -491,54 +486,6 @@ router.post('/', requireAuth, async (req, res) => {
   } catch (err) {
     console.error('Create discussion error:', err);
     res.status(500).json({ error: 'Failed to create discussion' });
-  }
-});
-
-// PUT /api/discussions/:idOrSlug - Update own discussion (or moderator/admin)
-router.put('/:idOrSlug', requireAuth, async (req, res) => {
-  try {
-    const discussion = await findDiscussionByIdOrSlug(req.params.idOrSlug);
-    if (!discussion) return res.status(404).json({ error: 'Discussion not found' });
-
-    const isOwner = discussion.author.toString() === req.user.id;
-    const isMod = isModerator(req.user);
-    if (!isOwner && !isMod) {
-      return res.status(403).json({ error: 'You can only edit your own discussions' });
-    }
-
-    const { title, body, category } = req.body;
-
-    if (title !== undefined) {
-      const cleanTitle = stripHtml(title);
-      if (cleanTitle.length < 3) return res.status(400).json({ error: 'Title must be at least 3 characters' });
-      if (cleanTitle.length > DISCUSSION_MAX_LENGTHS.title) return res.status(400).json({ error: 'Title too long' });
-      discussion.title = cleanTitle;
-    }
-
-    if (body !== undefined) {
-      const cleanBody = sanitizeForumHtml(body);
-      const visibleLength = visibleTextLength(cleanBody);
-      if (visibleLength < 10) return res.status(400).json({ error: 'Body must be at least 10 characters' });
-      if (visibleLength > DISCUSSION_MAX_LENGTHS.body) return res.status(400).json({ error: 'Body too long' });
-      discussion.body = cleanBody;
-    }
-
-    if (category !== undefined) {
-      if (!CATEGORIES.includes(category)) return res.status(400).json({ error: 'Invalid category' });
-      discussion.category = category;
-    }
-
-    await discussion.save();
-    logAudit(req, 'discussion.update', { type: 'discussion', id: discussion._id });
-
-    // Re-index after edit so search results reflect the new title/body
-    searchService.indexDiscussion(discussion._id);
-
-    await discussion.populate('author', 'username displayName roles contribution.tier contribution.specialty');
-    res.json({ discussion });
-  } catch (err) {
-    console.error('Update discussion error:', err);
-    res.status(500).json({ error: 'Failed to update discussion' });
   }
 });
 

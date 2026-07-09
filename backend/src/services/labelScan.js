@@ -47,46 +47,6 @@ function validateMediaType(mediaType) {
 }
 
 /**
- * Extract the wine name and producer from a label image.
- * Returns a search query string (legacy — used by older callers).
- *
- * @param {string} image     Base64-encoded image data
- * @param {string} mediaType MIME type (default 'image/jpeg')
- * @returns {Promise<string>} Search query string
- */
-async function scanLabel(image, mediaType = 'image/jpeg') {
-  validateMediaType(mediaType);
-  const client = getClient();
-
-  const response = await client.messages.create({
-    model: 'claude-haiku-4-5-20251001',
-    max_tokens: 80,
-    messages: [{
-      role: 'user',
-      content: [
-        {
-          type: 'image',
-          source: { type: 'base64', media_type: mediaType, data: image }
-        },
-        {
-          type: 'text',
-          text: 'Look at this wine bottle label. Extract the wine name and producer. Return ONLY a short search string like "wine name producer" with no explanation, punctuation, or extra words — just the key identifying text from the label.'
-        }
-      ]
-    }]
-  });
-
-  const query = textFromResponse(response);
-  if (!query) {
-    const err = new Error('Could not read label');
-    err.status = 422;
-    throw err;
-  }
-
-  return query;
-}
-
-/**
  * Extract full structured wine data from a label image using Claude vision.
  *
  * Returns an object with: name, producer, vintage, country, region,
@@ -404,4 +364,4 @@ async function suggestProfile({ name, producer, vintage, country, region, appell
   });
 }
 
-module.exports = { scanLabel, scanLabelFull, identifyWineFromText, identifyWineFromQuery, suggestDrinkWindow, suggestPrice, suggestProfile };
+module.exports = { scanLabelFull, identifyWineFromText, identifyWineFromQuery, suggestDrinkWindow, suggestPrice, suggestProfile };

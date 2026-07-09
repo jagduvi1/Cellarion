@@ -127,14 +127,6 @@ const calculateSimilarity = (str1, str2) => {
 };
 
 /**
- * Check if two strings are similar enough to be considered duplicates
- * threshold: 0.0 to 1.0 (default 0.85 = 85% similar)
- */
-const isSimilar = (str1, str2, threshold = 0.85) => {
-  return calculateSimilarity(str1, str2) >= threshold;
-};
-
-/**
  * Generate trigrams from a string for fuzzy matching
  * e.g., "wine" -> ["  w", " wi", "win", "ine", "ne "]
  */
@@ -341,11 +333,9 @@ module.exports = {
   tokenize,
   generateWineKey,
   generateWineSlug,
-  slugify,
   resolveGrapeName,
   levenshteinDistance,
   calculateSimilarity,
-  isSimilar,
   generateTrigrams,
   trigramSimilarity,
   tokenSimilarity,

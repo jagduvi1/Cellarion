@@ -158,29 +158,6 @@ router.get('/', async (req, res) => {
   }
 });
 
-// GET /api/journal/:id — get a single entry
-router.get('/:id', async (req, res) => {
-  try {
-    if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
-
-    const entry = await JournalEntry.findById(req.params.id)
-      .populate(POPULATE_PAIRINGS)
-      .lean();
-
-    if (!entry) return res.status(404).json({ error: 'Entry not found' });
-
-    // Only owner or public entries visible
-    if (entry.user.toString() !== req.user.id && entry.visibility !== 'public') {
-      return res.status(404).json({ error: 'Entry not found' });
-    }
-
-    res.json({ entry });
-  } catch (err) {
-    console.error('Get journal entry error:', err);
-    res.status(500).json({ error: 'Failed to load journal entry' });
-  }
-});
-
 // POST /api/journal — create a new entry
 router.post('/', async (req, res) => {
   try {
