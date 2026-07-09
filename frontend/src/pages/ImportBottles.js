@@ -619,10 +619,10 @@ function ImportBottles() {
     };
   };
 
-  // Rows eligible for bulk import: has a real selection, not skipped, not already imported
+  // Rows eligible for bulk import: has a real selection and is not skipped
   const isImportableRow = (r) => {
     const sel = selections[r.index];
-    return sel && sel !== 'skip' && sel !== 'imported';
+    return sel && sel !== 'skip';
   };
 
   const getImportableCount = () => results.filter(isImportableRow).length;
@@ -632,7 +632,7 @@ function ImportBottles() {
     setError(null);
     setStep('importing');
 
-    // Build items for confirm endpoint — skip already-imported rows
+    // Build items for confirm endpoint — skipped rows are excluded
     const items = results
       .filter(isImportableRow)
       .map(buildImportItem);
@@ -1082,12 +1082,11 @@ function ImportBottles() {
   );
 
   // Sort priority: unresolved no-match → unresolved fuzzy → unresolved exact →
-  // error → resolved (matched/requested) → skipped → imported.
+  // error → resolved (matched/requested) → skipped.
   // Within each group: alphabetical by producer then wine name.
   const sortResults = (rs) => {
     const priority = (r) => {
       const sel = selections[r.index];
-      if (sel === 'imported') return 6;
       if (sel === 'skip') return 5;
       if (sel === 'request') return 4;
       if (sel) return 3; // has a wineId selection
@@ -1106,7 +1105,6 @@ function ImportBottles() {
 
   const renderReviewStep = () => {
     const importable = getImportableCount();
-    const importedCount = results.filter(r => selections[r.index] === 'imported').length;
     const unresolved = results.filter(r => !selections[r.index] && r.status !== 'error').length;
     const sortedResults = sortResults(results);
 
@@ -1136,12 +1134,6 @@ function ImportBottles() {
             <span className="summary-number summary-importable">{importable}</span>
             <span className="summary-label">{t('importBottles.review.ready')}</span>
           </div>
-          {importedCount > 0 && (
-            <div className="summary-stat">
-              <span className="summary-number summary-imported">{importedCount}</span>
-              <span className="summary-label">{t('importBottles.review.imported')}</span>
-            </div>
-          )}
           {(summary?.priceWarnings || 0) > 0 && (
             <div className="summary-stat">
               <span className="summary-number summary-warn">{summary.priceWarnings}</span>
@@ -1227,8 +1219,7 @@ function ImportBottles() {
                 const sel = selections[r.index];
                 const isSkipped = sel === 'skip';
                 const isRequested = sel === 'request';
-                const isImported = sel === 'imported';
-                const hasReadySel = sel && !isSkipped && !isRequested && !isImported;
+                const hasReadySel = sel && !isSkipped && !isRequested;
                 const matchedWine = hasReadySel
                   ? r.matches.find(m => m.wineId === sel) || null
                   : null;
@@ -1249,11 +1240,11 @@ function ImportBottles() {
                 return (
                   <tr
                     key={r.index}
-                    className={`review-row ${isSkipped ? 'row-skipped' : ''} ${isRequested ? 'row-requested' : ''} ${isImported ? 'row-imported' : ''} ${STATUS_CLASSES[r.status]}`}
+                    className={`review-row ${isSkipped ? 'row-skipped' : ''} ${isRequested ? 'row-requested' : ''} ${STATUS_CLASSES[r.status]}`}
                   >
                     <td className="col-status">
-                      <span className={`status-badge ${isImported ? 'status-imported' : STATUS_CLASSES[r.status]}`}>
-                        {isImported ? t('importBottles.status.imported') : isSkipped ? t('importBottles.status.skipped') : isRequested ? t('importBottles.status.requested') : t(STATUS_LABEL_KEYS[r.status])}
+                      <span className={`status-badge ${STATUS_CLASSES[r.status]}`}>
+                        {isSkipped ? t('importBottles.status.skipped') : isRequested ? t('importBottles.status.requested') : t(STATUS_LABEL_KEYS[r.status])}
                       </span>
                     </td>
                     <td className="col-source">
@@ -1267,9 +1258,7 @@ function ImportBottles() {
                       </div>
                     </td>
                     <td className="col-match">
-                      {isImported ? (
-                        <span className="match-imported">{t('importBottles.review.addedToCellar')}</span>
-                      ) : isSkipped ? (
+                      {isSkipped ? (
                         <span className="match-skipped">{t('importBottles.review.willNotImport')}</span>
                       ) : isRequested ? (
                         <span className="match-requested">{t('importBottles.review.pendingAdminReview')}</span>
@@ -1332,69 +1321,67 @@ function ImportBottles() {
                       )}
                     </td>
                     <td className="col-actions">
-                      {isImported ? null : (
-                        <div className="action-buttons">
-                          {r.matches.length > 0 && r.status === 'fuzzy' && !isSkipped && !isRequested && (
-                            <button
-                              className="btn btn-secondary btn-xs"
-                              onClick={() => setExpandedRow(isExpanded ? null : r.index)}
-                            >
-                              {isExpanded ? t('importBottles.review.hide') : r.matches.length > 1 ? t('importBottles.review.options', { count: r.matches.length }) : t('importBottles.review.change')}
-                            </button>
-                          )}
-                          {r.matches.length > 1 && r.status !== 'fuzzy' && !isSkipped && !isRequested && (
-                            <button
-                              className="btn btn-secondary btn-xs"
-                              onClick={() => setExpandedRow(isExpanded ? null : r.index)}
-                            >
-                              {isExpanded ? t('importBottles.review.hide') : t('importBottles.review.options', { count: r.matches.length })}
-                            </button>
-                          )}
-                          {r.status === 'fuzzy' && r.item.wineName && r.item.producer && !isSkipped && !isRequested && (
-                            <button
-                              className="btn btn-secondary btn-xs"
-                              onClick={() => handleAiSearch(r.index)}
-                              disabled={aiSearchingRow === r.index}
-                            >
-                              {aiSearchingRow === r.index ? t('importBottles.review.searching') : t('importBottles.review.lookUp')}
-                            </button>
-                          )}
-                          {(r.status === 'no_match' || r.status === 'fuzzy') && !isSkipped && !isRequested && (
-                            <button
-                              className="btn btn-secondary btn-xs"
-                              onClick={() => openSearchModal(r.index)}
-                            >
-                              {t('importBottles.review.searchLibrary')}
-                            </button>
-                          )}
-                          {(r.status === 'no_match' || r.status === 'fuzzy') && !isSkipped && !isRequested && (
-                            <button
-                              className="btn btn-secondary btn-xs btn-request"
-                              onClick={() => requestWine(r.index)}
-                            >
-                              {t('importBottles.review.requestWine')}
-                            </button>
-                          )}
-                          {isSkipped || isRequested ? (
-                            <button
-                              className="btn btn-secondary btn-xs"
-                              onClick={() => unskipItem(r.index)}
-                            >
-                              {t('importBottles.review.undo')}
-                            </button>
-                          ) : (
-                            <button
-                              className="btn btn-secondary btn-xs btn-skip"
-                              onClick={() => skipItem(r.index)}
-                            >
-                              {t('importBottles.review.skip')}
-                            </button>
-                          )}
-                        </div>
-                      )}
+                      <div className="action-buttons">
+                        {r.matches.length > 0 && r.status === 'fuzzy' && !isSkipped && !isRequested && (
+                          <button
+                            className="btn btn-secondary btn-xs"
+                            onClick={() => setExpandedRow(isExpanded ? null : r.index)}
+                          >
+                            {isExpanded ? t('importBottles.review.hide') : r.matches.length > 1 ? t('importBottles.review.options', { count: r.matches.length }) : t('importBottles.review.change')}
+                          </button>
+                        )}
+                        {r.matches.length > 1 && r.status !== 'fuzzy' && !isSkipped && !isRequested && (
+                          <button
+                            className="btn btn-secondary btn-xs"
+                            onClick={() => setExpandedRow(isExpanded ? null : r.index)}
+                          >
+                            {isExpanded ? t('importBottles.review.hide') : t('importBottles.review.options', { count: r.matches.length })}
+                          </button>
+                        )}
+                        {r.status === 'fuzzy' && r.item.wineName && r.item.producer && !isSkipped && !isRequested && (
+                          <button
+                            className="btn btn-secondary btn-xs"
+                            onClick={() => handleAiSearch(r.index)}
+                            disabled={aiSearchingRow === r.index}
+                          >
+                            {aiSearchingRow === r.index ? t('importBottles.review.searching') : t('importBottles.review.lookUp')}
+                          </button>
+                        )}
+                        {(r.status === 'no_match' || r.status === 'fuzzy') && !isSkipped && !isRequested && (
+                          <button
+                            className="btn btn-secondary btn-xs"
+                            onClick={() => openSearchModal(r.index)}
+                          >
+                            {t('importBottles.review.searchLibrary')}
+                          </button>
+                        )}
+                        {(r.status === 'no_match' || r.status === 'fuzzy') && !isSkipped && !isRequested && (
+                          <button
+                            className="btn btn-secondary btn-xs btn-request"
+                            onClick={() => requestWine(r.index)}
+                          >
+                            {t('importBottles.review.requestWine')}
+                          </button>
+                        )}
+                        {isSkipped || isRequested ? (
+                          <button
+                            className="btn btn-secondary btn-xs"
+                            onClick={() => unskipItem(r.index)}
+                          >
+                            {t('importBottles.review.undo')}
+                          </button>
+                        ) : (
+                          <button
+                            className="btn btn-secondary btn-xs btn-skip"
+                            onClick={() => skipItem(r.index)}
+                          >
+                            {t('importBottles.review.skip')}
+                          </button>
+                        )}
+                      </div>
 
                       {/* Expanded candidate list */}
-                      {!isImported && isExpanded && r.matches.length > 0 && (
+                      {isExpanded && r.matches.length > 0 && (
                         <div className="candidates-list">
                           {r.matches.map((m) => (
                             <button

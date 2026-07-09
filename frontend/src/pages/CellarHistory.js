@@ -6,7 +6,7 @@ import RatingDisplay from '../components/RatingDisplay';
 import WineImage from '../components/WineImage';
 import BottleFilterModal from '../components/BottleFilterModal';
 import { addToWishlist } from '../api/wishlist';
-import { listCellars, getMultiCellarHistory } from '../api/cellars';
+import { listCellars, getCellarHistory, getMultiCellarHistory } from '../api/cellars';
 import CellarScopePicker from '../components/CellarScopePicker';
 import './CellarDetail.css';
 import './CellarHistory.css';
@@ -97,8 +97,7 @@ function CellarHistory() {
         params.append('cellars', scopeIds.join(','));
         res = await getMultiCellarHistory(apiFetch, params.toString());
       } else {
-        const qs = params.toString();
-        res = await apiFetch(`/api/cellars/${id}/history${qs ? `?${qs}` : ''}`);
+        res = await getCellarHistory(apiFetch, id, params.toString());
       }
       const data = await res.json();
       // Superseded by a newer fetch — drop this response.

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
+import { getCellar, getCellarAudit } from '../api/cellars';
 import './CellarAudit.css';
 
 function formatTimestamp(ts) {
@@ -90,8 +91,8 @@ function CellarAudit() {
   useEffect(() => {
     // Fetch cellar + audit in parallel
     Promise.all([
-      apiFetch(`/api/cellars/${id}`).then(r => r.json()),
-      apiFetch(`/api/cellars/${id}/audit`).then(r => r.json())
+      getCellar(apiFetch, id).then(r => r.json()),
+      getCellarAudit(apiFetch, id).then(r => r.json())
     ]).then(([cellarData, auditData]) => {
       if (cellarData.cellar) {
         setCellarName(cellarData.cellar.name);
