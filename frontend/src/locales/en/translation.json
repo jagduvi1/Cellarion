@@ -85,6 +85,7 @@
     "support": "Support",
     "supportTickets": "Support Tickets",
     "wineReports": "Wine Reports",
+    "aiBudgetRequests": "AI Budget",
     "sommelier": "Sommelier",
     "admin": "Admin",
     "cellars": "Cellars",
@@ -2173,6 +2174,38 @@
     "allrounder": "All-Rounder",
     "score": "Cellar Cred"
   },
+  "adminAiBudget": {
+    "title": "AI Budget Requests",
+    "intro": "Users can request a temporary increase of their daily AI look-up limit, e.g. during a large import. Approving writes a time-boxed override onto the user's account.",
+    "tabs": {
+      "pending": "Pending",
+      "decided": "Decided"
+    },
+    "count_one": "{{count}} request",
+    "count_other": "{{count}} requests",
+    "loading": "Loading…",
+    "empty": "No requests found.",
+    "loadError": "Failed to load requests",
+    "decideError": "Failed to update the request",
+    "networkError": "Network error.",
+    "deletedUser": "[deleted]",
+    "pendingRows_one": "{{count}} import row waiting for an AI look-up",
+    "pendingRows_other": "{{count}} import rows waiting for an AI look-up",
+    "status": {
+      "pending": "Pending",
+      "approved": "Approved",
+      "denied": "Denied"
+    },
+    "grantedMaxLabel": "Daily limit",
+    "daysLabel": "Days",
+    "approve": "Approve",
+    "deny": "Deny",
+    "approvedSummary": "Granted {{max}} AI look-ups per day until {{date}}",
+    "deniedSummary": "Denied",
+    "decidedBy": "by {{username}} on {{date}}",
+    "prev": "Prev",
+    "next": "Next"
+  },
   "adminStats": {
     "title": "Global Stats",
     "loading": "Loading platform statistics…",
@@ -2674,6 +2707,7 @@
       "ctAllPending_other": "All {{count}} bottles in this file are pending (undelivered) purchases — Cellarion doesn't track bottles you haven't received yet."
     },
     "warnings": {
+      "ctTruncatedTitle": "Only 25 rows found — this export may be cut off.",
       "ctTruncated": "This looks like a single-page export (exactly 25 rows). In CellarTracker, choose 'All wines' instead of 'Only wines on this page' before exporting, or your import may be missing most of your cellar.",
       "ctPendingSkipped_one": "{{count}} pending (undelivered) bottle was not imported: {{wines}}. Cellarion doesn't track bottles you haven't received yet — re-import after delivery.",
       "ctPendingSkipped_other": "{{count}} pending (undelivered) bottles were not imported: {{wines}}. Cellarion doesn't track bottles you haven't received yet — re-import after delivery."
@@ -2685,6 +2719,22 @@
       "consumed": "Consumed table",
       "purchase": "Purchase table",
       "pending": "Pending purchases table"
+    },
+    "ctDisclosure": {
+      "title": "Moving from CellarTracker? Here's what transfers",
+      "dismiss": "Dismiss",
+      "carriedTitle": "Comes with you",
+      "carriedBottles": "Bottles and vintages (including non-vintage)",
+      "carriedRatings": "Your personal ratings (MY / MyScore)",
+      "carriedPurchase": "Purchase data — price, date and store",
+      "carriedWindows": "Drink windows, as a personal window on each bottle",
+      "carriedConsumed": "Drinking history (Bottles and Consumed exports)",
+      "carriedLocations": "Locations and bins, as racks or free-text locations",
+      "notCarriedTitle": "Can't come along",
+      "notCarriedNotes": "Community tasting note text — the export only contains note counts",
+      "notCarriedPhotos": "Label photos",
+      "notCarriedWishlist": "Wishlists",
+      "notCarriedWhy": "CellarTracker's export files simply don't include these, so no importer can carry them over."
     },
     "upload": {
       "resumeReviewTitle": "Your matched results are still here",
@@ -2861,6 +2911,19 @@
       "importButton_one": "Import {{count}} bottle",
       "importButton_other": "Import {{count}} bottles"
     },
+    "aiBudget": {
+      "title": "Daily AI look-up limit reached.",
+      "description_one": "{{count}} row was matched with standard matching instead of AI.",
+      "description_other": "{{count}} rows were matched with standard matching instead of AI.",
+      "usage": "{{used}} of {{max}} AI look-ups used today.",
+      "overrideActive": "A temporary higher limit is active until {{date}}.",
+      "retryButton": "Retry AI lookups",
+      "retrying": "Retrying… ({{done}}/{{total}})",
+      "requestButton": "Request higher limit",
+      "requesting": "Requesting…",
+      "requested": "Requested — an admin will review your request.",
+      "requestError": "Could not send the request. Please try again."
+    },
     "progress": {
       "importing": "Importing bottles into your cellar...",
       "hint": "This may take a moment for large collections"
@@ -2884,6 +2947,17 @@
       "unplacedNote": "These bottles were imported successfully — they just couldn't be assigned a rack slot. You can place them manually from the Cellar page.",
       "viewErrors": "View errors ({{count}})",
       "errorRow": "Row {{row}}: {{reason}}",
+      "reportRow": "Row {{row}} ({{wine}}): {{reason}}",
+      "allImportedNote_one": "Your bottle made it into your cellar.",
+      "allImportedNote_other": "All {{count}} bottles made it into your cellar.",
+      "partialTitle": "{{created}} of {{total}} bottles imported",
+      "partialNote_one": "1 row didn't make it — the full breakdown is below.",
+      "partialNote_other": "{{count}} rows didn't make it — the full breakdown is below.",
+      "unplacedOnlyNote_one": "Every bottle was imported, but 1 couldn't be placed in a rack — details below.",
+      "unplacedOnlyNote_other": "Every bottle was imported, but {{count}} couldn't be placed in a rack — details below.",
+      "skippedSummary": "Skipped rows ({{count}})",
+      "skippedByYou": "Skipped by you during review",
+      "downloadReport": "Download report (CSV)",
       "goToCellar": "Go to Cellar",
       "importMore": "Import More"
     },

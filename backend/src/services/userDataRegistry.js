@@ -25,6 +25,7 @@
  *         AUDIT_MAX, truncated }
  */
 const User = require('../models/User');
+const AiBudgetRequest = require('../models/AiBudgetRequest');
 const AiUsage = require('../models/AiUsage');
 const Bottle = require('../models/Bottle');
 const BottleImage = require('../models/BottleImage');
@@ -121,6 +122,10 @@ const REGISTRY = [
           gdprConsent: u.gdprConsent,
           createdAt: u.createdAt,
           contribution: u.contribution || { totalScore: 0, categories: {}, tier: 'newcomer', specialty: null },
+          // Admin-granted temporary AI budget override (rides on the User doc).
+          aiBudgetOverride: u.aiBudgetOverride?.max
+            ? { max: u.aiBudgetOverride.max, expiresAt: u.aiBudgetOverride.expiresAt }
+            : null,
         },
       };
     },
@@ -466,6 +471,29 @@ const REGISTRY = [
     exportFragment: async (ctx) => ({
       importSessions: markTrunc(ctx, 'importSessions', await ImportSession.find({ user: ctx.userId }).select('cellar status results positionAnchor rackConfigs defaultCurrency createdAt').limit(EXPORT_MAX).lean())
         .map(s => ({ cellar: s.cellar, status: s.status, rowCount: s.results?.length || 0, positionAnchor: s.positionAnchor, rackConfigs: s.rackConfigs, defaultCurrency: s.defaultCurrency, createdAt: s.createdAt })),
+    }),
+  },
+  {
+    model: AiBudgetRequest, category: 'personal-data', userFields: ['user', 'decidedBy'],
+    purge: (ctx) => [
+      AiBudgetRequest.deleteMany({ user: ctx.userId }),
+      // Clear this user's admin ref off OTHER users' decided requests.
+      AiBudgetRequest.updateMany({ decidedBy: ctx.userId }, { $unset: { decidedBy: '' } }),
+    ],
+    exportFragment: async (ctx) => ({
+      aiBudgetRequests: markTrunc(ctx, 'aiBudgetRequests',
+        await AiBudgetRequest.find({ user: ctx.userId })
+          .select('reason requestedContext status grantedMax grantedUntil createdAt decidedAt')
+          .limit(EXPORT_MAX).lean())
+        .map(r => ({
+          reason: r.reason,
+          pendingRows: r.requestedContext?.pendingRows ?? null,
+          status: r.status,
+          grantedMax: r.grantedMax,
+          grantedUntil: r.grantedUntil,
+          createdAt: r.createdAt,
+          decidedAt: r.decidedAt,
+        })),
     }),
   },
   {

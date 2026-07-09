@@ -26,7 +26,10 @@ const notificationSchema = new mongoose.Schema({
       'journal_mention',
       'restock_alert',
       'price_tracked',
-      'price_tracking_declined'
+      'price_tracking_declined',
+      'ai_budget_request',
+      'ai_budget_approved',
+      'ai_budget_denied'
     ],
     required: true
   },

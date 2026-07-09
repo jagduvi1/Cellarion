@@ -3,10 +3,12 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useTranslation, Trans } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import { validateImport, confirmImport } from '../api/bottles';
+import { getAiBudgetStatus, requestAiBudgetIncrease } from '../api/aiBudget';
 import { searchWines } from '../api/wines';
 import { getRacks } from '../api/racks';
 import { parseAndMap, parseJSON, summariseRacks, getDefaultRackConfig, getDefaultAnchor, decodeImportBuffer } from '../utils/importMappers';
 import { describePriceWarning } from '../utils/priceValidation';
+import { summariseImportOutcome, buildImportReportCsv } from '../utils/importReport';
 import { getTotalSlots } from '../utils/rackLayouts';
 import { TYPE_DIMENSIONS } from '../components/racks/RackTypeSelector';
 import AnchorPicker from './import/AnchorPicker';
@@ -140,7 +142,21 @@ function ImportBottles() {
   // Import step
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState(null);
+  // Snapshot taken at import time so the done screen / CSV report can map
+  // the confirm response's submitted-array indices back to original file
+  // rows, and account for rows the user skipped at review (never submitted).
+  const [submittedRows, setSubmittedRows] = useState([]);
+  const [userSkippedRows, setUserSkippedRows] = useState([]);
   const [aiSearchingRow, setAiSearchingRow] = useState(null); // index of fuzzy row doing forced AI search
+  // CellarTracker "what transfers" disclosure panel (upload step)
+  const [ctDisclosureDismissed, setCtDisclosureDismissed] = useState(false);
+
+  // AI daily budget (rows with aiSkipped fell back to fuzzy matching).
+  // Status from GET /api/ai-budget/status: { dailyMax, usedToday, override, pendingRequest }
+  const [aiBudgetStatus, setAiBudgetStatus] = useState(null);
+  const [aiBudgetRequestState, setAiBudgetRequestState] = useState('idle'); // 'idle'|'submitting'|'requested'|'error'
+  const [retryingAi, setRetryingAi] = useState(false);
+  const [retryAiProgress, setRetryAiProgress] = useState({ done: 0, total: 0 });
 
   // Session persistence
   const [sessionId, setSessionId] = useState(null);
@@ -363,6 +379,7 @@ function ImportBottles() {
         setCtTable(parsed.ctTable || null);
         setImportWarnings(parsed.warnings || []);
         setCtTextFallback(parsed.ctRackAutoMap?.textFallback || []);
+        setCtDisclosureDismissed(false); // new file → show the CT disclosure again
         setFileName(file.name);
 
         // Build per-rack summary + seed editable config with format-aware
@@ -495,6 +512,103 @@ function ImportBottles() {
       setError(err.message || t('importBottles.errors.validationNetwork'));
     } finally {
       setValidating(false);
+    }
+  };
+
+  // ── AI daily budget (aiSkipped rows fell back to fuzzy matching) ─────────
+  // When the shared daily AI budget ran out mid-validate, the affected rows
+  // carry aiSkipped: true. The banner explains it, shows today's usage, lets
+  // the user bulk-retry those rows (after the budget reset or an admin-granted
+  // increase) or request a temporary higher limit from the admins.
+
+  const aiSkippedCount = results.filter(r => r.aiSkipped).length;
+  const showAiBudgetBanner = step === 'review' && (aiSkippedCount > 0 || !!summary?.aiBudgetExhausted);
+
+  const refreshAiBudgetStatus = useCallback(() => {
+    getAiBudgetStatus(apiFetch)
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => { if (d) setAiBudgetStatus(d); })
+      .catch(() => {});
+  }, [apiFetch]);
+
+  useEffect(() => {
+    if (showAiBudgetBanner) refreshAiBudgetStatus();
+  }, [showAiBudgetBanner, refreshAiBudgetStatus]);
+
+  // Bulk re-validate ONLY the AI-skipped / unmatched rows, in the same
+  // 25-row batches as handleValidate. Runs the full validate pipeline again
+  // for those rows — with budget available they now get their AI look-up.
+  const handleRetryAiLookups = async () => {
+    const rows = results.filter(r => r.aiSkipped || r.status === 'no_match');
+    if (rows.length === 0 || retryingAi) return;
+
+    setRetryingAi(true);
+    setError(null);
+    setRetryAiProgress({ done: 0, total: rows.length });
+
+    try {
+      const updatedByIndex = new Map();
+      for (let offset = 0; offset < rows.length; offset += VALIDATE_BATCH_SIZE) {
+        const batchRows = rows.slice(offset, offset + VALIDATE_BATCH_SIZE);
+        const res = await validateImport(apiFetch, {
+          cellarId,
+          items: batchRows.map(r => r.item),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || t('importBottles.errors.validationFailed', { status: res.status }));
+
+        // Map batch-local indices back to the rows' original global indices
+        for (const nr of data.results || []) {
+          const orig = batchRows[nr.index];
+          if (orig) updatedByIndex.set(orig.index, { ...nr, index: orig.index });
+        }
+        setRetryAiProgress({ done: Math.min(offset + VALIDATE_BATCH_SIZE, rows.length), total: rows.length });
+      }
+
+      const nextResults = results.map(r => updatedByIndex.get(r.index) || r);
+      setResults(nextResults);
+      setSummary(computeSummary(nextResults));
+
+      // Auto-select rows that now have a match (same rule as handleValidate),
+      // without touching existing manual choices.
+      setSelections(prev => {
+        const next = { ...prev };
+        for (const [idx, r] of updatedByIndex) {
+          if (!next[idx] && (r.status === 'exact' || r.status === 'fuzzy' || r.status === 'ai_match') && r.matches.length > 0) {
+            next[idx] = r.matches[0].wineId;
+          }
+        }
+        return next;
+      });
+
+      refreshAiBudgetStatus();
+    } catch (err) {
+      setError(err.message || t('importBottles.errors.validationNetwork'));
+    } finally {
+      setRetryingAi(false);
+    }
+  };
+
+  // Ask the admins for a temporary daily-limit increase. One pending request
+  // per user — the backend answers 409 if one is already open.
+  const handleRequestAiBudget = async () => {
+    if (aiBudgetRequestState === 'submitting') return;
+    setAiBudgetRequestState('submitting');
+    const pendingRows = results.filter(r => r.aiSkipped || r.status === 'no_match').length;
+    try {
+      const res = await requestAiBudgetIncrease(apiFetch, {
+        // Stored server-side and shown to the reviewing admin.
+        reason: `Importing ${results.length} bottles — ${pendingRows} remaining without an AI look-up`,
+        pendingRows,
+      });
+      if (res.ok || res.status === 409) {
+        setAiBudgetRequestState('requested');
+        setAiBudgetStatus(s => (s ? { ...s, pendingRequest: true } : s));
+        return;
+      }
+      setAiBudgetRequestState('error');
+    } catch {
+      setAiBudgetRequestState('error');
     }
   };
 
@@ -698,10 +812,16 @@ function ImportBottles() {
     setError(null);
     setStep('importing');
 
-    // Build items for confirm endpoint — skipped rows are excluded
-    const items = results
-      .filter(isImportableRow)
-      .map(buildImportItem);
+    // Build items for confirm endpoint — skipped rows are excluded.
+    // Keep both halves around: the confirm response indexes into the
+    // submitted array, and user-skipped rows must still show up in the
+    // done-screen accounting (an import that silently forgets them would
+    // read as more successful than it was).
+    const importableRows = results.filter(isImportableRow);
+    const skippedAtReview = results.filter(r => selections[r.index] === 'skip');
+    setSubmittedRows(importableRows);
+    setUserSkippedRows(skippedAtReview);
+    const items = importableRows.map(buildImportItem);
 
     try {
       const res = await confirmImport(apiFetch, { cellarId, items, positionAnchor, rackConfigs, defaultCurrency: importCurrency });
@@ -731,12 +851,24 @@ function ImportBottles() {
 
   // ── Render helpers ──────────────────────────────────────────────────────
 
-  // Non-blocking parse warnings (shown on both upload and review steps)
+  // Non-blocking parse warnings (shown on both upload and review steps).
+  // The CT truncation warning gets elevated styling + a bold headline: a
+  // 25-row page export silently missing 90% of a cellar is the single worst
+  // "looked like it worked" outcome an import can have.
   const renderImportWarnings = () => importWarnings.length > 0 && (
     <div className="import-parse-warnings">
       {importWarnings.map((w, i) => (
-        <div key={i} className="import-parse-warning-banner">
-          {w.code === 'ct-truncated' && t('importBottles.warnings.ctTruncated')}
+        <div
+          key={i}
+          className={`import-parse-warning-banner${w.code === 'ct-truncated' ? ' import-parse-warning-strong' : ''}`}
+          role={w.code === 'ct-truncated' ? 'alert' : undefined}
+        >
+          {w.code === 'ct-truncated' && (
+            <>
+              <strong>{t('importBottles.warnings.ctTruncatedTitle')}</strong>{' '}
+              {t('importBottles.warnings.ctTruncated')}
+            </>
+          )}
           {w.code === 'ct-pending-skipped' && t('importBottles.warnings.ctPendingSkipped', {
             count: w.count,
             wines: (w.wines || []).join(', ')
@@ -779,6 +911,49 @@ function ImportBottles() {
         locations: ctTextFallback.map(f => f.location).join(', ')
       })}
     </p>
+  );
+
+  // "What transfers from CellarTracker" disclosure — shown once on the upload
+  // step whenever a CT file is detected, before any import happens. Honest up
+  // front: CT's export simply doesn't contain some things, so we can't carry
+  // them, and users deserve to know that before they commit.
+  const renderCtDisclosure = () => detectedFormat === 'cellartracker' && !ctDisclosureDismissed && (
+    <div className="ct-disclosure-panel">
+      <div className="ct-disclosure-head">
+        <strong>{t('importBottles.ctDisclosure.title')}</strong>
+        <button
+          type="button"
+          className="ct-disclosure-dismiss"
+          onClick={() => setCtDisclosureDismissed(true)}
+          aria-label={t('importBottles.ctDisclosure.dismiss')}
+        >
+          &times;
+        </button>
+      </div>
+      <div className="ct-disclosure-cols">
+        <div className="ct-disclosure-col">
+          <span className="ct-disclosure-col-title ct-disclosure-yes">{t('importBottles.ctDisclosure.carriedTitle')}</span>
+          <ul>
+            <li>{t('importBottles.ctDisclosure.carriedBottles')}</li>
+            <li>{t('importBottles.ctDisclosure.carriedRatings')}</li>
+            <li>{t('importBottles.ctDisclosure.carriedPurchase')}</li>
+            <li>{t('importBottles.ctDisclosure.carriedWindows')}</li>
+            <li>{t('importBottles.ctDisclosure.carriedConsumed')}</li>
+            <li>{t('importBottles.ctDisclosure.carriedLocations')}</li>
+          </ul>
+        </div>
+        <div className="ct-disclosure-col">
+          <span className="ct-disclosure-col-title ct-disclosure-no">{t('importBottles.ctDisclosure.notCarriedTitle')}</span>
+          <ul>
+            <li>{t('importBottles.ctDisclosure.notCarriedNotes')}</li>
+            <li>{t('importBottles.ctDisclosure.notCarriedPhotos')}</li>
+            <li>{t('importBottles.ctDisclosure.notCarriedWishlist')}</li>
+          </ul>
+          <p className="ct-disclosure-why">{t('importBottles.ctDisclosure.notCarriedWhy')}</p>
+        </div>
+      </div>
+    </div>
+
   );
 
   const renderUploadStep = () => (
@@ -897,6 +1072,7 @@ function ImportBottles() {
       </div>
 
       {parsedItems.length > 0 && renderImportWarnings()}
+      {parsedItems.length > 0 && renderCtDisclosure()}
 
       {parsedItems.length > 0 && parsedItems.some(i => i.price) && (
         <CurrencyPicker
@@ -1300,6 +1476,54 @@ function ImportBottles() {
           </div>
         )}
 
+        {/* Daily AI budget banner — some rows fell back to fuzzy matching */}
+        {showAiBudgetBanner && (
+          <div className="import-ai-budget-banner">
+            <strong>{t('importBottles.aiBudget.title')}</strong>
+            {' '}{t('importBottles.aiBudget.description', { count: aiSkippedCount })}
+            {aiBudgetStatus && aiBudgetStatus.dailyMax > 0 && (
+              <p className="ai-budget-usage">
+                {t('importBottles.aiBudget.usage', {
+                  used: aiBudgetStatus.usedToday,
+                  max: aiBudgetStatus.dailyMax
+                })}
+                {aiBudgetStatus.override && (
+                  <> {t('importBottles.aiBudget.overrideActive', {
+                    date: new Date(aiBudgetStatus.override.expiresAt).toLocaleDateString()
+                  })}</>
+                )}
+              </p>
+            )}
+            <div className="ai-budget-actions">
+              <button
+                className="btn btn-secondary btn-sm"
+                onClick={handleRetryAiLookups}
+                disabled={retryingAi}
+              >
+                {retryingAi
+                  ? t('importBottles.aiBudget.retrying', { done: retryAiProgress.done, total: retryAiProgress.total })
+                  : t('importBottles.aiBudget.retryButton')}
+              </button>
+              {(aiBudgetStatus?.pendingRequest || aiBudgetRequestState === 'requested') ? (
+                <span className="ai-budget-pending">{t('importBottles.aiBudget.requested')}</span>
+              ) : (
+                <button
+                  className="btn btn-secondary btn-sm"
+                  onClick={handleRequestAiBudget}
+                  disabled={aiBudgetRequestState === 'submitting'}
+                >
+                  {aiBudgetRequestState === 'submitting'
+                    ? t('importBottles.aiBudget.requesting')
+                    : t('importBottles.aiBudget.requestButton')}
+                </button>
+              )}
+            </div>
+            {aiBudgetRequestState === 'error' && (
+              <p className="ai-budget-error">{t('importBottles.aiBudget.requestError')}</p>
+            )}
+          </div>
+        )}
+
         {/* Bulk actions */}
         <div className="review-actions">
           <button className="btn btn-secondary btn-sm" onClick={selectAllExact}>
@@ -1597,10 +1821,78 @@ function ImportBottles() {
     </div>
   );
 
-  const renderDoneStep = () => (
+  // Client-side CSV report of every row that did NOT become a placed bottle
+  // (skipped / error / unplaced) plus a one-line summary — no backend call.
+  const handleDownloadReport = () => {
+    const csv = buildImportReportCsv({
+      importResult,
+      submittedRows,
+      userSkippedRows,
+      userSkippedReason: t('importBottles.done.skippedByYou'),
+    });
+    // BOM so Excel opens the UTF-8 file with accents (Pétrus) intact
+    const blob = new Blob([String.fromCharCode(0xFEFF) + csv], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'cellarion-import-report.csv';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  };
+
+  // "Row 12 (Pétrus Pomerol): reason" — falls back to a plain row line when
+  // the wine fields are unknown. `row` is a validation-result row (or
+  // undefined), `fallbackIndex` the submitted-array index for safety.
+  const describeReportLine = (row, fallbackIndex, reason) => {
+    const rowNumber = (row?.index ?? fallbackIndex) + 1;
+    const wine = row?.item ? `${row.item.producer || ''} ${row.item.wineName || ''}`.trim() : '';
+    return wine
+      ? t('importBottles.done.reportRow', { row: rowNumber, wine, reason })
+      : t('importBottles.done.errorRow', { row: rowNumber, reason });
+  };
+
+  const renderDoneStep = () => {
+    const { created, totalRows, skippedCount, errorCount, unplacedCount, fullSuccess } =
+      summariseImportOutcome(importResult, userSkippedRows.length);
+
+    // Everything that didn't become a bottle, with per-row reasons: rows the
+    // backend skipped + rows the user skipped at review, in file order.
+    const skippedDetails = [
+      ...(importResult?.skipped || []).map(s => ({
+        row: submittedRows[s.index], fallbackIndex: s.index, reason: s.reason,
+      })),
+      ...userSkippedRows.map(r => ({
+        row: r, fallbackIndex: r.index, reason: t('importBottles.done.skippedByYou'),
+      })),
+    ].sort((a, b) => (a.row?.index ?? a.fallbackIndex) - (b.row?.index ?? b.fallbackIndex));
+
+    return (
     <div className="import-done">
-      <div className="done-icon">&#10003;</div>
-      <h2>{t('importBottles.done.title')}</h2>
+      {/* Honest headline: any skip, error or unplaced bottle means this was
+          NOT a full success, and the headline must say so — never a green
+          "Import complete!" over a partial result. */}
+      {fullSuccess ? (
+        <>
+          <div className="done-icon">&#10003;</div>
+          <h2>{t('importBottles.done.title')}</h2>
+          <p className="done-subtitle">{t('importBottles.done.allImportedNote', { count: created })}</p>
+        </>
+      ) : (
+        <>
+          <div className="done-icon done-icon-warn">!</div>
+          <h2>{t('importBottles.done.partialTitle', {
+            created: created.toLocaleString(),
+            total: totalRows.toLocaleString()
+          })}</h2>
+          <p className="done-subtitle done-partial-note">
+            {errorCount + skippedCount > 0
+              ? t('importBottles.done.partialNote', { count: errorCount + skippedCount })
+              : t('importBottles.done.unplacedOnlyNote', { count: unplacedCount })}
+          </p>
+        </>
+      )}
       {importResult && (
         <div className="done-stats">
           <div className="done-stat">
@@ -1613,15 +1905,15 @@ function ImportBottles() {
               <span>{t('importBottles.done.consumedHistory')}</span>
             </div>
           )}
-          {importResult.skipped.length > 0 && (
+          {skippedCount > 0 && (
             <div className="done-stat">
-              <span className="done-number done-skipped">{importResult.skipped.length}</span>
+              <span className="done-number done-skipped">{skippedCount}</span>
               <span>{t('importBottles.done.skipped')}</span>
             </div>
           )}
-          {importResult.errors.length > 0 && (
+          {errorCount > 0 && (
             <div className="done-stat">
-              <span className="done-number done-errors">{importResult.errors.length}</span>
+              <span className="done-number done-errors">{errorCount}</span>
               <span>{t('importBottles.done.errors')}</span>
             </div>
           )}
@@ -1637,13 +1929,26 @@ function ImportBottles() {
               <span>{t('importBottles.done.placedInRacks')}{importResult.overflowed > 0 ? t('importBottles.done.overflowSuffix', { count: importResult.overflowed }) : ''}</span>
             </div>
           )}
-          {importResult.unplaced?.length > 0 && (
+          {unplacedCount > 0 && (
             <div className="done-stat">
-              <span className="done-number done-errors">{importResult.unplaced.length}</span>
+              <span className="done-number done-errors">{unplacedCount}</span>
               <span>{t('importBottles.done.couldntPlace')}</span>
             </div>
           )}
         </div>
+      )}
+      {skippedDetails.length > 0 && (
+        <details className="done-errors-detail">
+          <summary>{t('importBottles.done.skippedSummary', { count: skippedDetails.length })}</summary>
+          <ul>
+            {skippedDetails.slice(0, 50).map((s, i) => (
+              <li key={i}>{describeReportLine(s.row, s.fallbackIndex, s.reason)}</li>
+            ))}
+            {skippedDetails.length > 50 && (
+              <li><em>{t('importBottles.done.andMore', { count: skippedDetails.length - 50 })}</em></li>
+            )}
+          </ul>
+        </details>
       )}
       {importResult?.racksCreated?.length > 0 && (
         <details className="done-errors-detail">
@@ -1686,7 +1991,7 @@ function ImportBottles() {
           <summary>{t('importBottles.done.viewErrors', { count: importResult.errors.length })}</summary>
           <ul>
             {importResult.errors.map((e, i) => (
-              <li key={i}>{t('importBottles.done.errorRow', { row: e.index + 1, reason: e.reason })}</li>
+              <li key={i}>{describeReportLine(submittedRows[e.index], e.index, e.reason)}</li>
             ))}
           </ul>
         </details>
@@ -1695,6 +2000,11 @@ function ImportBottles() {
         <Link to={`/cellars/${cellarId}`} className="btn btn-primary">
           {t('importBottles.done.goToCellar')}
         </Link>
+        {!fullSuccess && importResult && (
+          <button className="btn btn-secondary" onClick={handleDownloadReport}>
+            {t('importBottles.done.downloadReport')}
+          </button>
+        )}
         <button
           className="btn btn-secondary"
           onClick={() => {
@@ -1705,17 +2015,21 @@ function ImportBottles() {
             setSelections({});
             setManualWines({});
             setImportResult(null);
+            setSubmittedRows([]);
+            setUserSkippedRows([]);
             setFileName('');
             setDetectedEncoding(null);
             setCtTable(null);
             setImportWarnings([]);
+            setCtDisclosureDismissed(false);
           }}
         >
           {t('importBottles.done.importMore')}
         </button>
       </div>
     </div>
-  );
+    );
+  };
 
   // ── Main render ─────────────────────────────────────────────────────────
 

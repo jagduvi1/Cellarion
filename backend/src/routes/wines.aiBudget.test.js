@@ -40,6 +40,13 @@ jest.mock('../models/AiUsage', () => {
   };
 });
 
+// The REAL aiBudget service now checks User.aiBudgetOverride (admin-granted
+// temporary budget increases) — resolve "no override" so the base budget
+// applies. Override behaviour itself is covered by services/aiBudget.test.js.
+jest.mock('../models/User', () => ({
+  findById: jest.fn(() => ({ select: () => ({ lean: async () => null }) })),
+}));
+
 const http = require('http');
 const express = require('express');
 const jwt = require('jsonwebtoken');

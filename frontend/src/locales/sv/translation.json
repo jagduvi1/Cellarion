@@ -85,6 +85,7 @@
     "support": "Support",
     "supportTickets": "Supportärenden",
     "wineReports": "Vinrapporter",
+    "aiBudgetRequests": "AI-budget",
     "sommelier": "Sommelier",
     "admin": "Admin",
     "cellars": "Källare",
@@ -2173,6 +2174,38 @@
     "allrounder": "Allroundare",
     "score": "Cellar Cred"
   },
+  "adminAiBudget": {
+    "title": "AI-budgetförfrågningar",
+    "intro": "Användare kan begära en tillfällig höjning av sin dagliga gräns för AI-uppslag, t.ex. under en stor import. Ett godkännande skriver en tidsbegränsad höjning till användarens konto.",
+    "tabs": {
+      "pending": "Väntande",
+      "decided": "Avgjorda"
+    },
+    "count_one": "{{count}} förfrågan",
+    "count_other": "{{count}} förfrågningar",
+    "loading": "Laddar…",
+    "empty": "Inga förfrågningar hittades.",
+    "loadError": "Det gick inte att ladda förfrågningarna",
+    "decideError": "Det gick inte att uppdatera förfrågan",
+    "networkError": "Nätverksfel.",
+    "deletedUser": "[borttagen]",
+    "pendingRows_one": "{{count}} importrad väntar på AI-uppslag",
+    "pendingRows_other": "{{count}} importrader väntar på AI-uppslag",
+    "status": {
+      "pending": "Väntande",
+      "approved": "Godkänd",
+      "denied": "Nekad"
+    },
+    "grantedMaxLabel": "Daglig gräns",
+    "daysLabel": "Dagar",
+    "approve": "Godkänn",
+    "deny": "Neka",
+    "approvedSummary": "Beviljade {{max}} AI-uppslag per dag till {{date}}",
+    "deniedSummary": "Nekad",
+    "decidedBy": "av {{username}} den {{date}}",
+    "prev": "Föregående",
+    "next": "Nästa"
+  },
   "adminStats": {
     "title": "Global statistik",
     "loading": "Laddar plattformsstatistik…",
@@ -2674,6 +2707,7 @@
       "ctAllPending_other": "Alla {{count}} flaskor i filen är väntande (olevererade) köp — Cellarion hanterar inte flaskor du ännu inte har fått."
     },
     "warnings": {
+      "ctTruncatedTitle": "Bara 25 rader hittades — exporten kan vara avklippt.",
       "ctTruncated": "Det här ser ut som en export av en enda sida (exakt 25 rader). Välj 'All wines' istället för 'Only wines on this page' i CellarTracker innan du exporterar, annars kan större delen av din källare saknas i importen.",
       "ctPendingSkipped_one": "{{count}} väntande (olevererad) flaska importerades inte: {{wines}}. Cellarion hanterar inte flaskor du ännu inte har fått — importera igen efter leverans.",
       "ctPendingSkipped_other": "{{count}} väntande (olevererade) flaskor importerades inte: {{wines}}. Cellarion hanterar inte flaskor du ännu inte har fått — importera igen efter leverans."
@@ -2685,6 +2719,22 @@
       "consumed": "Consumed-tabellen",
       "purchase": "Purchase-tabellen",
       "pending": "Pending-tabellen (väntande köp)"
+    },
+    "ctDisclosure": {
+      "title": "Byter du från CellarTracker? Det här följer med",
+      "dismiss": "Stäng",
+      "carriedTitle": "Följer med dig",
+      "carriedBottles": "Flaskor och årgångar (även utan årgång)",
+      "carriedRatings": "Dina personliga betyg (MY / MyScore)",
+      "carriedPurchase": "Köpdata — pris, datum och butik",
+      "carriedWindows": "Drickfönster, som ett personligt fönster på varje flaska",
+      "carriedConsumed": "Din druckna historik (Bottles- och Consumed-exporter)",
+      "carriedLocations": "Platser och fack, som hyllor eller fritextplatser",
+      "notCarriedTitle": "Kan inte följa med",
+      "notCarriedNotes": "Communityns provningsanteckningar — exporten innehåller bara antal, inte texten",
+      "notCarriedPhotos": "Etikettfoton",
+      "notCarriedWishlist": "Önskelistor",
+      "notCarriedWhy": "CellarTrackers exportfiler innehåller helt enkelt inte det här, så ingen import kan ta med det."
     },
     "upload": {
       "resumeReviewTitle": "Dina matchade resultat finns kvar",
@@ -2861,6 +2911,19 @@
       "importButton_one": "Importera {{count}} flaska",
       "importButton_other": "Importera {{count}} flaskor"
     },
+    "aiBudget": {
+      "title": "Dagens gräns för AI-uppslag är nådd.",
+      "description_one": "{{count}} rad matchades med standardmatchning i stället för AI.",
+      "description_other": "{{count}} rader matchades med standardmatchning i stället för AI.",
+      "usage": "{{used}} av {{max}} AI-uppslag använda idag.",
+      "overrideActive": "En tillfälligt högre gräns är aktiv till {{date}}.",
+      "retryButton": "Försök AI-uppslag igen",
+      "retrying": "Försöker igen… ({{done}}/{{total}})",
+      "requestButton": "Begär högre gräns",
+      "requesting": "Skickar begäran…",
+      "requested": "Begäran skickad — en administratör granskar den.",
+      "requestError": "Det gick inte att skicka begäran. Försök igen."
+    },
     "progress": {
       "importing": "Importerar flaskor till din källare...",
       "hint": "Det kan ta en stund för stora samlingar"
@@ -2884,6 +2947,17 @@
       "unplacedNote": "De här flaskorna importerades korrekt — de kunde bara inte tilldelas en hyllplats. Du kan placera dem manuellt från källarsidan.",
       "viewErrors": "Visa fel ({{count}})",
       "errorRow": "Rad {{row}}: {{reason}}",
+      "reportRow": "Rad {{row}} ({{wine}}): {{reason}}",
+      "allImportedNote_one": "Din flaska kom med i källaren.",
+      "allImportedNote_other": "Alla {{count}} flaskor kom med i din källare.",
+      "partialTitle": "{{created}} av {{total}} flaskor importerade",
+      "partialNote_one": "1 rad kom inte med — hela uppdelningen finns nedan.",
+      "partialNote_other": "{{count}} rader kom inte med — hela uppdelningen finns nedan.",
+      "unplacedOnlyNote_one": "Alla flaskor importerades, men 1 kunde inte placeras i en hylla — detaljer nedan.",
+      "unplacedOnlyNote_other": "Alla flaskor importerades, men {{count}} kunde inte placeras i en hylla — detaljer nedan.",
+      "skippedSummary": "Överhoppade rader ({{count}})",
+      "skippedByYou": "Överhoppad av dig under granskningen",
+      "downloadReport": "Ladda ner rapport (CSV)",
       "goToCellar": "Gå till källaren",
       "importMore": "Importera fler"
     },

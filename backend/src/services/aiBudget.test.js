@@ -23,9 +23,22 @@ jest.mock('../models/AiUsage', () => {
   return model;
 });
 
+// User model backs the per-user override lookup (getEffectiveDailyMax).
+// __setOverride configures what findById resolves for any user.
+jest.mock('../models/User', () => {
+  const state = { override: null };
+  return {
+    findById: jest.fn(() => ({
+      select: () => ({ lean: async () => ({ aiBudgetOverride: state.override }) }),
+    })),
+    __setOverride: (o) => { state.override = o; },
+  };
+});
+
 const AiUsage = require('../models/AiUsage');
+const User = require('../models/User');
 const rateLimitsConfig = require('../config/rateLimits');
-const { tryDebitAi, isRefundableFailure, todayUTC, secondsUntilMidnightUTC } = require('./aiBudget');
+const { tryDebitAi, isRefundableFailure, getEffectiveDailyMax, todayUTC, secondsUntilMidnightUTC } = require('./aiBudget');
 
 const USER = 'u1';
 const userCount = () => AiUsage.__store.get(`${USER}|${todayUTC()}`)?.count ?? 0;
@@ -42,6 +55,7 @@ function setLimits({ budget, globalCap }) {
 beforeEach(() => {
   AiUsage.__store.clear();
   jest.clearAllMocks();
+  User.__setOverride(null);
   setLimits({ budget: 500, globalCap: 20000 });
 });
 
@@ -103,6 +117,67 @@ describe('tryDebitAi', () => {
     await res.refund(); // second call must not double-refund
     expect(userCount()).toBe(0);
     expect(globalCount()).toBe(0);
+  });
+});
+
+describe('per-user override (admin-granted AiBudgetRequest)', () => {
+  const future = () => new Date(Date.now() + 24 * 60 * 60 * 1000);
+  const past = () => new Date(Date.now() - 60 * 1000);
+
+  test('getEffectiveDailyMax returns the base budget when no override exists', async () => {
+    setLimits({ budget: 500, globalCap: 20000 });
+    const { max, override } = await getEffectiveDailyMax(USER);
+    expect(max).toBe(500);
+    expect(override).toBeNull();
+  });
+
+  test('an active override raises the effective max', async () => {
+    User.__setOverride({ max: 2000, expiresAt: future() });
+    const { max, override } = await getEffectiveDailyMax(USER);
+    expect(max).toBe(2000);
+    expect(override).toEqual({ max: 2000, expiresAt: expect.any(Date) });
+  });
+
+  test('an expired override is ignored (no cleanup job needed)', async () => {
+    User.__setOverride({ max: 2000, expiresAt: past() });
+    const { max, override } = await getEffectiveDailyMax(USER);
+    expect(max).toBe(500);
+    expect(override).toBeNull();
+  });
+
+  test('base 0 (unlimited) is never restricted by an override', async () => {
+    setLimits({ budget: 0, globalCap: 20000 });
+    User.__setOverride({ max: 2000, expiresAt: future() });
+    const { max } = await getEffectiveDailyMax(USER);
+    expect(max).toBe(0);
+  });
+
+  test('tryDebitAi honors the overridden budget', async () => {
+    setLimits({ budget: 1, globalCap: 20000 });
+    User.__setOverride({ max: 3, expiresAt: future() });
+    expect((await tryDebitAi(USER)).ok).toBe(true);
+    expect((await tryDebitAi(USER)).ok).toBe(true); // would fail without override
+    expect((await tryDebitAi(USER)).ok).toBe(true);
+    const fourth = await tryDebitAi(USER);
+    expect(fourth.ok).toBe(false);
+    expect(fourth.reason).toBe('user_budget');
+    expect(userCount()).toBe(3);
+  });
+
+  test('tryDebitAi falls back to base budget once the override expires', async () => {
+    setLimits({ budget: 1, globalCap: 20000 });
+    User.__setOverride({ max: 3, expiresAt: past() });
+    expect((await tryDebitAi(USER)).ok).toBe(true);
+    expect((await tryDebitAi(USER)).ok).toBe(false);
+  });
+
+  test('a User lookup failure degrades to the base budget (never breaks the call path)', async () => {
+    User.findById.mockImplementationOnce(() => ({
+      select: () => ({ lean: async () => { throw new Error('db down'); } }),
+    }));
+    const { max, override } = await getEffectiveDailyMax(USER);
+    expect(max).toBe(500);
+    expect(override).toBeNull();
   });
 });
 
