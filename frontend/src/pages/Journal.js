@@ -206,11 +206,11 @@ export default function Journal() {
                             <div key={i}>
                               <div className="journal-card__pairing">
                                 <div className="journal-card__pairing-dish">
-                                  <span className="journal-card__pairing-icon">Dish</span>
+                                  <span className="journal-card__pairing-icon">{t('journal.dish', 'Dish')}</span>
                                   <span className="journal-card__pairing-text">{p.dish || '—'}</span>
                                 </div>
                                 <div className="journal-card__pairing-wine">
-                                  <span className="journal-card__pairing-icon">Wine</span>
+                                  <span className="journal-card__pairing-icon">{t('journal.wine', 'Wine')}</span>
                                   <span className="journal-card__pairing-text">
                                     {wineName || '—'}{vintage ? ` ${vintage}` : ''}
                                   </span>

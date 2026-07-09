@@ -263,7 +263,7 @@ function CellarHistory() {
           {activeChips.map((chip, i) => (
             <span key={`${chip.key}-${chip.value}-${i}`} className="active-filter-chip">
               {chip.label}
-              <button type="button" className="active-filter-chip-remove" onClick={() => removeChip(chip)} aria-label={`Remove ${chip.label}`}>×</button>
+              <button type="button" className="active-filter-chip-remove" onClick={() => removeChip(chip)} aria-label={t('cellarDetail.removeFilterAria', { label: chip.label })}>×</button>
             </span>
           ))}
           <button type="button" className="active-filters-clear" onClick={clearAll}>
@@ -320,7 +320,7 @@ function CellarHistory() {
         });
 
         if (filters.search && !anyVisible && total > 0) {
-          return <p className="history-no-results">{t('history.noResults', 'No bottles match your search.')}</p>;
+          return <p className="history-no-results">{t('history.noResults')}</p>;
         }
         return sections;
       })()}
@@ -339,7 +339,7 @@ function HistoryBottleCard({ bottle, cellarId, showCellarBadge = false }) {
   const linkCellarId = bottle.cellar || cellarId;
   const cellarBadge = showCellarBadge && bottle.cellarName ? bottle.cellarName : null;
   const consumedDate = bottle.consumedAt
-    ? new Date(bottle.consumedAt).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
+    ? new Date(bottle.consumedAt).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
     : null;
 
   // One-tap add-to-wishlist: 'idle' → 'saving' → 'added' | 'error'.

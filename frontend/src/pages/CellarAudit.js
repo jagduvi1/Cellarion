@@ -47,7 +47,7 @@ function fmtVal(val) {
   return String(val);
 }
 
-function formatDetail(action, detail) {
+function formatDetail(action, detail, t) {
   if (!detail || Object.keys(detail).length === 0) return null;
   if (action === 'bottle.add' && detail.wineName) {
     return `${detail.wineName}${detail.vintage ? ` · ${detail.vintage}` : ''}`;
@@ -62,10 +62,10 @@ function formatDetail(action, detail) {
       : `${wine}← ${detail.fromCellarName || '—'}`;
   }
   if (action === 'cellar.share.add') {
-    return `${detail.sharedWith} as ${detail.role}`;
+    return t('cellarAudit.sharedAs', { user: detail.sharedWith, role: detail.role });
   }
   if (action === 'cellar.share.update') {
-    return `Role changed: ${detail.from} → ${detail.to}`;
+    return t('cellarAudit.roleChanged', { from: detail.from, to: detail.to });
   }
   if (action === 'bottle.update' && detail.changes) {
     const entries = Object.entries(detail.changes);
@@ -127,7 +127,7 @@ function CellarAudit() {
       ) : (
         <div className="cellar-audit-list">
           {logs.map(log => {
-            const detail = formatDetail(log.action, log.detail);
+            const detail = formatDetail(log.action, log.detail, t);
             return (
               <div key={log._id} className="cellar-audit-item">
                 <div className="cellar-audit-icon">
@@ -144,7 +144,7 @@ function CellarAudit() {
                   </div>
                   <div className="cellar-audit-meta">
                     <span className="cellar-audit-user">
-                      {log.actor?.userId?.username || 'anonymous'}
+                      {log.actor?.userId?.username || t('cellarAudit.anonymous')}
                     </span>
                     <span className="cellar-audit-sep">·</span>
                     <span className="cellar-audit-time">

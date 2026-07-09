@@ -282,7 +282,12 @@
     "removeDefault": "Remove as default cellar",
     "editRole": "Edit",
     "viewRole": "View",
-    "import": "Import"
+    "import": "Import",
+    "importTooltip": "Import a cellar export (.json or .zip)",
+    "ownedCount_one": "{{count}} owned",
+    "ownedCount_other": "{{count}} owned",
+    "sharedCount_one": "{{count}} shared",
+    "sharedCount_other": "{{count}} shared"
   },
 
   "cellarDetail": {
@@ -356,7 +361,19 @@
     "roomView": "Room View",
     "roomViewDesc": "3D cellar layout",
     "wineLists": "Wine Lists",
-    "wineListsDesc": "Restaurant menus & PDF"
+    "wineListsDesc": "Restaurant menus & PDF",
+    "importBottles": "Import Bottles",
+    "export": "Export",
+    "tabBottles": "Bottles",
+    "tabOverview": "Overview",
+    "viewRackLayout": "View rack layout",
+    "consumedBottles": "Consumed bottles",
+    "beta": "Beta",
+    "sortBottlesAria": "Sort bottles",
+    "removeFilterAria": "Remove {{label}}",
+    "groupBottleCount_one": "{{count}} bottle",
+    "groupBottleCount_other": "{{count}} bottles",
+    "collapseGroup": "Collapse ▲"
   },
 
   "addBottle": {
@@ -445,7 +462,12 @@
     "useCameraInstead": "Use camera instead",
     "searchManuallyInstead": "No camera? Search manually instead →",
     "searchBtn": "Search",
-    "searchHint": "Be as specific as possible — include the wine name and producer. We'll check our library first; if no match is found, we'll identify and add the wine."
+    "searchHint": "Be as specific as possible — include the wine name and producer. We'll check our library first; if no match is found, we'll identify and add the wine.",
+    "identifyFailed": "Identification failed",
+    "identifyNetworkError": "Network error during identification.",
+    "addFailed": "Failed to add bottle",
+    "partialAdded_one": "{{msg}} — {{count}} of {{total}} bottles was added. Retrying will add only the remaining {{remaining}}.",
+    "partialAdded_other": "{{msg}} — {{count}} of {{total}} bottles were added. Retrying will add only the remaining {{remaining}}."
   },
 
   "bottleDetail": {
@@ -526,7 +548,8 @@
     "tastingProfile": "Tasting profile",
     "structure": "Structure",
     "flavours": "Flavours",
-    "pairsWith": "Pairs with"
+    "pairsWith": "Pairs with",
+    "consumeError": "Failed to remove bottle"
   },
 
   "bottles": {
@@ -625,7 +648,11 @@
     "disabledSlotNote": "This slot is marked as unusable — bottles can't be placed here.",
     "preview": "Preview",
     "hidePreview": "Hide preview",
-    "previewLabel": "Preview — this is how the rack will look once created"
+    "previewLabel": "Preview — this is how the rack will look once created",
+    "viewCompact": "Compact",
+    "viewShelf": "Shelf view",
+    "view3d": "3D",
+    "consumeNotePlaceholder": "How was it?"
   },
 
   "nfc": {
@@ -798,7 +825,10 @@
       "cellarShareAdd": "Shared cellar",
       "cellarShareUpdate": "Changed share role",
       "cellarShareRemove": "Removed share"
-    }
+    },
+    "anonymous": "anonymous",
+    "sharedAs": "{{user}} as {{role}}",
+    "roleChanged": "Role changed: {{from}} → {{to}}"
   },
 
   "moveBottle": {
@@ -1259,6 +1289,8 @@
     "noCellars": "No cellars found",
     "noRatedBottles": "No rated bottles yet",
     "noneYet": "None yet",
+    "valueSeedStarted": "Value tracking has started. Your first data point will appear after the weekly snapshot runs.",
+    "valueSeedFirst": "Your first snapshot is recorded. Trend data will appear after next week's snapshot.",
 
     "typeLabels": {
       "red": "Red",
@@ -1815,6 +1847,21 @@
     "flavours": "Flavours",
     "pairsWith": "Pairs with"
   },
+  "taxonomy": {
+    "loading": "Loading…",
+    "grapeNotFound": "Grape not found.",
+    "regionNotFound": "Region not found.",
+    "countryNotFound": "Country not found.",
+    "wineTypeNotFound": "Wine type not found.",
+    "home": "Home",
+    "noWines": "No wines found.",
+    "alsoKnownAs": "Also known as:",
+    "agingPotential": "Aging potential:",
+    "typicalGrapes": "Typical grapes",
+    "regions": "Regions",
+    "prev": "← Prev",
+    "next": "Next →"
+  },
   "statsCard": {
     "title": "Your Cellar Card",
     "subtitle": "A snapshot of your wine collection — download or share it.",
@@ -1891,7 +1938,9 @@
     "yesAddEntry": "Yes, add journal entry",
     "notNow": "Not now",
     "dontAskAgain": "Don't ask again",
-    "loadMore": "Load more"
+    "loadMore": "Load more",
+    "dish": "Dish",
+    "wine": "Wine"
   },
   "restock": {
     "title": "Smart Restock",

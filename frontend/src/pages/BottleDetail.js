@@ -257,14 +257,19 @@ function BottleDetail() {
           navigate(`/cellars/${cellarId}`);
         }
       } else {
-        alert(data.error || 'Failed to remove bottle');
+        // Close the modal so the inline error banner is visible behind it.
+        setConsumeOpen(false);
+        setError(data.error || t('bottleDetail.consumeError'));
       }
     } catch {
-      alert('Network error');
+      setConsumeOpen(false);
+      setError(t('common.networkError'));
     }
   };
 
-  if (error) return <div className="alert alert-error">{error}</div>;
+  // Only replace the whole page when nothing has loaded yet; once the bottle
+  // is loaded, action failures render as a dismissible inline banner instead.
+  if (error && !bottle) return <div className="alert alert-error">{error}</div>;
 
   const wine = bottle?.wineDefinition;
   const isPending = !wine && !!bottle?.pendingWineRequest;
@@ -283,6 +288,19 @@ function BottleDetail() {
 
   return (
     <div className="bottle-detail-page">
+      {error && (
+        <div className="alert alert-error" role="alert">
+          {error}
+          <button
+            type="button"
+            className="btn btn-small btn-secondary"
+            style={{ marginLeft: '0.75rem' }}
+            onClick={() => setError(null)}
+          >
+            ✕
+          </button>
+        </div>
+      )}
       {/* ── Clean header ── */}
       <div className="bd-page-header">
         <div className="bd-header-top">
