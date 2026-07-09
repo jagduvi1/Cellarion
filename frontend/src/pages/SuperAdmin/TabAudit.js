@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
+import { adminGetAudit } from '../../api/admin';
 import { fmtDate, actionClass, RoleBadge } from './helpers';
 
 const PAGE_SIZE = 100;
@@ -47,7 +48,7 @@ export default function TabAudit() {
       else if (action) params.set('action', action);
       if (from)   params.set('from', from);
       if (to)     params.set('to', to);
-      const res = await apiFetch(`/api/admin/audit?${params}`);
+      const res = await adminGetAudit(apiFetch, params);
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         throw new Error(body.error || `HTTP ${res.status}`);

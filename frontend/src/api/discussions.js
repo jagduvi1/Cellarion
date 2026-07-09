@@ -9,9 +9,6 @@ export const getDiscussion = (apiFetch, id) =>
 export const createDiscussion = (apiFetch, data) =>
   apiFetch('/api/discussions', { method: 'POST', headers: JSON_HEADERS, body: JSON.stringify(data) });
 
-export const updateDiscussion = (apiFetch, id, data) =>
-  apiFetch(`/api/discussions/${id}`, { method: 'PUT', headers: JSON_HEADERS, body: JSON.stringify(data) });
-
 export const deleteDiscussion = (apiFetch, id) =>
   apiFetch(`/api/discussions/${id}`, { method: 'DELETE' });
 
@@ -65,9 +62,6 @@ export const getModerationReports = (apiFetch, params = '') =>
 
 export const resolveReport = (apiFetch, reportId, status) =>
   apiFetch(`/api/discussions/moderation/reports/${reportId}`, { method: 'PATCH', headers: JSON_HEADERS, body: JSON.stringify({ status }) });
-
-export const getCategories = (apiFetch) =>
-  apiFetch('/api/discussions/categories');
 
 export const getReplyOriginal = (apiFetch, discussionId, replyId) =>
   apiFetch(`/api/discussions/${discussionId}/replies/${replyId}/original`);
