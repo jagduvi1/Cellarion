@@ -426,9 +426,11 @@ router.post('/', requireAuth, async (req, res) => {
     }
     // Verify the wine actually exists (the reply path does the same) — a
     // stale picker id would create a thread whose wine chip silently never
-    // renders and whose og page omits the wine link.
-    if (wineDefinition) {
-      const wineExists = await WineDefinition.exists({ _id: wineDefinition });
+    // renders and whose og page omits the wine link. Cast the validated id
+    // to a real ObjectId before it touches the query (clears taint tracking).
+    const wineOid = wineDefinition ? new mongoose.Types.ObjectId(String(wineDefinition)) : null;
+    if (wineOid) {
+      const wineExists = await WineDefinition.exists({ _id: wineOid });
       if (!wineExists) return res.status(400).json({ error: 'Wine not found' });
     }
 
