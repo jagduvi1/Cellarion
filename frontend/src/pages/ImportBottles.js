@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useTranslation, Trans } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import { validateImport, confirmImport } from '../api/bottles';
 import { searchWines } from '../api/wines';
@@ -22,21 +23,21 @@ import './ImportBottles.css';
 
 const STEPS = ['upload', 'review', 'importing', 'done'];
 
-const FORMAT_LABELS = {
-  cellarion: 'Cellarion',
-  vivino: 'Vivino',
-  cellartracker: 'CellarTracker',
-  'oeno-export': 'Oeno by Vintec',
-  generic: 'CSV'
+const FORMAT_LABEL_KEYS = {
+  cellarion: 'importBottles.formats.cellarion',
+  vivino: 'importBottles.formats.vivino',
+  cellartracker: 'importBottles.formats.cellartracker',
+  'oeno-export': 'importBottles.formats.oenoExport',
+  generic: 'importBottles.formats.generic'
 };
 
-const STATUS_LABELS = {
-  exact: 'Matched',
-  fuzzy: 'Review',
-  ai_match: 'Auto Match',
-  no_match: 'No Match',
-  error: 'Error',
-  skipped: 'Skipped'
+const STATUS_LABEL_KEYS = {
+  exact: 'importBottles.status.exact',
+  fuzzy: 'importBottles.status.fuzzy',
+  ai_match: 'importBottles.status.aiMatch',
+  no_match: 'importBottles.status.noMatch',
+  error: 'importBottles.status.error',
+  skipped: 'importBottles.status.skipped'
 };
 
 const STATUS_CLASSES = {
@@ -58,6 +59,7 @@ const TYPE_DOTS = {
 };
 
 function ImportBottles() {
+  const { t } = useTranslation();
   const { id: cellarId } = useParams();
   const { apiFetch, user } = useAuth();
   const navigate = useNavigate();
@@ -291,12 +293,12 @@ function ImportBottles() {
     const validExtensions = ['.csv', '.tsv', '.txt', '.json'];
     const ext = file.name.toLowerCase().slice(file.name.lastIndexOf('.'));
     if (!validExtensions.includes(ext)) {
-      setError('Please upload a CSV, TSV, TXT, or JSON file');
+      setError(t('importBottles.errors.invalidFileType'));
       return;
     }
 
     if (file.size > 10 * 1024 * 1024) {
-      setError('File too large (max 10 MB)');
+      setError(t('importBottles.errors.fileTooLarge'));
       return;
     }
 
@@ -309,7 +311,7 @@ function ImportBottles() {
           : parseAndMap(e.target.result);
         const { items, format, oenoRackSpecs } = parsed;
         if (items.length === 0) {
-          setError('No valid items found in the file.');
+          setError(t('importBottles.errors.noValidItems'));
           return;
         }
         setParsedItems(items);
@@ -332,12 +334,12 @@ function ImportBottles() {
         setRackConfigs(initialConfigs);
         setPositionAnchor(getDefaultAnchor(format));
       } catch (err) {
-        setError(`Failed to parse file: ${err.message}`);
+        setError(t('importBottles.errors.parseFailed', { message: err.message }));
       }
     };
-    reader.onerror = () => setError('Failed to read file');
+    reader.onerror = () => setError(t('importBottles.errors.readFailed'));
     reader.readAsText(file);
-  }, []);
+  }, [t]);
 
   const handleFileInput = (e) => {
     processFile(e.target.files[0]);
@@ -389,7 +391,7 @@ function ImportBottles() {
           continue;
         }
         const data = await res.json().catch(() => ({}));
-        throw new Error(data.error || `Validation failed (HTTP ${res.status})`);
+        throw new Error(data.error || t('importBottles.errors.validationFailed', { status: res.status }));
       }
     };
 
@@ -429,7 +431,7 @@ function ImportBottles() {
       setSelections(autoSelections);
       setStep('review');
     } catch (err) {
-      setError(err.message || 'Network error during validation');
+      setError(err.message || t('importBottles.errors.validationNetwork'));
     } finally {
       setValidating(false);
     }
@@ -640,7 +642,7 @@ function ImportBottles() {
       const data = await res.json();
 
       if (!res.ok) {
-        setError(data.error || 'Import failed');
+        setError(data.error || t('importBottles.errors.importFailed'));
         setStep('review');
         setImporting(false);
         return;
@@ -654,7 +656,7 @@ function ImportBottles() {
         setSessionId(null);
       }
     } catch (err) {
-      setError('Network error during import');
+      setError(t('importBottles.errors.importNetwork'));
       setStep('review');
     } finally {
       setImporting(false);
@@ -672,10 +674,9 @@ function ImportBottles() {
       {results.length > 0 && !validating && (
         <div className="session-resume-banner">
           <div className="session-resume-info">
-            <strong>Your matched results are still here</strong>
+            <strong>{t('importBottles.upload.resumeReviewTitle')}</strong>
             <span className="session-resume-meta">
-              Return to review to keep every match, skip and manual selection.
-              Re-matching below starts the review over.
+              {t('importBottles.upload.resumeReviewMeta')}
             </span>
           </div>
           <div className="session-resume-actions">
@@ -683,7 +684,7 @@ function ImportBottles() {
               className="btn btn-primary btn-sm"
               onClick={() => setStep('review')}
             >
-              Return to review
+              {t('importBottles.upload.returnToReview')}
             </button>
           </div>
         </div>
@@ -691,10 +692,10 @@ function ImportBottles() {
       {draftSessions.length > 0 && (
         <div className="session-resume-banner">
           <div className="session-resume-info">
-            <strong>You have a saved import in progress</strong>
+            <strong>{t('importBottles.upload.draftTitle')}</strong>
             <span className="session-resume-meta">
               {draftSessions[0].fileName && `${draftSessions[0].fileName} · `}
-              Last saved {new Date(draftSessions[0].updatedAt).toLocaleString()}
+              {t('importBottles.upload.lastSaved', { date: new Date(draftSessions[0].updatedAt).toLocaleString() })}
             </span>
           </div>
           <div className="session-resume-actions">
@@ -702,39 +703,39 @@ function ImportBottles() {
               className="btn btn-primary btn-sm"
               onClick={() => handleResumeSession(draftSessions[0])}
             >
-              Resume
+              {t('importBottles.upload.resume')}
             </button>
             <button
               className="btn btn-secondary btn-sm"
               onClick={() => setDraftSessions([])}
             >
-              Dismiss
+              {t('importBottles.upload.dismiss')}
             </button>
           </div>
         </div>
       )}
       <div className="import-instructions">
-        <h3>Supported Formats</h3>
+        <h3>{t('importBottles.upload.supportedFormats')}</h3>
         <div className="format-cards">
           <div className="format-card">
-            <strong>Cellarion JSON</strong>
-            <p>Download from any cellar via &#8943; &rarr; Export (JSON). Bottles from all cellars in the file are imported into the cellar you pick here &mdash; to recreate whole cellars with racks and layout, use Import Cellar in Settings instead.</p>
+            <strong>{t('importBottles.upload.cellarionTitle')}</strong>
+            <p>{t('importBottles.upload.cellarionDesc')}</p>
           </div>
           <div className="format-card">
-            <strong>Vivino</strong>
-            <p>Export your collection from Vivino app settings</p>
+            <strong>{t('importBottles.upload.vivinoTitle')}</strong>
+            <p>{t('importBottles.upload.vivinoDesc')}</p>
           </div>
           <div className="format-card">
-            <strong>CellarTracker</strong>
-            <p>Export from CellarTracker via My Cellar &rarr; Download</p>
+            <strong>{t('importBottles.upload.cellartrackerTitle')}</strong>
+            <p>{t('importBottles.upload.cellartrackerDesc')}</p>
           </div>
           <div className="format-card">
-            <strong>Oeno by Vintec</strong>
-            <p>Real Oeno-by-Vintec export — two-section CSV with cabinet definitions + bottles. Cabinets, shelves, and bottle history all import automatically.</p>
+            <strong>{t('importBottles.upload.oenoTitle')}</strong>
+            <p>{t('importBottles.upload.oenoDesc')}</p>
           </div>
           <div className="format-card">
-            <strong>Generic CSV</strong>
-            <p>Any CSV with Wine, Producer, Vintage columns</p>
+            <strong>{t('importBottles.upload.genericTitle')}</strong>
+            <p>{t('importBottles.upload.genericDesc')}</p>
           </div>
         </div>
       </div>
@@ -757,15 +758,15 @@ function ImportBottles() {
           <div className="drop-zone-loaded">
             <span className="drop-zone-icon">&#10003;</span>
             <p><strong>{fileName}</strong></p>
-            <p>Detected format: <strong>{FORMAT_LABELS[detectedFormat] || detectedFormat}</strong></p>
-            <p>{parsedItems.length} bottle{parsedItems.length !== 1 ? 's' : ''} found</p>
-            <span className="drop-zone-change">Click or drop to change file</span>
+            <p>{t('importBottles.upload.detectedFormat')} <strong>{FORMAT_LABEL_KEYS[detectedFormat] ? t(FORMAT_LABEL_KEYS[detectedFormat]) : detectedFormat}</strong></p>
+            <p>{t('importBottles.upload.bottlesFound', { count: parsedItems.length })}</p>
+            <span className="drop-zone-change">{t('importBottles.upload.changeFile')}</span>
           </div>
         ) : (
           <div className="drop-zone-empty">
             <span className="drop-zone-icon">&#8686;</span>
-            <p>Drop your file here or click to browse</p>
-            <span className="drop-zone-hint">JSON, CSV, TSV, or TXT — max 10 MB</span>
+            <p>{t('importBottles.upload.dropHere')}</p>
+            <span className="drop-zone-hint">{t('importBottles.upload.dropHint')}</span>
           </div>
         )}
       </div>
@@ -781,21 +782,18 @@ function ImportBottles() {
 
       {parsedItems.length > 0 && Object.keys(rackSummary).length > 0 && (
         <div className="import-rack-options">
-          <h3>Rack placement</h3>
+          <h3>{t('importBottles.rack.title')}</h3>
           {detectedFormat === 'oeno-export' && (
             <p className="rack-options-hint">
-              Detected an <strong>Oeno by Vintec</strong> export. Cabinets and per-column
-              modules from your CSV have been mapped to one Open Shelf rack each
-              (6 front + 5 back per shelf, shelf 1 at the bottom). Each bottle's
-              exact slot is preserved — adjust shelf counts below only if a cabinet
-              has more shelves than the file shows.
+              <Trans i18nKey="importBottles.rack.oenoHint" components={{ 1: <strong /> }} />
             </p>
           )}
           <p className="rack-options-hint">
-            Found <strong>{Object.keys(rackSummary).length}</strong> unique
-            rack{Object.keys(rackSummary).length !== 1 ? 's' : ''} in your file.
-            We've guessed sensible dimensions from the highest slot number used — adjust them to match
-            your physical rack if you know better.
+            <Trans
+              i18nKey="importBottles.rack.found"
+              count={Object.keys(rackSummary).length}
+              components={{ 1: <strong /> }}
+            />
           </p>
 
           <div className="rack-config-list">
@@ -815,38 +813,35 @@ function ImportBottles() {
                   <div key={name} className="rack-config-card rack-config-existing">
                     <div className="rack-config-card-head">
                       <strong>{name}</strong>
-                      <span className="rack-config-existing-badge">Already exists</span>
+                      <span className="rack-config-existing-badge">{t('importBottles.rack.alreadyExists')}</span>
                       <span className="rack-config-meta">
-                        {info.count} bottle{info.count !== 1 ? 's' : ''}
-                        {info.maxPosition > 0 && (
-                          <>, highest {detectedFormat === 'oeno-export' ? 'shelf' : 'cell'} {info.maxPosition}</>
-                        )}
-                        {info.maxPerCell > 1 && (
-                          <>, up to {info.maxPerCell} on the busiest {detectedFormat === 'oeno-export' ? 'shelf' : 'cell'}</>
-                        )}
+                        {t('importBottles.rack.bottleCount', { count: info.count })}
+                        {info.maxPosition > 0 && t(detectedFormat === 'oeno-export' ? 'importBottles.rack.highestShelf' : 'importBottles.rack.highestCell', { n: info.maxPosition })}
+                        {info.maxPerCell > 1 && t(detectedFormat === 'oeno-export' ? 'importBottles.rack.busiestShelf' : 'importBottles.rack.busiestCell', { n: info.maxPerCell })}
                       </span>
                     </div>
                     <div className="rack-config-existing-note">
-                      Using the rack's current layout:{' '}
+                      {t('importBottles.rack.currentLayoutPrefix')}{' '}
                       <strong>
                         {existing.isModular
-                          ? `Modular (${(existing.modules || []).length} modules)`
-                          : `${existing.type} ${existing.rows}×${existing.cols}${existing.typeConfig?.bottlesPerCell > 1 ? ` × ${existing.typeConfig.bottlesPerCell}/cell` : ''}`}
+                          ? t('importBottles.rack.modularLayout', { count: (existing.modules || []).length })
+                          : `${existing.type} ${existing.rows}×${existing.cols}${existing.typeConfig?.bottlesPerCell > 1 ? t('importBottles.rack.perCellShort', { n: existing.typeConfig.bottlesPerCell }) : ''}`}
                       </strong>
-                      {existingCapacity !== null && <> — {existingCapacity} slots</>}.
-                      {' '}To reshape it, delete the rack first from the Cellar page.
+                      {existingCapacity !== null && <>{t('importBottles.rack.slotsSuffix', { count: existingCapacity })}</>}.
+                      {' '}{t('importBottles.rack.reshapeNote')}
                     </div>
                     {tooSmall && (
                       <div className="rack-config-warn rack-config-existing-warn">
-                        Capacity ({existingCapacity}) is below {required} bottles — extras will be reported as unplaced.
+                        {t('importBottles.rack.capacityBelow', { capacity: existingCapacity, required })}
                       </div>
                     )}
                     {detectedFormat === 'oeno-export' && existing.type !== 'shelf' && !existing.isModular && (
                       <div className="rack-config-warn rack-config-existing-warn">
-                        Oeno positions are <strong>shelf numbers</strong>, but this rack is a
-                        <code> {existing.type}</code>, so positions will be interpreted as
-                        slot indexes instead. Your bottles may land in the wrong physical
-                        location. Delete the rack to recreate it with the Oeno-aware layout.
+                        <Trans
+                          i18nKey="importBottles.rack.oenoTypeWarning"
+                          values={{ type: existing.type }}
+                          components={{ 1: <strong />, 3: <code /> }}
+                        />
                       </div>
                     )}
                     <label className="rack-config-skip-toggle">
@@ -858,7 +853,7 @@ function ImportBottles() {
                           [name]: { ...prev[name], skip: e.target.checked }
                         }))}
                       />
-                      <span>Skip — don't place bottles into this existing rack</span>
+                      <span>{t('importBottles.rack.skipExisting')}</span>
                     </label>
                   </div>
                 );
@@ -888,13 +883,9 @@ function ImportBottles() {
                   <div className="rack-config-card-head">
                     <strong>{name}</strong>
                     <span className="rack-config-meta">
-                      {info.count} bottle{info.count !== 1 ? 's' : ''}
-                      {info.maxPosition > 0 && (
-                        <>, highest {detectedFormat === 'oeno-export' ? 'shelf' : 'cell'} {info.maxPosition}</>
-                      )}
-                      {info.maxPerCell > 1 && (
-                        <>, up to {info.maxPerCell} on the busiest {detectedFormat === 'oeno-export' ? 'shelf' : 'cell'}</>
-                      )}
+                      {t('importBottles.rack.bottleCount', { count: info.count })}
+                      {info.maxPosition > 0 && t(detectedFormat === 'oeno-export' ? 'importBottles.rack.highestShelf' : 'importBottles.rack.highestCell', { n: info.maxPosition })}
+                      {info.maxPerCell > 1 && t(detectedFormat === 'oeno-export' ? 'importBottles.rack.busiestShelf' : 'importBottles.rack.busiestCell', { n: info.maxPerCell })}
                     </span>
                     <label className="rack-config-skip-toggle">
                       <input
@@ -902,17 +893,22 @@ function ImportBottles() {
                         checked={isSkipped}
                         onChange={(e) => updateCfg({ skip: e.target.checked })}
                       />
-                      <span>Skip — import bottles without a rack</span>
+                      <span>{t('importBottles.rack.skipNew')}</span>
                     </label>
                   </div>
                   {isSkipped && (
                     <div className="rack-config-skipped-note">
-                      The {info.count} bottle{info.count !== 1 ? 's' : ''} for this rack will be imported into the cellar without rack placement. No rack named <strong>{name}</strong> will be created.
+                      <Trans
+                        i18nKey="importBottles.rack.skippedNote"
+                        count={info.count}
+                        values={{ name }}
+                        components={{ 1: <strong /> }}
+                      />
                     </div>
                   )}
                   <div className="rack-config-card-body" style={{ display: isSkipped ? 'none' : undefined }}>
                     <label className="rack-config-field">
-                      <span>Type</span>
+                      <span>{t('importBottles.rack.typeLabel')}</span>
                       <select
                         value={cfg.type}
                         onChange={(e) => {
@@ -925,19 +921,19 @@ function ImportBottles() {
                           });
                         }}
                       >
-                        <option value="grid">Grid (1 bottle per slot)</option>
-                        <option value="shelf">Open Shelf (multi-bottle cells)</option>
-                        <option value="stack">Stack (single column)</option>
-                        <option value="hex">Honeycomb</option>
-                        <option value="triangle">A-Frame (triangle)</option>
-                        <option value="x-rack">X-Rack</option>
-                        <option value="cube">Modular Cube</option>
+                        <option value="grid">{t('importBottles.rack.typeGrid')}</option>
+                        <option value="shelf">{t('importBottles.rack.typeShelf')}</option>
+                        <option value="stack">{t('importBottles.rack.typeStack')}</option>
+                        <option value="hex">{t('importBottles.rack.typeHex')}</option>
+                        <option value="triangle">{t('importBottles.rack.typeTriangle')}</option>
+                        <option value="x-rack">{t('importBottles.rack.typeXRack')}</option>
+                        <option value="cube">{t('importBottles.rack.typeCube')}</option>
                       </select>
                     </label>
 
                     {dims.showRows && (
                       <label className="rack-config-field">
-                        <span>{dims.rowLabel === 'racks.heightLabel' ? 'Height' : 'Rows'}</span>
+                        <span>{dims.rowLabel === 'racks.heightLabel' ? t('importBottles.rack.height') : t('importBottles.rack.rows')}</span>
                         <input
                           type="number" min="1" max="20"
                           value={cfg.rows}
@@ -947,7 +943,7 @@ function ImportBottles() {
                     )}
                     {dims.showCols && (
                       <label className="rack-config-field">
-                        <span>{dims.colLabel === 'racks.baseWidthLabel' ? 'Base width' : 'Cols'}</span>
+                        <span>{dims.colLabel === 'racks.baseWidthLabel' ? t('importBottles.rack.baseWidth') : t('importBottles.rack.cols')}</span>
                         <input
                           type="number" min="1" max="20"
                           value={cfg.cols}
@@ -957,7 +953,7 @@ function ImportBottles() {
                     )}
                     {dims.showBottlesPerCell && (
                       <label className="rack-config-field">
-                        <span>Per cell</span>
+                        <span>{t('importBottles.rack.perCellLabel')}</span>
                         <input
                           type="number" min="1" max="20"
                           value={cfg.typeConfig?.bottlesPerCell || 1}
@@ -967,7 +963,7 @@ function ImportBottles() {
                     )}
                     {dims.showBackCols && (
                       <label className="rack-config-field">
-                        <span>Back row</span>
+                        <span>{t('importBottles.rack.backRow')}</span>
                         <input
                           type="number" min="0" max="20"
                           value={cfg.typeConfig?.backCols ?? 0}
@@ -977,7 +973,7 @@ function ImportBottles() {
                     )}
                     {dims.showBottlesPerSection && (
                       <label className="rack-config-field">
-                        <span>Per section</span>
+                        <span>{t('importBottles.rack.perSection')}</span>
                         <input
                           type="number" min="1" max="30"
                           value={cfg.typeConfig?.bottlesPerSection || 10}
@@ -988,7 +984,7 @@ function ImportBottles() {
                     {dims.showModule && (
                       <>
                         <label className="rack-config-field">
-                          <span>Module rows</span>
+                          <span>{t('importBottles.rack.moduleRows')}</span>
                           <input
                             type="number" min="1" max="10"
                             value={cfg.typeConfig?.moduleRows || 2}
@@ -996,7 +992,7 @@ function ImportBottles() {
                           />
                         </label>
                         <label className="rack-config-field">
-                          <span>Module cols</span>
+                          <span>{t('importBottles.rack.moduleCols')}</span>
                           <input
                             type="number" min="1" max="10"
                             value={cfg.typeConfig?.moduleCols || 2}
@@ -1008,10 +1004,10 @@ function ImportBottles() {
                   </div>
                   {!isSkipped && (
                     <div className="rack-config-capacity-line">
-                      = {capacity} slots
+                      {t('importBottles.rack.capacityLine', { count: capacity })}
                       {tooSmall && (
                         <span className="rack-config-warn">
-                          {' '}— too small for {required} bottles
+                          {t('importBottles.rack.tooSmallSuffix', { count: required })}
                         </span>
                       )}
                     </div>
@@ -1027,17 +1023,17 @@ function ImportBottles() {
 
       {parsedItems.length > 0 && (
         <div className="import-preview">
-          <h3>Preview ({Math.min(parsedItems.length, 5)} of {parsedItems.length})</h3>
+          <h3>{t('importBottles.preview.title', { shown: Math.min(parsedItems.length, 5), total: parsedItems.length })}</h3>
           <div className="preview-table-wrap">
             <table className="preview-table">
               <thead>
                 <tr>
-                  <th>Producer</th>
-                  <th>Wine</th>
-                  <th>Vintage</th>
-                  <th>Country</th>
-                  <th>Type</th>
-                  <th>Price</th>
+                  <th>{t('importBottles.preview.producer')}</th>
+                  <th>{t('importBottles.preview.wine')}</th>
+                  <th>{t('importBottles.preview.vintage')}</th>
+                  <th>{t('importBottles.preview.country')}</th>
+                  <th>{t('importBottles.preview.type')}</th>
+                  <th>{t('importBottles.preview.price')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -1045,7 +1041,7 @@ function ImportBottles() {
                   <tr key={i}>
                     <td>{item.producer || '—'}</td>
                     <td>{item.wineName || '—'}</td>
-                    <td>{item.vintage || 'NV'}</td>
+                    <td>{item.vintage || t('importBottles.preview.nv')}</td>
                     <td>{item.country || '—'}</td>
                     <td>
                       <span className="type-dot" style={{ background: TYPE_DOTS[item.type] || '#888' }} />
@@ -1062,7 +1058,7 @@ function ImportBottles() {
             <div className="validate-progress">
               <div className="progress-spinner" />
               <p className="validate-progress-label">
-                Matching wines… {validationProgress.done} / {validationProgress.total}
+                {t('importBottles.validate.matching', { done: validationProgress.done, total: validationProgress.total })}
               </p>
               <div className="validate-progress-track">
                 <div
@@ -1070,14 +1066,14 @@ function ImportBottles() {
                   style={{ width: validationProgress.total > 0 ? `${Math.round(validationProgress.done / validationProgress.total * 100)}%` : '0%' }}
                 />
               </div>
-              <p className="progress-hint">Identifying unknown wines — this may take a moment for large collections</p>
+              <p className="progress-hint">{t('importBottles.validate.largeCollectionHint')}</p>
             </div>
           ) : (
             <button
               className="btn btn-primary btn-validate"
               onClick={handleValidate}
             >
-              {`Match ${parsedItems.length} bottle${parsedItems.length !== 1 ? 's' : ''} against wine library`}
+              {t('importBottles.validate.matchButton', { count: parsedItems.length })}
             </button>
           )}
         </div>
@@ -1120,36 +1116,36 @@ function ImportBottles() {
         <div className="review-summary">
           <div className="summary-stat">
             <span className="summary-number summary-exact">{summary?.exact || 0}</span>
-            <span className="summary-label">Matched</span>
+            <span className="summary-label">{t('importBottles.review.matched')}</span>
           </div>
           <div className="summary-stat">
             <span className="summary-number summary-fuzzy">{summary?.fuzzy || 0}</span>
-            <span className="summary-label">Fuzzy</span>
+            <span className="summary-label">{t('importBottles.review.fuzzy')}</span>
           </div>
           {(summary?.aiMatch || 0) > 0 && (
             <div className="summary-stat">
               <span className="summary-number summary-ai">{summary.aiMatch}</span>
-              <span className="summary-label">Auto Added</span>
+              <span className="summary-label">{t('importBottles.review.autoAdded')}</span>
             </div>
           )}
           <div className="summary-stat">
             <span className="summary-number summary-nomatch">{summary?.noMatch || 0}</span>
-            <span className="summary-label">No Match</span>
+            <span className="summary-label">{t('importBottles.review.noMatch')}</span>
           </div>
           <div className="summary-stat">
             <span className="summary-number summary-importable">{importable}</span>
-            <span className="summary-label">Ready</span>
+            <span className="summary-label">{t('importBottles.review.ready')}</span>
           </div>
           {importedCount > 0 && (
             <div className="summary-stat">
               <span className="summary-number summary-imported">{importedCount}</span>
-              <span className="summary-label">Imported</span>
+              <span className="summary-label">{t('importBottles.review.imported')}</span>
             </div>
           )}
           {(summary?.priceWarnings || 0) > 0 && (
             <div className="summary-stat">
               <span className="summary-number summary-warn">{summary.priceWarnings}</span>
-              <span className="summary-label">Price warnings</span>
+              <span className="summary-label">{t('importBottles.review.priceWarnings')}</span>
             </div>
           )}
         </div>
@@ -1157,21 +1153,21 @@ function ImportBottles() {
         {/* Price sanity banner — surfaces fat-finger / 100×-too-high / cents-as-units mistakes */}
         {(summary?.priceWarnings || 0) > 0 && (
           <div className="import-price-warning-banner">
-            <strong>⚠️ {summary.priceWarnings} bottle{summary.priceWarnings === 1 ? '' : 's'} have unusual prices.</strong>
-            {' '}Hover the highlighted price tags below to see why. Common causes: typing extra zeros, prices entered in cents, or wrong currency.
+            <strong>{t('importBottles.review.priceWarningBanner', { count: summary.priceWarnings })}</strong>
+            {' '}{t('importBottles.review.priceWarningHint')}
           </div>
         )}
 
         {/* Bulk actions */}
         <div className="review-actions">
           <button className="btn btn-secondary btn-sm" onClick={selectAllExact}>
-            Accept all matches
+            {t('importBottles.review.acceptAllMatches')}
           </button>
           <button className="btn btn-secondary btn-sm" onClick={requestAllUnmatched}>
-            Request all unmatched
+            {t('importBottles.review.requestAllUnmatched')}
           </button>
           <button className="btn btn-secondary btn-sm" onClick={skipAllUnmatched}>
-            Skip all unmatched
+            {t('importBottles.review.skipAllUnmatched')}
           </button>
           <button
             className="btn btn-secondary btn-sm"
@@ -1186,27 +1182,28 @@ function ImportBottles() {
               setRefreshedItems({});
             }}
           >
-            Back to upload
+            {t('importBottles.review.backToUpload')}
           </button>
           <span className={`save-status save-status-${saveStatus}`}>
-            {saveStatus === 'saving' && 'Saving\u2026'}
-            {saveStatus === 'saved' && 'Progress saved'}
-            {saveStatus === 'unsaved' && 'Unsaved changes'}
-            {saveStatus === 'error' && 'Save failed'}
+            {saveStatus === 'saving' && t('importBottles.review.saving')}
+            {saveStatus === 'saved' && t('importBottles.review.saved')}
+            {saveStatus === 'unsaved' && t('importBottles.review.unsaved')}
+            {saveStatus === 'error' && t('importBottles.review.saveFailed')}
           </span>
         </div>
 
         {/* Notify user about wines matched since last save */}
         {Object.keys(refreshedItems).length > 0 && (
           <div className="session-refresh-notice">
-            <strong>
-              {Object.keys(refreshedItems).length} wine{Object.keys(refreshedItems).length !== 1 ? 's' : ''} added to the library
-            </strong>
-            {' '}since your last save — selections updated automatically.
+            <Trans
+              i18nKey="importBottles.review.refreshedNotice"
+              count={Object.keys(refreshedItems).length}
+              components={{ 1: <strong /> }}
+            />
             <button
               className="session-refresh-dismiss"
               onClick={() => setRefreshedItems({})}
-              aria-label="Dismiss"
+              aria-label={t('importBottles.review.dismiss')}
             >
               &times;
             </button>
@@ -1218,11 +1215,11 @@ function ImportBottles() {
           <table className="review-table">
             <thead>
               <tr>
-                <th className="col-status">Status</th>
-                <th className="col-source">Your File</th>
-                <th className="col-match">Matched To</th>
-                <th className="col-details">Details</th>
-                <th className="col-actions">Actions</th>
+                <th className="col-status">{t('importBottles.review.colStatus')}</th>
+                <th className="col-source">{t('importBottles.review.colSource')}</th>
+                <th className="col-match">{t('importBottles.review.colMatch')}</th>
+                <th className="col-details">{t('importBottles.review.colDetails')}</th>
+                <th className="col-actions">{t('importBottles.review.colActions')}</th>
               </tr>
             </thead>
             <tbody>
@@ -1256,7 +1253,7 @@ function ImportBottles() {
                   >
                     <td className="col-status">
                       <span className={`status-badge ${isImported ? 'status-imported' : STATUS_CLASSES[r.status]}`}>
-                        {isImported ? 'Imported' : isSkipped ? 'Skipped' : isRequested ? 'Requested' : STATUS_LABELS[r.status]}
+                        {isImported ? t('importBottles.status.imported') : isSkipped ? t('importBottles.status.skipped') : isRequested ? t('importBottles.status.requested') : t(STATUS_LABEL_KEYS[r.status])}
                       </span>
                     </td>
                     <td className="col-source">
@@ -1264,18 +1261,18 @@ function ImportBottles() {
                         <strong>{r.item.producer}</strong>
                         <span>{r.item.wineName}</span>
                         <span className="source-meta">
-                          {r.item.vintage || 'NV'}
+                          {r.item.vintage || t('importBottles.preview.nv')}
                           {r.item.country && ` · ${r.item.country}`}
                         </span>
                       </div>
                     </td>
                     <td className="col-match">
                       {isImported ? (
-                        <span className="match-imported">Added to cellar</span>
+                        <span className="match-imported">{t('importBottles.review.addedToCellar')}</span>
                       ) : isSkipped ? (
-                        <span className="match-skipped">Will not import</span>
+                        <span className="match-skipped">{t('importBottles.review.willNotImport')}</span>
                       ) : isRequested ? (
-                        <span className="match-requested">Imported pending admin review</span>
+                        <span className="match-requested">{t('importBottles.review.pendingAdminReview')}</span>
                       ) : selectedWine ? (
                         <div className="match-info">
                           <strong>{selectedWine.producer}</strong>
@@ -1286,31 +1283,31 @@ function ImportBottles() {
                             {selectedWine.region ? ` · ${selectedWine.region}` : ''}
                           </span>
                           {r.status === 'ai_match' && (
-                            <span className="match-ai-badge">Auto</span>
+                            <span className="match-ai-badge">{t('importBottles.review.autoBadge')}</span>
                           )}
                           {selectedWine.score != null && r.status !== 'ai_match' && (
-                            <span className="match-score">{Math.round(selectedWine.score * 100)}% match</span>
+                            <span className="match-score">{t('importBottles.review.matchScore', { score: Math.round(selectedWine.score * 100) })}</span>
                           )}
                         </div>
                       ) : r.status === 'error' ? (
                         <span className="match-error">{r.error}</span>
                       ) : (
                         <>
-                          <span className="match-pending">No match found</span>
+                          <span className="match-pending">{t('importBottles.review.noMatchFound')}</span>
                           {r.aiDebug && (
                             <details className={`ai-info-details${r.aiDebug.aiStatus === 'failed' || r.aiDebug.aiStatus === 'create_failed' ? ' ai-info-warn' : ''}`}>
                               <summary>
-                                {r.aiDebug.aiStatus === 'failed' ? 'Lookup failed' :
-                                 r.aiDebug.aiStatus === 'create_failed' ? 'Found a match but couldn\'t save it' :
-                                 'Why no match?'}
+                                {r.aiDebug.aiStatus === 'failed' ? t('importBottles.review.lookupFailed') :
+                                 r.aiDebug.aiStatus === 'create_failed' ? t('importBottles.review.createFailed') :
+                                 t('importBottles.review.whyNoMatch')}
                               </summary>
                               <p>
                                 {r.aiDebug.aiExplanation ||
                                  (r.aiDebug.aiStatus === 'failed'
-                                   ? 'The lookup encountered a temporary issue. Request the wine to be added manually.'
+                                   ? t('importBottles.review.lookupFailedDesc')
                                    : r.aiDebug.aiStatus === 'create_failed'
-                                   ? 'We identified this wine but encountered an error saving it. Try requesting it manually.'
-                                   : 'Could not identify this wine. Request it to be added to the registry.')}
+                                   ? t('importBottles.review.createFailedDesc')
+                                   : t('importBottles.review.couldNotIdentifyDesc'))}
                               </p>
                             </details>
                           )}
@@ -1329,7 +1326,7 @@ function ImportBottles() {
                           {r.item.price} {r.item.currency}
                         </span>
                       )}
-                      {r.item.rating && <span className="detail-tag">Rating: {r.item.rating}</span>}
+                      {r.item.rating && <span className="detail-tag">{t('importBottles.review.ratingTag', { rating: r.item.rating })}</span>}
                       {r.item.bottleSize && r.item.bottleSize !== '750ml' && (
                         <span className="detail-tag">{r.item.bottleSize}</span>
                       )}
@@ -1342,7 +1339,7 @@ function ImportBottles() {
                               className="btn btn-secondary btn-xs"
                               onClick={() => setExpandedRow(isExpanded ? null : r.index)}
                             >
-                              {isExpanded ? 'Hide' : r.matches.length > 1 ? `${r.matches.length} options` : 'Change'}
+                              {isExpanded ? t('importBottles.review.hide') : r.matches.length > 1 ? t('importBottles.review.options', { count: r.matches.length }) : t('importBottles.review.change')}
                             </button>
                           )}
                           {r.matches.length > 1 && r.status !== 'fuzzy' && !isSkipped && !isRequested && (
@@ -1350,7 +1347,7 @@ function ImportBottles() {
                               className="btn btn-secondary btn-xs"
                               onClick={() => setExpandedRow(isExpanded ? null : r.index)}
                             >
-                              {isExpanded ? 'Hide' : `${r.matches.length} options`}
+                              {isExpanded ? t('importBottles.review.hide') : t('importBottles.review.options', { count: r.matches.length })}
                             </button>
                           )}
                           {r.status === 'fuzzy' && r.item.wineName && r.item.producer && !isSkipped && !isRequested && (
@@ -1359,7 +1356,7 @@ function ImportBottles() {
                               onClick={() => handleAiSearch(r.index)}
                               disabled={aiSearchingRow === r.index}
                             >
-                              {aiSearchingRow === r.index ? 'Searching…' : 'Look up'}
+                              {aiSearchingRow === r.index ? t('importBottles.review.searching') : t('importBottles.review.lookUp')}
                             </button>
                           )}
                           {(r.status === 'no_match' || r.status === 'fuzzy') && !isSkipped && !isRequested && (
@@ -1367,7 +1364,7 @@ function ImportBottles() {
                               className="btn btn-secondary btn-xs"
                               onClick={() => openSearchModal(r.index)}
                             >
-                              Search library
+                              {t('importBottles.review.searchLibrary')}
                             </button>
                           )}
                           {(r.status === 'no_match' || r.status === 'fuzzy') && !isSkipped && !isRequested && (
@@ -1375,7 +1372,7 @@ function ImportBottles() {
                               className="btn btn-secondary btn-xs btn-request"
                               onClick={() => requestWine(r.index)}
                             >
-                              Request wine
+                              {t('importBottles.review.requestWine')}
                             </button>
                           )}
                           {isSkipped || isRequested ? (
@@ -1383,14 +1380,14 @@ function ImportBottles() {
                               className="btn btn-secondary btn-xs"
                               onClick={() => unskipItem(r.index)}
                             >
-                              Undo
+                              {t('importBottles.review.undo')}
                             </button>
                           ) : (
                             <button
                               className="btn btn-secondary btn-xs btn-skip"
                               onClick={() => skipItem(r.index)}
                             >
-                              Skip
+                              {t('importBottles.review.skip')}
                             </button>
                           )}
                         </div>
@@ -1429,13 +1426,16 @@ function ImportBottles() {
         <div className="review-footer">
           {unresolved > 0 && (
             <p className="review-warning">
-              {unresolved} item{unresolved !== 1 ? 's' : ''} still need a selection or to be skipped
+              {t('importBottles.review.unresolved', { count: unresolved })}
             </p>
           )}
           {Object.keys(rackSummary).length > 0 && (
             <p className="review-anchor-note">
-              Slot 1 anchor: <strong>{positionAnchor.replace('-', ' ')}</strong>
-              {' '}— change it on the <button type="button" className="link-btn" onClick={() => setStep('upload')}>upload step</button> if needed.
+              <Trans
+                i18nKey="importBottles.review.anchorNote"
+                values={{ anchor: t(`importBottles.anchor.${positionAnchor}`) }}
+                components={{ 1: <strong />, 3: <button type="button" className="link-btn" onClick={() => setStep('upload')} /> }}
+              />
             </p>
           )}
           <button
@@ -1444,8 +1444,8 @@ function ImportBottles() {
             disabled={importable === 0 || importing}
           >
             {importing
-              ? 'Importing...'
-              : `Import ${importable} bottle${importable !== 1 ? 's' : ''}`}
+              ? t('importBottles.review.importing')
+              : t('importBottles.review.importButton', { count: importable })}
           </button>
         </div>
       </div>
@@ -1455,62 +1455,62 @@ function ImportBottles() {
   const renderImportingStep = () => (
     <div className="import-progress">
       <div className="progress-spinner" />
-      <p>Importing bottles into your cellar...</p>
-      <p className="progress-hint">This may take a moment for large collections</p>
+      <p>{t('importBottles.progress.importing')}</p>
+      <p className="progress-hint">{t('importBottles.progress.hint')}</p>
     </div>
   );
 
   const renderDoneStep = () => (
     <div className="import-done">
       <div className="done-icon">&#10003;</div>
-      <h2>Import Complete</h2>
+      <h2>{t('importBottles.done.title')}</h2>
       {importResult && (
         <div className="done-stats">
           <div className="done-stat">
             <span className="done-number">{importResult.createdActive ?? importResult.created}</span>
-            <span>Active bottles</span>
+            <span>{t('importBottles.done.activeBottles')}</span>
           </div>
           {importResult.createdHistory > 0 && (
             <div className="done-stat">
               <span className="done-number">{importResult.createdHistory}</span>
-              <span>Consumed (history)</span>
+              <span>{t('importBottles.done.consumedHistory')}</span>
             </div>
           )}
           {importResult.skipped.length > 0 && (
             <div className="done-stat">
               <span className="done-number done-skipped">{importResult.skipped.length}</span>
-              <span>Skipped</span>
+              <span>{t('importBottles.done.skipped')}</span>
             </div>
           )}
           {importResult.errors.length > 0 && (
             <div className="done-stat">
               <span className="done-number done-errors">{importResult.errors.length}</span>
-              <span>Errors</span>
+              <span>{t('importBottles.done.errors')}</span>
             </div>
           )}
           {importResult.racksCreated?.length > 0 && (
             <div className="done-stat">
               <span className="done-number">{importResult.racksCreated.length}</span>
-              <span>Rack{importResult.racksCreated.length !== 1 ? 's' : ''} created</span>
+              <span>{t('importBottles.done.racksCreated', { count: importResult.racksCreated.length })}</span>
             </div>
           )}
           {importResult.placed > 0 && (
             <div className="done-stat">
               <span className="done-number">{importResult.placed}</span>
-              <span>Placed in racks{importResult.overflowed > 0 ? ` (${importResult.overflowed} into adjacent slots)` : ''}</span>
+              <span>{t('importBottles.done.placedInRacks')}{importResult.overflowed > 0 ? t('importBottles.done.overflowSuffix', { count: importResult.overflowed }) : ''}</span>
             </div>
           )}
           {importResult.unplaced?.length > 0 && (
             <div className="done-stat">
               <span className="done-number done-errors">{importResult.unplaced.length}</span>
-              <span>Couldn't place</span>
+              <span>{t('importBottles.done.couldntPlace')}</span>
             </div>
           )}
         </div>
       )}
       {importResult?.racksCreated?.length > 0 && (
         <details className="done-errors-detail">
-          <summary>Auto-created racks ({importResult.racksCreated.length})</summary>
+          <summary>{t('importBottles.done.autoCreatedRacks', { count: importResult.racksCreated.length })}</summary>
           <ul>
             {importResult.racksCreated.map((r, i) => (
               <li key={i}>
@@ -1522,37 +1522,41 @@ function ImportBottles() {
       )}
       {importResult?.unplaced?.length > 0 && (
         <details className="done-errors-detail">
-          <summary>Bottles that couldn't be placed in a rack ({importResult.unplaced.length})</summary>
+          <summary>{t('importBottles.done.unplacedSummary', { count: importResult.unplaced.length })}</summary>
           <ul>
             {importResult.unplaced.slice(0, 50).map((u, i) => (
               <li key={i}>
-                Row {u.sourceIndex + 1} → rack <strong>{u.rackName}</strong>
-                {u.requestedPosition !== null && <> (slot {u.requestedPosition})</>}
+                <Trans
+                  i18nKey="importBottles.done.unplacedRow"
+                  values={{ row: u.sourceIndex + 1, rack: u.rackName }}
+                  components={{ 1: <strong /> }}
+                />
+                {u.requestedPosition !== null && <>{t('importBottles.done.slotSuffix', { n: u.requestedPosition })}</>}
                 : {u.reason}
               </li>
             ))}
             {importResult.unplaced.length > 50 && (
-              <li><em>…and {importResult.unplaced.length - 50} more</em></li>
+              <li><em>{t('importBottles.done.andMore', { count: importResult.unplaced.length - 50 })}</em></li>
             )}
           </ul>
           <p className="done-note">
-            These bottles were imported successfully — they just couldn't be assigned a rack slot. You can place them manually from the Cellar page.
+            {t('importBottles.done.unplacedNote')}
           </p>
         </details>
       )}
       {importResult?.errors.length > 0 && (
         <details className="done-errors-detail">
-          <summary>View errors ({importResult.errors.length})</summary>
+          <summary>{t('importBottles.done.viewErrors', { count: importResult.errors.length })}</summary>
           <ul>
             {importResult.errors.map((e, i) => (
-              <li key={i}>Row {e.index + 1}: {e.reason}</li>
+              <li key={i}>{t('importBottles.done.errorRow', { row: e.index + 1, reason: e.reason })}</li>
             ))}
           </ul>
         </details>
       )}
       <div className="done-actions">
         <Link to={`/cellars/${cellarId}`} className="btn btn-primary">
-          Go to Cellar
+          {t('importBottles.done.goToCellar')}
         </Link>
         <button
           className="btn btn-secondary"
@@ -1567,7 +1571,7 @@ function ImportBottles() {
             setFileName('');
           }}
         >
-          Import More
+          {t('importBottles.done.importMore')}
         </button>
       </div>
     </div>
@@ -1580,20 +1584,18 @@ function ImportBottles() {
       <div className="import-header">
         <Link to={`/cellars/${cellarId}`} className="back-link">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
-          Back to Cellar
+          {t('importBottles.backToCellar')}
         </Link>
-        <h1>Import Bottles</h1>
+        <h1>{t('importBottles.title')}</h1>
       </div>
 
       {contactEmail && (
         <div className="import-beta-notice">
-          This feature is in beta. If anything doesn't import the way you expect,
-          email{' '}
-          <a href={`mailto:${contactEmail}?subject=Import%20issue&body=Hi%2C%20I%20ran%20into%20an%20issue%20importing%20bottles%20into%20Cellarion.%20A%20sample%20of%20the%20file%20I%20tried%20to%20import%20is%20attached.`}>
-            {contactEmail}
-          </a>{' '}
-          and attach a small example of the file you're trying to import — we'll
-          take a look and either fix it or tell you how to get it through.
+          <Trans
+            i18nKey="importBottles.betaNotice"
+            values={{ email: contactEmail }}
+            components={{ 1: <a href={`mailto:${contactEmail}?subject=${encodeURIComponent(t('importBottles.betaEmailSubject'))}&body=${encodeURIComponent(t('importBottles.betaEmailBody'))}`}>{contactEmail}</a> }}
+          />
         </div>
       )}
 
@@ -1608,7 +1610,7 @@ function ImportBottles() {
           >
             <span className="step-number">{i + 1}</span>
             <span className="step-label">
-              {s === 'upload' ? 'Upload' : s === 'review' ? 'Review' : 'Done'}
+              {s === 'upload' ? t('importBottles.steps.upload') : s === 'review' ? t('importBottles.steps.review') : t('importBottles.steps.done')}
             </span>
           </div>
         ))}
@@ -1625,7 +1627,7 @@ function ImportBottles() {
 
       {/* Wine search modal */}
       {searchModal && (
-        <Modal title="Search Wine Library" onClose={() => setSearchModal(null)}>
+        <Modal title={t('importBottles.search.title')} onClose={() => setSearchModal(null)}>
           <div className="search-modal-content">
             <div className="search-modal-input">
               <input
@@ -1633,7 +1635,7 @@ function ImportBottles() {
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-                placeholder="Search by wine name or producer..."
+                placeholder={t('importBottles.search.placeholder')}
                 autoFocus
               />
               <button
@@ -1641,12 +1643,12 @@ function ImportBottles() {
                 onClick={handleSearch}
                 disabled={searching}
               >
-                {searching ? 'Searching...' : 'Search'}
+                {searching ? t('importBottles.search.searching') : t('importBottles.search.button')}
               </button>
             </div>
             <div className="search-modal-results">
               {searchResults.length === 0 && !searching && (
-                <p className="search-empty">Type a search query and press Enter</p>
+                <p className="search-empty">{t('importBottles.search.empty')}</p>
               )}
               {searchResults.map((wine) => (
                 <button
@@ -1669,7 +1671,7 @@ function ImportBottles() {
             </div>
             {searchResults.length > 0 && (
               <div className="search-modal-footer">
-                <p className="search-none-right">None of these look right?</p>
+                <p className="search-none-right">{t('importBottles.search.noneRight')}</p>
                 <button
                   className="btn btn-secondary btn-sm btn-request"
                   onClick={() => {
@@ -1677,7 +1679,7 @@ function ImportBottles() {
                     setSearchModal(null);
                   }}
                 >
-                  Request this wine
+                  {t('importBottles.search.requestThis')}
                 </button>
               </div>
             )}
