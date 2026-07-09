@@ -60,4 +60,32 @@ function escapeRegex(str) {
   return String(str ?? '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-module.exports = { stripHtml, isSafeUrl, escapeRegex };
+/**
+ * Sanitizes a user-supplied array of grape-name strings from a bottle import.
+ *
+ * Additive import contract (CellarTracker `item.grapes`): entries are already
+ * trimmed client-side, but re-guard server-side — drop non-strings and empties,
+ * strip HTML, cap each name at `maxLen` chars, dedupe case-insensitively and
+ * keep at most `max` entries. Non-array input yields [] so callers never throw.
+ *
+ * Returns plain strings — taxonomy resolution (synonym mapping, find-or-create)
+ * stays in services/findOrCreateWine.findOrCreateGrapes.
+ */
+function sanitizeGrapeNames(raw, { max = 5, maxLen = 100 } = {}) {
+  if (!Array.isArray(raw)) return [];
+  const out = [];
+  const seen = new Set();
+  for (const entry of raw) {
+    if (out.length >= max) break;
+    if (typeof entry !== 'string') continue;
+    const name = (stripHtml(entry) || '').trim().slice(0, maxLen);
+    if (!name) continue;
+    const key = name.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(name);
+  }
+  return out;
+}
+
+module.exports = { stripHtml, isSafeUrl, escapeRegex, sanitizeGrapeNames };

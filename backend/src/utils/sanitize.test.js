@@ -1,4 +1,41 @@
-const { stripHtml, isSafeUrl } = require('./sanitize');
+const { stripHtml, isSafeUrl, sanitizeGrapeNames } = require('./sanitize');
+
+// ─── sanitizeGrapeNames ──────────────────────────────────────────────────────
+
+describe('sanitizeGrapeNames', () => {
+  test('non-array input yields [] (never throws)', () => {
+    expect(sanitizeGrapeNames(undefined)).toEqual([]);
+    expect(sanitizeGrapeNames(null)).toEqual([]);
+    expect(sanitizeGrapeNames('Syrah')).toEqual([]);
+    expect(sanitizeGrapeNames({ length: 1e12 })).toEqual([]);
+  });
+
+  test('trims entries and drops empties and non-strings', () => {
+    expect(sanitizeGrapeNames(['  Syrah  ', '', '   ', 42, null, 'Grenache']))
+      .toEqual(['Syrah', 'Grenache']);
+  });
+
+  test('strips HTML from grape names', () => {
+    expect(sanitizeGrapeNames(['<b>Syrah</b>', '<script>x</script>Merlot']))
+      .toEqual(['Syrah', 'xMerlot']);
+  });
+
+  test('caps at 5 grapes by default', () => {
+    const many = ['A', 'B', 'C', 'D', 'E', 'F', 'G'];
+    expect(sanitizeGrapeNames(many)).toEqual(['A', 'B', 'C', 'D', 'E']);
+  });
+
+  test('caps each name at 100 chars', () => {
+    const long = 'x'.repeat(250);
+    const [out] = sanitizeGrapeNames([long]);
+    expect(out).toHaveLength(100);
+  });
+
+  test('dedupes case-insensitively, keeps first casing', () => {
+    expect(sanitizeGrapeNames(['Syrah', 'syrah', 'SYRAH', 'Merlot']))
+      .toEqual(['Syrah', 'Merlot']);
+  });
+});
 
 // ─── stripHtml ───────────────────────────────────────────────────────────────
 
