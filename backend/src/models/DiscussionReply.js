@@ -23,9 +23,14 @@ const discussionReplySchema = new mongoose.Schema({
     // hard ceiling.
     maxlength: [4000, 'Reply too long']
   },
-  // Snapshot of the quoted reply — stored inline so it survives edits/deletes
+  // Snapshot of the quoted reply — stored inline so it survives edits/deletes.
+  // authorId mirrors the quoted reply's author at creation time so GDPR
+  // erasure can anonymise the denormalised authorName snapshot when the quoted
+  // user deletes their account (see userDataRegistry.js). Legacy quotes
+  // (created before authorId existed) are resolved via replyId at purge time.
   quote: {
     replyId: { type: mongoose.Schema.Types.ObjectId, ref: 'DiscussionReply', default: null },
+    authorId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
     authorName: { type: String, default: null },
     body: { type: String, default: null }
   },

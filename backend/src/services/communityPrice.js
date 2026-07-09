@@ -4,6 +4,7 @@
  * currency, without ever converting across currencies.
  */
 const CommunityWinePrice = require('../models/CommunityWinePrice');
+const { FIRM_MIN_OWNERS } = require('../utils/communityPricing');
 
 function normCurrency(c) {
   return String(c || 'USD').toUpperCase();
@@ -20,9 +21,15 @@ function vintageDesc(a, b) {
  */
 async function getReleaseCurve(wineId, currency) {
   if (!wineId) return [];
+  // k-anonymity floor (security audit L-18): a vintage backed by fewer than
+  // FIRM_MIN_OWNERS (3) distinct owners would publish what is essentially one
+  // or two identifiable users' exact purchase price on a public, unauthenticated
+  // endpoint. The aggregation job no longer stores such rows, but this read-side
+  // filter also suppresses low-sample rows persisted before the change.
   const docs = await CommunityWinePrice.find({
     wineDefinition: wineId,
     currency: normCurrency(currency),
+    sampleSize: { $gte: FIRM_MIN_OWNERS },
   })
     .select('vintage medianPrice sampleSize confidence p25 p75 currency -_id')
     .lean();

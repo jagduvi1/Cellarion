@@ -12,8 +12,10 @@
  *    price-stable across vintages, so a single fat-fingered vintage stands out
  *    against its neighbours and is flagged `suspect` (and not published).
  *  - Confidence tier: >= FIRM_MIN_OWNERS distinct owners → 'firm' (median + IQR
- *    trim); 1–2 owners → 'indicative'. This is a trust label, not a privacy
- *    gate — both are shown to users.
+ *    trim); 1–2 owners → 'indicative'. The curve builder stays pure and emits
+ *    both, but FIRM_MIN_OWNERS doubles as the k-anonymity floor (security
+ *    audit L-18): the job and the read layer suppress sub-floor vintages, so
+ *    'indicative' rows are never published.
  */
 
 // >= this many distinct owners promotes a vintage from 'indicative' to 'firm'.

@@ -34,8 +34,24 @@ function logAudit(req, action, resource = {}, detail = {}) {
     userAgent: req?.headers?.['user-agent']
   };
 
-  // Structured stdout log — visible in docker logs
-  logger.info(entry, action);
+  // Structured stdout log — visible in docker logs. REDACTED (L-16): the
+  // container/log-aggregation stream is an independent copy of the audit trail
+  // with no TTL and no erasure path, so it must never carry identifiers. Only
+  // actor userId + role, the action, and the resource type/ids are emitted
+  // (pino stamps the timestamp). actor.ipAddress, the userAgent, and every
+  // detail field (username/email/sharedWith/invitedEmail, …) stay ONLY in the
+  // MongoDB copy below, which is TTL'd and scrubbed on account erasure. The
+  // redacted object is built by explicit field pick — not by deleting keys —
+  // so no nested detail field can leak through a missed path.
+  logger.info({
+    actor: { userId: entry.actor.userId, role: entry.actor.role },
+    action,
+    resource: {
+      type: resource.type ?? null,
+      id: resource.id ?? null,
+      cellarId: resource.cellarId ?? null,
+    },
+  }, action);
 
   // Persist to MongoDB asynchronously — never blocks the response
   AuditLog.create(entry).catch(err =>

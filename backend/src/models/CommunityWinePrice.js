@@ -15,10 +15,13 @@ const mongoose = require('mongoose');
  * within one currency every value is same-currency / same-tax and therefore
  * comparable. See docs/wine-valuation-spec.md.
  *
- * `confidence` is a TRUST label, not a privacy gate. Community prices are
- * published unattributed (like a shared image), so even an `indicative`
- * (1–2 owner) value is shown — just flagged as low-confidence. Data quality is
- * protected by the cross-vintage cleaner in the job, not by withholding values.
+ * Privacy (security audit L-18): a k-anonymity floor of FIRM_MIN_OWNERS (3)
+ * distinct owners is enforced both by the aggregation job (sub-floor vintages
+ * are never stored, and previously stored ones are cleaned up) and by the
+ * read layer (services/communityPrice.js) — a 1–2 owner aggregate would
+ * effectively publish an individual user's exact purchase price on a public
+ * endpoint. `indicative` therefore no longer reaches clients; the enum is kept
+ * for legacy documents until the next job run sweeps them.
  */
 const communityWinePriceSchema = new mongoose.Schema({
   wineDefinition: {
@@ -54,7 +57,8 @@ const communityWinePriceSchema = new mongoose.Schema({
     min: 1
   },
   // 'firm'  → sampleSize >= FIRM_MIN_OWNERS (anonymised, high trust)
-  // 'indicative' → 1–2 owners, curve-validated (shown with a low-confidence label)
+  // 'indicative' → 1–2 owners; NO LONGER stored or served (k-anonymity floor,
+  // L-18) — value kept in the enum only for legacy documents pending cleanup.
   confidence: {
     type: String,
     enum: ['indicative', 'firm'],

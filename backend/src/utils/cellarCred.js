@@ -86,22 +86,37 @@ function getSpecialty(categories) {
 }
 
 /**
- * Atomically increment a user's contribution score and recompute the
- * tier/specialty badge. Does not touch the subscription plan. Fire-and-forget safe.
+ * Atomically adjust a user's contribution score by a signed multiple of an
+ * event's point value, clamped at 0, and recompute the tier/specialty badge.
+ * Does not touch the subscription plan. Fire-and-forget safe.
+ *
+ * Cred accounting is SYMMETRIC (security audit L-19): every award has a
+ * matching reversal (unlike/un-react toggles, content deletion, visibility
+ * flips), so toggle loops and create/delete cycles net to zero instead of
+ * inflating the publicly-displayed badge. The aggregation-pipeline update
+ * clamps both counters at 0 atomically, so reversing an award that predates
+ * this accounting (or a double reversal race) can never drive a score negative.
  */
-async function incrementCred(userId, eventType) {
+async function adjustCred(userId, eventType, count) {
   const points = POINT_VALUES[eventType];
   const category = CATEGORY_MAP[eventType];
-  if (!points || !category) return;
+  if (!points || !category || !count) return;
 
-  const inc = {
-    'contribution.totalScore': points,
-    [`contribution.categories.${category}`]: points,
-  };
+  const delta = points * count;
+  const catPath = `contribution.categories.${category}`;
 
   const user = await User.findByIdAndUpdate(
     userId,
-    { $inc: inc },
+    [{
+      $set: {
+        'contribution.totalScore': {
+          $max: [0, { $add: [{ $ifNull: ['$contribution.totalScore', 0] }, delta] }],
+        },
+        [catPath]: {
+          $max: [0, { $add: [{ $ifNull: [`$${catPath}`, 0] }, delta] }],
+        },
+      },
+    }],
     { new: true, select: 'contribution' }
   );
   if (!user) return;
@@ -120,4 +135,18 @@ async function incrementCred(userId, eventType) {
   }
 }
 
-module.exports = { POINT_VALUES, CATEGORY_MAP, TIERS, PLAN_RANK, getTier, getSpecialty, incrementCred };
+/** Award one event's points (tier/specialty recomputed, plan untouched). */
+function incrementCred(userId, eventType) {
+  return adjustCred(userId, eventType, 1);
+}
+
+/**
+ * Reverse `count` prior awards of an event (default 1). Used when the action
+ * that earned the points is undone: unlike/un-react, content deletion, or a
+ * public review going private. Clamped at 0 — never goes negative.
+ */
+function decrementCred(userId, eventType, count = 1) {
+  return adjustCred(userId, eventType, -Math.abs(count));
+}
+
+module.exports = { POINT_VALUES, CATEGORY_MAP, TIERS, PLAN_RANK, getTier, getSpecialty, incrementCred, decrementCred };

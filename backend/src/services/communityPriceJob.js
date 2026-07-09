@@ -14,7 +14,7 @@ const Bottle = require('../models/Bottle');
 const CommunityWinePrice = require('../models/CommunityWinePrice');
 const { CONSUMED_STATUSES } = require('../config/constants');
 const { ABSOLUTE_CAP } = require('../utils/priceValidation');
-const { buildReleaseCurve, median } = require('../utils/communityPricing');
+const { buildReleaseCurve, median, FIRM_MIN_OWNERS } = require('../utils/communityPricing');
 
 /** Per-currency typical-maximum cap, falling back to USD. */
 function capFor(currency) {
@@ -102,7 +102,13 @@ async function runCommunityPriceAggregation() {
     }
 
     const curve = buildReleaseCurve(vintages);
-    const valid = curve.filter((c) => !c.suspect);
+    // Publish only non-suspect vintages with a k-anonymity floor of
+    // FIRM_MIN_OWNERS distinct owners (security audit L-18): a 1–2 owner
+    // "indicative" aggregate is effectively an individual user's exact
+    // purchase price, and CommunityWinePrice feeds a public endpoint.
+    // Sub-floor vintages drop out of validVintages, so the stale-cleanup
+    // below also deletes previously-stored low-sample rows.
+    const valid = curve.filter((c) => !c.suspect && c.sampleSize >= FIRM_MIN_OWNERS);
     const validVintages = valid.map((c) => c.vintage);
 
     if (valid.length > 0) {
