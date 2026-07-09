@@ -5,10 +5,32 @@
 const WineVintageProfile = require('../models/WineVintageProfile');
 
 /**
+ * Classify a bottle against its OWN drinkFrom/drinkTo window (optional integer
+ * years the user set on the bottle). Returns 'not-ready' | 'peak' | 'declining'
+ * or null when the bottle has no personal window. A single-bound window is
+ * open-ended on the missing side.
+ */
+function classifyPersonalWindow(bottle, currentYear = new Date().getFullYear()) {
+  const from = Number.isFinite(bottle?.drinkFrom) ? bottle.drinkFrom : null;
+  const to   = Number.isFinite(bottle?.drinkTo)   ? bottle.drinkTo   : null;
+  if (from === null && to === null) return null;
+  if (from !== null && currentYear < from) return 'not-ready';
+  if (to   !== null && currentYear > to)   return 'declining';
+  return 'peak';
+}
+
+/**
  * Classify a bottle's maturity status using the sommelier WineVintageProfile.
+ * A personal per-bottle window (bottle.drinkFrom/drinkTo) takes precedence
+ * over the vintage-profile window when set.
  * Returns one of: 'declining', 'late', 'peak', 'early', 'not-ready', or null.
  */
 function classifyMaturity(bottle, profileMap) {
+  // The user's own drink window always wins over the shared profile — and
+  // applies even to NV bottles or bottles without a wine definition.
+  const personal = classifyPersonalWindow(bottle);
+  if (personal) return personal;
+
   const wdId    = bottle.wineDefinition?._id?.toString() || bottle.wineDefinition?.toString();
   const vintage = bottle.vintage;
   if (!wdId || !vintage || vintage === 'NV') return null;
@@ -95,4 +117,4 @@ function maturityLabel(status, profile) {
   }
 }
 
-module.exports = { classifyMaturity, buildProfileMap, maturityLabel };
+module.exports = { classifyMaturity, classifyPersonalWindow, buildProfileMap, maturityLabel };

@@ -1,4 +1,4 @@
-import { toInputDate, getMaturityStatus } from './drinkStatus';
+import { toInputDate, getMaturityStatus, getPersonalWindowStatus, getBottleDrinkStatus } from './drinkStatus';
 
 // ─── toInputDate ─────────────────────────────────────────────────────────────
 
@@ -136,5 +136,101 @@ describe('getMaturityStatus — relative (NV) profiles', () => {
     expect(getMaturityStatus(nvProfile, CURRENT_YEAR).status).toBe('early');
     expect(getMaturityStatus(nvProfile, CURRENT_YEAR - 3).status).toBe('peak');
     expect(getMaturityStatus(nvProfile, CURRENT_YEAR - 7).status).toBe('declining');
+  });
+});
+
+// ─── getPersonalWindowStatus — the bottle's OWN drinkFrom/drinkTo window ─────
+
+describe('getPersonalWindowStatus', () => {
+  const CURRENT_YEAR = new Date().getFullYear();
+
+  test('returns null when neither drinkFrom nor drinkTo is set', () => {
+    expect(getPersonalWindowStatus({})).toBeNull();
+    expect(getPersonalWindowStatus({ drinkFrom: null, drinkTo: null })).toBeNull();
+    expect(getPersonalWindowStatus(null)).toBeNull();
+  });
+
+  test('full window: not-ready / peak / declining', () => {
+    expect(getPersonalWindowStatus({ drinkFrom: CURRENT_YEAR + 2, drinkTo: CURRENT_YEAR + 6 }).status).toBe('not-ready');
+    expect(getPersonalWindowStatus({ drinkFrom: CURRENT_YEAR - 1, drinkTo: CURRENT_YEAR + 3 }).status).toBe('peak');
+    expect(getPersonalWindowStatus({ drinkFrom: CURRENT_YEAR - 6, drinkTo: CURRENT_YEAR - 2 }).status).toBe('declining');
+  });
+
+  test('boundary years are inclusive', () => {
+    expect(getPersonalWindowStatus({ drinkFrom: CURRENT_YEAR, drinkTo: CURRENT_YEAR }).status).toBe('peak');
+  });
+
+  test('only drinkFrom set: open-ended after the from year', () => {
+    expect(getPersonalWindowStatus({ drinkFrom: CURRENT_YEAR + 3 }).status).toBe('not-ready');
+    expect(getPersonalWindowStatus({ drinkFrom: CURRENT_YEAR - 3 }).status).toBe('peak');
+  });
+
+  test('only drinkTo set: drinkable now until the to year', () => {
+    expect(getPersonalWindowStatus({ drinkTo: CURRENT_YEAR + 4 }).status).toBe('peak');
+    expect(getPersonalWindowStatus({ drinkTo: CURRENT_YEAR - 1 }).status).toBe('declining');
+  });
+
+  test('tags the result as personal and echoes the window bounds', () => {
+    const r = getPersonalWindowStatus({ drinkFrom: CURRENT_YEAR - 1, drinkTo: CURRENT_YEAR + 1 });
+    expect(r.source).toBe('personal');
+    expect(r.from).toBe(CURRENT_YEAR - 1);
+    expect(r.to).toBe(CURRENT_YEAR + 1);
+  });
+});
+
+// ─── getBottleDrinkStatus — personal window takes precedence over profile ────
+
+describe('getBottleDrinkStatus', () => {
+  const CURRENT_YEAR = new Date().getFullYear();
+
+  // Profile that classifies as peak right now
+  const peakProfile = {
+    status: 'reviewed',
+    peakFrom: CURRENT_YEAR - 2,
+    peakUntil: CURRENT_YEAR + 3,
+  };
+
+  test('personal window overrides the profile window', () => {
+    const bottle = { drinkFrom: CURRENT_YEAR + 2, drinkTo: CURRENT_YEAR + 6 };
+    const r = getBottleDrinkStatus(bottle, peakProfile);
+    expect(r.status).toBe('not-ready'); // profile alone would say peak
+    expect(r.source).toBe('personal');
+  });
+
+  test('only-from personal window still overrides', () => {
+    const bottle = { drinkFrom: CURRENT_YEAR + 1 };
+    const r = getBottleDrinkStatus(bottle, peakProfile);
+    expect(r.status).toBe('not-ready');
+    expect(r.source).toBe('personal');
+  });
+
+  test('only-to personal window still overrides', () => {
+    const bottle = { drinkTo: CURRENT_YEAR - 1 };
+    const r = getBottleDrinkStatus(bottle, peakProfile);
+    expect(r.status).toBe('declining'); // profile alone would say peak
+    expect(r.source).toBe('personal');
+  });
+
+  test('no personal window → profile-based status, unchanged', () => {
+    const r = getBottleDrinkStatus({}, peakProfile);
+    expect(r.status).toBe('peak');
+    expect(r.source).toBe('profile');
+    expect(r.label).toBe(getMaturityStatus(peakProfile).label);
+  });
+
+  test('no personal window and no usable profile → null (unchanged behavior)', () => {
+    expect(getBottleDrinkStatus({}, null)).toBeNull();
+    expect(getBottleDrinkStatus({}, { status: 'pending', earlyFrom: 2020 })).toBeNull();
+  });
+
+  test('personal window works without any profile at all', () => {
+    const r = getBottleDrinkStatus({ drinkFrom: CURRENT_YEAR - 1, drinkTo: CURRENT_YEAR + 1 }, null);
+    expect(r.status).toBe('peak');
+    expect(r.source).toBe('personal');
+  });
+
+  test('relative (NV) profile still resolved via anchor year when no personal window', () => {
+    const nvProfile = { status: 'reviewed', relative: true, peakFrom: 2, peakUntil: 4 };
+    expect(getBottleDrinkStatus({}, nvProfile, CURRENT_YEAR - 3).status).toBe('peak');
   });
 });

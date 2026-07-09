@@ -7,6 +7,7 @@ import useLabelScanner from '../hooks/useLabelScanner';
 import { CURRENCIES } from '../config/currencies';
 import { BOTTLE_SIZES, bottleSizeLabel } from '../config/bottleSizes';
 import { validatePriceSanity } from '../utils/priceValidation';
+import { validateDrinkWindowFields, DRINK_YEAR_MIN, DRINK_YEAR_MAX } from '../utils/drinkStatus';
 import ImageUpload from '../components/ImageUpload';
 import RatingInput from '../components/RatingInput';
 import WineImage from '../components/WineImage';
@@ -39,6 +40,9 @@ function AddBottle() {
     purchaseLocation: '',
     purchaseUrl: '',
     notes: '',
+    occasion: '',
+    drinkFrom: '',
+    drinkTo: '',
     rating: '',
     ratingScale: user?.preferences?.ratingScale || '5',
     dateAdded: ''
@@ -292,6 +296,12 @@ function AddBottle() {
     // where a second submit (double-click, Enter+click) would duplicate
     // every bottle.
     if (saving) return;
+
+    // Client-side validation for the personal drink window + occasion —
+    // mirrors the backend rules (integer years 1900–2200, from ≤ to, ≤500 chars).
+    const windowError = validateDrinkWindowFields(bottleData, t);
+    if (windowError) { setError(windowError); return; }
+
     setSaving(true);
     setError(null);
 
@@ -307,6 +317,9 @@ function AddBottle() {
         wineDefinition: selectedWine._id,
         ...bottleData,
         price: bottleData.price ? parseFloat(bottleData.price) : undefined,
+        occasion: bottleData.occasion || undefined,
+        drinkFrom: bottleData.drinkFrom ? parseInt(bottleData.drinkFrom, 10) : undefined,
+        drinkTo: bottleData.drinkTo ? parseInt(bottleData.drinkTo, 10) : undefined,
         rating: bottleData.rating ? parseFloat(bottleData.rating) : undefined,
         ratingScale: bottleData.ratingScale || '5',
         dateAdded: bottleData.dateAdded || undefined,
@@ -874,6 +887,50 @@ function AddBottle() {
                     placeholder={t('addBottle.notesPlaceholder')}
                     rows="3"
                   />
+                </div>
+
+                <div className="form-group">
+                  <label>{t('addBottle.occasion')}</label>
+                  <input
+                    type="text"
+                    value={bottleData.occasion}
+                    onChange={(e) => setBottleData({ ...bottleData, occasion: e.target.value })}
+                    placeholder={t('addBottle.occasionPlaceholder')}
+                    maxLength={500}
+                  />
+                  <p className="help-text">{t('addBottle.occasionHint')}</p>
+                </div>
+
+                {/* ── Personal drink window ── */}
+                <div className="form-group">
+                  <label>{t('addBottle.drinkWindow')}</label>
+                  <div className="grid-2">
+                    <div className="form-group">
+                      <label>{t('addBottle.drinkFrom')}</label>
+                      <input
+                        type="number"
+                        value={bottleData.drinkFrom}
+                        onChange={(e) => setBottleData({ ...bottleData, drinkFrom: e.target.value })}
+                        placeholder={t('addBottle.drinkFromPlaceholder')}
+                        min={DRINK_YEAR_MIN}
+                        max={DRINK_YEAR_MAX}
+                        step="1"
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label>{t('addBottle.drinkTo')}</label>
+                      <input
+                        type="number"
+                        value={bottleData.drinkTo}
+                        onChange={(e) => setBottleData({ ...bottleData, drinkTo: e.target.value })}
+                        placeholder={t('addBottle.drinkToPlaceholder')}
+                        min={DRINK_YEAR_MIN}
+                        max={DRINK_YEAR_MAX}
+                        step="1"
+                      />
+                    </div>
+                  </div>
+                  <p className="help-text">{t('addBottle.drinkWindowHint')}</p>
                 </div>
 
                 {/* ── Add to History ── */}

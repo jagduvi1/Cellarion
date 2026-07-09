@@ -216,6 +216,14 @@
   border: 1px solid var(--color-border);
 }
 
+/* "your window" source chip — the status next to it came from the bottle's
+   own drinkFrom/drinkTo, not the sommelier profile */
+.maturity-badge--personal {
+  background: var(--color-surface-raised);
+  color: var(--color-text-muted);
+  border: 1px dashed var(--color-border);
+}
+
 .bottle-chevron {
   font-size: 1.4rem;
   color: var(--color-text-muted);

@@ -93,6 +93,13 @@ const bottleSchema = new mongoose.Schema({
     trim: true,
     maxlength: [5000, 'Notes too long (max 5000 characters)']
   },
+  // Personal purpose note ("Saving for my 50th birthday", "Gift from Anna") —
+  // distinct from tasting `notes`.
+  occasion: {
+    type: String,
+    trim: true,
+    maxlength: [500, 'Occasion too long (max 500 characters)']
+  },
   rating: {
     type: Number
   },

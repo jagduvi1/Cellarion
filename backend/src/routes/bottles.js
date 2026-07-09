@@ -359,6 +359,7 @@ router.post('/', async (req, res) => {
       purchaseUrl,
       location,
       notes,
+      occasion,
       rating,
       ratingScale,
       drinkFrom,
@@ -386,6 +387,7 @@ router.post('/', async (req, res) => {
       if (!isSafeUrl(purchaseUrl)) return res.status(400).json({ error: 'purchaseUrl must be a valid http or https URL' });
     }
     if (notes && notes.length > 5000) return res.status(400).json({ error: 'Notes are too long (max 5000 characters)' });
+    if (occasion && occasion.length > 500) return res.status(400).json({ error: 'Occasion is too long (max 500 characters)' });
     if (location && location.length > 500) return res.status(400).json({ error: 'Location is too long (max 500 characters)' });
     if (purchaseLocation && purchaseLocation.length > 500) return res.status(400).json({ error: 'Purchase location is too long (max 500 characters)' });
 
@@ -458,6 +460,7 @@ router.post('/', async (req, res) => {
       purchaseUrl,
       location: stripHtml(location),
       notes: stripHtml(notes),
+      occasion: stripHtml(occasion),
       rating: resolvedRating,
       ratingScale: resolvedRatingScale,
       drinkFrom: drinkFromCheck.value,
@@ -609,6 +612,7 @@ router.put('/:id', requireBottleAccess('editor'), async (req, res) => {
       if (!isSafeUrl(req.body.purchaseUrl)) return res.status(400).json({ error: 'purchaseUrl must be a valid http or https URL' });
     }
     if (req.body.notes && req.body.notes.length > 5000) return res.status(400).json({ error: 'Notes are too long (max 5000 characters)' });
+    if (req.body.occasion && req.body.occasion.length > 500) return res.status(400).json({ error: 'Occasion is too long (max 500 characters)' });
     if (req.body.location && req.body.location.length > 500) return res.status(400).json({ error: 'Location is too long (max 500 characters)' });
     if (req.body.purchaseLocation && req.body.purchaseLocation.length > 500) return res.status(400).json({ error: 'Purchase location is too long (max 500 characters)' });
 
@@ -646,7 +650,7 @@ router.put('/:id', requireBottleAccess('editor'), async (req, res) => {
     const updateFields = [
       'vintage', 'price', 'currency', 'bottleSize',
       'purchaseDate', 'purchaseLocation', 'purchaseUrl',
-      'location', 'notes', 'rating', 'ratingScale',
+      'location', 'notes', 'occasion', 'rating', 'ratingScale',
       'drinkFrom', 'drinkTo'
     ];
 
@@ -667,7 +671,7 @@ router.put('/:id', requireBottleAccess('editor'), async (req, res) => {
       return res.status(400).json({ error: 'Send rating together with ratingScale when changing the rating scale' });
     }
 
-    const htmlFields = new Set(['purchaseLocation', 'location', 'notes']);
+    const htmlFields = new Set(['purchaseLocation', 'location', 'notes', 'occasion']);
     const changes = {};
     updateFields.forEach(field => {
       if (req.body[field] !== undefined) {

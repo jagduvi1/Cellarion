@@ -1,11 +1,13 @@
 /**
- * Bottle schema — personal drink-window fields (drinkFrom/drinkTo).
+ * Bottle schema — occasion note + personal drink-window fields.
  *
- * These are the user's OWN per-bottle drink window (hand-set or imported from
- * CellarTracker BeginConsume/EndConsume) — deliberately bottle-level, so the
- * shared registry's WineVintageProfile stays sommelier-curated. The schema is
- * the last line of defence behind the route/import validation: integer years
- * 1900–2200, and drinkTo may not precede drinkFrom.
+ * drinkFrom/drinkTo are the user's OWN per-bottle drink window (hand-set or
+ * imported from CellarTracker BeginConsume/EndConsume) — deliberately
+ * bottle-level, so the shared registry's WineVintageProfile stays
+ * sommelier-curated. The schema is the last line of defence behind the
+ * route/import validation: integer years 1900–2200, and drinkTo may not
+ * precede drinkFrom. occasion is a personal purpose note distinct from
+ * tasting notes.
  *
  * validateSync() only — no MongoDB needed.
  */
@@ -17,9 +19,37 @@ function makeBottle(fields = {}) {
   return new Bottle({
     cellar: new mongoose.Types.ObjectId(),
     user: new mongoose.Types.ObjectId(),
+    wineDefinition: new mongoose.Types.ObjectId(),
+    vintage: '2020',
     ...fields,
   });
 }
+
+describe('Bottle.occasion', () => {
+  test('accepts an occasion note and trims surrounding whitespace', () => {
+    const bottle = makeBottle({ occasion: '  Saving for my 50th birthday  ' });
+    expect(bottle.validateSync()).toBeUndefined();
+    expect(bottle.occasion).toBe('Saving for my 50th birthday');
+  });
+
+  test('is optional — bottles without occasion stay valid', () => {
+    const bottle = makeBottle();
+    expect(bottle.validateSync()).toBeUndefined();
+    expect(bottle.occasion).toBeUndefined();
+  });
+
+  test('accepts exactly 500 characters', () => {
+    const bottle = makeBottle({ occasion: 'a'.repeat(500) });
+    expect(bottle.validateSync()).toBeUndefined();
+  });
+
+  test('rejects more than 500 characters', () => {
+    const bottle = makeBottle({ occasion: 'a'.repeat(501) });
+    const err = bottle.validateSync();
+    expect(err).toBeDefined();
+    expect(err.errors.occasion.message).toMatch(/Occasion too long/);
+  });
+});
 
 describe('Bottle.drinkFrom / drinkTo schema validation', () => {
   test('bottle without a drink window validates (additive regression)', () => {
