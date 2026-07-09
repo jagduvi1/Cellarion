@@ -13,9 +13,13 @@ services:
     cap_drop:
       - ALL
     # Entrypoint starts as root, chowns /data/db, then gosu's down to the
-    # mongodb user — the minimal caps that dance needs.
+    # mongodb user — the minimal caps that dance needs. DAC_OVERRIDE is
+    # required for EXISTING volumes: the root entrypoint must traverse data
+    # files already owned by the mongodb user (0700 dirs), which a capless
+    # root cannot (a fresh volume boots without it; a restart with data fails).
     cap_add:
       - CHOWN
+      - DAC_OVERRIDE
       - SETGID
       - SETUID
     # WiredTiger cache must stay well under the container limit (512M below) —
@@ -45,6 +49,13 @@ services:
     environment:
       - MEILI_MASTER_KEY=${MEILI_MASTER_KEY}
       - MEILI_ENV=production
+      # Meilisearch budgets indexing memory as 2/3 of the HOST's RAM (it cannot
+      # see the cgroup limit) and spawns one indexing thread per host core — on
+      # any machine with real RAM that blows straight through the 256M container
+      # limit and OOM-crash-loops the first full reindex (restore drills, wiped
+      # volume, MEILI_FORCE_REINDEX). Budget must stay well under the limit.
+      - MEILI_MAX_INDEXING_MEMORY=128Mb
+      - MEILI_MAX_INDEXING_THREADS=2
     volumes:
       - meili-data:/meili_data
     deploy:
