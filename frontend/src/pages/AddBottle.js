@@ -245,11 +245,11 @@ function AddBottle() {
     try {
       const res = await identifyWineByText(apiFetch, search.trim());
       const data = await res.json();
-      if (!res.ok) { setAiSearchError(data.error || 'Identification failed'); return; }
+      if (!res.ok) { setAiSearchError(data.error || t('addBottle.identifyFailed')); return; }
       if (!data.wine) { setAiSearchError(t('addBottle.aiCouldNotIdentify')); return; }
       setAiResult(data.wine);
     } catch {
-      setAiSearchError('Network error during identification.');
+      setAiSearchError(t('addBottle.identifyNetworkError'));
     } finally {
       setAiSearching(false);
     }
@@ -298,7 +298,7 @@ function AddBottle() {
     // A partial failure leaves invisible bottles behind — tell the user
     // exactly what happened and what a retry will do.
     const partialError = (msg, done) => done > 0
-      ? `${msg} — ${done} of ${numBottles} bottle${numBottles === 1 ? '' : 's'} ${done === 1 ? 'was' : 'were'} added. Retrying will add only the remaining ${numBottles - done}.`
+      ? t('addBottle.partialAdded', { msg, count: done, total: numBottles, remaining: numBottles - done })
       : msg;
 
     try {
@@ -333,7 +333,7 @@ function AddBottle() {
 
         const data = await res.json();
         if (!res.ok) {
-          setError(partialError(data.error || 'Failed to add bottle', createdBottles.length));
+          setError(partialError(data.error || t('addBottle.addFailed'), createdBottles.length));
           linkUploadedImages();
           return;
         }
@@ -344,7 +344,7 @@ function AddBottle() {
       linkUploadedImages();
       navigate(`/cellars/${cellarId}`);
     } catch (err) {
-      setError(partialError('Network error', createdBottlesRef.current.length));
+      setError(partialError(t('common.networkError'), createdBottlesRef.current.length));
       linkUploadedImages();
     } finally {
       setSaving(false);
