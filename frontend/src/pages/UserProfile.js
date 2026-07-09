@@ -177,7 +177,15 @@ function UserProfile() {
           <p className="user-profile__no-reviews">{t('userProfile.noReviews')}</p>
         ) : (
           reviews.map(review => (
-            <ReviewCard key={review._id} review={review} showWine />
+            <ReviewCard
+              key={review._id}
+              review={review}
+              showWine
+              onDelete={id => {
+                setReviews(prev => prev.filter(r => r._id !== id));
+                setProfile(prev => prev ? { ...prev, reviewCount: Math.max(0, (prev.reviewCount || 0) - 1) } : prev);
+              }}
+            />
           ))
         )}
 

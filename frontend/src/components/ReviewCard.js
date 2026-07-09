@@ -1,17 +1,23 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import RatingDisplay from './RatingDisplay';
-import { toggleLike } from '../api/reviews';
+import { toggleLike, deleteReview } from '../api/reviews';
 import CellarCredBadge from './CellarCredBadge';
+import Modal from './Modal';
 import timeAgo from '../utils/timeAgo';
 import './ReviewCard.css';
 
-export default function ReviewCard({ review, showWine = true, onUpdate }) {
+export default function ReviewCard({ review, showWine = true, onUpdate, onDelete }) {
+  const { t } = useTranslation();
   const { apiFetch, user } = useAuth();
   const [liked, setLiked] = useState(review.liked || false);
   const [likesCount, setLikesCount] = useState(review.likesCount || 0);
   const [expanded, setExpanded] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState(false);
 
   const author = review.author || {};
   const wine = review.wineDefinition || {};
@@ -40,6 +46,24 @@ export default function ReviewCard({ review, showWine = true, onUpdate }) {
     } catch {
       setLiked(prevLiked);
       setLikesCount(prevCount);
+    }
+  };
+
+  const handleDelete = async () => {
+    setDeleting(true);
+    setDeleteError(false);
+    try {
+      const res = await deleteReview(apiFetch, review._id);
+      if (res.ok) {
+        setConfirmDelete(false);
+        if (onDelete) onDelete(review._id);
+      } else {
+        setDeleteError(true);
+      }
+    } catch {
+      setDeleteError(true);
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -114,7 +138,52 @@ export default function ReviewCard({ review, showWine = true, onUpdate }) {
           </svg>
           <span>{likesCount}</span>
         </button>
+        {isOwnReview && onDelete && (
+          <button
+            className="review-card__delete-btn"
+            onClick={() => { setDeleteError(false); setConfirmDelete(true); }}
+            title={t('reviews.deleteReview', 'Delete review')}
+            aria-label={t('reviews.deleteReview', 'Delete review')}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <polyline points="3 6 5 6 21 6" />
+              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+              <line x1="10" y1="11" x2="10" y2="17" />
+              <line x1="14" y1="11" x2="14" y2="17" />
+            </svg>
+          </button>
+        )}
       </div>
+
+      {confirmDelete && (
+        <Modal
+          title={t('reviews.deleteTitle', 'Delete review?')}
+          onClose={() => !deleting && setConfirmDelete(false)}
+        >
+          <p>{t('reviews.deleteBody', 'This will permanently delete your review. This cannot be undone.')}</p>
+          {deleteError && (
+            <p className="alert alert-error">{t('reviews.deleteError', 'Failed to delete the review — please try again.')}</p>
+          )}
+          <div className="modal-actions">
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={() => setConfirmDelete(false)}
+              disabled={deleting}
+            >
+              {t('common.cancel', 'Cancel')}
+            </button>
+            <button
+              type="button"
+              className="btn btn-danger"
+              onClick={handleDelete}
+              disabled={deleting}
+            >
+              {deleting ? t('reviews.deleting', 'Deleting…') : t('common.delete', 'Delete')}
+            </button>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }
