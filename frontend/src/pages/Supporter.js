@@ -60,7 +60,9 @@ function Supporter() {
   const [actionError, setActionError] = useState(null);
   const [checkoutLoading, setCheckoutLoading] = useState(null);
 
-  const hasStripeSubscription = !!user?.stripeSubscriptionId;
+  // Derived boolean from User.toJSON — the raw stripeSubscriptionId is no
+  // longer serialised to the client (data minimisation).
+  const hasStripeSubscription = !!user?.hasStripeSubscription;
 
   async function handleCheckout(plan) {
     setCheckoutLoading(plan);

@@ -41,6 +41,7 @@ const WineVintageProfile = require('../models/WineVintageProfile');
 const searchService = require('./search');
 const { findOrCreateWine } = require('./findOrCreateWine');
 const { unlinkImageFiles, safeUploadPath } = require('./imageProcessor');
+const { sanitizeImageBuffer, detectImageFormat } = require('./imageSanitizer');
 const { ORIGINALS_DIR, PROCESSED_DIR } = require('../config/upload');
 const { planRackCreations, placeBottlesInRack, DEFAULT_ANCHOR } = require('../utils/rackImport');
 const { getMaxPosition } = require('../utils/rackGeometry');
@@ -408,7 +409,7 @@ function buildBottle({ cellarId, ownerId, item, canonicalVintage, wineDefinition
  *  the processed file when it exists and keep an original ONLY when there is no
  *  processed version — we never re-introduce a pre-crop original alongside a
  *  cropped one. Older exports that still carry both are normalised the same way. */
-async function attachImages(bottle, images, userId, getFileBuffer, result, dedupCache) {
+async function attachImages(bottle, images, userId, getFileBuffer, result, dedupCache, sourceIndex) {
   if (!Array.isArray(images) || images.length === 0) return;
   let firstImageId = null;
   let count = 0;
@@ -425,6 +426,9 @@ async function attachImages(bottle, images, userId, getFileBuffer, result, dedup
     const primaryBuf = procBuf || origBuf;
     if (!primaryBuf) continue;
 
+    // Hash the bytes AS EXPORTED (pre-sanitization): dedup must keep matching
+    // both existing BottleImage.contentHash values and repeat imports of the
+    // same archive, and sanitization re-encodes (bytes change on every run).
     const hash = crypto.createHash('sha256').update(primaryBuf).digest('hex');
 
     // Same photo already attached to this wine earlier in THIS import (e.g.
@@ -453,16 +457,33 @@ async function attachImages(bottle, images, userId, getFileBuffer, result, dedup
       originalUrl = fileOnDisk(existing.originalUrl) ? existing.originalUrl : null;
       deduped = true;
     } else {
+      // ZIP bytes are attacker-controlled: run them through the same fail-closed
+      // sanitizer as the live upload path (magic-byte/format check, decoded-pixel
+      // cap, EXIF/GPS strip) before anything reaches disk. An image that fails to
+      // decode is skipped and recorded — the import itself continues. The
+      // sanitizer preserves the decoded format, so the file extension is derived
+      // from the sanitized bytes (the archive filename / export field can lie).
+      let safeBuf;
+      try {
+        safeBuf = await sanitizeImageBuffer(primaryBuf);
+      } catch {
+        result.imagesSkipped++;
+        result.errors.push({
+          index: sourceIndex,
+          reason: `Image "${procArchive || origArchive}" skipped: not a valid JPEG, PNG, or WebP, or too large`,
+        });
+        continue;
+      }
       const uuid = crypto.randomUUID();
+      const ext = { jpeg: '.jpg', png: '.png', webp: '.webp' }[detectImageFormat(safeBuf)] || '.jpg';
       if (procBuf) {
-        const procName = `${uuid}.png`;
-        fs.writeFileSync(path.join(PROCESSED_DIR, procName), procBuf);
+        const procName = `${uuid}${ext}`;
+        fs.writeFileSync(path.join(PROCESSED_DIR, procName), safeBuf);
         processedUrl = `/api/uploads/processed/${procName}`;
       } else {
         // Original-only image (never cropped) — keep it so the photo isn't lost.
-        const ext = (path.extname(origArchive) || '.jpg').toLowerCase();
         const origName = `${uuid}${ext}`;
-        fs.writeFileSync(path.join(ORIGINALS_DIR, origName), origBuf);
+        fs.writeFileSync(path.join(ORIGINALS_DIR, origName), safeBuf);
         originalUrl = `/api/uploads/originals/${origName}`;
       }
     }
@@ -673,7 +694,7 @@ async function buildCellarContents({ cellarId, ownerId, userId, cellar, items, i
       result.bottlesCreated++;
       if (bottle.status === 'active') createdActiveIds.push(bottle._id);
 
-      await attachImages(bottle, imagesByIndex[i], userId, getFileBuffer, result, wineImageDedup);
+      await attachImages(bottle, imagesByIndex[i], userId, getFileBuffer, result, wineImageDedup, i);
       await attachReviews(bottle, item.reviews, userId, wine.wineDefinitionId, result);
       await attachMaturity(item.maturity, wine.wineDefinitionId, canonicalVintage, result, seenMaturity);
 
@@ -753,6 +774,7 @@ async function importCellar(userId, cellar, opts) {
     racksCreated: 0,
     imagesAttached: 0,
     imagesDeduped: 0,
+    imagesSkipped: 0,
     winesCreated: 0,
     wineRequests: 0,
     reviewsCreated: 0,
@@ -830,6 +852,7 @@ module.exports = {
   resolveTargets,
   exportBottleToItem,
   attachMaturity,
+  attachImages,
   importCellar,
   clearCellarContents,
   EXPORT_SCHEMA,

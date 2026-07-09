@@ -5,6 +5,7 @@ const Discussion = require('../models/Discussion');
 const searchService = require('../services/search');
 const { requireAuth, optionalAuth } = require('../middleware/auth');
 const { scanLabelFull, identifyWineFromQuery } = require('../services/labelScan');
+const { sanitizeImageBuffer, detectImageFormat } = require('../services/imageSanitizer');
 const { findOrCreateWine } = require('../services/findOrCreateWine');
 const { generateWineKey } = require('../utils/normalize');
 const { findBestMatch } = require('../services/wineMatching');
@@ -152,28 +153,44 @@ router.get('/', requireAuth, async (req, res) => {
 // plus any existing registry match (for user confirmation before committing).
 //
 // Body:  { image: base64String, mediaType?: "image/jpeg" | "image/png" | "image/webp" }
+//        (mediaType is accepted for compatibility but ignored — the actual type
+//         is detected from the sanitized bytes, since the declared one can lie)
 // Returns: {
 //   extracted: { name, producer, vintage, country, region, appellation, type, grapes[] },
 //   match: { wine: WineDefinition, confidence: number } | null,
 //   labelImage: "data:image/png;base64,..." (background-removed label, or original as fallback)
 // }
 router.post('/scan-label', requireAuth, aiBurstLimiter, async (req, res) => {
-  const { image, mediaType = 'image/jpeg' } = req.body;
+  const { image } = req.body;
 
   if (!image) {
     return res.status(400).json({ error: 'Image is required' });
   }
 
+  // 0. Fail-closed pixel/format guard + EXIF strip BEFORE anything touches the
+  // bytes. Without it a small compressed payload can decode to a 100M+ pixel
+  // "decompression bomb" on the single-worker rembg service (DoS). Mirrors the
+  // hardened /api/images/remove-bg-preview path. The sanitizer preserves the
+  // DECODED format, so the media type is re-detected from the sanitized bytes
+  // rather than trusting the client-declared mediaType.
+  let safeBuffer;
   try {
-    // 1. Attempt background removal via rembg (non-fatal — falls back to original)
-    let scanImage = image;
-    let scanMediaType = mediaType;
-    let labelImage = `data:${mediaType};base64,${image}`;
+    safeBuffer = await sanitizeImageBuffer(Buffer.from(image, 'base64'));
+  } catch {
+    return res.status(400).json({ error: 'Image is too large or not a valid JPEG, PNG, or WebP' });
+  }
+  const safeMediaType = `image/${detectImageFormat(safeBuffer) || 'jpeg'}`;
+
+  try {
+    // 1. Attempt background removal via rembg (non-fatal — falls back to the
+    //    sanitized original)
+    let scanImage = safeBuffer.toString('base64');
+    let scanMediaType = safeMediaType;
+    let labelImage = `data:${scanMediaType};base64,${scanImage}`;
 
     try {
-      const buf = Buffer.from(image, 'base64');
       const fd = new FormData();
-      fd.append('image', new Blob([buf], { type: mediaType }), 'label.jpg');
+      fd.append('image', new Blob([safeBuffer], { type: safeMediaType }), 'label.jpg');
       const rembgRes = await fetch(`${REMBG_URL}/remove-bg`, {
         method: 'POST',
         body: fd,

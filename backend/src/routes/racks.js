@@ -55,6 +55,13 @@ router.get('/nfc/:id', requireAuth, async (req, res) => {
     if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
     const rack = await Rack.findOne({ _id: req.params.id, deletedAt: null }).select('cellar');
     if (!rack) return res.status(404).json({ error: 'Rack not found' });
+    // Only members of the rack's cellar may resolve the tag — anyone else gets
+    // the same 404 as a nonexistent rack, so this endpoint is not an existence
+    // oracle for rack IDs or a rack→cellar linkage leak (audit L-4 / I-9).
+    const cellar = await Cellar.findById(rack.cellar).select('user members deletedAt');
+    if (!cellar || cellar.deletedAt || !getCellarRole(cellar, req.user.id)) {
+      return res.status(404).json({ error: 'Rack not found' });
+    }
     // Check if rack is placed in the 3D room layout
     const layout = await CellarLayout.findOne({ cellar: rack.cellar }).lean();
     const inRoom = layout?.rackPlacements?.some(

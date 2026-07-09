@@ -116,6 +116,21 @@ async function sanitizeImageBuffer(input) {
 }
 
 /**
+ * Detect the actual format of an image buffer from its magic bytes.
+ * Returns 'jpeg' | 'png' | 'webp' | null. sanitizeImageBuffer() preserves the
+ * DECODED format (it never converts), so callers that persist or label its
+ * output use this to pick a file extension / MIME type that matches the real
+ * bytes rather than trusting a client-declared type or archive filename.
+ */
+function detectImageFormat(buf) {
+  if (!Buffer.isBuffer(buf) || buf.length < 12) return null;
+  if (buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return 'jpeg';
+  if (buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47) return 'png';
+  if (buf.toString('ascii', 0, 4) === 'RIFF' && buf.toString('ascii', 8, 12) === 'WEBP') return 'webp';
+  return null;
+}
+
+/**
  * True when the file carries metadata worth stripping. Used by the backfill
  * script to skip already-clean files — re-encoding is lossy for JPEG, so a
  * re-run must not put clean files through another generation.
@@ -126,4 +141,4 @@ async function hasStrippableMetadata(filePath) {
   return !!(meta.exif || meta.xmp || meta.iptc || (meta.orientation && meta.orientation !== 1));
 }
 
-module.exports = { stripImageMetadata, sanitizeImageBuffer, hasStrippableMetadata, MAX_PIXELS };
+module.exports = { stripImageMetadata, sanitizeImageBuffer, detectImageFormat, hasStrippableMetadata, MAX_PIXELS };

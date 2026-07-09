@@ -3,10 +3,15 @@
 services:
   frontend:
     ports:
-      - "80:80"
+      # Container listens on 8080 (unprivileged nginx); keep localhost:80 outside.
+      - "80:8080"
   backend:
     ports:
-      - "5000:5000"
+      # Loopback-only (audit L-24): publishing :5000 on 0.0.0.0 exposed the raw
+      # Express API to the LAN, where a forged X-Forwarded-For defeats every
+      # IP-keyed rate limiter (trust proxy expects the nginx hop). localhost:5000
+      # keeps working for bare-metal frontend dev.
+      - "127.0.0.1:5000:5000"
   umami:
     ports:
       - "3001:3000"

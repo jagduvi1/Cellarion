@@ -238,7 +238,7 @@ Cellarion/
 │   │   ├── utils/                  # Frontend helpers
 │   │   └── styles/common.css
 │   ├── nginx.conf                  # nginx config (SPA + /api/ proxy)
-│   └── Dockerfile                  # Multi-stage: Node build → nginx:alpine
+│   └── Dockerfile                  # Multi-stage: Node build → nginx-unprivileged
 ├── rembg/                          # Python background-removal service
 └── docker-compose.yml
 ```
@@ -272,8 +272,11 @@ traefik.enable: "true"
 traefik.docker.network: "web"
 traefik.http.routers.cellarion.rule: "Host(`cellarion.app`)"
 traefik.http.routers.cellarion.entrypoints: "web"
-traefik.http.services.cellarion.loadbalancer.server.port: "80"
+traefik.http.services.cellarion.loadbalancer.server.port: "8080"
 ```
+
+The upstream port is **8080** (not 80): the frontend image is built on
+`nginxinc/nginx-unprivileged`, whose non-root nginx cannot bind ports below 1024.
 
 Update the `Host(...)` rule to match your own domain.
 
