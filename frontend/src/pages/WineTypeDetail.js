@@ -43,8 +43,8 @@ export default function WineTypeDetail() {
     return () => { cancelled = true; };
   }, [type, page]);
 
-  if (loading) return wrap(<div className="taxonomy-loading">Loading…</div>);
-  if (error || !data) return wrap(<div className="taxonomy-error"><p>Wine type not found.</p><Link to="/" className="btn btn-secondary">Home</Link></div>);
+  if (loading) return wrap(<div className="taxonomy-loading">{t('taxonomy.loading')}</div>);
+  if (error || !data) return wrap(<div className="taxonomy-error"><p>{t('taxonomy.wineTypeNotFound')}</p><Link to="/" className="btn btn-secondary">{t('taxonomy.home')}</Link></div>);
 
   const { wines, total } = data;
   const pages = Math.ceil(total / limit);
@@ -91,7 +91,7 @@ export default function WineTypeDetail() {
       </h2>
 
       {wines.length === 0 ? (
-        <p className="taxonomy-empty">No wines found.</p>
+        <p className="taxonomy-empty">{t('taxonomy.noWines')}</p>
       ) : (
         <div className="taxonomy-wine-grid">
           {wines.map(wine => (
@@ -108,9 +108,9 @@ export default function WineTypeDetail() {
 
       {pages > 1 && (
         <div className="taxonomy-pagination">
-          <button className="btn btn-secondary" disabled={page <= 1} onClick={() => setSearchParams({ page: page - 1 })}>← Prev</button>
+          <button className="btn btn-secondary" disabled={page <= 1} onClick={() => setSearchParams({ page: page - 1 })}>{t('taxonomy.prev')}</button>
           <span className="taxonomy-pagination-info">{page} / {pages}</span>
-          <button className="btn btn-secondary" disabled={page >= pages} onClick={() => setSearchParams({ page: page + 1 })}>Next →</button>
+          <button className="btn btn-secondary" disabled={page >= pages} onClick={() => setSearchParams({ page: page + 1 })}>{t('taxonomy.next')}</button>
         </div>
       )}
     </div>

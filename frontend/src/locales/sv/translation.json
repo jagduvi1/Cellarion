@@ -282,7 +282,12 @@
     "removeDefault": "Ta bort som standardkällare",
     "editRole": "Redigera",
     "viewRole": "Visa",
-    "import": "Importera"
+    "import": "Importera",
+    "importTooltip": "Importera en källarexport (.json eller .zip)",
+    "ownedCount_one": "{{count}} egen",
+    "ownedCount_other": "{{count}} egna",
+    "sharedCount_one": "{{count}} delad",
+    "sharedCount_other": "{{count}} delade"
   },
 
   "cellarDetail": {
@@ -356,7 +361,19 @@
     "roomView": "Rumsvy",
     "roomViewDesc": "3D-källarlayout",
     "wineLists": "Vinlistor",
-    "wineListsDesc": "Restaurangmenyer & PDF"
+    "wineListsDesc": "Restaurangmenyer & PDF",
+    "importBottles": "Importera flaskor",
+    "export": "Exportera",
+    "tabBottles": "Flaskor",
+    "tabOverview": "Översikt",
+    "viewRackLayout": "Visa hyllayout",
+    "consumedBottles": "Konsumerade flaskor",
+    "beta": "Beta",
+    "sortBottlesAria": "Sortera flaskor",
+    "removeFilterAria": "Ta bort {{label}}",
+    "groupBottleCount_one": "{{count}} flaska",
+    "groupBottleCount_other": "{{count}} flaskor",
+    "collapseGroup": "Fäll ihop ▲"
   },
 
   "addBottle": {
@@ -445,7 +462,12 @@
     "useCameraInstead": "Använd kameran istället",
     "searchManuallyInstead": "Ingen kamera? Sök manuellt istället →",
     "searchBtn": "Sök",
-    "searchHint": "Var så specifik som möjligt — ange både vinnamn och producent. Vi söker först i vårt bibliotek; om ingen träff hittas identifierar vi vinet och lägger till det."
+    "searchHint": "Var så specifik som möjligt — ange både vinnamn och producent. Vi söker först i vårt bibliotek; om ingen träff hittas identifierar vi vinet och lägger till det.",
+    "identifyFailed": "Identifieringen misslyckades",
+    "identifyNetworkError": "Nätverksfel under identifieringen.",
+    "addFailed": "Kunde inte lägga till flaskan",
+    "partialAdded_one": "{{msg}} — {{count}} av {{total}} flaskor lades till. Vid nytt försök läggs bara de återstående {{remaining}} till.",
+    "partialAdded_other": "{{msg}} — {{count}} av {{total}} flaskor lades till. Vid nytt försök läggs bara de återstående {{remaining}} till."
   },
 
   "bottleDetail": {
@@ -526,7 +548,8 @@
     "tastingProfile": "Smakprofil",
     "structure": "Struktur",
     "flavours": "Smaker",
-    "pairsWith": "Passar till"
+    "pairsWith": "Passar till",
+    "consumeError": "Kunde inte ta bort flaskan"
   },
 
   "bottles": {
@@ -625,7 +648,11 @@
     "disabledSlotNote": "Den här platsen är markerad som oanvändbar — flaskor kan inte placeras här.",
     "preview": "Förhandsgranska",
     "hidePreview": "Dölj förhandsgranskning",
-    "previewLabel": "Förhandsgranskning — så här kommer hyllan att se ut när den skapats"
+    "previewLabel": "Förhandsgranskning — så här kommer hyllan att se ut när den skapats",
+    "viewCompact": "Kompakt",
+    "viewShelf": "Hyllvy",
+    "view3d": "3D",
+    "consumeNotePlaceholder": "Hur var det?"
   },
 
   "nfc": {
@@ -798,7 +825,10 @@
       "cellarShareAdd": "Källare delad",
       "cellarShareUpdate": "Delningsroll ändrad",
       "cellarShareRemove": "Delning borttagen"
-    }
+    },
+    "anonymous": "anonym",
+    "sharedAs": "{{user}} som {{role}}",
+    "roleChanged": "Roll ändrad: {{from}} → {{to}}"
   },
 
   "moveBottle": {
@@ -1259,6 +1289,8 @@
     "noCellars": "Inga källare hittades",
     "noRatedBottles": "Inga betygsatta flaskor ännu",
     "noneYet": "Inga ännu",
+    "valueSeedStarted": "Värdespårningen har startat. Din första datapunkt visas efter att veckans ögonblicksbild har körts.",
+    "valueSeedFirst": "Din första ögonblicksbild är sparad. Trenddata visas efter nästa veckas ögonblicksbild.",
 
     "typeLabels": {
       "red": "Rött",
@@ -1815,6 +1847,21 @@
     "flavours": "Smaker",
     "pairsWith": "Passar till"
   },
+  "taxonomy": {
+    "loading": "Laddar…",
+    "grapeNotFound": "Druvan hittades inte.",
+    "regionNotFound": "Regionen hittades inte.",
+    "countryNotFound": "Landet hittades inte.",
+    "wineTypeNotFound": "Vintypen hittades inte.",
+    "home": "Hem",
+    "noWines": "Inga viner hittades.",
+    "alsoKnownAs": "Även känd som:",
+    "agingPotential": "Lagringspotential:",
+    "typicalGrapes": "Typiska druvor",
+    "regions": "Regioner",
+    "prev": "← Föregående",
+    "next": "Nästa →"
+  },
   "statsCard": {
     "title": "Ditt källarkort",
     "subtitle": "En ögonblicksbild av din vinsamling — ladda ner eller dela den.",
@@ -1891,7 +1938,9 @@
     "yesAddEntry": "Ja, lägg till anteckning",
     "notNow": "Inte nu",
     "dontAskAgain": "Fråga inte igen",
-    "loadMore": "Ladda fler"
+    "loadMore": "Ladda fler",
+    "dish": "Maträtt",
+    "wine": "Vin"
   },
   "restock": {
     "title": "Smart påfyllning",

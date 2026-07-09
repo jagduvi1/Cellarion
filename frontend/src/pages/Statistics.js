@@ -283,8 +283,8 @@ function Statistics() {
             </h2>
             <p className="value-chart-seed-msg">
               {valueHistory.snapshots.length === 0
-                ? 'Value tracking has started. Your first data point will appear after the weekly snapshot runs.'
-                : 'Your first snapshot is recorded. Trend data will appear after next week\'s snapshot.'}
+                ? t('statistics.valueSeedStarted')
+                : t('statistics.valueSeedFirst')}
             </p>
           </div>
         </div>
