@@ -71,8 +71,27 @@
     "moderators": "Moderators",
     "badge": {
       "admin": "Admin",
-      "somm": "Somm"
-    }
+      "somm": "Somm",
+      "mod": "Mod"
+    },
+    "analytics": "Analytics",
+    "restock": "Restock",
+    "wishlist": "Wishlist",
+    "recommendations": "Recommendations",
+    "journal": "Journal",
+    "community": "Community",
+    "cellarChat": "Cellar Chat",
+    "support": "Support",
+    "supportTickets": "Support Tickets",
+    "wineReports": "Wine Reports",
+    "sommelier": "Sommelier",
+    "admin": "Admin",
+    "cellars": "Cellars",
+    "more": "More",
+    "systemMonitor": "System Monitor",
+    "mainNavigation": "Main navigation",
+    "switchToDark": "Switch to dark mode",
+    "switchToLight": "Switch to light mode"
   },
 
   "auth": {
@@ -282,7 +301,12 @@
     "removeDefault": "Remove as default cellar",
     "editRole": "Edit",
     "viewRole": "View",
-    "import": "Import"
+    "import": "Import",
+    "importTooltip": "Import a cellar export (.json or .zip)",
+    "ownedCount_one": "{{count}} owned",
+    "ownedCount_other": "{{count}} owned",
+    "sharedCount_one": "{{count}} shared",
+    "sharedCount_other": "{{count}} shared"
   },
 
   "cellarDetail": {
@@ -356,7 +380,19 @@
     "roomView": "Room View",
     "roomViewDesc": "3D cellar layout",
     "wineLists": "Wine Lists",
-    "wineListsDesc": "Restaurant menus & PDF"
+    "wineListsDesc": "Restaurant menus & PDF",
+    "importBottles": "Import Bottles",
+    "export": "Export",
+    "tabBottles": "Bottles",
+    "tabOverview": "Overview",
+    "viewRackLayout": "View rack layout",
+    "consumedBottles": "Consumed bottles",
+    "beta": "Beta",
+    "sortBottlesAria": "Sort bottles",
+    "removeFilterAria": "Remove {{label}}",
+    "groupBottleCount_one": "{{count}} bottle",
+    "groupBottleCount_other": "{{count}} bottles",
+    "collapseGroup": "Collapse ▲"
   },
 
   "addBottle": {
@@ -445,7 +481,12 @@
     "useCameraInstead": "Use camera instead",
     "searchManuallyInstead": "No camera? Search manually instead →",
     "searchBtn": "Search",
-    "searchHint": "Be as specific as possible — include the wine name and producer. We'll check our library first; if no match is found, we'll identify and add the wine."
+    "searchHint": "Be as specific as possible — include the wine name and producer. We'll check our library first; if no match is found, we'll identify and add the wine.",
+    "identifyFailed": "Identification failed",
+    "identifyNetworkError": "Network error during identification.",
+    "addFailed": "Failed to add bottle",
+    "partialAdded_one": "{{msg}} — {{count}} of {{total}} bottles was added. Retrying will add only the remaining {{remaining}}.",
+    "partialAdded_other": "{{msg}} — {{count}} of {{total}} bottles were added. Retrying will add only the remaining {{remaining}}."
   },
 
   "bottleDetail": {
@@ -526,7 +567,8 @@
     "tastingProfile": "Tasting profile",
     "structure": "Structure",
     "flavours": "Flavours",
-    "pairsWith": "Pairs with"
+    "pairsWith": "Pairs with",
+    "consumeError": "Failed to remove bottle"
   },
 
   "bottles": {
@@ -625,7 +667,11 @@
     "disabledSlotNote": "This slot is marked as unusable — bottles can't be placed here.",
     "preview": "Preview",
     "hidePreview": "Hide preview",
-    "previewLabel": "Preview — this is how the rack will look once created"
+    "previewLabel": "Preview — this is how the rack will look once created",
+    "viewCompact": "Compact",
+    "viewShelf": "Shelf view",
+    "view3d": "3D",
+    "consumeNotePlaceholder": "How was it?"
   },
 
   "nfc": {
@@ -798,7 +844,10 @@
       "cellarShareAdd": "Shared cellar",
       "cellarShareUpdate": "Changed share role",
       "cellarShareRemove": "Removed share"
-    }
+    },
+    "anonymous": "anonymous",
+    "sharedAs": "{{user}} as {{role}}",
+    "roleChanged": "Role changed: {{from}} → {{to}}"
   },
 
   "moveBottle": {
@@ -1259,6 +1308,8 @@
     "noCellars": "No cellars found",
     "noRatedBottles": "No rated bottles yet",
     "noneYet": "None yet",
+    "valueSeedStarted": "Value tracking has started. Your first data point will appear after the weekly snapshot runs.",
+    "valueSeedFirst": "Your first snapshot is recorded. Trend data will appear after next week's snapshot.",
 
     "typeLabels": {
       "red": "Red",
@@ -1815,6 +1866,21 @@
     "flavours": "Flavours",
     "pairsWith": "Pairs with"
   },
+  "taxonomy": {
+    "loading": "Loading…",
+    "grapeNotFound": "Grape not found.",
+    "regionNotFound": "Region not found.",
+    "countryNotFound": "Country not found.",
+    "wineTypeNotFound": "Wine type not found.",
+    "home": "Home",
+    "noWines": "No wines found.",
+    "alsoKnownAs": "Also known as:",
+    "agingPotential": "Aging potential:",
+    "typicalGrapes": "Typical grapes",
+    "regions": "Regions",
+    "prev": "← Prev",
+    "next": "Next →"
+  },
   "statsCard": {
     "title": "Your Cellar Card",
     "subtitle": "A snapshot of your wine collection — download or share it.",
@@ -1891,7 +1957,9 @@
     "yesAddEntry": "Yes, add journal entry",
     "notNow": "Not now",
     "dontAskAgain": "Don't ask again",
-    "loadMore": "Load more"
+    "loadMore": "Load more",
+    "dish": "Dish",
+    "wine": "Wine"
   },
   "restock": {
     "title": "Smart Restock",
@@ -2962,6 +3030,182 @@
       "empty": "Type a search query and press Enter",
       "noneRight": "None of these look right?",
       "requestThis": "Request this wine"
+    }
+  },
+  "bottleCard": {
+    "pendingReview": "Pending review",
+    "groupTooltip": "{{count}} identical bottles — click to expand"
+  },
+  "followButton": {
+    "follow": "Follow",
+    "following": "Following"
+  },
+  "grapePicker": {
+    "removeGrape": "Remove {{name}}",
+    "searchPlaceholder_one": "Search {{count}} grape…",
+    "searchPlaceholder_other": "Search {{count}} grapes…",
+    "noMatch": "No grapes match \"{{search}}\"",
+    "allSelected": "All grapes selected"
+  },
+  "installPrompt": {
+    "message": "Install Cellarion for quick access",
+    "install": "Install",
+    "dismiss": "Dismiss"
+  },
+  "wineSearchPicker": {
+    "placeholder": "Search for a wine...",
+    "noResults": "No wines found"
+  },
+  "errorBoundary": {
+    "title": "Something went wrong",
+    "message": "An unexpected error occurred. Please refresh the page to try again.",
+    "refresh": "Refresh Page"
+  },
+  "reconsent": {
+    "title": "We've updated our Privacy Policy",
+    "body": "We've updated our Privacy Policy, including the third-party services that help run Cellarion. Please review and acknowledge the update to continue.",
+    "readPolicy": "Read the full policy:",
+    "policyLink": "Privacy Policy",
+    "logout": "Log out",
+    "acknowledge": "I acknowledge the updated policy"
+  },
+  "camera": {
+    "accessDenied": "Camera access denied. Please allow camera permissions.",
+    "notFound": "No camera found on this device.",
+    "accessError": "Could not access camera.",
+    "accessErrorDetail": "Could not access camera: {{message}}",
+    "captureFailed": "Capture failed. Please try again.",
+    "placeBottle": "Place bottle in the center",
+    "closeCamera": "Close camera",
+    "takePhoto": "Take photo",
+    "switchCamera": "Switch camera",
+    "takePhotoButton": "Take Photo"
+  },
+  "photoCapture": {
+    "removingBackground": "Removing background…",
+    "previewAlt": "Preview",
+    "removeImage": "Remove image",
+    "chooseFile": "Choose File"
+  },
+  "imageUpload": {
+    "upload": "Upload",
+    "uploading": "Uploading...",
+    "removingBackground": "Removing background...",
+    "processingFailed": "Processing failed",
+    "retry": "Retry",
+    "ready": "Ready",
+    "processing": "Processing",
+    "failed": "Failed",
+    "remove": "Remove",
+    "removeThisImage": "Remove this image",
+    "uploadFailed": "Upload failed",
+    "networkError": "Network error during upload",
+    "processedAlt": "Processed",
+    "originalAlt": "Original"
+  },
+  "cellarChat": {
+    "title": "Cellar Chat",
+    "newChat": "New chat",
+    "newChatAria": "Start a new conversation",
+    "usagePeriodToday": "today",
+    "usagePeriodWeek": "this week",
+    "allCellars": "All cellars",
+    "selectedCellar": "Selected cellar",
+    "nCellars_one": "{{count}} cellar",
+    "nCellars_other": "{{count}} cellars",
+    "tryAsking": "Try asking…",
+    "categories": {
+      "foodPairing": "Food pairing",
+      "occasion": "Occasion",
+      "cellarCheck": "Cellar check",
+      "moodStyle": "Mood & style"
+    },
+    "prompts": {
+      "food1": "I'm making lamb with rosemary tonight — what should I open?",
+      "food2": "What pairs well with grilled salmon from my cellar?",
+      "food3": "I'm having a cheese board with friends — what do you suggest?",
+      "food4": "What goes with a rich beef stew?",
+      "occasion1": "I need something special for a birthday dinner for two.",
+      "occasion2": "We're celebrating an anniversary — what's the best bottle I have?",
+      "occasion3": "Something easy and relaxed for a summer barbecue.",
+      "occasion4": "What's a good bottle to bring as a gift?",
+      "cellar1": "What's drinking well in my cellar right now?",
+      "cellar2": "Do I have anything that's past its peak and should drink soon?",
+      "cellar3": "What's my most interesting bottle right now?",
+      "cellar4": "Show me something I might have forgotten about.",
+      "mood1": "I want something light and fresh for a weeknight.",
+      "mood2": "Something bold and tannic to go with a steak.",
+      "mood3": "I'm in the mood for something elegant and complex.",
+      "mood4": "What's a good summer evening wine from my cellar?"
+    },
+    "tipLabel": "Tip:",
+    "tipBody": "describe food, occasion, or mood for the best results.",
+    "tipExample": "<1>\"Grilled salmon with herb butter\"</1> works much better than <3>\"white wine\"</3>.",
+    "searchingFor": "Searching for",
+    "thinking": "Thinking…",
+    "searchingCellar": "Searching your cellar…",
+    "errorGeneric": "Something went wrong.",
+    "errorNetwork": "Network error — please try again.",
+    "errorBurst": "Too many chat requests in a short time. Please wait a minute and try again.",
+    "errorQuotaDaily_one": "You've reached your daily limit of {{count}} question. Try again tomorrow.",
+    "errorQuotaDaily_other": "You've reached your daily limit of {{count}} questions. Try again tomorrow.",
+    "errorQuotaWeekly_one": "You've reached your weekly limit of {{count}} question. Try again in a few days.",
+    "errorQuotaWeekly_other": "You've reached your weekly limit of {{count}} questions. Try again in a few days.",
+    "placeholder": "Ask about your cellar… (Enter to send, Shift+Enter for new line)",
+    "placeholderLimitDaily": "Daily limit reached — resets at midnight UTC",
+    "placeholderLimitWeekly": "Weekly limit reached — try again in a few days",
+    "send": "Send"
+  },
+  "userProfile": {
+    "loading": "Loading...",
+    "notFound": "User not found",
+    "failedLoad": "Failed to load profile",
+    "memberSince": "Member since {{date}}",
+    "followers": "Followers",
+    "following": "Following",
+    "reviews": "Reviews",
+    "noReviews": "No reviews yet.",
+    "loadMore": "Load More",
+    "noneYet": "None yet.",
+    "listError": "Couldn't load the list — please try again.",
+    "close": "Close"
+  },
+  "support": {
+    "title": "Support",
+    "newTicket": "+ New Support Ticket",
+    "myTickets": "My Tickets ({{count}})",
+    "myWineReports": "My Wine Reports ({{count}})",
+    "loading": "Loading…",
+    "failedLoad": "Failed to load support history.",
+    "noTickets": "No support tickets yet. Use the button above to get help.",
+    "noReports": "No wine reports yet. Use the \"Report\" button on any wine to flag an issue.",
+    "yourMessage": "Your message",
+    "adminResponse": "Admin response",
+    "awaitingResponse": "Awaiting admin response…",
+    "yourDetails": "Your details",
+    "adminNotes": "Admin notes",
+    "underReview": "Under review…",
+    "category": {
+      "bug": "Bug Report",
+      "help": "Help / Question",
+      "feature": "Feature Request",
+      "other": "Other"
+    },
+    "status": {
+      "open": "Open",
+      "in_progress": "In Progress",
+      "closed": "Closed"
+    },
+    "reason": {
+      "wrong_info": "Wrong Information",
+      "duplicate": "Duplicate Entry",
+      "inappropriate": "Inappropriate Content",
+      "other": "Other"
+    },
+    "reportStatus": {
+      "pending": "Pending",
+      "resolved": "Resolved",
+      "dismissed": "Dismissed"
     }
   }
 }

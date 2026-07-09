@@ -82,10 +82,19 @@ router.get('/', requireAuth, async (req, res) => {
     const { limit: parsedLimit, offset: parsedOffset } = parsePagination(req.query, paginationOpts);
     const grapeIds = grapes ? String(grapes).split(',').filter(id => mongoose.isValidObjectId(id)) : [];
 
-    // Build MongoDB filter (used for non-search queries and as fallback)
+    // Build MongoDB filter (used for non-search queries and as fallback).
+    // Invalid country/region ids are a 400 — the old `? id : undefined`
+    // assignment made Mongoose drop the condition and silently return the
+    // UNFILTERED list for e.g. ?country=France.
     const filter = {};
-    if (country) filter.country = mongoose.isValidObjectId(String(country)) ? String(country) : undefined;
-    if (region) filter.region = mongoose.isValidObjectId(String(region)) ? String(region) : undefined;
+    if (country) {
+      if (!mongoose.isValidObjectId(String(country))) return res.status(400).json({ error: 'Invalid country ID' });
+      filter.country = String(country);
+    }
+    if (region) {
+      if (!mongoose.isValidObjectId(String(region))) return res.status(400).json({ error: 'Invalid region ID' });
+      filter.region = String(region);
+    }
     if (type) filter.type = String(type);
     if (grapeIds.length > 0) filter.grapes = { $in: grapeIds };
 

@@ -34,8 +34,8 @@ export default function CountryDetail() {
     return () => { cancelled = true; };
   }, [slug, page]);
 
-  if (loading) return wrap(<div className="taxonomy-loading">Loading…</div>);
-  if (error || !data) return wrap(<div className="taxonomy-error"><p>Country not found.</p><Link to="/" className="btn btn-secondary">Home</Link></div>);
+  if (loading) return wrap(<div className="taxonomy-loading">{t('taxonomy.loading')}</div>);
+  if (error || !data) return wrap(<div className="taxonomy-error"><p>{t('taxonomy.countryNotFound')}</p><Link to="/" className="btn btn-secondary">{t('taxonomy.home')}</Link></div>);
 
   const { country, regions, wines, total } = data;
   const pages = Math.ceil(total / limit);
@@ -83,7 +83,7 @@ export default function CountryDetail() {
 
       {regions?.length > 0 && (
         <>
-          <h2 className="taxonomy-section-title">Regions</h2>
+          <h2 className="taxonomy-section-title">{t('taxonomy.regions')}</h2>
           <div className="taxonomy-related-list">
             {regions.map(r => (
               <Link key={r._id} to={`/regions/${r.slug}`} className="taxonomy-related-chip">
@@ -99,7 +99,7 @@ export default function CountryDetail() {
       </h2>
 
       {wines.length === 0 ? (
-        <p className="taxonomy-empty">No wines found.</p>
+        <p className="taxonomy-empty">{t('taxonomy.noWines')}</p>
       ) : (
         <div className="taxonomy-wine-grid">
           {wines.map(wine => (
@@ -114,9 +114,9 @@ export default function CountryDetail() {
 
       {pages > 1 && (
         <div className="taxonomy-pagination">
-          <button className="btn btn-secondary" disabled={page <= 1} onClick={() => setSearchParams({ page: page - 1 })}>← Prev</button>
+          <button className="btn btn-secondary" disabled={page <= 1} onClick={() => setSearchParams({ page: page - 1 })}>{t('taxonomy.prev')}</button>
           <span className="taxonomy-pagination-info">{page} / {pages}</span>
-          <button className="btn btn-secondary" disabled={page >= pages} onClick={() => setSearchParams({ page: page + 1 })}>Next →</button>
+          <button className="btn btn-secondary" disabled={page >= pages} onClick={() => setSearchParams({ page: page + 1 })}>{t('taxonomy.next')}</button>
         </div>
       )}
     </div>

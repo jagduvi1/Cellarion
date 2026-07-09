@@ -663,6 +663,12 @@ router.post('/confirm', async (req, res) => {
 
           if (item.dateAdded) bottle.createdAt = new Date(item.dateAdded);
 
+          // Seed the cellar journey like POST /api/bottles does — honours a
+          // backdated dateAdded so the journey timeline and time-in-cellar
+          // stats start at the real added date, not the import date.
+          bottle.addedToCellarAt = bottle.createdAt || new Date();
+          bottle.cellarHistory = [{ cellar: cellar._id, cellarName: cellar.name, enteredAt: bottle.addedToCellarAt }];
+
           if (item.addToHistory) {
             const reason = item.consumedReason || 'drank';
             bottle.status = reason;
@@ -748,6 +754,11 @@ router.post('/confirm', async (req, res) => {
         // Allow backdating
         if (item.dateAdded) bottle.createdAt = new Date(item.dateAdded);
 
+        // Seed the cellar journey like POST /api/bottles does (see the
+        // requestWine branch above for the rationale).
+        bottle.addedToCellarAt = bottle.createdAt || new Date();
+        bottle.cellarHistory = [{ cellar: cellar._id, cellarName: cellar.name, enteredAt: bottle.addedToCellarAt }];
+
         // Allow adding directly to history
         if (item.addToHistory) {
           const reason = item.consumedReason || 'drank';
@@ -832,15 +843,28 @@ router.post('/confirm', async (req, res) => {
 
           for (const pl of placements) {
             rack.slots.push({ position: pl.position, bottle: pl.bottle });
-            placedCount++;
-            if (pl.overflowed) overflowedCount++;
           }
           for (const u of unplaced) {
             unplacedDetails.push({ ...u, rackName });
           }
 
+          // Count placements only AFTER the save succeeds — a swallowed save
+          // failure (e.g. VersionError from a concurrent rack edit) used to
+          // report bottles as placed that never persisted.
           if (placements.length > 0) {
-            await rack.save().catch(err => console.error(`Failed to save rack ${rackName} during import:`, err.message));
+            try {
+              await rack.save();
+              for (const pl of placements) {
+                placedCount++;
+                if (pl.overflowed) overflowedCount++;
+              }
+            } catch (err) {
+              console.error(`Failed to save rack ${rackName} during import:`, err.message);
+              for (const pl of placements) {
+                const src = group.find(p => String(p.bottleId) === String(pl.bottle));
+                unplacedDetails.push({ sourceIndex: src?.sourceIndex ?? null, rackName, requestedPosition: pl.position, reason: `Rack save failed: ${err.message}` });
+              }
+            }
           }
         } catch (err) {
           console.error(`Failed placement for rack ${rackName}:`, err.message);

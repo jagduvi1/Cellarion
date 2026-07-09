@@ -34,8 +34,8 @@ export default function GrapeDetail() {
     return () => { cancelled = true; };
   }, [slug, page]);
 
-  if (loading) return wrap(<div className="taxonomy-loading">Loading…</div>);
-  if (error || !data) return wrap(<div className="taxonomy-error"><p>Grape not found.</p><Link to="/" className="btn btn-secondary">Home</Link></div>);
+  if (loading) return wrap(<div className="taxonomy-loading">{t('taxonomy.loading')}</div>);
+  if (error || !data) return wrap(<div className="taxonomy-error"><p>{t('taxonomy.grapeNotFound')}</p><Link to="/" className="btn btn-secondary">{t('taxonomy.home')}</Link></div>);
 
   const { grape, wines, total } = data;
   const pages = Math.ceil(total / limit);
@@ -93,13 +93,13 @@ export default function GrapeDetail() {
 
       {grape.synonyms?.length > 0 && (
         <p className="taxonomy-description" style={{ fontSize: '0.88rem' }}>
-          Also known as: {grape.synonyms.join(', ')}
+          {t('taxonomy.alsoKnownAs')} {grape.synonyms.join(', ')}
         </p>
       )}
 
       {grape.agingPotential && (
         <p className="taxonomy-description" style={{ fontSize: '0.88rem' }}>
-          Aging potential: {grape.agingPotential}
+          {t('taxonomy.agingPotential')} {grape.agingPotential}
         </p>
       )}
 
@@ -108,7 +108,7 @@ export default function GrapeDetail() {
       </h2>
 
       {wines.length === 0 ? (
-        <p className="taxonomy-empty">No wines found.</p>
+        <p className="taxonomy-empty">{t('taxonomy.noWines')}</p>
       ) : (
         <div className="taxonomy-wine-grid">
           {wines.map(wine => (
@@ -123,9 +123,9 @@ export default function GrapeDetail() {
 
       {pages > 1 && (
         <div className="taxonomy-pagination">
-          <button className="btn btn-secondary" disabled={page <= 1} onClick={() => setSearchParams({ page: page - 1 })}>← Prev</button>
+          <button className="btn btn-secondary" disabled={page <= 1} onClick={() => setSearchParams({ page: page - 1 })}>{t('taxonomy.prev')}</button>
           <span className="taxonomy-pagination-info">{page} / {pages}</span>
-          <button className="btn btn-secondary" disabled={page >= pages} onClick={() => setSearchParams({ page: page + 1 })}>Next →</button>
+          <button className="btn btn-secondary" disabled={page >= pages} onClick={() => setSearchParams({ page: page + 1 })}>{t('taxonomy.next')}</button>
         </div>
       )}
     </div>

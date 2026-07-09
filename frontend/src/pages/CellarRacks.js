@@ -378,7 +378,7 @@ function CellarRacks() {
                 className={`view-mode-btn ${viewMode === 'compact' ? 'active' : ''}`}
                 onClick={() => setViewMode('compact')}
               >
-                Compact
+                {t('racks.viewCompact')}
               </button>
               <button
                 role="tab"
@@ -386,7 +386,7 @@ function CellarRacks() {
                 className={`view-mode-btn ${viewMode === 'shelf' ? 'active' : ''}`}
                 onClick={() => setViewMode('shelf')}
               >
-                Shelf view
+                {t('racks.viewShelf')}
               </button>
               <button
                 role="tab"
@@ -394,7 +394,7 @@ function CellarRacks() {
                 className={`view-mode-btn ${viewMode === '3d' ? 'active' : ''}`}
                 onClick={() => setViewMode('3d')}
               >
-                3D
+                {t('racks.view3d')}
               </button>
             </div>
           )}
@@ -821,7 +821,7 @@ function EmptySlotContent({ position, apiFetch, cellarId, canEdit, onAssign, onD
             >
               <span className={`slot-bottle-type-dot type-${b.wineDefinition?.type || 'red'}`} aria-hidden="true" />
               <div className="slot-bottle-info">
-                <strong>{b.wineDefinition?.name || 'Unknown'}</strong>
+                <strong>{b.wineDefinition?.name || t('common.unknown')}</strong>
                 <span className="slot-bottle-meta">
                   {b.wineDefinition?.producer} &middot; {b.vintage}
                   {b.wineDefinition?.country?.name ? ` \u00B7 ${b.wineDefinition.country.name}` : ''}
@@ -879,7 +879,7 @@ function FilledSlotContent({ position, slot, canEdit, onRemoveFromRack, onConsum
       <div className="slot-bottle-detail">
         <WineImage image={wine?.image} alt={wine?.name} className="slot-detail-img" />
         <div className="slot-detail-info">
-          <h4>{wine?.name || 'Unknown'}</h4>
+          <h4>{wine?.name || t('common.unknown')}</h4>
           {wine?.producer && <p className="slot-detail-producer">{wine.producer}</p>}
           <p className="slot-detail-meta">
             <span className={`slot-bottle-type-dot type-${wine?.type || 'red'}`} />
@@ -964,7 +964,7 @@ function ConsumeModal({ defaultRatingScale, onSubmit, onCancel }) {
               value={note}
               onChange={e => setNote(e.target.value)}
               rows={2}
-              placeholder="How was it?"
+              placeholder={t('racks.consumeNotePlaceholder')}
             />
           </div>
           <div className="consume-modal-actions">

@@ -435,14 +435,28 @@ router.post('/:id/like', async (req, res) => {
     const existing = await ReviewVote.findOne({ user: req.user.id, review: review._id });
 
     if (existing) {
-      await ReviewVote.deleteOne({ _id: existing._id });
-      await Review.updateOne({ _id: review._id }, { $inc: { likesCount: -1 } });
-      res.json({ liked: false, likesCount: Math.max(0, review.likesCount - 1) });
+      // Only decrement when THIS request actually removed the vote — two
+      // concurrent unlikes both matched `existing` and double-decremented,
+      // driving likesCount negative. The $gt filter clamps at zero.
+      const del = await ReviewVote.deleteOne({ _id: existing._id });
+      if (del.deletedCount > 0) {
+        await Review.updateOne({ _id: review._id, likesCount: { $gt: 0 } }, { $inc: { likesCount: -1 } });
+      }
+      const fresh = await Review.findById(review._id).select('likesCount').lean();
+      res.json({ liked: false, likesCount: fresh?.likesCount ?? 0 });
     } else {
-      await new ReviewVote({ user: req.user.id, review: review._id }).save();
+      try {
+        await new ReviewVote({ user: req.user.id, review: review._id }).save();
+      } catch (err) {
+        // Concurrent duplicate like — treat as already-liked, don't 500.
+        if (err.code !== 11000) throw err;
+        const dup = await Review.findById(review._id).select('likesCount').lean();
+        return res.json({ liked: true, likesCount: dup?.likesCount ?? review.likesCount });
+      }
       await Review.updateOne({ _id: review._id }, { $inc: { likesCount: 1 } });
       incrementCred(review.author.toString(), 'review_like_received').catch(() => {});
-      res.json({ liked: true, likesCount: review.likesCount + 1 });
+      const fresh = await Review.findById(review._id).select('likesCount').lean();
+      res.json({ liked: true, likesCount: fresh?.likesCount ?? review.likesCount + 1 });
     }
   } catch (err) {
     console.error('Toggle like error:', err);
