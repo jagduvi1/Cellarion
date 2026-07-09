@@ -1,0 +1,2 @@
+iWine	iPurchase	PurchaseDate	DeliveryDate	StoreName	Currency	ExchangeRate	Price	NativePrice	NativePriceCurrency	Quantity	Remaining	OrderNumber	Delivered	Size	SortSize	Vintage	Wine	SortWine	Locale	Type	Color	Category	Producer	Varietal	MasterVarietal	Designation	Vineyard	Country	Region	SubRegion	Appellation	cLabels
+684674	123799475	5/25/2020	5/25/2020	Unknown	EUR	1	0	0	EUR	3	3		False	750ml	12	2008	Pétrus	Pétrus	France, Bordeaux, Libournais, Pomerol	Red	Red	Dry	Pétrus	Red Bordeaux Blend	Red Bordeaux Blend	Unknown	Unknown	France	Bordeaux	Libournais	Pomerol	788
