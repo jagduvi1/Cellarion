@@ -475,6 +475,9 @@ router.post('/link-to-bottle', requireAuth, async (req, res) => {
     if (!bottleId || !imageIds || !Array.isArray(imageIds)) {
       return res.status(400).json({ error: 'bottleId and imageIds array are required' });
     }
+    if (imageIds.length > MAX_IMAGES_PER_BOTTLE) {
+      return res.status(400).json({ error: `Maximum of ${MAX_IMAGES_PER_BOTTLE} images per bottle` });
+    }
     if (!isValidId(bottleId) || !imageIds.every(id => isValidId(id))) {
       return res.status(400).json({ error: 'Invalid ID' });
     }
@@ -492,6 +495,13 @@ router.post('/link-to-bottle', requireAuth, async (req, res) => {
     const cellarRole = getCellarRole(cellar, req.user.id);
     if (!cellarRole || cellarRole === 'viewer') {
       return res.status(403).json({ error: 'Not authorized to link images to this bottle' });
+    }
+
+    // Enforce the same per-bottle cap /upload applies — the normal AddBottle
+    // flow uploads bottleless images then links here, which used to bypass it.
+    const existingCount = await BottleImage.countDocuments({ bottle: bottleId });
+    if (existingCount + imageIds.length > MAX_IMAGES_PER_BOTTLE) {
+      return res.status(400).json({ error: `Maximum of ${MAX_IMAGES_PER_BOTTLE} images per bottle reached` });
     }
 
     await BottleImage.updateMany(

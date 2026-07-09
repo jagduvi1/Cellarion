@@ -415,6 +415,11 @@ router.get('/me/data-export', requireAuth, async (req, res) => {
 router.get('/me/full-export', requireAuth, async (req, res) => {
   const scope = parseExportScope(req, res);
   if (scope === null) return;
+  // Claim bookkeeping hoisted out of the try so the catch can refund: a
+  // transient build failure used to consume the weekly allowance and lock
+  // the user out of full export for 7 days.
+  let claimStamp = null;
+  let claimedPrior;
   try {
     // Atomically CLAIM the weekly allowance before the expensive build, so two
     // concurrent requests (double-click / refresh) can't both pass a check and
@@ -437,6 +442,8 @@ router.get('/me/full-export', requireAuth, async (req, res) => {
         nextAvailableAt: new Date(new Date(u.lastImageExportAt).getTime() + IMAGE_EXPORT_COOLDOWN_MS),
       });
     }
+    claimStamp = now;
+    claimedPrior = claimed.lastImageExportAt;
 
     const result = await buildCellarDataExport(req.user.id, scope);
 
@@ -487,6 +494,14 @@ router.get('/me/full-export', requireAuth, async (req, res) => {
     await archive.finalize();
   } catch (error) {
     console.error('Full export error:', error);
+    // Refund the claimed allowance — guarded on our own timestamp so a later
+    // legitimate claim is never clobbered (same guard as the empty-refund).
+    if (claimStamp) {
+      await User.updateOne(
+        { _id: req.user.id, lastImageExportAt: claimStamp },
+        { $set: { lastImageExportAt: claimedPrior ?? null } }
+      ).catch(err => console.error('[full-export] refund failed:', err.message));
+    }
     if (!res.headersSent) res.status(500).json({ error: 'Failed to export' });
   }
 });

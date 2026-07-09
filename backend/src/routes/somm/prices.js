@@ -7,6 +7,8 @@ const Bottle = require('../../models/Bottle');
 const WineDefinition = require('../../models/WineDefinition');
 const { getOrCreateDailySnapshot, getSnapshotsForDates } = require('../../utils/exchangeRates');
 const { createNotification } = require('../../services/notifications');
+const { logAudit } = require('../../services/audit');
+const { SUPPORTED_CURRENCIES } = require('../../config/currencies');
 
 const { suggestPrice } = require('../../services/labelScan');
 
@@ -45,6 +47,9 @@ router.get('/queue', requireSommOrAdmin, async (req, res) => {
     // $last is only meaningful with a defined input order — sort by setAt
     // first, or "latest" is whatever natural order happens to yield.
     const latestPrices = await WineVintagePrice.aggregate([
+      // Only the requested pairs' snapshots — without this $match the $group
+      // scanned every price ever recorded on every queue load.
+      { $match: { wineDefinition: { $in: validRequests.map(r => r.wineDefinition._id) } } },
       { $sort: { setAt: 1 } },
       { $group: {
           _id: { wineDefinition: '$wineDefinition', vintage: '$vintage' },
@@ -251,18 +256,30 @@ router.post('/', requireSommOrAdmin, async (req, res) => {
     // time-anchored conversions later. Non-fatal if the API call fails.
     await getOrCreateDailySnapshot();
 
+    // String() coercion: a truthy non-string (number/object) used to throw
+    // TypeError on .trim() → 500 instead of a validation response.
+    const safeCurrency = String(currency || 'USD').toUpperCase();
+    if (!SUPPORTED_CURRENCIES.includes(safeCurrency)) {
+      return res.status(400).json({ error: `Unsupported currency (use one of: ${SUPPORTED_CURRENCIES.join(', ')})` });
+    }
+
     const entry = new WineVintagePrice({
       wineDefinition: wineDefId,
       vintage: safeVintage,
       price: priceNum,
-      currency: currency || 'USD',
-      source: source ? source.trim() : undefined,
-      sommNotes: sommNotes ? sommNotes.trim() : undefined,
+      currency: safeCurrency,
+      source: source ? String(source).trim() : undefined,
+      sommNotes: sommNotes ? String(sommNotes).trim() : undefined,
       setBy: req.user.id
     });
 
     await entry.save();
     await entry.populate('setBy', 'username');
+
+    logAudit(req, 'somm.price.add',
+      { type: 'wine', id: wineDefId },
+      { vintage: safeVintage, price: priceNum, currency: safeCurrency }
+    );
 
     // Notify everyone who requested tracking for this pair (best-effort,
     // never block the response on it).
@@ -316,6 +333,12 @@ router.delete('/requests/:requestId', requireSommOrAdmin, async (req, res) => {
     }
 
     await request.deleteOne();
+
+    logAudit(req, 'somm.price.decline',
+      { type: 'wine', id: request.wineDefinition?._id || null },
+      { vintage: request.vintage, requesters: request.requesters.length }
+    );
+
     res.json({ message: 'Tracking request declined' });
   } catch (error) {
     console.error('Decline tracking request error:', error);

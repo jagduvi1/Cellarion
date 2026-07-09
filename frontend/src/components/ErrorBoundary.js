@@ -1,4 +1,16 @@
 import { Component } from 'react';
+import i18n from '../i18n';
+
+// The boundary must render even if i18n itself failed to initialize —
+// never let a translation lookup throw inside the fallback UI.
+function tSafe(key, fallback) {
+  try {
+    const value = i18n.t(key);
+    return value && value !== key ? value : fallback;
+  } catch {
+    return fallback;
+  }
+}
 
 /**
  * Catches unhandled React render errors and shows a friendly fallback UI
@@ -31,10 +43,10 @@ class ErrorBoundary extends Component {
           textAlign: 'center'
         }}>
           <h1 style={{ fontSize: '1.5rem', color: 'var(--color-danger)', marginBottom: '1rem' }}>
-            Something went wrong
+            {tSafe('errorBoundary.title', 'Something went wrong')}
           </h1>
           <p style={{ color: 'var(--color-text-muted)', marginBottom: '1.5rem' }}>
-            An unexpected error occurred. Please refresh the page to try again.
+            {tSafe('errorBoundary.message', 'An unexpected error occurred. Please refresh the page to try again.')}
           </p>
           <button
             onClick={() => window.location.reload()}
@@ -48,7 +60,7 @@ class ErrorBoundary extends Component {
               fontSize: '1rem'
             }}
           >
-            Refresh Page
+            {tSafe('errorBoundary.refresh', 'Refresh Page')}
           </button>
           {import.meta.env.DEV && this.state.error && (
             <pre style={{

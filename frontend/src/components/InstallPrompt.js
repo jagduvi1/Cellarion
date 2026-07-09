@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 
 function InstallPrompt() {
+  const { t } = useTranslation();
   const [deferredPrompt, setDeferredPrompt] = useState(null);
   const [dismissed, setDismissed] = useState(false);
 
@@ -40,13 +42,13 @@ function InstallPrompt() {
   return (
     <div className="install-prompt">
       <span className="install-prompt-text">
-        Install Cellarion for quick access
+        {t('installPrompt.message')}
       </span>
       <div className="install-prompt-actions">
         <button className="btn btn-primary btn-sm" onClick={handleInstall}>
-          Install
+          {t('installPrompt.install')}
         </button>
-        <button className="install-prompt-dismiss" onClick={handleDismiss} aria-label="Dismiss">
+        <button className="install-prompt-dismiss" onClick={handleDismiss} aria-label={t('installPrompt.dismiss')}>
           &times;
         </button>
       </div>
