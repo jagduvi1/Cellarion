@@ -196,6 +196,21 @@
       "pushNotConfigured": "Push-aviseringar är inte konfigurerade på denna server.",
       "pushHint": "Push levererar aviseringar till din enhet även när Cellarion är stängt."
     },
+    "changePassword": {
+      "title": "Byt lösenord",
+      "hint": "Välj ett starkt lösenord: minst 12 tecken med en versal, en gemen, en siffra och ett specialtecken. När du byter lösenord loggas du ut på alla andra enheter.",
+      "currentLabel": "Nuvarande lösenord",
+      "newLabel": "Nytt lösenord",
+      "confirmLabel": "Bekräfta nytt lösenord",
+      "submitBtn": "Byt lösenord",
+      "submittingBtn": "Byter…",
+      "successMsg": "Lösenordet har bytts",
+      "errorMismatch": "De nya lösenorden matchar inte.",
+      "errorPolicy": "Lösenordet måste vara minst 12 tecken och innehålla en versal, en gemen, en siffra och ett specialtecken.",
+      "errorWrongCurrent": "Ditt nuvarande lösenord är felaktigt.",
+      "errorRateLimited": "För många försök. Vänta några minuter och försök igen.",
+      "errorGeneric": "Det gick inte att byta lösenord. Försök igen."
+    },
     "defaultRatingScale": "Standardbetygsskala",
     "ratingScaleHint": "Välj vilken betygsskala som används som standard när du sätter betyg. Du kan alltid ändra per flaska."
   },
