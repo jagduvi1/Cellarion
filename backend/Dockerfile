@@ -1,5 +1,10 @@
 FROM node:20-alpine
 
+# Bake production mode into the image: the refresh-cookie Secure flag and
+# 5xx error redaction key off NODE_ENV, and Express itself runs faster with
+# it set. Self-hosters previously ran with NODE_ENV undefined (audit L-22).
+ENV NODE_ENV=production
+
 WORKDIR /app
 
 COPY package.json package-lock.json ./

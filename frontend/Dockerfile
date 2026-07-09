@@ -26,11 +26,19 @@ ENV VITE_UMAMI_URL=$VITE_UMAMI_URL \
 RUN npm run build
 
 # ── Stage 2: serve with nginx ─────────────────────────────────────────────────
-FROM nginx:alpine
+# Unprivileged variant: master + workers run as the non-root `nginx` user
+# (uid 101), so an nginx compromise never holds root in the container (audit
+# L-25). Non-root cannot bind <1024, so the server listens on 8080 — compose
+# and Traefik map onto that port.
+FROM nginxinc/nginx-unprivileged:alpine
 
 COPY --from=builder /app/dist /usr/share/nginx/html
 COPY nginx.conf /etc/nginx/conf.d/default.conf
+# Shared security-header snippet, include'd by every HTML-serving location.
+# Lives outside conf.d/ so nginx does not auto-load it a second time at the
+# http{} level.
+COPY security-headers.conf /etc/nginx/snippets/security-headers.conf
 
-EXPOSE 80
+EXPOSE 8080
 
 CMD ["nginx", "-g", "daemon off;"]

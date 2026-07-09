@@ -1,8 +1,23 @@
+# Container hardening (audit L-25): every service drops all Linux capabilities
+# and forbids privilege escalation (no-new-privileges blocks setuid binaries;
+# it does NOT block gosu/su-exec, which use plain setuid() syscalls). Services
+# whose entrypoint starts as root and steps down to a service user get the
+# minimal cap_add set that step-down needs.
 services:
   mongo:
     image: mongo:7
     container_name: cellarion-mongo
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    # Entrypoint starts as root, chowns /data/db, then gosu's down to the
+    # mongodb user — the minimal caps that dance needs.
+    cap_add:
+      - CHOWN
+      - SETGID
+      - SETUID
     # WiredTiger cache must stay well under the container limit (512M below) —
     # cache + connection/aggregation overhead beyond the limit gets the
     # container OOM-killed under load. ~50% of the limit is the safe ratio.
@@ -23,6 +38,10 @@ services:
     image: getmeili/meilisearch:v1.45.1
     container_name: cellarion-meilisearch
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     environment:
       - MEILI_MASTER_KEY=${MEILI_MASTER_KEY}
       - MEILI_ENV=production
@@ -42,6 +61,10 @@ services:
     image: qdrant/qdrant:v1.18.1
     container_name: cellarion-qdrant
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     volumes:
       - qdrant-data:/qdrant/storage
     deploy:
@@ -59,7 +82,14 @@ services:
     build: ./backend
     container_name: cellarion-backend
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     environment:
+      # Belt-and-braces with the Dockerfile ENV (audit L-22): secure refresh
+      # cookie + redacted 5xx bodies must not depend on out-of-band config.
+      - NODE_ENV=production
       - MONGO_URI=mongodb://mongo:27017/winecellar
       - JWT_SECRET=${JWT_SECRET}
       - ACCESS_TOKEN_EXPIRES_IN=${ACCESS_TOKEN_EXPIRES_IN:-15m}
@@ -116,6 +146,10 @@ services:
     build: ./rembg
     container_name: cellarion-rembg
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
       interval: 30s
@@ -137,12 +171,18 @@ services:
         VITE_SITE_URL: ${VITE_SITE_URL:-}
     container_name: cellarion-frontend
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     deploy:
       resources:
         limits:
           memory: 64M
+    # 8080: nginxinc/nginx-unprivileged serve stage — non-root nginx cannot
+    # bind :80. Local port 80 mapping lives in docker-compose.override.yml.
     expose:
-      - "80"
+      - "8080"
     networks:
       - web
       - default
@@ -151,7 +191,7 @@ services:
       traefik.docker.network: "web"
       traefik.http.routers.cellarion.rule: "Host(`cellarion.app`)"
       traefik.http.routers.cellarion.entrypoints: "web"
-      traefik.http.services.cellarion.loadbalancer.server.port: "80"
+      traefik.http.services.cellarion.loadbalancer.server.port: "8080"
     depends_on:
       backend:
         condition: service_healthy
@@ -170,6 +210,10 @@ services:
     # profile (an empty password makes Postgres/Umami fail to start — fail-closed,
     # and never a guessable committed default). Matches docker-compose.prod.yml.
     profiles: ["analytics"]
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     environment:
       - DATABASE_URL=postgresql://umami:${UMAMI_DB_PASSWORD}@umami-db:5432/umami
       - DATABASE_TYPE=postgresql
@@ -198,6 +242,18 @@ services:
     container_name: cellarion-umami-db
     restart: unless-stopped
     profiles: ["analytics"]
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    # Entrypoint starts as root, fixes PGDATA ownership/permissions, then
+    # su-exec's down to the postgres user — the minimal caps that needs.
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+      - SETGID
+      - SETUID
     environment:
       - POSTGRES_DB=umami
       - POSTGRES_USER=umami

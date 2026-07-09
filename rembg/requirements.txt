@@ -1,7 +1,12 @@
 flask==3.1.3
 rembg[cpu]==2.0.75
-pillow>=10.0.0
+# Pinned (was >=10.0.0): pillow decodes untrusted image bytes, so builds must
+# not silently float to an unvetted release. Must stay inside rembg 2.0.75's
+# own constraint (pillow >=12.1,<13).
+pillow==12.3.0
 # app.py imports numpy directly (transparency pre-check) — pin it explicitly
 # instead of relying on it staying a transitive dependency of rembg.
 numpy>=1.26,<3
-gunicorn==22.0.0
+# >=23 fixes CVE-2024-6827 (request smuggling; unreachable here — rembg is
+# internal-only with no fronting proxy — bumped for hygiene).
+gunicorn>=23.0.0
