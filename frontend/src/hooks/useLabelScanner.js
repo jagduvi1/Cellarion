@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import i18n from '../i18n';
+import { scanLabel } from '../api/wines';
 
 /**
  * Custom hook that encapsulates label-scan camera logic.
@@ -121,11 +122,7 @@ export default function useLabelScanner(apiFetch, { onScanSuccess, onScanError }
           reader.readAsDataURL(blob);
         });
 
-        const res = await apiFetch('/api/wines/scan-label', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ image: base64, mediaType: 'image/jpeg' })
-        });
+        const res = await scanLabel(apiFetch, base64, 'image/jpeg');
         const data = await res.json();
 
         if (res.ok && data.extracted) {

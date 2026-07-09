@@ -15,9 +15,6 @@ export const getReviewFeed = (apiFetch, params = '') =>
 export const getDiscoverFeed = (apiFetch, params = '') =>
   apiFetch(`/api/reviews/discover${params ? `?${params}` : ''}`);
 
-export const getReview = (apiFetch, id) =>
-  apiFetch(`/api/reviews/${id}`);
-
 export const updateReview = (apiFetch, id, data) =>
   apiFetch(`/api/reviews/${id}`, { method: 'PUT', headers: JSON_HEADERS, body: JSON.stringify(data) });
 
