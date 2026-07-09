@@ -29,7 +29,6 @@
     "recharts": "^3.8.0",
     "rehype-sanitize": "^6.0.0",
     "three": "^0.183.2",
-    "web-vitals": "^2.1.4",
     "world-atlas": "^2.0.2"
   },
   "devDependencies": {

@@ -60,5 +60,3 @@ export function extractForumPlainText(html) {
   const stripped = forumPurify.sanitize(html, { ALLOWED_TAGS: [], KEEP_CONTENT: true });
   return stripped.replace(/\s+/g, ' ').trim();
 }
-
-export const FORUM_ALLOWED_TAGS = ALLOWED_TAGS;

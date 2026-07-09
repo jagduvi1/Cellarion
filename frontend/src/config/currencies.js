@@ -6,7 +6,6 @@ export const CURRENCIES = [
   'JPY', 'HKD', 'SGD',
   'ZAR'
 ];
-export const DEFAULT_CURRENCY = 'USD';
 
 // Display symbols for wine list menus and PDFs
 export const CURRENCY_SYMBOLS = {
