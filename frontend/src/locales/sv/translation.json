@@ -2707,6 +2707,7 @@
       "ctAllPending_other": "Alla {{count}} flaskor i filen är väntande (olevererade) köp — Cellarion hanterar inte flaskor du ännu inte har fått."
     },
     "warnings": {
+      "ctTruncatedTitle": "Bara 25 rader hittades — exporten kan vara avklippt.",
       "ctTruncated": "Det här ser ut som en export av en enda sida (exakt 25 rader). Välj 'All wines' istället för 'Only wines on this page' i CellarTracker innan du exporterar, annars kan större delen av din källare saknas i importen.",
       "ctPendingSkipped_one": "{{count}} väntande (olevererad) flaska importerades inte: {{wines}}. Cellarion hanterar inte flaskor du ännu inte har fått — importera igen efter leverans.",
       "ctPendingSkipped_other": "{{count}} väntande (olevererade) flaskor importerades inte: {{wines}}. Cellarion hanterar inte flaskor du ännu inte har fått — importera igen efter leverans."
@@ -2718,6 +2719,22 @@
       "consumed": "Consumed-tabellen",
       "purchase": "Purchase-tabellen",
       "pending": "Pending-tabellen (väntande köp)"
+    },
+    "ctDisclosure": {
+      "title": "Byter du från CellarTracker? Det här följer med",
+      "dismiss": "Stäng",
+      "carriedTitle": "Följer med dig",
+      "carriedBottles": "Flaskor och årgångar (även utan årgång)",
+      "carriedRatings": "Dina personliga betyg (MY / MyScore)",
+      "carriedPurchase": "Köpdata — pris, datum och butik",
+      "carriedWindows": "Drickfönster, som ett personligt fönster på varje flaska",
+      "carriedConsumed": "Din druckna historik (Bottles- och Consumed-exporter)",
+      "carriedLocations": "Platser och fack, som hyllor eller fritextplatser",
+      "notCarriedTitle": "Kan inte följa med",
+      "notCarriedNotes": "Communityns provningsanteckningar — exporten innehåller bara antal, inte texten",
+      "notCarriedPhotos": "Etikettfoton",
+      "notCarriedWishlist": "Önskelistor",
+      "notCarriedWhy": "CellarTrackers exportfiler innehåller helt enkelt inte det här, så ingen import kan ta med det."
     },
     "upload": {
       "resumeReviewTitle": "Dina matchade resultat finns kvar",
@@ -2911,6 +2928,17 @@
       "unplacedNote": "De här flaskorna importerades korrekt — de kunde bara inte tilldelas en hyllplats. Du kan placera dem manuellt från källarsidan.",
       "viewErrors": "Visa fel ({{count}})",
       "errorRow": "Rad {{row}}: {{reason}}",
+      "reportRow": "Rad {{row}} ({{wine}}): {{reason}}",
+      "allImportedNote_one": "Din flaska kom med i källaren.",
+      "allImportedNote_other": "Alla {{count}} flaskor kom med i din källare.",
+      "partialTitle": "{{created}} av {{total}} flaskor importerade",
+      "partialNote_one": "1 rad kom inte med — hela uppdelningen finns nedan.",
+      "partialNote_other": "{{count}} rader kom inte med — hela uppdelningen finns nedan.",
+      "unplacedOnlyNote_one": "Alla flaskor importerades, men 1 kunde inte placeras i en hylla — detaljer nedan.",
+      "unplacedOnlyNote_other": "Alla flaskor importerades, men {{count}} kunde inte placeras i en hylla — detaljer nedan.",
+      "skippedSummary": "Överhoppade rader ({{count}})",
+      "skippedByYou": "Överhoppad av dig under granskningen",
+      "downloadReport": "Ladda ner rapport (CSV)",
       "goToCellar": "Gå till källaren",
       "importMore": "Importera fler"
     },

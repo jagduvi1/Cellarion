@@ -1450,3 +1450,105 @@
   font: inherit;
   text-decoration: underline;
 }
+
+/* ── Honest reporting: elevated CT truncation warning ────────────────────── */
+
+/* The 25-row page-export case deserves more than a soft note — a user who
+   misses it imports 25 of maybe 2,000 bottles and thinks it worked. */
+.import-parse-warning-strong {
+  background: rgba(191, 138, 46, 0.18);
+  border: 1px solid #bf8a2e;
+  border-left-width: 5px;
+  font-size: 0.95rem;
+  padding: 1rem 1.25rem;
+}
+
+.import-parse-warning-strong strong {
+  display: block;
+  margin-bottom: 0.25rem;
+  color: #bf8a2e;
+}
+
+/* ── CellarTracker "what transfers" disclosure (upload step) ─────────────── */
+
+.ct-disclosure-panel {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-left: 3px solid var(--color-primary);
+  border-radius: var(--radius-md);
+  padding: 1rem 1.25rem;
+  margin: 0.75rem 0;
+  text-align: left;
+  font-size: 0.9rem;
+}
+
+.ct-disclosure-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.ct-disclosure-head strong {
+  color: var(--color-text);
+}
+
+.ct-disclosure-dismiss {
+  background: none;
+  border: none;
+  color: var(--color-text-muted);
+  font-size: 1.25rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 0.25rem;
+}
+
+.ct-disclosure-cols {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 0.75rem 2rem;
+}
+
+.ct-disclosure-col-title {
+  display: block;
+  font-weight: 600;
+  margin-bottom: 0.25rem;
+}
+
+.ct-disclosure-yes { color: var(--color-success); }
+.ct-disclosure-no { color: var(--color-danger); }
+
+.ct-disclosure-col ul {
+  margin: 0;
+  padding-left: 1.25rem;
+  color: var(--color-text-secondary);
+}
+
+.ct-disclosure-col li {
+  margin: 0.15rem 0;
+}
+
+.ct-disclosure-why {
+  margin: 0.5rem 0 0;
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+}
+
+/* ── Honest reporting: done-step partial-success state ───────────────────── */
+
+.done-icon-warn {
+  background: rgba(191, 138, 46, 0.15);
+  color: #bf8a2e;
+  font-weight: 700;
+}
+
+.done-subtitle {
+  color: var(--color-text-secondary);
+  margin: -0.75rem 0 1.5rem;
+  font-size: 0.95rem;
+}
+
+.done-partial-note {
+  color: #bf8a2e;
+}
