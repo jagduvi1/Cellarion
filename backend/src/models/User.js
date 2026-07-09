@@ -238,6 +238,15 @@ const userSchema = new mongoose.Schema({
     expiresAt: { type: Date, default: null }, // null = permanent
     bannedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null }
   },
+  // Temporary per-user override of the daily AI budget (services/aiBudget.js),
+  // granted by an admin approving an AiBudgetRequest. No defaults are
+  // persisted — the subdocument is absent on users without a grant. An
+  // expired override (expiresAt <= now) is simply ignored by the budget
+  // check; no cleanup job is needed.
+  aiBudgetOverride: {
+    max:       { type: Number },
+    expiresAt: { type: Date },
+  },
   createdAt: {
     type: Date,
     default: Date.now

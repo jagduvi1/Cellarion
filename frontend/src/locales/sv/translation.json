@@ -85,6 +85,7 @@
     "support": "Support",
     "supportTickets": "Supportärenden",
     "wineReports": "Vinrapporter",
+    "aiBudgetRequests": "AI-budget",
     "sommelier": "Sommelier",
     "admin": "Admin",
     "cellars": "Källare",
@@ -2173,6 +2174,38 @@
     "allrounder": "Allroundare",
     "score": "Cellar Cred"
   },
+  "adminAiBudget": {
+    "title": "AI-budgetförfrågningar",
+    "intro": "Användare kan begära en tillfällig höjning av sin dagliga gräns för AI-uppslag, t.ex. under en stor import. Ett godkännande skriver en tidsbegränsad höjning till användarens konto.",
+    "tabs": {
+      "pending": "Väntande",
+      "decided": "Avgjorda"
+    },
+    "count_one": "{{count}} förfrågan",
+    "count_other": "{{count}} förfrågningar",
+    "loading": "Laddar…",
+    "empty": "Inga förfrågningar hittades.",
+    "loadError": "Det gick inte att ladda förfrågningarna",
+    "decideError": "Det gick inte att uppdatera förfrågan",
+    "networkError": "Nätverksfel.",
+    "deletedUser": "[borttagen]",
+    "pendingRows_one": "{{count}} importrad väntar på AI-uppslag",
+    "pendingRows_other": "{{count}} importrader väntar på AI-uppslag",
+    "status": {
+      "pending": "Väntande",
+      "approved": "Godkänd",
+      "denied": "Nekad"
+    },
+    "grantedMaxLabel": "Daglig gräns",
+    "daysLabel": "Dagar",
+    "approve": "Godkänn",
+    "deny": "Neka",
+    "approvedSummary": "Beviljade {{max}} AI-uppslag per dag till {{date}}",
+    "deniedSummary": "Nekad",
+    "decidedBy": "av {{username}} den {{date}}",
+    "prev": "Föregående",
+    "next": "Nästa"
+  },
   "adminStats": {
     "title": "Global statistik",
     "loading": "Laddar plattformsstatistik…",
@@ -2858,6 +2891,19 @@
       "importing": "Importerar...",
       "importButton_one": "Importera {{count}} flaska",
       "importButton_other": "Importera {{count}} flaskor"
+    },
+    "aiBudget": {
+      "title": "Dagens gräns för AI-uppslag är nådd.",
+      "description_one": "{{count}} rad matchades med standardmatchning i stället för AI.",
+      "description_other": "{{count}} rader matchades med standardmatchning i stället för AI.",
+      "usage": "{{used}} av {{max}} AI-uppslag använda idag.",
+      "overrideActive": "En tillfälligt högre gräns är aktiv till {{date}}.",
+      "retryButton": "Försök AI-uppslag igen",
+      "retrying": "Försöker igen… ({{done}}/{{total}})",
+      "requestButton": "Begär högre gräns",
+      "requesting": "Skickar begäran…",
+      "requested": "Begäran skickad — en administratör granskar den.",
+      "requestError": "Det gick inte att skicka begäran. Försök igen."
     },
     "progress": {
       "importing": "Importerar flaskor till din källare...",

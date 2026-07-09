@@ -24,6 +24,7 @@
  */
 
 const AiUsage = require('../models/AiUsage');
+const User = require('../models/User');
 const rateLimitsConfig = require('../config/rateLimits');
 
 // Same retention window as ChatUsage — keeps the usage history inspectable
@@ -65,6 +66,45 @@ async function incUsage(userId, date, n) {
 }
 
 /**
+ * The user's currently-active budget override, or null.
+ *
+ * Granted by an admin approving an AiBudgetRequest (written onto the User
+ * document as `aiBudgetOverride: { max, expiresAt }`). An expired or
+ * malformed override is treated as absent — no cleanup job needed. A DB
+ * error also degrades to "no override" so the budget check never breaks an
+ * AI call path.
+ */
+async function getActiveOverride(userId) {
+  if (!userId) return null;
+  try {
+    const user = await User.findById(userId).select('aiBudgetOverride').lean();
+    const o = user?.aiBudgetOverride;
+    if (o && Number(o.max) > 0 && o.expiresAt && new Date(o.expiresAt) > new Date()) {
+      return { max: Number(o.max), expiresAt: o.expiresAt };
+    }
+  } catch (err) {
+    console.warn('[aiBudget] override lookup failed:', err.message);
+  }
+  return null;
+}
+
+/**
+ * Effective per-user daily max: the admin-granted override while it is
+ * active, otherwise the global aiDailyBudget config. A base of 0 means
+ * unlimited — an override can only ever RAISE the limit, so it is ignored
+ * when the site already runs unlimited.
+ *
+ * Returns { max, override } — override is { max, expiresAt } | null.
+ */
+async function getEffectiveDailyMax(userId) {
+  const cfg = rateLimitsConfig.get();
+  const base = cfg.aiDailyBudget?.max ?? rateLimitsConfig.defaults.aiDailyBudget.max;
+  if (base === 0) return { max: 0, override: null };
+  const override = await getActiveOverride(userId);
+  return { max: override ? override.max : base, override };
+}
+
+/**
  * Debit one Anthropic call against the user's daily budget AND the global
  * daily cap. The increment itself is the gate; overshoot is refunded.
  *
@@ -79,7 +119,9 @@ async function incUsage(userId, date, n) {
  */
 async function tryDebitAi(userId) {
   const cfg = rateLimitsConfig.get();
-  const budget    = cfg.aiDailyBudget?.max    ?? rateLimitsConfig.defaults.aiDailyBudget.max;
+  // Effective per-user budget: an active admin-granted override wins over the
+  // global default (getEffectiveDailyMax). The global cap is never overridden.
+  const { max: budget } = await getEffectiveDailyMax(userId);
   const globalCap = cfg.aiGlobalDailyCap?.max ?? rateLimitsConfig.defaults.aiGlobalDailyCap.max;
   const date = todayUTC();
   const debited = { user: false, global: false };
@@ -131,4 +173,4 @@ function isRefundableFailure(debugReason) {
     || debugReason.startsWith('exception');
 }
 
-module.exports = { tryDebitAi, isRefundableFailure, todayUTC, secondsUntilMidnightUTC };
+module.exports = { tryDebitAi, isRefundableFailure, getEffectiveDailyMax, todayUTC, secondsUntilMidnightUTC };

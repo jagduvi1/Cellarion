@@ -628,6 +628,47 @@
   color: #bf8a2e;
 }
 
+/* Banner above the review table when the daily AI budget skipped rows */
+.import-ai-budget-banner {
+  background: rgba(108, 92, 231, 0.08);
+  border-left: 3px solid #6c5ce7;
+  padding: 0.75rem 1rem;
+  margin: 0.75rem 0 1rem;
+  border-radius: 4px;
+  font-size: 0.9rem;
+  color: var(--color-text);
+}
+
+.import-ai-budget-banner .ai-budget-usage {
+  margin: 0.5rem 0 0;
+  font-size: 0.85rem;
+  opacity: 0.85;
+}
+
+.import-ai-budget-banner .ai-budget-actions {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-top: 0.6rem;
+}
+
+.import-ai-budget-banner .ai-budget-pending {
+  font-size: 0.85rem;
+  font-style: italic;
+  opacity: 0.85;
+}
+
+.import-ai-budget-banner .ai-budget-error {
+  margin: 0.5rem 0 0;
+  font-size: 0.85rem;
+  color: #c0392b;
+}
+
+[data-theme="dark"] .import-ai-budget-banner .ai-budget-error {
+  color: #e57368;
+}
+
 /* Parse-time warnings (CellarTracker truncation / skipped pending bottles) */
 .import-parse-warning-banner {
   background: rgba(191, 138, 46, 0.1);

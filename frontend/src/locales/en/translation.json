@@ -85,6 +85,7 @@
     "support": "Support",
     "supportTickets": "Support Tickets",
     "wineReports": "Wine Reports",
+    "aiBudgetRequests": "AI Budget",
     "sommelier": "Sommelier",
     "admin": "Admin",
     "cellars": "Cellars",
@@ -2173,6 +2174,38 @@
     "allrounder": "All-Rounder",
     "score": "Cellar Cred"
   },
+  "adminAiBudget": {
+    "title": "AI Budget Requests",
+    "intro": "Users can request a temporary increase of their daily AI look-up limit, e.g. during a large import. Approving writes a time-boxed override onto the user's account.",
+    "tabs": {
+      "pending": "Pending",
+      "decided": "Decided"
+    },
+    "count_one": "{{count}} request",
+    "count_other": "{{count}} requests",
+    "loading": "Loading…",
+    "empty": "No requests found.",
+    "loadError": "Failed to load requests",
+    "decideError": "Failed to update the request",
+    "networkError": "Network error.",
+    "deletedUser": "[deleted]",
+    "pendingRows_one": "{{count}} import row waiting for an AI look-up",
+    "pendingRows_other": "{{count}} import rows waiting for an AI look-up",
+    "status": {
+      "pending": "Pending",
+      "approved": "Approved",
+      "denied": "Denied"
+    },
+    "grantedMaxLabel": "Daily limit",
+    "daysLabel": "Days",
+    "approve": "Approve",
+    "deny": "Deny",
+    "approvedSummary": "Granted {{max}} AI look-ups per day until {{date}}",
+    "deniedSummary": "Denied",
+    "decidedBy": "by {{username}} on {{date}}",
+    "prev": "Prev",
+    "next": "Next"
+  },
   "adminStats": {
     "title": "Global Stats",
     "loading": "Loading platform statistics…",
@@ -2858,6 +2891,19 @@
       "importing": "Importing...",
       "importButton_one": "Import {{count}} bottle",
       "importButton_other": "Import {{count}} bottles"
+    },
+    "aiBudget": {
+      "title": "Daily AI look-up limit reached.",
+      "description_one": "{{count}} row was matched with standard matching instead of AI.",
+      "description_other": "{{count}} rows were matched with standard matching instead of AI.",
+      "usage": "{{used}} of {{max}} AI look-ups used today.",
+      "overrideActive": "A temporary higher limit is active until {{date}}.",
+      "retryButton": "Retry AI lookups",
+      "retrying": "Retrying… ({{done}}/{{total}})",
+      "requestButton": "Request higher limit",
+      "requesting": "Requesting…",
+      "requested": "Requested — an admin will review your request.",
+      "requestError": "Could not send the request. Please try again."
     },
     "progress": {
       "importing": "Importing bottles into your cellar...",
