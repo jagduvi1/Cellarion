@@ -31,7 +31,14 @@
  *                   and for row-origin math). Optional — also inferred from
  *                   max observed (row, col) per rack.
  *   rackType      - Optional rack type (grid|shelf|hex|triangle|stack|x-rack|cube)
+ *
+ * CellarTracker imports additionally emit (consumed by the backend importer):
+ *   grapes        - [string] grape varieties (from Varietal/MasterVarietal)
+ *   drinkFrom     - integer drink-window start year, or null
+ *   drinkTo       - integer drink-window end year, or null
  */
+
+import { normalizeBottleSize } from '../config/bottleSizes';
 
 /**
  * Robust locale-aware number parser. Handles:
@@ -123,11 +130,16 @@ export function parseCSV(text, delimiter = ',') {
   for (let i = 0; i < text.length; i++) {
     const ch = text[i];
     if (ch === '"') {
+      // Preserve quote characters — this pass only decides where logical
+      // lines end; splitLine below re-parses the quoting per field. Stripping
+      // quotes here (the old behaviour) made splitLine split quoted fields
+      // containing the delimiter ("France, Bordeaux, Libournais, Pomerol").
       if (inQuotes && text[i + 1] === '"') {
-        current += '"';
+        current += '""';
         i++; // skip escaped quote
       } else {
         inQuotes = !inQuotes;
+        current += '"';
       }
     } else if (ch === '\n' && !inQuotes) {
       if (current.trim() || lines.length > 0) lines.push(current);
@@ -307,6 +319,54 @@ function normaliseBottleSize(value) {
 }
 
 /**
+ * Decode a raw import file (ArrayBuffer/Uint8Array) into text with encoding
+ * detection. CellarTracker's browser-UI export is Windows-1252 — reading it
+ * as UTF-8 silently corrupts every accented producer (Pétrus → P�trus).
+ *
+ * Order: BOM sniff (UTF-8 / UTF-16LE / UTF-16BE) → strict UTF-8 validation
+ * (fatal decoder) → Windows-1252 fallback. cp1252 is used rather than plain
+ * latin-1 because it maps the 0x80–0x9F range (curly quotes, €) correctly,
+ * and a cp1252 decode never throws — every byte sequence is valid.
+ * Valid UTF-8 input always decodes as UTF-8, so this changes nothing for
+ * well-formed files.
+ *
+ * @returns {{ text: string, encoding: 'utf-8'|'utf-16le'|'utf-16be'|'windows-1252' }}
+ */
+export function decodeImportBuffer(buffer) {
+  const bytes = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
+  if (bytes[0] === 0xEF && bytes[1] === 0xBB && bytes[2] === 0xBF) {
+    return { text: new TextDecoder('utf-8').decode(bytes), encoding: 'utf-8' };
+  }
+  if (bytes[0] === 0xFF && bytes[1] === 0xFE) {
+    return { text: new TextDecoder('utf-16le').decode(bytes), encoding: 'utf-16le' };
+  }
+  if (bytes[0] === 0xFE && bytes[1] === 0xFF) {
+    return { text: new TextDecoder('utf-16be').decode(bytes), encoding: 'utf-16be' };
+  }
+  try {
+    return { text: new TextDecoder('utf-8', { fatal: true }).decode(bytes), encoding: 'utf-8' };
+  } catch {
+    return { text: new TextDecoder('windows-1252').decode(bytes), encoding: 'windows-1252' };
+  }
+}
+
+/**
+ * CellarTracker's WebQuery endpoint returns an HTML page ("You are currently
+ * not logged into CellarTracker.") instead of data when the session is
+ * invalid. Fail fast with a recognisable error code instead of parsing HTML
+ * as a wine list.
+ */
+function throwIfHtmlErrorPage(text) {
+  const head = text.slice(0, 512).trimStart().toLowerCase();
+  const isHtml = head.startsWith('<html') || head.startsWith('<!doctype');
+  if (isHtml || text.includes('You are currently not logged into CellarTracker')) {
+    const err = new Error('This file is an HTML error page, not a wine export');
+    err.code = 'ct-error-page';
+    throw err;
+  }
+}
+
+/**
  * Auto-detect delimiter from first line of CSV.
  */
 export function detectDelimiter(text) {
@@ -406,49 +466,393 @@ function mapVivinoRow(row) {
   };
 }
 
-// ── CellarTracker Mapper ────────────────────────────────────────────────────
+// ── CellarTracker Mappers ───────────────────────────────────────────────────
+//
+// CellarTracker ("CT") has TWO export paths and SIX table shapes:
+//
+//   A. Browser UI (My Cellar → Export): Windows-1252 CSV, sometimes truncated
+//      to 25 rows ("Only wines on this page" default), header names can drift
+//      (MyScore vs MY). Handled by the loose `mapCellarTrackerRow` fallback.
+//   B. WebQuery (xlquery.asp): UTF-8 TSV/CSV, one of six tables — List,
+//      Inventory, Bottles, Consumed, Purchase, Pending — each with a
+//      different row grain and column set. Fingerprinted by
+//      `detectCellarTrackerTable` and handled by a per-table mapper.
+//
+// CT sentinel values (never data):
+//   Vintage 1001            → non-vintage ('NV')
+//   9999 (vintage/windows)  → unknown / no drink window → null
+//   (n/a) / (pending) / (unknown) / Unknown → empty
+//
+// The `CT` column is the community average score — never imported. The
+// user's own score is `MY` (WebQuery) / `MyScore` (browser CSV), 100-scale.
 
+const CT_SENTINELS = new Set(['(n/a)', '(pending)', '(unknown)', 'unknown']);
+
+/** Trim a CT field and blank out CT's placeholder sentinels. */
+function ctClean(value) {
+  const s = (value || '').trim();
+  return CT_SENTINELS.has(s.toLowerCase()) ? '' : s;
+}
+
+/** Vintage: 1001 → 'NV' (CT's non-vintage sentinel), 9999/blank → ''. */
+function ctVintage(value) {
+  const s = (value || '').trim();
+  if (s === '1001') return 'NV';
+  if (s === '9999') return '';
+  return s;
+}
+
+/** Drink-window year: integer, or null for blank/9999/1001 sentinels. */
+function ctDrinkYear(value) {
+  const n = parseInt((value || '').trim(), 10);
+  if (!Number.isFinite(n) || n === 9999 || n === 1001) return null;
+  return n;
+}
+
+/**
+ * CT dates are US M/D/YYYY ("5/25/2020"). Parse month-first explicitly —
+ * never via `new Date(string)`, whose interpretation of slashed dates is
+ * implementation/locale lore. Falls back to tryParseDate for ISO strings.
+ */
+function ctDate(value) {
+  const s = (value || '').trim();
+  if (!s) return undefined;
+  const us = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (us) return `${us[3]}-${us[1].padStart(2, '0')}-${us[2].padStart(2, '0')}`;
+  return tryParseDate(s);
+}
+
+/** Grapes: Varietal → MasterVarietal, skipping the literal 'Unknown'. */
+function ctGrapes(get) {
+  const v = ctClean(get(['Varietal'])) || ctClean(get(['MasterVarietal']));
+  return v ? [v] : undefined;
+}
+
+/**
+ * CT `Locale` is the full "Country, Region, SubRegion, Appellation" path
+ * (2–4 parts). Used when a table has no dedicated Country/Region columns
+ * (the Bottles table) or they're blank.
+ */
+function parseCtLocale(locale) {
+  const parts = (locale || '').split(',').map((s) => s.trim()).filter(Boolean);
+  return {
+    country: parts[0] || '',
+    region: parts[1] || '',
+    appellation: parts.length > 2 ? parts[parts.length - 1] : '',
+  };
+}
+
+/**
+ * CT wine types are compound ("White - Sweet/Dessert", "Red - Fortified",
+ * "White - Sparkling", "Port", "Spirits"). Unlike the generic mapWineType,
+ * the style suffix must win over the base colour, so check fortified/
+ * sparkling/dessert BEFORE red/white.
+ */
+function mapCellarTrackerType(typeStr) {
+  const t = (typeStr || '').toLowerCase();
+  if (t.includes('fortified') || t.includes('port') || t.includes('sherry') ||
+      t.includes('madeira') || t.includes('spirits') || t.includes('whisky')) return 'fortified';
+  if (t.includes('sparkling') || t.includes('champagne')) return 'sparkling';
+  if (t.includes('sweet') || t.includes('dessert') || t.includes('ice wine')) return 'dessert';
+  if (t.includes('rosé') || t.includes('rose')) return 'rosé';
+  if (t.includes('white')) return 'white';
+  if (t.includes('red')) return 'red';
+  return mapWineType(typeStr);
+}
+
+/** Location + Bin joined into Cellarion's freeform location string. */
+function ctLocation(get) {
+  const location = ctClean(get(['Location', 'location']));
+  const bin = ctClean(get(['Bin', 'bin']));
+  return [location, bin].filter(Boolean).join(' / ');
+}
+
+/**
+ * The user's own 100-point score. `MY` in WebQuery exports, `MyScore` in
+ * browser-UI CSVs. 0/blank = no score. (The `CT` community average is
+ * deliberately NOT an alias here.)
+ */
+function ctMyRating(get) {
+  const n = parseLocaleNumber(get(['MY', 'MyScore']));
+  return isNaN(n) || n <= 0 ? undefined : n;
+}
+
+/**
+ * Price + currency. `Price`/`BottleCost` are in the ACCOUNT currency; when
+ * `NativePrice`/`NativePriceCurrency` record a different original purchase
+ * currency, prefer the native pair — that is what Cellarion's price field
+ * means. CT stores 0 for "no price recorded" → undefined.
+ */
+function ctMoney(get, { priceKeys = ['Price'], currencyKeys = ['Currency'] } = {}) {
+  const accountPrice = parseLocaleNumber(get(priceKeys));
+  const accountCurrency = get(currencyKeys) || undefined;
+  const nativePrice = parseLocaleNumber(get(['NativePrice']));
+  const nativeCurrency = get(['NativePriceCurrency']);
+  if (!isNaN(nativePrice) && nativePrice > 0 && nativeCurrency && nativeCurrency !== accountCurrency) {
+    return { price: nativePrice, currency: nativeCurrency };
+  }
+  return {
+    price: isNaN(accountPrice) || accountPrice <= 0 ? undefined : accountPrice,
+    currency: accountCurrency,
+  };
+}
+
+/** Map CT's ShortType/ConsumptionType to Cellarion's consumedReason enum. */
+function ctConsumedReason(shortType) {
+  const s = (shortType || '').toLowerCase();
+  if (!s || s.includes('drank') || s.includes('drink')) return 'drank';
+  if (s.includes('gift')) return 'gifted';
+  if (s.includes('sold') || s.includes('sale')) return 'sold';
+  return 'other';
+}
+
+/** Join per-bottle note fields (BottleNote / PNotes / PurchaseNote). */
+function joinCtNotes(...notes) {
+  return notes.map((n) => (n || '').trim()).filter(Boolean).join('\n');
+}
+
+const CT_PRODUCER_PREFIX_RE =
+  /^(Château|Chateau|Domaine|Clos|Castello|Tenuta|Bodegas?|Weingut|Cantina|Quinta|Mas)$/i;
+const CT_PRODUCER_PARTICLE_RE =
+  /^(de|du|des|la|le|les|di|del|della|dei|degli|do|dos|da|das|y|e|&|van|von|zu|zur)$/i;
+
+/**
+ * Best-effort producer guess from CT's "Wine" display name (which leads with
+ * the producer) when no Producer column exists. If the name starts with a
+ * producer-prefix word (Château/Domaine/…), take the prefix plus any name
+ * particles plus one substantive token, so
+ *   "Domaine de la Romanée-Conti La Tâche" → "Domaine de la Romanée-Conti"
+ *   "Château Margaux"                      → "Château Margaux"
+ * Otherwise keep the legacy rule: first word of a >2-word name.
+ */
+export function guessProducerFromWineName(wineName) {
+  if (!wineName) return '';
+  const parts = wineName.trim().split(/\s+/);
+  if (parts.length < 2) return '';
+  if (CT_PRODUCER_PREFIX_RE.test(parts[0])) {
+    let end = 1;
+    while (end < parts.length && CT_PRODUCER_PARTICLE_RE.test(parts[end])) end++;
+    if (end < parts.length) end++; // the substantive token
+    return parts.slice(0, end).join(' ');
+  }
+  return parts.length > 2 ? parts[0] : '';
+}
+
+/**
+ * CT's "Wine" display name includes the producer prefix ("Vega Sicilia
+ * Único"). When a real Producer column value is present and the name starts
+ * with it, strip the prefix for a cleaner wineName — unless stripping would
+ * empty it (wine named exactly after the producer, e.g. "Pétrus").
+ */
+export function stripProducerPrefix(wineName, producer) {
+  if (!wineName || !producer) return wineName;
+  if (wineName.toLowerCase().startsWith(producer.toLowerCase())) {
+    const rest = wineName.slice(producer.length).replace(/^[\s\-–—:,]+/, '').trim();
+    if (rest) return rest;
+  }
+  return wineName;
+}
+
+/** wineName + producer from a CT row (Producer column or heuristic). */
+function ctIdentity(get) {
+  const rawWine = get(['Wine', 'wine', 'WineName']);
+  const producerCol = ctClean(get(['Producer', 'producer']));
+  if (producerCol) {
+    return { wineName: stripProducerPrefix(rawWine, producerCol), producer: producerCol };
+  }
+  return { wineName: rawWine, producer: guessProducerFromWineName(rawWine) };
+}
+
+/** Fields shared by all CT table mappers. */
+function ctCommonFields(get, { sizeKeys = ['Size'] } = {}) {
+  const { wineName, producer } = ctIdentity(get);
+  const locale = parseCtLocale(get(['Locale']));
+  const rating = ctMyRating(get);
+  return {
+    wineName,
+    producer,
+    vintage: ctVintage(get(['Vintage'])) || 'NV',
+    country: get(['Country']) || locale.country,
+    region: get(['Region']) || locale.region,
+    appellation: ctClean(get(['Appellation'])) || locale.appellation,
+    type: mapCellarTrackerType(get(['Type'])),
+    bottleSize: normalizeBottleSize(get(sizeKeys)) || '750ml',
+    location: ctLocation(get),
+    rating,
+    ratingScale: rating !== undefined ? '100' : undefined,
+    grapes: ctGrapes(get),
+    drinkFrom: ctDrinkYear(get(['BeginConsume'])),
+    drinkTo: ctDrinkYear(get(['EndConsume'])),
+  };
+}
+
+// -- Per-table mappers (WebQuery fingerprinted files) ------------------------
+// Items flagged `_ctPending` are pending (undelivered) purchases — Cellarion
+// has no on-order state, so parseAndMap skips them and reports a warning.
+
+/** List: one row per WINE with Quantity (+ Pending). Quantity expands to N
+ *  bottles; Quantity 0 + Pending > 0 rows are on-order only → skipped. */
+function mapCtListRow(row) {
+  const get = makeGetter(row);
+  const qty = parseInt(get(['Quantity']), 10);
+  const pending = parseInt(get(['Pending']), 10) || 0;
+  const item = {
+    ...ctCommonFields(get),
+    ...ctMoney(get),
+    quantity: Number.isNaN(qty) ? 1 : qty,
+  };
+  if (item.quantity === 0 && pending > 0) {
+    item._ctPending = true;
+    item._ctPendingCount = pending;
+  }
+  return item;
+}
+
+/** Inventory: one row per physical in-cellar bottle (plus pending rows,
+ *  marked Location "(pending)", which are skipped). */
+function mapCtInventoryRow(row) {
+  const get = makeGetter(row);
+  const item = {
+    ...ctCommonFields(get),
+    ...ctMoney(get),
+    quantity: 1,
+    purchaseDate: ctDate(get(['PurchaseDate'])),
+    purchaseLocation: ctClean(get(['StoreName', 'Store'])),
+    notes: joinCtNotes(get(['BottleNote']), get(['PNotes'])),
+  };
+  if ((get(['Location']) || '').trim().toLowerCase() === '(pending)') {
+    item._ctPending = true;
+  }
+  return item;
+}
+
+/** Bottles: one row per bottle in ANY state.
+ *  BottleState: -1 = pending (skip), 0 = consumed (history), 1 = in cellar. */
+function mapCtBottlesRow(row) {
+  const get = makeGetter(row);
+  const common = ctCommonFields(get, { sizeKeys: ['BottleSize', 'Size'] });
+  const state = get(['BottleState']).trim();
+  if (state === '-1') {
+    return { ...common, quantity: 1, _ctPending: true };
+  }
+  const qty = parseInt(get(['Quantity']), 10);
+  const item = {
+    ...common,
+    ...ctMoney(get, { priceKeys: ['BottleCost'], currencyKeys: ['BottleCostCurrency'] }),
+    quantity: Number.isNaN(qty) || qty < 1 ? 1 : qty,
+    purchaseDate: ctDate(get(['PurchaseDate'])),
+    purchaseLocation: ctClean(get(['Store', 'StoreName'])),
+    notes: joinCtNotes(get(['BottleNote']), get(['PurchaseNote'])),
+  };
+  const consumedAt = ctDate(get(['ConsumptionDate']));
+  if (state === '0' || consumedAt) {
+    item.addToHistory = true;
+    item.consumedAt = consumedAt;
+    item.consumedReason = ctConsumedReason(get(['ShortType', 'ConsumptionType']));
+    item.consumedNote = get(['ConsumptionNote']) || undefined;
+  }
+  return item;
+}
+
+/** Consumed: one row per consumption event → drink-history entry.
+ *  NB: `cNotes` is a community-note COUNT, never note text — not mapped. */
+function mapCtConsumedRow(row) {
+  const get = makeGetter(row);
+  return {
+    ...ctCommonFields(get),
+    ...ctMoney(get, { priceKeys: ['Price', 'Value'] }),
+    quantity: 1,
+    notes: joinCtNotes(get(['BottleNote']), get(['PurchaseNote'])),
+    addToHistory: true,
+    consumedAt: ctDate(get(['Consumed'])),
+    consumedReason: ctConsumedReason(get(['ShortType'])),
+    consumedNote: get(['ConsumptionNote']) || undefined,
+  };
+}
+
+/** Purchase / Pending: one row per purchase ORDER with Quantity — expanded.
+ *  The two tables share a schema; a file whose rows are all Delivered=False
+ *  is relabeled 'pending' by parseAndMap. */
+function mapCtPurchaseRow(row) {
+  const get = makeGetter(row);
+  const qty = parseInt(get(['Quantity']), 10);
+  return {
+    ...ctCommonFields(get),
+    ...ctMoney(get),
+    quantity: Number.isNaN(qty) || qty < 1 ? 1 : qty,
+    purchaseDate: ctDate(get(['PurchaseDate'])),
+    purchaseLocation: ctClean(get(['StoreName', 'Store'])),
+  };
+}
+
+const CT_TABLE_MAPPERS = {
+  list: mapCtListRow,
+  inventory: mapCtInventoryRow,
+  bottles: mapCtBottlesRow,
+  consumed: mapCtConsumedRow,
+  purchase: mapCtPurchaseRow,
+};
+
+/**
+ * Fingerprint WHICH CellarTracker table a header row belongs to.
+ * Returns 'list' | 'inventory' | 'bottles' | 'consumed' | 'purchase' |
+ * 'availability' | null (null → loose mapCellarTrackerRow fallback, which
+ * also covers browser-UI CSV exports whose headers drift).
+ * Note: 'availability' is a statistics table and is REJECTED by parseAndMap.
+ * Order matters — Availability also carries iWine/Pending/Wine columns.
+ */
+export function detectCellarTrackerTable(headers) {
+  const h = new Set(headers.map((s) => s.trim().toLowerCase()));
+  if (h.has('available') && h.has('linear')) return 'availability';
+  if (h.has('iconsumed')) return 'consumed';
+  if (h.has('ipurchase')) return 'purchase';
+  if (h.has('bottlestate') && h.has('iwine') && h.has('bottlesize')) return 'bottles';
+  if (h.has('iwine') && h.has('barcode') && h.has('bottlenote')) return 'inventory';
+  if (h.has('iwine') && h.has('quantity') && h.has('pending') && h.has('wine')) return 'list';
+  return null;
+}
+
+/**
+ * Loose CellarTracker fallback for files detected as CT but not matching a
+ * WebQuery table fingerprint (browser-UI CSV exports with drifting headers).
+ */
 function mapCellarTrackerRow(row) {
   const get = makeGetter(row);
 
-  // CellarTracker uses "Wine" which often includes producer in the name
-  let wineName = get(['Wine', 'wine', 'WineName']);
-  let producer = get(['Producer', 'producer']);
-
-  // If producer is empty, fall back to the first word of the Wine field.
-  // CellarTracker's "Wine" column usually leads with the producer
-  // ("Producer Wine Name"), so this is a crude best-effort guess — wrong
-  // for multi-word producers ("Château Margaux" → "Château"), but it gives
-  // the import matcher something rather than nothing.
-  if (!producer && wineName) {
-    const parts = wineName.split(/\s+/);
-    if (parts.length > 2) {
-      producer = parts[0];
-    }
-  }
+  const { wineName, producer } = ctIdentity(get);
 
   const price = parseLocaleNumber(get(['Price', 'price', 'Cost']));
   const qty = parseInt(get(['Quantity', 'quantity', 'Qty', 'Count']), 10);
-  const ctRating = parseLocaleNumber(get(['MyCTRating', 'CT Rating', 'My Rating', 'Rating']));
+
+  // Personal score first (MY / MyScore, always 100-scale); legacy aliases
+  // as fallback. The `CT` community-average column is never imported.
+  const myRating = ctMyRating(get);
+  const legacyRating = parseLocaleNumber(get(['MyCTRating', 'CT Rating', 'My Rating', 'Rating']));
+  const rating = myRating !== undefined ? myRating : (isNaN(legacyRating) ? undefined : legacyRating);
+
+  const locale = parseCtLocale(get(['Locale']));
 
   return {
-    wineName: get(['Wine', 'wine', 'WineName']),
+    wineName,
     producer,
-    vintage: get(['Vintage', 'vintage', 'Year']) || 'NV',
-    country: get(['Country', 'country', 'Locale']),
-    region: get(['Region', 'region', 'Sub-Region']),
-    appellation: get(['Appellation', 'appellation', 'SubRegion']),
-    type: mapWineType(get(['Type', 'type', 'Color', 'Colour', 'Category'])),
+    vintage: ctVintage(get(['Vintage', 'vintage', 'Year'])) || 'NV',
+    country: get(['Country', 'country']) || locale.country,
+    region: get(['Region', 'region', 'Sub-Region']) || locale.region,
+    appellation: ctClean(get(['Appellation', 'appellation', 'SubRegion'])) || locale.appellation,
+    type: mapCellarTrackerType(get(['Type', 'type', 'Color', 'Colour', 'Category'])),
     price: isNaN(price) ? undefined : price,
     currency: get(['Currency', 'currency']) || undefined,
-    bottleSize: get(['Size', 'size', 'Bottle Size', 'BottleSize']) || '750ml',
+    bottleSize: normalizeBottleSize(get(['Size', 'size', 'Bottle Size', 'BottleSize'])) || '750ml',
     quantity: isNaN(qty) || qty < 1 ? 1 : qty,
-    purchaseDate: get(['PurchaseDate', 'Purchase Date', 'Date Purchased']),
-    purchaseLocation: get(['Store', 'store', 'StoreName', 'Purchase Location', 'Vendor']),
+    purchaseDate: ctDate(get(['PurchaseDate', 'Purchase Date', 'Date Purchased'])),
+    purchaseLocation: ctClean(get(['Store', 'store', 'StoreName', 'Purchase Location', 'Vendor'])),
     notes: get(['Notes', 'notes', 'MyNotes', 'Tasting Notes', 'Review']),
-    rating: isNaN(ctRating) ? undefined : ctRating,
-    ratingScale: inferRatingScale(ctRating),
-    location: get(['Location', 'location', 'Bin', 'bin']),
+    rating,
+    ratingScale: myRating !== undefined ? '100' : inferRatingScale(legacyRating),
+    location: ctLocation(get),
+    grapes: ctGrapes(get),
+    drinkFrom: ctDrinkYear(get(['BeginConsume'])),
+    drinkTo: ctDrinkYear(get(['EndConsume'])),
     ...mapRackFields(get),
   };
 }
@@ -892,11 +1296,25 @@ function splitCSVLine(line, delimiter = ',') {
  *
  * @param {string} text - Raw CSV/TSV text content
  * @param {string} [forceFormat] - Force a specific format ('vivino' | 'cellartracker' | 'generic')
- * @returns {{ items: object[], format: string, headers: string[] }}
+ * @returns {{ items: object[], format: string, headers: string[],
+ *             ctTable?: string, warnings?: object[] }}
+ *   `ctTable` identifies which CellarTracker table was fingerprinted
+ *   ('list'|'inventory'|'bottles'|'consumed'|'purchase'|'pending').
+ *   `warnings` are non-blocking notices:
+ *     { code: 'ct-truncated' }                       \u2014 exactly 25 data rows
+ *       (CellarTracker's "Only wines on this page" default page size)
+ *     { code: 'ct-pending-skipped', count, wines }   \u2014 undelivered bottles
+ *       skipped (Cellarion has no on-order state)
+ * @throws Error with code 'ct-error-page' for HTML error pages, or
+ *   'ct-availability' for CT's Availability statistics table.
  */
 export function parseAndMap(text, forceFormat) {
   // Strip BOM
   const cleaned = text.replace(/^\uFEFF/, '');
+
+  // HTML instead of data = an error page (typically CellarTracker's
+  // "not logged in" response saved as .csv/.tsv). Fail fast and clearly.
+  throwIfHtmlErrorPage(cleaned);
 
   // Oeno's real export has a distinctive two-section structure that single-
   // row header detection can't pick up; try the Oeno-export parser first.
@@ -918,18 +1336,46 @@ export function parseAndMap(text, forceFormat) {
   const headers = Object.keys(rows[0]);
   const format = forceFormat || detectFormat(headers);
 
+  let ctTable = null;
+  if (format === 'cellartracker') {
+    ctTable = detectCellarTrackerTable(headers);
+    if (ctTable === 'availability') {
+      // Statistics table (per-critic drink windows), not a cellar export.
+      const err = new Error('CellarTracker Availability is a statistics table, not a cellar export');
+      err.code = 'ct-availability';
+      throw err;
+    }
+    // Purchase and Pending share one schema; a file whose rows are ALL
+    // undelivered is the Pending table (or a purchase export of futures).
+    if (ctTable === 'purchase' &&
+        rows.every((r) => (r.Delivered || '').trim().toLowerCase() === 'false')) {
+      ctTable = 'pending';
+    }
+  }
+
   const mapper = format === 'cellarion'
     ? mapCellarionRow
     : format === 'vivino'
       ? mapVivinoRow
     : format === 'cellartracker'
-      ? mapCellarTrackerRow
+      ? (CT_TABLE_MAPPERS[ctTable] || mapCellarTrackerRow)
       : mapGenericRow;
 
   // Map rows and expand quantity > 1 into individual items
   const items = [];
+  const ctPendingSkipped = { count: 0, wines: [] };
   for (const row of rows) {
     const mapped = mapper(row);
+
+    // Pending (undelivered) CT bottles: Cellarion has no on-order state \u2014
+    // skip them but keep an honest count for the review-step warning.
+    if (mapped._ctPending) {
+      ctPendingSkipped.count += mapped._ctPendingCount || 1;
+      if (mapped.wineName && !ctPendingSkipped.wines.includes(mapped.wineName)) {
+        ctPendingSkipped.wines.push(mapped.wineName);
+      }
+      continue;
+    }
 
     // Normalise dates (mirror parseJSON)
     if (mapped.purchaseDate) mapped.purchaseDate = tryParseDate(mapped.purchaseDate);
@@ -939,7 +1385,10 @@ export function parseAndMap(text, forceFormat) {
     // Skip rows with no wine name and no producer
     if (!mapped.wineName && !mapped.producer) continue;
 
-    const qty = mapped.quantity || 1;
+    // `?? 1` not `|| 1`: CT List rows can legitimately carry quantity 0
+    // (fully pending wines) and must expand to zero items. All other
+    // mappers clamp quantity to >= 1 themselves.
+    const qty = mapped.quantity ?? 1;
     delete mapped.quantity;
 
     for (let q = 0; q < qty; q++) {
@@ -947,7 +1396,27 @@ export function parseAndMap(text, forceFormat) {
     }
   }
 
-  return { items, format, headers };
+  const warnings = [];
+  // CellarTracker's browser export defaults to "Only wines on this page" =
+  // 25 rows. A file with EXACTLY 25 data rows is very likely truncated.
+  if (format === 'cellartracker' && rows.length === 25) {
+    warnings.push({ code: 'ct-truncated' });
+  }
+  if (ctPendingSkipped.count > 0) {
+    warnings.push({
+      code: 'ct-pending-skipped',
+      count: ctPendingSkipped.count,
+      wines: ctPendingSkipped.wines,
+    });
+  }
+
+  return {
+    items,
+    format,
+    headers,
+    ...(ctTable ? { ctTable } : {}),
+    ...(warnings.length > 0 ? { warnings } : {}),
+  };
 }
 
 /**

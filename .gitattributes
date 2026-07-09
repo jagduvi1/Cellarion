@@ -6,3 +6,8 @@
 # directives parse cleanly.
 *.service text eol=lf
 *.timer   text eol=lf
+
+# Import-parser test fixtures are byte-exact vectors — encodings (UTF-8 vs
+# Windows-1252) and line endings (CRLF vs LF) are the thing under test.
+# Never normalize them.
+frontend/src/utils/__fixtures__/** -text

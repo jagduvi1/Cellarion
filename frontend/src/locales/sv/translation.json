@@ -2646,7 +2646,24 @@
       "validationFailed": "Valideringen misslyckades (HTTP {{status}})",
       "validationNetwork": "Nätverksfel under valideringen",
       "importFailed": "Importen misslyckades",
-      "importNetwork": "Nätverksfel under importen"
+      "importNetwork": "Nätverksfel under importen",
+      "ctErrorPage": "Filen är en felsida från CellarTracker, inte en export — logga in på CellarTracker och exportera igen.",
+      "ctAvailability": "Det här är CellarTrackers Availability-tabell — statistik över drickfönster, inte en källarexport. Exportera tabellen List eller Inventory istället.",
+      "ctAllPending_one": "Den enda flaskan i filen är ett väntande (olevererat) köp — Cellarion hanterar inte flaskor du ännu inte har fått.",
+      "ctAllPending_other": "Alla {{count}} flaskor i filen är väntande (olevererade) köp — Cellarion hanterar inte flaskor du ännu inte har fått."
+    },
+    "warnings": {
+      "ctTruncated": "Det här ser ut som en export av en enda sida (exakt 25 rader). Välj 'All wines' istället för 'Only wines on this page' i CellarTracker innan du exporterar, annars kan större delen av din källare saknas i importen.",
+      "ctPendingSkipped_one": "{{count}} väntande (olevererad) flaska importerades inte: {{wines}}. Cellarion hanterar inte flaskor du ännu inte har fått — importera igen efter leverans.",
+      "ctPendingSkipped_other": "{{count}} väntande (olevererade) flaskor importerades inte: {{wines}}. Cellarion hanterar inte flaskor du ännu inte har fått — importera igen efter leverans."
+    },
+    "ctTables": {
+      "list": "List-tabellen",
+      "inventory": "Inventory-tabellen",
+      "bottles": "Bottles-tabellen",
+      "consumed": "Consumed-tabellen",
+      "purchase": "Purchase-tabellen",
+      "pending": "Pending-tabellen (väntande köp)"
     },
     "upload": {
       "resumeReviewTitle": "Dina matchade resultat finns kvar",
@@ -2672,7 +2689,8 @@
       "bottlesFound_other": "{{count}} flaskor hittades",
       "changeFile": "Klicka eller släpp för att byta fil",
       "dropHere": "Släpp din fil här eller klicka för att bläddra",
-      "dropHint": "JSON, CSV, TSV eller TXT — max 10 MB"
+      "dropHint": "JSON, CSV, TSV eller TXT — max 10 MB",
+      "encodingLine": "Teckenkodning: {{encoding}}"
     },
     "rack": {
       "title": "Hyllplacering",

@@ -5,7 +5,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { validateImport, confirmImport } from '../api/bottles';
 import { searchWines } from '../api/wines';
 import { getRacks } from '../api/racks';
-import { parseAndMap, parseJSON, summariseRacks, getDefaultRackConfig, getDefaultAnchor } from '../utils/importMappers';
+import { parseAndMap, parseJSON, summariseRacks, getDefaultRackConfig, getDefaultAnchor, decodeImportBuffer } from '../utils/importMappers';
 import { describePriceWarning } from '../utils/priceValidation';
 import { getTotalSlots } from '../utils/rackLayouts';
 import { TYPE_DIMENSIONS } from '../components/racks/RackTypeSelector';
@@ -49,6 +49,24 @@ const STATUS_CLASSES = {
   skipped: 'status-skipped'
 };
 
+// Human-readable labels for the encodings decodeImportBuffer can detect
+const ENCODING_LABELS = {
+  'utf-8': 'UTF-8',
+  'utf-16le': 'UTF-16 LE',
+  'utf-16be': 'UTF-16 BE',
+  'windows-1252': 'Windows-1252'
+};
+
+// CellarTracker table names shown next to the detected format
+const CT_TABLE_LABEL_KEYS = {
+  list: 'importBottles.ctTables.list',
+  inventory: 'importBottles.ctTables.inventory',
+  bottles: 'importBottles.ctTables.bottles',
+  consumed: 'importBottles.ctTables.consumed',
+  purchase: 'importBottles.ctTables.purchase',
+  pending: 'importBottles.ctTables.pending'
+};
+
 const TYPE_DOTS = {
   red: '#8B2252',
   white: '#F5E6C8',
@@ -70,6 +88,12 @@ function ImportBottles() {
   // Upload step
   const [parsedItems, setParsedItems] = useState([]);
   const [detectedFormat, setDetectedFormat] = useState(null);
+  // File encoding detected by decodeImportBuffer ('utf-8', 'windows-1252', …)
+  const [detectedEncoding, setDetectedEncoding] = useState(null);
+  // Which CellarTracker table the file is (list/inventory/bottles/…), if CT
+  const [ctTable, setCtTable] = useState(null);
+  // Non-blocking parse warnings ({ code: 'ct-truncated' | 'ct-pending-skipped', … })
+  const [importWarnings, setImportWarnings] = useState([]);
   const [fileName, setFileName] = useState('');
   const [dragOver, setDragOver] = useState(false);
   // Where bottle 1 (or row 1, col 1) sits in the source system's rack:
@@ -306,16 +330,26 @@ function ImportBottles() {
     const reader = new FileReader();
     reader.onload = (e) => {
       try {
+        // Read raw bytes and detect the encoding ourselves — CellarTracker's
+        // browser export is Windows-1252, and a hard-assumed UTF-8 read
+        // silently corrupts every accented producer (Pétrus → P�trus).
+        const { text, encoding } = decodeImportBuffer(e.target.result);
         const parsed = isJson
-          ? parseJSON(e.target.result)
-          : parseAndMap(e.target.result);
+          ? parseJSON(text)
+          : parseAndMap(text);
         const { items, format, oenoRackSpecs } = parsed;
         if (items.length === 0) {
-          setError(t('importBottles.errors.noValidItems'));
+          const pendingWarning = (parsed.warnings || []).find(w => w.code === 'ct-pending-skipped');
+          setError(pendingWarning
+            ? t('importBottles.errors.ctAllPending', { count: pendingWarning.count })
+            : t('importBottles.errors.noValidItems'));
           return;
         }
         setParsedItems(items);
         setDetectedFormat(format);
+        setDetectedEncoding(encoding);
+        setCtTable(parsed.ctTable || null);
+        setImportWarnings(parsed.warnings || []);
         setFileName(file.name);
 
         // Build per-rack summary + seed editable config with format-aware
@@ -334,11 +368,17 @@ function ImportBottles() {
         setRackConfigs(initialConfigs);
         setPositionAnchor(getDefaultAnchor(format));
       } catch (err) {
-        setError(t('importBottles.errors.parseFailed', { message: err.message }));
+        if (err.code === 'ct-error-page') {
+          setError(t('importBottles.errors.ctErrorPage'));
+        } else if (err.code === 'ct-availability') {
+          setError(t('importBottles.errors.ctAvailability'));
+        } else {
+          setError(t('importBottles.errors.parseFailed', { message: err.message }));
+        }
       }
     };
     reader.onerror = () => setError(t('importBottles.errors.readFailed'));
-    reader.readAsText(file);
+    reader.readAsArrayBuffer(file);
   }, [t]);
 
   const handleFileInput = (e) => {
@@ -607,6 +647,11 @@ function ImportBottles() {
       notes: r.item.notes,
       rating: r.item.rating,
       ratingScale: r.item.ratingScale,
+      // CellarTracker imports carry grape varieties and a personal drink
+      // window; the backend importer consumes these when present.
+      grapes: r.item.grapes,
+      drinkFrom: r.item.drinkFrom ?? undefined,
+      drinkTo: r.item.drinkTo ?? undefined,
       dateAdded: r.item.dateAdded || r.item.purchaseDate,
       rackName: r.item.rackName,
       rackPosition: r.item.rackPosition,
@@ -664,6 +709,21 @@ function ImportBottles() {
   };
 
   // ── Render helpers ──────────────────────────────────────────────────────
+
+  // Non-blocking parse warnings (shown on both upload and review steps)
+  const renderImportWarnings = () => importWarnings.length > 0 && (
+    <div className="import-parse-warnings">
+      {importWarnings.map((w, i) => (
+        <div key={i} className="import-parse-warning-banner">
+          {w.code === 'ct-truncated' && t('importBottles.warnings.ctTruncated')}
+          {w.code === 'ct-pending-skipped' && t('importBottles.warnings.ctPendingSkipped', {
+            count: w.count,
+            wines: (w.wines || []).join(', ')
+          })}
+        </div>
+      ))}
+    </div>
+  );
 
   const renderUploadStep = () => (
     <div className="import-upload">
@@ -758,8 +818,17 @@ function ImportBottles() {
           <div className="drop-zone-loaded">
             <span className="drop-zone-icon">&#10003;</span>
             <p><strong>{fileName}</strong></p>
-            <p>{t('importBottles.upload.detectedFormat')} <strong>{FORMAT_LABEL_KEYS[detectedFormat] ? t(FORMAT_LABEL_KEYS[detectedFormat]) : detectedFormat}</strong></p>
+            <p>
+              {t('importBottles.upload.detectedFormat')}{' '}
+              <strong>{FORMAT_LABEL_KEYS[detectedFormat] ? t(FORMAT_LABEL_KEYS[detectedFormat]) : detectedFormat}</strong>
+              {ctTable && CT_TABLE_LABEL_KEYS[ctTable] && <> · {t(CT_TABLE_LABEL_KEYS[ctTable])}</>}
+            </p>
             <p>{t('importBottles.upload.bottlesFound', { count: parsedItems.length })}</p>
+            {detectedEncoding && (
+              <p className="import-encoding-line">
+                {t('importBottles.upload.encodingLine', { encoding: ENCODING_LABELS[detectedEncoding] || detectedEncoding })}
+              </p>
+            )}
             <span className="drop-zone-change">{t('importBottles.upload.changeFile')}</span>
           </div>
         ) : (
@@ -770,6 +839,8 @@ function ImportBottles() {
           </div>
         )}
       </div>
+
+      {parsedItems.length > 0 && renderImportWarnings()}
 
       {parsedItems.length > 0 && parsedItems.some(i => i.price) && (
         <CurrencyPicker
@@ -1141,6 +1212,14 @@ function ImportBottles() {
             </div>
           )}
         </div>
+
+        {/* Parse-time warnings (CT truncation / skipped pending bottles) + encoding info */}
+        {renderImportWarnings()}
+        {detectedEncoding && (
+          <p className="import-encoding-line">
+            {t('importBottles.upload.encodingLine', { encoding: ENCODING_LABELS[detectedEncoding] || detectedEncoding })}
+          </p>
+        )}
 
         {/* Price sanity banner — surfaces fat-finger / 100×-too-high / cents-as-units mistakes */}
         {(summary?.priceWarnings || 0) > 0 && (
@@ -1556,6 +1635,9 @@ function ImportBottles() {
             setManualWines({});
             setImportResult(null);
             setFileName('');
+            setDetectedEncoding(null);
+            setCtTable(null);
+            setImportWarnings([]);
           }}
         >
           {t('importBottles.done.importMore')}

@@ -1,0 +1,54 @@
+BottleState	iWine	Vintage	Wine	Locale	Quantity	BottleSize	Location	Bin	Store	PurchaseDate	DeliveryDate	BottleCost	BottleCostCurrency	BottleNote	PurchaseNote	ConsumptionDate	ConsumptionType	ShortType	ConsumptionNote	ConsumptionRevenue	ConsumptionRevenueCurrency
+-1	684674	2008	Pétrus	France, Bordeaux, Libournais, Pomerol	1	750ml	(n/a)		Farr Vintners	5/25/2020	5/25/2020	0	EUR								
+-1	684674	2008	Pétrus	France, Bordeaux, Libournais, Pomerol	1	750ml	(n/a)		Farr Vintners	5/25/2020	5/25/2020	0	EUR								
+-1	684674	2008	Pétrus	France, Bordeaux, Libournais, Pomerol	1	750ml	(n/a)		Farr Vintners	5/25/2020	5/25/2020	0	EUR								
+1	118542	2003	Domaine de la Romanée-Conti La Tâche	France, Burgundy, Côte de Nuits, La Tâche Grand Cru	1	750ml	Cellar		Private Cellar	4/8/2020	4/8/2020	3500	EUR								
+0	118542	2003	Domaine de la Romanée-Conti La Tâche	France, Burgundy, Côte de Nuits, La Tâche Grand Cru	1	750ml	Cellar		Private Cellar	4/8/2020	4/8/2020	3500	EUR			5/1/2020	Drank from my cellar	Drank	Absolutely fantastic wine!		
+1	1367113	2011	Château d'Yquem	France, Bordeaux, Sauternais, Sauternes	1	375ml	Cellar		Millesima	11/6/2019	11/6/2019	230	EUR								
+1	1367113	2011	Château d'Yquem	France, Bordeaux, Sauternais, Sauternes	1	375ml	Cellar		Millesima	11/6/2019	11/6/2019	230	EUR								
+1	1367113	2011	Château d'Yquem	France, Bordeaux, Sauternais, Sauternes	1	375ml	Cellar		Millesima	11/6/2019	11/6/2019	230	EUR								
+1	1367113	2011	Château d'Yquem	France, Bordeaux, Sauternais, Sauternes	1	375ml	Cellar		Millesima	11/6/2019	11/6/2019	230	EUR								
+1	1367113	2011	Château d'Yquem	France, Bordeaux, Sauternais, Sauternes	1	375ml	Cellar		Millesima	11/6/2019	11/6/2019	230	EUR								
+0	1367113	2011	Château d'Yquem	France, Bordeaux, Sauternais, Sauternes	1	375ml	Cellar		Millesima	11/6/2019	11/6/2019	230	EUR			5/21/2020	Drank from my cellar	Drank	Excellent!		
+1	1290011	1001	Krug Grande Cuvée	France, Champagne, Champagne	1	750ml	Wine Fridge	A1	Systembolaget	9/3/2021	9/3/2021	185	EUR								
+1	1290011	1001	Krug Grande Cuvée	France, Champagne, Champagne	1	750ml	Wine Fridge	A2	Systembolaget	9/3/2021	9/3/2021	185	EUR								
+1	1290011	1001	Krug Grande Cuvée	France, Champagne, Champagne	1	750ml	Wine Fridge	A3	Systembolaget	9/3/2021	9/3/2021	185	EUR								
+1	1290011	1001	Krug Grande Cuvée	France, Champagne, Champagne	1	750ml	Wine Fridge	A4	Systembolaget	9/3/2021	9/3/2021	185	EUR								
+1	1290011	1001	Krug Grande Cuvée	France, Champagne, Champagne	1	750ml	Wine Fridge	A5	Systembolaget	9/3/2021	9/3/2021	185	EUR								
+1	1290011	1001	Krug Grande Cuvée	France, Champagne, Champagne	1	750ml	Wine Fridge	A6	Systembolaget	9/3/2021	9/3/2021	185	EUR								
+1	155002	2016	Château Mouton-Rothschild	France, Bordeaux, Médoc, Pauillac	1	1.5L	Cellar	R3C2D1	Farr Vintners	6/2/2019	6/2/2019	1450	EUR								
+1	1442001	2013	Giacomo Conterno Barolo Riserva Monfortino	Italy, Piedmont, Barolo	1	750ml	Offsite Storage	12-3-4	Vinicum	10/14/2021	10/14/2021	620	EUR								
+1	1442001	2013	Giacomo Conterno Barolo Riserva Monfortino	Italy, Piedmont, Barolo	1	750ml	Offsite Storage	12-3-5	Vinicum	10/14/2021	10/14/2021	620	EUR								
+1	1501777	2018	E. Guigal Côte-Rôtie La Landonne	France, Rhône, Northern Rhône, Côte-Rôtie	1	750ml	Cellar	147	Systembolaget	2/11/2022	2/11/2022	285	EUR								
+1	1501777	2018	E. Guigal Côte-Rôtie La Landonne	France, Rhône, Northern Rhône, Côte-Rôtie	1	750ml	Cellar	148	Systembolaget	2/11/2022	2/11/2022	285	EUR								
+1	1501777	2018	E. Guigal Côte-Rôtie La Landonne	France, Rhône, Northern Rhône, Côte-Rôtie	1	750ml	Cellar	149	Systembolaget	2/11/2022	2/11/2022	285	EUR								
+1	1600123	2019	Joh. Jos. Prüm Wehlener Sonnenuhr Riesling Auslese	Germany, Mosel, Wehlener Sonnenuhr	1	750ml	EuroCave	A12	Weinhalle	7/19/2021	7/19/2021	48	EUR								
+1	1600123	2019	Joh. Jos. Prüm Wehlener Sonnenuhr Riesling Auslese	Germany, Mosel, Wehlener Sonnenuhr	1	750ml	EuroCave	A12	Weinhalle	7/19/2021	7/19/2021	48	EUR								
+1	1600123	2019	Joh. Jos. Prüm Wehlener Sonnenuhr Riesling Auslese	Germany, Mosel, Wehlener Sonnenuhr	1	750ml	EuroCave	A12	Weinhalle	7/19/2021	7/19/2021	48	EUR								
+1	1600123	2019	Joh. Jos. Prüm Wehlener Sonnenuhr Riesling Auslese	Germany, Mosel, Wehlener Sonnenuhr	1	750ml	EuroCave	A12	Weinhalle	7/19/2021	7/19/2021	48	EUR								
+1	1655900	2019	Ridge Monte Bello	USA, California, Santa Cruz Mountains, Santa Cruz Mountains	1	750ml	Basement	Rack B - Top	K&L Wines	3/9/2021	3/9/2021	215	EUR								
+1	1655900	2019	Ridge Monte Bello	USA, California, Santa Cruz Mountains, Santa Cruz Mountains	1	750ml	Basement	Rack B - Top	K&L Wines	3/9/2021	3/9/2021	215	EUR								
+1	1655900	2019	Ridge Monte Bello	USA, California, Santa Cruz Mountains, Santa Cruz Mountains	1	750ml	Basement	Rack B - Top	K&L Wines	3/9/2021	3/9/2021	215	EUR								
+1	1700055	1001	Lagavulin 16 Year Old	Scotland, Islay	1	700ml	Bar		Systembolaget	12/1/2020	12/1/2020	72	EUR								
+1	1720044	2010	Vega Sicilia Único	Spain, Castilla y León, Ribera del Duero	1	750ml	Cellar	D-04-1	Lavinia	5/30/2022	5/30/2022	395	EUR								
+1	1720044	2010	Vega Sicilia Único	Spain, Castilla y León, Ribera del Duero	1	750ml	Cellar	D-04-2	Lavinia	5/30/2022	5/30/2022	395	EUR								
+1	1740099	2015	Tenuta San Guido Sassicaia	Italy, Tuscany, Bolgheri	1	3.0L	Offsite Storage	BIN1	Vinicum	4/22/2021	4/22/2021	1800	EUR								
+1	1760321	2017	Taylor Fladgate Vintage Port	Portugal, Douro, Porto	1	750ml	Cellar	P1	The Wine Society	1/17/2022	1/17/2022	95	EUR								
+1	1760321	2017	Taylor Fladgate Vintage Port	Portugal, Douro, Porto	1	750ml	Cellar	P2	The Wine Society	1/17/2022	1/17/2022	95	EUR								
+1	1760321	2017	Taylor Fladgate Vintage Port	Portugal, Douro, Porto	1	750ml	Cellar	P3	The Wine Society	1/17/2022	1/17/2022	95	EUR								
+1	1760321	2017	Taylor Fladgate Vintage Port	Portugal, Douro, Porto	1	750ml	Cellar	P4	The Wine Society	1/17/2022	1/17/2022	95	EUR								
+1	1760321	2017	Taylor Fladgate Vintage Port	Portugal, Douro, Porto	1	750ml	Cellar	P5	The Wine Society	1/17/2022	1/17/2022	95	EUR								
+1	1760321	2017	Taylor Fladgate Vintage Port	Portugal, Douro, Porto	1	750ml	Cellar	P6	The Wine Society	1/17/2022	1/17/2022	95	EUR								
+1	1780500	2022	Domaine Tempier Bandol Rosé	France, Provence, Bandol	1	750ml	Wine Fridge	B1	Systembolaget	6/8/2023	6/8/2023	42	EUR								
+1	1780500	2022	Domaine Tempier Bandol Rosé	France, Provence, Bandol	1	750ml	Wine Fridge	B2	Systembolaget	6/8/2023	6/8/2023	42	EUR								
+1	1780500	2022	Domaine Tempier Bandol Rosé	France, Provence, Bandol	1	750ml	Wine Fridge	B3	Systembolaget	6/8/2023	6/8/2023	42	EUR								
+1	1800777	2015	Louis Roederer Cristal	France, Champagne, Champagne	1	750ml	Cellar	C1	Millesima	9/12/2022	9/12/2022	265	EUR								
+1	1800777	2015	Louis Roederer Cristal	France, Champagne, Champagne	1	750ml	Cellar	C2	Millesima	9/12/2022	9/12/2022	265	EUR								
+1	1800777	2015	Louis Roederer Cristal	France, Champagne, Champagne	1	750ml	Offsite Storage	C3	Millesima	9/12/2022	9/12/2022	265	EUR								
+1	1800777	2015	Louis Roederer Cristal	France, Champagne, Champagne	1	750ml	Offsite Storage	C4	Millesima	9/12/2022	9/12/2022	265	EUR								
+1	1820011	2017	Penfolds Grange	Australia, South Australia, South Australia	1	750ml	Cellar	R5C1D2	Dan Murphy's	8/3/2022	8/3/2022	580	EUR								
+1	1840222	2019	Domaine Raveneau Chablis Les Clos	France, Burgundy, Chablis, Chablis Grand Cru	1	750ml	Cellar	E-01-1	Burgundy Direct	11/30/2022	11/30/2022	312.50	EUR								
+1	1840222	2019	Domaine Raveneau Chablis Les Clos	France, Burgundy, Chablis, Chablis Grand Cru	1	750ml	Cellar	E-01-2	Burgundy Direct	11/30/2022	11/30/2022	312.50	EUR								
+1	1860900	2013	Harlan Estate	USA, California, Napa Valley, Oakville	1	750ml	Cellar	R6C3D1	K&L Wines	2/14/2021	2/14/2021	890	EUR								
+0	112050	1996	Château Margaux	France, Bordeaux, Médoc, Margaux	1	750ml	Cellar		Private Cellar	3/2/2015	3/2/2015	650	EUR			3/9/2021	Drank from my cellar	Drank	Perfection. At its peak.		
+0	112050	1996	Château Margaux	France, Bordeaux, Médoc, Margaux	1	750ml	Cellar		Private Cellar	3/2/2015	3/2/2015	650	EUR			12/24/2022	Drank from my cellar	Drank	Christmas magnum-worthy. Still stunning.		

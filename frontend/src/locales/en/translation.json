@@ -2646,7 +2646,24 @@
       "validationFailed": "Validation failed (HTTP {{status}})",
       "validationNetwork": "Network error during validation",
       "importFailed": "Import failed",
-      "importNetwork": "Network error during import"
+      "importNetwork": "Network error during import",
+      "ctErrorPage": "This file is a CellarTracker error page, not an export — log in to CellarTracker and re-export.",
+      "ctAvailability": "This is CellarTracker's Availability table — drinking-window statistics, not a cellar export. Export the List or Inventory table instead.",
+      "ctAllPending_one": "The only bottle in this file is a pending (undelivered) purchase — Cellarion doesn't track bottles you haven't received yet.",
+      "ctAllPending_other": "All {{count}} bottles in this file are pending (undelivered) purchases — Cellarion doesn't track bottles you haven't received yet."
+    },
+    "warnings": {
+      "ctTruncated": "This looks like a single-page export (exactly 25 rows). In CellarTracker, choose 'All wines' instead of 'Only wines on this page' before exporting, or your import may be missing most of your cellar.",
+      "ctPendingSkipped_one": "{{count}} pending (undelivered) bottle was not imported: {{wines}}. Cellarion doesn't track bottles you haven't received yet — re-import after delivery.",
+      "ctPendingSkipped_other": "{{count}} pending (undelivered) bottles were not imported: {{wines}}. Cellarion doesn't track bottles you haven't received yet — re-import after delivery."
+    },
+    "ctTables": {
+      "list": "List table",
+      "inventory": "Inventory table",
+      "bottles": "Bottles table",
+      "consumed": "Consumed table",
+      "purchase": "Purchase table",
+      "pending": "Pending purchases table"
     },
     "upload": {
       "resumeReviewTitle": "Your matched results are still here",
@@ -2672,7 +2689,8 @@
       "bottlesFound_other": "{{count}} bottles found",
       "changeFile": "Click or drop to change file",
       "dropHere": "Drop your file here or click to browse",
-      "dropHint": "JSON, CSV, TSV, or TXT — max 10 MB"
+      "dropHint": "JSON, CSV, TSV, or TXT — max 10 MB",
+      "encodingLine": "File encoding: {{encoding}}"
     },
     "rack": {
       "title": "Rack placement",
