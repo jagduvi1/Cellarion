@@ -178,7 +178,6 @@ router.put('/admin/posts/:id', requireAuth, requireRole('admin'), async (req, re
 
     const { title, content, excerpt, coverImage, tags, status, metaTitle, metaDescription } = req.body;
 
-    const oldTitle = post.title;
     if (title !== undefined) post.title = title;
     if (content !== undefined) post.content = content;
     if (excerpt !== undefined) post.excerpt = excerpt;
@@ -197,13 +196,9 @@ router.put('/admin/posts/:id', requireAuth, requireRole('admin'), async (req, re
       post.status = status;
     }
 
-    // Regenerate slug if title changed
-    if (title && title !== oldTitle) {
-      let newSlug = generateSlug(title);
-      const existing = await BlogPost.findOne({ slug: newSlug, _id: { $ne: post._id } });
-      if (existing) newSlug = `${newSlug}-${Date.now().toString(36)}`;
-      post.slug = newSlug;
-    }
+    // The slug is pinned at creation and NEVER regenerated on title edits —
+    // published URLs are indexed and backlinked, and changing the slug 404s
+    // them with no redirect (Discussion pins its slug for the same reason).
 
     await post.save();
     await post.populate('author', 'username');
@@ -234,6 +229,12 @@ router.delete('/admin/posts/:id', requireAuth, requireRole('admin'), async (req,
     if (!post) return res.status(404).json({ error: 'Post not found' });
 
     logAudit(req, 'blog.delete', { type: 'blogPost', id: post._id }, { title: post.title });
+
+    // Ping IndexNow so engines recrawl the dead URL and drop it, instead of
+    // serving the stale entry until an organic recrawl (discussions do this).
+    if (post.status === 'published') {
+      submitUrls(`/blog/${post.slug}`);
+    }
 
     res.json({ message: 'Post deleted' });
   } catch (err) {

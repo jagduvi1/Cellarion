@@ -28,8 +28,14 @@ function sanitizeEntry(body) {
   if (occasion && OCCASIONS.includes(occasion)) clean.occasion = occasion;
   if (mood != null) {
     const m = parseInt(mood, 10);
-    if (m >= 1 && m <= 5) clean.mood = m;
-    else clean.mood = null;
+    if (Number.isInteger(m) && m >= 1 && m <= 5) clean.mood = m;
+    else {
+      // Reject instead of silently nulling — a PUT with mood: 7 used to
+      // erase the stored value without any indication.
+      const err = new Error('Mood must be a whole number between 1 and 5');
+      err.status = 400;
+      throw err;
+    }
   }
   if (notes != null) clean.notes = stripHtml(String(notes)).slice(0, 2000);
   if (visibility && ['private', 'public'].includes(visibility)) clean.visibility = visibility;
@@ -108,7 +114,7 @@ const POPULATE_PAIRINGS = [
   { path: 'people.user', select: 'username displayName' }
 ];
 
-// GET /api/journal — list journal entries (own + public from following)
+// GET /api/journal — list the user's own journal entries
 router.get('/', async (req, res) => {
   try {
     const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 20, 1), 50);
@@ -215,6 +221,7 @@ router.post('/', async (req, res) => {
 
     res.status(201).json({ entry: populated });
   } catch (err) {
+    if (err.status === 400) return res.status(400).json({ error: err.message });
     console.error('Create journal entry error:', err);
     res.status(500).json({ error: 'Failed to create journal entry' });
   }
@@ -240,6 +247,7 @@ router.put('/:id', async (req, res) => {
 
     res.json({ entry: populated });
   } catch (err) {
+    if (err.status === 400) return res.status(400).json({ error: err.message });
     console.error('Update journal entry error:', err);
     res.status(500).json({ error: 'Failed to update journal entry' });
   }

@@ -20,6 +20,7 @@ const { embedSinglePair } = require('../services/embeddingJob');
 const { enrichWineById } = require('../services/enrichmentJob');
 const { CONSUMED_STATUSES, WINE_POPULATE, WINE_POPULATE_LIST } = require('../config/constants');
 const { checkRestockGap, resolveRestockAlerts } = require('../services/restockChecker');
+const { unlinkImageFiles } = require('../services/imageProcessor');
 const { gatherPriceWarnings } = require('../services/priceWarnings');
 const { getCurrentRelease } = require('../services/communityPrice');
 const { stripHtml, isSafeUrl, escapeRegex } = require('../utils/sanitize');
@@ -627,6 +628,13 @@ router.put('/:id', requireBottleAccess('editor'), async (req, res) => {
       return String(v);
     };
 
+    // A scale change without a rating value would leave the stored rating
+    // meaningless on the new scale (e.g. a 4/5 persisted as 4 on the 100
+    // scale, later clamped to 0 by toNormalized) — require both together.
+    if ('ratingScale' in req.body && !('rating' in req.body) && bottle.rating != null) {
+      return res.status(400).json({ error: 'Send rating together with ratingScale when changing the rating scale' });
+    }
+
     const htmlFields = new Set(['purchaseLocation', 'location', 'notes']);
     const changes = {};
     updateFields.forEach(field => {
@@ -809,7 +817,8 @@ router.post('/:id/consume', requireBottleAccess('editor'), async (req, res) => {
     // failed save doesn't leave an active bottle already pulled from its rack
     await removeFromRacks(bottle._id);
 
-    // Remove from Meilisearch (consumed bottles are excluded)
+    // Re-index so search reflects the consumed status (consumed bottles stay
+    // in the index for history search; they're filtered at query time)
     searchService.indexBottle(bottle._id);
 
     logAudit(req, 'bottle.consume',
@@ -931,8 +940,14 @@ router.post('/:id/undo', requireBottleAccess('editor'), async (req, res) => {
     await removeFromRacks(bottleId);
     searchService.removeBottle(bottleId);
 
-    // Bottle-only images go away. Images promoted to a WineDefinition (e.g.
-    // approved community photos) stay, but lose their link back to this bottle.
+    // Bottle-only images go away — files first: the docs hold the only disk
+    // reference, and the hourly orphan sweep only reconciles originals/, so a
+    // processed PNG whose doc was deleted would leak forever. Images promoted
+    // to a WineDefinition (e.g. approved community photos) stay, but lose
+    // their link back to this bottle.
+    const ownImages = await BottleImage.find({ bottle: bottleId, assignedToWine: false })
+      .select('originalUrl processedUrl').lean();
+    for (const img of ownImages) await unlinkImageFiles(img);
     await BottleImage.deleteMany({ bottle: bottleId, assignedToWine: false });
     await BottleImage.updateMany(
       { bottle: bottleId, assignedToWine: true },
@@ -961,15 +976,31 @@ router.post('/:id/undo', requireBottleAccess('editor'), async (req, res) => {
 });
 
 // DELETE /api/bottles/:id - Delete bottle (owner or editor)
+// No frontend caller today (the UI uses consume + /undo), but API clients can
+// reach it — so it runs the same image/wine-request cleanup as /undo instead
+// of orphaning BottleImage docs and pending requests.
 router.delete('/:id', requireBottleAccess('editor'), async (req, res) => {
   try {
     const { bottle } = req;
+    const pendingRequestId = bottle.pendingWineRequest || null;
 
     // Remove bottle from any rack slot that references it
     await removeFromRacks(bottle._id);
 
     // Remove from Meilisearch before deleting
     searchService.removeBottle(bottle._id);
+
+    const ownImages = await BottleImage.find({ bottle: bottle._id, assignedToWine: false })
+      .select('originalUrl processedUrl').lean();
+    for (const img of ownImages) await unlinkImageFiles(img);
+    await BottleImage.deleteMany({ bottle: bottle._id, assignedToWine: false });
+    await BottleImage.updateMany(
+      { bottle: bottle._id, assignedToWine: true },
+      { $set: { bottle: null } }
+    );
+    if (pendingRequestId) {
+      await WineRequest.deleteOne({ _id: pendingRequestId, status: 'pending' });
+    }
 
     logAudit(req, 'bottle.delete',
       { type: 'bottle', id: bottle._id, cellarId: bottle.cellar },

@@ -4,6 +4,7 @@ const { requireAuth, requireSommOrAdmin } = require('../../middleware/auth');
 const WineVintageProfile = require('../../models/WineVintageProfile');
 const { isValidId } = require('../../utils/validation');
 const { parsePagination } = require('../../utils/pagination');
+const { logAudit } = require('../../services/audit');
 
 const { suggestDrinkWindow } = require('../../services/labelScan');
 
@@ -149,7 +150,8 @@ router.put('/:id', requireSommOrAdmin, async (req, res) => {
       }
     }
     if (req.body.sommNotes !== undefined) {
-      profile.sommNotes = req.body.sommNotes ? req.body.sommNotes.trim() : '';
+      // String() coercion: a truthy non-string threw on .trim() → 500.
+      profile.sommNotes = req.body.sommNotes ? String(req.body.sommNotes).trim() : '';
     }
 
     profile.relative = isNv;
@@ -169,6 +171,13 @@ router.put('/:id', requireSommOrAdmin, async (req, res) => {
       },
       { path: 'setBy', select: 'username' }
     ]);
+
+    // Shared-data mutation visible to every user of this wine+vintage —
+    // audit like the comparable admin mutations do.
+    logAudit(req, 'somm.maturity.review',
+      { type: 'wine', id: profile.wineDefinition?._id || profile.wineDefinition },
+      { vintage: profile.vintage, relative: profile.relative }
+    );
 
     res.json({ profile });
   } catch (error) {
@@ -247,6 +256,12 @@ router.delete('/:id/reset', requireSommOrAdmin, async (req, res) => {
     profile.setAt     = null;
 
     await profile.save();
+
+    logAudit(req, 'somm.maturity.reset',
+      { type: 'wine', id: profile.wineDefinition },
+      { vintage: profile.vintage }
+    );
+
     res.json({ profile });
   } catch (error) {
     console.error('Reset maturity profile error:', error);
