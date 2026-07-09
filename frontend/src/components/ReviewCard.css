@@ -147,6 +147,24 @@
   opacity: 0.5;
 }
 
+.review-card__delete-btn {
+  display: inline-flex;
+  align-items: center;
+  margin-left: auto;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--color-text-muted);
+  padding: 0.3rem 0.5rem;
+  border-radius: var(--radius-sm);
+  transition: all var(--transition-fast);
+}
+
+.review-card__delete-btn:hover {
+  background: var(--color-bg);
+  color: var(--color-danger);
+}
+
 .review-card__private-badge {
   font-size: 0.75rem;
   color: var(--color-text-muted);

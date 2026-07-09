@@ -1645,7 +1645,12 @@
     "visibilityPublicHint": "Visible to all users",
     "visibilityPrivateHint": "Only you can see this review",
     "overallImpression": "Overall Impression",
-    "privateBadge": "Private"
+    "privateBadge": "Private",
+    "deleteReview": "Delete review",
+    "deleteTitle": "Delete review?",
+    "deleteBody": "This will permanently delete your review. This cannot be undone.",
+    "deleteError": "Failed to delete the review — please try again.",
+    "deleting": "Deleting…"
   },
   "discussions": {
     "community": "Community",

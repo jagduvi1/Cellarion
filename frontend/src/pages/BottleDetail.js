@@ -515,7 +515,17 @@ function BottleDetail() {
           </div>
           {wineReviews.length > 0 ? (
             wineReviews.map(review => (
-              <ReviewCard key={review._id} review={review} showWine={false} />
+              <ReviewCard
+                key={review._id}
+                review={review}
+                showWine={false}
+                onDelete={() => {
+                  // Same refresh as after saving a review: refetch the list and
+                  // drop the (now stale) community aggregate.
+                  fetchWineReviews(wine._id);
+                  setCommunityRating(null);
+                }}
+              />
             ))
           ) : (
             <p className="bd-reviews__empty">{t('reviews.noReviews', 'No reviews yet. Be the first to review this wine!')}</p>
