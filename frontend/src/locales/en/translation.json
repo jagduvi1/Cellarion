@@ -197,6 +197,21 @@
       "pushNotConfigured": "Push notifications are not configured on this server.",
       "pushHint": "Push delivers notifications to your device even when Cellarion is closed."
     },
+    "changePassword": {
+      "title": "Change password",
+      "hint": "Choose a strong password: at least 12 characters with an uppercase letter, a lowercase letter, a number, and a special character. Changing your password signs you out on all other devices.",
+      "currentLabel": "Current password",
+      "newLabel": "New password",
+      "confirmLabel": "Confirm new password",
+      "submitBtn": "Change password",
+      "submittingBtn": "Changing…",
+      "successMsg": "Password changed",
+      "errorMismatch": "The new passwords do not match.",
+      "errorPolicy": "Password must be at least 12 characters and include an uppercase letter, lowercase letter, number, and special character.",
+      "errorWrongCurrent": "Your current password is incorrect.",
+      "errorRateLimited": "Too many attempts. Please wait a few minutes and try again.",
+      "errorGeneric": "Failed to change password. Please try again."
+    },
     "defaultRatingScale": "Default Rating Scale",
     "ratingScaleHint": "Choose which rating scale to use by default when adding ratings. You can always override per bottle."
   },
@@ -1672,7 +1687,12 @@
     "visibilityPublicHint": "Visible to all users",
     "visibilityPrivateHint": "Only you can see this review",
     "overallImpression": "Overall Impression",
-    "privateBadge": "Private"
+    "privateBadge": "Private",
+    "deleteReview": "Delete review",
+    "deleteTitle": "Delete review?",
+    "deleteBody": "This will permanently delete your review. This cannot be undone.",
+    "deleteError": "Failed to delete the review — please try again.",
+    "deleting": "Deleting…"
   },
   "discussions": {
     "community": "Community",

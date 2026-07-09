@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import useVersion from '../hooks/useVersion';
 import { updateProfile } from '../api/profiles';
+import { changePassword } from '../api/auth';
 import { CURRENCIES } from '../config/currencies';
 import { PLANS } from '../config/plans';
 import { SCALE_META, VALID_SCALES } from '../utils/ratingUtils';
@@ -32,6 +33,14 @@ function Settings() {
   const [profileSaving, setProfileSaving] = useState(false);
   const [profileSaved, setProfileSaved] = useState(false);
   const [profileError, setProfileError] = useState(null);
+
+  // Change password state
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmNewPassword, setConfirmNewPassword] = useState('');
+  const [passwordSaving, setPasswordSaving] = useState(false);
+  const [passwordSaved, setPasswordSaved] = useState(false);
+  const [passwordError, setPasswordError] = useState(null);
 
   // Notification preferences — per-category × per-channel grid. The state
   // mirrors the User schema shape so updatePreferences just passes through.
@@ -198,6 +207,53 @@ function Settings() {
     }
   };
 
+  // Mirrors the backend password policy (backend/src/models/User.js):
+  // min 12 chars with an uppercase letter, lowercase letter, number and
+  // special character. Checked client-side for instant feedback; the
+  // backend re-validates and returns 400 if it disagrees.
+  const PASSWORD_POLICY = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^a-zA-Z\d]).{12,}$/;
+
+  const handleChangePassword = async (e) => {
+    e.preventDefault();
+    setPasswordError(null);
+    setPasswordSaved(false);
+
+    if (newPassword !== confirmNewPassword) {
+      setPasswordError(t('settings.changePassword.errorMismatch'));
+      return;
+    }
+    if (!PASSWORD_POLICY.test(newPassword)) {
+      setPasswordError(t('settings.changePassword.errorPolicy'));
+      return;
+    }
+
+    setPasswordSaving(true);
+    try {
+      const res = await changePassword(apiFetch, { currentPassword, newPassword });
+      if (res.ok) {
+        // Backend rotated this browser's refresh cookie and invalidated all
+        // other sessions — this session continues via apiFetch auto-refresh.
+        setCurrentPassword('');
+        setNewPassword('');
+        setConfirmNewPassword('');
+        setPasswordSaved(true);
+        setTimeout(() => setPasswordSaved(false), 5000);
+      } else if (res.status === 401) {
+        setPasswordError(t('settings.changePassword.errorWrongCurrent'));
+      } else if (res.status === 429) {
+        setPasswordError(t('settings.changePassword.errorRateLimited'));
+      } else if (res.status === 400) {
+        setPasswordError(t('settings.changePassword.errorPolicy'));
+      } else {
+        setPasswordError(t('settings.changePassword.errorGeneric'));
+      }
+    } catch {
+      setPasswordError(t('settings.changePassword.errorGeneric'));
+    } finally {
+      setPasswordSaving(false);
+    }
+  };
+
   const handleSave = async (e) => {
     e.preventDefault();
     setSaving(true);
@@ -348,6 +404,68 @@ function Settings() {
               {profileSaving ? t('settings.savingBtn') : t('settings.saveBtn')}
             </button>
             {profileSaved && <span className="settings-saved">{t('settings.savedMsg')}</span>}
+          </div>
+        </form>
+      </div>
+
+      {/* ── Change password card ── */}
+      <div className="card settings-card">
+        <h2 className="settings-section-title">{t('settings.changePassword.title')}</h2>
+        <p className="settings-hint">{t('settings.changePassword.hint')}</p>
+        <form onSubmit={handleChangePassword}>
+          {/* Hidden username field so password managers associate the new
+              credentials with the right account */}
+          <input
+            type="text"
+            autoComplete="username"
+            value={user?.username || ''}
+            readOnly
+            hidden
+          />
+          <div className="form-group">
+            <label htmlFor="current-password-input">{t('settings.changePassword.currentLabel')}</label>
+            <input
+              id="current-password-input"
+              type="password"
+              className="input"
+              autoComplete="current-password"
+              value={currentPassword}
+              onChange={e => setCurrentPassword(e.target.value)}
+              required
+            />
+          </div>
+          <div className="form-group">
+            <label htmlFor="new-password-input">{t('settings.changePassword.newLabel')}</label>
+            <input
+              id="new-password-input"
+              type="password"
+              className="input"
+              autoComplete="new-password"
+              value={newPassword}
+              onChange={e => setNewPassword(e.target.value)}
+              required
+            />
+          </div>
+          <div className="form-group">
+            <label htmlFor="confirm-password-input">{t('settings.changePassword.confirmLabel')}</label>
+            <input
+              id="confirm-password-input"
+              type="password"
+              className="input"
+              autoComplete="new-password"
+              value={confirmNewPassword}
+              onChange={e => setConfirmNewPassword(e.target.value)}
+              required
+            />
+          </div>
+
+          {passwordError && <div className="alert alert-error">{passwordError}</div>}
+
+          <div className="settings-actions">
+            <button type="submit" className="btn btn-primary" disabled={passwordSaving}>
+              {passwordSaving ? t('settings.changePassword.submittingBtn') : t('settings.changePassword.submitBtn')}
+            </button>
+            {passwordSaved && <span className="settings-saved">{t('settings.changePassword.successMsg')}</span>}
           </div>
         </form>
       </div>
