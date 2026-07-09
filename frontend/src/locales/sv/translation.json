@@ -2806,6 +2806,25 @@
       "capacityLine": "= {{count}} platser",
       "tooSmallSuffix": " — för liten för {{count}} flaskor"
     },
+    "rackAutoMap": {
+      "hint": "Identifierade <1>CellarTracker</1>-koder för Location/Bin. Platser med ett konsekvent fackmönster har mappats till hyllor nedan — kontrollera de upptäckta måtten innan du importerar. Flaskor vars fackkoder inte passar mönstret behåller i stället sin plats som text.",
+      "patternRowCol": "Rad/kolumn-fackkoder (R3C2)",
+      "patternRowColDepth": "Rad/kolumn/djup-fackkoder (R3C2D1)",
+      "patternLetterNumber": "Bokstav + siffra-fackkoder (A12)",
+      "patternSegments": "Segmenterade fackkoder (12-3-4)",
+      "patternSequential": "Numrerade fack (147)",
+      "patternGeneric": "Fackkoder",
+      "detectedDims_one": "{{rows}} rader × {{cols}} kolumner upptäckta från {{count}} fackkod",
+      "detectedDims_other": "{{rows}} rader × {{cols}} kolumner upptäckta från {{count}} fackkoder",
+      "detectedSeq_one": "löpande platsnummer upptäckta från {{count}} fackkod",
+      "detectedSeq_other": "löpande platsnummer upptäckta från {{count}} fackkoder",
+      "placed_one": "{{count}} flaska placeras automatiskt",
+      "placed_other": "{{count}} flaskor placeras automatiskt",
+      "unparsed_one": "{{count}} flaska har en fackkod vi inte kunde tolka — den behåller sin plats som text",
+      "unparsed_other": "{{count}} flaskor har fackkoder vi inte kunde tolka — de behåller sin plats som text",
+      "keptAsText_one": "{{count}} flaska i {{locations}} saknar ett konsekvent fackmönster — den behåller sin plats som text och placeras inte i någon hylla.",
+      "keptAsText_other": "{{count}} flaskor i {{locations}} saknar ett konsekvent fackmönster — de behåller sin plats som text och placeras inte i någon hylla."
+    },
     "anchor": {
       "question": "Var sitter plats 1 i din fysiska hylla?",
       "top-left": "Uppe till vänster",

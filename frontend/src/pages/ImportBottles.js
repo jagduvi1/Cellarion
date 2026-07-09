@@ -69,6 +69,15 @@ const CT_TABLE_LABEL_KEYS = {
   pending: 'importBottles.ctTables.pending'
 };
 
+// Pattern labels for CellarTracker Location/Bin auto-mapped racks
+const CT_PATTERN_LABEL_KEYS = {
+  'rowcol': 'importBottles.rackAutoMap.patternRowCol',
+  'rowcol-depth': 'importBottles.rackAutoMap.patternRowColDepth',
+  'letter-number': 'importBottles.rackAutoMap.patternLetterNumber',
+  'segments': 'importBottles.rackAutoMap.patternSegments',
+  'sequential': 'importBottles.rackAutoMap.patternSequential'
+};
+
 const TYPE_DOTS = {
   red: '#8B2252',
   white: '#F5E6C8',
@@ -96,6 +105,9 @@ function ImportBottles() {
   const [ctTable, setCtTable] = useState(null);
   // Non-blocking parse warnings ({ code: 'ct-truncated' | 'ct-pending-skipped', … })
   const [importWarnings, setImportWarnings] = useState([]);
+  // CellarTracker Location groups whose bins had no consistent pattern —
+  // their bottles keep the location as text: [{ location, count }]
+  const [ctTextFallback, setCtTextFallback] = useState([]);
   const [fileName, setFileName] = useState('');
   const [dragOver, setDragOver] = useState(false);
   // Where bottle 1 (or row 1, col 1) sits in the source system's rack:
@@ -366,18 +378,27 @@ function ImportBottles() {
         setDetectedEncoding(encoding);
         setCtTable(parsed.ctTable || null);
         setImportWarnings(parsed.warnings || []);
+        setCtTextFallback(parsed.ctRackAutoMap?.textFallback || []);
         setCtDisclosureDismissed(false); // new file → show the CT disclosure again
         setFileName(file.name);
 
         // Build per-rack summary + seed editable config with format-aware
         // defaults. For Oeno-export, the cabinet metadata in the CSV gives
         // us the exact shape of each rack (one per cabinet-column); pass
-        // that through to the picker via info.oenoRackSpec.
+        // that through to the picker via info.oenoRackSpec. For
+        // CellarTracker, racks derived from Location/Bin pattern detection
+        // carry their pattern + counts (info.ctAutoMap, shown on the card)
+        // and detected geometry (info.ctRackSpec).
         const summary = summariseRacks(items);
         const initialConfigs = {};
         for (const [name, info] of Object.entries(summary)) {
           if (oenoRackSpecs && oenoRackSpecs[name]) {
             info.oenoRackSpec = oenoRackSpecs[name];
+          }
+          const ctAutoMap = parsed.ctRackAutoMap?.racks?.[name];
+          if (ctAutoMap) {
+            info.ctAutoMap = ctAutoMap;
+            if (ctAutoMap.spec) info.ctRackSpec = ctAutoMap.spec;
           }
           initialConfigs[name] = getDefaultRackConfig(format, info);
         }
@@ -857,6 +878,41 @@ function ImportBottles() {
     </div>
   );
 
+  // CellarTracker auto-map: pattern + placement counts shown on a rack card
+  // (both the new-rack and existing-rack variants).
+  const renderCtAutoMapLine = (info) => {
+    const auto = info?.ctAutoMap;
+    if (!auto) return null;
+    return (
+      <div className="rack-config-automap">
+        <div className="rack-config-automap-pattern">
+          {t(CT_PATTERN_LABEL_KEYS[auto.pattern] || 'importBottles.rackAutoMap.patternGeneric')}
+          {' — '}
+          {auto.rows && auto.cols
+            ? t('importBottles.rackAutoMap.detectedDims', { rows: auto.rows, cols: auto.cols, count: auto.binCount })
+            : t('importBottles.rackAutoMap.detectedSeq', { count: auto.binCount })}
+        </div>
+        <div className="rack-config-automap-counts">
+          {t('importBottles.rackAutoMap.placed', { count: auto.placedCount })}
+          {auto.unparsedCount > 0 && (
+            <> · {t('importBottles.rackAutoMap.unparsed', { count: auto.unparsedCount })}</>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  // CellarTracker locations whose bins had no consistent pattern — their
+  // bottles keep the "Location / Bin" text, exactly like before auto-mapping.
+  const renderCtFallbackNote = () => ctTextFallback.length > 0 && (
+    <p className="rack-options-hint rack-automap-fallback">
+      {t('importBottles.rackAutoMap.keptAsText', {
+        count: ctTextFallback.reduce((sum, f) => sum + f.count, 0),
+        locations: ctTextFallback.map(f => f.location).join(', ')
+      })}
+    </p>
+  );
+
   // "What transfers from CellarTracker" disclosure — shown once on the upload
   // step whenever a CT file is detected, before any import happens. Honest up
   // front: CT's export simply doesn't contain some things, so we can't carry
@@ -897,6 +953,7 @@ function ImportBottles() {
         </div>
       </div>
     </div>
+
   );
 
   const renderUploadStep = () => (
@@ -1034,6 +1091,11 @@ function ImportBottles() {
               <Trans i18nKey="importBottles.rack.oenoHint" components={{ 1: <strong /> }} />
             </p>
           )}
+          {detectedFormat === 'cellartracker' && Object.values(rackSummary).some(i => i.ctAutoMap) && (
+            <p className="rack-options-hint">
+              <Trans i18nKey="importBottles.rackAutoMap.hint" components={{ 1: <strong /> }} />
+            </p>
+          )}
           <p className="rack-options-hint">
             <Trans
               i18nKey="importBottles.rack.found"
@@ -1066,6 +1128,7 @@ function ImportBottles() {
                         {info.maxPerCell > 1 && t(detectedFormat === 'oeno-export' ? 'importBottles.rack.busiestShelf' : 'importBottles.rack.busiestCell', { n: info.maxPerCell })}
                       </span>
                     </div>
+                    {renderCtAutoMapLine(info)}
                     <div className="rack-config-existing-note">
                       {t('importBottles.rack.currentLayoutPrefix')}{' '}
                       <strong>
@@ -1142,6 +1205,7 @@ function ImportBottles() {
                       <span>{t('importBottles.rack.skipNew')}</span>
                     </label>
                   </div>
+                  {renderCtAutoMapLine(info)}
                   {isSkipped && (
                     <div className="rack-config-skipped-note">
                       <Trans
@@ -1263,8 +1327,16 @@ function ImportBottles() {
             })}
           </div>
 
+          {renderCtFallbackNote()}
+
           <AnchorPicker value={positionAnchor} onChange={setPositionAnchor} />
         </div>
+      )}
+
+      {/* CT file where NO location qualified for auto-mapping: there are no
+          rack cards, but the user should still see why nothing gets placed. */}
+      {parsedItems.length > 0 && Object.keys(rackSummary).length === 0 && (
+        <>{renderCtFallbackNote()}</>
       )}
 
       {parsedItems.length > 0 && (
