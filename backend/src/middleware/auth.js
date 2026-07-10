@@ -1,4 +1,5 @@
 const jwt = require('jsonwebtoken');
+const { isApiTokenCredential, authenticateApiToken } = require('./apiTokenAuth');
 
 // Middleware to verify JWT and attach user to request
 const requireAuth = async (req, res, next) => {
@@ -11,6 +12,13 @@ const requireAuth = async (req, res, next) => {
     }
 
     const token = authHeader.substring(7); // Remove "Bearer " prefix
+
+    // Personal API tokens (cel_...) take a separate, scope-checked path —
+    // DB-backed and instantly revocable, unlike stateless JWTs. The prefix
+    // can never collide with a JWT (JWTs start with a base64url JSON header).
+    if (isApiTokenCredential(token)) {
+      return authenticateApiToken(req, res, next, token);
+    }
 
     // Verify token
     const decoded = jwt.verify(token, process.env.JWT_SECRET, { algorithms: ['HS256'] });
@@ -56,6 +64,16 @@ const optionalAuth = async (req, res, next) => {
 
   try {
     const token = authHeader.substring(7);
+
+    // API tokens are deliberately NOT honored on optionalAuth routes: those are
+    // public-readable pages with personalization, none of which a machine token
+    // needs — and keeping tokens off them keeps the scope allowlist the single
+    // definition of what a token can reach.
+    if (isApiTokenCredential(token)) {
+      req.user = null;
+      return next();
+    }
+
     const decoded = jwt.verify(token, process.env.JWT_SECRET, { algorithms: ['HS256'] });
 
     const roles = decoded.roles || (decoded.role ? [decoded.role] : ['user']);

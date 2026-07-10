@@ -10,6 +10,7 @@ import { PLANS } from '../config/plans';
 import { SCALE_META, VALID_SCALES } from '../utils/ratingUtils';
 import { isPushSupported, getPushPermissionState, subscribeToPush, unsubscribeFromPush, getCurrentEndpoint, getDeviceStatus, sendTestPush } from '../utils/pushSubscription';
 import { downloadBlobObject } from '../utils/downloadBlob';
+import ApiTokensSection from '../components/ApiTokensSection';
 import './Settings.css';
 
 function Settings() {
@@ -469,6 +470,9 @@ function Settings() {
           </div>
         </form>
       </div>
+
+      {/* ── API tokens card ── */}
+      <ApiTokensSection />
 
       {/* ── Your Supporter Tier card ── */}
       <div className="card settings-card settings-plan-card">
