@@ -397,3 +397,41 @@ describe('maturityLabel', () => {
     expect(label).toBe('Not ready yet — drinking from ?');
   });
 });
+
+// ── BUG 3: label must quote the PERSONAL window years when it governs ─────────
+// System clock is fixed to 2026 above. The profile deliberately disagrees with
+// the personal window so a leak of profile years is visible.
+describe('maturityLabel — personal window precedence', () => {
+  const profileSaysNow = { earlyFrom: 2018, peakFrom: 2020, peakUntil: 2028, lateUntil: 2032 };
+
+  test('not-ready: quotes the personal drinkFrom, not the profile early/peak year', () => {
+    const bottle = { drinkFrom: 2035, drinkTo: 2040 };
+    // status derived from the personal window (currentYear 2026 < 2035)
+    expect(maturityLabel('not-ready', profileSaysNow, bottle)).toBe('Not ready yet — drinking from 2035');
+  });
+
+  test('peak: quotes the personal drinkTo, not the profile peakUntil', () => {
+    const bottle = { drinkFrom: 2024, drinkTo: 2038 };
+    expect(maturityLabel('peak', profileSaysNow, bottle)).toBe('At peak — drink now through 2038');
+  });
+
+  test('peak with only drinkFrom set: open-ended personal peak has no year suffix', () => {
+    const bottle = { drinkFrom: 2024 };
+    expect(maturityLabel('peak', profileSaysNow, bottle)).toBe('At peak maturity — drink now');
+  });
+
+  test('declining: personal window → year-free past-peak label', () => {
+    const bottle = { drinkFrom: 2018, drinkTo: 2022 };
+    expect(maturityLabel('declining', profileSaysNow, bottle)).toBe('Past peak — declining, drink immediately if at all');
+  });
+
+  test('no personal window on the bottle → unchanged profile-based label', () => {
+    const bottle = { vintage: 2020 }; // no drinkFrom/drinkTo
+    expect(maturityLabel('peak', profileSaysNow, bottle)).toBe('At peak — drink now through 2028');
+    expect(maturityLabel('not-ready', { earlyFrom: 2028 }, bottle)).toBe('Not ready yet — drinking from 2028');
+  });
+
+  test('omitting the bottle arg keeps the legacy profile-based behaviour', () => {
+    expect(maturityLabel('peak', profileSaysNow)).toBe('At peak — drink now through 2028');
+  });
+});

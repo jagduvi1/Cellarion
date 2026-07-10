@@ -704,6 +704,19 @@ router.put('/:id', requireBottleAccess('editor'), async (req, res) => {
       }
     }
 
+    // A changed personal drink window invalidates the drink-window notifier's
+    // "already notified" marker: the notifier only rewrites the marker on a
+    // notifiable transition, so a stale status (e.g. 'peak' from the old window)
+    // would permanently suppress the alert for the NEW window (e.g. drinkFrom
+    // pushed out to 2030 → not-ready now, but 'peak' marker blocks the 2030
+    // peak alert forever). Clear it so the next notifier run re-evaluates from a
+    // clean slate. Only when a window bound actually changed (changes[field] is
+    // set only on a real value diff).
+    if (changes.drinkFrom || changes.drinkTo) {
+      bottle.drinkWindowNotifiedStatus = null;
+      bottle.drinkWindowNotifiedAt = null;
+    }
+
     await bottle.save();
     await bottle.populate(WINE_POPULATE);
 

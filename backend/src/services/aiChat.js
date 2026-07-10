@@ -143,10 +143,12 @@ function formatWineList(matches, { profileMap, countMap, priceMap } = {}) {
     const count = countMap?.get(key);
     const countStr = count ? `   Bottles: ${count}` : null;
 
-    // Enrichment: maturity status
+    // Enrichment: maturity status. Pass the bottle so the label quotes the
+    // PERSONAL drink-window years when that window governs the status (else the
+    // profile years would contradict a personal not-ready/peak/declining).
     const profile = profileMap?.get(key);
     const maturityStatus = profileMap ? classifyMaturity(bottle, profileMap) : null;
-    const maturityStr = maturityLabel(maturityStatus, profile);
+    const maturityStr = maturityLabel(maturityStatus, profile, bottle);
 
     // Enrichment: user's purchase price
     const purchaseStr = bottle.price ? `   Your price: ${bottle.currency || 'USD'} ${bottle.price}` : null;

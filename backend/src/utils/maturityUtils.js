@@ -87,14 +87,39 @@ async function buildProfileMap(activeBottles) {
 
 /**
  * Return a human-readable maturity label for the chat context.
- * Uses the classification status and the profile's year ranges.
+ *
+ * Uses the classification status and year ranges. When the bottle's PERSONAL
+ * drink window governs the status (same precedence as classifyMaturity), the
+ * label quotes the personal drinkFrom/drinkTo years — NOT the sommelier
+ * profile's — so the years match the status source (otherwise a personal
+ * "not-ready" could read "drinking from 2020" while the real personal drinkFrom
+ * is 2035). With no personal window, the profile-based labels are unchanged.
  *
  * @param {string|null} status  – output of classifyMaturity()
  * @param {object|null} profile – the WineVintageProfile document
+ * @param {object|null} bottle  – the bottle (for its personal drinkFrom/drinkTo)
  * @returns {string|null}
  */
-function maturityLabel(status, profile) {
+function maturityLabel(status, profile, bottle = null) {
   if (!status) return null;
+
+  // Personal window wins: build the label from the user's own years so it is
+  // consistent with the personal-window status classifyMaturity returned.
+  if (bottle && classifyPersonalWindow(bottle)) {
+    const from = Number.isFinite(bottle.drinkFrom) ? bottle.drinkFrom : null;
+    const to   = Number.isFinite(bottle.drinkTo)   ? bottle.drinkTo   : null;
+    switch (status) {
+      case 'not-ready':
+        return `Not ready yet — drinking from ${from ?? '?'}`;
+      case 'peak':
+        return to ? `At peak — drink now through ${to}` : 'At peak maturity — drink now';
+      case 'declining':
+        return 'Past peak — declining, drink immediately if at all';
+      default:
+        break; // any other status → fall through to the profile-based labels
+    }
+  }
+
   switch (status) {
     case 'not-ready':
       return `Not ready yet — drinking from ${profile?.earlyFrom || profile?.peakFrom || '?'}`;
