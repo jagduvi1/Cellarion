@@ -38,6 +38,7 @@ const { buildUserExport } = require('../services/userDataRegistry');
 const { buildCellarDataExport, EXPORT_README } = require('../services/cellarExport');
 const { safeUploadPath } = require('../services/imageProcessor');
 const { logAudit } = require('../services/audit');
+const eventBus = require('../services/eventBus');
 const { CURRENT_PRIVACY_POLICY_VERSION } = require('../config/legal');
 const { stripHtml, escapeRegex } = require('../utils/sanitize');
 const { isValidId, coerceStringQuery } = require('../utils/validation');
@@ -600,6 +601,7 @@ router.delete('/me', requireAuth, async (req, res) => {
     // deletion) — matching change-password / password-reset, which also clear it.
     user.refreshTokenHash = null;
     user.refreshTokenExpiresAt = null;
+    eventBus.dropUser(user._id); // and force-close open SSE event streams
     await user.save();
 
     // Clean up pending cellar invites sent by this user
