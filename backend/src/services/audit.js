@@ -1,6 +1,15 @@
 const pino = require('pino');
 const AuditLog = require('../models/AuditLog');
 const { getClientIp } = require('../utils/clientIp');
+const eventBus = require('./eventBus');
+
+// SSE nudges (docs/ha-push-events.md §1): audit is the one funnel every
+// significant mutation already flows through on its success path, so it doubles
+// as the stats_changed emitter — a new bottle/cellar route gets push support by
+// following the existing "audit your mutations" rule, with no second hook to
+// forget. Only actions in these categories are user-visible wine-data changes;
+// the emit targets the acting user (each account watches its own stream).
+const STATS_CHANGED_PREFIXES = ['bottle.', 'cellar.'];
 
 // Structured logger — outputs newline-delimited JSON to stdout.
 // In Docker this is captured by the container runtime.
@@ -57,6 +66,13 @@ function logAudit(req, action, resource = {}, detail = {}) {
   AuditLog.create(entry).catch(err =>
     logger.error({ err }, 'Failed to persist audit log entry')
   );
+
+  // SSE push nudge — debounced in the bus, no-op when the user has no open
+  // stream. System-actor events (req = null, e.g. retention jobs) are skipped:
+  // there is no acting user to notify.
+  if (entry.actor.userId && STATS_CHANGED_PREFIXES.some(p => action.startsWith(p))) {
+    eventBus.emit(entry.actor.userId, 'stats_changed', { reason: action });
+  }
 }
 
 module.exports = { logAudit, logger };

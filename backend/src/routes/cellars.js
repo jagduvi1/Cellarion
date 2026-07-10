@@ -447,6 +447,8 @@ router.post('/', async (req, res) => {
 
     await cellar.save();
 
+    logAudit(req, 'cellar.create', { type: 'cellar', id: cellar._id, cellarId: cellar._id }, { name: cellar.name });
+
     const obj = cellar.toObject();
     obj.userRole = 'owner';
     obj.userColor = getUserColor(cellar, req.user.id);
@@ -1347,6 +1349,9 @@ router.put('/:id', async (req, res) => {
     if (description !== undefined) cellar.description = description?.trim() || '';
 
     await cellar.save();
+
+    logAudit(req, 'cellar.update', { type: 'cellar', id: cellar._id, cellarId: cellar._id }, { name: cellar.name });
+
     const obj = cellar.toObject();
     obj.userRole = 'owner';
     obj.userColor = getUserColor(cellar, req.user.id);

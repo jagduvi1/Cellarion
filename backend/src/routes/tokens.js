@@ -5,6 +5,7 @@ const ApiToken = require('../models/ApiToken');
 const User = require('../models/User');
 const { requireAuth } = require('../middleware/auth');
 const { logAudit } = require('../services/audit');
+const eventBus = require('../services/eventBus');
 const rateLimitsConfig = require('../config/rateLimits');
 const { rateLimitKey } = require('../utils/clientIp');
 
@@ -117,9 +118,9 @@ router.delete('/:id', requireAuth, async (req, res) => {
 
     logAudit(req, 'token.revoked', { type: 'apiToken', id: token._id }, { name: token.name });
 
-    // §1 SSE interaction: when the event-stream endpoint ships, revoking a
-    // token must also close any open streams it authenticated (eventBus
-    // dropUser-style hook goes here).
+    // Revocation must also close any open SSE event streams this token
+    // authenticated (docs/ha-push-events.md §3).
+    eventBus.dropToken(token._id);
 
     res.json({ message: 'Token revoked' });
   } catch (error) {
