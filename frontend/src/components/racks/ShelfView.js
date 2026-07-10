@@ -23,7 +23,7 @@ const SHELF_LABEL_W = 64;
  * Designed for Oeno-style cabinets but works for any rack with type === 'shelf'.
  * Falls back to a friendly message for other rack types.
  */
-export default function ShelfView({ rack, activePosition, highlightPos, onSlotClick }) {
+export default function ShelfView({ rack, activePosition, highlightPos, onSlotClick, getSlotStyle }) {
   const [layerMode, setLayerMode] = useState('front');
   // All hooks must run before the non-shelf early return below, or a rack
   // type change on a mounted instance breaks the Rules of Hooks.
@@ -151,6 +151,7 @@ export default function ShelfView({ rack, activePosition, highlightPos, onSlotCl
                     isActive={activePosition === s.position}
                     isHighlight={highlightPos === s.position}
                     onClick={() => onSlotClick && onSlotClick(s.position, s.slot || null)}
+                    getSlotStyle={getSlotStyle}
                   />
                 );
               })}
@@ -162,12 +163,16 @@ export default function ShelfView({ rack, activePosition, highlightPos, onSlotCl
   );
 }
 
-function BottleOval({ cx, cy, slot, position, disabled, isActive, isHighlight, onClick }) {
+function BottleOval({ cx, cy, slot, position, disabled, isActive, isHighlight, onClick, getSlotStyle }) {
   const bottle = slot?.bottle;
   const wine = bottle?.wineDefinition;
   const wineType = wine?.type || 'red';
   const colors = bottle ? (WINE_COLORS[wineType] || WINE_COLORS.red) : null;
   const filled = !!bottle;
+  // Lens/search style: overrides fill/stroke/text for filled ovals, dims
+  // non-matching slots while a search is active.
+  const custom = getSlotStyle ? getSlotStyle(slot || null) : null;
+  const dimStyle = custom?.dim ? { opacity: 0.22 } : null;
 
   // Disabled (unusable) position: greyed oval with a subtle diagonal cross.
   // Still clickable so editors can re-enable it from the slot popup.
@@ -182,7 +187,7 @@ function BottleOval({ cx, cy, slot, position, disabled, isActive, isHighlight, o
         tabIndex={0}
         className="shelf-view-bottle disabled"
         aria-label={`Disabled slot ${position}`}
-        style={{ cursor: 'default' }}
+        style={{ cursor: 'default', ...dimStyle }}
       >
         <ellipse
           cx={cx}
@@ -201,6 +206,10 @@ function BottleOval({ cx, cy, slot, position, disabled, isActive, isHighlight, o
     );
   }
 
+  const fillColor = filled ? (custom?.fill || colors.fill) : 'transparent';
+  const strokeColor = filled ? (custom?.stroke || colors.stroke) : '#B09060';
+  const textColor = custom?.text || colors?.text;
+
   return (
     <g
       onClick={onClick}
@@ -209,6 +218,7 @@ function BottleOval({ cx, cy, slot, position, disabled, isActive, isHighlight, o
       tabIndex={0}
       className={`shelf-view-bottle ${filled ? 'filled' : 'empty'} ${isActive ? 'active' : ''} ${isHighlight ? 'highlight' : ''}`}
       aria-label={filled ? `${wine?.name || 'Wine'} ${bottle?.vintage || ''}` : `Empty slot ${position}`}
+      style={dimStyle || undefined}
     >
       <ellipse
         cx={cx + 0.5}
@@ -223,8 +233,8 @@ function BottleOval({ cx, cy, slot, position, disabled, isActive, isHighlight, o
         cy={cy}
         rx={BOTTLE_RX}
         ry={BOTTLE_RY}
-        fill={filled ? colors.fill : 'transparent'}
-        stroke={filled ? colors.stroke : '#B09060'}
+        fill={fillColor}
+        stroke={strokeColor}
         strokeWidth={isActive || isHighlight ? 2.5 : 1.5}
         strokeDasharray={filled ? null : '3 2'}
       />
@@ -245,7 +255,7 @@ function BottleOval({ cx, cy, slot, position, disabled, isActive, isHighlight, o
           textAnchor="middle"
           dominantBaseline="central"
           className="shelf-view-vintage"
-          fill={colors.text}
+          fill={textColor}
         >
           {bottle.vintage}
         </text>

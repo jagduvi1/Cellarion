@@ -10,10 +10,33 @@ const { getCellarRole } = require('../utils/cellarAccess');
 const { getMaxPosition } = require('../utils/rackGeometry');
 const { isValidId } = require('../utils/validation');
 const { logAudit } = require('../services/audit');
+const { classifyMaturity, buildProfileMap } = require('../utils/maturityUtils');
 
 const router = express.Router();
 
 const MAX_MODULES = 50;
+
+/**
+ * Serialize rack doc(s) with a maturityStatus attached to every populated
+ * slot bottle (same classification the cellar list attaches per bottle), so
+ * the rack views can color slots by drink window. Accepts a single rack or
+ * an array; returns plain objects ready for res.json.
+ */
+async function withMaturity(rackOrRacks) {
+  const rackDocs = Array.isArray(rackOrRacks) ? rackOrRacks : [rackOrRacks];
+  const bottles = rackDocs.flatMap(r => (r.slots || []).map(s => s.bottle).filter(Boolean));
+  const profileMap = await buildProfileMap(bottles);
+  const out = rackDocs.map(r => {
+    const obj = typeof r.toObject === 'function' ? r.toObject() : r;
+    for (const s of obj.slots || []) {
+      if (s.bottle && s.bottle._id) {
+        s.bottle.maturityStatus = classifyMaturity(s.bottle, profileMap) || null;
+      }
+    }
+    return obj;
+  });
+  return Array.isArray(rackOrRacks) ? out : out[0];
+}
 
 /**
  * Validate typeConfig.doubleHeightRows: grid racks (non-modular) only,
@@ -85,7 +108,7 @@ router.get('/', requireCellarAccess('viewer'), async (req, res) => {
         populate: { path: 'wineDefinition', populate: ['country', 'region', 'grapes'] }
       });
 
-    res.json({ racks });
+    res.json({ racks: await withMaturity(racks) });
   } catch (err) {
     console.error('Get racks error:', err);
     res.status(500).json({ error: 'Failed to get racks' });
@@ -226,7 +249,7 @@ router.put('/:id', async (req, res) => {
     });
 
     logAudit(req, 'rack.update', { type: 'rack', id: rack._id });
-    res.json({ rack });
+    res.json({ rack: await withMaturity(rack) });
   } catch (err) {
     if (err.code === 11000) {
       // Two unique indexes can throw here — report the right conflict.
@@ -339,7 +362,7 @@ router.put('/:id/slots/:position', async (req, res) => {
     });
 
     logAudit(req, 'rack.slot_assign', { type: 'rack', id: rack._id });
-    res.json({ rack });
+    res.json({ rack: await withMaturity(rack) });
   } catch (err) {
     if (err.name === 'VersionError') {
       return res.status(409).json({ error: 'This rack was modified by another request. Please refresh and try again.' });
@@ -374,7 +397,7 @@ router.delete('/:id/slots/:position', async (req, res) => {
     });
 
     logAudit(req, 'rack.slot_clear', { type: 'rack', id: rack._id });
-    res.json({ rack });
+    res.json({ rack: await withMaturity(rack) });
   } catch (err) {
     console.error('Clear slot error:', err);
     res.status(500).json({ error: 'Failed to clear slot' });
@@ -418,7 +441,7 @@ router.post('/:id/slots/:position/disable', async (req, res) => {
     });
 
     logAudit(req, 'rack.slot_disable', { type: 'rack', id: rack._id });
-    res.json({ rack });
+    res.json({ rack: await withMaturity(rack) });
   } catch (err) {
     if (err.name === 'VersionError') {
       return res.status(409).json({ error: 'This rack was modified by another request. Please refresh and try again.' });
@@ -455,7 +478,7 @@ router.delete('/:id/slots/:position/disable', async (req, res) => {
     });
 
     logAudit(req, 'rack.slot_enable', { type: 'rack', id: rack._id });
-    res.json({ rack });
+    res.json({ rack: await withMaturity(rack) });
   } catch (err) {
     if (err.name === 'VersionError') {
       return res.status(409).json({ error: 'This rack was modified by another request. Please refresh and try again.' });
