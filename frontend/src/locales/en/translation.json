@@ -2248,7 +2248,10 @@
     "undoPourBtn": "Undo pour",
     "finishBtn": "Finish bottle…",
     "undoOpenBtn": "Opened by mistake?",
-    "undoOpenHint": "Removes the open state and all pours"
+    "undoOpenHint": "Removes the open state and all pours",
+    "partialOption": "Just a glass — keep the bottle",
+    "partialOr": "or remove it completely:",
+    "partialConfirmBtn": "Open & pour a glass"
   },
 
   "audit": {

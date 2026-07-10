@@ -1,11 +1,12 @@
 import { useState, useEffect, useMemo, useCallback, useRef, lazy, Suspense } from 'react';
-import { useParams, Link, useSearchParams } from 'react-router-dom';
+import { useParams, Link, useSearchParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import { getCellar } from '../api/cellars';
 import { getRacks, deleteRack, updateSlot, clearSlot, moveSlot, createRack, updateRack, disableSlot, enableSlot } from '../api/racks';
-import { consumeBottle, pourBottle } from '../api/bottles';
+import { consumeBottle, pourBottle, openBottle } from '../api/bottles';
 import { glassesLeft, daysLeft, freshnessStatus, remainingMl } from '../utils/openBottle';
+import PreservationPickerModal from '../components/bottle/PreservationPickerModal';
 import { getTotalSlots, getModularTotalSlots } from '../utils/rackLayouts';
 import RackRenderer from '../components/racks/RackRenderer';
 import ShelfView from '../components/racks/ShelfView';
@@ -26,6 +27,7 @@ import './CellarRacks.css';
 function CellarRacks() {
   const { t } = useTranslation();
   const { id } = useParams();
+  const navigate = useNavigate();
   const { apiFetch, user } = useAuth();
   const [searchParams] = useSearchParams();
   const highlightBottleId = searchParams.get('highlight');
@@ -120,6 +122,10 @@ function CellarRacks() {
 
   // consume modal: { bottleId, bottle } or null
   const [consumeModal, setConsumeModal] = useState(null);
+
+  // "just a glass" partial flow: preservation picker for a not-yet-open bottle
+  const [partialPicker, setPartialPicker] = useState(null); // { bottleId }
+  const [partialBusy, setPartialBusy] = useState(false);
 
   // "Organize this rack" modal
   const [arrangeOpen, setArrangeOpen] = useState(false);
@@ -392,6 +398,32 @@ function CellarRacks() {
     } catch {
       alert('Network error — please try again.');
     }
+  };
+
+  // "Just a glass — keep the bottle": escape hatch out of the remove flow.
+  // Already-open bottles pour immediately; unopened ones ask for the
+  // preservation method first. Both land on the bottle page, where the
+  // open-bottle panel shows the result.
+  const handlePartial = async (bottle) => {
+    setConsumeModal(null);
+    if (bottle.openedAt) {
+      try { await pourBottle(apiFetch, bottle._id); } catch { /* bottle page shows truth */ }
+      navigate(`/cellars/${id}/bottles/${bottle._id}`);
+    } else {
+      setPartialPicker({ bottleId: bottle._id });
+    }
+  };
+
+  const confirmPartial = async (method) => {
+    const { bottleId } = partialPicker;
+    setPartialBusy(true);
+    try {
+      const res = await openBottle(apiFetch, bottleId, method);
+      if (res.ok) await pourBottle(apiFetch, bottleId);
+    } catch { /* bottle page shows truth */ }
+    setPartialBusy(false);
+    setPartialPicker(null);
+    navigate(`/cellars/${id}/bottles/${bottleId}`);
   };
 
   // Pour a glass from an open (Coravin'd) bottle right from the slot popup.
@@ -821,6 +853,16 @@ function CellarRacks() {
           defaultRatingScale={user?.preferences?.ratingScale || '5'}
           onSubmit={handleConsumeSubmit}
           onCancel={() => setConsumeModal(null)}
+          onPartial={() => handlePartial(consumeModal.bottle)}
+        />
+      )}
+
+      {/* Preservation picker for the "just a glass" partial flow */}
+      {partialPicker && (
+        <PreservationPickerModal
+          busy={partialBusy}
+          onConfirm={confirmPartial}
+          onClose={() => setPartialPicker(null)}
         />
       )}
 
@@ -1379,7 +1421,7 @@ function FilledSlotContent({ position, slot, zone, canEdit, onRemoveFromRack, on
 }
 
 // ---- Consume / remove modal ----
-function ConsumeModal({ defaultRatingScale, onSubmit, onCancel }) {
+function ConsumeModal({ defaultRatingScale, onSubmit, onCancel, onPartial }) {
   const { t } = useTranslation();
   const [reason,       setReason]      = useState('drank');
   const [note,         setNote]        = useState('');
@@ -1406,6 +1448,14 @@ function ConsumeModal({ defaultRatingScale, onSubmit, onCancel }) {
           <span className="slot-popup-title">{t('bottleDetail.removeBottleTitle')}</span>
           <button className="slot-popup-close" onClick={onCancel} aria-label="Close">&times;</button>
         </div>
+        {onPartial && (
+          <div className="consume-partial-row">
+            <button type="button" className="btn btn-secondary consume-partial-btn" onClick={onPartial}>
+              🍷 {t('openBottle.partialOption', 'Just a glass — keep the bottle')}
+            </button>
+            <span className="consume-partial-or">{t('openBottle.partialOr', 'or remove it completely:')}</span>
+          </div>
+        )}
         <form onSubmit={handleSubmit} className="consume-modal-form">
           <div className="form-group">
             <label>{t('common.reason')}</label>

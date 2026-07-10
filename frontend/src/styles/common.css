@@ -395,3 +395,21 @@
 #main-content:focus-visible {
   outline: none;
 }
+
+/* "Just a glass — keep the bottle" escape hatch in the remove dialogs */
+.consume-partial-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin-bottom: 0.9rem;
+}
+
+.consume-partial-btn {
+  width: 100%;
+}
+
+.consume-partial-or {
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+  text-align: center;
+}

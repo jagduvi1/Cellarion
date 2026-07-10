@@ -2248,7 +2248,10 @@
     "undoPourBtn": "Ångra glas",
     "finishBtn": "Avsluta flaskan…",
     "undoOpenBtn": "Öppnad av misstag?",
-    "undoOpenHint": "Tar bort öppnad-status och alla registrerade glas"
+    "undoOpenHint": "Tar bort öppnad-status och alla registrerade glas",
+    "partialOption": "Bara ett glas — behåll flaskan",
+    "partialOr": "eller ta bort den helt:",
+    "partialConfirmBtn": "Öppna & häll upp ett glas"
   },
 
   "audit": {
