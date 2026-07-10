@@ -1,4 +1,5 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef } from 'react';
+import useSlotDrag from '../../hooks/useSlotDrag';
 import './ShelfView.css';
 
 const WINE_COLORS = {
@@ -23,8 +24,9 @@ const SHELF_LABEL_W = 64;
  * Designed for Oeno-style cabinets but works for any rack with type === 'shelf'.
  * Falls back to a friendly message for other rack types.
  */
-export default function ShelfView({ rack, activePosition, highlightPos, onSlotClick, getSlotStyle }) {
+export default function ShelfView({ rack, activePosition, highlightPos, onSlotClick, getSlotStyle, onSlotMove }) {
   const [layerMode, setLayerMode] = useState('front');
+  const svgRef = useRef(null);
   // All hooks must run before the non-shelf early return below, or a rack
   // type change on a mounted instance breaks the Rules of Hooks.
   const slotMap = useMemo(() => {
@@ -38,18 +40,11 @@ export default function ShelfView({ rack, activePosition, highlightPos, onSlotCl
     [rack?.disabledPositions]
   );
 
-  if (rack?.type !== 'shelf') {
-    return (
-      <div className="shelf-view-empty">
-        Shelf view is only available for Open Shelf racks. Switch back to the compact view to see this rack.
-      </div>
-    );
-  }
-
-  const cols = rack.cols || 0;
-  const backCols = rack.typeConfig?.backCols || 0;
-  const bpc = rack.typeConfig?.bottlesPerCell || 1;
-  const rows = rack.rows || 0;
+  const isShelf = rack?.type === 'shelf';
+  const cols = rack?.cols || 0;
+  const backCols = rack?.typeConfig?.backCols || 0;
+  const bpc = rack?.typeConfig?.bottlesPerCell || 1;
+  const rows = rack?.rows || 0;
   const slotsPerShelf = (cols + backCols) * bpc;
   const hasBack = backCols > 0;
 
@@ -64,6 +59,48 @@ export default function ShelfView({ rack, activePosition, highlightPos, onSlotCl
   const shelfRowWidth = SHELF_LABEL_W + layerCols * layerBpc * (BOTTLE_RX * 2 + BOTTLE_GAP) + BOTTLE_GAP;
   const shelfRowHeight = BOTTLE_RY * 2 + SHELF_PAD_Y * 2;
   const totalHeight = rows * shelfRowHeight;
+
+  // Absolute svg coords of every visible oval on the active layer — the
+  // drag hit map (mirrors the geometry in the render loop below).
+  const slotCenters = useMemo(() => {
+    const centers = [];
+    const count = (layerMode === 'front' ? cols : backCols) * bpc;
+    const offset = layerMode === 'front' ? 0 : cols * bpc;
+    for (let displayIdx = 0; displayIdx < rows; displayIdx++) {
+      const shelfBase = displayIdx * slotsPerShelf;
+      for (let c = 1; c <= count; c++) {
+        centers.push({
+          position: shelfBase + offset + c,
+          cx: SHELF_LABEL_W + BOTTLE_GAP + BOTTLE_RX + (c - 1) * (BOTTLE_RX * 2 + BOTTLE_GAP),
+          cy: displayIdx * shelfRowHeight + shelfRowHeight / 2,
+          r: BOTTLE_RY,
+        });
+      }
+    }
+    return centers;
+  }, [rows, cols, backCols, bpc, slotsPerShelf, layerMode, shelfRowHeight]);
+
+  const { drag, startDrag, shouldSuppressClick } = useSlotDrag({
+    svgRef,
+    slotCenters,
+    isValidTarget: (pos) => !disabledSet.has(pos),
+    onMove: onSlotMove,
+    enabled: !!onSlotMove && isShelf,
+  });
+
+  // A click that lands right after a drop must not open the slot popup.
+  const handleSlotClick = (pos, slotData) => {
+    if (shouldSuppressClick()) return;
+    if (onSlotClick) onSlotClick(pos, slotData);
+  };
+
+  if (!isShelf) {
+    return (
+      <div className="shelf-view-empty">
+        Shelf view is only available for Open Shelf racks. Switch back to the compact view to see this rack.
+      </div>
+    );
+  }
 
   const shelves = [];
   for (let displayIdx = 0; displayIdx < rows; displayIdx++) {
@@ -111,7 +148,8 @@ export default function ShelfView({ rack, activePosition, highlightPos, onSlotCl
         <div className="shelf-view-empty">This shelf has no {layerMode} cells.</div>
       ) : (
         <svg
-          className="shelf-view-svg"
+          ref={svgRef}
+          className={`shelf-view-svg ${drag ? 'shelf-view-svg--dragging' : ''}`}
           viewBox={`0 0 ${shelfRowWidth} ${totalHeight}`}
           width="100%"
         >
@@ -150,20 +188,44 @@ export default function ShelfView({ rack, activePosition, highlightPos, onSlotCl
                     disabled={disabledSet.has(s.position)}
                     isActive={activePosition === s.position}
                     isHighlight={highlightPos === s.position}
-                    onClick={() => onSlotClick && onSlotClick(s.position, s.slot || null)}
+                    onClick={() => handleSlotClick(s.position, s.slot || null)}
                     getSlotStyle={getSlotStyle}
+                    onDragStart={onSlotMove ? startDrag : undefined}
+                    isDragOrigin={drag?.from === s.position}
+                    isDragTarget={drag?.over === s.position}
                   />
                 );
               })}
             </g>
           ))}
+
+          {/* Drag ghost — a floating oval that follows the pointer */}
+          {drag && (() => {
+            const originSlot = slotMap[drag.from];
+            const wineType = originSlot?.bottle?.wineDefinition?.type || 'red';
+            const colors = WINE_COLORS[wineType] || WINE_COLORS.red;
+            const custom = getSlotStyle && originSlot ? getSlotStyle(originSlot) : null;
+            return (
+              <g pointerEvents="none">
+                <ellipse cx={drag.x + 0.5} cy={drag.y + 1.5} rx={BOTTLE_RX} ry={BOTTLE_RY} fill="rgba(0,0,0,0.12)" />
+                <ellipse
+                  cx={drag.x} cy={drag.y}
+                  rx={BOTTLE_RX} ry={BOTTLE_RY}
+                  fill={custom?.fill || colors.fill}
+                  stroke={custom?.stroke || colors.stroke}
+                  strokeWidth={1.5}
+                  opacity={0.85}
+                />
+              </g>
+            );
+          })()}
         </svg>
       )}
     </div>
   );
 }
 
-function BottleOval({ cx, cy, slot, position, disabled, isActive, isHighlight, onClick, getSlotStyle }) {
+function BottleOval({ cx, cy, slot, position, disabled, isActive, isHighlight, onClick, getSlotStyle, onDragStart, isDragOrigin, isDragTarget }) {
   const bottle = slot?.bottle;
   const wine = bottle?.wineDefinition;
   const wineType = wine?.type || 'red';
@@ -172,7 +234,10 @@ function BottleOval({ cx, cy, slot, position, disabled, isActive, isHighlight, o
   // Lens/search style: overrides fill/stroke/text for filled ovals, dims
   // non-matching slots while a search is active.
   const custom = getSlotStyle ? getSlotStyle(slot || null) : null;
-  const dimStyle = custom?.dim ? { opacity: 0.22 } : null;
+  // Drag origin fades harder than a search dim so the "lifted" bottle reads
+  // as coming from that slot.
+  const dimStyle = isDragOrigin ? { opacity: 0.3 } : custom?.dim ? { opacity: 0.22 } : null;
+  const draggable = !!(filled && onDragStart);
 
   // Disabled (unusable) position: greyed oval with a subtle diagonal cross.
   // Still clickable so editors can re-enable it from the slot popup.
@@ -214,11 +279,12 @@ function BottleOval({ cx, cy, slot, position, disabled, isActive, isHighlight, o
     <g
       onClick={onClick}
       onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && onClick?.()}
+      onPointerDown={draggable ? (e) => onDragStart(e, position) : undefined}
       role="button"
       tabIndex={0}
       className={`shelf-view-bottle ${filled ? 'filled' : 'empty'} ${isActive ? 'active' : ''} ${isHighlight ? 'highlight' : ''}`}
       aria-label={filled ? `${wine?.name || 'Wine'} ${bottle?.vintage || ''}` : `Empty slot ${position}`}
-      style={dimStyle || undefined}
+      style={{ ...(draggable ? { cursor: 'grab' } : null), ...dimStyle }}
     >
       <ellipse
         cx={cx + 0.5}
@@ -270,6 +336,16 @@ function BottleOval({ cx, cy, slot, position, disabled, isActive, isHighlight, o
         >
           {position}
         </text>
+      )}
+      {isDragTarget && (
+        <ellipse
+          cx={cx} cy={cy}
+          rx={BOTTLE_RX + 3} ry={BOTTLE_RY + 3}
+          fill="none"
+          stroke="#7A1E2D"
+          strokeWidth={2.5}
+          strokeDasharray="5 3"
+        />
       )}
     </g>
   );

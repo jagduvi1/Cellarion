@@ -372,6 +372,61 @@ router.put('/:id/slots/:position', async (req, res) => {
   }
 });
 
+// POST /api/racks/:id/slots/:position/move  — move a bottle to another slot
+// in the same rack (owner or editor). Body: { toPosition }. If the target
+// slot is occupied the two bottles swap. One save() under the rack's
+// optimistic-concurrency guard, so the move/swap is atomic.
+router.post('/:id/slots/:position/move', async (req, res) => {
+  try {
+    if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
+    const from = parseInt(req.params.position, 10);
+    const to = parseInt(req.body?.toPosition, 10);
+    if (isNaN(from) || isNaN(to)) return res.status(400).json({ error: 'Invalid position' });
+    if (from === to) return res.status(400).json({ error: 'Source and target are the same slot' });
+
+    const rack = await Rack.findOne({ _id: req.params.id, deletedAt: null });
+    if (!rack) return res.status(404).json({ error: 'Rack not found' });
+
+    const cellarDoc = await Cellar.findById(rack.cellar);
+    const role = getCellarRole(cellarDoc, req.user.id);
+    if (!role || role === 'viewer') {
+      return res.status(403).json({ error: 'Not authorized to modify rack slots' });
+    }
+
+    const maxPos = getMaxPosition(rack);
+    if (from < 1 || from > maxPos || to < 1 || to > maxPos) {
+      return res.status(400).json({ error: `Position must be 1–${maxPos}` });
+    }
+    // Only the target needs the disabled check — an occupied source slot
+    // that was later disabled must still be allowed to move its bottle out.
+    if ((rack.disabledPositions || []).includes(to)) {
+      return res.status(400).json({ error: 'This slot is disabled' });
+    }
+
+    const fromSlot = rack.slots.find(s => s.position === from);
+    if (!fromSlot) return res.status(400).json({ error: 'Source slot is empty' });
+    const toSlot = rack.slots.find(s => s.position === to);
+
+    fromSlot.position = to;
+    if (toSlot) toSlot.position = from; // occupied target → swap
+    await rack.save();
+
+    await rack.populate({
+      path: 'slots.bottle',
+      populate: { path: 'wineDefinition', populate: ['country', 'region', 'grapes'] }
+    });
+
+    logAudit(req, 'rack.slot_move', { type: 'rack', id: rack._id }, { from, to, swapped: !!toSlot });
+    res.json({ rack: await withMaturity(rack) });
+  } catch (err) {
+    if (err.name === 'VersionError') {
+      return res.status(409).json({ error: 'This rack was modified by another request. Please refresh and try again.' });
+    }
+    console.error('Move slot error:', err);
+    res.status(500).json({ error: 'Failed to move bottle' });
+  }
+});
+
 // DELETE /api/racks/:id/slots/:position  — clear a slot (owner or editor)
 router.delete('/:id/slots/:position', async (req, res) => {
   try {
