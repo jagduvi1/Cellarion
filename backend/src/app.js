@@ -2,11 +2,11 @@ const express = require('express');
 const compression = require('compression');
 const cors = require('cors');
 const helmet = require('helmet');
-const path = require('path');
 const rateLimit = require('express-rate-limit');
 const cookieParser = require('cookie-parser');
 const { rateLimitKey } = require('./utils/clientIp');
 const { requireAuth } = require('./middleware/auth');
+const { uploadsGuard } = require('./middleware/uploadsStatic');
 const healthRoute = require('./routes/health');
 const siteRoute = require('./routes/site');
 const authRoute = require('./routes/auth');
@@ -168,15 +168,7 @@ app.use('/api/', writeLimiter);
 
 // Serve uploaded images — no auth required (filenames are random UUIDs).
 // Long cache: images are immutable once uploaded.
-app.use('/api/uploads', (req, res, next) => {
-  const ext = path.extname(req.path).toLowerCase();
-  const allowedExts = ['.jpg', '.jpeg', '.png', '.webp'];
-  if (!allowedExts.includes(ext)) {
-    return res.status(403).json({ error: 'File type not allowed' });
-  }
-  res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
-  next();
-}, express.static('/app/uploads'));
+app.use('/api/uploads', uploadsGuard, express.static('/app/uploads'));
 
 // Routes
 app.use('/api/health', healthRoute);
