@@ -17,7 +17,8 @@ jest.mock('../../services/notifications', () => ({
 }));
 jest.mock('../../models/AiBudgetRequest', () => ({
   find: jest.fn(),
-  findById: jest.fn(),
+  findOneAndUpdate: jest.fn(),
+  exists: jest.fn(),
   countDocuments: jest.fn(),
 }));
 jest.mock('../../models/User', () => ({
@@ -68,20 +69,21 @@ function request(app, { method, path, body, roles = ['admin'] }) {
   });
 }
 
-// A pending request document with the instance methods the route uses.
-function pendingDoc() {
+// The decided document findOneAndUpdate({new:true}) resolves to (the atomic
+// claim already applied the $set); the route only reads `.user`/`._id` and
+// calls `.populate()`.
+function decidedDoc(status) {
   return {
     _id: REQ_ID,
     user: REQUESTER,
-    reason: 'big import',
-    status: 'pending',
-    decidedBy: null,
-    decidedAt: null,
-    grantedMax: null,
-    grantedUntil: null,
-    save: jest.fn().mockResolvedValue(undefined),
+    status,
     populate: jest.fn().mockResolvedValue(undefined),
   };
+}
+
+// Convenience: the successful-claim path resolves the decided doc.
+function mockClaim(status) {
+  AiBudgetRequest.findOneAndUpdate.mockResolvedValue(decidedDoc(status));
 }
 
 function mockList(docs, total = docs.length) {
@@ -129,8 +131,7 @@ describe('GET /api/admin/ai-budget-requests', () => {
 
 describe('PATCH /api/admin/ai-budget-requests/:id — approve', () => {
   test('sets the user override, closes the request, notifies + audits', async () => {
-    const doc = pendingDoc();
-    AiBudgetRequest.findById.mockResolvedValue(doc);
+    mockClaim('approved');
     const before = Date.now();
 
     const res = await request(app, {
@@ -140,7 +141,16 @@ describe('PATCH /api/admin/ai-budget-requests/:id — approve', () => {
 
     expect(res.status).toBe(200);
 
-    // Override written onto the requesting user
+    // The request is claimed ATOMICALLY on { status: 'pending' } (audit BUG 6),
+    // with the decision applied in the same update.
+    expect(AiBudgetRequest.findOneAndUpdate).toHaveBeenCalledTimes(1);
+    const [claimFilter, claimUpdate] = AiBudgetRequest.findOneAndUpdate.mock.calls[0];
+    expect(claimFilter.status).toBe('pending');
+    expect(claimUpdate.$set.status).toBe('approved');
+    expect(claimUpdate.$set.decidedBy).toBe(ADMIN_ID);
+    expect(claimUpdate.$set.grantedMax).toBe(3000);
+
+    // Override written onto the requesting user (only after winning the claim)
     expect(User.updateOne).toHaveBeenCalledTimes(1);
     const [filter, update] = User.updateOne.mock.calls[0];
     expect(filter).toEqual({ _id: REQUESTER });
@@ -148,13 +158,6 @@ describe('PATCH /api/admin/ai-budget-requests/:id — approve', () => {
     const expiry = update.$set.aiBudgetOverride.expiresAt.getTime();
     expect(expiry).toBeGreaterThanOrEqual(before + 14 * 86400000 - 5000);
     expect(expiry).toBeLessThanOrEqual(Date.now() + 14 * 86400000 + 5000);
-
-    // Request closed with the grant recorded
-    expect(doc.status).toBe('approved');
-    expect(doc.decidedBy).toBe(ADMIN_ID);
-    expect(doc.grantedMax).toBe(3000);
-    expect(doc.grantedUntil).toBeInstanceOf(Date);
-    expect(doc.save).toHaveBeenCalled();
 
     // Requester notified with the new limit + expiry
     expect(createNotification).toHaveBeenCalledTimes(1);
@@ -171,8 +174,7 @@ describe('PATCH /api/admin/ai-budget-requests/:id — approve', () => {
   });
 
   test('defaults: grantedMax 2000, 7 days', async () => {
-    const doc = pendingDoc();
-    AiBudgetRequest.findById.mockResolvedValue(doc);
+    mockClaim('approved');
 
     await request(app, {
       method: 'PATCH', path: `/api/admin/ai-budget-requests/${REQ_ID}`,
@@ -194,7 +196,7 @@ describe('PATCH /api/admin/ai-budget-requests/:id — approve', () => {
     ]) {
       jest.clearAllMocks();
       User.updateOne.mockResolvedValue({});
-      AiBudgetRequest.findById.mockResolvedValue(pendingDoc());
+      mockClaim('approved');
       await request(app, {
         method: 'PATCH', path: `/api/admin/ai-budget-requests/${REQ_ID}`,
         body: { action: 'approve', ...input },
@@ -204,7 +206,7 @@ describe('PATCH /api/admin/ai-budget-requests/:id — approve', () => {
 
     jest.clearAllMocks();
     User.updateOne.mockResolvedValue({});
-    AiBudgetRequest.findById.mockResolvedValue(pendingDoc());
+    mockClaim('approved');
     await request(app, {
       method: 'PATCH', path: `/api/admin/ai-budget-requests/${REQ_ID}`,
       body: { action: 'approve', days: 365 },
@@ -212,12 +214,40 @@ describe('PATCH /api/admin/ai-budget-requests/:id — approve', () => {
     const expiry = User.updateOne.mock.calls[0][1].$set.aiBudgetOverride.expiresAt.getTime();
     expect(expiry).toBeLessThanOrEqual(Date.now() + 30 * 86400000 + 5000);
   });
+
+  test('a lost claim race (already decided) → 409, no override written', async () => {
+    // findOneAndUpdate on { status: 'pending' } finds nothing (another admin
+    // already decided); exists() confirms the request is real → 409, and the
+    // user override is never touched (audit BUG 6).
+    AiBudgetRequest.findOneAndUpdate.mockResolvedValue(null);
+    AiBudgetRequest.exists.mockResolvedValue({ _id: REQ_ID });
+
+    const res = await request(app, {
+      method: 'PATCH', path: `/api/admin/ai-budget-requests/${REQ_ID}`,
+      body: { action: 'approve', grantedMax: 5000 },
+    });
+
+    expect(res.status).toBe(409);
+    expect(User.updateOne).not.toHaveBeenCalled();
+    expect(createNotification).not.toHaveBeenCalled();
+  });
+
+  test('claim on a nonexistent request → 404', async () => {
+    AiBudgetRequest.findOneAndUpdate.mockResolvedValue(null);
+    AiBudgetRequest.exists.mockResolvedValue(null);
+
+    const res = await request(app, {
+      method: 'PATCH', path: `/api/admin/ai-budget-requests/${REQ_ID}`,
+      body: { action: 'deny' },
+    });
+
+    expect(res.status).toBe(404);
+  });
 });
 
 describe('PATCH /api/admin/ai-budget-requests/:id — deny', () => {
   test('closes the request without touching the user, neutral notification', async () => {
-    const doc = pendingDoc();
-    AiBudgetRequest.findById.mockResolvedValue(doc);
+    mockClaim('denied');
 
     const res = await request(app, {
       method: 'PATCH', path: `/api/admin/ai-budget-requests/${REQ_ID}`,
@@ -225,10 +255,12 @@ describe('PATCH /api/admin/ai-budget-requests/:id — deny', () => {
     });
 
     expect(res.status).toBe(200);
+    // Deny claims atomically too, and NEVER writes an override.
+    const [claimFilter, claimUpdate] = AiBudgetRequest.findOneAndUpdate.mock.calls[0];
+    expect(claimFilter.status).toBe('pending');
+    expect(claimUpdate.$set.status).toBe('denied');
+    expect(claimUpdate.$set.grantedMax).toBeUndefined();
     expect(User.updateOne).not.toHaveBeenCalled();
-    expect(doc.status).toBe('denied');
-    expect(doc.grantedMax).toBeNull();
-    expect(doc.save).toHaveBeenCalled();
 
     const [uid, type] = createNotification.mock.calls[0];
     expect(uid).toBe(REQUESTER);
@@ -248,7 +280,7 @@ describe('PATCH guards', () => {
       body: { action: 'approve' },
     });
     expect(res.status).toBe(400);
-    expect(AiBudgetRequest.findById).not.toHaveBeenCalled();
+    expect(AiBudgetRequest.findOneAndUpdate).not.toHaveBeenCalled();
   });
 
   test('400 on unknown action', async () => {
@@ -257,27 +289,6 @@ describe('PATCH guards', () => {
       body: { action: 'escalate' },
     });
     expect(res.status).toBe(400);
-  });
-
-  test('404 when the request does not exist', async () => {
-    AiBudgetRequest.findById.mockResolvedValue(null);
-    const res = await request(app, {
-      method: 'PATCH', path: `/api/admin/ai-budget-requests/${REQ_ID}`,
-      body: { action: 'approve' },
-    });
-    expect(res.status).toBe(404);
-  });
-
-  test('400 when already decided — no second override, no second notification', async () => {
-    const doc = { ...pendingDoc(), status: 'approved' };
-    AiBudgetRequest.findById.mockResolvedValue(doc);
-    const res = await request(app, {
-      method: 'PATCH', path: `/api/admin/ai-budget-requests/${REQ_ID}`,
-      body: { action: 'approve' },
-    });
-    expect(res.status).toBe(400);
-    expect(User.updateOne).not.toHaveBeenCalled();
-    expect(createNotification).not.toHaveBeenCalled();
   });
 
   test('403 for non-admins', async () => {

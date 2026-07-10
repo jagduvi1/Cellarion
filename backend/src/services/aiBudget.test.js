@@ -193,6 +193,13 @@ describe('isRefundableFailure', () => {
     expect(isRefundableFailure('missing_name_or_producer_in_response')).toBe(false);
     expect(isRefundableFailure(null)).toBe(false);
   });
+
+  test('a completed-but-unparseable response stays debited (audit EXTRA-A)', () => {
+    // labelScan.callClaudeJson now tags a post-completion JSON.parse failure as
+    // `parse_error:*` (a real billed call) instead of the refundable
+    // `exception:*` it used to return from the shared transport catch.
+    expect(isRefundableFailure('parse_error: Unexpected token < in JSON')).toBe(false);
+  });
 });
 
 describe('secondsUntilMidnightUTC', () => {
