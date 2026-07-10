@@ -19,6 +19,7 @@ import ConsumedDetails from '../components/bottle/ConsumedDetails';
 import EditForm from '../components/bottle/EditForm';
 import ViewDetails from '../components/bottle/ViewDetails';
 import BottleJourney from '../components/BottleJourney';
+import JournalPrompt, { journalPromptOptedOut } from '../components/JournalPrompt';
 import './BottleDetail.css';
 
 // Lazy-load heavy components only needed on user interaction
@@ -28,7 +29,6 @@ const ReviewForm = lazy(() => import('../components/ReviewForm'));
 const ConsumeModal = lazy(() => import('../components/ConsumeModal').then(m => ({ default: m.ConsumeModal })));
 const SuggestGrapesModal = lazy(() => import('../components/SuggestGrapesModal').then(m => ({ default: m.SuggestGrapesModal })));
 const RecommendWineModal = lazy(() => import('../components/RecommendWineModal'));
-const JournalEntryForm = lazy(() => import('../components/JournalEntryForm'));
 
 function BottleDetail() {
   const { t } = useTranslation();
@@ -57,8 +57,7 @@ function BottleDetail() {
   const [reportWineOpen, setReportWineOpen] = useState(false);
   const [reportDefaultReason, setReportDefaultReason] = useState(null);
   const [recommendOpen, setRecommendOpen] = useState(false);
-  const [journalPrompt, setJournalPrompt] = useState(false);
-  const [journalFormOpen, setJournalFormOpen] = useState(false);
+  const [journalPromptOpen, setJournalPromptOpen] = useState(false);
   const [reviewFormOpen, setReviewFormOpen] = useState(false);
   const [wineReviews, setWineReviews] = useState([]);
   const [communityRating, setCommunityRating] = useState(null);
@@ -249,10 +248,9 @@ function BottleDetail() {
       const data = await res.json();
       if (res.ok) {
         // Prompt for journal entry if user hasn't opted out
-        const optedOut = localStorage.getItem('cellarion_journal_prompt_optout') === '1';
-        if (!optedOut && reason === 'drank') {
+        if (!journalPromptOptedOut() && reason === 'drank') {
           setConsumeOpen(false);
-          setJournalPrompt(true);
+          setJournalPromptOpen(true);
         } else {
           navigate(`/cellars/${cellarId}`);
         }
@@ -671,39 +669,10 @@ function BottleDetail() {
           />
         )}
 
-        {journalPrompt && (
-          <div className="modal-overlay" onClick={() => { setJournalPrompt(false); navigate(`/cellars/${cellarId}`); }}>
-            <div className="modal-box" onClick={e => e.stopPropagation()}>
-              <h2>{t('journal.promptTitle', 'Add to your journal?')}</h2>
-              <p>{t('journal.promptText', 'Would you like to capture this moment in your wine journal?')}</p>
-              <div className="modal-actions" style={{ flexDirection: 'column', gap: '0.5rem' }}>
-                <button className="btn btn-primary" onClick={() => { setJournalPrompt(false); setJournalFormOpen(true); }}>
-                  {t('journal.yesAddEntry', 'Yes, add journal entry')}
-                </button>
-                <button className="btn btn-secondary" onClick={() => { setJournalPrompt(false); navigate(`/cellars/${cellarId}`); }}>
-                  {t('journal.notNow', 'Not now')}
-                </button>
-                <button
-                  className="btn btn-secondary"
-                  style={{ fontSize: '0.8rem', opacity: 0.6 }}
-                  onClick={() => {
-                    localStorage.setItem('cellarion_journal_prompt_optout', '1');
-                    setJournalPrompt(false);
-                    navigate(`/cellars/${cellarId}`);
-                  }}
-                >
-                  {t('journal.dontAskAgain', "Don't ask again")}
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {journalFormOpen && (
-          <JournalEntryForm
-            prefilledBottle={bottle}
-            onClose={() => { setJournalFormOpen(false); navigate(`/cellars/${cellarId}`); }}
-            onSaved={() => { setJournalFormOpen(false); navigate(`/cellars/${cellarId}`); }}
+        {journalPromptOpen && (
+          <JournalPrompt
+            bottle={bottle}
+            onDone={() => { setJournalPromptOpen(false); navigate(`/cellars/${cellarId}`); }}
           />
         )}
       </Suspense>

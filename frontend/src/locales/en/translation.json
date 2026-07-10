@@ -168,6 +168,8 @@
     "restockScopeHint": "When checking if you have similar wines after consuming a bottle, should we check all your cellars or only the one the bottle came from?",
     "restockScopeAll": "All cellars (default)",
     "restockScopeCellar": "Same cellar only",
+    "journalPrompt": "Ask to add a journal entry after drinking a bottle",
+    "journalPromptHint": "When you mark a bottle as drunk, Cellarion offers to capture the moment in your wine journal. Applies immediately and is stored on this device, so choosing \"Don't ask again\" in the prompt can be undone here.",
     "plan": {
       "title": "Your Plan",
       "expires": "Valid until:",
