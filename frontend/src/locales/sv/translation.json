@@ -2218,6 +2218,29 @@
     "footer": "Skapad med Cellarion"
   },
 
+  "audit": {
+    "title": "Inventera hylla — {{name}}",
+    "openBtn": "Inventera",
+    "introText": "Gå till hyllan och gå igenom den plats för plats — bekräfta att det Cellarion tror finns där stämmer med verkligheten. Du får en avvikelserapport i slutet.",
+    "includeEmpty": "Kontrollera även tomma platser (ska inte ha någon flaska)",
+    "startBtn": "Starta ({{count}} platser)",
+    "slotLabel": "Plats {{position}}",
+    "questionFilled": "Står den här flaskan på platsen?",
+    "expectedEmpty": "Ska vara tom",
+    "questionEmpty": "Är platsen verkligen tom?",
+    "answerYes": "Ja, stämmer",
+    "answerNo": "Nej — avvikelse",
+    "backBtn": "Tillbaka",
+    "skipBtn": "Hoppa över",
+    "finishEarly": "Avsluta nu",
+    "summary": "{{ok}} korrekta · {{issues}} avvikelser · {{skipped}} överhoppade (av {{total}})",
+    "allGood": "Allt stämmer — din källare och Cellarion är överens. 🎉",
+    "issueFilled": "Förväntade {{wine}} — saknas eller annan flaska",
+    "issueEmpty": "Förväntades tom — har en flaska. Öppna platsen efteråt för att registrera det du hittade.",
+    "clearSlot": "Töm plats",
+    "cleared": "Tömd"
+  },
+
   "zones": {
     "title": "Hyllzoner",
     "editBtn": "Hyllzoner",

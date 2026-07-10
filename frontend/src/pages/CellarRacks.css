@@ -880,3 +880,136 @@
   margin-left: 0.5rem;
   vertical-align: middle;
 }
+
+/* ---- Audit mode modal ---- */
+.audit-intro {
+  font-size: 0.9rem;
+  margin: 0 0 0.75rem;
+}
+
+.audit-include-empty {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+  margin-bottom: 1rem;
+  cursor: pointer;
+}
+
+.audit-progress {
+  height: 6px;
+  background: var(--color-bg);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.audit-progress-bar {
+  height: 100%;
+  background: var(--color-primary);
+  transition: width 0.2s ease;
+}
+
+.audit-step-count {
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+  margin: 0.3rem 0 0.75rem;
+  text-align: right;
+}
+
+.audit-card {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm, 6px);
+  padding: 1rem;
+  text-align: center;
+  margin-bottom: 1rem;
+}
+
+.audit-position {
+  font-size: 0.8rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+  margin-bottom: 0.35rem;
+}
+
+.audit-expected {
+  font-size: 1.15rem;
+  font-weight: 700;
+}
+
+.audit-expected--empty {
+  color: var(--color-text-muted);
+  font-style: italic;
+}
+
+.audit-expected-sub {
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+}
+
+.audit-question {
+  margin: 0.6rem 0 0;
+  font-size: 0.9rem;
+}
+
+.audit-answer-row {
+  display: flex;
+  gap: 0.6rem;
+  margin-bottom: 0.6rem;
+}
+
+.audit-answer-row .btn {
+  flex: 1;
+}
+
+.audit-secondary-row {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: center;
+}
+
+.audit-summary {
+  font-size: 0.9rem;
+  margin: 0 0 0.75rem;
+}
+
+.audit-clean {
+  font-size: 0.95rem;
+  margin: 1rem 0;
+}
+
+.audit-issues {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  max-height: 300px;
+  overflow-y: auto;
+  margin-bottom: 0.75rem;
+}
+
+.audit-issue {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.5rem 0.7rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm, 6px);
+}
+
+.audit-issue.resolved {
+  opacity: 0.55;
+}
+
+.audit-issue-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  font-size: 0.82rem;
+}
+
+.audit-resolved {
+  font-size: 0.8rem;
+  color: var(--color-primary);
+  white-space: nowrap;
+}

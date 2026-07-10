@@ -18,6 +18,7 @@ import ConfirmModal from '../components/ConfirmModal';
 import JournalPrompt, { journalPromptOptedOut } from '../components/JournalPrompt';
 import ArrangeModal from '../components/racks/ArrangeModal';
 import ZoneEditorModal from '../components/racks/ZoneEditorModal';
+import RackAuditModal from '../components/racks/RackAuditModal';
 import { LENSES, getLensStyle, getLensLegend, bottleMatchesSearch } from '../utils/rackLens';
 import './CellarRacks.css';
 
@@ -124,6 +125,9 @@ function CellarRacks() {
 
   // Zone editor modal
   const [zonesOpen, setZonesOpen] = useState(false);
+
+  // Audit mode modal
+  const [auditOpen, setAuditOpen] = useState(false);
 
   // consumed bottle awaiting the "add to journal?" prompt, or null
   const [journalBottle, setJournalBottle] = useState(null);
@@ -354,6 +358,19 @@ function CellarRacks() {
     }
   };
 
+  // Audit-mode fix: clear a slot whose bottle is physically gone.
+  const auditClearSlot = async (rackId, position) => {
+    try {
+      const res = await clearSlot(apiFetch, rackId, position);
+      const data = await res.json();
+      if (!res.ok) return false;
+      setRacks(prev => prev.map(r => r._id === rackId ? data.rack : r));
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
   // Zone editor save — PUT the zones array, adopt the returned rack.
   const saveZones = async (rackId, zones) => {
     try {
@@ -526,6 +543,11 @@ function CellarRacks() {
                 {canEdit && rack.slots.length >= 2 && (
                   <button className="btn btn-secondary btn-small rack-arrange-btn" onClick={() => setArrangeOpen(true)}>
                     {t('arrange.openBtn', 'Organize…')}
+                  </button>
+                )}
+                {canEdit && rack.slots.length > 0 && (
+                  <button className="btn btn-secondary btn-small rack-arrange-btn" onClick={() => setAuditOpen(true)}>
+                    {t('audit.openBtn', 'Audit')}
                   </button>
                 )}
               </div>
@@ -712,6 +734,16 @@ function CellarRacks() {
           rack={rack}
           onSave={(zones) => saveZones(rack._id, zones)}
           onClose={() => setZonesOpen(false)}
+        />
+      )}
+
+      {/* Audit mode modal */}
+      {auditOpen && rack && (
+        <RackAuditModal
+          rack={rack}
+          canEdit={canEdit}
+          onClearSlot={(position) => auditClearSlot(rack._id, position)}
+          onClose={() => setAuditOpen(false)}
         />
       )}
 
