@@ -2197,6 +2197,27 @@
     "noData": "Ingen mognadsdata"
   },
 
+  "cellarBook": {
+    "title": "Källarbok",
+    "linkBtn": "Källarbok",
+    "printBtn": "Skriv ut / Spara som PDF",
+    "backToRacks": "Tillbaka till hyllorna",
+    "backToCellar": "Tillbaka till källaren",
+    "summary": "{{total}} flaskor — {{placed}} i hyllor, {{unplaced}} oplacerade",
+    "rackFilled": "{{filled}} av {{total}} platser fyllda",
+    "rackEmpty": "Inga flaskor i den här hyllan.",
+    "unplacedTitle": "Ej i hylla",
+    "unplacedCount": "{{count}} flaskor",
+    "empty": "Den här källaren har inga aktiva flaskor ännu.",
+    "colPos": "Plats",
+    "colWine": "Vin",
+    "colVintage": "Årgång",
+    "colType": "Typ",
+    "colRating": "Betyg",
+    "colWindow": "Dryckesfönster",
+    "footer": "Skapad med Cellarion"
+  },
+
   "rackLens": {
     "searchPlaceholder": "Sök i hyllorna…",
     "colorBy": "Färglägg efter",

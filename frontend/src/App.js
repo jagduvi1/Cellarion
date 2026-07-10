@@ -24,6 +24,7 @@ const ImportBottles   = lazy(() => import('./pages/ImportBottles'));
 const ImportCellar    = lazy(() => import('./pages/ImportCellar'));
 const ExportCellar    = lazy(() => import('./pages/ExportCellar'));
 const CellarRacks     = lazy(() => import('./pages/CellarRacks'));
+const CellarBook      = lazy(() => import('./pages/CellarBook'));
 const BottleDetail    = lazy(() => import('./pages/BottleDetail'));
 const CellarHistory   = lazy(() => import('./pages/CellarHistory'));
 const CellarAudit     = lazy(() => import('./pages/CellarAudit'));
@@ -151,6 +152,15 @@ function AppRoutes() {
           element={
             <ProtectedRoute>
               <Layout><CellarRacks /></Layout>
+            </ProtectedRoute>
+          }
+        />
+        {/* No Layout — the book prints as a clean document without app chrome */}
+        <Route
+          path="/cellars/:id/book"
+          element={
+            <ProtectedRoute>
+              <CellarBook />
             </ProtectedRoute>
           }
         />
