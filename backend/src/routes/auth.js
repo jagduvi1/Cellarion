@@ -7,6 +7,7 @@ const User = require('../models/User');
 const { requireAuth } = require('../middleware/auth');
 const { checkIsSuperAdmin } = require('../middleware/superAdmin');
 const { logAudit } = require('../services/audit');
+const eventBus = require('../services/eventBus');
 const { CURRENT_PRIVACY_POLICY_VERSION } = require('../config/legal');
 const rateLimitsConfig = require('../config/rateLimits');
 const { sendVerificationEmail, sendPasswordResetEmail, sendAccountLockoutAlert, EMAIL_VERIFICATION_ENABLED } = require('../services/mailgun');
@@ -542,6 +543,9 @@ router.post('/change-password', requireAuth, authLimiter, async (req, res) => {
 
     user.password = newPassword;
     user.refreshTokenHash = null; // Invalidate all existing sessions
+    // Also force-close any open SSE event streams — same trust boundary as
+    // refresh sessions (docs/ha-push-events.md §1).
+    eventBus.dropUser(user._id);
 
     const accessToken = await issueTokens(user, res);
 
@@ -572,6 +576,10 @@ router.post('/logout', requireAuth, async (req, res) => {
       user.refreshTokenHash = null;
       await user.save();
     }
+    // Logout invalidates the account's (single) refresh session, so it is a
+    // logout-everywhere — close open SSE event streams too. An integration
+    // holding valid credentials simply reconnects.
+    eventBus.dropUser(req.user.id);
     clearRefreshCookie(res);
     res.json({ message: 'Logged out' });
   } catch (error) {
@@ -659,6 +667,7 @@ router.post('/reset-password', authLimiter, async (req, res) => {
     user.passwordResetTokenHash = null;
     user.passwordResetExpiresAt = null;
     user.refreshTokenHash = null; // Invalidate all existing sessions
+    eventBus.dropUser(user._id); // and force-close open SSE event streams
     // Successful password reset is the user's explicit recovery signal —
     // clear any brute-force lockout state too. Otherwise a locked user
     // would still be locked after resetting their password.

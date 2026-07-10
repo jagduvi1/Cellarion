@@ -2,6 +2,7 @@ const Notification = require('../models/Notification');
 const PushSubscription = require('../models/PushSubscription');
 const User = require('../models/User');
 const { runConcurrent } = require('../utils/concurrency');
+const eventBus = require('./eventBus');
 
 // Max simultaneous web-push HTTPS calls per batch — a popular thread can have
 // hundreds of watchers; an uncapped burst stampedes the event loop and the
@@ -85,10 +86,16 @@ async function createNotifications(items) {
   if (!items || items.length === 0) return;
 
   try {
-    await Notification.insertMany(
+    const created = await Notification.insertMany(
       items.map(i => ({ user: i.userId, type: i.type, title: i.title, message: i.message, link: i.link || null })),
       { ordered: false }
     );
+    // SSE push nudge (docs/ha-push-events.md §1) — debounced per user in the
+    // bus, no-op for users without an open stream. Payload is informational
+    // only; clients refresh via REST on any event.
+    for (const doc of created) {
+      eventBus.emit(doc.user, 'notification', { id: doc._id.toString(), type: doc.type });
+    }
   } catch (err) {
     console.error('[notifications] Failed to create notifications:', err.message);
   }
