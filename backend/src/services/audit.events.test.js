@@ -62,15 +62,23 @@ describe('shared-cellar owner nudge', () => {
   });
 
   test('without req.cellar the owner is resolved from cellarId — but only when streams exist', async () => {
+    const cellarId = 'a'.repeat(24);
     // No streams anywhere → no lookup at all
-    logAudit(reqFor('member1'), 'cellar.restore', { type: 'cellar', cellarId: 'c1' }, {});
+    logAudit(reqFor('member1'), 'cellar.restore', { type: 'cellar', cellarId }, {});
     expect(Cellar.findById).not.toHaveBeenCalled();
 
     // Streams exist → owner resolved and nudged
     eventBus.streamCounts.mockReturnValue({ total: 1, users: 1 });
     Cellar.findById.mockReturnValue({ select: () => ({ lean: () => Promise.resolve({ user: 'owner1' }) }) });
-    logAudit(reqFor('admin1'), 'cellar.restore', { type: 'cellar', cellarId: 'c1' }, {});
+    logAudit(reqFor('admin1'), 'cellar.restore', { type: 'cellar', cellarId }, {});
     await new Promise(r => setImmediate(r)); // let the fire-and-forget lookup settle
     expect(eventBus.emit).toHaveBeenCalledWith('owner1', 'stats_changed', { reason: 'cellar.restore' });
+  });
+
+  test('a cellarId that is not a plain 24-hex id never reaches the query', () => {
+    eventBus.streamCounts.mockReturnValue({ total: 1, users: 1 });
+    logAudit(reqFor('u1'), 'cellar.restore', { type: 'cellar', cellarId: { $ne: null } }, {});
+    logAudit(reqFor('u1'), 'cellar.restore', { type: 'cellar', cellarId: 'not-an-objectid' }, {});
+    expect(Cellar.findById).not.toHaveBeenCalled();
   });
 });

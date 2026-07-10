@@ -85,14 +85,20 @@ function logAudit(req, action, resource = {}, detail = {}) {
         eventBus.emit(ownerFromReq, 'stats_changed', { reason: action });
       }
     } else if (resource.cellarId && eventBus.streamCounts().total > 0) {
-      const Cellar = require('../models/Cellar');
-      Cellar.findById(resource.cellarId).select('user').lean()
-        .then(cellar => {
-          if (cellar && String(cellar.user) !== String(entry.actor.userId)) {
-            eventBus.emit(cellar.user, 'stats_changed', { reason: action });
-          }
-        })
-        .catch(() => {});
+      // Cast-guard before querying: every caller passes a document ObjectId
+      // today, but logAudit is a generic funnel — accept only a plain 24-hex
+      // id so no query-operator object can ever reach the lookup.
+      const cellarId = String(resource.cellarId);
+      if (/^[a-f0-9]{24}$/i.test(cellarId)) {
+        const Cellar = require('../models/Cellar');
+        Cellar.findById(cellarId).select('user').lean()
+          .then(cellar => {
+            if (cellar && String(cellar.user) !== String(entry.actor.userId)) {
+              eventBus.emit(cellar.user, 'stats_changed', { reason: action });
+            }
+          })
+          .catch(() => {});
+      }
     }
   }
 }
