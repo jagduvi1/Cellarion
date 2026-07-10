@@ -67,7 +67,9 @@ function ApiTokensSection() {
     setCreateError(null);
     try {
       const res = await createApiToken(apiFetch, { name: name.trim(), scopes, password });
-      if (res.status === 401) {
+      // 403 = wrong password confirmation (401 is reserved for session expiry,
+      // which apiFetch handles transparently)
+      if (res.status === 403) {
         setCreateError(t('settings.apiTokens.errorWrongPassword'));
       } else if (res.status === 429) {
         setCreateError(t('settings.apiTokens.errorRateLimited'));

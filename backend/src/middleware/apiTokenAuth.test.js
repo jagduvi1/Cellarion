@@ -102,6 +102,20 @@ describe('isRequestAllowed (default-deny)', () => {
     expect(isRequestAllowed(CONSUME, 'DELETE', `/api/bottles/${oid}`)).toBe(false);
   });
 
+  test.each([
+    // PII-bearing / non-wine-data endpoints under the allowed prefixes must be
+    // excluded even for a read token (audit log carries collaborator IPs and
+    // emails; members carries emails; import is a separate subsystem).
+    ['GET', `/api/cellars/${oid}/audit`],
+    ['GET', `/api/cellars/${oid}/audit/`],
+    ['GET', `/api/cellars/${oid}/members`],
+    ['GET', '/api/bottles/import/sessions'],
+    ['GET', `/api/bottles/import/sessions/${oid}`],
+  ])('read scope denies excluded sub-path %s %s', (method, path) => {
+    expect(isRequestAllowed(READ, method, path)).toBe(false);
+    expect(isRequestAllowed(BOTH, method, path)).toBe(false);
+  });
+
   test('scopes combine, unknown scopes grant nothing', () => {
     expect(isRequestAllowed(BOTH, 'GET', '/api/stats/overview')).toBe(true);
     expect(isRequestAllowed(BOTH, 'POST', `/api/bottles/${oid}/consume`)).toBe(true);

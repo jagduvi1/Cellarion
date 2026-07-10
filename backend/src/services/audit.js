@@ -72,6 +72,28 @@ function logAudit(req, action, resource = {}, detail = {}) {
   // there is no acting user to notify.
   if (entry.actor.userId && STATS_CHANGED_PREFIXES.some(p => action.startsWith(p))) {
     eventBus.emit(entry.actor.userId, 'stats_changed', { reason: action });
+
+    // Shared cellars: /api/stats aggregates the OWNER's bottles, so when a
+    // member (or an admin) mutates a bottle, it is the owner's stats that
+    // changed — nudge them too. Prefer the cellar requireBottleAccess already
+    // loaded onto the request; otherwise resolve the owner from the audited
+    // cellarId, but only when anyone is connected at all (skips the extra read
+    // on instances with no push clients).
+    const ownerFromReq = req?.cellar?.user;
+    if (ownerFromReq) {
+      if (String(ownerFromReq) !== String(entry.actor.userId)) {
+        eventBus.emit(ownerFromReq, 'stats_changed', { reason: action });
+      }
+    } else if (resource.cellarId && eventBus.streamCounts().total > 0) {
+      const Cellar = require('../models/Cellar');
+      Cellar.findById(resource.cellarId).select('user').lean()
+        .then(cellar => {
+          if (cellar && String(cellar.user) !== String(entry.actor.userId)) {
+            eventBus.emit(cellar.user, 'stats_changed', { reason: action });
+          }
+        })
+        .catch(() => {});
+    }
   }
 }
 

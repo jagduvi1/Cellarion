@@ -54,7 +54,12 @@ router.post('/', requireAuth, authLimiter, async (req, res) => {
     const isMatch = await user.comparePassword(password);
     if (!isMatch) {
       logAudit(req, 'token.create_failed', { type: 'user', id: user._id }, { reason: 'incorrect_password' });
-      return res.status(401).json({ error: 'Password is incorrect' });
+      // 403, NOT 401: the session is fine, the password confirmation failed.
+      // The frontend's apiFetch treats any 401 as "access token expired" and
+      // silently refreshes + re-submits — which would double every bcrypt
+      // compare and, if the refresh raced another tab, log the user out for
+      // a typo.
+      return res.status(403).json({ error: 'Password is incorrect' });
     }
 
     const activeCount = await ApiToken.countDocuments({ user: req.user.id, revokedAt: null });

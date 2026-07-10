@@ -41,6 +41,24 @@ const SCOPE_ALLOWLIST = {
   ],
 };
 
+/**
+ * Endpoints under the allowed prefixes that tokens must NOT reach, checked
+ * before the scope rules. The read prefixes cover the wine-data GETs the HA
+ * integration uses, but three sub-paths under them carry a different class of
+ * data than "the caller's wine data":
+ *   - /api/cellars/:id/audit    — audit log incl. collaborator IPs and emails
+ *   - /api/cellars/:id/members  — collaborator emails
+ *   - /api/bottles/import/*     — the import subsystem (a separate router
+ *                                 mounted under the /api/bottles prefix)
+ * When adding a new sub-route under /api/cellars or /api/bottles, ask whether
+ * it returns anything beyond the caller's own wine data — if so, add it here.
+ */
+const TOKEN_EXCLUSIONS = [
+  /^\/api\/cellars\/[^/]+\/audit(\/|$)/,
+  /^\/api\/cellars\/[^/]+\/members(\/|$)/,
+  /^\/api\/bottles\/import(\/|$)/,
+];
+
 /** True when the bearer credential is a personal API token, not a JWT. */
 function isApiTokenCredential(credential) {
   return typeof credential === 'string' && credential.startsWith(TOKEN_PREFIX);
@@ -51,6 +69,7 @@ function isRequestAllowed(scopes, method, path) {
   // Normalize: Express treats HEAD as GET, and a trailing slash as the same route.
   const m = method === 'HEAD' ? 'GET' : method;
   const p = path.length > 1 && path.endsWith('/') ? path.slice(0, -1) : path;
+  if (TOKEN_EXCLUSIONS.some(rule => rule.test(p))) return false;
   for (const scope of scopes || []) {
     for (const rule of SCOPE_ALLOWLIST[scope] || []) {
       if (rule.method === m && rule.pattern.test(p)) return true;
@@ -114,5 +133,6 @@ module.exports = {
   authenticateApiToken,
   isRequestAllowed,
   SCOPE_ALLOWLIST,
+  TOKEN_EXCLUSIONS,
   LAST_USED_THROTTLE_MS,
 };

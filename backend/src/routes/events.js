@@ -65,12 +65,22 @@ router.get('/stream', requireAuth, (req, res) => {
     } catch { /* transient DB error — keep the stream, retry next hour */ }
   }, REVALIDATE_MS);
 
-  req.on('close', () => {
+  let cleaned = false;
+  const cleanup = () => {
+    if (cleaned) return;
+    cleaned = true;
     clearInterval(heartbeat);
     clearInterval(revalidate);
     clearTimeout(maxAge);
     eventBus.unregister(req.user.id, res);
-  });
+  };
+  req.on('close', cleanup);
+  // If the socket died while requireAuth awaited its DB lookups (the API-token
+  // path awaits twice), 'close' fired BEFORE the listener above was attached
+  // and will never re-fire — reap immediately or the registration + timers
+  // leak until restart, and five such aborts fill the user's stream cap with
+  // zombies (permanent 429 for the household).
+  if (req.destroyed || res.destroyed || res.writableEnded) cleanup();
 });
 
 module.exports = router;
