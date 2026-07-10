@@ -675,3 +675,16 @@
   background: rgba(var(--color-primary-rgb), 0.25);
   color: var(--color-primary);
 }
+
+/* Drag & drop hint — pointless on touch devices (drag is mouse/pen only) */
+.rack-drag-hint {
+  font-size: 0.72rem;
+  color: var(--color-text-muted);
+  margin: -0.35rem 0 0.75rem;
+}
+
+@media (hover: none) {
+  .rack-drag-hint {
+    display: none;
+  }
+}

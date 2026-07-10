@@ -103,3 +103,14 @@
 .shelf-view-bottle {
   transition: opacity 0.15s ease;
 }
+
+/* While a bottle is being dragged: no text selection, grabbing cursor */
+.shelf-view-svg--dragging {
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: grabbing;
+}
+
+.shelf-view-svg--dragging .shelf-view-bottle {
+  cursor: grabbing !important;
+}

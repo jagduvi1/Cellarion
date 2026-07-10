@@ -1,6 +1,7 @@
-import { useMemo } from 'react';
+import { useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { computeLayout, computeModularLayout, SLOT_RADIUS, CELL_SIZE } from '../../utils/rackLayouts';
+import useSlotDrag from '../../hooks/useSlotDrag';
 import './RackRenderer.css';
 
 const WINE_COLORS = {
@@ -75,11 +76,13 @@ export default function RackRenderer({
   activePosition,
   highlightPos,
   onSlotClick,
+  onSlotMove,
   onDelete,
   onNfcLink,
   getSlotStyle,
 }) {
   const { t } = useTranslation();
+  const svgRef = useRef(null);
   const isModular = rack.isModular && rack.modules?.length > 0;
   const layout = useMemo(
     () => isModular
@@ -102,6 +105,48 @@ export default function RackRenderer({
 
   const activePos = activeRackId === rack._id ? activePosition : null;
   const R = SLOT_RADIUS;
+
+  // Actual rendered slot centers (mirrors the render logic below, including
+  // the sub-circle offsets of multi-bottle cells) — the drag hit map.
+  const slotCenters = useMemo(() => {
+    const bpc = layout.bottlesPerCell || 1;
+    const backR = layout.backRadius;
+    if (bpc === 1) {
+      return layout.slots.map(s => ({
+        position: s.position, cx: s.cx, cy: s.cy, r: s.isBack && backR ? backR : R,
+      }));
+    }
+    const cellMap = {};
+    layout.slots.forEach(s => {
+      const key = `${s.cx},${s.cy}`;
+      if (!cellMap[key]) cellMap[key] = { cx: s.cx, cy: s.cy, isBack: !!s.isBack, positions: [] };
+      cellMap[key].positions.push(s.position);
+    });
+    const centers = [];
+    Object.values(cellMap).forEach(cell => {
+      const useR = cell.isBack && backR ? getSubRadius(bpc, backR) : getSubRadius(bpc, R);
+      const useOff = cell.isBack && backR ? getSubOffsets(bpc, backR) : getSubOffsets(bpc, R);
+      cell.positions.forEach((pos, idx) => {
+        const off = useOff[idx] || { dx: 0, dy: 0 };
+        centers.push({ position: pos, cx: cell.cx + off.dx, cy: cell.cy + off.dy, r: useR });
+      });
+    });
+    return centers;
+  }, [layout, R]);
+
+  const { drag, startDrag, shouldSuppressClick } = useSlotDrag({
+    svgRef,
+    slotCenters,
+    isValidTarget: (pos) => !disabledSet.has(pos),
+    onMove: onSlotMove,
+    enabled: !!onSlotMove,
+  });
+
+  // A click that lands right after a drop must not open the slot popup.
+  const handleSlotClick = (pos, slotData) => {
+    if (shouldSuppressClick()) return;
+    onSlotClick(pos, slotData);
+  };
 
   return (
     <div className="rack-container card">
@@ -147,8 +192,9 @@ export default function RackRenderer({
 
       <div className="rack-svg-wrapper">
         <svg
+          ref={svgRef}
           viewBox={`0 0 ${layout.viewBox.width} ${layout.viewBox.height}`}
-          className="rack-svg"
+          className={`rack-svg ${drag ? 'rack-svg--dragging' : ''}`}
           role="group"
           aria-label={`${rack.name} rack`}
         >
@@ -230,8 +276,11 @@ export default function RackRenderer({
                   disabled={disabledSet.has(position)}
                   isActive={activePos === position}
                   isHighlight={highlightPos === position}
-                  onSlotClick={onSlotClick}
+                  onSlotClick={handleSlotClick}
                   getSlotStyle={getSlotStyle}
+                  onDragStart={onSlotMove ? startDrag : undefined}
+                  isDragOrigin={drag?.from === position}
+                  isDragTarget={drag?.over === position}
                 />
               ));
             }
@@ -287,14 +336,39 @@ export default function RackRenderer({
                         disabled={disabledSet.has(pos)}
                         isActive={activePos === pos}
                         isHighlight={highlightPos === pos}
-                        onSlotClick={onSlotClick}
+                        onSlotClick={handleSlotClick}
                         getSlotStyle={getSlotStyle}
+                        onDragStart={onSlotMove ? startDrag : undefined}
+                        isDragOrigin={drag?.from === pos}
+                        isDragTarget={drag?.over === pos}
                       />
                     );
                   })}
                 </g>
               );
             });
+          })()}
+
+          {/* Drag ghost — a floating bottle that follows the pointer */}
+          {drag && (() => {
+            const originSlot = slotMap[drag.from];
+            const wine = originSlot?.bottle?.wineDefinition;
+            const colors = WINE_COLORS[wine?.type || 'red'] || WINE_COLORS.red;
+            const custom = getSlotStyle && originSlot ? getSlotStyle(originSlot) : null;
+            const r = slotCenters.find(s => s.position === drag.from)?.r || R;
+            return (
+              <g pointerEvents="none">
+                <circle cx={drag.x + 1} cy={drag.y + 2} r={r} fill="rgba(0,0,0,0.15)" />
+                <circle
+                  cx={drag.x} cy={drag.y} r={r}
+                  fill={custom?.fill || colors.fill}
+                  stroke={custom?.stroke || colors.stroke}
+                  strokeWidth={1.5}
+                  opacity={0.85}
+                />
+                <circle cx={drag.x} cy={drag.y} r={r * 0.3} fill="rgba(0,0,0,0.4)" />
+              </g>
+            );
           })()}
         </svg>
       </div>
@@ -303,14 +377,17 @@ export default function RackRenderer({
 }
 
 /** Single slot circle (bpc=1 standard rendering) */
-function SlotCircle({ position, cx, cy, R, slot, disabled, isActive, isHighlight, onSlotClick, getSlotStyle }) {
+function SlotCircle({ position, cx, cy, R, slot, disabled, isActive, isHighlight, onSlotClick, getSlotStyle, onDragStart, isDragOrigin, isDragTarget }) {
   const wine = slot?.bottle?.wineDefinition;
   const wineType = wine?.type || 'red';
   const colors = slot ? (WINE_COLORS[wineType] || WINE_COLORS.red) : null;
   // Lens/search style: overrides fill/stroke for filled slots, dims
   // non-matching slots while a search is active.
   const custom = getSlotStyle ? getSlotStyle(slot || null) : null;
-  const dimStyle = custom?.dim ? { opacity: 0.22 } : null;
+  // Drag origin fades harder than a search dim so the "lifted" bottle reads
+  // as coming from that slot.
+  const dimStyle = isDragOrigin ? { opacity: 0.3 } : custom?.dim ? { opacity: 0.22 } : null;
+  const draggable = !!(slot && onDragStart);
 
   // Disabled (unusable) position: greyed circle with a subtle diagonal cross.
   // Still clickable so editors can re-enable it from the slot popup.
@@ -349,10 +426,11 @@ function SlotCircle({ position, cx, cy, R, slot, disabled, isActive, isHighlight
       className={`rack-slot-g ${slot ? 'filled' : 'empty'} ${isActive ? 'active' : ''} ${isHighlight ? 'highlighted' : ''}`}
       onClick={() => onSlotClick(position, slot || null)}
       onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && onSlotClick(position, slot || null)}
+      onPointerDown={draggable ? (e) => onDragStart(e, position) : undefined}
       role="button"
       tabIndex={0}
       aria-label={slot ? `${wine?.name || '?'} (${slot.bottle?.vintage || ''})` : `Empty slot ${position}`}
-      style={{ cursor: 'pointer', ...dimStyle }}
+      style={{ cursor: draggable ? 'grab' : 'pointer', ...dimStyle }}
     >
       <circle cx={cx + 1} cy={cy + 1} r={R} fill="rgba(0,0,0,0.08)" pointerEvents="none" />
       <circle
@@ -372,6 +450,9 @@ function SlotCircle({ position, cx, cy, R, slot, disabled, isActive, isHighlight
       )}
       {isHighlight && (
         <circle cx={cx} cy={cy} r={R + 4} fill="none" stroke={ACTIVE_STROKE} strokeWidth={2} className="highlight-ring" />
+      )}
+      {isDragTarget && (
+        <circle cx={cx} cy={cy} r={R + 3} fill="none" stroke={ACTIVE_STROKE} strokeWidth={2.5} strokeDasharray="5 3" />
       )}
     </g>
   );

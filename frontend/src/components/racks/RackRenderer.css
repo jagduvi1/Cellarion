@@ -102,3 +102,14 @@
 .rack-slot-g {
   transition: opacity 0.15s ease;
 }
+
+/* While a bottle is being dragged: no text selection, grabbing cursor */
+.rack-svg--dragging {
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: grabbing;
+}
+
+.rack-svg--dragging .rack-slot-g {
+  cursor: grabbing !important;
+}

@@ -3,7 +3,7 @@ import { useParams, Link, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import { getCellar } from '../api/cellars';
-import { getRacks, deleteRack, updateSlot, clearSlot, createRack, updateRack, disableSlot, enableSlot } from '../api/racks';
+import { getRacks, deleteRack, updateSlot, clearSlot, moveSlot, createRack, updateRack, disableSlot, enableSlot } from '../api/racks';
 import { consumeBottle } from '../api/bottles';
 import { getTotalSlots, getModularTotalSlots } from '../utils/rackLayouts';
 import RackRenderer from '../components/racks/RackRenderer';
@@ -331,6 +331,21 @@ function CellarRacks() {
     }
   };
 
+  // --- drag & drop: move a bottle to another slot / swap two bottles ---
+  const handleSlotMove = async (rackId, fromPosition, toPosition) => {
+    try {
+      const res = await moveSlot(apiFetch, rackId, fromPosition, toPosition);
+      const data = await res.json();
+      if (res.ok) {
+        setRacks(prev => prev.map(r => r._id === rackId ? data.rack : r));
+      } else {
+        alert(data.error || 'Failed to move bottle');
+      }
+    } catch {
+      alert('Network error — please try again.');
+    }
+  };
+
   // --- NFC: save or clear rfidTag on rack ---
   const handleNfcSave = async (rackId, rfidTag) => {
     try {
@@ -482,6 +497,11 @@ function CellarRacks() {
                   </span>
                 ))}
               </div>
+              {canEdit && (
+                <p className="rack-drag-hint">
+                  {t('rackLens.dragHint', 'Tip: drag a bottle to an empty slot to move it, onto another bottle to swap them.')}
+                </p>
+              )}
             </>
           )}
           {rack.type === 'shelf' && !rack.isModular && (
@@ -531,6 +551,7 @@ function CellarRacks() {
                 highlightPos: highlightPos?.rackId === rack._id ? highlightPos.position : null,
                 onSlotClick: handleClick,
                 getSlotStyle,
+                onSlotMove: canEdit ? (from, to) => handleSlotMove(rack._id, from, to) : undefined,
               };
               if (viewMode === '3d') {
                 return (
@@ -549,6 +570,7 @@ function CellarRacks() {
               activePosition={activePopup?.position}
               highlightPos={highlightPos?.rackId === rack._id ? highlightPos.position : null}
               getSlotStyle={getSlotStyle}
+              onSlotMove={canEdit ? (from, to) => handleSlotMove(rack._id, from, to) : undefined}
               onSlotClick={(pos, slotData) => {
                 // Viewers can only inspect filled or disabled slots, not interact with empty ones
                 const isDisabled = (rack.disabledPositions || []).includes(pos);

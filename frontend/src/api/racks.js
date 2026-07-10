@@ -16,6 +16,13 @@ export const updateSlot = (apiFetch, rackId, position, data) =>
 export const clearSlot = (apiFetch, rackId, position) =>
   apiFetch(`/api/racks/${rackId}/slots/${position}`, { method: 'DELETE' });
 
+export const moveSlot = (apiFetch, rackId, fromPosition, toPosition) =>
+  apiFetch(`/api/racks/${rackId}/slots/${fromPosition}/move`, {
+    method: 'POST',
+    headers: JSON_HEADERS,
+    body: JSON.stringify({ toPosition }),
+  });
+
 export const disableSlot = (apiFetch, rackId, position) =>
   apiFetch(`/api/racks/${rackId}/slots/${position}/disable`, { method: 'POST' });
 

@@ -2219,6 +2219,7 @@
   },
 
   "rackLens": {
+    "dragHint": "Tip: drag a bottle to an empty slot to move it, onto another bottle to swap them.",
     "searchPlaceholder": "Find in racks…",
     "colorBy": "Color by",
     "lensType": "Wine type",
