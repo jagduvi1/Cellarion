@@ -26,6 +26,7 @@
  */
 const User = require('../models/User');
 const AiBudgetRequest = require('../models/AiBudgetRequest');
+const ApiToken = require('../models/ApiToken');
 const AiUsage = require('../models/AiUsage');
 const Bottle = require('../models/Bottle');
 const BottleImage = require('../models/BottleImage');
@@ -461,6 +462,20 @@ const REGISTRY = [
     exportFragment: async (ctx) => ({
       supportTickets: markTrunc(ctx, 'supportTickets', await SupportTicket.find({ user: ctx.userId }).select('category subject message status adminResponse respondedAt createdAt').limit(EXPORT_MAX).lean())
         .map(t => ({ category: t.category, subject: t.subject, message: t.message, status: t.status, adminResponse: t.adminResponse, respondedAt: t.respondedAt, createdAt: t.createdAt })),
+    }),
+  },
+
+  // ── API tokens ──────────────────────────────────────────────────────────
+  {
+    model: ApiToken, category: 'personal-data', userFields: ['user'],
+    // Hard-delete on erasure — a token row is pure credential bookkeeping.
+    purge: (ctx) => ApiToken.deleteMany({ user: ctx.userId }),
+    // Export metadata only. The tokenHash NEVER leaves the database — it is
+    // not the user's data, it is the credential itself.
+    exportFragment: async (ctx) => ({
+      apiTokens: markTrunc(ctx, 'apiTokens', await ApiToken.find({ user: ctx.userId })
+        .select('name scopes lastUsedAt createdAt revokedAt').limit(EXPORT_MAX).lean())
+        .map(t => ({ name: t.name, scopes: t.scopes, lastUsedAt: t.lastUsedAt, createdAt: t.createdAt, revokedAt: t.revokedAt })),
     }),
   },
 

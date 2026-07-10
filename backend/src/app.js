@@ -61,6 +61,7 @@ const sitemapRoute = require('./routes/sitemap');
 const ogRoute = require('./routes/og');
 const taxonomyRoute = require('./routes/taxonomy');
 const stripeRoute = require('./routes/stripe');
+const tokensRoute = require('./routes/tokens');
 const rateLimitsConfig = require('./config/rateLimits');
 const aiConfig = require('./config/aiConfig');
 const announcementConfig = require('./config/announcement');
@@ -222,6 +223,7 @@ app.use('/api/restock-alerts', restockAlertsRoute);
 app.use('/api/help', helpRoute);
 app.use('/api/wine-lists', wineListsRoute);
 app.use('/api/stripe', stripeRoute);
+app.use('/api/tokens', tokensRoute);
 
 // 404 handler
 app.use((req, res) => {
