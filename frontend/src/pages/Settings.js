@@ -11,6 +11,7 @@ import { SCALE_META, VALID_SCALES } from '../utils/ratingUtils';
 import { isPushSupported, getPushPermissionState, subscribeToPush, unsubscribeFromPush, getCurrentEndpoint, getDeviceStatus, sendTestPush } from '../utils/pushSubscription';
 import { downloadBlobObject } from '../utils/downloadBlob';
 import ApiTokensSection from '../components/ApiTokensSection';
+import ClimateDevicesSection from '../components/ClimateDevicesSection';
 import { journalPromptOptedOut, setJournalPromptOptOut } from '../components/JournalPrompt';
 import './Settings.css';
 
@@ -476,6 +477,9 @@ function Settings() {
 
       {/* ── API tokens card ── */}
       <ApiTokensSection />
+
+      {/* ── Climate devices card ── */}
+      <ClimateDevicesSection />
 
       {/* ── Your Supporter Tier card ── */}
       <div className="card settings-card settings-plan-card">
