@@ -81,6 +81,33 @@ describe('parseCSV', () => {
     expect(rows).toHaveLength(1);
     expect(rows[0].Country).toBe('');
   });
+
+  // BUG 3 — a stray (unbalanced) double-quote must be treated as a literal
+  // character, not a state toggle, so it can't make the row-terminating newline
+  // look "quoted" and swallow every following row into one.
+  it('does not let a stray inch-mark quote in a note swallow the next row', () => {
+    const csv = 'Name,Notes\nWine A,Poured a 2" taste\nWine B,Simple';
+    const rows = parseCSV(csv);
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).toEqual({ Name: 'Wine A', Notes: 'Poured a 2" taste' });
+    expect(rows[1]).toEqual({ Name: 'Wine B', Notes: 'Simple' });
+  });
+
+  it('keeps a quoted note containing an inch-mark intact as one field', () => {
+    const csv = 'Name,Notes\n"Wine A","Poured a 2" taste"\nWine B,Simple';
+    const rows = parseCSV(csv);
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).toEqual({ Name: 'Wine A', Notes: 'Poured a 2" taste' });
+    expect(rows[1]).toEqual({ Name: 'Wine B', Notes: 'Simple' });
+  });
+
+  it('handles an inch-mark and a legitimately quoted comma field on the same row', () => {
+    const csv = 'Producer,Notes,Region\nProd,Poured a 2" taste,"France, Bordeaux"\nNext,ok,USA';
+    const rows = parseCSV(csv);
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).toEqual({ Producer: 'Prod', Notes: 'Poured a 2" taste', Region: 'France, Bordeaux' });
+    expect(rows[1]).toEqual({ Producer: 'Next', Notes: 'ok', Region: 'USA' });
+  });
 });
 
 // ---------------------------------------------------------------------------
