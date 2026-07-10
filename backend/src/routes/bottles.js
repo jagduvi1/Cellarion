@@ -912,6 +912,7 @@ router.post('/:id/open', requireBottleAccess('editor'), async (req, res) => {
     bottle.openedAt = new Date();
     bottle.preservationMethod = preservationMethod;
     bottle.pours = [];
+    bottle.openBottleNotifiedAt = null; // fresh opening → expiry alert re-arms
     await bottle.save();
     logAudit(req, 'bottle.open',
       { type: 'bottle', id: bottle._id, cellarId: bottle.cellar },
@@ -934,6 +935,7 @@ router.delete('/:id/open', requireBottleAccess('editor'), async (req, res) => {
     bottle.openedAt = null;
     bottle.preservationMethod = undefined;
     bottle.pours = [];
+    bottle.openBottleNotifiedAt = null;
     await bottle.save();
     logAudit(req, 'bottle.open_undo', { type: 'bottle', id: bottle._id, cellarId: bottle.cellar });
     res.json({ bottle });

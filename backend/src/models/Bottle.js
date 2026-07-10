@@ -185,6 +185,9 @@ const bottleSchema = new mongoose.Schema({
     }, { _id: false })],
     default: []
   },
+  // Set by the daily notifier when the open-bottle expiry alert fires, so it
+  // fires exactly once per opening. Reset on open / undo-open.
+  openBottleNotifiedAt: { type: Date, default: null },
   // Drink-window notification tracking — set by the daily notifier job
   drinkWindowNotifiedStatus: { type: String, default: null },
   drinkWindowNotifiedAt:     { type: Date,   default: null },

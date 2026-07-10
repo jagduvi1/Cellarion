@@ -14,6 +14,7 @@ const Bottle = require('../models/Bottle');
 const SiteConfig = require('../models/SiteConfig');
 const { CONSUMED_STATUSES } = require('../config/constants');
 const { classifyMaturity, classifyPersonalWindow, buildProfileMap } = require('../utils/maturityUtils');
+const { shouldNotifyOpenBottle, openBottleDaysLeft } = require('../utils/openBottleUtils');
 const { createNotification } = require('./notifications');
 const { sendDrinkWindowDigest, EMAIL_VERIFICATION_ENABLED } = require('./mailgun');
 
@@ -69,6 +70,14 @@ async function runDrinkWindowCheck() {
     } catch (err) {
       failedUsers++;
       console.error(`[drinkWindowNotifier] Error for user ${user._id}:`, err.message);
+    }
+    try {
+      // Open-bottle expiry alerts share the drinkWindow category (and its
+      // opt-outs) but not the maturity seed — a bottle can only be open
+      // after the feature shipped, so there is nothing to silently seed.
+      totalNotified += await processOpenBottles(user);
+    } catch (err) {
+      console.error(`[drinkWindowNotifier] Open-bottle check failed for user ${user._id}:`, err.message);
     }
   }
 
@@ -258,6 +267,50 @@ async function processUser(user, isFirstRun) {
   return uniqueAlerts.length;
 }
 
+/**
+ * Alert once per opening when an open (Coravin'd / preserved) bottle reaches
+ * the last day of its freshness window. The openBottleNotifiedAt marker
+ * guarantees once-only delivery; opening again re-arms it.
+ * Returns the number of notifications created.
+ */
+async function processOpenBottles(user) {
+  const bottles = await Bottle.find({
+    user: user._id,
+    status: { $nin: CONSUMED_STATUSES },
+    openedAt: { $ne: null },
+    openBottleNotifiedAt: null,
+  }).populate({ path: 'wineDefinition', select: 'name' }).lean();
+  if (bottles.length === 0) return 0;
+
+  const now = new Date();
+  let count = 0;
+  for (const bottle of bottles) {
+    if (!shouldNotifyOpenBottle(bottle, now)) continue;
+
+    const wineName = bottle.wineDefinition?.name || 'Unknown wine';
+    const wine = bottle.vintage && bottle.vintage !== 'NV' ? `${wineName} ${bottle.vintage}` : wineName;
+    const daysLeft = openBottleDaysLeft(bottle, now);
+    const message = daysLeft <= 0
+      ? `${wine} was opened and its freshness window has passed — drink it now if at all.`
+      : `${wine} is open and its freshness window ends today — finish it while it's still good.`;
+
+    await createNotification(
+      user._id,
+      'open_bottle_expiring',
+      'Open bottle — drink it now',
+      message,
+      `/cellars/${bottle.cellar}/bottles/${bottle._id}`,
+      'drinkWindow'
+    );
+    await Bottle.updateOne(
+      { _id: bottle._id },
+      { $set: { openBottleNotifiedAt: now } }
+    );
+    count++;
+  }
+  return count;
+}
+
 function buildNotification(alert) {
   const { name, vintage, status } = alert;
   const wine = `${name} ${vintage}`;
@@ -285,4 +338,4 @@ function buildNotification(alert) {
   }
 }
 
-module.exports = { runDrinkWindowCheck, processUser, shouldSendDigestEmail };
+module.exports = { runDrinkWindowCheck, processUser, processOpenBottles, shouldSendDigestEmail };
