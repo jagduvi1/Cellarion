@@ -9,10 +9,7 @@ import {
   Legend
 } from 'recharts';
 
-const CELLAR_COLORS = [
-  '#C0504D', '#D4C87A', '#E8A0B0', '#6EC6C6', '#D4A070',
-  '#8B6A9A', '#5B8DB8', '#A03648', '#946333', '#3B6D98',
-];
+import { SERIES_COLORS as CELLAR_COLORS } from '../utils/chartColors';
 
 function formatDateLabel(dateStr) {
   const [y, m] = dateStr.split('-');

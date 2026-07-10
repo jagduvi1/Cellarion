@@ -1,5 +1,4 @@
 const express = require('express');
-const mongoose = require('mongoose');
 const rateLimit = require('express-rate-limit');
 const router = express.Router();
 const ClimateDevice = require('../models/ClimateDevice');
@@ -9,16 +8,16 @@ const Cellar = require('../models/Cellar');
 const User = require('../models/User');
 const { requireAuth } = require('../middleware/auth');
 const { getCellarRole } = require('../utils/cellarAccess');
+const { isValidId } = require('../utils/validation');
 const { logAudit } = require('../services/audit');
 const { createNotification } = require('../services/notifications');
 const { effectiveClimateConfig, evaluateDeviceAlerts } = require('../services/climateAlerts');
 const eventBus = require('../services/eventBus');
-const rateLimitsConfig = require('../config/rateLimits');
+const { passwordConfirmLimiter } = require('../middleware/passwordConfirmLimiter');
 const { rateLimitKey } = require('../utils/clientIp');
 
 const { READING_TYPES, MAX_CHANNELS_PER_DEVICE, MAX_DEVICES_PER_USER, CHANNEL_KEY_RE } = ClimateDevice;
 const { MAX_ACTIVE_TOKENS_PER_USER } = ApiToken;
-const { CLIMATE_DEFAULTS } = Cellar;
 
 // Ingest contract constants (docs/climate-monitoring.md - PUBLIC API:
 // evolve additively only; renames/removals need a deprecation cycle).
@@ -39,8 +38,6 @@ const SUGGESTED_INTERVAL_S = Math.min(3600, Math.max(60,
 const MAX_READINGS_PER_DAY = Math.max(100,
   parseInt(process.env.CLIMATE_MAX_READINGS_PER_DAY, 10) || 20000);
 
-const isValidId = (id) => mongoose.isValidObjectId(id);
-
 // Per-token limiter so one misbehaving device throttles itself, not the
 // household's shared write budget. 60/15 min supports the fastest sane
 // cadence (60 s = 15 posts/15 min) with 4x headroom.
@@ -57,18 +54,11 @@ const ingestLimiter = rateLimit({
 });
 
 // Device creation confirms the account password (it mints a durable
-// credential) - same guessing-surface budget as login (see routes/tokens.js).
-const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: () => rateLimitsConfig.get().auth.max,
-  keyGenerator: (req) => rateLimitKey(req),
-  standardHeaders: true,
-  legacyHeaders: false,
-  handler: (req, res) => {
-    logAudit(req, 'system.rate_limit_exceeded', {}, { limiter: 'auth', limit: rateLimitsConfig.get().auth.max });
-    res.status(429).json({ error: 'Too many attempts, please try again later' });
-  },
-});
+// credential). It shares ONE limiter store with the other password-confirm
+// surfaces (personal token creation) so the auth guessing budget can't be
+// multiplied by spreading attempts across endpoints — see
+// middleware/passwordConfirmLimiter.js.
+const authLimiter = passwordConfirmLimiter;
 
 // ---------------------------------------------------------------------------
 // POST /api/climate/ingest - the open ingest contract. Auth: climate-scoped
@@ -92,27 +82,31 @@ router.post('/ingest', requireAuth, ingestLimiter, async (req, res) => {
     }
 
     const now = new Date();
-    const docs = [];
-    const docIndices = []; // reading index of each docs[] entry, for quota errors
     const errors = [];
     const pushError = (index, reason) => { if (errors.length < 10) errors.push({ index, reason }); };
-    // Newest accepted reading per (key, type), for the last-value cache.
-    const newest = new Map();
 
-    // Daily quota - reset on UTC date change, enforced before any insert.
+    // Daily quota rolls over on UTC date change. The stored count for a stale
+    // day counts as 0 (the reset is persisted atomically below), so a device's
+    // first post after midnight isn't wrongly rejected/trimmed on yesterday's
+    // total.
     const today = now.toISOString().slice(0, 10);
-    if (device.dailyReadingDate !== today) {
-      device.dailyReadingDate = today;
-      device.dailyReadingCount = 0;
-    }
-    const quotaRemaining = MAX_READINGS_PER_DAY - device.dailyReadingCount;
+    const dayIsStale = device.dailyReadingDate !== today;
+    const usedToday = dayIsStale ? 0 : device.dailyReadingCount;
+    const quotaRemaining = Math.max(0, MAX_READINGS_PER_DAY - usedToday);
     if (quotaRemaining <= 0) {
       // Still liveness - a quota-blocked device is not an offline device.
-      device.lastSeenAt = now;
-      await device.save();
+      // Atomic $set (not save()) so a concurrent post can't lose the update.
+      await ClimateDevice.updateOne({ _id: device._id }, { $set: { lastSeenAt: now } });
       return res.status(429).json({ error: 'Daily reading quota reached for this device - resumes at midnight UTC', intervalS: SUGGESTED_INTERVAL_S });
     }
 
+    // Validate every reading FIRST, mutating nothing on the device. Only fully
+    // valid, in-bounds readings that also fall within the granted quota get to
+    // register a channel or update the last-value cache — a rejected reading
+    // (bad value, out of bounds, quota overflow) must never leave a trace
+    // (phantom channel or phantom "current" value driving a false alert).
+    const accepted = [];              // { index, key, type, value, ts }
+    const pendingChannels = new Map(); // key\ttype -> true, for the 16-channel cap
     for (let i = 0; i < readings.length; i++) {
       const r = readings[i];
       const reject = (reason) => pushError(i, reason);
@@ -131,62 +125,95 @@ router.post('/ingest', requireAuth, ingestLimiter, async (req, res) => {
         if (delta < -FUTURE_SKEW_MS) { reject('ts_in_future'); continue; }
       }
 
-      let channel = device.findChannel(r.channel, r.type);
-      if (!channel) {
-        if (device.channels.length >= MAX_CHANNELS_PER_DEVICE) { reject('channel_limit'); continue; }
-        device.channels.push({ key: r.channel, type: r.type });
-        channel = device.channels[device.channels.length - 1];
+      const existing = device.findChannel(r.channel, r.type);
+      if (!existing) {
+        // A brand-new channel would be registered — but only if there's room
+        // AND the reading is otherwise acceptable. Reserve the slot against the
+        // cap without mutating the device yet.
+        const chKey = `${r.channel}\t${r.type}`;
+        if (!pendingChannels.has(chKey) && device.channels.length + pendingChannels.size >= MAX_CHANNELS_PER_DEVICE) {
+          reject('channel_limit'); continue;
+        }
+        const value = r.value; // no calibration offset on a channel that doesn't exist yet
+        const bounds = VALUE_BOUNDS[r.type];
+        if (value < bounds.min || value > bounds.max) { reject('out_of_bounds'); continue; }
+        pendingChannels.set(chKey, true);
+        accepted.push({ index: i, key: r.channel, type: r.type, value, ts, isNew: true });
+      } else {
+        const value = r.value + (existing.calibrationOffset || 0);
+        const bounds = VALUE_BOUNDS[r.type];
+        if (value < bounds.min || value > bounds.max) { reject('out_of_bounds'); continue; }
+        accepted.push({ index: i, key: r.channel, type: r.type, value, ts, isNew: false });
       }
-
-      const value = r.value + (channel.calibrationOffset || 0);
-      const bounds = VALUE_BOUNDS[r.type];
-      if (value < bounds.min || value > bounds.max) { reject('out_of_bounds'); continue; }
-
-      docs.push({ ts, meta: { device: device._id, channel: r.channel, type: r.type }, value });
-      docIndices.push(i);
-
-      const mapKey = `${r.channel} ${r.type}`;
-      const prev = newest.get(mapKey);
-      if (!prev || ts > prev.ts) newest.set(mapKey, { ts, value });
     }
 
-    // Trim to the remaining quota; the overflow counts as rejected.
-    if (docs.length > quotaRemaining) {
-      for (let k = quotaRemaining; k < docs.length; k++) pushError(docIndices[k], 'daily_quota');
-      docs.length = quotaRemaining;
-    }
-    device.dailyReadingCount += docs.length;
+    // Grant only up to the remaining quota; the overflow is rejected, never stored.
+    const granted = accepted.slice(0, quotaRemaining);
+    for (let k = quotaRemaining; k < accepted.length; k++) pushError(accepted[k].index, 'daily_quota');
 
-    if (docs.length > 0) {
-      await ClimateReading.insertMany(docs, { ordered: false });
+    // Register the new channels the GRANTED readings actually use.
+    for (const a of granted) {
+      if (a.isNew && !device.findChannel(a.key, a.type)) {
+        device.channels.push({ key: a.key, type: a.type });
+      }
     }
 
-    // Device bookkeeping - one save covers liveness, caches, and alert state.
+    // Insert readings and load the cellar concurrently — the cellar lookup only
+    // depends on device.cellar (known here), not on the insert.
+    const docs = granted.map(a => ({ ts: a.ts, meta: { device: device._id, channel: a.key, type: a.type }, value: a.value }));
+    const cellarPromise = device.cellar
+      ? Cellar.findOne({ _id: device.cellar, deletedAt: null }).select('name climate user')
+      : Promise.resolve(null);
+    const [, cellar] = await Promise.all([
+      docs.length > 0 ? ClimateReading.insertMany(docs, { ordered: false }) : Promise.resolve(),
+      cellarPromise,
+    ]);
+
+    // Update the last-value cache from GRANTED readings only.
+    for (const a of granted) {
+      const channel = device.findChannel(a.key, a.type);
+      if (channel && (!channel.lastValueAt || a.ts > channel.lastValueAt)) {
+        channel.lastValue = a.value;
+        channel.lastValueAt = a.ts;
+      }
+    }
+
     device.lastSeenAt = now;
     if (typeof rssi === 'number' && Number.isFinite(rssi)) device.lastRssi = rssi;
     if (typeof firmware === 'string' && firmware.trim()) device.firmware = firmware.trim().slice(0, 100);
-    for (const [mapKey, entry] of newest) {
-      const sep = mapKey.indexOf(' ');
-      const channel = device.findChannel(mapKey.slice(0, sep), mapKey.slice(sep + 1));
-      if (channel && (!channel.lastValueAt || entry.ts > channel.lastValueAt)) {
-        channel.lastValue = entry.value;
-        channel.lastValueAt = entry.ts;
-      }
-    }
 
     // Back-online recovery for a silence the offline cron already notified.
     const wasOffline = !!device.offlineNotifiedAt;
     if (wasOffline) device.offlineNotifiedAt = null;
 
-    // Threshold alerts against the assigned cellar (if any).
-    let notifications = [];
-    let cellar = null;
-    if (device.cellar) {
-      cellar = await Cellar.findOne({ _id: device.cellar, deletedAt: null }).select('name climate user');
-    }
-    notifications = evaluateDeviceAlerts(device, cellar, now);
+    // Threshold alerts against the assigned cellar (mutates channel alert state
+    // in memory; persisted below).
+    const notifications = evaluateDeviceAlerts(device, cellar, now);
 
-    await device.save();
+    // Persist atomically: $inc the day counter (never a stale read-modify-write
+    // that a concurrent post could clobber or that could throw a VersionError
+    // AFTER the readings were stored → firmware retry → duplicates), $set the
+    // caches/liveness/alert state. Roll the day over first if it was stale.
+    if (dayIsStale) {
+      await ClimateDevice.updateOne(
+        { _id: device._id, dailyReadingDate: { $ne: today } },
+        { $set: { dailyReadingDate: today, dailyReadingCount: 0 } }
+      );
+    }
+    await ClimateDevice.updateOne(
+      { _id: device._id },
+      {
+        $set: {
+          channels: device.channels,
+          lastSeenAt: device.lastSeenAt,
+          lastRssi: device.lastRssi,
+          firmware: device.firmware,
+          offlineNotifiedAt: device.offlineNotifiedAt,
+          dailyReadingDate: today,
+        },
+        $inc: { dailyReadingCount: granted.length },
+      }
+    );
 
     const link = cellar ? `/cellars/${cellar._id}` : '/settings';
     if (wasOffline) {
@@ -201,8 +228,8 @@ router.post('/ingest', requireAuth, ingestLimiter, async (req, res) => {
     eventBus.emit(device.user, 'climate', { device: device._id.toString() });
 
     res.status(202).json({
-      accepted: docs.length,
-      rejected: readings.length - docs.length,
+      accepted: granted.length,
+      rejected: readings.length - granted.length,
       ...(errors.length > 0 ? { errors } : {}),
       intervalS: SUGGESTED_INTERVAL_S,
     });
@@ -217,14 +244,21 @@ router.post('/ingest', requireAuth, ingestLimiter, async (req, res) => {
 // scope allowlist, so a device token can never list, mint, or delete devices.
 // ---------------------------------------------------------------------------
 
-const deviceResponse = (device, tokenLastUsedAt = undefined) => ({
+// A populated cellar that has been soft-deleted is treated as "unassigned" —
+// ingest and the offline job already ignore a deleted cellar, so the device
+// list must not keep showing it as an armed assignment.
+const liveCellarRef = (cellar) => {
+  if (!cellar) return null;
+  if (cellar.name !== undefined) {
+    return cellar.deletedAt ? null : { id: cellar._id, name: cellar.name };
+  }
+  return { id: cellar }; // unpopulated ObjectId
+};
+
+const deviceResponse = (device) => ({
   id: device._id,
   name: device.name,
-  cellar: device.cellar
-    ? (device.cellar.name !== undefined
-      ? { id: device.cellar._id, name: device.cellar.name }
-      : { id: device.cellar })
-    : null,
+  cellar: liveCellarRef(device.cellar),
   channels: (device.channels || []).map(c => ({
     key: c.key,
     type: c.type,
@@ -239,7 +273,6 @@ const deviceResponse = (device, tokenLastUsedAt = undefined) => ({
   lastRssi: device.lastRssi ?? null,
   offlineNotifiedAt: device.offlineNotifiedAt ?? null,
   createdAt: device.createdAt,
-  ...(tokenLastUsedAt !== undefined ? { tokenLastUsedAt } : {}),
 });
 
 // GET /api/climate/devices - the caller's devices
@@ -247,10 +280,9 @@ router.get('/devices', requireAuth, async (req, res) => {
   try {
     const devices = await ClimateDevice.find({ user: req.user.id })
       .sort({ createdAt: -1 })
-      .populate('cellar', 'name')
-      .populate('token', 'lastUsedAt');
+      .populate('cellar', 'name deletedAt');
     res.json({
-      devices: devices.map(d => deviceResponse(d, d.token?.lastUsedAt ?? null)),
+      devices: devices.map(d => deviceResponse(d)),
       maxDevices: MAX_DEVICES_PER_USER,
     });
   } catch (error) {
@@ -479,7 +511,10 @@ router.get('/cellars/:cellarId/readings', requireAuth, async (req, res) => {
     const cellar = await loadViewableCellar(req.params.cellarId, req.user.id);
     if (!cellar) return res.status(404).json({ error: 'Cellar not found' });
 
-    const range = RANGES[req.query.range] ? req.query.range : '24h';
+    // hasOwnProperty (not truthiness) so a prototype-chain key like
+    // ?range=constructor can't slip past the guard into an undefined bucket
+    // config (→ NaN date bound + undefined $dateTrunc binSize → full scan/500).
+    const range = Object.prototype.hasOwnProperty.call(RANGES, req.query.range) ? req.query.range : '24h';
     const { ms, bucketMinutes } = RANGES[range];
     const since = new Date(Date.now() - ms);
 
@@ -546,7 +581,15 @@ router.put('/cellars/:cellarId/config', requireAuth, async (req, res) => {
     if (!cellar) return res.status(404).json({ error: 'Cellar not found' });
 
     const body = req.body || {};
-    const cfg = effectiveClimateConfig(cellar);
+    // `effective` (defaults + stored + edits) is used for cross-field
+    // validation and the response; `stored` holds ONLY the fields a user has
+    // ever explicitly set, so unset fields keep following CLIMATE_DEFAULTS at
+    // read time — editing one field must not silently freeze the rest at
+    // today's shipped defaults.
+    const effective = effectiveClimateConfig(cellar);
+    const stored = cellar.climate
+      ? (typeof cellar.climate.toObject === 'function' ? cellar.climate.toObject() : { ...cellar.climate })
+      : {};
 
     const numeric = [
       ['tempMin', -30, 60], ['tempMax', -30, 60],
@@ -559,21 +602,23 @@ router.put('/cellars/:cellarId/config', requireAuth, async (req, res) => {
       if (!Number.isFinite(v) || v < min || v > max) {
         return res.status(400).json({ error: `${key} must be a number between ${min} and ${max}` });
       }
-      cfg[key] = v;
+      effective[key] = v;
+      stored[key] = v;
     }
     if (body.alertsEnabled !== undefined) {
       if (typeof body.alertsEnabled !== 'boolean') return res.status(400).json({ error: 'alertsEnabled must be a boolean' });
-      cfg.alertsEnabled = body.alertsEnabled;
+      effective.alertsEnabled = body.alertsEnabled;
+      stored.alertsEnabled = body.alertsEnabled;
     }
-    if (cfg.tempMin >= cfg.tempMax) return res.status(400).json({ error: 'tempMin must be below tempMax' });
-    if (cfg.rhMin >= cfg.rhMax) return res.status(400).json({ error: 'rhMin must be below rhMax' });
+    if (effective.tempMin >= effective.tempMax) return res.status(400).json({ error: 'tempMin must be below tempMax' });
+    if (effective.rhMin >= effective.rhMax) return res.status(400).json({ error: 'rhMin must be below rhMax' });
 
-    cellar.climate = cfg;
+    cellar.climate = stored;
     await cellar.save();
 
-    logAudit(req, 'climate.config.updated', { type: 'cellar', id: cellar._id, cellarId: cellar._id }, cfg);
+    logAudit(req, 'climate.config.updated', { type: 'cellar', id: cellar._id, cellarId: cellar._id }, effective);
 
-    res.json({ config: cfg });
+    res.json({ config: effective });
   } catch (error) {
     console.error('Update climate config error:', error);
     res.status(500).json({ error: 'Failed to update climate settings' });
@@ -581,7 +626,3 @@ router.put('/cellars/:cellarId/config', requireAuth, async (req, res) => {
 });
 
 module.exports = router;
-module.exports.INGEST_MAX_READINGS = INGEST_MAX_READINGS;
-module.exports.VALUE_BOUNDS = VALUE_BOUNDS;
-module.exports.MAX_READINGS_PER_DAY = MAX_READINGS_PER_DAY;
-module.exports.CLIMATE_DEFAULTS = CLIMATE_DEFAULTS;

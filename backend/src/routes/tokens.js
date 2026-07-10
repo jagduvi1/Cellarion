@@ -1,29 +1,24 @@
 const express = require('express');
-const rateLimit = require('express-rate-limit');
 const router = express.Router();
 const ApiToken = require('../models/ApiToken');
 const User = require('../models/User');
 const { requireAuth } = require('../middleware/auth');
 const { logAudit } = require('../services/audit');
 const eventBus = require('../services/eventBus');
-const rateLimitsConfig = require('../config/rateLimits');
-const { rateLimitKey } = require('../utils/clientIp');
+const { passwordConfirmLimiter } = require('../middleware/passwordConfirmLimiter');
 
 const { TOKEN_SCOPES, MAX_ACTIVE_TOKENS_PER_USER } = ApiToken;
 
 // Token creation verifies the account password, so it is a password-guessing
-// surface exactly like login/change-password — same auth limiter budget.
-const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: () => rateLimitsConfig.get().auth.max,
-  keyGenerator: (req) => rateLimitKey(req),
-  standardHeaders: true,
-  legacyHeaders: false,
-  handler: (req, res) => {
-    logAudit(req, 'system.rate_limit_exceeded', {}, { limiter: 'auth', limit: rateLimitsConfig.get().auth.max });
-    res.status(429).json({ error: 'Too many attempts, please try again later' });
-  }
-});
+// surface exactly like login/change-password. It shares ONE limiter store with
+// the other password-confirm surfaces (climate device creation) so the auth
+// budget can't be multiplied across endpoints — see the middleware.
+const authLimiter = passwordConfirmLimiter;
+
+// Device tokens (scope 'climate') are minted only by POST /api/climate/devices,
+// which binds each to a ClimateDevice. A climate scope minted here would have
+// no device and 404 on every ingest, so it is not user-mintable via this route.
+const USER_MINTABLE_SCOPES = TOKEN_SCOPES.filter(s => s !== 'climate');
 
 // NOTE: none of these routes appear in the API-token scope allowlist
 // (middleware/apiTokenAuth.js), so a token can never create, list, or revoke
@@ -36,8 +31,8 @@ router.post('/', requireAuth, authLimiter, async (req, res) => {
   if (!name || typeof name !== 'string' || !name.trim() || name.trim().length > 100) {
     return res.status(400).json({ error: 'Token name is required (max 100 characters)' });
   }
-  if (!Array.isArray(scopes) || scopes.length === 0 || scopes.some(s => !TOKEN_SCOPES.includes(s))) {
-    return res.status(400).json({ error: `Scopes must be a non-empty subset of: ${TOKEN_SCOPES.join(', ')}` });
+  if (!Array.isArray(scopes) || scopes.length === 0 || scopes.some(s => !USER_MINTABLE_SCOPES.includes(s))) {
+    return res.status(400).json({ error: `Scopes must be a non-empty subset of: ${USER_MINTABLE_SCOPES.join(', ')}` });
   }
   if (!password || typeof password !== 'string') {
     return res.status(400).json({ error: 'Password confirmation is required' });

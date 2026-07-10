@@ -62,8 +62,21 @@ function evaluateDeviceAlerts(device, cellar, now = new Date()) {
     return notifications;
   }
 
+  // A channel whose last reading is older than the offline window is treated as
+  // stale: judging a dead probe's final value forever would alert on a reading
+  // that can never change or recover (a single spike from a probe that then
+  // disconnects while a sibling channel keeps the device's lastSeenAt fresh).
+  const staleBeforeMs = now.getTime() - cfg.offlineAfterMin * 60 * 1000;
+
   for (const ch of device.channels) {
     if (ch.lastValue === null || ch.lastValue === undefined) continue;
+    if (ch.lastValueAt && new Date(ch.lastValueAt).getTime() < staleBeforeMs) {
+      // Stop evaluating a stale channel and clear a pending (not-yet-notified)
+      // breach so it doesn't fire the moment the timer crosses SUSTAIN_MS on a
+      // value that will never be refreshed.
+      if (ch.alertState !== 'breached') ch.breachedSince = null;
+      continue;
+    }
     const { min, max, unit } = boundsFor(ch.type, cfg);
     const out = ch.lastValue < min || ch.lastValue > max;
     const name = ch.label || ch.key;

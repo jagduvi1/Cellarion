@@ -47,6 +47,7 @@ jest.mock('../models/ClimateDevice', () => ({
   find: jest.fn(),
   countDocuments: jest.fn(),
   create: jest.fn(),
+  updateOne: jest.fn(async () => ({ modifiedCount: 1 })),
   READING_TYPES: ['temperature', 'humidity'],
   MAX_CHANNELS_PER_DEVICE: 16,
   MAX_DEVICES_PER_USER: 5,
@@ -200,7 +201,12 @@ describe('POST /api/climate/ingest', () => {
     expect(device.firmware).toBe('esphome 2026.6.0');
     expect(device.lastRssi).toBe(-61);
     expect(device.lastSeenAt).toBeInstanceOf(Date);
-    expect(device.save).toHaveBeenCalled();
+    // Persisted atomically (not save()) — $inc the day counter, $set the caches.
+    const [filter, update] = ClimateDevice.updateOne.mock.calls.at(-1);
+    expect(filter).toEqual({ _id: OID });
+    expect(update.$inc).toEqual({ dailyReadingCount: 2 });
+    expect(update.$set.lastSeenAt).toBeInstanceOf(Date);
+    expect(device.save).not.toHaveBeenCalled();
     expect(eventBus.emit).toHaveBeenCalledWith('u1', 'climate', { device: OID });
   });
 
@@ -271,9 +277,12 @@ describe('POST /api/climate/ingest', () => {
     const res = await deviceRequest({ readings: [{ channel: 'a', type: 'temperature', value: 12 }] });
     expect(res.status).toBe(429);
     expect(ClimateReading.insertMany).not.toHaveBeenCalled();
-    // Quota-blocked is not offline — lastSeenAt must still advance.
-    expect(device.lastSeenAt).toBeInstanceOf(Date);
-    expect(device.save).toHaveBeenCalled();
+    // Quota-blocked is not offline — lastSeenAt still advances, via an atomic
+    // $set (never save() that a concurrent post could clobber).
+    const [filter, update] = ClimateDevice.updateOne.mock.calls.at(-1);
+    expect(filter).toEqual({ _id: OID });
+    expect(update.$set.lastSeenAt).toBeInstanceOf(Date);
+    expect(device.save).not.toHaveBeenCalled();
   });
 
   test('daily quota: overflow within one batch is trimmed and reported as daily_quota', async () => {
@@ -293,7 +302,9 @@ describe('POST /api/climate/ingest', () => {
     expect(body.rejected).toBe(2);
     expect(body.errors.map(e => e.reason)).toEqual(['daily_quota', 'daily_quota']);
     expect(ClimateReading.insertMany.mock.calls[0][0]).toHaveLength(1);
-    expect(device.dailyReadingCount).toBe(20000);
+    // Only the granted reading is counted, via an atomic $inc.
+    const persist = ClimateDevice.updateOne.mock.calls.at(-1);
+    expect(persist[1].$inc).toEqual({ dailyReadingCount: 1 });
   });
 
   test('daily quota resets on a new UTC day', async () => {
@@ -303,8 +314,48 @@ describe('POST /api/climate/ingest', () => {
     const res = await deviceRequest({ readings: [{ channel: 'a', type: 'temperature', value: 12 }] });
     expect(res.status).toBe(202);
     expect((await res.json()).accepted).toBe(1);
-    expect(device.dailyReadingCount).toBe(1);
-    expect(device.dailyReadingDate).toBe(new Date().toISOString().slice(0, 10));
+    const today = new Date().toISOString().slice(0, 10);
+    // The stale day is rolled over atomically (conditional reset) before the $inc.
+    const rollover = ClimateDevice.updateOne.mock.calls.find(
+      c => c[0].dailyReadingDate && c[0].dailyReadingDate.$ne === today
+    );
+    expect(rollover).toBeTruthy();
+    expect(rollover[1].$set).toEqual({ dailyReadingDate: today, dailyReadingCount: 0 });
+    const persist = ClimateDevice.updateOne.mock.calls.at(-1);
+    expect(persist[1].$inc).toEqual({ dailyReadingCount: 1 });
+  });
+
+  test('an out-of-bounds reading on a new channel does NOT register a phantom channel', async () => {
+    const device = fakeDevice();
+    ClimateDevice.findOne.mockResolvedValue(device);
+
+    const res = await deviceRequest({ readings: [{ channel: 'ghost', type: 'temperature', value: -127 }] });
+    expect(res.status).toBe(202);
+    const body = await res.json();
+    expect(body.accepted).toBe(0);
+    expect(body.errors[0].reason).toBe('out_of_bounds');
+    // The rejected reading must leave no trace: no channel, no insert.
+    expect(device.channels).toHaveLength(0);
+    expect(ClimateReading.insertMany).not.toHaveBeenCalled();
+    const persist = ClimateDevice.updateOne.mock.calls.at(-1);
+    expect(persist[1].$set.channels).toHaveLength(0);
+    expect(persist[1].$inc).toEqual({ dailyReadingCount: 0 });
+  });
+
+  test('a quota-trimmed reading does NOT update the last-value cache (no phantom "current" value)', async () => {
+    const today = new Date().toISOString().slice(0, 10);
+    const device = fakeDevice({
+      dailyReadingCount: 20000, // exhausted → quotaRemaining 0
+      dailyReadingDate: today,
+      channels: [{ key: 'ambient', type: 'temperature', calibrationOffset: 0, label: '', lastValue: 12, lastValueAt: new Date(Date.now() - 3600e3), alertState: 'ok', breachedSince: null, lastAlertAt: null }],
+    });
+    ClimateDevice.findOne.mockResolvedValue(device);
+
+    // Exhausted → 429, and the out-of-range value 40 never becomes "current".
+    const res = await deviceRequest({ readings: [{ channel: 'ambient', type: 'temperature', value: 40 }] });
+    expect(res.status).toBe(429);
+    expect(device.channels[0].lastValue).toBe(12); // unchanged
+    expect(createNotification).not.toHaveBeenCalled();
   });
 
   test('a sustained threshold breach on an assigned cellar notifies climate_alert', async () => {

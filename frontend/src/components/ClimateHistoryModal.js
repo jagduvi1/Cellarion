@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   ResponsiveContainer,
@@ -14,14 +14,8 @@ import {
 import { useAuth } from '../contexts/AuthContext';
 import Modal from './Modal';
 import { getCellarClimateReadings } from '../api/climate';
+import { SERIES_COLORS } from '../utils/chartColors';
 
-// Same fixed categorical order as ValueOverTimeChart — series keep their hue
-// when the range changes because assignment follows the sorted series list,
-// never the visible count.
-const SERIES_COLORS = [
-  '#C0504D', '#D4C87A', '#E8A0B0', '#6EC6C6', '#D4A070',
-  '#8B6A9A', '#5B8DB8', '#A03648', '#946333', '#3B6D98',
-];
 // Threshold guides are recessive ink, not a series or status color.
 const THRESHOLD_STROKE = '#8a8474';
 
@@ -37,11 +31,11 @@ function formatTick(t, range) {
 function ChartTooltip({ active, payload, label, unit }) {
   if (!active || !payload?.length) return null;
   return (
-    <div className="value-chart-tooltip">
-      <p className="value-chart-tooltip-date">{new Date(label).toLocaleString()}</p>
+    <div className="climate-tooltip">
+      <p className="climate-tooltip-date">{new Date(label).toLocaleString()}</p>
       {payload.map((entry, i) => (
-        <p key={i} className="value-chart-tooltip-row" style={{ color: entry.color }}>
-          <span className="value-chart-tooltip-dot" style={{ background: entry.color }} />
+        <p key={i} className="climate-tooltip-row" style={{ color: entry.color }}>
+          <span className="climate-tooltip-dot" style={{ background: entry.color }} />
           {entry.name}: {entry.value != null ? `${entry.value} ${unit}` : '—'}
         </p>
       ))}
@@ -133,15 +127,20 @@ function ClimateHistoryModal({ cellarId, config, channelLabels = {}, onClose }) 
   const [range, setRange] = useState('24h');
   const [series, setSeries] = useState(null); // null = loading
 
+  // Monotonic fetch token: only the most-recently-started load may commit, so a
+  // slow older-range response can't land under a newly selected range (the
+  // codebase norm — CellarDetail, CellarHistory, etc.).
+  const fetchSeq = useRef(0);
   const load = useCallback(async (r) => {
+    const seq = ++fetchSeq.current;
     setSeries(null);
     try {
       const res = await getCellarClimateReadings(apiFetch, cellarId, r);
       if (!res.ok) throw new Error();
       const data = await res.json();
-      setSeries(data.series || []);
+      if (seq === fetchSeq.current) setSeries(data.series || []);
     } catch {
-      setSeries([]);
+      if (seq === fetchSeq.current) setSeries([]);
     }
   }, [apiFetch, cellarId]);
 

@@ -510,6 +510,7 @@ const REGISTRY = [
           cellar: d.cellar,
           firmware: d.firmware,
           lastSeenAt: d.lastSeenAt,
+          lastRssi: d.lastRssi,
           createdAt: d.createdAt,
           channels: (d.channels || []).map(c => ({ key: c.key, type: c.type, label: c.label, calibrationOffset: c.calibrationOffset })),
         })),

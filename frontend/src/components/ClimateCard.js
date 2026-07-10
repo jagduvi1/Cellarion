@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, lazy, Suspense } from 'react';
+import { useState, useEffect, useCallback, useRef, lazy, Suspense } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import Modal from './Modal';
@@ -22,18 +22,43 @@ function ClimateCard({ cellarId }) {
   const [showHistory, setShowHistory] = useState(false);
   const [showConfig, setShowConfig] = useState(false);
 
+  // Monotonic fetch token so a stale or failed response can't leave a previous
+  // cellar's climate on screen after navigating to another cellar.
+  const fetchSeq = useRef(0);
   const load = useCallback(async () => {
+    const seq = ++fetchSeq.current;
     try {
       const res = await getCellarClimate(apiFetch, cellarId);
-      if (!res.ok) return;
-      setData(await res.json());
-    } catch {}
+      if (!res.ok) return null;
+      const json = await res.json();
+      if (seq === fetchSeq.current) setData(json);
+      return json;
+    } catch { return null; }
   }, [apiFetch, cellarId]);
 
   useEffect(() => {
+    // Reset when navigating to a different cellar — never show the previous
+    // cellar's readings while the new one loads.
+    setData(null);
+    let timer = null;
+    const tick = async () => {
+      if (document.hidden) return; // don't poll a backgrounded tab
+      const json = await load();
+      // A cellar with no sensors doesn't need a per-minute poll — stop after
+      // the first empty response (device assignment is rare and re-mounts).
+      if (timer && json && (!json.devices || json.devices.length === 0)) {
+        clearInterval(timer);
+        timer = null;
+      }
+    };
     load();
-    const timer = setInterval(load, REFRESH_MS);
-    return () => clearInterval(timer);
+    timer = setInterval(tick, REFRESH_MS);
+    const onVisible = () => { if (!document.hidden) load(); };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      if (timer) clearInterval(timer);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
   }, [load]);
 
   if (!data || data.devices.length === 0) return null;
@@ -49,9 +74,9 @@ function ClimateCard({ cellarId }) {
     ch.type === 'temperature' ? `${ch.lastValue.toFixed(1)} °C` : `${Math.round(ch.lastValue)} %`;
   const agoLabel = (d) => {
     const min = Math.round((Date.now() - new Date(d).getTime()) / 60000);
-    if (min < 60) return `${min} min`;
-    if (min < 48 * 60) return `${Math.round(min / 60)} h`;
-    return `${Math.round(min / 1440)} d`;
+    if (min < 60) return t('climate.agoMin', { n: min });
+    if (min < 48 * 60) return t('climate.agoHours', { n: Math.round(min / 60) });
+    return t('climate.agoDays', { n: Math.round(min / 1440) });
   };
   // Channel labels for the history modal's series names.
   const channelLabels = {};

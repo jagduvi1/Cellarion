@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import Modal from './Modal';
@@ -56,11 +56,17 @@ function ClimateDevicesSection() {
 
   useEffect(() => { load(); }, [load]);
 
-  useEffect(() => {
+  // The cellar list only populates the dropdown inside the create/edit modals,
+  // which most Settings visitors never open — fetch it on first modal open, not
+  // on every Settings mount.
+  const cellarsLoaded = useRef(false);
+  const ensureCellars = useCallback(() => {
+    if (cellarsLoaded.current) return;
+    cellarsLoaded.current = true;
     listCellars(apiFetch)
       .then(r => r.json())
       .then(d => setCellars(d.cellars || []))
-      .catch(() => {});
+      .catch(() => { cellarsLoaded.current = false; });
   }, [apiFetch]);
 
   const closeCreate = () => {
@@ -108,6 +114,7 @@ function ClimateDevicesSection() {
   };
 
   const openEdit = (device) => {
+    ensureCellars();
     setEditTarget(device);
     setEditName(device.name);
     setEditCellarId(device.cellar?.id || '');
@@ -212,7 +219,7 @@ function ClimateDevicesSection() {
         <button
           type="button"
           className="btn btn-secondary"
-          onClick={() => setShowCreate(true)}
+          onClick={() => { ensureCellars(); setShowCreate(true); }}
           disabled={devices.length >= maxDevices}
         >
           {t('settings.climateDevices.addBtn')}

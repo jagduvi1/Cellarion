@@ -37,5 +37,12 @@ const climateReadingSchema = new mongoose.Schema({
   versionKey: false,
 });
 
+// The auto-created time-series index is on the whole metaField ({meta:1, ts:1})
+// and cannot serve dotted `meta.device` predicates, so the per-device history
+// aggregation and the device-deletion deleteMany would otherwise scan buckets
+// across ALL devices. A secondary index on the metaField subfield fixes both
+// (supported on Mongo 7 time-series collections).
+climateReadingSchema.index({ 'meta.device': 1, ts: 1 });
+
 module.exports = mongoose.model('ClimateReading', climateReadingSchema);
 module.exports.RETENTION_DAYS = RETENTION_DAYS;
