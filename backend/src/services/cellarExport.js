@@ -115,6 +115,15 @@ function mapBottlesForExport(bottles, racks, imagesByBottle = new Map(), reviews
     if (b.location) item.location = b.location;
     if (b.notes) item.notes = b.notes;
 
+    // Personal per-bottle drink window (the USER'S own intent, distinct from the
+    // sommelier `maturity` window below) + the occasion note. Additive fields the
+    // importer already consumes — emitted only when present so a bottle without
+    // them round-trips to the same (absent) state. Omitting these dropped the
+    // user's drink window on every export → import round-trip.
+    if (b.drinkFrom != null) item.drinkFrom = b.drinkFrom;
+    if (b.drinkTo != null) item.drinkTo = b.drinkTo;
+    if (b.occasion) item.occasion = b.occasion;
+
     // User-entered rating
     if (b.rating != null) {
       item.rating = b.rating;

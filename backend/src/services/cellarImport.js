@@ -48,7 +48,7 @@ const { getMaxPosition } = require('../utils/rackGeometry');
 const { resolveRating } = require('../utils/ratingUtils');
 const { normalizeBottleSize, DEFAULT_SIZE } = require('../config/bottleSizes');
 const { stripHtml } = require('../utils/sanitize');
-const { parseAndValidateVintage } = require('../utils/validation');
+const { parseAndValidateVintage, parseDrinkYear } = require('../utils/validation');
 const { ensurePendingVintageProfile } = require('../utils/vintageProfile');
 const { CONSUMED_STATUSES } = require('../config/constants');
 
@@ -172,6 +172,11 @@ function exportBottleToItem(b) {
     purchaseUrl: b.purchaseUrl,
     location: b.location,
     notes: b.notes,
+    occasion: b.occasion,
+    // Personal per-bottle drink window (user intent) — sanitized in buildBottle
+    // like routes/import.js does, so a bad imported year never fails the bottle.
+    drinkFrom: b.drinkFrom,
+    drinkTo: b.drinkTo,
     rating: b.rating,
     ratingScale: b.ratingScale,
     dateAdded: b.dateAdded,
@@ -372,6 +377,20 @@ async function resolveWine(item, userId, cache, result) {
 /** Build (but don't save) a Bottle from an export item — mirrors routes/import.js. */
 function buildBottle({ cellarId, ownerId, item, canonicalVintage, wineDefinitionId, pendingWineRequestId, defaultCurrency }) {
   const priceSetAt = (item.price != null && item.price !== '') ? new Date() : undefined;
+
+  // Personal drink window (drinkFrom/drinkTo years) — sanitized exactly like
+  // routes/import.js: invalid values are silently dropped so a bad imported year
+  // never fails the bottle, and an inverted pair (from > to) is dropped whole
+  // (we can't tell which side is wrong). undefined omits the field entirely.
+  const fromCheck = parseDrinkYear(item.drinkFrom, 'drinkFrom');
+  const toCheck = parseDrinkYear(item.drinkTo, 'drinkTo');
+  let drinkFrom = fromCheck.ok ? fromCheck.value : undefined;
+  let drinkTo = toCheck.ok ? toCheck.value : undefined;
+  if (drinkFrom !== undefined && drinkTo !== undefined && drinkFrom > drinkTo) {
+    drinkFrom = undefined;
+    drinkTo = undefined;
+  }
+
   const bottle = new Bottle({
     cellar: cellarId,
     user: ownerId,
@@ -386,6 +405,9 @@ function buildBottle({ cellarId, ownerId, item, canonicalVintage, wineDefinition
     purchaseUrl: item.purchaseUrl || undefined,
     location: stripHtml(item.location),
     notes: stripHtml(item.notes),
+    occasion: stripHtml(item.occasion),
+    drinkFrom,
+    drinkTo,
   });
   if (item.dateAdded) bottle.createdAt = new Date(item.dateAdded);
   // Restore the cellar journey from the export when present (names + dates only —
@@ -851,6 +873,7 @@ module.exports = {
   archivePathToUrl,
   resolveTargets,
   exportBottleToItem,
+  buildBottle,
   attachMaturity,
   attachImages,
   importCellar,

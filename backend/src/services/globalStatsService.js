@@ -453,6 +453,16 @@ async function _computeGlobalStatsUncached({ excludeAdmins = true } = {}) {
   // be compared against absolute calendar years — including them misclassified
   // every somm-reviewed NV bottle as 'declining'. Bottles without a reviewed
   // profile fall into 'noProfile'.
+  //
+  // KNOWN DIVERGENCE from utils/maturityUtils.js#classifyMaturity: that function
+  // gives a bottle's PERSONAL drink window (Bottle.drinkFrom/drinkTo) precedence
+  // over the sommelier profile, and applies it even to NV / definition-less
+  // bottles. This admin-only aggregation does NOT read the personal window — it
+  // classifies purely from the sommelier profile — so a bottle whose per-user
+  // window overrides its profile lands in a different phase here than on the
+  // owner's Statistics page. Accepted: this is a global registry-health view
+  // (low stakes), and personal windows are per-user data that don't belong in an
+  // instance-wide roll-up. See statsService.js for the personal-window-aware path.
   const maturityRaw = await safeAggregate(Bottle, [
     { $match: { ...bottleMatch, status: 'active', vintage: { $nin: ['NV', null, ''] } } },
     { $lookup: {
@@ -471,7 +481,9 @@ async function _computeGlobalStatsUncached({ excludeAdmins = true } = {}) {
     { $unwind: { path: '$profile', preserveNullAndEmptyArrays: true } },
     { $addFields: {
       maturity: {
-        // Mirror utils/maturityUtils.js#classifyMaturity exactly:
+        // Mirror utils/maturityUtils.js#classifyMaturity's PROFILE branch (the
+        // personal drinkFrom/drinkTo window is intentionally not applied here —
+        // see the KNOWN DIVERGENCE note above):
         //   - NV bottles return null there; here they are excluded by the
         //     pipeline's vintage $nin filter instead (their profiles hold
         //     purchase-relative offsets, not calendar years)
