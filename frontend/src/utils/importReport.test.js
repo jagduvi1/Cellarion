@@ -167,3 +167,81 @@ describe('buildImportReportCsv', () => {
     );
   });
 });
+
+// ---------------------------------------------------------------------------
+// BUG 2 — rows the user reviewed but left unselected (ignored no-match / error
+// rows) must count toward the total and appear in the report, so a partial
+// import can never read as a full success.
+// ---------------------------------------------------------------------------
+describe('summariseImportOutcome — unresolved rows (BUG 2)', () => {
+  it('counts reviewed-but-unselected rows in the denominator and blocks full success', () => {
+    // 100 reviewed: 95 imported, 5 error rows the user never resolved.
+    const out = summariseImportOutcome(
+      { created: 95, total: 95, skipped: [], errors: [], unplaced: [] },
+      0, // none user-skipped
+      5  // five left unresolved
+    );
+    expect(out.created).toBe(95);
+    expect(out.totalRows).toBe(100);
+    expect(out.unresolvedCount).toBe(5);
+    expect(out.missedCount).toBe(5);
+    expect(out.fullSuccess).toBe(false);
+  });
+
+  it('defaults unresolvedCount to 0 for legacy 2-arg callers', () => {
+    const out = summariseImportOutcome({ created: 3, total: 3, skipped: [], errors: [], unplaced: [] }, 0);
+    expect(out.unresolvedCount).toBe(0);
+    expect(out.totalRows).toBe(3);
+    expect(out.fullSuccess).toBe(true);
+  });
+});
+
+describe('buildOutcomeRows — unresolved rows (BUG 2)', () => {
+  it('emits each unresolved row: error rows keep their own reason, others the generic one', () => {
+    const unresolvedRows = [
+      { index: 10, item: { wineName: 'Wine K', producer: 'Prod K', vintage: 2015 }, status: 'no_match' },
+      { index: 12, item: { wineName: 'Wine M', producer: 'Prod M', vintage: 2016 }, status: 'error', error: 'Invalid vintage' },
+    ];
+    const rows = buildOutcomeRows({
+      importResult: { skipped: [], errors: [], unplaced: [] },
+      submittedRows: [],
+      unresolvedRows,
+    });
+    expect(rows).toEqual([
+      { index: 11, wineName: 'Wine K', producer: 'Prod K', vintage: 2015, outcome: 'not imported', reason: 'No match selected' },
+      { index: 13, wineName: 'Wine M', producer: 'Prod M', vintage: 2016, outcome: 'not imported', reason: 'Invalid vintage' },
+    ]);
+  });
+});
+
+describe('buildImportReportCsv — partial import with unresolved rows (BUG 2)', () => {
+  it('shows "95 of 100", the "not imported" clause, and lists all five rows', () => {
+    const mk = (index, extra = {}) => ({
+      index,
+      item: { wineName: `W${index}`, producer: `P${index}`, vintage: 2000 },
+      ...extra,
+    });
+    const unresolvedRows = [
+      mk(95), mk(96), mk(97),
+      mk(98, { status: 'error', error: 'Invalid vintage' }),
+      mk(99),
+    ];
+    const csv = buildImportReportCsv({
+      importResult: { created: 95, total: 95, skipped: [], errors: [], unplaced: [] },
+      submittedRows: [],
+      userSkippedRows: [],
+      unresolvedRows,
+      unresolvedReason: 'No match selected',
+    });
+    expect(csv.split('\r\n')).toEqual([
+      '# Import report: 95 of 100 rows imported (0 skipped, 0 errors, 5 not imported, 0 imported but unplaced)',
+      'index,wineName,producer,vintage,outcome,reason',
+      '96,W95,P95,2000,not imported,No match selected',
+      '97,W96,P96,2000,not imported,No match selected',
+      '98,W97,P97,2000,not imported,No match selected',
+      '99,W98,P98,2000,not imported,Invalid vintage',
+      '100,W99,P99,2000,not imported,No match selected',
+      '',
+    ]);
+  });
+});

@@ -19,6 +19,14 @@ const importSessionSchema = new mongoose.Schema({
   },
   fileName: { type: String },
   detectedFormat: { type: String },
+  // Non-blocking parse notices (e.g. { code: 'ct-truncated' }) — persisted so a
+  // resumed session re-renders the truncation banner instead of dropping it.
+  importWarnings: { type: mongoose.Schema.Types.Mixed, default: [] },
+  // Cosmetic parse metadata restored on resume: detected file encoding, which
+  // CellarTracker table the file was, and Location groups kept as plain text.
+  detectedEncoding: { type: String },
+  ctTable: { type: String },
+  ctTextFallback: { type: mongoose.Schema.Types.Mixed, default: [] },
   // Full results array from /validate (array of { index, item, status, matches })
   results: { type: mongoose.Schema.Types.Mixed, required: true },
   // User's selections: { [index]: wineId | 'skip' | 'request' }

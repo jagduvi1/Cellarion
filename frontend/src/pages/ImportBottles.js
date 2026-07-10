@@ -10,6 +10,14 @@ import { parseAndMap, parseJSON, summariseRacks, getDefaultRackConfig, getDefaul
 import { buildImportItem as buildImportItemPayload } from '../utils/importPayload';
 import { describePriceWarning } from '../utils/priceValidation';
 import { summariseImportOutcome, buildImportReportCsv } from '../utils/importReport';
+import {
+  rowsNeedingAiRetry,
+  reconcileRetrySelections,
+  mergeRetryResults,
+  restoreSessionMeta,
+  nextAiBudgetRequestState,
+  isAiBudgetRequestPending
+} from '../utils/importReview';
 import { getTotalSlots } from '../utils/rackLayouts';
 import { TYPE_DIMENSIONS } from '../components/racks/RackTypeSelector';
 import AnchorPicker from './import/AnchorPicker';
@@ -25,6 +33,8 @@ import Modal from '../components/Modal';
 import './ImportBottles.css';
 
 const STEPS = ['upload', 'review', 'importing', 'done'];
+
+const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
 const FORMAT_LABEL_KEYS = {
   cellarion: 'importBottles.formats.cellarion',
@@ -148,6 +158,10 @@ function ImportBottles() {
   // rows, and account for rows the user skipped at review (never submitted).
   const [submittedRows, setSubmittedRows] = useState([]);
   const [userSkippedRows, setUserSkippedRows] = useState([]);
+  // Rows the user reviewed but left unselected (unmatched-ignored + untouched
+  // error rows). Never submitted — tracked so the done screen counts them as
+  // "not imported" instead of silently dropping them from the total.
+  const [unresolvedRows, setUnresolvedRows] = useState([]);
   const [aiSearchingRow, setAiSearchingRow] = useState(null); // index of fuzzy row doing forced AI search
   // CellarTracker "what transfers" disclosure panel (upload step)
   const [ctDisclosureDismissed, setCtDisclosureDismissed] = useState(false);
@@ -214,7 +228,12 @@ function ImportBottles() {
   saveDataRef.current = {
     apiFetch, cellarId, fileName, detectedFormat,
     results, selections, manualWines, sessionId,
-    positionAnchor, rackConfigs, importCurrency
+    positionAnchor, rackConfigs, importCurrency,
+    // Parse-time notices/metadata — persisted so a resumed session still shows
+    // the ct-truncated banner (and the encoding/table/fallback notes) instead
+    // of silently dropping the single most important "looked like it worked"
+    // warning an import can have.
+    importWarnings, detectedEncoding, ctTable, ctTextFallback
   };
 
   // Auto-save whenever selections or manualWines change while in review step
@@ -229,7 +248,8 @@ function ImportBottles() {
       const {
         apiFetch: af, cellarId: cid, fileName: fn, detectedFormat: df,
         results: rs, selections: sels, manualWines: mw, sessionId: sid,
-        positionAnchor: pa, rackConfigs: rc, importCurrency: ic
+        positionAnchor: pa, rackConfigs: rc, importCurrency: ic,
+        importWarnings: iw, detectedEncoding: de, ctTable: ct, ctTextFallback: cf
       } = saveDataRef.current;
 
       try {
@@ -238,7 +258,8 @@ function ImportBottles() {
           const res = await createImportSession(af, {
             cellarId: cid, fileName: fn, detectedFormat: df,
             results: rs, selections: sels, manualWines: mw,
-            positionAnchor: pa, rackConfigs: rc, defaultCurrency: ic
+            positionAnchor: pa, rackConfigs: rc, defaultCurrency: ic,
+            importWarnings: iw, detectedEncoding: de, ctTable: ct, ctTextFallback: cf
           });
           const data = await res.json();
           if (res.ok) {
@@ -255,7 +276,8 @@ function ImportBottles() {
           // missing from the stored matches ("No match found").
           const res = await updateImportSession(af, sid, {
             results: rs, selections: sels, manualWines: mw,
-            positionAnchor: pa, rackConfigs: rc, defaultCurrency: ic
+            positionAnchor: pa, rackConfigs: rc, defaultCurrency: ic,
+            importWarnings: iw, detectedEncoding: de, ctTable: ct, ctTextFallback: cf
           });
           setSaveStatus(res.ok ? 'saved' : 'error');
         }
@@ -317,6 +339,13 @@ function ImportBottles() {
       setManualWines(s.manualWines || {});
       setFileName(s.fileName || '');
       setDetectedFormat(s.detectedFormat || null);
+      // Restore parse-time notices/metadata so the ct-truncated banner and the
+      // encoding/table/fallback notes reappear on resume.
+      const meta = restoreSessionMeta(s);
+      setImportWarnings(meta.importWarnings);
+      setDetectedEncoding(meta.detectedEncoding);
+      setCtTable(meta.ctTable);
+      setCtTextFallback(meta.ctTextFallback);
       setSummary(computeSummary(updatedResults));
       setSessionId(s._id);
       setDraftSessions([]);
@@ -434,6 +463,36 @@ function ImportBottles() {
 
   const VALIDATE_BATCH_SIZE = 25;
 
+  // Validate one chunk of items, riding out transient failures and rate limits
+  // (HTTP 429 / 5xx) with capped exponential backoff rather than aborting the
+  // whole import. Honors a Retry-After header when present. Resolves with the
+  // parsed JSON on success and only throws after retries are exhausted or on a
+  // non-retryable error — so a 1000+ bottle import waits through brief AI rate
+  // limits and continues instead of failing mid-way. Shared by the initial
+  // validate and the AI-budget retry so both get the same backoff.
+  const validateBatch = useCallback(async (batchItems) => {
+    const MAX_RETRIES = 5;
+    for (let attempt = 0; ; attempt++) {
+      let res;
+      try {
+        res = await validateImport(apiFetch, { cellarId, items: batchItems });
+      } catch (netErr) {
+        if (attempt >= MAX_RETRIES) throw netErr;
+        await sleep(Math.min(1000 * 2 ** attempt, 15000));
+        continue;
+      }
+      if (res.ok) return res.json();
+      if ((res.status === 429 || res.status >= 500) && attempt < MAX_RETRIES) {
+        const retryAfter = parseInt(res.headers.get('retry-after') || '', 10);
+        const waitMs = Number.isNaN(retryAfter) ? Math.min(1000 * 2 ** attempt, 15000) : retryAfter * 1000;
+        await sleep(waitMs);
+        continue;
+      }
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || t('importBottles.errors.validationFailed', { status: res.status }));
+    }
+  }, [apiFetch, cellarId, t]);
+
   const handleValidate = async () => {
     setValidating(true);
     setError(null);
@@ -443,36 +502,6 @@ function ImportBottles() {
 
     const allResults = [];
     let combinedSummary = null;
-
-    // Validate one chunk, riding out transient failures and rate limits
-    // (HTTP 429 / 5xx) with capped exponential backoff rather than aborting the
-    // whole import. Honors a Retry-After header when present. Resolves with the
-    // parsed JSON on success and only throws after retries are exhausted or on a
-    // non-retryable error — so a 1000+ bottle import waits through brief AI rate
-    // limits and continues instead of failing mid-way.
-    const sleep = (ms) => new Promise(r => setTimeout(r, ms));
-    const validateBatch = async (batch) => {
-      const MAX_RETRIES = 5;
-      for (let attempt = 0; ; attempt++) {
-        let res;
-        try {
-          res = await validateImport(apiFetch, { cellarId, items: batch });
-        } catch (netErr) {
-          if (attempt >= MAX_RETRIES) throw netErr;
-          await sleep(Math.min(1000 * 2 ** attempt, 15000));
-          continue;
-        }
-        if (res.ok) return res.json();
-        if ((res.status === 429 || res.status >= 500) && attempt < MAX_RETRIES) {
-          const retryAfter = parseInt(res.headers.get('retry-after') || '', 10);
-          const waitMs = Number.isNaN(retryAfter) ? Math.min(1000 * 2 ** attempt, 15000) : retryAfter * 1000;
-          await sleep(waitMs);
-          continue;
-        }
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.error || t('importBottles.errors.validationFailed', { status: res.status }));
-      }
-    };
 
     try {
       for (let offset = 0; offset < total; offset += VALIDATE_BATCH_SIZE) {
@@ -528,7 +557,14 @@ function ImportBottles() {
   const refreshAiBudgetStatus = useCallback(() => {
     getAiBudgetStatus(apiFetch)
       .then(r => (r.ok ? r.json() : null))
-      .then(d => { if (d) setAiBudgetStatus(d); })
+      .then(d => {
+        if (!d) return;
+        setAiBudgetStatus(d);
+        // Release a sticky local 'requested' once the server reports no pending
+        // request, so a request an admin has already decided doesn't block the
+        // user from asking again.
+        setAiBudgetRequestState(prev => nextAiBudgetRequestState(prev, d));
+      })
       .catch(() => {});
   }, [apiFetch]);
 
@@ -540,52 +576,45 @@ function ImportBottles() {
   // 25-row batches as handleValidate. Runs the full validate pipeline again
   // for those rows — with budget available they now get their AI look-up.
   const handleRetryAiLookups = async () => {
-    const rows = results.filter(r => r.aiSkipped || r.status === 'no_match');
+    // (a) Only retry rows that still NEED an AI look-up and the user hasn't
+    // already resolved — never re-spend budget on skipped / requested /
+    // manually matched rows.
+    const rows = rowsNeedingAiRetry(results, selections, manualWines);
     if (rows.length === 0 || retryingAi) return;
 
     setRetryingAi(true);
     setError(null);
     setRetryAiProgress({ done: 0, total: rows.length });
 
+    // (b) Merge each batch into state AS IT COMPLETES so a mid-loop failure
+    // can't discard batches that already succeeded, and (c) reuse
+    // validateBatch's capped backoff so a 429/5xx waits instead of aborting.
+    let workingResults = results;
     try {
-      const updatedByIndex = new Map();
       for (let offset = 0; offset < rows.length; offset += VALIDATE_BATCH_SIZE) {
         const batchRows = rows.slice(offset, offset + VALIDATE_BATCH_SIZE);
-        const res = await validateImport(apiFetch, {
-          cellarId,
-          items: batchRows.map(r => r.item),
-        });
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(data.error || t('importBottles.errors.validationFailed', { status: res.status }));
+        const data = await validateBatch(batchRows.map(r => r.item));
 
         // Map batch-local indices back to the rows' original global indices
+        const batchUpdates = new Map();
         for (const nr of data.results || []) {
           const orig = batchRows[nr.index];
-          if (orig) updatedByIndex.set(orig.index, { ...nr, index: orig.index });
+          if (orig) batchUpdates.set(orig.index, { ...nr, index: orig.index });
         }
+
+        workingResults = mergeRetryResults(workingResults, batchUpdates);
+        setResults(workingResults);
+        setSummary(computeSummary(workingResults));
+        // Fill empty selections and upgrade a stale fuzzy auto-pick to the new
+        // AI match, while preserving deliberate skip / request / manual choices.
+        setSelections(prev => reconcileRetrySelections(prev, batchUpdates, manualWines));
         setRetryAiProgress({ done: Math.min(offset + VALIDATE_BATCH_SIZE, rows.length), total: rows.length });
       }
-
-      const nextResults = results.map(r => updatedByIndex.get(r.index) || r);
-      setResults(nextResults);
-      setSummary(computeSummary(nextResults));
-
-      // Auto-select rows that now have a match (same rule as handleValidate),
-      // without touching existing manual choices.
-      setSelections(prev => {
-        const next = { ...prev };
-        for (const [idx, r] of updatedByIndex) {
-          if (!next[idx] && (r.status === 'exact' || r.status === 'fuzzy' || r.status === 'ai_match') && r.matches.length > 0) {
-            next[idx] = r.matches[0].wineId;
-          }
-        }
-        return next;
-      });
-
-      refreshAiBudgetStatus();
     } catch (err) {
       setError(err.message || t('importBottles.errors.validationNetwork'));
     } finally {
+      // The budget was (partially) spent even on a mid-loop failure — refresh.
+      refreshAiBudgetStatus();
       setRetryingAi(false);
     }
   };
@@ -783,14 +812,19 @@ function ImportBottles() {
     setStep('importing');
 
     // Build items for confirm endpoint — skipped rows are excluded.
-    // Keep both halves around: the confirm response indexes into the
-    // submitted array, and user-skipped rows must still show up in the
-    // done-screen accounting (an import that silently forgets them would
-    // read as more successful than it was).
+    // Keep all three cohorts around: the confirm response indexes into the
+    // submitted array, and both the user-skipped rows AND the rows left
+    // unresolved (no selection at all — ignored no-match / untouched error
+    // rows) must still show up in the done-screen accounting. An import that
+    // silently forgets either group would read as more successful than it was.
     const importableRows = results.filter(isImportableRow);
     const skippedAtReview = results.filter(r => selections[r.index] === 'skip');
+    const unresolvedAtReview = results.filter(
+      r => !isImportableRow(r) && selections[r.index] !== 'skip'
+    );
     setSubmittedRows(importableRows);
     setUserSkippedRows(skippedAtReview);
+    setUnresolvedRows(unresolvedAtReview);
     const items = importableRows.map(buildImportItem);
 
     try {
@@ -1474,7 +1508,7 @@ function ImportBottles() {
                   ? t('importBottles.aiBudget.retrying', { done: retryAiProgress.done, total: retryAiProgress.total })
                   : t('importBottles.aiBudget.retryButton')}
               </button>
-              {(aiBudgetStatus?.pendingRequest || aiBudgetRequestState === 'requested') ? (
+              {isAiBudgetRequestPending(aiBudgetStatus, aiBudgetRequestState) ? (
                 <span className="ai-budget-pending">{t('importBottles.aiBudget.requested')}</span>
               ) : (
                 <button
@@ -1798,7 +1832,9 @@ function ImportBottles() {
       importResult,
       submittedRows,
       userSkippedRows,
+      unresolvedRows,
       userSkippedReason: t('importBottles.done.skippedByYou'),
+      unresolvedReason: t('importBottles.done.notImported'),
     });
     // BOM so Excel opens the UTF-8 file with accents (Pétrus) intact
     const blob = new Blob([String.fromCharCode(0xFEFF) + csv], { type: 'text/csv;charset=utf-8' });
@@ -1824,17 +1860,22 @@ function ImportBottles() {
   };
 
   const renderDoneStep = () => {
-    const { created, totalRows, skippedCount, errorCount, unplacedCount, fullSuccess } =
-      summariseImportOutcome(importResult, userSkippedRows.length);
+    const { created, totalRows, skippedCount, errorCount, unplacedCount, unresolvedCount, missedCount, fullSuccess } =
+      summariseImportOutcome(importResult, userSkippedRows.length, unresolvedRows.length);
 
     // Everything that didn't become a bottle, with per-row reasons: rows the
-    // backend skipped + rows the user skipped at review, in file order.
+    // backend skipped + rows the user skipped at review + rows left unresolved
+    // (no selection — ignored no-match / untouched error rows), in file order.
     const skippedDetails = [
       ...(importResult?.skipped || []).map(s => ({
         row: submittedRows[s.index], fallbackIndex: s.index, reason: s.reason,
       })),
       ...userSkippedRows.map(r => ({
         row: r, fallbackIndex: r.index, reason: t('importBottles.done.skippedByYou'),
+      })),
+      ...unresolvedRows.map(r => ({
+        row: r, fallbackIndex: r.index,
+        reason: r.status === 'error' && r.error ? r.error : t('importBottles.done.notImported'),
       })),
     ].sort((a, b) => (a.row?.index ?? a.fallbackIndex) - (b.row?.index ?? b.fallbackIndex));
 
@@ -1857,8 +1898,8 @@ function ImportBottles() {
             total: totalRows.toLocaleString()
           })}</h2>
           <p className="done-subtitle done-partial-note">
-            {errorCount + skippedCount > 0
-              ? t('importBottles.done.partialNote', { count: errorCount + skippedCount })
+            {missedCount > 0
+              ? t('importBottles.done.partialNote', { count: missedCount })
               : t('importBottles.done.unplacedOnlyNote', { count: unplacedCount })}
           </p>
         </>
@@ -1885,6 +1926,12 @@ function ImportBottles() {
             <div className="done-stat">
               <span className="done-number done-errors">{errorCount}</span>
               <span>{t('importBottles.done.errors')}</span>
+            </div>
+          )}
+          {unresolvedCount > 0 && (
+            <div className="done-stat">
+              <span className="done-number done-errors">{unresolvedCount}</span>
+              <span>{t('importBottles.done.notImportedStat')}</span>
             </div>
           )}
           {importResult.racksCreated?.length > 0 && (
@@ -1936,17 +1983,36 @@ function ImportBottles() {
         <details className="done-errors-detail">
           <summary>{t('importBottles.done.unplacedSummary', { count: importResult.unplaced.length })}</summary>
           <ul>
-            {importResult.unplaced.slice(0, 50).map((u, i) => (
-              <li key={i}>
-                <Trans
-                  i18nKey="importBottles.done.unplacedRow"
-                  values={{ row: u.sourceIndex + 1, rack: u.rackName }}
-                  components={{ 1: <strong /> }}
-                />
-                {u.requestedPosition !== null && <>{t('importBottles.done.slotSuffix', { n: u.requestedPosition })}</>}
-                : {u.reason}
-              </li>
-            ))}
+            {importResult.unplaced.slice(0, 50).map((u, i) => {
+              // u.sourceIndex is a position in the SUBMITTED array, not a file
+              // row. Map it back through submittedRows so the number matches the
+              // skipped/error lists and the CSV. When it can't be mapped (null
+              // sourceIndex, e.g. a rack-save failure), omit the number rather
+              // than print a bogus "Row 1".
+              const mapped = u.sourceIndex != null ? submittedRows[u.sourceIndex] : undefined;
+              const rowNum = mapped?.index != null
+                ? mapped.index + 1
+                : (u.sourceIndex != null ? u.sourceIndex + 1 : null);
+              return (
+                <li key={i}>
+                  {rowNum != null ? (
+                    <Trans
+                      i18nKey="importBottles.done.unplacedRow"
+                      values={{ row: rowNum, rack: u.rackName }}
+                      components={{ 1: <strong /> }}
+                    />
+                  ) : (
+                    <Trans
+                      i18nKey="importBottles.done.unplacedRowNoNum"
+                      values={{ rack: u.rackName }}
+                      components={{ 1: <strong /> }}
+                    />
+                  )}
+                  {u.requestedPosition !== null && <>{t('importBottles.done.slotSuffix', { n: u.requestedPosition })}</>}
+                  : {u.reason}
+                </li>
+              );
+            })}
             {importResult.unplaced.length > 50 && (
               <li><em>{t('importBottles.done.andMore', { count: importResult.unplaced.length - 50 })}</em></li>
             )}
@@ -1987,11 +2053,15 @@ function ImportBottles() {
             setImportResult(null);
             setSubmittedRows([]);
             setUserSkippedRows([]);
+            setUnresolvedRows([]);
             setFileName('');
             setDetectedEncoding(null);
             setCtTable(null);
             setImportWarnings([]);
+            setCtTextFallback([]);
             setCtDisclosureDismissed(false);
+            setAiBudgetRequestState('idle');
+            setAiBudgetStatus(null);
           }}
         >
           {t('importBottles.done.importMore')}
