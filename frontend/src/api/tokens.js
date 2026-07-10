@@ -8,7 +8,8 @@ export const listApiTokens = (apiFetch) => apiFetch('/api/tokens');
 
 // POST /api/tokens — body: { name, scopes, password }. Returns { token, ... }
 // where `token` is the plaintext shown exactly ONCE.
-// Errors: 400 (validation / token cap), 401 (wrong password), 429 (auth limit).
+// Errors: 400 (validation / token cap), 403 (wrong password — NOT 401, which
+// apiFetch would treat as session expiry and retry), 429 (auth limit).
 export const createApiToken = (apiFetch, { name, scopes, password }) =>
   apiFetch('/api/tokens', {
     method: 'POST',

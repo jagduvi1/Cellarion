@@ -66,8 +66,18 @@ function emit(userId, event, data = {}) {
  * authenticated by a personal API token, so dropToken() can find it.
  * Returns { ok: true } or { ok: false, reason: 'user_cap' | 'global_cap' }.
  */
+let lastGlobalCapWarn = 0;
+
 function register(userId, res, tokenId = null) {
-  if (totalStreams >= MAX_STREAMS_GLOBAL) return { ok: false, reason: 'global_cap' };
+  if (totalStreams >= MAX_STREAMS_GLOBAL) {
+    // The cap silently degrades every OTHER user to polling — make sure the
+    // operator can see it happening (throttled so reconnect storms don't spam).
+    if (Date.now() - lastGlobalCapWarn > 60_000) {
+      lastGlobalCapWarn = Date.now();
+      console.warn(`[eventBus] global stream cap (${MAX_STREAMS_GLOBAL}) reached — new SSE connections are being rejected`);
+    }
+    return { ok: false, reason: 'global_cap' };
+  }
   const key = String(userId);
   let set = streams.get(key);
   if (!set) {

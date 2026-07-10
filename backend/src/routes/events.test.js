@@ -118,6 +118,31 @@ describe('GET /api/events/stream', () => {
     expect(s.status).toBe(429);
   });
 
+  test('a socket that died DURING auth is reaped immediately (close already fired)', async () => {
+    // Simulate the API-token auth path: requireAuth awaits DB lookups, the
+    // client aborts meanwhile, so req 'close' fires before the handler attaches
+    // its listener. Invoke the handler directly with an already-destroyed pair —
+    // the registration must not survive, or five flaky connects would fill the
+    // user's cap with zombies (permanent 429).
+    const handler = eventsRouter.stack
+      .find(l => l.route?.path === '/stream').route.stack.at(-1).handle;
+
+    const req = {
+      user: { id: 'u1' },
+      destroyed: true,           // socket already gone
+      on: () => {},              // 'close' will never fire again
+    };
+    const res = {
+      destroyed: true,
+      writableEnded: false,
+      set() {}, flushHeaders() {}, write() {}, end() { this.writableEnded = true; },
+      status() { return this; }, json() { return this; },
+    };
+
+    handler(req, res);
+    expect(eventBus.streamCounts().total).toBe(0);
+  });
+
   test('disconnect unregisters the stream (caps do not leak)', async () => {
     const s = await openStream({ Authorization: `Bearer ${token()}` });
     if (!s.body().includes('event: ready')) await s.nextChunk();

@@ -85,19 +85,23 @@ async function sendToSubscription(sub, payload) {
 async function createNotifications(items) {
   if (!items || items.length === 0) return;
 
+  let created = [];
   try {
-    const created = await Notification.insertMany(
+    created = await Notification.insertMany(
       items.map(i => ({ user: i.userId, type: i.type, title: i.title, message: i.message, link: i.link || null })),
       { ordered: false }
     );
-    // SSE push nudge (docs/ha-push-events.md §1) — debounced per user in the
-    // bus, no-op for users without an open stream. Payload is informational
-    // only; clients refresh via REST on any event.
-    for (const doc of created) {
-      eventBus.emit(doc.user, 'notification', { id: doc._id.toString(), type: doc.type });
-    }
   } catch (err) {
+    // ordered:false rejects AFTER inserting the valid rows — those users must
+    // still get their SSE nudge (the bulk-write error carries the inserted docs).
+    created = err?.insertedDocs || [];
     console.error('[notifications] Failed to create notifications:', err.message);
+  }
+  // SSE push nudge (docs/ha-push-events.md §1) — debounced per user in the
+  // bus, no-op for users without an open stream. Payload is informational
+  // only; clients refresh via REST on any event.
+  for (const doc of created) {
+    eventBus.emit(doc.user, 'notification', { id: doc._id.toString(), type: doc.type });
   }
 
   // Web push — fire and forget

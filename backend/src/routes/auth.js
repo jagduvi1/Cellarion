@@ -500,6 +500,7 @@ router.post('/refresh', refreshLimiter, async (req, res) => {
     if (user.refreshTokenExpiresAt && Date.now() > user.refreshTokenExpiresAt.getTime()) {
       user.refreshTokenHash = null;
       user.refreshTokenExpiresAt = null;
+      eventBus.dropUser(user._id); // session hard-cap is a credential event — close open SSE streams too
       await user.save();
       clearRefreshCookie(res);
       return res.status(401).json({ error: 'Session expired, please log in again' });

@@ -84,10 +84,10 @@ describe('POST /api/tokens', () => {
     expect(res.status).toBe(400);
   });
 
-  test('wrong password → 401 and an audit entry, no token created', async () => {
+  test('wrong password → 403 (NOT 401 — apiFetch auto-refreshes and re-submits on 401) and an audit entry, no token created', async () => {
     User.findById.mockResolvedValue({ _id: 'u1', comparePassword: jest.fn().mockResolvedValue(false) });
     const res = await request('POST', '/api/tokens', validBody);
-    expect(res.status).toBe(401);
+    expect(res.status).toBe(403);
     expect(ApiToken.create).not.toHaveBeenCalled();
     expect(logAudit).toHaveBeenCalledWith(expect.anything(), 'token.create_failed', expect.anything(), { reason: 'incorrect_password' });
   });
