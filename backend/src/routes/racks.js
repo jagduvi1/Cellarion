@@ -184,7 +184,36 @@ router.put('/:id', async (req, res) => {
       return res.status(403).json({ error: 'Not authorized to modify this rack' });
     }
 
-    const { name, type, rows, cols, typeConfig, isModular, modules, rfidTag } = req.body;
+    const { name, type, rows, cols, typeConfig, isModular, modules, rfidTag, zones } = req.body;
+
+    // Validate zones if provided: bounded count, named, valid hex color,
+    // integer positions, and no position in more than one zone.
+    if (zones !== undefined) {
+      if (!Array.isArray(zones) || zones.length > 12) {
+        return res.status(400).json({ error: 'zones must be an array of at most 12 zones' });
+      }
+      const seenPositions = new Set();
+      for (const z of zones) {
+        if (!z || typeof z.name !== 'string' || !z.name.trim() || z.name.trim().length > 40) {
+          return res.status(400).json({ error: 'Each zone needs a name (max 40 characters)' });
+        }
+        if (z.color != null && !/^#[0-9a-fA-F]{6}$/.test(z.color)) {
+          return res.status(400).json({ error: 'Zone color must be a #rrggbb hex value' });
+        }
+        if (!Array.isArray(z.positions)) {
+          return res.status(400).json({ error: 'Each zone needs a positions array' });
+        }
+        for (const p of z.positions) {
+          if (!Number.isInteger(p) || p < 1) {
+            return res.status(400).json({ error: 'Zone positions must be whole numbers ≥ 1' });
+          }
+          if (seenPositions.has(p)) {
+            return res.status(400).json({ error: `Position ${p} is in more than one zone` });
+          }
+          seenPositions.add(p);
+        }
+      }
+    }
 
     // Validate modular modules if provided
     if (isModular && modules) {
@@ -226,6 +255,13 @@ router.put('/:id', async (req, res) => {
     // rfidTag still indexes explicit nulls, so two unlinked racks anywhere in
     // the DB would collide with E11000.
     if (rfidTag !== undefined) rack.rfidTag = rfidTag || undefined;
+    if (zones !== undefined) {
+      rack.zones = zones.map(z => ({
+        name: z.name.trim(),
+        color: z.color || undefined,
+        positions: [...new Set(z.positions)].sort((a, b) => a - b),
+      }));
+    }
 
     // Validate that existing slots still fit within new dimensions
     const newMax = getMaxPosition(rack);
@@ -240,6 +276,13 @@ router.put('/:id', async (req, res) => {
     // cells that no longer exist after the resize.
     if ((rack.disabledPositions || []).some(p => p > newMax)) {
       rack.disabledPositions = rack.disabledPositions.filter(p => p <= newMax);
+    }
+
+    // Same for zone positions — a resize just shrinks the zones.
+    for (const z of rack.zones || []) {
+      if (z.positions.some(p => p > newMax)) {
+        z.positions = z.positions.filter(p => p <= newMax);
+      }
     }
 
     await rack.save();

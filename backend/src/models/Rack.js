@@ -8,6 +8,15 @@ const slotSchema = new mongoose.Schema({
   rfidTag:  { type: String }
 }, { _id: false });
 
+// Named area of a rack ("Whites", "Bordeaux", …) — a set of global slot
+// positions with a display color. A position belongs to at most one zone
+// (enforced in the route, not the schema).
+const zoneSchema = new mongoose.Schema({
+  name:      { type: String, required: true, trim: true, maxlength: 40 },
+  color:     { type: String, trim: true, maxlength: 20 },
+  positions: { type: [Number], default: [] },
+}, { _id: false });
+
 const rackModuleSchema = new mongoose.Schema({
   type:       { type: String, enum: RACK_TYPES, required: true },
   rows:       { type: Number, required: true, min: 1, max: 20 },
@@ -61,6 +70,7 @@ const rackSchema = new mongoose.Schema({
   // schema requires a bottle ref) and NOT per-module (global positions cover
   // modular racks too). Position numbering stays contiguous; these are holes.
   disabledPositions: { type: [Number], default: [] },
+  zones:     { type: [zoneSchema], default: [] },
   rfidTag:   { type: String },
   // Soft-delete: set when deleted, null when active
   deletedAt: { type: Date, default: null }

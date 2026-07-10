@@ -17,6 +17,7 @@ import WineImage from '../components/WineImage';
 import ConfirmModal from '../components/ConfirmModal';
 import JournalPrompt, { journalPromptOptedOut } from '../components/JournalPrompt';
 import ArrangeModal from '../components/racks/ArrangeModal';
+import ZoneEditorModal from '../components/racks/ZoneEditorModal';
 import { LENSES, getLensStyle, getLensLegend, bottleMatchesSearch } from '../utils/rackLens';
 import './CellarRacks.css';
 
@@ -120,6 +121,9 @@ function CellarRacks() {
 
   // "Organize this rack" modal
   const [arrangeOpen, setArrangeOpen] = useState(false);
+
+  // Zone editor modal
+  const [zonesOpen, setZonesOpen] = useState(false);
 
   // consumed bottle awaiting the "add to journal?" prompt, or null
   const [journalBottle, setJournalBottle] = useState(null);
@@ -347,6 +351,19 @@ function CellarRacks() {
       }
     } catch {
       alert('Network error — please try again.');
+    }
+  };
+
+  // Zone editor save — PUT the zones array, adopt the returned rack.
+  const saveZones = async (rackId, zones) => {
+    try {
+      const res = await updateRack(apiFetch, rackId, { zones });
+      const data = await res.json();
+      if (!res.ok) return false;
+      setRacks(prev => prev.map(r => r._id === rackId ? data.rack : r));
+      return true;
+    } catch {
+      return false;
     }
   };
 
@@ -606,6 +623,7 @@ function CellarRacks() {
               }}
               onDelete={() => setDeleteConfirm(rack._id)}
               onNfcLink={() => setNfcModal({ rackId: rack._id })}
+              onZones={() => setZonesOpen(true)}
             />
           )}
           </div>
@@ -619,6 +637,9 @@ function CellarRacks() {
         const popupRack = racks.find(r => r._id === activePopup.rackId);
         const popupDisabled = !activePopup.slot &&
           (popupRack?.disabledPositions || []).includes(activePopup.position);
+        const popupZone = (popupRack?.zones || []).find(
+          z => (z.positions || []).includes(activePopup.position)
+        ) || null;
         return (
           <div className="slot-modal-overlay" onClick={() => setActivePopup(null)} role="dialog" aria-modal="true">
             <div className="slot-modal" onClick={e => e.stopPropagation()}>
@@ -626,6 +647,7 @@ function CellarRacks() {
                 <FilledSlotContent
                   position={activePopup.position}
                   slot={activePopup.slot}
+                  zone={popupZone}
                   canEdit={canEdit}
                   onRemoveFromRack={() => handleRemoveFromRack(activePopup.rackId, activePopup.position)}
                   onConsume={() => {
@@ -644,6 +666,7 @@ function CellarRacks() {
               ) : (
                 <EmptySlotContent
                   position={activePopup.position}
+                  zone={popupZone}
                   apiFetch={apiFetch}
                   cellarId={id}
                   canEdit={canEdit}
@@ -680,6 +703,15 @@ function CellarRacks() {
             : getTotalSlots(rack.type || 'grid', rack.rows, rack.cols, rack.typeConfig)}
           onMoveStep={(from, to) => applyArrangeStep(rack._id, from, to)}
           onClose={() => setArrangeOpen(false)}
+        />
+      )}
+
+      {/* Zone editor modal */}
+      {zonesOpen && rack && (
+        <ZoneEditorModal
+          rack={rack}
+          onSave={(zones) => saveZones(rack._id, zones)}
+          onClose={() => setZonesOpen(false)}
         />
       )}
 
@@ -929,7 +961,7 @@ function NewRackForm({ newRack, setNewRack, onTypeChange, onSubmit, saving }) {
 }
 
 // ---- Content for empty slot: pick a bottle to place ----
-function EmptySlotContent({ position, apiFetch, cellarId, canEdit, onAssign, onDisable, onClose }) {
+function EmptySlotContent({ position, zone, apiFetch, cellarId, canEdit, onAssign, onDisable, onClose }) {
   const { t } = useTranslation();
   const [search, setSearch] = useState('');
   const [results, setResults] = useState([]);
@@ -970,7 +1002,15 @@ function EmptySlotContent({ position, apiFetch, cellarId, canEdit, onAssign, onD
   return (
     <>
       <div className="slot-popup-header">
-        <span className="slot-popup-title">{t('racks.slotPlaceBottle', { position })}</span>
+        <span className="slot-popup-title">
+          {t('racks.slotPlaceBottle', { position })}
+          {zone && (
+            <span className="slot-zone-chip">
+              <span className="rack-zone-dot" style={{ background: zone.color || '#888' }} />
+              {zone.name}
+            </span>
+          )}
+        </span>
         <button className="slot-popup-close" onClick={onClose} aria-label="Close">&times;</button>
       </div>
       <input
@@ -1042,7 +1082,7 @@ function DisabledSlotContent({ position, canEdit, onEnable, onClose }) {
 }
 
 // ---- Content for filled slot: show bottle info + actions ----
-function FilledSlotContent({ position, slot, canEdit, onRemoveFromRack, onConsume, onClose }) {
+function FilledSlotContent({ position, slot, zone, canEdit, onRemoveFromRack, onConsume, onClose }) {
   const { t } = useTranslation();
   const bottle = slot.bottle;
   const wine = bottle?.wineDefinition;
@@ -1050,7 +1090,15 @@ function FilledSlotContent({ position, slot, canEdit, onRemoveFromRack, onConsum
   return (
     <>
       <div className="slot-popup-header">
-        <span className="slot-popup-title">{t('racks.slotTitle', { position })}</span>
+        <span className="slot-popup-title">
+          {t('racks.slotTitle', { position })}
+          {zone && (
+            <span className="slot-zone-chip">
+              <span className="rack-zone-dot" style={{ background: zone.color || '#888' }} />
+              {zone.name}
+            </span>
+          )}
+        </span>
         <button className="slot-popup-close" onClick={onClose} aria-label="Close">&times;</button>
       </div>
 

@@ -94,6 +94,15 @@ export default function ShelfView({ rack, activePosition, highlightPos, onSlotCl
     if (onSlotClick) onSlotClick(pos, slotData);
   };
 
+  // position → zone color, for the soft halos behind the ovals
+  const zoneColorByPos = useMemo(() => {
+    const m = new Map();
+    for (const z of rack?.zones || []) {
+      for (const p of z.positions || []) m.set(p, z.color || '#888888');
+    }
+    return m;
+  }, [rack?.zones]);
+
   if (!isShelf) {
     return (
       <div className="shelf-view-empty">
@@ -193,6 +202,7 @@ export default function ShelfView({ rack, activePosition, highlightPos, onSlotCl
                     onDragStart={onSlotMove ? startDrag : undefined}
                     isDragOrigin={drag?.from === s.position}
                     isDragTarget={drag?.over === s.position}
+                    zoneColor={zoneColorByPos.get(s.position) || null}
                   />
                 );
               })}
@@ -225,7 +235,7 @@ export default function ShelfView({ rack, activePosition, highlightPos, onSlotCl
   );
 }
 
-function BottleOval({ cx, cy, slot, position, disabled, isActive, isHighlight, onClick, getSlotStyle, onDragStart, isDragOrigin, isDragTarget }) {
+function BottleOval({ cx, cy, slot, position, disabled, isActive, isHighlight, onClick, getSlotStyle, onDragStart, isDragOrigin, isDragTarget, zoneColor }) {
   const bottle = slot?.bottle;
   const wine = bottle?.wineDefinition;
   const wineType = wine?.type || 'red';
@@ -286,6 +296,17 @@ function BottleOval({ cx, cy, slot, position, disabled, isActive, isHighlight, o
       aria-label={filled ? `${wine?.name || 'Wine'} ${bottle?.vintage || ''}` : `Empty slot ${position}`}
       style={{ ...(draggable ? { cursor: 'grab' } : null), ...dimStyle }}
     >
+      {zoneColor && (
+        <ellipse
+          cx={cx}
+          cy={cy}
+          rx={BOTTLE_RX + 4}
+          ry={BOTTLE_RY + 4}
+          fill={zoneColor}
+          opacity={0.3}
+          pointerEvents="none"
+        />
+      )}
       <ellipse
         cx={cx + 0.5}
         cy={cy + 1}

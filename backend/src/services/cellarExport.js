@@ -372,6 +372,9 @@ async function buildCellarDataExport(userId, scope) {
         ...(Array.isArray(r.disabledPositions) && r.disabledPositions.length > 0
           ? { disabledPositions: r.disabledPositions }
           : {}),
+        ...(Array.isArray(r.zones) && r.zones.length > 0
+          ? { zones: r.zones.map((z) => ({ name: z.name, color: z.color, positions: z.positions })) }
+          : {}),
       })),
       ...(layout ? { layout } : {}),
       bottles: mapBottlesForExport(

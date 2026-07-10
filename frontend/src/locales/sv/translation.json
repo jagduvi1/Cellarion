@@ -2218,6 +2218,18 @@
     "footer": "Skapad med Cellarion"
   },
 
+  "zones": {
+    "title": "Hyllzoner",
+    "editBtn": "Hyllzoner",
+    "intro": "Namnge områden i hyllan (”Vita”, ”Bordeaux”…). Välj en zon och klicka sedan på platser i kartan för att måla dem.",
+    "addZone": "Lägg till zon",
+    "namePlaceholder": "Zonnamn…",
+    "selectZone": "Välj zon",
+    "color": "Zonfärg",
+    "nameMissing": "Ge varje zon med platser ett namn (eller ta bort den).",
+    "saveError": "Kunde inte spara zonerna — försök igen."
+  },
+
   "arrange": {
     "title": "Organisera hyllan",
     "openBtn": "Organisera…",

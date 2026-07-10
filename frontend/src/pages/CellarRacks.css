@@ -785,3 +785,98 @@
   font-weight: 400;
   color: var(--color-text-muted);
 }
+
+/* ---- Zone editor modal ---- */
+.zones-intro {
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+  margin: 0 0 0.75rem;
+}
+
+.zones-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin-bottom: 1rem;
+}
+
+.zones-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm, 6px);
+  cursor: pointer;
+}
+
+.zones-row.active {
+  border-color: var(--color-primary);
+  background: rgba(var(--color-primary-rgb), 0.06);
+}
+
+.zones-color {
+  width: 28px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+}
+
+.zones-name {
+  flex: 1;
+  min-width: 0;
+  padding: 0.3rem 0.5rem;
+  font-size: 0.85rem;
+}
+
+.zones-count {
+  font-size: 0.72rem;
+  color: var(--color-text-muted);
+  background: var(--color-bg);
+  border-radius: 10px;
+  padding: 1px 7px;
+}
+
+.zones-remove {
+  border: none;
+  background: none;
+  color: var(--color-text-muted);
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 0.25rem;
+}
+
+.zones-remove:hover {
+  color: var(--color-danger, #c62828);
+}
+
+.zones-map {
+  max-height: 320px;
+  overflow: auto;
+  margin-bottom: 0.75rem;
+}
+
+.zones-map-svg {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+/* Zone chip in the slot popup title */
+.slot-zone-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.7rem;
+  font-weight: 400;
+  color: var(--color-text-muted);
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  padding: 0.1rem 0.5rem 0.1rem 0.35rem;
+  margin-left: 0.5rem;
+  vertical-align: middle;
+}

@@ -79,6 +79,7 @@ export default function RackRenderer({
   onSlotMove,
   onDelete,
   onNfcLink,
+  onZones,
   getSlotStyle,
 }) {
   const { t } = useTranslation();
@@ -142,6 +143,15 @@ export default function RackRenderer({
     enabled: !!onSlotMove,
   });
 
+  // position → zone color, for the soft halos behind the slots
+  const zoneColorByPos = useMemo(() => {
+    const m = new Map();
+    for (const z of rack.zones || []) {
+      for (const p of z.positions || []) m.set(p, z.color || '#888888');
+    }
+    return m;
+  }, [rack.zones]);
+
   // A click that lands right after a drop must not open the slot popup.
   const handleSlotClick = (pos, slotData) => {
     if (shouldSuppressClick()) return;
@@ -163,6 +173,18 @@ export default function RackRenderer({
           </span>
         </div>
         <div className="rack-header-actions">
+          {canEdit && onZones && (
+            <button
+              className={`rack-icon-btn ${(rack.zones || []).length > 0 ? 'rack-icon-btn--active' : ''}`}
+              onClick={onZones}
+              title={t('zones.editBtn', 'Rack zones')}
+              aria-label={t('zones.editBtn', 'Rack zones')}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3 3h7v7H3z" /><path d="M14 3h7v7h-7z" /><path d="M3 14h7v7H3z" /><path d="M14 14h7v7h-7z" />
+              </svg>
+            </button>
+          )}
           {canEdit && onNfcLink && (
             <button
               className={`rack-icon-btn ${rack.rfidTag ? 'rack-icon-btn--active' : ''}`}
@@ -189,6 +211,18 @@ export default function RackRenderer({
           )}
         </div>
       </div>
+
+      {(rack.zones || []).length > 0 && (
+        <div className="rack-zone-chips">
+          {rack.zones.map((z, i) => (
+            <span key={`${z.name}-${i}`} className="rack-zone-chip">
+              <span className="rack-zone-dot" style={{ background: z.color || '#888' }} />
+              {z.name}
+              <span className="rack-zone-count">{z.positions?.length || 0}</span>
+            </span>
+          ))}
+        </div>
+      )}
 
       <div className="rack-svg-wrapper">
         <svg
@@ -243,6 +277,21 @@ export default function RackRenderer({
                 stroke={WOOD_FRAME} strokeWidth={3} opacity={0.6} />
             </>
           )}
+
+          {/* Zone halos — soft colored discs behind the slots */}
+          {zoneColorByPos.size > 0 && slotCenters.map(s => {
+            const color = zoneColorByPos.get(s.position);
+            if (!color) return null;
+            return (
+              <circle
+                key={`zone-${s.position}`}
+                cx={s.cx} cy={s.cy} r={s.r + 4}
+                fill={color}
+                opacity={0.3}
+                pointerEvents="none"
+              />
+            );
+          })}
 
           {/* Module boundaries for modular racks */}
           {isModular && layout.moduleLayouts?.map(ml => (
