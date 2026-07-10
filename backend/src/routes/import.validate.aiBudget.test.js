@@ -282,9 +282,42 @@ describe('registry-first cascade (zero AI for known wines)', () => {
     expect(res.body.results[0].status).toBe('exact');
     expect(res.body.results[0].matches[0].wineId).toBe(LA_TACHE._id);
     expect(identifyWineFromText).not.toHaveBeenCalled();
-    // The lookup must have offered BOTH the raw and the stripped key
-    const filter = WineDefinition.findOne.mock.calls[0][0];
-    expect(filter.normalizedKey.$in).toContain('domaine de la romaneeconti:la tache:');
+    // The raw-as-typed key is queried FIRST (plain key, not a $in over both);
+    // the prefix-stripped variant is the deterministic fallback that resolves
+    // this producer-in-name row to the clean registry wine.
+    expect(WineDefinition.findOne).toHaveBeenCalledTimes(2);
+    const firstKey = WineDefinition.findOne.mock.calls[0][0].normalizedKey;
+    const secondKey = WineDefinition.findOne.mock.calls[1][0].normalizedKey;
+    expect(typeof firstKey).toBe('string');            // raw key, queried first (no $in)
+    expect(firstKey).not.toBe(LA_TACHE.normalizedKey); // it's the raw-as-typed key, not the stripped one
+    expect(secondKey).toBe(LA_TACHE.normalizedKey);    // stripped fallback hits the clean wine
+  });
+
+  test('BUG 4: exact lookup deterministically prefers the raw-as-typed key over a producer-in-name duplicate', async () => {
+    // The registry holds BOTH a clean entry (producer + bare name) and a
+    // "producer-in-name" duplicate (producer embedded in the name). A single
+    // $in over both keys returns an arbitrary one (Mongo storage order); the
+    // raw-first lookup must deterministically pick the entry matching the row
+    // as typed.
+    const { generateWineKey } = require('../utils/normalize');
+    const rawKey = generateWineKey('Domaine de la Romanée-Conti La Tâche', 'Domaine de la Romanée-Conti');
+    const strippedKey = generateWineKey('La Tâche', 'Domaine de la Romanée-Conti');
+    expect(rawKey).not.toBe(strippedKey); // sanity: the two keys genuinely differ
+
+    const RAW_DUP = { ...LA_TACHE, _id: 'raw-dup-id', normalizedKey: rawKey };     // producer-in-name duplicate
+    const CLEAN = { ...LA_TACHE, _id: 'clean-id', normalizedKey: strippedKey };    // clean entry
+    // Insert the CLEAN (stripped-key) entry FIRST — a $in-over-both lookup would
+    // tend to surface it; the raw-first lookup must still pick the raw duplicate.
+    WineDefinition.__state.exactByKey.set(strippedKey, CLEAN);
+    WineDefinition.__state.exactByKey.set(rawKey, RAW_DUP);
+
+    const res = await validate([
+      { wineName: 'Domaine de la Romanée-Conti La Tâche', producer: 'Domaine de la Romanée-Conti', vintage: '2018' },
+    ]);
+
+    expect(res.body.results[0].status).toBe('exact');
+    expect(res.body.results[0].matches[0].wineId).toBe('raw-dup-id'); // raw key wins, insertion order irrelevant
+    expect(identifyWineFromText).not.toHaveBeenCalled();
   });
 
   test('(i) full display name with NO producer resolves via variant fuzzy at >= 0.95 (no AI eligible anyway)', async () => {

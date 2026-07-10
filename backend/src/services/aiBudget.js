@@ -101,7 +101,13 @@ async function getEffectiveDailyMax(userId) {
   const base = cfg.aiDailyBudget?.max ?? rateLimitsConfig.defaults.aiDailyBudget.max;
   if (base === 0) return { max: 0, override: null };
   const override = await getActiveOverride(userId);
-  return { max: override ? override.max : base, override };
+  // An override may only ever RAISE the limit (per the design comment above):
+  // take max(base, override.max) so a stale/low grant can never LOWER a user
+  // below the current base budget — e.g. when the admin-grant floor (100) sits
+  // below the default base (500), or the base was raised after a small grant.
+  // This is the single source of truth; the admin route's clamp is only a sane
+  // input bound.
+  return { max: override ? Math.max(base, override.max) : base, override };
 }
 
 /**
@@ -173,4 +179,19 @@ function isRefundableFailure(debugReason) {
     || debugReason.startsWith('exception');
 }
 
-module.exports = { tryDebitAi, isRefundableFailure, getEffectiveDailyMax, todayUTC, secondsUntilMidnightUTC };
+/**
+ * Thrown-error counterpart of isRefundableFailure for services/labelScan's
+ * scanLabelFull (which THROWS with an HTTP `status` rather than returning a
+ * debugReason). A completed billable Claude vision call that could not read the
+ * label throws 422 ("Could not read label" / "Could not identify wine from
+ * label" — the analogue of a non-refundable `ai_unknown:*`). Everything else —
+ * no API key (503), an unsupported/oversized image (400), or a transport/
+ * network error from the SDK — never produced a billable completion and is
+ * refundable. Mirrors the identify-text/ai-info policy: completed-but-unhelpful
+ * stays debited; pre-completion/transport failures refund.
+ */
+function isRefundableScanError(err) {
+  return err?.status !== 422;
+}
+
+module.exports = { tryDebitAi, isRefundableFailure, isRefundableScanError, getEffectiveDailyMax, todayUTC, secondsUntilMidnightUTC };

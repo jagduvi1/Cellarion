@@ -66,6 +66,13 @@ function buildApp() {
   const app = express();
   app.use(express.json({ limit: '10mb' }));
   app.use('/api/wines', winesRouter);
+  // Mirror app.js's centralized error handler so a rejection escaping an
+  // asyncHandler-wrapped route (e.g. tryDebitAi throwing on a Mongo error)
+  // becomes a JSON 500 instead of hanging the request.
+  // eslint-disable-next-line no-unused-vars
+  app.use((err, req, res, next) => {
+    res.status(err.status || 500).json({ error: err.message || 'Internal server error' });
+  });
   return app;
 }
 
@@ -170,7 +177,11 @@ describe('POST /api/wines/scan-label — daily AI budget', () => {
     expect(userDebits()).toBe(1);
   });
 
-  test('a failed scan refunds the debit', async () => {
+  test('a completed-but-unhelpful scan (422) STAYS debited — no refund', async () => {
+    // scanLabelFull throws 422 for a billed Claude call that couldn't read the
+    // label (JSON parse fail / {"error":…} / missing name+producer). That call
+    // completed and was billed, so refunding it would let a user bypass the
+    // budget + global kill-switch with unreadable images (audit HIGH).
     const err = new Error('Could not read label');
     err.status = 422;
     scanLabelFull.mockRejectedValue(err);
@@ -178,7 +189,32 @@ describe('POST /api/wines/scan-label — daily AI budget', () => {
     const res = await postJson(app, '/api/wines/scan-label', { image: await validImage() });
 
     expect(res.status).toBe(422);
-    expect(userDebits()).toBe(0);
+    expect(userDebits()).toBe(1); // completed call — debit kept
+  });
+
+  test('a transport failure (no billable completion) refunds the debit', async () => {
+    // A network/transport error from the SDK (no 422) never produced a billable
+    // completion — refund so a failed call doesn't burn the user's budget.
+    const err = new Error('socket hang up');
+    // no .status → generic transport failure
+    scanLabelFull.mockRejectedValue(err);
+
+    const res = await postJson(app, '/api/wines/scan-label', { image: await validImage() });
+
+    expect(res.status).toBe(500);
+    expect(userDebits()).toBe(0); // refunded
+  });
+
+  test('a debit-time DB failure yields 500, never a hang (async debit outside the try)', async () => {
+    // tryDebitAi runs before the handler try; if incUsage throws a non-11000
+    // Mongo error, the async route rejects. Without asyncHandler, Express 4
+    // would leave the request hanging — assert it resolves as a 500 instead.
+    AiUsage.findOneAndUpdate.mockRejectedValueOnce(new Error('Mongo down'));
+
+    const res = await postJson(app, '/api/wines/scan-label', { image: await validImage() });
+
+    expect(res.status).toBe(500);
+    expect(scanLabelFull).not.toHaveBeenCalled(); // never reached the AI call
   });
 });
 

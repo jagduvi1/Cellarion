@@ -81,6 +81,36 @@ describe('scoreWineMatchVariants — producer-embedded import rows', () => {
   });
 });
 
+// The concat-equality shortcut ignores appellation, so two registry siblings
+// with the SAME producer+name but DIFFERENT appellations must not both be
+// forced to an exact 1 (arbitrary matches[0] auto-accepted). The appellation
+// has to actually disambiguate.
+describe('appellation disambiguation — same producer+name siblings (BUG 3)', () => {
+  const P = 'Giacomo Conterno';
+  const N = 'Barolo';
+  const C1 = { producer: P, name: N, appellation: 'Cascina Francia' };
+  const C2 = { producer: P, name: N, appellation: 'Monfortino' };
+
+  test('no query appellation → neither sibling is forced to an exact 1', () => {
+    const query = { producer: P, name: N, appellation: '' };
+    expect(scoreWineMatchVariants(C1, query)).toBeLessThan(1);
+    expect(scoreWineMatchVariants(C2, query)).toBeLessThan(1);
+  });
+
+  test('a query appellation matches only its own sibling exactly; the other drops below the exact threshold', () => {
+    const query = { producer: P, name: N, appellation: 'Cascina Francia' };
+    expect(scoreWineMatchVariants(C1, query)).toBeGreaterThanOrEqual(1); // exact — appellations agree
+    expect(scoreWineMatchVariants(C2, query)).toBeLessThan(EXACT);       // forced disambiguation
+  });
+
+  test('monotonic: variant score is still never below the raw scorer for these siblings', () => {
+    const query = { producer: P, name: N, appellation: 'Cascina Francia' };
+    for (const c of [C1, C2]) {
+      expect(scoreWineMatchVariants(c, query)).toBeGreaterThanOrEqual(scoreWineMatch(c, query));
+    }
+  });
+});
+
 describe('helpers', () => {
   test('concatNormalized dedups an embedded producer prefix', () => {
     // normalizeString drops punctuation without padding: 'Romanée-Conti' → 'romaneeconti'
