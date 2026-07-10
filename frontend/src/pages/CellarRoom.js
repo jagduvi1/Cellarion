@@ -10,6 +10,7 @@ import { getCellarLayout, saveCellarLayout } from '../api/cellarLayout';
 import RoomScene from '../components/room/RoomScene';
 import { getRackHeight, clampToRoom } from '../utils/roomConstants';
 import WineImage from '../components/WineImage';
+import JournalPrompt, { journalPromptOptedOut } from '../components/JournalPrompt';
 import './CellarRoom.css';
 
 const DEFAULT_DIMENSIONS = { width: 10, depth: 10, height: 3 };
@@ -55,7 +56,8 @@ export default function CellarRoom() {
   const [slotResults, setSlotResults] = useState([]);
   const [slotLoading, setSlotLoading] = useState(false);
   const slotTimerRef = useRef(null);
-  const [consumeModal, setConsumeModal] = useState(null); // { bottleId }
+  const [consumeModal, setConsumeModal] = useState(null); // { bottleId, bottle }
+  const [journalBottle, setJournalBottle] = useState(null); // consumed bottle awaiting journal prompt
 
   // Undo / redo history for layout changes (edit mode)
   const undoStackRef = useRef([]);
@@ -903,6 +905,9 @@ export default function CellarRoom() {
         })));
         setConsumeModal(null);
         setSelectedBottle(null);
+        if (reason === 'drank' && !journalPromptOptedOut()) {
+          setJournalBottle(consumeModal.bottle);
+        }
       } else {
         alert(data.error || 'Failed to remove bottle');
       }
@@ -1177,7 +1182,7 @@ export default function CellarRoom() {
                     <button
                       className="btn btn-consume btn-small"
                       onClick={() => {
-                        setConsumeModal({ bottleId: bottle._id });
+                        setConsumeModal({ bottleId: bottle._id, bottle });
                       }}
                     >
                       {t('racks.remove', 'Remove')}
@@ -1250,6 +1255,11 @@ export default function CellarRoom() {
                 />
               </div>
             </div>
+          )}
+
+          {/* Post-consume "add to journal?" prompt */}
+          {journalBottle && (
+            <JournalPrompt bottle={journalBottle} onDone={() => setJournalBottle(null)} />
           )}
 
           {/* Multi-select detail panel */}

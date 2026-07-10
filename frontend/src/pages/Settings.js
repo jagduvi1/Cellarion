@@ -11,6 +11,7 @@ import { SCALE_META, VALID_SCALES } from '../utils/ratingUtils';
 import { isPushSupported, getPushPermissionState, subscribeToPush, unsubscribeFromPush, getCurrentEndpoint, getDeviceStatus, sendTestPush } from '../utils/pushSubscription';
 import { downloadBlobObject } from '../utils/downloadBlob';
 import ApiTokensSection from '../components/ApiTokensSection';
+import { journalPromptOptedOut, setJournalPromptOptOut } from '../components/JournalPrompt';
 import './Settings.css';
 
 function Settings() {
@@ -23,6 +24,8 @@ function Settings() {
   const [ratingScale, setRatingScale] = useState(user?.preferences?.ratingScale || '5');
   const [rackNavigation, setRackNavigation] = useState(user?.preferences?.rackNavigation || 'auto');
   const [restockScope, setRestockScope] = useState(user?.preferences?.restockScope || 'all');
+  // Device-local (localStorage) — applies immediately, no save button needed.
+  const [journalPromptEnabled, setJournalPromptEnabled] = useState(() => !journalPromptOptedOut());
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState(null);
@@ -727,6 +730,23 @@ function Settings() {
               <option value="all">{t('settings.restockScopeAll', 'All cellars (default)')}</option>
               <option value="cellar">{t('settings.restockScopeCellar', 'Same cellar only')}</option>
             </select>
+          </div>
+
+          <div className="form-group">
+            <label className="settings-toggle-row">
+              <input
+                type="checkbox"
+                checked={journalPromptEnabled}
+                onChange={e => {
+                  setJournalPromptEnabled(e.target.checked);
+                  setJournalPromptOptOut(!e.target.checked);
+                }}
+              />
+              <span>{t('settings.journalPrompt', 'Ask to add a journal entry after drinking a bottle')}</span>
+            </label>
+            <p className="settings-hint">
+              {t('settings.journalPromptHint', 'When you mark a bottle as drunk, Cellarion offers to capture the moment in your wine journal. Applies immediately and is stored on this device, so choosing "Don\'t ask again" in the prompt can be undone here.')}
+            </p>
           </div>
 
           {error && <div className="alert alert-error">{error}</div>}

@@ -15,6 +15,7 @@ import RackTypeSelector, { TYPE_DIMENSIONS } from '../components/racks/RackTypeS
 import RatingInput from '../components/RatingInput';
 import WineImage from '../components/WineImage';
 import ConfirmModal from '../components/ConfirmModal';
+import JournalPrompt, { journalPromptOptedOut } from '../components/JournalPrompt';
 import './CellarRacks.css';
 
 function CellarRacks() {
@@ -65,8 +66,11 @@ function CellarRacks() {
   // active popup: { rackId, position, slot: slotData|null } — rendered as fixed modal
   const [activePopup, setActivePopup] = useState(null);
 
-  // consume modal: { bottleId } or null
+  // consume modal: { bottleId, bottle } or null
   const [consumeModal, setConsumeModal] = useState(null);
+
+  // consumed bottle awaiting the "add to journal?" prompt, or null
+  const [journalBottle, setJournalBottle] = useState(null);
 
   // NFC modal: { rackId } or null
   const [nfcModal, setNfcModal] = useState(null);
@@ -253,7 +257,7 @@ function CellarRacks() {
 
   // --- soft-remove bottle via the shared consume endpoint ---
   const handleConsumeSubmit = async (reason, note, rating, consumedRatingScale) => {
-    const { bottleId } = consumeModal;
+    const { bottleId, bottle } = consumeModal;
     try {
       const res = await consumeBottle(apiFetch, bottleId, { reason, note, rating, consumedRatingScale });
       const data = await res.json();
@@ -267,6 +271,9 @@ function CellarRacks() {
           })
         })));
         setConsumeModal(null);
+        if (reason === 'drank' && !journalPromptOptedOut()) {
+          setJournalBottle(bottle);
+        }
       } else {
         alert(data.error || 'Failed to remove bottle');
       }
@@ -468,7 +475,7 @@ function CellarRacks() {
                   canEdit={canEdit}
                   onRemoveFromRack={() => handleRemoveFromRack(activePopup.rackId, activePopup.position)}
                   onConsume={() => {
-                    setConsumeModal({ bottleId: activePopup.slot.bottle._id });
+                    setConsumeModal({ bottleId: activePopup.slot.bottle._id, bottle: activePopup.slot.bottle });
                     setActivePopup(null);
                   }}
                   onClose={() => setActivePopup(null)}
@@ -503,6 +510,11 @@ function CellarRacks() {
           onSubmit={handleConsumeSubmit}
           onCancel={() => setConsumeModal(null)}
         />
+      )}
+
+      {/* Post-consume "add to journal?" prompt */}
+      {journalBottle && (
+        <JournalPrompt bottle={journalBottle} onDone={() => setJournalBottle(null)} />
       )}
 
       {/* NFC link modal */}

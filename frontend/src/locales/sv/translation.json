@@ -168,6 +168,8 @@
     "restockScopeHint": "När vi kontrollerar om du har liknande viner efter att du konsumerat en flaska, ska vi kolla alla dina källare eller bara den som flaskan kom från?",
     "restockScopeAll": "Alla källare (standard)",
     "restockScopeCellar": "Samma källare",
+    "journalPrompt": "Fråga om att lägga till en journalanteckning efter att du druckit en flaska",
+    "journalPromptHint": "När du markerar en flaska som drucken erbjuder Cellarion att fånga ögonblicket i din vinjournal. Gäller direkt och sparas på den här enheten, så valet \"Fråga inte igen\" i rutan kan ångras här.",
     "plan": {
       "title": "Ditt abonnemang",
       "expires": "Giltigt till:",
