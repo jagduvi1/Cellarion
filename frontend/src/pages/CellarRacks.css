@@ -523,3 +523,155 @@
 .new-rack-preview-canvas .rack-meta {
   display: none;
 }
+
+/* ---- Lens + search toolbar ---- */
+.rack-lens-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  margin: 0.9rem 0 0.5rem;
+}
+
+.rack-lens-search-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 1 1 200px;
+  max-width: 300px;
+}
+
+.rack-lens-search-icon {
+  position: absolute;
+  left: 12px;
+  color: var(--color-text-muted);
+  pointer-events: none;
+}
+
+.rack-lens-search {
+  width: 100%;
+  padding: 0.42rem 2rem 0.42rem 2.15rem;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-size: 0.85rem;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.rack-lens-search::placeholder {
+  color: var(--color-text-muted);
+}
+
+.rack-lens-search:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(var(--color-primary-rgb), 0.15);
+}
+
+/* We render our own clear button */
+.rack-lens-search::-webkit-search-cancel-button {
+  display: none;
+}
+
+.rack-lens-search-clear {
+  position: absolute;
+  right: 7px;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 50%;
+  background: var(--color-border);
+  color: var(--color-text-muted);
+  font-size: 0.95rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+}
+
+.rack-lens-search-clear:hover {
+  color: var(--color-text);
+}
+
+/* Segmented lens control — same pill language as .rack-view-mode-toggle */
+.rack-lens-segment {
+  display: inline-flex;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  padding: 0.2rem;
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.rack-lens-segment::-webkit-scrollbar {
+  display: none;
+}
+
+.rack-lens-segment-btn {
+  border: none;
+  background: transparent;
+  padding: 0.32rem 0.8rem;
+  font-size: 0.82rem;
+  border-radius: 999px;
+  cursor: pointer;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+  transition: background 0.15s, color 0.15s;
+}
+
+.rack-lens-segment-btn:hover {
+  color: var(--color-text);
+}
+
+.rack-lens-segment-btn.active {
+  background: var(--color-primary);
+  color: white;
+}
+
+.rack-lens-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin-bottom: 0.85rem;
+}
+
+.rack-lens-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.72rem;
+  color: var(--color-text-muted);
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  padding: 0.14rem 0.6rem 0.14rem 0.45rem;
+}
+
+.rack-lens-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  border: 1px solid rgba(0, 0, 0, 0.25);
+  flex-shrink: 0;
+}
+
+/* Per-tab search match count */
+.rack-tab-matches {
+  font-size: 0.72rem;
+  border-radius: 10px;
+  padding: 1px 6px;
+  font-weight: 600;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--color-text-muted);
+}
+
+.rack-tab-matches.has-matches {
+  background: rgba(var(--color-primary-rgb), 0.25);
+  color: var(--color-primary);
+}

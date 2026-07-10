@@ -16,6 +16,7 @@ import RatingInput from '../components/RatingInput';
 import WineImage from '../components/WineImage';
 import ConfirmModal from '../components/ConfirmModal';
 import JournalPrompt, { journalPromptOptedOut } from '../components/JournalPrompt';
+import { LENSES, getLensStyle, getLensLegend, bottleMatchesSearch } from '../utils/rackLens';
 import './CellarRacks.css';
 
 function CellarRacks() {
@@ -62,6 +63,53 @@ function CellarRacks() {
       // localStorage unavailable (e.g. private mode) — view mode just won't persist
     }
   };
+
+  // Lens: which dimension colors the slots (type = classic wine-type colors).
+  // Persisted like the view mode so the choice survives navigation.
+  const [lens, setLensState] = useState(() => {
+    try {
+      const stored = window.localStorage.getItem('cellarion.rackLens');
+      return LENSES.includes(stored) ? stored : 'type';
+    } catch {
+      return 'type';
+    }
+  });
+  const setLens = (l) => {
+    setLensState(l);
+    try {
+      window.localStorage.setItem('cellarion.rackLens', l);
+    } catch {
+      // not persisted — fine
+    }
+  };
+
+  // Free-text search across rack slots — non-matching slots are dimmed.
+  const [rackSearch, setRackSearch] = useState('');
+  const searchActive = rackSearch.trim().length > 0;
+
+  // Per-slot style callback for the renderers; null = default rendering.
+  // Empty/disabled slots and non-matching bottles dim while searching so
+  // matches pop; the lens picks the fill for filled slots.
+  const getSlotStyle = useMemo(() => {
+    if (lens === 'type' && !searchActive) return null;
+    return (slot) => {
+      const bottle = slot?.bottle;
+      const style = bottle ? getLensStyle(lens, bottle) : null;
+      const dim = searchActive && (!bottle || !bottleMatchesSearch(bottle, rackSearch));
+      return { ...(style || {}), dim };
+    };
+  }, [lens, searchActive, rackSearch]);
+
+  // While searching, show a match count on every rack tab so cross-rack
+  // hits are visible from the current rack.
+  const matchCounts = useMemo(() => {
+    if (!searchActive) return null;
+    const counts = {};
+    for (const r of racks) {
+      counts[r._id] = r.slots.filter(s => s.bottle && bottleMatchesSearch(s.bottle, rackSearch)).length;
+    }
+    return counts;
+  }, [racks, searchActive, rackSearch]);
 
   // active popup: { rackId, position, slot: slotData|null } — rendered as fixed modal
   const [activePopup, setActivePopup] = useState(null);
@@ -374,9 +422,65 @@ function CellarRacks() {
                     : getTotalSlots(r.type || 'grid', r.rows, r.cols, r.typeConfig))
                     - (r.disabledPositions?.length || 0)}
                 </span>
+                {matchCounts && (
+                  <span className={`rack-tab-matches ${matchCounts[r._id] > 0 ? 'has-matches' : ''}`}>
+                    {matchCounts[r._id]}
+                  </span>
+                )}
               </button>
             ))}
           </div>
+
+          {/* Lens + search toolbar (the 3D shelf view doesn't support lenses yet) */}
+          {!(rack.type === 'shelf' && !rack.isModular && viewMode === '3d') && (
+            <>
+              <div className="rack-lens-toolbar">
+                <div className="rack-lens-search-wrap">
+                  <svg className="rack-lens-search-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                  <input
+                    type="search"
+                    className="rack-lens-search"
+                    placeholder={t('rackLens.searchPlaceholder', 'Find in racks…')}
+                    aria-label={t('rackLens.searchPlaceholder', 'Find in racks…')}
+                    value={rackSearch}
+                    onChange={e => setRackSearch(e.target.value)}
+                  />
+                  {searchActive && (
+                    <button
+                      type="button"
+                      className="rack-lens-search-clear"
+                      onClick={() => setRackSearch('')}
+                      aria-label={t('common.clear', 'Clear')}
+                    >
+                      ×
+                    </button>
+                  )}
+                </div>
+                <div className="rack-lens-segment" role="tablist" aria-label={t('rackLens.colorBy', 'Color by')}>
+                  <button role="tab" aria-selected={lens === 'type'} className={`rack-lens-segment-btn ${lens === 'type' ? 'active' : ''}`} onClick={() => setLens('type')}>
+                    {t('rackLens.lensType', 'Wine type')}
+                  </button>
+                  <button role="tab" aria-selected={lens === 'maturity'} className={`rack-lens-segment-btn ${lens === 'maturity' ? 'active' : ''}`} onClick={() => setLens('maturity')}>
+                    {t('rackLens.lensMaturity', 'Drink window')}
+                  </button>
+                  <button role="tab" aria-selected={lens === 'age'} className={`rack-lens-segment-btn ${lens === 'age' ? 'active' : ''}`} onClick={() => setLens('age')}>
+                    {t('rackLens.lensAge', 'Bottle age')}
+                  </button>
+                  <button role="tab" aria-selected={lens === 'rating'} className={`rack-lens-segment-btn ${lens === 'rating' ? 'active' : ''}`} onClick={() => setLens('rating')}>
+                    {t('rackLens.lensRating', 'My rating')}
+                  </button>
+                </div>
+              </div>
+              <div className="rack-lens-legend" aria-hidden="true">
+                {getLensLegend(lens).map(e => (
+                  <span key={e.tKey} className="rack-lens-chip">
+                    <span className="rack-lens-dot" style={{ background: e.fill }} />
+                    {t(e.tKey)}
+                  </span>
+                ))}
+              </div>
+            </>
+          )}
           {rack.type === 'shelf' && !rack.isModular && (
             <div className="rack-view-mode-toggle" role="tablist">
               <button
@@ -423,6 +527,7 @@ function CellarRacks() {
                 activePosition: activePopup?.rackId === rack._id ? activePopup.position : null,
                 highlightPos: highlightPos?.rackId === rack._id ? highlightPos.position : null,
                 onSlotClick: handleClick,
+                getSlotStyle,
               };
               if (viewMode === '3d') {
                 return (
@@ -440,6 +545,7 @@ function CellarRacks() {
               activeRackId={activePopup?.rackId}
               activePosition={activePopup?.position}
               highlightPos={highlightPos?.rackId === rack._id ? highlightPos.position : null}
+              getSlotStyle={getSlotStyle}
               onSlotClick={(pos, slotData) => {
                 // Viewers can only inspect filled or disabled slots, not interact with empty ones
                 const isDisabled = (rack.disabledPositions || []).includes(pos);

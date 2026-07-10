@@ -117,11 +117,18 @@ function useResetCursorOnUnmount() {
   useEffect(() => () => { document.body.style.cursor = ''; }, []);
 }
 
-function Bottle({ position, wineType, slot, onBottleClick, highlighted, scale = 1, flipNeck = false }) {
-  const glassColor = GLASS_COLORS[wineType] || GLASS_COLORS.red;
-  const wineColor = WINE_COLORS[wineType] || WINE_COLORS.red;
-  const foilColor = FOIL_COLORS[wineType] || FOIL_COLORS.red;
-  const emissive = EMISSIVE_COLORS[wineType] || EMISSIVE_COLORS.red;
+function Bottle({ position, wineType, slot, onBottleClick, highlighted, scale = 1, flipNeck = false, lensStyle }) {
+  // Lens/search style: a lens color re-tints the whole bottle (glass + wine
+  // + glow) so the room reads as a heatmap; dim greys a non-matching bottle
+  // out while a search is active. Highlight (gold) still wins below.
+  const dim = !!lensStyle?.dim;
+  const lensColor = dim ? null : lensStyle?.color || null;
+  const glassColor = dim ? '#4A453E' : (lensColor || GLASS_COLORS[wineType] || GLASS_COLORS.red);
+  const wineColor = dim ? '#4A453E' : (lensColor || WINE_COLORS[wineType] || WINE_COLORS.red);
+  const foilColor = dim ? '#3A362F' : (FOIL_COLORS[wineType] || FOIL_COLORS.red);
+  const emissive = dim ? '#000000' : (lensColor || EMISSIVE_COLORS[wineType] || EMISSIVE_COLORS.red);
+  const emissiveIntensity = highlighted ? 1.2 : dim ? 0 : lensColor ? 0.25 : 0.3;
+  const labelColor = dim ? '#6A645C' : '#F0E8D8';
   const bottleGeo = useMemo(() => getBottleGeometry(), []);
   useResetCursorOnUnmount();
 
@@ -154,7 +161,7 @@ function Bottle({ position, wineType, slot, onBottleClick, highlighted, scale = 
         <meshPhysicalMaterial
           color={highlighted ? '#FFE060' : glassColor}
           emissive={highlighted ? '#FFD700' : emissive}
-          emissiveIntensity={highlighted ? 1.2 : 0.3}
+          emissiveIntensity={emissiveIntensity}
           roughness={0.15}
           metalness={0.05}
           transmission={highlighted ? 0 : 0.12}
@@ -183,7 +190,7 @@ function Bottle({ position, wineType, slot, onBottleClick, highlighted, scale = 
       {/* Label band */}
       <mesh position={[0, 0.12, 0]}>
         <cylinderGeometry args={[BOTTLE_RADIUS + 0.001, BOTTLE_RADIUS + 0.001, 0.06, 8]} />
-        <meshStandardMaterial color="#F0E8D8" roughness={0.85} metalness={0} />
+        <meshStandardMaterial color={labelColor} roughness={0.85} metalness={0} />
       </mesh>
     </group>
   );
@@ -504,6 +511,7 @@ function PullOutShelfRow({
   onBottleClick,
   onEmptySlotClick,
   highlightBottleId,
+  getBottleStyle,
 }) {
   useResetCursorOnUnmount();
   const groupRef = useRef();
@@ -562,6 +570,7 @@ function PullOutShelfRow({
               onBottleClick={onBottleClick}
               highlighted={highlightBottleId && (slot.bottle?._id || slot.bottle) === highlightBottleId}
               flipNeck={!!flipNeck}
+              lensStyle={getBottleStyle ? getBottleStyle(slot) : null}
             />
           );
         }
@@ -626,6 +635,7 @@ export default function RackMesh({
   onEmptySlotClick,
   onSnapPosition,
   highlightBottleId,
+  getBottleStyle,
   enableShelfPullOut = false,
 }) {
   // Which shelf row is currently pulled out (or null). Telescopic-drawer
@@ -1023,6 +1033,7 @@ export default function RackMesh({
               onBottleClick={onBottleClick}
               onEmptySlotClick={onEmptySlotClick}
               highlightBottleId={highlightBottleId}
+              getBottleStyle={getBottleStyle}
             />
           );
         })
@@ -1050,6 +1061,7 @@ export default function RackMesh({
               onBottleClick={onBottleClick}
               highlighted={highlightBottleId && (slot.bottle?._id || slot.bottle) === highlightBottleId}
               flipNeck={!!flipNeck}
+              lensStyle={getBottleStyle ? getBottleStyle(slot) : null}
             />
           ) : (
             <EmptySlot

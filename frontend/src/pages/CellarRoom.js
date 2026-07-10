@@ -11,6 +11,7 @@ import RoomScene from '../components/room/RoomScene';
 import { getRackHeight, clampToRoom } from '../utils/roomConstants';
 import WineImage from '../components/WineImage';
 import JournalPrompt, { journalPromptOptedOut } from '../components/JournalPrompt';
+import { LENSES, getLensStyle, getLensLegend, bottleMatchesSearch } from '../utils/rackLens';
 import './CellarRoom.css';
 
 const DEFAULT_DIMENSIONS = { width: 10, depth: 10, height: 3 };
@@ -58,6 +59,43 @@ export default function CellarRoom() {
   const slotTimerRef = useRef(null);
   const [consumeModal, setConsumeModal] = useState(null); // { bottleId, bottle }
   const [journalBottle, setJournalBottle] = useState(null); // consumed bottle awaiting journal prompt
+
+  // Lens + search — shares the persisted lens choice with the flat rack view.
+  const [lens, setLensState] = useState(() => {
+    try {
+      const stored = window.localStorage.getItem('cellarion.rackLens');
+      return LENSES.includes(stored) ? stored : 'type';
+    } catch {
+      return 'type';
+    }
+  });
+  const setLens = (l) => {
+    setLensState(l);
+    try {
+      window.localStorage.setItem('cellarion.rackLens', l);
+    } catch { /* not persisted — fine */ }
+  };
+  // The input updates instantly; the applied term is debounced so hundreds
+  // of bottle materials aren't re-tinted on every keystroke.
+  const [roomSearchInput, setRoomSearchInput] = useState('');
+  const [roomSearch, setRoomSearch] = useState('');
+  useEffect(() => {
+    const id = setTimeout(() => setRoomSearch(roomSearchInput), 250);
+    return () => clearTimeout(id);
+  }, [roomSearchInput]);
+  const searchActive = roomSearch.trim().length > 0;
+
+  // Per-bottle 3D style: { color, dim } or null for the natural look.
+  const getBottleStyle = useMemo(() => {
+    if (lens === 'type' && !searchActive) return null;
+    return (slot) => {
+      const bottle = slot?.bottle;
+      if (!bottle) return null;
+      const style = getLensStyle(lens, bottle);
+      const dim = searchActive && !bottleMatchesSearch(bottle, roomSearch);
+      return { color: style?.fill || null, dim };
+    };
+  }, [lens, searchActive, roomSearch]);
 
   // Undo / redo history for layout changes (edit mode)
   const undoStackRef = useRef([]);
@@ -1031,6 +1069,60 @@ export default function CellarRoom() {
             </div>
           )}
 
+          {/* Lens + search overlay (view mode only — edit mode has its own toolbar) */}
+          {!isEditMode && placements.length > 0 && (
+            <div className="room-lens-bar">
+              <div className="room-lens-controls">
+                <div className="room-lens-search-wrap">
+                  <svg className="room-lens-search-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                  <input
+                    type="search"
+                    className="room-lens-search"
+                    placeholder={t('rackLens.searchPlaceholder', 'Find in racks…')}
+                    aria-label={t('rackLens.searchPlaceholder', 'Find in racks…')}
+                    value={roomSearchInput}
+                    onChange={e => setRoomSearchInput(e.target.value)}
+                  />
+                  {roomSearchInput && (
+                    <button
+                      type="button"
+                      className="room-lens-clear"
+                      onClick={() => setRoomSearchInput('')}
+                      aria-label={t('common.clear', 'Clear')}
+                    >
+                      ×
+                    </button>
+                  )}
+                </div>
+                <div className="room-lens-segment" role="tablist" aria-label={t('rackLens.colorBy', 'Color by')}>
+                  <button role="tab" aria-selected={lens === 'type'} className={`room-lens-segment-btn ${lens === 'type' ? 'active' : ''}`} onClick={() => setLens('type')}>
+                    {t('rackLens.lensType', 'Wine type')}
+                  </button>
+                  <button role="tab" aria-selected={lens === 'maturity'} className={`room-lens-segment-btn ${lens === 'maturity' ? 'active' : ''}`} onClick={() => setLens('maturity')}>
+                    {t('rackLens.lensMaturity', 'Drink window')}
+                  </button>
+                  <button role="tab" aria-selected={lens === 'age'} className={`room-lens-segment-btn ${lens === 'age' ? 'active' : ''}`} onClick={() => setLens('age')}>
+                    {t('rackLens.lensAge', 'Bottle age')}
+                  </button>
+                  <button role="tab" aria-selected={lens === 'rating'} className={`room-lens-segment-btn ${lens === 'rating' ? 'active' : ''}`} onClick={() => setLens('rating')}>
+                    {t('rackLens.lensRating', 'My rating')}
+                  </button>
+                </div>
+              </div>
+              {/* Legend only for non-type lenses: the natural bottle look needs no key */}
+              {lens !== 'type' && (
+                <div className="room-lens-legend" aria-hidden="true">
+                  {getLensLegend(lens).map(e => (
+                    <span key={e.tKey} className="room-lens-chip">
+                      <span className="room-lens-dot" style={{ background: e.fill }} />
+                      {t(e.tKey)}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
           <Canvas
             shadows
             camera={{
@@ -1049,6 +1141,7 @@ export default function CellarRoom() {
                 isEditMode={isEditMode}
                 selectedRackIds={selectedRackIds}
                 groupColorMap={groupColorMap}
+                getBottleStyle={getBottleStyle}
                 onRackClick={(rackId, shiftKey) => {
                   // Handle click-to-stack / click-to-link modes
                   if (interactionMode === 'stack' && selectedRackId && rackId !== selectedRackId) {

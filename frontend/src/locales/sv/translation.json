@@ -2197,6 +2197,26 @@
     "noData": "Ingen mognadsdata"
   },
 
+  "rackLens": {
+    "searchPlaceholder": "Sök i hyllorna…",
+    "colorBy": "Färglägg efter",
+    "lensType": "Vintyp",
+    "lensMaturity": "Dryckesfönster",
+    "lensAge": "Flaskålder",
+    "lensRating": "Mitt betyg",
+    "age0to2": "≤ 2 år",
+    "age3to5": "3–5 år",
+    "age6to10": "6–10 år",
+    "age11to20": "11–20 år",
+    "age20plus": "> 20 år",
+    "ageNV": "NV / okänd",
+    "ratingExcellent": "Utmärkt",
+    "ratingGood": "Bra",
+    "ratingAverage": "Medel",
+    "ratingLow": "Lågt",
+    "ratingNone": "Ej betygsatt"
+  },
+
   "cellarCred": {
     "newcomer": "Nykomling",
     "contributor": "Bidragsgivare",

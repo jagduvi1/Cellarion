@@ -2197,6 +2197,26 @@
     "noData": "No Maturity Data"
   },
 
+  "rackLens": {
+    "searchPlaceholder": "Find in racks…",
+    "colorBy": "Color by",
+    "lensType": "Wine type",
+    "lensMaturity": "Drink window",
+    "lensAge": "Bottle age",
+    "lensRating": "My rating",
+    "age0to2": "≤ 2 yrs",
+    "age3to5": "3–5 yrs",
+    "age6to10": "6–10 yrs",
+    "age11to20": "11–20 yrs",
+    "age20plus": "> 20 yrs",
+    "ageNV": "NV / unknown",
+    "ratingExcellent": "Excellent",
+    "ratingGood": "Good",
+    "ratingAverage": "Average",
+    "ratingLow": "Low",
+    "ratingNone": "Not rated"
+  },
+
   "cellarCred": {
     "newcomer": "Newcomer",
     "contributor": "Contributor",

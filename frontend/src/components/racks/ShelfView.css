@@ -98,3 +98,8 @@
   font-size: 0.85rem;
   font-style: italic;
 }
+
+/* Lens/search dimming animates smoothly as the user types */
+.shelf-view-bottle {
+  transition: opacity 0.15s ease;
+}

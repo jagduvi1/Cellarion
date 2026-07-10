@@ -77,6 +77,7 @@ export default function RackRenderer({
   onSlotClick,
   onDelete,
   onNfcLink,
+  getSlotStyle,
 }) {
   const { t } = useTranslation();
   const isModular = rack.isModular && rack.modules?.length > 0;
@@ -230,6 +231,7 @@ export default function RackRenderer({
                   isActive={activePos === position}
                   isHighlight={highlightPos === position}
                   onSlotClick={onSlotClick}
+                  getSlotStyle={getSlotStyle}
                 />
               ));
             }
@@ -286,6 +288,7 @@ export default function RackRenderer({
                         isActive={activePos === pos}
                         isHighlight={highlightPos === pos}
                         onSlotClick={onSlotClick}
+                        getSlotStyle={getSlotStyle}
                       />
                     );
                   })}
@@ -300,10 +303,14 @@ export default function RackRenderer({
 }
 
 /** Single slot circle (bpc=1 standard rendering) */
-function SlotCircle({ position, cx, cy, R, slot, disabled, isActive, isHighlight, onSlotClick }) {
+function SlotCircle({ position, cx, cy, R, slot, disabled, isActive, isHighlight, onSlotClick, getSlotStyle }) {
   const wine = slot?.bottle?.wineDefinition;
   const wineType = wine?.type || 'red';
   const colors = slot ? (WINE_COLORS[wineType] || WINE_COLORS.red) : null;
+  // Lens/search style: overrides fill/stroke for filled slots, dims
+  // non-matching slots while a search is active.
+  const custom = getSlotStyle ? getSlotStyle(slot || null) : null;
+  const dimStyle = custom?.dim ? { opacity: 0.22 } : null;
 
   // Disabled (unusable) position: greyed circle with a subtle diagonal cross.
   // Still clickable so editors can re-enable it from the slot popup.
@@ -317,7 +324,7 @@ function SlotCircle({ position, cx, cy, R, slot, disabled, isActive, isHighlight
         role="button"
         tabIndex={0}
         aria-label={`Disabled slot ${position}`}
-        style={{ cursor: 'default' }}
+        style={{ cursor: 'default', ...dimStyle }}
       >
         <circle
           cx={cx} cy={cy} r={R}
@@ -334,6 +341,9 @@ function SlotCircle({ position, cx, cy, R, slot, disabled, isActive, isHighlight
     );
   }
 
+  const fillColor = slot ? (custom?.fill || colors.fill) : EMPTY_FILL;
+  const strokeColor = slot ? (custom?.stroke || colors.stroke) : EMPTY_STROKE;
+
   return (
     <g
       className={`rack-slot-g ${slot ? 'filled' : 'empty'} ${isActive ? 'active' : ''} ${isHighlight ? 'highlighted' : ''}`}
@@ -342,13 +352,13 @@ function SlotCircle({ position, cx, cy, R, slot, disabled, isActive, isHighlight
       role="button"
       tabIndex={0}
       aria-label={slot ? `${wine?.name || '?'} (${slot.bottle?.vintage || ''})` : `Empty slot ${position}`}
-      style={{ cursor: 'pointer' }}
+      style={{ cursor: 'pointer', ...dimStyle }}
     >
       <circle cx={cx + 1} cy={cy + 1} r={R} fill="rgba(0,0,0,0.08)" pointerEvents="none" />
       <circle
         cx={cx} cy={cy} r={R}
-        fill={slot ? colors.fill : EMPTY_FILL}
-        stroke={isActive || isHighlight ? ACTIVE_STROKE : (slot ? colors.stroke : EMPTY_STROKE)}
+        fill={fillColor}
+        stroke={isActive || isHighlight ? ACTIVE_STROKE : strokeColor}
         strokeWidth={isActive || isHighlight ? 3 : 1.5}
       />
       <circle cx={cx} cy={cy} r={R * 0.82} fill="none"
