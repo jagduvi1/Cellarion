@@ -92,6 +92,26 @@ describe('maturityCoverage.sommSet (BUG 5)', () => {
   });
 });
 
+describe('urgencyLadder bottle id (HA consume support)', () => {
+  test('urgency items carry the bottle id so API consumers can act on them', async () => {
+    const stats = await runOverview([
+      // drinkTo in the past → 'declining' → lands on the urgency ladder
+      { _id: 'b1', cellar: 'c1', vintage: '2015', drinkFrom: 2016, drinkTo: 2020, wineDefinition: { _id: 'wd1', name: 'Old Red' } },
+    ]);
+    expect(stats.urgencyLadder).toHaveLength(1);
+    expect(stats.urgencyLadder[0].id).toBe('b1');
+    expect(stats.urgencyLadder[0].name).toBe('Old Red');
+  });
+
+  test('a bottle without _id omits the id field instead of crashing', async () => {
+    const stats = await runOverview([
+      { cellar: 'c1', vintage: '2015', drinkFrom: 2016, drinkTo: 2020, wineDefinition: { _id: 'wd1' } },
+    ]);
+    expect(stats.urgencyLadder).toHaveLength(1);
+    expect(stats.urgencyLadder[0].id).toBeUndefined();
+  });
+});
+
 describe('maturityForecast personal-window consistency (BUG 5)', () => {
   test('a personal-only bottle is included in the forecast using its own years', async () => {
     const stats = await runOverview([
