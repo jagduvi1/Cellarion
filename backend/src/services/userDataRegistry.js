@@ -29,6 +29,8 @@ const AiBudgetRequest = require('../models/AiBudgetRequest');
 const ApiToken = require('../models/ApiToken');
 const AiUsage = require('../models/AiUsage');
 const Bottle = require('../models/Bottle');
+const ClimateDevice = require('../models/ClimateDevice');
+const ClimateReading = require('../models/ClimateReading');
 const BottleImage = require('../models/BottleImage');
 const Cellar = require('../models/Cellar');
 const CellarLayout = require('../models/CellarLayout');
@@ -93,6 +95,7 @@ const EXCLUDED = {
   StripeWebhookEvent: 'no user reference (idempotency ledger, TTL)',
   WineEmbedding: 'no user reference (references WineDefinition only)',
   WineNotDuplicate: 'no user reference (admin-confirmed distinct wine pairs; actor in AuditLog)',
+  ClimateReading: 'no user reference (telemetry keyed by meta.device; purged + exported via the ClimateDevice entry)',
 };
 
 const REGISTRY = [
@@ -477,6 +480,44 @@ const REGISTRY = [
         .select('name scopes lastUsedAt createdAt revokedAt').limit(EXPORT_MAX).lean())
         .map(t => ({ name: t.name, scopes: t.scopes, lastUsedAt: t.lastUsedAt, createdAt: t.createdAt, revokedAt: t.revokedAt })),
     }),
+  },
+
+  // ── Climate monitoring ──────────────────────────────────────────────────
+  {
+    model: ClimateDevice, category: 'personal-data', userFields: ['user'],
+    // ClimateReading rows are keyed by device (meta.device, no user ref) — they
+    // are purged and exported HERE, through the device→user link, which is why
+    // ClimateReading itself sits in EXCLUDED. Ids are collected before the
+    // device deleteMany so the readings can still be found. The devices' API
+    // tokens are hard-deleted by the ApiToken entry above.
+    purge: async (ctx) => {
+      const deviceIds = await ClimateDevice.find({ user: ctx.userId }).distinct('_id');
+      if (deviceIds.length > 0) {
+        await ClimateReading.deleteMany({ 'meta.device': { $in: deviceIds } });
+      }
+      await ClimateDevice.deleteMany({ user: ctx.userId });
+    },
+    exportFragment: async (ctx) => {
+      const devices = await ClimateDevice.find({ user: ctx.userId }).limit(EXPORT_MAX).lean();
+      const deviceIds = devices.map(d => d._id);
+      const readings = deviceIds.length > 0
+        ? await ClimateReading.find({ 'meta.device': { $in: deviceIds } })
+          .sort({ ts: -1 }).limit(EXPORT_MAX).lean()
+        : [];
+      return {
+        climateDevices: markTrunc(ctx, 'climateDevices', devices).map(d => ({
+          name: d.name,
+          cellar: d.cellar,
+          firmware: d.firmware,
+          lastSeenAt: d.lastSeenAt,
+          lastRssi: d.lastRssi,
+          createdAt: d.createdAt,
+          channels: (d.channels || []).map(c => ({ key: c.key, type: c.type, label: c.label, calibrationOffset: c.calibrationOffset })),
+        })),
+        climateReadings: markTrunc(ctx, 'climateReadings', readings)
+          .map(r => ({ ts: r.ts, device: r.meta?.device, channel: r.meta?.channel, type: r.meta?.type, value: r.value })),
+      };
+    },
   },
 
   // ── Import & usage ──────────────────────────────────────────────────────

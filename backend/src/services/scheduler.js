@@ -6,6 +6,7 @@ const { runUserDeletionJob } = require('./userDeletionJob');
 const { runCellarRetentionPurge } = require('./cellarRetentionJob');
 const { runRecommendationEmailScrub } = require('./recommendationRetentionJob');
 const { runSecurityAlertCheck } = require('./securityAlertJob');
+const { runClimateOfflineCheck } = require('./climateOfflineJob');
 
 /**
  * Start all scheduled cron jobs.
@@ -87,7 +88,19 @@ function startScheduler() {
     }
   });
 
-  console.log('[scheduler] Cron jobs registered (drink-window daily 06:00 UTC, value-snapshot weekly Sun 01:00 UTC, community-price weekly Sun 02:00 UTC, user-deletion daily 03:00 UTC, cellar-retention daily 04:00 UTC, recommendation-email-scrub daily 04:30 UTC, security-spike every 15 min)');
+  // Climate sensor offline detection: every 15 minutes. Cheap indexed query
+  // over devices that have posted before; one notification per silence
+  // (recovery is handled by the ingest route when the device returns).
+  cron.schedule('*/15 * * * *', async () => {
+    try {
+      const result = await runClimateOfflineCheck();
+      if (result?.notified > 0) console.log('[scheduler] Climate offline notifications sent:', result.notified);
+    } catch (err) {
+      console.error('[scheduler] Climate offline check failed:', err);
+    }
+  });
+
+  console.log('[scheduler] Cron jobs registered (drink-window daily 06:00 UTC, value-snapshot weekly Sun 01:00 UTC, community-price weekly Sun 02:00 UTC, user-deletion daily 03:00 UTC, cellar-retention daily 04:00 UTC, recommendation-email-scrub daily 04:30 UTC, security-spike every 15 min, climate-offline every 15 min)');
 }
 
 module.exports = { startScheduler };

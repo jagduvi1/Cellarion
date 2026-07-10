@@ -8,6 +8,7 @@ const AuditLog = require('../models/AuditLog');
 const BottleImage = require('../models/BottleImage');
 const WineDefinition = require('../models/WineDefinition');
 const PendingShare = require('../models/PendingShare');
+const ClimateDevice = require('../models/ClimateDevice');
 const { getCellarRole } = require('../utils/cellarAccess');
 const { logAudit } = require('../services/audit');
 const { getSnapshotsForDates, getOrCreateDailySnapshot, convertCurrency } = require('../utils/exchangeRates');
@@ -1556,6 +1557,16 @@ router.put('/:id/members/:userId', async (req, res) => {
     member.role = role;
     await cellar.save();
 
+    // Assigning a climate device to a cellar requires owner/editor. If this
+    // member is downgraded to viewer, detach any device they had assigned here
+    // so a demoted collaborator can't keep writing readings into the cellar.
+    if (previousRole === 'editor' && role === 'viewer') {
+      await ClimateDevice.updateMany(
+        { cellar: cellar._id, user: req.params.userId },
+        { $set: { cellar: null } }
+      );
+    }
+
     logAudit(req, 'cellar.share.update',
       { type: 'cellar', id: cellar._id, cellarId: cellar._id },
       { memberId: req.params.userId, from: previousRole, to: role }
@@ -1590,6 +1601,15 @@ router.delete('/:id/members/:userId', async (req, res) => {
 
     cellar.members.splice(memberIndex, 1);
     await cellar.save();
+
+    // Detach any climate devices the removed member had assigned to this
+    // cellar — otherwise their token keeps posting readings into a cellar they
+    // no longer have access to, and their alerts keep leaking its live name and
+    // thresholds (device assignment was role-checked only at assignment time).
+    await ClimateDevice.updateMany(
+      { cellar: cellar._id, user: req.params.userId },
+      { $set: { cellar: null } }
+    );
 
     logAudit(req, 'cellar.share.remove',
       { type: 'cellar', id: cellar._id, cellarId: cellar._id },

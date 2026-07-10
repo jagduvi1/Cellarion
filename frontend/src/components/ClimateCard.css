@@ -1,0 +1,205 @@
+/* Climate card (CellarDetail → Overview) + config modal bits.
+   Hues follow the app's chart conventions (see ValueOverTimeChart):
+   muted ink #9A9484, hairlines #2a2a2a, alert red family #C0504D. */
+
+.climate-card {
+  margin-top: 16px;
+}
+
+.climate-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 4px;
+}
+
+.climate-card-title {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.climate-card-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.climate-device + .climate-device {
+  border-top: 1px solid #2a2a2a;
+  margin-top: 10px;
+  padding-top: 10px;
+}
+
+.climate-device-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin: 6px 0;
+}
+
+.climate-device-name {
+  font-size: 0.85rem;
+  color: #9A9484;
+}
+
+.climate-badge {
+  font-size: 0.72rem;
+  padding: 1px 8px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+}
+
+.climate-badge--online {
+  color: #7B9E88;
+  border-color: rgba(123, 158, 136, 0.45);
+}
+
+.climate-badge--offline {
+  color: #C0504D;
+  border-color: rgba(192, 80, 77, 0.45);
+}
+
+.climate-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.climate-chip {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 8px 12px;
+  border: 1px solid #2a2a2a;
+  border-radius: 10px;
+  min-width: 108px;
+  position: relative;
+}
+
+.climate-chip-icon {
+  position: absolute;
+  top: 8px;
+  right: 10px;
+  font-size: 0.85rem;
+  opacity: 0.85;
+}
+
+.climate-chip-value {
+  font-size: 1.25rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.climate-chip-label {
+  font-size: 0.75rem;
+  color: #9A9484;
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.climate-chip--alert {
+  border-color: rgba(192, 80, 77, 0.65);
+  background: rgba(192, 80, 77, 0.08);
+}
+
+.climate-chip--alert .climate-chip-value {
+  color: #C0504D;
+}
+
+.climate-chip--stale .climate-chip-value,
+.climate-chip--stale .climate-chip-icon {
+  opacity: 0.45;
+}
+
+/* Config modal */
+.climate-config-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 14px;
+}
+
+.climate-config-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+/* Device edit modal (Settings) — one row per channel */
+.climate-channel-edit-row {
+  display: grid;
+  grid-template-columns: minmax(110px, auto) 1fr auto;
+  gap: 8px;
+  align-items: center;
+  margin: 6px 0;
+}
+
+.climate-channel-offset {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.8rem;
+  color: #9A9484;
+}
+
+.climate-channel-offset .input {
+  width: 76px;
+}
+
+/* Chart tooltip — defined here (loaded with the climate card) rather than
+   borrowed from the Statistics page's stylesheet, which lives in a lazy chunk
+   that may not be loaded when the history modal opens. */
+.climate-tooltip {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: 0.6rem 0.75rem;
+  font-size: 0.78rem;
+  color: var(--color-text);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.climate-tooltip-date {
+  margin: 0 0 0.3rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+
+.climate-tooltip-row {
+  margin: 0.15rem 0;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.climate-tooltip-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+/* History modal */
+.climate-history-ranges {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.climate-history-chart-title {
+  margin: 12px 0 4px;
+  font-size: 0.85rem;
+  color: #9A9484;
+}
+
+@media (max-width: 560px) {
+  .climate-config-grid {
+    grid-template-columns: 1fr;
+  }
+  .climate-channel-edit-row {
+    grid-template-columns: 1fr;
+  }
+}

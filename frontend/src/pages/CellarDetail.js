@@ -8,6 +8,7 @@ import { getCellarLayout } from '../api/cellarLayout';
 import BottleCard from '../components/BottleCard';
 import BottleFilterModal from '../components/BottleFilterModal';
 import CellarScopePicker from '../components/CellarScopePicker';
+import ClimateCard from '../components/ClimateCard';
 import './CellarDetail.css';
 
 // Stable empty rack map for the cross-cellar view (rack placement is per-cellar,
@@ -428,6 +429,9 @@ function CellarDetail() {
               </div>
             </div>
           )}
+
+          {/* Climate card — self-hides when the cellar has no sensor devices */}
+          <ClimateCard cellarId={id} />
 
           {/* Quick links */}
           <div className="overview-links">
