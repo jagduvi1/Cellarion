@@ -745,6 +745,9 @@
     "searchWines": "Sök viner...",
     "noUnplacedBottles": "Inga oplacerade flaskor hittades",
     "caseOpenBtn": "Placera flera…",
+    "toolsMenu": "Hyllverktyg",
+    "openInfo": "Öppnad — ≈ {{glasses}} glas kvar · drick inom {{days}} d",
+    "pourGlass": "Häll upp ett glas",
     "caseHint": "Fyller de lediga platserna härifrån och framåt, i platsordning.",
     "caseMax": "max {{max}}",
     "casePlaceBtn": "Placera {{count}} flaskor",
@@ -774,6 +777,7 @@
     "viewCompact": "Kompakt",
     "viewShelf": "Hyllvy",
     "view3d": "3D",
+    "toolsMenu": "Hyllverktyg",
     "consumeNotePlaceholder": "Hur var det?"
   },
 
@@ -2223,6 +2227,33 @@
     "footer": "Skapad med Cellarion"
   },
 
+  "openBottle": {
+    "openBtn": "Öppna flaska…",
+    "pickerTitle": "Öppna den här flaskan",
+    "pickerText": "Hur bevarar du den? Det styr dryckesfönstret — flaskan ligger kvar i din källare tills du avslutar den.",
+    "confirmBtn": "Öppna flaska",
+    "freshness": "cirka {{days}} dagar",
+    "method": {
+      "coravin": "Coravin (argonnål)",
+      "inert-gas": "Inert gas-spray",
+      "vacuum": "Vakuumpropp",
+      "sparkling-stopper": "Champagnepropp",
+      "recorked": "Återkorkad / ingen bevaring"
+    },
+    "openSince": "Öppnad {{date}}",
+    "drinkBy": "Drick senast {{date}} ({{days}} d)",
+    "pastWindow": "Förbi sitt fönster — drick nu",
+    "remaining": "≈ {{glasses}} glas kvar ({{ml}} av {{size}} ml)",
+    "pourBtn": "Häll upp ett glas",
+    "undoPourBtn": "Ångra glas",
+    "finishBtn": "Avsluta flaskan…",
+    "undoOpenBtn": "Öppnad av misstag?",
+    "undoOpenHint": "Tar bort öppnad-status och alla registrerade glas",
+    "partialOption": "Bara ett glas — behåll flaskan",
+    "partialOr": "eller ta bort den helt:",
+    "partialConfirmBtn": "Öppna & häll upp ett glas"
+  },
+
   "audit": {
     "title": "Inventera hylla — {{name}}",
     "openBtn": "Inventera",
@@ -2276,7 +2307,20 @@
     "applying": "Flyttar… {{done}}/{{total}}",
     "applyError": "En flytt misslyckades — hyllan kan ha ändrats. Stäng och försök igen.",
     "doneText": "Klart — hyllan är omorganiserad i Cellarion. Flytta nu flaskorna i din fysiska hylla så att de stämmer; använd listan som guide:",
-    "bookTip": "Tips: Källarboken ger dig en utskrivbar karta över den nya layouten."
+    "bookTip": "Tips: Källarboken ger dig en utskrivbar karta över den nya layouten.",
+    "fillFrom": "Första platsen",
+    "cornerTopLeft": "Uppe till vänster",
+    "cornerTopRight": "Uppe till höger",
+    "cornerBottomLeft": "Nere till vänster",
+    "cornerBottomRight": "Nere till höger",
+    "lastPlanIntro": "Din senaste organisering av hyllan, utförd {{when}} — använd listan som guide:",
+    "backToLast": "← Tillbaka till senaste organiseringen",
+    "newPlanBtn": "Ny organisering…",
+    "undoBtn": "Ångra ({{count}} flyttar)",
+    "undoing": "Ångrar… {{done}}/{{total}}",
+    "undoneText": "Ångrat — flaskorna är tillbaka där de stod före organiseringen. Kom ihåg att återställa den fysiska hyllan också om du redan hade flyttat dem.",
+    "undoUnavailable": "Hyllan har ändrats sedan dess — organiseringen kan inte längre ångras.",
+    "undoError": "En flytt misslyckades under ångringen — hyllan kan ha ändrats. Stäng och kontrollera hyllan."
   },
 
   "rackLens": {
@@ -3115,6 +3159,7 @@
   },
   "bottleCard": {
     "pendingReview": "Väntar på granskning",
+    "openBadge": "{{glasses}} glas · {{days}} d",
     "groupTooltip": "{{count}} identiska flaskor — klicka för att visa alla",
     "yourWindow": "ditt fönster",
     "yourWindowTooltip": "Baserat på ditt eget dryckesfönster för den här flaskan"

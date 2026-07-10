@@ -188,6 +188,10 @@ function exportBottleToItem(b) {
     consumedNote: b.consumedNote,
     consumedRating: b.consumedRating,
     consumedRatingScale: b.consumedRatingScale,
+    // Open-bottle (Coravin / preservation) state
+    openedAt: b.openedAt,
+    preservationMethod: b.preservationMethod,
+    pours: Array.isArray(b.pours) ? b.pours : undefined,
     // Placement: rackPosition is Cellarion's internal 1-indexed slot (from the
     // export); row/col are the human row/col the export also records (grid only).
     // `internalSlot` tells computeRackPosition this position is already a
@@ -735,6 +739,23 @@ async function buildCellarContents({ cellarId, ownerId, userId, cellar, items, i
         bottle.consumedAt = item.consumedAt ? new Date(item.consumedAt) : new Date();
         if (item.consumedNote) bottle.consumedNote = stripHtml(item.consumedNote);
         if (cRating !== undefined) { bottle.consumedRating = cRating; bottle.consumedRatingScale = cScale; }
+      }
+
+      // Restore open-bottle (Coravin / preservation) state — invalid values
+      // are dropped rather than failing the bottle (schema-mirrored bounds).
+      if (item.openedAt) {
+        const openedDate = new Date(item.openedAt);
+        if (!isNaN(openedDate.getTime())) {
+          bottle.openedAt = openedDate;
+          const METHODS = ['coravin', 'inert-gas', 'vacuum', 'sparkling-stopper', 'recorked'];
+          if (METHODS.includes(item.preservationMethod)) bottle.preservationMethod = item.preservationMethod;
+          if (Array.isArray(item.pours)) {
+            bottle.pours = item.pours
+              .map((p) => ({ at: p?.at ? new Date(p.at) : new Date(), ml: Math.round(Number(p?.ml)) }))
+              .filter((p) => !isNaN(p.at.getTime()) && Number.isFinite(p.ml) && p.ml >= 1 && p.ml <= 6000)
+              .slice(0, 100);
+          }
+        }
       }
 
       await bottle.save();

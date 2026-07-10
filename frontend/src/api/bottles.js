@@ -32,6 +32,26 @@ export const consumeBottle = (apiFetch, id, data) =>
     body: JSON.stringify(data),
   });
 
+export const openBottle = (apiFetch, id, preservationMethod) =>
+  apiFetch(`/api/bottles/${id}/open`, {
+    method: 'POST',
+    headers: JSON_HEADERS,
+    body: JSON.stringify({ preservationMethod }),
+  });
+
+export const undoOpenBottle = (apiFetch, id) =>
+  apiFetch(`/api/bottles/${id}/open`, { method: 'DELETE' });
+
+export const pourBottle = (apiFetch, id, ml) =>
+  apiFetch(`/api/bottles/${id}/pour`, {
+    method: 'POST',
+    headers: JSON_HEADERS,
+    body: JSON.stringify(ml ? { ml } : {}),
+  });
+
+export const undoPour = (apiFetch, id) =>
+  apiFetch(`/api/bottles/${id}/pour`, { method: 'DELETE' });
+
 export const undoBottle = (apiFetch, id) =>
   apiFetch(`/api/bottles/${id}/undo`, {
     method: 'POST',

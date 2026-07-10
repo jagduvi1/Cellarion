@@ -5,7 +5,8 @@ import { Canvas } from '@react-three/fiber';
 import { useAuth } from '../contexts/AuthContext';
 import { getCellar } from '../api/cellars';
 import { getRacks, updateSlot, clearSlot } from '../api/racks';
-import { consumeBottle } from '../api/bottles';
+import { consumeBottle, pourBottle, openBottle } from '../api/bottles';
+import PreservationPickerModal from '../components/bottle/PreservationPickerModal';
 import { getCellarLayout, saveCellarLayout } from '../api/cellarLayout';
 import RoomScene from '../components/room/RoomScene';
 import { getRackHeight, clampToRoom } from '../utils/roomConstants';
@@ -59,6 +60,10 @@ export default function CellarRoom() {
   const slotTimerRef = useRef(null);
   const [consumeModal, setConsumeModal] = useState(null); // { bottleId, bottle }
   const [journalBottle, setJournalBottle] = useState(null); // consumed bottle awaiting journal prompt
+
+  // "just a glass" partial flow (see CellarRacks.handlePartial)
+  const [partialPicker, setPartialPicker] = useState(null); // { bottleId }
+  const [partialBusy, setPartialBusy] = useState(false);
 
   // Lens + search — shares the persisted lens choice with the flat rack view.
   const [lens, setLensState] = useState(() => {
@@ -925,6 +930,31 @@ export default function CellarRoom() {
     }
   }, [selectedBottle, apiFetch]);
 
+  // "Just a glass — keep the bottle": escape hatch out of the remove flow
+  // (see CellarRacks.handlePartial for the rationale).
+  const handlePartial = async (bottle) => {
+    setConsumeModal(null);
+    setSelectedBottle(null);
+    if (bottle.openedAt) {
+      try { await pourBottle(apiFetch, bottle._id); } catch { /* bottle page shows truth */ }
+      navigate(`/cellars/${id}/bottles/${bottle._id}`);
+    } else {
+      setPartialPicker({ bottleId: bottle._id });
+    }
+  };
+
+  const confirmPartial = async (method) => {
+    const { bottleId } = partialPicker;
+    setPartialBusy(true);
+    try {
+      const res = await openBottle(apiFetch, bottleId, method);
+      if (res.ok) await pourBottle(apiFetch, bottleId);
+    } catch { /* bottle page shows truth */ }
+    setPartialBusy(false);
+    setPartialPicker(null);
+    navigate(`/cellars/${id}/bottles/${bottleId}`);
+  };
+
   // Consume bottle
   const handleConsumeSubmit = useCallback(async (reason, note, rating, ratingScale) => {
     if (!consumeModal) return;
@@ -1343,6 +1373,7 @@ export default function CellarRoom() {
                 <RoomConsumeForm
                   onSubmit={handleConsumeSubmit}
                   onCancel={() => setConsumeModal(null)}
+                  onPartial={consumeModal.bottle ? () => handlePartial(consumeModal.bottle) : undefined}
                   defaultRatingScale={user?.preferences?.ratingScale}
                   t={t}
                 />
@@ -1353,6 +1384,15 @@ export default function CellarRoom() {
           {/* Post-consume "add to journal?" prompt */}
           {journalBottle && (
             <JournalPrompt bottle={journalBottle} onDone={() => setJournalBottle(null)} />
+          )}
+
+          {/* Preservation picker for the "just a glass" partial flow */}
+          {partialPicker && (
+            <PreservationPickerModal
+              busy={partialBusy}
+              onConfirm={confirmPartial}
+              onClose={() => setPartialPicker(null)}
+            />
           )}
 
           {/* Multi-select detail panel */}
@@ -1558,7 +1598,7 @@ export default function CellarRoom() {
   );
 }
 
-function RoomConsumeForm({ onSubmit, onCancel, defaultRatingScale, t }) {
+function RoomConsumeForm({ onSubmit, onCancel, onPartial, defaultRatingScale, t }) {
   const [reason, setReason] = useState('drank');
   const [note, setNote] = useState('');
   const [rating, setRating] = useState('');
@@ -1580,6 +1620,14 @@ function RoomConsumeForm({ onSubmit, onCancel, defaultRatingScale, t }) {
   return (
     <form onSubmit={handleSubmit}>
       <h3>{t('bottleDetail.removeBottleTitle', 'Remove Bottle')}</h3>
+      {onPartial && (
+        <div className="consume-partial-row">
+          <button type="button" className="btn btn-secondary consume-partial-btn" onClick={onPartial}>
+            🍷 {t('openBottle.partialOption', 'Just a glass — keep the bottle')}
+          </button>
+          <span className="consume-partial-or">{t('openBottle.partialOr', 'or remove it completely:')}</span>
+        </div>
+      )}
       <div className="form-group">
         <label>{t('common.reason', 'Reason')}</label>
         <select value={reason} onChange={e => setReason(e.target.value)}>

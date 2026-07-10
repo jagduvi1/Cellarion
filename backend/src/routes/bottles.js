@@ -890,6 +890,108 @@ router.post('/:id/consume', requireBottleAccess('editor'), async (req, res) => {
   }
 });
 
+// ── Open-bottle (Coravin / preservation) tracking ────────────────────────────
+const PRESERVATION_METHODS = ['coravin', 'inert-gas', 'vacuum', 'sparkling-stopper', 'recorked'];
+const DEFAULT_POUR_ML = 125;
+const MAX_POURS = 100;
+
+// POST /api/bottles/:id/open — mark an active bottle as opened (owner or editor)
+router.post('/:id/open', requireBottleAccess('editor'), async (req, res) => {
+  try {
+    const { bottle } = req;
+    const { preservationMethod } = req.body || {};
+    if (CONSUMED_STATUSES.includes(bottle.status)) {
+      return res.status(400).json({ error: 'Bottle is already consumed' });
+    }
+    if (bottle.openedAt) {
+      return res.status(400).json({ error: 'Bottle is already open' });
+    }
+    if (!PRESERVATION_METHODS.includes(preservationMethod)) {
+      return res.status(400).json({ error: 'Invalid preservation method' });
+    }
+    bottle.openedAt = new Date();
+    bottle.preservationMethod = preservationMethod;
+    bottle.pours = [];
+    bottle.openBottleNotifiedAt = null; // fresh opening → expiry alert re-arms
+    await bottle.save();
+    logAudit(req, 'bottle.open',
+      { type: 'bottle', id: bottle._id, cellarId: bottle.cellar },
+      { preservationMethod }
+    );
+    res.json({ bottle });
+  } catch (error) {
+    console.error('Open bottle error:', error);
+    res.status(500).json({ error: 'Failed to open bottle' });
+  }
+});
+
+// DELETE /api/bottles/:id/open — undo an accidental open (clears pours too)
+router.delete('/:id/open', requireBottleAccess('editor'), async (req, res) => {
+  try {
+    const { bottle } = req;
+    if (!bottle.openedAt) {
+      return res.status(400).json({ error: 'Bottle is not open' });
+    }
+    bottle.openedAt = null;
+    bottle.preservationMethod = undefined;
+    bottle.pours = [];
+    bottle.openBottleNotifiedAt = null;
+    await bottle.save();
+    logAudit(req, 'bottle.open_undo', { type: 'bottle', id: bottle._id, cellarId: bottle.cellar });
+    res.json({ bottle });
+  } catch (error) {
+    console.error('Undo open error:', error);
+    res.status(500).json({ error: 'Failed to undo open' });
+  }
+});
+
+// POST /api/bottles/:id/pour — record a pour (default: one 125 ml glass)
+router.post('/:id/pour', requireBottleAccess('editor'), async (req, res) => {
+  try {
+    const { bottle } = req;
+    if (CONSUMED_STATUSES.includes(bottle.status)) {
+      return res.status(400).json({ error: 'Bottle is already consumed' });
+    }
+    if (!bottle.openedAt) {
+      return res.status(400).json({ error: 'Open the bottle first' });
+    }
+    const ml = req.body?.ml === undefined ? DEFAULT_POUR_ML : Number(req.body.ml);
+    if (!Number.isFinite(ml) || ml < 1 || ml > 6000) {
+      return res.status(400).json({ error: 'Pour must be between 1 and 6000 ml' });
+    }
+    if (bottle.pours.length >= MAX_POURS) {
+      return res.status(400).json({ error: 'Too many pours recorded for this bottle' });
+    }
+    bottle.pours.push({ at: new Date(), ml: Math.round(ml) });
+    await bottle.save();
+    logAudit(req, 'bottle.pour',
+      { type: 'bottle', id: bottle._id, cellarId: bottle.cellar },
+      { ml: Math.round(ml) }
+    );
+    res.json({ bottle });
+  } catch (error) {
+    console.error('Pour error:', error);
+    res.status(500).json({ error: 'Failed to record pour' });
+  }
+});
+
+// DELETE /api/bottles/:id/pour — undo the most recent pour
+router.delete('/:id/pour', requireBottleAccess('editor'), async (req, res) => {
+  try {
+    const { bottle } = req;
+    if (!bottle.pours || bottle.pours.length === 0) {
+      return res.status(400).json({ error: 'No pours to undo' });
+    }
+    bottle.pours.pop();
+    await bottle.save();
+    logAudit(req, 'bottle.pour_undo', { type: 'bottle', id: bottle._id, cellarId: bottle.cellar });
+    res.json({ bottle });
+  } catch (error) {
+    console.error('Undo pour error:', error);
+    res.status(500).json({ error: 'Failed to undo pour' });
+  }
+});
+
 // POST /api/bottles/:id/move - Move an active bottle to another cellar you own.
 // v1: own-cellars-only + active bottles only; the bottle lands UNPLACED in the
 // destination (freed from any source rack slot). All bottle data is kept —
