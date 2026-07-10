@@ -1,6 +1,6 @@
 const { getOrCreateDailySnapshot, convertCurrency } = require('../utils/exchangeRates');
 const { toNormalized } = require('../utils/ratingUtils');
-const { classifyMaturity, buildProfileMap } = require('../utils/maturityUtils');
+const { classifyMaturity, classifyPersonalWindow, buildProfileMap } = require('../utils/maturityUtils');
 
 // ── Main export ───────────────────────────────────────────────────────────────
 
@@ -111,26 +111,54 @@ async function computeOverview({ activeBottles, consumedBottles, cellars, target
       byPurchaseYear[py] = (byPurchaseYear[py] || 0) + 1;
     }
 
-    // Maturity classification from sommelier profiles
+    // Maturity classification. classifyMaturity prefers the bottle's PERSONAL
+    // drink window (drinkFrom/drinkTo) over the sommelier profile, so the phase
+    // buckets + health score reflect the user's own intent wherever it's set.
+    const personalStatus = classifyPersonalWindow(b);
+    const wdId = wd?._id?.toString() || (typeof b.wineDefinition === 'string' ? b.wineDefinition : null);
+    const reviewedProfile = (wdId && b.vintage && b.vintage !== 'NV')
+      ? profileMap.get(`${wdId}:${b.vintage}`)
+      : null;
+    // A reviewed profile only "counts" when it carries a usable window boundary —
+    // same guard classifyMaturity uses, so a usable profile always yields a phase
+    // (and is never left in the noProfile bucket).
+    const hasUsableProfile = !!reviewedProfile &&
+      (reviewedProfile.earlyFrom != null || reviewedProfile.peakFrom != null || reviewedProfile.peakUntil != null);
+
     const maturityStatus = classifyMaturity(b, profileMap);
     if (maturityStatus) {
       const key = maturityStatus === 'not-ready' ? 'notReady' : maturityStatus;
       maturity[key]++;
-      maturityCoverage.sommSet++;
       healthScoreSum += HEALTH_SCORES[maturityStatus] ?? 0;
       healthScoreCount++;
     } else {
       maturity.noProfile++;
-      maturityCoverage.none++;
     }
 
-    // Forecast: for bottles with a reviewed profile, count peak years
+    // Coverage note ("N with sommelier profiles") counts ONLY a usable reviewed
+    // sommelier profile (BUG 5). A personal drink window is the user's own
+    // overlay, not a somm profile, so it must not inflate sommSet. A bottle with
+    // neither signal is "without data" (none); a personal-only bottle carries the
+    // user's data but no somm profile, so it counts toward neither — it still
+    // shows in the phase distribution above, just not in this coverage line.
+    if (hasUsableProfile) maturityCoverage.sommSet++;
+    else if (!personalStatus) maturityCoverage.none++;
+
+    // Forecast: count the years each drinkable bottle sits in its window, using
+    // the SAME window that governed its bucket — the personal window when it
+    // governs (so personal-only bottles are included and a personal override on a
+    // profiled wine uses the personal years), else the sommelier profile. This
+    // keeps the forecast reconciled with how the buckets were counted.
     if (maturityStatus) {
-      const wdId = wd?._id?.toString() || b.wineDefinition?.toString();
-      const profile = profileMap.get(`${wdId}:${b.vintage}`);
-      if (profile) {
-        const pFrom = profile.peakFrom || profile.earlyFrom;
-        const pUntil = profile.lateUntil || profile.peakUntil || profile.earlyUntil;
+      let pFrom = null, pUntil = null;
+      if (personalStatus) {
+        pFrom  = Number.isFinite(b.drinkFrom) ? b.drinkFrom : null;
+        pUntil = Number.isFinite(b.drinkTo)   ? b.drinkTo   : null;
+      } else if (reviewedProfile) {
+        pFrom  = reviewedProfile.peakFrom || reviewedProfile.earlyFrom;
+        pUntil = reviewedProfile.lateUntil || reviewedProfile.peakUntil || reviewedProfile.earlyUntil;
+      }
+      if (personalStatus || reviewedProfile) {
         for (const fy of forecastYears) {
           if ((!pFrom || fy >= pFrom) && (!pUntil || fy <= pUntil)) forecastCounts[fy]++;
         }

@@ -241,4 +241,57 @@ describe('PUT /api/bottles/:id drink window', () => {
     expect((await update({ drinkTo: 9999 })).status).toBe(400);
     expect(storedBottle.save).not.toHaveBeenCalled();
   });
+
+  // ── BUG 1: editing the personal window must reset the notifier marker ────────
+  // The daily notifier only rewrites drinkWindowNotifiedStatus on a notifiable
+  // transition, so a stale marker (e.g. 'peak' from the old window) would
+  // permanently suppress the alert for the new window. A window edit must clear
+  // both marker fields so the next notifier run re-evaluates cleanly.
+  test('changing drinkFrom clears the stale notifier marker', async () => {
+    storedBottle.drinkWindowNotifiedStatus = 'peak';
+    storedBottle.drinkWindowNotifiedAt = new Date('2026-01-01T00:00:00Z');
+    const { status } = await update({ drinkFrom: 2030 });
+    expect(status).toBe(200);
+    expect(storedBottle.drinkFrom).toBe(2030);
+    expect(storedBottle.drinkWindowNotifiedStatus).toBeNull();
+    expect(storedBottle.drinkWindowNotifiedAt).toBeNull();
+  });
+
+  test('changing drinkTo clears the stale notifier marker', async () => {
+    storedBottle.drinkWindowNotifiedStatus = 'ending';
+    storedBottle.drinkWindowNotifiedAt = new Date('2026-01-01T00:00:00Z');
+    const { status } = await update({ drinkTo: 2050 });
+    expect(status).toBe(200);
+    expect(storedBottle.drinkTo).toBe(2050);
+    expect(storedBottle.drinkWindowNotifiedStatus).toBeNull();
+    expect(storedBottle.drinkWindowNotifiedAt).toBeNull();
+  });
+
+  test('clearing the window (nulls) also resets the notifier marker', async () => {
+    storedBottle.drinkWindowNotifiedStatus = 'declining';
+    storedBottle.drinkWindowNotifiedAt = new Date('2026-01-01T00:00:00Z');
+    const { status } = await update({ drinkFrom: null, drinkTo: null });
+    expect(status).toBe(200);
+    expect(storedBottle.drinkWindowNotifiedStatus).toBeNull();
+    expect(storedBottle.drinkWindowNotifiedAt).toBeNull();
+  });
+
+  test('an update that does NOT touch the window leaves the notifier marker intact', async () => {
+    storedBottle.drinkWindowNotifiedStatus = 'peak';
+    storedBottle.drinkWindowNotifiedAt = new Date('2026-01-01T00:00:00Z');
+    const { status } = await update({ notes: 'just a note' });
+    expect(status).toBe(200);
+    expect(storedBottle.drinkWindowNotifiedStatus).toBe('peak');
+    expect(storedBottle.drinkWindowNotifiedAt).toEqual(new Date('2026-01-01T00:00:00Z'));
+  });
+
+  test('a no-op window write (same value) does not reset the notifier marker', async () => {
+    // stored drinkFrom is 2020 — resending 2020 is not a real change.
+    storedBottle.drinkWindowNotifiedStatus = 'peak';
+    storedBottle.drinkWindowNotifiedAt = new Date('2026-01-01T00:00:00Z');
+    const { status } = await update({ drinkFrom: 2020 });
+    expect(status).toBe(200);
+    expect(storedBottle.drinkWindowNotifiedStatus).toBe('peak');
+    expect(storedBottle.drinkWindowNotifiedAt).toEqual(new Date('2026-01-01T00:00:00Z'));
+  });
 });

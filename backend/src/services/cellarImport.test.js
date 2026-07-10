@@ -34,14 +34,23 @@ const {
   archivePathToUrl,
   resolveTargets,
   exportBottleToItem,
+  buildBottle,
   attachMaturity,
   attachImages,
   EXPORT_SCHEMA,
   MAX_IMPORT_CELLARS,
   MAX_IMPORT_BOTTLES,
 } = require('./cellarImport');
+const { mapBottlesForExport } = require('./cellarExport');
 const WineVintageProfile = require('../models/WineVintageProfile');
 const BottleImage = require('../models/BottleImage');
+
+// Valid 24-hex ObjectIds so buildBottle's `new Bottle({...})` casts cleanly.
+const OID = {
+  cellar: '64b0000000000000000000bb',
+  owner: '64b000000000000000000001',
+  wine: '64b0000000000000000000cc',
+};
 
 sharp.cache(false);
 
@@ -226,6 +235,60 @@ describe('exportBottleToItem', () => {
     expect(exportBottleToItem({ wineName: 'W', maturity }).maturity).toEqual(maturity);
     expect(exportBottleToItem({ wineName: 'W' }).maturity).toBeNull();
     expect(exportBottleToItem({ wineName: 'W', maturity: 'x' }).maturity).toBeNull();
+  });
+
+  test('carries the personal drink window + occasion through (BUG 2)', () => {
+    const item = exportBottleToItem({ wineName: 'W', drinkFrom: 2030, drinkTo: 2040, occasion: 'For my 50th' });
+    expect(item.drinkFrom).toBe(2030);
+    expect(item.drinkTo).toBe(2040);
+    expect(item.occasion).toBe('For my 50th');
+  });
+});
+
+// ── BUG 2: personal drink window + occasion survive a full export → import ─────
+describe('buildBottle drink window + occasion', () => {
+  const build = (item) => buildBottle({
+    cellarId: OID.cellar, ownerId: OID.owner, item, canonicalVintage: item.vintage || '2018',
+    wineDefinitionId: OID.wine, defaultCurrency: 'USD',
+  });
+
+  test('applies a valid personal window and occasion to the built bottle', () => {
+    const bottle = build({ vintage: '2018', drinkFrom: 2030, drinkTo: 2040, occasion: 'For my 50th' });
+    expect(bottle.drinkFrom).toBe(2030);
+    expect(bottle.drinkTo).toBe(2040);
+    expect(bottle.occasion).toBe('For my 50th');
+  });
+
+  test('drops an inverted window whole (mirrors routes/import.js)', () => {
+    const bottle = build({ vintage: '2018', drinkFrom: 2040, drinkTo: 2030 });
+    expect(bottle.drinkFrom).toBeUndefined();
+    expect(bottle.drinkTo).toBeUndefined();
+  });
+
+  test('silently drops an out-of-range year without failing the bottle', () => {
+    const bottle = build({ vintage: '2018', drinkFrom: 1899, drinkTo: 2040 });
+    expect(bottle.drinkFrom).toBeUndefined();
+    expect(bottle.drinkTo).toBe(2040);
+  });
+
+  test('leaves the window unset when the export carries none', () => {
+    const bottle = build({ vintage: '2018' });
+    expect(bottle.drinkFrom).toBeUndefined();
+    expect(bottle.drinkTo).toBeUndefined();
+  });
+
+  test('round-trips through export → import: mapBottlesForExport → exportBottleToItem → buildBottle', () => {
+    const oid = (s) => ({ toString: () => s });
+    const exportBottle = {
+      _id: oid('b1'), vintage: '2018', wineDefinition: { name: 'W' },
+      drinkFrom: 2030, drinkTo: 2040, occasion: 'For my 50th',
+    };
+    const [exported] = mapBottlesForExport([exportBottle], []);
+    const item = exportBottleToItem(exported);
+    const bottle = build({ ...item, vintage: '2018' });
+    expect(bottle.drinkFrom).toBe(2030);
+    expect(bottle.drinkTo).toBe(2040);
+    expect(bottle.occasion).toBe('For my 50th');
   });
 });
 

@@ -128,6 +128,15 @@ async function processUser(user, isFirstRun) {
     const maturityStatus = classifyMaturity(bottle, profileMap);
     if (!maturityStatus) continue;
 
+    // A personal-window bottle whose wine request hasn't been approved yet has
+    // NO wineDefinition (it qualified for this query purely via drinkFrom/
+    // drinkTo). Its wdId is undefined, so the dedup key `undefined:vintage:status`
+    // would collapse every such bottle into ONE "Unknown wine" notification with
+    // a dead search link. There's no stable wine identity to notify about yet —
+    // skip it (and don't seed it) until it gains a definition; the marker starts
+    // null, so the correct alert fires cleanly on the first run after approval.
+    if (!bottle.wineDefinition) continue;
+
     const wdId = bottle.wineDefinition?._id?.toString();
     const profile = profileMap.get(`${wdId}:${bottle.vintage}`);
     const prevStatus = bottle.drinkWindowNotifiedStatus;
@@ -276,4 +285,4 @@ function buildNotification(alert) {
   }
 }
 
-module.exports = { runDrinkWindowCheck, shouldSendDigestEmail };
+module.exports = { runDrinkWindowCheck, processUser, shouldSendDigestEmail };

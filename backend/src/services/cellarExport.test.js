@@ -62,6 +62,34 @@ describe('mapBottlesForExport', () => {
     expect(item).not.toHaveProperty('images');
   });
 
+  test('emits the personal drink window + occasion when the bottle has them (BUG 2)', () => {
+    // Without these, an export → import round-trip silently dropped the user's
+    // own drink window and occasion note.
+    const bottles = [{
+      _id: oid('b1'), vintage: '2018', wineDefinition: { name: 'W' },
+      drinkFrom: 2030, drinkTo: 2040, occasion: 'For my 50th',
+    }];
+    const [item] = mapBottlesForExport(bottles, []);
+    expect(item.drinkFrom).toBe(2030);
+    expect(item.drinkTo).toBe(2040);
+    expect(item.occasion).toBe('For my 50th');
+  });
+
+  test('emits a single-sided drink window and omits the absent half', () => {
+    const bottles = [{ _id: oid('b1'), vintage: 'NV', wineDefinition: { name: 'W' }, drinkTo: 2035 }];
+    const [item] = mapBottlesForExport(bottles, []);
+    expect(item).not.toHaveProperty('drinkFrom');
+    expect(item.drinkTo).toBe(2035);
+  });
+
+  test('omits drink-window / occasion keys when the bottle has none', () => {
+    const bottles = [{ _id: oid('b1'), vintage: 'NV', wineDefinition: { name: 'W' } }];
+    const [item] = mapBottlesForExport(bottles, []);
+    expect(item).not.toHaveProperty('drinkFrom');
+    expect(item).not.toHaveProperty('drinkTo');
+    expect(item).not.toHaveProperty('occasion');
+  });
+
   test('emits rackPosition for a shelf rack but NOT the (grid-only) row/col', () => {
     // For non-grid racks the cols-based row/col math is wrong, so the export must
     // only carry rackPosition (the internal slot) and let the importer round-trip

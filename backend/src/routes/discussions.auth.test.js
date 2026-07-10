@@ -1,73 +1,143 @@
 /**
- * Auth-matrix tests for /api/discussions.
+ * Auth-matrix tests for the REAL /api/discussions router.
  *
  * WHY THIS TEST EXISTS:
- * Discussions are publicly readable (GET) but writes (POST/PUT/PATCH/DELETE)
- * require authentication, and moderation actions additionally require the
- * moderator/admin role. This test documents that contract so it cannot be
- * accidentally regressed by adding/removing per-route middleware.
+ * Discussions are publicly readable (GET with optionalAuth) but writes
+ * (POST/PUT/PATCH/DELETE) require authentication, and moderation actions
+ * additionally require the moderator/admin role.
  *
- * It mounts a tiny stub app that mirrors the middleware composition of
- * discussions.js — no DB or model code is exercised.
+ * Unlike a stub that mirrors the middleware table (which silently drifts —
+ * an earlier version of this file was missing three real routes), this suite
+ * introspects the actual router exported by discussions.js and verifies, by
+ * function identity, which auth middleware guards each route. It then fires
+ * real HTTP requests through the router for the rejection paths (401/403),
+ * which the auth middleware short-circuits before any handler or DB access.
  */
 
 process.env.JWT_SECRET = 'test-secret';
+
+// External-service modules are mocked so requiring the real router has no
+// side effects (Meilisearch/Mailgun clients, audit writes). Handlers are
+// never reached in this suite, so the mocks just need to exist.
+jest.mock('../services/audit', () => ({ logAudit: jest.fn() }));
+jest.mock('../services/indexNow', () => ({ submitUrls: jest.fn() }));
+jest.mock('../services/notifications', () => ({
+  createNotification: jest.fn(),
+  createNotifications: jest.fn(),
+}));
+jest.mock('../services/search', () => ({}));
+jest.mock('../services/mailgun', () => ({
+  sendDiscussionReplyEmail: jest.fn(),
+  EMAIL_VERIFICATION_ENABLED: false,
+}));
 
 const express = require('express');
 const http = require('http');
 const jwt = require('jsonwebtoken');
 const { requireAuth, optionalAuth, requireModeratorOrAdmin } = require('../middleware/auth');
+const discussionsRouter = require('./discussions');
 
+// ---------------------------------------------------------------------------
+// Router introspection: [{ path, methods, handlers }] from the real router.
+// ---------------------------------------------------------------------------
+const routes = discussionsRouter.stack
+  .filter((layer) => layer.route)
+  .map((layer) => ({
+    path: layer.route.path,
+    methods: Object.keys(layer.route.methods).map((m) => m.toUpperCase()),
+    handlers: layer.route.stack.map((s) => s.handle),
+  }));
+
+const writeRoutes = routes.filter((r) => r.methods.some((m) => m !== 'GET'));
+const getRoutes = routes.filter((r) => r.methods.includes('GET'));
+const modRoutes = routes.filter((r) => r.handlers.includes(requireModeratorOrAdmin));
+
+describe('discussions router shape', () => {
+  test('router defines the expected number of routes (drift canary)', () => {
+    // 21 routes as of this writing. If you add/remove a route this fails on
+    // purpose: update the count AND make sure the new route carries the right
+    // auth middleware (the suites below check that automatically).
+    expect(routes.length).toBe(21);
+  });
+
+  test('every route starts with an auth middleware (requireAuth or optionalAuth)', () => {
+    for (const r of routes) {
+      expect([requireAuth, optionalAuth]).toContain(r.handlers[0]);
+    }
+  });
+});
+
+describe('write routes require authentication (real router)', () => {
+  test('every non-GET route includes requireAuth', () => {
+    expect(writeRoutes.length).toBeGreaterThan(0);
+    for (const r of writeRoutes) {
+      expect(r.handlers).toContain(requireAuth);
+    }
+  });
+});
+
+describe('public reads stay public (real router)', () => {
+  test('list, detail and replies GETs use optionalAuth, not requireAuth', () => {
+    for (const p of ['/', '/:idOrSlug', '/:idOrSlug/replies']) {
+      const r = getRoutes.find((x) => x.path === p);
+      expect(r).toBeDefined();
+      expect(r.handlers).toContain(optionalAuth);
+      expect(r.handlers).not.toContain(requireAuth);
+    }
+  });
+});
+
+describe('moderation routes require moderator/admin (real router)', () => {
+  test('all /moderation/* routes carry requireAuth + requireModeratorOrAdmin', () => {
+    const moderationPrefixed = routes.filter((r) => r.path.startsWith('/moderation'));
+    expect(moderationPrefixed.length).toBeGreaterThanOrEqual(4);
+    for (const r of moderationPrefixed) {
+      expect(r.handlers).toContain(requireAuth);
+      expect(r.handlers).toContain(requireModeratorOrAdmin);
+    }
+  });
+
+  test('privileged thread actions (delete/pin/lock/move/original) are mod-gated', () => {
+    const privileged = [
+      ['DELETE', '/:idOrSlug'],
+      ['PATCH', '/:idOrSlug/pin'],
+      ['PATCH', '/:idOrSlug/lock'],
+      ['PATCH', '/:idOrSlug/move'],
+      ['GET', '/:discussionId/replies/:replyId/original'],
+    ];
+    for (const [method, path] of privileged) {
+      const r = routes.find((x) => x.path === path && x.methods.includes(method));
+      expect(r).toBeDefined();
+      expect(r.handlers).toContain(requireModeratorOrAdmin);
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Behavioral rejection tests through the REAL router. requireAuth /
+// requireModeratorOrAdmin short-circuit with 401/403 before any handler code
+// or model call runs, so no DB is needed.
+// ---------------------------------------------------------------------------
 function buildApp() {
   const app = express();
   app.use(express.json());
-
-  // Stub handler: succeeds and reports who (if anyone) the request authenticated as.
-  const ok = (req, res) => res.status(200).json({ uid: req.user?.id || null });
-
-  // Mirror the per-route middleware composition from discussions.js.
-  // Public reads (optionalAuth — no token = anonymous, valid token = personalized).
-  app.get('/api/discussions', optionalAuth, ok);
-  app.get('/api/discussions/:id', optionalAuth, ok);
-  app.get('/api/discussions/:id/replies', optionalAuth, ok);
-
-  // Auth-required writes.
-  app.post('/api/discussions', requireAuth, ok);
-  app.post('/api/discussions/:id/replies', requireAuth, ok);
-  app.put('/api/discussions/:id/replies/:replyId', requireAuth, ok);
-  app.delete('/api/discussions/:id/replies/:replyId', requireAuth, ok);
-  app.post('/api/discussions/:id/replies/:replyId/reactions', requireAuth, ok);
-  app.post('/api/discussions/:idOrSlug/watch', requireAuth, ok);
-  app.delete('/api/discussions/:idOrSlug/watch', requireAuth, ok);
-  app.post('/api/discussions/:id/report', requireAuth, ok);
-  app.post('/api/discussions/:id/replies/:replyId/report', requireAuth, ok);
-
-  // Mod/admin-only.
-  app.delete('/api/discussions/:id', requireAuth, requireModeratorOrAdmin, ok);
-  app.patch('/api/discussions/:id/pin', requireAuth, requireModeratorOrAdmin, ok);
-  app.patch('/api/discussions/:id/lock', requireAuth, requireModeratorOrAdmin, ok);
-  app.patch('/api/discussions/:id/move', requireAuth, requireModeratorOrAdmin, ok);
-  app.get('/api/discussions/moderation/reports', requireAuth, requireModeratorOrAdmin, ok);
-  app.post('/api/discussions/moderation/ban', requireAuth, requireModeratorOrAdmin, ok);
-
+  app.use('/api/discussions', discussionsRouter);
   return app;
 }
 
 function makeReq(app, method, url, headers = {}) {
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     const server = http.createServer(app);
     server.listen(0, () => {
       const port = server.address().port;
       const req = http.request({ port, path: url, method, headers }, (res) => {
-        const chunks = [];
-        res.on('data', c => chunks.push(c));
+        res.resume();
         res.on('end', () => {
           server.close();
-          const body = Buffer.concat(chunks).toString();
-          resolve({ status: res.statusCode, body: body ? JSON.parse(body) : null });
+          resolve({ status: res.statusCode });
         });
       });
-      req.on('error', () => { server.close(); resolve({ status: 0 }); });
+      req.on('error', (err) => { server.close(); reject(err); });
       req.end();
     });
   });
@@ -75,98 +145,30 @@ function makeReq(app, method, url, headers = {}) {
 
 const tokenFor = (payload) => jwt.sign(payload, 'test-secret', { algorithm: 'HS256', expiresIn: '1h' });
 const userTok = () => tokenFor({ id: 'u-user', roles: ['user'] });
-const modTok  = () => tokenFor({ id: 'u-mod',  roles: ['moderator'] });
 
-const PUBLIC_GETS = [
-  '/api/discussions',
-  '/api/discussions/anyid',
-  '/api/discussions/anyid/replies',
-];
+// Turn an express route path into a concrete URL (':param' → a dummy id).
+const concreteUrl = (path) => `/api/discussions${path.replace(/:[A-Za-z]+/g, 'x')}`.replace(/\/$/, '') || '/api/discussions';
 
-describe('Discussion GETs are publicly readable', () => {
-  for (const url of PUBLIC_GETS) {
-    test(`GET ${url} returns 200 without any Authorization header`, async () => {
-      const { status, body } = await makeReq(buildApp(), 'GET', url);
-      expect(status).toBe(200);
-      expect(body.uid).toBeNull();
-    });
-
-    test(`GET ${url} returns 200 with a valid token, attaching req.user`, async () => {
-      const { status, body } = await makeReq(buildApp(), 'GET', url, {
-        authorization: `Bearer ${userTok()}`,
+describe('behavioral: unauthenticated writes are rejected with 401', () => {
+  for (const r of writeRoutes) {
+    for (const method of r.methods.filter((m) => m !== 'GET')) {
+      test(`${method} ${r.path} → 401 without a token`, async () => {
+        const { status } = await makeReq(buildApp(), method, concreteUrl(r.path));
+        expect(status).toBe(401);
       });
-      expect(status).toBe(200);
-      expect(body.uid).toBe('u-user');
-    });
-
-    test(`GET ${url} returns 200 even with an invalid token (treated as anonymous)`, async () => {
-      const { status, body } = await makeReq(buildApp(), 'GET', url, {
-        authorization: 'Bearer not.a.valid.token',
-      });
-      expect(status).toBe(200);
-      expect(body.uid).toBeNull();
-    });
+    }
   }
 });
 
-const WRITE_ROUTES = [
-  ['POST',   '/api/discussions'],
-  ['POST',   '/api/discussions/anyid/replies'],
-  ['PUT',    '/api/discussions/anyid/replies/r1'],
-  ['DELETE', '/api/discussions/anyid/replies/r1'],
-  ['POST',   '/api/discussions/anyid/replies/r1/reactions'],
-  ['POST',   '/api/discussions/anyid/watch'],
-  ['DELETE', '/api/discussions/anyid/watch'],
-  ['POST',   '/api/discussions/anyid/report'],
-  ['POST',   '/api/discussions/anyid/replies/r1/report'],
-];
-
-describe('Discussion writes require authentication', () => {
-  for (const [method, url] of WRITE_ROUTES) {
-    test(`${method} ${url} returns 401 without auth`, async () => {
-      const { status } = await makeReq(buildApp(), method, url);
-      expect(status).toBe(401);
-    });
-
-    test(`${method} ${url} returns 200 with a valid user token`, async () => {
-      const { status, body } = await makeReq(buildApp(), method, url, {
-        authorization: `Bearer ${userTok()}`,
+describe('behavioral: regular users are rejected from moderation routes with 403', () => {
+  for (const r of modRoutes) {
+    for (const method of r.methods) {
+      test(`${method} ${r.path} → 403 with a plain user token`, async () => {
+        const { status } = await makeReq(buildApp(), method, concreteUrl(r.path), {
+          authorization: `Bearer ${userTok()}`,
+        });
+        expect(status).toBe(403);
       });
-      expect(status).toBe(200);
-      expect(body.uid).toBe('u-user');
-    });
-  }
-});
-
-const MOD_ROUTES = [
-  ['DELETE', '/api/discussions/anyid'],
-  ['PATCH',  '/api/discussions/anyid/pin'],
-  ['PATCH',  '/api/discussions/anyid/lock'],
-  ['PATCH',  '/api/discussions/anyid/move'],
-  ['GET',    '/api/discussions/moderation/reports'],
-  ['POST',   '/api/discussions/moderation/ban'],
-];
-
-describe('Moderation routes require moderator/admin role', () => {
-  for (const [method, url] of MOD_ROUTES) {
-    test(`${method} ${url} returns 401 without auth`, async () => {
-      const { status } = await makeReq(buildApp(), method, url);
-      expect(status).toBe(401);
-    });
-
-    test(`${method} ${url} returns 403 for a regular user`, async () => {
-      const { status } = await makeReq(buildApp(), method, url, {
-        authorization: `Bearer ${userTok()}`,
-      });
-      expect(status).toBe(403);
-    });
-
-    test(`${method} ${url} returns 200 for a moderator`, async () => {
-      const { status, body } = await makeReq(buildApp(), method, url, {
-        authorization: `Bearer ${modTok()}`,
-      });
-      expect(status).toBe(200);
-      expect(body.uid).toBe('u-mod');
-    });
+    }
   }
 });
