@@ -11,33 +11,43 @@
 //   row (0-based) and `submittedRows[i].item` the parsed wine fields.
 // - `userSkippedRows` are validation-result rows the user skipped at review
 //   (never submitted).
+// - `unresolvedRows` are validation-result rows the user reviewed but left
+//   without any selection — unmatched (no_match) rows they ignored and error
+//   rows they neither fixed nor skipped. They were NEVER submitted, so the
+//   confirm response knows nothing about them; without counting them here the
+//   done screen's denominator understates the review set and a partial import
+//   can read as a full success.
 
 /**
  * Summarise an import outcome for the done screen.
  *
  * @param {object|null} importResult  confirm response
  * @param {number} userSkippedCount   rows skipped by the user at review
+ * @param {number} unresolvedCount    rows the user reviewed but left unselected
+ *                                     (unmatched-ignored + untouched error rows)
  * @returns {{ created, totalRows, skippedCount, errorCount, unplacedCount,
- *             missedCount, fullSuccess }}
- *   - totalRows: everything the user brought to the import (submitted +
- *     user-skipped) — the honest denominator for "X of Y imported".
- *   - fullSuccess: true only when every single row became a bottle and every
- *     placement landed. Any skip, error or unplaced bottle makes it false.
+ *             unresolvedCount, missedCount, fullSuccess }}
+ *   - totalRows: EVERY row the user reviewed (submitted + user-skipped +
+ *     unresolved) — the honest denominator for "X of Y imported".
+ *   - fullSuccess: true only when every single reviewed row became a bottle and
+ *     every placement landed. Any skip, error, unresolved or unplaced row makes
+ *     it false.
  */
-export function summariseImportOutcome(importResult, userSkippedCount = 0) {
+export function summariseImportOutcome(importResult, userSkippedCount = 0, unresolvedCount = 0) {
   const created = importResult?.created ?? 0;
   const backendSkipped = importResult?.skipped?.length ?? 0;
   const errorCount = importResult?.errors?.length ?? 0;
   const unplacedCount = importResult?.unplaced?.length ?? 0;
-  const totalRows = (importResult?.total ?? 0) + userSkippedCount;
+  const totalRows = (importResult?.total ?? 0) + userSkippedCount + unresolvedCount;
   const skippedCount = backendSkipped + userSkippedCount;
-  const missedCount = skippedCount + errorCount;
+  const missedCount = skippedCount + errorCount + unresolvedCount;
   return {
     created,
     totalRows,
     skippedCount,
     errorCount,
     unplacedCount,
+    unresolvedCount,
     missedCount,
     fullSuccess: Boolean(importResult) && missedCount === 0 && unplacedCount === 0 && created === totalRows,
   };
@@ -64,11 +74,11 @@ const rowFields = (row) => ({
 
 /**
  * Flatten every non-created outcome into report rows.
- * Outcomes: 'skipped' (backend + user-skipped), 'error', 'unplaced'
- * (imported but no rack slot — still worth telling the user about).
- * Rows are sorted by original file row number.
+ * Outcomes: 'skipped' (backend + user-skipped), 'not imported' (reviewed but
+ * left unselected), 'error', 'unplaced' (imported but no rack slot — still
+ * worth telling the user about). Rows are sorted by original file row number.
  */
-export function buildOutcomeRows({ importResult, submittedRows = [], userSkippedRows = [], userSkippedReason = 'Skipped during review' }) {
+export function buildOutcomeRows({ importResult, submittedRows = [], userSkippedRows = [], unresolvedRows = [], userSkippedReason = 'Skipped during review', unresolvedReason = 'No match selected' }) {
   const rows = [];
 
   for (const s of importResult?.skipped || []) {
@@ -76,6 +86,16 @@ export function buildOutcomeRows({ importResult, submittedRows = [], userSkipped
   }
   for (const r of userSkippedRows) {
     rows.push({ ...rowFields(r), outcome: 'skipped', reason: userSkippedReason });
+  }
+  // Rows the user reviewed but never resolved — never submitted, so they carry
+  // no backend outcome. An error row keeps its own validation reason; an
+  // ignored no-match row gets the generic "no selection" reason.
+  for (const r of unresolvedRows) {
+    rows.push({
+      ...rowFields(r),
+      outcome: 'not imported',
+      reason: (r?.status === 'error' && r?.error) ? r.error : unresolvedReason,
+    });
   }
   for (const e of importResult?.errors || []) {
     rows.push({ ...rowFields(submittedRows[e.index]), outcome: 'error', reason: e.reason || '' });
@@ -100,15 +120,23 @@ export function buildOutcomeRows({ importResult, submittedRows = [], userSkipped
  *
  * @returns {string} CSV text (no BOM; the caller prepends one for Excel)
  */
-export function buildImportReportCsv({ importResult, submittedRows = [], userSkippedRows = [], userSkippedReason } = {}) {
-  const { created, totalRows, skippedCount, errorCount, unplacedCount } =
-    summariseImportOutcome(importResult, userSkippedRows.length);
+export function buildImportReportCsv({ importResult, submittedRows = [], userSkippedRows = [], unresolvedRows = [], userSkippedReason, unresolvedReason } = {}) {
+  const { created, totalRows, skippedCount, errorCount, unplacedCount, unresolvedCount } =
+    summariseImportOutcome(importResult, userSkippedRows.length, unresolvedRows.length);
 
   // The summary line is intentionally left unquoted (it's for humans; the
-  // leading '#' marks it as a comment for anyone re-parsing the file).
-  const summary = `# Import report: ${created} of ${totalRows} rows imported (${skippedCount} skipped, ${errorCount} errors, ${unplacedCount} imported but unplaced)`;
+  // leading '#' marks it as a comment for anyone re-parsing the file). The
+  // "not imported" clause only appears when there were unresolved rows, so a
+  // clean import's summary stays byte-for-byte what it always was.
+  const parts = [
+    `${skippedCount} skipped`,
+    `${errorCount} errors`,
+    ...(unresolvedCount > 0 ? [`${unresolvedCount} not imported`] : []),
+    `${unplacedCount} imported but unplaced`,
+  ];
+  const summary = `# Import report: ${created} of ${totalRows} rows imported (${parts.join(', ')})`;
   const header = 'index,wineName,producer,vintage,outcome,reason';
-  const lines = buildOutcomeRows({ importResult, submittedRows, userSkippedRows, userSkippedReason })
+  const lines = buildOutcomeRows({ importResult, submittedRows, userSkippedRows, unresolvedRows, userSkippedReason, unresolvedReason })
     .map(r => [r.index, r.wineName, r.producer, r.vintage, r.outcome, r.reason].map(csvEscape).join(','));
 
   return [summary, header, ...lines].join('\r\n') + '\r\n';

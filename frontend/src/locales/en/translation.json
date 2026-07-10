@@ -2942,6 +2942,7 @@
       "autoCreatedRacks": "Auto-created racks ({{count}})",
       "unplacedSummary": "Bottles that couldn't be placed in a rack ({{count}})",
       "unplacedRow": "Row {{row}} → rack <1>{{rack}}</1>",
+      "unplacedRowNoNum": "Rack <1>{{rack}}</1>",
       "slotSuffix": " (slot {{n}})",
       "andMore": "…and {{count}} more",
       "unplacedNote": "These bottles were imported successfully — they just couldn't be assigned a rack slot. You can place them manually from the Cellar page.",
@@ -2957,6 +2958,8 @@
       "unplacedOnlyNote_other": "Every bottle was imported, but {{count}} couldn't be placed in a rack — details below.",
       "skippedSummary": "Skipped rows ({{count}})",
       "skippedByYou": "Skipped by you during review",
+      "notImported": "No match selected",
+      "notImportedStat": "Not imported",
       "downloadReport": "Download report (CSV)",
       "goToCellar": "Go to Cellar",
       "importMore": "Import More"

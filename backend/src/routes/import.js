@@ -1089,7 +1089,7 @@ router.post('/confirm', async (req, res) => {
  */
 router.post('/sessions', async (req, res) => {
   try {
-    const { cellarId, fileName, detectedFormat, results, selections, manualWines, positionAnchor, rackConfigs, defaultCurrency } = req.body;
+    const { cellarId, fileName, detectedFormat, results, selections, manualWines, positionAnchor, rackConfigs, defaultCurrency, importWarnings, detectedEncoding, ctTable, ctTextFallback } = req.body;
 
     if (!cellarId || !mongoose.Types.ObjectId.isValid(cellarId)) {
       return res.status(400).json({ error: 'Valid cellarId is required' });
@@ -1120,7 +1120,11 @@ router.post('/sessions', async (req, res) => {
       manualWines: manualWines || {},
       positionAnchor: positionAnchor || 'top-left',
       rackConfigs: rackConfigs || {},
-      defaultCurrency: defaultCurrency || 'USD'
+      defaultCurrency: defaultCurrency || 'USD',
+      importWarnings: Array.isArray(importWarnings) ? importWarnings : [],
+      detectedEncoding: detectedEncoding || undefined,
+      ctTable: ctTable || undefined,
+      ctTextFallback: Array.isArray(ctTextFallback) ? ctTextFallback : []
     });
     await session.save();
 
@@ -1244,7 +1248,7 @@ router.put('/sessions/:id', async (req, res) => {
       return res.status(403).json({ error: 'Not authorized' });
     }
 
-    const { results, selections, manualWines, positionAnchor, rackConfigs, defaultCurrency } = req.body;
+    const { results, selections, manualWines, positionAnchor, rackConfigs, defaultCurrency, importWarnings, detectedEncoding, ctTable, ctTextFallback } = req.body;
     // Results change when a per-row AI look-up rewrites a row — persist them
     // so a resumed session doesn't show stale "No match found" rows whose
     // selection references a wine absent from the stored matches.
@@ -1254,6 +1258,12 @@ router.put('/sessions/:id', async (req, res) => {
     if (positionAnchor !== undefined) session.positionAnchor = positionAnchor;
     if (rackConfigs !== undefined) session.rackConfigs = rackConfigs;
     if (defaultCurrency !== undefined) session.defaultCurrency = defaultCurrency;
+    // Parse-time notices/metadata — persisted so the ct-truncated banner (and
+    // the encoding/table/fallback notes) survive a resume.
+    if (importWarnings !== undefined) session.importWarnings = importWarnings;
+    if (detectedEncoding !== undefined) session.detectedEncoding = detectedEncoding;
+    if (ctTable !== undefined) session.ctTable = ctTable;
+    if (ctTextFallback !== undefined) session.ctTextFallback = ctTextFallback;
     await session.save();
 
     res.json({ ok: true });

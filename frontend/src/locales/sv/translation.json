@@ -2942,6 +2942,7 @@
       "autoCreatedRacks": "Automatiskt skapade hyllor ({{count}})",
       "unplacedSummary": "Flaskor som inte kunde placeras i en hylla ({{count}})",
       "unplacedRow": "Rad {{row}} → hylla <1>{{rack}}</1>",
+      "unplacedRowNoNum": "Hylla <1>{{rack}}</1>",
       "slotSuffix": " (plats {{n}})",
       "andMore": "…och {{count}} till",
       "unplacedNote": "De här flaskorna importerades korrekt — de kunde bara inte tilldelas en hyllplats. Du kan placera dem manuellt från källarsidan.",
@@ -2957,6 +2958,8 @@
       "unplacedOnlyNote_other": "Alla flaskor importerades, men {{count}} kunde inte placeras i en hylla — detaljer nedan.",
       "skippedSummary": "Överhoppade rader ({{count}})",
       "skippedByYou": "Överhoppad av dig under granskningen",
+      "notImported": "Ingen matchning vald",
+      "notImportedStat": "Inte importerade",
       "downloadReport": "Ladda ner rapport (CSV)",
       "goToCellar": "Gå till källaren",
       "importMore": "Importera fler"
