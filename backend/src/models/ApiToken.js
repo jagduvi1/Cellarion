@@ -18,7 +18,7 @@ const crypto = require('crypto');
 //   userDataRegistry.js.
 
 const TOKEN_PREFIX = 'cel_';
-const TOKEN_SCOPES = ['read', 'consume'];
+const TOKEN_SCOPES = ['read', 'consume', 'climate'];
 const MAX_ACTIVE_TOKENS_PER_USER = 10;
 
 const apiTokenSchema = new mongoose.Schema({

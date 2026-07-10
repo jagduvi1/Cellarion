@@ -1,0 +1,142 @@
+# Cellarion climate sensor — ESPHome reference firmware (docs/climate-monitoring.md)
+#
+# Reference build: ESP32 DevKitC (WROOM-32) + 2× DS18B20 waterproof probes on
+# one 1-Wire bus + 2× SHT31 (I2C, addresses 0x44/0x45). Wiring:
+#   3V3   → probe reds, SHT VIN, one leg of the 4.7 kΩ pull-up
+#   GND   → probe blacks, SHT GND
+#   GPIO4 → probe DATA wires (both) + other leg of the 4.7 kΩ pull-up
+#   GPIO21/GPIO22 → SHT SDA/SCL (both boards in parallel)
+#
+# This device is STANDALONE: it POSTs directly to Cellarion's ingest API.
+# No Home Assistant required — though HA can additionally adopt it if present.
+#
+# Quickstart (no toolchain install; run from the repo root):
+#   cp firmware/secrets.yaml.example firmware/secrets.yaml   # then fill it in
+#   docker run --rm -v "$PWD/firmware":/config -it esphome/esphome run cellarion-climate.yaml
+# First flash must be over USB; later updates go over the air (OTA).
+#
+# NOTE: verified against the ESPHome release current at authoring time. If a
+# future ESPHome renames an option (they warn loudly during validation), fix
+# the name here — the ingest contract itself is stable.
+
+esphome:
+  name: cellarion-climate
+  friendly_name: Cellarion Climate Sensor
+
+esp32:
+  board: esp32dev
+  framework:
+    type: esp-idf
+
+logger:
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  # If Wi-Fi is unreachable, the device opens this setup hotspot with a
+  # captive portal to reconfigure credentials.
+  ap:
+    ssid: "Cellarion-Climate"
+
+captive_portal:
+
+ota:
+  - platform: esphome
+    password: !secret ota_password
+
+# Local status page on http://<device-ip>/ — handy for LAN debugging.
+web_server:
+  port: 80
+
+time:
+  - platform: sntp
+
+http_request:
+  timeout: 10s
+  # Set false ONLY for self-hosted plain-HTTP LAN installs.
+  verify_ssl: true
+
+one_wire:
+  - platform: gpio
+    pin: GPIO4
+
+i2c:
+  sda: GPIO21
+  scl: GPIO22
+  frequency: 50kHz
+
+sensor:
+  # DS18B20 probes. With ONE probe on the bus, `address` may be omitted.
+  # With several, flash once, read each probe's address from the boot log
+  # ("Found sensors: ... 0x1c0000031edd2a28"), and pin them here so
+  # "probe-a" stays the same physical probe forever.
+  - platform: dallas_temp
+    # address: 0x1c0000031edd2a28
+    id: probe_a
+    name: "Probe A"
+    update_interval: 60s
+  - platform: dallas_temp
+    # address: 0x2b0000031ed0f128
+    id: probe_b
+    name: "Probe B"
+    update_interval: 60s
+
+  # SHT31 #1 — default address (ADDR pin unconnected).
+  - platform: sht3xd
+    address: 0x44
+    temperature:
+      id: rh1_temp
+      name: "Ambient 1 temperature"
+    humidity:
+      id: rh1_hum
+      name: "Ambient 1 humidity"
+    update_interval: 60s
+
+  # SHT31 #2 — ADDR pin jumpered to 3V3.
+  - platform: sht3xd
+    address: 0x45
+    temperature:
+      id: rh2_temp
+      name: "Ambient 2 temperature"
+    humidity:
+      id: rh2_hum
+      name: "Ambient 2 humidity"
+    update_interval: 60s
+
+  # Wi-Fi signal at the device — reported to Cellarion as `rssi` for the
+  # device page (cellars are Wi-Fi-hostile; this makes weak signal visible).
+  - platform: wifi_signal
+    id: wifi_rssi
+    update_interval: 60s
+
+# Push the current snapshot to Cellarion. Failed posts are skipped (gaps in
+# the chart; the server's offline alert covers real outages). The server
+# replies 202 with an advisory `intervalS` — adjust `interval` to match if
+# you change the cadence server-side.
+interval:
+  - interval: 5min
+    then:
+      - http_request.post:
+          url: !secret cellarion_ingest_url
+          request_headers:
+            Content-Type: application/json
+            Authorization: !secret cellarion_token
+          json: |-
+            root["firmware"] = "cellarion-climate/1 esphome";
+            if (!std::isnan(id(wifi_rssi).state)) root["rssi"] = id(wifi_rssi).state;
+            JsonArray readings = root.createNestedArray("readings");
+            const struct { const char* ch; const char* ty; float v; } vals[] = {
+              {"probe-a",   "temperature", id(probe_a).state},
+              {"probe-b",   "temperature", id(probe_b).state},
+              {"ambient-1", "temperature", id(rh1_temp).state},
+              {"ambient-1", "humidity",    id(rh1_hum).state},
+              {"ambient-2", "temperature", id(rh2_temp).state},
+              {"ambient-2", "humidity",    id(rh2_hum).state},
+            };
+            for (const auto &s : vals) {
+              if (std::isnan(s.v)) continue;  // sensor not ready / disconnected
+              JsonObject r = readings.createNestedObject();
+              r["channel"] = s.ch;
+              r["type"] = s.ty;
+              r["value"] = s.v;
+            }

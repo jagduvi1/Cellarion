@@ -123,6 +123,25 @@ describe('isRequestAllowed (default-deny)', () => {
     expect(isRequestAllowed([], 'GET', '/api/stats')).toBe(false);
     expect(isRequestAllowed(undefined, 'GET', '/api/stats')).toBe(false);
   });
+
+  test('climate scope allows exactly POST /api/climate/ingest — the device credential', () => {
+    const CLIMATE = ['climate'];
+    expect(isRequestAllowed(CLIMATE, 'POST', '/api/climate/ingest')).toBe(true);
+    expect(isRequestAllowed(CLIMATE, 'POST', '/api/climate/ingest/')).toBe(true);
+    // A leaked device token must reach NOTHING else — not device management,
+    // not cellar reads, not the wine data the read scope covers.
+    expect(isRequestAllowed(CLIMATE, 'GET', '/api/climate/devices')).toBe(false);
+    expect(isRequestAllowed(CLIMATE, 'POST', '/api/climate/devices')).toBe(false);
+    expect(isRequestAllowed(CLIMATE, 'DELETE', `/api/climate/devices/${oid}`)).toBe(false);
+    expect(isRequestAllowed(CLIMATE, 'GET', `/api/climate/cellars/${oid}/current`)).toBe(false);
+    expect(isRequestAllowed(CLIMATE, 'PUT', `/api/climate/cellars/${oid}/config`)).toBe(false);
+    expect(isRequestAllowed(CLIMATE, 'GET', '/api/stats/overview')).toBe(false);
+    expect(isRequestAllowed(CLIMATE, 'GET', '/api/cellars')).toBe(false);
+    expect(isRequestAllowed(CLIMATE, 'GET', '/api/users/me/export')).toBe(false);
+    // And the other scopes never grant ingest.
+    expect(isRequestAllowed(READ, 'POST', '/api/climate/ingest')).toBe(false);
+    expect(isRequestAllowed(BOTH, 'POST', '/api/climate/ingest')).toBe(false);
+  });
 });
 
 // ---------------------------------------------------------------------------

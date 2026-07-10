@@ -23,10 +23,12 @@ const LAST_USED_THROTTLE_MS = 60 * 60 * 1000; // 1 hour
  * (req.baseUrl + req.path), not req.originalUrl, so query strings and
  * percent-encoding cannot influence matching.
  *
- * Scopes (docs/ha-push-events.md §3):
+ * Scopes (docs/ha-push-events.md §3; climate: docs/climate-monitoring.md):
  *   read    — the GETs the Home Assistant integration uses: stats, cellars,
  *             bottles, notifications, and the SSE event stream.
  *   consume — POST /api/bottles/:id/consume only.
+ *   climate — POST /api/climate/ingest only: the sensor-device credential.
+ *             A leaked device token can post readings and nothing else.
  */
 const SCOPE_ALLOWLIST = {
   read: [
@@ -38,6 +40,9 @@ const SCOPE_ALLOWLIST = {
   ],
   consume: [
     { method: 'POST', pattern: /^\/api\/bottles\/[a-f0-9]{24}\/consume$/ },
+  ],
+  climate: [
+    { method: 'POST', pattern: /^\/api\/climate\/ingest$/ },
   ],
 };
 

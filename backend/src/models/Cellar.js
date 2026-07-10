@@ -45,6 +45,20 @@ const cellarSchema = new mongoose.Schema({
     type: [memberSchema],
     default: []
   },
+  // Climate monitoring thresholds (docs/climate-monitoring.md). Absent on
+  // cellars that never configured them — readers must fall back to
+  // CLIMATE_DEFAULTS (exported below) rather than assuming the path exists.
+  climate: {
+    type: new mongoose.Schema({
+      tempMin: { type: Number, min: -30, max: 60 },
+      tempMax: { type: Number, min: -30, max: 60 },
+      rhMin: { type: Number, min: 0, max: 100 },
+      rhMax: { type: Number, min: 0, max: 100 },
+      offlineAfterMin: { type: Number, min: 15, max: 1440 },
+      alertsEnabled: { type: Boolean },
+    }, { _id: false }),
+    default: undefined
+  },
   // Soft-delete: set when deleted, null when active
   deletedAt: { type: Date, default: null },
   createdAt: {
@@ -76,4 +90,16 @@ cellarSchema.pre('save', function(next) {
   next();
 });
 
+// Shipped alert thresholds: the classic 10–14 °C storage band with headroom
+// before alerting, and the 45–80 %RH corridor (dry corks below, mold above).
+const CLIMATE_DEFAULTS = Object.freeze({
+  tempMin: 8,
+  tempMax: 16,
+  rhMin: 45,
+  rhMax: 80,
+  offlineAfterMin: 60,
+  alertsEnabled: true,
+});
+
 module.exports = mongoose.model('Cellar', cellarSchema);
+module.exports.CLIMATE_DEFAULTS = CLIMATE_DEFAULTS;

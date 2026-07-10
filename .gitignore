@@ -45,5 +45,11 @@ backend/src/data/wine_cellar_wines_no_multipack_box.json
 # User-uploaded images
 backend/uploads/
 
+# ESPHome firmware: real secrets (Wi-Fi credentials + device token) and build
+# artifacts must never be committed — only the template and secrets example.
+firmware/secrets.yaml
+firmware/.esphome/
+firmware/*.bin
+
 # TWA Android build tools and output (run locally, never commit keystore or AAB)
 twa/

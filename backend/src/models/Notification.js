@@ -30,7 +30,10 @@ const notificationSchema = new mongoose.Schema({
       'price_tracking_declined',
       'ai_budget_request',
       'ai_budget_approved',
-      'ai_budget_denied'
+      'ai_budget_denied',
+      'climate_alert',
+      'climate_recovered',
+      'climate_offline'
     ],
     required: true
   },

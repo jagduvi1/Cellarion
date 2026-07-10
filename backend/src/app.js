@@ -63,6 +63,7 @@ const taxonomyRoute = require('./routes/taxonomy');
 const stripeRoute = require('./routes/stripe');
 const tokensRoute = require('./routes/tokens');
 const eventsRoute = require('./routes/events');
+const climateRoute = require('./routes/climate');
 const rateLimitsConfig = require('./config/rateLimits');
 const aiConfig = require('./config/aiConfig');
 const announcementConfig = require('./config/announcement');
@@ -226,6 +227,7 @@ app.use('/api/wine-lists', wineListsRoute);
 app.use('/api/stripe', stripeRoute);
 app.use('/api/tokens', tokensRoute);
 app.use('/api/events', eventsRoute);
+app.use('/api/climate', climateRoute);
 
 // 404 handler
 app.use((req, res) => {
