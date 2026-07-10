@@ -567,3 +567,159 @@
     left: 0.5rem;
   }
 }
+
+/* ── Lens + search overlay (view mode) ─────────────────── */
+.room-lens-bar {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 12;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  max-width: calc(100% - 20px);
+  pointer-events: none;
+}
+
+.room-lens-bar > * {
+  pointer-events: auto;
+}
+
+.room-lens-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.room-lens-search-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.room-lens-search-icon {
+  position: absolute;
+  left: 10px;
+  color: rgba(255, 255, 255, 0.55);
+  pointer-events: none;
+}
+
+.room-lens-search {
+  width: 190px;
+  padding: 0.35rem 1.8rem 0.35rem 1.85rem;
+  font-size: 0.8rem;
+  color: #fff;
+  background: rgba(20, 16, 12, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 999px;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+.room-lens-search::placeholder {
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.room-lens-search:focus {
+  outline: none;
+  border-color: rgba(255, 255, 255, 0.45);
+}
+
+.room-lens-search::-webkit-search-cancel-button {
+  display: none;
+}
+
+.room-lens-clear {
+  position: absolute;
+  right: 6px;
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.2);
+  color: #fff;
+  font-size: 0.85rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+}
+
+.room-lens-segment {
+  display: inline-flex;
+  background: rgba(20, 16, 12, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 999px;
+  padding: 2px;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.room-lens-segment::-webkit-scrollbar {
+  display: none;
+}
+
+.room-lens-segment-btn {
+  border: none;
+  background: transparent;
+  padding: 0.3rem 0.7rem;
+  font-size: 0.78rem;
+  border-radius: 999px;
+  cursor: pointer;
+  color: rgba(255, 255, 255, 0.6);
+  white-space: nowrap;
+  transition: background 0.15s, color 0.15s;
+}
+
+.room-lens-segment-btn:hover {
+  color: #fff;
+}
+
+.room-lens-segment-btn.active {
+  background: var(--color-primary, #6366f1);
+  color: #fff;
+}
+
+.room-lens-legend {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 4px;
+}
+
+.room-lens-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.68rem;
+  color: rgba(255, 255, 255, 0.85);
+  background: rgba(20, 16, 12, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 999px;
+  padding: 2px 8px 2px 5px;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+.room-lens-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  border: 1px solid rgba(0, 0, 0, 0.3);
+  flex-shrink: 0;
+}
+
+@media (max-width: 640px) {
+  .room-lens-search {
+    width: 150px;
+  }
+}

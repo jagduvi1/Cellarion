@@ -67,6 +67,7 @@ export default function RoomScene({
   onEmptySlotClick,
   focusTarget,
   highlightBottleId,
+  getBottleStyle,
 }) {
   const { width: rw, depth: rd, height: rh } = roomDimensions;
   const halfW = rw / 2;
@@ -450,6 +451,7 @@ export default function RoomScene({
             onBottleClick={onBottleClick ? (slot) => onBottleClick(rack._id, slot) : undefined}
             onEmptySlotClick={onEmptySlotClick ? (slotPos) => onEmptySlotClick(rack._id, slotPos) : undefined}
             highlightBottleId={highlightBottleId}
+            getBottleStyle={getBottleStyle}
           />
         );
       })}

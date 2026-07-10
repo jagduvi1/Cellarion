@@ -435,27 +435,41 @@ function CellarRacks() {
           {!(rack.type === 'shelf' && !rack.isModular && viewMode === '3d') && (
             <>
               <div className="rack-lens-toolbar">
-                <input
-                  type="search"
-                  className="input rack-lens-search"
-                  placeholder={t('rackLens.searchPlaceholder', 'Find in racks…')}
-                  aria-label={t('rackLens.searchPlaceholder', 'Find in racks…')}
-                  value={rackSearch}
-                  onChange={e => setRackSearch(e.target.value)}
-                />
-                <label className="rack-lens-label">
-                  {t('rackLens.colorBy', 'Color by')}
-                  <select
-                    className="input rack-lens-select"
-                    value={lens}
-                    onChange={e => setLens(e.target.value)}
-                  >
-                    <option value="type">{t('rackLens.lensType', 'Wine type')}</option>
-                    <option value="maturity">{t('rackLens.lensMaturity', 'Drink window')}</option>
-                    <option value="age">{t('rackLens.lensAge', 'Bottle age')}</option>
-                    <option value="rating">{t('rackLens.lensRating', 'My rating')}</option>
-                  </select>
-                </label>
+                <div className="rack-lens-search-wrap">
+                  <svg className="rack-lens-search-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                  <input
+                    type="search"
+                    className="rack-lens-search"
+                    placeholder={t('rackLens.searchPlaceholder', 'Find in racks…')}
+                    aria-label={t('rackLens.searchPlaceholder', 'Find in racks…')}
+                    value={rackSearch}
+                    onChange={e => setRackSearch(e.target.value)}
+                  />
+                  {searchActive && (
+                    <button
+                      type="button"
+                      className="rack-lens-search-clear"
+                      onClick={() => setRackSearch('')}
+                      aria-label={t('common.clear', 'Clear')}
+                    >
+                      ×
+                    </button>
+                  )}
+                </div>
+                <div className="rack-lens-segment" role="tablist" aria-label={t('rackLens.colorBy', 'Color by')}>
+                  <button role="tab" aria-selected={lens === 'type'} className={`rack-lens-segment-btn ${lens === 'type' ? 'active' : ''}`} onClick={() => setLens('type')}>
+                    {t('rackLens.lensType', 'Wine type')}
+                  </button>
+                  <button role="tab" aria-selected={lens === 'maturity'} className={`rack-lens-segment-btn ${lens === 'maturity' ? 'active' : ''}`} onClick={() => setLens('maturity')}>
+                    {t('rackLens.lensMaturity', 'Drink window')}
+                  </button>
+                  <button role="tab" aria-selected={lens === 'age'} className={`rack-lens-segment-btn ${lens === 'age' ? 'active' : ''}`} onClick={() => setLens('age')}>
+                    {t('rackLens.lensAge', 'Bottle age')}
+                  </button>
+                  <button role="tab" aria-selected={lens === 'rating'} className={`rack-lens-segment-btn ${lens === 'rating' ? 'active' : ''}`} onClick={() => setLens('rating')}>
+                    {t('rackLens.lensRating', 'My rating')}
+                  </button>
+                </div>
               </div>
               <div className="rack-lens-legend" aria-hidden="true">
                 {getLensLegend(lens).map(e => (
