@@ -16,6 +16,7 @@ import RatingInput from '../components/RatingInput';
 import WineImage from '../components/WineImage';
 import ConfirmModal from '../components/ConfirmModal';
 import JournalPrompt, { journalPromptOptedOut } from '../components/JournalPrompt';
+import ArrangeModal from '../components/racks/ArrangeModal';
 import { LENSES, getLensStyle, getLensLegend, bottleMatchesSearch } from '../utils/rackLens';
 import './CellarRacks.css';
 
@@ -116,6 +117,9 @@ function CellarRacks() {
 
   // consume modal: { bottleId, bottle } or null
   const [consumeModal, setConsumeModal] = useState(null);
+
+  // "Organize this rack" modal
+  const [arrangeOpen, setArrangeOpen] = useState(false);
 
   // consumed bottle awaiting the "add to journal?" prompt, or null
   const [journalBottle, setJournalBottle] = useState(null);
@@ -346,6 +350,20 @@ function CellarRacks() {
     }
   };
 
+  // Auto-arrange step: same move endpoint, but reports success back to the
+  // modal's apply loop instead of alerting (the modal shows the error).
+  const applyArrangeStep = async (rackId, fromPosition, toPosition) => {
+    try {
+      const res = await moveSlot(apiFetch, rackId, fromPosition, toPosition);
+      const data = await res.json();
+      if (!res.ok) return false;
+      setRacks(prev => prev.map(r => r._id === rackId ? data.rack : r));
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
   // --- NFC: save or clear rfidTag on rack ---
   const handleNfcSave = async (rackId, rfidTag) => {
     try {
@@ -488,6 +506,11 @@ function CellarRacks() {
                     {t('rackLens.lensRating', 'My rating')}
                   </button>
                 </div>
+                {canEdit && rack.slots.length >= 2 && (
+                  <button className="btn btn-secondary btn-small rack-arrange-btn" onClick={() => setArrangeOpen(true)}>
+                    {t('arrange.openBtn', 'Organize…')}
+                  </button>
+                )}
               </div>
               <div className="rack-lens-legend" aria-hidden="true">
                 {getLensLegend(lens).map(e => (
@@ -646,6 +669,18 @@ function CellarRacks() {
       {/* Post-consume "add to journal?" prompt */}
       {journalBottle && (
         <JournalPrompt bottle={journalBottle} onDone={() => setJournalBottle(null)} />
+      )}
+
+      {/* Auto-arrange modal */}
+      {arrangeOpen && rack && (
+        <ArrangeModal
+          rack={rack}
+          maxPosition={rack.isModular && rack.modules?.length > 0
+            ? getModularTotalSlots(rack.modules)
+            : getTotalSlots(rack.type || 'grid', rack.rows, rack.cols, rack.typeConfig)}
+          onMoveStep={(from, to) => applyArrangeStep(rack._id, from, to)}
+          onClose={() => setArrangeOpen(false)}
+        />
       )}
 
       {/* NFC link modal */}

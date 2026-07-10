@@ -2218,6 +2218,27 @@
     "footer": "Skapad med Cellarion"
   },
 
+  "arrange": {
+    "title": "Organisera hyllan",
+    "openBtn": "Organisera…",
+    "strategyMaturity": "Dryckesfönster (rekommenderas)",
+    "strategyMaturityDesc": "Flaskor som ska drickas snart hamnar på de första platserna.",
+    "strategyType": "Vintyp",
+    "strategyTypeDesc": "Gruppera röda, vita, rosé, mousserande…",
+    "strategyVintage": "Årgång",
+    "strategyVintageDesc": "Äldsta årgångarna först.",
+    "alreadyOrganized": "Hyllan är redan organiserad så här — inget att flytta.",
+    "summary": "{{count}} flaskor byter plats ({{moves}} flyttar):",
+    "colTo": "Till",
+    "colWine": "Vin",
+    "colFrom": "Från",
+    "applyBtn": "Utför ({{count}} flyttar)",
+    "applying": "Flyttar… {{done}}/{{total}}",
+    "applyError": "En flytt misslyckades — hyllan kan ha ändrats. Stäng och försök igen.",
+    "doneText": "Klart — hyllan är omorganiserad i Cellarion. Flytta nu flaskorna i din fysiska hylla så att de stämmer; använd listan som guide:",
+    "bookTip": "Tips: Källarboken ger dig en utskrivbar karta över den nya layouten."
+  },
+
   "rackLens": {
     "dragHint": "Tips: dra en flaska till en tom plats för att flytta den, eller släpp den på en annan flaska för att byta plats.",
     "searchPlaceholder": "Sök i hyllorna…",
