@@ -325,6 +325,31 @@ async function createRacks(cellarId, userId, cellar, items, result) {
           .filter((p) => !isNaN(p) && p >= 1 && p <= rackMax)
       )];
     }
+    // Restore zones (named rack areas), same clamping; positions already
+    // claimed by an earlier zone are dropped to keep the one-zone-per-slot
+    // invariant the API enforces.
+    if (Array.isArray(spec?.zones) && spec.zones.length > 0) {
+      const rackMax = getMaxPosition(rackDoc);
+      const claimed = new Set();
+      rackDoc.zones = spec.zones
+        .slice(0, 12)
+        .map((z) => {
+          const name = typeof z?.name === 'string' ? z.name.trim().slice(0, 40) : '';
+          if (!name) return null;
+          const positions = [...new Set(
+            (Array.isArray(z.positions) ? z.positions : [])
+              .map((p) => parseInt(p, 10))
+              .filter((p) => !isNaN(p) && p >= 1 && p <= rackMax && !claimed.has(p))
+          )].sort((a, b) => a - b);
+          for (const p of positions) claimed.add(p);
+          return {
+            name,
+            color: typeof z.color === 'string' && /^#[0-9a-fA-F]{6}$/.test(z.color) ? z.color : undefined,
+            positions,
+          };
+        })
+        .filter(Boolean);
+    }
     try {
       await rackDoc.save();
       result.racksCreated++;
