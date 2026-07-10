@@ -139,6 +139,16 @@ function mapBottlesForExport(bottles, racks, imagesByBottle = new Map(), reviews
       if (rackInfo.rackCol != null) item.rackCol = rackInfo.rackCol;
     }
 
+    // Open-bottle (Coravin / preservation) state — rides along so a migration
+    // doesn't lose the fact that a bottle is open and part-drunk.
+    if (b.openedAt) {
+      item.openedAt = b.openedAt.toISOString();
+      if (b.preservationMethod) item.preservationMethod = b.preservationMethod;
+      if (Array.isArray(b.pours) && b.pours.length > 0) {
+        item.pours = b.pours.map((p) => ({ at: p.at ? p.at.toISOString() : undefined, ml: p.ml }));
+      }
+    }
+
     // Consumed / history bottles
     if (b.status && b.status !== 'active') {
       item.addToHistory = true;

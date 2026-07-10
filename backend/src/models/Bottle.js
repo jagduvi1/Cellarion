@@ -167,6 +167,24 @@ const bottleSchema = new mongoose.Schema({
     enum: ['5', '20', '100'],
     default: '5'
   },
+  // ── Open-bottle (Coravin / preservation) tracking ────────────────────
+  // openedAt null/absent = unopened. An open bottle stays ACTIVE and keeps
+  // its rack slot (a Coravin'd bottle literally stays in the rack). Pours
+  // record what has been drawn so remaining volume derives from bottleSize.
+  // The whole trio is cleared by the undo-open endpoint; on consume it is
+  // kept as drinking history.
+  openedAt: { type: Date, default: null },
+  preservationMethod: {
+    type: String,
+    enum: ['coravin', 'inert-gas', 'vacuum', 'sparkling-stopper', 'recorked']
+  },
+  pours: {
+    type: [new mongoose.Schema({
+      at: { type: Date, default: Date.now },
+      ml: { type: Number, required: true, min: 1, max: 6000 }
+    }, { _id: false })],
+    default: []
+  },
   // Drink-window notification tracking — set by the daily notifier job
   drinkWindowNotifiedStatus: { type: String, default: null },
   drinkWindowNotifiedAt:     { type: Date,   default: null },

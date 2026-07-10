@@ -369,3 +369,30 @@
     4px 4px 0 0 var(--color-surface), 4px 4px 0 1px var(--color-border),
     var(--shadow-sm);
 }
+
+/* Open-bottle (Coravin / preservation) badge */
+.open-bottle-badge {
+  display: inline-block;
+  font-size: 0.7rem;
+  padding: 1px 7px;
+  border-radius: var(--radius-full);
+  font-weight: 600;
+}
+
+.open-bottle-badge--ok {
+  background: #ede7f6;
+  color: #4527a0;
+  border: 1px solid #b39ddb;
+}
+
+.open-bottle-badge--soon {
+  background: #fff3e0;
+  color: #e65100;
+  border: 1px solid #ffcc80;
+}
+
+.open-bottle-badge--past {
+  background: #fce4ec;
+  color: #c62828;
+  border: 1px solid #ef9a9a;
+}

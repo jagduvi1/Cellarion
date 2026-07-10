@@ -689,9 +689,112 @@
   }
 }
 
+/* ---- Rack tools (⋮) dropdown ---- */
+.rack-tools {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.rack-tools-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding-left: 0.45rem;
+  padding-right: 0.45rem;
+}
+
+.rack-tools-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+}
+
+.rack-tools-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 41;
+  min-width: 160px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+  overflow: hidden;
+  padding: 0.35rem;
+}
+
+.rack-tools-menu button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 0.5rem 0.6rem;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--color-text);
+  font-size: 0.88rem;
+  cursor: pointer;
+}
+
+.rack-tools-menu button:hover {
+  background: var(--color-primary-light);
+}
+
 /* ---- Auto-arrange modal ---- */
 .rack-arrange-btn {
   white-space: nowrap;
+}
+
+.arrange-back-link {
+  border: none;
+  background: none;
+  padding: 0;
+  margin: 0 0 0.75rem;
+  color: var(--color-primary);
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.arrange-corner {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 0.75rem 0;
+}
+
+.arrange-corner-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.arrange-corner-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.arrange-corner-btn {
+  padding: 0.3rem 0.6rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-input-bg);
+  color: var(--color-text-muted);
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color var(--transition-fast), color var(--transition-fast);
+}
+
+.arrange-corner-btn:hover:not(:disabled) {
+  border-color: var(--color-border-focus);
+  color: var(--color-text);
+}
+
+.arrange-corner-btn.active {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+  background: var(--color-primary-light);
 }
 
 .arrange-strategies {
@@ -1063,3 +1166,14 @@
   font-size: 0.75rem;
   color: var(--color-text-muted);
 }
+
+/* Open-bottle info in the filled slot popup */
+.slot-open-info {
+  font-size: 0.78rem;
+  font-weight: 600;
+  margin: 0.3rem 0 0;
+}
+
+.slot-open-info--ok { color: #4527a0; }
+.slot-open-info--soon { color: #e65100; }
+.slot-open-info--past { color: #c62828; }

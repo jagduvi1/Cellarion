@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { buildRackUrl } from '../utils/rackNavigation';
 import { useTranslation } from 'react-i18next';
 import AuthImage from './AuthImage';
+import { glassesLeft, daysLeft, freshnessStatus } from '../utils/openBottle';
 import './BottleCard.css';
 
 const MATURITY_LABELS = {
@@ -88,6 +89,14 @@ function BottleCard({ bottle, rackMap, cellarId, viewMode, groupCount = 1, onCli
             )}
             {isPending && (
               <span className="pending-wine-badge">{t('bottleCard.pendingReview')}</span>
+            )}
+            {bottle.openedAt && bottle.status === 'active' && (
+              <span className={`open-bottle-badge open-bottle-badge--${freshnessStatus(bottle) || 'ok'}`}>
+                🍷 {t('bottleCard.openBadge', '{{glasses}} gl · {{days}}d', {
+                  glasses: glassesLeft(bottle),
+                  days: Math.max(0, daysLeft(bottle) ?? 0),
+                })}
+              </span>
             )}
             {maturityInfo && (
               <span
