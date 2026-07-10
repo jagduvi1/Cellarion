@@ -85,28 +85,39 @@ router.patch('/:id', async (req, res) => {
       : null;
     if (!action) return res.status(400).json({ error: 'action must be approve or deny' });
 
-    const request = await AiBudgetRequest.findById(requestId);
-    if (!request) return res.status(404).json({ error: 'Request not found' });
-    if (request.status !== 'pending') {
-      return res.status(400).json({ error: 'Request has already been decided' });
-    }
+    // Atomically CLAIM the pending request so only the first of two concurrent
+    // approve/deny decisions wins (audit BUG 6: the old findById → check status
+    // → save was a check-then-act race — both admins passed the check, so a
+    // deny could land after an approve and record 'denied' while the approve's
+    // override stayed live on the user). A null result means already-decided
+    // (409) or never-existed (404).
+    const now = new Date();
+    const decideConflict = async () => {
+      const exists = await AiBudgetRequest.exists({ _id: requestId });
+      return exists
+        ? res.status(409).json({ error: 'Request has already been decided' })
+        : res.status(404).json({ error: 'Request not found' });
+    };
 
+    let request;
     if (action === 'approve') {
       const grantedMax = clampInt(req.body.grantedMax, GRANT_MAX_DEFAULT, GRANT_MAX_MIN, GRANT_MAX_MAX);
       const days = clampInt(req.body.days, GRANT_DAYS_DEFAULT, GRANT_DAYS_MIN, GRANT_DAYS_MAX);
       const grantedUntil = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
 
+      request = await AiBudgetRequest.findOneAndUpdate(
+        { _id: requestId, status: 'pending' },
+        { $set: { status: 'approved', decidedBy: req.user.id, decidedAt: now, grantedMax, grantedUntil } },
+        { new: true }
+      );
+      if (!request) return decideConflict();
+
+      // Grant the override ONLY after winning the claim, so a losing racer can
+      // never write it.
       await User.updateOne(
         { _id: request.user },
         { $set: { aiBudgetOverride: { max: grantedMax, expiresAt: grantedUntil } } }
       );
-
-      request.status = 'approved';
-      request.decidedBy = req.user.id;
-      request.decidedAt = new Date();
-      request.grantedMax = grantedMax;
-      request.grantedUntil = grantedUntil;
-      await request.save();
 
       logAudit(req, 'admin.aiBudget.approve',
         { type: 'AiBudgetRequest', id: request._id },
@@ -121,10 +132,13 @@ router.patch('/:id', async (req, res) => {
         null
       );
     } else {
-      request.status = 'denied';
-      request.decidedBy = req.user.id;
-      request.decidedAt = new Date();
-      await request.save();
+      request = await AiBudgetRequest.findOneAndUpdate(
+        { _id: requestId, status: 'pending' },
+        { $set: { status: 'denied', decidedBy: req.user.id, decidedAt: now } },
+        { new: true }
+      );
+      if (!request) return decideConflict();
+      // Deny NEVER writes an aiBudgetOverride.
 
       logAudit(req, 'admin.aiBudget.deny',
         { type: 'AiBudgetRequest', id: request._id },

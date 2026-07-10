@@ -14,7 +14,8 @@ const { isValidId } = require('../utils/validation');
 const { submitUrls } = require('../services/indexNow');
 const { getReleaseCurve } = require('../services/communityPrice');
 const aiBurstLimiter = require('../middleware/aiBurstLimiter');
-const { tryDebitAi, isRefundableFailure } = require('../services/aiBudget');
+const asyncHandler = require('../utils/asyncHandler');
+const { tryDebitAi, isRefundableFailure, isRefundableScanError } = require('../services/aiBudget');
 
 const REMBG_URL = process.env.REMBG_URL || 'http://rembg:5000';
 
@@ -178,7 +179,10 @@ router.get('/', requireAuth, async (req, res) => {
 //   match: { wine: WineDefinition, confidence: number } | null,
 //   labelImage: "data:image/png;base64,..." (background-removed label, or original as fallback)
 // }
-router.post('/scan-label', requireAuth, aiBurstLimiter, async (req, res) => {
+// asyncHandler (mirrors chat.js): if tryDebitAi rejects on a Mongo error — it
+// runs BEFORE the try below — Express 4 would otherwise leave the request
+// hanging on an unhandled rejection instead of responding 500 (audit HIGH).
+router.post('/scan-label', requireAuth, aiBurstLimiter, asyncHandler(async (req, res) => {
   const { image } = req.body;
 
   if (!image) {
@@ -205,12 +209,19 @@ router.post('/scan-label', requireAuth, aiBurstLimiter, async (req, res) => {
   const debit = await tryDebitAi(req.user.id);
   if (!debit.ok) return sendAiBudgetExhausted(res, debit);
 
+  // Phase 1: the billable work (rembg + the Claude vision call). Refund the
+  // debit ONLY on a failure that produced no billable completion (no API key,
+  // unsupported image, transport error). A completed-but-unhelpful call
+  // (422 "Could not read label") STAYS debited — mirrors identify-text/ai-info
+  // and closes the budget + kill-switch bypass via unreadable labels (audit HIGH).
+  let extracted;
+  let labelImage;
   try {
     // 1. Attempt background removal via rembg (non-fatal — falls back to the
     //    sanitized original)
     let scanImage = safeBuffer.toString('base64');
     let scanMediaType = safeMediaType;
-    let labelImage = `data:${scanMediaType};base64,${scanImage}`;
+    labelImage = `data:${scanMediaType};base64,${scanImage}`;
 
     try {
       const fd = new FormData();
@@ -232,8 +243,18 @@ router.post('/scan-label', requireAuth, aiBurstLimiter, async (req, res) => {
     }
 
     // 2. Extract wine info via Claude
-    const extracted = await scanLabelFull(scanImage, scanMediaType);
+    extracted = await scanLabelFull(scanImage, scanMediaType);
+  } catch (err) {
+    // Only a pre-completion / transport failure refunds; a completed 422 stays debited.
+    if (isRefundableScanError(err)) await debit.refund();
+    console.error('Label scan error:', err.message);
+    return res.status(err.status || 500).json({ error: err.message || 'Label scan failed' });
+  }
 
+  // Phase 2: registry match + response. The billable call has completed and
+  // been paid for — a failure here (e.g. a DB error) returns 500 WITHOUT a
+  // refund, since the AI work really happened.
+  try {
     // Try to find an existing match in the registry
     let match = null;
 
@@ -290,11 +311,10 @@ router.post('/scan-label', requireAuth, aiBurstLimiter, async (req, res) => {
 
     res.json({ extracted, match, labelImage });
   } catch (err) {
-    await debit.refund();
-    console.error('Label scan error:', err.message);
-    res.status(err.status || 500).json({ error: err.message || 'Label scan failed' });
+    console.error('Label scan match error:', err.message);
+    res.status(500).json({ error: 'Label scan failed' });
   }
-});
+}));
 
 // POST /api/wines/find-or-create
 // Called after the user confirms (and optionally edits) the AI-extracted wine data.
@@ -354,7 +374,8 @@ router.post('/find-or-create', requireAuth, async (req, res) => {
 
 // POST /api/wines/identify-text — identify a wine from a free-text query using AI,
 // then find or create it in the registry. Used by the AddBottle manual search fallback.
-router.post('/identify-text', requireAuth, aiBurstLimiter, async (req, res) => {
+// asyncHandler: tryDebitAi runs before the try; a Mongo error there must 500, not hang (audit HIGH).
+router.post('/identify-text', requireAuth, aiBurstLimiter, asyncHandler(async (req, res) => {
   const query = typeof req.body.query === 'string' ? req.body.query.trim() : '';
   if (!query) return res.status(400).json({ error: 'query is required' });
 
@@ -376,12 +397,13 @@ router.post('/identify-text', requireAuth, aiBurstLimiter, async (req, res) => {
     console.error('Identify text error:', err);
     return res.status(500).json({ error: err.message || 'Failed to identify wine' });
   }
-});
+}));
 
 // POST /api/wines/ai-info — query AI for wine info without creating anything in DB.
 // Returns raw AI-identified data (country/region/grapes as name strings, not IDs).
 // Used by the AdminRequests page to pre-fill the Create New Wine form.
-router.post('/ai-info', requireAuth, aiBurstLimiter, async (req, res) => {
+// asyncHandler: tryDebitAi runs before the try; a Mongo error there must 500, not hang (audit HIGH).
+router.post('/ai-info', requireAuth, aiBurstLimiter, asyncHandler(async (req, res) => {
   const query = typeof req.body.query === 'string' ? req.body.query.trim() : '';
   if (!query) return res.status(400).json({ error: 'query is required' });
 
@@ -401,7 +423,7 @@ router.post('/ai-info', requireAuth, aiBurstLimiter, async (req, res) => {
     console.error('AI info error:', err);
     return res.status(500).json({ error: err.message || 'Failed to get AI wine info' });
   }
-});
+}));
 
 // GET /api/wines/:idOrSlug/public — Public wine detail (no auth required)
 // Accepts both ObjectId and slug. Used for shared links and social previews.

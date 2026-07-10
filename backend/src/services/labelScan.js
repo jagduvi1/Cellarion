@@ -150,18 +150,11 @@ async function callClaudeJson({ client, model, maxTokens, prompt, validate }) {
 
   let raw = '';
   for (let attempt = 1; attempt <= 2; attempt++) {
+    // Only the Anthropic call itself is inside the transport try: a failure
+    // HERE never produced a billable completion, so its reason is refundable.
+    let response;
     try {
-      const response = await client.messages.create(apiParams);
-      raw = textFromResponse(response);
-      // Strip code fences, then extract only the first balanced {...} so any
-      // trailing explanation text from the model doesn't break JSON.parse.
-      const stripped = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
-      const parsed = JSON.parse(extractFirstJsonObject(stripped));
-
-      if (parsed.error) return { data: null, debugRaw: raw, debugReason: `ai_unknown: ${parsed.error}` };
-      const invalidReason = validate ? validate(parsed) : null;
-      if (invalidReason) return { data: null, debugRaw: raw, debugReason: invalidReason };
-      return { data: parsed, debugRaw: raw, debugReason: null };
+      response = await client.messages.create(apiParams);
     } catch (err) {
       if (err.status === 429 && attempt === 1) {
         // Rate limited — wait for retry-after header (or 15 s) then retry once.
@@ -175,6 +168,26 @@ async function callClaudeJson({ client, model, maxTokens, prompt, validate }) {
       }
       const reason = err.status === 429 ? 'rate_limit_exceeded' : `exception: ${err.message}`;
       return { data: null, debugRaw: raw || err.message, debugReason: reason };
+    }
+
+    // The Claude call COMPLETED and is billed. Every failure from here on is
+    // NON-refundable — a completed-but-unparseable/invalid response must stay
+    // debited, exactly like ai_unknown (audit EXTRA-A: a post-completion parse
+    // failure used to return an `exception:` reason and get wrongly refunded).
+    raw = textFromResponse(response);
+    try {
+      // Strip code fences, then extract only the first balanced {...} so any
+      // trailing explanation text from the model doesn't break JSON.parse.
+      const stripped = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
+      const parsed = JSON.parse(extractFirstJsonObject(stripped));
+      if (parsed.error) return { data: null, debugRaw: raw, debugReason: `ai_unknown: ${parsed.error}` };
+      const invalidReason = validate ? validate(parsed) : null;
+      if (invalidReason) return { data: null, debugRaw: raw, debugReason: invalidReason };
+      return { data: parsed, debugRaw: raw, debugReason: null };
+    } catch (err) {
+      // Parse of a billed completion failed → non-refundable `parse_error`
+      // (isRefundableFailure only refunds no_api_key/rate_limit/exception).
+      return { data: null, debugRaw: raw, debugReason: `parse_error: ${err.message}` };
     }
   }
 }

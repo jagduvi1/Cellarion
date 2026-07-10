@@ -71,10 +71,23 @@ function scoreCandidate(candidate, item) {
  */
 async function findExactRegistryWine(item) {
   if (!item.wineName || !item.producer) return null;
-  const keys = [generateWineKey(item.wineName, item.producer, item.appellation)];
+  // Prefer the exact-as-typed registry entry: query the RAW normalizedKey
+  // first, and only fall back to the producer-prefix-stripped variant when
+  // there is no raw hit. A single `$in: [rawKey, strippedKey]` returns an
+  // ARBITRARY doc when the registry holds BOTH a clean entry and a
+  // "producer-in-name" duplicate (~430 such duplicates exist pending cleanup),
+  // making the import outcome depend on Mongo's storage order. Two cheap
+  // indexed findOnes make it deterministic.
+  const rawKey = generateWineKey(item.wineName, item.producer, item.appellation);
+  const rawHit = await WineDefinition.findOne({ normalizedKey: rawKey })
+    .populate(['country', 'region', 'grapes']);
+  if (rawHit) return rawHit;
+
   const stripped = stripProducerPrefix(item.wineName, item.producer);
-  if (stripped) keys.push(generateWineKey(stripped, item.producer, item.appellation));
-  return WineDefinition.findOne({ normalizedKey: { $in: keys } })
+  if (!stripped) return null;
+  const strippedKey = generateWineKey(stripped, item.producer, item.appellation);
+  if (strippedKey === rawKey) return null; // same key — nothing new to try
+  return WineDefinition.findOne({ normalizedKey: strippedKey })
     .populate(['country', 'region', 'grapes']);
 }
 
@@ -253,6 +266,17 @@ router.post('/validate', aiBurstLimiter, async (req, res) => {
     }
     const uniquePrs = [...aiKeyMap.values()];
 
+    // Latch a client disconnect as EARLY as possible — BEFORE the sequential
+    // Pass 1a cascade — so a disconnect during Pass 1a (which can be long for a
+    // big batch) still stops us LAUNCHING (and debiting) the AI fan-out below.
+    // res 'close' fires when the underlying connection closes; writableEnded
+    // distinguishes a premature client disconnect from normal completion.
+    // (req 'close' fires on message completion in Node >= 15, so it can't be
+    // used for disconnect detection here.)
+    let aiBudgetExhausted = false;
+    let clientDisconnected = false;
+    res.on('close', () => { if (!res.writableEnded) clientDisconnected = true; });
+
     // ── Pass 1a: registry-first cascade (zero AI for known wines) ──────────
     // (a) exact normalizedKey match (raw + producer-prefix-stripped variant);
     // (b) existing fuzzy scorer at the exact threshold (>= 0.95) — at that
@@ -260,6 +284,7 @@ router.post('/validate', aiBurstLimiter, async (req, res) => {
     //     registry wine, so skipping AI is outcome-identical;
     // (c) everything else goes to AI exactly as before.
     for (const pr of uniquePrs) {
+      if (clientDisconnected) break; // requester gone — stop the cascade, skip AI entirely
       if (pr.forceAi) continue;
       const exactWine = await findExactRegistryWine(pr.item);
       if (exactWine) {
@@ -284,14 +309,6 @@ router.post('/validate', aiBurstLimiter, async (req, res) => {
       ?? rateLimitsConfig.defaults.aiImportPerRequestCap.max;
     const aiRun = needAi.slice(0, perRequestCap);
     for (const pr of needAi.slice(perRequestCap)) pr.aiSkipped = true;
-
-    let aiBudgetExhausted = false;
-    let clientDisconnected = false;
-    // res 'close' fires when the underlying connection closes; writableEnded
-    // distinguishes a premature client disconnect from normal completion.
-    // (req 'close' fires on message completion in Node >= 15, so it can't be
-    // used for disconnect detection here.)
-    res.on('close', () => { if (!res.writableEnded) clientDisconnected = true; });
 
     const AI_SKIPPED = Symbol('aiSkipped');
     const aiSettled = await runConcurrent(

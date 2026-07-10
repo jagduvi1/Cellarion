@@ -210,6 +210,41 @@ describe('/api/cellar-import size cap + concurrency gate', () => {
     expect((await second).status).toBe(200);
   });
 
+  test('the gate runs BEFORE multer buffers the upload (audit BUG 8)', async () => {
+    // Fill both global slots.
+    const resolvers = [];
+    importCellar.mockImplementation(
+      () => new Promise((resolve) => { resolvers.push(() => resolve(IMPORT_RESULT)); })
+    );
+    const first = postUpload(app, '/api/cellar-import', VALID_EXPORT, authHeader('u1'));
+    const second = postUpload(app, '/api/cellar-import', VALID_EXPORT, authHeader('u2'));
+    await waitFor(() => importCellar.mock.calls.length === 2);
+
+    // A third request with a NON-multipart body (no file part). If multer ran
+    // first it would 400 "No file uploaded" after reading the body; because the
+    // gate is now ahead of handleUpload it 429s WITHOUT buffering anything.
+    const third = await new Promise((resolve, reject) => {
+      const payload = Buffer.from('not a multipart upload');
+      const server = http.createServer(app);
+      server.listen(0, () => {
+        const req = http.request({
+          port: server.address().port, path: '/api/cellar-import', method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Content-Length': payload.length, ...authHeader('u3') },
+        }, (res) => {
+          const chunks = [];
+          res.on('data', (c) => chunks.push(c));
+          res.on('end', () => { server.close(); resolve({ status: res.statusCode }); });
+        });
+        req.on('error', (e) => { server.close(); reject(e); });
+        req.end(payload);
+      });
+    });
+    expect(third.status).toBe(429);
+
+    resolvers.forEach((r) => r());
+    await first; await second;
+  });
+
   test('regression: a valid small import is unchanged', async () => {
     const res = await postUpload(app, '/api/cellar-import', VALID_EXPORT, authHeader());
 

@@ -64,6 +64,23 @@ function importBusy(res) {
   });
 }
 
+// Gate BEFORE multer buffers the upload (audit BUG 8): acquiring the slot only
+// inside the route handler let N concurrent uploads each buffer up to 64 MB into
+// memory before N−2 were 429'd — the exact stacking the gate exists to prevent.
+// Placed ahead of handleUpload so an over-limit request is rejected before its
+// body is read. The slot is released once, on whichever response event fires
+// first (finish on success, close on client abort), covering the multer-400,
+// handler-throw, and disconnect paths uniformly.
+function gateImport(req, res, next) {
+  const release = acquireImportSlot(req.user.id);
+  if (!release) return importBusy(res);
+  let released = false;
+  const releaseOnce = () => { if (!released) { released = true; release(); } };
+  res.on('finish', releaseOnce);
+  res.on('close', releaseOnce);
+  next();
+}
+
 const uploadImport = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: MAX_UPLOAD_BYTES },
@@ -166,9 +183,7 @@ async function activeCellarNamesLc(userId) {
 }
 
 // POST /api/cellar-import/preview — parse only, report what would happen.
-router.post('/preview', handleUpload, async (req, res) => {
-  const release = acquireImportSlot(req.user.id);
-  if (!release) return importBusy(res);
+router.post('/preview', gateImport, handleUpload, async (req, res) => {
   try {
     const { parsed, hasImageFiles } = await loadUpload(req.file);
     const existing = await activeCellarNamesLc(req.user.id);
@@ -200,16 +215,12 @@ router.post('/preview', handleUpload, async (req, res) => {
     if (err.status === 400 || err.status === 413) return res.status(err.status).json({ error: err.message });
     console.error('Cellar import preview error:', err);
     res.status(500).json({ error: 'Failed to read export' });
-  } finally {
-    release();
   }
 });
 
 // POST /api/cellar-import — run the import.
 // Body (multipart text field): targets = JSON { [sourceName]: { targetName, confirmOverwrite } }
-router.post('/', handleUpload, async (req, res) => {
-  const release = acquireImportSlot(req.user.id);
-  if (!release) return importBusy(res);
+router.post('/', gateImport, handleUpload, async (req, res) => {
   try {
     const user = await User.findById(req.user.id).select('preferences.currency');
     const { parsed, getFileBuffer } = await loadUpload(req.file);
@@ -265,8 +276,6 @@ router.post('/', handleUpload, async (req, res) => {
     if (err.status === 400 || err.status === 413) return res.status(err.status).json({ error: err.message });
     console.error('Cellar import error:', err);
     res.status(500).json({ error: 'Import failed' });
-  } finally {
-    release();
   }
 });
 

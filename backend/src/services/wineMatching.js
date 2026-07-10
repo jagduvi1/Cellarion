@@ -105,9 +105,20 @@ function scoreWineMatchVariants(candidate, query, opts) {
   if (best >= 1) return best;
 
   // 2. Concatenated-normalized equality — producer placement irrelevant.
+  // The concat signal deliberately ignores appellation, so two registry
+  // siblings that share producer+name but differ only by appellation would
+  // BOTH score a forced 1 and the arbitrary matches[0] would be auto-accepted
+  // as exact. Only treat the concat match as a forced exact 1 when the
+  // appellations AGREE (both absent, or the same normalized value); otherwise
+  // fall through to the weighted scorer (appellation weighted 0.10 → ~0.90,
+  // below the 0.95 exact threshold) so the disambiguation is forced. This
+  // never LOWERS the raw score — `best` already holds it and the tail below
+  // only ever raises it (monotonic).
   const queryFull = concatNormalized(query.producer, query.name);
   if (queryFull && queryFull === concatNormalized(candidate.producer, candidate.name)) {
-    return 1;
+    const qApp = normalizeString(query.appellation || '');
+    const cApp = normalizeString(candidate.appellation || '');
+    if (qApp === cApp) return 1;
   }
 
   // 3. Strip the query's own producer prefix off the query name.
