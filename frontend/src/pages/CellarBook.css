@@ -1,0 +1,220 @@
+/* ── Cellar Book — screen ─────────────────────────────────────────── */
+.cellar-book {
+  max-width: 860px;
+  margin: 0 auto;
+  padding: 1.5rem 1.25rem 3rem;
+  color: var(--color-text);
+}
+
+.cellar-book-status {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1rem;
+  padding-top: 3rem;
+}
+
+.cb-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.cb-header h1 {
+  margin: 0;
+  font-size: 1.9rem;
+}
+
+.cb-subtitle {
+  margin: 0.15rem 0 0;
+  font-size: 1rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.cb-meta {
+  margin: 0.5rem 0 0;
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+}
+
+.cb-empty {
+  margin-top: 2rem;
+  color: var(--color-text-muted);
+}
+
+.cb-rack-section {
+  margin-top: 2.25rem;
+  border-top: 2px solid var(--color-border);
+  padding-top: 1.25rem;
+}
+
+.cb-rack-section h2 {
+  margin: 0;
+  font-size: 1.25rem;
+}
+
+.cb-rack-meta {
+  margin: 0.2rem 0 0.75rem;
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+}
+
+.cb-rack-map {
+  max-width: 520px;
+  margin-bottom: 1rem;
+}
+
+.print-rack-map {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.cb-rack-empty {
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+}
+
+/* ── Bottle table ─────────────────────────────────────────────────── */
+.cb-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+}
+
+.cb-table th {
+  text-align: left;
+  font-weight: 600;
+  padding: 0.35rem 0.5rem;
+  border-bottom: 1.5px solid var(--color-border);
+  white-space: nowrap;
+}
+
+.cb-table td {
+  padding: 0.32rem 0.5rem;
+  border-bottom: 1px solid var(--color-border);
+  vertical-align: top;
+}
+
+.cb-col-pos {
+  width: 3rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.cb-col-vintage,
+.cb-col-rating {
+  width: 4.5rem;
+  white-space: nowrap;
+}
+
+.cb-col-type {
+  width: 6.5rem;
+  white-space: nowrap;
+}
+
+.cb-col-window {
+  width: 7rem;
+  white-space: nowrap;
+}
+
+.cb-wine-name {
+  font-weight: 600;
+}
+
+.cb-wine-producer {
+  color: var(--color-text-muted);
+}
+
+.cb-type-dot {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  margin-right: 0.35rem;
+  border: 1px solid rgba(0, 0, 0, 0.25);
+  vertical-align: baseline;
+}
+
+.cb-type-dot.type-red       { background: #8A1028; }
+.cb-type-dot.type-white     { background: #C8B850; }
+.cb-type-dot.type-rosé      { background: #D06888; }
+.cb-type-dot.type-sparkling { background: #88A848; }
+.cb-type-dot.type-dessert   { background: #A06020; }
+.cb-type-dot.type-fortified { background: #7A3010; }
+
+.cb-footer {
+  margin-top: 3rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--color-border);
+  font-size: 0.72rem;
+  color: var(--color-text-muted);
+}
+
+/* ── Print ────────────────────────────────────────────────────────── */
+@media print {
+  @page {
+    margin: 14mm 12mm;
+  }
+
+  .cellar-book {
+    max-width: none;
+    padding: 0;
+    color: #000;
+  }
+
+  .cb-toolbar {
+    display: none;
+  }
+
+  /* Each rack starts on a fresh page — the first follows the header. */
+  .cb-rack-section + .cb-rack-section {
+    break-before: page;
+    page-break-before: always;
+  }
+
+  .cb-rack-section {
+    border-top: none;
+    margin-top: 1rem;
+    padding-top: 0;
+  }
+
+  /* Keep the map intact on one page; let long tables flow across pages
+     without splitting individual rows. */
+  .cb-rack-map {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .cb-table tr {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .cb-table th {
+    border-bottom-color: #000;
+  }
+
+  .cb-table td {
+    border-bottom-color: #ccc;
+  }
+
+  .cb-subtitle,
+  .cb-meta,
+  .cb-rack-meta,
+  .cb-wine-producer,
+  .cb-footer {
+    color: #555;
+  }
+
+  /* Slot fills and type dots must survive "don't print backgrounds". */
+  .cb-type-dot,
+  .print-rack-map {
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+}

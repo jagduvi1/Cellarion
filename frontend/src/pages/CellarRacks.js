@@ -377,6 +377,9 @@ function CellarRacks() {
             <Link to={`/cellars/${id}/room`} className="btn btn-secondary btn-small">
               {t('room.title', 'Room View')}
             </Link>
+            <Link to={`/cellars/${id}/book`} className="btn btn-secondary btn-small">
+              {t('cellarBook.linkBtn', 'Cellar Book')}
+            </Link>
             {canEdit && (
               <button className="btn btn-primary" onClick={() => setShowNewRack(v => !v)}>
                 {showNewRack ? t('common.cancel') : `+ ${t('racks.newRack')}`}
