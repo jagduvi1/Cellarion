@@ -282,6 +282,38 @@ function CellarRacks() {
     setActivePopup(null);
   };
 
+  // --- case placement: assign several bottles of the same wine to the free
+  // positions from startPosition onward. Sequential on purpose — each save
+  // bumps the rack version, so parallel PUTs would 409 each other.
+  const handleAssignMany = async (rackId, startPosition, bottleIds) => {
+    const r = racks.find(x => x._id === rackId);
+    if (!r) return;
+    const total = r.isModular && r.modules?.length > 0
+      ? getModularTotalSlots(r.modules)
+      : getTotalSlots(r.type || 'grid', r.rows, r.cols, r.typeConfig);
+    const occupied = new Set(r.slots.map(s => s.position));
+    const disabled = new Set(r.disabledPositions || []);
+    const targets = [];
+    for (let p = startPosition; p <= total && targets.length < bottleIds.length; p++) {
+      if (!occupied.has(p) && !disabled.has(p)) targets.push(p);
+    }
+    for (let i = 0; i < targets.length; i++) {
+      try {
+        const res = await updateSlot(apiFetch, rackId, targets[i], { bottleId: bottleIds[i] });
+        const data = await res.json();
+        if (!res.ok) {
+          alert(data.error || 'Failed to place bottles');
+          break;
+        }
+        setRacks(prev => prev.map(x => x._id === rackId ? data.rack : x));
+      } catch {
+        alert('Network error — please try again.');
+        break;
+      }
+    }
+    setActivePopup(null);
+  };
+
   // --- remove bottle from slot (keep bottle in cellar) ---
   const handleRemoveFromRack = async (rackId, position) => {
     const res = await clearSlot(apiFetch, rackId, position);
@@ -662,6 +694,18 @@ function CellarRacks() {
         const popupZone = (popupRack?.zones || []).find(
           z => (z.positions || []).includes(activePopup.position)
         ) || null;
+        // Free positions from this slot onward — the cap for case placement.
+        let popupFreeRun = 0;
+        if (popupRack && !activePopup.slot) {
+          const totalPos = popupRack.isModular && popupRack.modules?.length > 0
+            ? getModularTotalSlots(popupRack.modules)
+            : getTotalSlots(popupRack.type || 'grid', popupRack.rows, popupRack.cols, popupRack.typeConfig);
+          const occupiedPos = new Set(popupRack.slots.map(s => s.position));
+          const disabledPos = new Set(popupRack.disabledPositions || []);
+          for (let p = activePopup.position; p <= totalPos; p++) {
+            if (!occupiedPos.has(p) && !disabledPos.has(p)) popupFreeRun++;
+          }
+        }
         return (
           <div className="slot-modal-overlay" onClick={() => setActivePopup(null)} role="dialog" aria-modal="true">
             <div className="slot-modal" onClick={e => e.stopPropagation()}>
@@ -692,6 +736,10 @@ function CellarRacks() {
                   apiFetch={apiFetch}
                   cellarId={id}
                   canEdit={canEdit}
+                  freeRun={popupFreeRun}
+                  onAssignMany={canEdit
+                    ? (bottleIds) => handleAssignMany(activePopup.rackId, activePopup.position, bottleIds)
+                    : undefined}
                   onAssign={(pos, bottleId) => handleAssign(activePopup.rackId, pos, bottleId)}
                   onDisable={() => handleDisableSlot(activePopup.rackId, activePopup.position)}
                   onClose={() => setActivePopup(null)}
@@ -993,11 +1041,26 @@ function NewRackForm({ newRack, setNewRack, onTypeChange, onSubmit, saving }) {
 }
 
 // ---- Content for empty slot: pick a bottle to place ----
-function EmptySlotContent({ position, zone, apiFetch, cellarId, canEdit, onAssign, onDisable, onClose }) {
+/** Group unplaced bottles by wine + vintage so a case shows as one row ×N. */
+function groupBottles(bottles) {
+  const map = new Map();
+  for (const b of bottles) {
+    const key = `${b.wineDefinition?._id || b._id}:${b.vintage || ''}`;
+    if (!map.has(key)) map.set(key, { key, sample: b, bottles: [] });
+    map.get(key).bottles.push(b);
+  }
+  return [...map.values()];
+}
+
+function EmptySlotContent({ position, zone, apiFetch, cellarId, canEdit, onAssign, onAssignMany, freeRun, onDisable, onClose }) {
   const { t } = useTranslation();
   const [search, setSearch] = useState('');
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(true);
+  // Case placement: the group being quantity-picked, chosen quantity, busy flag
+  const [caseGroup, setCaseGroup] = useState(null);
+  const [caseQty, setCaseQty] = useState(2);
+  const [placing, setPlacing] = useState(false);
   const timerRef = useRef(null);
 
   // Fetch bottles from backend, excluding already-placed bottles server-side
@@ -1054,33 +1117,104 @@ function EmptySlotContent({ position, zone, apiFetch, cellarId, canEdit, onAssig
         aria-label={t('racks.searchWines')}
         autoFocus
       />
+      {caseGroup ? (
+        /* Quantity picker: place several bottles of the same wine into the
+           free slots starting at this position. */
+        <div className="slot-case-panel">
+          <p className="slot-case-title">
+            <strong>{caseGroup.sample.wineDefinition?.name || t('common.unknown')}</strong>
+            {caseGroup.sample.vintage ? ` (${caseGroup.sample.vintage})` : ''}
+          </p>
+          <p className="slot-case-hint">
+            {t('racks.caseHint', 'Fills the free slots from here onward, in position order.')}
+          </p>
+          <div className="slot-case-qty">
+            <button
+              type="button"
+              className="btn btn-secondary btn-small"
+              onClick={() => setCaseQty(q => Math.max(2, q - 1))}
+              disabled={placing || caseQty <= 2}
+              aria-label="−"
+            >
+              −
+            </button>
+            <span className="slot-case-count">{caseQty}</span>
+            <button
+              type="button"
+              className="btn btn-secondary btn-small"
+              onClick={() => setCaseQty(q => Math.min(caseGroup.max, q + 1))}
+              disabled={placing || caseQty >= caseGroup.max}
+              aria-label="+"
+            >
+              +
+            </button>
+            <span className="slot-case-max">{t('racks.caseMax', 'max {{max}}', { max: caseGroup.max })}</span>
+          </div>
+          <div className="slot-popup-actions">
+            <button className="btn btn-secondary btn-small" onClick={() => setCaseGroup(null)} disabled={placing}>
+              {t('common.cancel')}
+            </button>
+            <button
+              className="btn btn-primary btn-small"
+              disabled={placing}
+              onClick={async () => {
+                setPlacing(true);
+                // The parent closes the popup once every bottle is placed.
+                await onAssignMany(caseGroup.bottles.slice(0, caseQty).map(b => b._id));
+              }}
+            >
+              {placing
+                ? t('racks.casePlacing', 'Placing…')
+                : t('racks.casePlaceBtn', 'Place {{count}} bottles', { count: caseQty })}
+            </button>
+          </div>
+        </div>
+      ) : (
       <div className="slot-bottle-list">
         {loading ? (
           <p className="slot-empty-msg">…</p>
         ) : results.length === 0 ? (
           <p className="slot-empty-msg">{t('racks.noUnplacedBottles')}</p>
         ) : (
-          results.map(b => (
+          groupBottles(results).map(g => (
             <div
-              key={b._id}
+              key={g.key}
               className="slot-bottle-item"
-              onClick={() => onAssign(position, b._id)}
-              onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && onAssign(position, b._id)}
+              onClick={() => onAssign(position, g.bottles[0]._id)}
+              onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && onAssign(position, g.bottles[0]._id)}
               role="button"
               tabIndex={0}
             >
-              <span className={`slot-bottle-type-dot type-${b.wineDefinition?.type || 'red'}`} aria-hidden="true" />
+              <span className={`slot-bottle-type-dot type-${g.sample.wineDefinition?.type || 'red'}`} aria-hidden="true" />
               <div className="slot-bottle-info">
-                <strong>{b.wineDefinition?.name || t('common.unknown')}</strong>
+                <strong>
+                  {g.sample.wineDefinition?.name || t('common.unknown')}
+                  {g.bottles.length > 1 && <span className="slot-case-badge">×{g.bottles.length}</span>}
+                </strong>
                 <span className="slot-bottle-meta">
-                  {b.wineDefinition?.producer} &middot; {b.vintage}
-                  {b.wineDefinition?.country?.name ? ` \u00B7 ${b.wineDefinition.country.name}` : ''}
+                  {g.sample.wineDefinition?.producer} &middot; {g.sample.vintage}
+                  {g.sample.wineDefinition?.country?.name ? ` \u00B7 ${g.sample.wineDefinition.country.name}` : ''}
                 </span>
               </div>
+              {onAssignMany && g.bottles.length > 1 && Math.min(g.bottles.length, freeRun || 0) > 1 && (
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-small slot-case-btn"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const max = Math.min(g.bottles.length, freeRun);
+                    setCaseGroup({ ...g, max });
+                    setCaseQty(Math.min(g.bottles.length, max));
+                  }}
+                >
+                  {t('racks.caseOpenBtn', 'Place several\u2026')}
+                </button>
+              )}
             </div>
           ))
         )}
       </div>
+      )}
       {canEdit && onDisable && (
         <div className="slot-popup-actions">
           <button className="btn btn-secondary btn-small" onClick={onDisable}>

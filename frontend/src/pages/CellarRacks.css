@@ -1013,3 +1013,53 @@
   color: var(--color-primary);
   white-space: nowrap;
 }
+
+/* ---- Case placement (place several of the same wine) ---- */
+.slot-case-badge {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--color-primary);
+  background: rgba(var(--color-primary-rgb), 0.12);
+  border-radius: 10px;
+  padding: 0 6px;
+  margin-left: 0.4rem;
+}
+
+.slot-case-btn {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.slot-case-panel {
+  padding: 0.5rem 0.25rem;
+}
+
+.slot-case-title {
+  margin: 0 0 0.25rem;
+}
+
+.slot-case-hint {
+  font-size: 0.78rem;
+  color: var(--color-text-muted);
+  margin: 0 0 0.75rem;
+}
+
+.slot-case-qty {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 0.75rem;
+}
+
+.slot-case-count {
+  font-size: 1.2rem;
+  font-weight: 700;
+  min-width: 2rem;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.slot-case-max {
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+}
