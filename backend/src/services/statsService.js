@@ -167,6 +167,11 @@ async function computeOverview({ activeBottles, consumedBottles, cellars, target
 
     if (maturityStatus === 'declining' || maturityStatus === 'late') {
       urgencyArr.push({
+        // Bottle id lets API consumers (e.g. the Home Assistant card) act on the
+        // item — consume via POST /api/bottles/:id/consume. Optional-chained so a
+        // missing _id omits the field instead of crashing (clients treat absence
+        // as "no actions available").
+        id:            b._id?.toString(),
         name:          wd?.name      || 'Unknown',
         producer:      wd?.producer  || '',
         vintage:       b.vintage     || 'NV',
