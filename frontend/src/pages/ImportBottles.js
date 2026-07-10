@@ -7,6 +7,7 @@ import { getAiBudgetStatus, requestAiBudgetIncrease } from '../api/aiBudget';
 import { searchWines } from '../api/wines';
 import { getRacks } from '../api/racks';
 import { parseAndMap, parseJSON, summariseRacks, getDefaultRackConfig, getDefaultAnchor, decodeImportBuffer } from '../utils/importMappers';
+import { buildImportItem as buildImportItemPayload } from '../utils/importPayload';
 import { describePriceWarning } from '../utils/priceValidation';
 import { summariseImportOutcome, buildImportReportCsv } from '../utils/importReport';
 import { getTotalSlots } from '../utils/rackLayouts';
@@ -764,40 +765,9 @@ function ImportBottles() {
 
   // ── Import ──────────────────────────────────────────────────────────────
 
-  // Build the payload object for a single result row
-  const buildImportItem = (r) => {
-    const sel = selections[r.index];
-    return {
-      wineDefinition: sel !== 'request' ? sel : undefined,
-      requestWine: sel === 'request' ? true : undefined,
-      wineName: r.item.wineName,
-      producer: r.item.producer,
-      vintage: r.item.vintage,
-      price: r.item.price,
-      currency: r.item.currency,
-      bottleSize: r.item.bottleSize,
-      purchaseDate: r.item.purchaseDate,
-      purchaseLocation: r.item.purchaseLocation,
-      location: r.item.location,
-      notes: r.item.notes,
-      rating: r.item.rating,
-      ratingScale: r.item.ratingScale,
-      // CellarTracker imports carry grape varieties and a personal drink
-      // window; the backend importer consumes these when present.
-      grapes: r.item.grapes,
-      drinkFrom: r.item.drinkFrom ?? undefined,
-      drinkTo: r.item.drinkTo ?? undefined,
-      dateAdded: r.item.dateAdded || r.item.purchaseDate,
-      rackName: r.item.rackName,
-      rackPosition: r.item.rackPosition,
-      addToHistory: r.item.addToHistory,
-      consumedReason: r.item.consumedReason,
-      consumedAt: r.item.consumedAt,
-      consumedRating: r.item.consumedRating,
-      consumedRatingScale: r.item.consumedRatingScale,
-      consumedNote: r.item.consumedNote,
-    };
-  };
+  // Build the payload object for a single result row (pure mapping lives in
+  // utils/importPayload.js so the review→confirm field boundary stays tested)
+  const buildImportItem = (r) => buildImportItemPayload(r, selections[r.index]);
 
   // Rows eligible for bulk import: has a real selection and is not skipped
   const isImportableRow = (r) => {
