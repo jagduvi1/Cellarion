@@ -714,6 +714,28 @@
   background: var(--color-primary-light);
 }
 
+/* Mobile: keep the lens toolbar tidy. Search + the ⋮ tools button share the
+   top row (tools pinned to the RIGHT so its dropdown opens on-screen), and the
+   lens segment drops to its own full-width scrollable row below. Without this
+   the ⋮ wrapped to its own row at the far left and its right-anchored menu
+   rendered off the left screen edge, overlapping the legend. */
+@media (max-width: 700px) {
+  .rack-lens-search-wrap {
+    max-width: none;
+    flex: 1 1 auto;
+    order: 1;
+  }
+
+  .rack-tools {
+    order: 2;
+  }
+
+  .rack-lens-segment {
+    order: 3;
+    flex-basis: 100%;
+  }
+}
+
 /* ---- Auto-arrange modal ---- */
 .rack-arrange-btn {
   white-space: nowrap;
