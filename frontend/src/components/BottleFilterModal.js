@@ -84,13 +84,13 @@ function BottleFilterModal({ filters, onApply, onClose, facets, baseFacets, face
   const clearAll = () => {
     onApply({
       ...filters,
-      type: [], country: [], region: [], grapes: [], vintage: [],
+      type: [], country: [], region: [], appellation: [], grapes: [], vintage: [],
       minRating: '', maturity: ''
     });
   };
 
   const activeCount = (filters.type?.length || 0) + (filters.country?.length || 0) +
-    (filters.region?.length || 0) + (filters.grapes?.length || 0) +
+    (filters.region?.length || 0) + (filters.appellation?.length || 0) + (filters.grapes?.length || 0) +
     (filters.vintage?.length || 0) + (filters.minRating ? 1 : 0) + (filters.maturity ? 1 : 0);
 
   // For a given facet key, decide which counts to use:
@@ -176,6 +176,35 @@ function BottleFilterModal({ filters, onApply, onClose, facets, baseFacets, face
                       onClick={() => toggle('region', id)}
                     />
                   ) : null;
+                })}
+            </FilterSection>
+          );
+        })()}
+
+        {/* Appellation — facet keys are the appellation strings themselves (no
+            ID map). Bottles with no appellation index as "" — drop that key so
+            it doesn't render an empty, meaningless pill. */}
+        {(() => {
+          const entries = Object.entries(allFacets?.appellation || {}).filter(([name]) => name !== '');
+          if (entries.length === 0) return null;
+          const counts = countsFor('appellation', 'appellation');
+          return (
+            <FilterSection label={t('cellarDetail.appellationLabel', 'Appellation')} icon="🏷️" defaultExpanded={false}>
+              {entries
+                .sort(([, a], [, b]) => b - a)
+                .map(([name]) => {
+                  const count = counts[name] || 0;
+                  const selected = filters.appellation?.includes(name);
+                  return (
+                    <FilterPill
+                      key={name}
+                      label={name}
+                      count={count || null}
+                      selected={selected}
+                      dimmed={!selected && count === 0}
+                      onClick={() => toggle('appellation', name)}
+                    />
+                  );
                 })}
             </FilterSection>
           );

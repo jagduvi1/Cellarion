@@ -7,7 +7,7 @@ import BottleCard from '../components/BottleCard';
 import './Bottles.css';
 
 const FILTER_KEYS = [
-  'search', 'type', 'country', 'region', 'grapes',
+  'search', 'type', 'country', 'region', 'appellation', 'grapes',
   'vintage', 'producer', 'bottleSize', 'minRating', 'maturity', 'sort',
   'purchaseYear', 'consumedYear', 'status',
 ];
@@ -133,6 +133,9 @@ function Bottles() {
       const name = data.items.find(b => b.wineDefinition?.region?._id === filters.region)
         ?.wineDefinition?.region?.name;
       labels.region = t('bottles.chipRegion', 'Region: {{value}}', { value: name || filters.region });
+    }
+    if (filters.appellation) {
+      labels.appellation = t('bottles.chipAppellation', 'Appellation: {{value}}', { value: filters.appellation });
     }
     if (filters.grapes) {
       const ids = String(filters.grapes).split(',');

@@ -153,6 +153,7 @@ async function queryBottlesAcrossCellars(req, { cellarIds, statusFilter, paginat
   const region = coerceStringQuery(req.query.region);
   const grapes = coerceStringQuery(req.query.grapes);
   const vintage = coerceStringQuery(req.query.vintage);
+  const appellation = coerceStringQuery(req.query.appellation);
   const minRating = coerceStringQuery(req.query.minRating);
   const maxRating = coerceStringQuery(req.query.maxRating);
   const maturityFilter = coerceStringQuery(req.query.maturity);
@@ -164,7 +165,7 @@ async function queryBottlesAcrossCellars(req, { cellarIds, statusFilter, paginat
   const grapeIds = grapes
     ? String(grapes).split(',').map(g => g.trim()).filter(isValidObjectId)
     : [];
-  const hasMeiliFilters = !!(search || type || country || region || grapes || vintage);
+  const hasMeiliFilters = !!(search || type || country || region || grapes || vintage || appellation);
   const needsMaturity = statusFilter !== 'consumed' && !!(maturityFilter || sortField === 'maturity');
   const statusMongo = statusFilter === 'consumed'
     ? { $in: CONSUMED_STATUSES }
@@ -199,6 +200,7 @@ async function queryBottlesAcrossCellars(req, { cellarIds, statusFilter, paginat
         type: type || undefined,
         countryId: country || undefined,
         regionId: region || undefined,
+        appellation: appellation || undefined,
         grapeIds: grapeIds.length > 0 ? grapeIds : undefined,
         vintage: vintage || undefined,
         statusFilter,
@@ -241,6 +243,10 @@ async function queryBottlesAcrossCellars(req, { cellarIds, statusFilter, paginat
     if (type) {
       const types = String(type).split(',').map(t => t.trim()).filter(Boolean);
       wdFilter.type = types.length === 1 ? types[0] : { $in: types };
+    }
+    if (appellation) {
+      const apps = String(appellation).split(',').map(a => a.trim()).filter(Boolean);
+      if (apps.length > 0) wdFilter.appellation = apps.length === 1 ? apps[0] : { $in: apps };
     }
     if (grapeIds.length > 0) wdFilter.grapes = { $in: grapeIds };
     if (Object.keys(wdFilter).length > 0) {
@@ -358,12 +364,12 @@ async function attachBottleImageUrls(bottles, userId) {
 
 // Facets + facetMeta across the cellar set, for the shared filter modal.
 async function facetsAcrossCellars(req, { cellarIds, statusFilter }) {
-  const { search, type, country, region, grapes, vintage } = req.query;
+  const { search, type, country, region, grapes, vintage, appellation } = req.query;
   const { isValidObjectId } = mongoose;
   const grapeIds = grapes
     ? String(grapes).split(',').map(g => g.trim()).filter(isValidObjectId)
     : [];
-  const hasMeiliFilters = !!(search || type || country || region || grapes || vintage);
+  const hasMeiliFilters = !!(search || type || country || region || grapes || vintage || appellation);
   const statusMongo = statusFilter === 'consumed'
     ? { $in: CONSUMED_STATUSES }
     : { $nin: CONSUMED_STATUSES };
@@ -377,6 +383,7 @@ async function facetsAcrossCellars(req, { cellarIds, statusFilter }) {
         const filteredResult = await searchService.searchBottles(search || '', {
           cellarIds, statusFilter,
           type: type || undefined, countryId: country || undefined, regionId: region || undefined,
+          appellation: appellation || undefined,
           grapeIds: grapeIds.length > 0 ? grapeIds : undefined, vintage: vintage || undefined,
           limit: 0, offset: 0,
         });
@@ -702,7 +709,7 @@ router.get('/:id/history', async (req, res) => {
     const role = getCellarRole(cellar, req.user.id);
     if (!role || cellar.deletedAt) return res.status(404).json({ error: 'Cellar not found' });
 
-    const { search, type, country, region, grapes, vintage } = req.query;
+    const { search, type, country, region, grapes, vintage, appellation } = req.query;
     const { isValidObjectId } = mongoose;
 
     // Base query: consumed bottles in this cellar
@@ -728,6 +735,10 @@ router.get('/:id/history', async (req, res) => {
       const types = String(type).split(',').map(t => t.trim()).filter(Boolean);
       wdFilter.type = types.length === 1 ? types[0] : { $in: types };
     }
+    if (appellation) {
+      const apps = String(appellation).split(',').map(a => a.trim()).filter(Boolean);
+      if (apps.length > 0) wdFilter.appellation = apps.length === 1 ? apps[0] : { $in: apps };
+    }
     if (grapes) {
       const grapeIds = String(grapes).split(',').map(g => g.trim()).filter(isValidObjectId);
       if (grapeIds.length > 0) wdFilter.grapes = { $in: grapeIds };
@@ -746,7 +757,7 @@ router.get('/:id/history', async (req, res) => {
     const grapeIds = grapes
       ? String(grapes).split(',').map(g => g.trim()).filter(isValidObjectId)
       : [];
-    const hasMeiliFilters = !!(search || type || country || region || grapes || vintage);
+    const hasMeiliFilters = !!(search || type || country || region || grapes || vintage || appellation);
 
     // Try Meilisearch for text search (typo tolerance)
     let usedMeili = false;
@@ -758,6 +769,7 @@ router.get('/:id/history', async (req, res) => {
           type: type || undefined,
           countryId: country || undefined,
           regionId: region || undefined,
+          appellation: appellation || undefined,
           grapeIds: grapeIds.length > 0 ? grapeIds : undefined,
           vintage: vintage || undefined,
           statusFilter: 'consumed',
@@ -824,7 +836,7 @@ router.get('/:id/history', async (req, res) => {
           const filteredResult = await searchService.searchBottles(search || '', {
             cellarId: req.params.id, statusFilter: 'consumed',
             type: type || undefined, countryId: country || undefined,
-            regionId: region || undefined,
+            regionId: region || undefined, appellation: appellation || undefined,
             grapeIds: grapeIds.length > 0 ? grapeIds : undefined,
             vintage: vintage || undefined,
             limit: 0, offset: 0
@@ -894,6 +906,7 @@ router.get('/:id', async (req, res) => {
       grapes,
       type,
       vintage,
+      appellation,
       minRating,
       maxRating,
       search,
@@ -941,7 +954,7 @@ router.get('/:id', async (req, res) => {
     const MATURITY_RANK = { declining: 0, late: 1, peak: 2, early: 3, 'not-ready': 4 };
 
     // ── Determine if we can use Meilisearch as the primary search engine ──
-    const hasMeiliFilters = !!(search || type || country || region || grapes || vintage);
+    const hasMeiliFilters = !!(search || type || country || region || grapes || vintage || appellation);
     let usedMeili = false;
     let bottles;
     let totalCount;
@@ -970,6 +983,7 @@ router.get('/:id', async (req, res) => {
           type: type || undefined,
           countryId: country || undefined,
           regionId: region || undefined,
+          appellation: appellation || undefined,
           grapeIds: grapeIds.length > 0 ? grapeIds : undefined,
           vintage: vintage || undefined,
           sort,
@@ -1042,6 +1056,10 @@ router.get('/:id', async (req, res) => {
       if (type) {
         const types = String(type).split(',').map(t => t.trim()).filter(Boolean);
         wdFilter.type = types.length === 1 ? types[0] : { $in: types };
+      }
+      if (appellation) {
+        const apps = String(appellation).split(',').map(a => a.trim()).filter(Boolean);
+        if (apps.length > 0) wdFilter.appellation = apps.length === 1 ? apps[0] : { $in: apps };
       }
       if (grapeIds.length > 0) wdFilter.grapes = { $in: grapeIds };
 
@@ -1251,7 +1269,7 @@ router.get('/:id', async (req, res) => {
     let facets = null;
     let baseFacets = null;
     let facetMeta = null;
-    const hasAnyFilter = !!(type || country || region || grapes || vintage || search);
+    const hasAnyFilter = !!(type || country || region || grapes || vintage || appellation || search);
     if (searchService.getIsAvailable()) {
       try {
         // Always fetch unfiltered facets for showing all available options
@@ -1268,6 +1286,7 @@ router.get('/:id', async (req, res) => {
             type: type || undefined,
             countryId: country || undefined,
             regionId: region || undefined,
+            appellation: appellation || undefined,
             grapeIds: grapeIds.length > 0 ? grapeIds : undefined,
             vintage: vintage || undefined,
             limit: 0, offset: 0

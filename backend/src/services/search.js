@@ -67,6 +67,7 @@ async function initialize() {
         'countryName',
         'regionId',
         'regionName',
+        'appellation',
         'grapeIds',
         'vintage',
         'rating'
@@ -408,6 +409,7 @@ async function searchBottles(query, {
   type,
   countryId,
   regionId,
+  appellation,
   grapeIds,
   vintage,
   minRating,
@@ -475,6 +477,18 @@ async function searchBottles(query, {
     if (validIds.length === 1) filters.push(`grapeIds = "${validIds[0]}"`);
     else if (validIds.length > 1) filters.push(`grapeIds IN ["${validIds.join('","')}"]`);
   }
+  // Appellation: single or comma-separated free-text values (e.g. "Barolo",
+  // "Châteauneuf-du-Pape"). Values are the facet keys the client got back, so
+  // they're echoed as-is — but strip any double-quote defensively so a value
+  // can never break out of the quoted Meili filter string.
+  if (appellation) {
+    const apps = String(appellation)
+      .split(',')
+      .map(a => a.trim().replace(/"/g, ''))
+      .filter(Boolean);
+    if (apps.length === 1) filters.push(`appellation = "${apps[0]}"`);
+    else if (apps.length > 1) filters.push(`appellation IN ["${apps.join('","')}"]`);
+  }
   // Vintage: single or comma-separated. Only alphanumeric tokens (years / NV /
   // Unknown) are allowed — this drops anything containing a double-quote or
   // other special char that could inject into the Meili filter string.
@@ -499,7 +513,7 @@ async function searchBottles(query, {
   const result = await bottlesIndex.search(query || '', {
     filter: filters.length > 0 ? filters : undefined,
     sort: meiliSort.length > 0 ? meiliSort : undefined,
-    facets: ['type', 'countryName', 'regionName', 'vintage', 'countryId', 'regionId', 'grapeIds'],
+    facets: ['type', 'countryName', 'regionName', 'appellation', 'vintage', 'countryId', 'regionId', 'grapeIds'],
     limit,
     offset
   });
