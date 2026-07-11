@@ -91,6 +91,56 @@
   color: var(--color-danger, #b3392f);
 }
 
+/* ── "Move back to cellar" (restore within 2 days) — under consumed details ── */
+.bd-restore-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin: 0.75rem 0 0;
+}
+
+.bd-restore-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.45rem 0.8rem;
+  font-size: 0.85rem;
+  font-weight: 500;
+  font-family: var(--font-body);
+  color: var(--color-text);
+  background: var(--color-surface-raised, rgba(127, 127, 127, 0.08));
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background var(--transition-fast), border-color var(--transition-fast);
+}
+
+.bd-restore-btn:hover:not(:disabled) {
+  border-color: var(--color-primary);
+  background: var(--color-primary-light);
+}
+
+.bd-restore-btn:focus-visible {
+  outline: 2px solid var(--color-border-focus);
+  outline-offset: 2px;
+}
+
+.bd-restore-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.bd-restore-hint {
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+}
+
+.bd-restore-error {
+  font-size: 0.8rem;
+  color: var(--color-danger, #b3392f);
+}
+
 .bd-mistake-row {
   display: flex;
   justify-content: flex-end;

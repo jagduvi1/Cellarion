@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import ReactMarkdown from 'react-markdown';
 import rehypeSanitize from 'rehype-sanitize';
 import { useAuth } from '../contexts/AuthContext';
-import { getBottle, consumeBottle, setBottleDefaultImage, undoBottle, openBottle } from '../api/bottles';
+import { getBottle, consumeBottle, setBottleDefaultImage, undoBottle, openBottle, restoreBottle } from '../api/bottles';
 import OpenBottlePanel from '../components/bottle/OpenBottlePanel';
 import { PRESERVATION_METHODS } from '../utils/openBottle';
 import { getRacks } from '../api/racks';
@@ -54,6 +54,8 @@ function BottleDetail() {
   const [consumeOpen, setConsumeOpen] = useState(false);
   const [moveOpen, setMoveOpen] = useState(false);
   const [bdMoreOpen, setBdMoreOpen] = useState(false); // ⋮ overflow (Move, Added by mistake)
+  const [restoreBusy, setRestoreBusy] = useState(false);
+  const [restoreError, setRestoreError] = useState(null);
   const [mistakeOpen, setMistakeOpen] = useState(false);
   const [mistakeBusy, setMistakeBusy] = useState(false);
   const [suggestGrapesOpen, setSuggestGrapesOpen] = useState(false);
@@ -308,6 +310,13 @@ function BottleDetail() {
   // v1: move only active bottles, and only between cellars you own.
   const canMove = !isConsumed && userRole === 'owner';
 
+  // "Move back to cellar" (undo an accidental removal) — only for a bottle
+  // consumed within the last 2 days. Matches the server-side restore window;
+  // past it the button is hidden and the endpoint refuses.
+  const RESTORE_WINDOW_MS = 2 * 24 * 60 * 60 * 1000;
+  const canRestore = canEditConsumed && bottle?.consumedAt &&
+    (Date.now() - new Date(bottle.consumedAt).getTime()) <= RESTORE_WINDOW_MS;
+
   // Shared overflow-menu contents — same list used by the desktop header ⋮ and
   // the mobile bar ⋮, so the rare actions live in exactly one place.
   const overflowItems = (
@@ -328,6 +337,25 @@ function BottleDetail() {
   const handleMoved = () => {
     setMoveOpen(false);
     navigate(`/cellars/${cellarId}`); // stay with the source cellar — back to its list
+  };
+
+  const handleRestore = async () => {
+    if (restoreBusy) return;
+    setRestoreBusy(true);
+    setRestoreError(null);
+    try {
+      const res = await restoreBottle(apiFetch, bottleId);
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        navigate(`/cellars/${cellarId}`); // back to the active cellar — the bottle is there now
+      } else {
+        setRestoreError(data.error || t('bottleDetail.restoreError', 'Could not move it back — try again'));
+        setRestoreBusy(false);
+      }
+    } catch {
+      setRestoreError(t('bottleDetail.restoreError', 'Could not move it back — try again'));
+      setRestoreBusy(false);
+    }
   };
 
   return (
@@ -460,6 +488,20 @@ function BottleDetail() {
       {/* ── Consumption details (history bottles only) ── */}
       {isConsumed && (
         <ConsumedDetails bottle={bottle} canEdit={canEditConsumed} onUpdate={setBottle} />
+      )}
+
+      {/* Undo an accidental removal — only within the 2-day restore window */}
+      {canRestore && (
+        <div className="bd-restore-row">
+          <button type="button" className="bd-restore-btn" onClick={handleRestore} disabled={restoreBusy}>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><polyline points="3 3 3 8 8 8"/>
+            </svg>
+            {restoreBusy ? t('bottleDetail.restoring', 'Moving back…') : t('bottleDetail.restore', 'Move back to cellar')}
+          </button>
+          <span className="bd-restore-hint">{t('bottleDetail.restoreHint', 'Removed by mistake? Put it back as active (within 2 days).')}</span>
+          {restoreError && <span className="bd-restore-error">{restoreError}</span>}
+        </div>
       )}
 
       {/* Bottle details or edit form */}

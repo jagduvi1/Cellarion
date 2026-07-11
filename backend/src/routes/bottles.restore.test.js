@@ -108,7 +108,7 @@ function makeBottle(overrides = {}) {
     user: USER_ID,
     vintage: '2018',
     status: 'drank',
-    consumedAt: new Date('2026-07-11T11:07:00Z'),
+    consumedAt: new Date(Date.now() - 60 * 60 * 1000), // 1h ago — inside the 2-day window
     consumedReason: 'drank',
     consumedNote: 'oops',
     consumedRating: 4,
@@ -173,5 +173,29 @@ describe('POST /api/bottles/:id/restore', () => {
     expect([403, 404]).toContain(status);
     expect(bottle.save).not.toHaveBeenCalled();
     expect(bottle.status).toBe('drank');
+  });
+
+  test('rejects a bottle consumed more than 2 days ago (window expired)', async () => {
+    const threeDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);
+    const bottle = makeBottle({ consumedAt: threeDaysAgo });
+    Bottle.findById.mockResolvedValue(bottle);
+
+    const { status, body } = await restore();
+
+    expect(status).toBe(400);
+    expect(body.code).toBe('restore_window_expired');
+    expect(bottle.save).not.toHaveBeenCalled();
+    expect(bottle.status).toBe('drank');
+  });
+
+  test('allows a bottle consumed just inside the 2-day window', async () => {
+    const almostTwoDays = new Date(Date.now() - (2 * 24 * 60 * 60 * 1000 - 60 * 1000)); // 2d minus 1 min
+    const bottle = makeBottle({ consumedAt: almostTwoDays });
+    Bottle.findById.mockResolvedValue(bottle);
+
+    const { status } = await restore();
+
+    expect(status).toBe(200);
+    expect(bottle.status).toBe('active');
   });
 });
