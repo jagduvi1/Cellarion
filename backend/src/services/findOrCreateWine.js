@@ -73,12 +73,18 @@ async function findOrCreateGrapes(names, userId) {
     const normalizedName = normalizeString(canonicalName);
     if (seen.has(normalizedName)) continue; // skip intra-call duplicates
     seen.add(normalizedName);
-    let grape = await Grape.findOne({ normalizedName });
+    // Match the canonical name OR a per-document synonym ("Tinta Roriz" finds
+    // the Tempranillo doc when the admin lists it as a synonym) — local names
+    // resolve to one variety instead of minting a duplicate Grape.
+    let grape = await Grape.findOne({
+      $or: [{ normalizedName }, { normalizedSynonyms: normalizedName }],
+    });
     if (!grape) {
       grape = new Grape({ name: canonicalName, normalizedName, createdBy: userId });
       await grape.save();
     }
-    ids.push(grape._id);
+    if (!ids.some(id => String(id) === String(grape._id))) ids.push(grape._id); // two synonyms may resolve to one doc
+
   }
   return ids;
 }
