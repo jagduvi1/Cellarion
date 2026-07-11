@@ -362,7 +362,33 @@ const REGISTRY = [
   // ── Social ──────────────────────────────────────────────────────────────
   {
     model: Follow, category: 'personal-data', userFields: ['follower', 'following'],
-    purge: (ctx) => Follow.deleteMany({ $or: [{ follower: ctx.userId }, { following: ctx.userId }] }),
+    purge: async (ctx) => {
+      // Reconcile the denormalized counters on the counterparties BEFORE removing
+      // the edges — otherwise deleting a user leaves everyone they were connected
+      // to with a permanently inflated followersCount / followingCount (the live
+      // follow/unfollow paths keep these in sync, but the hard-delete skipped it).
+      const edges = await Follow.find({ $or: [{ follower: ctx.userId }, { following: ctx.userId }] })
+        .select('follower following').lean();
+      const decFollowers = {}; // people this user followed → their followersCount drops
+      const decFollowing = {}; // people who followed this user → their followingCount drops
+      for (const e of edges) {
+        if (String(e.follower) === String(ctx.userId)) decFollowers[e.following] = (decFollowers[e.following] || 0) + 1;
+        if (String(e.following) === String(ctx.userId)) decFollowing[e.follower] = (decFollowing[e.follower] || 0) + 1;
+      }
+      const ops = [
+        ...Object.entries(decFollowers).map(([id, n]) => ({
+          updateOne: { filter: { _id: id }, update: { $inc: { followersCount: -n } } },
+        })),
+        ...Object.entries(decFollowing).map(([id, n]) => ({
+          updateOne: { filter: { _id: id }, update: { $inc: { followingCount: -n } } },
+        })),
+      ];
+      if (ops.length) await User.bulkWrite(ops);
+      // Clamp any counter that may have drifted negative.
+      await User.updateMany({ followersCount: { $lt: 0 } }, [{ $set: { followersCount: 0 } }]);
+      await User.updateMany({ followingCount: { $lt: 0 } }, [{ $set: { followingCount: 0 } }]);
+      return Follow.deleteMany({ $or: [{ follower: ctx.userId }, { following: ctx.userId }] });
+    },
     exportFragment: async (ctx) => {
       const follows = await Follow.find({ $or: [{ follower: ctx.userId }, { following: ctx.userId }] }).limit(EXPORT_MAX)
         .populate('follower', 'username').populate('following', 'username').lean();

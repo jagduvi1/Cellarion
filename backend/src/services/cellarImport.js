@@ -163,6 +163,9 @@ function exportBottleToItem(b) {
     region: b.region || '',
     appellation: b.appellation || '',
     type: b.type || '',
+    // Grape variety names — reconstructed on the destination via findOrCreateWine
+    // → findOrCreateGrapes when the wine has to be auto-created.
+    grapes: Array.isArray(b.grapes) ? b.grapes : undefined,
     vintage: b.vintage || 'NV',
     price: b.price,
     currency: b.currency,
@@ -373,7 +376,8 @@ async function resolveWine(item, userId, cache, result) {
   try {
     const { wine, created } = await findOrCreateWine(
       { name, producer: producer || name, country: item.country, region: item.region,
-        appellation: item.appellation, type: item.type, grapes: [] },
+        appellation: item.appellation, type: item.type,
+        grapes: Array.isArray(item.grapes) ? item.grapes : [] },
       userId,
       { confirmCreate: true } // non-interactive: match >= 0.95 or create
     );
@@ -728,7 +732,12 @@ async function buildCellarContents({ cellarId, ownerId, userId, cellar, items, i
         pendingWineRequestId: wine.wineRequestId,
         defaultCurrency,
       });
-      if (!item.addToHistory && rating !== undefined) {
+      // The user's live (pre-consumption) rating — restore it for BOTH active
+      // and history bottles. A consumed bottle can legitimately carry both a
+      // cellar rating (`rating`) and a drinking rating (`consumedRating`); the
+      // regret-signal analytics key on having both, so dropping `rating` on
+      // history bottles silently lost that data on a round-trip.
+      if (rating !== undefined) {
         bottle.rating = rating;
         bottle.ratingScale = ratingScale;
       }
