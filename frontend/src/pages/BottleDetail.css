@@ -811,35 +811,9 @@
   margin-bottom: 0.35rem;
 }
 
-/* ── Consume modal ── */
-.modal-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.65);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-  padding: 1rem;
-}
-
-.modal-box {
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  padding: 1.5rem;
-  width: 100%;
-  max-width: 420px;
-  max-height: 90vh;
-  overflow-y: auto;
-  box-shadow: var(--shadow-lg);
-}
-
-.modal-box h2 {
-  margin: 0 0 0.25rem 0;
-  color: var(--color-text);
-}
-
+/* ── Consume modal ── (overlay/box come from the shared styles/common.css
+   .modal-overlay / .modal-box — redefining them here as globals made the
+   backdrop's blur/opacity depend on CSS bundle order) */
 .modal-wine-name {
   color: var(--color-text-muted);
   font-size: 0.9rem;

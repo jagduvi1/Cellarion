@@ -17,7 +17,7 @@
 }
 
 .blog-subtitle {
-  color: var(--text-secondary);
+  color: var(--color-text-secondary);
   font-size: 1.1rem;
 }
 
@@ -32,9 +32,9 @@
 .blog-tag {
   padding: 0.35rem 0.9rem;
   border-radius: 20px;
-  border: 1px solid var(--border);
-  background: var(--bg-secondary);
-  color: var(--text-secondary);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text-secondary);
   font-size: 0.85rem;
   cursor: pointer;
   transition: all 0.2s;
@@ -42,9 +42,9 @@
 
 .blog-tag:hover,
 .blog-tag.active {
-  background: var(--accent);
+  background: var(--color-accent);
   color: #fff;
-  border-color: var(--accent);
+  border-color: var(--color-accent);
 }
 
 .blog-grid {
@@ -56,8 +56,8 @@
 .blog-card {
   border-radius: 12px;
   overflow: hidden;
-  border: 1px solid var(--border);
-  background: var(--bg-card);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
   transition: box-shadow 0.2s, transform 0.2s;
 }
 
@@ -76,7 +76,7 @@
   width: 100%;
   aspect-ratio: 16 / 9;
   overflow: hidden;
-  background: var(--bg-secondary);
+  background: var(--color-surface);
 }
 
 .blog-card-image img {
@@ -94,7 +94,7 @@
   align-items: center;
   gap: 0.75rem;
   font-size: 0.8rem;
-  color: var(--text-secondary);
+  color: var(--color-text-secondary);
   margin-bottom: 0.5rem;
 }
 
@@ -111,7 +111,7 @@
 }
 
 .blog-card-excerpt {
-  color: var(--text-secondary);
+  color: var(--color-text-secondary);
   font-size: 0.9rem;
   line-height: 1.5;
   margin: 0 0 0.75rem;
@@ -131,8 +131,8 @@
   font-size: 0.75rem;
   padding: 0.2rem 0.6rem;
   border-radius: 12px;
-  background: var(--bg-secondary);
-  color: var(--text-secondary);
+  background: var(--color-surface);
+  color: var(--color-text-secondary);
   text-decoration: none;
 }
 
@@ -147,7 +147,7 @@
 }
 
 .blog-pagination-info {
-  color: var(--text-secondary);
+  color: var(--color-text-secondary);
   font-size: 0.9rem;
 }
 
@@ -157,7 +157,7 @@
 .blog-error {
   text-align: center;
   padding: 3rem 1rem;
-  color: var(--text-secondary);
+  color: var(--color-text-secondary);
 }
 
 .blog-error .btn {
@@ -176,12 +176,12 @@
   align-items: center;
   gap: 0.5rem;
   font-size: 0.85rem;
-  color: var(--text-secondary);
+  color: var(--color-text-secondary);
   margin-bottom: 1.5rem;
 }
 
 .blog-breadcrumb a {
-  color: var(--accent);
+  color: var(--color-accent);
   text-decoration: none;
 }
 
@@ -221,7 +221,7 @@
   align-items: center;
   gap: 0.75rem;
   font-size: 0.9rem;
-  color: var(--text-secondary);
+  color: var(--color-text-secondary);
   margin-bottom: 0.75rem;
 }
 
@@ -240,7 +240,7 @@
 .blog-article-content {
   font-size: 1.05rem;
   line-height: 1.75;
-  color: var(--text-primary);
+  color: var(--color-text);
 }
 
 .blog-article-content h2 {
@@ -273,10 +273,10 @@
 }
 
 .blog-article-content blockquote {
-  border-left: 3px solid var(--accent);
+  border-left: 3px solid var(--color-accent);
   margin: 1.25rem 0;
   padding: 0.5rem 1.25rem;
-  color: var(--text-secondary);
+  color: var(--color-text-secondary);
   font-style: italic;
 }
 
@@ -291,19 +291,19 @@
 }
 
 .blog-article-content a {
-  color: var(--accent);
+  color: var(--color-accent);
   text-decoration: underline;
 }
 
 .blog-article-content hr {
   border: none;
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--color-border);
   margin: 2rem 0;
 }
 
 .blog-article-content aside.post-attribution {
-  background: var(--bg-secondary);
-  border-left: 3px solid var(--accent);
+  background: var(--color-surface);
+  border-left: 3px solid var(--color-accent);
   padding: 0.9rem 1.25rem;
   margin: 0 0 1.5rem;
   border-radius: 6px;
@@ -324,29 +324,29 @@
 .blog-article-content th,
 .blog-article-content td {
   padding: 0.6rem 0.8rem;
-  border: 1px solid var(--border);
+  border: 1px solid var(--color-border);
   text-align: left;
   vertical-align: top;
 }
 
 .blog-article-content thead th {
-  background: var(--bg-secondary);
+  background: var(--color-surface);
   font-weight: 600;
 }
 
 .blog-article-content tbody tr:nth-child(even) {
-  background: var(--bg-secondary);
+  background: var(--color-surface);
 }
 
 .blog-article-content table td[colspan] {
-  background: var(--bg-card);
+  background: var(--color-surface);
   font-size: 1rem;
 }
 
 .blog-post-footer {
   margin-top: 3rem;
   padding-top: 1.5rem;
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--color-border);
 }
 
 /* ── Responsive ── */

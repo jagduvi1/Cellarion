@@ -121,19 +121,19 @@ function WineClusterCompareModal({ cluster, apiFetch, onClose, onMerged }) {
   if (!wines) {
     return (
       <Modal title="Compare & merge" onClose={onClose} showClose wide>
-        <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-secondary, #888)' }}>Loading…</div>
+        <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--color-text-secondary, #888)' }}>Loading…</div>
       </Modal>
     );
   }
 
-  const C = { border: '1px solid var(--border, #e5e5e5)', pad: '7px 10px' };
-  const accent = 'var(--accent, #4a7c4a)';
-  const warnBg = 'var(--bg-warning-faint, #fdf6e3)';
+  const C = { border: '1px solid var(--color-border, #e5e5e5)', pad: '7px 10px' };
+  const accent = 'var(--color-accent, #4a7c4a)';
+  const warnBg = 'var(--color-warning-bg, #fdf6e3)';
 
   return (
     <Modal title={`Compare & merge — ${wines.length} wines`} onClose={onClose} showClose
            boxStyle={{ maxWidth: 'min(96vw, 1100px)', width: 'min(96vw, 1100px)' }}>
-      <p style={{ margin: '0 0 0.75rem', fontSize: '0.85rem', color: 'var(--text-secondary, #666)' }}>
+      <p style={{ margin: '0 0 0.75rem', fontSize: '0.85rem', color: 'var(--color-text-secondary, #666)' }}>
         Pick the keeper, then click the best value for each field to compose the surviving wine.
         <strong> Conflicting values are highlighted</strong>; fields everyone agrees on are dimmed.
       </p>
@@ -149,11 +149,11 @@ function WineClusterCompareModal({ cluster, apiFetch, onClose, onMerged }) {
                 const id = wid(w);
                 const isKeeper = id === keeperId;
                 return (
-                  <th key={id} style={{ ...thStyle, background: isKeeper ? 'var(--bg-success-faint, #f0f7f0)' : undefined, borderBottom: isKeeper ? `2px solid ${accent}` : thStyle.borderBottom }}>
+                  <th key={id} style={{ ...thStyle, background: isKeeper ? 'var(--color-success-bg, #f0f7f0)' : undefined, borderBottom: isKeeper ? `2px solid ${accent}` : thStyle.borderBottom }}>
                     <label style={{ display: 'flex', flexDirection: 'column', gap: 3, alignItems: 'center', cursor: 'pointer' }}>
                       <input type="radio" name="keeper" checked={isKeeper} disabled={merging} onChange={() => { setKeeperId(id); setConfirming(false); }} />
                       <span style={{ fontWeight: isKeeper ? 700 : 500, color: isKeeper ? accent : 'inherit' }}>{isKeeper ? 'KEEP' : 'keep'}</span>
-                      <span style={{ fontSize: '0.7rem', fontWeight: 400, color: 'var(--text-secondary, #888)' }}>{w.bottleCount || 0} btl</span>
+                      <span style={{ fontSize: '0.7rem', fontWeight: 400, color: 'var(--color-text-secondary, #888)' }}>{w.bottleCount || 0} btl</span>
                     </label>
                   </th>
                 );
@@ -169,7 +169,7 @@ function WineClusterCompareModal({ cluster, apiFetch, onClose, onMerged }) {
               const pickedVal = f.show(byId[pickedId] || keeper);
               return (
                 <tr key={f.key} style={{ opacity: allSame ? 0.55 : 1 }}>
-                  <td style={{ ...tdStyle, fontWeight: 600, color: 'var(--text-secondary, #555)' }}>{f.label}{!allSame && <span title="values differ" style={{ color: 'var(--warning, #b8860b)' }}> ⚠</span>}</td>
+                  <td style={{ ...tdStyle, fontWeight: 600, color: 'var(--color-text-secondary, #555)' }}>{f.label}{!allSame && <span title="values differ" style={{ color: 'var(--color-warning, #b8860b)' }}> ⚠</span>}</td>
                   {wines.map((w, i) => {
                     const id = wid(w);
                     const isPicked = id === pickedId;
@@ -184,7 +184,7 @@ function WineClusterCompareModal({ cluster, apiFetch, onClose, onMerged }) {
                           style={{
                             width: '100%', height: '100%', textAlign: 'left', cursor: 'pointer',
                             padding: C.pad, border: 'none', font: 'inherit',
-                            background: isPicked ? 'var(--bg-success-faint, #eef6ee)' : (differs ? warnBg : 'transparent'),
+                            background: isPicked ? 'var(--color-success-bg, #eef6ee)' : (differs ? warnBg : 'transparent'),
                             boxShadow: isPicked ? `inset 3px 0 0 ${accent}` : 'none',
                             color: 'inherit',
                           }}
@@ -201,7 +201,7 @@ function WineClusterCompareModal({ cluster, apiFetch, onClose, onMerged }) {
 
             {/* Image row */}
             <tr>
-              <td style={{ ...tdStyle, fontWeight: 600, color: 'var(--text-secondary, #555)' }}>Photo</td>
+              <td style={{ ...tdStyle, fontWeight: 600, color: 'var(--color-text-secondary, #555)' }}>Photo</td>
               {wines.map(w => {
                 const id = wid(w);
                 const isPicked = picks.image === id;
@@ -224,7 +224,7 @@ function WineClusterCompareModal({ cluster, apiFetch, onClose, onMerged }) {
       </div>
 
       {/* After-merge preview + actions */}
-      <div style={{ marginTop: 14, padding: '10px 12px', background: 'var(--bg-secondary, #fafafa)', borderRadius: 6, fontSize: '0.85rem' }}>
+      <div style={{ marginTop: 14, padding: '10px 12px', background: 'var(--color-surface, #fafafa)', borderRadius: 6, fontSize: '0.85rem' }}>
         <strong>After merge:</strong>{' '}
         “{f0(byId[picks.name], 'name', keeper)}” — {f0(byId[picks.producer], 'producer', keeper)}
         {f0(byId[picks.appellation], 'appellation', keeper) ? `, ${f0(byId[picks.appellation], 'appellation', keeper)}` : ''}
@@ -263,7 +263,7 @@ function f0(wine, key, keeper) {
   return (w[key] || '').toString();
 }
 
-const thStyle = { border: '1px solid var(--border, #e5e5e5)', padding: '7px 10px', textAlign: 'center', background: 'var(--bg-secondary, #f7f7f7)', position: 'sticky', top: 0, verticalAlign: 'bottom' };
-const tdStyle = { border: '1px solid var(--border, #e5e5e5)', padding: '7px 10px', verticalAlign: 'middle' };
+const thStyle = { border: '1px solid var(--color-border, #e5e5e5)', padding: '7px 10px', textAlign: 'center', background: 'var(--color-surface, #f7f7f7)', position: 'sticky', top: 0, verticalAlign: 'bottom' };
+const tdStyle = { border: '1px solid var(--color-border, #e5e5e5)', padding: '7px 10px', verticalAlign: 'middle' };
 
 export default WineClusterCompareModal;

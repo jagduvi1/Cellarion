@@ -22,7 +22,7 @@
   width: 80px;
   height: 110px;
   border-radius: 4px;
-  background: var(--color-bg-elev, #eee);
+  background: var(--color-surface-raised, #eee);
   opacity: 0.4;
 }
 .compare-wine-placeholder.red       { background: #722f37; }

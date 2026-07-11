@@ -24,7 +24,7 @@
   align-items: center;
   gap: 1rem;
   font-size: 0.85rem;
-  color: var(--text-secondary);
+  color: var(--color-text-secondary);
   flex-wrap: wrap;
 }
 
@@ -46,7 +46,7 @@
 }
 
 .admin-stats-toggle-info {
-  color: var(--text-secondary);
+  color: var(--color-text-secondary);
   opacity: 0.7;
   font-size: 0.8rem;
 }
@@ -58,23 +58,23 @@
 }
 
 .admin-stats-note {
-  color: var(--text-secondary);
+  color: var(--color-text-secondary);
   font-size: 0.9rem;
   margin: 0 0 2rem;
   padding: 0.75rem 1rem;
-  background: var(--bg-secondary);
+  background: var(--color-surface);
   border-radius: 6px;
-  border-left: 3px solid var(--accent);
+  border-left: 3px solid var(--color-accent);
 }
 
 .admin-stats-section-note {
-  color: var(--text-secondary);
+  color: var(--color-text-secondary);
   font-size: 0.85rem;
   margin: -0.5rem 0 1rem;
 }
 
 .admin-stats-empty {
-  color: var(--text-secondary);
+  color: var(--color-text-secondary);
   font-style: italic;
 }
 
@@ -91,7 +91,7 @@
   font-family: 'Playfair Display', serif;
   font-size: 1.4rem;
   margin: 0 0 1rem;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--color-border);
   padding-bottom: 0.5rem;
 }
 
@@ -104,8 +104,8 @@
 }
 
 .admin-stats-card {
-  background: var(--bg-card);
-  border: 1px solid var(--border);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
   border-radius: 8px;
   padding: 1rem 1.1rem;
 }
@@ -123,12 +123,12 @@
   font-size: 1.8rem;
   font-weight: 600;
   line-height: 1.1;
-  color: var(--text-primary);
+  color: var(--color-text);
 }
 
 .admin-stats-card-label {
   font-size: 0.85rem;
-  color: var(--text-secondary);
+  color: var(--color-text-secondary);
   margin-top: 0.25rem;
   text-transform: uppercase;
   letter-spacing: 0.02em;
@@ -136,7 +136,7 @@
 
 .admin-stats-card-sub {
   font-size: 0.8rem;
-  color: var(--text-secondary);
+  color: var(--color-text-secondary);
   opacity: 0.75;
   margin-top: 0.4rem;
 }
@@ -149,8 +149,8 @@
 }
 
 .admin-stats-panel {
-  background: var(--bg-card);
-  border: 1px solid var(--border);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
   border-radius: 8px;
   padding: 1rem 1.1rem;
 }
@@ -164,7 +164,7 @@
 .admin-stats-panel .admin-stats-sub {
   display: block;
   font-size: 0.8rem;
-  color: var(--text-secondary);
+  color: var(--color-text-secondary);
   margin: 0 0 0.5rem;
 }
 
@@ -180,14 +180,14 @@
   font-size: 0.75rem;
   text-transform: uppercase;
   letter-spacing: 0.03em;
-  color: var(--text-secondary);
+  color: var(--color-text-secondary);
   padding: 0.4rem 0.4rem;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--color-border);
 }
 
 .admin-stats-table td {
   padding: 0.4rem 0.4rem;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--color-border);
   vertical-align: top;
 }
 
@@ -197,7 +197,7 @@
 
 .admin-stats-rank {
   width: 2rem;
-  color: var(--text-secondary);
+  color: var(--color-text-secondary);
   font-variant-numeric: tabular-nums;
 }
 
@@ -208,7 +208,7 @@
 .admin-stats-name .admin-stats-sub {
   display: block;
   font-size: 0.75rem;
-  color: var(--text-secondary);
+  color: var(--color-text-secondary);
   font-weight: 400;
   margin-top: 0.1rem;
 }
@@ -216,13 +216,13 @@
 .admin-stats-count {
   text-align: right;
   font-variant-numeric: tabular-nums;
-  color: var(--text-secondary);
+  color: var(--color-text-secondary);
 }
 
 .admin-stats-pct {
   text-align: right;
   font-variant-numeric: tabular-nums;
-  color: var(--text-secondary);
+  color: var(--color-text-secondary);
   width: 3.5rem;
   font-size: 0.85rem;
 }
@@ -253,7 +253,7 @@
 
 .admin-stats-bar {
   width: 100%;
-  background: var(--accent);
+  background: var(--color-accent);
   border-radius: 3px 3px 0 0;
   min-height: 4px;
   position: relative;
@@ -271,7 +271,7 @@
   left: 50%;
   transform: translateX(-50%);
   font-size: 0.65rem;
-  color: var(--text-secondary);
+  color: var(--color-text-secondary);
   white-space: nowrap;
   pointer-events: none;
   font-variant-numeric: tabular-nums;
@@ -279,7 +279,7 @@
 
 .admin-stats-bar-label {
   font-size: 0.7rem;
-  color: var(--text-secondary);
+  color: var(--color-text-secondary);
   font-variant-numeric: tabular-nums;
   text-align: center;
 }
@@ -295,12 +295,12 @@
 }
 
 .admin-stats-hbar-label {
-  color: var(--text-primary);
+  color: var(--color-text);
 }
 
 .admin-stats-hbar-track {
   height: 16px;
-  background: var(--bg-secondary);
+  background: var(--color-surface);
   border-radius: 4px;
   overflow: hidden;
 }
@@ -313,7 +313,7 @@
 
 .admin-stats-hbar-count {
   text-align: right;
-  color: var(--text-secondary);
+  color: var(--color-text-secondary);
   font-variant-numeric: tabular-nums;
 }
 

@@ -25,9 +25,9 @@
 .admin-blog-filters select {
   padding: 0.4rem 0.75rem;
   border-radius: 6px;
-  border: 1px solid var(--border);
-  background: var(--bg-card);
-  color: var(--text-primary);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text);
   font-size: 0.9rem;
 }
 
@@ -44,13 +44,13 @@
 .admin-blog-table td {
   padding: 0.75rem 0.5rem;
   text-align: left;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--color-border);
   font-size: 0.9rem;
 }
 
 .admin-blog-table th {
   font-weight: 600;
-  color: var(--text-secondary);
+  color: var(--color-text-secondary);
   font-size: 0.8rem;
   text-transform: uppercase;
   letter-spacing: 0.03em;
@@ -68,7 +68,7 @@
 .admin-blog-slug {
   display: block;
   font-size: 0.78rem;
-  color: var(--text-secondary);
+  color: var(--color-text-secondary);
   opacity: 0.7;
 }
 
@@ -81,8 +81,8 @@
 }
 
 .admin-blog-status--draft {
-  background: var(--bg-secondary);
-  color: var(--text-secondary);
+  background: var(--color-surface);
+  color: var(--color-text-secondary);
 }
 
 .admin-blog-status--published {

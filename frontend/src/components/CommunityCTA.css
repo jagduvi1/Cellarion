@@ -17,7 +17,7 @@
 .community-cta__message {
   margin: 0;
   font-size: 0.95rem;
-  color: var(--text-color, inherit);
+  color: var(--color-text, inherit);
 }
 
 .community-cta__actions {

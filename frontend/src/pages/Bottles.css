@@ -19,7 +19,7 @@
 
 .bottles-subtitle {
   margin: 0.25rem 0 0;
-  color: var(--text-muted, #9A9484);
+  color: var(--color-text-muted, #9A9484);
   font-size: 0.95rem;
 }
 
@@ -63,7 +63,7 @@
 .bottles-chip-clear {
   background: none;
   border: none;
-  color: var(--text-muted, #9A9484);
+  color: var(--color-text-muted, #9A9484);
   cursor: pointer;
   padding: 0.3rem 0.5rem;
   font-size: 0.85rem;
@@ -77,7 +77,7 @@
 .bottles-empty {
   padding: 3rem 1rem;
   text-align: center;
-  color: var(--text-muted, #9A9484);
+  color: var(--color-text-muted, #9A9484);
   background: rgba(255, 255, 255, 0.02);
   border: 1px dashed rgba(255, 255, 255, 0.08);
   border-radius: 8px;
@@ -118,6 +118,6 @@
 }
 
 .bottles-page-indicator {
-  color: var(--text-muted, #9A9484);
+  color: var(--color-text-muted, #9A9484);
   font-size: 0.9rem;
 }

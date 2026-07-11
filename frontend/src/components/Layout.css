@@ -498,3 +498,15 @@
 .install-prompt-dismiss:hover {
   color: #fff;
 }
+
+/* Print: hide the app chrome (top navbar, mobile bottom bar, announcement
+   banner) so print flows like the Cellar Book produce a clean document with no
+   navigation bands. */
+@media print {
+  .navbar,
+  .bottom-nav,
+  .announcement-banner,
+  .install-prompt {
+    display: none !important;
+  }
+}

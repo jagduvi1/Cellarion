@@ -1,14 +1,6 @@
-.modal-overlay {
-  position: fixed;
-  inset: 0;
-  background: var(--color-overlay);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-  padding: 1rem;
-}
-
+/* .modal-overlay comes from the shared styles/common.css — redefining it here
+   as a global (and dropping the backdrop blur) made the app-wide backdrop
+   bundle-order dependent. */
 .share-modal {
   background: var(--color-surface);
   border: 1px solid var(--color-border);

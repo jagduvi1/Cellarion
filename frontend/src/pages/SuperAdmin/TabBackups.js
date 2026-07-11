@@ -59,7 +59,7 @@ export default function TabBackups() {
         </tbody>
       </table>
 
-      <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary, #888)', marginTop: 12 }}>
+      <p style={{ fontSize: '0.8rem', color: 'var(--color-text-secondary, #888)', marginTop: 12 }}>
         Reported by the backup job — the app reads this status only and never accesses the backup repository.
       </p>
       <button className="sa-btn" onClick={reload} style={{ marginTop: 8 }}>Refresh</button>

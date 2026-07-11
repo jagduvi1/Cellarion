@@ -1553,7 +1553,7 @@ function NfcLinkModal({ rack, onSave, onCancel }) {
                 </p>
               )}
               {status === 'error' && (
-                <p style={{ color: 'var(--color-error)', fontSize: '0.85rem', margin: '0.5rem 0 0' }}>
+                <p style={{ color: 'var(--color-danger)', fontSize: '0.85rem', margin: '0.5rem 0 0' }}>
                   {errorMsg}
                 </p>
               )}

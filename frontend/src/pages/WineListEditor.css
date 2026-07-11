@@ -271,7 +271,7 @@
 .wle-glass-calc {
   margin-top: 0.75rem;
   padding: 0.75rem;
-  background: var(--color-bg-secondary, #f8f8f8);
+  background: var(--color-surface, #f8f8f8);
   border-radius: var(--radius-sm);
 }
 
@@ -536,7 +536,7 @@
   border-radius: 10px;
   font-size: 0.7rem;
   font-weight: 600;
-  background: var(--color-bg-secondary, #f0f0f0);
+  background: var(--color-surface, #f0f0f0);
   color: var(--color-text-secondary, #666);
 }
 

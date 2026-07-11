@@ -19,7 +19,7 @@ import './WineModalThumbs.css';
 function SimilarWinesModal({ candidates, queryName, onPick, onCreateNew, onCancel, busy }) {
   return (
     <Modal title="Did you mean one of these?" onClose={onCancel} showClose wide>
-      <p style={{ margin: '0 0 1rem', fontSize: '0.95rem', color: 'var(--text-secondary, #666)' }}>
+      <p style={{ margin: '0 0 1rem', fontSize: '0.95rem', color: 'var(--color-text-secondary, #666)' }}>
         We found wines in the registry that look close to{' '}
         <strong>{queryName || 'what you entered'}</strong>. Picking an existing
         wine keeps the registry tidy and lets you share data with other users.
@@ -34,7 +34,7 @@ function SimilarWinesModal({ candidates, queryName, onPick, onCreateNew, onCance
               alignItems: 'center',
               gap: 12,
               padding: '0.6rem 0.4rem',
-              borderBottom: '1px solid var(--border, #e5e5e5)',
+              borderBottom: '1px solid var(--color-border, #e5e5e5)',
             }}
           >
             <div style={{ width: 48, height: 64, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -48,19 +48,19 @@ function SimilarWinesModal({ candidates, queryName, onPick, onCreateNew, onCance
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontWeight: 600 }}>{wine.name}</div>
-              <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary, #666)' }}>
+              <div style={{ fontSize: '0.85rem', color: 'var(--color-text-secondary, #666)' }}>
                 {wine.producer}
                 {wine.country?.name ? ` · ${wine.country.name}` : ''}
                 {wine.region?.name ? ` · ${wine.region.name}` : ''}
               </div>
               {wine.appellation && (
-                <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary, #888)' }}>{wine.appellation}</div>
+                <div style={{ fontSize: '0.8rem', color: 'var(--color-text-secondary, #888)' }}>{wine.appellation}</div>
               )}
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
               <span
                 title="Similarity score"
-                style={{ fontSize: '0.75rem', color: 'var(--text-secondary, #888)' }}
+                style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary, #888)' }}
               >
                 {Math.round(score * 100)}% match
               </span>

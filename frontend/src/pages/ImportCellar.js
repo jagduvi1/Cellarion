@@ -193,7 +193,7 @@ function ImportCellar() {
               )}
 
               {rows.map(r => (
-                <div key={r.sourceName} className="form-group" style={{ borderTop: '1px solid var(--border, #ddd)', paddingTop: '0.75rem' }}>
+                <div key={r.sourceName} className="form-group" style={{ borderTop: '1px solid var(--color-border, #ddd)', paddingTop: '0.75rem' }}>
                   <label htmlFor={`name-${r.sourceName}`}>{t('importCellar.importAsLabel', { name: r.sourceName })}</label>
                   <input
                     id={`name-${r.sourceName}`}

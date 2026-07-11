@@ -117,7 +117,7 @@ function WineDuplicatesModal({ apiFetch, onClose, onMerged }) {
           {scanning ? 'Scanning…' : 'Re-scan'}
         </button>
         {meta && !scanning && (
-          <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary, #666)' }}>
+          <span style={{ fontSize: '0.85rem', color: 'var(--color-text-secondary, #666)' }}>
             Scanned {meta.scannedCount} wines across {meta.producerGroupCount} producers · {meta.totalClusters} cluster{meta.totalClusters === 1 ? '' : 's'} found
           </span>
         )}
@@ -129,7 +129,7 @@ function WineDuplicatesModal({ apiFetch, onClose, onMerged }) {
         <div style={{
           display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
           padding: '0.5rem 0.75rem', marginBottom: 12, borderRadius: 6,
-          background: 'var(--bg-secondary, #f4f4f4)', border: '1px solid var(--border, #e5e5e5)',
+          background: 'var(--color-surface, #f4f4f4)', border: '1px solid var(--color-border, #e5e5e5)',
           fontSize: '0.85rem',
         }}>
           <span>
@@ -147,13 +147,13 @@ function WineDuplicatesModal({ apiFetch, onClose, onMerged }) {
       )}
 
       {scanning && !clusters && (
-        <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-secondary, #888)' }}>
+        <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--color-text-secondary, #888)' }}>
           Scanning registry… this can take a few seconds.
         </div>
       )}
 
       {!scanning && clusters?.length === 0 && (
-        <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-secondary, #888)' }}>
+        <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--color-text-secondary, #888)' }}>
           No duplicate clusters at this threshold.
         </div>
       )}
@@ -222,15 +222,15 @@ function ClusterCard({ cluster, apiFetch, onMerged, onOpenCompare, onDismiss }) 
 
   return (
     <div style={{
-      border: '1px solid var(--border, #e5e5e5)',
+      border: '1px solid var(--color-border, #e5e5e5)',
       borderRadius: 6,
       padding: 12,
-      background: 'var(--bg-secondary, #fafafa)',
+      background: 'var(--color-surface, #fafafa)',
     }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, gap: 8 }}>
         <strong>{cluster.wines[0]?.producer}</strong>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary, #888)' }}>
+          <span style={{ fontSize: '0.8rem', color: 'var(--color-text-secondary, #888)' }}>
             {Math.round(cluster.score * 100)}% match
           </span>
           <button
@@ -268,8 +268,8 @@ function ClusterCard({ cluster, apiFetch, onMerged, onOpenCompare, onDismiss }) 
                 alignItems: 'center',
                 gap: 10,
                 padding: '0.5rem',
-                borderTop: '1px solid var(--border, #eee)',
-                background: isTarget ? 'var(--bg-success-faint, #f0f7f0)' : 'transparent',
+                borderTop: '1px solid var(--color-border, #eee)',
+                background: isTarget ? 'var(--color-success-bg, #f0f7f0)' : 'transparent',
               }}
             >
               <input
@@ -285,14 +285,14 @@ function ClusterCard({ cluster, apiFetch, onMerged, onOpenCompare, onDismiss }) 
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontWeight: 600 }}>{wine.name}</div>
-                <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary, #666)' }}>
+                <div style={{ fontSize: '0.8rem', color: 'var(--color-text-secondary, #666)' }}>
                   {wine.appellation || '—'}
                   {wine.country?.name ? ` · ${wine.country.name}` : ''}
                   {' · '}{wine.bottleCount || 0} bottle{(wine.bottleCount || 0) === 1 ? '' : 's'}
                 </div>
               </div>
               {isTarget ? (
-                <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--accent, #4a7c4a)' }}>
+                <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--color-accent, #4a7c4a)' }}>
                   KEEP
                 </span>
               ) : (
