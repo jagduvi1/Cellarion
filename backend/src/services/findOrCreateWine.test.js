@@ -140,7 +140,11 @@ beforeEach(() => {
   // Taxonomy defaults: everything already exists
   Country.findOne.mockResolvedValue({ _id: 'country-1' });
   Region.findOne.mockResolvedValue({ _id: 'region-1' });
-  Grape.findOne.mockImplementation(async ({ normalizedName }) => ({ _id: `grape-${normalizedName}` }));
+  // findOrCreateGrapes queries { $or: [{ normalizedName }, { normalizedSynonyms: … }] }
+  Grape.findOne.mockImplementation(async (q) => {
+    const normalizedName = q.$or ? q.$or[0].normalizedName : q.normalizedName;
+    return { _id: `grape-${normalizedName}` };
+  });
 });
 
 afterEach(() => {
@@ -562,7 +566,9 @@ describe('taxonomy find-or-create dedup', () => {
     // "Shiraz" resolves to canonical "Syrah"; the second entry is an
     // intra-call duplicate and is skipped — one lookup, one create, one id.
     expect(Grape.findOne).toHaveBeenCalledTimes(1);
-    expect(Grape.findOne).toHaveBeenCalledWith({ normalizedName: 'syrah' });
+    expect(Grape.findOne).toHaveBeenCalledWith({
+      $or: [{ normalizedName: 'syrah' }, { normalizedSynonyms: 'syrah' }],
+    });
     expect(Grape).toHaveBeenCalledTimes(1);
     expect(Grape).toHaveBeenCalledWith({ name: 'Syrah', normalizedName: 'syrah', createdBy: USER_ID });
     expect(ids).toEqual(['grape-new']);
@@ -576,5 +582,33 @@ describe('taxonomy find-or-create dedup', () => {
 
     expect(await findOrCreateGrapes(undefined, USER_ID)).toEqual([]);
     expect(await findOrCreateGrapes([], USER_ID)).toEqual([]);
+  });
+
+  test('findOrCreateGrapes: per-document synonym resolves to the canonical grape (no duplicate doc)', async () => {
+    // The Tempranillo doc lists "Tinta Roriz" as a synonym; a wine created
+    // with grape "Tinta Roriz" must reuse it, not create a new Grape.
+    Grape.findOne.mockImplementation(async (q) => {
+      const key = q.$or[0].normalizedName;
+      if (key === 'tinta roriz') return { _id: 'grape-tempranillo' }; // matched via normalizedSynonyms
+      return { _id: `grape-${key}` };
+    });
+
+    const ids = await findOrCreateGrapes(['Tinta Roriz'], USER_ID);
+
+    expect(Grape.findOne).toHaveBeenCalledWith({
+      $or: [{ normalizedName: 'tinta roriz' }, { normalizedSynonyms: 'tinta roriz' }],
+    });
+    expect(ids).toEqual(['grape-tempranillo']);
+    expect(Grape).not.toHaveBeenCalled(); // no new doc
+  });
+
+  test('findOrCreateGrapes: two names resolving to the same doc yield one id', async () => {
+    // e.g. "Tempranillo" (canonical) + "Tinta Roriz" (synonym) in the same
+    // AI response — both resolve to the same document, id appears once.
+    Grape.findOne.mockResolvedValue({ _id: 'grape-tempranillo' });
+
+    const ids = await findOrCreateGrapes(['Tempranillo', 'Tinta Roriz'], USER_ID);
+
+    expect(ids).toEqual(['grape-tempranillo']);
   });
 });

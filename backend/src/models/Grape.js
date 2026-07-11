@@ -1,5 +1,5 @@
 const mongoose = require('mongoose');
-const { slugify } = require('../utils/normalize');
+const { slugify, normalizeString } = require('../utils/normalize');
 
 const grapeSchema = new mongoose.Schema({
   name: {
@@ -43,6 +43,16 @@ const grapeSchema = new mongoose.Schema({
     type: [String],
     default: []
   },
+  // Lowercase/diacritic-free forms of `synonyms`, maintained by the pre-save
+  // hook below. Lets findOrCreateGrapes resolve a local name ("Tinta Roriz")
+  // to its canonical Grape document instead of creating a duplicate — the
+  // display name stays local on the grape page ("also known as …") while
+  // filters, stats and similarity see one variety.
+  normalizedSynonyms: {
+    type: [String],
+    default: [],
+    index: true
+  },
   slug: { type: String, trim: true, lowercase: true, unique: true, sparse: true, index: true },
   description: { type: String, trim: true, default: '' },
   createdBy: {
@@ -54,6 +64,17 @@ const grapeSchema = new mongoose.Schema({
     type: Date,
     default: Date.now
   }
+});
+
+// Keep normalizedSynonyms in lockstep with synonyms (admin edits go through
+// .save(), so this covers the taxonomy route).
+grapeSchema.pre('save', function(next) {
+  if (this.isModified('synonyms') || this.isNew) {
+    this.normalizedSynonyms = (this.synonyms || [])
+      .map(s => normalizeString(s))
+      .filter(Boolean);
+  }
+  next();
 });
 
 grapeSchema.pre('save', async function(next) {
