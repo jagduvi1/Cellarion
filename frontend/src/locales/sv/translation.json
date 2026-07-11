@@ -2306,6 +2306,7 @@
     "pickerTitle": "Öppna den här flaskan",
     "pickerText": "Hur bevarar du den? Det styr dryckesfönstret — flaskan ligger kvar i din källare tills du avslutar den.",
     "confirmBtn": "Öppna flaska",
+    "openBtnShort": "Öppna",
     "freshness": "cirka {{days}} dagar",
     "method": {
       "coravin": "Coravin (argonnål)",
