@@ -18,7 +18,7 @@ const Country = require('../models/Country');
 const Region = require('../models/Region');
 const Grape = require('../models/Grape');
 const searchService = require('./search');
-const { generateWineKey, normalizeString, resolveGrapeName } = require('../utils/normalize');
+const { generateWineKey, normalizeString, resolveGrapeName, resolveCountryName, isUnknownName, isJunkGrapeName } = require('../utils/normalize');
 const { scoreAllMatches } = require('./wineMatching');
 const { stripProducerPrefix } = require('../utils/producerPrefix');
 const { escapeRegex } = require('../utils/sanitize');
@@ -38,17 +38,24 @@ const POPULATE = ['country', 'region', 'grapes'];
 // ── Taxonomy helpers ─────────────────────────────────────────────────────────
 
 async function findOrCreateCountry(name, userId) {
-  if (!name || !name.trim()) return null;
-  const normalizedName = normalizeString(name);
+  // "Unknown"/placeholder → null, never a Country doc named "Unknown". The
+  // caller treats a null country as a 400 — honest, since country is required.
+  if (isUnknownName(name)) return null;
+  // Resolve alias → canonical name before lookup (e.g. "USA" → "United States",
+  // "Tyskland" → "Germany") so localized/abbreviated AI output can't mint a
+  // duplicate Country — mirrors the resolveGrapeName pattern below.
+  const canonicalName = resolveCountryName(name);
+  const normalizedName = normalizeString(canonicalName);
   let country = await Country.findOne({ normalizedName });
   if (country) return country;
-  country = new Country({ name: name.trim(), normalizedName, createdBy: userId });
+  country = new Country({ name: canonicalName.trim(), normalizedName, createdBy: userId });
   await country.save();
   return country;
 }
 
 async function findOrCreateRegion(name, countryId, userId) {
-  if (!name || !name.trim() || !countryId) return null;
+  // "Unknown"/placeholder → null region (the schema's representation of unknown)
+  if (isUnknownName(name) || !countryId) return null;
   const normalizedName = normalizeString(name);
   let region = await Region.findOne({ country: countryId, normalizedName });
   if (region) return region;
@@ -62,7 +69,10 @@ async function findOrCreateGrapes(names, userId) {
   const ids = [];
   const seen = new Set(); // deduplicate within the same call (e.g. AI returns "Shiraz" + "Syrah")
   for (const name of names) {
-    if (!name || !name.trim()) continue;
+    // Placeholders and descriptions-instead-of-varietals ("unknown", "blend -
+    // specific varieties unknown") are dropped — a blend is represented by its
+    // actual varieties or an empty array, never a junk Grape document.
+    if (isJunkGrapeName(name)) continue;
     // Resolve synonym → canonical name before lookup (e.g. "Shiraz" → "Syrah")
     const canonicalName = resolveGrapeName(name);
     const normalizedName = normalizeString(canonicalName);

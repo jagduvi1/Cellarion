@@ -41,6 +41,7 @@ Important rules:
 - Labels often print a founder's or family name as part of the producer's crest/logo lockup (e.g. "DESIDERIUS" in small text above "PONGRÁCZ"). Such words belong to the producer identity, NOT the wine name. The name is the line that distinguishes this bottle within the producer's range (here "Blanc de Blancs") — include a person's name only when it genuinely names the cuvée itself (e.g. Pongrácz's separate prestige bottling "Desiderius").
 - Production-method terms are NOT part of the name — put "Méthode Cap Classique" / "Cap Classique", "Méthode Traditionnelle", "Metodo Classico" / "Traditional Method" in the appellation field instead (name "Blanc de Blancs" + appellation "Méthode Cap Classique", NOT name "Blanc de Blancs Méthode Cap Classique"). Legally-defined aging classifications that belong to the displayed name (Reserva, Gran Reserva, Riserva, Spätlese, Grosses Gewächs) and dosage words that are part of a cuvée name (e.g. "Brut Premier") stay in the name.
 - Do not hallucinate appellation names, producer names, or grape varieties. Only use names you are confident are real and match what is visible on the label or your knowledge of that specific producer/appellation.
+- Country must be the canonical English country name: "United States" (never "USA" or "America"), "Germany" (never "Deutschland" or a local-language name like "Tyskland"), "Italy" (never "Italia"/"Italie"), "England" for English wines. Never return a country name in the label's language.
 - If a field is genuinely unknown and cannot be reliably inferred, set it to null rather than guessing.
 - Only return {"error":"cannot read label"} if the image contains no wine label at all.`;
 
@@ -61,6 +62,7 @@ Rules:
 - Production-method terms are NOT part of the name — move "Méthode Cap Classique" / "Cap Classique", "Méthode Traditionnelle", "Metodo Classico" / "Traditional Method" to the appellation field (name "Blanc de Blancs" + appellation "Méthode Cap Classique"). Aging classifications that belong to the displayed name (Reserva, Gran Reserva, Riserva, Spätlese, Grosses Gewächs) and dosage words that are part of a cuvée name (e.g. "Brut Premier") stay in the name
 - Fill in country, region, appellation, type, and grapes from your wine knowledge
 - Country is REQUIRED — always provide a country name; it is never acceptable to return null for country
+- Country must be the canonical English country name: "United States" (never "USA" or "America"), "Germany" (never "Deutschland"/"Tyskland"), "Italy" (never "Italia"/"Italie"), "England" for English wines — never a local-language or abbreviated name, even if the import data uses one
 - For any other field you are unsure about, use null — do NOT omit the field
 - Grapes: provide an empty array [] if unknown, never null for grapes
 - confidence: 1.0 = well-known wine you are certain about, 0.7 = confident from producer knowledge, 0.5 = reasonably sure
@@ -83,6 +85,7 @@ Rules:
 - Production-method terms are NOT part of the name — move "Méthode Cap Classique" / "Cap Classique", "Méthode Traditionnelle", "Metodo Classico" / "Traditional Method" to the appellation field (name "Blanc de Blancs" + appellation "Méthode Cap Classique"). Aging classifications (Reserva, Gran Reserva, Riserva, Spätlese, Grosses Gewächs) and dosage words that are part of a cuvée name (e.g. "Brut Premier") stay in the name
 - Fill in country, region, appellation, type, and grapes from your wine knowledge
 - Country is REQUIRED — always provide a country name; it is never acceptable to return null for country
+- Country must be the canonical English country name: "United States" (never "USA" or "America"), "Germany" (never "Deutschland"/"Tyskland"), "Italy" (never "Italia"/"Italie"), "England" for English wines — never a local-language or abbreviated name, even if the query uses one
 - For any other unknown field use null; use [] for unknown grapes, never null
 - confidence: 1.0 = certain, 0.7 = confident, 0.5 = reasonably sure
 - IMPORTANT: if you recognise the producer or wine name, return a result even if some fields are null — partial information is always better than returning unknown

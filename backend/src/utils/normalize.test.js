@@ -8,6 +8,10 @@ const {
   trigramSimilarity,
   tokenSimilarity,
   combinedSimilarity,
+  resolveCountryName,
+  isUnknownName,
+  isJunkGrapeName,
+  resolveGrapeName,
 } = require('./normalize');
 
 // ─── normalizeString ──────────────────────────────────────────────────────────
@@ -274,5 +278,140 @@ describe('combinedSimilarity', () => {
     const combined = combinedSimilarity('burgundy', 'burgundie');
     expect(combined).toBeGreaterThanOrEqual(Math.min(lev, tri, tok));
     expect(combined).toBeLessThanOrEqual(Math.max(lev, tri, tok));
+  });
+});
+
+// ─── resolveCountryName ──────────────────────────────────────────────────────
+
+describe('resolveCountryName', () => {
+  test('returns falsy input unchanged', () => {
+    expect(resolveCountryName(null)).toBe(null);
+    expect(resolveCountryName('')).toBe('');
+    expect(resolveCountryName('   ')).toBe('   ');
+  });
+
+  test('maps English abbreviations to canonical names', () => {
+    expect(resolveCountryName('USA')).toBe('United States');
+    expect(resolveCountryName('U.S.A.')).toBe('United States'); // punctuation stripped
+    expect(resolveCountryName('US')).toBe('United States');
+    expect(resolveCountryName('United States of America')).toBe('United States');
+    expect(resolveCountryName('America')).toBe('United States');
+  });
+
+  test('maps local-language names to canonical English (the prod duplicates)', () => {
+    // Each of these existed as a duplicate Country document on prod
+    expect(resolveCountryName('Tyskland')).toBe('Germany');   // Swedish
+    expect(resolveCountryName('Italie')).toBe('Italy');       // French
+    expect(resolveCountryName('New Zeeland')).toBe('New Zealand'); // typo
+  });
+
+  test('maps United Kingdom to England (canonical wine country)', () => {
+    expect(resolveCountryName('United Kingdom')).toBe('England');
+    expect(resolveCountryName('UK')).toBe('England');
+    expect(resolveCountryName('Great Britain')).toBe('England');
+  });
+
+  test('handles diacritics and hyphens through normalizeString', () => {
+    expect(resolveCountryName('Österrike')).toBe('Austria');        // Swedish, Ö → o
+    expect(resolveCountryName('Nouvelle-Zélande')).toBe('New Zealand'); // hyphen deleted
+    expect(resolveCountryName('États-Unis')).toBe('United States');
+    expect(resolveCountryName('Großbritannien')).toBe('England');   // ß stripped
+    expect(resolveCountryName('Südafrika')).toBe('South Africa');
+  });
+
+  test('is case-insensitive', () => {
+    expect(resolveCountryName('tyskland')).toBe('Germany');
+    expect(resolveCountryName('FRANKRIKE')).toBe('France');
+  });
+
+  test('returns canonical names unchanged', () => {
+    expect(resolveCountryName('France')).toBe('France');
+    expect(resolveCountryName('United States')).toBe('United States');
+    expect(resolveCountryName('England')).toBe('England');
+    expect(resolveCountryName('South Africa')).toBe('South Africa');
+  });
+
+  test('passes unknown countries through trimmed', () => {
+    expect(resolveCountryName('  Uzbekistan  ')).toBe('Uzbekistan');
+    expect(resolveCountryName('Atlantis')).toBe('Atlantis');
+  });
+});
+
+// ─── isUnknownName / isJunkGrapeName ─────────────────────────────────────────
+
+describe('isUnknownName', () => {
+  test('true for empty/falsy input', () => {
+    expect(isUnknownName(null)).toBe(true);
+    expect(isUnknownName('')).toBe(true);
+    expect(isUnknownName('   ')).toBe(true);
+  });
+
+  test('true for placeholder values in several languages (the prod junk)', () => {
+    // Each of these existed as a taxonomy document on prod
+    expect(isUnknownName('Unknown')).toBe(true);
+    expect(isUnknownName('unknown')).toBe(true);
+    expect(isUnknownName('Okänd')).toBe(true);     // sv
+    expect(isUnknownName('Unbekannt')).toBe(true); // de
+    expect(isUnknownName('Inconnu')).toBe(true);   // fr
+    expect(isUnknownName('N/A')).toBe(true);
+    expect(isUnknownName('n.a.')).toBe(true);
+    expect(isUnknownName('none')).toBe(true);
+    expect(isUnknownName('Not specified')).toBe(true);
+    expect(isUnknownName('?')).toBe(true);   // normalizes to empty
+    expect(isUnknownName('-')).toBe(true);   // normalizes to empty
+  });
+
+  test('false for real names', () => {
+    expect(isUnknownName('Mendoza')).toBe(false);
+    expect(isUnknownName('Napa Valley')).toBe(false);
+    expect(isUnknownName('Germany')).toBe(false);
+    // 'Nahe' must not be confused with placeholder 'na'
+    expect(isUnknownName('Nahe')).toBe(false);
+  });
+});
+
+describe('isJunkGrapeName', () => {
+  test('rejects placeholders and hedge descriptions (real prod examples)', () => {
+    expect(isJunkGrapeName('unknown')).toBe(true);
+    expect(isJunkGrapeName('Red Blend')).toBe(true);
+    expect(isJunkGrapeName('blend - specific varieties unknown')).toBe(true);
+    expect(isJunkGrapeName('unknown white blend')).toBe(true);
+    expect(isJunkGrapeName('blend of 40 botanicals including orange peel')).toBe(true);
+    expect(isJunkGrapeName('unknown - likely Riesling, Gewurztraminer, Pinot Gris, or Muscat')).toBe(true);
+  });
+
+  test('accepts real varietals, including compound names', () => {
+    expect(isJunkGrapeName('Syrah')).toBe(false);
+    expect(isJunkGrapeName('Cabernet Sauvignon')).toBe(false);
+    expect(isJunkGrapeName('Refosco dal Peduncolo Rosso')).toBe(false);
+    expect(isJunkGrapeName('Moscato Bianco')).toBe(false);
+    expect(isJunkGrapeName('Colombard')).toBe(false);
+  });
+});
+
+describe('resolveGrapeName — Sangiovese Grosso', () => {
+  test('maps the Montalcino local name to Sangiovese', () => {
+    expect(resolveGrapeName('Sangiovese Grosso')).toBe('Sangiovese');
+  });
+});
+
+describe('resolveGrapeName — spelling variants merged 2026-07-11', () => {
+  test('maps spelling variants and typos to canonical names', () => {
+    expect(resolveGrapeName('Agiorghitiko')).toBe('Agiorgitiko');
+    expect(resolveGrapeName('Inzolia')).toBe('Insolia');
+    expect(resolveGrapeName('Corvina Veronese')).toBe('Corvina');
+    expect(resolveGrapeName('Sylvaner')).toBe('Silvaner');
+    expect(resolveGrapeName('Tinta Barocca')).toBe('Tinta Barroca');
+    expect(resolveGrapeName('Tinta-Roriz')).toBe('Tinta Roriz'); // hyphen deleted by normalizeString
+    expect(resolveGrapeName('Verdehlo')).toBe('Verdelho');
+    expect(resolveGrapeName('Vidal')).toBe('Vidal Blanc');
+    expect(resolveGrapeName('Portugieser')).toBe('Blauer Portugieser');
+  });
+
+  test('ß-spelled Weißburgunder finally resolves to Pinot Blanc', () => {
+    // normalizeString strips ß entirely ('weiburgunder'), so the old
+    // 'weissburgunder' key never matched the real label spelling
+    expect(resolveGrapeName('Weißburgunder')).toBe('Pinot Blanc');
+    expect(resolveGrapeName('Weisser Burgunder')).toBe('Pinot Blanc');
   });
 });
