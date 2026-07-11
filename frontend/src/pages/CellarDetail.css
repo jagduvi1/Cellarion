@@ -632,6 +632,12 @@
   background: var(--color-primary-light);
 }
 
+/* Density toggle sits just left of the list/card control (list view only),
+   separated by a small gutter so it doesn't read as part of that segmented pair. */
+.density-toggle-btn {
+  margin-right: 0.4rem;
+}
+
 /* ── Expanded bottle-group header (full-width across the grid/list) ── */
 .bottle-group-bar {
   grid-column: 1 / -1;
