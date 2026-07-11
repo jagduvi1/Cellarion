@@ -394,3 +394,24 @@ describe('resolveGrapeName — Sangiovese Grosso', () => {
     expect(resolveGrapeName('Sangiovese Grosso')).toBe('Sangiovese');
   });
 });
+
+describe('resolveGrapeName — spelling variants merged 2026-07-11', () => {
+  test('maps spelling variants and typos to canonical names', () => {
+    expect(resolveGrapeName('Agiorghitiko')).toBe('Agiorgitiko');
+    expect(resolveGrapeName('Inzolia')).toBe('Insolia');
+    expect(resolveGrapeName('Corvina Veronese')).toBe('Corvina');
+    expect(resolveGrapeName('Sylvaner')).toBe('Silvaner');
+    expect(resolveGrapeName('Tinta Barocca')).toBe('Tinta Barroca');
+    expect(resolveGrapeName('Tinta-Roriz')).toBe('Tinta Roriz'); // hyphen deleted by normalizeString
+    expect(resolveGrapeName('Verdehlo')).toBe('Verdelho');
+    expect(resolveGrapeName('Vidal')).toBe('Vidal Blanc');
+    expect(resolveGrapeName('Portugieser')).toBe('Blauer Portugieser');
+  });
+
+  test('ß-spelled Weißburgunder finally resolves to Pinot Blanc', () => {
+    // normalizeString strips ß entirely ('weiburgunder'), so the old
+    // 'weissburgunder' key never matched the real label spelling
+    expect(resolveGrapeName('Weißburgunder')).toBe('Pinot Blanc');
+    expect(resolveGrapeName('Weisser Burgunder')).toBe('Pinot Blanc');
+  });
+});

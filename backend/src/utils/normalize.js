@@ -282,6 +282,27 @@ const GRAPE_SYNONYMS = {
 
   // Muscadet (the wine name used as grape name by mistake)
   'muscadet':             'Melon de Bourgogne',
+
+  // Spelling variants / typos / short forms that existed as duplicate Grape
+  // docs on prod (merged 2026-07-11) — mapped so they can't come back.
+  'agiorghitiko':         'Agiorgitiko',
+  'inzolia':              'Insolia',
+  'corvina veronese':     'Corvina',
+  'cesanese di affile':   "Cesanese d'Affile",
+  'sylvaner':             'Silvaner',
+  'tinta barocca':        'Tinta Barroca',
+  'tintaroriz':           'Tinta Roriz',   // "Tinta-Roriz" — hyphens are deleted by normalizeString
+  'verdehlo':             'Verdelho',
+  'bacchud':              'Bacchus',
+  'vidal':                'Vidal Blanc',
+  'foch':                 'Maréchal Foch',
+  'portugieser':          'Blauer Portugieser',
+
+  // ß is stripped (not expanded to ss) by normalizeString, so the existing
+  // 'weissburgunder' key never matched the actual label spelling Weißburgunder
+  // — a duplicate Grape doc proved it on prod.
+  'weiburgunder':         'Pinot Blanc',
+  'weisser burgunder':    'Pinot Blanc',
 };
 
 /**
