@@ -49,7 +49,11 @@ function CellarDetail() {
   const [showColorPicker, setShowColorPicker] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState('bottles');
+  // Initial tab honours a ?tab=overview deep link (the Overview tab in the
+  // shared CellarNav on the other cellar pages links here); after mount the
+  // param is cleared like the filter params below, and the in-page toggle takes
+  // over as local state.
+  const [activeTab, setActiveTab] = useState(() => searchParams.get('tab') === 'overview' ? 'overview' : 'bottles');
   const [showFilterModal, setShowFilterModal] = useState(false);
   const [filters, setFilters] = useState(() => ({
     search: searchParams.get('search') || '',
@@ -111,9 +115,9 @@ function CellarDetail() {
     return () => clearTimeout(searchTimer.current);
   }, [filters.search]);
 
-  // Clear URL search params after they've been read into filter state
+  // Clear URL search params after they've been read into filter/tab state
   useEffect(() => {
-    if (searchParams.has('search') || searchParams.has('vintage') || searchParams.has('minRating') || searchParams.has('sort') || searchParams.has('type') || searchParams.has('country') || searchParams.has('region') || searchParams.has('grapes') || searchParams.has('unplaced')) {
+    if (searchParams.has('search') || searchParams.has('vintage') || searchParams.has('minRating') || searchParams.has('sort') || searchParams.has('type') || searchParams.has('country') || searchParams.has('region') || searchParams.has('grapes') || searchParams.has('unplaced') || searchParams.has('tab')) {
       setSearchParams({}, { replace: true });
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps

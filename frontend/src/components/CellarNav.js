@@ -8,16 +8,20 @@ import './CellarNav.css';
  * without going back through the cellar landing first. Grew out of the menu
  * cleanup: destinations live here, actions live in the ⋮ menu.
  *
- * `active`   — 'bottles' | 'racks' | 'room' | 'history' | 'book'
+ * `active`   — 'bottles' | 'overview' | 'racks' | 'room' | 'history' | 'book'
  * `children` — optional custom leading tabs; when present the built-in
- *              "Bottles" link is omitted (CellarDetail injects its in-page
- *              Bottles/Overview toggle instead).
+ *              Bottles + Overview links are omitted (CellarDetail injects its
+ *              in-page Bottles/Overview toggle instead). On every other cellar
+ *              page they render as links so Overview is reachable everywhere.
  */
 function CellarNav({ cellarId, active, children }) {
   const { t } = useTranslation();
 
   const views = [
-    ...(children ? [] : [{ key: 'bottles', to: `/cellars/${cellarId}`, label: t('cellarDetail.tabBottles') }]),
+    ...(children ? [] : [
+      { key: 'bottles', to: `/cellars/${cellarId}`, label: t('cellarDetail.tabBottles') },
+      { key: 'overview', to: `/cellars/${cellarId}?tab=overview`, label: t('cellarDetail.tabOverview') },
+    ]),
     { key: 'racks', to: `/cellars/${cellarId}/racks`, label: t('cellarDetail.racks') },
     { key: 'room', to: `/cellars/${cellarId}/room`, label: t('cellarDetail.roomView', 'Room View') },
     { key: 'history', to: `/cellars/${cellarId}/history`, label: t('cellarDetail.history') },
