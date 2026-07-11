@@ -142,6 +142,19 @@
   background: rgba(var(--color-accent-rgb), 0.18);
 }
 
+/* "Unplaced" — added to the cellar but not yet assigned a rack slot. Dashed
+   border (vs the solid rack/maturity chips) reads as "pending placement". */
+.unplaced-badge {
+  display: inline-block;
+  font-size: 0.72rem;
+  font-weight: 500;
+  padding: 1px 8px;
+  border-radius: var(--radius-full);
+  background: #fff3e0;
+  color: #e65100;
+  border: 1px dashed #ffb74d;
+}
+
 /* Cross-cellar view: which cellar this bottle lives in. */
 .cellar-badge {
   display: inline-flex;

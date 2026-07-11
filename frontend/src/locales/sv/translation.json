@@ -490,6 +490,8 @@
     "countryLabel": "Länder",
     "regionLabel": "Regioner",
     "appellationLabel": "Appellation",
+    "placementLabel": "Placering",
+    "unplacedOnly": "Endast oplacerade",
     "grapeLabel": "Druvor",
     "vintageLabel": "Årgångar",
     "showMore": "+{{count}} till",
@@ -3234,7 +3236,9 @@
     "openBadge": "{{glasses}} glas · {{days}} d",
     "groupTooltip": "{{count}} identiska flaskor — klicka för att visa alla",
     "yourWindow": "ditt fönster",
-    "yourWindowTooltip": "Baserat på ditt eget dryckesfönster för den här flaskan"
+    "yourWindowTooltip": "Baserat på ditt eget dryckesfönster för den här flaskan",
+    "unplaced": "Oplacerad",
+    "unplacedTooltip": "Tillagd men inte placerad i en ställning"
   },
   "followButton": {
     "follow": "Följ",
