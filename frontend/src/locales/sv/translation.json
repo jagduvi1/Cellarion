@@ -993,6 +993,10 @@
     "addingToWishlist": "Lägger till…",
     "onWishlist": "På önskelistan",
     "wishlistError": "Försök igen",
+    "restore": "Flytta tillbaka till källaren",
+    "restoring": "Flyttar tillbaka…",
+    "restoreHint": "Registrerad av misstag? Lägg tillbaka flaskan i källaren som aktiv (den återkommer utan hyllplats).",
+    "restoreError": "Kunde inte flytta tillbaka – försök igen",
     "viewBottleAria": "Visa {{name}}",
     "noResults": "Inga flaskor matchar din sökning."
   },
