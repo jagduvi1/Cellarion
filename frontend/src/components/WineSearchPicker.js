@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useId, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import { searchWines } from '../api/wines';
@@ -19,8 +19,10 @@ export default function WineSearchPicker({ selected, onSelect, placeholder }) {
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
   const [noResults, setNoResults] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(-1);
   const wrapperRef = useRef(null);
   const debounceRef = useRef(null);
+  const listboxId = useId();
 
   // Debounced search
   useEffect(() => {
@@ -39,6 +41,7 @@ export default function WineSearchPicker({ selected, onSelect, placeholder }) {
         const wines = data.wines || [];
         setResults(wines);
         setNoResults(wines.length === 0);
+        setActiveIndex(-1);
         setOpen(true);
       } catch {
         setResults([]);
@@ -75,6 +78,29 @@ export default function WineSearchPicker({ selected, onSelect, placeholder }) {
     setQuery('');
   };
 
+  // Keyboard operability for the results list (ARIA combobox pattern): arrow
+  // keys move a virtual highlight via aria-activedescendant, Enter selects,
+  // Escape closes. The input keeps DOM focus throughout.
+  const handleKeyDown = (e) => {
+    if (e.key === 'ArrowDown') {
+      if (results.length === 0) return;
+      e.preventDefault();
+      setOpen(true);
+      setActiveIndex((i) => (i + 1) % results.length);
+    } else if (e.key === 'ArrowUp') {
+      if (results.length === 0) return;
+      e.preventDefault();
+      setActiveIndex((i) => (i <= 0 ? results.length - 1 : i - 1));
+    } else if (e.key === 'Enter') {
+      if (open && activeIndex >= 0 && results[activeIndex]) {
+        e.preventDefault();
+        handleSelect(results[activeIndex]);
+      }
+    } else if (e.key === 'Escape') {
+      if (open) { e.preventDefault(); setOpen(false); }
+    }
+  };
+
   if (selected) {
     return (
       <div className="wine-search-picker__selected">
@@ -96,13 +122,27 @@ export default function WineSearchPicker({ selected, onSelect, placeholder }) {
         value={query}
         onChange={(e) => setQuery(e.target.value)}
         onFocus={() => results.length > 0 && setOpen(true)}
+        onKeyDown={handleKeyDown}
         placeholder={placeholder || t('wineSearchPicker.placeholder')}
+        role="combobox"
+        aria-expanded={open}
+        aria-controls={listboxId}
+        aria-autocomplete="list"
+        aria-activedescendant={open && activeIndex >= 0 ? `${listboxId}-opt-${activeIndex}` : undefined}
       />
       {loading && <span className="wine-search-picker__spinner" />}
       {open && (results.length > 0 || noResults) && (
-        <ul className="wine-search-picker__dropdown">
-          {results.map((wine) => (
-            <li key={wine._id} className="wine-search-picker__option" onClick={() => handleSelect(wine)}>
+        <ul className="wine-search-picker__dropdown" id={listboxId} role="listbox">
+          {results.map((wine, idx) => (
+            <li
+              key={wine._id}
+              id={`${listboxId}-opt-${idx}`}
+              role="option"
+              aria-selected={idx === activeIndex}
+              className={`wine-search-picker__option${idx === activeIndex ? ' is-active' : ''}`}
+              onClick={() => handleSelect(wine)}
+              onMouseEnter={() => setActiveIndex(idx)}
+            >
               <span className={`wine-search-picker__option-dot ${wine.type || ''}`} />
               <div className="wine-search-picker__option-text">
                 <span className="wine-search-picker__option-name">{wine.name}</span>
@@ -118,7 +158,7 @@ export default function WineSearchPicker({ selected, onSelect, placeholder }) {
             </li>
           ))}
           {noResults && (
-            <li className="wine-search-picker__no-results">{t('wineSearchPicker.noResults')}</li>
+            <li className="wine-search-picker__no-results" role="presentation">{t('wineSearchPicker.noResults')}</li>
           )}
         </ul>
       )}

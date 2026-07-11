@@ -2711,6 +2711,7 @@
     "tabShare": "Dela",
     "previewEmpty": "Välj viner för att se förhandsgranskningen.",
     "statsEmpty": "Spara din vinlista först för att se statistik.",
+    "tableScrollAria": "Statistiktabell (skrolla i sidled för att se alla kolumner)",
     "noWinesMatch": "Inga viner matchar din sökning.",
     "noActiveBottles": "Inga aktiva flaskor i den här källaren.",
     "noWinesInSection": "Inga viner i den här sektionen ännu. Välj viner nedan.",

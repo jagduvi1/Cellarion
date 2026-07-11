@@ -21,6 +21,15 @@ function Modal({ title, onClose, children, wide, showClose, boxStyle, trapFocus 
   const titleId = useId();
   const boxRef = useRef(null);
 
+  // Escape closes the dialog, independent of the optional focus trap — mirrors
+  // Drawer.js so every shared-Modal dialog is keyboard-dismissible.
+  useEffect(() => {
+    if (!onClose) return undefined;
+    const onKey = (e) => { if (e.key === 'Escape') onClose(e); };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
   useEffect(() => {
     if (!trapFocus) return;
     const box = boxRef.current;

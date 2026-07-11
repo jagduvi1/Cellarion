@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
+import { useDialogA11y } from '../utils/useDialogA11y';
 
 export function SuggestGrapesModal({ wine, onClose }) {
   const { t } = useTranslation();
@@ -9,6 +10,8 @@ export function SuggestGrapesModal({ wine, onClose }) {
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState(null);
+  const titleId = useId();
+  const boxRef = useDialogA11y(onClose);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -38,10 +41,10 @@ export function SuggestGrapesModal({ wine, onClose }) {
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-box" onClick={e => e.stopPropagation()}>
+      <div className="modal-box" onClick={e => e.stopPropagation()} ref={boxRef} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1}>
         {submitted ? (
           <>
-            <h2>{t('bottleDetail.suggestGrapesThankYou', 'Thanks for contributing!')}</h2>
+            <h2 id={titleId}>{t('bottleDetail.suggestGrapesThankYou', 'Thanks for contributing!')}</h2>
             <p className="modal-wine-name">{wine?.name}</p>
             <p style={{ fontSize: '0.9rem', color: 'var(--color-text-muted)', marginBottom: '1.25rem' }}>
               {t('bottleDetail.suggestGrapesConfirm', 'Your suggestion has been submitted for review. Our team will add the verified varieties to the wine registry.')}
@@ -52,7 +55,7 @@ export function SuggestGrapesModal({ wine, onClose }) {
           </>
         ) : (
           <>
-            <h2>{t('bottleDetail.suggestGrapesTitle', 'Suggest Grape Varieties')}</h2>
+            <h2 id={titleId}>{t('bottleDetail.suggestGrapesTitle', 'Suggest Grape Varieties')}</h2>
             <p className="modal-wine-name">{wine?.name}</p>
             <form onSubmit={handleSubmit}>
               <div className="form-group">

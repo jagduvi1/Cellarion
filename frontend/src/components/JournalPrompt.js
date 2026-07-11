@@ -1,5 +1,6 @@
-import { lazy, Suspense, useState } from 'react';
+import { lazy, Suspense, useId, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useDialogA11y } from '../utils/useDialogA11y';
 
 const JournalEntryForm = lazy(() => import('./JournalEntryForm'));
 
@@ -31,11 +32,14 @@ export default function JournalPrompt({ bottle, onDone }) {
   const { t } = useTranslation();
   const [formOpen, setFormOpen] = useState(false);
   const [dontAsk, setDontAsk] = useState(false);
+  const titleId = useId();
 
   const finish = () => {
     if (dontAsk) setJournalPromptOptOut(true);
     onDone();
   };
+
+  const boxRef = useDialogA11y(finish);
 
   const accept = () => {
     if (dontAsk) setJournalPromptOptOut(true);
@@ -52,8 +56,8 @@ export default function JournalPrompt({ bottle, onDone }) {
 
   return (
     <div className="modal-overlay" onClick={finish}>
-      <div className="modal-box" onClick={e => e.stopPropagation()}>
-        <h2>{t('journal.promptTitle', 'Add to your journal?')}</h2>
+      <div className="modal-box" onClick={e => e.stopPropagation()} ref={boxRef} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1}>
+        <h2 id={titleId}>{t('journal.promptTitle', 'Add to your journal?')}</h2>
         <p>{t('journal.promptText', 'Would you like to capture this moment in your wine journal?')}</p>
         <div className="modal-actions" style={{ flexDirection: 'column', gap: '0.5rem' }}>
           <button className="btn btn-primary" onClick={accept}>

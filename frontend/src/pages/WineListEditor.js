@@ -1048,6 +1048,7 @@ function WineListEditor() {
                 </div>
               </div>
 
+              <div className="wle-table-wrap" role="group" tabIndex={0} aria-label={t('wineLists.tableScrollAria', 'Stats table (scroll sideways to see all columns)')}>
               <table className="wle-stats-table">
                 <thead>
                   <tr>
@@ -1081,6 +1082,7 @@ function WineListEditor() {
                   ))}
                 </tbody>
               </table>
+              </div>
             </>
           )}
           {!statsLoading && !stats && (

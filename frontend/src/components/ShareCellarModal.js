@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useId } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { useDialogA11y } from '../utils/useDialogA11y';
 import './ShareCellarModal.css';
 
 function ShareCellarModal({ cellarId, cellarName, onClose }) {
@@ -10,6 +11,8 @@ function ShareCellarModal({ cellarId, cellarName, onClose }) {
   const [adding, setAdding] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
+  const titleId = useId();
+  const boxRef = useDialogA11y(onClose);
 
   useEffect(() => {
     fetchMembers();
@@ -90,9 +93,9 @@ function ShareCellarModal({ cellarId, cellarName, onClose }) {
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="share-modal" onClick={e => e.stopPropagation()}>
+      <div className="share-modal" onClick={e => e.stopPropagation()} ref={boxRef} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1}>
         <div className="share-modal-header">
-          <h2>Share "{cellarName}"</h2>
+          <h2 id={titleId}>Share "{cellarName}"</h2>
           <button className="modal-close-btn" onClick={onClose} aria-label="Close">{'\u2715'}</button>
         </div>
 

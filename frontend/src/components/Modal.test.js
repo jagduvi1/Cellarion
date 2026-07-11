@@ -31,4 +31,18 @@ describe('Modal', () => {
     fireEvent.click(screen.getByText('body'));
     expect(onClose).not.toHaveBeenCalled();
   });
+
+  test('calls onClose when Escape is pressed', () => {
+    const onClose = vi.fn();
+    render(<Modal onClose={onClose}>body</Modal>);
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  test('exposes dialog semantics', () => {
+    render(<Modal title="Edit Wine" onClose={() => {}}>body</Modal>);
+    const dialog = screen.getByRole('dialog');
+    expect(dialog).toHaveAttribute('aria-modal', 'true');
+    expect(dialog).toHaveAttribute('aria-labelledby');
+  });
 });
