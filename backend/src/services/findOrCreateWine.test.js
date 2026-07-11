@@ -3,7 +3,11 @@
  * previously auto-created ~430 junk registry entries, so the threshold routing
  * IS the feature:
  *
+ *   producer-prefix strip (step 0)     → "Amisfield Pinot Noir"/"Amisfield" is
+ *                                        canonicalized to "Pinot Noir" before ANY matching
  *   exact normalizedKey match          → return existing, never create
+ *   unique producer+name sibling (1b)  → auto-match regardless of appellation
+ *                                        (unless skipSiblingMatch)
  *   fuzzy score >= 0.95                → auto-match existing (>= — exactly 0.95 matches)
  *   0.85 <= score < 0.95 (soft zone)   → { wine: null, candidates } "did you mean?",
  *                                        never a silent create (unless confirmCreate)
@@ -11,9 +15,9 @@
  *
  * The scorer (wineMatching.scoreAllMatches) is mocked so the boundary values
  * can be pinned exactly; wineMatching has its own dedicated suites. The
- * normalize utils (generateWineKey, normalizeString, resolveGrapeName) are the
- * REAL implementations, so key generation and grape-synonym dedup are tested
- * for real.
+ * normalize utils (generateWineKey, normalizeString, resolveGrapeName) and the
+ * producer-prefix stripper are the REAL implementations, so key generation,
+ * grape-synonym dedup and prefix stripping are tested for real.
  */
 jest.mock('../models/WineDefinition', () => {
   const ctor = jest.fn();
@@ -75,18 +79,33 @@ const EXISTING_WINE = { _id: 'wine-existing', name: 'Clos des Papes' };
 
 // findOne(...).populate(...) — populate resolves to the doc or null
 const findOneChain = (doc) => ({ populate: jest.fn().mockResolvedValue(doc) });
-// find($text...).populate(...).limit(20) — the MongoDB text-search fallback
-const textSearchChain = (docs) => ({
-  populate: jest.fn().mockReturnValue({ limit: jest.fn().mockResolvedValue(docs) }),
-});
+
+/**
+ * Query-shape dispatcher for WineDefinition.find — the service issues three
+ * differently-chained find() queries, so a single mockReturnValue can't serve
+ * them all:
+ *   { normalizedKey: RegExp } → .limit(2).populate(...)   (step 1b sibling lookup)
+ *   { _id: { $in: ids } }     → .populate(...)            (Meilisearch id fetch)
+ *   { $text: ... }            → .populate(...).limit(20)  (Mongo text fallback)
+ */
+function primeFind({ siblings = [], meiliDocs = [], textDocs = [] } = {}) {
+  WineDefinition.find.mockImplementation((q) => {
+    if (q && q.normalizedKey) {
+      return { limit: jest.fn().mockReturnValue({ populate: jest.fn().mockResolvedValue(siblings) }) };
+    }
+    if (q && q.$text) {
+      return { populate: jest.fn().mockReturnValue({ limit: jest.fn().mockResolvedValue(textDocs) }) };
+    }
+    return { populate: jest.fn().mockResolvedValue(meiliDocs) };
+  });
+}
 
 /** Prime the Meilisearch path with ranked results the mocked scorer returns. */
 function primeCandidates(ranked) {
   const candidates = ranked.map((r) => r.wine);
   searchService.getIsAvailable.mockReturnValue(true);
   searchService.search.mockResolvedValue({ ids: candidates.map((c) => c._id) });
-  // find({ _id: { $in: ids } }).populate(POPULATE) — awaited directly
-  WineDefinition.find.mockReturnValue({ populate: jest.fn().mockResolvedValue(candidates) });
+  primeFind({ meiliDocs: candidates });
   scoreAllMatches.mockReturnValue(ranked);
 }
 
@@ -111,10 +130,11 @@ beforeEach(() => {
     });
   }
 
-  // Defaults: no exact match, Meilisearch down, text fallback empty → create path
+  // Defaults: no exact match, no siblings, Meilisearch down, text fallback
+  // empty → create path
   WineDefinition.findOne.mockReturnValue(findOneChain(null));
   searchService.getIsAvailable.mockReturnValue(false);
-  WineDefinition.find.mockReturnValue(textSearchChain([]));
+  primeFind();
   scoreAllMatches.mockReturnValue([]);
 
   // Taxonomy defaults: everything already exists
@@ -150,6 +170,106 @@ describe('findOrCreateWine — exact match', () => {
     );
 
     expect(WineDefinition.findOne).toHaveBeenCalledWith({ normalizedKey: INPUT_KEY });
+  });
+});
+
+describe('findOrCreateWine — producer-prefix canonicalization (step 0)', () => {
+  // Registry canon: the name never embeds the producer. Cellar-format imports
+  // and non-compliant AI output arrive as "Producer Wine Name" + "Producer" —
+  // these previously minted producer-in-name duplicates (42 on prod, 2026-07-11).
+  const PREFIXED = { ...INPUT, name: 'Paul Avril Clos des Papes' };
+
+  test('name embedding the producer is stripped before the exact-key lookup', async () => {
+    WineDefinition.findOne.mockReturnValue(findOneChain(EXISTING_WINE));
+
+    const result = await findOrCreateWine(PREFIXED, USER_ID);
+
+    // INPUT_KEY is built from the producer-free name — the prefixed input must
+    // resolve to the very same key.
+    expect(WineDefinition.findOne).toHaveBeenCalledWith({ normalizedKey: INPUT_KEY });
+    expect(result).toEqual({ wine: EXISTING_WINE, created: false });
+  });
+
+  test('created wines store the stripped name, never producer-in-name', async () => {
+    const result = await findOrCreateWine(PREFIXED, USER_ID);
+
+    expect(result.created).toBe(true);
+    expect(WineDefinition.mock.calls[0][0].name).toBe('Clos des Papes');
+    expect(WineDefinition.mock.calls[0][0].normalizedKey).toBe(INPUT_KEY);
+  });
+
+  test('a doubled producer prefix is stripped repeatedly', async () => {
+    await findOrCreateWine({ ...INPUT, name: 'Paul Avril Paul Avril Clos des Papes' }, USER_ID);
+
+    expect(WineDefinition.mock.calls[0][0].name).toBe('Clos des Papes');
+  });
+
+  test('a name identical to the producer is left alone (nothing would remain)', async () => {
+    await findOrCreateWine({ ...INPUT, name: 'Paul Avril' }, USER_ID);
+
+    expect(WineDefinition.mock.calls[0][0].name).toBe('Paul Avril');
+  });
+});
+
+describe('findOrCreateWine — sibling match (step 1b)', () => {
+  // Same producer + same canonical name but a different appellation granularity
+  // ("Cromwell" vs "Central Otago") misses the exact key and fuzzy-scores ~0.90
+  // — below auto-match — so non-interactive callers used to create a duplicate.
+  const SIBLING = {
+    _id: 'wine-sibling',
+    name: 'Clos des Papes',
+    producer: 'Paul Avril',
+    appellation: 'Rhône',
+  };
+
+  test('a unique producer+name hit auto-matches regardless of appellation — no create, no fuzzy', async () => {
+    primeFind({ siblings: [SIBLING] });
+
+    const result = await findOrCreateWine(INPUT, USER_ID);
+
+    expect(result).toEqual({ wine: SIBLING, created: false });
+    expect(scoreAllMatches).not.toHaveBeenCalled();
+    expect(WineDefinition).not.toHaveBeenCalled();
+    expect(searchService.indexWine).not.toHaveBeenCalled();
+  });
+
+  test('sibling match fires under confirmCreate too (non-interactive importers rely on it)', async () => {
+    primeFind({ siblings: [SIBLING] });
+
+    const result = await findOrCreateWine(INPUT, USER_ID, { confirmCreate: true });
+
+    expect(result).toEqual({ wine: SIBLING, created: false });
+  });
+
+  test('the sibling lookup uses an anchored producer:name: prefix regex', async () => {
+    primeFind({ siblings: [SIBLING] });
+
+    await findOrCreateWine(INPUT, USER_ID);
+
+    const call = WineDefinition.find.mock.calls.find((c) => c[0] && c[0].normalizedKey);
+    const regex = call[0].normalizedKey;
+    expect(regex).toBeInstanceOf(RegExp);
+    expect(regex.source.startsWith('^')).toBe(true);
+    expect('paul avril:clos des papes:any appellation at all').toMatch(regex);
+    expect('other producer:clos des papes:').not.toMatch(regex);
+  });
+
+  test('several siblings fall through to the fuzzy scorer instead of picking one arbitrarily', async () => {
+    primeFind({ siblings: [SIBLING, { _id: 'wine-sibling-2' }] });
+
+    const result = await findOrCreateWine(INPUT, USER_ID);
+
+    // Default fuzzy mocks are empty → the create path proves we fell through.
+    expect(result.created).toBe(true);
+  });
+
+  test('skipSiblingMatch honours an explicit "create anyway" over a lone sibling', async () => {
+    primeFind({ siblings: [SIBLING] });
+
+    const result = await findOrCreateWine(INPUT, USER_ID, { confirmCreate: true, skipSiblingMatch: true });
+
+    expect(result.created).toBe(true);
+    expect(result.wine._id).toBe('wine-new');
   });
 });
 
@@ -266,7 +386,7 @@ describe('findOrCreateWine — fuzzy threshold routing', () => {
   test('Meilisearch failure falls back to MongoDB text search', async () => {
     searchService.getIsAvailable.mockReturnValue(true);
     searchService.search.mockRejectedValue(new Error('meili down'));
-    WineDefinition.find.mockReturnValue(textSearchChain([EXISTING_WINE]));
+    primeFind({ textDocs: [EXISTING_WINE] });
     scoreAllMatches.mockReturnValue([{ wine: EXISTING_WINE, score: 0.97 }]);
 
     const result = await findOrCreateWine(INPUT, USER_ID);
@@ -306,7 +426,7 @@ describe('findOrCreateWine — creation', () => {
     jest.clearAllMocks();
     WineDefinition.findOne.mockReturnValue(findOneChain(null));
     searchService.getIsAvailable.mockReturnValue(false);
-    WineDefinition.find.mockReturnValue(textSearchChain([]));
+    primeFind();
     Country.findOne.mockResolvedValue({ _id: 'country-1' });
     Region.findOne.mockResolvedValue({ _id: 'region-1' });
     Grape.findOne.mockResolvedValue({ _id: 'grape-1' });

@@ -354,7 +354,10 @@ router.post('/find-or-create', requireAuth, async (req, res) => {
     const result = await findOrCreateWine(
       { name, producer, country, region, appellation, type, grapes: grapes || [] },
       req.user.id,
-      { confirmCreate: !!confirmCreate }
+      // skipSiblingMatch: the user has already reviewed the suggested matches
+      // (that's what confirmCreate means here) — an appellation-variant sibling
+      // must not silently override their explicit "create a new wine anyway".
+      { confirmCreate: !!confirmCreate, skipSiblingMatch: !!confirmCreate }
     );
 
     // Soft-zone: hand the candidates back so the UI can prompt the user
