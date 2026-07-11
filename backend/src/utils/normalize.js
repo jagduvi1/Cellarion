@@ -298,6 +298,198 @@ const resolveGrapeName = (name) => {
 };
 
 /**
+ * Map of alternate country names → canonical English name.
+ * Keys are the output of normalizeString() applied to the alternate name.
+ * Values are the canonical Country.name used by the seeded taxonomy.
+ *
+ * Same idea as GRAPE_SYNONYMS: the AI importer and label scan receive labels
+ * in the user's language ("Tyskland", "Italie") or informal abbreviations
+ * ("USA"), and findOrCreateCountry would otherwise mint a duplicate Country
+ * document for each spelling — this happened on prod (USA / United States Of
+ * America / Tyskland / Italie / New Zeeland were all created as countries).
+ * Covers Swedish, German, French, Spanish, Italian and Dutch names for the
+ * wine countries plus common English variants; anything unmapped passes
+ * through unchanged and still dedupes by normalizedName.
+ */
+const COUNTRY_ALIASES = {
+  // United States
+  'usa':                      'United States',
+  'us':                       'United States',
+  'united states of america': 'United States',
+  'america':                  'United States',
+  'estados unidos':           'United States',
+  'etatsunis':                'United States', // États-Unis (hyphen deleted by normalizeString)
+  'vereinigte staaten':       'United States',
+
+  // England — canonical wine country (English PDO sparkling/still wines;
+  // wine-world convention over ISO). Welsh wines are rare enough that a
+  // separate "Wales" country may still be created deliberately.
+  'united kingdom':           'England',
+  'uk':                       'England',
+  'great britain':            'England',
+  'storbritannien':           'England',
+  'grobritannien':            'England', // Großbritannien (ß is stripped by normalizeString)
+
+  // Germany
+  'tyskland':                 'Germany',   // sv/da/no
+  'deutschland':              'Germany',
+  'allemagne':                'Germany',
+  'alemania':                 'Germany',
+  'germania':                 'Germany',
+  'duitsland':                'Germany',
+
+  // Italy
+  'italie':                   'Italy',     // fr
+  'italia':                   'Italy',
+  'italien':                  'Italy',     // sv + de
+
+  // France
+  'frankrike':                'France',    // sv
+  'frankreich':               'France',
+  'francia':                  'France',
+  'frankrijk':                'France',
+
+  // Spain
+  'spanien':                  'Spain',     // sv + de
+  'espagne':                  'Spain',
+  'espana':                   'Spain',
+  'espanha':                  'Spain',
+  'spagna':                   'Spain',
+  'spanje':                   'Spain',
+
+  // Portugal — same spelling in most languages; no aliases needed
+
+  // New Zealand
+  'new zeeland':              'New Zealand', // common typo (created a prod country)
+  'nya zeeland':              'New Zealand', // sv
+  'neuseeland':               'New Zealand',
+  'nouvellezelande':          'New Zealand', // Nouvelle-Zélande (hyphen deleted)
+  'nueva zelanda':            'New Zealand',
+  'nuova zelanda':            'New Zealand',
+
+  // Austria
+  'osterrike':                'Austria',   // sv (Österrike)
+  'osterreich':               'Austria',   // de (Österreich)
+  'autriche':                 'Austria',
+
+  // South Africa
+  'sydafrika':                'South Africa', // sv
+  'sudafrika':                'South Africa', // de (Südafrika)
+  'afrique du sud':           'South Africa',
+  'sudafrica':                'South Africa',
+
+  // Australia
+  'australien':               'Australia', // sv + de
+  'australie':                'Australia',
+
+  // Greece
+  'grekland':                 'Greece',    // sv
+  'griechenland':             'Greece',
+  'grece':                    'Greece',
+  'grecia':                   'Greece',
+
+  // Hungary
+  'ungern':                   'Hungary',   // sv
+  'ungarn':                   'Hungary',
+  'hongrie':                  'Hungary',
+  'ungheria':                 'Hungary',
+
+  // Switzerland
+  'schweiz':                  'Switzerland', // sv + de
+  'suisse':                   'Switzerland',
+  'svizzera':                 'Switzerland',
+
+  // Croatia
+  'kroatien':                 'Croatia',   // sv + de
+  'croatie':                  'Croatia',
+  'croazia':                  'Croatia',
+  'hrvatska':                 'Croatia',
+
+  // Czech Republic
+  'czechia':                  'Czech Republic',
+  'tjeckien':                 'Czech Republic', // sv
+  'tschechien':               'Czech Republic',
+
+  // Netherlands
+  'holland':                  'Netherlands',
+  'nederlanderna':            'Netherlands', // sv
+  'niederlande':              'Netherlands',
+  'paysbas':                  'Netherlands', // Pays-Bas (hyphen deleted)
+
+  // Georgia
+  'georgien':                 'Georgia',   // sv + de
+  'georgie':                  'Georgia',
+
+  // Lebanon
+  'libanon':                  'Lebanon',   // sv + de
+  'liban':                    'Lebanon',
+
+  // Turkey
+  'turkiye':                  'Turkey',
+  'turkiet':                  'Turkey',    // sv
+  'turkei':                   'Turkey',    // de (Türkei)
+  'turquie':                  'Turkey',
+
+  // Belgium
+  'belgien':                  'Belgium',   // sv + de
+  'belgique':                 'Belgium',
+  'belgie':                   'Belgium',
+
+  // Scandinavia
+  'sverige':                  'Sweden',
+  'schweden':                 'Sweden',
+  'suede':                    'Sweden',
+  'norge':                    'Norway',
+  'norwegen':                 'Norway',
+  'norvege':                  'Norway',
+  'danmark':                  'Denmark',
+  'danemark':                 'Denmark',
+
+  // Canada / Mexico / Brazil / Japan / Morocco
+  'kanada':                   'Canada',    // sv + de
+  'mexiko':                   'Mexico',    // sv + de
+  'mexique':                  'Mexico',
+  'brasilien':                'Brazil',    // sv + de
+  'bresil':                   'Brazil',
+  'brasil':                   'Brazil',
+  'japon':                    'Japan',
+  'marocko':                  'Morocco',   // sv
+  'marokko':                  'Morocco',   // de
+  'maroc':                    'Morocco',
+
+  // Eastern Europe
+  'slovenien':                'Slovenia',  // sv
+  'slowenien':                'Slovenia',  // de
+  'rumanien':                 'Romania',   // sv/de (Rumänien)
+  'roumanie':                 'Romania',
+  'bulgarien':                'Bulgaria',  // sv + de
+  'bulgarie':                 'Bulgaria',
+  'moldavien':                'Moldova',   // sv
+  'moldawien':                'Moldova',   // de
+  'russia':                   'Russian Federation',
+  'ryssland':                 'Russian Federation', // sv
+
+  // South America
+  'argentine':                'Argentina', // fr
+  'argentinien':              'Argentina', // de
+  'chili':                    'Chile',     // fr + nl
+};
+
+/**
+ * Resolve a country name to its canonical English form.
+ * If the name (after normalization) matches a known alias, the canonical
+ * name is returned. Otherwise the original trimmed name is returned unchanged.
+ *
+ * @param {string} name  Raw country name from label scan, AI lookup or import
+ * @returns {string}     Canonical country name for storage
+ */
+const resolveCountryName = (name) => {
+  if (!name || !name.trim()) return name;
+  const key = normalizeString(name);
+  return COUNTRY_ALIASES[key] || name.trim();
+};
+
+/**
  * Convert any string to a URL-safe slug (lowercase, hyphenated, ASCII-only).
  * Builds on normalizeString (which already strips diacritics and punctuation).
  */
@@ -334,6 +526,7 @@ module.exports = {
   generateWineKey,
   generateWineSlug,
   resolveGrapeName,
+  resolveCountryName,
   levenshteinDistance,
   calculateSimilarity,
   generateTrigrams,

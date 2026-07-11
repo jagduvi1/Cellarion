@@ -2,7 +2,7 @@ const express = require('express');
 const multer = require('multer');
 const { parse } = require('csv-parse');
 const { requireAuth, requireRole } = require('../../middleware/auth');
-const { generateWineKey, normalizeString } = require('../../utils/normalize');
+const { generateWineKey, normalizeString, resolveCountryName } = require('../../utils/normalize');
 const WineDefinition = require('../../models/WineDefinition');
 const Country = require('../../models/Country');
 const Region = require('../../models/Region');
@@ -133,10 +133,13 @@ async function getOrCreateCountry(name, userId, cache) {
   const key = name.toLowerCase().trim();
   if (cache.has(key)) return cache.get(key);
 
-  const normalized = normalizeString(name);
+  // Alias → canonical ("USA" → "United States", "Tyskland" → "Germany") so a
+  // CSV in another language can't mint a duplicate Country document.
+  const canonicalName = resolveCountryName(name);
+  const normalized = normalizeString(canonicalName);
   const doc = await Country.findOneAndUpdate(
     { normalizedName: normalized },
-    { $setOnInsert: { name: name.trim(), normalizedName: normalized, createdBy: userId } },
+    { $setOnInsert: { name: canonicalName.trim(), normalizedName: normalized, createdBy: userId } },
     { upsert: true, new: true }
   );
   cache.set(key, doc._id);

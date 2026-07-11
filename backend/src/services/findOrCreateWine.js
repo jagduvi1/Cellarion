@@ -15,7 +15,7 @@ const Country = require('../models/Country');
 const Region = require('../models/Region');
 const Grape = require('../models/Grape');
 const searchService = require('./search');
-const { generateWineKey, normalizeString, resolveGrapeName } = require('../utils/normalize');
+const { generateWineKey, normalizeString, resolveGrapeName, resolveCountryName } = require('../utils/normalize');
 const { scoreAllMatches } = require('./wineMatching');
 
 // Auto-match when combined score >= SIMILARITY_THRESHOLD (near-identical — e.g.
@@ -34,10 +34,14 @@ const POPULATE = ['country', 'region', 'grapes'];
 
 async function findOrCreateCountry(name, userId) {
   if (!name || !name.trim()) return null;
-  const normalizedName = normalizeString(name);
+  // Resolve alias → canonical name before lookup (e.g. "USA" → "United States",
+  // "Tyskland" → "Germany") so localized/abbreviated AI output can't mint a
+  // duplicate Country — mirrors the resolveGrapeName pattern below.
+  const canonicalName = resolveCountryName(name);
+  const normalizedName = normalizeString(canonicalName);
   let country = await Country.findOne({ normalizedName });
   if (country) return country;
-  country = new Country({ name: name.trim(), normalizedName, createdBy: userId });
+  country = new Country({ name: canonicalName.trim(), normalizedName, createdBy: userId });
   await country.save();
   return country;
 }

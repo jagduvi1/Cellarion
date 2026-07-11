@@ -8,6 +8,7 @@ const {
   trigramSimilarity,
   tokenSimilarity,
   combinedSimilarity,
+  resolveCountryName,
 } = require('./normalize');
 
 // ─── normalizeString ──────────────────────────────────────────────────────────
@@ -274,5 +275,61 @@ describe('combinedSimilarity', () => {
     const combined = combinedSimilarity('burgundy', 'burgundie');
     expect(combined).toBeGreaterThanOrEqual(Math.min(lev, tri, tok));
     expect(combined).toBeLessThanOrEqual(Math.max(lev, tri, tok));
+  });
+});
+
+// ─── resolveCountryName ──────────────────────────────────────────────────────
+
+describe('resolveCountryName', () => {
+  test('returns falsy input unchanged', () => {
+    expect(resolveCountryName(null)).toBe(null);
+    expect(resolveCountryName('')).toBe('');
+    expect(resolveCountryName('   ')).toBe('   ');
+  });
+
+  test('maps English abbreviations to canonical names', () => {
+    expect(resolveCountryName('USA')).toBe('United States');
+    expect(resolveCountryName('U.S.A.')).toBe('United States'); // punctuation stripped
+    expect(resolveCountryName('US')).toBe('United States');
+    expect(resolveCountryName('United States of America')).toBe('United States');
+    expect(resolveCountryName('America')).toBe('United States');
+  });
+
+  test('maps local-language names to canonical English (the prod duplicates)', () => {
+    // Each of these existed as a duplicate Country document on prod
+    expect(resolveCountryName('Tyskland')).toBe('Germany');   // Swedish
+    expect(resolveCountryName('Italie')).toBe('Italy');       // French
+    expect(resolveCountryName('New Zeeland')).toBe('New Zealand'); // typo
+  });
+
+  test('maps United Kingdom to England (canonical wine country)', () => {
+    expect(resolveCountryName('United Kingdom')).toBe('England');
+    expect(resolveCountryName('UK')).toBe('England');
+    expect(resolveCountryName('Great Britain')).toBe('England');
+  });
+
+  test('handles diacritics and hyphens through normalizeString', () => {
+    expect(resolveCountryName('Österrike')).toBe('Austria');        // Swedish, Ö → o
+    expect(resolveCountryName('Nouvelle-Zélande')).toBe('New Zealand'); // hyphen deleted
+    expect(resolveCountryName('États-Unis')).toBe('United States');
+    expect(resolveCountryName('Großbritannien')).toBe('England');   // ß stripped
+    expect(resolveCountryName('Südafrika')).toBe('South Africa');
+  });
+
+  test('is case-insensitive', () => {
+    expect(resolveCountryName('tyskland')).toBe('Germany');
+    expect(resolveCountryName('FRANKRIKE')).toBe('France');
+  });
+
+  test('returns canonical names unchanged', () => {
+    expect(resolveCountryName('France')).toBe('France');
+    expect(resolveCountryName('United States')).toBe('United States');
+    expect(resolveCountryName('England')).toBe('England');
+    expect(resolveCountryName('South Africa')).toBe('South Africa');
+  });
+
+  test('passes unknown countries through trimmed', () => {
+    expect(resolveCountryName('  Uzbekistan  ')).toBe('Uzbekistan');
+    expect(resolveCountryName('Atlantis')).toBe('Atlantis');
   });
 });
