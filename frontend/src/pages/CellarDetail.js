@@ -35,6 +35,10 @@ function CellarDetail() {
   const [bottlesTotal, setBottlesTotal] = useState(0);
   const [statistics, setStatistics] = useState(null);
   const [rackMap, setRackMap] = useState(new Map());
+  // null = rack layout not yet loaded. Gates the "Unplaced" badge: only badge
+  // once we know the cellar has racks (true) — never while loading, and never
+  // for cellars with no racks at all (false), where placement isn't a concept.
+  const [hasRacks, setHasRacks] = useState(null);
   const [loading, setLoading] = useState(true);
   const [bottlesLoading, setBottlesLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -195,6 +199,7 @@ function CellarDetail() {
   };
 
   const fetchRacks = async () => {
+    setHasRacks(null);
     try {
       const [racksRes, layoutRes] = await Promise.all([
         getRacks(apiFetch, id),
@@ -214,6 +219,7 @@ function CellarDetail() {
           });
         });
         setRackMap(map);
+        setHasRacks((racksData.racks || []).length > 0);
       }
     } catch {}
   };
@@ -627,6 +633,7 @@ function CellarDetail() {
               loadingMore={bottlesLoading}
               onLoadMore={loadMore}
               multi={dataIsMulti}
+              rackKnown={!dataIsMulti && hasRacks === true}
             />
           )}
         </div>
@@ -685,7 +692,7 @@ function CellarDetail() {
 // `multi` = cross-cellar view: `bottles` is a flat list (no grouping), each item
 // carries its own `cellar` id + `cellarName` so it links to and is badged with
 // the right cellar.
-function BottlesList({ bottles, rackMap, cellarId, hasMore, loadingMore, onLoadMore, multi = false }) {
+function BottlesList({ bottles, rackMap, cellarId, hasMore, loadingMore, onLoadMore, multi = false, rackKnown = false }) {
   const { t } = useTranslation();
   const [viewMode, setViewMode] = useState(() => {
     try { return localStorage.getItem('cellarion_bottle_view') || 'list'; } catch { return 'list'; }
@@ -761,6 +768,7 @@ function BottlesList({ bottles, rackMap, cellarId, hasMore, loadingMore, onLoadM
                 viewMode={viewMode}
                 showCellarBadge
                 compact={compact}
+                rackKnown={rackKnown}
               />
             );
           }
@@ -769,7 +777,7 @@ function BottlesList({ bottles, rackMap, cellarId, hasMore, loadingMore, onLoadM
             const rep = item.bottles[0];
             if (item.count === 1) {
               return (
-                <BottleCard key={rep._id} bottle={rep} rackMap={rackMap} cellarId={cellarId} viewMode={viewMode} compact={compact} />
+                <BottleCard key={rep._id} bottle={rep} rackMap={rackMap} cellarId={cellarId} viewMode={viewMode} compact={compact} rackKnown={rackKnown} />
               );
             }
             if (!expandedGroups.has(item.key)) {
@@ -783,6 +791,7 @@ function BottlesList({ bottles, rackMap, cellarId, hasMore, loadingMore, onLoadM
                   groupCount={item.count}
                   onClick={() => toggleGroup(item.key)}
                   compact={compact}
+                  rackKnown={rackKnown}
                 />
               );
             }
@@ -796,14 +805,14 @@ function BottlesList({ bottles, rackMap, cellarId, hasMore, loadingMore, onLoadM
                   </button>
                 </div>
                 {item.bottles.map(b => (
-                  <BottleCard key={b._id} bottle={b} rackMap={rackMap} cellarId={cellarId} viewMode={viewMode} compact={compact} />
+                  <BottleCard key={b._id} bottle={b} rackMap={rackMap} cellarId={cellarId} viewMode={viewMode} compact={compact} rackKnown={rackKnown} />
                 ))}
               </Fragment>
             );
           }
           // Defensive fallback: a plain bottle item (responses are always grouped)
           return (
-            <BottleCard key={item._id} bottle={item} rackMap={rackMap} cellarId={cellarId} viewMode={viewMode} compact={compact} />
+            <BottleCard key={item._id} bottle={item} rackMap={rackMap} cellarId={cellarId} viewMode={viewMode} compact={compact} rackKnown={rackKnown} />
           );
         })}
       </div>

@@ -3234,7 +3234,9 @@
     "openBadge": "{{glasses}} gl · {{days}}d",
     "groupTooltip": "{{count}} identical bottles — click to expand",
     "yourWindow": "your window",
-    "yourWindowTooltip": "Based on your own drink window for this bottle"
+    "yourWindowTooltip": "Based on your own drink window for this bottle",
+    "unplaced": "Unplaced",
+    "unplacedTooltip": "Added but not placed in a rack"
   },
   "followButton": {
     "follow": "Follow",

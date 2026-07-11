@@ -19,7 +19,7 @@ const MATURITY_LABELS = {
  * Renders a single bottle in either list or card (grid) view.
  * Props: bottle, rackMap, cellarId, viewMode ('list' | 'card')
  */
-function BottleCard({ bottle, rackMap, cellarId, viewMode, groupCount = 1, onClick, showCellarBadge = false, compact = false }) {
+function BottleCard({ bottle, rackMap, cellarId, viewMode, groupCount = 1, onClick, showCellarBadge = false, compact = false, rackKnown = false }) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -30,6 +30,11 @@ function BottleCard({ bottle, rackMap, cellarId, viewMode, groupCount = 1, onCli
   // A collapsed group spans multiple bottles (possibly in different racks), so a
   // single rack badge would be misleading — suppress it until the group expands.
   const rackInfo = isGroup ? null : rackMap?.get(bottle._id);
+  // "Unplaced" = the caller knows this cellar's rack layout (single-cellar view
+  // of a cellar that has racks) and this active bottle isn't in any slot — i.e.
+  // it's been added but not shelved. Suppressed for groups (members may differ)
+  // and whenever placement is unknown (cross-cellar view, or no racks exist).
+  const isUnplaced = rackKnown && !isGroup && !rackInfo && bottle.status === 'active';
   const rackNavPref = user?.preferences?.rackNavigation || 'auto';
   const imgSrc = bottle.defaultImageUrl || bottle.wineDefinition?.image || bottle.pendingImageUrl;
   const credit = bottle.defaultImageUrl ? null : bottle.wineDefinition?.imageCredit;
@@ -112,6 +117,11 @@ function BottleCard({ bottle, rackMap, cellarId, viewMode, groupCount = 1, onCli
             {!maturityInfo && bottle.maturityStatus === null && bottle.hasOwnProperty('maturityStatus') && (
               <span className="maturity-badge maturity-badge--none">{t('maturity.noData')}</span>
             )}
+            {isUnplaced && (
+              <span className="unplaced-badge" title={t('bottleCard.unplacedTooltip', 'Added but not placed in a rack')}>
+                {t('bottleCard.unplaced', 'Unplaced')}
+              </span>
+            )}
             {rackInfo && (
               <Link
                 to={buildRackUrl(cellarId, { rackId: rackInfo.rackId, bottleId: bottle._id, inRoom: rackInfo.inRoom, preference: rackNavPref })}
@@ -184,6 +194,11 @@ function BottleCard({ bottle, rackMap, cellarId, viewMode, groupCount = 1, onCli
           {!maturityInfo && bottle.maturityStatus === null && bottle.hasOwnProperty('maturityStatus') && (
             <span className="maturity-badge maturity-badge--none">{t('maturity.noData')}</span>
           )}
+          {isUnplaced && (
+            <span className="unplaced-badge" title={t('bottleCard.unplacedTooltip', 'Added but not placed in a rack')}>
+              {t('bottleCard.unplaced', 'Unplaced')}
+            </span>
+          )}
           {rackInfo && (
             <Link
               to={buildRackUrl(cellarId, { rackId: rackInfo.rackId, bottleId: bottle._id, inRoom: rackInfo.inRoom, preference: rackNavPref })}
@@ -212,7 +227,7 @@ function BottleCard({ bottle, rackMap, cellarId, viewMode, groupCount = 1, onCli
 // values derived from the OTHER compared props (the bottle/group item) — if a
 // future caller closes over unrelated state, that handler must be stabilized
 // with useCallback instead.
-const COMPARED_PROPS = ['bottle', 'rackMap', 'cellarId', 'viewMode', 'groupCount', 'showCellarBadge', 'compact'];
+const COMPARED_PROPS = ['bottle', 'rackMap', 'cellarId', 'viewMode', 'groupCount', 'showCellarBadge', 'compact', 'rackKnown'];
 export default memo(BottleCard, (prev, next) =>
   COMPARED_PROPS.every(key => prev[key] === next[key])
 );
