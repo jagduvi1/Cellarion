@@ -1,17 +1,16 @@
-/* Shared cellar view switcher — visual twin of the CellarDetail segmented
-   tabs so pages that adopt it look native. Horizontally scrollable on
-   phones instead of wrapping. */
+/* Shared cellar view switcher — an underline tab bar (not a segmented pill
+   control). The segmented look was byte-identical to the app's in-page filter
+   toggles (e.g. the rack-lens control), so the nav didn't read as navigation.
+   Underline tabs are the web's canonical "separate destinations" idiom.
+   Horizontally scrollable on phones; hidden in print (Cellar Book). */
 .cellar-nav {
   display: flex;
-  background: var(--color-bg);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  padding: 3px;
+  gap: 0.25rem;
   margin: 1rem 0;
-  gap: 3px;
+  border-bottom: 1px solid var(--color-border);
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
-  scrollbar-width: none; /* the strip itself signals scrollability by cut-off tabs */
+  scrollbar-width: none;
 }
 
 .cellar-nav::-webkit-scrollbar {
@@ -19,44 +18,44 @@
 }
 
 .cellar-nav-tab {
-  flex: 1;
+  flex: 0 0 auto;                 /* natural width, left-aligned (tab-bar look) */
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 0.4rem;
-  padding: 0.6rem 0.75rem;
+  padding: 0.6rem 0.9rem;
   border: none;
-  border-radius: calc(var(--radius-md) - 2px);
   background: transparent;
   color: var(--color-text-muted);
-  font-size: 0.88rem;
+  font-size: 0.9rem;
   font-weight: 500;
   font-family: var(--font-body);
   cursor: pointer;
-  transition: all var(--transition-fast);
   min-height: 44px;
-  position: relative;
-  text-decoration: none;
   white-space: nowrap;
+  text-decoration: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;            /* sit the 2px indicator on the strip's 1px baseline */
+  transition: color var(--transition-fast), border-color var(--transition-fast);
 }
 
 .cellar-nav-tab:hover {
   color: var(--color-text-secondary);
+  border-bottom-color: var(--color-border);
 }
 
 .cellar-nav-tab.active {
-  background: var(--color-surface);
   color: var(--color-primary);
-  box-shadow: var(--shadow-sm);
+  border-bottom-color: var(--color-primary);
   font-weight: 600;
 }
 
 .cellar-nav-tab:focus-visible {
   outline: 2px solid var(--color-border-focus);
   outline-offset: -2px;
+  border-radius: var(--radius-sm);
 }
 
-/* Never print the navigation (the Cellar Book is a print view) */
 @media print {
   .cellar-nav {
     display: none;

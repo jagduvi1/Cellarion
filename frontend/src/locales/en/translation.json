@@ -880,6 +880,7 @@
 
   "room": {
     "title": "Room View",
+    "subtitle": "3D cellar layout",
     "backToRacks": "Racks",
     "editMode": "Edit",
     "viewMode": "View",
@@ -2294,6 +2295,7 @@
     "linkBtn": "Cellar Book",
     "linkDesc": "Printable rack maps & lists",
     "printBtn": "Print / Save as PDF",
+    "tableAria": "Bottle list (scroll sideways to see all columns)",
     "backToRacks": "Back to racks",
     "backToCellar": "Back to cellar",
     "summary": "{{total}} bottles — {{placed}} in racks, {{unplaced}} unplaced",

@@ -1,0 +1,70 @@
+/* Shared header block above the CellarNav strip. Fixed shape + a
+   height-reserved subtitle line so the nav anchors at the same Y on every
+   cellar page, regardless of whether a subtitle/description is present, the
+   page is still loading, or page-specific action buttons are shown. */
+.cellar-page-header {
+  margin-bottom: 0;              /* the nav's own 1rem top margin is the only gap, everywhere */
+}
+
+.cellar-page-header-main {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: 0.25rem;
+}
+
+.cellar-page-header-titles {
+  min-width: 0;                  /* allow the title to truncate, don't push actions off-screen */
+}
+
+.cellar-page-header h1 {
+  margin: 0;
+  font-size: 1.5rem;
+  font-family: var(--font-heading);
+  color: var(--color-text);
+}
+
+@media (max-width: 768px) {
+  .cellar-page-header h1 {
+    font-size: 1.3rem;
+  }
+}
+
+.cellar-page-subtitle {
+  margin: 0.25rem 0 0;
+  font-size: 0.9rem;
+  color: var(--color-text-secondary);
+  min-height: 1.2em;             /* RESERVE the line even when empty → no gap, no load-time jump */
+}
+
+.cellar-page-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+/* Self-contained loading skeleton so the component works on pages that don't
+   import CellarDetail.css. */
+.cph-skeleton-h1 {
+  height: 1.5rem;
+  width: 40%;
+  min-width: 8rem;
+  border-radius: var(--radius-sm);
+  background: var(--color-border);
+  animation: cph-skeleton-pulse 1.2s ease-in-out infinite;
+}
+
+@media (max-width: 768px) {
+  .cph-skeleton-h1 { height: 1.3rem; }
+}
+
+@keyframes cph-skeleton-pulse {
+  0%, 100% { opacity: 0.4; }
+  50%      { opacity: 0.8; }
+}
+
+@media print {
+  .cellar-page-header { display: none; }
+}

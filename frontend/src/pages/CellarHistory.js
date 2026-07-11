@@ -9,6 +9,7 @@ import { addToWishlist } from '../api/wishlist';
 import { listCellars, getCellarHistory, getMultiCellarHistory } from '../api/cellars';
 import CellarScopePicker from '../components/CellarScopePicker';
 import CellarNav from '../components/CellarNav';
+import CellarPageHeader from '../components/CellarPageHeader';
 import './CellarDetail.css';
 import './CellarHistory.css';
 
@@ -183,26 +184,14 @@ function CellarHistory() {
           </button>
         </div>
       )}
-      <div className="history-header">
-        <Link to={`/cellars/${id}`} className="back-link">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
-          {t('history.backTo', { cellarName: cellar?.name || '…' })}
-        </Link>
-        {loading ? (
-          <div className="skeleton-h1" />
-        ) : (
-          <>
-            <h1 className={cellar?.userColor ? 'cellar-accent-border' : ''} style={cellar?.userColor ? { '--cellar-color': cellar.userColor } : undefined}>
-              {t('history.title')}
-            </h1>
-            <p className="page-subtitle">
-              {total === 0 && !activeChips.length
-                ? t('history.noHistory')
-                : t('history.bottleCount', { count: total })}
-            </p>
-          </>
-        )}
-      </div>
+      <CellarPageHeader
+        backTo={`/cellars/${id}`}
+        backLabel={t('history.backTo', { cellarName: cellar?.name || '…' })}
+        title={t('history.title')}
+        loading={loading}
+        userColor={cellar?.userColor}
+        subtitle={total === 0 && !activeChips.length ? t('history.noHistory') : t('history.bottleCount', { count: total })}
+      />
 
       <CellarNav cellarId={id} active="history" />
 

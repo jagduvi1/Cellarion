@@ -8,6 +8,7 @@ import { buildCellarBook, formatDrinkWindow } from '../utils/cellarBook';
 import { formatRating } from '../utils/ratingUtils';
 import PrintRackMap from '../components/racks/PrintRackMap';
 import CellarNav from '../components/CellarNav';
+import CellarPageHeader from '../components/CellarPageHeader';
 import './CellarBook.css';
 
 // The cellar bottles endpoint caps page size at 200 — loop until we have
@@ -101,21 +102,25 @@ function CellarBook() {
 
   return (
     <div className="cellar-book">
-      {/* Screen-only toolbar */}
-      <div className="cb-toolbar">
-        <Link to={`/cellars/${id}`} className="back-link">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="15 18 9 12 15 6"/></svg>
-          {t('cellarBook.backToCellar', 'Back to cellar')}
-        </Link>
-        <button className="btn btn-primary" onClick={() => window.print()}>
-          {t('cellarBook.printBtn', 'Print / Save as PDF')}
-        </button>
-      </div>
+      {/* Screen header — shared shape so the nav anchors like every other page.
+          Print button folded into the action slot. Hidden in print. */}
+      <CellarPageHeader
+        backTo={`/cellars/${id}`}
+        backLabel={t('cellarBook.backToCellar', 'Back to cellar')}
+        title={cellar?.name}
+        subtitle={t('cellarBook.title', 'Cellar Book')}
+        actions={
+          <button className="btn btn-primary btn-small" onClick={() => window.print()}>
+            {t('cellarBook.printBtn', 'Print / Save as PDF')}
+          </button>
+        }
+      />
 
       {/* Shared view switcher (screen only — CellarNav hides itself in print) */}
       <CellarNav cellarId={id} active="book" />
 
-      {/* Book header */}
+      {/* Print-only document heading (hidden on screen; the screen header above
+          carries the title). */}
       <header className="cb-header">
         <h1>{cellar?.name}</h1>
         <p className="cb-subtitle">{t('cellarBook.title', 'Cellar Book')}</p>
@@ -171,6 +176,7 @@ function CellarBook() {
 
 function BottleTable({ entries, t }) {
   return (
+    <div className="cb-table-wrap" role="group" tabIndex={0} aria-label={t('cellarBook.tableAria', 'Bottle list (scroll sideways to see all columns)')}>
     <table className="cb-table">
       <thead>
         <tr>
@@ -210,6 +216,7 @@ function BottleTable({ entries, t }) {
         })}
       </tbody>
     </table>
+    </div>
   );
 }
 

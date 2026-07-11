@@ -10,6 +10,7 @@ import BottleFilterModal from '../components/BottleFilterModal';
 import CellarScopePicker from '../components/CellarScopePicker';
 import ClimateCard from '../components/ClimateCard';
 import CellarNav from '../components/CellarNav';
+import CellarPageHeader from '../components/CellarPageHeader';
 import './CellarDetail.css';
 
 // Stable empty rack map for the cross-cellar view (rack placement is per-cellar,
@@ -244,11 +245,6 @@ function CellarDetail() {
   // cellar is loaded, transient fetch failures render as an inline banner.
   if (error && !cellar) return <div className="alert alert-error">{error}</div>;
 
-  const h1Style = cellar?.userColor
-    ? { '--cellar-color': cellar.userColor }
-    : {};
-  const h1Class = cellar?.userColor ? 'cellar-accent-border' : '';
-
   return (
     <div className="cellar-detail-page">
       {error && (
@@ -264,133 +260,119 @@ function CellarDetail() {
           </button>
         </div>
       )}
-      {/* ── Header — shell renders immediately, details fill in after load ── */}
-      <div className="cellar-header">
-        <div className="cellar-header-top">
-          <Link to="/cellars?all=1" className="back-link">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="15 18 9 12 15 6"/></svg>
-            {t('cellarDetail.backToCellars')}
-          </Link>
-          {/* Desktop-only add bottle button */}
-          {!loading && (
-            <div className="cellar-header-desktop-actions">
-              {canEdit && (
-                <Link to={`/cellars/${id}/add-bottle`} className="btn btn-primary btn-small">
-                  + {t('cellarDetail.addBottle')}
-                </Link>
-              )}
-              <div className="more-menu-wrap">
-                <button
-                  className="btn btn-secondary btn-small btn-more"
-                  onClick={() => setMoreOpen(o => !o)}
-                  aria-label={t('cellarDetail.moreActions')}
-                  aria-haspopup="menu"
-                  aria-expanded={moreOpen}
-                >
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><circle cx="12" cy="12" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="12" cy="19" r="1"/></svg>
-                </button>
-                {moreOpen && (
-                  <>
-                    <div className="more-menu-backdrop" onClick={() => setMoreOpen(false)} aria-hidden="true" />
-                    {/* Views (Racks/History/…) moved to the CellarNav strip —
-                        this menu now holds actions only: Manage / Data / Danger. */}
-                    <div className="more-menu-dropdown" role="menu">
-                      {cellar.userRole === 'owner' && (
-                        <button
-                          className="more-menu-item"
-                          onClick={() => { setShowEditModal(true); setMoreOpen(false); }}
-                        >
-                          <span aria-hidden="true">✏️</span> {t('cellarDetail.editCellar')}
-                        </button>
-                      )}
+      {/* ── Header — shared shape so the nav anchors at the same Y everywhere ── */}
+      <CellarPageHeader
+        backTo="/cellars?all=1"
+        backLabel={t('cellarDetail.backToCellars')}
+        title={cellar?.name}
+        loading={loading}
+        userColor={cellar?.userColor}
+        subtitle={cellar?.description}
+        titleBadge={!loading && cellar?.userRole && cellar.userRole !== 'owner' ? (
+          <span className={`shared-role-tag shared-role-tag--${cellar.userRole}`} style={{ marginLeft: '0.5rem' }}>
+            {t('cellarDetail.sharedBy')} {cellar.user?.username}
+          </span>
+        ) : null}
+        actions={!loading && (
+          <>
+            {canEdit && (
+              <Link to={`/cellars/${id}/add-bottle`} className="btn btn-primary btn-small cph-desktop-only">
+                + {t('cellarDetail.addBottle')}
+              </Link>
+            )}
+            <div className="more-menu-wrap">
+              <button
+                className="btn btn-secondary btn-small btn-more"
+                onClick={() => setMoreOpen(o => !o)}
+                aria-label={t('cellarDetail.moreActions')}
+                aria-haspopup="menu"
+                aria-expanded={moreOpen}
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><circle cx="12" cy="12" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="12" cy="19" r="1"/></svg>
+              </button>
+              {moreOpen && (
+                <>
+                  <div className="more-menu-backdrop" onClick={() => setMoreOpen(false)} aria-hidden="true" />
+                  {/* Views (Racks/History/…) live in the CellarNav strip —
+                      this menu holds actions only: Manage / Data / Danger. */}
+                  <div className="more-menu-dropdown" role="menu">
+                    {cellar.userRole === 'owner' && (
                       <button
                         className="more-menu-item"
-                        onClick={() => setShowColorPicker(true) || setMoreOpen(false)}
+                        onClick={() => { setShowEditModal(true); setMoreOpen(false); }}
                       >
-                        <span aria-hidden="true">🎨</span> {t('cellarDetail.setColor')}
+                        <span aria-hidden="true">✏️</span> {t('cellarDetail.editCellar')}
                       </button>
-                      {cellar.userRole === 'owner' && (
+                    )}
+                    <button
+                      className="more-menu-item"
+                      onClick={() => setShowColorPicker(true) || setMoreOpen(false)}
+                    >
+                      <span aria-hidden="true">🎨</span> {t('cellarDetail.setColor')}
+                    </button>
+                    {cellar.userRole === 'owner' && (
+                      <button
+                        className="more-menu-item"
+                        onClick={() => { setShowShareModal(true); setMoreOpen(false); }}
+                      >
+                        <span aria-hidden="true">🔗</span> {t('cellarDetail.share')}
+                      </button>
+                    )}
+                    {cellar.userRole === 'owner' && (
+                      <Link
+                        to={`/cellars/${id}/wine-lists`}
+                        className="more-menu-item"
+                        onClick={() => setMoreOpen(false)}
+                      >
+                        <span aria-hidden="true">📋</span> {t('cellarDetail.wineLists')}
+                      </Link>
+                    )}
+                    {(canEdit || cellar.userRole === 'owner') && <div className="more-menu-divider" />}
+                    {canEdit && (
+                      <Link
+                        to={`/cellars/${id}/import`}
+                        className="more-menu-item"
+                        onClick={() => setMoreOpen(false)}
+                      >
+                        <span aria-hidden="true">📥</span> {t('cellarDetail.importBottles')}
+                      </Link>
+                    )}
+                    {cellar.userRole === 'owner' && (
+                      <Link
+                        to={`/export-cellar?cellar=${id}`}
+                        className="more-menu-item"
+                        onClick={() => setMoreOpen(false)}
+                      >
+                        <span aria-hidden="true">📤</span> {t('cellarDetail.export')}
+                      </Link>
+                    )}
+                    {cellar.userRole === 'owner' && (
+                      <Link
+                        to={`/cellars/${id}/audit`}
+                        className="more-menu-item"
+                        onClick={() => setMoreOpen(false)}
+                      >
+                        <span aria-hidden="true">🧾</span> {t('cellarDetail.auditLog')}
+                      </Link>
+                    )}
+                    {cellar.userRole === 'owner' && (
+                      <>
+                        <div className="more-menu-divider" />
                         <button
-                          className="more-menu-item"
-                          onClick={() => { setShowShareModal(true); setMoreOpen(false); }}
+                          className="more-menu-item more-menu-item--danger"
+                          onClick={() => { setShowDeleteModal(true); setMoreOpen(false); }}
                         >
-                          <span aria-hidden="true">🔗</span> {t('cellarDetail.share')}
+                          <span aria-hidden="true">🗑️</span> {t('cellarDetail.deleteCellar')}
                         </button>
-                      )}
-                      {cellar.userRole === 'owner' && (
-                        <Link
-                          to={`/cellars/${id}/wine-lists`}
-                          className="more-menu-item"
-                          onClick={() => setMoreOpen(false)}
-                        >
-                          <span aria-hidden="true">📋</span> {t('cellarDetail.wineLists')}
-                        </Link>
-                      )}
-                      {(canEdit || cellar.userRole === 'owner') && <div className="more-menu-divider" />}
-                      {canEdit && (
-                        <Link
-                          to={`/cellars/${id}/import`}
-                          className="more-menu-item"
-                          onClick={() => setMoreOpen(false)}
-                        >
-                          <span aria-hidden="true">📥</span> {t('cellarDetail.importBottles')}
-                        </Link>
-                      )}
-                      {cellar.userRole === 'owner' && (
-                        <Link
-                          to={`/export-cellar?cellar=${id}`}
-                          className="more-menu-item"
-                          onClick={() => setMoreOpen(false)}
-                        >
-                          <span aria-hidden="true">📤</span> {t('cellarDetail.export')}
-                        </Link>
-                      )}
-                      {cellar.userRole === 'owner' && (
-                        <Link
-                          to={`/cellars/${id}/audit`}
-                          className="more-menu-item"
-                          onClick={() => setMoreOpen(false)}
-                        >
-                          <span aria-hidden="true">🧾</span> {t('cellarDetail.auditLog')}
-                        </Link>
-                      )}
-                      {cellar.userRole === 'owner' && (
-                        <>
-                          <div className="more-menu-divider" />
-                          <button
-                            className="more-menu-item more-menu-item--danger"
-                            onClick={() => { setShowDeleteModal(true); setMoreOpen(false); }}
-                          >
-                            <span aria-hidden="true">🗑️</span> {t('cellarDetail.deleteCellar')}
-                          </button>
-                        </>
-                      )}
-                    </div>
-                  </>
-                )}
-              </div>
+                      </>
+                    )}
+                  </div>
+                </>
+              )}
             </div>
-          )}
-        </div>
-
-        {loading ? (
-          <div className="skeleton-h1" />
-        ) : (
-          <>
-            <h1 className={h1Class} style={h1Style}>{cellar.name}</h1>
-            {cellar.description && <p className="cellar-description">{cellar.description}</p>}
-            {cellar.userRole && cellar.userRole !== 'owner' && (
-              <p className="shared-by-label">
-                {t('cellarDetail.sharedBy')} <strong>{cellar.user?.username}</strong>
-                {' · '}
-                <span className={`shared-role-tag shared-role-tag--${cellar.userRole}`}>
-                  {cellar.userRole === 'editor' ? t('cellarDetail.editAccess') : t('cellarDetail.viewAccess')}
-                </span>
-              </p>
-            )}
           </>
         )}
-      </div>
+      />
 
       {/* ── View switcher: in-page Bottles/Overview toggles + links to every
              other cellar view (shared CellarNav strip used on all subpages) ── */}

@@ -14,6 +14,7 @@ import WineImage from '../components/WineImage';
 import JournalPrompt, { journalPromptOptedOut } from '../components/JournalPrompt';
 import { LENSES, getLensStyle, getLensLegend, bottleMatchesSearch } from '../utils/rackLens';
 import CellarNav from '../components/CellarNav';
+import CellarPageHeader from '../components/CellarPageHeader';
 import './CellarRoom.css';
 
 const DEFAULT_DIMENSIONS = { width: 10, depth: 10, height: 3 };
@@ -1022,19 +1023,48 @@ export default function CellarRoom() {
 
   return (
     <div className="cellar-room-page">
-      <div className="cellar-room-header">
-        <div className="cellar-room-header-left">
-          <Link to={`/cellars/${id}/racks`} className="back-link">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="15 18 9 12 15 6"/></svg>
-            {t('room.backToRacks', 'Racks')}
-          </Link>
-          <h1>{cellar?.name || '...'} — {t('room.title', 'Room View')}</h1>
-          <span className="room-beta-badge">Beta</span>
-          {isEditMode && <span className="room-mode-badge edit">{t('room.editMode', 'Edit')}</span>}
-          {!isEditMode && <span className="room-mode-badge view">{t('room.viewMode', 'View')}</span>}
-        </div>
+      {/* View mode uses the shared header so the nav anchors like every other
+          cellar page. Edit mode keeps its own full-bleed working toolbar (and
+          the nav is hidden while arranging racks). */}
+      {!isEditMode ? (
+        <CellarPageHeader
+          backTo={`/cellars/${id}/racks`}
+          backLabel={t('room.backToRacks', 'Racks')}
+          title={`${cellar?.name || '...'} — ${t('room.title', 'Room View')}`}
+          loading={loading}
+          subtitle={t('room.subtitle', '3D cellar layout')}
+          titleBadge={<span className="room-beta-badge" style={{ marginLeft: '0.5rem' }}>Beta</span>}
+          actions={canEdit && (
+            <>
+              <button className="btn btn-secondary btn-small" onClick={() => setShowSettings(s => !s)}>
+                {t('room.roomSettings', 'Settings')}
+              </button>
+              <button
+                className="btn btn-primary btn-small"
+                onClick={() => {
+                  setIsEditMode(m => {
+                    if (!m) { setSelectedBottle(null); setEmptySlotTarget(null); }
+                    return !m;
+                  });
+                }}
+              >
+                {t('room.editMode', 'Edit')}
+              </button>
+            </>
+          )}
+        />
+      ) : (
+        <div className="cellar-room-header">
+          <div className="cellar-room-header-left">
+            <Link to={`/cellars/${id}/racks`} className="back-link">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="15 18 9 12 15 6"/></svg>
+              {t('room.backToRacks', 'Racks')}
+            </Link>
+            <h1>{cellar?.name || '...'} — {t('room.title', 'Room View')}</h1>
+            <span className="room-beta-badge">Beta</span>
+            <span className="room-mode-badge edit">{t('room.editMode', 'Edit')}</span>
+          </div>
 
-        {canEdit && (
           <div className="cellar-room-header-actions">
             <button
               className="btn btn-secondary btn-small"
@@ -1043,7 +1073,7 @@ export default function CellarRoom() {
               {t('room.roomSettings', 'Settings')}
             </button>
             <button
-              className={`btn btn-small ${isEditMode ? 'btn-secondary' : 'btn-primary'}`}
+              className="btn btn-small btn-secondary"
               onClick={() => {
                 setIsEditMode(m => {
                   if (!m) { setSelectedBottle(null); setEmptySlotTarget(null); }
@@ -1051,42 +1081,38 @@ export default function CellarRoom() {
                 });
               }}
             >
-              {isEditMode ? t('room.viewMode', 'View') : t('room.editMode', 'Edit')}
+              {t('room.viewMode', 'View')}
             </button>
-            {isEditMode && (
-              <>
-                <button
-                  className={`btn btn-small ${showAddRackPicker ? 'btn-primary' : 'btn-secondary'}`}
-                  onClick={() => setShowAddRackPicker(p => !p)}
-                  disabled={unplacedRacks.length === 0}
-                >
-                  {t('room.addRack', 'Add Rack')} {unplacedRacks.length > 0 && `(${unplacedRacks.length})`}
-                </button>
-                <button
-                  className="btn btn-secondary btn-small"
-                  onClick={doUndo}
-                  disabled={undoStackRef.current.length === 0}
-                  title={t('room.undo', 'Undo (Ctrl+Z)')}
-                >
-                  {t('room.undo', 'Undo')}
-                </button>
-                <button
-                  className="btn btn-secondary btn-small"
-                  onClick={doRedo}
-                  disabled={redoStackRef.current.length === 0}
-                  title={t('room.redo', 'Redo (Ctrl+Y)')}
-                >
-                  {t('room.redo', 'Redo')}
-                </button>
-                {saveError && <span style={{ color: 'var(--color-danger)', fontSize: '0.75rem' }}>{saveError}</span>}
-                <button className="btn btn-primary btn-small" onClick={handleSave} disabled={saving}>
-                  {saving ? t('common.saving', 'Saving...') : t('room.saveLayout', 'Save')}
-                </button>
-              </>
-            )}
+            <button
+              className={`btn btn-small ${showAddRackPicker ? 'btn-primary' : 'btn-secondary'}`}
+              onClick={() => setShowAddRackPicker(p => !p)}
+              disabled={unplacedRacks.length === 0}
+            >
+              {t('room.addRack', 'Add Rack')} {unplacedRacks.length > 0 && `(${unplacedRacks.length})`}
+            </button>
+            <button
+              className="btn btn-secondary btn-small"
+              onClick={doUndo}
+              disabled={undoStackRef.current.length === 0}
+              title={t('room.undo', 'Undo (Ctrl+Z)')}
+            >
+              {t('room.undo', 'Undo')}
+            </button>
+            <button
+              className="btn btn-secondary btn-small"
+              onClick={doRedo}
+              disabled={redoStackRef.current.length === 0}
+              title={t('room.redo', 'Redo (Ctrl+Y)')}
+            >
+              {t('room.redo', 'Redo')}
+            </button>
+            {saveError && <span style={{ color: 'var(--color-danger)', fontSize: '0.75rem' }}>{saveError}</span>}
+            <button className="btn btn-primary btn-small" onClick={handleSave} disabled={saving}>
+              {saving ? t('common.saving', 'Saving...') : t('room.saveLayout', 'Save')}
+            </button>
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Shared cellar view switcher — hidden in edit mode to keep the 3D
           workbench uncluttered while arranging racks */}

@@ -880,6 +880,7 @@
 
   "room": {
     "title": "Rumsvy",
+    "subtitle": "3D-källarlayout",
     "backToRacks": "Hyllor",
     "editMode": "Redigera",
     "viewMode": "Visa",
@@ -2294,6 +2295,7 @@
     "linkBtn": "Källarbok",
     "linkDesc": "Utskrivbara ställkartor & listor",
     "printBtn": "Skriv ut / Spara som PDF",
+    "tableAria": "Flasklista (skrolla i sidled för att se alla kolumner)",
     "backToRacks": "Tillbaka till hyllorna",
     "backToCellar": "Tillbaka till källaren",
     "summary": "{{total}} flaskor — {{placed}} i hyllor, {{unplaced}} oplacerade",
