@@ -159,7 +159,7 @@ function AdminStats() {
     notReady:   '#9e9e9e',
     late:       '#bf8a2e',
     declining:  '#dc3545',
-    noProfile:  'var(--border)',
+    noProfile:  'var(--color-border)',
   };
 
   return (
@@ -376,7 +376,7 @@ function AdminStats() {
             <div className="admin-stats-panel">
               <h3>{t('adminStats.ratingDistribution')}</h3>
               {ratings.distribution.filter(r => r.count > 0).map((r, i) => (
-                <HorizontalBar key={`${r.band}-${i}`} label={r.band} count={r.count} total={ratings.ratedCount} color="var(--accent)" />
+                <HorizontalBar key={`${r.band}-${i}`} label={r.band} count={r.count} total={ratings.ratedCount} color="var(--color-accent)" />
               ))}
             </div>
           )}

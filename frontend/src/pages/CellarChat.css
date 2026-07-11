@@ -118,7 +118,7 @@
 }
 
 .cellar-chat__scope-option:hover {
-  background: var(--color-hover);
+  background: var(--color-surface-hover);
 }
 
 .cellar-chat__scope-option input[type="checkbox"] {

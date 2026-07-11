@@ -450,7 +450,7 @@
 
 .rating-fill {
   height: 100%;
-  background: linear-gradient(to right, var(--color-accent-dark, #B4882A), var(--color-accent));
+  background: linear-gradient(to right, var(--color-accent-hover, #B4882A), var(--color-accent));
   border-radius: 4px;
   transition: width 0.5s cubic-bezier(0.25, 1, 0.5, 1);
 }
@@ -2081,7 +2081,7 @@
 .value-chart-tooltip {
   background: var(--color-surface);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius);
+  border-radius: var(--radius-md);
   padding: 0.6rem 0.75rem;
   font-size: 0.78rem;
   color: var(--color-text);

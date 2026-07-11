@@ -31,7 +31,7 @@
   border: 1px solid var(--color-border, #e0d6d0);
   border-radius: 8px;
   font-size: 0.9rem;
-  background: var(--color-card-bg, #fff);
+  background: var(--color-surface, #fff);
   color: var(--color-text);
   outline: none;
   transition: border-color 0.15s;
@@ -42,7 +42,7 @@
 }
 
 .help-search::placeholder {
-  color: var(--color-text-tertiary, #999);
+  color: var(--color-text-muted, #999);
 }
 
 /* ─── Sections ─── */
@@ -54,8 +54,8 @@
 }
 
 .help-section {
-  background: var(--color-card-bg, #fff);
-  border-radius: var(--radius, 8px);
+  background: var(--color-surface, #fff);
+  border-radius: var(--radius-md, 8px);
   border: 1px solid var(--color-border, #e0d6d0);
   overflow: hidden;
   transition: box-shadow 0.15s;
@@ -81,7 +81,7 @@
 }
 
 .help-section-header:hover {
-  background: var(--color-bg-secondary, #f5f0ec);
+  background: var(--color-surface, #f5f0ec);
 }
 
 .help-section-header-text h2 {
@@ -100,7 +100,7 @@
 .help-section-chevron {
   flex-shrink: 0;
   transition: transform 0.2s;
-  color: var(--color-text-tertiary, #999);
+  color: var(--color-text-muted, #999);
 }
 
 .help-section--open .help-section-chevron {

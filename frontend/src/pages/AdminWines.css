@@ -324,7 +324,7 @@
   padding: 0;
   font: inherit;
   font-weight: 600;
-  color: var(--accent, #4a7c4a);
+  color: var(--color-accent, #4a7c4a);
   cursor: pointer;
   text-align: left;
 }
@@ -341,9 +341,9 @@
   flex-wrap: wrap;
   margin-top: 1rem;
 }
-.pagination-range { font-size: 0.85rem; color: var(--text-secondary, #777); }
+.pagination-range { font-size: 0.85rem; color: var(--color-text-secondary, #777); }
 .pagination-controls { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
-.pagination-page { font-size: 0.85rem; color: var(--text-secondary, #777); padding: 0 0.25rem; }
+.pagination-page { font-size: 0.85rem; color: var(--color-text-secondary, #777); padding: 0 0.25rem; }
 .page-size select { padding: 2px 4px; }
 
 .toast-stack {
@@ -364,6 +364,6 @@
   animation: toast-in 0.18s ease;
   max-width: 340px;
 }
-.toast--success { background: var(--accent, #4a7c4a); }
+.toast--success { background: var(--color-accent, #4a7c4a); }
 .toast--error { background: var(--danger, #c0392b); }
 @keyframes toast-in { from { transform: translateY(8px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }

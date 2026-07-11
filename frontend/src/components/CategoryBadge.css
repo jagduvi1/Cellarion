@@ -56,3 +56,12 @@ button.category-badge:hover {
   background: var(--color-surface-hover);
   color: var(--color-text-muted);
 }
+
+/* Dark mode: the translucent backgrounds adapt, but the solid dark text becomes
+   dark-on-dark (low contrast). Lighten each label's hue for dark surfaces while
+   keeping the intentionally-desaturated identity. The app toggles theme via
+   [data-theme], so match that (no prefers-color-scheme). */
+[data-theme="dark"] .category-badge--tasting-notes   { color: #C89AD0; }
+[data-theme="dark"] .category-badge--food-pairing    { color: #D9A84E; }
+[data-theme="dark"] .category-badge--recommendations { color: #8FB0D6; }
+[data-theme="dark"] .category-badge--cellar-tips     { color: #7FB08A; }

@@ -90,7 +90,7 @@
 }
 
 .journal-form__friend-suggestions button:hover {
-  background: var(--color-hover, rgba(0,0,0,.05));
+  background: var(--color-surface-hover, rgba(0,0,0,.05));
 }
 
 .journal-form__friend-username {
@@ -104,7 +104,7 @@
   flex-direction: column;
   gap: 0.4rem;
   padding: 0.75rem;
-  background: var(--color-surface-alt, #fafafa);
+  background: var(--color-surface-raised, #fafafa);
   border-radius: var(--radius-md, 8px);
   border: 1px solid var(--color-border);
   margin-bottom: 0.5rem;
@@ -184,7 +184,7 @@
 
 .journal-form__vis-btn.active {
   background: var(--color-primary);
-  color: var(--color-on-primary, #fff);
+  color: var(--color-text-inverse, #fff);
 }
 
 @media (max-width: 768px) {

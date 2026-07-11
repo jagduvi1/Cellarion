@@ -51,7 +51,7 @@
 }
 
 .wine-search-picker__option:hover {
-  background: var(--color-bg-secondary, #f5f5f5);
+  background: var(--color-surface, #f5f5f5);
 }
 
 .wine-search-picker__option-dot {
@@ -133,7 +133,7 @@
   align-items: center;
   gap: 0.5rem;
   padding: 0.45rem 0.65rem;
-  background: var(--color-bg-secondary, #f5f5f5);
+  background: var(--color-surface, #f5f5f5);
   border: 1px solid var(--color-border);
   border-radius: 8px;
   font-size: 0.88rem;

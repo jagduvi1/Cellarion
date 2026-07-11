@@ -134,20 +134,20 @@ function WineProducerInNameModal({ apiFetch, onClose, onChanged }) {
     textAlign: 'left',
     padding: '0.4rem 0.5rem',
     fontSize: '0.8rem',
-    color: 'var(--text-secondary, #666)',
-    borderBottom: '1px solid var(--border, #e5e5e5)',
+    color: 'var(--color-text-secondary, #666)',
+    borderBottom: '1px solid var(--color-border, #e5e5e5)',
     whiteSpace: 'nowrap',
   };
   const tdStyle = {
     padding: '0.45rem 0.5rem',
-    borderBottom: '1px solid var(--border, #eee)',
+    borderBottom: '1px solid var(--color-border, #eee)',
     verticalAlign: 'top',
   };
 
   return (
     <Modal title={t('admin.wines.producerInName.title')} onClose={onClose} showClose wide>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12, flexWrap: 'wrap' }}>
-        <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary, #666)' }}>
+        <span style={{ fontSize: '0.85rem', color: 'var(--color-text-secondary, #666)' }}>
           {t('admin.wines.producerInName.intro')}
         </span>
         {wines !== null && !loading && (
@@ -157,8 +157,8 @@ function WineProducerInNameModal({ apiFetch, onClose, onChanged }) {
               fontWeight: 600,
               padding: '0.15rem 0.6rem',
               borderRadius: 999,
-              background: 'var(--bg-secondary, #f4f4f4)',
-              border: '1px solid var(--border, #e5e5e5)',
+              background: 'var(--color-surface, #f4f4f4)',
+              border: '1px solid var(--color-border, #e5e5e5)',
               flexShrink: 0,
             }}
           >
@@ -175,13 +175,13 @@ function WineProducerInNameModal({ apiFetch, onClose, onChanged }) {
       )}
 
       {loading && !wines && (
-        <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-secondary, #888)' }}>
+        <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--color-text-secondary, #888)' }}>
           {t('common.loading')}
         </div>
       )}
 
       {!loading && wines?.length === 0 && (
-        <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-secondary, #888)' }}>
+        <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--color-text-secondary, #888)' }}>
           {t('admin.wines.producerInName.empty')}
         </div>
       )}

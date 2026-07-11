@@ -302,5 +302,5 @@
 .admin-notes-hint {
   font-weight: normal;
   font-size: 0.85em;
-  color: var(--text-secondary, #888);
+  color: var(--color-text-secondary, #888);
 }

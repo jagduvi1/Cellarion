@@ -148,7 +148,7 @@ function ExportCellar() {
 
         {/* Total export summary (hidden when there is nothing to export yet) */}
         {!noCellars && (
-          <div className="card" style={{ marginTop: '1rem', padding: '1rem', background: 'var(--surface-2, #f7f7f8)' }}>
+          <div className="card" style={{ marginTop: '1rem', padding: '1rem', background: 'var(--color-surface-raised, #f7f7f8)' }}>
             <div style={{ fontWeight: 600, marginBottom: '0.5rem' }}>{t('exportCellar.containsTitle')}</div>
             {loadingSummary ? (
               <div className="settings-hint">{t('exportCellar.calculating')}</div>

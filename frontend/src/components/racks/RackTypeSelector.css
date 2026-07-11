@@ -22,22 +22,22 @@
   align-items: center;
   gap: 0.35rem;
   padding: 0.5rem;
-  border: 2px solid var(--border-color, #333);
+  border: 2px solid var(--color-border, #333);
   border-radius: 8px;
-  background: var(--bg-secondary, #1a1a1a);
+  background: var(--color-surface, #1a1a1a);
   cursor: pointer;
   transition: border-color 0.2s, background 0.2s;
 }
 
 .rack-type-option:hover {
-  border-color: var(--text-secondary, #888);
-  background: var(--bg-tertiary, #2a2a2a);
+  border-color: var(--color-text-secondary, #888);
+  background: var(--color-surface-raised, #2a2a2a);
 }
 
 .rack-type-option.selected {
-  border-color: var(--primary, #8b5cf6);
-  background: var(--bg-tertiary, #2a2a2a);
-  box-shadow: 0 0 0 1px var(--primary, #8b5cf6);
+  border-color: var(--color-primary, #8b5cf6);
+  background: var(--color-surface-raised, #2a2a2a);
+  box-shadow: 0 0 0 1px var(--color-primary, #8b5cf6);
 }
 
 .rack-type-preview-svg {
@@ -48,12 +48,12 @@
 
 .rack-type-name {
   font-size: 0.75rem;
-  color: var(--text-secondary, #aaa);
+  color: var(--color-text-secondary, #aaa);
   text-transform: capitalize;
   white-space: nowrap;
 }
 
 .rack-type-option.selected .rack-type-name {
-  color: var(--text-primary, #fff);
+  color: var(--color-text, #fff);
   font-weight: 600;
 }

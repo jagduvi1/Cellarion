@@ -102,7 +102,7 @@
   display: flex;
   justify-content: center;
   padding: 2rem 1.5rem 1rem;
-  background: var(--color-surface-alt, #fafafa);
+  background: var(--color-surface-raised, #fafafa);
 }
 
 .wd-image {
