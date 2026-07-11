@@ -260,7 +260,9 @@ router.post('/', async (req, res) => {
             'journal_mention',
             'Journal Mention',
             `${senderName} mentioned you in a journal entry: "${populated.title || 'Untitled'}"`,
-            `/journal/${populated._id}`
+            `/journal/${populated._id}`,
+            undefined,
+            req.user.id // actor — lets GDPR erasure remove this on the mentioner's deletion
           );
         }
       }

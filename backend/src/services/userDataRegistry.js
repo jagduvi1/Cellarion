@@ -453,8 +453,14 @@ const REGISTRY = [
     }),
   },
   {
-    model: Notification, category: 'personal-data', userFields: ['user'],
-    purge: (ctx) => Notification.deleteMany({ user: ctx.userId }),
+    model: Notification, category: 'personal-data', userFields: ['user', 'actor'],
+    // Delete both the departing user's OWN notifications AND notifications
+    // delivered to OTHERS that this user triggered (follow/reply/mention/
+    // recommendation) — those denormalize the departing user's display name into
+    // the title/message, so leaving them would let a deleted user's name persist
+    // in third parties' feeds until the 90-day TTL. `actor` (set at creation)
+    // makes them matchable.
+    purge: (ctx) => Notification.deleteMany({ $or: [{ user: ctx.userId }, { actor: ctx.userId }] }),
     exportFragment: async (ctx) => ({
       notifications: markTrunc(ctx, 'notifications', await Notification.find({ user: ctx.userId }).limit(EXPORT_MAX).lean())
         .map(n => ({ ...n, _id: undefined })),
@@ -739,13 +745,24 @@ const REGISTRY = [
     // the invitee's address as { sharedWith } / { invitedEmail } (L-15). $unset
     // only touches docs that actually have those keys, so it's safe across the
     // heterogeneous detail shapes.
-    purge: (ctx) => AuditLog.updateMany(
-      { 'actor.userId': ctx.userId },
-      {
-        $set: { 'actor.userId': null, 'actor.ipAddress': null },
-        $unset: { 'detail.email': '', 'detail.username': '', 'detail.sharedWith': '', 'detail.invitedEmail': '' },
-      }
-    ),
+    purge: (ctx) => [
+      // (a) The departing user as the ACTOR of their own events.
+      AuditLog.updateMany(
+        { 'actor.userId': ctx.userId },
+        {
+          $set: { 'actor.userId': null, 'actor.ipAddress': null },
+          $unset: { 'detail.email': '', 'detail.username': '', 'detail.sharedWith': '', 'detail.invitedEmail': '' },
+        }
+      ),
+      // (b) The departing user as the SUBJECT of ANOTHER actor's event — a
+      // cellar-share event stores the invitee's email in the INVITER's row
+      // (detail.sharedWith / detail.invitedEmail). The actor-scoped scrub above
+      // never touches those, so match on the departing user's email instead.
+      ...(ctx.userEmail ? [AuditLog.updateMany(
+        { $or: [{ 'detail.sharedWith': ctx.userEmail }, { 'detail.invitedEmail': ctx.userEmail }] },
+        { $unset: { 'detail.sharedWith': '', 'detail.invitedEmail': '' } }
+      )] : []),
+    ],
     exportFragment: async (ctx) => ({
       activityLog: markTrunc(ctx, 'activityLog', await AuditLog.find({ 'actor.userId': ctx.userId }).sort({ timestamp: -1 }).limit(AUDIT_MAX).lean(), AUDIT_MAX)
         .map(a => ({ action: a.action, timestamp: a.timestamp, detail: a.detail })),

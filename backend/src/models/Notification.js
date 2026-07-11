@@ -7,6 +7,17 @@ const notificationSchema = new mongoose.Schema({
     required: true,
     index: true
   },
+  // The user who triggered this notification (follower, replier, mentioner, …),
+  // when there is one. The title/message denormalize their display name, so this
+  // ref lets GDPR erasure remove notifications delivered to OTHERS that name a
+  // departing user. Null for system notifications (drink-window, admin, etc.).
+  actor: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    default: null,
+    index: true,
+    sparse: true
+  },
   type: {
     type: String,
     enum: [

@@ -478,7 +478,8 @@ router.post('/', requireAuth, async (req, res) => {
         `${authorName} mentioned you`,
         `In a new discussion: "${cleanTitle}"`,
         link,
-        'communityMention'
+        'communityMention',
+        req.user.id // actor — lets GDPR erasure remove this on the author's deletion
       );
     }
 
@@ -865,8 +866,10 @@ router.post('/:idOrSlug/replies', requireAuth, async (req, res) => {
     }
 
     // Fire-and-forget, same as the old per-recipient calls — delivery must
-    // never block or fail the reply create.
-    createNotifications(notificationItems).catch(err =>
+    // never block or fail the reply create. Every item here is triggered by the
+    // replier, so tag them with actor so GDPR erasure can remove notifications
+    // that name this user from other users' feeds on their deletion.
+    createNotifications(notificationItems.map(i => ({ ...i, actor: req.user.id }))).catch(err =>
       console.error('[discussions] reply notification batch failed:', err.message)
     );
 
