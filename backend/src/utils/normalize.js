@@ -254,6 +254,7 @@ const GRAPE_SYNONYMS = {
   'brunello':             'Sangiovese',
   'prugnolo gentile':     'Sangiovese',
   'morellino':            'Sangiovese',
+  'sangiovese grosso':    'Sangiovese', // Montalcino's local name — 15 Brunelli on prod carried it as a separate grape
 
   // Zinfandel / Primitivo — same DNA, often listed interchangeably
   'primitivo':            'Zinfandel',
@@ -490,6 +491,34 @@ const resolveCountryName = (name) => {
 };
 
 /**
+ * Placeholder values the AI (or an import file) uses when it doesn't actually
+ * know the value — despite the prompts demanding null. The registry's
+ * representation for unknown is country/region = null and grapes = [] — never
+ * a taxonomy document literally named "Unknown" (prod accumulated an Unknown
+ * country, five Unknown regions and an "unknown" grape this way).
+ * Keys are checked after normalizeString(), so "Okänd" → "okand", "N/A" → "na",
+ * "?" / "-" → "" (caught by the empty check).
+ */
+const UNKNOWN_NAME_RX = /^(unknown|unbekannt|okand|ukjent|inconnu|inconnue|sconosciuto|desconocido|na|none|null|nil|various|misc|miscellaneous|not specified|unspecified|not available|tbd|to be determined)$/;
+
+const isUnknownName = (name) => {
+  if (!name || !name.trim()) return true;
+  const key = normalizeString(name);
+  return key === '' || UNKNOWN_NAME_RX.test(key);
+};
+
+/**
+ * Grape names additionally reject descriptions-instead-of-varietals: the AI
+ * sometimes returns hedges like "blend - specific varieties unknown",
+ * "unknown - likely Riesling, Gewurztraminer, Pinot Gris, or Muscat" or
+ * "blend of 40 botanicals including orange peel" (all real prod examples).
+ * A blend's correct representation is the list of its varieties, or [].
+ */
+const JUNK_GRAPE_RX = /\bblends?\b|\bbotanicals?\b|\blikely\b|\bunknown\b|\bvarieties\b|\bunspecified\b/i;
+
+const isJunkGrapeName = (name) => isUnknownName(name) || JUNK_GRAPE_RX.test(name);
+
+/**
  * Convert any string to a URL-safe slug (lowercase, hyphenated, ASCII-only).
  * Builds on normalizeString (which already strips diacritics and punctuation).
  */
@@ -527,6 +556,8 @@ module.exports = {
   generateWineSlug,
   resolveGrapeName,
   resolveCountryName,
+  isUnknownName,
+  isJunkGrapeName,
   levenshteinDistance,
   calculateSimilarity,
   generateTrigrams,

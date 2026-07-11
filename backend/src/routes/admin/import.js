@@ -2,7 +2,7 @@ const express = require('express');
 const multer = require('multer');
 const { parse } = require('csv-parse');
 const { requireAuth, requireRole } = require('../../middleware/auth');
-const { generateWineKey, normalizeString, resolveCountryName } = require('../../utils/normalize');
+const { generateWineKey, normalizeString, resolveCountryName, isUnknownName } = require('../../utils/normalize');
 const WineDefinition = require('../../models/WineDefinition');
 const Country = require('../../models/Country');
 const Region = require('../../models/Region');
@@ -130,6 +130,9 @@ function mapRow(row, format) {
  * Results are cached in `cache` (Map) to avoid repeated DB round-trips.
  */
 async function getOrCreateCountry(name, userId, cache) {
+  // "Unknown"/placeholder values must not become a Country document; the row
+  // fails WineDefinition validation (country required) and is counted as an error.
+  if (isUnknownName(name)) return null;
   const key = name.toLowerCase().trim();
   if (cache.has(key)) return cache.get(key);
 
@@ -151,7 +154,7 @@ async function getOrCreateCountry(name, userId, cache) {
  * Returns null when name is falsy.
  */
 async function getOrCreateRegion(name, countryId, userId, cache) {
-  if (!name) return null;
+  if (!name || isUnknownName(name) || !countryId) return null;
   const key = `${countryId}:${name.toLowerCase().trim()}`;
   if (cache.has(key)) return cache.get(key);
 
@@ -179,7 +182,7 @@ async function getOrCreateRegion(name, countryId, userId, cache) {
  * Returns null when name is falsy.
  */
 async function getOrCreateAppellation(name, countryId, regionId, userId, cache) {
-  if (!name) return null;
+  if (!name || isUnknownName(name) || !countryId) return null;
   const key = `${countryId}:${name.toLowerCase().trim()}`;
   if (cache.has(key)) return cache.get(key);
 

@@ -9,6 +9,9 @@ const {
   tokenSimilarity,
   combinedSimilarity,
   resolveCountryName,
+  isUnknownName,
+  isJunkGrapeName,
+  resolveGrapeName,
 } = require('./normalize');
 
 // ─── normalizeString ──────────────────────────────────────────────────────────
@@ -331,5 +334,63 @@ describe('resolveCountryName', () => {
   test('passes unknown countries through trimmed', () => {
     expect(resolveCountryName('  Uzbekistan  ')).toBe('Uzbekistan');
     expect(resolveCountryName('Atlantis')).toBe('Atlantis');
+  });
+});
+
+// ─── isUnknownName / isJunkGrapeName ─────────────────────────────────────────
+
+describe('isUnknownName', () => {
+  test('true for empty/falsy input', () => {
+    expect(isUnknownName(null)).toBe(true);
+    expect(isUnknownName('')).toBe(true);
+    expect(isUnknownName('   ')).toBe(true);
+  });
+
+  test('true for placeholder values in several languages (the prod junk)', () => {
+    // Each of these existed as a taxonomy document on prod
+    expect(isUnknownName('Unknown')).toBe(true);
+    expect(isUnknownName('unknown')).toBe(true);
+    expect(isUnknownName('Okänd')).toBe(true);     // sv
+    expect(isUnknownName('Unbekannt')).toBe(true); // de
+    expect(isUnknownName('Inconnu')).toBe(true);   // fr
+    expect(isUnknownName('N/A')).toBe(true);
+    expect(isUnknownName('n.a.')).toBe(true);
+    expect(isUnknownName('none')).toBe(true);
+    expect(isUnknownName('Not specified')).toBe(true);
+    expect(isUnknownName('?')).toBe(true);   // normalizes to empty
+    expect(isUnknownName('-')).toBe(true);   // normalizes to empty
+  });
+
+  test('false for real names', () => {
+    expect(isUnknownName('Mendoza')).toBe(false);
+    expect(isUnknownName('Napa Valley')).toBe(false);
+    expect(isUnknownName('Germany')).toBe(false);
+    // 'Nahe' must not be confused with placeholder 'na'
+    expect(isUnknownName('Nahe')).toBe(false);
+  });
+});
+
+describe('isJunkGrapeName', () => {
+  test('rejects placeholders and hedge descriptions (real prod examples)', () => {
+    expect(isJunkGrapeName('unknown')).toBe(true);
+    expect(isJunkGrapeName('Red Blend')).toBe(true);
+    expect(isJunkGrapeName('blend - specific varieties unknown')).toBe(true);
+    expect(isJunkGrapeName('unknown white blend')).toBe(true);
+    expect(isJunkGrapeName('blend of 40 botanicals including orange peel')).toBe(true);
+    expect(isJunkGrapeName('unknown - likely Riesling, Gewurztraminer, Pinot Gris, or Muscat')).toBe(true);
+  });
+
+  test('accepts real varietals, including compound names', () => {
+    expect(isJunkGrapeName('Syrah')).toBe(false);
+    expect(isJunkGrapeName('Cabernet Sauvignon')).toBe(false);
+    expect(isJunkGrapeName('Refosco dal Peduncolo Rosso')).toBe(false);
+    expect(isJunkGrapeName('Moscato Bianco')).toBe(false);
+    expect(isJunkGrapeName('Colombard')).toBe(false);
+  });
+});
+
+describe('resolveGrapeName — Sangiovese Grosso', () => {
+  test('maps the Montalcino local name to Sangiovese', () => {
+    expect(resolveGrapeName('Sangiovese Grosso')).toBe('Sangiovese');
   });
 });
