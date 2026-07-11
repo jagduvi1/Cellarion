@@ -59,6 +59,7 @@ function CellarDetail() {
     vintage: searchParams.get('vintage')?.split(',').filter(Boolean) || [],
     minRating: searchParams.get('minRating') || '',
     maturity: searchParams.get('maturity') || '',
+    unplaced: searchParams.get('unplaced') || '',
     sort: searchParams.get('sort') || '-createdAt'
   }));
   const [facets, setFacets] = useState(null);
@@ -71,6 +72,7 @@ function CellarDetail() {
   const [allCellars, setAllCellars] = useState([]);
   const [scopeIds, setScopeIds] = useState([id]);
   const scopeKey = scopeIds.join(',');
+  const multiScope = !(scopeIds.length === 1 && scopeIds[0] === id);
   // Shape of the bottles CURRENTLY in state (grouped vs flat). Tracked separately
   // from the live scope selection so a scope change never renders the just-loaded
   // (old-shape) list through the wrong BottlesList branch before the refetch lands.
@@ -91,6 +93,13 @@ function CellarDetail() {
   // Reset scope to just this cellar when navigating to another cellar.
   useEffect(() => { setScopeIds([id]); }, [id]);
 
+  // The unplaced filter is single-cellar only (placement is per-cellar; the
+  // cross-cellar endpoint doesn't resolve rack slots) — drop it when the scope
+  // widens rather than leaving a chip that silently does nothing.
+  useEffect(() => {
+    if (multiScope) setFilters(prev => (prev.unplaced ? { ...prev, unplaced: '' } : prev));
+  }, [multiScope]);
+
   // Debounce the search input — only send the API call after the user stops typing
   const [debouncedSearch, setDebouncedSearch] = useState(filters.search);
   const searchTimer = useRef(null);
@@ -102,7 +111,7 @@ function CellarDetail() {
 
   // Clear URL search params after they've been read into filter state
   useEffect(() => {
-    if (searchParams.has('search') || searchParams.has('vintage') || searchParams.has('minRating') || searchParams.has('sort') || searchParams.has('type') || searchParams.has('country') || searchParams.has('region') || searchParams.has('grapes')) {
+    if (searchParams.has('search') || searchParams.has('vintage') || searchParams.has('minRating') || searchParams.has('sort') || searchParams.has('type') || searchParams.has('country') || searchParams.has('region') || searchParams.has('grapes') || searchParams.has('unplaced')) {
       setSearchParams({}, { replace: true });
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -112,7 +121,7 @@ function CellarDetail() {
     debouncedSearch,
     filters.type.join(','), filters.country.join(','), filters.region.join(','),
     filters.appellation.join(','), filters.grapes.join(','), filters.vintage.join(','),
-    filters.minRating, filters.maturity, filters.sort
+    filters.minRating, filters.maturity, filters.unplaced, filters.sort
   ].join('|');
 
   // Refetch on cellar id, filters, or scope change. `id` is included so an
@@ -139,6 +148,9 @@ function CellarDetail() {
         const val = filters[key];
         if (key === 'search') {
           if (debouncedSearch) params.append('search', debouncedSearch);
+        } else if (key === 'unplaced') {
+          // Mapped to the backend's excludePlaced param below — single-cellar
+          // only (the cross-cellar endpoint doesn't resolve rack slots).
         } else if (Array.isArray(val)) {
           if (val.length > 0) params.append(key, val.join(','));
         } else if (val) {
@@ -154,6 +166,7 @@ function CellarDetail() {
         res = await getMultiCellarBottles(apiFetch, params.toString());
       } else {
         params.set('group', '1');
+        if (filters.unplaced) params.set('excludePlaced', '1');
         res = await getCellar(apiFetch, id, params);
       }
       const data = await res.json();
@@ -503,6 +516,7 @@ function CellarDetail() {
             (filters.vintage || []).forEach(v => activeChips.push({ key: 'vintage', value: v, label: v }));
             if (filters.minRating) activeChips.push({ key: 'minRating', value: filters.minRating, label: `${filters.minRating}+ rating` });
             if (filters.maturity) activeChips.push({ key: 'maturity', value: filters.maturity, label: filters.maturity });
+            if (filters.unplaced) activeChips.push({ key: 'unplaced', value: '1', label: t('cellarDetail.unplacedOnly', 'Unplaced only') });
 
             const removeChip = (chip) => {
               setFilters(prev => {
@@ -517,7 +531,7 @@ function CellarDetail() {
             const clearAll = () => setFilters(prev => ({
               ...prev,
               type: [], country: [], region: [], appellation: [], grapes: [], vintage: [],
-              minRating: '', maturity: ''
+              minRating: '', maturity: '', unplaced: ''
             }));
 
             return (
@@ -600,6 +614,7 @@ function CellarDetail() {
                       baseFacets={baseFacets}
                       facetMeta={facetMeta}
                       bottlesTotal={bottlesTotal}
+                      showUnplaced={!multiScope && hasRacks === true}
                     />
                   </Suspense>
                 )}
@@ -610,7 +625,7 @@ function CellarDetail() {
           {loading ? (
             <div className="loading">{t('cellarDetail.loadingCellar')}</div>
           ) : bottles.length === 0 && !bottlesLoading ? (
-            (filters.search || filters.vintage?.length || filters.minRating || filters.maturity || filters.type?.length || filters.country?.length || filters.region?.length || filters.appellation?.length || filters.grapes?.length) ? (
+            (filters.search || filters.vintage?.length || filters.minRating || filters.maturity || filters.unplaced || filters.type?.length || filters.country?.length || filters.region?.length || filters.appellation?.length || filters.grapes?.length) ? (
               <div className="empty-state">
                 <p>{t('cellarDetail.noSearchResults')}</p>
               </div>

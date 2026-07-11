@@ -490,6 +490,8 @@
     "countryLabel": "Länder",
     "regionLabel": "Regioner",
     "appellationLabel": "Appellation",
+    "placementLabel": "Placering",
+    "unplacedOnly": "Endast oplacerade",
     "grapeLabel": "Druvor",
     "vintageLabel": "Årgångar",
     "showMore": "+{{count}} till",

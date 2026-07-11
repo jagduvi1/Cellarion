@@ -490,6 +490,8 @@
     "countryLabel": "Country",
     "regionLabel": "Region",
     "appellationLabel": "Appellation",
+    "placementLabel": "Placement",
+    "unplacedOnly": "Unplaced only",
     "grapeLabel": "Grapes",
     "vintageLabel": "Vintage",
     "showMore": "+{{count}} more",

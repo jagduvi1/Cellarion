@@ -66,7 +66,10 @@ function FilterSection({ label, icon, children, defaultExpanded = true }) {
 // showRatingMaturity: pages whose backend endpoint doesn't support the
 // rating/maturity filters (e.g. consumed history) hide those controls —
 // rendering them would silently do nothing.
-function BottleFilterModal({ filters, onApply, onClose, facets, baseFacets, facetMeta, bottlesTotal, showRatingMaturity = true }) {
+// showUnplaced: only the single-cellar active list supports the unplaced
+// filter (placement is per-cellar; consumed bottles hold no rack slot), and
+// only when the cellar actually has racks.
+function BottleFilterModal({ filters, onApply, onClose, facets, baseFacets, facetMeta, bottlesTotal, showRatingMaturity = true, showUnplaced = false }) {
   const { t } = useTranslation();
 
   // baseFacets = all options in the cellar (unfiltered) — used to LIST available pills
@@ -85,13 +88,14 @@ function BottleFilterModal({ filters, onApply, onClose, facets, baseFacets, face
     onApply({
       ...filters,
       type: [], country: [], region: [], appellation: [], grapes: [], vintage: [],
-      minRating: '', maturity: ''
+      minRating: '', maturity: '', unplaced: ''
     });
   };
 
   const activeCount = (filters.type?.length || 0) + (filters.country?.length || 0) +
     (filters.region?.length || 0) + (filters.appellation?.length || 0) + (filters.grapes?.length || 0) +
-    (filters.vintage?.length || 0) + (filters.minRating ? 1 : 0) + (filters.maturity ? 1 : 0);
+    (filters.vintage?.length || 0) + (filters.minRating ? 1 : 0) + (filters.maturity ? 1 : 0) +
+    (filters.unplaced ? 1 : 0);
 
   // For a given facet key, decide which counts to use:
   // - If THIS category has active selections, use baseFacets (so you can still add more)
@@ -263,6 +267,19 @@ function BottleFilterModal({ filters, onApply, onClose, facets, baseFacets, face
             </FilterSection>
           );
         })()}
+
+        {/* Placement — single toggle, no facet count (Meilisearch doesn't know
+            rack placement; the filter is applied server-side after search, so
+            cascading counts in the other sections won't reflect it). */}
+        {showUnplaced && (
+          <FilterSection label={t('cellarDetail.placementLabel', 'Placement')} icon="📍">
+            <FilterPill
+              label={t('cellarDetail.unplacedOnly', 'Unplaced only')}
+              selected={!!filters.unplaced}
+              onClick={() => onApply({ ...filters, unplaced: filters.unplaced ? '' : '1' })}
+            />
+          </FilterSection>
+        )}
 
         {/* Rating + Maturity — side by side */}
         {showRatingMaturity && (
