@@ -346,7 +346,7 @@ describe('POST /api/journal response redaction (old rows / create echo)', () => 
     // Trailing args: category (undefined here) + actor (the mentioner) so GDPR
     // erasure can remove the notification on the mentioner's deletion.
     expect(createNotification).toHaveBeenCalledWith(
-      PRIVATE_USER, 'journal_mention', 'Journal Mention', expect.any(String), expect.any(String), undefined, expect.any(String)
+      PRIVATE_USER, 'journal_mention', 'Journal Mention', expect.any(String), null, undefined, expect.any(String)
     );
   });
 });

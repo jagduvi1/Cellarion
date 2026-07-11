@@ -42,6 +42,8 @@
   },
   "scripts": {
     "start": "vite",
+    "lint:tokens": "node scripts/check-css-tokens.mjs",
+    "prebuild": "node scripts/check-css-tokens.mjs",
     "build": "vite build",
     "test": "vitest run",
     "test:watch": "vitest"
