@@ -6,9 +6,9 @@ import RatingDisplay from '../components/RatingDisplay';
 import WineImage from '../components/WineImage';
 import BottleFilterModal from '../components/BottleFilterModal';
 import { addToWishlist } from '../api/wishlist';
-import { restoreBottle } from '../api/bottles';
 import { listCellars, getCellarHistory, getMultiCellarHistory } from '../api/cellars';
 import CellarScopePicker from '../components/CellarScopePicker';
+import CellarNav from '../components/CellarNav';
 import './CellarDetail.css';
 import './CellarHistory.css';
 
@@ -126,24 +126,6 @@ function CellarHistory() {
     }
   };
 
-  // Restoring a consumed bottle is an editor/owner action (the backend
-  // re-checks per bottle). In the cross-cellar view we don't have a per-row
-  // role, so gate on the page cellar's role.
-  const canEdit = ['owner', 'editor'].includes(cellar?.userRole);
-
-  // Drop a restored bottle from the history list in place (it's back in the
-  // active cellar now) without a full refetch.
-  const handleRestored = (bottleId) => {
-    setGrouped(prev => {
-      const next = {};
-      for (const [key, items] of Object.entries(prev)) {
-        next[key] = items.filter(b => b._id !== bottleId);
-      }
-      return next;
-    });
-    setTotal(prev => Math.max(0, prev - 1));
-  };
-
   // Only replace the whole page when nothing has loaded yet; after a successful
   // load, transient fetch failures render as an inline banner instead.
   const hasLoadedContent = Object.keys(grouped).length > 0;
@@ -221,6 +203,8 @@ function CellarHistory() {
           </>
         )}
       </div>
+
+      <CellarNav cellarId={id} active="history" />
 
       {loading ? (
         <div className="loading">{t('history.loadingHistory')}</div>
@@ -330,7 +314,7 @@ function CellarHistory() {
               </div>
               <div className="history-bottles">
                 {items.map(bottle => (
-                  <HistoryBottleCard key={bottle._id} bottle={bottle} cellarId={id} showCellarBadge={isMulti} canRestore={canEdit} onRestored={handleRestored} />
+                  <HistoryBottleCard key={bottle._id} bottle={bottle} cellarId={id} showCellarBadge={isMulti} />
                 ))}
               </div>
             </section>
@@ -348,28 +332,10 @@ function CellarHistory() {
   );
 }
 
-function HistoryBottleCard({ bottle, cellarId, showCellarBadge = false, canRestore = false, onRestored }) {
+function HistoryBottleCard({ bottle, cellarId, showCellarBadge = false }) {
   const { t } = useTranslation();
   const { apiFetch, user } = useAuth();
   const wine = bottle.wineDefinition;
-  const [restoreState, setRestoreState] = useState('idle'); // idle | saving | error
-
-  const handleRestore = async (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (restoreState === 'saving') return;
-    setRestoreState('saving');
-    try {
-      const res = await restoreBottle(apiFetch, bottle._id);
-      if (res.ok) {
-        onRestored?.(bottle._id);
-      } else {
-        setRestoreState('error');
-      }
-    } catch {
-      setRestoreState('error');
-    }
-  };
   // In the cross-cellar view each row belongs to its own cellar; fall back to
   // the page's cellar id for the single-cellar view.
   const linkCellarId = bottle.cellar || cellarId;
@@ -473,26 +439,6 @@ function HistoryBottleCard({ bottle, cellarId, showCellarBadge = false, canResto
           <p className="history-note">"{bottle.consumedNote}"</p>
         )}
       </div>
-
-      {canRestore && (
-        <div className="history-bottle-actions">
-          <button
-            type="button"
-            className="history-restore-btn"
-            onClick={handleRestore}
-            disabled={restoreState === 'saving'}
-            title={t('history.restoreHint')}
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><polyline points="3 3 3 8 8 8"/>
-            </svg>
-            <span>{restoreState === 'saving' ? t('history.restoring') : t('history.restore')}</span>
-          </button>
-          {restoreState === 'error' && (
-            <span className="history-restore-error">{t('history.restoreError')}</span>
-          )}
-        </div>
-      )}
     </div>
   );
 }

@@ -690,6 +690,11 @@
     "editDetailsShort": "Redigera",
     "removeBottle": "Ta bort flaska",
     "removeBottleShort": "Ta bort",
+    "moreShort": "Mer",
+    "restore": "Flytta tillbaka till källaren",
+    "restoring": "Flyttar tillbaka…",
+    "restoreHint": "Borttagen av misstag? Lägg tillbaka den som aktiv (inom 2 dagar). Den återkommer utan hyllplats.",
+    "restoreError": "Kunde inte flytta tillbaka – försök igen",
     "mistakeLink": "Tillagd av misstag?",
     "mistakeTitle": "Ta bort som misstag?",
     "mistakeBody": "Detta tar permanent bort flaskan som om den aldrig lagts till. Den syns inte i statistik, historik eller sökning. Detta kan inte ångras.",
@@ -993,10 +998,6 @@
     "addingToWishlist": "Lägger till…",
     "onWishlist": "På önskelistan",
     "wishlistError": "Försök igen",
-    "restore": "Flytta tillbaka till källaren",
-    "restoring": "Flyttar tillbaka…",
-    "restoreHint": "Registrerad av misstag? Lägg tillbaka flaskan i källaren som aktiv (den återkommer utan hyllplats).",
-    "restoreError": "Kunde inte flytta tillbaka – försök igen",
     "viewBottleAria": "Visa {{name}}",
     "noResults": "Inga flaskor matchar din sökning."
   },
@@ -2284,9 +2285,14 @@
     "noData": "Ingen mognadsdata"
   },
 
+  "cellarNav": {
+    "aria": "Källarvyer"
+  },
+
   "cellarBook": {
     "title": "Källarbok",
     "linkBtn": "Källarbok",
+    "linkDesc": "Utskrivbara ställkartor & listor",
     "printBtn": "Skriv ut / Spara som PDF",
     "backToRacks": "Tillbaka till hyllorna",
     "backToCellar": "Tillbaka till källaren",

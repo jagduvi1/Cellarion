@@ -7,6 +7,7 @@ import { getRacks } from '../api/racks';
 import { buildCellarBook, formatDrinkWindow } from '../utils/cellarBook';
 import { formatRating } from '../utils/ratingUtils';
 import PrintRackMap from '../components/racks/PrintRackMap';
+import CellarNav from '../components/CellarNav';
 import './CellarBook.css';
 
 // The cellar bottles endpoint caps page size at 200 — loop until we have
@@ -102,14 +103,17 @@ function CellarBook() {
     <div className="cellar-book">
       {/* Screen-only toolbar */}
       <div className="cb-toolbar">
-        <Link to={`/cellars/${id}/racks`} className="back-link">
+        <Link to={`/cellars/${id}`} className="back-link">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="15 18 9 12 15 6"/></svg>
-          {t('cellarBook.backToRacks', 'Back to racks')}
+          {t('cellarBook.backToCellar', 'Back to cellar')}
         </Link>
         <button className="btn btn-primary" onClick={() => window.print()}>
           {t('cellarBook.printBtn', 'Print / Save as PDF')}
         </button>
       </div>
+
+      {/* Shared view switcher (screen only — CellarNav hides itself in print) */}
+      <CellarNav cellarId={id} active="book" />
 
       {/* Book header */}
       <header className="cb-header">

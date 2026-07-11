@@ -215,7 +215,7 @@ function Discussions() {
           </select>
         </div>
         {user ? (
-          <button className="btn btn-primary" data-guide="discussion-create" onClick={() => setShowCreate(true)}>
+          <button className="btn btn-primary" onClick={() => setShowCreate(true)}>
             {t('discussions.newDiscussion')}
           </button>
         ) : null}

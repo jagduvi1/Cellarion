@@ -1069,12 +1069,18 @@ router.post('/:id/move', requireBottleAccess('owner'), async (req, res) => {
   }
 });
 
-// POST /api/bottles/:id/restore - Put a consumed bottle back to active.
+// A consumed bottle can be moved back to the cellar only within this window of
+// being removed — restore is an "undo an accidental log", not a way to
+// resurrect a bottle drunk long ago. Enforced server-side (the UI also hides
+// the button past the window, but the check is here so it's real).
+const RESTORE_WINDOW_MS = 2 * 24 * 60 * 60 * 1000; // 2 days
+
+// POST /api/bottles/:id/restore - Put a recently-consumed bottle back to active.
 // The inverse of /consume: for when a bottle was marked drank/gifted/sold by
 // mistake. Clears every consumed-* field so it re-enters the cellar cleanly.
 // The bottle is NOT auto-returned to its old rack slot (the slot was freed on
 // consume and may now be occupied) — it comes back unplaced, and the user
-// re-racks it.
+// re-racks it. Only allowed within RESTORE_WINDOW_MS of removal.
 router.post('/:id/restore', requireBottleAccess('editor'), async (req, res) => {
   try {
     const { bottle } = req;
@@ -1084,6 +1090,12 @@ router.post('/:id/restore', requireBottleAccess('editor'), async (req, res) => {
     }
     if (!CONSUMED_STATUSES.includes(bottle.status)) {
       return res.status(400).json({ error: 'Only a consumed bottle can be restored' });
+    }
+    if (bottle.consumedAt && (Date.now() - new Date(bottle.consumedAt).getTime()) > RESTORE_WINDOW_MS) {
+      return res.status(400).json({
+        error: 'This bottle was removed too long ago to move back. Add it again as a new bottle instead.',
+        code: 'restore_window_expired',
+      });
     }
 
     const previousStatus = bottle.status;

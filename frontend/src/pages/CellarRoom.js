@@ -13,6 +13,7 @@ import { getRackHeight, clampToRoom } from '../utils/roomConstants';
 import WineImage from '../components/WineImage';
 import JournalPrompt, { journalPromptOptedOut } from '../components/JournalPrompt';
 import { LENSES, getLensStyle, getLensLegend, bottleMatchesSearch } from '../utils/rackLens';
+import CellarNav from '../components/CellarNav';
 import './CellarRoom.css';
 
 const DEFAULT_DIMENSIONS = { width: 10, depth: 10, height: 3 };
@@ -1043,7 +1044,6 @@ export default function CellarRoom() {
             </button>
             <button
               className={`btn btn-small ${isEditMode ? 'btn-secondary' : 'btn-primary'}`}
-              data-guide="room-edit-mode"
               onClick={() => {
                 setIsEditMode(m => {
                   if (!m) { setSelectedBottle(null); setEmptySlotTarget(null); }
@@ -1057,7 +1057,6 @@ export default function CellarRoom() {
               <>
                 <button
                   className={`btn btn-small ${showAddRackPicker ? 'btn-primary' : 'btn-secondary'}`}
-                  data-guide="room-add-rack"
                   onClick={() => setShowAddRackPicker(p => !p)}
                   disabled={unplacedRacks.length === 0}
                 >
@@ -1080,7 +1079,7 @@ export default function CellarRoom() {
                   {t('room.redo', 'Redo')}
                 </button>
                 {saveError && <span style={{ color: 'var(--color-danger)', fontSize: '0.75rem' }}>{saveError}</span>}
-                <button className="btn btn-primary btn-small" data-guide="room-save" onClick={handleSave} disabled={saving}>
+                <button className="btn btn-primary btn-small" onClick={handleSave} disabled={saving}>
                   {saving ? t('common.saving', 'Saving...') : t('room.saveLayout', 'Save')}
                 </button>
               </>
@@ -1088,6 +1087,10 @@ export default function CellarRoom() {
           </div>
         )}
       </div>
+
+      {/* Shared cellar view switcher — hidden in edit mode to keep the 3D
+          workbench uncluttered while arranging racks */}
+      {!isEditMode && <CellarNav cellarId={id} active="room" />}
 
       {loading ? (
         <div className="room-loading">{t('common.loading', 'Loading...')}</div>

@@ -22,6 +22,7 @@ import ArrangeModal from '../components/racks/ArrangeModal';
 import ZoneEditorModal from '../components/racks/ZoneEditorModal';
 import RackAuditModal from '../components/racks/RackAuditModal';
 import { LENSES, getLensStyle, getLensLegend, bottleMatchesSearch } from '../utils/rackLens';
+import CellarNav from '../components/CellarNav';
 import './CellarRacks.css';
 
 function CellarRacks() {
@@ -545,22 +546,18 @@ function CellarRacks() {
             </>
           )}
         </div>
-        {!loading && (
+        {!loading && canEdit && (
           <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-            <Link to={`/cellars/${id}/room`} className="btn btn-secondary btn-small">
-              {t('room.title', 'Room View')}
-            </Link>
-            <Link to={`/cellars/${id}/book`} className="btn btn-secondary btn-small">
-              {t('cellarBook.linkBtn', 'Cellar Book')}
-            </Link>
-            {canEdit && (
-              <button className="btn btn-primary" onClick={() => setShowNewRack(v => !v)}>
-                {showNewRack ? t('common.cancel') : `+ ${t('racks.newRack')}`}
-              </button>
-            )}
+            <button className="btn btn-primary" onClick={() => setShowNewRack(v => !v)}>
+              {showNewRack ? t('common.cancel') : `+ ${t('racks.newRack')}`}
+            </button>
           </div>
         )}
       </div>
+
+      {/* Room View / Cellar Book moved from ad-hoc header links into the
+          shared view switcher used on every cellar page */}
+      <CellarNav cellarId={id} active="racks" />
 
       {loading ? (
         <div className="loading">{t('racks.loadingRacks')}</div>
