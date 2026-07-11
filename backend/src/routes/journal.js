@@ -260,7 +260,10 @@ router.post('/', async (req, res) => {
             'journal_mention',
             'Journal Mention',
             `${senderName} mentioned you in a journal entry: "${populated.title || 'Untitled'}"`,
-            `/journal/${populated._id}`,
+            // No link: journal entries are private to their owner (there is no
+            // route or endpoint to view another user's entry), so a per-entry
+            // deep link would 404. Keep the notification informational-only.
+            null,
             undefined,
             req.user.id // actor — lets GDPR erasure remove this on the mentioner's deletion
           );
