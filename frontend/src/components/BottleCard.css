@@ -120,6 +120,12 @@
   margin-top: 0.3rem;
 }
 
+/* A bottle with no badges still renders the container; without this the
+   empty flex box's margin-top reserves ~5px of dead vertical space per row. */
+.bottle-badges:empty {
+  display: none;
+}
+
 /* ── Rack badge ── */
 .rack-badge {
   display: inline-block;
@@ -229,6 +235,36 @@
   color: var(--color-text-muted);
   flex-shrink: 0;
   line-height: 1;
+}
+
+/* ── Compact (dense) list rows ──
+   Opt-in via the density toggle. The 64px thumbnail is the height floor for a
+   comfortable row, so compact both trims the padding AND shrinks the image —
+   dropping rows from ~88px to ~60px to fit far more bottles on screen. */
+.bottle-card--compact {
+  padding: 0.35rem 0.75rem;
+  gap: 0.6rem;
+  min-height: 0;
+}
+
+.bottle-card--compact .bottle-wine-image,
+.bottle-card--compact .bottle-wine-placeholder {
+  width: 36px;
+  height: 52px;
+}
+
+.bottle-card--compact .bottle-name {
+  font-size: 0.9rem;
+  margin-bottom: 0.1rem;
+}
+
+.bottle-card--compact .bottle-meta {
+  font-size: 0.78rem;
+}
+
+.bottle-card--compact .bottle-badges {
+  margin-top: 0.15rem;
+  gap: 0.25rem;
 }
 
 /* ── Card grid-mode ── */

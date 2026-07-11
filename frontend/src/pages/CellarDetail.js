@@ -688,12 +688,23 @@ function BottlesList({ bottles, rackMap, cellarId, hasMore, loadingMore, onLoadM
   const [viewMode, setViewMode] = useState(() => {
     try { return localStorage.getItem('cellarion_bottle_view') || 'list'; } catch { return 'list'; }
   });
+  const [density, setDensity] = useState(() => {
+    try { return localStorage.getItem('cellarion_bottle_density') || 'comfortable'; } catch { return 'comfortable'; }
+  });
   const [expandedGroups, setExpandedGroups] = useState(() => new Set());
 
   const setView = (mode) => {
     setViewMode(mode);
     try { localStorage.setItem('cellarion_bottle_view', mode); } catch {}
   };
+
+  const setDens = (mode) => {
+    setDensity(mode);
+    try { localStorage.setItem('cellarion_bottle_density', mode); } catch {}
+  };
+
+  // Compact only applies to list view — the grid's height is driven by the image.
+  const compact = viewMode === 'list' && density === 'compact';
 
   const toggleGroup = (key) => {
     setExpandedGroups(prev => {
@@ -706,6 +717,17 @@ function BottlesList({ bottles, rackMap, cellarId, hasMore, loadingMore, onLoadM
   return (
     <>
       <div className="bottles-view-toggle">
+        {viewMode === 'list' && (
+          <button
+            className={`view-toggle-btn density-toggle-btn ${density === 'compact' ? 'active' : ''}`}
+            onClick={() => setDens(density === 'compact' ? 'comfortable' : 'compact')}
+            aria-label={t('cellarDetail.compactView', 'Compact view')}
+            aria-pressed={density === 'compact'}
+            title={t('cellarDetail.compactView', 'Compact view')}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="3" y1="14" x2="21" y2="14"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+          </button>
+        )}
         <button
           className={`view-toggle-btn ${viewMode === 'list' ? 'active' : ''}`}
           onClick={() => setView('list')}
@@ -736,6 +758,7 @@ function BottlesList({ bottles, rackMap, cellarId, hasMore, loadingMore, onLoadM
                 cellarId={item.cellar || cellarId}
                 viewMode={viewMode}
                 showCellarBadge
+                compact={compact}
               />
             );
           }
@@ -744,7 +767,7 @@ function BottlesList({ bottles, rackMap, cellarId, hasMore, loadingMore, onLoadM
             const rep = item.bottles[0];
             if (item.count === 1) {
               return (
-                <BottleCard key={rep._id} bottle={rep} rackMap={rackMap} cellarId={cellarId} viewMode={viewMode} />
+                <BottleCard key={rep._id} bottle={rep} rackMap={rackMap} cellarId={cellarId} viewMode={viewMode} compact={compact} />
               );
             }
             if (!expandedGroups.has(item.key)) {
@@ -757,6 +780,7 @@ function BottlesList({ bottles, rackMap, cellarId, hasMore, loadingMore, onLoadM
                   viewMode={viewMode}
                   groupCount={item.count}
                   onClick={() => toggleGroup(item.key)}
+                  compact={compact}
                 />
               );
             }
@@ -770,14 +794,14 @@ function BottlesList({ bottles, rackMap, cellarId, hasMore, loadingMore, onLoadM
                   </button>
                 </div>
                 {item.bottles.map(b => (
-                  <BottleCard key={b._id} bottle={b} rackMap={rackMap} cellarId={cellarId} viewMode={viewMode} />
+                  <BottleCard key={b._id} bottle={b} rackMap={rackMap} cellarId={cellarId} viewMode={viewMode} compact={compact} />
                 ))}
               </Fragment>
             );
           }
           // Defensive fallback: a plain bottle item (responses are always grouped)
           return (
-            <BottleCard key={item._id} bottle={item} rackMap={rackMap} cellarId={cellarId} viewMode={viewMode} />
+            <BottleCard key={item._id} bottle={item} rackMap={rackMap} cellarId={cellarId} viewMode={viewMode} compact={compact} />
           );
         })}
       </div>

@@ -19,7 +19,7 @@ const MATURITY_LABELS = {
  * Renders a single bottle in either list or card (grid) view.
  * Props: bottle, rackMap, cellarId, viewMode ('list' | 'card')
  */
-function BottleCard({ bottle, rackMap, cellarId, viewMode, groupCount = 1, onClick, showCellarBadge = false }) {
+function BottleCard({ bottle, rackMap, cellarId, viewMode, groupCount = 1, onClick, showCellarBadge = false, compact = false }) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -130,7 +130,7 @@ function BottleCard({ bottle, rackMap, cellarId, viewMode, groupCount = 1, onCli
   // list view (default)
   return (
     <div
-      className={`bottle-card${isGroup ? ' bottle-card--stacked' : ''}`}
+      className={`bottle-card${isGroup ? ' bottle-card--stacked' : ''}${compact ? ' bottle-card--compact' : ''}`}
       onClick={handleClick}
       role="button"
       tabIndex={0}
@@ -212,7 +212,7 @@ function BottleCard({ bottle, rackMap, cellarId, viewMode, groupCount = 1, onCli
 // values derived from the OTHER compared props (the bottle/group item) — if a
 // future caller closes over unrelated state, that handler must be stabilized
 // with useCallback instead.
-const COMPARED_PROPS = ['bottle', 'rackMap', 'cellarId', 'viewMode', 'groupCount', 'showCellarBadge'];
+const COMPARED_PROPS = ['bottle', 'rackMap', 'cellarId', 'viewMode', 'groupCount', 'showCellarBadge', 'compact'];
 export default memo(BottleCard, (prev, next) =>
   COMPARED_PROPS.every(key => prev[key] === next[key])
 );
