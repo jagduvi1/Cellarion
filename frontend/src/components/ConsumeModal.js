@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import RatingInput from './RatingInput';
+import { useDialogA11y } from '../utils/useDialogA11y';
 
 export function ConsumeModal({ wineName, defaultRatingScale, onConfirm, onCancel }) {
   const { t } = useTranslation();
@@ -9,18 +10,23 @@ export function ConsumeModal({ wineName, defaultRatingScale, onConfirm, onCancel
   const [rating,       setRating]      = useState('');
   const [ratingScale,  setRatingScale] = useState(defaultRatingScale || '5');
   const [saving,       setSaving]      = useState(false);
+  const titleId = useId();
+  const boxRef = useDialogA11y(onCancel);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setSaving(true);
-    await onConfirm(reason, note || undefined, rating || undefined, ratingScale);
-    setSaving(false);
+    try {
+      await onConfirm(reason, note || undefined, rating || undefined, ratingScale);
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
     <div className="modal-overlay" onClick={onCancel}>
-      <div className="modal-box" onClick={e => e.stopPropagation()}>
-        <h2>{t('bottleDetail.removeBottleTitle')}</h2>
+      <div className="modal-box" onClick={e => e.stopPropagation()} ref={boxRef} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1}>
+        <h2 id={titleId}>{t('bottleDetail.removeBottleTitle')}</h2>
         {wineName && <p className="modal-wine-name">{wineName}</p>}
         <form onSubmit={handleSubmit}>
           <div className="form-group">

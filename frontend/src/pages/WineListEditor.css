@@ -446,6 +446,14 @@
 }
 
 /* Stats table */
+/* Scroll wrapper so the 7 columns stay reachable on narrow viewports — the
+   page body sets overflow-x:hidden, so without this the rightmost columns
+   (Glass, Margin) would be clipped with no way to scroll to them. */
+.wle-table-wrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
 .wle-stats-table {
   width: 100%;
   border-collapse: collapse;

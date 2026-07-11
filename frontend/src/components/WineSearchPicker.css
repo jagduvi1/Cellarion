@@ -50,8 +50,9 @@
   transition: background 0.1s;
 }
 
-.wine-search-picker__option:hover {
-  background: var(--color-surface, #f5f5f5);
+.wine-search-picker__option:hover,
+.wine-search-picker__option.is-active {
+  background: var(--color-surface-hover, #eee);
 }
 
 .wine-search-picker__option-dot {

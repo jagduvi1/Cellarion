@@ -104,7 +104,7 @@ function Wishlist() {
     const newStatus = item.status === 'wanted' ? 'bought' : 'wanted';
     try {
       const res = await updateWishlistItem(apiFetch, item._id, { status: newStatus });
-      if (!res.ok) return;
+      if (!res.ok) { setError(t('wishlist.failedUpdateStatus')); return; }
       // Remove from current list if filter doesn't match
       if (statusFilter !== 'all' && newStatus !== statusFilter) {
         setItems(prev => prev.filter(i => i._id !== item._id));
@@ -127,7 +127,7 @@ function Wishlist() {
   const handleDelete = async (id) => {
     try {
       const res = await removeWishlistItem(apiFetch, id);
-      if (!res.ok) return;
+      if (!res.ok) { setError(t('wishlist.failedRemove')); return; }
       setItems(prev => prev.filter(i => i._id !== id));
       setTotal(prev => prev - 1);
       setDeleteConfirm(null);

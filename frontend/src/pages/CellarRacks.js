@@ -328,12 +328,19 @@ function CellarRacks() {
 
   // --- remove bottle from slot (keep bottle in cellar) ---
   const handleRemoveFromRack = async (rackId, position) => {
-    const res = await clearSlot(apiFetch, rackId, position);
-    const data = await res.json();
-    if (res.ok) {
-      setRacks(racks.map(r => r._id === rackId ? data.rack : r));
+    try {
+      const res = await clearSlot(apiFetch, rackId, position);
+      const data = await res.json();
+      if (res.ok) {
+        setRacks(racks.map(r => r._id === rackId ? data.rack : r));
+      } else {
+        alert(data.error || 'Failed to remove from rack');
+      }
+    } catch {
+      alert('Network error — please try again.');
+    } finally {
+      setActivePopup(null);
     }
-    setActivePopup(null);
   };
 
   // --- disable / re-enable a slot position ---

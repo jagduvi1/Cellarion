@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation, Trans } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
@@ -9,6 +9,10 @@ const LOGO_WEBP = '/cellarion-logo-light.webp';
 const LOGO_PNG  = '/cellarion-logo-light.png';
 
 function Login() {
+  const usernameId = useId();
+  const emailId = useId();
+  const passwordId = useId();
+  const forgotEmailId = useId();
   const [mode, setMode] = useState('login');
   const [formData, setFormData] = useState({ username: '', email: '', password: '' });
   const [error, setError] = useState(null);
@@ -154,8 +158,9 @@ function Login() {
                 {t('auth.forgotIntro')}
               </p>
               <div className="form-group">
-                <label>{t('auth.emailLabel')}</label>
+                <label htmlFor={forgotEmailId}>{t('auth.emailLabel')}</label>
                 <input
+                  id={forgotEmailId}
                   type="email"
                   value={forgotEmail}
                   onChange={(e) => setForgotEmail(e.target.value)}
@@ -274,8 +279,9 @@ function Login() {
 
         <form onSubmit={handleSubmit}>
           <div className="form-group">
-            <label>{mode === 'login' ? t('auth.usernameOrEmail') : t('auth.usernameLabel')}</label>
+            <label htmlFor={usernameId}>{mode === 'login' ? t('auth.usernameOrEmail') : t('auth.usernameLabel')}</label>
             <input
+              id={usernameId}
               type="text"
               value={formData.username}
               onChange={(e) => setFormData({ ...formData, username: e.target.value })}
@@ -285,8 +291,9 @@ function Login() {
           </div>
           {mode === 'register' && (
             <div className="form-group">
-              <label>{t('auth.emailLabel')}</label>
+              <label htmlFor={emailId}>{t('auth.emailLabel')}</label>
               <input
+                id={emailId}
                 type="email"
                 value={formData.email}
                 onChange={(e) => setFormData({ ...formData, email: e.target.value })}
@@ -295,8 +302,9 @@ function Login() {
             </div>
           )}
           <div className="form-group">
-            <label>{t('auth.passwordLabel')}</label>
+            <label htmlFor={passwordId}>{t('auth.passwordLabel')}</label>
             <input
+              id={passwordId}
               type="password"
               value={formData.password}
               onChange={(e) => setFormData({ ...formData, password: e.target.value })}

@@ -2711,6 +2711,7 @@
     "tabShare": "Share",
     "previewEmpty": "Select wines to see the preview.",
     "statsEmpty": "Save your wine list first to see dashboard stats.",
+    "tableScrollAria": "Stats table (scroll sideways to see all columns)",
     "noWinesMatch": "No wines match your search.",
     "noActiveBottles": "No active bottles in this cellar.",
     "noWinesInSection": "No wines in this section yet. Select wines below.",
