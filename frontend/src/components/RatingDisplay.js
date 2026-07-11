@@ -26,9 +26,10 @@ export default function RatingDisplay({ value, scale, preferredScale }) {
   const precision = meta.step < 1 ? 1 : 0;
   const originalFormatted = `${numVal.toFixed(precision)}${meta.suffix}`;
 
-  // Star fill % for the original scale '5' star bar, or the converted star value
-  const starNorm = scales.normalized;
-  const starFill = Math.max(0, Math.min(100, starNorm));
+  // Star fill % for the '5'-scale star bar. The bar only renders when
+  // resolvedScale === '5' (below), so numVal is the 0–5 star value — fill to the
+  // star proportion (matching RatingInput), NOT the non-linear normalized score.
+  const starFill = Math.max(0, Math.min(100, (numVal / 5) * 100));
 
   // Determine if we need to show a preferred-scale conversion
   const prefScale = SCALE_META[preferredScale] ? preferredScale : null;

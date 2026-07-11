@@ -569,14 +569,22 @@ router.get('/:id/statistics', async (req, res) => {
       return res.status(404).json({ error: 'Cellar not found' });
     }
 
-    // Only count active bottles in statistics. Lean + the list projection:
-    // this handler only reads scalar fields (wine _id, country.name, type),
-    // so hydrating full documents with the multi-KB aiProfile made this the
-    // heaviest per-request allocation in the file on large cellars.
+    // Only count active bottles in statistics. This handler reads only scalar
+    // bottle fields plus wineDefinition.type and wineDefinition.country.name, so
+    // populate just those — the full WINE_POPULATE_LIST also joins region + the
+    // grapes array (never read here), pure waste on large cellars. Capped at 10k
+    // to match the sibling list/history routes.
     const bottles = await Bottle.find({
       cellar: req.params.id,
       status: { $nin: CONSUMED_STATUSES }
-    }).populate(WINE_POPULATE_LIST).lean();
+    })
+      .populate({
+        path: 'wineDefinition',
+        select: 'type country',
+        populate: { path: 'country', select: 'name' },
+      })
+      .limit(10000)
+      .lean();
 
     // Batch-load historical rate snapshots for all priceSetAt dates (one DB query)
     const targetCurrency = req.query.currency || null;

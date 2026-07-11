@@ -23,7 +23,7 @@ const REASON_CONFIG = {
 function CellarHistory() {
   const { t } = useTranslation();
   const { id } = useParams();
-  const { apiFetch, user } = useAuth();
+  const { apiFetch } = useAuth();
   const [cellar, setCellar] = useState(null);
   const [grouped, setGrouped] = useState({});
   const [loading, setLoading] = useState(true);

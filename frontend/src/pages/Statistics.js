@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, lazy, Suspense } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
@@ -22,9 +22,13 @@ import PurchaseHistoryChart from '../components/charts/PurchaseHistoryChart';
 import TopValueList from '../components/charts/TopValueList';
 import CellarBreakdownViz from '../components/charts/CellarBreakdownViz';
 import BottleSizeChart from '../components/charts/BottleSizeChart';
-import WorldMapChart from '../components/charts/WorldMapChart';
 import ValueOverTimeChart from '../components/ValueOverTimeChart';
 import './Statistics.css';
+
+// Lazy-loaded: pulls in react-simple-maps + a 108 KB world-atlas topojson, and
+// the map sits at the bottom of the page (desktop-only), so keep it out of the
+// Statistics route chunk — matches the ShelfView3D / modal code-splitting pattern.
+const WorldMapChart = lazy(() => import('../components/charts/WorldMapChart'));
 
 // ── KPI Card ──────────────────────────────────────────────────────────────────
 function KPICard({ icon, label, value, sub, accentColor }) {
@@ -359,7 +363,9 @@ function Statistics() {
             {t('statistics.sections.collectionOrigins')}
             <span className="stats-card-title-note">{t('statistics.sections.lighterMoreBottles')}</span>
           </h2>
-          <WorldMapChart byCountry={byCountry} />
+          <Suspense fallback={null}>
+            <WorldMapChart byCountry={byCountry} />
+          </Suspense>
         </div>
 
         {/* Top Origins */}

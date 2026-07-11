@@ -78,10 +78,15 @@ function DiscussionDetail() {
   const isOwner = user && discussion?.author?._id === user.id;
   const isMod = user && (user.roles?.includes('moderator') || user.roles?.includes('admin'));
 
-  const fetchDiscussion = useCallback(async () => {
+  // Latest-wins guard so an out-of-order response for a previous thread can't
+  // overwrite the current thread's header/replies (mirrors CellarDetail/History).
+  const fetchSeq = useRef(0);
+
+  const fetchDiscussion = useCallback(async (seq) => {
     try {
       const res = await getDiscussion(apiFetch, idOrSlug);
       const data = await res.json();
+      if (seq !== fetchSeq.current) return; // superseded by a newer thread load
       if (res.ok) {
         setDiscussion(data.discussion);
         setError(null);
@@ -95,11 +100,12 @@ function DiscussionDetail() {
         setError(data.error || t('discussions.failedLoadDiscussion'));
       }
     } catch {
+      if (seq !== fetchSeq.current) return;
       setError(t('discussions.failedLoadDiscussion'));
     }
   }, [apiFetch, idOrSlug, t]);
 
-  const fetchReplies = useCallback(async (p, replace = false) => {
+  const fetchReplies = useCallback(async (p, replace = false, seq = fetchSeq.current) => {
     try {
       if (replace) setLoading(true);
       else setLoadingMore(true);
@@ -107,6 +113,7 @@ function DiscussionDetail() {
       const res = await getDiscussionReplies(apiFetch, id, `page=${p}&limit=30`);
       const data = await res.json();
 
+      if (seq !== fetchSeq.current) return; // superseded by a newer thread load
       if (res.ok) {
         setReplies(prev => replace ? data.replies : [...prev, ...data.replies]);
         setPage(p);
@@ -115,14 +122,17 @@ function DiscussionDetail() {
     } catch {
       // silent
     } finally {
-      setLoading(false);
-      setLoadingMore(false);
+      if (seq === fetchSeq.current) {
+        setLoading(false);
+        setLoadingMore(false);
+      }
     }
   }, [apiFetch, id]);
 
   useEffect(() => {
-    fetchDiscussion();
-    fetchReplies(1, true);
+    const seq = ++fetchSeq.current;
+    fetchDiscussion(seq);
+    fetchReplies(1, true, seq);
   }, [fetchDiscussion, fetchReplies]);
 
   const handleSubmitReply = async (e) => {

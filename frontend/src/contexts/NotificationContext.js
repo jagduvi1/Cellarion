@@ -96,13 +96,21 @@ export function NotificationProvider({ children }) {
     // can't see net-zero changes (one read on another device while a new
     // notification arrives keeps the count equal), so waking is the moment
     // we resynchronize the actual list — same self-heal the old code had.
-    const handleWake = () => { if (!document.hidden) fetchNotifications(); };
+    // Returning to a tab fires BOTH visibilitychange and focus, so debounce to
+    // coalesce that burst into a single fetch.
+    let wakeTimer = null;
+    const handleWake = () => {
+      if (document.hidden) return;
+      clearTimeout(wakeTimer);
+      wakeTimer = setTimeout(() => fetchNotifications(), 250);
+    };
     window.addEventListener('focus', handleWake);
     document.addEventListener('visibilitychange', handleWake);
 
     return () => {
       clearInterval(intervalRef.current);
       intervalRef.current = null;
+      clearTimeout(wakeTimer);
       window.removeEventListener('focus', handleWake);
       document.removeEventListener('visibilitychange', handleWake);
     };

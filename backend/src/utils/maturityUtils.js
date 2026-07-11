@@ -78,9 +78,18 @@ async function buildProfileMap(activeBottles) {
   const map = new Map();
   if (profileQueries.length === 0) return map;
 
-  const profiles = await WineVintageProfile.find({ $or: profileQueries, status: 'reviewed' }).lean();
+  // One index-friendly $in over wineDefinition instead of an N-branch $or (which
+  // can reach thousands of clauses on a large maturity-sorted cellar), then drop
+  // rows whose (wineDefinition, vintage) pair wasn't requested. Same
+  // {wineDefinition, vintage} unique index, one query.
+  const wineIds = [...new Set(profileQueries.map(q => q.wineDefinition))];
+  const profiles = await WineVintageProfile.find({
+    wineDefinition: { $in: wineIds },
+    status: 'reviewed',
+  }).lean();
   for (const p of profiles) {
-    map.set(`${p.wineDefinition.toString()}:${p.vintage}`, p);
+    const key = `${p.wineDefinition.toString()}:${p.vintage}`;
+    if (seenPairs.has(key)) map.set(key, p);
   }
   return map;
 }
