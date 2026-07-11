@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useTranslation } from 'react-i18next';
+import { useTranslation, Trans } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import { deleteCellar } from '../api/cellars';
 import Modal from './Modal';
@@ -34,7 +34,7 @@ export function DeleteCellarModal({ cellar, onDeleted, onClose }) {
   return (
     <Modal title={t('cellarDetail.deleteCellarTitle')} onClose={onClose}>
       <p className="delete-warning">
-        This will delete <strong>{cellar.name}</strong> and all its racks.<br />
+        <Trans i18nKey="cellarDetail.deleteWillDelete" components={{ strong: <strong /> }} values={{ name: cellar.name }} /><br />
         {t('cellarDetail.bottlesPreserved')}
       </p>
       <p className="delete-recovery">
@@ -42,7 +42,7 @@ export function DeleteCellarModal({ cellar, onDeleted, onClose }) {
       </p>
       {error && <div className="alert alert-error">{error}</div>}
       <div className="form-group">
-        <label>Type <strong>{cellar.name}</strong> to confirm</label>
+        <label><Trans i18nKey="cellarDetail.typeToConfirm" components={{ strong: <strong /> }} values={{ name: cellar.name }} /></label>
         <input
           type="text"
           value={typed}

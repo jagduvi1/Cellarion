@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { useTranslation } from 'react-i18next';
+import { useTranslation, Trans } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import useVersion from '../hooks/useVersion';
 import { updateProfile } from '../api/profiles';
@@ -349,16 +349,16 @@ function Settings() {
 
       {/* ── Profile card ── */}
       <div className="card settings-card">
-        <h2 className="settings-section-title">Profile</h2>
+        <h2 className="settings-section-title">{t('settings.profile.title', 'Profile')}</h2>
         <form onSubmit={handleProfileSave}>
           <div className="form-group">
             <label>{t('settings.signedInAs', 'Signed in as')}</label>
             <div className="settings-email-display">{user?.email || '—'}</div>
           </div>
           <div className="form-group">
-            <label htmlFor="display-name-input">Display Name</label>
+            <label htmlFor="display-name-input">{t('settings.profile.displayName', 'Display Name')}</label>
             <p className="settings-hint">
-              How your name appears to other users. Leave blank to use your username.
+              {t('settings.profile.displayNameHint', 'How your name appears to other users. Leave blank to use your username.')}
             </p>
             <input
               id="display-name-input"
@@ -366,30 +366,30 @@ function Settings() {
               className="input"
               value={displayName}
               onChange={e => setDisplayName(e.target.value)}
-              placeholder={user?.username || 'Display name'}
+              placeholder={user?.username || t('settings.profile.displayName', 'Display Name')}
               maxLength={50}
             />
           </div>
           <div className="form-group">
-            <label htmlFor="bio-input">Bio</label>
+            <label htmlFor="bio-input">{t('settings.profile.bio', 'Bio')}</label>
             <p className="settings-hint">
-              A short description visible on your public profile.
+              {t('settings.profile.bioHint', 'A short description visible on your public profile.')}
             </p>
             <textarea
               id="bio-input"
               className="input"
               value={bio}
               onChange={e => setBio(e.target.value)}
-              placeholder="Tell others about your wine journey..."
+              placeholder={t('settings.profile.bioPlaceholder', 'Tell others about your wine journey...')}
               maxLength={500}
               rows={3}
             />
           </div>
 
           <div className="form-group">
-            <label htmlFor="visibility-select">Profile Visibility</label>
+            <label htmlFor="visibility-select">{t('settings.profile.visibility', 'Profile Visibility')}</label>
             <p className="settings-hint">
-              Public profiles appear in search results and the Discover feed. Private profiles are hidden from other users.
+              {t('settings.profile.visibilityHint', 'Public profiles appear in search results and the Discover feed. Private profiles are hidden from other users.')}
             </p>
             <select
               id="visibility-select"
@@ -397,8 +397,8 @@ function Settings() {
               value={profileVisibility}
               onChange={e => setProfileVisibility(e.target.value)}
             >
-              <option value="public">Public</option>
-              <option value="private">Private</option>
+              <option value="public">{t('settings.profile.public', 'Public')}</option>
+              <option value="private">{t('settings.profile.private', 'Private')}</option>
             </select>
           </div>
 
@@ -593,7 +593,7 @@ function Settings() {
           <div className="settings-push-devices">
             <div className="settings-push-device-row">
               <span className={`settings-push-device-status ${deviceStatus.thisDeviceRegistered ? 'settings-push-device-status--active' : ''}`}>
-                {deviceStatus.thisDeviceRegistered ? 'This device is registered' : 'This device is not registered'}
+                {deviceStatus.thisDeviceRegistered ? t('settings.push.deviceRegistered', 'This device is registered') : t('settings.push.deviceNotRegistered', 'This device is not registered')}
               </span>
               {deviceStatus.thisDeviceRegistered ? (
                 <button
@@ -601,7 +601,7 @@ function Settings() {
                   onClick={handleRemoveDevice}
                   disabled={deviceLoading}
                 >
-                  {deviceLoading ? 'Removing...' : 'Remove this device'}
+                  {deviceLoading ? t('settings.push.removing', 'Removing...') : t('settings.push.removeDevice', 'Remove this device')}
                 </button>
               ) : (
                 <button
@@ -609,13 +609,13 @@ function Settings() {
                   onClick={handleRegisterDevice}
                   disabled={deviceLoading}
                 >
-                  {deviceLoading ? 'Registering...' : 'Register this device'}
+                  {deviceLoading ? t('settings.push.registering', 'Registering...') : t('settings.push.registerDevice', 'Register this device')}
                 </button>
               )}
             </div>
             {deviceStatus.totalDevices > 0 && (
               <p className="settings-hint" style={{ marginTop: '0.25rem' }}>
-                {deviceStatus.totalDevices} {deviceStatus.totalDevices === 1 ? 'device' : 'devices'} registered for push notifications.
+                {t('settings.push.devicesRegistered', { count: deviceStatus.totalDevices, defaultValue: '{{count}} devices registered for push notifications.' })}
               </p>
             )}
             {deviceStatus.thisDeviceRegistered && (
@@ -625,11 +625,11 @@ function Settings() {
                   onClick={handleTestPush}
                   disabled={testSending}
                 >
-                  {testSending ? 'Sending...' : 'Send test notification'}
+                  {testSending ? t('settings.push.sending', 'Sending...') : t('settings.push.sendTest', 'Send test notification')}
                 </button>
                 {testResult && (
                   <span className={testResult.success ? 'settings-saved' : 'settings-push-test-error'}>
-                    {testResult.success ? 'Test sent!' : testResult.error}
+                    {testResult.success ? t('settings.push.testSent', 'Test sent!') : testResult.error}
                   </span>
                 )}
               </div>
@@ -766,74 +766,81 @@ function Settings() {
 
       {/* ── Your Data (GDPR) ── */}
       <div className="card settings-card">
-        <h2 className="settings-section-title">Your Data</h2>
+        <h2 className="settings-section-title">{t('settings.data.title', 'Your Data')}</h2>
         <p className="settings-hint">
-          Download a complete copy of all your personal data stored in Cellarion, including
-          your profile, bottles, cellars, reviews, and activity log.
+          {t('settings.data.intro', 'Download a complete copy of all your personal data stored in Cellarion, including your profile, bottles, cellars, reviews, and activity log.')}
         </p>
         <button
           className="btn btn-secondary"
           onClick={handleExportData}
           disabled={exporting}
         >
-          {exporting ? 'Exporting...' : 'Export my data'}
+          {exporting ? t('settings.data.exporting', 'Exporting...') : t('settings.data.exportBtn', 'Export my data')}
         </button>
         {exportError && <div className="alert alert-error" style={{ marginTop: '0.75rem' }}>{exportError}</div>}
         <p className="settings-hint" style={{ marginTop: '1rem' }}>
-          Read our <a href="/privacy">Privacy Policy</a> to learn how your data is processed and what rights you have.
+          <Trans i18nKey="settings.data.privacyLink" components={{ a: <a href="/privacy" /> }}>
+            Read our <a href="/privacy">Privacy Policy</a> to learn how your data is processed and what rights you have.
+          </Trans>
         </p>
       </div>
 
       {/* ── Take your cellars with you (portability / anti-lock-in) ── */}
       <div className="card settings-card">
-        <h2 className="settings-section-title">Take your cellars with you</h2>
+        <h2 className="settings-section-title">{t('settings.portability.title', 'Take your cellars with you')}</h2>
         <p className="settings-hint">
-          Export one cellar or all of them — bottles, rack placements, 3D room layout, reviews,
-          maturity data and the images you uploaded yourself — in a format you can import into any
-          Cellarion instance. Your data is yours; we never lock it in.
+          {t('settings.portability.intro', 'Export one cellar or all of them — bottles, rack placements, 3D room layout, reviews, maturity data and the images you uploaded yourself — in a format you can import into any Cellarion instance. Your data is yours; we never lock it in.')}
         </p>
 
         <div className="settings-actions" style={{ marginTop: '1rem' }}>
-          <Link to="/export-cellar" className="btn btn-secondary">Export your cellars →</Link>
+          <Link to="/export-cellar" className="btn btn-secondary">{t('settings.portability.exportBtn', 'Export your cellars →')}</Link>
         </div>
 
         <p className="settings-hint" style={{ marginTop: '1rem' }}>
-          Moving in from another Cellarion instance? <Link to="/import-cellar">Import a cellar export</Link> to
-          recreate your cellars, bottles and images here.
+          <Trans i18nKey="settings.portability.importLink" components={{ a: <Link to="/import-cellar" /> }}>
+            Moving in from another Cellarion instance? <Link to="/import-cellar">Import a cellar export</Link> to recreate your cellars, bottles and images here.
+          </Trans>
         </p>
       </div>
 
       {/* ── Danger zone ── */}
       <div className="card settings-card settings-danger-card">
-        <h2 className="settings-section-title settings-danger-title">Danger zone</h2>
+        <h2 className="settings-section-title settings-danger-title">{t('settings.danger.title', 'Danger zone')}</h2>
         {isDeletionScheduled ? (
           <div>
             <div className="alert alert-error" style={{ marginBottom: '1rem' }}>
-              Account deletion is scheduled for{' '}
-              <strong>{new Date(user.deletionScheduledFor).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })}</strong>.
-              All your data will be permanently removed after this date.
+              <Trans
+                i18nKey="settings.danger.scheduledFor"
+                components={{ strong: <strong /> }}
+                values={{ date: new Date(user.deletionScheduledFor).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' }) }}
+              >
+                Account deletion is scheduled for <strong>{'{{date}}'}</strong>. All your data will be permanently removed after this date.
+              </Trans>
             </div>
             <button
               className="btn btn-secondary"
               onClick={handleCancelDeletion}
               disabled={cancelling}
             >
-              {cancelling ? 'Cancelling...' : 'Cancel deletion'}
+              {cancelling ? t('settings.danger.cancelling', 'Cancelling...') : t('settings.danger.cancelDeletion', 'Cancel deletion')}
             </button>
           </div>
         ) : (
           <>
             <p className="settings-hint">
-              Permanently delete your account and all associated data — cellars, bottles, reviews, and settings.
-              After requesting deletion, you have 7 days to change your mind before the deletion is permanent.
+              {t('settings.danger.intro', 'Permanently delete your account and all associated data — cellars, bottles, reviews, and settings. After requesting deletion, you have 7 days to change your mind before the deletion is permanent.')}
             </p>
             {!showDeleteConfirm ? (
               <button className="btn btn-danger" onClick={() => setShowDeleteConfirm(true)}>
-                Delete my account
+                {t('settings.danger.deleteBtn', 'Delete my account')}
               </button>
             ) : (
               <div className="settings-delete-confirm">
-                <p>Type <strong>DELETE</strong> to confirm:</p>
+                <p>
+                  <Trans i18nKey="settings.danger.typeToConfirm" components={{ strong: <strong /> }}>
+                    Type <strong>DELETE</strong> to confirm:
+                  </Trans>
+                </p>
                 <input
                   type="text"
                   className="input"
@@ -849,10 +856,10 @@ function Settings() {
                     onClick={handleDeleteAccount}
                     disabled={deleteConfirmText !== 'DELETE' || deleting}
                   >
-                    {deleting ? 'Scheduling...' : 'Schedule account deletion'}
+                    {deleting ? t('settings.danger.scheduling', 'Scheduling...') : t('settings.danger.scheduleBtn', 'Schedule account deletion')}
                   </button>
                   <button className="btn btn-secondary" onClick={() => { setShowDeleteConfirm(false); setDeleteConfirmText(''); }}>
-                    Cancel
+                    {t('common.cancel')}
                   </button>
                 </div>
               </div>

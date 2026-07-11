@@ -1,3 +1,4 @@
+import { useTranslation, Trans } from 'react-i18next';
 import Modal from './Modal';
 import WineImage from './WineImage';
 import './WineModalThumbs.css';
@@ -17,12 +18,15 @@ import './WineModalThumbs.css';
  *   busy         — disables buttons while a follow-up request is in flight
  */
 function SimilarWinesModal({ candidates, queryName, onPick, onCreateNew, onCancel, busy }) {
+  const { t } = useTranslation();
   return (
-    <Modal title="Did you mean one of these?" onClose={onCancel} showClose wide>
+    <Modal title={t('similarWines.title')} onClose={onCancel} showClose wide>
       <p style={{ margin: '0 0 1rem', fontSize: '0.95rem', color: 'var(--color-text-secondary, #666)' }}>
-        We found wines in the registry that look close to{' '}
-        <strong>{queryName || 'what you entered'}</strong>. Picking an existing
-        wine keeps the registry tidy and lets you share data with other users.
+        <Trans
+          i18nKey="similarWines.intro"
+          components={{ strong: <strong /> }}
+          values={{ query: queryName || t('similarWines.whatYouEntered') }}
+        />
       </p>
 
       <ul style={{ listStyle: 'none', padding: 0, margin: '0 0 1.25rem', maxHeight: 380, overflowY: 'auto' }}>
@@ -59,10 +63,10 @@ function SimilarWinesModal({ candidates, queryName, onPick, onCreateNew, onCance
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
               <span
-                title="Similarity score"
+                title={t('similarWines.similarityTitle')}
                 style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary, #888)' }}
               >
-                {Math.round(score * 100)}% match
+                {t('similarWines.matchLabel', { percent: Math.round(score * 100) })}
               </span>
               <button
                 type="button"
@@ -71,7 +75,7 @@ function SimilarWinesModal({ candidates, queryName, onPick, onCreateNew, onCance
                 onClick={() => onPick(wine)}
                 style={{ padding: '0.35rem 0.8rem', fontSize: '0.85rem' }}
               >
-                Use this
+                {t('similarWines.useThis')}
               </button>
             </div>
           </li>
@@ -80,10 +84,10 @@ function SimilarWinesModal({ candidates, queryName, onPick, onCreateNew, onCance
 
       <div className="modal-actions" style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
         <button type="button" className="btn" disabled={busy} onClick={onCancel}>
-          Cancel
+          {t('common.cancel')}
         </button>
         <button type="button" className="btn btn-secondary" disabled={busy} onClick={onCreateNew}>
-          No, create new wine
+          {t('similarWines.createNew')}
         </button>
       </div>
     </Modal>
