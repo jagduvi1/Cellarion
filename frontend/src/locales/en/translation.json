@@ -993,6 +993,10 @@
     "addingToWishlist": "Adding…",
     "onWishlist": "On wishlist",
     "wishlistError": "Try again",
+    "restore": "Move back to cellar",
+    "restoring": "Moving back…",
+    "restoreHint": "Logged by mistake? Put this bottle back in your cellar as active (it returns unplaced).",
+    "restoreError": "Could not move it back — try again",
     "viewBottleAria": "View {{name}}",
     "noResults": "No bottles match your search."
   },

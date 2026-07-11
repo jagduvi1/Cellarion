@@ -1069,6 +1069,51 @@ router.post('/:id/move', requireBottleAccess('owner'), async (req, res) => {
   }
 });
 
+// POST /api/bottles/:id/restore - Put a consumed bottle back to active.
+// The inverse of /consume: for when a bottle was marked drank/gifted/sold by
+// mistake. Clears every consumed-* field so it re-enters the cellar cleanly.
+// The bottle is NOT auto-returned to its old rack slot (the slot was freed on
+// consume and may now be occupied) — it comes back unplaced, and the user
+// re-racks it.
+router.post('/:id/restore', requireBottleAccess('editor'), async (req, res) => {
+  try {
+    const { bottle } = req;
+
+    if (bottle.status === 'active') {
+      return res.status(400).json({ error: 'Bottle is already active' });
+    }
+    if (!CONSUMED_STATUSES.includes(bottle.status)) {
+      return res.status(400).json({ error: 'Only a consumed bottle can be restored' });
+    }
+
+    const previousStatus = bottle.status;
+    bottle.status = 'active';
+    bottle.consumedAt = undefined;
+    bottle.consumedReason = undefined;
+    bottle.consumedNote = undefined;
+    bottle.consumedRating = undefined;
+    bottle.consumedRatingScale = undefined;
+    await bottle.save();
+
+    // Re-index so the bottle leaves history-only search results and rejoins the
+    // active cellar index.
+    searchService.indexBottle(bottle._id);
+
+    logAudit(req, 'bottle.restore',
+      { type: 'bottle', id: bottle._id, cellarId: bottle.cellar },
+      { from: previousStatus }
+    );
+
+    res.json({ bottle });
+  } catch (error) {
+    if (error.name === 'ValidationError') {
+      return res.status(400).json({ error: error.message });
+    }
+    console.error('Restore bottle error:', error);
+    res.status(500).json({ error: 'Failed to restore bottle' });
+  }
+});
+
 // POST /api/bottles/:id/undo - Reverse an incorrectly-added bottle.
 // The bottle disappears from cellar, racks, search, and stats as if it had
 // never been added. Internal audit log keeps the original `bottle.add` row

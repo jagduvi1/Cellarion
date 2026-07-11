@@ -57,6 +57,13 @@ export const undoBottle = (apiFetch, id) =>
     method: 'POST',
   });
 
+// Put a consumed bottle back to active (inverse of consumeBottle) — for a
+// drink/gift/sale logged by mistake. Comes back unplaced.
+export const restoreBottle = (apiFetch, id) =>
+  apiFetch(`/api/bottles/${id}/restore`, {
+    method: 'POST',
+  });
+
 export const moveBottle = (apiFetch, id, toCellarId) =>
   apiFetch(`/api/bottles/${id}/move`, {
     method: 'POST',
