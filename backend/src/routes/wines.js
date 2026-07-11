@@ -21,6 +21,11 @@ const REMBG_URL = process.env.REMBG_URL || 'http://rembg:5000';
 
 const router = express.Router();
 
+// Cap the free-text AI query length before it becomes Claude prompt input, so a
+// caller can't maximize per-call input-token cost with a ~10KB body. Mirrors the
+// chat message cap (chat.js).
+const MAX_AI_QUERY_LEN = 300;
+
 /**
  * 429 for the Anthropic-backed endpoints when the shared per-user daily AI
  * budget (or the site-wide daily cap) is exhausted. These endpoints have no
@@ -381,6 +386,7 @@ router.post('/find-or-create', requireAuth, async (req, res) => {
 router.post('/identify-text', requireAuth, aiBurstLimiter, asyncHandler(async (req, res) => {
   const query = typeof req.body.query === 'string' ? req.body.query.trim() : '';
   if (!query) return res.status(400).json({ error: 'query is required' });
+  if (query.length > MAX_AI_QUERY_LEN) return res.status(400).json({ error: `query must be at most ${MAX_AI_QUERY_LEN} characters` });
 
   const debit = await tryDebitAi(req.user.id);
   if (!debit.ok) return sendAiBudgetExhausted(res, debit);
@@ -409,6 +415,7 @@ router.post('/identify-text', requireAuth, aiBurstLimiter, asyncHandler(async (r
 router.post('/ai-info', requireAuth, aiBurstLimiter, asyncHandler(async (req, res) => {
   const query = typeof req.body.query === 'string' ? req.body.query.trim() : '';
   if (!query) return res.status(400).json({ error: 'query is required' });
+  if (query.length > MAX_AI_QUERY_LEN) return res.status(400).json({ error: `query must be at most ${MAX_AI_QUERY_LEN} characters` });
 
   const debit = await tryDebitAi(req.user.id);
   if (!debit.ok) return sendAiBudgetExhausted(res, debit);

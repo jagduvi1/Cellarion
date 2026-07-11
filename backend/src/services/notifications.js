@@ -48,8 +48,8 @@ const PUSH_PREF_PATH = {
  *   callers (recommendations, restock checker, etc.) that don't yet have
  *   per-category prefs.
  */
-async function createNotification(userId, type, title, message, link = null, category) {
-  return createNotifications([{ userId, type, title, message, link, category }]);
+async function createNotification(userId, type, title, message, link = null, category, actor = null) {
+  return createNotifications([{ userId, type, title, message, link, category, actor }]);
 }
 
 // Push-preference gate: category-specific when the caller named one,
@@ -88,7 +88,7 @@ async function createNotifications(items) {
   let created = [];
   try {
     created = await Notification.insertMany(
-      items.map(i => ({ user: i.userId, type: i.type, title: i.title, message: i.message, link: i.link || null })),
+      items.map(i => ({ user: i.userId, type: i.type, title: i.title, message: i.message, link: i.link || null, actor: i.actor || null })),
       { ordered: false }
     );
   } catch (err) {

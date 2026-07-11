@@ -40,7 +40,8 @@ router.post('/:userId', async (req, res) => {
       type: 'new_follower',
       title: 'New Follower',
       message: `${followerName} started following you`,
-      link: `/users/${req.user.id}`
+      link: `/users/${req.user.id}`,
+      actor: req.user.id, // so GDPR erasure can remove this on the follower's deletion
     }).save().catch(() => {});
 
     logAudit(req, 'user.follow', { type: 'user', id: targetId });

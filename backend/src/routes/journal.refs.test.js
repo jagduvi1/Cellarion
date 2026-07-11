@@ -342,9 +342,11 @@ describe('POST /api/journal response redaction (old rows / create echo)', () => 
     expect(status).toBe(201);
     expect(body.entry.people[0].user).toEqual({ _id: PRIVATE_USER });
     expect(JSON.stringify(body)).not.toContain('secretanna');
-    // the mention notification still reaches the tagged user (by id, no name leak)
+    // the mention notification still reaches the tagged user (by id, no name leak).
+    // Trailing args: category (undefined here) + actor (the mentioner) so GDPR
+    // erasure can remove the notification on the mentioner's deletion.
     expect(createNotification).toHaveBeenCalledWith(
-      PRIVATE_USER, 'journal_mention', 'Journal Mention', expect.any(String), expect.any(String)
+      PRIVATE_USER, 'journal_mention', 'Journal Mention', expect.any(String), expect.any(String), undefined, expect.any(String)
     );
   });
 });

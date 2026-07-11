@@ -194,4 +194,33 @@ function isRefundableScanError(err) {
   return err?.status !== 422;
 }
 
-module.exports = { tryDebitAi, isRefundableFailure, isRefundableScanError, getEffectiveDailyMax, todayUTC, secondsUntilMidnightUTC };
+/**
+ * Debit ONLY the site-wide daily cap (not the per-user AI budget). Cellar chat
+ * has its own per-user quota (ChatUsage / chatDailyLimit), so it must not also
+ * consume the shared per-user AI budget — but it DOES need to count toward the
+ * SuperAdmin kill-switch (aiGlobalDailyCap) so that the site-wide brake actually
+ * bounds chat spend during an abuse event. Returns the same {ok, refund} shape
+ * as tryDebitAi so callers refund on a failed/aborted call.
+ */
+async function tryDebitGlobalAi() {
+  const cfg = rateLimitsConfig.get();
+  const globalCap = cfg.aiGlobalDailyCap?.max ?? rateLimitsConfig.defaults.aiGlobalDailyCap.max;
+  if (globalCap <= 0) return { ok: true, refund: async () => {} }; // cap disabled
+
+  const date = todayUTC();
+  const global = await incUsage(null, date, 1);
+  if (global.count > globalCap) {
+    await incUsage(null, date, -1);
+    return { ok: false, reason: 'global_cap', retryAfterSeconds: secondsUntilMidnightUTC() };
+  }
+
+  let refunded = false;
+  const refund = async () => {
+    if (refunded) return;
+    refunded = true;
+    try { await incUsage(null, date, -1); } catch (err) { console.warn('[aiBudget] global refund failed:', err.message); }
+  };
+  return { ok: true, refund };
+}
+
+module.exports = { tryDebitAi, tryDebitGlobalAi, isRefundableFailure, isRefundableScanError, getEffectiveDailyMax, todayUTC, secondsUntilMidnightUTC };

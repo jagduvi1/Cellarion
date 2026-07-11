@@ -163,7 +163,9 @@ router.post('/', async (req, res) => {
         'wine_recommendation',
         'Wine Recommendation',
         `${senderName} recommends "${wineName}"${trimmedNote ? `: "${trimmedNote}"` : ''}`,
-        `/recommendations`
+        `/recommendations`,
+        undefined,
+        req.user.id // actor — lets GDPR erasure remove this on the sender's deletion
       );
     }
 

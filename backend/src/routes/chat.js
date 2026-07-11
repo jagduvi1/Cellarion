@@ -15,6 +15,7 @@ const rateLimit = require('express-rate-limit');
 const { requireAuth } = require('../middleware/auth');
 const asyncHandler = require('../utils/asyncHandler');
 const aiChat = require('../services/aiChat');
+const { tryDebitGlobalAi } = require('../services/aiBudget');
 const aiConfig = require('../config/aiConfig');
 const ChatUsage = require('../models/ChatUsage');
 const User = require('../models/User');
@@ -199,6 +200,19 @@ router.post('/', requireAuth, chatBurstLimiter, asyncHandler(async (req, res) =>
 
   const { message, useQueryExpansion, history, previousWines, cellarIds, date, usedBefore, limit, period } = validated;
 
+  // Count this chat request toward the site-wide daily AI cap (the SuperAdmin
+  // kill-switch) — chat has its own per-user quota (ChatUsage) but previously
+  // escaped the global brake entirely. If the site cap is hit, don't consume the
+  // user's chat quota that validateAndCheckLimit already reserved.
+  const globalDebit = await tryDebitGlobalAi();
+  if (!globalDebit.ok) {
+    await ChatUsage.findOneAndUpdate({ userId: req.user.id, date }, { $inc: { count: -1 } });
+    return res.status(429).json({
+      error: 'AI is temporarily at capacity. Please try again later.',
+      retryAfterSeconds: globalDebit.retryAfterSeconds,
+    });
+  }
+
   try {
     const result = await aiChat.chat(req.user.id, message, {
       useQueryExpansion,
@@ -221,6 +235,7 @@ router.post('/', requireAuth, chatBurstLimiter, asyncHandler(async (req, res) =>
       { userId: req.user.id, date },
       { $inc: { count: -1 } }
     );
+    await globalDebit.refund(); // the AI call didn't complete — release the global unit
     const status = err.status || 500;
     if (status === 503) return res.status(503).json({ error: err.message });
     console.error('[chat] Error:', err);
