@@ -2,7 +2,10 @@
  * findOrCreateWine service
  *
  * Resolves a wine definition from AI-extracted label data:
+ *   0. Canonicalize the name — strip a redundant producer prefix
+ *      ("Amisfield Pinot Noir" / "Amisfield" → "Pinot Noir")
  *   1. Exact match by normalizedKey (producer:name:appellation)
+ *   1b. Unique producer+name sibling match (appellation-agnostic)
  *   2. Fuzzy similarity search using Meilisearch + scoring
  *   3. If no match above threshold: create wine + any missing taxonomy records
  *
@@ -17,6 +20,8 @@ const Grape = require('../models/Grape');
 const searchService = require('./search');
 const { generateWineKey, normalizeString, resolveGrapeName } = require('../utils/normalize');
 const { scoreAllMatches } = require('./wineMatching');
+const { stripProducerPrefix } = require('../utils/producerPrefix');
+const { escapeRegex } = require('../utils/sanitize');
 
 // Auto-match when combined score >= SIMILARITY_THRESHOLD (near-identical — e.g.
 // token-order or punctuation differences the exact normalizedKey match missed).
@@ -91,22 +96,54 @@ async function findOrCreateGrapes(names, userId) {
  * @param {string} userId     - ObjectId string of the authenticated user (for createdBy)
  * @param {Object} [opts]
  * @param {boolean} [opts.confirmCreate=false] - Skip soft-zone candidate return and create directly
+ * @param {boolean} [opts.skipSiblingMatch=false] - Skip step 1b. Pass when the user has
+ *   explicitly rejected the suggested matches (find-or-create route with confirmCreate),
+ *   so their "create anyway" isn't silently overridden by an appellation-variant sibling.
  */
-async function findOrCreateWine({ name, producer, country, region, appellation, type, grapes }, userId, { confirmCreate = false } = {}) {
+async function findOrCreateWine({ name, producer, country, region, appellation, type, grapes }, userId, { confirmCreate = false, skipSiblingMatch = false } = {}) {
   // Cap stored/compared field lengths at this single create chokepoint (covers
-  // the find-or-create route, CSV import, and label-scan). This bounds both the
-  // fuzzy-match cost and the persisted document size WITHOUT a schema maxlength
-  // validator — a validator re-runs on every .save() (full-document validation)
-  // and would make legacy rows that predate the cap un-editable.
+  // the find-or-create route, CSV import, cellar-format import and label-scan).
+  // This bounds both the fuzzy-match cost and the persisted document size
+  // WITHOUT a schema maxlength validator — a validator re-runs on every .save()
+  // (full-document validation) and would make legacy rows that predate the cap
+  // un-editable.
   const MAX_FIELD = 200;
-  const trimmedName = name.trim().slice(0, MAX_FIELD);
+  let trimmedName = name.trim().slice(0, MAX_FIELD);
   const trimmedProducer = producer.trim().slice(0, MAX_FIELD);
   const trimmedAppellation = (typeof appellation === 'string' ? appellation.trim() : '').slice(0, MAX_FIELD);
+
+  // 0. Registry canon: a wine's name never embeds its producer. Cellar-format
+  // imports and the occasional non-compliant AI response arrive as
+  // name "Amisfield Pinot Noir" + producer "Amisfield" — canonicalize BEFORE
+  // any matching so that input resolves to (or creates) the producer-free
+  // entry instead of minting a producer-in-name duplicate the admin tool has
+  // to clean up later. Loop: concatenated sources can double the prefix.
+  for (let rest = stripProducerPrefix(trimmedName, trimmedProducer); rest;
+       rest = stripProducerPrefix(trimmedName, trimmedProducer)) {
+    trimmedName = rest;
+  }
 
   // 1. Exact match by normalizedKey
   const normalizedKey = generateWineKey(trimmedName, trimmedProducer, trimmedAppellation);
   let wine = await WineDefinition.findOne({ normalizedKey }).populate(POPULATE);
   if (wine) return { wine, created: false };
+
+  // 1b. Sibling match: same producer + same canonical name, ANY appellation.
+  // Import files and AI output often carry a different appellation granularity
+  // than the registry ("Cromwell" vs the registry's "Central Otago") — the
+  // full-key match above misses and the fuzzy score lands around 0.90, below
+  // the auto-match threshold, so without this step a non-interactive caller
+  // (confirmCreate) would mint a near-duplicate. A UNIQUE producer+name hit is
+  // overwhelmingly the same wine; with several siblings we fall through to the
+  // fuzzy scorer so the soft zone can disambiguate instead of picking one
+  // arbitrarily. The anchored regex is a prefix scan on the normalizedKey index.
+  if (!skipSiblingMatch) {
+    const siblingPrefix = `${normalizeString(trimmedProducer)}:${normalizeString(trimmedName)}:`;
+    const siblings = await WineDefinition.find({ normalizedKey: new RegExp(`^${escapeRegex(siblingPrefix)}`) })
+      .limit(2)
+      .populate(POPULATE);
+    if (siblings.length === 1) return { wine: siblings[0], created: false };
+  }
 
   // 2. Fuzzy similarity search
   const searchQuery = `${trimmedName} ${trimmedProducer}`.trim();
