@@ -690,6 +690,7 @@
     "editDetailsShort": "Redigera",
     "removeBottle": "Ta bort flaska",
     "removeBottleShort": "Ta bort",
+    "moreShort": "Mer",
     "mistakeLink": "Tillagd av misstag?",
     "mistakeTitle": "Ta bort som misstag?",
     "mistakeBody": "Detta tar permanent bort flaskan som om den aldrig lagts till. Den syns inte i statistik, historik eller sökning. Detta kan inte ångras.",
@@ -2284,9 +2285,14 @@
     "noData": "Ingen mognadsdata"
   },
 
+  "cellarNav": {
+    "aria": "Källarvyer"
+  },
+
   "cellarBook": {
     "title": "Källarbok",
     "linkBtn": "Källarbok",
+    "linkDesc": "Utskrivbara ställkartor & listor",
     "printBtn": "Skriv ut / Spara som PDF",
     "backToRacks": "Tillbaka till hyllorna",
     "backToCellar": "Tillbaka till källaren",

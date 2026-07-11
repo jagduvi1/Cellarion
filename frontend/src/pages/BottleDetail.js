@@ -53,6 +53,7 @@ function BottleDetail() {
   const [editing, setEditing] = useState(false);
   const [consumeOpen, setConsumeOpen] = useState(false);
   const [moveOpen, setMoveOpen] = useState(false);
+  const [bdMoreOpen, setBdMoreOpen] = useState(false); // ⋮ overflow (Move, Added by mistake)
   const [mistakeOpen, setMistakeOpen] = useState(false);
   const [mistakeBusy, setMistakeBusy] = useState(false);
   const [suggestGrapesOpen, setSuggestGrapesOpen] = useState(false);
@@ -307,6 +308,23 @@ function BottleDetail() {
   // v1: move only active bottles, and only between cellars you own.
   const canMove = !isConsumed && userRole === 'owner';
 
+  // Shared overflow-menu contents — same list used by the desktop header ⋮ and
+  // the mobile bar ⋮, so the rare actions live in exactly one place.
+  const overflowItems = (
+    <>
+      {canMove && (
+        <button className="bd-overflow-item" role="menuitem" onClick={() => { setMoveOpen(true); setBdMoreOpen(false); }}>
+          <span aria-hidden="true">📦</span> {t('moveBottle.action')}
+        </button>
+      )}
+      {canEdit && (
+        <button className="bd-overflow-item bd-overflow-item--danger" role="menuitem" onClick={() => { setMistakeOpen(true); setBdMoreOpen(false); }}>
+          <span aria-hidden="true">↩️</span> {t('bottleDetail.mistakeLink', 'Added by mistake?')}
+        </button>
+      )}
+    </>
+  );
+
   const handleMoved = () => {
     setMoveOpen(false);
     navigate(`/cellars/${cellarId}`); // stay with the source cellar — back to its list
@@ -347,28 +365,38 @@ function BottleDetail() {
                       🍷 <span className="bd-btn-label">{t('openBottle.openBtn', 'Open bottle…')}</span>
                     </button>
                   )}
-                  <button className="btn btn-consume btn-small" data-guide="bottle-consume" onClick={() => setConsumeOpen(true)}>
+                  <button className="btn btn-consume btn-small" onClick={() => setConsumeOpen(true)}>
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M8 2h8l4 10H4L8 2z"/><path d="M12 12v6"/><path d="M8 22h8"/></svg>
                     <span className="bd-btn-label">{t('bottleDetail.removeBottle')}</span>
                   </button>
                 </>
               )}
-              {canMove && (
-                <button className="btn btn-secondary btn-small" onClick={() => setMoveOpen(true)}>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M5 9l-3 3 3 3"/><path d="M9 5l3-3 3 3"/><path d="M15 19l-3 3-3-3"/><path d="M19 9l3 3-3 3"/><path d="M2 12h20"/><path d="M12 2v20"/></svg>
-                  <span className="bd-btn-label">{t('moveBottle.action')}</span>
-                </button>
+              {/* Rare actions (Move, Added by mistake) live in the overflow —
+                  frequent actions stay visible, so the bar fits on phones too */}
+              {(canMove || canEdit) && (
+                <div className="bd-overflow-wrap">
+                  <button
+                    className="btn btn-secondary btn-small"
+                    onClick={() => setBdMoreOpen(o => !o)}
+                    aria-label={t('cellarDetail.moreActions')}
+                    aria-haspopup="menu"
+                    aria-expanded={bdMoreOpen}
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><circle cx="12" cy="12" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="12" cy="19" r="1"/></svg>
+                  </button>
+                  {bdMoreOpen && (
+                    <>
+                      <div className="bd-overflow-backdrop" onClick={() => setBdMoreOpen(false)} aria-hidden="true" />
+                      <div className="bd-overflow-menu" role="menu">
+                        {overflowItems}
+                      </div>
+                    </>
+                  )}
+                </div>
               )}
             </div>
           )}
         </div>
-        {!loading && !editing && canEdit && (
-          <div className="bd-mistake-row">
-            <button type="button" className="bd-mistake-link" onClick={() => setMistakeOpen(true)}>
-              {t('bottleDetail.mistakeLink', 'Added by mistake?')}
-            </button>
-          </div>
-        )}
       </div>
 
       {loading ? (
@@ -592,7 +620,6 @@ function BottleDetail() {
           )}
           <button
             className="btn btn-primary btn-small"
-            data-guide="bottle-write-review"
             onClick={() => setReviewFormOpen(true)}
           >
             {t('reviews.writeReview', 'Write a Review')}
@@ -637,11 +664,23 @@ function BottleDetail() {
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M8 2h8l4 10H4L8 2z"/><path d="M12 12v6"/><path d="M8 22h8"/></svg>
             {t('bottleDetail.removeBottleShort')}
           </button>
-          {canMove && (
-            <button className="bd-mobile-action-btn bd-mobile-action-move" onClick={() => setMoveOpen(true)}>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M5 9l-3 3 3 3"/><path d="M9 5l3-3 3 3"/><path d="M15 19l-3 3-3-3"/><path d="M19 9l3 3-3 3"/><path d="M2 12h20"/><path d="M12 2v20"/></svg>
-              {t('moveBottle.actionShort')}
-            </button>
+          {/* Rare actions (Move, Added by mistake) — keeps the bar to three
+              visible buttons so nothing gets cut off on narrow screens */}
+          {(canMove || canEdit) && (
+            <div className="bd-overflow-wrap bd-overflow-wrap--mobile">
+              <button className="bd-mobile-action-btn bd-mobile-action-more" onClick={() => setBdMoreOpen(o => !o)} aria-label={t('cellarDetail.moreActions')} aria-haspopup="menu" aria-expanded={bdMoreOpen}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><circle cx="12" cy="12" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="12" cy="19" r="1"/></svg>
+                {t('bottleDetail.moreShort', 'More')}
+              </button>
+              {bdMoreOpen && (
+                <>
+                  <div className="bd-overflow-backdrop" onClick={() => setBdMoreOpen(false)} aria-hidden="true" />
+                  <div className="bd-overflow-menu bd-overflow-menu--up" role="menu">
+                    {overflowItems}
+                  </div>
+                </>
+              )}
+            </div>
           )}
         </div>
       )}

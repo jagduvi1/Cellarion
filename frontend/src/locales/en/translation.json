@@ -690,6 +690,7 @@
     "editDetailsShort": "Edit",
     "removeBottle": "Remove Bottle",
     "removeBottleShort": "Remove",
+    "moreShort": "More",
     "mistakeLink": "Added by mistake?",
     "mistakeTitle": "Remove as a mistake?",
     "mistakeBody": "This will permanently remove the bottle as if it had never been added. It will not appear in your stats, history, or search. This cannot be undone.",
@@ -2284,9 +2285,14 @@
     "noData": "No Maturity Data"
   },
 
+  "cellarNav": {
+    "aria": "Cellar views"
+  },
+
   "cellarBook": {
     "title": "Cellar Book",
     "linkBtn": "Cellar Book",
+    "linkDesc": "Printable rack maps & lists",
     "printBtn": "Print / Save as PDF",
     "backToRacks": "Back to racks",
     "backToCellar": "Back to cellar",

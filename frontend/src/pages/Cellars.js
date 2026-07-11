@@ -115,7 +115,6 @@ function Cellars() {
                 setShowCreateForm(!showCreateForm);
               }}
               className="btn btn-primary btn-small cellars-desktop-create"
-              data-guide="create-cellar"
             >
               {showCreateForm ? t('common.cancel') : `+ ${t('cellars.newCellar')}`}
             </button>
@@ -188,7 +187,6 @@ function Cellars() {
               key={cellar._id}
               to={`/cellars/${cellar._id}`}
               className="cellar-card"
-              data-guide="cellar-card"
               style={{ borderLeft: `3px solid ${cellar.userColor || 'transparent'}` }}
             >
               <div className="cellar-card-header">

@@ -9,6 +9,7 @@ import { addToWishlist } from '../api/wishlist';
 import { restoreBottle } from '../api/bottles';
 import { listCellars, getCellarHistory, getMultiCellarHistory } from '../api/cellars';
 import CellarScopePicker from '../components/CellarScopePicker';
+import CellarNav from '../components/CellarNav';
 import './CellarDetail.css';
 import './CellarHistory.css';
 
@@ -221,6 +222,8 @@ function CellarHistory() {
           </>
         )}
       </div>
+
+      <CellarNav cellarId={id} active="history" />
 
       {loading ? (
         <div className="loading">{t('history.loadingHistory')}</div>

@@ -1,0 +1,64 @@
+/* Shared cellar view switcher — visual twin of the CellarDetail segmented
+   tabs so pages that adopt it look native. Horizontally scrollable on
+   phones instead of wrapping. */
+.cellar-nav {
+  display: flex;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 3px;
+  margin: 1rem 0;
+  gap: 3px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none; /* the strip itself signals scrollability by cut-off tabs */
+}
+
+.cellar-nav::-webkit-scrollbar {
+  display: none;
+}
+
+.cellar-nav-tab {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 0.6rem 0.75rem;
+  border: none;
+  border-radius: calc(var(--radius-md) - 2px);
+  background: transparent;
+  color: var(--color-text-muted);
+  font-size: 0.88rem;
+  font-weight: 500;
+  font-family: var(--font-body);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  min-height: 44px;
+  position: relative;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.cellar-nav-tab:hover {
+  color: var(--color-text-secondary);
+}
+
+.cellar-nav-tab.active {
+  background: var(--color-surface);
+  color: var(--color-primary);
+  box-shadow: var(--shadow-sm);
+  font-weight: 600;
+}
+
+.cellar-nav-tab:focus-visible {
+  outline: 2px solid var(--color-border-focus);
+  outline-offset: -2px;
+}
+
+/* Never print the navigation (the Cellar Book is a print view) */
+@media print {
+  .cellar-nav {
+    display: none;
+  }
+}

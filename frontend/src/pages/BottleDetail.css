@@ -27,6 +27,70 @@
   gap: 0.35rem;
 }
 
+/* ── Overflow (⋮) menu for rare bottle actions (Move, Added by mistake) ── */
+.bd-overflow-wrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.bd-overflow-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+}
+
+.bd-overflow-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 41;
+  min-width: 190px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg, 0 8px 24px rgba(0, 0, 0, 0.18));
+  padding: 0.35rem;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* Mobile bar sits at the bottom, so its menu opens upward */
+.bd-overflow-menu--up {
+  top: auto;
+  bottom: calc(100% + 4px);
+}
+
+.bd-overflow-item {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  width: 100%;
+  padding: 0.6rem 0.7rem;
+  border: none;
+  background: transparent;
+  color: var(--color-text);
+  font-size: 0.9rem;
+  font-family: var(--font-body);
+  text-align: left;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background var(--transition-fast);
+}
+
+.bd-overflow-item:hover {
+  background: var(--color-primary-light);
+}
+
+.bd-overflow-item:focus-visible {
+  outline: 2px solid var(--color-border-focus);
+  outline-offset: -2px;
+}
+
+.bd-overflow-item--danger {
+  color: var(--color-danger, #b3392f);
+}
+
 .bd-mistake-row {
   display: flex;
   justify-content: flex-end;
@@ -98,6 +162,29 @@
 
 .bd-mobile-action-open:hover {
   background: var(--color-primary-light);
+}
+
+.bd-mobile-action-more {
+  background: var(--color-surface-raised);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+}
+
+.bd-mobile-action-more:hover {
+  background: var(--color-primary-light);
+}
+
+/* On mobile the overflow wrapper must stretch like the other bar buttons */
+.bd-overflow-wrap--mobile {
+  flex: 1;
+  display: flex;
+}
+.bd-overflow-wrap--mobile .bd-mobile-action-more {
+  flex: 1;
+}
+.bd-overflow-wrap--mobile .bd-overflow-menu {
+  right: 0;
+  left: auto;
 }
 
 .bd-mobile-action-consume {
