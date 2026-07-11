@@ -2306,6 +2306,7 @@
     "pickerTitle": "Open this bottle",
     "pickerText": "How will you preserve it? This sets the drink-by window — the bottle stays in your cellar until you finish it.",
     "confirmBtn": "Open bottle",
+    "openBtnShort": "Open",
     "freshness": "about {{days}} days",
     "method": {
       "coravin": "Coravin (argon needle)",

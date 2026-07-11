@@ -90,6 +90,16 @@
   background: var(--color-primary-light);
 }
 
+.bd-mobile-action-open {
+  background: var(--color-surface-raised);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+}
+
+.bd-mobile-action-open:hover {
+  background: var(--color-primary-light);
+}
+
 .bd-mobile-action-consume {
   background: #6a3d8a;
   color: white;
