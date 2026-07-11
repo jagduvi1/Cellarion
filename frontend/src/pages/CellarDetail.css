@@ -3,19 +3,10 @@
   margin: 0 auto;
 }
 
-/* ── Header ── */
-.cellar-header {
-  margin-bottom: 0.25rem;
-}
+/* ── Header (now provided by the shared CellarPageHeader component) ── */
 
-.cellar-header h1 {
-  margin: 0.25rem 0 0;
-  font-size: 1.5rem;
-  color: var(--color-text);
-  font-family: var(--font-heading);
-}
-
-/* Skeleton placeholder while cellar data loads */
+/* Skeleton placeholder while cellar data loads (still used by other views
+   that import this stylesheet). */
 .skeleton-h1 {
   height: 1.5rem;
   width: 40%;
@@ -30,28 +21,12 @@
   50%      { opacity: 0.8; }
 }
 
-.cellar-header-top {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.cellar-header-desktop-actions {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.cellar-description {
-  color: var(--color-text-secondary);
-  margin: 0.25rem 0 0;
-  font-size: 0.9rem;
-}
-
-.shared-by-label {
-  margin-top: 0.35rem;
-  font-size: 0.85rem;
-  color: var(--color-text-secondary);
+/* "+ Add bottle" is desktop-only in the header action slot; the mobile FAB
+   covers phones. */
+@media (max-width: 768px) {
+  .cph-desktop-only {
+    display: none;
+  }
 }
 
 .shared-role-tag {
@@ -994,10 +969,6 @@
 
 /* ── Mobile ── */
 @media (max-width: 768px) {
-  .cellar-header-desktop-actions .btn-primary {
-    display: none;
-  }
-
   .fab {
     display: flex;
   }
@@ -1041,14 +1012,6 @@
 }
 
 @media (max-width: 480px) {
-  .cellar-header h1 {
-    font-size: 1.3rem;
-  }
-
-  .cellar-tabs {
-    margin: 0.75rem 0;
-  }
-
   .statistics-grid {
     grid-template-columns: repeat(2, 1fr);
   }

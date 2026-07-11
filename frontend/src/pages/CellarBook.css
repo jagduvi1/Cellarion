@@ -14,12 +14,10 @@
   padding-top: 3rem;
 }
 
-.cb-toolbar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 1rem;
-  margin-bottom: 1.5rem;
+/* The screen header lives in the shared CellarPageHeader above the nav; the
+   .cb-header block is the PRINT document heading only. */
+.cb-header {
+  display: none;
 }
 
 .cb-header h1 {
@@ -122,6 +120,25 @@
   white-space: nowrap;
 }
 
+/* On screen the 6 nowrap columns exceed a phone's width; scroll the table
+   inside its own container so the page body never scrolls sideways. */
+.cb-table-wrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* On phones, drop the three lowest-value columns — Type is already conveyed by
+   the colored rack-map slot, and Rating/Drink-window are supplementary. Pos +
+   Wine + Vintage are enough to locate and identify a bottle. (The full table
+   is restored for print below.) */
+@media screen and (max-width: 640px) {
+  .cb-col-type,
+  .cb-col-rating,
+  .cb-col-window {
+    display: none;
+  }
+}
+
 .cb-wine-name {
   font-weight: 600;
 }
@@ -167,8 +184,20 @@
     color: #000;
   }
 
-  .cb-toolbar {
-    display: none;
+  /* Print: the shared screen header + nav are hidden; show the print document
+     heading and the FULL table (every column, no scroll wrapper). */
+  .cb-header {
+    display: block;
+  }
+
+  .cb-table-wrap {
+    overflow-x: visible;
+  }
+
+  .cb-col-type,
+  .cb-col-rating,
+  .cb-col-window {
+    display: table-cell;
   }
 
   /* Each rack starts on a fresh page — the first follows the header. */

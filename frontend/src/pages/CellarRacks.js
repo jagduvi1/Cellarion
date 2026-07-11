@@ -23,6 +23,7 @@ import ZoneEditorModal from '../components/racks/ZoneEditorModal';
 import RackAuditModal from '../components/racks/RackAuditModal';
 import { LENSES, getLensStyle, getLensLegend, bottleMatchesSearch } from '../utils/rackLens';
 import CellarNav from '../components/CellarNav';
+import CellarPageHeader from '../components/CellarPageHeader';
 import './CellarRacks.css';
 
 function CellarRacks() {
@@ -529,34 +530,21 @@ function CellarRacks() {
 
   return (
     <div className="cellar-racks-page">
-      <div className="cellarracks-header">
-        <div>
-          <Link to={`/cellars/${id}`} className="back-link">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="15 18 9 12 15 6"/></svg>
-            {t('racks.backToCellar')}
-          </Link>
-          {loading ? (
-            <div className="skeleton-h1" />
-          ) : (
-            <>
-              <h1 style={cellar?.userColor ? { borderLeft: `4px solid ${cellar.userColor}`, paddingLeft: '0.75rem' } : {}}>
-                {cellar?.name}
-              </h1>
-              <p className="cellar-description">{t('racks.title')}</p>
-            </>
-          )}
-        </div>
-        {!loading && canEdit && (
-          <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-            <button className="btn btn-primary" onClick={() => setShowNewRack(v => !v)}>
-              {showNewRack ? t('common.cancel') : `+ ${t('racks.newRack')}`}
-            </button>
-          </div>
+      <CellarPageHeader
+        backTo={`/cellars/${id}`}
+        backLabel={t('racks.backToCellar')}
+        title={cellar?.name}
+        loading={loading}
+        userColor={cellar?.userColor}
+        subtitle={t('racks.title')}
+        actions={!loading && canEdit && (
+          <button className="btn btn-primary btn-small" onClick={() => setShowNewRack(v => !v)}>
+            {showNewRack ? t('common.cancel') : `+ ${t('racks.newRack')}`}
+          </button>
         )}
-      </div>
+      />
 
-      {/* Room View / Cellar Book moved from ad-hoc header links into the
-          shared view switcher used on every cellar page */}
+      {/* Room View / Cellar Book live in the shared view switcher on every page */}
       <CellarNav cellarId={id} active="racks" />
 
       {loading ? (
