@@ -50,6 +50,7 @@ function CellarDetail() {
     type: searchParams.get('type')?.split(',').filter(Boolean) || [],
     country: searchParams.get('country')?.split(',').filter(Boolean) || [],
     region: searchParams.get('region')?.split(',').filter(Boolean) || [],
+    appellation: searchParams.get('appellation')?.split(',').filter(Boolean) || [],
     grapes: searchParams.get('grapes')?.split(',').filter(Boolean) || [],
     vintage: searchParams.get('vintage')?.split(',').filter(Boolean) || [],
     minRating: searchParams.get('minRating') || '',
@@ -106,7 +107,7 @@ function CellarDetail() {
   const filterKey = [
     debouncedSearch,
     filters.type.join(','), filters.country.join(','), filters.region.join(','),
-    filters.grapes.join(','), filters.vintage.join(','),
+    filters.appellation.join(','), filters.grapes.join(','), filters.vintage.join(','),
     filters.minRating, filters.maturity, filters.sort
   ].join('|');
 
@@ -491,6 +492,7 @@ function CellarDetail() {
             (filters.type || []).forEach(v => activeChips.push({ key: 'type', value: v, label: v.charAt(0).toUpperCase() + v.slice(1) }));
             (filters.country || []).forEach(v => activeChips.push({ key: 'country', value: v, label: countryNames[v] || v }));
             (filters.region || []).forEach(v => activeChips.push({ key: 'region', value: v, label: regionNames[v] || v }));
+            (filters.appellation || []).forEach(v => activeChips.push({ key: 'appellation', value: v, label: v }));
             (filters.grapes || []).forEach(v => activeChips.push({ key: 'grapes', value: v, label: grapeNames[v] || v }));
             (filters.vintage || []).forEach(v => activeChips.push({ key: 'vintage', value: v, label: v }));
             if (filters.minRating) activeChips.push({ key: 'minRating', value: filters.minRating, label: `${filters.minRating}+ rating` });
@@ -508,7 +510,7 @@ function CellarDetail() {
 
             const clearAll = () => setFilters(prev => ({
               ...prev,
-              type: [], country: [], region: [], grapes: [], vintage: [],
+              type: [], country: [], region: [], appellation: [], grapes: [], vintage: [],
               minRating: '', maturity: ''
             }));
 
@@ -602,7 +604,7 @@ function CellarDetail() {
           {loading ? (
             <div className="loading">{t('cellarDetail.loadingCellar')}</div>
           ) : bottles.length === 0 && !bottlesLoading ? (
-            (filters.search || filters.vintage?.length || filters.minRating || filters.maturity || filters.type?.length || filters.country?.length || filters.region?.length || filters.grapes?.length) ? (
+            (filters.search || filters.vintage?.length || filters.minRating || filters.maturity || filters.type?.length || filters.country?.length || filters.region?.length || filters.appellation?.length || filters.grapes?.length) ? (
               <div className="empty-state">
                 <p>{t('cellarDetail.noSearchResults')}</p>
               </div>
