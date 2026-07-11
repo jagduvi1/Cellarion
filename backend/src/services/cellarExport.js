@@ -87,6 +87,10 @@ function mapBottlesForExport(bottles, racks, imagesByBottle = new Map(), reviews
       region: wine.region?.name || '',
       appellation: wine.appellation || '',
       type: wine.type || '',
+      // Grape varieties (names only) so the importer can reconstruct them via
+      // findOrCreateGrapes on a cross-instance migration — otherwise every
+      // auto-created wine lands with an empty grape list.
+      grapes: Array.isArray(wine.grapes) ? wine.grapes.map((g) => g.name).filter(Boolean) : [],
       bottleSize: b.bottleSize || '750ml',
       dateAdded: b.createdAt ? b.createdAt.toISOString().slice(0, 10) : undefined,
     };
@@ -282,8 +286,9 @@ async function buildCellarDataExport(userId, scope) {
         populate: [
           { path: 'country', select: 'name' },
           { path: 'region', select: 'name' },
+          { path: 'grapes', select: 'name' },
         ],
-        select: 'name producer type appellation country region',
+        select: 'name producer type appellation country region grapes',
       })
       .limit(EXPORT_MAX)
       .lean(),

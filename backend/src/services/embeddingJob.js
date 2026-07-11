@@ -229,20 +229,28 @@ async function runJob(cfg) {
         job.lastError = err.message;
         console.error(`[embeddingJob] Error embedding (${wineDefId}, ${vintage}):`, err.message);
 
-        // Mark as error in DB so admins can see which ones failed
+        // Mark as error in DB so admins can see which ones failed. Preserve any
+        // EXISTING qdrantPointId — overwriting it with a fresh UUID (as before)
+        // orphaned the previously-embedded point in Qdrant, because the next
+        // successful re-embed would then delete the bogus new UUID (a no-op)
+        // instead of the real prior point. Only mint a UUID for a brand-new row.
         try {
           await WineEmbedding.findOneAndUpdate(
             { wineDefinition: wineDefId, vintage, model, indexVersion: vectorIndex },
             {
-              wineDefinition: wineDefId,
-              vintage,
-              model,
-              indexVersion: vectorIndex,
-              qdrantPointId: randomUUID(),
-              textHash: '',
-              embeddedAt: new Date(),
-              status: 'error',
-              errorMessage: err.message
+              $set: {
+                textHash: '',
+                embeddedAt: new Date(),
+                status: 'error',
+                errorMessage: err.message,
+              },
+              $setOnInsert: {
+                wineDefinition: wineDefId,
+                vintage,
+                model,
+                indexVersion: vectorIndex,
+                qdrantPointId: randomUUID(),
+              },
             },
             { upsert: true }
           );

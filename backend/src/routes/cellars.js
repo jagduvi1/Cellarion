@@ -1084,7 +1084,15 @@ router.get('/:id', async (req, res) => {
 
       let query = Bottle.find(filter).populate(WINE_POPULATE_LIST);
       if (canSortInDb_) query = query.sort({ [sortField]: sortDir });
-      if (canPaginateInDb) query = query.skip(skip).limit(limit);
+      if (canPaginateInDb) {
+        query = query.skip(skip).limit(limit);
+      } else {
+        // Safety cap: an in-memory sort/group path must never hydrate an
+        // unbounded populated set (a large cellar sorted by name/maturity would
+        // otherwise load every active bottle into memory). Mirror the 10k cap
+        // the sibling fallbacks use (bottles.js, cellars history, multi-cellar).
+        query = query.limit(10000);
+      }
       bottles = await query.lean();
 
       if (canPaginateInDb) {

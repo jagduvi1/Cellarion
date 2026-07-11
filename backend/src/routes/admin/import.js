@@ -337,15 +337,19 @@ router.post('/wines', csvUpload.single('file'), async (req, res) => {
         continue;
       }
 
-      // Skip rows that are missing required fields
-      if (!mapped.producer || !mapped.name || !mapped.country) {
+      // Skip rows that are missing required fields. Country must also be a real
+      // value, not a placeholder like "Unknown"/"N/A" — getOrCreateCountry maps
+      // those to null, and because the flush uses bulkWrite (which bypasses the
+      // `country: required` validator) a placeholder would otherwise be inserted
+      // as a country=null WineDefinition and mis-counted as `created`.
+      if (!mapped.producer || !mapped.name || !mapped.country || isUnknownName(mapped.country)) {
         stats.skipped++;
         stats.skippedReasons.missingFields++;
         if (stats.errors.length < 100) {
           const missing = [
             !mapped.producer && 'producer',
             !mapped.name     && 'name',
-            !mapped.country  && 'country',
+            (!mapped.country || isUnknownName(mapped.country)) && 'country',
           ].filter(Boolean).join(', ');
           stats.errors.push({ row: rowIndex, reason: `Missing: ${missing}` });
         }

@@ -166,6 +166,7 @@ router.post('/', requireCellarAccess('editor'), async (req, res) => {
     res.status(201).json({ rack });
   } catch (err) {
     if (err.code === 11000) return res.status(409).json({ error: 'A rack with that name already exists in this cellar' });
+    if (err.name === 'ValidationError') return res.status(400).json({ error: err.message });
     console.error('Create rack error:', err);
     res.status(500).json({ error: 'Failed to create rack' });
   }
@@ -306,6 +307,7 @@ router.put('/:id', async (req, res) => {
     if (err.name === 'VersionError') {
       return res.status(409).json({ error: 'This rack was modified by another request. Please refresh and try again.' });
     }
+    if (err.name === 'ValidationError') return res.status(400).json({ error: err.message });
     console.error('Update rack error:', err);
     res.status(500).json({ error: 'Failed to update rack' });
   }

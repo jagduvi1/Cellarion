@@ -82,6 +82,24 @@ describe('mapBottlesForExport', () => {
     expect(item.drinkTo).toBe(2035);
   });
 
+  test('emits grape variety names so they round-trip on a cross-instance migration', () => {
+    // Without this, an auto-created wine on the destination lands with grapes:[]
+    // — the other taxonomy fields (country/region/appellation) always survived,
+    // making the grapes omission an asymmetric data-loss bug.
+    const bottles = [{
+      _id: oid('b1'), vintage: '2018',
+      wineDefinition: { name: 'W', grapes: [{ name: 'Syrah' }, { name: 'Grenache' }] },
+    }];
+    const [item] = mapBottlesForExport(bottles, []);
+    expect(item.grapes).toEqual(['Syrah', 'Grenache']);
+  });
+
+  test('emits an empty grapes array when the wine has none', () => {
+    const bottles = [{ _id: oid('b1'), vintage: 'NV', wineDefinition: { name: 'W' } }];
+    const [item] = mapBottlesForExport(bottles, []);
+    expect(item.grapes).toEqual([]);
+  });
+
   test('omits drink-window / occasion keys when the bottle has none', () => {
     const bottles = [{ _id: oid('b1'), vintage: 'NV', wineDefinition: { name: 'W' } }];
     const [item] = mapBottlesForExport(bottles, []);

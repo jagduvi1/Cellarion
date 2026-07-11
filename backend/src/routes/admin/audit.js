@@ -39,8 +39,16 @@ router.get('/', async (req, res) => {
 
     if (from || to) {
       filter.timestamp = {};
-      if (from) filter.timestamp.$gte = new Date(from);
-      if (to)   filter.timestamp.$lte = new Date(to);
+      if (from) {
+        const d = new Date(from);
+        if (Number.isNaN(d.getTime())) return res.status(400).json({ error: 'Invalid "from" date' });
+        filter.timestamp.$gte = d;
+      }
+      if (to) {
+        const d = new Date(to);
+        if (Number.isNaN(d.getTime())) return res.status(400).json({ error: 'Invalid "to" date' });
+        filter.timestamp.$lte = d;
+      }
     }
 
     const [logs, total] = await Promise.all([
