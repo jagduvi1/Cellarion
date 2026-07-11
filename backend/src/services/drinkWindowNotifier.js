@@ -132,6 +132,7 @@ async function processUser(user, isFirstRun) {
   const currentYear = new Date().getFullYear();
   const alerts = []; // { bottleId, name, vintage, status, notifType }
   const seedOps = []; // first-run status seeds, flushed as one bulkWrite
+  const transitionOps = []; // per-transition status updates, flushed as one bulkWrite
 
   for (const bottle of bottles) {
     const maturityStatus = classifyMaturity(bottle, profileMap);
@@ -211,14 +212,20 @@ async function processUser(user, isFirstRun) {
       status: notifType,
     });
 
-    await Bottle.updateOne(
-      { _id: bottle._id },
-      { $set: { drinkWindowNotifiedStatus: effectiveStatus, drinkWindowNotifiedAt: new Date() } }
-    );
+    transitionOps.push({
+      updateOne: {
+        filter: { _id: bottle._id },
+        update: { $set: { drinkWindowNotifiedStatus: effectiveStatus, drinkWindowNotifiedAt: new Date() } },
+      },
+    });
   }
 
   if (seedOps.length > 0) {
     await Bottle.bulkWrite(seedOps, { ordered: false });
+  }
+
+  if (transitionOps.length > 0) {
+    await Bottle.bulkWrite(transitionOps, { ordered: false });
   }
 
   if (alerts.length === 0) return 0;

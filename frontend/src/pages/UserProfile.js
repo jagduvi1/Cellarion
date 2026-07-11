@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
@@ -31,36 +31,45 @@ function UserProfile() {
 
   const isOwnProfile = currentUser?.id === userId;
 
+  // Latest-wins guard: the followers/following modal navigates to /users/:userId
+  // in place (route stays mounted), so switching profiles fires a new fetch while
+  // the old one may still be pending. Drop responses whose captured seq is stale.
+  const fetchSeq = useRef(0);
+
   useEffect(() => {
     // Reset stale state when navigating between profiles client-side,
     // otherwise a previously-errored view stays stuck.
+    const seq = ++fetchSeq.current;
     setLoading(true);
     setError(null);
-    fetchProfile();
-    fetchReviews(1, true);
+    fetchProfile(seq);
+    fetchReviews(1, true, seq);
   }, [userId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const fetchProfile = async () => {
+  const fetchProfile = async (seq) => {
     try {
       const res = await getPublicProfile(apiFetch, userId);
       const data = await res.json();
+      if (seq !== fetchSeq.current) return; // a newer profile load superseded this one
       if (res.ok) {
         setProfile(data.user);
       } else {
         setError(data.error || t('userProfile.failedLoad'));
       }
     } catch {
+      if (seq !== fetchSeq.current) return;
       setError(t('userProfile.failedLoad'));
     } finally {
-      setLoading(false);
+      if (seq === fetchSeq.current) setLoading(false);
     }
   };
 
-  const fetchReviews = async (p, replace = false) => {
+  const fetchReviews = async (p, replace = false, seq = fetchSeq.current) => {
     try {
       if (!replace) setLoadingMore(true);
       const res = await getUserReviews(apiFetch, userId, `page=${p}&limit=20`);
       const data = await res.json();
+      if (seq !== fetchSeq.current) return; // superseded by a newer profile load
       if (res.ok) {
         setReviews(prev => replace ? data.reviews : [...prev, ...data.reviews]);
         setReviewPage(p);
@@ -69,7 +78,7 @@ function UserProfile() {
     } catch {
       // silently fail for reviews
     } finally {
-      setLoadingMore(false);
+      if (seq === fetchSeq.current) setLoadingMore(false);
     }
   };
 

@@ -105,7 +105,12 @@ describe('processUser — definition-less personal-window bottles (BUG 4)', () =
       expect(`${call[2]} ${call[3]}`).not.toContain('Unknown wine');
     }
     // The definition-less bottles are never even marked (no seed/update for them).
-    const markedIds = Bottle.updateOne.mock.calls.map((c) => c[0]._id);
+    // Transition marks go through Bottle.bulkWrite (transitionOps); older direct
+    // updateOne calls are collected too so the assertion is path-agnostic.
+    const markedIds = [
+      ...Bottle.updateOne.mock.calls.map((c) => c[0]._id),
+      ...Bottle.bulkWrite.mock.calls.flatMap((c) => c[0].map((op) => op.updateOne.filter._id)),
+    ];
     expect(markedIds).not.toContain('b1');
     expect(markedIds).not.toContain('b2');
     expect(markedIds).toContain('b3');
