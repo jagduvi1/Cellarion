@@ -589,6 +589,17 @@ router.post('/logout', requireAuth, async (req, res) => {
   }
 });
 
+// GET /api/auth/whoami — minimal stable identity for scoped integrations
+// (e.g. the Home Assistant integration verifying, on re-auth, that a new
+// credential belongs to the SAME account). Returns ONLY the account id — never
+// email/plan or any other PII — so a `read`-scoped API token can confirm which
+// account it belongs to without the wider exposure that /me carries. The id is
+// the stable, non-secret Mongo ObjectId (already sent to the frontend via
+// user.toJSON()). req.user.id is set on both auth paths (JWT and API token).
+router.get('/whoami', requireAuth, (req, res) => {
+  res.json({ id: req.user.id });
+});
+
 // GET /api/auth/me - Get current user (protected)
 router.get('/me', requireAuth, async (req, res) => {
   try {

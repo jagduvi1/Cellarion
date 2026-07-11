@@ -25,7 +25,9 @@ const LAST_USED_THROTTLE_MS = 60 * 60 * 1000; // 1 hour
  *
  * Scopes (docs/ha-push-events.md §3; climate: docs/climate-monitoring.md):
  *   read    — the GETs the Home Assistant integration uses: stats, cellars,
- *             bottles, notifications, and the SSE event stream.
+ *             bottles, notifications, the SSE event stream, and /auth/whoami
+ *             (its own account id, for reauth same-account verification — id
+ *             only, no PII, unlike /auth/me).
  *   consume — POST /api/bottles/:id/consume only.
  *   climate — POST /api/climate/ingest only: the sensor-device credential.
  *             A leaked device token can post readings and nothing else.
@@ -37,6 +39,9 @@ const SCOPE_ALLOWLIST = {
     { method: 'GET', pattern: /^\/api\/bottles(\/|$)/ },
     { method: 'GET', pattern: /^\/api\/notifications(\/|$)/ },
     { method: 'GET', pattern: /^\/api\/events\/stream$/ },
+    // Exact match only — the caller's own account id (id, no PII). Anchored so
+    // it can never widen to /api/auth/me or any other /api/auth/* route.
+    { method: 'GET', pattern: /^\/api\/auth\/whoami$/ },
   ],
   consume: [
     { method: 'POST', pattern: /^\/api\/bottles\/[a-f0-9]{24}\/consume$/ },

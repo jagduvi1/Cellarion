@@ -602,3 +602,20 @@ describe('POST /api/auth/reset-password', () => {
     expect(after.body).toEqual({ error: 'Invalid or expired refresh token' });
   });
 });
+
+// ---------------------------------------------------------------------------
+// GET /api/auth/whoami — minimal stable identity for scoped integrations
+// ---------------------------------------------------------------------------
+describe('GET /api/auth/whoami', () => {
+  test('returns ONLY the account id for an authenticated session', async () => {
+    const res = await request({ method: 'GET', path: '/api/auth/whoami', bearer: tokenFor('user-abc') });
+    expect(res.status).toBe(200);
+    // No email/plan/roles — id and nothing else (HA reads data.id).
+    expect(res.body).toEqual({ id: 'user-abc' });
+  });
+
+  test('401 without a credential', async () => {
+    const res = await request({ method: 'GET', path: '/api/auth/whoami' });
+    expect(res.status).toBe(401);
+  });
+});

@@ -66,6 +66,7 @@ describe('isRequestAllowed (default-deny)', () => {
     ['GET', `/api/bottles/${oid}`],
     ['GET', '/api/notifications'],
     ['GET', '/api/events/stream'],
+    ['GET', '/api/auth/whoami'],
   ])('read scope allows %s %s', (method, path) => {
     expect(isRequestAllowed(READ, method, path)).toBe(true);
   });
@@ -80,10 +81,15 @@ describe('isRequestAllowed (default-deny)', () => {
     ['GET', '/api/users/me/export'],
     ['GET', '/api/tokens'],
     ['GET', '/api/admin/users'],
-    ['GET', '/api/auth/me'],
+    ['GET', '/api/auth/me'], // /whoami is allowed but /me (full user + PII) is NOT
     // A prefix that merely CONTAINS an allowed prefix
     ['GET', '/api/statsy'],
     ['GET', '/api/cellars-export'],
+    // whoami is exact-anchored: no other method, sibling, or sub-path leaks
+    ['POST', '/api/auth/whoami'],
+    ['GET', '/api/auth/whoami/extra'],
+    ['GET', '/api/auth/whoamix'],
+    ['GET', '/api/auth/logout'],
     // Writes are never granted by read
     ['POST', '/api/bottles'],
     ['DELETE', `/api/cellars/${oid}`],
@@ -141,6 +147,15 @@ describe('isRequestAllowed (default-deny)', () => {
     // And the other scopes never grant ingest.
     expect(isRequestAllowed(READ, 'POST', '/api/climate/ingest')).toBe(false);
     expect(isRequestAllowed(BOTH, 'POST', '/api/climate/ingest')).toBe(false);
+  });
+
+  test('GET /api/auth/whoami is granted ONLY by read (own account id for HA reauth)', () => {
+    expect(isRequestAllowed(READ, 'GET', '/api/auth/whoami')).toBe(true);
+    expect(isRequestAllowed(BOTH, 'GET', '/api/auth/whoami')).toBe(true); // read+consume
+    expect(isRequestAllowed(CONSUME, 'GET', '/api/auth/whoami')).toBe(false);
+    expect(isRequestAllowed(['climate'], 'GET', '/api/auth/whoami')).toBe(false);
+    // Never the wider /me even for read.
+    expect(isRequestAllowed(READ, 'GET', '/api/auth/me')).toBe(false);
   });
 });
 
