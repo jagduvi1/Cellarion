@@ -1,17 +1,14 @@
 import { useState } from 'react';
+import { useTranslation, Trans } from 'react-i18next';
 import Modal from './Modal';
 import { submitSupportTicket } from '../api/support';
 import { useAuth } from '../contexts/AuthContext';
 import './SupportModal.css';
 
-const CATEGORIES = [
-  { value: 'bug', label: 'Bug Report' },
-  { value: 'help', label: 'Help / Question' },
-  { value: 'feature', label: 'Feature Request' },
-  { value: 'other', label: 'Other' },
-];
+const CATEGORY_VALUES = ['bug', 'help', 'feature', 'other'];
 
 function SupportModal({ onClose }) {
+  const { t } = useTranslation();
   const { apiFetch } = useAuth();
   const [form, setForm] = useState({ category: 'bug', subject: '', message: '' });
   const [submitting, setSubmitting] = useState(false);
@@ -25,18 +22,18 @@ function SupportModal({ onClose }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!form.subject.trim()) return setError('Subject is required');
-    if (!form.message.trim()) return setError('Message is required');
+    if (!form.subject.trim()) return setError(t('support.subjectRequired'));
+    if (!form.message.trim()) return setError(t('support.messageRequired'));
 
     setSubmitting(true);
     setError(null);
     try {
       const res = await submitSupportTicket(apiFetch, form);
       const data = await res.json();
-      if (!res.ok) return setError(data.error || 'Failed to submit ticket');
+      if (!res.ok) return setError(data.error || t('support.submitFailed'));
       setSuccess(true);
     } catch {
-      setError('Network error. Please try again.');
+      setError(t('common.networkError'));
     } finally {
       setSubmitting(false);
     }
@@ -44,49 +41,51 @@ function SupportModal({ onClose }) {
 
   if (success) {
     return (
-      <Modal title="Support Request Sent" onClose={onClose}>
+      <Modal title={t('support.sentTitle')} onClose={onClose}>
         <div className="support-modal-success">
-          <p>Your ticket has been submitted. An admin will respond shortly.</p>
-          <p>You can track your tickets under <strong>Support</strong> in the menu.</p>
+          <p>{t('support.sentBody')}</p>
+          <p>
+            <Trans i18nKey="support.sentTrack" components={{ strong: <strong /> }} />
+          </p>
         </div>
         <div className="modal-actions">
-          <button className="btn-primary" onClick={onClose}>Close</button>
+          <button className="btn-primary" onClick={onClose}>{t('common.close')}</button>
         </div>
       </Modal>
     );
   }
 
   return (
-    <Modal title="Contact Support" onClose={onClose}>
+    <Modal title={t('support.contactTitle', 'Contact Support')} onClose={onClose}>
       <form onSubmit={handleSubmit} className="support-modal-form">
         <label>
-          Category
+          {t('support.categoryLabel', 'Category')}
           <select name="category" value={form.category} onChange={handleChange}>
-            {CATEGORIES.map(c => (
-              <option key={c.value} value={c.value}>{c.label}</option>
+            {CATEGORY_VALUES.map(v => (
+              <option key={v} value={v}>{t(`support.category.${v}`)}</option>
             ))}
           </select>
         </label>
 
         <label>
-          Subject
+          {t('support.subject')}
           <input
             type="text"
             name="subject"
             value={form.subject}
             onChange={handleChange}
-            placeholder="Brief summary of your issue"
+            placeholder={t('support.subjectPlaceholder')}
             maxLength={200}
           />
         </label>
 
         <label>
-          Message
+          {t('support.message')}
           <textarea
             name="message"
             value={form.message}
             onChange={handleChange}
-            placeholder="Describe your issue or question in detail..."
+            placeholder={t('support.messagePlaceholder')}
             rows={6}
             maxLength={5000}
           />
@@ -97,10 +96,10 @@ function SupportModal({ onClose }) {
 
         <div className="modal-actions">
           <button type="button" className="btn-secondary" onClick={onClose} disabled={submitting}>
-            Cancel
+            {t('common.cancel')}
           </button>
           <button type="submit" className="btn-primary" disabled={submitting}>
-            {submitting ? 'Sending…' : 'Send Ticket'}
+            {submitting ? t('support.sending') : t('support.sendTicket')}
           </button>
         </div>
       </form>

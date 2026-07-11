@@ -1,19 +1,14 @@
 import { useState } from 'react';
+import { useTranslation, Trans } from 'react-i18next';
 import Modal from './Modal';
 import { submitWineReport } from '../api/support';
 import { useAuth } from '../contexts/AuthContext';
 import './ReportWineModal.css';
 
-const REASONS = [
-  { value: 'wrong_info', label: 'Wrong information (name, producer, region, etc.)' },
-  { value: 'duplicate', label: 'Duplicate wine entry' },
-  { value: 'wrong_price', label: 'Wrong or inaccurate market price' },
-  { value: 'wrong_tasting_profile', label: 'Incorrect tasting profile (structure, flavours, pairings)' },
-  { value: 'inappropriate', label: 'Inappropriate content' },
-  { value: 'other', label: 'Other' },
-];
+const REASON_VALUES = ['wrong_info', 'duplicate', 'wrong_price', 'wrong_tasting_profile', 'inappropriate', 'other'];
 
 function ReportWineModal({ wine, defaultReason, onClose }) {
+  const { t } = useTranslation();
   const { apiFetch } = useAuth();
   const [form, setForm] = useState({ reason: defaultReason || 'wrong_info', details: '' });
   const [submitting, setSubmitting] = useState(false);
@@ -37,10 +32,10 @@ function ReportWineModal({ wine, defaultReason, onClose }) {
         details: form.details || undefined,
       });
       const data = await res.json();
-      if (!res.ok) return setError(data.error || 'Failed to submit report');
+      if (!res.ok) return setError(data.error || t('reportWine.submitFailed'));
       setSuccess(true);
     } catch {
-      setError('Network error. Please try again.');
+      setError(t('common.networkError'));
     } finally {
       setSubmitting(false);
     }
@@ -48,39 +43,43 @@ function ReportWineModal({ wine, defaultReason, onClose }) {
 
   if (success) {
     return (
-      <Modal title="Report Submitted" onClose={onClose}>
+      <Modal title={t('reportWine.sentTitle')} onClose={onClose}>
         <div className="report-wine-success">
-          <p>Thank you for your report. Our team will review it shortly.</p>
+          <p>{t('reportWine.sentBody')}</p>
         </div>
         <div className="modal-actions">
-          <button className="btn-primary" onClick={onClose}>Close</button>
+          <button className="btn-primary" onClick={onClose}>{t('common.close')}</button>
         </div>
       </Modal>
     );
   }
 
   return (
-    <Modal title="Report Wine" onClose={onClose}>
+    <Modal title={t('reportWine.title')} onClose={onClose}>
       <p className="report-wine-subtitle">
-        Reporting: <strong>{wine.name}{wine.producer ? ` — ${wine.producer}` : ''}</strong>
+        <Trans
+          i18nKey="reportWine.reporting"
+          components={{ strong: <strong /> }}
+          values={{ wine: `${wine.name}${wine.producer ? ` — ${wine.producer}` : ''}` }}
+        />
       </p>
       <form onSubmit={handleSubmit} className="report-wine-form">
         <label>
-          Reason
+          {t('reportWine.reason')}
           <select name="reason" value={form.reason} onChange={handleChange}>
-            {REASONS.map(r => (
-              <option key={r.value} value={r.value}>{r.label}</option>
+            {REASON_VALUES.map(v => (
+              <option key={v} value={v}>{t(`reportWine.reasons.${v}`)}</option>
             ))}
           </select>
         </label>
 
         <label>
-          Details <span className="optional">(optional)</span>
+          {t('reportWine.details')} <span className="optional">{t('reportWine.optional')}</span>
           <textarea
             name="details"
             value={form.details}
             onChange={handleChange}
-            placeholder="Provide any additional information that will help us investigate…"
+            placeholder={t('reportWine.detailsPlaceholder')}
             rows={4}
             maxLength={2000}
           />
@@ -91,10 +90,10 @@ function ReportWineModal({ wine, defaultReason, onClose }) {
 
         <div className="modal-actions">
           <button type="button" className="btn-secondary" onClick={onClose} disabled={submitting}>
-            Cancel
+            {t('common.cancel')}
           </button>
           <button type="submit" className="btn-danger" disabled={submitting}>
-            {submitting ? 'Submitting…' : 'Submit Report'}
+            {submitting ? t('reportWine.submitting') : t('reportWine.submit')}
           </button>
         </div>
       </form>

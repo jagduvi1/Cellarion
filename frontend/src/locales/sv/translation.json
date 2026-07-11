@@ -45,7 +45,6 @@
     "optional": "valfritt",
     "or": "eller"
   },
-
   "nav": {
     "myCellars": "Mina källare",
     "wineRegistry": "Vinregister",
@@ -95,7 +94,6 @@
     "switchToDark": "Byt till mörkt läge",
     "switchToLight": "Byt till ljust läge"
   },
-
   "auth": {
     "login": "Logga in",
     "register": "Registrera",
@@ -145,7 +143,6 @@
     "newLinkSent": "En ny verifieringslänk har skickats. Kolla din inkorg.",
     "sendFailed": "Kunde inte skicka. Försök igen."
   },
-
   "settings": {
     "title": "Inställningar",
     "signedInAs": "Inloggad som",
@@ -279,7 +276,56 @@
       "errorRateLimited": "För många försök. Vänta några minuter och försök igen."
     },
     "defaultRatingScale": "Standardbetygsskala",
-    "ratingScaleHint": "Välj vilken betygsskala som används som standard när du sätter betyg. Du kan alltid ändra per flaska."
+    "ratingScaleHint": "Välj vilken betygsskala som används som standard när du sätter betyg. Du kan alltid ändra per flaska.",
+    "profile": {
+      "title": "Profil",
+      "displayName": "Visningsnamn",
+      "displayNameHint": "Hur ditt namn visas för andra användare. Lämna tomt för att använda ditt användarnamn.",
+      "bio": "Biografi",
+      "bioHint": "En kort beskrivning som visas på din offentliga profil.",
+      "bioPlaceholder": "Berätta för andra om din vinresa...",
+      "visibility": "Profilens synlighet",
+      "visibilityHint": "Offentliga profiler visas i sökresultat och i Upptäck-flödet. Privata profiler är dolda för andra användare.",
+      "public": "Offentlig",
+      "private": "Privat"
+    },
+    "push": {
+      "deviceRegistered": "Den här enheten är registrerad",
+      "deviceNotRegistered": "Den här enheten är inte registrerad",
+      "removing": "Tar bort...",
+      "removeDevice": "Ta bort den här enheten",
+      "registering": "Registrerar...",
+      "registerDevice": "Registrera den här enheten",
+      "devicesRegistered_one": "{{count}} enhet registrerad för push-notiser.",
+      "devicesRegistered_other": "{{count}} enheter registrerade för push-notiser.",
+      "sending": "Skickar...",
+      "sendTest": "Skicka testnotis",
+      "testSent": "Test skickat!"
+    },
+    "data": {
+      "title": "Dina uppgifter",
+      "intro": "Ladda ner en fullständig kopia av alla dina personuppgifter som lagras i Cellarion, inklusive din profil, flaskor, vinkällare, recensioner och aktivitetslogg.",
+      "exporting": "Exporterar...",
+      "exportBtn": "Exportera mina uppgifter",
+      "privacyLink": "Läs vår <a>integritetspolicy</a> för att förstå hur dina uppgifter behandlas och vilka rättigheter du har."
+    },
+    "portability": {
+      "title": "Ta med dig dina vinkällare",
+      "intro": "Exportera en vinkällare eller alla — flaskor, hyllplaceringar, 3D-rumslayout, recensioner, mognadsdata och bilderna du själv laddat upp — i ett format du kan importera till valfri Cellarion-instans. Dina uppgifter är dina; vi låser aldrig in dem.",
+      "exportBtn": "Exportera dina vinkällare →",
+      "importLink": "Flyttar du in från en annan Cellarion-instans? <a>Importera en vinkällarexport</a> för att återskapa dina vinkällare, flaskor och bilder här."
+    },
+    "danger": {
+      "title": "Farozon",
+      "scheduledFor": "Kontoradering är schemalagd till <strong>{{date}}</strong>. Alla dina uppgifter tas bort permanent efter detta datum.",
+      "cancelling": "Avbryter...",
+      "cancelDeletion": "Avbryt radering",
+      "intro": "Radera ditt konto och alla tillhörande uppgifter permanent — vinkällare, flaskor, recensioner och inställningar. Efter att du begärt radering har du 7 dagar på dig att ändra dig innan raderingen blir permanent.",
+      "deleteBtn": "Radera mitt konto",
+      "typeToConfirm": "Skriv <strong>DELETE</strong> för att bekräfta:",
+      "scheduling": "Schemalägger...",
+      "scheduleBtn": "Schemalägg kontoradering"
+    }
   },
   "climate": {
     "title": "Klimat",
@@ -383,11 +429,9 @@
     "laugh": "Roligt",
     "pray": "Tack"
   },
-
   "plans": {
     "expired": "Utgånget"
   },
-
   "supporter": {
     "title": "Cellarion är gratis och öppen källkod. Här är vad som håller det igång.",
     "subtitle": "Varje funktion är gratis för alla, för alltid — inga betalväggar, inget låst. Men servrarna och AI:n bakom appen kostar riktiga pengar. Om Cellarion har förtjänat en plats i din källare är du varmt välkommen att hjälpa till att dela på notan.",
@@ -426,7 +470,6 @@
     "alreadySupporting": "💛 Du stödjer Cellarion — tack! Du kan ändra eller avsluta när som helst.",
     "donateNote": "Betalningar hanteras säkert av Stripe. Cellarion förblir gratis och öppet oavsett om du stödjer eller inte."
   },
-
   "cellars": {
     "title": "Mina källare",
     "newCellar": "Ny källare",
@@ -454,7 +497,6 @@
     "sharedCount_one": "{{count}} delad",
     "sharedCount_other": "{{count}} delade"
   },
-
   "cellarDetail": {
     "backToCellars": "← Tillbaka till källare",
     "loadingCellar": "Laddar källare...",
@@ -542,9 +584,9 @@
     "removeFilterAria": "Ta bort {{label}}",
     "groupBottleCount_one": "{{count}} flaska",
     "groupBottleCount_other": "{{count}} flaskor",
-    "collapseGroup": "Fäll ihop ▲"
+    "collapseGroup": "Fäll ihop ▲",
+    "deleteWillDelete": "Detta raderar <strong>{{name}}</strong> och alla dess hyllor."
   },
-
   "addBottle": {
     "title": "Lägg till flaska",
     "backToCellar": "← Tillbaka till källare",
@@ -650,7 +692,6 @@
     "partialAdded_one": "{{msg}} — {{count}} av {{total}} flaskor lades till. Vid nytt försök läggs bara de återstående {{remaining}} till.",
     "partialAdded_other": "{{msg}} — {{count}} av {{total}} flaskor lades till. Vid nytt försök läggs bara de återstående {{remaining}} till."
   },
-
   "bottleDetail": {
     "backToCellar": "← Tillbaka till källare",
     "backToChat": "← Tillbaka till chatten",
@@ -746,7 +787,6 @@
     "pairsWith": "Passar till",
     "consumeError": "Kunde inte ta bort flaskan"
   },
-
   "bottles": {
     "title": "Alla flaskor",
     "loading": "Laddar…",
@@ -781,7 +821,6 @@
     "status_sold": "Sålda",
     "status_other": "Övriga"
   },
-
   "racks": {
     "title": "Förvaringshyllor",
     "backToCellar": "← Tillbaka till källare",
@@ -856,10 +895,8 @@
     "viewCompact": "Kompakt",
     "viewShelf": "Hyllvy",
     "view3d": "3D",
-    "toolsMenu": "Hyllverktyg",
     "consumeNotePlaceholder": "Hur var det?"
   },
-
   "nfc": {
     "linkTitle": "Koppla NFC-tagg",
     "linkDescription": "Skriv hyllans URL till en NFC-klisterlapp. När någon håller telefonen mot lappen öppnas hyllan direkt.",
@@ -877,7 +914,6 @@
     "networkError": "Nätverksfel. Försök igen.",
     "goToCellars": "Gå till vinförråd"
   },
-
   "room": {
     "title": "Rumsvy",
     "subtitle": "3D-källarlayout",
@@ -923,7 +959,6 @@
     "loadRacksError": "Kunde inte ladda hyllorna för denna källare",
     "loadLayoutError": "Kunde inte ladda rumslayouten"
   },
-
   "wines": {
     "title": "Vinregister",
     "subtitle": "Bläddra bland alla tillgängliga viner i registret",
@@ -949,7 +984,6 @@
     "appellationLabel": "Appellation:",
     "grapesLabel": "Druvor:"
   },
-
   "wineRequests": {
     "title": "Mina vinförfrågningar",
     "newRequest": "Ny förfrågan",
@@ -970,7 +1004,6 @@
     "imageUrlPlaceholder": "Klistra in bild-URL…",
     "imageNotice": "Bilder granskas av en administratör innan de läggs till i det delade vinregistret, där de visas för alla Cellarion-användare."
   },
-
   "history": {
     "title": "Flaskhistorik",
     "backTo": "← Tillbaka till {{cellarName}}",
@@ -1002,7 +1035,6 @@
     "viewBottleAria": "Visa {{name}}",
     "noResults": "Inga flaskor matchar din sökning."
   },
-
   "cellarScope": {
     "title": "Välj vilka källare som visas",
     "thisCellar": "Denna källare",
@@ -1013,7 +1045,6 @@
     "thisCellarOnly": "Endast denna källare",
     "current": "Aktuell"
   },
-
   "cellarAudit": {
     "backToCellar": "← Tillbaka till källare",
     "auditLogTitle": "Aktivitetslogg",
@@ -1036,7 +1067,6 @@
     "sharedAs": "{{user}} som {{role}}",
     "roleChanged": "Roll ändrad: {{from}} → {{to}}"
   },
-
   "moveBottle": {
     "action": "Flytta till en annan källare",
     "actionShort": "Flytta",
@@ -1054,7 +1084,6 @@
     "movedInfo": "Den här flaskan flyttades till {{cellar}}.",
     "backToCellar": "Tillbaka till källaren"
   },
-
   "admin": {
     "requests": {
       "title": "Admin: Vinförfrågningar",
@@ -1280,7 +1309,6 @@
       "page": "Sida {{current}} av {{total}}"
     }
   },
-
   "somm": {
     "maturity": {
       "title": "Mognadskö",
@@ -1352,7 +1380,6 @@
       "requesterNoteLabel": "Förfrågans kommentar"
     }
   },
-
   "priceTracking": {
     "trigger": "Bevaka marknadspris",
     "triggerRequested": "Bevakning begärd",
@@ -1367,7 +1394,6 @@
     "cancel": "Avbryt förfrågan",
     "saving": "Sparar…"
   },
-
   "bottleSizeNames": {
     "split": "Split",
     "half": "Halvflaska",
@@ -1399,7 +1425,6 @@
     "noneYet": "Inga ännu",
     "valueSeedStarted": "Värdespårningen har startat. Din första datapunkt visas efter att veckans ögonblicksbild har körts.",
     "valueSeedFirst": "Din första ögonblicksbild är sparad. Trenddata visas efter nästa veckas ögonblicksbild.",
-
     "typeLabels": {
       "red": "Rött",
       "white": "Vitt",
@@ -1409,7 +1434,6 @@
       "fortified": "Starkvin",
       "unknown": "Väntar på granskning"
     },
-
     "ratingBands": {
       "excellent": "Utmärkt",
       "veryGood": "Mycket bra",
@@ -1417,7 +1441,6 @@
       "fair": "Godkänt",
       "poor": "Svagt"
     },
-
     "maturityPhases": {
       "declining": "Förbi bäst-före",
       "late": "Sen mognad",
@@ -1426,31 +1449,26 @@
       "notReady": "Inte redo ännu",
       "noProfile": "Ingen profil"
     },
-
     "days": {
       "overdue": "{{count}}d försenad",
       "today": "Idag",
       "left": "{{count}}d kvar",
       "ago": "{{count}}d sedan"
     },
-
     "donut": {
       "ariaLabel": "Munkdiagram: {{count}} flaskor totalt",
       "bottles": "flaskor"
     },
-
     "rating": {
       "average": "Genomsnitt:",
       "acrossBottles_one": "baserat på {{count}} betygsatt flaska",
       "acrossBottles_other": "baserat på {{count}} betygsatta flaskor"
     },
-
     "maturity": {
       "withProfiles": "{{count}} med sommelierprofiler",
       "withoutData": "{{count}} utan data",
       "profilesNeeded": "Sommelierprofiler för mognad krävs för att se ditt betyg"
     },
-
     "regret": {
       "pastPrime_one": "{{count}} flaska förbi sin bästa tid, fortfarande oöppnad.",
       "pastPrime_other": "{{count}} flaskor förbi sin bästa tid, fortfarande oöppnade.",
@@ -1460,22 +1478,18 @@
       "mild": "Några flaskor börjar passera sin topp. Håll koll på din källare.",
       "great": "Utmärkt! Din källare är välskött."
     },
-
     "forecast": {
       "inWindow_one": "{{year}}: {{count}} flaska i fönstret",
       "inWindow_other": "{{year}}: {{count}} flaskor i fönstret",
       "now": "nu"
     },
-
     "urgency": {
       "noUrgent": "Inga flaskor kräver brådskande uppmärksamhet — din källare är väl tajmad!"
     },
-
     "holdingTime": {
       "empty": "Markera flaskor som konsumerade för att se din tålamodsprofil.",
       "note": "Högre betyg vid längre lagringstid tyder på att lagring lönar sig för din källare."
     },
-
     "joyPerDollar": {
       "empty": "Betygsätt dina konsumerade flaskor för att se vilken typ som ger mest glädje per {{currency}}.",
       "count_one": "{{count}} flaska",
@@ -1483,7 +1497,6 @@
       "avg": "snitt {{price}}",
       "note": "Poäng = nöjesbetyg per {{currency}} 1 000 spenderat. Högre = bättre värde."
     },
-
     "regretSignal": {
       "empty": "Betygsätt flaskor före och efter drickning för att spåra förväntning vs verklighet.",
       "avgDelta": "Snittdelta:",
@@ -1492,7 +1505,6 @@
       "surprises": "Överraskningar",
       "disappointments": "Besvikelser"
     },
-
     "pace": {
       "bottlesIn": "flaskor in / år",
       "bottlesOut": "flaskor ut / år",
@@ -1503,7 +1515,6 @@
       "runway_other": "år av vin vid nuvarande konsumtion",
       "consumeToSee": "Konsumera flaskor för att se din källares bana."
     },
-
     "consumption": {
       "empty": "Ingen konsumtionshistorik ännu — markera flaskor som druckna, bortgivna eller sålda för att se din historik.",
       "drank": "Drucken",
@@ -1513,18 +1524,15 @@
       "totalConsumed_one": "{{count}} flaska konsumerad totalt",
       "totalConsumed_other": "{{count}} flaskor konsumerade totalt"
     },
-
     "topValue": {
       "empty": "Lägg till priser på dina flaskor för att se dina mest värdefulla viner."
     },
-
     "cellarBreakdown": {
       "bottle_one": "{{count}} flaska",
       "bottle_other": "{{count}} flaskor",
       "uniqueWine_one": "{{count}} unikt vin",
       "uniqueWine_other": "{{count}} unika viner"
     },
-
     "worldMap": {
       "bottle_one": "{{count}} flaska",
       "bottle_other": "{{count}} flaskor",
@@ -1533,7 +1541,6 @@
       "unmapped_one": "{{count}} land utan ISO-kod dolt",
       "unmapped_other": "{{count}} länder utan ISO-kod dolda"
     },
-
     "premiumGate": {
       "desc": "Djupgående insikter i hela din vinsamling — typer, ursprung, årgångar, värde, mognadsprofiler, konsumtionshistorik och mer. Den mest omfattande vinanalysen tillgänglig.",
       "feat1": "Vintyp- och ursprungsfördelning",
@@ -1548,12 +1555,10 @@
       "notSure": "Inte säker ännu?",
       "startTrial": "Starta en gratis 30-dagars provperiod"
     },
-
     "upgrade": {
       "unlockWith": "Lås upp med {{plan}}",
       "upgradeTo": "Uppgradera till {{plan}}"
     },
-
     "sections": {
       "wineTypes": "Vintyper",
       "maturityStatus": "Mognadsstatus",
@@ -1589,7 +1594,6 @@
       "mostValuableBottles": "Mest värdefulla flaskor",
       "valueOverTime": "Samlingens värde över tid"
     },
-
     "kpi": {
       "activeBottles": "Aktiva flaskor",
       "uniqueWines": "{{count}} unika viner",
@@ -1609,15 +1613,12 @@
       "sold": "Sålda",
       "avgConsumedRating": "Snittbetyg vid konsumtion"
     },
-
-
     "footnote": {
       "activeOnly": "Endast aktiva flaskor",
       "pricesConverted": "Priser omräknade med dagens växelkurser till {{currency}}",
       "maturityData": "Mognadsdata från sommelierprofiler",
       "ownedOnly": "Endast dina egna källare inkluderas"
     },
-
     "bottle_one": "{{count}} flaska",
     "bottle_other": "{{count}} flaskor",
     "vintageBottle_one": "{{vintage}}: {{count}} flaska",
@@ -1625,7 +1626,6 @@
     "purchased_one": "{{year}}: {{count}} flaska inköpt",
     "purchased_other": "{{year}}: {{count}} flaskor inköpta"
   },
-
   "blog": {
     "title": "Blogg",
     "subtitle": "Nyheter, tips och uppdateringar från Cellarion-teamet",
@@ -1706,7 +1706,23 @@
     "deleteTitle": "Ta bort omdömet?",
     "deleteBody": "Detta tar bort ditt omdöme permanent. Det går inte att ångra.",
     "deleteError": "Det gick inte att ta bort omdömet — försök igen.",
-    "deleting": "Tar bort…"
+    "deleting": "Tar bort…",
+    "saveFailed": "Det gick inte att spara recensionen",
+    "editTitle": "Redigera recension",
+    "reviewTitle": "Recension: {{wine}}",
+    "ratingLabel": "Betyg *",
+    "vintage": "Årgång",
+    "vintagePlaceholder": "t.ex. 2019",
+    "overallPlaceholder": "Vad tyckte du om vinet?",
+    "tastingNotes": "Detaljerade smaknoteringar",
+    "aroma": "Doft / Nos",
+    "aromaPlaceholder": "Vad känner du för dofter?",
+    "palate": "Smak",
+    "palatePlaceholder": "Vad känner du för smaker?",
+    "finish": "Eftersmak",
+    "finishPlaceholder": "Hur dröjer den sig kvar?",
+    "update": "Uppdatera recension",
+    "submit": "Skicka recension"
   },
   "discussions": {
     "community": "Gemenskap",
@@ -2212,7 +2228,6 @@
       }
     }
   },
-
   "landing": {
     "heroHeadline": "Din vinkällare,",
     "heroAccent": "vackert organiserad.",
@@ -2276,7 +2291,6 @@
       "a6": "Ja — din data är din. Cellarion har en en-kliks dataexport som ger dig allt som JSON, plus CSV-import och -export för flaskor. Du kan radera ditt konto från Inställningar med 7 dagars betänketid. Data på den hostade tjänsten lagras på europeisk infrastruktur under GDPR."
     }
   },
-
   "maturity": {
     "peak": "Optimal",
     "early": "Tidig",
@@ -2285,11 +2299,9 @@
     "notReady": "Ej redo",
     "noData": "Ingen mognadsdata"
   },
-
   "cellarNav": {
     "aria": "Källarvyer"
   },
-
   "cellarBook": {
     "title": "Källarbok",
     "linkBtn": "Källarbok",
@@ -2312,7 +2324,6 @@
     "colWindow": "Dryckesfönster",
     "footer": "Skapad med Cellarion"
   },
-
   "openBottle": {
     "openBtn": "Öppna flaska…",
     "pickerTitle": "Öppna den här flaskan",
@@ -2340,7 +2351,6 @@
     "partialOr": "eller ta bort den helt:",
     "partialConfirmBtn": "Öppna & häll upp ett glas"
   },
-
   "audit": {
     "title": "Inventera hylla — {{name}}",
     "openBtn": "Inventera",
@@ -2363,7 +2373,6 @@
     "clearSlot": "Töm plats",
     "cleared": "Tömd"
   },
-
   "zones": {
     "title": "Hyllzoner",
     "editBtn": "Hyllzoner",
@@ -2375,7 +2384,6 @@
     "nameMissing": "Ge varje zon med platser ett namn (eller ta bort den).",
     "saveError": "Kunde inte spara zonerna — försök igen."
   },
-
   "arrange": {
     "title": "Organisera hyllan",
     "openBtn": "Organisera…",
@@ -2409,7 +2417,6 @@
     "undoUnavailable": "Hyllan har ändrats sedan dess — organiseringen kan inte längre ångras.",
     "undoError": "En flytt misslyckades under ångringen — hyllan kan ha ändrats. Stäng och kontrollera hyllan."
   },
-
   "rackLens": {
     "dragHint": "Tips: dra en flaska till en tom plats för att flytta den, eller släpp den på en annan flaska för att byta plats.",
     "searchPlaceholder": "Sök i hyllorna…",
@@ -2430,7 +2437,6 @@
     "ratingLow": "Lågt",
     "ratingNone": "Ej betygsatt"
   },
-
   "cellarCred": {
     "newcomer": "Nykomling",
     "contributor": "Bidragsgivare",
@@ -3424,6 +3430,50 @@
       "pending": "Väntar",
       "resolved": "Åtgärdad",
       "dismissed": "Avvisad"
-    }
+    },
+    "contactTitle": "Kontakta support",
+    "categoryLabel": "Kategori",
+    "sentTitle": "Supportförfrågan skickad",
+    "sentBody": "Ditt ärende har skickats. En administratör svarar inom kort.",
+    "sentTrack": "Du kan följa dina ärenden under <strong>Support</strong> i menyn.",
+    "subject": "Ämne",
+    "subjectPlaceholder": "Kort sammanfattning av ditt ärende",
+    "message": "Meddelande",
+    "messagePlaceholder": "Beskriv ditt problem eller din fråga i detalj...",
+    "sending": "Skickar…",
+    "sendTicket": "Skicka ärende",
+    "subjectRequired": "Ämne krävs",
+    "messageRequired": "Meddelande krävs",
+    "submitFailed": "Det gick inte att skicka ärendet"
+  },
+  "similarWines": {
+    "title": "Menade du någon av dessa?",
+    "intro": "Vi hittade viner i registret som liknar <strong>{{query}}</strong>. Att välja ett befintligt vin håller registret städat och låter dig dela data med andra användare.",
+    "whatYouEntered": "det du angav",
+    "similarityTitle": "Likhetspoäng",
+    "matchLabel": "{{percent}}% träff",
+    "useThis": "Använd detta",
+    "createNew": "Nej, skapa nytt vin"
+  },
+  "reportWine": {
+    "title": "Rapportera vin",
+    "sentTitle": "Rapport skickad",
+    "sentBody": "Tack för din rapport. Vårt team granskar den inom kort.",
+    "reporting": "Rapporterar: <strong>{{wine}}</strong>",
+    "reason": "Anledning",
+    "reasons": {
+      "wrong_info": "Fel information (namn, producent, region m.m.)",
+      "duplicate": "Dubblettvin",
+      "wrong_price": "Fel eller felaktigt marknadspris",
+      "wrong_tasting_profile": "Felaktig smakprofil (struktur, smaker, matchningar)",
+      "inappropriate": "Olämpligt innehåll",
+      "other": "Annat"
+    },
+    "details": "Detaljer",
+    "optional": "(valfritt)",
+    "detailsPlaceholder": "Ange ytterligare information som hjälper oss att undersöka…",
+    "submitting": "Skickar…",
+    "submit": "Skicka rapport",
+    "submitFailed": "Det gick inte att skicka rapporten"
   }
 }

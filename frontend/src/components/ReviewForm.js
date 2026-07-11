@@ -59,17 +59,17 @@ export default function ReviewForm({ wineDefinition, wineName, existingReview, d
         setError(result.error || 'Failed to save review');
       }
     } catch {
-      setError('Failed to save review');
+      setError(t('reviews.saveFailed', 'Failed to save review'));
     } finally {
       setSaving(false);
     }
   };
 
   return (
-    <Modal title={isEdit ? 'Edit Review' : `Review: ${wineName || 'Wine'}`} onClose={onClose}>
+    <Modal title={isEdit ? t('reviews.editTitle', 'Edit Review') : t('reviews.reviewTitle', { wine: wineName || t('common.wine', 'Wine') })} onClose={onClose}>
       <form onSubmit={handleSubmit} className="review-form">
         <div className="form-group">
-          <label>Rating *</label>
+          <label>{t('reviews.ratingLabel', 'Rating *')}</label>
           <RatingInput
             value={rating}
             scale={ratingScale}
@@ -80,14 +80,14 @@ export default function ReviewForm({ wineDefinition, wineName, existingReview, d
         </div>
 
         <div className="form-group">
-          <label htmlFor="review-vintage">Vintage</label>
+          <label htmlFor="review-vintage">{t('reviews.vintage', 'Vintage')}</label>
           <input
             id="review-vintage"
             type="text"
             className="input"
             value={vintage}
             onChange={e => setVintage(e.target.value)}
-            placeholder="e.g. 2019"
+            placeholder={t('reviews.vintagePlaceholder', 'e.g. 2019')}
             maxLength={10}
           />
         </div>
@@ -124,47 +124,47 @@ export default function ReviewForm({ wineDefinition, wineName, existingReview, d
             className="input"
             value={overall}
             onChange={e => setOverall(e.target.value)}
-            placeholder="What did you think of this wine?"
+            placeholder={t('reviews.overallPlaceholder', 'What did you think of this wine?')}
             rows={3}
             maxLength={2000}
           />
         </div>
 
         <details className="review-form__details">
-          <summary>Detailed Tasting Notes</summary>
+          <summary>{t('reviews.tastingNotes', 'Detailed Tasting Notes')}</summary>
           <div className="review-form__tasting-fields">
             <div className="form-group">
-              <label htmlFor="review-aroma">Aroma / Nose</label>
+              <label htmlFor="review-aroma">{t('reviews.aroma', 'Aroma / Nose')}</label>
               <textarea
                 id="review-aroma"
                 className="input"
                 value={aroma}
                 onChange={e => setAroma(e.target.value)}
-                placeholder="What do you smell?"
+                placeholder={t('reviews.aromaPlaceholder', 'What do you smell?')}
                 rows={2}
                 maxLength={1000}
               />
             </div>
             <div className="form-group">
-              <label htmlFor="review-palate">Palate</label>
+              <label htmlFor="review-palate">{t('reviews.palate', 'Palate')}</label>
               <textarea
                 id="review-palate"
                 className="input"
                 value={palate}
                 onChange={e => setPalate(e.target.value)}
-                placeholder="What do you taste?"
+                placeholder={t('reviews.palatePlaceholder', 'What do you taste?')}
                 rows={2}
                 maxLength={1000}
               />
             </div>
             <div className="form-group">
-              <label htmlFor="review-finish">Finish</label>
+              <label htmlFor="review-finish">{t('reviews.finish', 'Finish')}</label>
               <textarea
                 id="review-finish"
                 className="input"
                 value={finish}
                 onChange={e => setFinish(e.target.value)}
-                placeholder="How does it linger?"
+                placeholder={t('reviews.finishPlaceholder', 'How does it linger?')}
                 rows={2}
                 maxLength={1000}
               />
@@ -176,10 +176,10 @@ export default function ReviewForm({ wineDefinition, wineName, existingReview, d
 
         <div className="modal-actions">
           <button type="button" className="btn btn-secondary" onClick={onClose} disabled={saving}>
-            Cancel
+            {t('common.cancel')}
           </button>
           <button type="submit" className="btn btn-primary" disabled={saving || rating == null}>
-            {saving ? 'Saving...' : (isEdit ? 'Update Review' : 'Submit Review')}
+            {saving ? t('common.saving') : (isEdit ? t('reviews.update', 'Update Review') : t('reviews.submit', 'Submit Review'))}
           </button>
         </div>
       </form>

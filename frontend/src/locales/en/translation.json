@@ -45,7 +45,6 @@
     "optional": "optional",
     "or": "or"
   },
-
   "nav": {
     "myCellars": "My Cellars",
     "wineRegistry": "Wine Registry",
@@ -95,7 +94,6 @@
     "switchToDark": "Switch to dark mode",
     "switchToLight": "Switch to light mode"
   },
-
   "auth": {
     "login": "Login",
     "register": "Register",
@@ -145,7 +143,6 @@
     "newLinkSent": "New verification link sent. Check your inbox.",
     "sendFailed": "Failed to send. Please try again."
   },
-
   "settings": {
     "title": "Settings",
     "signedInAs": "Signed in as",
@@ -279,7 +276,56 @@
       "errorRateLimited": "Too many attempts. Please wait a few minutes and try again."
     },
     "defaultRatingScale": "Default Rating Scale",
-    "ratingScaleHint": "Choose which rating scale to use by default when adding ratings. You can always override per bottle."
+    "ratingScaleHint": "Choose which rating scale to use by default when adding ratings. You can always override per bottle.",
+    "profile": {
+      "title": "Profile",
+      "displayName": "Display Name",
+      "displayNameHint": "How your name appears to other users. Leave blank to use your username.",
+      "bio": "Bio",
+      "bioHint": "A short description visible on your public profile.",
+      "bioPlaceholder": "Tell others about your wine journey...",
+      "visibility": "Profile Visibility",
+      "visibilityHint": "Public profiles appear in search results and the Discover feed. Private profiles are hidden from other users.",
+      "public": "Public",
+      "private": "Private"
+    },
+    "push": {
+      "deviceRegistered": "This device is registered",
+      "deviceNotRegistered": "This device is not registered",
+      "removing": "Removing...",
+      "removeDevice": "Remove this device",
+      "registering": "Registering...",
+      "registerDevice": "Register this device",
+      "devicesRegistered_one": "{{count}} device registered for push notifications.",
+      "devicesRegistered_other": "{{count}} devices registered for push notifications.",
+      "sending": "Sending...",
+      "sendTest": "Send test notification",
+      "testSent": "Test sent!"
+    },
+    "data": {
+      "title": "Your Data",
+      "intro": "Download a complete copy of all your personal data stored in Cellarion, including your profile, bottles, cellars, reviews, and activity log.",
+      "exporting": "Exporting...",
+      "exportBtn": "Export my data",
+      "privacyLink": "Read our <a>Privacy Policy</a> to learn how your data is processed and what rights you have."
+    },
+    "portability": {
+      "title": "Take your cellars with you",
+      "intro": "Export one cellar or all of them — bottles, rack placements, 3D room layout, reviews, maturity data and the images you uploaded yourself — in a format you can import into any Cellarion instance. Your data is yours; we never lock it in.",
+      "exportBtn": "Export your cellars →",
+      "importLink": "Moving in from another Cellarion instance? <a>Import a cellar export</a> to recreate your cellars, bottles and images here."
+    },
+    "danger": {
+      "title": "Danger zone",
+      "scheduledFor": "Account deletion is scheduled for <strong>{{date}}</strong>. All your data will be permanently removed after this date.",
+      "cancelling": "Cancelling...",
+      "cancelDeletion": "Cancel deletion",
+      "intro": "Permanently delete your account and all associated data — cellars, bottles, reviews, and settings. After requesting deletion, you have 7 days to change your mind before the deletion is permanent.",
+      "deleteBtn": "Delete my account",
+      "typeToConfirm": "Type <strong>DELETE</strong> to confirm:",
+      "scheduling": "Scheduling...",
+      "scheduleBtn": "Schedule account deletion"
+    }
   },
   "climate": {
     "title": "Climate",
@@ -383,11 +429,9 @@
     "laugh": "Funny",
     "pray": "Thanks"
   },
-
   "plans": {
     "expired": "Expired"
   },
-
   "supporter": {
     "title": "Cellarion is free, and open-source. Here's what keeps it running.",
     "subtitle": "Every feature is free for everyone, forever — no paywalls, nothing locked. But the servers and AI behind the app cost real money. If Cellarion has earned a place in your cellar, you're warmly invited to help split the tab.",
@@ -426,7 +470,6 @@
     "alreadySupporting": "💛 You're supporting Cellarion — thank you! You can change or cancel anytime.",
     "donateNote": "Payments are handled securely by Stripe. Cellarion stays free and open whether you support or not."
   },
-
   "cellars": {
     "title": "My Cellars",
     "newCellar": "New Cellar",
@@ -454,7 +497,6 @@
     "sharedCount_one": "{{count}} shared",
     "sharedCount_other": "{{count}} shared"
   },
-
   "cellarDetail": {
     "backToCellars": "← Back to Cellars",
     "loadingCellar": "Loading cellar...",
@@ -542,9 +584,9 @@
     "removeFilterAria": "Remove {{label}}",
     "groupBottleCount_one": "{{count}} bottle",
     "groupBottleCount_other": "{{count}} bottles",
-    "collapseGroup": "Collapse ▲"
+    "collapseGroup": "Collapse ▲",
+    "deleteWillDelete": "This will delete <strong>{{name}}</strong> and all its racks."
   },
-
   "addBottle": {
     "title": "Add Bottle",
     "backToCellar": "← Back to Cellar",
@@ -650,7 +692,6 @@
     "partialAdded_one": "{{msg}} — {{count}} of {{total}} bottles was added. Retrying will add only the remaining {{remaining}}.",
     "partialAdded_other": "{{msg}} — {{count}} of {{total}} bottles were added. Retrying will add only the remaining {{remaining}}."
   },
-
   "bottleDetail": {
     "backToCellar": "← Back to Cellar",
     "backToChat": "← Back to chat",
@@ -746,7 +787,6 @@
     "pairsWith": "Pairs with",
     "consumeError": "Failed to remove bottle"
   },
-
   "bottles": {
     "title": "All bottles",
     "loading": "Loading…",
@@ -781,7 +821,6 @@
     "status_sold": "Sold",
     "status_other": "Other"
   },
-
   "racks": {
     "title": "Storage Racks",
     "backToCellar": "← Back to Cellar",
@@ -856,10 +895,8 @@
     "viewCompact": "Compact",
     "viewShelf": "Shelf view",
     "view3d": "3D",
-    "toolsMenu": "Rack tools",
     "consumeNotePlaceholder": "How was it?"
   },
-
   "nfc": {
     "linkTitle": "Link NFC Tag",
     "linkDescription": "Write this rack's URL to an NFC sticker. When someone taps the sticker with their phone, it will open directly to this rack.",
@@ -877,7 +914,6 @@
     "networkError": "Network error. Please try again.",
     "goToCellars": "Go to Cellars"
   },
-
   "room": {
     "title": "Room View",
     "subtitle": "3D cellar layout",
@@ -923,7 +959,6 @@
     "loadRacksError": "Failed to load racks for this cellar",
     "loadLayoutError": "Failed to load the room layout"
   },
-
   "wines": {
     "title": "Wine Registry",
     "subtitle": "Browse all available wines in the registry",
@@ -949,7 +984,6 @@
     "appellationLabel": "Appellation:",
     "grapesLabel": "Grapes:"
   },
-
   "wineRequests": {
     "title": "My Wine Requests",
     "newRequest": "New Request",
@@ -970,7 +1004,6 @@
     "imageUrlPlaceholder": "Paste image URL…",
     "imageNotice": "Images are reviewed by an admin before being added to the shared wine registry, where they will be visible to all Cellarion users."
   },
-
   "history": {
     "title": "Bottle History",
     "backTo": "← Back to {{cellarName}}",
@@ -1002,7 +1035,6 @@
     "viewBottleAria": "View {{name}}",
     "noResults": "No bottles match your search."
   },
-
   "cellarScope": {
     "title": "Choose which cellars to show",
     "thisCellar": "This cellar",
@@ -1013,7 +1045,6 @@
     "thisCellarOnly": "This cellar only",
     "current": "Current"
   },
-
   "cellarAudit": {
     "backToCellar": "← Back to Cellar",
     "auditLogTitle": "Audit Log",
@@ -1036,7 +1067,6 @@
     "sharedAs": "{{user}} as {{role}}",
     "roleChanged": "Role changed: {{from}} → {{to}}"
   },
-
   "moveBottle": {
     "action": "Move to another cellar",
     "actionShort": "Move",
@@ -1054,7 +1084,6 @@
     "movedInfo": "This bottle was moved to {{cellar}}.",
     "backToCellar": "Back to cellar"
   },
-
   "admin": {
     "requests": {
       "title": "Admin: Wine Requests",
@@ -1280,7 +1309,6 @@
       "page": "Page {{current}} of {{total}}"
     }
   },
-
   "somm": {
     "maturity": {
       "title": "Maturity Queue",
@@ -1352,7 +1380,6 @@
       "requesterNoteLabel": "Requester note"
     }
   },
-
   "priceTracking": {
     "trigger": "Track market price",
     "triggerRequested": "Tracking requested",
@@ -1367,7 +1394,6 @@
     "cancel": "Cancel request",
     "saving": "Saving…"
   },
-
   "bottleSizeNames": {
     "split": "Split",
     "half": "Half",
@@ -1399,7 +1425,6 @@
     "noneYet": "None yet",
     "valueSeedStarted": "Value tracking has started. Your first data point will appear after the weekly snapshot runs.",
     "valueSeedFirst": "Your first snapshot is recorded. Trend data will appear after next week's snapshot.",
-
     "typeLabels": {
       "red": "Red",
       "white": "White",
@@ -1409,7 +1434,6 @@
       "fortified": "Fortified",
       "unknown": "Pending review"
     },
-
     "ratingBands": {
       "excellent": "Excellent",
       "veryGood": "Very Good",
@@ -1417,7 +1441,6 @@
       "fair": "Fair",
       "poor": "Poor"
     },
-
     "maturityPhases": {
       "declining": "Past Prime",
       "late": "Late Maturity",
@@ -1426,31 +1449,26 @@
       "notReady": "Not Ready Yet",
       "noProfile": "No Profile"
     },
-
     "days": {
       "overdue": "{{count}}d overdue",
       "today": "Today",
       "left": "{{count}}d left",
       "ago": "{{count}}d ago"
     },
-
     "donut": {
       "ariaLabel": "Donut chart: {{count}} total bottles",
       "bottles": "bottles"
     },
-
     "rating": {
       "average": "Average:",
       "acrossBottles_one": "across {{count}} rated bottle",
       "acrossBottles_other": "across {{count}} rated bottles"
     },
-
     "maturity": {
       "withProfiles": "{{count}} with sommelier profiles",
       "withoutData": "{{count}} without data",
       "profilesNeeded": "Sommelier maturity profiles needed to see your score"
     },
-
     "regret": {
       "pastPrime_one": "{{count}} bottle past their prime, still unopened.",
       "pastPrime_other": "{{count}} bottles past their prime, still unopened.",
@@ -1460,22 +1478,18 @@
       "mild": "A few bottles slipping by. Stay on top of your cellar.",
       "great": "Excellent! Your cellar is well managed."
     },
-
     "forecast": {
       "inWindow_one": "{{year}}: {{count}} bottle in window",
       "inWindow_other": "{{year}}: {{count}} bottles in window",
       "now": "now"
     },
-
     "urgency": {
       "noUrgent": "No bottles need urgent attention — your cellar is well timed!"
     },
-
     "holdingTime": {
       "empty": "Mark bottles as consumed to see your patience profile.",
       "note": "Higher ratings at longer holding times suggest aging is rewarding for your cellar."
     },
-
     "joyPerDollar": {
       "empty": "Rate your consumed bottles to see which type gives you the most joy per {{currency}}.",
       "count_one": "{{count}} bottle",
@@ -1483,7 +1497,6 @@
       "avg": "avg {{price}}",
       "note": "Score = enjoyment rating per {{currency}}1,000 spent. Higher = better value."
     },
-
     "regretSignal": {
       "empty": "Rate bottles before and after drinking to track expectation vs reality.",
       "avgDelta": "Avg delta:",
@@ -1492,7 +1505,6 @@
       "surprises": "Surprises",
       "disappointments": "Disappointments"
     },
-
     "pace": {
       "bottlesIn": "bottles in / year",
       "bottlesOut": "bottles out / year",
@@ -1503,7 +1515,6 @@
       "runway_other": "years of wine at current consumption",
       "consumeToSee": "Consume bottles to see your cellar trajectory."
     },
-
     "consumption": {
       "empty": "No consumption history yet — mark bottles as drank, gifted, or sold to see your history.",
       "drank": "Drank",
@@ -1513,18 +1524,15 @@
       "totalConsumed_one": "{{count}} total bottle consumed",
       "totalConsumed_other": "{{count}} total bottles consumed"
     },
-
     "topValue": {
       "empty": "Add prices to your bottles to see your most valuable wines."
     },
-
     "cellarBreakdown": {
       "bottle_one": "{{count}} bottle",
       "bottle_other": "{{count}} bottles",
       "uniqueWine_one": "{{count}} unique wine",
       "uniqueWine_other": "{{count}} unique wines"
     },
-
     "worldMap": {
       "bottle_one": "{{count}} bottle",
       "bottle_other": "{{count}} bottles",
@@ -1533,7 +1541,6 @@
       "unmapped_one": "{{count}} country without ISO code hidden",
       "unmapped_other": "{{count}} countries without ISO code hidden"
     },
-
     "premiumGate": {
       "desc": "Deep insights into your entire wine collection — types, origins, vintages, value, maturity profiles, consumption history, and more. The most comprehensive wine analytics dashboard available.",
       "feat1": "Wine type & origin breakdown",
@@ -1548,12 +1555,10 @@
       "notSure": "Not sure yet?",
       "startTrial": "Start a free 30-day trial"
     },
-
     "upgrade": {
       "unlockWith": "Unlock with {{plan}}",
       "upgradeTo": "Upgrade to {{plan}}"
     },
-
     "sections": {
       "wineTypes": "Wine Types",
       "maturityStatus": "Maturity Status",
@@ -1589,7 +1594,6 @@
       "mostValuableBottles": "Most Valuable Bottles",
       "valueOverTime": "Collection Value Over Time"
     },
-
     "kpi": {
       "activeBottles": "Active Bottles",
       "uniqueWines": "{{count}} unique wines",
@@ -1609,15 +1613,12 @@
       "sold": "Sold",
       "avgConsumedRating": "Avg Consumed Rating"
     },
-
-
     "footnote": {
       "activeOnly": "Active bottles only",
       "pricesConverted": "Prices converted using today's exchange rates to {{currency}}",
       "maturityData": "Maturity data from sommelier profiles",
       "ownedOnly": "Only your owned cellars are included"
     },
-
     "bottle_one": "{{count}} bottle",
     "bottle_other": "{{count}} bottles",
     "vintageBottle_one": "{{vintage}}: {{count}} bottle",
@@ -1625,7 +1626,6 @@
     "purchased_one": "{{year}}: {{count}} bottle purchased",
     "purchased_other": "{{year}}: {{count}} bottles purchased"
   },
-
   "blog": {
     "title": "Blog",
     "subtitle": "News, tips, and updates from the Cellarion team",
@@ -1706,7 +1706,23 @@
     "deleteTitle": "Delete review?",
     "deleteBody": "This will permanently delete your review. This cannot be undone.",
     "deleteError": "Failed to delete the review — please try again.",
-    "deleting": "Deleting…"
+    "deleting": "Deleting…",
+    "saveFailed": "Failed to save review",
+    "editTitle": "Edit Review",
+    "reviewTitle": "Review: {{wine}}",
+    "ratingLabel": "Rating *",
+    "vintage": "Vintage",
+    "vintagePlaceholder": "e.g. 2019",
+    "overallPlaceholder": "What did you think of this wine?",
+    "tastingNotes": "Detailed Tasting Notes",
+    "aroma": "Aroma / Nose",
+    "aromaPlaceholder": "What do you smell?",
+    "palate": "Palate",
+    "palatePlaceholder": "What do you taste?",
+    "finish": "Finish",
+    "finishPlaceholder": "How does it linger?",
+    "update": "Update Review",
+    "submit": "Submit Review"
   },
   "discussions": {
     "community": "Community",
@@ -2212,7 +2228,6 @@
       }
     }
   },
-
   "landing": {
     "heroHeadline": "Your wine cellar,",
     "heroAccent": "beautifully organised.",
@@ -2276,7 +2291,6 @@
       "a6": "Yes — your data is yours. Cellarion includes a one-click data export that gives you everything as JSON, plus CSV import and export for bottles. You can delete your account from Settings with a 7-day cooling-off window. Hosted data lives on European infrastructure under GDPR."
     }
   },
-
   "maturity": {
     "peak": "Peak",
     "early": "Early",
@@ -2285,11 +2299,9 @@
     "notReady": "Not Ready",
     "noData": "No Maturity Data"
   },
-
   "cellarNav": {
     "aria": "Cellar views"
   },
-
   "cellarBook": {
     "title": "Cellar Book",
     "linkBtn": "Cellar Book",
@@ -2312,7 +2324,6 @@
     "colWindow": "Drink window",
     "footer": "Generated by Cellarion"
   },
-
   "openBottle": {
     "openBtn": "Open bottle…",
     "pickerTitle": "Open this bottle",
@@ -2340,7 +2351,6 @@
     "partialOr": "or remove it completely:",
     "partialConfirmBtn": "Open & pour a glass"
   },
-
   "audit": {
     "title": "Audit rack — {{name}}",
     "openBtn": "Audit",
@@ -2363,7 +2373,6 @@
     "clearSlot": "Clear slot",
     "cleared": "Cleared"
   },
-
   "zones": {
     "title": "Rack zones",
     "editBtn": "Rack zones",
@@ -2375,7 +2384,6 @@
     "nameMissing": "Give every zone with slots a name (or remove it).",
     "saveError": "Failed to save zones — please try again."
   },
-
   "arrange": {
     "title": "Organize this rack",
     "openBtn": "Organize…",
@@ -2409,7 +2417,6 @@
     "undoUnavailable": "The rack has changed since — this organization can no longer be undone.",
     "undoError": "A move failed while undoing — the rack may have changed. Close and check the rack."
   },
-
   "rackLens": {
     "dragHint": "Tip: drag a bottle to an empty slot to move it, onto another bottle to swap them.",
     "searchPlaceholder": "Find in racks…",
@@ -2430,7 +2437,6 @@
     "ratingLow": "Low",
     "ratingNone": "Not rated"
   },
-
   "cellarCred": {
     "newcomer": "Newcomer",
     "contributor": "Contributor",
@@ -3424,6 +3430,50 @@
       "pending": "Pending",
       "resolved": "Resolved",
       "dismissed": "Dismissed"
-    }
+    },
+    "contactTitle": "Contact Support",
+    "categoryLabel": "Category",
+    "sentTitle": "Support Request Sent",
+    "sentBody": "Your ticket has been submitted. An admin will respond shortly.",
+    "sentTrack": "You can track your tickets under <strong>Support</strong> in the menu.",
+    "subject": "Subject",
+    "subjectPlaceholder": "Brief summary of your issue",
+    "message": "Message",
+    "messagePlaceholder": "Describe your issue or question in detail...",
+    "sending": "Sending…",
+    "sendTicket": "Send Ticket",
+    "subjectRequired": "Subject is required",
+    "messageRequired": "Message is required",
+    "submitFailed": "Failed to submit ticket"
+  },
+  "similarWines": {
+    "title": "Did you mean one of these?",
+    "intro": "We found wines in the registry that look close to <strong>{{query}}</strong>. Picking an existing wine keeps the registry tidy and lets you share data with other users.",
+    "whatYouEntered": "what you entered",
+    "similarityTitle": "Similarity score",
+    "matchLabel": "{{percent}}% match",
+    "useThis": "Use this",
+    "createNew": "No, create new wine"
+  },
+  "reportWine": {
+    "title": "Report Wine",
+    "sentTitle": "Report Submitted",
+    "sentBody": "Thank you for your report. Our team will review it shortly.",
+    "reporting": "Reporting: <strong>{{wine}}</strong>",
+    "reason": "Reason",
+    "reasons": {
+      "wrong_info": "Wrong information (name, producer, region, etc.)",
+      "duplicate": "Duplicate wine entry",
+      "wrong_price": "Wrong or inaccurate market price",
+      "wrong_tasting_profile": "Incorrect tasting profile (structure, flavours, pairings)",
+      "inappropriate": "Inappropriate content",
+      "other": "Other"
+    },
+    "details": "Details",
+    "optional": "(optional)",
+    "detailsPlaceholder": "Provide any additional information that will help us investigate…",
+    "submitting": "Submitting…",
+    "submit": "Submit Report",
+    "submitFailed": "Failed to submit report"
   }
 }
