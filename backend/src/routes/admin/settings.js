@@ -34,7 +34,7 @@ router.get('/rate-limits', async (req, res) => {
 // accountLockout.threshold to 9999 effectively turns lockout off).
 router.patch('/rate-limits', async (req, res) => {
   try {
-    const { api, write, auth, accountLockout, chatBurst, chatConcurrentStreams, aiDailyBudget, aiImportPerRequestCap, aiGlobalDailyCap } = req.body;
+    const { api, write, auth, accountLockout, chatBurst, chatConcurrentStreams, aiDailyBudget, aiImportPerRequestCap, aiGlobalDailyCap, demo } = req.body;
 
     const previous = { ...rateLimitsConfig.get() };
 
@@ -90,6 +90,17 @@ router.patch('/rate-limits', async (req, res) => {
       requireIntInRange('aiGlobalDailyCap.max', aiGlobalDailyCap.max, 0, 10_000_000);
     }
 
+    // Ephemeral public-demo accounts. globalMax=0 is the demo kill-switch
+    // (demo-login always 429s), so the lower bound is 0. ttlMs floor of 5 min
+    // keeps the reaper meaningful; createWindowMs floor of 1 min matches the
+    // other burst windows.
+    if (demo !== undefined) {
+      requireIntInRange('demo.createMax',      demo.createMax,      1,       1000);
+      requireIntInRange('demo.createWindowMs', demo.createWindowMs, 60_000,  24 * 60 * 60 * 1000);
+      requireIntInRange('demo.globalMax',      demo.globalMax,      0,       100_000);
+      requireIntInRange('demo.ttlMs',          demo.ttlMs,          5 * 60_000, 24 * 60 * 60 * 1000);
+    }
+
     if (errors.length > 0) {
       return res.status(400).json({ error: errors[0], errors });
     }
@@ -123,6 +134,12 @@ router.patch('/rate-limits', async (req, res) => {
       },
       aiGlobalDailyCap: {
         max: aiGlobalDailyCap?.max ?? previous.aiGlobalDailyCap?.max ?? rateLimitsConfig.defaults.aiGlobalDailyCap.max,
+      },
+      demo: {
+        createMax:      demo?.createMax      ?? previous.demo?.createMax      ?? rateLimitsConfig.defaults.demo.createMax,
+        createWindowMs: demo?.createWindowMs ?? previous.demo?.createWindowMs ?? rateLimitsConfig.defaults.demo.createWindowMs,
+        globalMax:      demo?.globalMax      ?? previous.demo?.globalMax      ?? rateLimitsConfig.defaults.demo.globalMax,
+        ttlMs:          demo?.ttlMs          ?? previous.demo?.ttlMs          ?? rateLimitsConfig.defaults.demo.ttlMs,
       },
     };
 

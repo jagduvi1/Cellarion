@@ -3,7 +3,13 @@ const jwt = require('jsonwebtoken');
 // Use a fixed test secret so we can sign real tokens
 process.env.JWT_SECRET = 'test-secret';
 
-const { requireAuth, optionalAuth, requireRole, requireSommOrAdmin } = require('./auth');
+// requireAuth does a demo-session existence check (User.exists) for isDemo tokens
+// only; mock it so those paths are testable without a DB. Real-user tokens never
+// trigger the lookup, so the mock is inert for the rest of the suite.
+jest.mock('../models/User', () => ({ exists: jest.fn() }));
+const User = require('../models/User');
+
+const { requireAuth, optionalAuth, requireRole, requireNonDemo, requireSommOrAdmin } = require('./auth');
 
 // ─── Helpers ────────────────────────────────────────��────────────────────────
 
@@ -311,5 +317,94 @@ describe('requireSommOrAdmin', () => {
     requireSommOrAdmin(req, res, next);
 
     expect(next).toHaveBeenCalled();
+  });
+});
+
+// ─── requireNonDemo ───────────────────────────────────────────────────────────
+
+describe('requireNonDemo', () => {
+  test('401 when unauthenticated', () => {
+    const req = {};
+    const res = makeRes();
+    const next = jest.fn();
+
+    requireNonDemo(req, res, next);
+
+    expect(res.status).toHaveBeenCalledWith(401);
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  test('403 for a demo account', () => {
+    const req = { user: { id: 'u1', isDemo: true } };
+    const res = makeRes();
+    const next = jest.fn();
+
+    requireNonDemo(req, res, next);
+
+    expect(res.status).toHaveBeenCalledWith(403);
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  test('calls next for a normal (non-demo) user', () => {
+    const req = { user: { id: 'u1', isDemo: false } };
+    const res = makeRes();
+    const next = jest.fn();
+
+    requireNonDemo(req, res, next);
+
+    expect(next).toHaveBeenCalled();
+    expect(res.status).not.toHaveBeenCalled();
+  });
+
+  test('calls next when isDemo is absent (defensive)', () => {
+    const req = { user: { id: 'u1' } };
+    const res = makeRes();
+    const next = jest.fn();
+
+    requireNonDemo(req, res, next);
+
+    expect(next).toHaveBeenCalled();
+  });
+});
+
+// ─── requireAuth — demo session existence check ───────────────────────────────
+
+describe('requireAuth demo-session existence check', () => {
+  test('demo token passes and attaches isDemo when the account still exists', async () => {
+    User.exists.mockResolvedValue({ _id: 'u1' });
+    const req = makeReq({ headers: { authorization: `Bearer ${signToken({ id: 'u1', roles: ['user'], isDemo: true })}` } });
+    const res = makeRes();
+    const next = jest.fn();
+
+    await requireAuth(req, res, next);
+
+    expect(User.exists).toHaveBeenCalledWith({ _id: 'u1', isDemo: true });
+    expect(next).toHaveBeenCalled();
+    expect(req.user.isDemo).toBe(true);
+  });
+
+  test('401 when the demo account has been reaped (zombie token)', async () => {
+    User.exists.mockResolvedValue(null);
+    const req = makeReq({ headers: { authorization: `Bearer ${signToken({ id: 'u1', roles: ['user'], isDemo: true })}` } });
+    const res = makeRes();
+    const next = jest.fn();
+
+    await requireAuth(req, res, next);
+
+    expect(res.status).toHaveBeenCalledWith(401);
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  test('a normal (non-demo) token never triggers the existence lookup', async () => {
+    User.exists.mockClear();
+    const req = makeReq({ headers: { authorization: `Bearer ${signToken({ id: 'u1', roles: ['user'] })}` } });
+    const res = makeRes();
+    const next = jest.fn();
+
+    await requireAuth(req, res, next);
+
+    expect(User.exists).not.toHaveBeenCalled();
+    expect(next).toHaveBeenCalled();
+    expect(req.user.isDemo).toBe(false);
   });
 });

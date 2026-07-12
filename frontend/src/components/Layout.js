@@ -7,6 +7,7 @@ import { PLANS } from '../config/plans';
 import NotificationBell from './NotificationBell';
 import InstallPrompt from './InstallPrompt';
 import AnnouncementBanner from './AnnouncementBanner';
+import DemoBanner from './DemoBanner';
 import './Layout.css';
 
 const LOGO_LIGHT_WEBP = '/cellarion-logo-light.webp';
@@ -315,6 +316,9 @@ function Layout({ children }) {
 
       {/* SuperAdmin-managed site announcement (e.g. planned maintenance) */}
       <AnnouncementBanner />
+
+      {/* Persistent notice for ephemeral demo sessions (data resets + sign-up CTA) */}
+      <DemoBanner />
 
       <main id="main-content" className="main-content" tabIndex={-1}>
         {children}

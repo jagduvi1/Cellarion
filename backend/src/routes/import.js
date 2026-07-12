@@ -1,6 +1,6 @@
 const express = require('express');
 const mongoose = require('mongoose');
-const { requireAuth } = require('../middleware/auth');
+const { requireAuth, requireNonDemo } = require('../middleware/auth');
 const aiBurstLimiter = require('../middleware/aiBurstLimiter');
 const Bottle = require('../models/Bottle');
 const Cellar = require('../models/Cellar');
@@ -41,7 +41,9 @@ const WineRequest = require('../models/WineRequest');
 const ImportSession = require('../models/ImportSession');
 
 const router = express.Router();
-router.use(requireAuth);
+// requireNonDemo: the CT/CSV importer spends AI on identify and creates registry
+// wines; a throwaway demo must do neither. Demo users can't bulk-import.
+router.use(requireAuth, requireNonDemo);
 
 // Aliases for readability (imported from config/constants.js)
 const EXACT_THRESHOLD = IMPORT_EXACT_THRESHOLD;
@@ -318,7 +320,7 @@ router.post('/validate', aiBurstLimiter, async (req, res) => {
           pr.aiSkipped = true;
           return AI_SKIPPED;
         }
-        const debit = await tryDebitAi(req.user.id);
+        const debit = await tryDebitAi(req.user.id, { isDemo: req.user.isDemo });
         if (!debit.ok) {
           aiBudgetExhausted = true;
           pr.aiSkipped = true;

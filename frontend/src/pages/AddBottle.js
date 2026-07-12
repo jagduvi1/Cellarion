@@ -364,6 +364,22 @@ function AddBottle() {
     }
   };
 
+  // Adding bottles is not available in the demo (backend enforces via
+  // requireNonDemo on POST /api/bottles). Show a friendly sign-up nudge instead
+  // of the form if a demo visitor navigates here directly. The persistent
+  // DemoBanner already carries the "create your own cellar" CTA.
+  if (user?.isDemo) {
+    return (
+      <div className="add-bottle-page">
+        <div className="card add-bottle-demo-block">
+          <h2>{t('demo.noAddTitle')}</h2>
+          <p>{t('demo.noAddBody')}</p>
+          <Link to={`/cellars/${cellarId}`} className="btn btn-primary">{t('demo.backToCellar')}</Link>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="add-bottle-page">
       {/* Label-scan camera modal */}

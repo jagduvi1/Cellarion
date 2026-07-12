@@ -306,6 +306,22 @@ const userSchema = new mongoose.Schema({
   lastImageExportAt: {
     type: Date,
     default: null
+  },
+  // ─── Ephemeral public demo accounts ──────────────────────────────────────
+  // A demo account is a throwaway, auto-expiring user created by
+  // POST /api/auth/demo-login so anonymous visitors can try Cellarion with a
+  // fully-populated (cloned) cellar without signing up. `isDemo` gates a set of
+  // server-side guard rails (no password/account changes, no API tokens, no AI
+  // spend) and `demoExpiresAt` drives the demoSweepJob reaper, which fully
+  // erases the user + every cloned document via purgeUserData once the window
+  // passes. Never granted the somm/admin role; never mailed (unroutable address).
+  isDemo: {
+    type: Boolean,
+    default: false
+  },
+  demoExpiresAt: {
+    type: Date,
+    default: null
   }
 });
 
@@ -318,6 +334,11 @@ userSchema.index({ refreshTokenHash: 1 }, { sparse: true });
 // SSO login resolves the account by (provider, provider's user id) on every
 // federated sign-in — index it so that lookup isn't a full collection scan.
 userSchema.index({ 'authProviders.provider': 1, 'authProviders.providerId': 1 });
+// The demoSweepJob reaper queries { isDemo: true, demoExpiresAt: { $lte: now } }
+// every ~15 min, and demo-login counts live demos ({ isDemo: true }) to enforce
+// the global concurrency ceiling. A partial index keyed to demo rows keeps both
+// cheap and stays empty (zero bytes) for the overwhelming majority of real users.
+userSchema.index({ demoExpiresAt: 1 }, { partialFilterExpression: { isDemo: true } });
 
 // Heal legacy notification-pref shapes before save. Old docs stored
 // `drinkWindow: false` (single boolean); the current schema expects
@@ -356,10 +377,24 @@ userSchema.pre('save', function(next) {
   next();
 });
 
+// Non-login sentinel stored as the password for ephemeral demo accounts: it is
+// not a valid bcrypt hash, so comparePassword always returns false — a demo can
+// never password-login (it authenticates by JWT only, on an unroutable address).
+const DEMO_PASSWORD_SENTINEL = '!demo-no-login!';
+
 // Hash password before saving
 userSchema.pre('save', async function(next) {
   // Only hash if password is modified or new
   if (!this.isModified('password')) {
+    return next();
+  }
+
+  // Ephemeral demo accounts skip the expensive bcrypt hash entirely: they never
+  // password-login, and under a burst of demo-logins N parallel cost-12 hashes
+  // on the single Node thread would degrade latency for everyone. Store the
+  // non-login sentinel instead.
+  if (this.isDemo) {
+    this.password = DEMO_PASSWORD_SENTINEL;
     return next();
   }
 
@@ -465,6 +500,10 @@ userSchema.methods.toJSON = function() {
   // review and acknowledge the update. Derived, never stored.
   const pp = obj.gdprConsent?.privacyPolicy;
   obj.requiresPolicyReconsent = !pp?.accepted || (pp?.version || null) !== CURRENT_PRIVACY_POLICY_VERSION;
+  // Surface the demo flag as a clean boolean so the frontend can show the
+  // persistent "demo resets" banner and hide restricted actions. demoExpiresAt
+  // rides along on obj (null for real users) so the banner can show a countdown.
+  obj.isDemo = !!obj.isDemo;
   return obj;
 };
 

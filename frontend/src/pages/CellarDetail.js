@@ -279,7 +279,7 @@ function CellarDetail() {
         ) : null}
         actions={!loading && (
           <>
-            {canEdit && (
+            {canEdit && !user?.isDemo && (
               <Link to={`/cellars/${id}/add-bottle`} className="btn btn-primary btn-small cph-desktop-only">
                 + {t('cellarDetail.addBottle')}
               </Link>

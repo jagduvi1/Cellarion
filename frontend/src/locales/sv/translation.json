@@ -2621,6 +2621,17 @@
   "announcement": {
     "dismiss": "Stäng"
   },
+  "demo": {
+    "tryDemo": "Testa livedemon",
+    "starting": "Startar demo…",
+    "startError": "Det gick inte att starta en demosession. Försök igen.",
+    "bannerText": "Du utforskar Cellarion-demon — ändringar är tillfälliga och återställs automatiskt.",
+    "bannerTextTimed": "Du utforskar Cellarion-demon — den här sessionen återställs om cirka {{minutes}} min.",
+    "bannerCta": "Skapa din egen gratis vinkällare",
+    "noAddTitle": "Att lägga till flaskor är inte tillgängligt i demon",
+    "noAddBody": "I demon kan du utforska en färdig vinkällare — häll ett glas, flytta flaskor, ordna ställ och bläddra i din statistik. Skapa ett gratiskonto för att börja lägga till egna flaskor.",
+    "backToCellar": "Tillbaka till vinkällaren"
+  },
   "wineLists": {
     "title": "Vinlistor",
     "loadFailed": "Kunde inte ladda vinlistan.",

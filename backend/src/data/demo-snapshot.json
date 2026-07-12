@@ -1,0 +1,38 @@
+{
+  "schema": "cellarion-export@1",
+  "_placeholder": true,
+  "_note": "PLACEHOLDER demo snapshot. Replace with the scrubbed, registry-validated capture of the curated prod cellar (run scripts/validate-demo-snapshot.js before committing the real one). Wines here mirror backend/src/seed-demo.js so a seeded dev DB clones them; unresolved wines are skipped by the registry-safe demo clone, so an empty demo is harmless.",
+  "cellars": [
+    {
+      "cellarName": "Demo Cellar",
+      "description": "A sample cellar to explore Cellarion — add bottles, build racks, and browse drink windows. This demo resets automatically.",
+      "racks": [],
+      "layout": null,
+      "bottles": [
+        {
+          "wineName": "Château Margaux",
+          "producer": "Château Margaux",
+          "country": "France",
+          "region": "Bordeaux",
+          "appellation": "Margaux",
+          "type": "red",
+          "grapes": ["Cabernet Sauvignon", "Merlot"],
+          "vintage": "2015",
+          "currency": "EUR",
+          "bottleSize": "750ml"
+        },
+        {
+          "wineName": "Sauvignon Blanc",
+          "producer": "Cloudy Bay",
+          "country": "New Zealand",
+          "region": "Marlborough",
+          "type": "white",
+          "grapes": ["Sauvignon Blanc"],
+          "vintage": "2022",
+          "currency": "NZD",
+          "bottleSize": "750ml"
+        }
+      ]
+    }
+  ]
+}

@@ -3,14 +3,16 @@ const router = express.Router();
 const mongoose = require('mongoose');
 const WineReport = require('../models/WineReport');
 const WineDefinition = require('../models/WineDefinition');
-const { requireAuth } = require('../middleware/auth');
+const { requireAuth, requireNonDemo } = require('../middleware/auth');
 const { logAudit } = require('../services/audit');
 const { stripHtml } = require('../utils/sanitize');
 
 const VALID_REASONS = ['wrong_info', 'duplicate', 'inappropriate', 'wrong_price', 'wrong_tasting_profile', 'other'];
 
 // POST /api/wine-reports — report a wine
-router.post('/', requireAuth, async (req, res) => {
+// requireNonDemo: wine reports enter the admin moderation queue — demo accounts
+// must not spam it (same class as the guarded wine-requests route).
+router.post('/', requireAuth, requireNonDemo, async (req, res) => {
   try {
     const { wineDefinitionId, reason, details, duplicateOfId } = req.body;
 

@@ -1,5 +1,5 @@
 const express = require('express');
-const { requireAuth } = require('../middleware/auth');
+const { requireAuth, requireNonDemo } = require('../middleware/auth');
 const Recommendation = require('../models/Recommendation');
 const WineDefinition = require('../models/WineDefinition');
 const User = require('../models/User');
@@ -68,7 +68,9 @@ router.get('/sent', async (req, res) => {
 });
 
 // POST /api/recommendations — send a recommendation
-router.post('/', async (req, res) => {
+// requireNonDemo: this sends an email to a third-party recipient — an outbound-
+// email abuse vector a throwaway demo account must not have.
+router.post('/', requireNonDemo, async (req, res) => {
   try {
     const { wineId, recipientId, recipientEmail, note } = req.body;
 

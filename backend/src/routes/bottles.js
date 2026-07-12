@@ -1,5 +1,5 @@
 const express = require('express');
-const { requireAuth } = require('../middleware/auth');
+const { requireAuth, requireNonDemo } = require('../middleware/auth');
 const { requireBottleAccess } = require('../middleware/bottleAccess');
 const Bottle = require('../models/Bottle');
 const Cellar = require('../models/Cellar');
@@ -344,8 +344,13 @@ router.get('/', async (req, res) => {
   }
 });
 
-// POST /api/bottles - Add bottle to cellar (owner or editor)
-router.post('/', async (req, res) => {
+// POST /api/bottles - Add bottle to cellar (owner or editor).
+// requireNonDemo: adding a bottle is intentionally NOT available in the demo.
+// The real add-bottle experience leans on AI (label scan / identify), which is
+// disabled for demo accounts, so rather than offer a lesser AI-free add we keep
+// the demo an explore-and-interact experience on the pre-populated cellar
+// (consume, pour, move, arrange, edit, browse). "Sign up to add your bottles."
+router.post('/', requireNonDemo, async (req, res) => {
   try {
     const {
       cellar,
@@ -509,6 +514,8 @@ router.post('/', async (req, res) => {
     // new wine the user just created), generate one — which also re-embeds the
     // wine so Qdrant carries the taste data. No-op if already enriched / a batch
     // enrichment job is running / AI isn't configured.
+    // (Demo accounts never reach this route — requireNonDemo blocks bottle-add —
+    // so no demo AI/Voyage spend occurs here.)
     enrichWineById(wineDefinition, { budgetUserId: req.user.id }).catch(() => {});
 
     // Fire-and-forget: auto-resolve any restock alerts for this wine
@@ -732,7 +739,10 @@ router.put('/:id', requireBottleAccess('editor'), async (req, res) => {
 
     // If vintage changed, the old (wine, oldVintage) embedding is still in Qdrant
     // but won't match this bottle anymore (user changed the year). Embed the new pair.
-    if (changes.vintage) {
+    // Skipped for demo accounts: a novel year misses the embedding cache and would
+    // fire a paid Voyage call, and a demo's ephemeral edits never need Qdrant
+    // coverage — keeps demo AI/Voyage spend at exactly zero.
+    if (changes.vintage && !req.user.isDemo) {
       embedSinglePair(bottle.wineDefinition._id || bottle.wineDefinition, bottle.vintage).catch(err => console.error('Failed to embed wine-vintage pair after vintage update:', err.message));
     }
 
@@ -875,8 +885,11 @@ router.post('/:id/consume', requireBottleAccess('editor'), async (req, res) => {
       { reason }
     );
 
-    // Fire-and-forget: check if user needs a restock alert (paid plans only)
-    if (reason === 'drank') {
+    // Fire-and-forget: check if user needs a restock alert. Skipped for demo
+    // accounts: on an un-cached (wine, vintage) pair checkRestockGap fires a paid
+    // Voyage embedding call (no budget gate of its own), which would breach the
+    // demo's "zero AI spend" guarantee.
+    if (reason === 'drank' && !req.user.isDemo) {
       checkRestockGap(req.user.id, bottle._id, bottle.cellar).catch(() => {});
     }
 

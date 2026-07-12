@@ -11,7 +11,7 @@ const crypto = require('crypto');
 const generateAccessToken = (user) => {
   const roles = user.roles && user.roles.length > 0 ? user.roles : ['user'];
   return jwt.sign(
-    { id: user._id, roles, plan: user.plan || 'free', planExpiresAt: user.planExpiresAt || null },
+    { id: user._id, roles, plan: user.plan || 'free', planExpiresAt: user.planExpiresAt || null, isDemo: !!user.isDemo },
     process.env.JWT_SECRET,
     { algorithm: 'HS256', expiresIn: process.env.ACCESS_TOKEN_EXPIRES_IN || '15m' }
   );

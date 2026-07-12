@@ -98,6 +98,24 @@
   border-radius: var(--radius-md);
 }
 
+/* button.btn-landing-ghost needs an explicit pointer + inherited font (native
+   <button> defaults otherwise). */
+button.btn-landing-ghost {
+  cursor: pointer;
+  font-family: inherit;
+}
+
+button.btn-landing-ghost:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.landing-demo-error {
+  margin-top: 12px;
+  color: var(--color-danger, #c0392b);
+  font-size: 0.9rem;
+}
+
 /* ── Hero ── */
 .landing-hero {
   position: relative;

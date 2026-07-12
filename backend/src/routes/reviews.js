@@ -1,6 +1,6 @@
 const express = require('express');
 const mongoose = require('mongoose');
-const { requireAuth } = require('../middleware/auth');
+const { requireAuth, requireNonDemo } = require('../middleware/auth');
 const Review = require('../models/Review');
 const ReviewVote = require('../models/ReviewVote');
 const WineDefinition = require('../models/WineDefinition');
@@ -37,7 +37,10 @@ function sanitizeTasting(tasting) {
 }
 
 // POST /api/reviews - Create a review
-router.post('/', async (req, res) => {
+// requireNonDemo: public reviews on shared registry wines persist after the demo
+// account is reaped (anonymised, not erased) — a spam vector. Demo users rate
+// their own bottles instead.
+router.post('/', requireNonDemo, async (req, res) => {
   try {
     const { wineDefinition, bottle, vintage, rating, ratingScale, tasting, visibility } = req.body;
 
@@ -416,7 +419,7 @@ router.delete('/:id', async (req, res) => {
 });
 
 // POST /api/reviews/:id/like - Toggle like
-router.post('/:id/like', async (req, res) => {
+router.post('/:id/like', requireNonDemo, async (req, res) => {
   try {
     if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid review ID' });
     const review = await Review.findById(req.params.id);

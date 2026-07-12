@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const ApiToken = require('../models/ApiToken');
 const User = require('../models/User');
-const { requireAuth } = require('../middleware/auth');
+const { requireAuth, requireNonDemo } = require('../middleware/auth');
 const { logAudit } = require('../services/audit');
 const eventBus = require('../services/eventBus');
 const { passwordConfirmLimiter } = require('../middleware/passwordConfirmLimiter');
@@ -24,8 +24,11 @@ const USER_MINTABLE_SCOPES = TOKEN_SCOPES.filter(s => s !== 'climate');
 // (middleware/apiTokenAuth.js), so a token can never create, list, or revoke
 // tokens — management is a logged-in-session (JWT) capability only.
 
-// POST /api/tokens — create a personal API token (plaintext shown ONCE)
-router.post('/', requireAuth, authLimiter, async (req, res) => {
+// POST /api/tokens — create a personal API token (plaintext shown ONCE).
+// requireNonDemo: a cel_ token authenticates via apiTokenAuth (bypassing the JWT),
+// so it carries no isDemo claim — a demo user minting one would defeat the demo
+// AI/guard gates. Token creation is off-limits to demo accounts entirely.
+router.post('/', requireAuth, requireNonDemo, authLimiter, async (req, res) => {
   const { name, scopes, password } = req.body;
 
   if (!name || typeof name !== 'string' || !name.trim() || name.trim().length > 100) {

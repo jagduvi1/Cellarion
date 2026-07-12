@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
@@ -13,9 +13,29 @@ const LOGO_DARK  = '/cellarion-logo-dark.png';
 
 export default function LandingPage() {
   const { t, i18n } = useTranslation();
-  const { user } = useAuth();
+  const { user, demoLogin } = useAuth();
   const { theme } = useTheme();
+  const navigate = useNavigate();
   const [contactEmail, setContactEmail] = useState(null);
+  const [demoStarting, setDemoStarting] = useState(false);
+  const [demoError, setDemoError] = useState(null);
+
+  // Start an ephemeral demo session and drop the visitor straight into a
+  // populated cellar — the frictionless "try before you sign up" entry point.
+  const handleTryDemo = async () => {
+    if (demoStarting) return;
+    setDemoStarting(true);
+    setDemoError(null);
+    const res = await demoLogin();
+    if (res.success) {
+      navigate('/cellars');
+    } else {
+      setDemoStarting(false);
+      // Only surface a backend-issued message (e.g. "at capacity"); transport/
+      // proxy failures fall back to friendly localized copy — never raw error text.
+      setDemoError(res.serverIssued ? res.error : t('demo.startError'));
+    }
+  };
 
   const features = [
     { icon: '🍷', title: t('landing.featureBottleTitle'), desc: t('landing.featureBottleDesc') },
@@ -149,11 +169,22 @@ export default function LandingPage() {
                 {t('landing.goToCellar')}
               </Link>
             ) : (
-              <Link to="/login" className="btn-landing-primary btn-landing-large">
-                {t('landing.getStarted')}
-              </Link>
+              <>
+                <Link to="/login" className="btn-landing-primary btn-landing-large">
+                  {t('landing.getStarted')}
+                </Link>
+                <button
+                  type="button"
+                  className="btn-landing-ghost btn-landing-large"
+                  onClick={handleTryDemo}
+                  disabled={demoStarting}
+                >
+                  {demoStarting ? t('demo.starting') : t('demo.tryDemo')}
+                </button>
+              </>
             )}
           </div>
+          {demoError && <p className="landing-demo-error" role="alert">{demoError}</p>}
         </div>
       </section>
 

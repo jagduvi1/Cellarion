@@ -123,7 +123,17 @@ async function getEffectiveDailyMax(userId) {
  * when the Anthropic call fails at the transport level so a failed call
  * doesn't consume budget.
  */
-async function tryDebitAi(userId) {
+async function tryDebitAi(userId, { isDemo = false } = {}) {
+  // Ephemeral public-demo accounts get ZERO Anthropic spend: no per-user budget
+  // and no draw on the shared global cap. This denial covers the AI-gated
+  // registry-write paths that run findOrCreateWine only AFTER a debit (label-scan
+  // / identify-text / import). The NON-AI registry-write path (POST
+  // /api/wines/find-or-create) is not downstream of this debit and is guarded
+  // separately with requireNonDemo. The UI surfaces AI features as "sign up to
+  // use"; a direct API call gets this clean denial (`code:'demo_disabled'`).
+  if (isDemo) {
+    return { ok: false, reason: 'demo_disabled', retryAfterSeconds: secondsUntilMidnightUTC() };
+  }
   const cfg = rateLimitsConfig.get();
   // Effective per-user budget: an active admin-granted override wins over the
   // global default (getEffectiveDailyMax). The global cap is never overridden.

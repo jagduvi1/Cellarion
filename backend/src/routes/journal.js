@@ -1,5 +1,5 @@
 const express = require('express');
-const { requireAuth } = require('../middleware/auth');
+const { requireAuth, requireNonDemo } = require('../middleware/auth');
 const JournalEntry = require('../models/JournalEntry');
 const Bottle = require('../models/Bottle');
 const User = require('../models/User');
@@ -229,7 +229,10 @@ router.get('/', async (req, res) => {
 });
 
 // POST /api/journal — create a new entry
-router.post('/', async (req, res) => {
+// requireNonDemo: a public journal entry can tag real users, firing
+// journal_mention notifications to them from an account that then vanishes —
+// notification spam (same class the follows route guards against).
+router.post('/', requireNonDemo, async (req, res) => {
   try {
     const clean = sanitizeEntry(req.body);
 

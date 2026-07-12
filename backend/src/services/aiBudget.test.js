@@ -71,6 +71,17 @@ describe('tryDebitAi', () => {
     expect(globalCount()).toBe(1);
   });
 
+  test('demo accounts are denied with zero spend (no user or global debit)', async () => {
+    const res = await tryDebitAi(USER, { isDemo: true });
+    expect(res.ok).toBe(false);
+    expect(res.reason).toBe('demo_disabled');
+    expect(res.retryAfterSeconds).toBeGreaterThan(0);
+    // The short-circuit runs BEFORE any AiUsage $inc — nothing is billed.
+    expect(userCount()).toBe(0);
+    expect(globalCount()).toBe(0);
+    expect(AiUsage.findOneAndUpdate).not.toHaveBeenCalled();
+  });
+
   test('the increment is the gate: over-budget call is rejected and refunded', async () => {
     setLimits({ budget: 2, globalCap: 20000 });
     expect((await tryDebitAi(USER)).ok).toBe(true);

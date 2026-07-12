@@ -3,7 +3,7 @@ const mongoose = require('mongoose');
 const WineDefinition = require('../models/WineDefinition');
 const Discussion = require('../models/Discussion');
 const searchService = require('../services/search');
-const { requireAuth, optionalAuth } = require('../middleware/auth');
+const { requireAuth, requireNonDemo, optionalAuth } = require('../middleware/auth');
 const { scanLabelFull, identifyWineFromQuery } = require('../services/labelScan');
 const { sanitizeImageBuffer, detectImageFormat } = require('../services/imageSanitizer');
 const { findOrCreateWine } = require('../services/findOrCreateWine');
@@ -34,6 +34,14 @@ const MAX_AI_QUERY_LEN = 300;
  * daily window resets.
  */
 function sendAiBudgetExhausted(res, debit) {
+  // Demo accounts get no AI at all — a distinct, non-retryable 403 so the client
+  // shows "sign up to use AI" rather than a "try again at midnight" budget message.
+  if (debit.reason === 'demo_disabled') {
+    return res.status(403).json({
+      error: 'AI features are not available in the demo. Create a free account to use them.',
+      code: 'demo_ai_disabled',
+    });
+  }
   res.set('Retry-After', String(debit.retryAfterSeconds));
   return res.status(429).json({
     error: 'Daily AI budget reached. AI features reset at midnight UTC.',
@@ -211,7 +219,7 @@ router.post('/scan-label', requireAuth, aiBurstLimiter, asyncHandler(async (req,
   // Debit the shared daily AI budget BEFORE any expensive work (rembg + the
   // Claude vision call); refunded below if the scan fails (mirrors chat's
   // debit-before / refund-on-error pattern).
-  const debit = await tryDebitAi(req.user.id);
+  const debit = await tryDebitAi(req.user.id, { isDemo: req.user.isDemo });
   if (!debit.ok) return sendAiBudgetExhausted(res, debit);
 
   // Phase 1: the billable work (rembg + the Claude vision call). Refund the
@@ -336,7 +344,12 @@ router.post('/scan-label', requireAuth, aiBurstLimiter, asyncHandler(async (req,
 //
 // Pass `confirmCreate: true` after the user has reviewed the soft-zone
 // candidates and explicitly chosen to create a new wine anyway.
-router.post('/find-or-create', requireAuth, async (req, res) => {
+// requireNonDemo: find-or-create is a NON-AI registry-write primitive — on a miss
+// it mints a WineDefinition + Country/Region/Grape into the SHARED registry
+// (reachable via the AddBottle/Wishlist "create new wine" flow). purgeUserData
+// only reassigns createdBy on reap, so those rows would persist forever. A demo
+// must never create registry entries; it can only resolve existing ones elsewhere.
+router.post('/find-or-create', requireAuth, requireNonDemo, async (req, res) => {
   const { name, producer, country, region, appellation, type, grapes, labelImage, confirmCreate } = req.body;
 
   if (!name?.trim() || !producer?.trim()) {
@@ -388,7 +401,7 @@ router.post('/identify-text', requireAuth, aiBurstLimiter, asyncHandler(async (r
   if (!query) return res.status(400).json({ error: 'query is required' });
   if (query.length > MAX_AI_QUERY_LEN) return res.status(400).json({ error: `query must be at most ${MAX_AI_QUERY_LEN} characters` });
 
-  const debit = await tryDebitAi(req.user.id);
+  const debit = await tryDebitAi(req.user.id, { isDemo: req.user.isDemo });
   if (!debit.ok) return sendAiBudgetExhausted(res, debit);
 
   try {
@@ -417,7 +430,7 @@ router.post('/ai-info', requireAuth, aiBurstLimiter, asyncHandler(async (req, re
   if (!query) return res.status(400).json({ error: 'query is required' });
   if (query.length > MAX_AI_QUERY_LEN) return res.status(400).json({ error: `query must be at most ${MAX_AI_QUERY_LEN} characters` });
 
-  const debit = await tryDebitAi(req.user.id);
+  const debit = await tryDebitAi(req.user.id, { isDemo: req.user.isDemo });
   if (!debit.ok) return sendAiBudgetExhausted(res, debit);
 
   try {

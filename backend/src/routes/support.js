@@ -1,14 +1,16 @@
 const express = require('express');
 const router = express.Router();
 const SupportTicket = require('../models/SupportTicket');
-const { requireAuth } = require('../middleware/auth');
+const { requireAuth, requireNonDemo } = require('../middleware/auth');
 const { logAudit } = require('../services/audit');
 const { stripHtml } = require('../utils/sanitize');
 
 const VALID_CATEGORIES = ['bug', 'help', 'feature', 'other'];
 
 // POST /api/support — submit a support ticket
-router.post('/', requireAuth, async (req, res) => {
+// requireNonDemo: support tickets land in the admin queue and would waste admin
+// attention on a throwaway account that's gone before anyone replies.
+router.post('/', requireAuth, requireNonDemo, async (req, res) => {
   try {
     const { category, subject, message } = req.body;
 

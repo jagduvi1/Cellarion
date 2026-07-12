@@ -12,7 +12,7 @@
 const express = require('express');
 const multer = require('multer');
 const yauzl = require('yauzl');
-const { requireAuth } = require('../middleware/auth');
+const { requireAuth, requireNonDemo } = require('../middleware/auth');
 const User = require('../models/User');
 const Cellar = require('../models/Cellar');
 const { logAudit } = require('../services/audit');
@@ -23,7 +23,11 @@ const {
 } = require('../services/cellarImport');
 
 const router = express.Router();
-router.use(requireAuth);
+// requireNonDemo: importing a file into a demo would re-create registry wines
+// verbatim (the known cellar-import registry-pollution vector), drive heavy DB
+// work, and — for the CT path — spend AI. Demo users can't import; "sign up to
+// import your collection".
+router.use(requireAuth, requireNonDemo);
 
 // The ZIP can hold many images; cap generously but bound memory (entries are
 // buffered). A data-only JSON is tiny; the cap mainly guards the image ZIP.

@@ -1,3 +1,17 @@
+/* Demo accounts can't add bottles — a centered sign-up nudge replaces the form. */
+.add-bottle-demo-block {
+  max-width: 560px;
+  margin: 2rem auto;
+  text-align: center;
+}
+.add-bottle-demo-block h2 {
+  margin-top: 0;
+}
+.add-bottle-demo-block p {
+  margin: 0.75rem 0 1.25rem;
+  color: var(--color-text-muted, #666);
+}
+
 .add-bottle-page {
   max-width: 900px;
   margin: 0 auto;
