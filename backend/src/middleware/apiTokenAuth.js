@@ -27,7 +27,9 @@ const LAST_USED_THROTTLE_MS = 60 * 60 * 1000; // 1 hour
  *   read    — the GETs the Home Assistant integration uses: stats, cellars,
  *             bottles, notifications, the SSE event stream, and /auth/whoami
  *             (its own account id, for reauth same-account verification — id
- *             only, no PII, unlike /auth/me).
+ *             only, no PII, unlike /auth/me). Also POST /api/mcp: the Model
+ *             Context Protocol endpoint, whose per-tool authorization is
+ *             enforced inside the MCP registry (a read token sees read tools).
  *   consume — POST /api/bottles/:id/consume only.
  *   climate — POST /api/climate/ingest only: the sensor-device credential.
  *             A leaked device token can post readings and nothing else.
@@ -42,6 +44,12 @@ const SCOPE_ALLOWLIST = {
     // Exact match only — the caller's own account id (id, no PII). Anchored so
     // it can never widen to /api/auth/me or any other /api/auth/* route.
     { method: 'GET', pattern: /^\/api\/auth\/whoami$/ },
+    // MCP endpoint (Model Context Protocol). A single POST envelope; which tools
+    // the caller may actually invoke is enforced *inside* by the MCP registry's
+    // scope filter (a read token only ever sees read/public tools), so reaching
+    // this path is safe. Anchored exact — cannot widen to any other /api/mcp/*.
+    // When consume/write MCP tools ship, add this entry under those scopes too.
+    { method: 'POST', pattern: /^\/api\/mcp$/ },
   ],
   consume: [
     { method: 'POST', pattern: /^\/api\/bottles\/[a-f0-9]{24}\/consume$/ },

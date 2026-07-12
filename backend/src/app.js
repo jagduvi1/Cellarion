@@ -65,6 +65,7 @@ const stripeRoute = require('./routes/stripe');
 const tokensRoute = require('./routes/tokens');
 const eventsRoute = require('./routes/events');
 const climateRoute = require('./routes/climate');
+const mcpRoute = require('./routes/mcp');
 const rateLimitsConfig = require('./config/rateLimits');
 const aiConfig = require('./config/aiConfig');
 const announcementConfig = require('./config/announcement');
@@ -140,6 +141,24 @@ if (indexNowKey) {
 // sitemap/OG/public-wine-list routes that are mounted before the limiters.
 const isStripeWebhook = (req) => req.originalUrl.split('?')[0] === '/api/stripe/webhook';
 
+// The MCP endpoint is a single JSON-RPC envelope (POST-only, stateless Streamable
+// HTTP). One POST may be a harmless `initialize`/`tools/list` or a `tools/call`
+// that writes — the HTTP write limiter can't tell them apart, so limiting it at
+// this layer would throttle the read-mostly handshake while providing no real
+// write protection. Per-tool authorization (registry scope filter) and, for
+// write tools, the write-safety layers govern MCP mutations instead. It stays
+// under the global apiLimiter, so it is never unbounded.
+//
+// NOTE for future write/DB tools: a JSON-RPC body may be a *batch* (array) of
+// calls, so one HTTP request can fan out to many tool invocations — apiLimiter
+// counts requests, not calls. Before the first tool that touches Mongo/AI ships,
+// add a per-tool/per-batch guard (and likely a dedicated MCP limiter). Today the
+// only tool is get_source_info (in-memory, no I/O), so this is a non-issue.
+const isMcp = (req) => {
+  const p = req.originalUrl.split('?')[0];
+  return p === '/api/mcp' || p === '/api/mcp/';
+};
+
 // Global API rate limiter — default 200 requests per 15 min per IP (admin-configurable)
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -162,7 +181,7 @@ const writeLimiter = rateLimit({
   keyGenerator: (req) => rateLimitKey(req),
   standardHeaders: true,
   legacyHeaders: false,
-  skip: (req) => isStripeWebhook(req) || req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS',
+  skip: (req) => isStripeWebhook(req) || isMcp(req) || req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS',
   handler: (req, res) => {
     logAudit(req, 'system.rate_limit_exceeded', {}, { limiter: 'write', limit: rateLimitsConfig.get().write.max });
     res.status(429).json({ error: 'Too many write requests, please try again later' });
@@ -233,6 +252,10 @@ app.use('/api/stripe', stripeRoute);
 app.use('/api/tokens', tokensRoute);
 app.use('/api/events', eventsRoute);
 app.use('/api/climate', climateRoute);
+// Model Context Protocol endpoint — lets an external AI (Claude Desktop, etc.)
+// read the connected user's own cellar over a scoped `cel_` token or a JWT.
+// Stateless Streamable HTTP; per-tool authorization lives in the MCP registry.
+app.use('/api/mcp', mcpRoute);
 
 // 404 handler
 app.use((req, res) => {
