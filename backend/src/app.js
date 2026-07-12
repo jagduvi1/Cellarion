@@ -10,6 +10,7 @@ const { uploadsGuard } = require('./middleware/uploadsStatic');
 const healthRoute = require('./routes/health');
 const siteRoute = require('./routes/site');
 const authRoute = require('./routes/auth');
+const oauthRoute = require('./routes/oauth');
 const usersRoute = require('./routes/users');
 const winesRoute = require('./routes/wines');
 const cellarsRoute = require('./routes/cellars');
@@ -177,6 +178,10 @@ app.use('/api/uploads', uploadsGuard, express.static('/app/uploads'));
 app.use('/api/health', healthRoute);
 app.use('/api/site', siteRoute);
 app.use('/api/auth', authRoute);
+// SSO / OAuth endpoints (Google) live under the same /api/auth prefix. Mounted
+// after authRoute; their subpaths (/google, /sso/providers) don't collide with
+// the password-auth routes.
+app.use('/api/auth', oauthRoute);
 app.use('/api/users', usersRoute);
 app.use('/api/wines', winesRoute);
 app.use('/api/cellars', cellarsRoute);

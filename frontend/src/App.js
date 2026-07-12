@@ -14,6 +14,7 @@ import './styles/common.css';
 // The initial bundle only includes Layout, ProtectedRoute, and routing logic.
 const LandingPage     = lazy(() => import('./pages/LandingPage'));
 const Login           = lazy(() => import('./pages/Login'));
+const OAuthCallback   = lazy(() => import('./pages/OAuthCallback'));
 const VerifyEmail     = lazy(() => import('./pages/VerifyEmail'));
 const ResetPassword   = lazy(() => import('./pages/ResetPassword'));
 const PrivacyPolicy   = lazy(() => import('./pages/PrivacyPolicy'));
@@ -92,6 +93,7 @@ function AppRoutes() {
       <Routes>
         {/* Public routes */}
         <Route path="/login" element={user ? <Navigate to="/cellars" replace /> : <Login />} />
+        <Route path="/login/callback" element={<OAuthCallback />} />
         <Route path="/verify-email" element={<VerifyEmail />} />
         <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="/privacy" element={<PrivacyPolicy />} />

@@ -130,6 +130,12 @@ services:
       - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET:-}
       - STRIPE_SUPPORTER_PRICE_ID=${STRIPE_SUPPORTER_PRICE_ID:-}
       - STRIPE_PATRON_PRICE_ID=${STRIPE_PATRON_PRICE_ID:-}
+      # Google Sign-In (SSO) — optional; unset leaves email/password login
+      # untouched. The backend env block enumerates vars explicitly, so these
+      # must be forwarded or the container never sees them even when set in .env.
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET:-}
+      - GOOGLE_CALLBACK_URL=${GOOGLE_CALLBACK_URL:-}
     volumes:
       - image-data:/app/uploads
     deploy:
