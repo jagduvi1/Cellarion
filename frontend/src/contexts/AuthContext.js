@@ -247,6 +247,34 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  // Start an ephemeral demo session — no signup. The backend creates a throwaway,
+  // auto-expiring account with a populated (cloned) cellar and returns the same
+  // { token, user } shape as login; user.isDemo drives the persistent banner and
+  // hides restricted actions app-wide with no further plumbing.
+  const demoLogin = async () => {
+    try {
+      const response = await fetch('/api/auth/demo-login', {
+        method: 'POST',
+        credentials: 'include'
+      });
+      // Parse defensively: a non-JSON proxy body (502/504 HTML during a deploy)
+      // must not throw a raw SyntaxError that ends up rendered on the public
+      // landing page. `serverIssued` tells the caller whether the backend
+      // actually sent a message (surface it) or this was a transport/proxy
+      // failure (use generic localized copy).
+      let data = null;
+      try { data = await response.json(); } catch { /* non-JSON body */ }
+      if (!response.ok) {
+        return { success: false, error: data?.error, code: data?.code, serverIssued: !!data?.error };
+      }
+      applySession(data.token, data.user);
+      return { success: true };
+    } catch {
+      // Transport failure — fetch rejected; no server-issued message.
+      return { success: false, error: null, serverIssued: false };
+    }
+  };
+
   const verifyEmail = async (token) => {
     try {
       const response = await fetch(`/api/auth/verify-email?token=${encodeURIComponent(token)}`, {
@@ -308,6 +336,7 @@ export const AuthProvider = ({ children }) => {
     loading,
     register,
     login,
+    demoLogin,
     logout,
     verifyEmail,
     updatePreferences,

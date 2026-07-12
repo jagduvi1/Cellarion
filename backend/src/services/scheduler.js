@@ -7,6 +7,7 @@ const { runCellarRetentionPurge } = require('./cellarRetentionJob');
 const { runRecommendationEmailScrub } = require('./recommendationRetentionJob');
 const { runSecurityAlertCheck } = require('./securityAlertJob');
 const { runClimateOfflineCheck } = require('./climateOfflineJob');
+const { runDemoSweep } = require('./demoSweepJob');
 
 /**
  * Start all scheduled cron jobs.
@@ -100,7 +101,21 @@ function startScheduler() {
     }
   });
 
-  console.log('[scheduler] Cron jobs registered (drink-window daily 06:00 UTC, value-snapshot weekly Sun 01:00 UTC, community-price weekly Sun 02:00 UTC, user-deletion daily 03:00 UTC, cellar-retention daily 04:00 UTC, recommendation-email-scrub daily 04:30 UTC, security-spike every 15 min, climate-offline every 15 min)');
+  // Ephemeral demo sweep: every 15 minutes, offset (5,20,35,50) so it doesn't
+  // pile onto the two */15 jobs above. Fully erases expired demo accounts + all
+  // cloned data via the purgeUserData cascade. A short cadence keeps dead demo
+  // data (and the global-ceiling headroom) from accumulating between the hourly-
+  // scale TTLs. Cheap: a partial-indexed query over only demo rows.
+  cron.schedule('5,20,35,50 * * * *', async () => {
+    try {
+      const result = await runDemoSweep();
+      if (result?.deleted > 0) console.log('[scheduler] Demo sweep deleted', result.deleted, 'expired demo account(s)');
+    } catch (err) {
+      console.error('[scheduler] Demo sweep failed:', err);
+    }
+  });
+
+  console.log('[scheduler] Cron jobs registered (drink-window daily 06:00 UTC, value-snapshot weekly Sun 01:00 UTC, community-price weekly Sun 02:00 UTC, user-deletion daily 03:00 UTC, cellar-retention daily 04:00 UTC, recommendation-email-scrub daily 04:30 UTC, security-spike every 15 min, climate-offline every 15 min, demo-sweep every 15 min offset)');
 }
 
 module.exports = { startScheduler };

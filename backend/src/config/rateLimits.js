@@ -60,6 +60,19 @@ const defaults = {
   // Default 30/hour bounds worst-case to ~7 GB/day per user — generous for
   // real use (a session of adding bottles rarely exceeds 30 uploads).
   imageUploadBurst: { max: 30, windowMs: 60 * 60 * 1000 },
+  // Ephemeral public-demo accounts (POST /api/auth/demo-login). Cloning a
+  // snapshot cellar per visitor is write-heavy, so this is bounded on three
+  // axes: per-IP creation rate, a DURABLE global ceiling on concurrent live
+  // demos (the real backstop — it survives restarts, unlike the in-memory
+  // per-IP limiter), and a short account lifetime the demoSweepJob enforces.
+  // Conservative defaults sized for a 4 GB VM: ~100 live demos × a small
+  // snapshot. All runtime-tunable by SuperAdmin.
+  demo: {
+    createMax:      3,                  // demo creations per IP per window
+    createWindowMs: 60 * 60 * 1000,     // 1 hour
+    globalMax:      100,                // max concurrent live demo accounts
+    ttlMs:          2 * 60 * 60 * 1000, // demo account lifetime (2 hours)
+  },
 };
 
 let cache = {
@@ -74,6 +87,7 @@ let cache = {
   aiImportPerRequestCap: { ...defaults.aiImportPerRequestCap },
   aiGlobalDailyCap: { ...defaults.aiGlobalDailyCap },
   imageUploadBurst: { ...defaults.imageUploadBurst },
+  demo: { ...defaults.demo },
 };
 
 async function load() {
@@ -115,6 +129,12 @@ async function load() {
         imageUploadBurst: {
           max:      doc.value.imageUploadBurst?.max      ?? defaults.imageUploadBurst.max,
           windowMs: doc.value.imageUploadBurst?.windowMs ?? defaults.imageUploadBurst.windowMs,
+        },
+        demo: {
+          createMax:      doc.value.demo?.createMax      ?? defaults.demo.createMax,
+          createWindowMs: doc.value.demo?.createWindowMs ?? defaults.demo.createWindowMs,
+          globalMax:      doc.value.demo?.globalMax      ?? defaults.demo.globalMax,
+          ttlMs:          doc.value.demo?.ttlMs          ?? defaults.demo.ttlMs,
         },
       };
     }

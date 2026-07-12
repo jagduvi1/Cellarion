@@ -1,0 +1,31 @@
+/* Demo banner: reuses the .announcement-banner layout (see AnnouncementBanner.css)
+   but is persistent (no dismiss button) and carries an inline sign-up CTA. */
+
+.demo-banner {
+  gap: 0.75rem;
+}
+
+.demo-banner-cta {
+  flex: 0 0 auto;
+  border: 1px solid currentColor;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: 600;
+  padding: 0.25rem 0.75rem;
+  border-radius: 999px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.demo-banner-cta:hover {
+  background: currentColor;
+}
+
+/* On hover the pill fills with currentColor; keep the label readable by flipping
+   it to the banner's own background. Works in both light and dark themes since it
+   inherits from the surrounding banner surface. */
+.demo-banner-cta:hover {
+  color: var(--color-bg, #fff);
+}

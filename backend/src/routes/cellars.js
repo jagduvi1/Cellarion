@@ -1,5 +1,5 @@
 const express = require('express');
-const { requireAuth } = require('../middleware/auth');
+const { requireAuth, requireNonDemo } = require('../middleware/auth');
 const Cellar = require('../models/Cellar');
 const Bottle = require('../models/Bottle');
 const Rack = require('../models/Rack');
@@ -1476,7 +1476,10 @@ router.delete('/:id', async (req, res) => {
 });
 
 // POST /api/cellars/:id/members - Add a member (owner only)
-router.post('/:id/members', async (req, res) => {
+// requireNonDemo: inviting a member sends an email to an arbitrary address — an
+// outbound-email/PII spam vector a throwaway demo must not have. A demo user can
+// explore a populated cellar but can't invite others to it.
+router.post('/:id/members', requireNonDemo, async (req, res) => {
   try {
     if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
     const { email, role } = req.body;

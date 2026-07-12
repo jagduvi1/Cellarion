@@ -33,7 +33,7 @@ const WineReport = require('../models/WineReport');
 const WishlistItem = require('../models/WishlistItem');
 const PriceTrackingRequest = require('../models/PriceTrackingRequest');
 const PriceTrackingSkip = require('../models/PriceTrackingSkip');
-const { requireAuth } = require('../middleware/auth');
+const { requireAuth, requireNonDemo } = require('../middleware/auth');
 const { buildUserExport } = require('../services/userDataRegistry');
 const { buildCellarDataExport, EXPORT_README } = require('../services/cellarExport');
 const { safeUploadPath } = require('../services/imageProcessor');
@@ -564,8 +564,10 @@ router.get('/me/export-summary', requireAuth, async (req, res) => {
   }
 });
 
-// DELETE /api/users/me — schedule account deletion (7-day cooling-off period)
-router.delete('/me', requireAuth, async (req, res) => {
+// DELETE /api/users/me — schedule account deletion (7-day cooling-off period).
+// requireNonDemo: demo accounts are throwaway and auto-expire via the reaper;
+// the cooling-off deletion flow (and its email) makes no sense for them.
+router.delete('/me', requireAuth, requireNonDemo, async (req, res) => {
   const userId = req.user.id;
   try {
     const user = await User.findById(userId);

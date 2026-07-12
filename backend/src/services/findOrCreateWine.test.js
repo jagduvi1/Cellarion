@@ -423,6 +423,28 @@ describe('findOrCreateWine — creation', () => {
     expect(searchService.indexWine).toHaveBeenCalledWith('wine-new');
   });
 
+  test('matchOnly: no match anywhere returns { noMatch: true } and creates NOTHING (registry-safe demo clone)', async () => {
+    const result = await findOrCreateWine(INPUT, USER_ID, { confirmCreate: true, matchOnly: true });
+
+    expect(result.wine).toBeNull();
+    expect(result.noMatch).toBe(true);
+    // The load-bearing guarantee: a match-only resolve never mints a
+    // WineDefinition, taxonomy, or search index entry on a miss.
+    expect(WineDefinition).not.toHaveBeenCalled(); // no `new WineDefinition(...)`
+    expect(Country.findOne).not.toHaveBeenCalled();
+    expect(Region.findOne).not.toHaveBeenCalled();
+    expect(Grape.findOne).not.toHaveBeenCalled();
+    expect(searchService.indexWine).not.toHaveBeenCalled();
+  });
+
+  test('matchOnly still resolves an EXACT existing match (created: false), never creating', async () => {
+    WineDefinition.findOne.mockReturnValue(findOneChain(EXISTING_WINE));
+    const result = await findOrCreateWine(INPUT, USER_ID, { matchOnly: true });
+    expect(result.wine).toBe(EXISTING_WINE);
+    expect(result.created).toBe(false);
+    expect(WineDefinition).not.toHaveBeenCalled();
+  });
+
   test('unknown wine type defaults to "red"; valid types are kept', async () => {
     await findOrCreateWine({ ...INPUT, type: 'orange' }, USER_ID);
     expect(WineDefinition.mock.calls[0][0].type).toBe('red');

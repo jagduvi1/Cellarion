@@ -1,5 +1,5 @@
 const express = require('express');
-const { requireAuth } = require('../middleware/auth');
+const { requireAuth, requireNonDemo } = require('../middleware/auth');
 const Follow = require('../models/Follow');
 const User = require('../models/User');
 const Notification = require('../models/Notification');
@@ -12,7 +12,9 @@ const router = express.Router();
 router.use(requireAuth);
 
 // POST /api/follows/:userId - Follow a user
-router.post('/:userId', async (req, res) => {
+// requireNonDemo: following notifies a real user, from an account that then
+// vanishes — notification spam. Demo accounts don't create follow relationships.
+router.post('/:userId', requireNonDemo, async (req, res) => {
   try {
     const targetId = req.params.userId;
     if (!isValidId(targetId)) return res.status(400).json({ error: 'Invalid user ID' });

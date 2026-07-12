@@ -3,7 +3,7 @@ const express = require('express');
 const fs = require('fs');
 const mongoose = require('mongoose');
 const rateLimit = require('express-rate-limit');
-const { requireAuth } = require('../middleware/auth');
+const { requireAuth, requireNonDemo } = require('../middleware/auth');
 const { upload, ORIGINALS_DIR } = require('../config/upload');
 const BottleImage = require('../models/BottleImage');
 const Bottle = require('../models/Bottle');
@@ -170,7 +170,10 @@ function handleImageUpload(req, res, next) {
 }
 
 // POST /api/images/upload - Upload image for a bottle or wine definition
-router.post('/upload', requireAuth, imageUploadLimiter, handleImageUpload, async (req, res) => {
+// requireNonDemo: image upload writes a 10 MB original to disk and spawns a
+// rembg background-removal job (memory-heavy, shared with real users' label
+// scans). The demo is JSON-only / zero-compute by design, so uploads are off.
+router.post('/upload', requireAuth, requireNonDemo, imageUploadLimiter, handleImageUpload, async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ error: 'No image file provided' });
@@ -416,7 +419,7 @@ router.get('/:id', requireAuth, async (req, res) => {
 });
 
 // POST /api/images/remove-bg-preview - Remove background from a base64 image (no DB storage)
-router.post('/remove-bg-preview', requireAuth, bgRemovalLimiter, async (req, res) => {
+router.post('/remove-bg-preview', requireAuth, requireNonDemo, bgRemovalLimiter, async (req, res) => {
   try {
     const { image } = req.body;
     if (!image || typeof image !== 'string') {
@@ -517,7 +520,7 @@ router.post('/link-to-bottle', requireAuth, async (req, res) => {
 });
 
 // POST /api/images/:id/retry - Retry background removal
-router.post('/:id/retry', requireAuth, async (req, res) => {
+router.post('/:id/retry', requireAuth, requireNonDemo, async (req, res) => {
   try {
     if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
 

@@ -367,8 +367,11 @@ async function createRacks(cellarId, userId, cellar, items, result) {
 }
 
 /** Resolve a wine: auto-create via findOrCreateWine, else fall back to a
- *  pending WineRequest (mirrors the existing importer's no-match path). */
-async function resolveWine(item, userId, cache, result) {
+ *  pending WineRequest (mirrors the existing importer's no-match path).
+ *  In demoMode, resolve to an EXISTING registry wine only (matchOnly) and skip
+ *  the bottle on a miss — a throwaway demo clone must never mint a
+ *  WineDefinition, taxonomy, or WineRequest in the shared registry. */
+async function resolveWine(item, userId, cache, result, demoMode = false) {
   const name = (item.wineName || item.producer || '').trim();
   const producer = (item.producer || '').trim();
   if (!name) return { error: 'Wine name or producer is required' };
@@ -379,7 +382,7 @@ async function resolveWine(item, userId, cache, result) {
         appellation: item.appellation, type: item.type,
         grapes: Array.isArray(item.grapes) ? item.grapes : [] },
       userId,
-      { confirmCreate: true } // non-interactive: match >= 0.95 or create
+      { confirmCreate: true, matchOnly: demoMode } // demo: match existing only; else match >= 0.95 or create
     );
     if (wine) {
       if (created) result.winesCreated++;
@@ -389,6 +392,14 @@ async function resolveWine(item, userId, cache, result) {
     // Most commonly: country missing (findOrCreateWine throws 400). Fall through
     // to a WineRequest so the bottle is still imported (pending admin review).
     if (err.status !== 400) console.warn('[cellarImport] findOrCreateWine error:', err.message);
+  }
+
+  // Demo clone: never touch the shared registry on a miss — skip the bottle.
+  // The snapshot fixture is pre-validated so every wine resolves exact; this is
+  // the defense-in-depth backstop if a snapshot ever drifts from the registry.
+  if (demoMode) {
+    result.winesSkipped = (result.winesSkipped || 0) + 1;
+    return { skip: true };
   }
 
   const key = `${name.toLowerCase()}|${producer.toLowerCase()}`;
@@ -691,7 +702,7 @@ async function createLayout(cellarId, layout, result) {
  * `result`; only an unexpected failure rejects. Returns the ids of the active
  * bottles created, for search indexing.
  */
-async function buildCellarContents({ cellarId, ownerId, userId, cellar, items, imagesByIndex, anchor, getFileBuffer, defaultCurrency, result }) {
+async function buildCellarContents({ cellarId, ownerId, userId, cellar, items, imagesByIndex, anchor, getFileBuffer, defaultCurrency, result, demoMode = false }) {
   // Racks (exact geometry, fallback inference), then the 3D room layout.
   await createRacks(cellarId, ownerId, cellar, items, result);
   await createLayout(cellarId, cellar.layout, result);
@@ -723,8 +734,11 @@ async function buildCellarContents({ cellarId, ownerId, userId, cellar, items, i
         continue;
       }
 
-      const wine = await resolveWine(item, userId, requestCache, result);
+      const wine = await resolveWine(item, userId, requestCache, result, demoMode);
       if (wine.error) { result.errors.push({ index: i, reason: wine.error }); continue; }
+      // Demo clone: a wine that didn't resolve to an existing registry entry is
+      // skipped rather than imported against a freshly-minted definition.
+      if (wine.skip) continue;
 
       const bottle = buildBottle({
         cellarId, ownerId, item, canonicalVintage,
@@ -772,15 +786,21 @@ async function buildCellarContents({ cellarId, ownerId, userId, cellar, items, i
       if (bottle.status === 'active') createdActiveIds.push(bottle._id);
 
       await attachImages(bottle, imagesByIndex[i], userId, getFileBuffer, result, wineImageDedup, i);
-      await attachReviews(bottle, item.reviews, userId, wine.wineDefinitionId, result);
-      await attachMaturity(item.maturity, wine.wineDefinitionId, canonicalVintage, result, seenMaturity);
+      // Demo clones deliberately create NOTHING in the shared registry: no
+      // disposable-author public reviews, no WineVintageProfile, no pending-somm
+      // queue entries. The demo bottle still shows its drink window from the
+      // registry wine's existing profile at read time.
+      if (!demoMode) {
+        await attachReviews(bottle, item.reviews, userId, wine.wineDefinitionId, result);
+        await attachMaturity(item.maturity, wine.wineDefinitionId, canonicalVintage, result, seenMaturity);
+      }
 
       // Seed the sommelier maturity queue for resolved wines that didn't carry a
       // reviewed window in the export (attachMaturity only restores existing
       // curated data). Mirrors the hand-add / CSV-import behaviour so imported
       // wines surface for a somm. Idempotent ($setOnInsert never clobbers the
       // reviewed profile above) and deduped per wine+vintage.
-      if (wine.wineDefinitionId) {
+      if (!demoMode && wine.wineDefinitionId) {
         const pk = `${wine.wineDefinitionId}:${canonicalVintage}`;
         if (!seenPendingProfile.has(pk)) {
           seenPendingProfile.add(pk);
@@ -837,7 +857,11 @@ async function buildCellarContents({ cellarId, ownerId, userId, cellar, items, i
  *
  * @param userId   importing user (becomes owner of created cellar/bottles/images)
  * @param cellar   one entry from parseCellarExport().cellars
- * @param opts     { targetName, mode: 'create'|'overwrite', getFileBuffer(archivePath)->Buffer|null, defaultCurrency }
+ * @param opts     { targetName, mode: 'create'|'overwrite', getFileBuffer(archivePath)->Buffer|null, defaultCurrency, demoMode }
+ *                 demoMode=true → registry-safe clone: resolve wines to existing
+ *                 registry entries only (never create WineDefinition/taxonomy/
+ *                 WineRequest), and skip reviews / maturity / pending-somm-profile
+ *                 side effects. Used by the ephemeral public-demo account clone.
  * @returns per-cellar result object
  */
 async function importCellar(userId, cellar, opts) {
@@ -853,6 +877,7 @@ async function importCellar(userId, cellar, opts) {
     imagesDeduped: 0,
     imagesSkipped: 0,
     winesCreated: 0,
+    winesSkipped: 0,
     wineRequests: 0,
     reviewsCreated: 0,
     reviewsSkipped: 0,
@@ -889,6 +914,7 @@ async function importCellar(userId, cellar, opts) {
       cellarId: buildCellar._id, ownerId: buildCellar.user, userId, cellar,
       items, imagesByIndex, anchor, getFileBuffer,
       defaultCurrency: opts.defaultCurrency, result,
+      demoMode: !!opts.demoMode,
     });
     if (liveCellar) {
       swapStarted = true;

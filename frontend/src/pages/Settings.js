@@ -413,7 +413,8 @@ function Settings() {
         </form>
       </div>
 
-      {/* ── Change password card ── */}
+      {/* ── Change password card (hidden for demo accounts — no credential changes) ── */}
+      {!user?.isDemo && (
       <div className="card settings-card">
         <h2 className="settings-section-title">{t('settings.changePassword.title')}</h2>
         <p className="settings-hint">{t('settings.changePassword.hint')}</p>
@@ -474,12 +475,13 @@ function Settings() {
           </div>
         </form>
       </div>
+      )}
 
-      {/* ── API tokens card ── */}
-      <ApiTokensSection />
+      {/* ── API tokens card (hidden for demo — token creation is blocked) ── */}
+      {!user?.isDemo && <ApiTokensSection />}
 
-      {/* ── Climate devices card ── */}
-      <ClimateDevicesSection />
+      {/* ── Climate devices card (hidden for demo) ── */}
+      {!user?.isDemo && <ClimateDevicesSection />}
 
       {/* ── Your Supporter Tier card ── */}
       <div className="card settings-card settings-plan-card">
@@ -785,7 +787,8 @@ function Settings() {
         </p>
       </div>
 
-      {/* ── Take your cellars with you (portability / anti-lock-in) ── */}
+      {/* ── Portability (hidden for demo — cellar import is blocked, export is moot) ── */}
+      {!user?.isDemo && (
       <div className="card settings-card">
         <h2 className="settings-section-title">{t('settings.portability.title', 'Take your cellars with you')}</h2>
         <p className="settings-hint">
@@ -802,8 +805,10 @@ function Settings() {
           </Trans>
         </p>
       </div>
+      )}
 
-      {/* ── Danger zone ── */}
+      {/* ── Danger zone (hidden for demo — account deletion is blocked) ── */}
+      {!user?.isDemo && (
       <div className="card settings-card settings-danger-card">
         <h2 className="settings-section-title settings-danger-title">{t('settings.danger.title', 'Danger zone')}</h2>
         {isDeletionScheduled ? (
@@ -867,6 +872,7 @@ function Settings() {
           </>
         )}
       </div>
+      )}
 
       {appVersion && (
         <p className="settings-version">

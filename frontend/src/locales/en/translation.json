@@ -2621,6 +2621,17 @@
   "announcement": {
     "dismiss": "Dismiss"
   },
+  "demo": {
+    "tryDemo": "Try the live demo",
+    "starting": "Starting demo…",
+    "startError": "Could not start a demo session. Please try again.",
+    "bannerText": "You're exploring the Cellarion demo — changes are temporary and reset automatically.",
+    "bannerTextTimed": "You're exploring the Cellarion demo — this session resets in about {{minutes}} min.",
+    "bannerCta": "Create your own free cellar",
+    "noAddTitle": "Adding bottles isn't available in the demo",
+    "noAddBody": "The demo lets you explore a ready-made cellar — pour a glass, move bottles, arrange racks and browse your stats. Create a free account to start adding your own bottles.",
+    "backToCellar": "Back to the cellar"
+  },
   "wineLists": {
     "title": "Wine Lists",
     "loadFailed": "Failed to load wine list.",

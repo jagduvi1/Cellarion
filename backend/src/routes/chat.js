@@ -77,6 +77,12 @@ async function getChatUsage(userId) {
  * or sends an error response and returns null.
  */
 async function validateAndCheckLimit(req, res) {
+  // Ephemeral demo accounts get no AI — block chat before reserving any per-user
+  // quota (ChatUsage) or touching the shared global cap / Anthropic.
+  if (req.user?.isDemo) {
+    res.status(403).json({ error: 'Cellar Chat is not available in the demo. Create a free account to use it.', code: 'demo_ai_disabled' });
+    return null;
+  }
   const cfg = aiConfig.get();
   if (!cfg.chatEnabled) {
     res.status(503).json({ error: 'Cellar Chat is currently disabled.' });

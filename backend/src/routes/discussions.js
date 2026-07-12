@@ -1,6 +1,6 @@
 const express = require('express');
 const mongoose = require('mongoose');
-const { requireAuth, optionalAuth, requireModeratorOrAdmin, isModerator } = require('../middleware/auth');
+const { requireAuth, requireNonDemo, optionalAuth, requireModeratorOrAdmin, isModerator } = require('../middleware/auth');
 const Discussion = require('../models/Discussion');
 const { CATEGORIES } = require('../models/Discussion');
 const DiscussionReply = require('../models/DiscussionReply');
@@ -405,7 +405,7 @@ router.get('/:idOrSlug', optionalAuth, async (req, res) => {
 });
 
 // POST /api/discussions - Create a discussion
-router.post('/', requireAuth, async (req, res) => {
+router.post('/', requireAuth, requireNonDemo, async (req, res) => {
   try {
     if (await checkDiscussionBan(req, res)) return;
 
@@ -662,7 +662,7 @@ router.get('/:idOrSlug/replies', optionalAuth, async (req, res) => {
 });
 
 // POST /api/discussions/:idOrSlug/replies - Create a reply
-router.post('/:idOrSlug/replies', requireAuth, async (req, res) => {
+router.post('/:idOrSlug/replies', requireAuth, requireNonDemo, async (req, res) => {
   try {
     if (await checkDiscussionBan(req, res)) return;
 
@@ -991,7 +991,7 @@ router.get('/:discussionId/replies/:replyId/original', requireAuth, requireModer
 //
 // Self-reactions are allowed (Slack/Discord/GitHub all do this — letting an
 // author 🥂 their own answer is a normal interaction).
-router.post('/:discussionId/replies/:replyId/reactions', requireAuth, async (req, res) => {
+router.post('/:discussionId/replies/:replyId/reactions', requireAuth, requireNonDemo, async (req, res) => {
   try {
     if (!isValidId(req.params.replyId)) return res.status(400).json({ error: 'Invalid reply ID' });
     const { kind } = req.body || {};
@@ -1167,7 +1167,7 @@ router.patch('/:idOrSlug/move', requireAuth, requireModeratorOrAdmin, async (req
 // ─── Reporting ──────────────────────────────────────────────────────────────
 
 // POST /api/discussions/:idOrSlug/report - Report a discussion
-router.post('/:idOrSlug/report', requireAuth, async (req, res) => {
+router.post('/:idOrSlug/report', requireAuth, requireNonDemo, async (req, res) => {
   try {
     const discussion = await findDiscussionByIdOrSlug(req.params.idOrSlug);
     if (!discussion) return res.status(404).json({ error: 'Discussion not found' });
@@ -1196,7 +1196,7 @@ router.post('/:idOrSlug/report', requireAuth, async (req, res) => {
 });
 
 // POST /api/discussions/:discussionId/replies/:replyId/report - Report a reply
-router.post('/:discussionId/replies/:replyId/report', requireAuth, async (req, res) => {
+router.post('/:discussionId/replies/:replyId/report', requireAuth, requireNonDemo, async (req, res) => {
   try {
     if (!isValidId(req.params.replyId)) return res.status(400).json({ error: 'Invalid reply ID' });
 

@@ -1,5 +1,5 @@
 const express = require('express');
-const { requireAuth } = require('../middleware/auth');
+const { requireAuth, requireNonDemo } = require('../middleware/auth');
 const { logAudit } = require('../services/audit');
 const WineRequest = require('../models/WineRequest');
 const WineDefinition = require('../models/WineDefinition');
@@ -27,7 +27,9 @@ function validateUrl(url) {
 }
 
 // POST /api/wine-requests - Submit wine request (new_wine or grape_suggestion)
-router.post('/', async (req, res) => {
+// requireNonDemo: wine requests land in the admin review queue and persist after
+// the demo is reaped — queue-spam vector.
+router.post('/', requireNonDemo, async (req, res) => {
   try {
     const { requestType = 'new_wine', wineName, sourceUrl, image, linkedWineDefinition, suggestedGrapes } = req.body;
 

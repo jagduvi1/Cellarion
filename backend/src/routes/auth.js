@@ -3,7 +3,7 @@ const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
 const rateLimit = require('express-rate-limit');
 const User = require('../models/User');
-const { requireAuth } = require('../middleware/auth');
+const { requireAuth, requireNonDemo } = require('../middleware/auth');
 const { checkIsSuperAdmin } = require('../middleware/superAdmin');
 const { logAudit } = require('../services/audit');
 const eventBus = require('../services/eventBus');
@@ -17,6 +17,7 @@ const { rateLimitKey } = require('../utils/clientIp');
 // (routes/oauth.js) share one implementation.
 const { issueTokens, clearRefreshCookie } = require('../services/authTokens');
 const { resolvePendingShares } = require('../services/pendingShares');
+const { createDemoAccountWithinCeiling } = require('../services/demoAccount');
 
 const router = express.Router();
 
@@ -65,6 +66,23 @@ const resendLimiter = rateLimit({
   legacyHeaders: false,
   handler: (req, res) => {
     res.status(429).json({ error: 'Too many resend attempts, please try again later' });
+  }
+});
+
+// Ephemeral public-demo creation limiter — default 3/hour per IP (admin-tunable
+// max). Cloning a snapshot cellar per visitor is write-heavy, so this per-IP cap
+// is tighter than authLimiter. windowMs is fixed at limiter-build time (like
+// authLimiter); the durable global ceiling in the handler is the real backstop,
+// since this in-memory limiter resets on every backend restart.
+const demoLimiter = rateLimit({
+  windowMs: rateLimitsConfig.defaults.demo.createWindowMs,
+  max: () => rateLimitsConfig.get().demo.createMax,
+  keyGenerator: (req) => rateLimitKey(req),
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: (req, res) => {
+    logAudit(req, 'system.rate_limit_exceeded', {}, { limiter: 'demo', limit: rateLimitsConfig.get().demo.createMax });
+    res.status(429).json({ error: 'Too many demo sessions from this network. Please try again later, or create a free account.' });
   }
 });
 
@@ -158,6 +176,41 @@ router.post('/register', authLimiter, async (req, res) => {
     }
     console.error('Registration error:', error);
     res.status(500).json({ error: 'Registration failed' });
+  }
+});
+
+// POST /api/auth/demo-login - Create an ephemeral, auto-expiring demo account
+// (no signup) and clone a populated sample cellar into it so an anonymous
+// visitor can try Cellarion. The account is heavily guarded elsewhere: no AI
+// spend, no password/account changes, no API-token minting (requireNonDemo +
+// isDemo short-circuits), and it is fully erased by the demoSweepJob reaper once
+// demoExpiresAt passes. Volume is bounded by demoLimiter (per-IP) plus a durable
+// global ceiling (demo.globalMax; set to 0 to disable demos entirely).
+router.post('/demo-login', demoLimiter, async (req, res) => {
+  try {
+    // Durable global ceiling — the real backstop against DB-bloat abuse, since
+    // the in-memory per-IP limiter resets on restart. The count-check and the
+    // insert are serialized into one atomic critical section (demoAccount) so a
+    // concurrent burst can't overshoot the ceiling. null = at/over capacity
+    // (demo.globalMax; 0 → always → demo kill-switch).
+    const user = await createDemoAccountWithinCeiling();
+    if (!user) {
+      return res.status(429).json({ error: 'The live demo is at capacity right now. Please try again shortly, or create a free account.' });
+    }
+
+    // Bound the session to the demo TTL: set the refresh-token deadline to the
+    // account's expiry and PRESERVE it through issueTokens (no 30-day default),
+    // with a session cookie (rememberMe:false). A page reload refreshes within
+    // the window; once the account is reaped, /refresh 401s cleanly.
+    user.refreshTokenExpiresAt = user.demoExpiresAt;
+    const accessToken = await issueTokens(user, res, { preserveLifetime: true, rememberMe: false });
+
+    logAudit(req, 'auth.demo_login', { type: 'user', id: user._id }, { expiresAt: user.demoExpiresAt });
+
+    res.status(201).json({ token: accessToken, user: user.toJSON() });
+  } catch (error) {
+    console.error('Demo login error:', error);
+    res.status(500).json({ error: 'Could not start a demo session. Please try again.' });
   }
 });
 
@@ -402,7 +455,7 @@ router.post('/refresh', refreshLimiter, async (req, res) => {
 });
 
 // POST /api/auth/change-password - Change password while authenticated
-router.post('/change-password', requireAuth, authLimiter, async (req, res) => {
+router.post('/change-password', requireAuth, requireNonDemo, authLimiter, async (req, res) => {
   const { currentPassword, newPassword } = req.body;
 
   if (!currentPassword || !newPassword) {

@@ -115,8 +115,13 @@ async function findOrCreateGrapes(names, userId) {
  * @param {boolean} [opts.skipSiblingMatch=false] - Skip step 1b. Pass when the user has
  *   explicitly rejected the suggested matches (find-or-create route with confirmCreate),
  *   so their "create anyway" isn't silently overridden by an appellation-variant sibling.
+ * @param {boolean} [opts.matchOnly=false] - Never create. Resolve only to an existing
+ *   registry wine (exact/sibling/fuzzy>=threshold); if nothing confident matches, return
+ *   { wine: null, noMatch: true } instead of minting a WineDefinition + taxonomy. Used by
+ *   the registry-safe ephemeral-demo clone so a throwaway account can't pollute the shared
+ *   registry. Combine with confirmCreate:true to also bypass the soft-zone candidate return.
  */
-async function findOrCreateWine({ name, producer, country, region, appellation, type, grapes }, userId, { confirmCreate = false, skipSiblingMatch = false } = {}) {
+async function findOrCreateWine({ name, producer, country, region, appellation, type, grapes }, userId, { confirmCreate = false, skipSiblingMatch = false, matchOnly = false } = {}) {
   // Cap stored/compared field lengths at this single create chokepoint (covers
   // the find-or-create route, CSV import, cellar-format import and label-scan).
   // This bounds both the fuzzy-match cost and the persisted document size
@@ -210,6 +215,11 @@ async function findOrCreateWine({ name, producer, country, region, appellation, 
       return { wine: null, candidates: softCandidates };
     }
   }
+
+  // Match-only callers (the registry-safe demo clone) never create: if no
+  // confident match was found above, report no-match so the caller can skip the
+  // item instead of minting a WineDefinition + taxonomy per use.
+  if (matchOnly) return { wine: null, noMatch: true };
 
   // 3. Create new wine — resolve taxonomy first
   const countryDoc = await findOrCreateCountry(country, userId);

@@ -23,6 +23,20 @@ const requireAuth = async (req, res, next) => {
     // Verify token
     const decoded = jwt.verify(token, process.env.JWT_SECRET, { algorithms: ['HS256'] });
 
+    // Demo access tokens are stateless 15-min JWTs, but the reaper HARD-DELETES
+    // the demo User the moment demoExpiresAt passes — leaving a window where a
+    // still-valid token outlives its account and could create orphan data on any
+    // creation route not covered by requireNonDemo (e.g. POST /api/cellars). For
+    // demo tokens ONLY (real users incur zero extra cost), confirm the account
+    // still exists; a reaped session cleanly 401s → the client logs out.
+    if (decoded.isDemo === true) {
+      const User = require('../models/User');
+      const stillLive = await User.exists({ _id: decoded.id, isDemo: true });
+      if (!stillLive) {
+        return res.status(401).json({ error: 'Demo session ended' });
+      }
+    }
+
     // Support old tokens that carry a single `role` string
     const roles = decoded.roles || (decoded.role ? [decoded.role] : ['user']);
 
@@ -36,6 +50,9 @@ const requireAuth = async (req, res, next) => {
       roles,
       plan: effectivePlan,
       planExpiresAt: decoded.planExpiresAt || null,
+      // Ephemeral public-demo accounts carry this claim so guard rails and the
+      // AI kill-switch can branch with zero DB cost. Absent on all real users.
+      isDemo: decoded.isDemo === true,
     };
 
     next();
@@ -106,6 +123,23 @@ const requireRole = (role) => {
 };
 
 /**
+ * Middleware that blocks ephemeral public-demo accounts (isDemo) from a route.
+ * Used to protect consequential/self-management actions a throwaway demo user
+ * must never reach — changing the password, deleting the account, and minting
+ * personal API tokens (a cel_ token would bypass the JWT and defeat the demo
+ * AI/guard gates). Real users are unaffected.
+ */
+const requireNonDemo = (req, res, next) => {
+  if (!req.user) {
+    return res.status(401).json({ error: 'Authentication required' });
+  }
+  if (req.user.isDemo) {
+    return res.status(403).json({ error: 'This action is not available in the demo. Create a free account to use it.' });
+  }
+  next();
+};
+
+/**
  * Middleware that allows both somm and admin roles.
  * Used to protect sommelier queue routes.
  */
@@ -150,6 +184,7 @@ module.exports = {
   requireAuth,
   optionalAuth,
   requireRole,
+  requireNonDemo,
   requireSommOrAdmin,
   requireModeratorOrAdmin,
   isModerator,
