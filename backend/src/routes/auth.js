@@ -1,5 +1,4 @@
 const express = require('express');
-const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
 const rateLimit = require('express-rate-limit');
@@ -12,46 +11,12 @@ const { CURRENT_PRIVACY_POLICY_VERSION } = require('../config/legal');
 const rateLimitsConfig = require('../config/rateLimits');
 const { sendVerificationEmail, sendPasswordResetEmail, sendAccountLockoutAlert, EMAIL_VERIFICATION_ENABLED } = require('../services/mailgun');
 const { isAccountLocked, recordLoginFailure, resetLoginAttempts } = require('../utils/loginAttempts');
-const PendingShare = require('../models/PendingShare');
-const Cellar = require('../models/Cellar');
-const { createNotification } = require('../services/notifications');
 const { rateLimitKey } = require('../utils/clientIp');
-
-/**
- * Resolve any pending cellar shares for a newly registered / verified user.
- * Adds the user as a member to each cellar and creates notifications.
- */
-async function resolvePendingShares(user) {
-  try {
-    const pending = await PendingShare.find({ email: user.email }).populate('invitedBy', 'username').populate('cellar', 'name');
-    if (!pending.length) return;
-
-    for (const invite of pending) {
-      // Skip if cellar was deleted or user is already a member
-      if (!invite.cellar) continue;
-      const cellar = await Cellar.findById(invite.cellar._id);
-      if (!cellar || cellar.deletedAt) continue;
-
-      const alreadyMember = cellar.members.some(m => m.user.toString() === user._id.toString());
-      if (alreadyMember) continue;
-
-      cellar.members.push({ user: user._id, role: invite.role });
-      await cellar.save();
-
-      createNotification(
-        user._id,
-        'cellar_shared',
-        'Cellar shared with you',
-        `${invite.invitedBy?.username ?? 'Someone'} shared their cellar "${invite.cellar.name}" with you (${invite.role}).`,
-        '/cellars'
-      );
-    }
-
-    await PendingShare.deleteMany({ email: user.email });
-  } catch (err) {
-    console.error('Failed to resolve pending shares:', err.message);
-  }
-}
+// Token issuance + refresh-cookie handling and pending-share resolution are
+// extracted to services so the password flow (here) and the SSO flow
+// (routes/oauth.js) share one implementation.
+const { issueTokens, clearRefreshCookie } = require('../services/authTokens');
+const { resolvePendingShares } = require('../services/pendingShares');
 
 const router = express.Router();
 
@@ -102,92 +67,6 @@ const resendLimiter = rateLimit({
     res.status(429).json({ error: 'Too many resend attempts, please try again later' });
   }
 });
-
-// Generate short-lived access token (default 15 min)
-const generateAccessToken = (user) => {
-  const roles = user.roles && user.roles.length > 0 ? user.roles : ['user'];
-  return jwt.sign(
-    { id: user._id, roles, plan: user.plan || 'free', planExpiresAt: user.planExpiresAt || null },
-    process.env.JWT_SECRET,
-    { algorithm: 'HS256', expiresIn: process.env.ACCESS_TOKEN_EXPIRES_IN || '15m' }
-  );
-};
-
-// Generate opaque refresh token (random bytes) and store its hash on the user
-const generateRefreshToken = () => crypto.randomBytes(64).toString('hex');
-
-// Secure flag for the refresh cookie (L-22): dedicated COOKIE_SECURE override
-// ('true'/'false'), falling back to the old NODE_ENV inference when unset.
-// Self-hosters serving plain HTTP must set COOKIE_SECURE=false once the image
-// ships with NODE_ENV=production, or the browser will drop the cookie.
-const COOKIE_SECURE = process.env.COOKIE_SECURE
-  ? process.env.COOKIE_SECURE === 'true'
-  : process.env.NODE_ENV === 'production';
-
-// Cookie options for the httpOnly refresh token. path-scoped to /api/auth
-// (L-23) so the 30-day credential only rides on auth endpoints instead of
-// every backend request (uploads, JSON APIs, SSE) where it could land in
-// logs/proxies.
-const refreshCookieBase = {
-  httpOnly: true,
-  secure: COOKIE_SECURE,
-  sameSite: 'lax',
-  path: '/api/auth'
-};
-
-// Backward-compatible default (7-day persistent cookie)
-const refreshCookieOptions = { ...refreshCookieBase, maxAge: 7 * 24 * 60 * 60 * 1000 };
-
-// Clear the refresh cookie. clearCookie only removes a cookie whose path
-// matches, so we clear BOTH the scoped path and the legacy path '/' — sessions
-// issued before the /api/auth scoping (L-23) still carry a path=/ cookie until
-// their next rotation, and clearing only the scoped variant would silently
-// leave the old credential behind. The legacy clear can be dropped once all
-// pre-scoping sessions have aged out (30-day absolute lifetime).
-// Uses refreshCookieBase (no maxAge): passing maxAge to clearCookie makes
-// Express re-derive a FUTURE expiry, leaving an empty cookie behind instead
-// of deleting it.
-const clearRefreshCookie = (res) => {
-  res.clearCookie('refreshToken', refreshCookieBase);
-  res.clearCookie('refreshToken', { ...refreshCookieBase, path: '/' });
-};
-
-// Build cookie options based on rememberMe preference
-const buildCookieOptions = (rememberMe) => {
-  if (rememberMe === false) {
-    // Session cookie — no maxAge means it expires when the browser closes
-    return { ...refreshCookieBase };
-  }
-  return refreshCookieOptions;
-};
-
-// Absolute refresh-token lifetime: a session may be rotated for at most this
-// long before re-login is forced, regardless of refresh activity. Bounds how
-// long a stolen-but-rotated refresh token stays usable.
-const REFRESH_ABSOLUTE_LIFETIME_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
-
-// Issue both tokens: access token in body, refresh token in httpOnly cookie.
-// preserveLifetime=true (rotation via /refresh) keeps the existing absolute
-// deadline; otherwise (login/register/re-auth) a fresh 30-day deadline is set.
-const issueTokens = async (user, res, { rememberMe, preserveLifetime = false } = {}) => {
-  const accessToken = generateAccessToken(user);
-  const refreshToken = generateRefreshToken();
-  user.setRefreshToken(refreshToken);
-  if (!preserveLifetime) {
-    user.refreshTokenExpiresAt = new Date(Date.now() + REFRESH_ABSOLUTE_LIFETIME_MS);
-  }
-  // Persist the remember-me choice at session start so rotation paths
-  // (/refresh, /change-password) reissue the same cookie kind instead of
-  // silently upgrading a session cookie to a persistent one.
-  if (rememberMe !== undefined) {
-    user.refreshTokenPersistent = rememberMe;
-  } else {
-    rememberMe = user.refreshTokenPersistent === false ? false : true;
-  }
-  await user.save();
-  res.cookie('refreshToken', refreshToken, buildCookieOptions(rememberMe));
-  return accessToken;
-};
 
 // POST /api/auth/register - Register new user
 router.post('/register', authLimiter, async (req, res) => {
@@ -301,8 +180,11 @@ router.post('/login', authLimiter, async (req, res) => {
     });
 
     // Always run bcrypt.compare to prevent timing-based user enumeration
-    // (DUMMY_HASH is defined at module scope, pinned to User.BCRYPT_COST)
-    const isMatch = await bcrypt.compare(password, user ? user.password : DUMMY_HASH);
+    // (DUMMY_HASH is defined at module scope, pinned to User.BCRYPT_COST).
+    // Fall back to the dummy hash both when there's no user AND when the user is
+    // SSO-only (no local password) — comparing against `undefined` would throw,
+    // and an SSO-only account must never authenticate via the password form.
+    const isMatch = await bcrypt.compare(password, user && user.password ? user.password : DUMMY_HASH);
 
     // Per-account brute-force protection. A locked account behaves IDENTICALLY
     // to a wrong-password response — same 401, same generic message, same

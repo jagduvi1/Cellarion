@@ -26,13 +26,40 @@ const userSchema = new mongoose.Schema({
     lowercase: true,
     match: [/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/, 'Please enter a valid email']
   },
+  // Local password. Required for classic email+password accounts, but OPTIONAL
+  // for accounts created via an external identity provider (SSO) — those carry
+  // an entry in `authProviders` and have no password. `required` is a function
+  // so it only fires when the account has no linked provider. A local user may
+  // still ALSO link providers later (password stays set).
   password: {
     type: String,
-    required: [true, 'Password is required'],
+    required: [
+      function () { return !Array.isArray(this.authProviders) || this.authProviders.length === 0; },
+      'Password is required'
+    ],
     validate: {
-      validator: (v) => /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^a-zA-Z\d]).{12,}$/.test(v),
+      // Skip complexity when there is no password (SSO-only account); Mongoose
+      // also skips custom validators for undefined, but guard explicitly so an
+      // empty-string never slips through.
+      validator: (v) => v == null || /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^a-zA-Z\d]).{12,}$/.test(v),
       message: 'Password must be at least 12 characters and include an uppercase letter, lowercase letter, number, and special character'
     }
+  },
+  // External identity providers linked to this account (SSO). Each entry ties a
+  // provider's stable user id to this account so a returning user is matched
+  // back to the same Cellarion account. Empty for classic email+password users.
+  authProviders: {
+    type: [
+      new mongoose.Schema(
+        {
+          provider: { type: String, enum: ['google'], required: true },
+          providerId: { type: String, required: true },
+          linkedAt: { type: Date, default: Date.now }
+        },
+        { _id: false }
+      )
+    ],
+    default: []
   },
   roles: {
     type: [String],
@@ -288,6 +315,9 @@ userSchema.index({ passwordResetTokenHash: 1 }, { sparse: true });
 // Every /api/auth/refresh resolves the session via this hash — without the
 // index it is a full collection scan per token refresh (one per session ~15min)
 userSchema.index({ refreshTokenHash: 1 }, { sparse: true });
+// SSO login resolves the account by (provider, provider's user id) on every
+// federated sign-in — index it so that lookup isn't a full collection scan.
+userSchema.index({ 'authProviders.provider': 1, 'authProviders.providerId': 1 });
 
 // Heal legacy notification-pref shapes before save. Old docs stored
 // `drinkWindow: false` (single boolean); the current schema expects
@@ -342,8 +372,10 @@ userSchema.pre('save', async function(next) {
   }
 });
 
-// Method to compare password for login
+// Method to compare password for login. Returns false for SSO-only accounts
+// (no local password) instead of throwing on a bcrypt.compare against undefined.
 userSchema.methods.comparePassword = async function(candidatePassword) {
+  if (!this.password) return false;
   return await bcrypt.compare(candidatePassword, this.password);
 };
 
@@ -405,6 +437,14 @@ userSchema.methods.toJSON = function() {
   // toObject() omits the `id` virtual, but the frontend's ownership checks
   // compare against `user.id` — expose it as a plain string alongside _id.
   if (obj._id) obj.id = obj._id.toString();
+  // Whether the account can log in with a password. false = SSO-only, so the UI
+  // can hide "change password" and show "set a password" instead. Compute before
+  // password is stripped below.
+  obj.hasPassword = !!obj.password;
+  // Surface only the linked provider NAMES (e.g. ['google']) — never the raw
+  // provider ids — so the UI can show "Connected: Google".
+  obj.linkedProviders = Array.isArray(obj.authProviders) ? obj.authProviders.map(p => p.provider) : [];
+  delete obj.authProviders;
   delete obj.password;
   delete obj.refreshTokenHash;
   delete obj.refreshTokenExpiresAt;
