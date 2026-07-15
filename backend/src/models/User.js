@@ -377,11 +377,6 @@ userSchema.pre('save', function(next) {
   next();
 });
 
-// Non-login sentinel stored as the password for ephemeral demo accounts: it is
-// not a valid bcrypt hash, so comparePassword always returns false — a demo can
-// never password-login (it authenticates by JWT only, on an unroutable address).
-const DEMO_PASSWORD_SENTINEL = '!demo-no-login!';
-
 // Hash password before saving
 userSchema.pre('save', async function(next) {
   // Only hash if password is modified or new
@@ -390,11 +385,14 @@ userSchema.pre('save', async function(next) {
   }
 
   // Ephemeral demo accounts skip the expensive bcrypt hash entirely: they never
-  // password-login, and under a burst of demo-logins N parallel cost-12 hashes
-  // on the single Node thread would degrade latency for everyone. Store the
-  // non-login sentinel instead.
+  // password-login (JWT only, on an unroutable address), and under a burst of
+  // demo-logins N parallel cost-12 hashes on the single Node thread would degrade
+  // latency for everyone. The demo's random password is complexity-valid (so it
+  // passes the schema validator, which re-runs on the later issueTokens save) but
+  // is left UNHASHED — it is never used, and comparePassword returns false against
+  // a non-bcrypt value, so it can never authenticate. (Do NOT substitute a fixed
+  // sentinel here: full-document validation on the next save would reject it.)
   if (this.isDemo) {
-    this.password = DEMO_PASSWORD_SENTINEL;
     return next();
   }
 
