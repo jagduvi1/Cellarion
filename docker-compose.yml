@@ -120,6 +120,13 @@ services:
       - MAILGUN_API_URL=${MAILGUN_API_URL:-}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
       - VOYAGE_API_KEY=${VOYAGE_API_KEY:-}
+      # Self-hosted AI provider (issue #698) — optional; unset keeps Anthropic.
+      - AI_PROVIDER=${AI_PROVIDER:-}
+      - OPENAI_BASE_URL=${OPENAI_BASE_URL:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - AI_MODEL=${AI_MODEL:-}
+      - AI_VISION_MODEL=${AI_VISION_MODEL:-}
+      - OPENAI_TIMEOUT_MS=${OPENAI_TIMEOUT_MS:-}
       - QDRANT_URL=http://qdrant:6333
       - SUPER_ADMIN_EMAIL=${SUPER_ADMIN_EMAIL:-}
       - SUPER_ADMIN_IPS=${SUPER_ADMIN_IPS:-}

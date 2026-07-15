@@ -18,6 +18,7 @@ const vectorStore = require('../services/vectorStore');
 const aiConfig = require('../config/aiConfig');
 const announcementConfig = require('../config/announcement');
 const aiChat = require('../services/aiChat');
+const aiProvider = require('../services/aiProvider');
 const { updateSiteConfig } = require('../utils/siteConfig');
 const { parsePagination } = require('../utils/pagination');
 const { escapeRegex } = require('../utils/sanitize');
@@ -218,9 +219,10 @@ router.get('/services', async (req, res) => {
     results.rembg = { status: 'error', error: 'Service unavailable' };
   }
 
-  // Anthropic API
+  // LLM provider (Anthropic by default; OpenAI-compatible when AI_PROVIDER=openai)
   results.anthropic = {
-    configured: !!process.env.ANTHROPIC_API_KEY,
+    configured: aiProvider.isConfigured(),
+    provider: aiProvider.providerName(),
   };
 
   // Voyage AI (embeddings)
@@ -387,7 +389,7 @@ router.get('/ai', async (req, res) => {
       configured: {
         voyageAI:  !!process.env.VOYAGE_API_KEY,
         qdrant:    !!process.env.QDRANT_URL,
-        anthropic: !!process.env.ANTHROPIC_API_KEY,
+        anthropic: aiProvider.isConfigured(),
       },
       config: cfg,
       job: jobStatus,

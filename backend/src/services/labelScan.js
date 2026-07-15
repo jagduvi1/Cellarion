@@ -3,22 +3,18 @@ const aiConfig = require('../config/aiConfig');
 const { extractFirstJsonObject } = require('../utils/jsonExtract');
 const { textFromResponse, thinkingOff } = require('../utils/aiResponse');
 
+const aiProvider = require('./aiProvider');
+
 function getClient() {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) {
-    const err = new Error('Label scan is not configured on this server');
-    err.status = 503;
-    throw err;
-  }
-  const sdk = require('@anthropic-ai/sdk');
-  const Anthropic = sdk.default ?? sdk;
-  // maxRetries lets the SDK transparently wait out 429 / 529 (overloaded) /
-  // 5xx with exponential backoff that honors the `retry-after` header, instead
-  // of failing the call. This is what keeps a large bottle import (1000+) going
-  // when Anthropic briefly rate-limits us — each AI call waits and continues
-  // rather than aborting. The per-call wait stays bounded so a single import
-  // chunk request can't hang indefinitely.
-  return new Anthropic({ apiKey, maxRetries: 4 });
+  // maxRetries lets the provider transparently wait out 429 / 529 (overloaded)
+  // / 5xx with exponential backoff that honors the `retry-after` header,
+  // instead of failing the call. This is what keeps a large bottle import
+  // (1000+) going when the AI backend briefly rate-limits us — each AI call
+  // waits and continues rather than aborting. The per-call wait stays bounded
+  // so a single import chunk request can't hang indefinitely.
+  // Throws a 503-shaped error when the active provider is not configured
+  // (callers map that to their 'no_api_key' degrade path).
+  return aiProvider.getChatClient({ maxRetries: 4 });
 }
 
 /**

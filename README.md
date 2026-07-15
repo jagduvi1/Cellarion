@@ -440,6 +440,12 @@ Copy `.env.example` to `.env` in the project root and set the required values:
 | `REMBG_URL` | No | `http://rembg:5000` | Background removal service |
 | `ANTHROPIC_API_KEY` | No | — | Enables label scanning and AI cellar chat ([get a key](https://console.anthropic.com/)) |
 | `VOYAGE_API_KEY` | No | — | Required for AI cellar chat embeddings ([get a key](https://dash.voyageai.com/)) |
+| `AI_PROVIDER` | No | `anthropic` | Set to `openai` to serve all LLM features from an OpenAI-compatible endpoint (see [Self-hosted AI](#self-hosted-ai-openai-compatible-endpoints)) |
+| `OPENAI_BASE_URL` | No | — | OpenAI-compatible `/v1` root, e.g. `http://host.docker.internal:11434/v1` (required when `AI_PROVIDER=openai`) |
+| `OPENAI_API_KEY` | No | — | Bearer token for the endpoint (Ollama/LM Studio ignore it; vLLM may require one) |
+| `AI_MODEL` | No | — | Model name to use, e.g. `llama3.1:70b` (required when `AI_PROVIDER=openai`) |
+| `AI_VISION_MODEL` | No | `AI_MODEL` | Vision-capable model for label scanning, e.g. `qwen2.5-vl:32b` |
+| `OPENAI_TIMEOUT_MS` | No | `120000` | Per-request timeout for the OpenAI-compatible endpoint |
 | `QDRANT_URL` | No | `http://qdrant:6333` | Vector database URL (auto-set in Docker Compose) |
 | `SUPER_ADMIN_EMAIL` | No | — | Email of the super admin account |
 | `SUPER_ADMIN_IPS` | No | — | Comma-separated IP allowlist for super admin access |
@@ -459,6 +465,24 @@ The AI chat feature requires three services working together:
 When all three are configured, users can ask natural-language questions about their collection (food pairings, occasion picks, cellar insights). The system only surfaces wines the user actually owns — no hallucinated recommendations.
 
 A single daily usage quota — the same for every user, regardless of supporter tier — is configurable by SuperAdmins (default 50 questions/day).
+
+### Self-hosted AI (OpenAI-compatible endpoints)
+
+Self-hosters who prefer not to use an Anthropic API key can point every LLM feature (cellar chat, label scan, import lookup, drink-window / price / profile suggestions) at any endpoint that speaks the OpenAI chat-completions API — Ollama, LM Studio, vLLM, LiteLLM, or OpenAI itself:
+
+```bash
+AI_PROVIDER=openai
+OPENAI_BASE_URL=http://host.docker.internal:11434/v1   # your endpoint's /v1 root
+AI_MODEL=llama3.1:70b                                   # any model your server hosts
+AI_VISION_MODEL=qwen2.5-vl:32b                          # optional — used for label scanning
+```
+
+Notes:
+
+- This is **opt-in**: without `AI_PROVIDER=openai`, nothing changes — Anthropic remains the default.
+- The admin panel's Claude model settings are ignored in this mode (the model comes from `AI_MODEL`); the configurable AI **prompts** still apply.
+- Label scanning needs a vision-capable model. Extraction quality depends heavily on the model you host — smaller local models will misread more labels than Claude does.
+- Wine **embeddings** (the semantic-search half of cellar chat) still require Voyage AI + Qdrant for now; a configurable embedding provider is planned as a follow-up. All other AI features work without any external key.
 
 ### Email Verification
 

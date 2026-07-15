@@ -23,17 +23,15 @@ const Bottle = require('../models/Bottle');
 const WineVintagePrice = require('../models/WineVintagePrice');
 const { classifyMaturity, buildProfileMap, maturityLabel } = require('../utils/maturityUtils');
 
-// ── Claude client (reuse the @anthropic-ai/sdk already in package.json) ────
-// Lazily instantiated so the module can load even when ANTHROPIC_API_KEY is not set yet.
+// ── LLM client ──────────────────────────────────────────────────────────────
+// Provider-selected (Anthropic by default, OpenAI-compatible for self-hosters
+// via AI_PROVIDER=openai) — see services/aiProvider.js. Both providers expose
+// the same messages.create / messages.stream surface used below.
 
-let _claudeClient = null;
+const aiProvider = require('./aiProvider');
+
 function getClaudeClient() {
-  if (!_claudeClient) {
-    const sdk = require('@anthropic-ai/sdk');
-    const Anthropic = sdk.default ?? sdk;
-    _claudeClient = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-  }
-  return _claudeClient;
+  return aiProvider.getChatClient();
 }
 
 // ── In-memory event log (ring buffer, survives until restart) ─────────────
@@ -266,12 +264,12 @@ Reply with ONLY these two lines, no explanation. Always reply in English regardl
       || err.error?.type === 'overloaded_error';
     logEvent({
       phase: 'query-expansion',
-      primaryModel: cfg.chatModel,
+      primaryModel: aiProvider.displayModel(cfg.chatModel),
       status: err.status || null,
       errorType: err.error?.type || null,
       errorMessage: err.message || null,
       fallbackAttempted: isRetryable && canFallback,
-      fallbackModel: canFallback ? cfg.chatModelFallback : null,
+      fallbackModel: canFallback ? aiProvider.displayModel(cfg.chatModelFallback) : null,
     });
     if (isRetryable && canFallback) {
       try {
@@ -325,9 +323,7 @@ async function _prepareChatContext(userId, message, { useQueryExpansion = true, 
   if (!cfg.chatEnabled) {
     throw Object.assign(new Error('AI chat is currently disabled'), { status: 503 });
   }
-  if (!process.env.ANTHROPIC_API_KEY) {
-    throw Object.assign(new Error('ANTHROPIC_API_KEY is not configured'), { status: 503 });
-  }
+  aiProvider.assertConfigured(); // throws 503 when the active AI provider lacks config
 
   const hasHistory = history.length > 0;
 
@@ -445,12 +441,12 @@ async function chat(userId, message, opts = {}) {
       || err.error?.type === 'overloaded_error';
     logEvent({
       phase: 'chat',
-      primaryModel: cfg.chatModel,
+      primaryModel: aiProvider.displayModel(cfg.chatModel),
       status: err.status || null,
       errorType: err.error?.type || null,
       errorMessage: err.message || null,
       fallbackAttempted: isRetryable && canFallback,
-      fallbackModel: canFallback ? cfg.chatModelFallback : null,
+      fallbackModel: canFallback ? aiProvider.displayModel(cfg.chatModelFallback) : null,
     });
     if (isRetryable && canFallback) {
       console.warn(`[aiChat] Primary model failed (${cfg.chatModel}, status ${err.status}), retrying with fallback: ${cfg.chatModelFallback}`);

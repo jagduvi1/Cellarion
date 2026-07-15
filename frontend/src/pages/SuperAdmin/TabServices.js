@@ -55,11 +55,13 @@ export default function TabServices() {
           </div>
         ))}
 
-        {/* Anthropic */}
+        {/* LLM provider (Anthropic by default, OpenAI-compatible when AI_PROVIDER=openai) */}
         <div className="sa-service">
           <StatusDot status={data.anthropic?.configured ? 'ok' : 'not_configured'} />
           <div>
-            <div className="sa-service-name">Anthropic API</div>
+            <div className="sa-service-name">
+              {data.anthropic?.provider === 'openai' ? 'AI (OpenAI-compatible)' : 'Anthropic API'}
+            </div>
             <div className="sa-service-status">{data.anthropic?.configured ? 'Configured' : 'Not configured'}</div>
             {data.anthropic?.keyPrefix && (
               <div className="sa-service-latency">{data.anthropic.keyPrefix}</div>
