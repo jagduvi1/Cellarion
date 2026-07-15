@@ -149,11 +149,11 @@ const isStripeWebhook = (req) => req.originalUrl.split('?')[0] === '/api/stripe/
 // write tools, the write-safety layers govern MCP mutations instead. It stays
 // under the global apiLimiter, so it is never unbounded.
 //
-// NOTE for future write/DB tools: a JSON-RPC body may be a *batch* (array) of
-// calls, so one HTTP request can fan out to many tool invocations — apiLimiter
-// counts requests, not calls. Before the first tool that touches Mongo/AI ships,
-// add a per-tool/per-batch guard (and likely a dedicated MCP limiter). Today the
-// only tool is get_source_info (in-memory, no I/O), so this is a non-issue.
+// A JSON-RPC body may be a *batch* (array) of calls, so one HTTP request can
+// fan out to many tool invocations — apiLimiter counts requests, not calls.
+// That amplification is capped by the per-request tool-call budget in
+// mcp/server.js (MAX_CALLS_PER_REQUEST). Revisit with a dedicated MCP limiter
+// before write/AI tools ship (they add cost beyond DB reads).
 const isMcp = (req) => {
   const p = req.originalUrl.split('?')[0];
   return p === '/api/mcp' || p === '/api/mcp/';

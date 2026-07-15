@@ -26,6 +26,37 @@ function loadSdk() {
   return sdkPromise;
 }
 
+// A JSON-RPC body may be a BATCH (array) of calls, so one HTTP request can fan
+// out to many tool invocations — and /api/mcp is exempt from the write limiter
+// while apiLimiter counts requests, not calls. This per-request budget caps that
+// amplification: generous for a legitimate agent turn, far below abuse scale.
+const MAX_CALLS_PER_REQUEST = 20;
+
+// Wrap a tool handler with the per-request call budget. `state` is shared by
+// all tools of ONE request's server instance (fresh per request in stateless
+// mode). Exported for unit testing — jest cannot load the ESM SDK, so
+// buildServer itself is covered by the smoke test instead.
+function budgetedHandler(tool, ctx, state) {
+  return (args) => {
+    state.calls += 1;
+    if (state.calls > MAX_CALLS_PER_REQUEST) {
+      return {
+        isError: true,
+        content: [{
+          type: 'text',
+          text: JSON.stringify({
+            error: {
+              code: 'rate_limited',
+              message: `Too many tool calls in one request (max ${MAX_CALLS_PER_REQUEST}). Send fewer calls per batch and paginate instead.`,
+            },
+          }),
+        }],
+      };
+    }
+    return tool.handler(args || {}, ctx);
+  };
+}
+
 // Build a per-request MCP server exposing ONLY the tools the caller's token
 // scopes allow. Because a disallowed tool is never registered on this server, it
 // is not merely hidden from tools/list — it is uncallable (a tools/call for it
@@ -37,6 +68,7 @@ async function buildServer(ctx) {
     { name: 'cellarion', version: pkg.version },
     { instructions: INSTRUCTIONS }
   );
+  const state = { calls: 0 };
   for (const tool of toolsForScopes(ctx.scopes)) {
     server.registerTool(
       tool.name,
@@ -46,7 +78,7 @@ async function buildServer(ctx) {
         inputSchema: tool.inputSchema,
         annotations: tool.annotations,
       },
-      (args) => tool.handler(args || {}, ctx)
+      budgetedHandler(tool, ctx, state)
     );
   }
   return server;
@@ -74,4 +106,4 @@ async function handleMcpRequest(req, res, ctx) {
   await transport.handleRequest(req, res, req.body);
 }
 
-module.exports = { handleMcpRequest, buildServer, loadSdk };
+module.exports = { handleMcpRequest, buildServer, loadSdk, budgetedHandler, MAX_CALLS_PER_REQUEST };
