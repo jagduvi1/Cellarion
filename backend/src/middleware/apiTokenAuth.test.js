@@ -67,6 +67,7 @@ describe('isRequestAllowed (default-deny)', () => {
     ['GET', '/api/notifications'],
     ['GET', '/api/events/stream'],
     ['GET', '/api/auth/whoami'],
+    ['POST', '/api/mcp'],
   ])('read scope allows %s %s', (method, path) => {
     expect(isRequestAllowed(READ, method, path)).toBe(true);
   });
@@ -90,6 +91,10 @@ describe('isRequestAllowed (default-deny)', () => {
     ['GET', '/api/auth/whoami/extra'],
     ['GET', '/api/auth/whoamix'],
     ['GET', '/api/auth/logout'],
+    // MCP is POST-only and exact-anchored: no GET, no sibling, no sub-path leaks
+    ['GET', '/api/mcp'],
+    ['POST', '/api/mcp/extra'],
+    ['POST', '/api/mcpx'],
     // Writes are never granted by read
     ['POST', '/api/bottles'],
     ['DELETE', `/api/cellars/${oid}`],
@@ -147,6 +152,18 @@ describe('isRequestAllowed (default-deny)', () => {
     // And the other scopes never grant ingest.
     expect(isRequestAllowed(READ, 'POST', '/api/climate/ingest')).toBe(false);
     expect(isRequestAllowed(BOTH, 'POST', '/api/climate/ingest')).toBe(false);
+  });
+
+  test('POST /api/mcp is granted by read — per-tool authz lives inside the MCP registry', () => {
+    expect(isRequestAllowed(READ, 'POST', '/api/mcp')).toBe(true);
+    expect(isRequestAllowed(BOTH, 'POST', '/api/mcp')).toBe(true); // read+consume
+    // Neither consume nor climate reaches the MCP endpoint until write/consume
+    // tools ship and their scopes are added to the allowlist alongside them.
+    expect(isRequestAllowed(CONSUME, 'POST', '/api/mcp')).toBe(false);
+    expect(isRequestAllowed(['climate'], 'POST', '/api/mcp')).toBe(false);
+    // POST-only + exact-anchored — GET (the 405 fallback) and sub-paths denied.
+    expect(isRequestAllowed(READ, 'GET', '/api/mcp')).toBe(false);
+    expect(isRequestAllowed(READ, 'POST', '/api/mcp/tools')).toBe(false);
   });
 
   test('GET /api/auth/whoami is granted ONLY by read (own account id for HA reauth)', () => {
