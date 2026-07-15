@@ -23,7 +23,7 @@
 const crypto = require('crypto');
 const { randomUUID } = require('crypto');
 const aiConfig = require('../config/aiConfig');
-const { embedSingle, buildEmbeddingText } = require('./embedding');
+const { embedSingle, buildEmbeddingText, isEmbeddingConfigured, activeEmbeddingModel } = require('./embedding');
 const vectorStore = require('./vectorStore');
 const WineEmbedding = require('../models/WineEmbedding');
 const Bottle = require('../models/Bottle');
@@ -99,7 +99,7 @@ async function start({ mode = 'incremental' } = {}) {
   job = {
     status: 'running',
     mode,
-    model: cfg.embeddingModel,
+    model: activeEmbeddingModel(cfg.embeddingModel),
     indexVersion: cfg.vectorIndex,
     total: 0,
     done: 0,
@@ -120,7 +120,11 @@ async function start({ mode = 'incremental' } = {}) {
 }
 
 async function runJob(cfg) {
-  const { embeddingModel: model, vectorIndex, embeddingBatchDelayMs } = cfg;
+  const { vectorIndex, embeddingBatchDelayMs } = cfg;
+  // In openai embedding mode the model comes from EMBEDDING_MODEL env, not
+  // aiConfig — resolve once so WineEmbedding bookkeeping records the model
+  // that actually produced each vector.
+  const model = activeEmbeddingModel(cfg.embeddingModel);
 
   try {
     // Ensure the Qdrant collection exists before we start
@@ -280,14 +284,14 @@ async function runJob(cfg) {
  * routes — errors are caught and logged, never thrown to the caller.
  *
  * Skips silently when:
- *  - VOYAGE_API_KEY is not configured
+ *  - the embedding provider is not configured
  *  - the pair already has an up-to-date embedding (same textHash + status ok)
  *
  * @param {string|object} wineDefId  – WineDefinition _id (string or ObjectId)
  * @param {string}        vintage    – e.g. '2019' or 'NV'
  */
 async function embedSinglePair(wineDefId, vintage) {
-  if (!process.env.VOYAGE_API_KEY) return;
+  if (!isEmbeddingConfigured()) return;
   // Intentionally NOT skipped while a batch job runs: a batch snapshots its
   // (wine, vintage) list at start, so a just-added pair isn't covered by it.
   // The textHash check below makes a redundant re-embed a cheap no-op.
@@ -295,7 +299,8 @@ async function embedSinglePair(wineDefId, vintage) {
   const cfg = aiConfig.get();
   if (!cfg.chatEnabled) return;
 
-  const { embeddingModel: model, vectorIndex } = cfg;
+  const { vectorIndex } = cfg;
+  const model = activeEmbeddingModel(cfg.embeddingModel);
 
   try {
     const wine = await WineDefinition.findById(wineDefId)

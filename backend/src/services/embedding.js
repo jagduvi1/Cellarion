@@ -1,83 +1,120 @@
 /**
- * Voyage AI embedding service.
+ * Embedding service — Voyage AI by default, or any OpenAI-compatible
+ * /v1/embeddings endpoint for self-hosters (issue #698, phase 2).
  *
- * Wraps the Voyage AI REST API (/v1/embeddings) using Node's built-in fetch.
- * Default model is voyage-4-large at 2048 dimensions — Voyage's best
- * general-purpose retrieval quality. The output dimension is requested
- * explicitly (output_dimension) and must match the Qdrant collection size
- * (VOYAGE_DIMENSION). Changing either requires a fresh collection / full
- * re-embed (bump aiConfig.vectorIndex).
+ *   EMBEDDING_PROVIDER=voyage (default) — Voyage AI REST API, exactly as
+ *     before: voyage-4-large at 2048 dimensions (output_dimension requested
+ *     explicitly).
+ *   EMBEDDING_PROVIDER=openai — POST {EMBEDDING_BASE_URL}/embeddings with
+ *     EMBEDDING_MODEL. Self-hosted embedding models have fixed, per-model
+ *     vector sizes, so EMBEDDING_DIMENSION is required and every returned
+ *     vector is validated against it (a mismatch would silently corrupt the
+ *     Qdrant collection).
  *
- * Throttle strategy
+ * The active dimension (getEmbeddingDimension) sizes the Qdrant collection in
+ * vectorStore.js. Changing provider, model, or dimension therefore requires a
+ * FULL embedding job (drops + recreates the collection) — same procedure as a
+ * Voyage model upgrade.
+ *
+ * Env (openai mode)
  * -----------------
- * The free tier allows 3 requests per minute. Any 429 response is retried
- * with truncated exponential backoff + jitter (initial 2 s, doubles each
- * attempt, capped at 64 s). A Retry-After header is honoured when present.
- * Permanent errors (4xx other than 429, 5xx after max retries) are thrown.
+ *   EMBEDDING_BASE_URL     – /v1 root; falls back to OPENAI_BASE_URL so an
+ *                            Ollama/vLLM install can serve chat + embeddings
+ *                            off one URL
+ *   EMBEDDING_API_KEY      – optional; falls back to OPENAI_API_KEY
+ *   EMBEDDING_MODEL        – required, e.g. nomic-embed-text / bge-m3
+ *   EMBEDDING_DIMENSION    – required, the model's vector size (e.g. 768)
+ *   EMBEDDING_TIMEOUT_MS   – optional, default 30000
+ *
+ * Throttle strategy (both providers)
+ * ----------------------------------
+ * Voyage's free tier allows 3 requests per minute. Any 429 response is
+ * retried with truncated exponential backoff + jitter (initial 2 s, doubles
+ * each attempt, capped at 64 s). A Retry-After header is honoured when
+ * present. Permanent errors (4xx other than 429, 5xx after max retries) are
+ * thrown.
  */
 
 const VOYAGE_API_URL = 'https://api.voyageai.com/v1/embeddings';
 const VOYAGE_DIMENSION = 2048;
 const DEFAULT_MODEL = 'voyage-4-large';
 // Outbound timeout: Node fetch has no application-level timeout, so a stalled
-// Voyage connection would park callers (notably the /api/chat RAG path) until
-// undici's ~300 s default fires. Same AbortSignal pattern as imageProcessor.js.
+// embedding connection would park callers (notably the /api/chat RAG path)
+// until undici's ~300 s default fires. Same AbortSignal pattern as
+// imageProcessor.js. Self-hosted models get a higher default — first request
+// after idle can include model load time.
 const VOYAGE_TIMEOUT_MS = 15000;
+const OPENAI_EMBED_TIMEOUT_MS = 30000;
+
+function embeddingProviderName() {
+  return (process.env.EMBEDDING_PROVIDER || 'voyage').trim().toLowerCase();
+}
+
+function openAiEmbEnv() {
+  return {
+    baseUrl: (process.env.EMBEDDING_BASE_URL || process.env.OPENAI_BASE_URL || '').replace(/\/+$/, ''),
+    apiKey: process.env.EMBEDDING_API_KEY || process.env.OPENAI_API_KEY || '',
+    model: process.env.EMBEDDING_MODEL || '',
+    dimension: parseInt(process.env.EMBEDDING_DIMENSION || '', 10) || 0,
+    timeoutMs: parseInt(process.env.EMBEDDING_TIMEOUT_MS || '', 10) || OPENAI_EMBED_TIMEOUT_MS,
+  };
+}
+
+/** Is the active embedding provider fully configured? (feature gate) */
+function isEmbeddingConfigured() {
+  if (embeddingProviderName() === 'openai') {
+    const env = openAiEmbEnv();
+    return !!(env.baseUrl && env.model && env.dimension > 0);
+  }
+  return !!process.env.VOYAGE_API_KEY;
+}
+
+/** Vector size of the active provider — sizes the Qdrant collection. */
+function getEmbeddingDimension() {
+  return embeddingProviderName() === 'openai' ? openAiEmbEnv().dimension : VOYAGE_DIMENSION;
+}
+
+/**
+ * The model name that will actually embed — for WineEmbedding bookkeeping and
+ * logs. In openai mode the requested model (a Voyage name from aiConfig) is
+ * replaced by EMBEDDING_MODEL.
+ */
+function activeEmbeddingModel(requestedModel) {
+  return embeddingProviderName() === 'openai'
+    ? openAiEmbEnv().model
+    : (requestedModel || DEFAULT_MODEL);
+}
 
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 /**
- * Embed one or more texts. Returns an array of float[] vectors in the same
- * order as the input array.
- *
- * @param {string[]} texts
- * @param {object}   opts
- * @param {string}   [opts.model]      – override the embedding model
- * @param {number}   [opts.maxRetries] – retry budget for 429 responses (default 6)
- * @returns {Promise<number[][]>}
+ * Shared retry loop for both providers. `doFetch` performs one attempt and
+ * returns the fetch Response; `label` names the provider in error messages.
  */
-async function embed(texts, { model = DEFAULT_MODEL, maxRetries = 6 } = {}) {
-  const apiKey = process.env.VOYAGE_API_KEY;
-  if (!apiKey) {
-    throw new Error('VOYAGE_API_KEY is not configured');
-  }
-
+async function fetchWithRetry(doFetch, { maxRetries, timeoutMs, label }) {
   let delay = 2000; // ms — initial backoff
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     let res;
     try {
-      res = await fetch(VOYAGE_API_URL, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${apiKey}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ input: texts, model, output_dimension: VOYAGE_DIMENSION }),
-        signal: AbortSignal.timeout(VOYAGE_TIMEOUT_MS)
-      });
+      res = await doFetch();
     } catch (err) {
       // Surface timeouts as the same plain-Error shape callers already handle
-      // for Voyage failures (no .status → generic 500 degrade path).
+      // for embedding failures (no .status → generic 500 degrade path).
       if (err.name === 'TimeoutError' || err.name === 'AbortError') {
-        throw new Error(`Voyage AI request timed out after ${VOYAGE_TIMEOUT_MS}ms`);
+        throw new Error(`${label} request timed out after ${timeoutMs}ms`);
       }
       throw err;
     }
 
-    if (res.ok) {
-      const json = await res.json();
-      // Sort by index to guarantee order matches input
-      const sorted = json.data.slice().sort((a, b) => a.index - b.index);
-      return sorted.map(d => d.embedding);
-    }
+    if (res.ok) return res;
 
     if (res.status === 429 && attempt < maxRetries) {
       // Honour Retry-After if present; otherwise use exponential backoff + jitter
       const retryAfter = res.headers.get('retry-after');
-      let waitMs = retryAfter
+      const waitMs = retryAfter
         ? parseInt(retryAfter, 10) * 1000
         : delay + Math.floor(Math.random() * 500);
 
@@ -91,12 +128,91 @@ async function embed(texts, { model = DEFAULT_MODEL, maxRetries = 6 } = {}) {
     let body = '';
     try { body = await res.text(); } catch (_) { /* ignore */ }
     throw Object.assign(
-      new Error(`Voyage AI error ${res.status}: ${body}`),
+      new Error(`${label} error ${res.status}: ${body}`),
       { status: res.status }
     );
   }
 
-  throw new Error(`Voyage AI: exceeded ${maxRetries} retries due to rate limiting`);
+  throw new Error(`${label}: exceeded ${maxRetries} retries due to rate limiting`);
+}
+
+/** Sort an OpenAI/Voyage-shaped data array by index and return the vectors. */
+function vectorsInOrder(json) {
+  return json.data.slice().sort((a, b) => a.index - b.index).map(d => d.embedding);
+}
+
+async function embedVoyage(texts, { model, maxRetries }) {
+  const apiKey = process.env.VOYAGE_API_KEY;
+  if (!apiKey) {
+    throw new Error('VOYAGE_API_KEY is not configured');
+  }
+
+  const res = await fetchWithRetry(
+    () => fetch(VOYAGE_API_URL, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ input: texts, model, output_dimension: VOYAGE_DIMENSION }),
+      signal: AbortSignal.timeout(VOYAGE_TIMEOUT_MS)
+    }),
+    { maxRetries, timeoutMs: VOYAGE_TIMEOUT_MS, label: 'Voyage AI' }
+  );
+
+  return vectorsInOrder(await res.json());
+}
+
+async function embedOpenAi(texts, { maxRetries }) {
+  const env = openAiEmbEnv();
+  if (!env.baseUrl || !env.model || !(env.dimension > 0)) {
+    throw new Error('Embedding provider is not configured (EMBEDDING_BASE_URL / EMBEDDING_MODEL / EMBEDDING_DIMENSION required when EMBEDDING_PROVIDER=openai)');
+  }
+
+  const headers = { 'Content-Type': 'application/json' };
+  if (env.apiKey) headers.Authorization = `Bearer ${env.apiKey}`;
+
+  const res = await fetchWithRetry(
+    () => fetch(`${env.baseUrl}/embeddings`, {
+      method: 'POST',
+      headers,
+      // No dimensions param — OpenAI-compat servers vary in support; the
+      // model's native size must match EMBEDDING_DIMENSION (validated below).
+      body: JSON.stringify({ input: texts, model: env.model }),
+      signal: AbortSignal.timeout(env.timeoutMs)
+    }),
+    { maxRetries, timeoutMs: env.timeoutMs, label: 'Embedding provider' }
+  );
+
+  const vectors = vectorsInOrder(await res.json());
+  for (const v of vectors) {
+    if (!Array.isArray(v) || v.length !== env.dimension) {
+      throw new Error(
+        `Embedding provider returned ${Array.isArray(v) ? v.length : typeof v}-dim vectors but EMBEDDING_DIMENSION=${env.dimension} — ` +
+        `set EMBEDDING_DIMENSION to the model's real size and run a FULL embedding job to rebuild the collection`
+      );
+    }
+  }
+  return vectors;
+}
+
+/**
+ * Embed one or more texts. Returns an array of float[] vectors in the same
+ * order as the input array.
+ *
+ * @param {string[]} texts
+ * @param {object}   opts
+ * @param {string}   [opts.model]      – override the embedding model
+ *                                       (voyage mode only — openai mode always
+ *                                       uses EMBEDDING_MODEL)
+ * @param {number}   [opts.maxRetries] – retry budget for 429 responses (default 6)
+ * @returns {Promise<number[][]>}
+ */
+async function embed(texts, { model = DEFAULT_MODEL, maxRetries = 6 } = {}) {
+  if (embeddingProviderName() === 'openai') {
+    return embedOpenAi(texts, { maxRetries });
+  }
+  return embedVoyage(texts, { model, maxRetries });
 }
 
 /**
@@ -154,4 +270,13 @@ function buildEmbeddingText(wine, vintage) {
   return lines.join('\n');
 }
 
-module.exports = { embed, embedSingle, buildEmbeddingText, VOYAGE_DIMENSION };
+module.exports = {
+  embed,
+  embedSingle,
+  buildEmbeddingText,
+  VOYAGE_DIMENSION,
+  embeddingProviderName,
+  isEmbeddingConfigured,
+  getEmbeddingDimension,
+  activeEmbeddingModel,
+};

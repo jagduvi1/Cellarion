@@ -19,6 +19,7 @@ const aiConfig = require('../config/aiConfig');
 const announcementConfig = require('../config/announcement');
 const aiChat = require('../services/aiChat');
 const aiProvider = require('../services/aiProvider');
+const { isEmbeddingConfigured, embeddingProviderName } = require('../services/embedding');
 const { updateSiteConfig } = require('../utils/siteConfig');
 const { parsePagination } = require('../utils/pagination');
 const { escapeRegex } = require('../utils/sanitize');
@@ -225,9 +226,10 @@ router.get('/services', async (req, res) => {
     provider: aiProvider.providerName(),
   };
 
-  // Voyage AI (embeddings)
+  // Embedding provider (Voyage by default; OpenAI-compatible when EMBEDDING_PROVIDER=openai)
   results.voyageAI = {
-    configured: !!process.env.VOYAGE_API_KEY,
+    configured: isEmbeddingConfigured(),
+    provider: embeddingProviderName(),
   };
 
   // Qdrant (optional)
@@ -387,7 +389,7 @@ router.get('/ai', async (req, res) => {
 
     res.json({
       configured: {
-        voyageAI:  !!process.env.VOYAGE_API_KEY,
+        voyageAI:  isEmbeddingConfigured(),
         qdrant:    !!process.env.QDRANT_URL,
         anthropic: aiProvider.isConfigured(),
       },

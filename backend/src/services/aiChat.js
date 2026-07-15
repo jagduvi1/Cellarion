@@ -17,7 +17,7 @@
 const mongoose = require('mongoose');
 const aiConfig = require('../config/aiConfig');
 const { textFromResponse, thinkingOff } = require('../utils/aiResponse');
-const { embedSingle } = require('./embedding');
+const { embedSingle, isEmbeddingConfigured } = require('./embedding');
 const vectorStore = require('./vectorStore');
 const Bottle = require('../models/Bottle');
 const WineVintagePrice = require('../models/WineVintagePrice');
@@ -347,8 +347,8 @@ async function _prepareChatContext(userId, message, { useQueryExpansion = true, 
   let matches = [];
 
   if (needsNewSearch) {
-    if (!process.env.VOYAGE_API_KEY) {
-      throw Object.assign(new Error('VOYAGE_API_KEY is not configured'), { status: 503 });
+    if (!isEmbeddingConfigured()) {
+      throw Object.assign(new Error('Embeddings are not configured on this server'), { status: 503 });
     }
 
     // Restrict Qdrant search to wines the user actually owns. Without this,

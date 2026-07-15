@@ -29,7 +29,7 @@ async function checkRestockGap(userId, bottleId, cellarId) {
   try {
     // Check if embedding infra is available
     if (!embedding || !vectorStore) return;
-    if (!process.env.VOYAGE_API_KEY) return;
+    if (!embedding.isEmbeddingConfigured()) return;
 
     const user = await User.findById(userId).select('username displayName preferences.restockScope').lean();
     if (!user) return;

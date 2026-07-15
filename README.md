@@ -446,6 +446,12 @@ Copy `.env.example` to `.env` in the project root and set the required values:
 | `AI_MODEL` | No | — | Model name to use, e.g. `llama3.1:70b` (required when `AI_PROVIDER=openai`) |
 | `AI_VISION_MODEL` | No | `AI_MODEL` | Vision-capable model for label scanning, e.g. `qwen2.5-vl:32b` |
 | `OPENAI_TIMEOUT_MS` | No | `120000` | Per-request timeout for the OpenAI-compatible endpoint |
+| `EMBEDDING_PROVIDER` | No | `voyage` | Set to `openai` to serve wine embeddings from an OpenAI-compatible endpoint instead of Voyage AI |
+| `EMBEDDING_BASE_URL` | No | `OPENAI_BASE_URL` | `/v1` root of the embedding endpoint |
+| `EMBEDDING_API_KEY` | No | `OPENAI_API_KEY` | Bearer token for the embedding endpoint |
+| `EMBEDDING_MODEL` | No | — | Embedding model name, e.g. `nomic-embed-text` (required when `EMBEDDING_PROVIDER=openai`) |
+| `EMBEDDING_DIMENSION` | No | — | The model's vector size, e.g. `768` (required when `EMBEDDING_PROVIDER=openai`) |
+| `EMBEDDING_TIMEOUT_MS` | No | `30000` | Per-request timeout for the embedding endpoint |
 | `QDRANT_URL` | No | `http://qdrant:6333` | Vector database URL (auto-set in Docker Compose) |
 | `SUPER_ADMIN_EMAIL` | No | — | Email of the super admin account |
 | `SUPER_ADMIN_IPS` | No | — | Comma-separated IP allowlist for super admin access |
@@ -477,12 +483,22 @@ AI_MODEL=llama3.1:70b                                   # any model your server 
 AI_VISION_MODEL=qwen2.5-vl:32b                          # optional — used for label scanning
 ```
 
+Wine **embeddings** (the semantic-search half of cellar chat) can independently be moved off Voyage AI the same way:
+
+```bash
+EMBEDDING_PROVIDER=openai
+EMBEDDING_MODEL=nomic-embed-text   # any embedding model your server hosts
+EMBEDDING_DIMENSION=768            # MUST be that model's real vector size
+# EMBEDDING_BASE_URL / EMBEDDING_API_KEY default to OPENAI_BASE_URL / OPENAI_API_KEY
+```
+
 Notes:
 
-- This is **opt-in**: without `AI_PROVIDER=openai`, nothing changes — Anthropic remains the default.
-- The admin panel's Claude model settings are ignored in this mode (the model comes from `AI_MODEL`); the configurable AI **prompts** still apply.
+- Both switches are **opt-in**: without them, nothing changes — Anthropic + Voyage remain the defaults, and they can be switched independently (e.g. local LLM + Voyage embeddings).
+- The admin panel's Claude model settings are ignored in openai mode (the model comes from `AI_MODEL`); the configurable AI **prompts** still apply.
 - Label scanning needs a vision-capable model. Extraction quality depends heavily on the model you host — smaller local models will misread more labels than Claude does.
-- Wine **embeddings** (the semantic-search half of cellar chat) still require Voyage AI + Qdrant for now; a configurable embedding provider is planned as a follow-up. All other AI features work without any external key.
+- The Qdrant collection is sized to the embedding dimension. After changing `EMBEDDING_PROVIDER`, `EMBEDDING_MODEL`, or `EMBEDDING_DIMENSION`, run a **full** embedding job (SuperAdmin → AI) — it drops and rebuilds the collection at the new size. Every returned vector is validated against `EMBEDDING_DIMENSION`, so a wrong value fails loudly instead of corrupting search.
+- Qdrant itself is always required for cellar chat (it ships in docker-compose).
 
 ### Email Verification
 

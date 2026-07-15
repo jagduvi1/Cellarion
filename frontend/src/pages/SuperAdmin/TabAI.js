@@ -709,9 +709,9 @@ export default function TabAI() {
       {/* API keys configured */}
       <div className="sa-services-grid" style={{ marginBottom: 16 }}>
         {[
-          { name: 'Voyage AI (Embeddings)', ok: configured.voyageAI },
-          { name: 'Qdrant (Vector DB)',     ok: configured.qdrant },
-          { name: 'Anthropic (AI Chat)',    ok: configured.anthropic },
+          { name: 'Embeddings', ok: configured.voyageAI },
+          { name: 'Qdrant (Vector DB)', ok: configured.qdrant },
+          { name: 'LLM (AI Chat)', ok: configured.anthropic },
         ].map(s => (
           <div key={s.name} className="sa-service">
             <StatusDot status={s.ok ? 'ok' : 'not_configured'} />

@@ -13,7 +13,7 @@
  * makes index migrations (v1 → v2) easy to reason about.
  */
 
-const { VOYAGE_DIMENSION } = require('./embedding');
+const { getEmbeddingDimension } = require('./embedding');
 
 // Outbound timeout: Node fetch has no application-level timeout, so a stalled
 // Qdrant connection would park callers (notably the /api/chat RAG path) until
@@ -74,10 +74,12 @@ async function ensureCollection(indexVersion) {
     if (err.status !== 404) throw err;
   }
 
-  // Create it
+  // Create it, sized to the active embedding provider's vector dimension.
+  // Changing provider/model/dimension requires a FULL embedding job (drops +
+  // recreates the collection at the new size).
   await qdrantRequest('PUT', `/collections/${name}`, {
     vectors: {
-      size: VOYAGE_DIMENSION,
+      size: getEmbeddingDimension(),
       distance: 'Cosine'
     }
   });
