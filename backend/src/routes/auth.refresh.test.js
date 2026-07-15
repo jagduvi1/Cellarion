@@ -60,6 +60,34 @@ jest.mock('../services/notifications', () => ({ createNotification: jest.fn() })
 jest.mock('../models/PendingShare', () => ({ find: jest.fn(), deleteMany: jest.fn() }));
 jest.mock('../models/Cellar', () => ({ findById: jest.fn() }));
 
+// auth.js now transitively requires the search service (auth.js →
+// services/demoAccount → services/cellarImport → services/search), and
+// services/search does `require('meilisearch')` at module load. meilisearch@0.58
+// is ESM-only (its only `.` export is an ESM dist/index.js); Node 20.19+ loads it
+// at runtime via require(esm), but jest's CJS module runtime can't parse it — so
+// merely requiring auth.js would fail this whole suite at load. A factory mock
+// short-circuits the chain (jest never loads the real search.js, hence never
+// meilisearch), matching how the route suites (bottles.restore, cellarImport,
+// import.confirm, …) already stub search. This suite never exercises search.
+jest.mock('../services/search', () => ({
+  initialize: jest.fn(),
+  getIsAvailable: () => false,
+  search: async () => ({ ids: [] }),
+  searchBottles: async () => ({ ids: [] }),
+  searchDiscussions: async () => ({ ids: [] }),
+  indexWine: jest.fn(),
+  removeWine: jest.fn(),
+  indexBottle: jest.fn(),
+  removeBottle: jest.fn(),
+  removeBottles: jest.fn(),
+  bulkIndexBottles: jest.fn(),
+  indexDiscussion: jest.fn(),
+  removeDiscussion: jest.fn(),
+  fullSync: jest.fn(),
+  fullSyncBottles: jest.fn(),
+  fullSyncDiscussions: jest.fn(),
+}));
+
 // Give every request a UNIQUE rate-limit key so the real express-rate-limit
 // limiters are mounted (their wiring is exercised) but never trip mid-suite.
 jest.mock('../utils/clientIp', () => {
