@@ -66,9 +66,12 @@ async function createDemoAccount() {
   const user = new User({
     username: `demo-${rand}`,
     email: `demo-${rand}@${DEMO_EMAIL_DOMAIN}`,
-    // The schema requires a password; a demo logs in via JWT only and the address
-    // is unroutable, so this value is never used for anything. Random + discarded.
-    password: crypto.randomBytes(24).toString('hex'),
+    // The schema password-complexity validator runs on every save (full-document
+    // validation), so this must stay complexity-valid: the fixed "Aa1!" prefix
+    // supplies the required upper/lower/digit/special classes, the random hex the
+    // length + uniqueness. The pre-save hook leaves it UNHASHED for demo accounts
+    // (they log in via JWT only, unroutable address), and it can never authenticate.
+    password: 'Aa1!' + crypto.randomBytes(24).toString('hex'),
     roles: ['user'],
     emailVerified: true,
     isDemo: true,
