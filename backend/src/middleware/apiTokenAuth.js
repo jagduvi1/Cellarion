@@ -125,6 +125,14 @@ async function authenticateApiToken(req, res, next, rawToken) {
       return res.status(401).json({ error: 'Invalid token' });
     }
 
+    // An OAuth access token expires (personal PATs have expiresAt === null and
+    // never do). A dead access token is a 401 so the MCP client runs its
+    // refresh grant — same status as a missing token; the WWW-Authenticate
+    // challenge on /api/mcp tells it where to refresh.
+    if (token.expiresAt && token.expiresAt.getTime() <= Date.now()) {
+      return res.status(401).json({ error: 'Token expired' });
+    }
+
     const user = await User.findById(token.user)
       .select('roles plan planExpiresAt deletionScheduledFor');
     // A token whose account is gone or pending deletion is dead — same policy

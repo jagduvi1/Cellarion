@@ -28,6 +28,7 @@ const User = require('../models/User');
 const AiBudgetRequest = require('../models/AiBudgetRequest');
 const ApiToken = require('../models/ApiToken');
 const ExportLink = require('../models/ExportLink');
+const OAuthAuthCode = require('../models/OAuthAuthCode');
 const McpActionLog = require('../models/McpActionLog');
 const AiUsage = require('../models/AiUsage');
 const Bottle = require('../models/Bottle');
@@ -98,6 +99,7 @@ const EXCLUDED = {
   WineEmbedding: 'no user reference (references WineDefinition only)',
   WineNotDuplicate: 'no user reference (admin-confirmed distinct wine pairs; actor in AuditLog)',
   ClimateReading: 'no user reference (telemetry keyed by meta.device; purged + exported via the ClimateDevice entry)',
+  OAuthClient: 'no user reference (a DCR-registered connector, not personal data — it is registered pre-login and shared across whoever connects it; the per-user tokens it mints live on ApiToken)',
 };
 
 const REGISTRY = [
@@ -507,12 +509,13 @@ const REGISTRY = [
     model: ApiToken, category: 'personal-data', userFields: ['user'],
     // Hard-delete on erasure — a token row is pure credential bookkeeping.
     purge: (ctx) => ApiToken.deleteMany({ user: ctx.userId }),
-    // Export metadata only. The tokenHash NEVER leaves the database — it is
-    // not the user's data, it is the credential itself.
+    // Export metadata only. The tokenHash / refreshTokenHash NEVER leave the
+    // database — they are not the user's data, they are the credential itself.
+    // `origin` distinguishes user-minted PATs from OAuth AI connections.
     exportFragment: async (ctx) => ({
       apiTokens: markTrunc(ctx, 'apiTokens', await ApiToken.find({ user: ctx.userId })
-        .select('name scopes lastUsedAt createdAt revokedAt').limit(EXPORT_MAX).lean())
-        .map(t => ({ name: t.name, scopes: t.scopes, lastUsedAt: t.lastUsedAt, createdAt: t.createdAt, revokedAt: t.revokedAt })),
+        .select('name scopes origin lastUsedAt createdAt revokedAt').limit(EXPORT_MAX).lean())
+        .map(t => ({ name: t.name, scopes: t.scopes, origin: t.origin || 'personal', lastUsedAt: t.lastUsedAt, createdAt: t.createdAt, revokedAt: t.revokedAt })),
     }),
   },
 
@@ -524,6 +527,17 @@ const REGISTRY = [
     // through its own registry entries (cellars, account, …). Nothing to export
     // here (and the tokenHash, like ApiToken's, never leaves the DB).
     purge: (ctx) => ExportLink.deleteMany({ user: ctx.userId }),
+    exportFragment: null,
+  },
+
+  // ── OAuth authorization codes ─────────────────────────────────────────────
+  {
+    model: OAuthAuthCode, category: 'personal-data', userFields: ['user'],
+    // Hard-delete on erasure. These are single-use, 5-minute credentials that
+    // TTL themselves away; nothing to export (an ephemeral, spent-or-expired
+    // authorization code is not meaningful personal data). The tokens they mint
+    // are covered by the ApiToken entry above.
+    purge: (ctx) => OAuthAuthCode.deleteMany({ user: ctx.userId }),
     exportFragment: null,
   },
 
