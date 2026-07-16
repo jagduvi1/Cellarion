@@ -3,7 +3,7 @@ import { useParams, Link, useSearchParams, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import { getCellar } from '../api/cellars';
-import { getRacks, deleteRack, updateSlot, clearSlot, moveSlot, createRack, updateRack, disableSlot, enableSlot } from '../api/racks';
+import { getRacks, deleteRack, updateSlot, clearSlot, moveSlot, createRack, updateRack, disableSlot, enableSlot, previewArrange, applyArrange } from '../api/racks';
 import { consumeBottle, pourBottle, openBottle } from '../api/bottles';
 import { glassesLeft, daysLeft, freshnessStatus, remainingMl } from '../utils/openBottle';
 import PreservationPickerModal from '../components/bottle/PreservationPickerModal';
@@ -499,17 +499,29 @@ function CellarRacks() {
     }
   };
 
-  // Auto-arrange step: same move endpoint, but reports success back to the
-  // modal's apply loop instead of alerting (the modal shows the error).
-  const applyArrangeStep = async (rackId, fromPosition, toPosition) => {
+  // Auto-arrange: the plan is computed AND applied server-side (the same
+  // engine the MCP auto_arrange tool uses); the modal shows the returned
+  // errors itself. Apply refreshes the rack from the response in one shot.
+  const handleArrangePreview = async (rackId, strategy, positionOrder) => {
     try {
-      const res = await moveSlot(apiFetch, rackId, fromPosition, toPosition);
+      const res = await previewArrange(apiFetch, rackId, { strategy, positionOrder });
       const data = await res.json();
-      if (!res.ok) return false;
-      setRacks(prev => prev.map(r => r._id === rackId ? data.rack : r));
-      return true;
+      if (!res.ok) return { ok: false, error: data?.error };
+      return { ok: true, data };
     } catch {
-      return false;
+      return { ok: false };
+    }
+  };
+
+  const handleArrangeApply = async (rackId, target, before) => {
+    try {
+      const res = await applyArrange(apiFetch, rackId, { target, before });
+      const data = await res.json();
+      if (!res.ok) return { ok: false, error: data?.error };
+      setRacks(prev => prev.map(r => r._id === rackId ? data.rack : r));
+      return { ok: true };
+    } catch {
+      return { ok: false };
     }
   };
 
@@ -867,10 +879,8 @@ function CellarRacks() {
       {arrangeOpen && rack && (
         <ArrangeModal
           rack={rack}
-          maxPosition={rack.isModular && rack.modules?.length > 0
-            ? getModularTotalSlots(rack.modules)
-            : getTotalSlots(rack.type || 'grid', rack.rows, rack.cols, rack.typeConfig)}
-          onMoveStep={(from, to) => applyArrangeStep(rack._id, from, to)}
+          onPreview={(strategy, positionOrder) => handleArrangePreview(rack._id, strategy, positionOrder)}
+          onApply={(target, before) => handleArrangeApply(rack._id, target, before)}
           onClose={() => setArrangeOpen(false)}
         />
       )}

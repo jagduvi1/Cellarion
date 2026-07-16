@@ -1,153 +1,23 @@
 /**
- * Auto-arrange engine — proposes a better ordering of a rack's bottles and
- * the operation sequence to reach it through the atomic move/swap endpoint.
+ * Auto-arrange — client-side helpers only. The DECISION ENGINE (comparators,
+ * target assignment) lives on the SERVER (backend/src/utils/rackArrange.js +
+ * rackOps.applyArrangement) and is shared with the MCP auto_arrange tool, so
+ * the web app and an AI caller can never drift: the modal calls
+ * POST /api/racks/:id/arrange/preview and .../apply (see api/racks.js).
  *
- * Slot positions are treated in ascending order: position 1 is the top-left
- * of every rack type, so "first" positions are the most visible/accessible
- * ones. Disabled positions are never used.
+ * What stays client-side:
+ *  - fill-corner geometry (buildFillOrder) — where the "first" slot is depends
+ *    on how the physical rack is grabbed; the layout engine gives us real
+ *    coordinates, and the resulting positionOrder is sent WITH the preview
+ *    request so the server plans in that priority order;
+ *  - the last-applied record (localStorage, 7 days) — the user's guide for
+ *    physically re-shelving, plus what undo needs: undo is simply the apply
+ *    endpoint called with target/before swapped.
  */
 
 import { computeLayout, computeModularLayout } from './rackLayouts';
 
-export const ARRANGE_STRATEGIES = ['maturity', 'type', 'vintage'];
-
 export const FILL_CORNERS = ['top-left', 'top-right', 'bottom-left', 'bottom-right'];
-
-// Urgency first: what must be drunk soon belongs in the first slots.
-const MATURITY_RANK = {
-  declining: 0,
-  late: 1,
-  peak: 2,
-  early: 3,
-  'not-ready': 4,
-};
-const NO_MATURITY_RANK = 5;
-
-const TYPE_ORDER = {
-  red: 0,
-  white: 1,
-  'rosé': 2,
-  sparkling: 3,
-  dessert: 4,
-  fortified: 5,
-};
-const NO_TYPE_ORDER = 6;
-
-function maturityRank(bottle) {
-  const r = MATURITY_RANK[bottle?.maturityStatus];
-  return r === undefined ? NO_MATURITY_RANK : r;
-}
-
-function typeRank(bottle) {
-  const r = TYPE_ORDER[bottle?.wineDefinition?.type];
-  return r === undefined ? NO_TYPE_ORDER : r;
-}
-
-// NV / unparseable vintages sort after real years (they have no aging urgency).
-function vintageRank(bottle) {
-  const y = Number(bottle?.vintage);
-  return Number.isInteger(y) ? y : Infinity;
-}
-
-function nameKey(bottle) {
-  return (bottle?.wineDefinition?.name || '').toLowerCase();
-}
-
-const COMPARATORS = {
-  maturity: (a, b) =>
-    maturityRank(a) - maturityRank(b) ||
-    typeRank(a) - typeRank(b) ||
-    vintageRank(a) - vintageRank(b) ||
-    nameKey(a).localeCompare(nameKey(b)),
-  type: (a, b) =>
-    typeRank(a) - typeRank(b) ||
-    maturityRank(a) - maturityRank(b) ||
-    vintageRank(a) - vintageRank(b) ||
-    nameKey(a).localeCompare(nameKey(b)),
-  vintage: (a, b) =>
-    vintageRank(a) - vintageRank(b) ||
-    nameKey(a).localeCompare(nameKey(b)),
-};
-
-/**
- * Build an arrangement plan for one rack.
- *
- * @param {Array<{position: number, bottle: object}>} entries  occupied slots
- * @param {number}   maxPosition        rack capacity (getMaxPosition equivalent)
- * @param {number[]} disabledPositions
- * @param {string}   strategy           'maturity' | 'type' | 'vintage'
- * @param {number[]} [positionOrder]    fill-priority order of all positions
- *                                      (see buildFillOrder); defaults to ascending
- * @returns {{
- *   changes: Array<{ bottle, from, to }>,   // human list: who ends up where
- *   steps:   Array<{ from, to, swap }>,     // op sequence for the move endpoint
- * }}
- */
-export function buildArrangePlan(entries, maxPosition, disabledPositions, strategy, positionOrder) {
-  const disabled = new Set(disabledPositions || []);
-  const order = positionOrder && positionOrder.length > 0
-    ? positionOrder
-    : Array.from({ length: maxPosition }, (_, i) => i + 1);
-  const usable = order.filter(p => !disabled.has(p));
-
-  const occupied = (entries || []).filter(e => e.bottle);
-  const sorted = [...occupied].sort((a, b) =>
-    (COMPARATORS[strategy] || COMPARATORS.maturity)(a.bottle, b.bottle)
-  );
-
-  // Desired: sorted bottles fill the first usable positions.
-  const idOf = (b) => (b?._id || b || '').toString();
-  const desired = new Map(); // position -> bottleId
-  sorted.forEach((e, i) => desired.set(usable[i], idOf(e.bottle)));
-
-  const bottleById = new Map(occupied.map(e => [idOf(e.bottle), e.bottle]));
-  const state = new Map(occupied.map(e => [e.position, idOf(e.bottle)])); // position -> bottleId
-
-  // Human-facing change list: every bottle whose slot differs.
-  const currentPosOf = new Map(occupied.map(e => [idOf(e.bottle), e.position]));
-  const changes = [];
-  for (const [pos, bid] of desired) {
-    const from = currentPosOf.get(bid);
-    if (from !== pos) changes.push({ bottle: bottleById.get(bid), from, to: pos });
-  }
-  changes.sort((a, b) => a.to - b.to);
-
-  // Op sequence: settle each desired position in order. Every op is a legal
-  // single move/swap against POST /slots/:from/move, and applying them in
-  // order provably reaches the desired state (each iteration fixes one
-  // position and never disturbs already-settled ones).
-  const steps = [];
-  const posOf = new Map(); // bottleId -> position (live)
-  for (const [pos, bid] of state) posOf.set(bid, pos);
-
-  for (const [target, wantId] of desired) {
-    const curId = state.get(target);
-    if (curId === wantId) continue;
-    const src = posOf.get(wantId);
-    steps.push({ from: src, to: target, swap: curId !== undefined });
-    // apply to live state
-    if (curId !== undefined) {
-      state.set(src, curId);
-      posOf.set(curId, src);
-    } else {
-      state.delete(src);
-    }
-    state.set(target, wantId);
-    posOf.set(wantId, target);
-  }
-
-  return { changes, steps };
-}
-
-/* ---------------------------------------------------------------------------
- * Fill order — where the "first" slot is.
- *
- * Position numbers ascend from the top-left in every rack type, but the most
- * accessible corner of a physical rack varies (a floor rack is grabbed from
- * the top, an over-fridge rack from the bottom). The layout engine gives us
- * real coordinates for every slot, so the fill priority is derived
- * geometrically and works for any rack type, including modular ones.
- * ------------------------------------------------------------------------- */
 
 /**
  * Priority-ordered list of ALL slot positions for a rack, starting at the
@@ -179,10 +49,10 @@ export function buildFillOrder(rack, corner = 'top-left') {
  *
  * The post-apply change list is the user's guide for physically rearranging
  * the bottles, so it must survive the modal closing. We keep the last applied
- * plan per rack in localStorage for a week, and store enough state to undo it:
- * replaying the steps in reverse order (from/to flipped) exactly restores the
- * original layout — but only from the exact state the plan produced, so the
- * record also snapshots what every touched position held after the apply.
+ * plan per rack in localStorage for a week. Undo calls the apply endpoint
+ * with { target: record.before, before: record.after } — the server enforces
+ * that the rack still holds EXACTLY the applied layout, so undo is only
+ * offered (canUndoArrange) while that is true.
  * ------------------------------------------------------------------------- */
 
 export const ARRANGE_RECORD_TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -191,55 +61,39 @@ const recordKey = (rackId) => `cellarion:arrange:last:${rackId}`;
 const idOf = (b) => (b?._id || b || '').toString();
 
 /**
- * Build a slim, serializable record of an applied plan.
- * `entries` must be the occupied slots as they were BEFORE the plan ran.
+ * Build a slim, serializable record of an applied plan from the server's
+ * preview payload ({ before, target, changes } — see the arrange endpoints).
  */
-export function buildArrangeRecord(entries, plan, strategy, appliedAt = Date.now()) {
-  // Replay the steps to learn the post-apply contents of every touched
-  // position — that snapshot is what makes undo safe to offer later.
-  const state = new Map(
-    (entries || []).filter(e => e.bottle).map(e => [e.position, idOf(e.bottle)])
-  );
-  for (const { from, to } of plan.steps) {
-    const moving = state.get(from);
-    const displaced = state.get(to);
-    if (displaced !== undefined) state.set(from, displaced);
-    else state.delete(from);
-    state.set(to, moving);
-  }
-  const touchedPositions = [...new Set(plan.steps.flatMap(s => [s.from, s.to]))]
-    .sort((a, b) => a - b);
-
+export function buildArrangeRecord({ before, target, changes, strategy }, appliedAt = Date.now()) {
   return {
     strategy,
     appliedAt,
-    steps: plan.steps.map(({ from, to, swap }) => ({ from, to, swap })),
-    changes: plan.changes.map(c => ({
+    before,          // [{ position, bottleId }] — what undo restores
+    after: target,   // [{ position, bottleId }] — what apply produced
+    changes: (changes || []).map(c => ({
       from: c.from,
       to: c.to,
-      bottleId: idOf(c.bottle),
-      name: c.bottle?.wineDefinition?.name || '',
-      vintage: c.bottle?.vintage || '',
+      bottleId: c.bottleId,
+      name: c.name || '',
+      vintage: c.vintage || '',
     })),
-    touched: touchedPositions.map(p => ({ position: p, bottleId: state.get(p) ?? null })),
   };
 }
 
-/** Reversed op sequence: undoing the last step first walks back to the start. */
-export function buildUndoSteps(steps) {
-  return [...steps].reverse().map(({ from, to, swap }) => ({ from: to, to: from, swap }));
-}
-
 /**
- * Undo is only exact from the state the plan left behind. True when every
- * touched position still holds exactly what the record says it should.
+ * Undo restores the full before-assignment, and the server refuses unless the
+ * rack still holds EXACTLY the applied layout — so undo is offered while the
+ * current occupancy equals record.after.
  */
 export function canUndoArrange(record, slots) {
-  if (!record?.touched?.length) return false;
-  const current = new Map(
-    (slots || []).filter(s => s.bottle).map(s => [s.position, idOf(s.bottle)])
-  );
-  return record.touched.every(t => (current.get(t.position) ?? null) === t.bottleId);
+  if (!record?.after?.length || !record?.before?.length) return false;
+  const current = (slots || [])
+    .filter(s => s.bottle)
+    .map(s => ({ position: s.position, bottleId: idOf(s.bottle) }))
+    .sort((a, b) => a.position - b.position);
+  const after = [...record.after].sort((a, b) => a.position - b.position);
+  return current.length === after.length &&
+    current.every((s, i) => s.position === after[i].position && s.bottleId === String(after[i].bottleId));
 }
 
 export function saveArrangeRecord(rackId, record) {
@@ -254,6 +108,12 @@ export function loadArrangeRecord(rackId, now = Date.now()) {
     if (!raw) return null;
     const record = JSON.parse(raw);
     if (!record?.appliedAt || now - record.appliedAt > ARRANGE_RECORD_TTL_MS) {
+      localStorage.removeItem(recordKey(rackId));
+      return null;
+    }
+    // Records from the pre-server-engine format (steps-based, no before/after)
+    // cannot drive the new undo — drop them rather than misbehave.
+    if (!Array.isArray(record.before) || !Array.isArray(record.after)) {
       localStorage.removeItem(recordKey(rackId));
       return null;
     }

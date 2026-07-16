@@ -1,12 +1,10 @@
-import { useState, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import Modal from '../Modal';
 import {
-  buildArrangePlan,
   buildFillOrder,
   FILL_CORNERS,
   buildArrangeRecord,
-  buildUndoSteps,
   canUndoArrange,
   saveArrangeRecord,
   loadArrangeRecord,
@@ -17,15 +15,21 @@ import {
 
 /**
  * "Organize this rack" — pick a strategy and fill corner, preview which
- * bottles change place, then apply the plan step by step through the atomic
- * move/swap endpoint. The database is updated first; the change list is the
- * user's guide for physically rearranging the bottles, so the applied plan
- * is persisted per rack (localStorage, 7 days) and restored when the modal
- * reopens — closing it, even accidentally, loses nothing. An applied plan
- * can be undone by replaying its steps in reverse, as long as the rack still
- * holds exactly the layout the plan produced.
+ * bottles change place, then apply. The plan is computed SERVER-SIDE
+ * (POST /api/racks/:id/arrange/preview — the same engine the MCP auto_arrange
+ * tool uses) and applied in ONE atomic request, so there are no per-slot move
+ * loops and no half-applied racks. The applied plan is persisted per rack
+ * (localStorage, 7 days) as the user's guide for physically re-shelving, and
+ * undo calls the same apply endpoint with the layouts swapped — the server
+ * refuses if the rack changed in between.
+ *
+ * Props:
+ *  - rack:      the rack document (slots populated)
+ *  - onPreview: async (strategy, positionOrder) => ({ ok, data|error })
+ *  - onApply:   async (target, before) => ({ ok, error? })   — also used for undo
+ *  - onClose
  */
-export default function ArrangeModal({ rack, maxPosition, onMoveStep, onClose }) {
+export default function ArrangeModal({ rack, onPreview, onApply, onClose }) {
   const { t } = useTranslation();
   const [record, setRecord] = useState(() => loadArrangeRecord(rack._id));
   // 'pick' = strategy + preview | 'applied' = guide list + undo | 'undone'
@@ -33,21 +37,30 @@ export default function ArrangeModal({ rack, maxPosition, onMoveStep, onClose })
   const [freshlyApplied, setFreshlyApplied] = useState(false);
   const [strategy, setStrategy] = useState('maturity');
   const [corner, setCorner] = useState(() => loadArrangeCorner(rack._id));
-  const [busy, setBusy] = useState(null); // 'apply' | 'undo' | null
-  const [progress, setProgress] = useState({ done: 0, total: 0 });
+  const [busy, setBusy] = useState(null); // 'preview' | 'apply' | 'undo' | null
+  const [plan, setPlan] = useState(null); // server preview: { changes, target, before, bottlesTotal }
   const [error, setError] = useState(null);
 
-  const entries = useMemo(() => (rack.slots || []).filter(s => s.bottle), [rack.slots]);
   const fillOrder = useMemo(() => buildFillOrder(rack, corner), [rack, corner]);
-  // Plan is frozen once we start applying — rack.slots mutates underneath us
-  // as each move's response lands, and re-deriving mid-apply would corrupt
-  // the remaining steps.
-  const [frozenPlan, setFrozenPlan] = useState(null);
-  const livePlan = useMemo(
-    () => buildArrangePlan(entries, maxPosition, rack.disabledPositions, strategy, fillOrder),
-    [entries, maxPosition, rack.disabledPositions, strategy, fillOrder]
-  );
-  const plan = frozenPlan || livePlan;
+
+  // Server-side preview whenever the inputs change (only while picking).
+  useEffect(() => {
+    if (view !== 'pick') return undefined;
+    let cancelled = false;
+    setBusy('preview');
+    setError(null);
+    onPreview(strategy, fillOrder).then((res) => {
+      if (cancelled) return;
+      if (res.ok) setPlan(res.data);
+      else {
+        setPlan(null);
+        setError(res.error || t('arrange.previewError', 'Could not compute the plan — close and try again.'));
+      }
+      setBusy(null);
+    });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [strategy, fillOrder, view]);
 
   const canUndo = useMemo(
     () => !!record && canUndoArrange(record, rack.slots),
@@ -73,44 +86,32 @@ export default function ArrangeModal({ rack, maxPosition, onMoveStep, onClose })
   };
 
   const handleApply = async () => {
-    const applied = plan;
-    // Snapshot the pre-apply layout now — building the record after the loop
-    // would read the already-mutated rack.
-    const rec = buildArrangeRecord(entries, applied, strategy);
-    setFrozenPlan(applied);
+    if (!plan) return;
     setBusy('apply');
     setError(null);
-    setProgress({ done: 0, total: applied.steps.length });
-    for (let i = 0; i < applied.steps.length; i++) {
-      setProgress({ done: i + 1, total: applied.steps.length });
-      const ok = await onMoveStep(applied.steps[i].from, applied.steps[i].to);
-      if (!ok) {
-        setError(t('arrange.applyError', 'A move failed — the rack may have changed. Close and try again.'));
-        setBusy(null);
-        return;
-      }
+    const res = await onApply(plan.target, plan.before);
+    if (!res.ok) {
+      setError(res.error || t('arrange.applyError', 'A move failed — the rack may have changed. Close and try again.'));
+      setBusy(null);
+      return;
     }
+    const rec = buildArrangeRecord({ ...plan, strategy });
     saveArrangeRecord(rack._id, rec);
     setRecord(rec);
     setFreshlyApplied(true);
-    setFrozenPlan(null);
     setBusy(null);
     setView('applied');
   };
 
   const handleUndo = async () => {
-    const steps = buildUndoSteps(record.steps);
     setBusy('undo');
     setError(null);
-    setProgress({ done: 0, total: steps.length });
-    for (let i = 0; i < steps.length; i++) {
-      setProgress({ done: i + 1, total: steps.length });
-      const ok = await onMoveStep(steps[i].from, steps[i].to);
-      if (!ok) {
-        setError(t('arrange.undoError', 'A move failed while undoing — the rack may have changed. Close and check the rack.'));
-        setBusy(null);
-        return;
-      }
+    // Undo = the same atomic apply, with the layouts swapped.
+    const res = await onApply(record.before, record.after);
+    if (!res.ok) {
+      setError(res.error || t('arrange.undoError', 'A move failed while undoing — the rack may have changed. Close and check the rack.'));
+      setBusy(null);
+      return;
     }
     clearArrangeRecord(rack._id);
     setRecord(null);
@@ -119,7 +120,7 @@ export default function ArrangeModal({ rack, maxPosition, onMoveStep, onClose })
   };
 
   const close = () => {
-    if (busy) return; // no half-applied confusion — let the loop finish
+    if (busy === 'apply' || busy === 'undo') return; // no mid-flight confusion
     onClose();
   };
 
@@ -149,8 +150,10 @@ export default function ArrangeModal({ rack, maxPosition, onMoveStep, onClose })
     </div>
   );
 
+  const changeCount = plan?.changes?.length || 0;
+
   return (
-    <Modal title={t('arrange.title', 'Organize this rack')} onClose={close} wide showClose={!busy}>
+    <Modal title={t('arrange.title', 'Organize this rack')} onClose={close} wide showClose={busy !== 'apply' && busy !== 'undo'}>
       {view === 'pick' && (
         <>
           {record && (
@@ -168,7 +171,7 @@ export default function ArrangeModal({ rack, maxPosition, onMoveStep, onClose })
                   value={s.id}
                   checked={strategy === s.id}
                   onChange={() => setStrategy(s.id)}
-                  disabled={!!busy}
+                  disabled={busy === 'apply'}
                 />
                 <span>
                   <strong>{s.label}</strong>
@@ -187,7 +190,7 @@ export default function ArrangeModal({ rack, maxPosition, onMoveStep, onClose })
                   type="button"
                   className={`arrange-corner-btn ${corner === c ? 'active' : ''}`}
                   onClick={() => pickCorner(c)}
-                  disabled={!!busy}
+                  disabled={busy === 'apply'}
                   aria-pressed={corner === c}
                 >
                   {CORNER_LABELS[c]}
@@ -196,39 +199,37 @@ export default function ArrangeModal({ rack, maxPosition, onMoveStep, onClose })
             </div>
           </div>
 
-          {plan.changes.length === 0 ? (
+          {busy === 'preview' && (
+            <p className="arrange-empty">{t('arrange.previewLoading', 'Computing the plan…')}</p>
+          )}
+          {busy !== 'preview' && plan && (changeCount === 0 ? (
             <p className="arrange-empty">{t('arrange.alreadyOrganized', 'This rack is already organized this way — nothing to move.')}</p>
           ) : (
             <>
               <p className="arrange-summary">
                 {t('arrange.summary', '{{count}} bottles change place ({{moves}} moves):', {
-                  count: plan.changes.length,
-                  moves: plan.steps.length,
+                  count: changeCount,
+                  moves: changeCount,
                 })}
               </p>
-              {changesTable(plan.changes.map(c => ({
-                to: c.to,
-                from: c.from,
-                name: c.bottle?.wineDefinition?.name || '',
-                vintage: c.bottle?.vintage || '',
-              })))}
+              {changesTable(plan.changes)}
             </>
-          )}
+          ))}
 
           {error && <div className="alert alert-error">{error}</div>}
 
           <div className="modal-actions">
-            <button className="btn btn-secondary" onClick={close} disabled={!!busy}>
+            <button className="btn btn-secondary" onClick={close} disabled={busy === 'apply'}>
               {t('common.cancel', 'Cancel')}
             </button>
             <button
               className="btn btn-primary"
               onClick={handleApply}
-              disabled={!!busy || plan.steps.length === 0}
+              disabled={!!busy || changeCount === 0}
             >
               {busy === 'apply'
-                ? t('arrange.applying', 'Moving… {{done}}/{{total}}', progress)
-                : t('arrange.applyBtn', 'Apply ({{count}} moves)', { count: plan.steps.length })}
+                ? t('arrange.applyingNow', 'Applying…')
+                : t('arrange.applyBtn', 'Apply ({{count}} moves)', { count: changeCount })}
             </button>
           </div>
         </>
@@ -260,8 +261,8 @@ export default function ArrangeModal({ rack, maxPosition, onMoveStep, onClose })
             {(canUndo || busy === 'undo') && (
               <button className="btn btn-secondary" onClick={handleUndo} disabled={!!busy}>
                 {busy === 'undo'
-                  ? t('arrange.undoing', 'Undoing… {{done}}/{{total}}', progress)
-                  : t('arrange.undoBtn', 'Undo ({{count}} moves)', { count: record.steps.length })}
+                  ? t('arrange.undoingNow', 'Undoing…')
+                  : t('arrange.undoBtn', 'Undo ({{count}} moves)', { count: record.changes.length })}
               </button>
             )}
             <button className="btn btn-secondary" onClick={() => { setView('pick'); setFreshlyApplied(false); }} disabled={!!busy}>
