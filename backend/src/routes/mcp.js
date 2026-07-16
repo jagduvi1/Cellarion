@@ -5,11 +5,12 @@ const { handleMcpRequest } = require('../mcp/server');
 
 // Scopes a caller has when talking to the MCP endpoint. For a personal API token
 // (`cel_…`) these are the token's OWN scopes — so a read-only token sees and can
-// call only read tools. A JWT session is the user themselves; it gets `consume`
-// (a logged-in user can consume/restore in the UI already, and the consume
-// tools ship with the full write-safety stack: conflict guard, idempotency
-// keys, the McpActionLog undo ledger). `write` is deliberately NOT granted —
-// that extension happens with Phase 2b's add/edit tools, consciously.
+// call only read tools. A JWT session is the user themselves and gets the full
+// personal set including `write` (Phase 2b, conscious): the UI already lets a
+// logged-in user add/edit/consume, and every mutating tool ships with the
+// write-safety stack (registry-safe two-step add, conflict guards, idempotency
+// keys, the McpActionLog undo ledger, per-user mutation budget). Demo sessions
+// are blocked below; cel_ tokens opt into scopes explicitly at mint time.
 const JWT_SCOPES = ['read', 'consume', 'write'];
 
 // POST /api/mcp — stateless Streamable HTTP MCP endpoint. Auth is the same

@@ -257,3 +257,33 @@ describe('mutation rate budget (write-limiter parity at the tool layer)', () => 
     expect(takeMutationSlot('someone-else')).toBe(true);
   });
 });
+
+describe('undo_last walk-backward + scope gating (e2e-caught regression)', () => {
+  test('the candidate query excludes undo-generated rows and respects the write grant', async () => {
+    McpActionLog.findOne.mockReturnValue(chain(null));
+    await tool('undo_last').handler({}, CTX); // CTX has scopes ['consume'] only
+    let q = McpActionLog.findOne.mock.calls[0][0];
+    expect(q.viaUndo).toEqual({ $ne: true });
+    expect(q.action.$in).toEqual(['consume', 'restore']); // no add/update without write
+
+    McpActionLog.findOne.mockClear();
+    McpActionLog.findOne.mockReturnValue(chain(null));
+    await tool('undo_last').handler({}, { ...CTX, scopes: ['consume', 'write'] });
+    q = McpActionLog.findOne.mock.calls[0][0];
+    expect(q.action.$in).toEqual(['consume', 'restore', 'add', 'update']);
+  });
+
+  test('the reverse row is marked viaUndo and the undone row frees its idempotency key', async () => {
+    const entry = {
+      _id: 'log9', action: 'consume', bottle: new mongoose.Types.ObjectId(oid('d')),
+      reversed: false, idempotencyKey: 'k-once', save: jest.fn(),
+    };
+    McpActionLog.findOne.mockReturnValue(chain(entry));
+    ownBottle({ status: 'drank' });
+    bottleOps.restoreBottle.mockImplementation(async (bottle) => { bottle.status = 'active'; return { bottle, from: 'drank' }; });
+    await tool('undo_last').handler({}, CTX);
+    expect(entry.reversed).toBe(true);
+    expect(entry.idempotencyKey).toBeNull();
+    expect(McpActionLog.create.mock.calls[0][0].viaUndo).toBe(true);
+  });
+});

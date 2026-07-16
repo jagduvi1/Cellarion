@@ -155,9 +155,17 @@ registerTool({
     const last = await McpActionLog.findOne({
       user: ctx.user.id,
       reversed: false,
-      // undo_add rows are the record OF an undo — not themselves undoable
-      // (the bottle is gone).
-      action: { $in: ['consume', 'restore', 'add', 'update'] },
+      // Rows created BY an undo are never candidates: sequential undos walk
+      // BACKWARD through the user's own actions ("undo, undo" = revert the
+      // update, then the add) — they must not ping-pong on one action.
+      viaUndo: { $ne: true },
+      // Reversing add/update needs the write grant — a consume-only token
+      // must never gain delete-a-bottle power through undo.
+      action: {
+        $in: (ctx.scopes || []).includes('write')
+          ? ['consume', 'restore', 'add', 'update']
+          : ['consume', 'restore'],
+      },
       createdAt: { $gte: new Date(Date.now() - RESTORE_WINDOW_MS) },
     }).sort({ createdAt: -1 });
     if (!last) return fail('not_found', 'No recent MCP action to undo — nothing has been changed through MCP in the last few days.');
@@ -237,10 +245,14 @@ registerTool({
     }
 
     last.reversed = true;
+    // Free the idempotency key: a retry after an undo must re-execute AND get
+    // a fresh ledger row (the unique index would otherwise swallow it).
+    last.idempotencyKey = null;
     await last.save();
     await logAction(ctx, {
       tool: 'undo_last',
       ...reverseEntry,
+      viaUndo: true,
       bottle: bottle._id,
       cellar: bottle.cellar,
       detail: { undid: String(last._id) },

@@ -36,6 +36,10 @@ const mcpActionLogSchema = new mongoose.Schema({
   result: { type: mongoose.Schema.Types.Mixed, default: null },
   // Set once undo_last (or a manual revert) has reversed this action.
   reversed: { type: Boolean, default: false },
+  // True on rows created BY undo_last (the record of a reversal). Excluded
+  // from undo candidacy so sequential undos walk backward through the user's
+  // own actions instead of ping-ponging on one.
+  viaUndo: { type: Boolean, default: false },
   createdAt: { type: Date, default: Date.now },
 });
 
