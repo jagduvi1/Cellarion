@@ -238,6 +238,23 @@
       "errorWrongPassword": "Fel lösenord.",
       "errorRateLimited": "För många försök. Vänta några minuter och försök igen."
     },
+    "aiConnect": {
+      "title": "Anslut din AI",
+      "hint": "Prata med din källare från Claude Desktop, Claude Code eller vilken MCP-kompatibel assistent som helst: fråga vad du ska öppna ikväll, var en flaska står eller vad samlingen är värd. Anslutningen är skrivskyddad och använder en personlig token som du kan återkalla när som helst.",
+      "step1": "Steg 1 — skapa en API-token med behörigheten \"read\" i avsnittet API-tokens ovan och klistra in den här så fylls konfigurationerna i (din token stannar på den här sidan):",
+      "tokenPlaceholder": "cel_… (klistra in din token, valfritt)",
+      "testBtn": "Testa anslutningen",
+      "testing": "Testar…",
+      "testOk": "Ansluten — din token fungerar.",
+      "testFail": "Din token avvisades. Kontrollera att hela värdet kopierades, att den har behörigheten \"read\" och att den inte har återkallats.",
+      "claudeDesktopTitle": "Claude Desktop (claude_desktop_config.json)",
+      "claudeCodeTitle": "Claude Code (terminal)",
+      "genericTitle": "Valfri MCP-klient (Streamable HTTP)",
+      "copy": "Kopiera",
+      "copied": "Kopierat!",
+      "securityNote": "Din AI ser bara dina egna källardata. Återkallar du din token i avsnittet API-tokens bryts anslutningen omedelbart.",
+      "testError": "Det gick inte att verifiera just nu (servern är upptagen eller onåbar) — det säger ingenting om din token. Försök igen om en stund."
+    },
     "climateDevices": {
       "title": "Klimatenheter",
       "hint": "Sensorenheter (t.ex. en ESP32 med temperatur- och fuktgivare) som skickar mätvärden till dina källare. När du lägger till en enhet skapas en egen behörighetsstyrd åtkomsttoken — den visas bara en gång — som bara kan skicka mätvärden, inget annat. Firmware-mall och API-detaljer: docs/climate-monitoring.md i kodförrådet.",

@@ -343,3 +343,38 @@
   margin-bottom: 0.35rem;
   font-weight: normal;
 }
+
+/* ── Connect your AI section ── */
+.ai-connect-token-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+.ai-connect-token-row .input {
+  flex: 1;
+}
+.ai-connect-snippet-block {
+  margin-top: 1rem;
+}
+.ai-connect-snippet-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.35rem;
+}
+.ai-connect-snippet-head h3 {
+  font-size: 0.95rem;
+  margin: 0;
+}
+.ai-connect-snippet {
+  display: block;
+  white-space: pre;
+  overflow-x: auto;
+  word-break: normal;
+  user-select: all;
+  margin: 0;
+}
+.ai-connect-footnote {
+  margin-top: 1rem;
+}
