@@ -56,30 +56,36 @@ registerTool({
     let emb = preferVintage
       ? await WineEmbedding.findOne({ ...embQuery, vintage: preferVintage }).lean()
       : null;
-    if (!emb) emb = await WineEmbedding.findOne(embQuery).lean();
+    // Deterministic fallback pick (newest vintage) — an unsorted findOne is
+    // natural-order and can flip between identical calls.
+    if (!emb) emb = await WineEmbedding.findOne(embQuery).sort({ vintage: -1 }).lean();
     if (!emb || !emb.qdrantPointId) {
       return ok('Reference wine has no embedding yet', [], {
         warnings: ['This wine has not been embedded yet (embeddings are created when bottles are added). Try search_registry for keyword matches instead.'],
       });
     }
 
-    let points;
-    try {
-      points = await vectorStore.getPoints(indexVersion, [emb.qdrantPointId]);
-    } catch {
-      return fail('rate_limited', 'The similarity index is temporarily unavailable — try again shortly or use search_registry.');
-    }
-    const vector = points?.[0]?.vector;
-    if (!Array.isArray(vector)) {
-      return ok('Reference embedding unavailable', [], {
-        warnings: ['The stored embedding could not be loaded. Use search_registry for keyword matches.'],
-      });
-    }
-
     const limit = Math.min(Math.max(parseInt(args.limit, 10) || 8, 1), MAX_SIMILAR);
     // Over-fetch: hits include the reference wine itself and one hit per
     // embedded vintage of the same wine — dedup to distinct wines below.
-    const hits = await vectorStore.searchSimilar(indexVersion, vector, (limit + 1) * 3);
+    const FETCH = (limit + 1) * 5;
+    let vector;
+    let hits;
+    // One guard for BOTH Qdrant calls — a failure between them must not escape
+    // as a raw transport error. rate_limited is the closest taxonomy code (its
+    // retry semantics fit an outage); the message carries the real guidance.
+    try {
+      const points = await vectorStore.getPoints(indexVersion, [emb.qdrantPointId]);
+      vector = points?.[0]?.vector;
+      if (!Array.isArray(vector)) {
+        return ok('Reference embedding unavailable', [], {
+          warnings: ['The stored embedding could not be loaded. Use search_registry for keyword matches.'],
+        });
+      }
+      hits = await vectorStore.searchSimilar(indexVersion, vector, FETCH);
+    } catch {
+      return fail('rate_limited', 'The similarity index is unavailable (it may be down or rebuilding). Use search_registry for keyword matches; retrying later may help.');
+    }
     const best = new Map(); // wineDefinitionId -> { score, vintage }
     for (const h of hits) {
       const id = h.payload?.wineDefinitionId ? String(h.payload.wineDefinitionId) : null;
@@ -88,6 +94,9 @@ registerTool({
     }
     const ranked = [...best.entries()].slice(0, limit);
     if (ranked.length === 0) return ok('No similar wines found', []);
+    // If dedup consumed the whole fetch window, more distinct wines may exist
+    // beyond it — say so instead of implying an exhaustive ranking.
+    const possiblyMore = ranked.length < limit && hits.length >= FETCH;
 
     const docs = await WineDefinition.find({ _id: { $in: ranked.map(([id]) => id) } })
       .select('name producer slug country region appellation classification grapes type communityRating')
@@ -101,6 +110,7 @@ registerTool({
         similarity: Math.round(m.score * 1000) / 1000,
         embedded_vintage: m.vintage,
       }));
-    return ok(`${data.length} similar wine(s)`, data);
+    return ok(`${data.length} similar wine(s)`, data,
+      possiblyMore ? { warnings: ['Result window was dominated by multi-vintage duplicates; more distinct similar wines may exist.'] } : {});
   },
 });

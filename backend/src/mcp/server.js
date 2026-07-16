@@ -1,7 +1,8 @@
 const { toolsForScopes, resourcesForScopes } = require('./registry');
 const { INSTRUCTIONS } = require('./instructions');
 const pkg = require('../../package.json');
-require('./tools'); // register all tools + resources (side-effect)
+require('./tools');     // register all tools (side-effect)
+require('./resources'); // register all resources (side-effect)
 
 // The MCP SDK is ESM-only (`type: module`), so this CommonJS module loads it via
 // dynamic import() and caches the classes. Loaded lazily (first request) so the
@@ -133,7 +134,9 @@ async function handleMcpRequest(req, res, ctx) {
   await transport.handleRequest(req, res, req.body);
 }
 
+// buildServer/loadSdk are internal; the budget wrappers are exported for unit
+// tests (jest cannot load the ESM SDK, so buildServer is covered by smoke.js).
 module.exports = {
-  handleMcpRequest, buildServer, loadSdk,
+  handleMcpRequest,
   budgetedHandler, budgetedResourceHandler, MAX_CALLS_PER_REQUEST,
 };

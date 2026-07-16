@@ -1,13 +1,11 @@
 // Rack read tools. list_racks is deliberately slot-free (occupancy summary
 // only); get_rack returns the full slot map for one rack — keeps responses
 // bounded instead of dumping every slot of every rack.
-const { z } = require('zod');
 const Rack = require('../../models/Rack');
 const { registerTool } = require('../registry');
 const { getMaxPosition } = require('../../utils/rackGeometry');
-const { ok, fail, resolveCellarAccess } = require('../toolUtil');
+const { ok, fail, objectId, MSG_CELLAR_NOT_FOUND, resolveCellarAccess } = require('../toolUtil');
 
-const objectId = z.string().regex(/^[a-f0-9]{24}$/i, 'must be a 24-hex id');
 
 registerTool({
   name: 'list_racks',
@@ -20,7 +18,7 @@ registerTool({
   inputSchema: { cellar_id: objectId },
   handler: async (args, ctx) => {
     const access = await resolveCellarAccess(ctx.user.id, args.cellar_id);
-    if (!access) return fail('not_found', 'No such cellar, or you have no access to it. Use list_cellars for valid ids.');
+    if (!access) return fail('not_found', MSG_CELLAR_NOT_FOUND);
     const racks = await Rack.find({ cellar: access.cellar._id, deletedAt: null }).lean();
     const data = racks.map((r) => {
       const capacity = Math.max(getMaxPosition(r) - (r.disabledPositions || []).length, 0);

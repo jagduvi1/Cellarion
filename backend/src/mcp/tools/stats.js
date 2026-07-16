@@ -32,7 +32,7 @@ registerTool({
   scope: 'read',
   annotations: { readOnlyHint: true, openWorldHint: false },
   inputSchema: {
-    currency: z.string().length(3).optional().describe('ISO 4217 override; defaults to the user\'s preference'),
+    currency: z.string().regex(/^[A-Za-z]{3}$/, 'ISO 4217 code').optional().describe('ISO 4217 override; defaults to the user\'s preference'),
   },
   handler: async (args, ctx) => {
     const r = await buildStats(ctx.user.id, args.currency);
@@ -57,7 +57,8 @@ async function buildStats(userId, currencyOverride) {
 
   const cellars = await Cellar.find({ user: userId, deletedAt: null }).lean();
   if (cellars.length === 0) {
-    // Same data shape as the populated case so the model never sees two envelopes.
+    // Same data shape as the populated case (by_type is an OBJECT map in
+    // statsService) so the model never sees two envelopes.
     const empty = buildEmptyStats(targetCurrency);
     return {
       summary: 'No cellars yet',
@@ -65,7 +66,7 @@ async function buildStats(userId, currencyOverride) {
         currency: targetCurrency,
         rating_scale: targetRatingScale,
         overview: empty.overview,
-        by_type: [],
+        by_type: {},
         top_countries: [],
         top_grapes: [],
         top_producers: [],

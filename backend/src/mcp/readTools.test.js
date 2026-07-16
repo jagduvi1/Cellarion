@@ -93,7 +93,11 @@ describe('ownership scoping', () => {
 
     expect(Cellar.find).toHaveBeenCalledWith({ user: ME, deletedAt: null });
     const filter = Bottle.find.mock.calls[0][0];
-    expect(filter.user).toBe(ME);
+    // Deliberately NO user filter: the contract is "bottles in cellars you
+    // OWN" (cellar-view semantics), so the Meili and Mongo paths paginate
+    // identically — a user filter here could only apply AFTER pagination on
+    // the Meili path (page holes / inflated totals).
+    expect(filter.user).toBeUndefined();
     expect(filter.cellar).toEqual({ $in: [oid('c')] });
     expect(filter.status).toEqual({ $nin: ['drank', 'gifted', 'sold', 'other'] });
   });
@@ -256,13 +260,16 @@ describe('privilege parity & bounds', () => {
     expect(body.warnings.join(' ')).toMatch(/search engine unavailable/i);
   });
 
-  test('search_bottles Meili path re-applies the user filter (both paths share one contract)', async () => {
+  test('search_bottles Meili path hydrates by id only — no post-pagination filters', async () => {
     searchService.getIsAvailable.mockReturnValue(true);
     searchService.searchBottles.mockResolvedValue({ ids: [oid('d')], estimatedTotalHits: 1 });
     Cellar.find.mockReturnValue(chain([oid('c')]));
     Bottle.find.mockReturnValue(chain([]));
     await tool('search_bottles').handler({ query: 'barolo' }, CTX);
-    expect(Bottle.find.mock.calls[0][0]).toMatchObject({ user: ME });
+    // Scope lives INSIDE the Meili query (owned cellarIds); hydration must not
+    // re-filter or pages get holes and totals lie.
+    expect(Bottle.find.mock.calls[0][0]).toEqual({ _id: { $in: [oid('d')] } });
+    expect(searchService.searchBottles.mock.calls[0][1]).toMatchObject({ cellarIds: [oid('c')] });
   });
 
   test('per-request tool-call budget rejects call #21 with rate_limited (batch amplification cap)', async () => {

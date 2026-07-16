@@ -95,7 +95,7 @@ describe('resource handlers', () => {
     const res = await resource('cellar-snapshot').handler('cellar://snapshot', {}, CTX);
     const body = parseResource(res);
     expect(Cellar.find).toHaveBeenCalledWith({ $or: [{ user: ME }, { 'members.user': ME }], deletedAt: null });
-    expect(body.cellars[0]).toMatchObject({ name: 'Mine', role: 'owner', active_bottles: 4, consumed_bottles: 2 });
+    expect(body.data[0]).toMatchObject({ name: 'Mine', role: 'owner', active_bottles: 4, consumed_bottles: 2 });
     // Member ids never serialize in the snapshot.
     expect(res.contents[0].text).not.toContain(STRANGER);
   });
@@ -165,7 +165,87 @@ describe('find_similar_wines', () => {
     vectorStore.getPoints.mockResolvedValue([{ id: 'uuid-1', vector: [0.1] }]);
     vectorStore.searchSimilar.mockResolvedValue([]);
     await t.handler({ wine_id: oid('f'), limit: 500 }, CTX);
-    // over-fetch is (limit+1)*3 with limit clamped to 10 → 33
-    expect(vectorStore.searchSimilar).toHaveBeenCalledWith('v1', [0.1], 33);
+    // over-fetch is (limit+1)*5 with limit clamped to 10 → 55
+    expect(vectorStore.searchSimilar).toHaveBeenCalledWith('v1', [0.1], 55);
+  });
+});
+
+// ── Coverage added by the 2026-07-16 refactor audit ──────────────────────────
+
+describe('previously-uncovered handlers', () => {
+  const User = require('../models/User');
+  const Rack = require('../models/Rack');
+  const { INSTRUCTIONS } = require('./instructions');
+
+  test('cellar_stats: empty case keeps the envelope (uncached), currency preference uppercased', async () => {
+    User.findById.mockReturnValue(chain({ preferences: { currency: 'sek', ratingScale: '5' } }));
+    Cellar.find.mockReturnValue(chain([]));
+    const res = await tool('cellar_stats').handler({}, { user: { id: oid('9') }, scopes: ['read'] });
+    const body = parseTool(res);
+    expect(body.data.currency).toBe('SEK');           // preference uppercased
+    expect(body.data.by_type).toEqual({});            // object map, same as populated shape
+    expect(body.data.overview).toBeDefined();
+  });
+
+  test('cellar_stats: populated result is cached for the TTL (no recompute on repeat call)', async () => {
+    User.findById.mockReturnValue(chain({ preferences: { currency: 'EUR' } }));
+    Cellar.find.mockReturnValue(chain([{ _id: oid('c'), user: oid('6') }]));
+    Bottle.find.mockReturnValue(chain([]));
+    await tool('cellar_stats').handler({}, { user: { id: oid('6') }, scopes: ['read'] });
+
+    // Second call within TTL: served from cache — no cellar/bottle queries.
+    Cellar.find.mockClear();
+    Bottle.find.mockClear();
+    const res = await tool('cellar_stats').handler({}, { user: { id: oid('6') }, scopes: ['read'] });
+    expect(Cellar.find).not.toHaveBeenCalled();
+    expect(Bottle.find).not.toHaveBeenCalled();
+    expect(parseTool(res).data.currency).toBe('EUR');
+  });
+
+  test('cellar://stats resource returns {summary, data, warnings?} (tool-envelope parity)', async () => {
+    User.findById.mockReturnValue(chain({ preferences: {} }));
+    Cellar.find.mockReturnValue(chain([]));
+    const res = await resource('cellar-stats').handler('cellar://stats', {}, { user: { id: oid('8') }, scopes: ['read'] });
+    const body = parseResource(res);
+    expect(body.summary).toBeDefined();
+    expect(body.data.currency).toBe('USD');
+    expect(body.cellars).toBeUndefined(); // one envelope convention everywhere
+  });
+
+  test('get_wine: invalid id → invalid_input; skeleton aiProfile serializes as null; public_url from slug', async () => {
+    const WineDefinition = require('../models/WineDefinition');
+    const bad = await tool('get_wine').handler({ wine_id: 'nope' }, CTX);
+    expect(JSON.parse(bad.content[0].text).error.code).toBe('invalid_input');
+
+    WineDefinition.findById.mockReturnValue(chain({
+      _id: oid('f'), name: 'Barolo', producer: 'X', slug: 'barolo-x', grapes: [],
+      aiProfile: { body: null, acidity: null, notes: [] }, communityRating: { averageNormalized: null, reviewCount: 0 },
+    }));
+    const res = await tool('get_wine').handler({ wine_id: oid('f') }, CTX);
+    const body = parseTool(res);
+    expect(body.data.tasting_profile).toBeNull();
+    expect(body.data.community_rating).toBeNull();
+    expect(body.data.public_url).toBe('https://cellarion.app/wines/barolo-x');
+  });
+
+  test('list_racks: modular racks report null rows/cols + module count; capacity honors disabled positions', async () => {
+    Cellar.findById.mockReturnValue(chain({ _id: oid('c'), user: ME, members: [], deletedAt: null, name: 'Mine' }));
+    Rack.find.mockReturnValue(chain([
+      { _id: oid('e'), name: 'Grid', type: 'grid', rows: 3, cols: 4, slots: [{}], disabledPositions: [1, 2], zones: [] },
+      { _id: oid('7'), name: 'Mod', isModular: true, rows: 4, cols: 8, modules: [{}, {}], slots: [], zones: [] },
+    ]));
+    const res = await tool('list_racks').handler({ cellar_id: oid('c') }, CTX);
+    const body = parseTool(res);
+    expect(body.data[0]).toMatchObject({ capacity: 10, filled: 1, free: 9 }); // getMaxPosition mocked to 12, minus 2 disabled
+    expect(body.data[1]).toMatchObject({ type: 'modular', rows: null, cols: null, modules: 2 });
+  });
+
+  test('instructions drift guard: every tool name and resource URI is mentioned', () => {
+    for (const t of allTools()) {
+      expect(INSTRUCTIONS).toContain(t.name);
+    }
+    for (const r of allResources()) {
+      expect(INSTRUCTIONS).toContain(r.uri || r.uriTemplate);
+    }
   });
 });
