@@ -378,3 +378,48 @@
 .ai-connect-footnote {
   margin-top: 1rem;
 }
+
+/* Recent AI activity timeline (McpActivitySection) — mirrors the token list. */
+.mcp-activity-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.mcp-activity-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.6rem 0;
+  border-bottom: 1px solid var(--color-border, #e0e0e0);
+}
+
+.mcp-activity-row:last-child {
+  border-bottom: none;
+}
+
+.mcp-activity-row.is-reversed {
+  opacity: 0.6;
+}
+
+.mcp-activity-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.mcp-activity-summary {
+  font-weight: 500;
+}
+
+.mcp-activity-meta {
+  font-size: 0.85rem;
+  color: var(--color-text-secondary, #777);
+}
+
+.mcp-activity-reverted {
+  color: var(--color-text-secondary, #777);
+  font-style: italic;
+}

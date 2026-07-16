@@ -7,7 +7,12 @@ import { listApiTokens, createApiToken, revokeApiToken } from '../api/tokens';
 // Personal API tokens (Settings card). Scoped machine credentials for
 // integrations like Home Assistant — create (password-confirmed, plaintext
 // shown once), list with last-used, revoke.
-const ALL_SCOPES = ['read', 'consume'];
+//
+// `write` is the AI-agent scope: it exists FOR the MCP write tools (add / edit /
+// organise a cellar from a connected AI) and grants no REST route beyond
+// POST /api/mcp. Deliberately last and separately described so a user granting
+// it understands it is broader than read/consume.
+const ALL_SCOPES = ['read', 'consume', 'write'];
 
 function ApiTokensSection() {
   const { t } = useTranslation();

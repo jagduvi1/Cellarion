@@ -12,6 +12,7 @@ import { isPushSupported, getPushPermissionState, subscribeToPush, unsubscribeFr
 import { downloadBlobObject } from '../utils/downloadBlob';
 import ApiTokensSection from '../components/ApiTokensSection';
 import AiConnectSection from '../components/AiConnectSection';
+import McpActivitySection from '../components/McpActivitySection';
 import ClimateDevicesSection from '../components/ClimateDevicesSection';
 import { journalPromptOptedOut, setJournalPromptOptOut } from '../components/JournalPrompt';
 import './Settings.css';
@@ -483,6 +484,9 @@ function Settings() {
 
       {/* ── Connect your AI card (needs a token → hidden for demo too) ── */}
       {!user?.isDemo && <AiConnectSection />}
+
+      {/* ── Recent AI activity card (self-hides when the ledger is empty) ── */}
+      {!user?.isDemo && <McpActivitySection />}
 
       {/* ── Climate devices card (hidden for demo) ── */}
       {!user?.isDemo && <ClimateDevicesSection />}

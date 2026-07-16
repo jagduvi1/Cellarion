@@ -236,7 +236,9 @@
       "errorGeneric": "Something went wrong. Please try again.",
       "errorNoScope": "Select at least one permission.",
       "errorWrongPassword": "Your password is incorrect.",
-      "errorRateLimited": "Too many attempts. Please wait a few minutes and try again."
+      "errorRateLimited": "Too many attempts. Please wait a few minutes and try again.",
+      "scope_write": "write",
+      "scopeDesc_write": "Write (AI agent) — let a connected AI add, edit and organise bottles via MCP. Broadest scope; grant only to an assistant you trust."
     },
     "aiConnect": {
       "title": "Connect your AI",
@@ -342,6 +344,22 @@
       "typeToConfirm": "Type <strong>DELETE</strong> to confirm:",
       "scheduling": "Scheduling...",
       "scheduleBtn": "Schedule account deletion"
+    },
+    "aiActivity": {
+      "title": "Recent AI activity",
+      "hint": "Changes a connected AI assistant (or a scoped API token) has made to your cellar. You can undo anything from the last {{days}} days.",
+      "hintNoWindow": "Changes a connected AI assistant (or a scoped API token) has made to your cellar.",
+      "byToken": "via API token",
+      "bySession": "from your session",
+      "tagUndo": "undo",
+      "tagReverted": "reverted",
+      "revertBtn": "Revert",
+      "revertTitle": "Revert this change",
+      "revertConfirm": "Undo this AI change? \"{{summary}}\"",
+      "revertConfirmBtn": "Revert it",
+      "revertingBtn": "Reverting…",
+      "errorLoad": "Failed to load AI activity.",
+      "errorRevert": "Couldn't revert that change. It may have already been undone or changed since."
     }
   },
   "climate": {
