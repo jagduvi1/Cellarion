@@ -22,7 +22,7 @@ const mcpActionLogSchema = new mongoose.Schema({
   // (JWT) called the MCP directly. Never store the token itself.
   tokenId: { type: mongoose.Schema.Types.ObjectId, ref: 'ApiToken', default: null },
   tool: { type: String, required: true },
-  action: { type: String, enum: ['consume', 'restore'], required: true },
+  action: { type: String, enum: ['consume', 'restore', 'add', 'update', 'undo_add'], required: true },
   bottle: { type: mongoose.Schema.Types.ObjectId, ref: 'Bottle' },
   cellar: { type: mongoose.Schema.Types.ObjectId, ref: 'Cellar' },
   // Small, non-PII operational detail (reason, ml, …) for the timeline.
@@ -36,6 +36,10 @@ const mcpActionLogSchema = new mongoose.Schema({
   result: { type: mongoose.Schema.Types.Mixed, default: null },
   // Set once undo_last (or a manual revert) has reversed this action.
   reversed: { type: Boolean, default: false },
+  // True on rows created BY undo_last (the record of a reversal). Excluded
+  // from undo candidacy so sequential undos walk backward through the user's
+  // own actions instead of ping-ponging on one.
+  viaUndo: { type: Boolean, default: false },
   createdAt: { type: Date, default: Date.now },
 });
 

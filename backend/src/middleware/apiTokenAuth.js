@@ -56,6 +56,11 @@ const SCOPE_ALLOWLIST = {
     // filter decides which tools it sees (consume + public, not read/write).
     { method: 'POST', pattern: /^\/api\/mcp$/ },
   ],
+  write: [
+    // MCP endpoint only — the write scope exists FOR the MCP write tools; it
+    // grants no REST routes. Per-tool authz lives in the MCP registry.
+    { method: 'POST', pattern: /^\/api\/mcp$/ },
+  ],
   climate: [
     { method: 'POST', pattern: /^\/api\/climate\/ingest$/ },
   ],

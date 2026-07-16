@@ -22,39 +22,13 @@ const McpActionLog = require('../../models/McpActionLog');
 const { CONSUMED_STATUSES } = require('../../config/constants');
 const { registerTool } = require('../registry');
 const { consumeBottle, restoreBottle, RESTORE_WINDOW_MS } = require('../../services/bottleOps');
+const { logAction, replay } = require('../actionLedger');
 const { ok, fail, objectId, MSG_BOTTLE_NOT_FOUND, resolveBottleAccess } = require('../toolUtil');
 
 const RESTORE_WINDOW_DAYS = Math.round(RESTORE_WINDOW_MS / 86400000);
 
 function bottleLabel(bottle) {
   return `bottle ${bottle._id} (vintage ${bottle.vintage})`;
-}
-
-/** Persist the action ledger row. Never throws (the action itself succeeded). */
-async function logAction(ctx, entry) {
-  try {
-    return await McpActionLog.create({
-      user: ctx.user.id,
-      tokenId: ctx.req?.apiToken?.id || null,
-      ...entry,
-    });
-  } catch (err) {
-    // Duplicate idempotencyKey race: the concurrent twin already recorded it.
-    if (err?.code !== 11000) console.error('[mcp] action log failed:', err.message);
-    return null;
-  }
-}
-
-/**
- * Idempotent replay: return the stored envelope for a seen key, else null.
- * Reversed actions don't replay — if the action was undone since, a retry
- * should go through the normal path (and re-assert) rather than reporting a
- * stale success for a state that no longer holds.
- */
-async function replay(ctx, idempotencyKey) {
-  if (!idempotencyKey) return null;
-  const seen = await McpActionLog.findOne({ user: ctx.user.id, idempotencyKey, reversed: false }).lean();
-  return seen?.result ? { content: [{ type: 'text', text: JSON.stringify(seen.result) }] } : null;
 }
 
 registerTool({
@@ -181,7 +155,17 @@ registerTool({
     const last = await McpActionLog.findOne({
       user: ctx.user.id,
       reversed: false,
-      action: { $in: ['consume', 'restore'] },
+      // Rows created BY an undo are never candidates: sequential undos walk
+      // BACKWARD through the user's own actions ("undo, undo" = revert the
+      // update, then the add) — they must not ping-pong on one action.
+      viaUndo: { $ne: true },
+      // Reversing add/update needs the write grant — a consume-only token
+      // must never gain delete-a-bottle power through undo.
+      action: {
+        $in: (ctx.scopes || []).includes('write')
+          ? ['consume', 'restore', 'add', 'update']
+          : ['consume', 'restore'],
+      },
       createdAt: { $gte: new Date(Date.now() - RESTORE_WINDOW_MS) },
     }).sort({ createdAt: -1 });
     if (!last) return fail('not_found', 'No recent MCP action to undo — nothing has been changed through MCP in the last few days.');
@@ -192,7 +176,36 @@ registerTool({
 
     let envelope;
     let reverseEntry;
-    if (last.action === 'consume') {
+    if (last.action === 'add') {
+      // Undo an add = remove the bottle again (the REST /undo cascade: rack
+      // slots, search, images, pending wine request, then the doc). Only an
+      // ACTIVE bottle — if it was consumed/changed since, refuse.
+      const { removeBottleCascade } = require('../../services/bottleOps');
+      const result = await removeBottleCascade(bottle, ctx.req, 'bottle.undo');
+      if (result.error) {
+        return fail('conflict', `Cannot undo that add: ${result.error.message} Nothing was changed.`);
+      }
+      envelope = {
+        summary: `Undid add — ${bottleLabel(bottle)} removed from the cellar`,
+        data: { undone: 'add_bottle', bottle_id: bottle._id },
+      };
+      reverseEntry = { action: 'undo_add', prev: null };
+    } else if (last.action === 'update') {
+      // Undo an update = re-apply the snapshotted previous values.
+      const { updateBottleFields } = require('../../services/bottleOps');
+      const prevFields = last.prev || {};
+      if (Object.keys(prevFields).length === 0) {
+        return fail('conflict', 'That update has no recorded previous values; nothing was changed.');
+      }
+      const result = await updateBottleFields(bottle, prevFields, ctx.req);
+      if (result.error) return fail('conflict', `Cannot undo that update: ${result.error.message}`);
+      envelope = {
+        summary: `Undid update on ${bottleLabel(bottle)} — restored: ${Object.keys(prevFields).join(', ')}`,
+        data: { undone: 'update_bottle', bottle_id: bottle._id, restored: result.changes },
+      };
+      // The reverse row snapshots what we just overwrote, so undo-of-undo works.
+      reverseEntry = { action: 'update', prev: result.prev };
+    } else if (last.action === 'consume') {
       // Snapshot BEFORE restoring, so undoing THIS undo can re-consume with
       // the original values instead of defaults.
       const prevSnapshot = {
@@ -232,10 +245,14 @@ registerTool({
     }
 
     last.reversed = true;
+    // Free the idempotency key: a retry after an undo must re-execute AND get
+    // a fresh ledger row (the unique index would otherwise swallow it).
+    last.idempotencyKey = null;
     await last.save();
     await logAction(ctx, {
       tool: 'undo_last',
       ...reverseEntry,
+      viaUndo: true,
       bottle: bottle._id,
       cellar: bottle.cellar,
       detail: { undid: String(last._id) },

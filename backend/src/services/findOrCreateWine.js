@@ -121,7 +121,7 @@ async function findOrCreateGrapes(names, userId) {
  *   the registry-safe ephemeral-demo clone so a throwaway account can't pollute the shared
  *   registry. Combine with confirmCreate:true to also bypass the soft-zone candidate return.
  */
-async function findOrCreateWine({ name, producer, country, region, appellation, type, grapes }, userId, { confirmCreate = false, skipSiblingMatch = false, matchOnly = false } = {}) {
+async function findOrCreateWine({ name, producer, country, region, appellation, type, grapes }, userId, { confirmCreate = false, skipSiblingMatch = false, matchOnly = false, createdVia = null } = {}) {
   // Cap stored/compared field lengths at this single create chokepoint (covers
   // the find-or-create route, CSV import, cellar-format import and label-scan).
   // This bounds both the fuzzy-match cost and the persisted document size
@@ -244,7 +244,10 @@ async function findOrCreateWine({ name, producer, country, region, appellation, 
     type: wineType,
     grapes: grapeIds,
     normalizedKey,
-    createdBy: userId
+    createdBy: userId,
+    // Surface provenance ('mcp' = minted by a connected AI) — reviewable as a
+    // class by admins; see WineDefinition.createdVia.
+    createdVia
   });
 
   try {

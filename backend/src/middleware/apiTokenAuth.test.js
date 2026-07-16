@@ -168,6 +168,15 @@ describe('isRequestAllowed (default-deny)', () => {
     expect(isRequestAllowed(READ, 'POST', '/api/mcp/tools')).toBe(false);
   });
 
+  test('write scope: MCP endpoint only — never any REST route', () => {
+    const WRITE = ['write'];
+    expect(isRequestAllowed(WRITE, 'POST', '/api/mcp')).toBe(true);
+    expect(isRequestAllowed(WRITE, 'POST', '/api/bottles')).toBe(false);
+    expect(isRequestAllowed(WRITE, 'PUT', '/api/bottles/' + 'a'.repeat(24))).toBe(false);
+    expect(isRequestAllowed(WRITE, 'GET', '/api/cellars')).toBe(false);
+    expect(isRequestAllowed(WRITE, 'GET', '/api/mcp')).toBe(false);
+  });
+
   test('GET /api/auth/whoami is granted ONLY by read (own account id for HA reauth)', () => {
     expect(isRequestAllowed(READ, 'GET', '/api/auth/whoami')).toBe(true);
     expect(isRequestAllowed(BOTH, 'GET', '/api/auth/whoami')).toBe(true); // read+consume
