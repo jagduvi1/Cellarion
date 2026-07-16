@@ -90,14 +90,29 @@ const apiTokenSchema = new mongoose.Schema({
     type: String,
     default: null,
   },
+  // SHA-256 of the PREVIOUS (rotated-away) refresh token. Presenting a token
+  // that matches this is refresh-token REUSE (a replay of an already-spent
+  // token) — the signal that a refresh token was stolen. The refresh grant
+  // revokes the whole connection on a match (OAuth 2.1 security BCP §4.14.2).
+  prevRefreshTokenHash: {
+    type: String,
+    default: null,
+  },
   // The DCR client this connection belongs to (OAuthClient.clientId).
   oauthClientId: {
     type: String,
     default: null,
   },
-  // RFC 8707 audience the token was issued for (the MCP resource URL). Stored
-  // for correctness; the SCOPE_ALLOWLIST already confines these tokens to
-  // /api/mcp, so the usable audience is enforced structurally regardless.
+  // RFC 8707 audience the token was issued for (the MCP resource URL).
+  //
+  // NOTE the audience is NOT enforced by the SCOPE_ALLOWLIST alone: `read` also
+  // grants GET /api/stats, /api/cellars, /api/bottles, … and `consume` grants
+  // POST /api/bottles/:id/consume. Those are all the caller's own wine data and
+  // within the consented scope, but an OAuth token is issued for ONE audience —
+  // the MCP endpoint — so apiTokenAuth confines `origin:'oauth'` tokens to
+  // POST /api/mcp explicitly, regardless of scope. That is what makes this
+  // field's promise real (and stops a future addition to the read allowlist
+  // from silently widening every AI connection's reach).
   resource: {
     type: String,
     default: null,

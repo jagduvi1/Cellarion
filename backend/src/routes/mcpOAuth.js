@@ -1,4 +1,5 @@
 const express = require('express');
+const crypto = require('crypto');
 const router = express.Router();
 const ApiToken = require('../models/ApiToken');
 const OAuthClient = require('../models/OAuthClient');
@@ -67,9 +68,14 @@ router.post('/register', async (req, res) => {
     if (!redirectUris.every(isValidRedirectUri)) {
       return oauthError(res, 400, 'invalid_redirect_uri', 'redirect_uris must all be https, or http on a loopback host');
     }
+    // Only the two methods the token endpoint actually implements, and that the
+    // AS metadata advertises. `client_secret_basic` is deliberately NOT accepted
+    // — authenticateClient reads the secret from the body only, so a basic
+    // client could never authenticate; rejecting it at registration is honest
+    // instead of handing out a client_id that can never get a token.
     const authMethod = body.token_endpoint_auth_method || 'none';
-    if (!['none', 'client_secret_post', 'client_secret_basic'].includes(authMethod)) {
-      return oauthError(res, 400, 'invalid_client_metadata', 'unsupported token_endpoint_auth_method');
+    if (!['none', 'client_secret_post'].includes(authMethod)) {
+      return oauthError(res, 400, 'invalid_client_metadata', 'token_endpoint_auth_method must be "none" or "client_secret_post"');
     }
 
     const clientId = OAuthClient.generateClientId();
@@ -163,8 +169,13 @@ router.post('/approve', requireAuth, requireNonDemo, async (req, res) => {
   try {
     const { client_id, redirect_uri, code_challenge, code_challenge_method, scope, state, resource, approved } = req.body || {};
 
-    const client = client_id ? await OAuthClient.findOne({ clientId: client_id }) : null;
+    // typeof guard before the query: this body is JSON, so an object value
+    // (`{"$ne":null}`) would otherwise reach Mongo as an operator. Same guard as
+    // /authorize and /token.
+    if (typeof client_id !== 'string') return res.status(400).json({ error: 'unknown client' });
+    const client = await OAuthClient.findOne({ clientId: client_id });
     if (!client) return res.status(400).json({ error: 'unknown client' });
+    if (typeof redirect_uri !== 'string') return res.status(400).json({ error: 'redirect_uri does not match a registered URI' });
     if (!redirect_uri || !redirectUriRegistered(client, redirect_uri)) {
       return res.status(400).json({ error: 'redirect_uri does not match a registered URI' });
     }
@@ -222,7 +233,13 @@ async function authenticateClient(req) {
   if (!client) return null;
   if (client.tokenEndpointAuthMethod === 'none') return client; // public — client_id is enough
   const secret = req.body.client_secret;
-  if (!secret || OAuthClient.hashSecret(secret) !== client.clientSecretHash) return null;
+  if (typeof secret !== 'string' || !client.clientSecretHash) return null;
+  // Constant-time compare, same as verifyPkce. (Both sides are SHA-256 hex, so
+  // a timing leak would only be over the hash — but keep one habit for every
+  // credential comparison rather than reasoning about which ones are safe.)
+  const a = Buffer.from(OAuthClient.hashSecret(secret));
+  const b = Buffer.from(client.clientSecretHash);
+  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return null;
   return client;
 }
 
@@ -275,23 +292,43 @@ router.post('/token', async (req, res) => {
     if (grantType === 'refresh_token') {
       const { refresh_token } = req.body;
       if (!refresh_token) return oauthError(res, 400, 'invalid_request', 'refresh_token is required');
-      // Look up the connection by the CURRENT refresh hash. A rotated-away (old)
-      // refresh token no longer matches — reuse is simply invalid_grant.
-      const token = await ApiToken.findOne({
-        refreshTokenHash: ApiToken.hashToken(refresh_token),
-        origin: 'oauth',
-        revokedAt: null,
-      });
-      if (!token || token.oauthClientId !== client.clientId) {
+      const presented = ApiToken.hashToken(refresh_token);
+      // Look up the connection by the CURRENT refresh hash.
+      const token = await ApiToken.findOne({ refreshTokenHash: presented, origin: 'oauth', revokedAt: null });
+
+      if (!token) {
+        // REUSE DETECTION (OAuth 2.1 security BCP §4.14.2). The token matched no
+        // live connection — but if it matches one's PREVIOUS (already-rotated)
+        // refresh token, then a spent token is being replayed, which means it
+        // leaked: the legitimate client would be holding the rotated successor.
+        // We cannot tell thief from victim, so kill the whole connection; both
+        // must re-authorize. (Trade-off: a client whose successful rotation
+        // response was lost in transit retries with the spent token and also
+        // trips this — it re-auths. Rare, and the safe direction to err.)
+        const reused = await ApiToken.findOne({
+          prevRefreshTokenHash: presented, origin: 'oauth', revokedAt: null, oauthClientId: client.clientId,
+        });
+        if (reused) {
+          reused.revokedAt = new Date();
+          await reused.save();
+          eventBus.dropToken(reused._id);
+          logAudit(req, 'oauth.refresh_reuse_detected', { type: 'apiToken', id: reused._id }, { clientId: client.clientId });
+        }
+        return oauthError(res, 400, 'invalid_grant', 'refresh token is invalid or revoked');
+      }
+      if (token.oauthClientId !== client.clientId) {
         return oauthError(res, 400, 'invalid_grant', 'refresh token is invalid or revoked');
       }
 
-      // Rotate BOTH tokens (OAuth 2.1 §4.3.1). A concurrent double-refresh is
-      // guarded by matching the old hash in the update filter — only one wins.
+      // Rotate BOTH tokens (OAuth 2.1 §4.3.1), remembering the spent refresh
+      // hash so a later replay of it is caught above. A concurrent double-
+      // refresh is guarded by pinning the old hash in the update filter — only
+      // one wins, and the loser gets invalid_grant WITHOUT tripping reuse
+      // detection (it already matched the current hash on the read above).
       const cred = rotateCredentials();
       const rotated = await ApiToken.findOneAndUpdate(
         { _id: token._id, refreshTokenHash: token.refreshTokenHash, revokedAt: null },
-        { $set: cred.fields },
+        { $set: { ...cred.fields, prevRefreshTokenHash: token.refreshTokenHash } },
         { new: true }
       );
       if (!rotated) return oauthError(res, 400, 'invalid_grant', 'refresh token is invalid or revoked');

@@ -37,13 +37,16 @@ const SESSION_GONE = {
 // MUST answer 401 with a WWW-Authenticate header pointing at the protected-
 // resource metadata, so an MCP client can discover the authorization server and
 // start the OAuth flow. requireAuth sends the 401 itself, so we patch res.status
-// to attach the header the moment a 401/403 is set (and only then — a 200 tool
-// response carries no auth challenge). Applied to the MCP endpoint only.
+// to attach the header the moment a 401 is set. 401 ONLY — a 403 means the
+// credential is valid but insufficient (wrong scope, demo account), where
+// re-authenticating fixes nothing and the challenge would just nudge a client
+// into a pointless refresh loop. A 200 tool response carries no challenge.
+// Applied to the MCP endpoint only.
 function mcpChallenge(req, res, next) {
   const prm = `${issuer()}/.well-known/oauth-protected-resource/api/mcp`;
   const origStatus = res.status.bind(res);
   res.status = (code) => {
-    if (code === 401 || code === 403) {
+    if (code === 401) {
       res.setHeader('WWW-Authenticate', `Bearer resource_metadata="${prm}"`);
     }
     return origStatus(code);

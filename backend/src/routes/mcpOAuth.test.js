@@ -279,12 +279,36 @@ describe('POST /token — refresh_token (rotation)', () => {
     expect(setArg.refreshTokenHash).toBeTruthy();
   });
 
-  test('an unknown / rotated-away refresh token → invalid_grant', async () => {
+  test('an unknown refresh token → invalid_grant, nothing revoked', async () => {
     OAuthClient.findOne.mockResolvedValue(CLIENT);
-    ApiToken.findOne.mockResolvedValue(null);
+    ApiToken.findOne.mockResolvedValue(null); // matches neither current nor prev
     const r = await formPost('/token', { grant_type: 'refresh_token', client_id: CLIENT.clientId, refresh_token: 'dead' });
     expect(r.status).toBe(400);
     expect((await r.json()).error).toBe('invalid_grant');
+  });
+
+  test('REUSE of an already-rotated refresh token revokes the whole connection', async () => {
+    OAuthClient.findOne.mockResolvedValue(CLIENT);
+    const save = jest.fn().mockResolvedValue();
+    // 1st findOne (by current hash) → miss; 2nd (by prevRefreshTokenHash) → hit.
+    ApiToken.findOne
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ _id: 't1', oauthClientId: CLIENT.clientId, save });
+    const r = await formPost('/token', { grant_type: 'refresh_token', client_id: CLIENT.clientId, refresh_token: 'spent' });
+    expect(r.status).toBe(400);
+    expect((await r.json()).error).toBe('invalid_grant');
+    // The stolen-token signal kills the connection — both parties must re-auth.
+    expect(save).toHaveBeenCalled();
+    expect(ApiToken.findOne.mock.calls[1][0]).toMatchObject({ prevRefreshTokenHash: sha256('spent'), origin: 'oauth', oauthClientId: CLIENT.clientId });
+  });
+
+  test('rotation records the spent refresh hash so a later replay is detectable', async () => {
+    OAuthClient.findOne.mockResolvedValue(CLIENT);
+    const raw = 'currentraw';
+    ApiToken.findOne.mockResolvedValue({ _id: 't1', oauthClientId: CLIENT.clientId, refreshTokenHash: sha256(raw), scopes: ['read'] });
+    ApiToken.findOneAndUpdate.mockResolvedValue({ _id: 't1', scopes: ['read'] });
+    await formPost('/token', { grant_type: 'refresh_token', client_id: CLIENT.clientId, refresh_token: raw });
+    expect(ApiToken.findOneAndUpdate.mock.calls[0][1].$set.prevRefreshTokenHash).toBe(sha256(raw));
   });
 
   test('a client cannot refresh ANOTHER client\'s token', async () => {
