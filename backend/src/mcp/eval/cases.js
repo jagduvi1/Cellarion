@@ -19,11 +19,19 @@ const CASES = [
     expect: { anyOf: ['search_bottles', 'get_rack'] },
   },
   { id: 'drank-recently', prompt: 'What did I drink last month?', expect: { tool: 'list_history' } },
-  { id: 'portfolio-value', prompt: 'What is my wine collection worth right now?', expect: { tool: 'cellar_stats' } },
+  {
+    id: 'portfolio-value',
+    prompt: 'What is my wine collection worth right now?',
+    // value_report (Phase 3) answers collection-worth questions at least as
+    // well as the stats overview — both are correct first moves.
+    expect: { anyOf: ['cellar_stats', 'value_report'] },
+  },
   {
     id: 'drink-soon-urgency',
     prompt: 'Which of my wines should I drink soon, before they go past their peak?',
-    expect: { anyOf: ['cellar_stats', 'search_bottles'] },
+    // Phase 3 added two tools that answer this directly (urgency ladder in the
+    // health check; readiness ranking in tonight's candidates).
+    expect: { anyOf: ['cellar_stats', 'search_bottles', 'cellar_health_check', 'what_should_i_open_tonight'] },
   },
   {
     id: 'rack-layout',
