@@ -65,8 +65,13 @@ async function resolveCellarAccess(userId, cellarId, minRole = 'viewer') {
  * or null (missing bottle, deleted cellar, or no access — all not_found).
  */
 async function resolveBottleAccess(userId, bottleId, minRole = 'viewer') {
-  if (!isValidId(bottleId)) return null;
-  const bottle = await Bottle.findById(bottleId);
+  // Same coercion as resolveCellarAccess above: callers pass client strings
+  // AND document refs (ObjectId instances, e.g. McpActionLog.bottle in
+  // undo_last). String() of an ObjectId is its 24-hex id; a smuggled object
+  // stringifies to something isValidId rejects — still fail-closed.
+  const id = String(bottleId);
+  if (!isValidId(id)) return null;
+  const bottle = await Bottle.findById(id);
   if (!bottle) return null;
   const access = await resolveCellarAccess(userId, bottle.cellar, minRole);
   if (!access) return null;

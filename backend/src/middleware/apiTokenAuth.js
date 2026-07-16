@@ -48,11 +48,13 @@ const SCOPE_ALLOWLIST = {
     // the caller may actually invoke is enforced *inside* by the MCP registry's
     // scope filter (a read token only ever sees read/public tools), so reaching
     // this path is safe. Anchored exact — cannot widen to any other /api/mcp/*.
-    // When consume/write MCP tools ship, add this entry under those scopes too.
     { method: 'POST', pattern: /^\/api\/mcp$/ },
   ],
   consume: [
     { method: 'POST', pattern: /^\/api\/bottles\/[a-f0-9]{24}\/consume$/ },
+    // MCP endpoint — a consume-scoped token may reach it; the registry's scope
+    // filter decides which tools it sees (consume + public, not read/write).
+    { method: 'POST', pattern: /^\/api\/mcp$/ },
   ],
   climate: [
     { method: 'POST', pattern: /^\/api\/climate\/ingest$/ },

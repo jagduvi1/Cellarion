@@ -5,12 +5,12 @@ const { handleMcpRequest } = require('../mcp/server');
 
 // Scopes a caller has when talking to the MCP endpoint. For a personal API token
 // (`cel_…`) these are the token's OWN scopes — so a read-only token sees and can
-// call only read tools. A JWT session is the user themselves, but we DELIBERATELY
-// cap it at `read`: the only tools today are read/public, and pre-granting
-// `consume`/`write` here would silently hand every logged-in session write power
-// the instant the first mutating tool ships. When consume/write tools land, that
-// PR extends this set as a conscious decision alongside the write-safety layers.
-const JWT_SCOPES = ['read'];
+// call only read tools. A JWT session is the user themselves; it gets `consume`
+// (a logged-in user can consume/restore in the UI already, and the consume
+// tools ship with the full write-safety stack: conflict guard, idempotency
+// keys, the McpActionLog undo ledger). `write` is deliberately NOT granted —
+// that extension happens with Phase 2b's add/edit tools, consciously.
+const JWT_SCOPES = ['read', 'consume'];
 
 // POST /api/mcp — stateless Streamable HTTP MCP endpoint. Auth is the same
 // requireAuth as the REST API. For `cel_` tokens the SCOPE_ALLOWLIST grants this
@@ -24,7 +24,11 @@ const JWT_SCOPES = ['read'];
 router.post('/', requireAuth, requireNonDemo, async (req, res, next) => {
   try {
     const scopes = req.apiToken ? req.apiToken.scopes : JWT_SCOPES;
-    await handleMcpRequest(req, res, { user: req.user, scopes });
+    // ctx.req rides along for the mutating tools: logAudit reads actor/ip/UA
+    // from it (which also emits the stats_changed SSE nudge), and req.apiToken
+    // lets the action ledger attribute the acting token (id only, never the
+    // token value).
+    await handleMcpRequest(req, res, { user: req.user, scopes, req });
   } catch (err) {
     next(err);
   }
