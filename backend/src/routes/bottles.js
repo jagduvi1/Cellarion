@@ -34,6 +34,7 @@ const searchService = require('../services/search');
 // consume/restore logic + rack-slot freeing live in the shared service so the
 // REST routes and the MCP tools can never drift (plan §7).
 const { consumeBottle, restoreBottle, removeFromRacks, removeBottleCascade } = require('../services/bottleOps');
+const { moveBottleToCellar } = require('../services/rackOps');
 
 const router = express.Router();
 
@@ -987,47 +988,14 @@ router.post('/:id/move', requireBottleAccess('owner'), async (req, res) => {
     });
     if (!destCellar) return res.status(404).json({ error: 'Destination cellar not found' });
 
-    const now = new Date();
-    // Backfill the origin entry for bottles created before cellarHistory existed
-    // (or imported), so the journey reads "added → moved", not just "moved".
-    if (bottle.cellarHistory.length === 0) {
-      bottle.cellarHistory.push({
-        cellar: sourceCellar._id, cellarName: sourceCellar.name,
-        enteredAt: bottle.addedToCellarAt || bottle.createdAt
-      });
-    }
-    bottle.cellar = destCellar._id;
-    bottle.addedToCellarAt = now;
-    bottle.cellarHistory.push({ cellar: destCellar._id, cellarName: destCellar.name, enteredAt: now });
-    // Commit the move FIRST — if it hits an optimistic-concurrency conflict the
-    // source rack is still untouched, so we never orphan a slot.
-    await bottle.save();
+    // Move mechanics (history seed, save-first ordering, unplace, dual audit)
+    // are shared with the MCP move tool.
+    const result = await moveBottleToCellar(bottle, sourceCellar, destCellar, req);
+    if (result.error) return res.status(result.error.status).json({ error: result.error.message });
 
-    // Now free the bottle from its old rack slot — it arrives unplaced. A failure
-    // here would only leave a stale slot that self-heals on the next rack render,
-    // never a bottle knocked out of its rack while still in the old cellar.
-    await removeFromRacks(bottle._id);
-
-    // Re-index so search reflects the new cellar.
-    searchService.indexBottle(bottle._id);
     await bottle.populate(WINE_POPULATE);
-
-    // Audit BOTH cellars so the move is followable from either side's audit log.
-    const wineName = bottle.wineDefinition?.name;
-    logAudit(req, 'bottle.move.out',
-      { type: 'bottle', id: bottle._id, cellarId: sourceCellar._id },
-      { toCellarId: destCellar._id, toCellarName: destCellar.name, wineName, vintage: bottle.vintage }
-    );
-    logAudit(req, 'bottle.move.in',
-      { type: 'bottle', id: bottle._id, cellarId: destCellar._id },
-      { fromCellarId: sourceCellar._id, fromCellarName: sourceCellar.name, wineName, vintage: bottle.vintage }
-    );
-
     res.json({ bottle });
   } catch (error) {
-    if (error.name === 'VersionError') {
-      return res.status(409).json({ error: 'This bottle was modified by another request. Please refresh and try again.' });
-    }
     console.error('Move bottle error:', error);
     res.status(500).json({ error: 'Failed to move bottle' });
   }

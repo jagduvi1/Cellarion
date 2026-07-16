@@ -146,7 +146,9 @@ registerTool({
     'consume_bottle becomes a restore; an accidental restore_bottle re-consumes with the original reason/note/rating. ' +
     `Only actions from the last ${RESTORE_WINDOW_DAYS} days are undoable, and only if the bottle hasn't been changed ` +
     'since. Call when the user says "undo that" about a change YOU just made. Tell the user exactly what was undone.',
-  scope: 'consume',
+  // Reachable by a consume OR a write token — it reverses both kinds of
+  // mutation, and the write tools all promise "reversible via undo_last".
+  scope: ['consume', 'write'],
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
   inputSchema: {},
   handler: async (_args, ctx) => {
@@ -163,12 +165,21 @@ registerTool({
       // must never gain delete-a-bottle power through undo.
       action: {
         $in: (ctx.scopes || []).includes('write')
-          ? ['consume', 'restore', 'add', 'update', 'bulk_add', 'somm_maturity', 'somm_price']
+          ? ['consume', 'restore', 'add', 'update', 'bulk_add', 'somm_maturity', 'somm_price',
+             'cellar_create', 'rack_create', 'place', 'unplace', 'move']
           : ['consume', 'restore'],
       },
       createdAt: { $gte: new Date(Date.now() - RESTORE_WINDOW_MS) },
     }).sort({ createdAt: -1 });
     if (!last) return fail('not_found', 'No recent MCP action to undo — nothing has been changed through MCP in the last few days.');
+
+    // Structural actions (cellar/rack create, placement, cross-cellar move)
+    // have bespoke reversals and don't all reference a single bottle — handled
+    // by a dedicated module before the bottle-centric branches below.
+    if (['cellar_create', 'rack_create', 'place', 'unplace', 'move'].includes(last.action)) {
+      const { undoStructural } = require('../structuralUndo');
+      return undoStructural(last, ctx, { ok, fail, logAction });
+    }
 
     // Somm curation rows reference registry data, not a bottle — handled first.
     // The role is re-checked: a somm demoted since the action cannot keep

@@ -28,8 +28,11 @@ function registerTool(def) {
   if (!def || typeof def.name !== 'string' || typeof def.handler !== 'function') {
     throw new Error('registerTool: name and handler are required');
   }
-  if (typeof def.scope !== 'string') {
-    throw new Error(`registerTool(${def.name}): scope is required`);
+  // scope is a single scope string, or an array of accepted scopes.
+  const scopeOk = typeof def.scope === 'string'
+    || (Array.isArray(def.scope) && def.scope.length > 0 && def.scope.every((s) => typeof s === 'string'));
+  if (!scopeOk) {
+    throw new Error(`registerTool(${def.name}): scope (string or non-empty string[]) is required`);
   }
   if (tools.some((t) => t.name === def.name)) {
     throw new Error(`registerTool: duplicate tool name "${def.name}"`);
@@ -44,7 +47,10 @@ function registerTool(def) {
  */
 function scopeSatisfies(tokenScopes, required) {
   if (required === 'public') return true;
-  return Array.isArray(tokenScopes) && tokenScopes.includes(required);
+  // A tool may accept ANY of several scopes (e.g. undo_last, reachable by a
+  // consume OR a write token — it reverses both kinds of mutation).
+  const accepted = Array.isArray(required) ? required : [required];
+  return Array.isArray(tokenScopes) && accepted.some((r) => tokenScopes.includes(r));
 }
 
 /**

@@ -17,6 +17,7 @@ require('./consume');
 require('./write');
 require('./bulk');
 require('./somm');
+require('./rack');
 require('./similar');
 
 module.exports = {};
