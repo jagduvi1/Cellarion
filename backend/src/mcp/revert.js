@@ -37,15 +37,17 @@ async function revertLedgerRow(row, ctx, { ok, fail }) {
     return undoStructural(row, ctx, { ok, fail, logAction });
   }
 
-  // Tasting note — remove the journal entry and restore the previous rating.
+  // Tasting note — remove the journal entry (via the shared journalOps delete,
+  // so the reversal is audited exactly like a manual deletion) and restore the
+  // previous rating.
   if (row.action === 'tasting_note') {
-    const JournalEntry = require('../models/JournalEntry');
+    const { deleteEntry } = require('../services/journalOps');
     const access = await resolveBottleAccess(ctx.user.id, row.bottle, 'editor');
     if (!access) return fail('conflict', 'The bottle from that note is no longer accessible; nothing was changed.');
     const claimed = await McpActionLog.findOneAndUpdate({ _id: row._id, reversed: false }, { $set: { reversed: true, idempotencyKey: null } });
     if (!claimed) return fail('conflict', 'That action is already being undone by another request.');
 
-    const del = await JournalEntry.deleteOne({ _id: row.detail?.journalId, user: ctx.user.id });
+    const del = await deleteEntry(ctx.user.id, row.detail?.journalId, ctx.req, { auditMeta: { via: 'undo' } });
     let ratingRestored = false;
     if (row.prev && row.prev.field) {
       const { bottle } = access;
@@ -61,8 +63,8 @@ async function revertLedgerRow(row, ctx, { ok, fail }) {
       }
     }
     const envelope = {
-      summary: `Undid tasting note${del.deletedCount ? ' — journal entry removed' : ' — entry was already gone'}${row.prev?.field ? (ratingRestored ? ', previous rating restored' : ', rating could NOT be restored') : ''}`,
-      data: { undone: 'capture_tasting_note', entry_removed: !!del.deletedCount, rating_restored: row.prev?.field ? ratingRestored : undefined },
+      summary: `Undid tasting note${del.deleted ? ' — journal entry removed' : ' — entry was already gone'}${row.prev?.field ? (ratingRestored ? ', previous rating restored' : ', rating could NOT be restored') : ''}`,
+      data: { undone: 'capture_tasting_note', entry_removed: !!del.deleted, rating_restored: row.prev?.field ? ratingRestored : undefined },
     };
     await logAction(ctx, { tool: 'undo_last', action: 'tasting_note', viaUndo: true, bottle: row.bottle, cellar: row.cellar, detail: { undid: String(row._id) }, result: envelope });
     return ok(envelope.summary, envelope.data);

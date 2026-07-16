@@ -184,6 +184,47 @@ async function moveBottleToCellar(bottle, sourceCellar, destCellar, req) {
   return { bottle, from: { cellarId: String(sourceCellar._id), cellarName: sourceCellar.name } };
 }
 
+/**
+ * Occupied slots of a (slots.bottle-populated) rack annotated with the same
+ * maturityStatus the rack views color by (routes/racks withMaturity) — the
+ * input shape utils/rackArrange.buildArrangePlan sorts on. Shared so an MCP
+ * auto_arrange and a future REST arrange endpoint classify identically.
+ */
+async function buildAnnotatedEntries(rack) {
+  const { classifyMaturity, buildProfileMap } = require('../utils/maturityUtils');
+  const bottles = (rack.slots || []).map((s) => s.bottle).filter(Boolean);
+  const profileMap = await buildProfileMap(bottles);
+  return (rack.slots || [])
+    .filter((s) => s.bottle)
+    .map((s) => {
+      const b = s.bottle.toObject ? s.bottle.toObject() : s.bottle;
+      b.maturityStatus = classifyMaturity(b, profileMap) || null;
+      return { position: s.position, bottle: b };
+    });
+}
+
+/**
+ * Apply a full slot assignment to an access-checked rack in ONE atomic save —
+ * no partial arrangements. `target` = [{ position, bottleId }]. Optimistic
+ * concurrency (Rack versionKey) turns a concurrent slot write into a clean
+ * conflict instead of a lost update. Audits rack.arrange with the given meta.
+ * Returns { rack } or { error: { status: 409, message, code: 'conflict' } }.
+ */
+async function applyArrangement(rack, target, req, meta = {}) {
+  rack.slots = target.map((t) => ({ position: t.position, bottle: t.bottleId }));
+  try {
+    await rack.save();
+  } catch (err) {
+    if (err.name === 'VersionError') {
+      return { error: { status: 409, code: 'conflict', message: 'The rack was modified at the same moment — nothing was applied.' } };
+    }
+    throw err;
+  }
+  logAudit(req, 'rack.arrange', { type: 'rack', id: rack._id, cellarId: rack.cellar }, meta);
+  return { rack };
+}
+
 module.exports = {
   createCellar, createGridRack, placeBottleInRack, clearRackSlot, moveBottleToCellar,
+  buildAnnotatedEntries, applyArrangement,
 };

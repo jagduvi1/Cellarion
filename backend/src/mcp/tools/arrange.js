@@ -20,9 +20,10 @@ const McpActionLog = require('../../models/McpActionLog');
 const { registerTool } = require('../registry');
 const { getMaxPosition } = require('../../utils/rackGeometry');
 const { ARRANGE_STRATEGIES, buildArrangePlan } = require('../../utils/rackArrange');
-const { classifyMaturity, buildProfileMap } = require('../../utils/maturityUtils');
+// Maturity annotation + the one-save atomic apply live in services/rackOps —
+// shared with a future REST arrange endpoint (one-impl rule).
+const { buildAnnotatedEntries, applyArrangement } = require('../../services/rackOps');
 const { isValidId } = require('../../utils/validation');
-const { logAudit } = require('../../services/audit');
 const { ok, fail, objectId, resolveCellarAccess } = require('../toolUtil');
 const { logAction } = require('../actionLedger');
 const { takeMutationSlot } = require('../mutationBudget');
@@ -88,16 +89,8 @@ registerTool({
       const strategy = args.strategy || 'maturity';
 
       // Same classification the rack views color by (routes/racks withMaturity).
-      const bottles = (rack.slots || []).map((s) => s.bottle).filter(Boolean);
-      if (bottles.length === 0) return ok('Rack is empty — nothing to arrange', { changes: [] });
-      const profileMap = await buildProfileMap(bottles);
-      const entries = (rack.slots || [])
-        .filter((s) => s.bottle)
-        .map((s) => {
-          const b = s.bottle.toObject ? s.bottle.toObject() : s.bottle;
-          b.maturityStatus = classifyMaturity(b, profileMap) || null;
-          return { position: s.position, bottle: b };
-        });
+      const entries = await buildAnnotatedEntries(rack);
+      if (entries.length === 0) return ok('Rack is empty — nothing to arrange', { changes: [] });
 
       const { target, changes } = buildArrangePlan(entries, getMaxPosition(rack), rack.disabledPositions || [], strategy);
       if (changes.length === 0) {
@@ -118,13 +111,13 @@ registerTool({
         result: null,
       });
       return ok(
-        `Preview: ${changes.length} of ${bottles.length} bottle(s) would move (strategy: ${strategy})`,
+        `Preview: ${changes.length} of ${entries.length} bottle(s) would move (strategy: ${strategy})`,
         {
           preview_id: String(row._id),
           rack: rack.name,
           strategy,
           bottles_moving: changes.length,
-          bottles_total: bottles.length,
+          bottles_total: entries.length,
           moves: moveList,
           guidance: 'Show this move list to the user. On their approval call auto_arrange with mode:"apply" and this preview_id.',
         }
@@ -172,19 +165,13 @@ registerTool({
     );
     if (!claimed) return fail('conflict', 'That preview was just used by another request.');
 
-    // One atomic save: the whole target assignment at once. Optimistic
-    // concurrency (rack.__v) turns a concurrent slot write into a clean
-    // conflict instead of a lost update.
-    rack.slots = target.map((t) => ({ position: t.position, bottle: t.bottleId }));
-    try {
-      await rack.save();
-    } catch (err) {
-      if (err.name === 'VersionError') {
-        return fail('conflict', 'The rack was modified at the same moment — nothing was applied. Run a fresh preview.');
-      }
-      throw err;
+    // One atomic save via the shared rackOps.applyArrangement — the whole
+    // target assignment at once; optimistic concurrency turns a concurrent
+    // slot write into a clean conflict instead of a lost update.
+    const applied = await applyArrangement(rack, target, ctx.req, { via: 'mcp', strategy, moved });
+    if (applied.error) {
+      return fail('conflict', `${applied.error.message} Run a fresh preview.`);
     }
-    logAudit(ctx.req, 'rack.arrange', { type: 'rack', id: rack._id, cellarId: rack.cellar }, { via: 'mcp', strategy, moved });
 
     const envelope = {
       summary: `Arranged rack "${rack.name}" by ${strategy} — ${moved} bottle(s) moved`,

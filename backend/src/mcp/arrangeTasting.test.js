@@ -24,7 +24,7 @@ jest.mock('../models/Bottle', () => ({
 jest.mock('../models/Rack', () => ({ find: jest.fn(), findOne: jest.fn() }));
 jest.mock('../models/User', () => ({ findById: jest.fn() }));
 jest.mock('../models/WishlistItem', () => ({ find: jest.fn(), countDocuments: jest.fn() }));
-jest.mock('../models/JournalEntry', () => ({ create: jest.fn(), deleteOne: jest.fn(), find: jest.fn(), countDocuments: jest.fn() }));
+jest.mock('../models/JournalEntry', () => ({ create: jest.fn(), deleteOne: jest.fn(), findOneAndDelete: jest.fn(), find: jest.fn(), countDocuments: jest.fn() }));
 jest.mock('../models/WineDefinition', () => ({ find: jest.fn(), findById: jest.fn() }));
 jest.mock('../models/WineEmbedding', () => ({ findOne: jest.fn() }));
 jest.mock('../models/WineVintageProfile', () => ({ find: jest.fn() }));
@@ -273,13 +273,16 @@ describe('capture_tasting_note', () => {
     };
     Bottle.findById.mockReturnValue(chain(b));
     Cellar.findById.mockReturnValue(chain({ _id: b.cellar, user: ME, members: [], deletedAt: null }));
+    // journalOps.validatePairingRefs re-verifies the pairing bottle ref (the
+    // SAME pipeline the REST journal route runs) — let it find an owned bottle.
+    Bottle.find.mockReturnValue(chain([{ _id: b._id, user: ME, cellar: { user: ME, members: [], deletedAt: null } }]));
     return b;
   };
 
   test('active bottle: rating via updateBottleFields, private entry with the bottle pairing, prev snapshot', async () => {
     const b = ownBottle();
     bottleOps.updateBottleFields.mockResolvedValue({ changes: { rating: 4 }, prev: { rating: 3 } });
-    JournalEntry.create.mockResolvedValue({ _id: new mongoose.Types.ObjectId(oid('9')) });
+    JournalEntry.create.mockResolvedValue({ _id: new mongoose.Types.ObjectId(oid('9')), visibility: 'private', people: [] });
 
     const res = await tool('capture_tasting_note').handler(
       { bottle_id: oid('d'), note: '<b>Cherries</b> and tar', rating: 4, rating_scale: '5', dish: 'brasato' }, CTX);
@@ -288,12 +291,26 @@ describe('capture_tasting_note', () => {
     expect(bottleOps.updateBottleFields).toHaveBeenCalledWith(b, { rating: 4, ratingScale: '5' }, CTX.req);
     const entry = JournalEntry.create.mock.calls[0][0];
     expect(entry.visibility).toBe('private');
-    expect(entry.people).toEqual([]);
-    expect(entry.notes).toBe('Cherries and tar'); // HTML stripped
-    expect(entry.pairings[0]).toMatchObject({ bottle: b._id, dish: 'brasato' });
+    expect(entry.people).toBeUndefined(); // never sent — no tagging over MCP
+    expect(entry.notes).toBe('Cherries and tar'); // HTML stripped (journalOps pipeline)
+    expect(entry.pairings[0]).toMatchObject({ bottle: String(b._id), dish: 'brasato' });
     const row = McpActionLog.create.mock.calls[0][0];
     expect(row.action).toBe('tasting_note');
     expect(row.prev).toMatchObject({ field: 'rating', rating: 3, ratingScale: '5' });
+  });
+
+  test('rating failure after the entry is created compensates by deleting the entry (all-or-nothing)', async () => {
+    ownBottle();
+    JournalEntry.create.mockResolvedValue({ _id: new mongoose.Types.ObjectId(oid('9')), visibility: 'private' });
+    JournalEntry.findOneAndDelete.mockResolvedValue({ _id: oid('9') });
+    bottleOps.updateBottleFields.mockResolvedValue({ error: { status: 400, message: 'nope' } });
+
+    const res = await tool('capture_tasting_note').handler(
+      { bottle_id: oid('d'), note: 'x', rating: 4 }, CTX);
+    expect(parse(res).error.code).toBe('invalid_input');
+    expect(JournalEntry.findOneAndDelete).toHaveBeenCalledWith(
+      { _id: expect.anything(), user: ME });
+    expect(McpActionLog.create).not.toHaveBeenCalled(); // no ledger row for a rolled-back action
   });
 
   test('consumed bottle: rating lands on consumedRating with its own prev snapshot', async () => {

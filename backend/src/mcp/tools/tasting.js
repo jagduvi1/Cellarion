@@ -5,17 +5,19 @@
 // notification side-effects a machine caller has no business triggering) and
 // visibility is always private. One ledger row covers both effects, so
 // undo_last / the activity timeline revert the note AND the rating together.
+//
+// The entry itself is written through services/journalOps.createEntry — the
+// SAME sanitise/validate/create/audit pipeline the REST journal route uses,
+// so the two surfaces cannot drift (one-impl rule, like bottleOps/rackOps).
 const { z } = require('zod');
-const JournalEntry = require('../../models/JournalEntry');
 const { registerTool } = require('../registry');
 const { updateBottleFields } = require('../../services/bottleOps');
+const { createEntry, deleteEntry, OCCASIONS } = require('../../services/journalOps');
 const { resolveRating } = require('../../utils/ratingUtils');
 const { stripHtml } = require('../../utils/sanitize');
 const { logAudit } = require('../../services/audit');
 const { ok, fail, objectId, MSG_BOTTLE_NOT_FOUND, resolveBottleAccess } = require('../toolUtil');
 const { logAction, replay } = require('../actionLedger');
-
-const OCCASIONS = ['dinner', 'tasting', 'celebration', 'casual', 'gift', 'travel', 'other'];
 
 registerTool({
   name: 'capture_tasting_note',
@@ -73,11 +75,29 @@ registerTool({
     if (!noteText) return fail('invalid_input', 'note is empty after sanitisation.');
     const dish = args.dish ? stripHtml(String(args.dish)).slice(0, 200).trim() : '';
 
-    // 1. Rating first (validated above, so a failure here leaves no orphan note).
+    // 1. The journal entry — through the shared journalOps pipeline (private,
+    //    no people; the service re-sanitises, re-validates the bottle ref and
+    //    writes the journal.create audit row). Entry first: if it is rejected,
+    //    nothing has been written yet.
+    const created = await createEntry(ctx.user.id, {
+      date,
+      occasion: args.occasion || 'tasting',
+      notes: noteText,
+      pairings: [{ bottle: String(bottle._id), dish }],
+      visibility: 'private',
+    }, ctx.req, { auditMeta: { via: 'mcp', bottleId: String(bottle._id) } });
+    if (created.error) return fail('invalid_input', created.error.message);
+    const entry = created.entry;
+
+    // 2. The rating (pre-validated above). If it still fails, compensate by
+    //    removing the just-created entry — the tool's effects are all-or-nothing.
     if (ratingChange) {
       if (ratingChange.field === 'rating') {
         const result = await updateBottleFields(bottle, { rating: args.rating, ratingScale: args.rating_scale }, ctx.req);
-        if (result.error) return fail('invalid_input', `Could not set the rating: ${result.error.message}`);
+        if (result.error) {
+          await deleteEntry(ctx.user.id, entry._id, ctx.req, { auditMeta: { via: 'mcp', compensation: true } });
+          return fail('invalid_input', `Could not set the rating: ${result.error.message} Nothing was saved.`);
+        }
       } else {
         bottle.consumedRating = ratingChange.value;
         bottle.consumedRatingScale = ratingChange.scale;
@@ -85,19 +105,6 @@ registerTool({
         logAudit(ctx.req, 'bottle.update', { type: 'bottle', id: bottle._id, cellarId: bottle.cellar }, { via: 'mcp', fields: ['consumedRating'] });
       }
     }
-
-    // 2. The journal entry (private, no people).
-    const entry = await JournalEntry.create({
-      user: ctx.user.id,
-      date,
-      title: '',
-      occasion: args.occasion || 'tasting',
-      notes: noteText,
-      people: [],
-      pairings: [{ bottle: bottle._id, dish, wineName: '' }],
-      visibility: 'private',
-    });
-    logAudit(ctx.req, 'journal.create', { type: 'journal', id: entry._id }, { via: 'mcp', bottleId: String(bottle._id) });
 
     const envelope = {
       summary: `Tasting note saved for vintage ${bottle.vintage}${ratingChange ? ` (rating ${ratingChange.value}/${ratingChange.scale})` : ''}`,

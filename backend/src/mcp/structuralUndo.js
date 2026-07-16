@@ -127,14 +127,10 @@ async function undoStructural(last, ctx, { ok, fail, logAction }) {
       return fail('conflict', 'The rack has changed since that arrangement; undo it manually. Nothing was changed.');
     }
     if (!(await claim(last))) return fail('conflict', 'That action is already being undone.');
-    rack.slots = before.map((t) => ({ position: t.position, bottle: t.bottleId }));
-    try {
-      await rack.save();
-    } catch (err) {
-      if (err.name === 'VersionError') return fail('conflict', 'The rack was modified at the same moment; nothing was restored.');
-      throw err;
-    }
-    logAudit(ctx.req, 'rack.arrange', { type: 'rack', id: rack._id, cellarId: rack.cellar }, { via: 'undo', restored: before.length });
+    // Same shared one-save apply the arrangement itself used (rackOps).
+    const { applyArrangement } = require('../services/rackOps');
+    const applied = await applyArrangement(rack, before, ctx.req, { via: 'undo', restored: before.length });
+    if (applied.error) return fail('conflict', `${applied.error.message} Nothing was restored.`);
     return record({
       summary: `Undid arrangement — rack "${rack.name}" restored to its previous layout`,
       data: { undone: 'auto_arrange', rack_id: String(rack._id), bottles: before.length },

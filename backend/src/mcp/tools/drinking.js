@@ -1,164 +1,35 @@
 // "What should I drink" tools (plan Phase 3): what_should_i_open_tonight and
-// pair_with_dish. Both are candidate-shortlist generators over the SAME core —
-// they select ready-to-drink bottles, attach the structured facts a sommelier
-// would weigh (maturity + urgency, taste profile, rating, price, rack position,
-// open-bottle state) and let the CALLING model make the actual choice. No LLM
-// runs here (§5.2): the server curates data, the caller reasons.
+// pair_with_dish. Both are candidate-shortlist generators — they select
+// ready-to-drink bottles with the structured facts a sommelier would weigh
+// (maturity + urgency, taste profile, rating, price, rack position, open-
+// bottle state) and let the CALLING model make the actual choice. No LLM runs
+// here (§5.2): the server curates data, the caller reasons.
+//
+// Selection/enrichment/scoring live in services/drinkingService.js — ONE
+// implementation shared with any future UI feature (one-impl rule). This file
+// is the MCP adapter: access resolution, zod schemas, envelopes.
 const { z } = require('zod');
 const Cellar = require('../../models/Cellar');
-const Bottle = require('../../models/Bottle');
-const Rack = require('../../models/Rack');
-const WineDefinition = require('../../models/WineDefinition');
-const { CONSUMED_STATUSES, WINE_POPULATE_LIST } = require('../../config/constants');
-const { classifyMaturity, buildProfileMap, maturityLabel } = require('../../utils/maturityUtils');
-const { toNormalized } = require('../../utils/ratingUtils');
 const { registerTool } = require('../registry');
-const { ok, fail, objectId, MSG_CELLAR_NOT_FOUND, resolveCellarAccess, hasContent } = require('../toolUtil');
+const { ok, fail, objectId, MSG_CELLAR_NOT_FOUND, resolveCellarAccess } = require('../toolUtil');
 
 const WINE_TYPES = ['red', 'white', 'rosé', 'sparkling', 'dessert', 'fortified'];
 const MAX_LIMIT = 15;
 
-// Readiness order: already-open bottles first (finish before opening anew),
-// then closing windows (drinking them tonight is a rescue), then peak.
-// 'not-ready' is excluded from candidates entirely.
-const READINESS_RANK = { open: 0, declining: 1, late: 2, peak: 3, early: 4, unknown: 5 };
-
-const parseMl = (size) => {
-  const n = parseInt(String(size || '750').replace(/[^0-9]/g, ''), 10);
-  return Number.isInteger(n) && n > 0 ? n : 750;
-};
-
 /**
- * Select and rank ready-to-drink candidates.
- * Scope: the user's OWN cellars by default (cellar-view semantics, like
- * search_bottles); an explicit cellar_id may be any cellar they can view.
- * Returns { candidates, considered, notReady, cellarName } or { error }.
+ * Resolve the cellar scope for candidate selection: the user's OWN cellars by
+ * default (cellar-view semantics, like search_bottles); an explicit cellar_id
+ * may be any cellar they can view. Returns { cellarIds, cellarName } or
+ * { error } (an MCP fail envelope).
  */
-async function readyCandidates(ctx, args) {
-  let cellarIds;
-  let cellarName = null;
+async function resolveScope(ctx, args) {
   if (args.cellar_id) {
     const access = await resolveCellarAccess(ctx.user.id, args.cellar_id);
     if (!access) return { error: fail('not_found', MSG_CELLAR_NOT_FOUND) };
-    cellarIds = [access.cellar._id];
-    cellarName = access.cellar.name;
-  } else {
-    const cellars = await Cellar.find({ user: ctx.user.id, deletedAt: null }).select('_id').lean();
-    cellarIds = cellars.map((c) => c._id);
+    return { cellarIds: [access.cellar._id], cellarName: access.cellar.name };
   }
-  if (cellarIds.length === 0) return { candidates: [], considered: 0, notReady: 0, cellarName };
-
-  const bottles = await Bottle.find({ cellar: { $in: cellarIds }, status: { $nin: CONSUMED_STATUSES } })
-    .populate(WINE_POPULATE_LIST).lean();
-
-  let pool = bottles;
-  if (args.wine_type) pool = pool.filter((b) => b.wineDefinition?.type === args.wine_type);
-
-  let priceWarning = null;
-  if (args.max_price != null) {
-    const { getOrCreateDailySnapshot, convertCurrency } = require('../../utils/exchangeRates');
-    const User = require('../../models/User');
-    const dbUser = await User.findById(ctx.user.id).select('preferences').lean();
-    const target = (args.currency || dbUser?.preferences?.currency || 'USD').toUpperCase();
-    let rates = null;
-    try { rates = (await getOrCreateDailySnapshot())?.rates || null; } catch (_) {}
-    const before = pool.length;
-    pool = pool.filter((b) => {
-      const v = b.price ? convertCurrency(b.price, b.currency || 'USD', target, rates) : null;
-      return v != null && v <= args.max_price;
-    });
-    priceWarning = `max_price ${args.max_price} ${target}: ${before - pool.length} bottle(s) without a comparable price were excluded.`;
-  }
-
-  const profileMap = await buildProfileMap(pool);
-  let notReady = 0;
-  const ranked = [];
-  for (const b of pool) {
-    const status = classifyMaturity(b, profileMap);
-    if (status === 'not-ready') { notReady++; continue; }
-    const readiness = b.openedAt ? 'open' : (status || 'unknown');
-    ranked.push({ b, status, readiness, rank: READINESS_RANK[readiness] });
-  }
-  ranked.sort((a, x) => {
-    if (a.rank !== x.rank) return a.rank - x.rank;
-    const ra = a.b.rating ? toNormalized(a.b.rating, a.b.ratingScale || '5') : -1;
-    const rx = x.b.rating ? toNormalized(x.b.rating, x.b.ratingScale || '5') : -1;
-    if (ra !== rx) return rx - ra; // better-rated first within a readiness band
-    return String(a.b.vintage).localeCompare(String(x.b.vintage));
-  });
-
-  return { ranked, profileMap, considered: pool.length, notReady, cellarName, cellarIds, priceWarning };
-}
-
-/** Serialize the top `limit` ranked entries, enriching with taste + position. */
-async function serializeCandidates(ranked, profileMap, cellarIds, limit) {
-  const top = ranked.slice(0, limit);
-  const bottleIds = top.map((r) => r.b._id);
-  const wineIds = [...new Set(top.map((r) => String(r.b.wineDefinition?._id)).filter(Boolean))];
-
-  // Taste profiles (WINE_POPULATE_LIST strips them from list loads) and rack
-  // positions, fetched only for the shortlist.
-  const [wines, racks] = await Promise.all([
-    wineIds.length
-      ? WineDefinition.find({ _id: { $in: wineIds } }).select('aiProfile').lean()
-      : [],
-    bottleIds.length
-      ? Rack.find({ cellar: { $in: cellarIds }, deletedAt: null, 'slots.bottle': { $in: bottleIds } })
-          .select('name slots.position slots.bottle').lean()
-      : [],
-  ]);
-  const tasteOf = new Map(wines.map((w) => [String(w._id), w.aiProfile]));
-  const positionOf = new Map();
-  for (const rack of racks) {
-    for (const s of rack.slots || []) {
-      const bid = String(s.bottle);
-      if (bottleIds.some((id) => String(id) === bid)) positionOf.set(bid, { rack: rack.name, position: s.position });
-    }
-  }
-
-  return top.map(({ b, status, readiness }) => {
-    const profile = b.wineDefinition ? tasteOf.get(String(b.wineDefinition._id)) : null;
-    const taste = profile && hasContent(profile)
-      ? {
-          body: profile.body || null,
-          tannin: profile.tannin || null,
-          acidity: profile.acidity || null,
-          sweetness: profile.sweetness || null,
-          flavors: profile.flavors || [],
-          food_pairings: profile.foodPairings || [],
-        }
-      : null;
-    const wdId = b.wineDefinition?._id ? String(b.wineDefinition._id) : null;
-    const vintageProfile = wdId ? profileMap.get(`${wdId}:${b.vintage}`) : null;
-    return {
-      bottle_id: b._id,
-      wine: {
-        name: b.wineDefinition?.name || b.pendingWineRequest?.wineName || 'Unknown wine',
-        producer: b.wineDefinition?.producer || null,
-        type: b.wineDefinition?.type || null,
-        grapes: (b.wineDefinition?.grapes || []).map((g) => g?.name).filter(Boolean),
-        region: b.wineDefinition?.region?.name || null,
-        country: b.wineDefinition?.country?.name || null,
-      },
-      vintage: b.vintage,
-      readiness,
-      maturity: status,
-      window: maturityLabel(status, vintageProfile, b),
-      open: b.openedAt
-        ? {
-            opened_at: b.openedAt,
-            preservation: b.preservationMethod || null,
-            remaining_ml: Math.max(parseMl(b.bottleSize) - (b.pours || []).reduce((s, p) => s + (p.ml || 0), 0), 0),
-          }
-        : null,
-      rating: b.rating ?? null,
-      rating_scale: b.rating != null ? b.ratingScale || '5' : undefined,
-      price: b.price ?? null,
-      currency: b.price != null ? b.currency || 'USD' : undefined,
-      location: positionOf.get(String(b._id)) || null,
-      taste,
-    };
-  });
+  const cellars = await Cellar.find({ user: ctx.user.id, deletedAt: null }).select('_id').lean();
+  return { cellarIds: cellars.map((c) => c._id), cellarName: null };
 }
 
 registerTool({
@@ -179,22 +50,26 @@ registerTool({
     limit: z.number().int().min(1).max(MAX_LIMIT).default(8),
   },
   handler: async (args, ctx) => {
-    const sel = await readyCandidates(ctx, args);
-    if (sel.error) return sel.error;
+    const { readyCandidates, serializeCandidates } = require('../../services/drinkingService');
+    const scope = await resolveScope(ctx, args);
+    if (scope.error) return scope.error;
     const limit = Math.min(Math.max(parseInt(args.limit, 10) || 8, 1), MAX_LIMIT);
-    if (!sel.ranked || sel.ranked.length === 0) {
+    const sel = await readyCandidates(ctx.user.id, scope.cellarIds, {
+      wineType: args.wine_type, maxPrice: args.max_price, currency: args.currency,
+    });
+    if (sel.ranked.length === 0) {
       return ok('No ready-to-drink bottles matched', [], {
         warnings: [
-          `${sel.notReady || 0} bottle(s) are not ready yet; ${sel.considered || 0} matched the filters in total.`,
+          `${sel.notReady} bottle(s) are not ready yet; ${sel.considered} matched the filters in total.`,
           ...(sel.priceWarning ? [sel.priceWarning] : []),
         ],
       });
     }
-    const data = await serializeCandidates(sel.ranked, sel.profileMap, sel.cellarIds, limit);
+    const data = await serializeCandidates(sel.ranked, sel.profileMap, scope.cellarIds, limit);
     const openCount = data.filter((c) => c.readiness === 'open').length;
     const urgentCount = data.filter((c) => c.readiness === 'declining' || c.readiness === 'late').length;
     return ok(
-      `${data.length} candidate(s)${sel.cellarName ? ` in "${sel.cellarName}"` : ''}` +
+      `${data.length} candidate(s)${scope.cellarName ? ` in "${scope.cellarName}"` : ''}` +
         `${openCount ? ` — ${openCount} already open` : ''}${urgentCount ? `, ${urgentCount} in closing windows` : ''}`,
       data,
       {
@@ -224,42 +99,18 @@ registerTool({
     limit: z.number().int().min(1).max(MAX_LIMIT).default(8),
   },
   handler: async (args, ctx) => {
-    const sel = await readyCandidates(ctx, args);
-    if (sel.error) return sel.error;
+    const { readyCandidates, serializeCandidates, scoreDishMatches } = require('../../services/drinkingService');
+    const scope = await resolveScope(ctx, args);
+    if (scope.error) return scope.error;
     const limit = Math.min(Math.max(parseInt(args.limit, 10) || 8, 1), MAX_LIMIT);
-    if (!sel.ranked || sel.ranked.length === 0) {
+    const sel = await readyCandidates(ctx.user.id, scope.cellarIds, {});
+    if (sel.ranked.length === 0) {
       return ok('No ready-to-drink bottles to pair', [], {
-        warnings: [`${sel.notReady || 0} bottle(s) are not ready yet. Suggest the user widens the pool or looks at the registry.`],
+        warnings: [`${sel.notReady} bottle(s) are not ready yet. Suggest the user widens the pool or looks at the registry.`],
       });
     }
 
-    // Keyword evidence: dish tokens vs stored foodPairings (weight 2) and
-    // flavors (weight 1). Profiles are fetched once for the ready pool's wines.
-    const tokens = [...new Set(String(args.dish).toLowerCase().split(/[^a-zà-ÿ]+/i).filter((t) => t.length >= 3))];
-    const wineIds = [...new Set(sel.ranked.map((r) => String(r.b.wineDefinition?._id)).filter(Boolean))];
-    const wines = wineIds.length
-      ? await WineDefinition.find({ _id: { $in: wineIds } }).select('aiProfile.foodPairings aiProfile.flavors').lean()
-      : [];
-    const profOf = new Map(wines.map((w) => [String(w._id), w.aiProfile || {}]));
-
-    const scoreOf = new Map(); // bottleId -> { score, terms }
-    for (const r of sel.ranked) {
-      const prof = r.b.wineDefinition ? profOf.get(String(r.b.wineDefinition._id)) : null;
-      if (!prof) continue;
-      const hay = [
-        ...(prof.foodPairings || []).map((p) => ({ text: String(p).toLowerCase(), w: 2 })),
-        ...(prof.flavors || []).map((f) => ({ text: String(f).toLowerCase(), w: 1 })),
-      ];
-      let score = 0;
-      const terms = new Set();
-      for (const t of tokens) {
-        for (const h of hay) {
-          if (h.text.includes(t)) { score += h.w; terms.add(h.text); }
-        }
-      }
-      if (score > 0) scoreOf.set(String(r.b._id), { score, terms: [...terms].slice(0, 6) });
-    }
-
+    const scoreOf = await scoreDishMatches(args.dish, sel.ranked);
     const matched = sel.ranked
       .filter((r) => scoreOf.has(String(r.b._id)))
       .sort((a, b) => scoreOf.get(String(b.b._id)).score - scoreOf.get(String(a.b._id)).score || a.rank - b.rank);
@@ -275,12 +126,12 @@ registerTool({
     }
     const spread = [...perType.values()].flat();
 
-    const matchedOut = await serializeCandidates(matched, sel.profileMap, sel.cellarIds, Math.min(matched.length, limit));
+    const matchedOut = await serializeCandidates(matched, sel.profileMap, scope.cellarIds, Math.min(matched.length, limit));
     for (const c of matchedOut) {
       const s = scoreOf.get(String(c.bottle_id));
       c.match = { score: s.score, matched_on: s.terms };
     }
-    const spreadOut = await serializeCandidates(spread, sel.profileMap, sel.cellarIds, Math.max(limit - matchedOut.length, 3));
+    const spreadOut = await serializeCandidates(spread, sel.profileMap, scope.cellarIds, Math.max(limit - matchedOut.length, 3));
 
     return ok(
       `${matchedOut.length} keyword match(es) for "${args.dish}", ${spreadOut.length} style-spread candidate(s)`,
@@ -294,4 +145,4 @@ registerTool({
   },
 });
 
-module.exports = { readyCandidates };
+module.exports = {};
