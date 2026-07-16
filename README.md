@@ -448,7 +448,7 @@ Copy `.env.example` to `.env` in the project root and set the required values:
 | `OPENAI_TIMEOUT_MS` | No | `120000` | Per-request timeout for the OpenAI-compatible endpoint |
 | `EMBEDDING_PROVIDER` | No | `voyage` | Set to `openai` to serve wine embeddings from an OpenAI-compatible endpoint instead of Voyage AI |
 | `EMBEDDING_BASE_URL` | No | `OPENAI_BASE_URL` | `/v1` root of the embedding endpoint |
-| `EMBEDDING_API_KEY` | No | `OPENAI_API_KEY` | Bearer token for the embedding endpoint |
+| `EMBEDDING_API_KEY` | No | — | Bearer token for the embedding endpoint (falls back to `OPENAI_API_KEY` only when `EMBEDDING_BASE_URL` is also unset — a dedicated embedding host is never sent the chat key) |
 | `EMBEDDING_MODEL` | No | — | Embedding model name, e.g. `nomic-embed-text` (required when `EMBEDDING_PROVIDER=openai`) |
 | `EMBEDDING_DIMENSION` | No | — | The model's vector size, e.g. `768` (required when `EMBEDDING_PROVIDER=openai`) |
 | `EMBEDDING_TIMEOUT_MS` | No | `30000` | Per-request timeout for the embedding endpoint |
@@ -495,6 +495,8 @@ EMBEDDING_DIMENSION=768            # MUST be that model's real vector size
 Notes:
 
 - Both switches are **opt-in**: without them, nothing changes — Anthropic + Voyage remain the defaults, and they can be switched independently (e.g. local LLM + Voyage embeddings).
+- `host.docker.internal` resolves out of the box only on Docker Desktop (Windows/macOS). On a Linux server, either add `extra_hosts: ["host.docker.internal:host-gateway"]` to the backend service in your compose file, or point `OPENAI_BASE_URL` at the host's LAN IP or a service on the compose network.
+- The AI usage budgets (per-user/global daily caps, import per-request cap, chat daily limit) were tuned to bound paid Anthropic spend. Against your own hardware they still apply — raise or disable them in SuperAdmin → Rate limits (`0`/`-1` = unlimited) if you don't want your local endpoint metered.
 - The admin panel's Claude model settings are ignored in openai mode (the model comes from `AI_MODEL`); the configurable AI **prompts** still apply.
 - Label scanning needs a vision-capable model. Extraction quality depends heavily on the model you host — smaller local models will misread more labels than Claude does.
 - The Qdrant collection is sized to the embedding dimension. After changing `EMBEDDING_PROVIDER`, `EMBEDDING_MODEL`, or `EMBEDDING_DIMENSION`, run a **full** embedding job (SuperAdmin → AI) — it drops and rebuilds the collection at the new size. Every returned vector is validated against `EMBEDDING_DIMENSION`, so a wrong value fails loudly instead of corrupting search.

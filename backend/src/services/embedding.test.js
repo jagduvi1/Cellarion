@@ -148,6 +148,21 @@ describe('embed (OpenAI-compatible provider)', () => {
     expect(opts.headers.Authorization).toBe('Bearer shared-key');
   });
 
+  test('never sends the chat key to a DEDICATED embedding host (key fallback requires shared base URL)', async () => {
+    // EMBEDDING_BASE_URL set (own host), OPENAI_API_KEY set (chat key),
+    // EMBEDDING_API_KEY unset → the request must carry NO Authorization.
+    process.env.OPENAI_API_KEY = 'chat-endpoint-secret';
+    global.fetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({ data: [{ index: 0, embedding: [1, 2, 3] }] }),
+    });
+
+    await embed(['a']);
+
+    const [, opts] = global.fetch.mock.calls[0];
+    expect(opts.headers.Authorization).toBeUndefined();
+  });
+
   test('rejects vectors that do not match EMBEDDING_DIMENSION (collection-corruption guard)', async () => {
     global.fetch.mockResolvedValue({
       ok: true,

@@ -324,6 +324,66 @@ describe('openai stream', () => {
     expect(global.fetch).toHaveBeenCalledTimes(2);
   }, 10000);
 
+  test('[DONE] ends the stream even when the server keeps the connection open', async () => {
+    let releasedAfterDone = false;
+    global.fetch.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      headers: new Headers(),
+      body: (async function* () {
+        yield Buffer.from('data: {"choices":[{"delta":{"content":"done-test"}}]}\n\n');
+        yield Buffer.from('data: {"choices":[],"usage":{"prompt_tokens":3,"completion_tokens":1}}\n\ndata: [DONE]\n\n');
+        // keep-alive: the server never closes — [DONE] alone must finish it
+        await new Promise(() => {});
+        releasedAfterDone = true; // unreachable
+      })(),
+    });
+
+    const stream = aiProvider.getChatClient().messages.stream({
+      max_tokens: 10, messages: [{ role: 'user', content: 'q' }],
+    });
+    const { deltas, msg } = await collect(stream);
+    expect(deltas).toEqual(['done-test']);
+    expect(msg.usage).toEqual({ input_tokens: 3, output_tokens: 1 });
+    expect(releasedAfterDone).toBe(false);
+  });
+
+  test('an in-stream error frame emits error instead of a success-shaped finalMessage', async () => {
+    global.fetch.mockResolvedValueOnce(streamRes([
+      'data: {"choices":[{"delta":{"content":"partial"}}]}\n\n',
+      'data: {"error":{"message":"engine crashed"}}\n\n',
+    ]));
+
+    const stream = aiProvider.getChatClient().messages.stream({
+      max_tokens: 10, messages: [{ role: 'user', content: 'q' }],
+    });
+    await expect(collect(stream)).rejects.toMatchObject({
+      status: 502,
+      message: expect.stringMatching(/engine crashed/),
+    });
+  });
+
+  test('first-token watchdog errors when headers arrive but no data ever flows', async () => {
+    process.env.OPENAI_TIMEOUT_MS = '100';
+    global.fetch.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      headers: new Headers(),
+      body: (async function* () {
+        await new Promise(() => {}); // model "loading" forever, no chunks
+        yield Buffer.from('');       // unreachable
+      })(),
+    });
+
+    const stream = aiProvider.getChatClient().messages.stream({
+      max_tokens: 10, messages: [{ role: 'user', content: 'q' }],
+    });
+    await expect(collect(stream)).rejects.toMatchObject({
+      status: 504,
+      message: expect.stringMatching(/no data within/),
+    });
+  });
+
   test('flushes an unterminated final SSE line (usage frame without trailing newline)', async () => {
     global.fetch.mockResolvedValueOnce(streamRes([
       'data: {"choices":[{"delta":{"content":"Hi"}}]}\n\n',

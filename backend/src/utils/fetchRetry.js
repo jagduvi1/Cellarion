@@ -85,7 +85,8 @@ async function fetchWithRetry(doFetch, {
       // keeps the undici socket reserved until GC.
       try { await res.body?.cancel?.(); } catch (_) { /* ignore */ }
 
-      if (onRetry) onRetry(waitMs, attempt + 1);
+      // Observability only — a throwing hook must not abort the retry loop.
+      if (onRetry) { try { onRetry(waitMs, attempt + 1); } catch (_) { /* ignore */ } }
       await sleep(waitMs);
       delay = Math.min(delay * 2, maxWaitMs);
       continue;

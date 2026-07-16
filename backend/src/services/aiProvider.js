@@ -204,6 +204,10 @@ async function openAiCreate(params, { maxRetries = 2 } = {}) {
  * the Anthropic SDK: 'text' (delta), 'finalMessage' ({content, usage}),
  * 'error', 'abort', plus an .abort() method. The request only starts on a
  * later tick, so callers can attach listeners synchronously after the call.
+ *
+ * Contract: callers MUST attach an 'error' listener in the same synchronous
+ * block — this is a bare EventEmitter, and an 'error' event with no listener
+ * throws (process-fatal under Node defaults).
  */
 class OpenAiCompatStream extends EventEmitter {
   constructor(params) {
@@ -212,6 +216,9 @@ class OpenAiCompatStream extends EventEmitter {
     this._aborted = false;
     this._run(params).catch((err) => {
       if (this._aborted) return; // abort already signalled via 'abort'
+      // Tear down the connection (e.g. after an in-stream error frame) —
+      // note: NOT this.abort(), which would emit 'abort' and suppress 'error'.
+      try { this._controller.abort(); } catch (_) { /* ignore */ }
       this.emit('error', err);
     });
   }
@@ -261,41 +268,81 @@ class OpenAiCompatStream extends EventEmitter {
     let fullText = '';
     let usage = null;
     let buffer = '';
+    let done = false; // saw the 'data: [DONE]' protocol terminator
     const decoder = new TextDecoder();
 
+    // Returns true when the protocol terminator was seen; throws on an
+    // in-stream error frame (OpenAI-compat servers report mid-generation
+    // failures as `data: {"error":...}` on a 200 stream — swallowing it would
+    // deliver a truncated/empty answer as a SUCCESS).
     const handleLine = (line) => {
-      if (!line.startsWith('data:')) return;
+      if (!line.startsWith('data:')) return false;
       const data = line.slice(5).trim();
-      if (!data || data === '[DONE]') return;
+      if (!data) return false;
+      if (data === '[DONE]') return true;
       let json;
-      try { json = JSON.parse(data); } catch { return; }
+      try { json = JSON.parse(data); } catch { return false; }
+      if (json.error) {
+        const msg = typeof json.error === 'string'
+          ? json.error
+          : (json.error.message || JSON.stringify(json.error).slice(0, 200));
+        throw Object.assign(new Error(`AI provider stream error: ${msg}`), { status: 502 });
+      }
       if (json.usage) usage = json.usage;
       const delta = json.choices?.[0]?.delta?.content;
       if (delta) {
         fullText += delta;
         this.emit('text', delta);
       }
+      return false;
     };
+
+    // First-token watchdog: OpenAI-compat servers send 200 headers instantly
+    // and do the slow work (model load, prompt eval) BEFORE the first chunk,
+    // so the header timeout alone never protects streaming. Cleared as soon
+    // as any data arrives; a flowing stream is never killed mid-answer.
+    const firstTokenTimer = setTimeout(() => {
+      if (!this._aborted) {
+        this._aborted = true;
+        this._controller.abort();
+        this.emit('error', Object.assign(
+          new Error(`AI provider stream produced no data within ${env.timeoutMs}ms`), { status: 504 }));
+      }
+    }, env.timeoutMs);
 
     try {
       for await (const chunk of res.body) {
+        clearTimeout(firstTokenTimer);
         if (this._aborted) return;
         buffer += decoder.decode(chunk, { stream: true });
         const lines = buffer.split('\n');
         buffer = lines.pop(); // keep the trailing partial line for next chunk
-        for (const line of lines) handleLine(line);
+        for (const line of lines) {
+          if (handleLine(line)) { done = true; break; }
+        }
+        // [DONE] is the protocol terminator — finish now instead of waiting
+        // for the server to close the connection (keep-alive servers may not).
+        if (done) break;
       }
     } catch (err) {
       if (this._aborted) return; // reader torn down by abort()
       throw err;
+    } finally {
+      clearTimeout(firstTokenTimer);
     }
     if (this._aborted) return;
 
-    // Flush: a final SSE line without a trailing newline (and any multi-byte
-    // character the streaming decoder is still holding) would otherwise be
-    // silently dropped — losing the last text delta or the usage frame.
-    buffer += decoder.decode();
-    for (const line of buffer.split('\n')) handleLine(line);
+    if (done) {
+      // Everything received — release the connection instead of waiting for
+      // the server to close it (keep-alive servers may hold it open).
+      try { this._controller.abort(); } catch (_) { /* ignore */ }
+    } else {
+      // Flush: a final SSE line without a trailing newline (and any multi-byte
+      // character the streaming decoder is still holding) would otherwise be
+      // silently dropped — losing the last text delta or the usage frame.
+      buffer += decoder.decode();
+      for (const line of buffer.split('\n')) handleLine(line);
+    }
 
     this.emit('finalMessage', {
       content: [{ type: 'text', text: fullText }],

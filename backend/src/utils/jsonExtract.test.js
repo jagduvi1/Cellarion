@@ -45,14 +45,19 @@ describe('extractFirstJsonObject', () => {
     expect(result).toBe('{"note":"He said \\"hello\\"","vintage":2020}');
   });
 
-  test('handles text before the JSON object', () => {
-    // walkBraces starts scanning from index 0 and depth increments on first '{'
-    // but characters before { are output because depth=0
-    // The function slices from 0 to closing brace, so leading text is included
+  test('strips text before the JSON object (chatty local models add preambles)', () => {
     const input = 'prefix {"name":"test"} suffix';
     const result = extractFirstJsonObject(input);
-    // It slices from 0 to closing brace+1, so prefix is included
-    expect(result).toBe('prefix {"name":"test"}');
+    expect(result).toBe('{"name":"test"}');
+    expect(JSON.parse(result)).toEqual({ name: 'test' });
+  });
+
+  test('a quote character in the preamble does not corrupt brace tracking', () => {
+    // Before the fix, the lone '"' flipped the in-string state and the whole
+    // object was treated as inside a string → fallback returned everything.
+    const input = 'Here is the "JSON: {"name":"test"} hope that helps';
+    const result = extractFirstJsonObject(input);
+    expect(result).toBe('{"name":"test"}');
   });
 
   test('handles arrays inside objects', () => {

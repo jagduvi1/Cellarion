@@ -82,12 +82,15 @@ async function scanLabelFull(image, mediaType = 'image/jpeg') {
 
   const raw = textFromResponse(response);
 
-  // Strip any accidental markdown fences just in case
+  // Strip any accidental markdown fences, then extract only the first
+  // balanced {...} — local vision models (openai mode) often wrap the JSON
+  // in prose, which used to fail the scan AND burn a non-refundable budget
+  // unit even when the label was read correctly.
   const stripped = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
 
   let data;
   try {
-    data = JSON.parse(stripped);
+    data = JSON.parse(extractFirstJsonObject(stripped));
   } catch {
     console.error('labelScan JSON parse failed, raw response:', raw);
     const err = new Error('Could not read label');
@@ -154,11 +157,15 @@ async function callClaudeJson({ client, model, maxTokens, prompt, validate }) {
     } catch (err) {
       if (err.status === 429 && attempt === 1) {
         // Rate limited — wait for retry-after header (or 15 s) then retry once.
-        // The SDK exposes err.headers as a fetch Headers instance, so read it
-        // via .get(); keep the plain-object lookup as a fallback for SDK
-        // versions/errors that attach a plain map.
+        // Both the Anthropic SDK and the OpenAI-compat adapter expose
+        // err.headers as a fetch Headers instance, so read it via .get(); keep
+        // the plain-object lookup as a fallback. The header value is
+        // provider-controlled: a date-format value parses to NaN (fall back to
+        // 15 s) and a hostile huge value must not park the import worker —
+        // cap the wait at 60 s.
         const retryAfter = err.headers?.get?.('retry-after') ?? err.headers?.['retry-after'];
-        const waitMs = (parseInt(retryAfter ?? '15', 10) + 1) * 1000;
+        const secs = parseInt(retryAfter ?? '', 10);
+        const waitMs = Math.min((secs > 0 ? secs : 15) + 1, 60) * 1000;
         await new Promise(r => setTimeout(r, waitMs));
         continue;
       }

@@ -23,7 +23,7 @@
 const crypto = require('crypto');
 const { randomUUID } = require('crypto');
 const aiConfig = require('../config/aiConfig');
-const { embedSingle, buildEmbeddingText, isEmbeddingConfigured } = require('./embedding');
+const { embedSingle, buildEmbeddingText, isEmbeddingConfigured, getEmbeddingDimension } = require('./embedding');
 const vectorStore = require('./vectorStore');
 const WineEmbedding = require('../models/WineEmbedding');
 const Bottle = require('../models/Bottle');
@@ -92,8 +92,26 @@ async function start({ mode = 'incremental' } = {}) {
   if (job.status === 'running' || job.status === 'stopping') {
     throw new Error('A job is already running');
   }
+  // Guard BEFORE any destructive step: a full job drops the collection first,
+  // so starting with a broken embedding config (e.g. EMBEDDING_PROVIDER=openai
+  // without EMBEDDING_DIMENSION) would destroy the existing vectors and then
+  // fail to recreate the collection.
+  if (!isEmbeddingConfigured()) {
+    throw new Error('Embedding provider is not configured — set VOYAGE_API_KEY, or EMBEDDING_BASE_URL/EMBEDDING_MODEL/EMBEDDING_DIMENSION for EMBEDDING_PROVIDER=openai');
+  }
 
   const cfg = aiConfig.get();
+
+  // An incremental job into a collection built at a different dimension would
+  // embed every pair and then fail every upsert (Qdrant 400) — fail fast and
+  // name the fix instead.
+  if (mode !== 'full') {
+    const existingSize = await vectorStore.collectionVectorSize(cfg.vectorIndex).catch(() => null);
+    const wantedSize = getEmbeddingDimension();
+    if (existingSize && existingSize !== wantedSize) {
+      throw new Error(`Collection wines_${cfg.vectorIndex} was built for ${existingSize}-dim vectors but the active embedding provider produces ${wantedSize}-dim — run a FULL embedding job to rebuild it`);
+    }
+  }
 
   stopRequested = false;
   job = {

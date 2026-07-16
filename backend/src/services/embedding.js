@@ -59,9 +59,13 @@ function embeddingProviderName() {
 }
 
 function openAiEmbEnv() {
+  // The OPENAI_API_KEY fallback applies ONLY when the base URL is also shared
+  // (EMBEDDING_BASE_URL unset): a dedicated embedding host must never be sent
+  // the chat endpoint's bearer token.
+  const sharedBase = !process.env.EMBEDDING_BASE_URL;
   return {
     baseUrl: (process.env.EMBEDDING_BASE_URL || process.env.OPENAI_BASE_URL || '').replace(/\/+$/, ''),
-    apiKey: process.env.EMBEDDING_API_KEY || process.env.OPENAI_API_KEY || '',
+    apiKey: process.env.EMBEDDING_API_KEY || (sharedBase ? process.env.OPENAI_API_KEY || '' : ''),
     model: process.env.EMBEDDING_MODEL || '',
     dimension: parseInt(process.env.EMBEDDING_DIMENSION || '', 10) || 0,
     timeoutMs: parseInt(process.env.EMBEDDING_TIMEOUT_MS || '', 10) || OPENAI_EMBED_TIMEOUT_MS,
