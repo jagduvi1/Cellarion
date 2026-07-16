@@ -1,0 +1,34 @@
+{
+  "name": "cellarion-mcp",
+  "version": "0.1.0",
+  "description": "Connect your AI (Claude Desktop, Cursor, …) to your Cellarion wine cellar — a stdio MCP bridge to a Cellarion server.",
+  "type": "module",
+  "bin": {
+    "cellarion-mcp": "index.js"
+  },
+  "files": [
+    "index.js",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "wine",
+    "cellar",
+    "cellarion",
+    "claude"
+  ],
+  "license": "AGPL-3.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jagduvi1/Cellarion.git",
+    "directory": "cellarion-mcp"
+  },
+  "homepage": "https://cellarion.app",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0"
+  }
+}
