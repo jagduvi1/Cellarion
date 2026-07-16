@@ -15,6 +15,7 @@ require('./wines');
 require('./personal');
 require('./consume');
 require('./write');
+require('./bulk');
 require('./similar');
 
 module.exports = {};

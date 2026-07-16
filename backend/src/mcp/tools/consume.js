@@ -163,12 +163,64 @@ registerTool({
       // must never gain delete-a-bottle power through undo.
       action: {
         $in: (ctx.scopes || []).includes('write')
-          ? ['consume', 'restore', 'add', 'update']
+          ? ['consume', 'restore', 'add', 'update', 'bulk_add']
           : ['consume', 'restore'],
       },
       createdAt: { $gte: new Date(Date.now() - RESTORE_WINDOW_MS) },
     }).sort({ createdAt: -1 });
     if (!last) return fail('not_found', 'No recent MCP action to undo — nothing has been changed through MCP in the last few days.');
+
+    // Bulk rows reference MANY bottles (detail.bottles), no single last.bottle
+    // — handled before the single-bottle access resolution below.
+    if (last.action === 'bulk_add') {
+      const { removeBottleCascade } = require('../../services/bottleOps');
+      const ids = last.detail?.bottles || [];
+      if (!ids.length) return fail('conflict', 'That bulk add recorded no bottles; nothing to undo.');
+      // All-or-nothing: verify access + active status for EVERY bottle first,
+      // so a batch undo can never half-delete.
+      const resolved = [];
+      for (const id of ids) {
+        const a = await resolveBottleAccess(ctx.user.id, id, 'editor');
+        if (!a) return fail('conflict', `Bottle ${id} from that batch is no longer accessible; nothing was changed.`);
+        if (a.bottle.status !== 'active') {
+          return fail('conflict', `Bottle ${id} from that batch has been ${a.bottle.status} since; undo it individually or restore it first. Nothing was changed.`);
+        }
+        resolved.push(a.bottle);
+      }
+      // Claim the row atomically BEFORE cascading (plain save has no
+      // concurrency guard on this model), so a crash or failure mid-cascade
+      // can never leave a half-deleted batch that blocks undo_last for days —
+      // the outcome, including any per-bottle failures, is reported honestly.
+      const claimed = await McpActionLog.findOneAndUpdate(
+        { _id: last._id, reversed: false },
+        { $set: { reversed: true, idempotencyKey: null } }
+      );
+      if (!claimed) return fail('conflict', 'That batch is already being undone by another request.');
+      const removed = [];
+      const failures = [];
+      for (const b of resolved) {
+        try {
+          const r = await removeBottleCascade(b, ctx.req, 'bottle.undo');
+          if (r.error) failures.push({ bottle_id: String(b._id), error: r.error.message });
+          else removed.push(String(b._id));
+        } catch (err) {
+          failures.push({ bottle_id: String(b._id), error: err.message });
+        }
+      }
+      const bulkEnvelope = {
+        summary: `Undid bulk add — ${removed.length} bottle(s) removed${failures.length ? `, ${failures.length} FAILED (remove those manually)` : ''}`,
+        data: { undone: 'bulk_add', removed_bottle_ids: removed, ...(failures.length ? { failures } : {}) },
+      };
+      await logAction(ctx, {
+        tool: 'undo_last',
+        action: 'undo_add',
+        viaUndo: true,
+        cellar: last.cellar,
+        detail: { undid: String(last._id), count: resolved.length },
+        result: bulkEnvelope,
+      });
+      return ok(bulkEnvelope.summary, bulkEnvelope.data);
+    }
 
     const access = await resolveBottleAccess(ctx.user.id, last.bottle, 'editor');
     if (!access) return fail('conflict', 'The bottle from the last action is no longer accessible; nothing was changed.');

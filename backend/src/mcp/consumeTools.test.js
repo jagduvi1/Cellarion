@@ -26,7 +26,7 @@ jest.mock('../models/JournalEntry', () => ({ find: jest.fn(), countDocuments: je
 jest.mock('../models/WineDefinition', () => ({ find: jest.fn(), findById: jest.fn() }));
 jest.mock('../models/User', () => ({ findById: jest.fn() }));
 jest.mock('../models/WineEmbedding', () => ({ findOne: jest.fn() }));
-jest.mock('../models/McpActionLog', () => ({ create: jest.fn(), findOne: jest.fn() }));
+jest.mock('../models/McpActionLog', () => ({ create: jest.fn(), findOne: jest.fn(), findOneAndUpdate: jest.fn() }));
 jest.mock('../utils/rackGeometry', () => ({ getMaxPosition: jest.fn(() => 12) }));
 jest.mock('../services/search', () => ({
   getIsAvailable: jest.fn(() => false), search: jest.fn(), searchBottles: jest.fn(),
@@ -270,7 +270,7 @@ describe('undo_last walk-backward + scope gating (e2e-caught regression)', () =>
     McpActionLog.findOne.mockReturnValue(chain(null));
     await tool('undo_last').handler({}, { ...CTX, scopes: ['consume', 'write'] });
     q = McpActionLog.findOne.mock.calls[0][0];
-    expect(q.action.$in).toEqual(['consume', 'restore', 'add', 'update']);
+    expect(q.action.$in).toEqual(['consume', 'restore', 'add', 'update', 'bulk_add']);
   });
 
   test('the reverse row is marked viaUndo and the undone row frees its idempotency key', async () => {
