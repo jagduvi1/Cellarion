@@ -16,6 +16,7 @@ require('./personal');
 require('./consume');
 require('./write');
 require('./bulk');
+require('./somm');
 require('./similar');
 
 module.exports = {};
