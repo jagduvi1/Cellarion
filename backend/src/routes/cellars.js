@@ -11,6 +11,7 @@ const PendingShare = require('../models/PendingShare');
 const ClimateDevice = require('../models/ClimateDevice');
 const { getCellarRole } = require('../utils/cellarAccess');
 const { logAudit } = require('../services/audit');
+const { createCellar } = require('../services/rackOps');
 const { getSnapshotsForDates, getOrCreateDailySnapshot, convertCurrency } = require('../utils/exchangeRates');
 const { createNotification } = require('../services/notifications');
 const { sendCellarInviteEmail } = require('../services/mailgun');
@@ -441,30 +442,24 @@ router.get('/', async (req, res) => {
 router.post('/', async (req, res) => {
   try {
     const { name, description, color } = req.body;
-
-    if (!name) {
-      return res.status(400).json({ error: 'Cellar name is required' });
+    // Core create (name/description + audit) is shared with the MCP tool;
+    // colour is a UI-only preference the tool doesn't set, applied here after.
+    const result = await createCellar({ name, description }, req);
+    if (result.error) {
+      // Preserve the REST route's historical 400 on duplicate name.
+      const status = result.error.code === 'duplicate' ? 400 : result.error.status;
+      return res.status(status).json({ error: result.error.message });
     }
-
-    const cellar = new Cellar({
-      name: name.trim(),
-      description: description?.trim() || '',
-      userColors: color ? [{ user: req.user.id, color }] : [],
-      user: req.user.id
-    });
-
-    await cellar.save();
-
-    logAudit(req, 'cellar.create', { type: 'cellar', id: cellar._id, cellarId: cellar._id }, { name: cellar.name });
-
+    const cellar = result.cellar;
+    if (color) {
+      cellar.userColors = [{ user: req.user.id, color }];
+      await cellar.save();
+    }
     const obj = cellar.toObject();
     obj.userRole = 'owner';
     obj.userColor = getUserColor(cellar, req.user.id);
     res.status(201).json({ cellar: obj });
   } catch (error) {
-    if (error.code === 11000) {
-      return res.status(400).json({ error: 'You already have a cellar with this name' });
-    }
     console.error('Create cellar error:', error);
     res.status(500).json({ error: 'Failed to create cellar' });
   }

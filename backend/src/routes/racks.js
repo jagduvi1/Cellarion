@@ -8,6 +8,7 @@ const Bottle = require('../models/Bottle');
 const CellarLayout = require('../models/CellarLayout');
 const { getCellarRole } = require('../utils/cellarAccess');
 const { getMaxPosition } = require('../utils/rackGeometry');
+const { placeBottleInRack, clearRackSlot } = require('../services/rackOps');
 const { isValidId } = require('../utils/validation');
 const { logAudit } = require('../services/audit');
 const { classifyMaturity, buildProfileMap } = require('../utils/maturityUtils');
@@ -372,46 +373,16 @@ router.put('/:id/slots/:position', async (req, res) => {
       return res.status(403).json({ error: 'Not authorized to modify rack slots' });
     }
 
-    const maxPos = getMaxPosition(rack);
-    if (position < 1 || position > maxPos) {
-      return res.status(400).json({ error: `Position must be 1–${maxPos}` });
-    }
-
-    if ((rack.disabledPositions || []).includes(position)) {
-      return res.status(400).json({ error: 'This slot is disabled' });
-    }
-
-    // Verify the bottle belongs to this cellar
-    const bottle = await Bottle.findOne({ _id: bottleId, cellar: rack.cellar });
-    if (!bottle) return res.status(404).json({ error: 'Bottle not found in this cellar' });
-
-    // A bottle occupies at most one slot. Clear its placement in any OTHER
-    // rack of this cellar first (this rack is handled in-memory below — an
-    // external update to it would trip optimistic concurrency on save()).
-    await Rack.updateMany(
-      { _id: { $ne: rack._id }, cellar: rack.cellar, 'slots.bottle': bottleId },
-      { $pull: { slots: { bottle: bottleId } } }
-    );
-
-    // Remove the target position's assignment and the bottle's old slot in
-    // this rack (if any), then add the new assignment
-    rack.slots = rack.slots.filter(
-      s => s.position !== position && String(s.bottle) !== String(bottleId)
-    );
-    rack.slots.push({ position, bottle: bottleId });
-    await rack.save();
+    // Placement invariants + slot write are shared with the MCP place tool.
+    const result = await placeBottleInRack(rack, position, bottleId, req);
+    if (result.error) return res.status(result.error.status).json({ error: result.error.message });
 
     await rack.populate({
       path: 'slots.bottle',
       populate: { path: 'wineDefinition', populate: ['country', 'region', 'grapes'] }
     });
-
-    logAudit(req, 'rack.slot_assign', { type: 'rack', id: rack._id });
     res.json({ rack: await withMaturity(rack) });
   } catch (err) {
-    if (err.name === 'VersionError') {
-      return res.status(409).json({ error: 'This rack was modified by another request. Please refresh and try again.' });
-    }
     console.error('Assign slot error:', err);
     res.status(500).json({ error: 'Failed to assign slot' });
   }
@@ -488,15 +459,13 @@ router.delete('/:id/slots/:position', async (req, res) => {
       return res.status(403).json({ error: 'Not authorized to modify rack slots' });
     }
 
-    rack.slots = rack.slots.filter(s => s.position !== position);
-    await rack.save();
+    const result = await clearRackSlot(rack, position, req);
+    if (result.error) return res.status(result.error.status).json({ error: result.error.message });
 
     await rack.populate({
       path: 'slots.bottle',
       populate: { path: 'wineDefinition', populate: ['country', 'region', 'grapes'] }
     });
-
-    logAudit(req, 'rack.slot_clear', { type: 'rack', id: rack._id });
     res.json({ rack: await withMaturity(rack) });
   } catch (err) {
     console.error('Clear slot error:', err);

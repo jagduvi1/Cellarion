@@ -77,13 +77,22 @@ beforeEach(() => {
 
 describe('scope gating', () => {
   test('consume tools exist, carry the consume scope + honest annotations', () => {
-    for (const name of ['consume_bottle', 'restore_bottle', 'undo_last']) {
+    for (const name of ['consume_bottle', 'restore_bottle']) {
       expect(tool(name).scope).toBe('consume');
       expect(tool(name).annotations.readOnlyHint).toBe(false);
     }
+    // undo_last reverses BOTH consume- and write-scoped mutations, so it is
+    // reachable by either scope.
+    expect(tool('undo_last').scope).toEqual(['consume', 'write']);
     expect(tool('consume_bottle').annotations.destructiveHint).toBe(true);
     expect(tool('consume_bottle').annotations.idempotentHint).toBe(false);
     expect(tool('restore_bottle').annotations.idempotentHint).toBe(true);
+  });
+
+  test('undo_last is reachable by a WRITE-only token too (it reverses write actions)', () => {
+    const writeNames = toolsForScopes(['write'], ['user']).map((t) => t.name);
+    expect(writeNames).toContain('undo_last');
+    expect(writeNames).toContain('add_bottle');
   });
 
   test('a read-only token NEVER sees the consume tools; a consume token sees them but not read tools', () => {
@@ -270,7 +279,8 @@ describe('undo_last walk-backward + scope gating (e2e-caught regression)', () =>
     McpActionLog.findOne.mockReturnValue(chain(null));
     await tool('undo_last').handler({}, { ...CTX, scopes: ['consume', 'write'] });
     q = McpActionLog.findOne.mock.calls[0][0];
-    expect(q.action.$in).toEqual(['consume', 'restore', 'add', 'update', 'bulk_add', 'somm_maturity', 'somm_price']);
+    expect(q.action.$in).toEqual(['consume', 'restore', 'add', 'update', 'bulk_add', 'somm_maturity', 'somm_price',
+      'cellar_create', 'rack_create', 'place', 'unplace', 'move']);
   });
 
   test('the reverse row is marked viaUndo and the undone row frees its idempotency key', async () => {
