@@ -36,9 +36,20 @@ async function main() {
   console.log('[smoke] get_source_info ->', info.name, info.version, info.license);
   if (info.license !== 'AGPL-3.0') throw new Error('unexpected get_source_info payload');
 
+  // Resources: list static + template registrations, then read the one
+  // resource that needs no database (cellarion://about).
+  const { resources } = await client.listResources();
+  console.log('[smoke] resources/list ->', resources.map((r) => r.uri));
+  if (!resources.some((r) => r.uri === 'cellar://snapshot')) throw new Error('cellar://snapshot not advertised');
+  const { resourceTemplates } = await client.listResourceTemplates();
+  if (!resourceTemplates.some((t) => t.uriTemplate === 'cellar://bottle/{id}')) throw new Error('bottle template not advertised');
+  const about = await client.readResource({ uri: 'cellarion://about' });
+  if (!about.contents[0].text.includes('AGPL-3.0')) throw new Error('about resource payload wrong');
+  console.log('[smoke] cellarion://about read OK');
+
   await client.close();
   httpServer.close();
-  console.log('[smoke] OK — /api/mcp serves the full initialize -> tools/list -> tools/call round-trip.');
+  console.log('[smoke] OK — tools + resources round-trip clean on /api/mcp.');
 }
 
 main().catch((e) => { console.error('[smoke] FAILED:', e); process.exit(1); });

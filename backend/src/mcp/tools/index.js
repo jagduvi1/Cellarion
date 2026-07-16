@@ -13,5 +13,7 @@ require('./racks');
 require('./stats');
 require('./wines');
 require('./personal');
+require('./similar');
+require('../resources'); // MCP resources ride the same registry
 
 module.exports = {};
