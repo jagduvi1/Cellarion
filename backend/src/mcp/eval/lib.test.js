@@ -4,7 +4,7 @@
  * including that the REAL cases file is structurally valid, so a typo in a
  * case fails CI instead of the first paid eval run.
  */
-const { toAnthropicTools, judgeCase, assertValidCases } = require('./lib');
+const { toAnthropicTools, judgeCase, assertValidCases, caseApplies } = require('./lib');
 const { CASES } = require('./cases');
 const { allTools } = require('../registry');
 require('../tools');
@@ -47,6 +47,26 @@ describe('judgeCase', () => {
     expect(judgeCase(kase, [use('search_bottles', { query: 'rioja' })]).pass).toBe(false);
     expect(judgeCase(kase, [use('search_bottles', {})]).pass).toBe(false);
   });
+
+  test('orNone: a write case accepts a no-tool confirmation but still rejects the WRONG tool', () => {
+    const kase = { expect: { tool: 'create_cellar', orNone: true } };
+    expect(judgeCase(kase, []).pass).toBe(true);                      // confirmed first — OK
+    expect(judgeCase(kase, [use('create_cellar')]).pass).toBe(true);  // acted — OK
+    expect(judgeCase(kase, [use('consume_bottle')]).pass).toBe(false); // wrong tool — still a fail
+  });
+});
+
+describe('caseApplies', () => {
+  test('a tool/anyOf case applies only when a listed tool is advertised', () => {
+    const advertised = new Set(['search_bottles', 'consume_bottle']);
+    expect(caseApplies({ expect: { tool: 'consume_bottle' } }, advertised)).toBe(true);
+    expect(caseApplies({ expect: { tool: 'set_vintage_price' } }, advertised)).toBe(false); // somm-only, not advertised
+    expect(caseApplies({ expect: { anyOf: ['set_vintage_price', 'search_bottles'] } }, advertised)).toBe(true);
+  });
+
+  test('a none case always applies (it asserts NO tool is called)', () => {
+    expect(caseApplies({ expect: { none: true } }, new Set())).toBe(true);
+  });
 });
 
 describe('the shipped cases', () => {
@@ -63,5 +83,13 @@ describe('the shipped cases', () => {
       }
     }
     expect(true).toBe(true);
+  });
+
+  test('cover the Phase-2 write surface + export tools', () => {
+    const expected = new Set(CASES.flatMap((k) => k.expect.anyOf || (k.expect.tool ? [k.expect.tool] : [])));
+    for (const t of ['consume_bottle', 'resolve_wine', 'bulk_add', 'create_cellar', 'move_bottle',
+      'export_cellar', 'get_account_export', 'list_maturity_queue']) {
+      expect(expected.has(t)).toBe(true);
+    }
   });
 });

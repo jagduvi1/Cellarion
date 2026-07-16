@@ -89,8 +89,10 @@ registerTool({
   name: 'set_vintage_maturity',
   title: 'Sommelier: set a vintage\'s drink-window phases',
   description:
-    'Fills in the maturity phases for one wine+vintage profile (from list_maturity_queue): early/peak/late, each a ' +
-    'from/until pair. Absolute years (1900–2200) — except NV vintages, which use RELATIVE year-offsets 0–100 from ' +
+    'Sets/records the drink-window (maturity) years for one wine+vintage: early/peak/late, each a from/until pair. ' +
+    'Call whenever the somm wants to set, record, or update when a specific wine is drinkable — get the profile_id from ' +
+    'list_maturity_queue, OR look the wine up with search_registry/get_wine when they name it directly (no need to open ' +
+    'the queue first). Absolute years (1900–2200) — except NV vintages, which use RELATIVE year-offsets 0–100 from ' +
     'release. Ordering: each until ≥ its from; peak_from ≥ early_from; late_from ≥ peak_from. Marks the profile ' +
     'reviewed. This is SHARED data powering every user\'s recommendations — confirm the values with the somm first. ' +
     'Reversible via undo_last.',

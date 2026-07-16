@@ -64,6 +64,7 @@ const CASES = [
   },
   { id: 'no-tool-smalltalk', prompt: 'Hi! How are you today?', expect: { none: true } },
 
+
   // ── Phase 3: sommelier intelligence ──────────────────────────────────────
   {
     id: 'health-check',
@@ -185,6 +186,112 @@ const CASES = [
     id: 'request-missing-wine',
     prompt: "Cellarion doesn't have this wine and I don't know the producer — ask the team to add it. Here's the page: https://www.systembolaget.se/produkt/123",
     expect: { anyOf: ['request_wine_addition', 'resolve_wine', 'search_registry'] },
+  },
+
+  // ── Writes (Phase 2, consume/write scope) ────────────────────────────────
+  // Many writes legitimately open with a READ to resolve an id from the user's
+  // words ("my 2015 Barolo" → search_bottles → consume), so those cases accept
+  // the lookup-first move via anyOf. The registry-safe add is the exception:
+  // the instructions teach resolve_wine FIRST, and that two-step is the whole
+  // point of registry integrity, so we assert it directly.
+  {
+    id: 'consume-a-bottle',
+    prompt: 'I opened and finished my 2015 Barolo tonight — mark it as drunk.',
+    expect: { anyOf: ['consume_bottle', 'search_bottles'] },
+  },
+  {
+    id: 'restore-a-bottle',
+    prompt: 'That Chablis I logged as consumed is actually still in my rack — put it back.',
+    expect: { anyOf: ['restore_bottle', 'search_bottles', 'list_history'] },
+  },
+  {
+    id: 'undo-last-change',
+    prompt: 'Actually, undo the last change you just made to my cellar.',
+    expect: { tool: 'undo_last' },
+  },
+  {
+    id: 'add-a-bottle-resolve-first',
+    prompt: 'Add a bottle of 2019 Château Pontet-Canet to my cellar.',
+    // The registry-safe two-step means the model must NOT jump straight to
+    // add_bottle: it either resolves the wine first (resolve_wine) or resolves
+    // the target cellar first (list_cellars). Both are correct; add_bottle as
+    // the first move — skipping dedup — is the failure this catches.
+    expect: { anyOf: ['resolve_wine', 'list_cellars'] },
+  },
+  {
+    id: 'update-a-price',
+    prompt: 'Change the price on my 2016 Rioja to 45 euros.',
+    expect: { anyOf: ['update_bottle', 'search_bottles'] },
+  },
+  {
+    id: 'add-a-case-bulk',
+    prompt: 'I just bought a case of 12 bottles of Domaine du Cayron Gigondas 2020 — add them all.',
+    // A careful model may confirm the case before adding (preview→apply); the
+    // real failure to catch is reaching for the wrong tool, not a confirmation.
+    expect: { anyOf: ['bulk_add', 'resolve_wine'], orNone: true },
+  },
+  {
+    id: 'create-a-cellar',
+    prompt: "Create a new empty cellar called 'Everyday Reds'.",
+    expect: { tool: 'create_cellar', orNone: true },
+  },
+  {
+    id: 'create-a-rack',
+    prompt: 'Add a new rack with 6 columns and 12 rows to my cellar.',
+    expect: { anyOf: ['create_rack', 'list_cellars'] }, // may resolve a cellar_id first
+  },
+  {
+    id: 'place-a-bottle',
+    prompt: 'Put my Cloudy Bay into slot 4 of the top rack.',
+    expect: { anyOf: ['place_bottle', 'search_bottles', 'get_rack', 'list_racks'] },
+  },
+  {
+    id: 'move-a-bottle',
+    prompt: 'Move my 2015 Barolo over to my other cellar.',
+    expect: { anyOf: ['move_bottle', 'search_bottles'] },
+  },
+  {
+    id: 'unplace-a-bottle',
+    prompt: 'Take my Cloudy Bay out of its rack slot but keep it in the cellar.',
+    expect: { anyOf: ['unplace_bottle', 'search_bottles'] },
+  },
+
+  // ── Data portability (export tools) ──────────────────────────────────────
+  {
+    id: 'export-cellar',
+    prompt: 'Export my whole wine collection so I can back it up somewhere.',
+    expect: { anyOf: ['export_cellar', 'get_account_export'] },
+  },
+  {
+    id: 'gdpr-account-export',
+    prompt: 'Give me a full GDPR export of everything you have about me.',
+    expect: { anyOf: ['get_account_export', 'export_cellar'] },
+  },
+
+  // ── Sommelier curation (role-gated: judged only when a somm/admin token is
+  // used, auto-SKIPPED for a normal user whose token can't see these tools). ──
+  {
+    id: 'somm-maturity-queue',
+    prompt: 'As the sommelier, is anything sitting in my maturity review queue right now?',
+    expect: { tool: 'list_maturity_queue' },
+  },
+  {
+    id: 'somm-set-maturity',
+    // Name a concrete wine so the model has a real first move (look it up to get
+    // the wine id, then set its window). Phrased as a per-wine data edit — not
+    // "drink window", which the model conflates with the maturity-review queue.
+    prompt: 'As sommelier, for the wine Penfolds Grange 2015, set the earliest drinking year to 2025 and the latest to 2035.',
+    expect: { anyOf: ['set_vintage_maturity', 'search_registry'], orNone: true },
+  },
+  {
+    id: 'somm-price-queue',
+    prompt: 'Which wines are waiting for a price update in the tracking queue?',
+    expect: { tool: 'list_price_tracking_requests' },
+  },
+  {
+    id: 'somm-set-price',
+    prompt: 'As sommelier, record a market price of 120 USD for Sassicaia 2016.',
+    expect: { anyOf: ['set_vintage_price', 'search_registry'], orNone: true },
   },
 ];
 

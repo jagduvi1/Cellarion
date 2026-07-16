@@ -18,7 +18,7 @@
  * which IS jest-covered.
  */
 const Anthropic = require('@anthropic-ai/sdk');
-const { toAnthropicTools, judgeCase, assertValidCases } = require('./lib');
+const { toAnthropicTools, judgeCase, assertValidCases, caseApplies } = require('./lib');
 const { CASES } = require('./cases');
 
 const BASE = process.env.CELLARION_URL || 'http://127.0.0.1:5000';
@@ -65,10 +65,19 @@ async function main() {
 
   const anthropic = new Anthropic();
   const anthropicTools = toAnthropicTools(tools);
-  console.log(`Evaluating ${CASES.length} cases against ${MODEL} with ${tools.length} live tools\n`);
+
+  // The tool surface is scope/role-filtered per token, so only judge cases whose
+  // expected tools are actually advertised to THIS token — a somm case is not a
+  // failure when a normal user runs the eval, it is out of scope. Skips are
+  // reported so a run against the wrong token is obvious, not silently narrowed.
+  const advertised = new Set(tools.map((t) => t.name));
+  const applicable = CASES.filter((k) => caseApplies(k, advertised));
+  const skipped = CASES.length - applicable.length;
+  console.log(`Evaluating ${applicable.length} cases against ${MODEL} with ${tools.length} live tools` +
+    (skipped ? ` (skipped ${skipped} whose tools this token can't see)` : '') + '\n');
 
   let passed = 0;
-  for (const kase of CASES) {
+  for (const kase of applicable) {
     let msg;
     try {
       msg = await anthropic.messages.create({
@@ -90,8 +99,8 @@ async function main() {
     console.log(` ${pass ? '✓' : '✗'} ${kase.id.padEnd(24)} ${detail}`);
   }
 
-  const accuracy = passed / CASES.length;
-  console.log(`\nTool-selection accuracy: ${passed}/${CASES.length} (${Math.round(accuracy * 100)}%) — gate ${Math.round(MIN * 100)}%`);
+  const accuracy = applicable.length ? passed / applicable.length : 1;
+  console.log(`\nTool-selection accuracy: ${passed}/${applicable.length} (${Math.round(accuracy * 100)}%) — gate ${Math.round(MIN * 100)}%`);
   if (accuracy < MIN) {
     console.error('Below the accuracy gate. Fix tool descriptions (see failing cases), then re-run.');
     process.exit(1);
