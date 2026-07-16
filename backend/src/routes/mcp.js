@@ -175,7 +175,7 @@ router.get('/export/:token', async (req, res, next) => {
     }
     // Never let a PII-bearing export sit in a shared/proxy cache.
     res.setHeader('Cache-Control', 'no-store');
-    const failure = await redeemExportLink(link, res);
+    const failure = await redeemExportLink(link, res, req);
     if (failure) return res.status(failure.status).json({ error: failure.error });
   } catch (err) {
     if (res.headersSent) return res.destroy(err);

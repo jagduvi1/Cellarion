@@ -7,6 +7,7 @@
 const crypto = require('crypto');
 const ExportLink = require('../models/ExportLink');
 const User = require('../models/User');
+const { logAudit } = require('./audit');
 const {
   buildCellarDataExport,
   claimImageExportAllowance,
@@ -74,17 +75,32 @@ async function findLiveLink(raw) {
   return link;
 }
 
+// One shared 404 for "link no longer resolves to a downloadable export" —
+// identical wording to the route's not-found so a redeemer can't distinguish
+// "unknown/expired token" from "token valid but the owner was since deleted"
+// (no existence oracle; the deleted-owner case is a purge race anyway).
+const GONE = { status: 404, error: 'This download link is invalid or has expired. Ask your AI to generate a new export.' };
+
 /**
  * Redeem a link: build the export and stream/send it on `res`. Owns all
  * response writes on the success path. On a pre-send failure returns a
  * {status, error} the caller turns into JSON; once bytes stream it can only
- * tear the socket down (mirrors the web full-export route).
+ * tear the socket down (mirrors the web full-export route). `req` is the
+ * (unauthenticated) redeem request — passed through only so the actual PII
+ * download is audit-logged with the downloader's IP.
  *
  * @returns {Promise<{status:number, error:string}|null>} null once handled
  */
-async function redeemExportLink(link, res) {
+async function redeemExportLink(link, res, req = null) {
   const user = await User.findById(link.user).select('username lastAccountExportAt lastImageExportAt');
-  if (!user) return { status: 404, error: 'Account no longer exists' };
+  if (!user) return GONE;
+
+  // Record the DOWNLOAD, not just the mint: a link is a shareable credential
+  // and this is the point the data actually leaves us (CLAUDE.md GDPR — log
+  // significant data processing). Actor is whoever holds the link (anonymous +
+  // IP); the resource is the owning account.
+  const auditDownload = () =>
+    logAudit(req, 'user.export_download', { type: 'user', id: String(link.user) }, { kind: link.kind, via: 'mcp_link' });
 
   const markUsed = () =>
     ExportLink.updateOne({ _id: link._id }, { $set: { usedAt: new Date() }, $inc: { downloads: 1 } })
@@ -94,6 +110,7 @@ async function redeemExportLink(link, res) {
     const result = await buildCellarDataExport(link.user, link.cellarScope);
     if (!result) return { status: 404, error: 'No cellar found for that selection' };
     await markUsed();
+    auditDownload();
     res.setHeader('Content-Disposition', 'attachment; filename="cellarion-data-export.json"');
     res.setHeader('Content-Type', 'application/json');
     res.json(result.payload);
@@ -117,9 +134,10 @@ async function redeemExportLink(link, res) {
     }
     try {
       const full = await User.findById(link.user);
-      if (!full) return { status: 404, error: 'Account no longer exists' };
+      if (!full) return GONE;
       const exportData = await buildUserExport(link.user, full);
       await markUsed();
+      auditDownload();
       res.setHeader('Content-Disposition', `attachment; filename="cellarion-data-export-${full.username}.json"`);
       res.setHeader('Content-Type', 'application/json');
       res.json(exportData);
@@ -134,6 +152,12 @@ async function redeemExportLink(link, res) {
     }
   }
 
+  if (link.kind !== 'cellar_zip') {
+    // Unreachable in practice (kind is an enum set server-side at mint), but an
+    // explicit reject beats a silent fall-through if a new kind is ever added.
+    return { status: 400, error: 'Unsupported export kind.' };
+  }
+
   // cellar_zip — the expensive image archive. Shares the weekly allowance with
   // the web full-export route (MCP is not a bypass).
   let claimStamp = null;
@@ -141,7 +165,7 @@ async function redeemExportLink(link, res) {
   try {
     const claim = await claimImageExportAllowance(link.user);
     if (!claim.claimed) {
-      if (claim.notFound) return { status: 404, error: 'Account no longer exists' };
+      if (claim.notFound) return GONE;
       return { status: 429, error: `Full ZIP export is limited to once per week. Try again after ${claim.nextAvailableAt.toISOString()}.` };
     }
     claimStamp = claim.claimStamp;
@@ -153,7 +177,20 @@ async function redeemExportLink(link, res) {
       claimStamp = null;
       if (!result) return { status: 404, error: 'No cellar found for that selection' };
     }
+    // If the client disconnects mid-stream, refund the weekly allowance so the
+    // still-valid link stays retryable (streamCellarArchive resolves on a clean
+    // 'end'; a premature socket close would otherwise leave the allowance spent
+    // and re-clicking the link would 429). Guarded on our own claim stamp, and
+    // idempotent with the catch refund below (a refunded stamp is a no-op).
+    if (claimStamp) {
+      const stamp = claimStamp;
+      const prior = claimedPrior;
+      res.on('close', () => {
+        if (!res.writableEnded) refundImageExportAllowance(link.user, stamp, prior).catch(() => {});
+      });
+    }
     await markUsed();
+    auditDownload();
     res.setHeader('Content-Disposition', 'attachment; filename="cellarion-export.zip"');
     res.setHeader('Content-Type', 'application/zip');
     await streamCellarArchive(res, result.payload, result.imageFiles);

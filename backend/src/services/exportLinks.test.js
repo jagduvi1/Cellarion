@@ -20,12 +20,14 @@ jest.mock('./cellarExport', () => ({
   streamCellarArchive: jest.fn(),
 }));
 jest.mock('./userDataRegistry', () => ({ buildUserExport: jest.fn() }));
+jest.mock('./audit', () => ({ logAudit: jest.fn() }));
 
 const crypto = require('crypto');
 const ExportLink = require('../models/ExportLink');
 const User = require('../models/User');
 const cellarExport = require('./cellarExport');
 const { buildUserExport } = require('./userDataRegistry');
+const { logAudit } = require('./audit');
 const svc = require('./exportLinks');
 
 const oid = (c) => c.repeat(24);
@@ -45,15 +47,20 @@ function fakeRes() {
     headers: {},
     body: undefined,
     headersSent: false,
+    writableEnded: false,
     destroyed: null,
+    listeners: {},
     setHeader(k, v) { this.headers[k] = v; },
-    json(b) { this.body = b; this.headersSent = true; },
+    json(b) { this.body = b; this.headersSent = true; this.writableEnded = true; },
     destroy(e) { this.destroyed = e; },
+    on(ev, fn) { this.listeners[ev] = fn; return this; },
+    emit(ev) { if (this.listeners[ev]) this.listeners[ev](); },
   };
 }
 
 beforeEach(() => {
   jest.clearAllMocks();
+  cellarExport.refundImageExportAllowance.mockResolvedValue();
   ExportLink.create.mockResolvedValue({});
   ExportLink.updateOne.mockResolvedValue({});
   User.updateOne.mockResolvedValue({});
@@ -232,5 +239,38 @@ describe('redeemExportLink — cellar_zip (weekly allowance)', () => {
     expect(out).toBeNull();
     expect(cellarExport.refundImageExportAllowance).toHaveBeenCalledWith(USER, stamp, null);
     expect(cellarExport.streamCellarArchive).toHaveBeenCalled();
+  });
+
+  test('client disconnect mid-stream refunds the weekly allowance (link stays retryable)', async () => {
+    User.findById.mockReturnValue(q({ username: 'jo' }));
+    const stamp = new Date();
+    cellarExport.claimImageExportAllowance.mockResolvedValue({ claimed: true, claimStamp: stamp, priorStamp: null });
+    cellarExport.buildCellarDataExport.mockResolvedValue({ payload: { bottleCount: 2 }, imageCount: 4, imageFiles: [{ relPath: 'a' }] });
+    const res = fakeRes();
+
+    await svc.redeemExportLink({ _id: 'L1', user: USER, kind: 'cellar_zip', cellarScope: 'all' }, res);
+    // No refund yet — the stream (mocked) "completed".
+    expect(cellarExport.refundImageExportAllowance).not.toHaveBeenCalled();
+    // Now simulate the socket closing before the response finished.
+    res.writableEnded = false;
+    res.emit('close');
+    expect(cellarExport.refundImageExportAllowance).toHaveBeenCalledWith(USER, stamp, null);
+  });
+});
+
+describe('redeemExportLink — auditing + unknown kind', () => {
+  test('a successful download is audit-logged (the data actually leaves us)', async () => {
+    User.findById.mockReturnValue(q({ username: 'jo' }));
+    cellarExport.buildCellarDataExport.mockResolvedValue({ payload: { bottleCount: 1 }, imageCount: 0, imageFiles: [] });
+    const req = { headers: {} };
+    await svc.redeemExportLink({ _id: 'L1', user: USER, kind: 'cellar_json', cellarScope: 'all' }, fakeRes(), req);
+    expect(logAudit).toHaveBeenCalledWith(req, 'user.export_download', expect.objectContaining({ id: USER }), expect.objectContaining({ kind: 'cellar_json' }));
+  });
+
+  test('an unknown kind is rejected, not silently streamed', async () => {
+    User.findById.mockReturnValue(q({ username: 'jo' }));
+    const out = await svc.redeemExportLink({ _id: 'L1', user: USER, kind: 'weird_kind' }, fakeRes());
+    expect(out.status).toBe(400);
+    expect(cellarExport.buildCellarDataExport).not.toHaveBeenCalled();
   });
 });
