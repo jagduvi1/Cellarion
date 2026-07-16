@@ -416,6 +416,7 @@ describe('findOrCreateWine — creation', () => {
       grapes: ['grape-grenache', 'grape-syrah'],
       normalizedKey: INPUT_KEY,
       createdBy: USER_ID,
+      createdVia: null, // provenance default — 'mcp' only via the MCP write tools
     });
     expect(result.created).toBe(true);
     expect(result.wine.save).toHaveBeenCalled();
