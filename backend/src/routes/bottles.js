@@ -3,7 +3,6 @@ const { requireAuth, requireNonDemo } = require('../middleware/auth');
 const { requireBottleAccess } = require('../middleware/bottleAccess');
 const Bottle = require('../models/Bottle');
 const Cellar = require('../models/Cellar');
-const Rack = require('../models/Rack');
 const WineDefinition = require('../models/WineDefinition');
 const Country = require('../models/Country');
 const Region = require('../models/Region');
@@ -19,7 +18,7 @@ const { resolveRating } = require('../utils/ratingUtils');
 const { embedSinglePair } = require('../services/embeddingJob');
 const { enrichWineById } = require('../services/enrichmentJob');
 const { CONSUMED_STATUSES, WINE_POPULATE, WINE_POPULATE_LIST } = require('../config/constants');
-const { checkRestockGap, resolveRestockAlerts } = require('../services/restockChecker');
+const { resolveRestockAlerts } = require('../services/restockChecker');
 const { unlinkImageFiles } = require('../services/imageProcessor');
 const { gatherPriceWarnings } = require('../services/priceWarnings');
 const { getCurrentRelease } = require('../services/communityPrice');
@@ -32,16 +31,11 @@ const { ensurePendingVintageProfile } = require('../utils/vintageProfile');
 const { parsePagination } = require('../utils/pagination');
 const mongoose = require('mongoose');
 const searchService = require('../services/search');
+// consume/restore logic + rack-slot freeing live in the shared service so the
+// REST routes and the MCP tools can never drift (plan §7).
+const { consumeBottle, restoreBottle, removeFromRacks } = require('../services/bottleOps');
 
 const router = express.Router();
-
-// Remove a bottle from every rack slot that references it
-async function removeFromRacks(bottleId) {
-  await Rack.updateMany(
-    { 'slots.bottle': bottleId },
-    { $pull: { slots: { bottle: bottleId } } }
-  );
-}
 
 // All routes require authentication
 router.use(requireAuth);
@@ -847,53 +841,10 @@ router.put('/:id/default-image', requireBottleAccess('editor'), async (req, res)
 // POST /api/bottles/:id/consume - Soft-remove bottle (owner or editor)
 router.post('/:id/consume', requireBottleAccess('editor'), async (req, res) => {
   try {
-    const { bottle } = req;
     const { reason = 'drank', note, rating, consumedRatingScale } = req.body;
-
-    if (!CONSUMED_STATUSES.includes(reason)) {
-      return res.status(400).json({ error: 'Invalid reason' });
-    }
-
-    if (note && (typeof note !== 'string' || note.length > 1000)) {
-      return res.status(400).json({ error: 'Note is too long (max 1000 characters)' });
-    }
-
-    const { rating: resolvedConsumedRating, ratingScale: resolvedConsumedScale, error: consumeRatingError } = resolveRating(rating, consumedRatingScale);
-    if (consumeRatingError) return res.status(400).json({ error: consumeRatingError });
-
-    bottle.status = reason;
-    bottle.consumedAt = new Date();
-    bottle.consumedReason = reason;
-    if (note) bottle.consumedNote = stripHtml(note);
-    if (resolvedConsumedRating !== undefined) {
-      bottle.consumedRating = resolvedConsumedRating;
-      bottle.consumedRatingScale = resolvedConsumedScale;
-    }
-
-    await bottle.save();
-
-    // Remove from any rack slot so the slot is freed up — after the save, so a
-    // failed save doesn't leave an active bottle already pulled from its rack
-    await removeFromRacks(bottle._id);
-
-    // Re-index so search reflects the consumed status (consumed bottles stay
-    // in the index for history search; they're filtered at query time)
-    searchService.indexBottle(bottle._id);
-
-    logAudit(req, 'bottle.consume',
-      { type: 'bottle', id: bottle._id, cellarId: bottle.cellar },
-      { reason }
-    );
-
-    // Fire-and-forget: check if user needs a restock alert. Skipped for demo
-    // accounts: on an un-cached (wine, vintage) pair checkRestockGap fires a paid
-    // Voyage embedding call (no budget gate of its own), which would breach the
-    // demo's "zero AI spend" guarantee.
-    if (reason === 'drank' && !req.user.isDemo) {
-      checkRestockGap(req.user.id, bottle._id, bottle.cellar).catch(() => {});
-    }
-
-    res.json({ bottle });
+    const result = await consumeBottle(req.bottle, { reason, note, rating, ratingScale: consumedRatingScale }, req);
+    if (result.error) return res.status(result.error.status).json({ error: result.error.message });
+    res.json({ bottle: result.bottle });
   } catch (error) {
     if (error.name === 'ValidationError') {
       return res.status(400).json({ error: error.message });
@@ -1082,11 +1033,10 @@ router.post('/:id/move', requireBottleAccess('owner'), async (req, res) => {
   }
 });
 
-// A consumed bottle can be moved back to the cellar only within this window of
-// being removed — restore is an "undo an accidental log", not a way to
-// resurrect a bottle drunk long ago. Enforced server-side (the UI also hides
-// the button past the window, but the check is here so it's real).
-const RESTORE_WINDOW_MS = 2 * 24 * 60 * 60 * 1000; // 2 days
+// A consumed bottle can be moved back to the cellar only within a 2-day
+// window of being removed — restore is an "undo an accidental log", not a way
+// to resurrect a bottle drunk long ago. The window (RESTORE_WINDOW_MS) is
+// enforced inside services/bottleOps.restoreBottle, shared with the MCP tool.
 
 // POST /api/bottles/:id/restore - Put a recently-consumed bottle back to active.
 // The inverse of /consume: for when a bottle was marked drank/gifted/sold by
@@ -1096,40 +1046,12 @@ const RESTORE_WINDOW_MS = 2 * 24 * 60 * 60 * 1000; // 2 days
 // re-racks it. Only allowed within RESTORE_WINDOW_MS of removal.
 router.post('/:id/restore', requireBottleAccess('editor'), async (req, res) => {
   try {
-    const { bottle } = req;
-
-    if (bottle.status === 'active') {
-      return res.status(400).json({ error: 'Bottle is already active' });
+    const result = await restoreBottle(req.bottle, req);
+    if (result.error) {
+      const { status, message, code } = result.error;
+      return res.status(status).json({ error: message, ...(code ? { code } : {}) });
     }
-    if (!CONSUMED_STATUSES.includes(bottle.status)) {
-      return res.status(400).json({ error: 'Only a consumed bottle can be restored' });
-    }
-    if (bottle.consumedAt && (Date.now() - new Date(bottle.consumedAt).getTime()) > RESTORE_WINDOW_MS) {
-      return res.status(400).json({
-        error: 'This bottle was removed too long ago to move back. Add it again as a new bottle instead.',
-        code: 'restore_window_expired',
-      });
-    }
-
-    const previousStatus = bottle.status;
-    bottle.status = 'active';
-    bottle.consumedAt = undefined;
-    bottle.consumedReason = undefined;
-    bottle.consumedNote = undefined;
-    bottle.consumedRating = undefined;
-    bottle.consumedRatingScale = undefined;
-    await bottle.save();
-
-    // Re-index so the bottle leaves history-only search results and rejoins the
-    // active cellar index.
-    searchService.indexBottle(bottle._id);
-
-    logAudit(req, 'bottle.restore',
-      { type: 'bottle', id: bottle._id, cellarId: bottle.cellar },
-      { from: previousStatus }
-    );
-
-    res.json({ bottle });
+    res.json({ bottle: result.bottle });
   } catch (error) {
     if (error.name === 'ValidationError') {
       return res.status(400).json({ error: error.message });

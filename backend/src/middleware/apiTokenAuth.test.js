@@ -154,15 +154,17 @@ describe('isRequestAllowed (default-deny)', () => {
     expect(isRequestAllowed(BOTH, 'POST', '/api/climate/ingest')).toBe(false);
   });
 
-  test('POST /api/mcp is granted by read — per-tool authz lives inside the MCP registry', () => {
+  test('POST /api/mcp is granted by read AND consume — per-tool authz lives inside the MCP registry', () => {
     expect(isRequestAllowed(READ, 'POST', '/api/mcp')).toBe(true);
     expect(isRequestAllowed(BOTH, 'POST', '/api/mcp')).toBe(true); // read+consume
-    // Neither consume nor climate reaches the MCP endpoint until write/consume
-    // tools ship and their scopes are added to the allowlist alongside them.
-    expect(isRequestAllowed(CONSUME, 'POST', '/api/mcp')).toBe(false);
+    // consume tokens reach the endpoint since the consume tools shipped; the
+    // registry scope filter decides which tools they actually see.
+    expect(isRequestAllowed(CONSUME, 'POST', '/api/mcp')).toBe(true);
+    // climate (device credential) still reaches NOTHING but ingest.
     expect(isRequestAllowed(['climate'], 'POST', '/api/mcp')).toBe(false);
     // POST-only + exact-anchored — GET (the 405 fallback) and sub-paths denied.
     expect(isRequestAllowed(READ, 'GET', '/api/mcp')).toBe(false);
+    expect(isRequestAllowed(CONSUME, 'GET', '/api/mcp')).toBe(false);
     expect(isRequestAllowed(READ, 'POST', '/api/mcp/tools')).toBe(false);
   });
 

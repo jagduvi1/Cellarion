@@ -27,6 +27,7 @@
 const User = require('../models/User');
 const AiBudgetRequest = require('../models/AiBudgetRequest');
 const ApiToken = require('../models/ApiToken');
+const McpActionLog = require('../models/McpActionLog');
 const AiUsage = require('../models/AiUsage');
 const Bottle = require('../models/Bottle');
 const ClimateDevice = require('../models/ClimateDevice');
@@ -511,6 +512,22 @@ const REGISTRY = [
       apiTokens: markTrunc(ctx, 'apiTokens', await ApiToken.find({ user: ctx.userId })
         .select('name scopes lastUsedAt createdAt revokedAt').limit(EXPORT_MAX).lean())
         .map(t => ({ name: t.name, scopes: t.scopes, lastUsedAt: t.lastUsedAt, createdAt: t.createdAt, revokedAt: t.revokedAt })),
+    }),
+  },
+
+  // ── MCP action ledger ───────────────────────────────────────────────────
+  {
+    model: McpActionLog, category: 'personal-data', userFields: ['user'],
+    // Hard-delete on erasure — operational undo/idempotency bookkeeping.
+    purge: (ctx) => McpActionLog.deleteMany({ user: ctx.userId }),
+    // Export what the connected AI changed (right of access) INCLUDING prev —
+    // after a restore, the user's consumed note/rating snapshot may exist only
+    // here for up to the TTL. Never the idempotency keys or stored result
+    // payloads (operational plumbing).
+    exportFragment: async (ctx) => ({
+      mcpActions: markTrunc(ctx, 'mcpActions', await McpActionLog.find({ user: ctx.userId })
+        .select('tool action bottle cellar detail prev reversed createdAt').limit(EXPORT_MAX).lean())
+        .map(a => ({ tool: a.tool, action: a.action, bottle: a.bottle, cellar: a.cellar, detail: a.detail, prev: a.prev || null, reversed: a.reversed, createdAt: a.createdAt })),
     }),
   },
 

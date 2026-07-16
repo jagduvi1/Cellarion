@@ -151,9 +151,11 @@ const isStripeWebhook = (req) => req.originalUrl.split('?')[0] === '/api/stripe/
 //
 // A JSON-RPC body may be a *batch* (array) of calls, so one HTTP request can
 // fan out to many tool invocations — apiLimiter counts requests, not calls.
-// That amplification is capped by the per-request tool-call budget in
-// mcp/server.js (MAX_CALLS_PER_REQUEST). Revisit with a dedicated MCP limiter
-// before write/AI tools ship (they add cost beyond DB reads).
+// That amplification is capped in mcp/server.js at TWO layers: the per-request
+// tool-call budget (MAX_CALLS_PER_REQUEST) and, for MUTATING tools, a per-user
+// budget sharing the SAME admin-tunable number as this writeLimiter — so an
+// agent looping consumes hits exactly the wall a looping REST client would.
+// Revisit again before AI-spending tools ship (enrichment adds cost beyond DB).
 const isMcp = (req) => {
   const p = req.originalUrl.split('?')[0];
   return p === '/api/mcp' || p === '/api/mcp/';

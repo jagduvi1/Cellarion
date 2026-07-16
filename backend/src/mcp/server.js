@@ -34,26 +34,48 @@ function loadSdk() {
 // amplification: generous for a legitimate agent turn, far below abuse scale.
 const MAX_CALLS_PER_REQUEST = 20;
 
-// Wrap a tool handler with the per-request call budget. `state` is shared by
-// all tools of ONE request's server instance (fresh per request in stateless
-// mode). Exported for unit testing — jest cannot load the ESM SDK, so
-// buildServer itself is covered by the smoke test instead.
+const rateLimited = (message) => ({
+  isError: true,
+  content: [{ type: 'text', text: JSON.stringify({ error: { code: 'rate_limited', message } }) }],
+});
+
+// MUTATING tools additionally ride the same per-user budget as REST writes
+// (the admin-tunable write limiter number, per 15 minutes). /api/mcp is exempt
+// from the HTTP writeLimiter because one POST can't be classified — so the
+// classification happens HERE, per tool call, where readOnlyHint tells us the
+// truth. An agent looping consumes hits exactly the wall a looping REST client
+// would. In-memory like express-rate-limit; cleared wholesale at the cap.
+const WRITE_WINDOW_MS = 15 * 60 * 1000;
+const mutationWindows = new Map(); // userId -> { start, count }
+const MUTATION_WINDOWS_MAX = 5000;
+
+function takeMutationSlot(userId) {
+  const max = require('../config/rateLimits').get().write.max;
+  const now = Date.now();
+  let w = mutationWindows.get(userId);
+  if (!w || now - w.start >= WRITE_WINDOW_MS) {
+    if (mutationWindows.size >= MUTATION_WINDOWS_MAX) mutationWindows.clear();
+    w = { start: now, count: 0 };
+    mutationWindows.set(userId, w);
+  }
+  if (w.count >= max) return false;
+  w.count += 1;
+  return true;
+}
+
+// Wrap a tool handler with the per-request call budget (+ the per-user
+// mutation budget for non-read-only tools). `state` is shared by all tools of
+// ONE request's server instance (fresh per request in stateless mode).
+// Exported for unit testing — jest cannot load the ESM SDK, so buildServer
+// itself is covered by the smoke test instead.
 function budgetedHandler(tool, ctx, state) {
   return (args) => {
     state.calls += 1;
     if (state.calls > MAX_CALLS_PER_REQUEST) {
-      return {
-        isError: true,
-        content: [{
-          type: 'text',
-          text: JSON.stringify({
-            error: {
-              code: 'rate_limited',
-              message: `Too many tool calls in one request (max ${MAX_CALLS_PER_REQUEST}). Send fewer calls per batch and paginate instead.`,
-            },
-          }),
-        }],
-      };
+      return rateLimited(`Too many tool calls in one request (max ${MAX_CALLS_PER_REQUEST}). Send fewer calls per batch and paginate instead.`);
+    }
+    if (tool.annotations?.readOnlyHint === false && !takeMutationSlot(String(ctx.user.id))) {
+      return rateLimited('Too many cellar changes in a short time — wait a few minutes before mutating again. Reads still work.');
     }
     return tool.handler(args || {}, ctx);
   };
@@ -139,4 +161,5 @@ async function handleMcpRequest(req, res, ctx) {
 module.exports = {
   handleMcpRequest,
   budgetedHandler, budgetedResourceHandler, MAX_CALLS_PER_REQUEST,
+  takeMutationSlot, WRITE_WINDOW_MS,
 };
