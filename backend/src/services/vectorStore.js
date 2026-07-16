@@ -68,7 +68,20 @@ async function ensureCollection(indexVersion) {
 
   // Check if collection exists
   try {
-    await qdrantRequest('GET', `/collections/${name}`);
+    const info = await qdrantRequest('GET', `/collections/${name}`);
+    // A collection built for a different embedding dimension (provider/model
+    // switch without the required FULL re-embed) makes every upsert/search
+    // fail with an opaque Qdrant 400 — call it out loudly and point at the
+    // fix. Not thrown: the full embedding job runs through here right before
+    // it drops + recreates the collection, which IS the fix.
+    const existingSize = info.result?.config?.params?.vectors?.size;
+    const wantedSize = getEmbeddingDimension();
+    if (existingSize && existingSize !== wantedSize) {
+      console.error(
+        `[vectorStore] Collection ${name} holds ${existingSize}-dim vectors but the active embedding provider produces ${wantedSize}-dim — ` +
+        `vector search will fail until a FULL embedding job rebuilds the collection (SuperAdmin → AI)`
+      );
+    }
     return; // already exists
   } catch (err) {
     if (err.status !== 404) throw err;

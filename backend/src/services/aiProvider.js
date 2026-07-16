@@ -33,11 +33,25 @@
  */
 
 const { EventEmitter } = require('events');
+const { fetchWithRetry } = require('../utils/fetchRetry');
 
 const DEFAULT_TIMEOUT_MS = 120000;
+// Chat/scan calls retry 429 and transient 5xx (matching the Anthropic SDK),
+// with waits capped well below the request timeout so a hostile Retry-After
+// can't park an import chunk.
+const RETRYABLE = (status) => status === 429 || status >= 500;
+const MAX_RETRY_WAIT_MS = 32000;
 
+let _warnedUnknownProvider = false;
 function providerName() {
-  return (process.env.AI_PROVIDER || 'anthropic').trim().toLowerCase();
+  const name = (process.env.AI_PROVIDER || 'anthropic').trim().toLowerCase();
+  // A typo here silently reports "not configured" everywhere — warn once so
+  // the operator sees why AI features went dark despite valid keys.
+  if (name !== 'anthropic' && name !== 'openai' && !_warnedUnknownProvider) {
+    _warnedUnknownProvider = true;
+    console.warn(`[aiProvider] Unknown AI_PROVIDER "${name}" (expected "anthropic" or "openai") — all AI features are disabled until it is fixed`);
+  }
+  return name;
 }
 
 /**
@@ -148,71 +162,37 @@ function buildHeaders(env) {
   return h;
 }
 
-async function providerError(res) {
-  let bodyText = '';
-  try { bodyText = await res.text(); } catch (_) { /* ignore */ }
-  return Object.assign(
-    new Error(`AI provider error ${res.status}: ${bodyText.slice(0, 500)}`),
-    { status: res.status, headers: res.headers }
-  );
-}
-
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
 /**
- * Non-streaming completion. Retries 429/5xx with backoff (honouring
- * Retry-After) up to `maxRetries`, mirroring the Anthropic SDK's transparent
- * retry behaviour that labelScan relies on to keep large imports going
- * through brief rate-limit windows.
+ * Non-streaming completion. Retries 429/5xx with capped backoff (honouring
+ * Retry-After) up to `maxRetries` via the shared fetchWithRetry helper,
+ * mirroring the Anthropic SDK's transparent retry behaviour that labelScan
+ * relies on to keep large imports going through brief rate-limit windows.
  */
 async function openAiCreate(params, { maxRetries = 2 } = {}) {
   const env = openAiEnv();
-  let delay = 2000;
+  // Serialize once — label-scan bodies carry multi-MB base64 images, so
+  // rebuilding the JSON per retry attempt would be pure allocation waste.
+  const body = JSON.stringify(buildRequestBody(params, env, false));
 
-  for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    let res;
-    try {
-      res = await fetch(`${env.baseUrl}/chat/completions`, {
-        method: 'POST',
-        headers: buildHeaders(env),
-        body: JSON.stringify(buildRequestBody(params, env, false)),
-        signal: AbortSignal.timeout(env.timeoutMs),
-      });
-    } catch (err) {
-      if (err.name === 'TimeoutError' || err.name === 'AbortError') {
-        throw Object.assign(new Error(`AI provider request timed out after ${env.timeoutMs}ms`), { status: 504 });
-      }
-      throw err;
-    }
+  const res = await fetchWithRetry(
+    () => fetch(`${env.baseUrl}/chat/completions`, {
+      method: 'POST',
+      headers: buildHeaders(env),
+      body,
+      signal: AbortSignal.timeout(env.timeoutMs),
+    }),
+    { maxRetries, timeoutMs: env.timeoutMs, label: 'AI provider', retryable: RETRYABLE, maxWaitMs: MAX_RETRY_WAIT_MS }
+  );
 
-    if (res.ok) {
-      const json = await res.json();
-      return {
-        model: json.model,
-        content: [{ type: 'text', text: json.choices?.[0]?.message?.content ?? '' }],
-        usage: {
-          input_tokens: json.usage?.prompt_tokens ?? 0,
-          output_tokens: json.usage?.completion_tokens ?? 0,
-        },
-      };
-    }
-
-    const retryable = res.status === 429 || res.status >= 500;
-    if (retryable && attempt < maxRetries) {
-      const retryAfter = res.headers.get('retry-after');
-      const waitMs = retryAfter
-        ? (parseInt(retryAfter, 10) || 2) * 1000
-        : delay + Math.floor(Math.random() * 500);
-      await sleep(waitMs);
-      delay = Math.min(delay * 2, 32000);
-      continue;
-    }
-    throw await providerError(res);
-  }
-  // Unreachable — the final attempt either returned or threw above.
-  throw Object.assign(new Error('AI provider: retries exhausted'), { status: 429 });
+  const json = await res.json();
+  return {
+    model: json.model,
+    content: [{ type: 'text', text: json.choices?.[0]?.message?.content ?? '' }],
+    usage: {
+      input_tokens: json.usage?.prompt_tokens ?? 0,
+      output_tokens: json.usage?.completion_tokens ?? 0,
+    },
+  };
 }
 
 /**
@@ -241,9 +221,10 @@ class OpenAiCompatStream extends EventEmitter {
 
   async _run(params) {
     const env = openAiEnv();
+    const body = JSON.stringify(buildRequestBody(params, env, true));
 
-    // The timeout only covers waiting for response headers — an open, flowing
-    // stream must not be killed mid-answer by a fixed timer.
+    // The timeout only covers the header phase (incl. transparent retries) —
+    // an open, flowing stream must not be killed mid-answer by a fixed timer.
     const headerTimer = setTimeout(() => {
       if (!this._aborted) {
         this._aborted = true;
@@ -255,25 +236,42 @@ class OpenAiCompatStream extends EventEmitter {
 
     let res;
     try {
-      res = await fetch(`${env.baseUrl}/chat/completions`, {
-        method: 'POST',
-        headers: buildHeaders(env),
-        body: JSON.stringify(buildRequestBody(params, env, true)),
-        signal: this._controller.signal,
-      });
+      // Transparent pre-first-token retry on 429/transient 5xx — parity with
+      // the Anthropic SDK stream client, which retries connection-phase
+      // failures before any tokens are emitted. Terminal errors throw and are
+      // emitted as 'error' by the constructor's catch.
+      res = await fetchWithRetry(
+        () => fetch(`${env.baseUrl}/chat/completions`, {
+          method: 'POST',
+          headers: buildHeaders(env),
+          body,
+          signal: this._controller.signal,
+        }),
+        { maxRetries: 2, timeoutMs: env.timeoutMs, label: 'AI provider', retryable: RETRYABLE, maxWaitMs: MAX_RETRY_WAIT_MS }
+      );
     } finally {
       clearTimeout(headerTimer);
     }
     if (this._aborted) return;
-    if (!res.ok) {
-      this.emit('error', await providerError(res));
-      return;
-    }
 
     let fullText = '';
     let usage = null;
     let buffer = '';
     const decoder = new TextDecoder();
+
+    const handleLine = (line) => {
+      if (!line.startsWith('data:')) return;
+      const data = line.slice(5).trim();
+      if (!data || data === '[DONE]') return;
+      let json;
+      try { json = JSON.parse(data); } catch { return; }
+      if (json.usage) usage = json.usage;
+      const delta = json.choices?.[0]?.delta?.content;
+      if (delta) {
+        fullText += delta;
+        this.emit('text', delta);
+      }
+    };
 
     try {
       for await (const chunk of res.body) {
@@ -281,25 +279,19 @@ class OpenAiCompatStream extends EventEmitter {
         buffer += decoder.decode(chunk, { stream: true });
         const lines = buffer.split('\n');
         buffer = lines.pop(); // keep the trailing partial line for next chunk
-        for (const line of lines) {
-          if (!line.startsWith('data:')) continue;
-          const data = line.slice(5).trim();
-          if (!data || data === '[DONE]') continue;
-          let json;
-          try { json = JSON.parse(data); } catch { continue; }
-          if (json.usage) usage = json.usage;
-          const delta = json.choices?.[0]?.delta?.content;
-          if (delta) {
-            fullText += delta;
-            this.emit('text', delta);
-          }
-        }
+        for (const line of lines) handleLine(line);
       }
     } catch (err) {
       if (this._aborted) return; // reader torn down by abort()
       throw err;
     }
     if (this._aborted) return;
+
+    // Flush: a final SSE line without a trailing newline (and any multi-byte
+    // character the streaming decoder is still holding) would otherwise be
+    // silently dropped — losing the last text delta or the usage frame.
+    buffer += decoder.decode();
+    for (const line of buffer.split('\n')) handleLine(line);
 
     this.emit('finalMessage', {
       content: [{ type: 'text', text: fullText }],

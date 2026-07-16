@@ -296,12 +296,45 @@ describe('openai stream', () => {
     expect(body.stream_options).toEqual({ include_usage: true });
   });
 
-  test('non-ok response emits an error with status', async () => {
-    global.fetch.mockResolvedValueOnce(errorRes(500));
+  test('non-retryable non-ok response emits an error with status', async () => {
+    // 400 is non-retryable; 429/5xx are transparently retried pre-first-token
+    global.fetch.mockResolvedValueOnce(errorRes(400));
     const stream = aiProvider.getChatClient().messages.stream({
       max_tokens: 10, messages: [{ role: 'user', content: 'q' }],
     });
-    await expect(collect(stream)).rejects.toMatchObject({ status: 500 });
+    await expect(collect(stream)).rejects.toMatchObject({ status: 400 });
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+  });
+
+  test('retries a transient 429 before the first token, then streams normally', async () => {
+    global.fetch
+      .mockResolvedValueOnce(errorRes(429, { 'retry-after': '1' }))
+      .mockResolvedValueOnce(streamRes([
+        'data: {"choices":[{"delta":{"content":"ok"}}]}\n\n',
+        'data: [DONE]\n\n',
+      ]));
+
+    const stream = aiProvider.getChatClient().messages.stream({
+      max_tokens: 10, messages: [{ role: 'user', content: 'q' }],
+    });
+    const { deltas } = await collect(stream);
+    expect(deltas).toEqual(['ok']);
+    expect(global.fetch).toHaveBeenCalledTimes(2);
+  }, 10000);
+
+  test('flushes an unterminated final SSE line (usage frame without trailing newline)', async () => {
+    global.fetch.mockResolvedValueOnce(streamRes([
+      'data: {"choices":[{"delta":{"content":"Hi"}}]}\n\n',
+      // stream ends mid-line: no trailing \n after the usage frame
+      'data: {"choices":[],"usage":{"prompt_tokens":9,"completion_tokens":2}}',
+    ]));
+
+    const stream = aiProvider.getChatClient().messages.stream({
+      max_tokens: 10, messages: [{ role: 'user', content: 'q' }],
+    });
+    const { deltas, msg } = await collect(stream);
+    expect(deltas).toEqual(['Hi']);
+    expect(msg.usage).toEqual({ input_tokens: 9, output_tokens: 2 });
   });
 
   test('abort() emits abort and suppresses finalMessage/error', async () => {

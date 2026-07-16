@@ -393,6 +393,12 @@ router.get('/ai', async (req, res) => {
         qdrant:    !!process.env.QDRANT_URL,
         anthropic: aiProvider.isConfigured(),
       },
+      // Lets the UI flag that model settings below are env-governed and inert
+      // when a provider runs in openai mode (prompts still apply).
+      providers: {
+        llm: aiProvider.providerName(),
+        embedding: embeddingProviderName(),
+      },
       config: cfg,
       job: jobStatus,
       enrichmentJob: enrichStatus,

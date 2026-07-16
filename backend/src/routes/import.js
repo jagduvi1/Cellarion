@@ -419,6 +419,7 @@ router.post('/validate', aiBurstLimiter, async (req, res) => {
 
     // Pass 4: build final results
     const results = [];
+    const aiConfigured = aiProvider.isConfigured(); // invariant — don't re-derive per row
     for (const pr of preResults) {
       if (pr.errorMsg) {
         results.push({ index: pr.index, item: pr.item, status: 'error', error: pr.errorMsg, matches: [] });
@@ -485,7 +486,7 @@ router.post('/validate', aiBurstLimiter, async (req, res) => {
 
         // Include AI debug info when AI was attempted but failed (not when it
         // was skipped by budget/cap/disconnect — those rows carry aiSkipped)
-        if (!pr.aiSkipped && aiProvider.isConfigured() && (pr.item.wineName || pr.item.producer)) {
+        if (!pr.aiSkipped && aiConfigured && (pr.item.wineName || pr.item.producer)) {
           const aiStatus = pr.aiError || pr.aiDebugReason === 'rate_limit_exceeded' ||
             (pr.aiDebugReason && pr.aiDebugReason.startsWith('exception'))
             ? 'failed' : (pr.aiWineError ? 'create_failed' : 'searched');

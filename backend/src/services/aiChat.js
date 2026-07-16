@@ -30,8 +30,12 @@ const { classifyMaturity, buildProfileMap, maturityLabel } = require('../utils/m
 
 const aiProvider = require('./aiProvider');
 
-function getClaudeClient() {
-  return aiProvider.getChatClient();
+// In openai mode every configured Claude name resolves to the same AI_MODEL,
+// so a "fallback" would just re-send the identical request to the identical
+// model (and log a fictitious second model). Compare resolved names instead.
+function canFallbackTo(cfg) {
+  return !!cfg.chatModelFallback &&
+    aiProvider.displayModel(cfg.chatModelFallback) !== aiProvider.displayModel(cfg.chatModel);
 }
 
 // ── In-memory event log (ring buffer, survives until restart) ─────────────
@@ -236,7 +240,7 @@ async function fetchEnrichmentData(userId, matches) {
  */
 async function expandQuery(message, hasHistory = false) {
   const cfg = aiConfig.get();
-  const client = getClaudeClient();
+  const client = aiProvider.getChatClient();
 
   // First message or no history — always search, use the original expansion prompt
   const systemPrompt = hasHistory
@@ -259,7 +263,7 @@ Reply with ONLY these two lines, no explanation. Always reply in English regardl
     return parseExpandResult(text, message, hasHistory);
   } catch (err) {
     // If primary failed and a fallback is configured, try the fallback
-    const canFallback = cfg.chatModelFallback && cfg.chatModelFallback !== cfg.chatModel;
+    const canFallback = canFallbackTo(cfg);
     const isRetryable = [429, 500, 502, 503, 529].includes(err.status)
       || err.error?.type === 'overloaded_error';
     logEvent({
@@ -431,12 +435,12 @@ async function chat(userId, message, opts = {}) {
   const { cfg, callParams, wines, searchQuery, needsNewSearch, wineSection, useQueryExpansion } =
     await _prepareChatContext(userId, message, opts);
 
-  const client = getClaudeClient();
+  const client = aiProvider.getChatClient();
   let response;
   try {
     response = await client.messages.create({ ...callParams, model: cfg.chatModel, ...thinkingOff(cfg.chatModel) });
   } catch (err) {
-    const canFallback = cfg.chatModelFallback && cfg.chatModelFallback !== cfg.chatModel;
+    const canFallback = canFallbackTo(cfg);
     const isRetryable = [429, 500, 502, 503, 529].includes(err.status)
       || err.error?.type === 'overloaded_error';
     logEvent({
@@ -449,7 +453,7 @@ async function chat(userId, message, opts = {}) {
       fallbackModel: canFallback ? aiProvider.displayModel(cfg.chatModelFallback) : null,
     });
     if (isRetryable && canFallback) {
-      console.warn(`[aiChat] Primary model failed (${cfg.chatModel}, status ${err.status}), retrying with fallback: ${cfg.chatModelFallback}`);
+      console.warn(`[aiChat] Primary model failed (${aiProvider.displayModel(cfg.chatModel)}, status ${err.status}), retrying with fallback: ${aiProvider.displayModel(cfg.chatModelFallback)}`);
       try {
         response = await client.messages.create({ ...callParams, model: cfg.chatModelFallback, ...thinkingOff(cfg.chatModelFallback) });
         _eventLog[_eventLog.length - 1].fallbackResult = 'ok';
@@ -503,13 +507,13 @@ async function chatStream(userId, message, opts, res) {
     wineContext: wineSection,
   });
 
-  const client = getClaudeClient();
+  const client = aiProvider.getChatClient();
 
   // messages.stream() returns synchronously and reports HTTP failures via the
   // 'error' event (never by throwing), so the model fallback has to live in
   // the error handler: retry once on the fallback model if the primary fails
   // before any tokens were emitted.
-  const canFallback = cfg.chatModelFallback && cfg.chatModelFallback !== cfg.chatModel;
+  const canFallback = canFallbackTo(cfg);
 
   return new Promise((resolve, reject) => {
     let aborted = false;

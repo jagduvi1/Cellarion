@@ -499,6 +499,7 @@ Notes:
 - Label scanning needs a vision-capable model. Extraction quality depends heavily on the model you host — smaller local models will misread more labels than Claude does.
 - The Qdrant collection is sized to the embedding dimension. After changing `EMBEDDING_PROVIDER`, `EMBEDDING_MODEL`, or `EMBEDDING_DIMENSION`, run a **full** embedding job (SuperAdmin → AI) — it drops and rebuilds the collection at the new size. Every returned vector is validated against `EMBEDDING_DIMENSION`, so a wrong value fails loudly instead of corrupting search.
 - Qdrant itself is always required for cellar chat (it ships in docker-compose).
+- **Privacy note for multi-user instances:** the bundled Privacy Policy names Anthropic and Voyage AI as the AI sub-processors. Pointing these vars at your own local endpoint (Ollama/vLLM on your hardware) removes third-party AI processing entirely — but if you point them at a remote third-party service (e.g. OpenAI or a hosted proxy), you are responsible for updating your instance's privacy policy and user consent accordingly.
 
 ### Email Verification
 

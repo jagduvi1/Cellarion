@@ -14,7 +14,6 @@ const {
   getEmbeddingDimension,
   activeEmbeddingModel,
   embeddingProviderName,
-  VOYAGE_DIMENSION,
 } = require('./embedding');
 
 describe('embed (Voyage fetch)', () => {
@@ -104,7 +103,7 @@ describe('embed (OpenAI-compatible provider)', () => {
 
     delete process.env.EMBEDDING_PROVIDER;
     expect(embeddingProviderName()).toBe('voyage');
-    expect(getEmbeddingDimension()).toBe(VOYAGE_DIMENSION);
+    expect(getEmbeddingDimension()).toBe(2048); // Voyage default
     expect(activeEmbeddingModel('voyage-4-large')).toBe('voyage-4-large');
     expect(isEmbeddingConfigured()).toBe(false); // no VOYAGE_API_KEY
   });
@@ -156,6 +155,15 @@ describe('embed (OpenAI-compatible provider)', () => {
     });
 
     await expect(embed(['a'])).rejects.toThrow(/EMBEDDING_DIMENSION=3/);
+  });
+
+  test('rejects a response with fewer vectors than inputs (embedSingle would yield undefined)', async () => {
+    global.fetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({ data: [] }),
+    });
+
+    await expect(embed(['a', 'b'])).rejects.toThrow(/0 vectors for 2 inputs/);
   });
 
   test('throws a clear config error when required env is missing', async () => {

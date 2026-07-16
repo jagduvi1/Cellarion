@@ -46,8 +46,16 @@ const DEFAULT_MODEL = 'voyage-4-large';
 const VOYAGE_TIMEOUT_MS = 15000;
 const OPENAI_EMBED_TIMEOUT_MS = 30000;
 
+let _warnedUnknownProvider = false;
 function embeddingProviderName() {
-  return (process.env.EMBEDDING_PROVIDER || 'voyage').trim().toLowerCase();
+  const name = (process.env.EMBEDDING_PROVIDER || 'voyage').trim().toLowerCase();
+  // A typo here would silently fall back to Voyage — warn once so the
+  // operator sees why their openai settings are being ignored.
+  if (name !== 'voyage' && name !== 'openai' && !_warnedUnknownProvider) {
+    _warnedUnknownProvider = true;
+    console.warn(`[embedding] Unknown EMBEDDING_PROVIDER "${name}" (expected "voyage" or "openai") — treating as voyage`);
+  }
+  return name;
 }
 
 function openAiEmbEnv() {
@@ -85,55 +93,16 @@ function activeEmbeddingModel(requestedModel) {
     : (requestedModel || DEFAULT_MODEL);
 }
 
-function sleep(ms) {
-  return new Promise(resolve => setTimeout(resolve, ms));
-}
+const { fetchWithRetry } = require('../utils/fetchRetry');
 
-/**
- * Shared retry loop for both providers. `doFetch` performs one attempt and
- * returns the fetch Response; `label` names the provider in error messages.
- */
-async function fetchWithRetry(doFetch, { maxRetries, timeoutMs, label }) {
-  let delay = 2000; // ms — initial backoff
-
-  for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    let res;
-    try {
-      res = await doFetch();
-    } catch (err) {
-      // Surface timeouts as the same plain-Error shape callers already handle
-      // for embedding failures (no .status → generic 500 degrade path).
-      if (err.name === 'TimeoutError' || err.name === 'AbortError') {
-        throw new Error(`${label} request timed out after ${timeoutMs}ms`);
-      }
-      throw err;
-    }
-
-    if (res.ok) return res;
-
-    if (res.status === 429 && attempt < maxRetries) {
-      // Honour Retry-After if present; otherwise use exponential backoff + jitter
-      const retryAfter = res.headers.get('retry-after');
-      const waitMs = retryAfter
-        ? parseInt(retryAfter, 10) * 1000
-        : delay + Math.floor(Math.random() * 500);
-
-      console.warn(`[embedding] 429 rate-limited — waiting ${waitMs}ms (attempt ${attempt + 1}/${maxRetries})`);
-      await sleep(waitMs);
-      delay = Math.min(delay * 2, 64000);
-      continue;
-    }
-
-    // Non-retryable error
-    let body = '';
-    try { body = await res.text(); } catch (_) { /* ignore */ }
-    throw Object.assign(
-      new Error(`${label} error ${res.status}: ${body}`),
-      { status: res.status }
-    );
-  }
-
-  throw new Error(`${label}: exceeded ${maxRetries} retries due to rate limiting`);
+function retryOpts({ maxRetries, timeoutMs, label }) {
+  return {
+    maxRetries,
+    timeoutMs,
+    label,
+    onRetry: (waitMs, attempt) =>
+      console.warn(`[embedding] 429 rate-limited — waiting ${waitMs}ms (attempt ${attempt}/${maxRetries})`),
+  };
 }
 
 /** Sort an OpenAI/Voyage-shaped data array by index and return the vectors. */
@@ -147,6 +116,7 @@ async function embedVoyage(texts, { model, maxRetries }) {
     throw new Error('VOYAGE_API_KEY is not configured');
   }
 
+  const body = JSON.stringify({ input: texts, model, output_dimension: VOYAGE_DIMENSION });
   const res = await fetchWithRetry(
     () => fetch(VOYAGE_API_URL, {
       method: 'POST',
@@ -154,37 +124,43 @@ async function embedVoyage(texts, { model, maxRetries }) {
         'Authorization': `Bearer ${apiKey}`,
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({ input: texts, model, output_dimension: VOYAGE_DIMENSION }),
+      body,
       signal: AbortSignal.timeout(VOYAGE_TIMEOUT_MS)
     }),
-    { maxRetries, timeoutMs: VOYAGE_TIMEOUT_MS, label: 'Voyage AI' }
+    retryOpts({ maxRetries, timeoutMs: VOYAGE_TIMEOUT_MS, label: 'Voyage AI' })
   );
 
   return vectorsInOrder(await res.json());
 }
 
 async function embedOpenAi(texts, { maxRetries }) {
-  const env = openAiEmbEnv();
-  if (!env.baseUrl || !env.model || !(env.dimension > 0)) {
+  if (!isEmbeddingConfigured()) {
     throw new Error('Embedding provider is not configured (EMBEDDING_BASE_URL / EMBEDDING_MODEL / EMBEDDING_DIMENSION required when EMBEDDING_PROVIDER=openai)');
   }
+  const env = openAiEmbEnv();
 
   const headers = { 'Content-Type': 'application/json' };
   if (env.apiKey) headers.Authorization = `Bearer ${env.apiKey}`;
 
+  // No dimensions param — OpenAI-compat servers vary in support; the model's
+  // native size must match EMBEDDING_DIMENSION (validated below).
+  const body = JSON.stringify({ input: texts, model: env.model });
   const res = await fetchWithRetry(
     () => fetch(`${env.baseUrl}/embeddings`, {
       method: 'POST',
       headers,
-      // No dimensions param — OpenAI-compat servers vary in support; the
-      // model's native size must match EMBEDDING_DIMENSION (validated below).
-      body: JSON.stringify({ input: texts, model: env.model }),
+      body,
       signal: AbortSignal.timeout(env.timeoutMs)
     }),
-    { maxRetries, timeoutMs: env.timeoutMs, label: 'Embedding provider' }
+    retryOpts({ maxRetries, timeoutMs: env.timeoutMs, label: 'Embedding provider' })
   );
 
   const vectors = vectorsInOrder(await res.json());
+  if (vectors.length !== texts.length) {
+    throw new Error(
+      `Embedding provider returned ${vectors.length} vectors for ${texts.length} inputs — response is unusable`
+    );
+  }
   for (const v of vectors) {
     if (!Array.isArray(v) || v.length !== env.dimension) {
       throw new Error(
@@ -270,11 +246,12 @@ function buildEmbeddingText(wine, vintage) {
   return lines.join('\n');
 }
 
+// Note: VOYAGE_DIMENSION is intentionally NOT exported — collection sizing
+// must go through getEmbeddingDimension() so openai-mode dimensions apply.
 module.exports = {
   embed,
   embedSingle,
   buildEmbeddingText,
-  VOYAGE_DIMENSION,
   embeddingProviderName,
   isEmbeddingConfigured,
   getEmbeddingDimension,
