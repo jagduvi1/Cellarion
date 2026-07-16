@@ -238,6 +238,23 @@
       "errorWrongPassword": "Your password is incorrect.",
       "errorRateLimited": "Too many attempts. Please wait a few minutes and try again."
     },
+    "aiConnect": {
+      "title": "Connect your AI",
+      "hint": "Talk to your cellar from Claude Desktop, Claude Code, or any MCP-capable assistant: ask what to open tonight, where a bottle is stored, or what your collection is worth. Connections are read-only and use a personal token you can revoke at any time.",
+      "step1": "Step 1 — create an API token with the \"read\" scope in the API tokens section above, then paste it here to fill in the configs (the token is only kept on this page):",
+      "tokenPlaceholder": "cel_… (paste your token, optional)",
+      "testBtn": "Test connection",
+      "testing": "Testing…",
+      "testOk": "Connected — the token works.",
+      "testFail": "That token was rejected. Check it was copied completely and has the \"read\" scope, and that it has not been revoked.",
+      "claudeDesktopTitle": "Claude Desktop (claude_desktop_config.json)",
+      "claudeCodeTitle": "Claude Code (terminal)",
+      "genericTitle": "Any MCP client (Streamable HTTP)",
+      "copy": "Copy",
+      "copied": "Copied!",
+      "securityNote": "Your AI sees only your own cellar data. Revoking the token in the API tokens section cuts the connection off instantly.",
+      "testError": "Could not verify right now (server busy or unreachable) — this says nothing about your token. Try again in a moment."
+    },
     "climateDevices": {
       "title": "Climate devices",
       "hint": "Sensor devices (like an ESP32 with temperature and humidity probes) that post readings into your cellars. Creating a device mints its own scoped access token — shown once — that can only post readings, nothing else. Firmware template and API details: docs/climate-monitoring.md in the repository.",
