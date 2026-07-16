@@ -91,8 +91,8 @@ describe('GET /api/mcp/activity', () => {
     expect(res.status).toBe(200);
     const body = await res.json();
 
-    // caller-scoped query that hides never-applied bulk previews
-    expect(McpActionLog.find).toHaveBeenCalledWith({ user: 'u1', action: { $ne: 'bulk_preview' } });
+    // caller-scoped query that hides never-applied previews (bulk + arrange)
+    expect(McpActionLog.find).toHaveBeenCalledWith({ user: 'u1', action: { $nin: ['bulk_preview', 'arrange_preview'] } });
     expect(body.total).toBe(3);
     expect(body.revert_window_days).toBe(5);
     expect(body.activity).toHaveLength(3);
