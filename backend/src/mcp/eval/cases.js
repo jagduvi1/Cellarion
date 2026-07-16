@@ -55,6 +55,59 @@ const CASES = [
     args: (a) => Number(a.year) === 2025 || a.year === undefined, // year arg preferred, plain call acceptable
   },
   { id: 'no-tool-smalltalk', prompt: 'Hi! How are you today?', expect: { none: true } },
+
+  // ── Phase 3: sommelier intelligence ──────────────────────────────────────
+  {
+    id: 'health-check',
+    prompt: 'Give my cellar a health check — am I buying faster than I drink?',
+    expect: { anyOf: ['cellar_health_check', 'cellar_stats'] },
+  },
+  {
+    id: 'dead-stock',
+    prompt: 'Which wines am I hoarding but never actually drinking?',
+    expect: { tool: 'cellar_health_check' },
+  },
+  {
+    id: 'open-tonight',
+    prompt: 'What should I open tonight?',
+    expect: { tool: 'what_should_i_open_tonight' },
+  },
+  {
+    id: 'pair-dinner',
+    prompt: "I'm cooking duck confit — which bottle from my cellar goes best with it?",
+    expect: { anyOf: ['pair_with_dish', 'what_should_i_open_tonight'] },
+    args: (a) => a.dish === undefined || /duck/i.test(a.dish),
+  },
+  {
+    id: 'collection-gaps',
+    prompt: 'What is missing from my wine collection? Help me round it out.',
+    expect: { anyOf: ['find_gaps', 'cellar_stats'] },
+  },
+  {
+    id: 'value-gains',
+    prompt: 'Are any of my bottles worth a lot more than I paid for them?',
+    expect: { tool: 'value_report' },
+  },
+  {
+    id: 'case-development',
+    prompt: 'How is my case of 2016 Léoville Barton developing? Should I speed up drinking it?',
+    expect: { anyOf: ['case_journey', 'search_bottles'] }, // may resolve the wine/bottle id first
+  },
+  {
+    id: 'semantic-mood',
+    prompt: 'Find me a wine that tastes like a walk through a pine forest after rain.',
+    expect: { anyOf: ['semantic_search_wines', 'search_registry'] },
+  },
+  {
+    id: 'log-tasting-note',
+    prompt: 'Note on the Rioja I just drank: leather and dried cherries, better than last bottle. 4 stars.',
+    expect: { anyOf: ['capture_tasting_note', 'search_bottles', 'list_history'] }, // likely resolves the bottle first
+  },
+  {
+    id: 'rearrange-rack',
+    prompt: 'Rearrange my main rack so the bottles I should drink first end up on top.',
+    expect: { anyOf: ['auto_arrange', 'list_racks', 'list_cellars'] }, // may resolve ids first; apply still needs a preview
+  },
 ];
 
 module.exports = { CASES };

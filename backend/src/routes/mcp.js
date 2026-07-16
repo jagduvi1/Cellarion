@@ -91,10 +91,11 @@ router.get('/activity', requireAuth, requireNonDemo, async (req, res, next) => {
   try {
     const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 50, 1), 100);
     const skip = Math.max(parseInt(req.query.skip, 10) || 0, 0);
-    // Hide bulk_preview rows: a preview that was shown-then-declined changed
-    // nothing, so surfacing it as "AI activity" is misleading (and it can never
-    // be reverted). Applied bulk adds land as a separate `bulk_add` row.
-    const filter = { user: req.user.id, action: { $ne: 'bulk_preview' } };
+    // Hide preview rows (bulk_add / auto_arrange): a preview that was
+    // shown-then-declined changed nothing, so surfacing it as "AI activity" is
+    // misleading (and it can never be reverted). Applied batches land as
+    // separate `bulk_add` / `arrange` rows.
+    const filter = { user: req.user.id, action: { $nin: ['bulk_preview', 'arrange_preview'] } };
     const [rows, total] = await Promise.all([
       McpActionLog.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
       McpActionLog.countDocuments(filter),

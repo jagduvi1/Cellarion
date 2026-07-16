@@ -121,7 +121,54 @@ function allResources() {
   return resources.slice();
 }
 
+// ── Prompts ──────────────────────────────────────────────────────────────────
+// MCP prompts are user-invokable workflow templates (slash-commands in most
+// clients): parameterized messages that teach the calling model HOW to run a
+// multi-tool Cellarion workflow well. Static templates only — a prompt handler
+// interpolates its arguments into text and never touches the DB (the tools it
+// directs the model to are where data comes from), so prompts/get is ~free.
+// Same declarative registry + structural scope gate as tools and resources: a
+// prompt is only registered on a request's server when the caller's scopes
+// satisfy it, so a read-only token never sees a write-workflow prompt whose
+// tools it could not call.
+
+const prompts = [];
+
+/**
+ * Register an MCP prompt.
+ * @param {object} def
+ * @param {string}   def.name         unique snake_case name
+ * @param {string}   def.title        short human-readable title
+ * @param {string}   def.description  when to use — shown in client prompt pickers
+ * @param {string}   def.scope        'public' | 'read' | 'write' | …
+ * @param {object}   [def.argsSchema] zod raw shape; MCP prompt args are strings
+ * @param {Function} def.handler      (args) => ({ messages: [...] }) — must be pure
+ */
+function registerPrompt(def) {
+  if (!def || typeof def.name !== 'string' || typeof def.handler !== 'function') {
+    throw new Error('registerPrompt: name and handler are required');
+  }
+  if (typeof def.scope !== 'string') {
+    throw new Error(`registerPrompt(${def.name}): scope is required`);
+  }
+  if (prompts.some((p) => p.name === def.name)) {
+    throw new Error(`registerPrompt: duplicate prompt name "${def.name}"`);
+  }
+  prompts.push({ argsSchema: {}, ...def });
+}
+
+/** The subset of registered prompts a token with `tokenScopes` may use. */
+function promptsForScopes(tokenScopes) {
+  return prompts.filter((p) => scopeSatisfies(tokenScopes, p.scope));
+}
+
+/** All registered prompts (for tests / introspection). */
+function allPrompts() {
+  return prompts.slice();
+}
+
 module.exports = {
   registerTool, toolsForScopes, scopeSatisfies, allTools,
   registerResource, resourcesForScopes, allResources,
+  registerPrompt, promptsForScopes, allPrompts,
 };

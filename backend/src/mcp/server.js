@@ -1,8 +1,9 @@
-const { toolsForScopes, resourcesForScopes } = require('./registry');
+const { toolsForScopes, resourcesForScopes, promptsForScopes } = require('./registry');
 const { INSTRUCTIONS } = require('./instructions');
 const pkg = require('../../package.json');
 require('./tools');     // register all tools (side-effect)
 require('./resources'); // register all resources (side-effect)
+require('./prompts');   // register all prompts (side-effect)
 
 // The MCP SDK is ESM-only (`type: module`), so this CommonJS module loads it via
 // dynamic import() and caches the classes. Loaded lazily (first request) so the
@@ -101,7 +102,29 @@ async function buildServer(ctx) {
       server.registerResource(rsrc.name, rsrc.uri, meta, wrapped);
     }
   }
+  // Prompts: static workflow templates behind the same structural scope gate.
+  // Handlers are pure (no DB), but they still count against the per-request
+  // call budget so a batched prompts/get flood is bounded like everything else.
+  for (const prompt of promptsForScopes(ctx.scopes)) {
+    server.registerPrompt(
+      prompt.name,
+      { title: prompt.title, description: prompt.description, argsSchema: prompt.argsSchema },
+      budgetedPromptHandler(prompt, ctx, state)
+    );
+  }
   return server;
+}
+
+// Prompt variant of budgetedHandler. Over budget we throw — the SDK surfaces
+// it as a JSON-RPC error for prompts/get (same convention as resources).
+function budgetedPromptHandler(prompt, ctx, state) {
+  return (args) => {
+    state.calls += 1;
+    if (state.calls > MAX_CALLS_PER_REQUEST) {
+      throw new Error(`rate_limited: too many calls in one request (max ${MAX_CALLS_PER_REQUEST})`);
+    }
+    return prompt.handler(args || {}, ctx);
+  };
 }
 
 // Resource variant of budgetedHandler. SDK callbacks: static resources get
@@ -145,6 +168,6 @@ async function handleMcpRequest(req, res, ctx) {
 // tests (jest cannot load the ESM SDK, so buildServer is covered by smoke.js).
 module.exports = {
   handleMcpRequest,
-  budgetedHandler, budgetedResourceHandler, MAX_CALLS_PER_REQUEST,
+  budgetedHandler, budgetedResourceHandler, budgetedPromptHandler, MAX_CALLS_PER_REQUEST,
   takeMutationSlot, WRITE_WINDOW_MS,
 };

@@ -16,7 +16,7 @@ const { resolveBottleAccess } = require('./toolUtil');
 // delete-a-bottle power through undo).
 const CONSUME_REVERSIBLE = ['consume', 'restore'];
 const WRITE_REVERSIBLE = ['add', 'update', 'bulk_add', 'somm_maturity', 'somm_price',
-  'cellar_create', 'rack_create', 'place', 'unplace', 'move'];
+  'cellar_create', 'rack_create', 'place', 'unplace', 'move', 'arrange', 'tasting_note'];
 
 function reversibleActionsFor(scopes) {
   return (scopes || []).includes('write') ? [...CONSUME_REVERSIBLE, ...WRITE_REVERSIBLE] : CONSUME_REVERSIBLE;
@@ -31,10 +31,41 @@ const bottleLabel = (b) => `bottle ${b._id} (vintage ${b.vintage})`;
  * their own). Returns whatever ok/fail return.
  */
 async function revertLedgerRow(row, ctx, { ok, fail }) {
-  // Structural (cellar/rack create, placement, move) — bespoke, no single bottle.
-  if (['cellar_create', 'rack_create', 'place', 'unplace', 'move'].includes(row.action)) {
+  // Structural (cellar/rack create, placement, move, arrange) — bespoke, no single bottle.
+  if (['cellar_create', 'rack_create', 'place', 'unplace', 'move', 'arrange'].includes(row.action)) {
     const { undoStructural } = require('./structuralUndo');
     return undoStructural(row, ctx, { ok, fail, logAction });
+  }
+
+  // Tasting note — remove the journal entry and restore the previous rating.
+  if (row.action === 'tasting_note') {
+    const JournalEntry = require('../models/JournalEntry');
+    const access = await resolveBottleAccess(ctx.user.id, row.bottle, 'editor');
+    if (!access) return fail('conflict', 'The bottle from that note is no longer accessible; nothing was changed.');
+    const claimed = await McpActionLog.findOneAndUpdate({ _id: row._id, reversed: false }, { $set: { reversed: true, idempotencyKey: null } });
+    if (!claimed) return fail('conflict', 'That action is already being undone by another request.');
+
+    const del = await JournalEntry.deleteOne({ _id: row.detail?.journalId, user: ctx.user.id });
+    let ratingRestored = false;
+    if (row.prev && row.prev.field) {
+      const { bottle } = access;
+      if (row.prev.field === 'rating') {
+        const { updateBottleFields } = require('../services/bottleOps');
+        const result = await updateBottleFields(bottle, { rating: row.prev.rating, ratingScale: row.prev.ratingScale || undefined }, ctx.req);
+        ratingRestored = !result.error;
+      } else {
+        bottle.consumedRating = row.prev.consumedRating ?? undefined;
+        bottle.consumedRatingScale = row.prev.consumedRatingScale || undefined;
+        await bottle.save();
+        ratingRestored = true;
+      }
+    }
+    const envelope = {
+      summary: `Undid tasting note${del.deletedCount ? ' — journal entry removed' : ' — entry was already gone'}${row.prev?.field ? (ratingRestored ? ', previous rating restored' : ', rating could NOT be restored') : ''}`,
+      data: { undone: 'capture_tasting_note', entry_removed: !!del.deletedCount, rating_restored: row.prev?.field ? ratingRestored : undefined },
+    };
+    await logAction(ctx, { tool: 'undo_last', action: 'tasting_note', viaUndo: true, bottle: row.bottle, cellar: row.cellar, detail: { undid: String(row._id) }, result: envelope });
+    return ok(envelope.summary, envelope.data);
   }
 
   // Somm curation — registry data, role re-checked.

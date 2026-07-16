@@ -47,9 +47,21 @@ async function main() {
   if (!about.contents[0].text.includes('AGPL-3.0')) throw new Error('about resource payload wrong');
   console.log('[smoke] cellarion://about read OK');
 
+  // Prompts (the third primitive, Phase 3): list is scope-filtered — a read
+  // ctx must see the read prompts but NOT the write-workflow one — and
+  // prompts/get renders the template with its arguments interpolated.
+  const { prompts } = await client.listPrompts();
+  console.log('[smoke] prompts/list ->', prompts.map((p) => p.name));
+  if (!prompts.some((p) => p.name === 'sommelier_pairing')) throw new Error('sommelier_pairing not advertised');
+  if (prompts.some((p) => p.name === 'plan_rack_layout')) throw new Error('write prompt leaked to a read-only ctx');
+  const rendered = await client.getPrompt({ name: 'sommelier_pairing', arguments: { dish: 'osso buco' } });
+  if (!rendered.messages[0].content.text.includes('osso buco')) throw new Error('prompt args not interpolated');
+  if (!rendered.messages[0].content.text.includes('pair_with_dish')) throw new Error('prompt lost its workflow');
+  console.log('[smoke] prompts round-trip OK (scope-filtered, args interpolated)');
+
   await client.close();
   httpServer.close();
-  console.log('[smoke] OK — tools + resources round-trip clean on /api/mcp.');
+  console.log('[smoke] OK — tools + resources + prompts round-trip clean on /api/mcp.');
 }
 
 main().catch((e) => { console.error('[smoke] FAILED:', e); process.exit(1); });
