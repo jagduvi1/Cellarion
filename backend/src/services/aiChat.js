@@ -17,23 +17,24 @@
 const mongoose = require('mongoose');
 const aiConfig = require('../config/aiConfig');
 const { textFromResponse, thinkingOff } = require('../utils/aiResponse');
-const { embedSingle } = require('./embedding');
+const { embedSingle, isEmbeddingConfigured } = require('./embedding');
 const vectorStore = require('./vectorStore');
 const Bottle = require('../models/Bottle');
 const WineVintagePrice = require('../models/WineVintagePrice');
 const { classifyMaturity, buildProfileMap, maturityLabel } = require('../utils/maturityUtils');
 
-// ── Claude client (reuse the @anthropic-ai/sdk already in package.json) ────
-// Lazily instantiated so the module can load even when ANTHROPIC_API_KEY is not set yet.
+// ── LLM client ──────────────────────────────────────────────────────────────
+// Provider-selected (Anthropic by default, OpenAI-compatible for self-hosters
+// via AI_PROVIDER=openai) — see services/aiProvider.js. Both providers expose
+// the same messages.create / messages.stream surface used below.
 
-let _claudeClient = null;
-function getClaudeClient() {
-  if (!_claudeClient) {
-    const sdk = require('@anthropic-ai/sdk');
-    const Anthropic = sdk.default ?? sdk;
-    _claudeClient = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-  }
-  return _claudeClient;
+const aiProvider = require('./aiProvider');
+
+// aiConfig.get() returns provider-resolved model names (in openai mode the
+// fallback resolves to the same AI_MODEL as the primary), so comparing the
+// cfg values directly is enough to disable a pointless same-model "fallback".
+function canFallbackTo(cfg) {
+  return !!cfg.chatModelFallback && cfg.chatModelFallback !== cfg.chatModel;
 }
 
 // ── In-memory event log (ring buffer, survives until restart) ─────────────
@@ -238,7 +239,7 @@ async function fetchEnrichmentData(userId, matches) {
  */
 async function expandQuery(message, hasHistory = false) {
   const cfg = aiConfig.get();
-  const client = getClaudeClient();
+  const client = aiProvider.getChatClient();
 
   // First message or no history — always search, use the original expansion prompt
   const systemPrompt = hasHistory
@@ -261,7 +262,7 @@ Reply with ONLY these two lines, no explanation. Always reply in English regardl
     return parseExpandResult(text, message, hasHistory);
   } catch (err) {
     // If primary failed and a fallback is configured, try the fallback
-    const canFallback = cfg.chatModelFallback && cfg.chatModelFallback !== cfg.chatModel;
+    const canFallback = canFallbackTo(cfg);
     const isRetryable = [429, 500, 502, 503, 529].includes(err.status)
       || err.error?.type === 'overloaded_error';
     logEvent({
@@ -325,9 +326,7 @@ async function _prepareChatContext(userId, message, { useQueryExpansion = true, 
   if (!cfg.chatEnabled) {
     throw Object.assign(new Error('AI chat is currently disabled'), { status: 503 });
   }
-  if (!process.env.ANTHROPIC_API_KEY) {
-    throw Object.assign(new Error('ANTHROPIC_API_KEY is not configured'), { status: 503 });
-  }
+  aiProvider.assertConfigured(); // throws 503 when the active AI provider lacks config
 
   const hasHistory = history.length > 0;
 
@@ -351,8 +350,8 @@ async function _prepareChatContext(userId, message, { useQueryExpansion = true, 
   let matches = [];
 
   if (needsNewSearch) {
-    if (!process.env.VOYAGE_API_KEY) {
-      throw Object.assign(new Error('VOYAGE_API_KEY is not configured'), { status: 503 });
+    if (!isEmbeddingConfigured()) {
+      throw Object.assign(new Error('Embeddings are not configured on this server'), { status: 503 });
     }
 
     // Restrict Qdrant search to wines the user actually owns. Without this,
@@ -435,12 +434,12 @@ async function chat(userId, message, opts = {}) {
   const { cfg, callParams, wines, searchQuery, needsNewSearch, wineSection, useQueryExpansion } =
     await _prepareChatContext(userId, message, opts);
 
-  const client = getClaudeClient();
+  const client = aiProvider.getChatClient();
   let response;
   try {
     response = await client.messages.create({ ...callParams, model: cfg.chatModel, ...thinkingOff(cfg.chatModel) });
   } catch (err) {
-    const canFallback = cfg.chatModelFallback && cfg.chatModelFallback !== cfg.chatModel;
+    const canFallback = canFallbackTo(cfg);
     const isRetryable = [429, 500, 502, 503, 529].includes(err.status)
       || err.error?.type === 'overloaded_error';
     logEvent({
@@ -507,13 +506,13 @@ async function chatStream(userId, message, opts, res) {
     wineContext: wineSection,
   });
 
-  const client = getClaudeClient();
+  const client = aiProvider.getChatClient();
 
   // messages.stream() returns synchronously and reports HTTP failures via the
   // 'error' event (never by throwing), so the model fallback has to live in
   // the error handler: retry once on the fallback model if the primary fails
   // before any tokens were emitted.
-  const canFallback = cfg.chatModelFallback && cfg.chatModelFallback !== cfg.chatModel;
+  const canFallback = canFallbackTo(cfg);
 
   return new Promise((resolve, reject) => {
     let aborted = false;

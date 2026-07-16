@@ -23,7 +23,7 @@
 const crypto = require('crypto');
 const { randomUUID } = require('crypto');
 const aiConfig = require('../config/aiConfig');
-const { embedSingle, buildEmbeddingText } = require('./embedding');
+const { embedSingle, buildEmbeddingText, isEmbeddingConfigured, getEmbeddingDimension } = require('./embedding');
 const vectorStore = require('./vectorStore');
 const WineEmbedding = require('../models/WineEmbedding');
 const Bottle = require('../models/Bottle');
@@ -92,14 +92,32 @@ async function start({ mode = 'incremental' } = {}) {
   if (job.status === 'running' || job.status === 'stopping') {
     throw new Error('A job is already running');
   }
+  // Guard BEFORE any destructive step: a full job drops the collection first,
+  // so starting with a broken embedding config (e.g. EMBEDDING_PROVIDER=openai
+  // without EMBEDDING_DIMENSION) would destroy the existing vectors and then
+  // fail to recreate the collection.
+  if (!isEmbeddingConfigured()) {
+    throw new Error('Embedding provider is not configured — set VOYAGE_API_KEY, or EMBEDDING_BASE_URL/EMBEDDING_MODEL/EMBEDDING_DIMENSION for EMBEDDING_PROVIDER=openai');
+  }
 
   const cfg = aiConfig.get();
+
+  // An incremental job into a collection built at a different dimension would
+  // embed every pair and then fail every upsert (Qdrant 400) — fail fast and
+  // name the fix instead.
+  if (mode !== 'full') {
+    const existingSize = await vectorStore.collectionVectorSize(cfg.vectorIndex).catch(() => null);
+    const wantedSize = getEmbeddingDimension();
+    if (existingSize && existingSize !== wantedSize) {
+      throw new Error(`Collection wines_${cfg.vectorIndex} was built for ${existingSize}-dim vectors but the active embedding provider produces ${wantedSize}-dim — run a FULL embedding job to rebuild it`);
+    }
+  }
 
   stopRequested = false;
   job = {
     status: 'running',
     mode,
-    model: cfg.embeddingModel,
+    model: cfg.embeddingModel, // provider-resolved by aiConfig.get()
     indexVersion: cfg.vectorIndex,
     total: 0,
     done: 0,
@@ -120,6 +138,8 @@ async function start({ mode = 'incremental' } = {}) {
 }
 
 async function runJob(cfg) {
+  // cfg.embeddingModel is provider-resolved by aiConfig.get(), so the
+  // WineEmbedding bookkeeping records the model that actually embedded.
   const { embeddingModel: model, vectorIndex, embeddingBatchDelayMs } = cfg;
 
   try {
@@ -280,14 +300,14 @@ async function runJob(cfg) {
  * routes — errors are caught and logged, never thrown to the caller.
  *
  * Skips silently when:
- *  - VOYAGE_API_KEY is not configured
+ *  - the embedding provider is not configured
  *  - the pair already has an up-to-date embedding (same textHash + status ok)
  *
  * @param {string|object} wineDefId  – WineDefinition _id (string or ObjectId)
  * @param {string}        vintage    – e.g. '2019' or 'NV'
  */
 async function embedSinglePair(wineDefId, vintage) {
-  if (!process.env.VOYAGE_API_KEY) return;
+  if (!isEmbeddingConfigured()) return;
   // Intentionally NOT skipped while a batch job runs: a batch snapshots its
   // (wine, vintage) list at start, so a just-added pair isn't covered by it.
   // The textHash check below makes a redundant re-embed a cheap no-op.

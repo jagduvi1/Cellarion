@@ -684,6 +684,8 @@ export default function TabAI() {
   if (!data)   return null;
 
   const { configured, config, job, collection, embeddings } = data;
+  const providers = data.providers || {};
+  const openAiMode = providers.llm === 'openai' || providers.embedding === 'openai';
   const enrichJob = data.enrichmentJob || {};
   const enrichCoverage = data.enrichment || { totalWines: 0, enrichedWines: 0 };
   const enrichPct = enrichJob.total > 0 ? Math.round((enrichJob.done / enrichJob.total) * 100) : 0;
@@ -709,9 +711,9 @@ export default function TabAI() {
       {/* API keys configured */}
       <div className="sa-services-grid" style={{ marginBottom: 16 }}>
         {[
-          { name: 'Voyage AI (Embeddings)', ok: configured.voyageAI },
-          { name: 'Qdrant (Vector DB)',     ok: configured.qdrant },
-          { name: 'Anthropic (AI Chat)',    ok: configured.anthropic },
+          { name: 'Embeddings', ok: configured.voyageAI },
+          { name: 'Qdrant (Vector DB)', ok: configured.qdrant },
+          { name: 'LLM (AI Chat)', ok: configured.anthropic },
         ].map(s => (
           <div key={s.name} className="sa-service">
             <StatusDot status={s.ok ? 'ok' : 'not_configured'} />
@@ -722,6 +724,15 @@ export default function TabAI() {
           </div>
         ))}
       </div>
+
+      {/* Self-hosted provider mode: model pickers below are env-governed and inert */}
+      {openAiMode && (
+        <div className="sa-error" style={{ marginBottom: 16, fontSize: 11 }}>
+          {providers.llm === 'openai' && 'AI_PROVIDER=openai — chat/scan model settings below are ignored; the model comes from the AI_MODEL / AI_VISION_MODEL env vars. '}
+          {providers.embedding === 'openai' && 'EMBEDDING_PROVIDER=openai — the embedding model comes from the EMBEDDING_MODEL env var. '}
+          Prompts and all other settings still apply.
+        </div>
+      )}
 
       <div className="sa-grid-2">
         {/* AI Config */}

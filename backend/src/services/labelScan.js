@@ -3,22 +3,18 @@ const aiConfig = require('../config/aiConfig');
 const { extractFirstJsonObject } = require('../utils/jsonExtract');
 const { textFromResponse, thinkingOff } = require('../utils/aiResponse');
 
+const aiProvider = require('./aiProvider');
+
 function getClient() {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) {
-    const err = new Error('Label scan is not configured on this server');
-    err.status = 503;
-    throw err;
-  }
-  const sdk = require('@anthropic-ai/sdk');
-  const Anthropic = sdk.default ?? sdk;
-  // maxRetries lets the SDK transparently wait out 429 / 529 (overloaded) /
-  // 5xx with exponential backoff that honors the `retry-after` header, instead
-  // of failing the call. This is what keeps a large bottle import (1000+) going
-  // when Anthropic briefly rate-limits us — each AI call waits and continues
-  // rather than aborting. The per-call wait stays bounded so a single import
-  // chunk request can't hang indefinitely.
-  return new Anthropic({ apiKey, maxRetries: 4 });
+  // maxRetries lets the provider transparently wait out 429 / 529 (overloaded)
+  // / 5xx with exponential backoff that honors the `retry-after` header,
+  // instead of failing the call. This is what keeps a large bottle import
+  // (1000+) going when the AI backend briefly rate-limits us — each AI call
+  // waits and continues rather than aborting. The per-call wait stays bounded
+  // so a single import chunk request can't hang indefinitely.
+  // Throws a 503-shaped error when the active provider is not configured
+  // (callers map that to their 'no_api_key' degrade path).
+  return aiProvider.getChatClient({ maxRetries: 4 });
 }
 
 /**
@@ -86,12 +82,15 @@ async function scanLabelFull(image, mediaType = 'image/jpeg') {
 
   const raw = textFromResponse(response);
 
-  // Strip any accidental markdown fences just in case
+  // Strip any accidental markdown fences, then extract only the first
+  // balanced {...} — local vision models (openai mode) often wrap the JSON
+  // in prose, which used to fail the scan AND burn a non-refundable budget
+  // unit even when the label was read correctly.
   const stripped = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
 
   let data;
   try {
-    data = JSON.parse(stripped);
+    data = JSON.parse(extractFirstJsonObject(stripped));
   } catch {
     console.error('labelScan JSON parse failed, raw response:', raw);
     const err = new Error('Could not read label');
@@ -158,11 +157,15 @@ async function callClaudeJson({ client, model, maxTokens, prompt, validate }) {
     } catch (err) {
       if (err.status === 429 && attempt === 1) {
         // Rate limited — wait for retry-after header (or 15 s) then retry once.
-        // The SDK exposes err.headers as a fetch Headers instance, so read it
-        // via .get(); keep the plain-object lookup as a fallback for SDK
-        // versions/errors that attach a plain map.
+        // Both the Anthropic SDK and the OpenAI-compat adapter expose
+        // err.headers as a fetch Headers instance, so read it via .get(); keep
+        // the plain-object lookup as a fallback. The header value is
+        // provider-controlled: a date-format value parses to NaN (fall back to
+        // 15 s) and a hostile huge value must not park the import worker —
+        // cap the wait at 60 s.
         const retryAfter = err.headers?.get?.('retry-after') ?? err.headers?.['retry-after'];
-        const waitMs = (parseInt(retryAfter ?? '15', 10) + 1) * 1000;
+        const secs = parseInt(retryAfter ?? '', 10);
+        const waitMs = Math.min((secs > 0 ? secs : 15) + 1, 60) * 1000;
         await new Promise(r => setTimeout(r, waitMs));
         continue;
       }

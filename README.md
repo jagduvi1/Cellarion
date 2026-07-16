@@ -440,6 +440,18 @@ Copy `.env.example` to `.env` in the project root and set the required values:
 | `REMBG_URL` | No | `http://rembg:5000` | Background removal service |
 | `ANTHROPIC_API_KEY` | No | — | Enables label scanning and AI cellar chat ([get a key](https://console.anthropic.com/)) |
 | `VOYAGE_API_KEY` | No | — | Required for AI cellar chat embeddings ([get a key](https://dash.voyageai.com/)) |
+| `AI_PROVIDER` | No | `anthropic` | Set to `openai` to serve all LLM features from an OpenAI-compatible endpoint (see [Self-hosted AI](#self-hosted-ai-openai-compatible-endpoints)) |
+| `OPENAI_BASE_URL` | No | — | OpenAI-compatible `/v1` root, e.g. `http://host.docker.internal:11434/v1` (required when `AI_PROVIDER=openai`) |
+| `OPENAI_API_KEY` | No | — | Bearer token for the endpoint (Ollama/LM Studio ignore it; vLLM may require one) |
+| `AI_MODEL` | No | — | Model name to use, e.g. `llama3.1:70b` (required when `AI_PROVIDER=openai`) |
+| `AI_VISION_MODEL` | No | `AI_MODEL` | Vision-capable model for label scanning, e.g. `qwen2.5-vl:32b` |
+| `OPENAI_TIMEOUT_MS` | No | `120000` | Per-request timeout for the OpenAI-compatible endpoint |
+| `EMBEDDING_PROVIDER` | No | `voyage` | Set to `openai` to serve wine embeddings from an OpenAI-compatible endpoint instead of Voyage AI |
+| `EMBEDDING_BASE_URL` | No | `OPENAI_BASE_URL` | `/v1` root of the embedding endpoint |
+| `EMBEDDING_API_KEY` | No | — | Bearer token for the embedding endpoint (falls back to `OPENAI_API_KEY` only when `EMBEDDING_BASE_URL` is also unset — a dedicated embedding host is never sent the chat key) |
+| `EMBEDDING_MODEL` | No | — | Embedding model name, e.g. `nomic-embed-text` (required when `EMBEDDING_PROVIDER=openai`) |
+| `EMBEDDING_DIMENSION` | No | — | The model's vector size, e.g. `768` (required when `EMBEDDING_PROVIDER=openai`) |
+| `EMBEDDING_TIMEOUT_MS` | No | `30000` | Per-request timeout for the embedding endpoint |
 | `QDRANT_URL` | No | `http://qdrant:6333` | Vector database URL (auto-set in Docker Compose) |
 | `SUPER_ADMIN_EMAIL` | No | — | Email of the super admin account |
 | `SUPER_ADMIN_IPS` | No | — | Comma-separated IP allowlist for super admin access |
@@ -459,6 +471,37 @@ The AI chat feature requires three services working together:
 When all three are configured, users can ask natural-language questions about their collection (food pairings, occasion picks, cellar insights). The system only surfaces wines the user actually owns — no hallucinated recommendations.
 
 A single daily usage quota — the same for every user, regardless of supporter tier — is configurable by SuperAdmins (default 50 questions/day).
+
+### Self-hosted AI (OpenAI-compatible endpoints)
+
+Self-hosters who prefer not to use an Anthropic API key can point every LLM feature (cellar chat, label scan, import lookup, drink-window / price / profile suggestions) at any endpoint that speaks the OpenAI chat-completions API — Ollama, LM Studio, vLLM, LiteLLM, or OpenAI itself:
+
+```bash
+AI_PROVIDER=openai
+OPENAI_BASE_URL=http://host.docker.internal:11434/v1   # your endpoint's /v1 root
+AI_MODEL=llama3.1:70b                                   # any model your server hosts
+AI_VISION_MODEL=qwen2.5-vl:32b                          # optional — used for label scanning
+```
+
+Wine **embeddings** (the semantic-search half of cellar chat) can independently be moved off Voyage AI the same way:
+
+```bash
+EMBEDDING_PROVIDER=openai
+EMBEDDING_MODEL=nomic-embed-text   # any embedding model your server hosts
+EMBEDDING_DIMENSION=768            # MUST be that model's real vector size
+# EMBEDDING_BASE_URL / EMBEDDING_API_KEY default to OPENAI_BASE_URL / OPENAI_API_KEY
+```
+
+Notes:
+
+- Both switches are **opt-in**: without them, nothing changes — Anthropic + Voyage remain the defaults, and they can be switched independently (e.g. local LLM + Voyage embeddings).
+- `host.docker.internal` resolves out of the box only on Docker Desktop (Windows/macOS). On a Linux server, either add `extra_hosts: ["host.docker.internal:host-gateway"]` to the backend service in your compose file, or point `OPENAI_BASE_URL` at the host's LAN IP or a service on the compose network.
+- The AI usage budgets (per-user/global daily caps, import per-request cap, chat daily limit) were tuned to bound paid Anthropic spend. Against your own hardware they still apply — raise or disable them in SuperAdmin → Rate limits (`0`/`-1` = unlimited) if you don't want your local endpoint metered.
+- The admin panel's Claude model settings are ignored in openai mode (the model comes from `AI_MODEL`); the configurable AI **prompts** still apply.
+- Label scanning needs a vision-capable model. Extraction quality depends heavily on the model you host — smaller local models will misread more labels than Claude does.
+- The Qdrant collection is sized to the embedding dimension. After changing `EMBEDDING_PROVIDER`, `EMBEDDING_MODEL`, or `EMBEDDING_DIMENSION`, run a **full** embedding job (SuperAdmin → AI) — it drops and rebuilds the collection at the new size. Every returned vector is validated against `EMBEDDING_DIMENSION`, so a wrong value fails loudly instead of corrupting search.
+- Qdrant itself is always required for cellar chat (it ships in docker-compose).
+- **Privacy note for multi-user instances:** the bundled Privacy Policy names Anthropic and Voyage AI as the AI sub-processors. Pointing these vars at your own local endpoint (Ollama/vLLM on your hardware) removes third-party AI processing entirely — but if you point them at a remote third-party service (e.g. OpenAI or a hosted proxy), you are responsible for updating your instance's privacy policy and user consent accordingly.
 
 ### Email Verification
 

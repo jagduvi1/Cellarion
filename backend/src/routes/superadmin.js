@@ -18,6 +18,8 @@ const vectorStore = require('../services/vectorStore');
 const aiConfig = require('../config/aiConfig');
 const announcementConfig = require('../config/announcement');
 const aiChat = require('../services/aiChat');
+const aiProvider = require('../services/aiProvider');
+const { isEmbeddingConfigured, embeddingProviderName } = require('../services/embedding');
 const { updateSiteConfig } = require('../utils/siteConfig');
 const { parsePagination } = require('../utils/pagination');
 const { escapeRegex } = require('../utils/sanitize');
@@ -218,14 +220,16 @@ router.get('/services', async (req, res) => {
     results.rembg = { status: 'error', error: 'Service unavailable' };
   }
 
-  // Anthropic API
+  // LLM provider (Anthropic by default; OpenAI-compatible when AI_PROVIDER=openai)
   results.anthropic = {
-    configured: !!process.env.ANTHROPIC_API_KEY,
+    configured: aiProvider.isConfigured(),
+    provider: aiProvider.providerName(),
   };
 
-  // Voyage AI (embeddings)
+  // Embedding provider (Voyage by default; OpenAI-compatible when EMBEDDING_PROVIDER=openai)
   results.voyageAI = {
-    configured: !!process.env.VOYAGE_API_KEY,
+    configured: isEmbeddingConfigured(),
+    provider: embeddingProviderName(),
   };
 
   // Qdrant (optional)
@@ -354,7 +358,7 @@ router.get('/backups', async (req, res) => {
 // ---------------------------------------------------------------------------
 router.get('/ai', async (req, res) => {
   try {
-    const cfg = aiConfig.get();
+    const cfg = aiConfig.getRaw();
     const jobStatus = embeddingJob.getStatus();
     const enrichStatus = enrichmentJob.getStatus();
 
@@ -385,9 +389,15 @@ router.get('/ai', async (req, res) => {
 
     res.json({
       configured: {
-        voyageAI:  !!process.env.VOYAGE_API_KEY,
+        voyageAI:  isEmbeddingConfigured(),
         qdrant:    !!process.env.QDRANT_URL,
-        anthropic: !!process.env.ANTHROPIC_API_KEY,
+        anthropic: aiProvider.isConfigured(),
+      },
+      // Lets the UI flag that model settings below are env-governed and inert
+      // when a provider runs in openai mode (prompts still apply).
+      providers: {
+        llm: aiProvider.providerName(),
+        embedding: embeddingProviderName(),
       },
       config: cfg,
       job: jobStatus,
@@ -424,7 +434,7 @@ router.patch('/ai/chat-limit', async (req, res) => {
     return res.status(400).json({ error: 'limit must be an integer of -1 (unlimited) or greater' });
   }
   try {
-    const current = aiConfig.get();
+    const current = aiConfig.getRaw();
     const updated = { ...current, chatDailyLimit: limit };
     await updateSiteConfig('aiConfig', updated, req.user.id);
     aiConfig.set(updated);
@@ -456,7 +466,7 @@ function registerPromptRoute(path, configKey, maxLen, saveErrorMsg) {
       return res.status(400).json({ error: `prompt must be ${maxLen} characters or fewer` });
     }
     try {
-      const current = aiConfig.get();
+      const current = aiConfig.getRaw();
       const updated = { ...current, [configKey]: prompt.trim() };
       await updateSiteConfig('aiConfig', updated, req.user.id);
       aiConfig.set(updated);
@@ -479,7 +489,7 @@ function registerModelRoute(path, configKey, saveErrorMsg) {
     }
 
     try {
-      const current = aiConfig.get();
+      const current = aiConfig.getRaw();
       const updated = { ...current, [configKey]: model };
       await updateSiteConfig('aiConfig', updated, req.user.id);
       aiConfig.set(updated);
@@ -522,7 +532,7 @@ router.patch('/ai/chat-model', async (req, res) => {
   }
 
   try {
-    const current = aiConfig.get();
+    const current = aiConfig.getRaw();
     // Validate the invariant against the EFFECTIVE pair — an omitted
     // fallbackModel keeps the stored one, which must not equal the new model.
     const effectiveFallback = fallbackModel !== undefined ? fallbackModel : current.chatModelFallback;

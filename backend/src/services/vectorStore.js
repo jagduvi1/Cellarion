@@ -13,7 +13,7 @@
  * makes index migrations (v1 → v2) easy to reason about.
  */
 
-const { VOYAGE_DIMENSION } = require('./embedding');
+const { getEmbeddingDimension } = require('./embedding');
 
 // Outbound timeout: Node fetch has no application-level timeout, so a stalled
 // Qdrant connection would park callers (notably the /api/chat RAG path) until
@@ -68,16 +68,38 @@ async function ensureCollection(indexVersion) {
 
   // Check if collection exists
   try {
-    await qdrantRequest('GET', `/collections/${name}`);
+    const info = await qdrantRequest('GET', `/collections/${name}`);
+    // A collection built for a different embedding dimension (provider/model
+    // switch without the required FULL re-embed) makes every upsert/search
+    // fail with an opaque Qdrant 400 — call it out loudly and point at the
+    // fix. Not thrown: the full embedding job runs through here right before
+    // it drops + recreates the collection, which IS the fix.
+    const existingSize = info.result?.config?.params?.vectors?.size;
+    const wantedSize = getEmbeddingDimension();
+    if (existingSize && existingSize !== wantedSize) {
+      console.error(
+        `[vectorStore] Collection ${name} holds ${existingSize}-dim vectors but the active embedding provider produces ${wantedSize}-dim — ` +
+        `vector search will fail until a FULL embedding job rebuilds the collection (SuperAdmin → AI)`
+      );
+    }
     return; // already exists
   } catch (err) {
     if (err.status !== 404) throw err;
   }
 
-  // Create it
+  // Create it, sized to the active embedding provider's vector dimension.
+  // Changing provider/model/dimension requires a FULL embedding job (drops +
+  // recreates the collection at the new size).
+  const size = getEmbeddingDimension();
+  if (!(size > 0)) {
+    // Refuse rather than create a broken collection — this matters most in
+    // the full-job path, which has already DROPPED the old collection when
+    // it calls back in here.
+    throw new Error('Embedding dimension is not configured (EMBEDDING_DIMENSION) — refusing to create the vector collection');
+  }
   await qdrantRequest('PUT', `/collections/${name}`, {
     vectors: {
-      size: VOYAGE_DIMENSION,
+      size,
       distance: 'Cosine'
     }
   });
@@ -156,6 +178,22 @@ async function dropCollection(indexVersion) {
 }
 
 /**
+ * The vector size an existing collection was created with, or null when the
+ * collection doesn't exist. Used to fail an incremental embedding job fast
+ * when the active provider's dimension doesn't match.
+ */
+async function collectionVectorSize(indexVersion) {
+  const name = collectionName(indexVersion);
+  try {
+    const res = await qdrantRequest('GET', `/collections/${name}`);
+    return res.result?.config?.params?.vectors?.size ?? null;
+  } catch (err) {
+    if (err.status === 404) return null;
+    throw err;
+  }
+}
+
+/**
  * Return basic stats about a collection (count of vectors).
  */
 async function collectionInfo(indexVersion) {
@@ -195,5 +233,6 @@ module.exports = {
   deletePoints,
   dropCollection,
   collectionInfo,
+  collectionVectorSize,
   collectionName
 };

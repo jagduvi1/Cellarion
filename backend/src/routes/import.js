@@ -15,6 +15,7 @@ const { normalizeString } = require('../utils/normalize');
 const { normalizeBottleSize, DEFAULT_SIZE } = require('../config/bottleSizes');
 const searchService = require('../services/search');
 const { identifyWineFromText } = require('../services/labelScan');
+const aiProvider = require('../services/aiProvider');
 const { findOrCreateWine } = require('../services/findOrCreateWine');
 const { scoreWineMatchVariants, stripProducerPrefix } = require('../services/wineMatching');
 const { tryDebitAi, isRefundableFailure } = require('../services/aiBudget');
@@ -255,7 +256,7 @@ router.post('/validate', aiBurstLimiter, async (req, res) => {
     // registry ALREADY knows, the AI's canonicalized result would dedup to
     // the same registry wine anyway — so a confident registry match skips the
     // AI call with an outcome-identical result (audit M-2 cost defense).
-    const aiEligible = process.env.ANTHROPIC_API_KEY
+    const aiEligible = aiProvider.isConfigured()
       ? preResults.filter(pr => !pr.errorMsg && pr.item.wineName && pr.item.producer)
       : [];
 
@@ -418,6 +419,7 @@ router.post('/validate', aiBurstLimiter, async (req, res) => {
 
     // Pass 4: build final results
     const results = [];
+    const aiConfigured = aiProvider.isConfigured(); // invariant — don't re-derive per row
     for (const pr of preResults) {
       if (pr.errorMsg) {
         results.push({ index: pr.index, item: pr.item, status: 'error', error: pr.errorMsg, matches: [] });
@@ -484,7 +486,7 @@ router.post('/validate', aiBurstLimiter, async (req, res) => {
 
         // Include AI debug info when AI was attempted but failed (not when it
         // was skipped by budget/cap/disconnect — those rows carry aiSkipped)
-        if (!pr.aiSkipped && process.env.ANTHROPIC_API_KEY && (pr.item.wineName || pr.item.producer)) {
+        if (!pr.aiSkipped && aiConfigured && (pr.item.wineName || pr.item.producer)) {
           const aiStatus = pr.aiError || pr.aiDebugReason === 'rate_limit_exceeded' ||
             (pr.aiDebugReason && pr.aiDebugReason.startsWith('exception'))
             ? 'failed' : (pr.aiWineError ? 'create_failed' : 'searched');

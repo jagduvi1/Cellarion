@@ -26,11 +26,17 @@ function walkBraces(str, onClose, fallback) {
 
 /**
  * Extracts the first balanced {...} JSON object from a string.
- * Prevents trailing model commentary from breaking JSON.parse.
+ * Prevents surrounding model commentary from breaking JSON.parse: the walk
+ * starts at the first '{' so a leading preamble ("Here is the JSON: {...}")
+ * is dropped and its prose (which may contain unbalanced quotes that would
+ * corrupt the in-string tracking) never reaches the brace matcher.
  */
 function extractFirstJsonObject(str) {
+  const start = str.indexOf('{');
+  if (start === -1) return str;   // no object — return as-is
+  const sub = str.slice(start);
   return walkBraces(
-    str,
+    sub,
     (s, i) => s.slice(0, i + 1),
     (s) => s               // no balanced object — return as-is
   );
@@ -43,9 +49,11 @@ function extractFirstJsonObject(str) {
  */
 function extractAiExplanation(raw) {
   if (!raw) return null;
+  const start = raw.indexOf('{');
+  if (start === -1) return null;
   return walkBraces(
-    raw,
-    (_s, i) => raw.slice(i + 1).replace(/^\s*\*{0,2}Reason\*{0,2}:?\s*/i, '').trim() || null,
+    raw.slice(start),
+    (s, i) => s.slice(i + 1).replace(/^\s*\*{0,2}Reason\*{0,2}:?\s*/i, '').trim() || null,
     () => null
   );
 }

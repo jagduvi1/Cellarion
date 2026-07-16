@@ -24,6 +24,7 @@ const mongoose = require('mongoose');
 const aiConfig = require('../config/aiConfig');
 const { tryDebitAi, isRefundableFailure } = require('./aiBudget');
 const { suggestProfile } = require('./labelScan');
+const aiProvider = require('./aiProvider');
 const { embedSinglePair } = require('./embeddingJob');
 const { isValidId } = require('../utils/validation');
 const WineDefinition = require('../models/WineDefinition');
@@ -79,9 +80,7 @@ async function start({ mode = 'incremental', limit = 0 } = {}) {
   if (job.status === 'running' || job.status === 'stopping') {
     throw new Error('A job is already running');
   }
-  if (!process.env.ANTHROPIC_API_KEY) {
-    throw new Error('ANTHROPIC_API_KEY is not configured');
-  }
+  aiProvider.assertConfigured(); // throws when the active AI provider lacks config
 
   const cfg = aiConfig.get();
   const cap = Number.isInteger(limit) && limit > 0 ? limit : 0;
@@ -259,8 +258,8 @@ async function enrichWineById(wineDefId, { budgetUserId } = {}) {
   if (!isValidId(idStr)) return;
   const oid = new mongoose.Types.ObjectId(idStr);
   try {
-    if (!process.env.ANTHROPIC_API_KEY) {
-      console.warn('[enrichmentJob] enrichWineById skipped: ANTHROPIC_API_KEY not configured');
+    if (!aiProvider.isConfigured()) {
+      console.warn('[enrichmentJob] enrichWineById skipped: AI provider not configured');
       return;
     }
     // Intentionally NOT skipped while a batch job runs: a batch snapshots its
