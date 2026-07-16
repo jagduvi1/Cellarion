@@ -125,6 +125,16 @@ const wineDefinitionSchema = new mongoose.Schema({
     ref: 'User',
     required: true
   },
+  // Provenance: which surface minted this registry entry ('mcp' = a connected
+  // AI via the MCP write tools). Lets admins review AI-created wines as a
+  // class (registry-integrity plan §5.1). null for rows predating the field
+  // and for surfaces that haven't adopted it yet; actor detail stays in
+  // AuditLog (wine.create).
+  createdVia: {
+    type: String,
+    enum: ['ui', 'import', 'mcp', 'ai', null],
+    default: null
+  },
   createdAt: {
     type: Date,
     default: Date.now

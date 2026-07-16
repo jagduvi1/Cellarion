@@ -10,7 +10,7 @@ const { handleMcpRequest } = require('../mcp/server');
 // tools ship with the full write-safety stack: conflict guard, idempotency
 // keys, the McpActionLog undo ledger). `write` is deliberately NOT granted —
 // that extension happens with Phase 2b's add/edit tools, consciously.
-const JWT_SCOPES = ['read', 'consume'];
+const JWT_SCOPES = ['read', 'consume', 'write'];
 
 // POST /api/mcp — stateless Streamable HTTP MCP endpoint. Auth is the same
 // requireAuth as the REST API. For `cel_` tokens the SCOPE_ALLOWLIST grants this

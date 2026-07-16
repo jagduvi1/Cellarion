@@ -33,7 +33,7 @@ const mongoose = require('mongoose');
 const searchService = require('../services/search');
 // consume/restore logic + rack-slot freeing live in the shared service so the
 // REST routes and the MCP tools can never drift (plan §7).
-const { consumeBottle, restoreBottle, removeFromRacks } = require('../services/bottleOps');
+const { consumeBottle, restoreBottle, removeFromRacks, removeBottleCascade } = require('../services/bottleOps');
 
 const router = express.Router();
 
@@ -1068,49 +1068,13 @@ router.post('/:id/restore', requireBottleAccess('editor'), async (req, res) => {
 // Active bottles only — consumed bottles must use a different path.
 router.post('/:id/undo', requireBottleAccess('editor'), async (req, res) => {
   try {
-    const { bottle } = req;
-
-    if (bottle.status !== 'active') {
-      return res.status(400).json({
+    // Full cleanup cascade shared with the MCP undo path (services/bottleOps).
+    const result = await removeBottleCascade(req.bottle, req, 'bottle.undo');
+    if (result.error) {
+      return res.status(result.error.status).json({
         error: 'Only active bottles can be marked as a mistake. Already-consumed bottles cannot be undone.'
       });
     }
-
-    const bottleId = bottle._id;
-    const cellarId = bottle.cellar;
-    const pendingRequestId = bottle.pendingWineRequest || null;
-
-    await removeFromRacks(bottleId);
-    searchService.removeBottle(bottleId);
-
-    // Bottle-only images go away — files first: the docs hold the only disk
-    // reference, and the hourly orphan sweep only reconciles originals/, so a
-    // processed PNG whose doc was deleted would leak forever. Images promoted
-    // to a WineDefinition (e.g. approved community photos) stay, but lose
-    // their link back to this bottle.
-    const ownImages = await BottleImage.find({ bottle: bottleId, assignedToWine: false })
-      .select('originalUrl processedUrl').lean();
-    for (const img of ownImages) await unlinkImageFiles(img);
-    await BottleImage.deleteMany({ bottle: bottleId, assignedToWine: false });
-    await BottleImage.updateMany(
-      { bottle: bottleId, assignedToWine: true },
-      { $set: { bottle: null } }
-    );
-
-    // If this bottle held a still-pending wine request, drop it — the user
-    // is saying the entry shouldn't have been created in the first place.
-    // Resolved/rejected requests are admin-actioned and stay put.
-    if (pendingRequestId) {
-      await WineRequest.deleteOne({ _id: pendingRequestId, status: 'pending' });
-    }
-
-    await bottle.deleteOne();
-
-    logAudit(req, 'bottle.undo',
-      { type: 'bottle', id: bottleId, cellarId },
-      { reason: 'mistake' }
-    );
-
     res.json({ message: 'Bottle removed as mistake' });
   } catch (error) {
     console.error('Undo bottle error:', error);

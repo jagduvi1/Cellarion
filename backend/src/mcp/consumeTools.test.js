@@ -39,6 +39,10 @@ jest.mock('../services/bottleOps', () => ({
   restoreBottle: jest.fn(),
   removeFromRacks: jest.fn(),
   RESTORE_WINDOW_MS: 2 * 24 * 60 * 60 * 1000,
+  addBottle: jest.fn(),
+  updateBottleFields: jest.fn(),
+  removeBottleCascade: jest.fn(),
+  UPDATABLE_FIELDS: ['price', 'currency', 'notes', 'occasion', 'rating', 'ratingScale', 'drinkFrom', 'drinkTo'],
 }));
 
 const mongoose = require('mongoose');
