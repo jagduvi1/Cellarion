@@ -20,10 +20,13 @@ const { ok, fail, wineSummary } = require('../toolUtil');
 
 const MAX_RESULTS = 10;
 
-// Query-vector cache: normalized query text -> { at, vector }. A 2048-float
-// vector is ~16 KB; 300 entries ≈ 5 MB, cleared wholesale on overflow (same
-// convention as the stats cache). 1h TTL — embeddings of the same text are
-// stable, the TTL just bounds memory over time.
+// Query-vector cache: `${model}:${indexVersion}:${normalized query}` ->
+// { at, vector }. Keyed by model + index so an admin switching the embedding
+// provider (services/aiProvider era) can never serve wrong-dimension vectors
+// from cache. A 2048-float vector is ~16 KB; 300 entries ≈ 5 MB. Eviction is
+// oldest-first (Map = insertion order), not a wholesale clear — one user's
+// churn must not force other users' repeats to re-debit their budgets. 1h TTL
+// only bounds memory; embeddings of identical text are stable.
 const vectorCache = new Map();
 const VECTOR_TTL_MS = 60 * 60 * 1000;
 const VECTOR_CACHE_MAX = 300;
@@ -38,7 +41,12 @@ function takeEmbedSlot(userId) {
   const now = Date.now();
   const w = embedWindow.get(userId);
   if (!w || now - w.windowStart >= 60 * 1000) {
-    if (embedWindow.size > 5000) embedWindow.clear();
+    if (embedWindow.size > 5000) {
+      // Sweep expired windows only — never reset other users' LIVE windows.
+      for (const [k, v] of embedWindow) {
+        if (now - v.windowStart >= 60 * 1000) embedWindow.delete(k);
+      }
+    }
     embedWindow.set(userId, { windowStart: now, count: 1 });
     return true;
   }
@@ -75,8 +83,10 @@ registerTool({
     const limit = Math.min(Math.max(parseInt(args.limit, 10) || 8, 1), MAX_RESULTS);
 
     // 1. Vector for the query — cache first, then budget + embed.
+    const cfg = aiConfig.get();
+    const cacheKey = `${cfg.embeddingModel || 'default'}:${cfg.vectorIndex}:${query}`;
     let vector;
-    const hit = vectorCache.get(query);
+    const hit = vectorCache.get(cacheKey);
     if (hit && Date.now() - hit.at < VECTOR_TTL_MS) {
       vector = hit.vector;
     } else {
@@ -91,15 +101,16 @@ registerTool({
       }
       try {
         const { embedSingle } = require('../../services/embedding');
-        const cfg = aiConfig.get();
         vector = await embedSingle(query, { model: cfg.embeddingModel });
         if (!Array.isArray(vector)) throw new Error('embedding returned no vector');
       } catch (err) {
         await debit.refund();
         return fail('rate_limited', 'The embedding service is unavailable right now — use search_registry keywords; retrying later may help.');
       }
-      if (vectorCache.size >= VECTOR_CACHE_MAX) vectorCache.clear();
-      vectorCache.set(query, { at: Date.now(), vector });
+      if (vectorCache.size >= VECTOR_CACHE_MAX) {
+        vectorCache.delete(vectorCache.keys().next().value); // oldest entry
+      }
+      vectorCache.set(cacheKey, { at: Date.now(), vector });
     }
 
     // 2. Optional "mine" filter: restrict hits to wines in the user's cellars.

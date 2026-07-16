@@ -92,9 +92,12 @@ async function placeBottleInRack(rack, position, bottleId, req) {
 
   // Clear the bottle from other racks in the cellar (this rack handled in
   // memory below — an external $pull would trip optimistic concurrency).
+  // $inc __v so a concurrent whole-slots writer on one of THOSE racks
+  // (auto_arrange apply/undo) VersionErrors instead of re-inserting the
+  // bottle it just lost — same reasoning as bottleOps.removeFromRacks.
   await Rack.updateMany(
     { _id: { $ne: rack._id }, cellar: rack.cellar, 'slots.bottle': bottleId },
-    { $pull: { slots: { bottle: bottleId } } }
+    { $pull: { slots: { bottle: bottleId } }, $inc: { __v: 1 } }
   );
 
   // The procedural one-per-slot / one-slot-per-bottle invariant.
@@ -208,10 +211,28 @@ async function buildAnnotatedEntries(rack) {
  * no partial arrangements. `target` = [{ position, bottleId }]. Optimistic
  * concurrency (Rack versionKey) turns a concurrent slot write into a clean
  * conflict instead of a lost update. Audits rack.arrange with the given meta.
- * Returns { rack } or { error: { status: 409, message, code: 'conflict' } }.
+ * Returns { rack } or { error: { status: 409|400, message, code: 'conflict' } }.
  */
 async function applyArrangement(rack, target, req, meta = {}) {
-  rack.slots = target.map((t) => ({ position: t.position, bottle: t.bottleId }));
+  // Re-validate geometry at WRITE time, not plan time: the rack may have been
+  // resized or had positions disabled since the plan was computed (a stored
+  // arrange preview is valid for 15 minutes) — every other placement surface
+  // refuses disabled/out-of-range positions, so this one must too.
+  const maxPos = getMaxPosition(rack);
+  const disabled = new Set(rack.disabledPositions || []);
+  const bad = target.find((t) => !Number.isInteger(t.position) || t.position < 1 || t.position > maxPos || disabled.has(t.position));
+  if (bad) {
+    return { error: { status: 409, code: 'conflict', message: `Position ${bad.position} is no longer usable (rack resized or slot disabled) — nothing was applied.` } };
+  }
+  // Slot-level rfidTags follow their bottle through the rewrite. No current
+  // writer sets them, but silently wiping a schema field on every arrange
+  // would be a trap for whichever feature starts using it.
+  const tagOf = new Map((rack.slots || []).filter((s) => s.rfidTag).map((s) => [String(s.bottle), s.rfidTag]));
+  rack.slots = target.map((t) => ({
+    position: t.position,
+    bottle: t.bottleId,
+    ...(tagOf.has(String(t.bottleId)) ? { rfidTag: tagOf.get(String(t.bottleId)) } : {}),
+  }));
   try {
     await rack.save();
   } catch (err) {

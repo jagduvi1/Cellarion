@@ -147,6 +147,17 @@ describe('auto_arrange preview', () => {
     const res = await tool('auto_arrange').handler({ rack_id: oid('9') }, CTX);
     expect(parse(res).error.code).toBe('not_found');
   });
+
+  test('more bottles than usable positions → conflict, never position:undefined targets', async () => {
+    const rack = mkRack();
+    rack.disabledPositions = [1, 2, 3]; // capacity 4, usable 1, but 2 bottles placed
+    wireRackLoad(rack);
+    const res = await tool('auto_arrange').handler({ rack_id: oid('e') }, CTX);
+    const body = parse(res);
+    expect(body.error.code).toBe('conflict');
+    expect(body.error.message).toMatch(/usable position/);
+    expect(McpActionLog.create).not.toHaveBeenCalled();
+  });
 });
 
 describe('auto_arrange apply', () => {
@@ -297,6 +308,20 @@ describe('capture_tasting_note', () => {
     const row = McpActionLog.create.mock.calls[0][0];
     expect(row.action).toBe('tasting_note');
     expect(row.prev).toMatchObject({ field: 'rating', rating: 3, ratingScale: '5' });
+  });
+
+  test('rating with NO scale on a 100-scale bottle stores the RESOLVED default (4/5), never 4/100 (audit M1)', async () => {
+    const b = ownBottle({ rating: 92, ratingScale: '100' });
+    bottleOps.updateBottleFields.mockResolvedValue({ changes: { rating: 4 }, prev: { rating: 92 } });
+    JournalEntry.create.mockResolvedValue({ _id: new mongoose.Types.ObjectId(oid('9')), visibility: 'private' });
+
+    const res = await tool('capture_tasting_note').handler({ bottle_id: oid('d'), note: 'x', rating: 4 }, CTX);
+    expect(parse(res).error).toBeUndefined();
+    // The resolved value+scale must be written — updateBottleFields would
+    // otherwise default the missing scale to the bottle's CURRENT ('100'),
+    // storing 4/100 while the envelope/ledger report 4/5.
+    expect(bottleOps.updateBottleFields).toHaveBeenCalledWith(b, { rating: 4, ratingScale: '5' }, CTX.req);
+    expect(parse(res).data.rating_recorded).toMatchObject({ value: 4, scale: '5' });
   });
 
   test('rating failure after the entry is created compensates by deleting the entry (all-or-nothing)', async () => {

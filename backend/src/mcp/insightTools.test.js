@@ -200,6 +200,20 @@ describe('find_gaps', () => {
     expect(data.price_bands).toMatchObject({ budget: 1, mid: 1, premium: 1, luxury: 1, unpriced: 1 });
   });
 
+  test('price bands report unavailable (not all-luxury) when edge conversion fails', async () => {
+    const fx = require('../utils/exchangeRates');
+    // Rates missing: cross-currency conversion nulls, same-currency passes.
+    fx.convertCurrency.mockImplementation((amount, from, to) => (from === to ? amount : null));
+    // Target USD (prefs) with EUR band edges → edges null → bands must degrade honestly.
+    const User = require('../models/User');
+    wirePortfolio({ active: [mkBottle({ price: 500, currency: 'USD' })], consumed: [] });
+    User.findById.mockReturnValue(chain({ preferences: { currency: 'USD' } }));
+    const res = await tool('find_gaps').handler({}, ctxFor(oid('b')));
+    const { data } = parse(res);
+    expect(data.price_bands.unavailable).toBe(true);
+    expect(data.price_bands.luxury).toBeUndefined();
+  });
+
   test('wishlist items ride along for cross-referencing gaps', async () => {
     wirePortfolio({ active: [mkBottle()], consumed: [] });
     WishlistItem.find.mockReturnValue(chain([

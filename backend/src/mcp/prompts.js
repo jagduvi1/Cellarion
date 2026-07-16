@@ -16,6 +16,12 @@ const template = (text) => ({
   messages: [{ role: 'user', content: { type: 'text', text } }],
 });
 
+// User-supplied argument values are flattened to one line and delimited with
+// «» wherever they are interpolated: some clients auto-fill prompt arguments
+// from conversation context, and a multi-line value could otherwise render as
+// extra "server-authored" workflow steps inside the template.
+const arg = (v) => `«${String(v).replace(/\s+/g, ' ').trim()}»`;
+
 registerPrompt({
   name: 'sommelier_pairing',
   title: 'Pair wine from the cellar with a dish',
@@ -28,8 +34,8 @@ registerPrompt({
     preferences: z.string().max(300).optional().describe('Optional constraints: colour, budget, "nothing too heavy", …'),
   },
   handler: ({ dish, preferences }) => template([
-    `Act as my personal sommelier. I am making: ${dish}.`,
-    preferences ? `Preferences to respect: ${preferences}.` : null,
+    `Act as my personal sommelier. I am making: ${arg(dish)}.`,
+    preferences ? `Preferences to respect: ${arg(preferences)}.` : null,
     '',
     'Workflow:',
     `1. Call pair_with_dish with the dish to get candidate bottles from MY cellar — each comes with its taste profile (body, tannin, acidity, sweetness, flavours, known food pairings), maturity status and rack position. The keyword matches are hints, not verdicts: apply your own pairing judgement over the structured profiles.`,
@@ -52,7 +58,7 @@ registerPrompt({
     dish: z.string().max(200).optional().describe('What is being cooked or eaten, if known'),
   },
   handler: ({ occasion, dish }) => template([
-    `Help me choose tonight's wine.${occasion ? ` The occasion: ${occasion}.` : ''}${dish ? ` We are having: ${dish}.` : ''}`,
+    `Help me choose tonight's wine.${occasion ? ` The occasion: ${arg(occasion)}.` : ''}${dish ? ` We are having: ${arg(dish)}.` : ''}`,
     '',
     'Workflow:',
     dish
@@ -96,7 +102,7 @@ registerPrompt({
     rack: z.string().max(120).optional().describe('Rack name or hint; omit to discuss all racks'),
   },
   handler: ({ rack }) => template([
-    `Help me reorganise ${rack ? `my rack "${rack}"` : 'my wine racks'}.`,
+    `Help me reorganise ${rack ? `my rack ${arg(rack)}` : 'my wine racks'}.`,
     '',
     'Workflow:',
     '1. Call list_cellars, then list_racks to find the rack(s), then get_rack for the current slot-by-slot layout.',

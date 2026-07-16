@@ -71,7 +71,8 @@ registerTool({
     'accessible) slots, "type" groups by style, "vintage" sorts chronologically. TWO steps: preview computes the move ' +
     'list without changing anything — SHOW IT TO THE USER; apply (with the preview_id, after their approval) updates ' +
     'the whole rack atomically. The returned move list is the user\'s guide for physically re-shelving. One undo_last ' +
-    'restores the previous layout. Zones and disabled slots are respected as holes; zone GROUPING is web-app-only.',
+    'restores the previous layout. Disabled slots stay empty; zone assignments are IGNORED (bottles may land in other ' +
+    'zones) — warn the user if their rack uses zones; zone-aware arranging is web-app-only.',
   scope: 'write',
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
   inputSchema: {
@@ -91,6 +92,16 @@ registerTool({
       // Same classification the rack views color by (routes/racks withMaturity).
       const entries = await buildAnnotatedEntries(rack);
       if (entries.length === 0) return ok('Rack is empty — nothing to arrange', { changes: [] });
+
+      // Overflow guard: a rack can legitimately hold more bottles than USABLE
+      // positions (slots disabled after placement, double-height rows removed).
+      // The plan would then assign bottles to undefined positions — refuse
+      // with a recovery hint instead.
+      const usableCount = getMaxPosition(rack) - (rack.disabledPositions || []).length;
+      if (entries.length > usableCount) {
+        return fail('conflict',
+          `This rack holds ${entries.length} bottle(s) but only ${usableCount} usable position(s) — free up or re-enable slots in the web app before arranging.`);
+      }
 
       const { target, changes } = buildArrangePlan(entries, getMaxPosition(rack), rack.disabledPositions || [], strategy);
       if (changes.length === 0) {
@@ -152,6 +163,10 @@ registerTool({
       return fail('conflict', 'The rack has changed since the preview — run a fresh preview.');
     }
 
+    // Budget is charged before the claim/save and is NOT refunded if either
+    // fails afterwards (a losing concurrent apply pays without effect) — the
+    // window refills in minutes and never double-applies, which is the side
+    // to fail on.
     const moved = moveList?.length || target.length;
     if (!takeMutationSlot(String(ctx.user.id), moved)) {
       return fail('rate_limited', `Not enough write budget left to move ${moved} bottle(s) this window — wait a few minutes.`);

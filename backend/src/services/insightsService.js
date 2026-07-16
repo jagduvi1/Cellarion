@@ -165,18 +165,26 @@ async function computeGaps(userId, currencyOverride) {
   // Price bands in the target currency (today's rates, like all stats money).
   let rates = null;
   try { rates = (await getOrCreateDailySnapshot())?.rates || null; } catch (_) { /* bands skip cross-currency */ }
-  const bands = { budget: 0, mid: 0, premium: 0, luxury: 0, unpriced: 0 };
-  // Band edges are expressed in EUR-ish magnitudes and converted to the
-  // target currency so "premium" means the same thing in SEK as in USD.
+  // Band edges are expressed in EUR magnitudes and converted to the target
+  // currency so "premium" means the same thing in SEK as in USD. Without
+  // usable edges (rates unavailable + non-EUR target) bands are reported as
+  // unavailable — NOT computed against null edges, which would silently file
+  // every priced bottle under "luxury".
   const edge = (n) => convertCurrency(n, 'EUR', targetCurrency, rates);
   const [e1, e2, e3] = [edge(15), edge(40), edge(100)];
-  for (const b of activeBottles) {
-    const v = b.price ? convertCurrency(b.price, b.currency || 'USD', targetCurrency, rates) : null;
-    if (v == null) { bands.unpriced++; continue; }
-    if (e1 != null && v < e1) bands.budget++;
-    else if (e2 != null && v < e2) bands.mid++;
-    else if (e3 != null && v < e3) bands.premium++;
-    else bands.luxury++;
+  let bands;
+  if (e1 == null || e2 == null || e3 == null) {
+    bands = { unavailable: true, note: 'Exchange rates are unavailable right now — price bands cannot be computed.' };
+  } else {
+    bands = { budget: 0, mid: 0, premium: 0, luxury: 0, unpriced: 0 };
+    for (const b of activeBottles) {
+      const v = b.price ? convertCurrency(b.price, b.currency || 'USD', targetCurrency, rates) : null;
+      if (v == null) { bands.unpriced++; continue; }
+      if (v < e1) bands.budget++;
+      else if (v < e2) bands.mid++;
+      else if (v < e3) bands.premium++;
+      else bands.luxury++;
+    }
   }
 
   const wishlist = await WishlistItem.find({ user: userId, status: 'wanted' })

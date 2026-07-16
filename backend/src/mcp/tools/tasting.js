@@ -93,7 +93,11 @@ registerTool({
     //    removing the just-created entry — the tool's effects are all-or-nothing.
     if (ratingChange) {
       if (ratingChange.field === 'rating') {
-        const result = await updateBottleFields(bottle, { rating: args.rating, ratingScale: args.rating_scale }, ctx.req);
+        // Pass the RESOLVED value+scale, not the raw args: resolveRating
+        // defaulted a missing scale to '5' (what the envelope/ledger report),
+        // while updateBottleFields would default it to the bottle's CURRENT
+        // scale — "4" on a 100-scale bottle would store 4/100 yet report 4/5.
+        const result = await updateBottleFields(bottle, { rating: ratingChange.value, ratingScale: ratingChange.scale }, ctx.req);
         if (result.error) {
           await deleteEntry(ctx.user.id, entry._id, ctx.req, { auditMeta: { via: 'mcp', compensation: true } });
           return fail('invalid_input', `Could not set the rating: ${result.error.message} Nothing was saved.`);

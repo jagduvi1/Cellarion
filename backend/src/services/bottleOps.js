@@ -32,7 +32,12 @@ const RESTORE_WINDOW_MS = 2 * 24 * 60 * 60 * 1000; // 2 days
 async function removeFromRacks(bottleId) {
   await Rack.updateMany(
     { 'slots.bottle': bottleId },
-    { $pull: { slots: { bottle: bottleId } } }
+    // $inc __v: this $pull bypasses document save(), so without the version
+    // bump a concurrent whole-slots writer (auto_arrange apply/undo, which
+    // compares occupancy then save()s) would pass its optimistic-concurrency
+    // check and resurrect the just-removed bottle into a slot. Bumping the
+    // version turns that race into a clean VersionError → conflict.
+    { $pull: { slots: { bottle: bottleId } }, $inc: { __v: 1 } }
   );
 }
 

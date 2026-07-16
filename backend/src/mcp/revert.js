@@ -49,9 +49,19 @@ async function revertLedgerRow(row, ctx, { ok, fail }) {
 
     const del = await deleteEntry(ctx.user.id, row.detail?.journalId, ctx.req, { auditMeta: { via: 'undo' } });
     let ratingRestored = false;
+    let ratingSkipped = false;
     if (row.prev && row.prev.field) {
       const { bottle } = access;
-      if (row.prev.field === 'rating') {
+      // Changed-since guard: only restore the previous rating while the bottle
+      // still carries the rating THIS action set (row.result records it). If
+      // the user re-rated by hand since, their newer intent wins over the undo.
+      const set = row.result?.data?.rating_recorded;
+      const current = row.prev.field === 'rating'
+        ? { value: bottle.rating ?? null, scale: bottle.ratingScale || '5' }
+        : { value: bottle.consumedRating ?? null, scale: bottle.consumedRatingScale || '5' };
+      if (set && (current.value !== set.value || current.scale !== set.scale)) {
+        ratingSkipped = true;
+      } else if (row.prev.field === 'rating') {
         const { updateBottleFields } = require('../services/bottleOps');
         const result = await updateBottleFields(bottle, { rating: row.prev.rating, ratingScale: row.prev.ratingScale || undefined }, ctx.req);
         ratingRestored = !result.error;
@@ -62,8 +72,11 @@ async function revertLedgerRow(row, ctx, { ok, fail }) {
         ratingRestored = true;
       }
     }
+    const ratingNote = !row.prev?.field ? ''
+      : ratingSkipped ? ', rating left as-is (it was changed again since)'
+        : ratingRestored ? ', previous rating restored' : ', rating could NOT be restored';
     const envelope = {
-      summary: `Undid tasting note${del.deleted ? ' — journal entry removed' : ' — entry was already gone'}${row.prev?.field ? (ratingRestored ? ', previous rating restored' : ', rating could NOT be restored') : ''}`,
+      summary: `Undid tasting note${del.deleted ? ' — journal entry removed' : ' — entry was already gone'}${ratingNote}`,
       data: { undone: 'capture_tasting_note', entry_removed: !!del.deleted, rating_restored: row.prev?.field ? ratingRestored : undefined },
     };
     await logAction(ctx, { tool: 'undo_last', action: 'tasting_note', viaUndo: true, bottle: row.bottle, cellar: row.cellar, detail: { undid: String(row._id) }, result: envelope });

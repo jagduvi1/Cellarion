@@ -11,6 +11,7 @@
 const { z } = require('zod');
 const Cellar = require('../../models/Cellar');
 const { registerTool } = require('../registry');
+const { cachedResult } = require('../resultCache');
 const { ok, fail, objectId, MSG_CELLAR_NOT_FOUND, resolveCellarAccess } = require('../toolUtil');
 
 const WINE_TYPES = ['red', 'white', 'rosé', 'sparkling', 'dessert', 'fortified'];
@@ -49,7 +50,10 @@ registerTool({
     currency: z.string().regex(/^[A-Za-z]{3}$/).optional().describe('Currency for max_price; defaults to the user\'s preference'),
     limit: z.number().int().min(1).max(MAX_LIMIT).default(8),
   },
-  handler: async (args, ctx) => {
+  handler: (args, ctx) => cachedResult(
+    'tonight', String(ctx.user.id),
+    JSON.stringify([args.wine_type, args.cellar_id, args.max_price, args.currency, args.limit]),
+    async () => {
     const { readyCandidates, serializeCandidates } = require('../../services/drinkingService');
     const scope = await resolveScope(ctx, args);
     if (scope.error) return scope.error;
@@ -79,7 +83,7 @@ registerTool({
         ],
       }
     );
-  },
+  }),
 });
 
 registerTool({
@@ -98,7 +102,10 @@ registerTool({
     cellar_id: objectId.optional().describe('Restrict to one cellar (default: all own cellars)'),
     limit: z.number().int().min(1).max(MAX_LIMIT).default(8),
   },
-  handler: async (args, ctx) => {
+  handler: (args, ctx) => cachedResult(
+    'pair', String(ctx.user.id),
+    JSON.stringify([String(args.dish || '').toLowerCase(), args.cellar_id, args.limit]),
+    async () => {
     const { readyCandidates, serializeCandidates, scoreDishMatches } = require('../../services/drinkingService');
     const scope = await resolveScope(ctx, args);
     if (scope.error) return scope.error;
@@ -142,7 +149,7 @@ registerTool({
         ],
       }
     );
-  },
+  }),
 });
 
 module.exports = {};

@@ -6,6 +6,7 @@
 // envelope. Pure read, $0.
 const { z } = require('zod');
 const { registerTool } = require('../registry');
+const { cachedResult } = require('../resultCache');
 const { isValidId } = require('../../utils/validation');
 const { ok, fail, MSG_BOTTLE_NOT_FOUND, resolveBottleAccess } = require('../toolUtil');
 
@@ -28,7 +29,10 @@ registerTool({
     min_count: z.number().int().min(2).max(24).default(3).describe('List mode: only lots with at least this many bottles (all time)'),
     limit: z.number().int().min(1).max(MAX_LOTS).default(8),
   },
-  handler: async (args, ctx) => {
+  handler: (args, ctx) => cachedResult(
+    'journey', String(ctx.user.id),
+    JSON.stringify([args.wine_id, args.bottle_id, args.min_count, args.limit]),
+    async () => {
     let focusWineId = null;
     let focusVintage = null; // only set via bottle_id — wine_id covers all vintages
     if (args.bottle_id) {
@@ -52,5 +56,5 @@ registerTool({
       limit: Math.min(Math.max(parseInt(args.limit, 10) || 8, 1), MAX_LOTS),
     });
     return ok(result.summary, result.data, result.warnings ? { warnings: result.warnings } : {});
-  },
+  }),
 });

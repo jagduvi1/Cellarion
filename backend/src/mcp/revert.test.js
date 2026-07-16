@@ -125,6 +125,24 @@ describe('revertLedgerRow dispatch', () => {
     expect(bottleOps.updateBottleFields).not.toHaveBeenCalled();
   });
 
+  test('tasting_note: rating changed again since the note → entry removed but rating left as-is', async () => {
+    const { deleteEntry } = require('../services/journalOps');
+    deleteEntry.mockResolvedValue({ deleted: true });
+    // The tool set 4/5 (recorded in result); the user has since re-rated to 5/5.
+    const bottle = { _id: 'b4', rating: 5, ratingScale: '5', save: jest.fn() };
+    resolveBottleAccess.mockResolvedValue({ bottle });
+    const row = {
+      _id: 'r4', action: 'tasting_note', bottle: 'b4',
+      detail: { journalId: 'j4' }, prev: { field: 'rating', rating: 3, ratingScale: '5' },
+      result: { data: { rating_recorded: { field: 'rating', value: 4, scale: '5' } } },
+    };
+    const res = await revertLedgerRow(row, ctx(), H);
+    expect(res.ok).toBe(true);
+    expect(res.summary).toMatch(/rating left as-is/);
+    expect(bottleOps.updateBottleFields).not.toHaveBeenCalled(); // newer intent wins
+    expect(bottle.save).not.toHaveBeenCalled();
+  });
+
   test('tasting_note: inaccessible bottle refuses before any deletion or claim', async () => {
     const { deleteEntry } = require('../services/journalOps');
     resolveBottleAccess.mockResolvedValue(null);

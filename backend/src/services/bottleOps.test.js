@@ -49,8 +49,11 @@ describe('consumeBottle', () => {
     expect(bottle.consumedRating).toBe(4);
     expect(bottle.consumedRatingScale).toBe('5');
     expect(callOrder).toEqual(['save', 'rack']); // failed save must not orphan a slot
+    // $inc __v: the slot-freeing $pull must bump the rack version so a
+    // concurrent whole-slots save() (auto_arrange) VersionErrors instead of
+    // resurrecting the consumed bottle into a slot.
     expect(Rack.updateMany).toHaveBeenCalledWith(
-      { 'slots.bottle': 'b1' }, { $pull: { slots: { bottle: 'b1' } } }
+      { 'slots.bottle': 'b1' }, { $pull: { slots: { bottle: 'b1' } }, $inc: { __v: 1 } }
     );
     expect(searchService.indexBottle).toHaveBeenCalledWith('b1');
     expect(logAudit).toHaveBeenCalledWith(REQ, 'bottle.consume',

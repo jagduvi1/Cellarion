@@ -14,21 +14,8 @@
 // (same pattern as stats.js).
 const { z } = require('zod');
 const { registerTool } = require('../registry');
+const { cachedResult: cached } = require('../resultCache');
 const { ok } = require('../toolUtil');
-
-const cache = new Map(); // `${tool}:${userId}:${currency}` -> { at, result }
-const TTL_MS = 60 * 1000;
-const CACHE_MAX = 2000;
-
-async function cached(tool, userId, currency, compute) {
-  const key = `${tool}:${userId}:${currency}`;
-  const hit = cache.get(key);
-  if (hit && Date.now() - hit.at < TTL_MS) return hit.result;
-  const result = await compute();
-  if (cache.size >= CACHE_MAX) cache.clear();
-  cache.set(key, { at: Date.now(), result });
-  return result;
-}
 
 const CURRENCY_ARG = {
   currency: z.string().regex(/^[A-Za-z]{3}$/, 'ISO 4217 code').optional().describe('ISO 4217 override; defaults to the user\'s preference'),
