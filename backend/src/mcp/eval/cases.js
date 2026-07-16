@@ -207,7 +207,8 @@ const CASES = [
   {
     id: 'undo-last-change',
     prompt: 'Actually, undo the last change you just made to my cellar.',
-    expect: { tool: 'undo_last' },
+    // A careful model may confirm which change before reversing it.
+    expect: { tool: 'undo_last', orNone: true },
   },
   {
     id: 'add-a-bottle-resolve-first',
@@ -226,9 +227,10 @@ const CASES = [
   {
     id: 'add-a-case-bulk',
     prompt: 'I just bought a case of 12 bottles of Domaine du Cayron Gigondas 2020 — add them all.',
-    // A careful model may confirm the case before adding (preview→apply); the
-    // real failure to catch is reaching for the wrong tool, not a confirmation.
-    expect: { anyOf: ['bulk_add', 'resolve_wine'], orNone: true },
+    // Valid first moves: preview the batch (bulk_add), dedup-resolve the wine
+    // (resolve_wine), or resolve the target cellar (list_cellars). A careful
+    // model may also confirm first. The failure to catch is a WRONG tool.
+    expect: { anyOf: ['bulk_add', 'resolve_wine', 'list_cellars'], orNone: true },
   },
   {
     id: 'create-a-cellar',
@@ -248,7 +250,9 @@ const CASES = [
   {
     id: 'move-a-bottle',
     prompt: 'Move my 2015 Barolo over to my other cellar.',
-    expect: { anyOf: ['move_bottle', 'search_bottles'] },
+    // Needs both the bottle and the destination cellar, so resolving either
+    // first (search_bottles / list_cellars) or moving directly are all valid.
+    expect: { anyOf: ['move_bottle', 'search_bottles', 'list_cellars'] },
   },
   {
     id: 'unplace-a-bottle',
