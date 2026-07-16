@@ -262,3 +262,6 @@ registerTool({
     return ok(envelope.summary, envelope.data);
   },
 });
+
+// Shared with tools/bulk.js so batch items validate identically to singles.
+module.exports = { NEW_WINE_SHAPE };

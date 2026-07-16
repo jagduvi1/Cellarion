@@ -44,24 +44,9 @@ const rateLimited = (message) => ({
 // from the HTTP writeLimiter because one POST can't be classified — so the
 // classification happens HERE, per tool call, where readOnlyHint tells us the
 // truth. An agent looping consumes hits exactly the wall a looping REST client
-// would. In-memory like express-rate-limit; cleared wholesale at the cap.
-const WRITE_WINDOW_MS = 15 * 60 * 1000;
-const mutationWindows = new Map(); // userId -> { start, count }
-const MUTATION_WINDOWS_MAX = 5000;
-
-function takeMutationSlot(userId) {
-  const max = require('../config/rateLimits').get().write.max;
-  const now = Date.now();
-  let w = mutationWindows.get(userId);
-  if (!w || now - w.start >= WRITE_WINDOW_MS) {
-    if (mutationWindows.size >= MUTATION_WINDOWS_MAX) mutationWindows.clear();
-    w = { start: now, count: 0 };
-    mutationWindows.set(userId, w);
-  }
-  if (w.count >= max) return false;
-  w.count += 1;
-  return true;
-}
+// would. Batch tools (bulk_add) charge one slot PER ITEM through the same
+// module, so a case of 12 costs 12 — see mcp/mutationBudget.js.
+const { takeMutationSlot, WRITE_WINDOW_MS } = require('./mutationBudget');
 
 // Wrap a tool handler with the per-request call budget (+ the per-user
 // mutation budget for non-read-only tools). `state` is shared by all tools of
