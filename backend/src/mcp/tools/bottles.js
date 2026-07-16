@@ -131,15 +131,29 @@ registerTool({
   annotations: { readOnlyHint: true, openWorldHint: false },
   inputSchema: { bottle_id: objectId.describe('Bottle id from search_bottles / list_history') },
   handler: async (args, ctx) => {
-    const access = await resolveBottleAccess(ctx.user.id, args.bottle_id);
-    if (!access) return fail('not_found', 'No such bottle, or you have no access to it. Find ids via search_bottles.');
-    const { cellar, role } = access;
-    const b = await Bottle.findById(access.bottle._id).populate(WINE_POPULATE).lean();
-    const rack = await Rack.findOne({ 'slots.bottle': b._id, deletedAt: null })
-      .select('name slots.position slots.bottle').lean();
-    const slot = rack ? rack.slots.find((s) => String(s.bottle) === String(b._id)) : null;
-    const wd = b.wineDefinition;
-    return ok(`${wd ? wd.name : 'Bottle'} ${b.vintage}`, {
+    const r = await buildBottleDetail(ctx.user.id, args.bottle_id);
+    return r.error ? fail(r.error.code, r.error.message) : ok(r.summary, r.data);
+  },
+});
+
+// One implementation, two surfaces: the get_bottle tool above and the
+// cellar://bottle/{id} resource both read through this builder, so the access
+// check and the response shape can never drift apart.
+// Returns { error: { code, message } } or { summary, data }.
+async function buildBottleDetail(userId, bottleId) {
+  const access = await resolveBottleAccess(userId, bottleId);
+  if (!access) {
+    return { error: { code: 'not_found', message: 'No such bottle, or you have no access to it. Find ids via search_bottles.' } };
+  }
+  const { cellar, role } = access;
+  const b = await Bottle.findById(access.bottle._id).populate(WINE_POPULATE).lean();
+  const rack = await Rack.findOne({ 'slots.bottle': b._id, deletedAt: null })
+    .select('name slots.position slots.bottle').lean();
+  const slot = rack ? rack.slots.find((s) => String(s.bottle) === String(b._id)) : null;
+  const wd = b.wineDefinition;
+  return {
+    summary: `${wd ? wd.name : 'Bottle'} ${b.vintage}`,
+    data: {
       bottle_id: b._id,
       wine: wd ? {
         ...wineSummary(wd),
@@ -170,9 +184,9 @@ registerTool({
       placement: slot ? { rack_id: rack._id, rack_name: rack.name, position: slot.position } : null,
       cellar: { cellar_id: cellar._id, name: cellar.name, your_role: role },
       added_at: b.addedToCellarAt || b.createdAt,
-    });
-  },
-});
+    },
+  };
+}
 
 registerTool({
   name: 'list_history',
@@ -220,3 +234,4 @@ registerTool({
     return ok(`${items.length} of ${total} consumed bottle(s)`, items, { page: { limit, offset, total } });
   },
 });
+module.exports = { buildBottleDetail };

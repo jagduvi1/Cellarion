@@ -35,23 +35,33 @@ registerTool({
     currency: z.string().length(3).optional().describe('ISO 4217 override; defaults to the user\'s preference'),
   },
   handler: async (args, ctx) => {
-    // statsService pulls exchange-rate utils — keep it off the module-load
-    // path of the tool registry (same lazy pattern as services/search).
-    const { computeOverview, buildEmptyStats } = require('../../services/statsService');
+    const r = await buildStats(ctx.user.id, args.currency);
+    return ok(r.summary, r.data, r.extra);
+  },
+});
 
-    const dbUser = await User.findById(ctx.user.id).select('preferences').lean();
-    const targetCurrency = (args.currency || dbUser?.preferences?.currency || 'USD').toUpperCase();
-    const targetRatingScale = dbUser?.preferences?.ratingScale || '5';
+// One implementation, two surfaces: the cellar_stats tool above and the
+// cellar://stats resource. Returns { summary, data, extra } (cached 60s).
+async function buildStats(userId, currencyOverride) {
+  // statsService pulls exchange-rate utils — keep it off the module-load
+  // path of the tool registry (same lazy pattern as services/search).
+  const { computeOverview, buildEmptyStats } = require('../../services/statsService');
 
-    const cacheKey = `${ctx.user.id}:${targetCurrency}:${targetRatingScale}`;
-    const cached = statsCache.get(cacheKey);
-    if (cached && Date.now() - cached.at < STATS_TTL_MS) return cached.result;
+  const dbUser = await User.findById(userId).select('preferences').lean();
+  const targetCurrency = (currencyOverride || dbUser?.preferences?.currency || 'USD').toUpperCase();
+  const targetRatingScale = dbUser?.preferences?.ratingScale || '5';
 
-    const cellars = await Cellar.find({ user: ctx.user.id, deletedAt: null }).lean();
-    if (cellars.length === 0) {
-      // Same data shape as the populated case so the model never sees two envelopes.
-      const empty = buildEmptyStats(targetCurrency);
-      return ok('No cellars yet', {
+  const cacheKey = `${userId}:${targetCurrency}:${targetRatingScale}`;
+  const cached = statsCache.get(cacheKey);
+  if (cached && Date.now() - cached.at < STATS_TTL_MS) return cached.result;
+
+  const cellars = await Cellar.find({ user: userId, deletedAt: null }).lean();
+  if (cellars.length === 0) {
+    // Same data shape as the populated case so the model never sees two envelopes.
+    const empty = buildEmptyStats(targetCurrency);
+    return {
+      summary: 'No cellars yet',
+      data: {
         currency: targetCurrency,
         rating_scale: targetRatingScale,
         overview: empty.overview,
@@ -62,33 +72,36 @@ registerTool({
         maturity: empty.maturity || {},
         urgency_ladder: [],
         pace: empty.pace || {},
-      });
-    }
-    const scope = { user: ctx.user.id, cellar: { $in: cellars.map((c) => c._id) } };
-    const [activeBottles, consumedBottles] = await Promise.all([
-      Bottle.find({ ...scope, status: { $nin: CONSUMED_STATUSES } }).populate(WINE_POPULATE_LIST).lean(),
-      Bottle.find({ ...scope, status: { $in: CONSUMED_STATUSES } }).populate(WINE_POPULATE_LIST).lean(),
-    ]);
-    const stats = await computeOverview({ activeBottles, consumedBottles, cellars, targetCurrency, targetRatingScale });
-
-    const result = ok(
-      `${activeBottles.length} active bottle(s) across ${cellars.length} cellar(s)`,
-      {
-        currency: targetCurrency,
-        rating_scale: targetRatingScale,
-        overview: stats.overview,
-        by_type: stats.byType,
-        top_countries: topN(stats.byCountry, 10),
-        top_grapes: topN(stats.byGrape, 10),
-        top_producers: topN(stats.topProducers, 5),
-        maturity: stats.maturity,
-        urgency_ladder: stats.urgencyLadder,
-        pace: stats.pace,
       },
-      { warnings: ['Distributions truncated to top entries; full breakdowns are in the web app\'s Statistics page.'] }
-    );
-    if (statsCache.size >= STATS_CACHE_MAX) statsCache.clear();
-    statsCache.set(cacheKey, { at: Date.now(), result });
-    return result;
-  },
-});
+      extra: {},
+    };
+  }
+  const scope = { user: userId, cellar: { $in: cellars.map((c) => c._id) } };
+  const [activeBottles, consumedBottles] = await Promise.all([
+    Bottle.find({ ...scope, status: { $nin: CONSUMED_STATUSES } }).populate(WINE_POPULATE_LIST).lean(),
+    Bottle.find({ ...scope, status: { $in: CONSUMED_STATUSES } }).populate(WINE_POPULATE_LIST).lean(),
+  ]);
+  const stats = await computeOverview({ activeBottles, consumedBottles, cellars, targetCurrency, targetRatingScale });
+
+  const result = {
+    summary: `${activeBottles.length} active bottle(s) across ${cellars.length} cellar(s)`,
+    data: {
+      currency: targetCurrency,
+      rating_scale: targetRatingScale,
+      overview: stats.overview,
+      by_type: stats.byType,
+      top_countries: topN(stats.byCountry, 10),
+      top_grapes: topN(stats.byGrape, 10),
+      top_producers: topN(stats.topProducers, 5),
+      maturity: stats.maturity,
+      urgency_ladder: stats.urgencyLadder,
+      pace: stats.pace,
+    },
+    extra: { warnings: ['Distributions truncated to top entries; full breakdowns are in the web app\'s Statistics page.'] },
+  };
+  if (statsCache.size >= STATS_CACHE_MAX) statsCache.clear();
+  statsCache.set(cacheKey, { at: Date.now(), result });
+  return result;
+}
+
+module.exports = { buildStats };

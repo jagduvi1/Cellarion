@@ -57,4 +57,53 @@ function allTools() {
   return tools.slice();
 }
 
-module.exports = { registerTool, toolsForScopes, scopeSatisfies, allTools };
+// ── Resources ────────────────────────────────────────────────────────────────
+// MCP resources are read-only context a client can attach (cellar://snapshot,
+// cellarion://about, …). Same declarative registry + scope model as tools: a
+// resource is only registered on a request's server when the caller's scopes
+// satisfy it, so a read-scoped surface stays read-scoped.
+
+const resources = [];
+
+/**
+ * Register an MCP resource.
+ * @param {object} def
+ * @param {string}   def.name          unique name
+ * @param {string}   [def.uri]         static URI (exactly one of uri/uriTemplate)
+ * @param {string}   [def.uriTemplate] RFC 6570 template, e.g. 'cellar://bottle/{id}'
+ * @param {string}   def.title
+ * @param {string}   def.description
+ * @param {string}   [def.mimeType]    default application/json
+ * @param {string}   def.scope         'public' | 'read' | …
+ * @param {Function} def.handler       async (uri, params, ctx) => ({ contents: [...] })
+ */
+function registerResource(def) {
+  if (!def || typeof def.name !== 'string' || typeof def.handler !== 'function') {
+    throw new Error('registerResource: name and handler are required');
+  }
+  if (typeof def.scope !== 'string') {
+    throw new Error(`registerResource(${def.name}): scope is required`);
+  }
+  if (!def.uri === !def.uriTemplate) {
+    throw new Error(`registerResource(${def.name}): exactly one of uri / uriTemplate is required`);
+  }
+  if (resources.some((r) => r.name === def.name)) {
+    throw new Error(`registerResource: duplicate resource name "${def.name}"`);
+  }
+  resources.push({ mimeType: 'application/json', ...def });
+}
+
+/** The subset of registered resources a token with `tokenScopes` may read. */
+function resourcesForScopes(tokenScopes) {
+  return resources.filter((r) => scopeSatisfies(tokenScopes, r.scope));
+}
+
+/** All registered resources (for tests / introspection). */
+function allResources() {
+  return resources.slice();
+}
+
+module.exports = {
+  registerTool, toolsForScopes, scopeSatisfies, allTools,
+  registerResource, resourcesForScopes, allResources,
+};
