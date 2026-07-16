@@ -236,7 +236,9 @@
       "errorGeneric": "Något gick fel. Försök igen.",
       "errorNoScope": "Välj minst en behörighet.",
       "errorWrongPassword": "Fel lösenord.",
-      "errorRateLimited": "För många försök. Vänta några minuter och försök igen."
+      "errorRateLimited": "För många försök. Vänta några minuter och försök igen.",
+      "scope_write": "skriv",
+      "scopeDesc_write": "Skriv (AI-agent) — låt en ansluten AI lägga till, redigera och organisera flaskor via MCP. Vidaste behörigheten; ge den bara till en assistent du litar på."
     },
     "aiConnect": {
       "title": "Anslut din AI",
@@ -342,6 +344,22 @@
       "typeToConfirm": "Skriv <strong>DELETE</strong> för att bekräfta:",
       "scheduling": "Schemalägger...",
       "scheduleBtn": "Schemalägg kontoradering"
+    },
+    "aiActivity": {
+      "title": "Senaste AI-aktivitet",
+      "hint": "Ändringar som en ansluten AI-assistent (eller en behörighetsbegränsad API-token) har gjort i din vinkällare. Du kan ångra allt från de senaste {{days}} dagarna.",
+      "hintNoWindow": "Ändringar som en ansluten AI-assistent (eller en behörighetsbegränsad API-token) har gjort i din vinkällare.",
+      "byToken": "via API-token",
+      "bySession": "från din session",
+      "tagUndo": "ångra",
+      "tagReverted": "återställd",
+      "revertBtn": "Återställ",
+      "revertTitle": "Återställ den här ändringen",
+      "revertConfirm": "Ångra den här AI-ändringen? \"{{summary}}\"",
+      "revertConfirmBtn": "Återställ",
+      "revertingBtn": "Återställer…",
+      "errorLoad": "Kunde inte läsa in AI-aktivitet.",
+      "errorRevert": "Kunde inte återställa ändringen. Den kan redan ha ångrats eller ändrats sedan dess."
     }
   },
   "climate": {

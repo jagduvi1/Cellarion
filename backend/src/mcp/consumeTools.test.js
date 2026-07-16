@@ -73,6 +73,9 @@ beforeEach(() => {
   jest.clearAllMocks();
   McpActionLog.findOne.mockReturnValue(chain(null));
   McpActionLog.create.mockResolvedValue({});
+  // undo now claims the row atomically via findOneAndUpdate (shared revert.js
+  // engine) rather than mutating+saving the doc; default to a winning claim.
+  McpActionLog.findOneAndUpdate.mockResolvedValue({ _id: 'claimed' });
 });
 
 describe('scope gating', () => {
@@ -207,8 +210,9 @@ describe('undo_last', () => {
     bottleOps.restoreBottle.mockImplementation(async (bottle) => { bottle.status = 'active'; return { bottle, from: 'gifted' }; });
     const res = await tool('undo_last').handler({}, CTX);
     expect(parse(res).data.undone).toBe('consume_bottle');
-    expect(entry.reversed).toBe(true);
-    expect(entry.save).toHaveBeenCalled();
+    // Claims the row atomically (reversed:false → true) instead of save().
+    expect(McpActionLog.findOneAndUpdate).toHaveBeenCalledWith(
+      { _id: 'log1', reversed: false }, { $set: { reversed: true, idempotencyKey: null } });
     // The undo's own ledger row must carry the pre-restore snapshot, so a
     // second undo re-consumes with the ORIGINAL values, not defaults.
     const row = McpActionLog.create.mock.calls[0][0];
@@ -227,7 +231,8 @@ describe('undo_last', () => {
     const res = await tool('undo_last').handler({}, CTX);
     expect(parse(res).data.undone).toBe('restore_bottle');
     expect(bottleOps.consumeBottle.mock.calls[0][1]).toEqual({ reason: 'gifted', note: 'to Anna', rating: 4, ratingScale: '5' });
-    expect(entry.reversed).toBe(true);
+    expect(McpActionLog.findOneAndUpdate).toHaveBeenCalledWith(
+      { _id: 'log2', reversed: false }, { $set: { reversed: true, idempotencyKey: null } });
   });
 
   test('refuses to undo a restore when the bottle was consumed again since (state moved on)', async () => {
@@ -292,8 +297,10 @@ describe('undo_last walk-backward + scope gating (e2e-caught regression)', () =>
     ownBottle({ status: 'drank' });
     bottleOps.restoreBottle.mockImplementation(async (bottle) => { bottle.status = 'active'; return { bottle, from: 'drank' }; });
     await tool('undo_last').handler({}, CTX);
-    expect(entry.reversed).toBe(true);
-    expect(entry.idempotencyKey).toBeNull();
+    // The claim both reverses the row AND frees its idempotency key (a retry
+    // after undo must re-execute and get a fresh row, not replay).
+    expect(McpActionLog.findOneAndUpdate).toHaveBeenCalledWith(
+      { _id: 'log9', reversed: false }, { $set: { reversed: true, idempotencyKey: null } });
     expect(McpActionLog.create.mock.calls[0][0].viaUndo).toBe(true);
   });
 });
