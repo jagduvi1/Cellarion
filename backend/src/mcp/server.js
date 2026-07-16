@@ -1,7 +1,8 @@
-const { toolsForScopes } = require('./registry');
+const { toolsForScopes, resourcesForScopes } = require('./registry');
 const { INSTRUCTIONS } = require('./instructions');
 const pkg = require('../../package.json');
-require('./tools'); // register all tools (side-effect)
+require('./tools');     // register all tools (side-effect)
+require('./resources'); // register all resources (side-effect)
 
 // The MCP SDK is ESM-only (`type: module`), so this CommonJS module loads it via
 // dynamic import() and caches the classes. Loaded lazily (first request) so the
@@ -14,6 +15,7 @@ function loadSdk() {
       import('@modelcontextprotocol/sdk/server/streamableHttp.js'),
     ]).then(([mcp, http]) => ({
       McpServer: mcp.McpServer,
+      ResourceTemplate: mcp.ResourceTemplate,
       StreamableHTTPServerTransport: http.StreamableHTTPServerTransport,
     })).catch((err) => {
       // Never cache a rejected import. A transient first-load failure (e.g.
@@ -63,7 +65,7 @@ function budgetedHandler(tool, ctx, state) {
 // gets "unknown tool"). So scope enforcement is structural, not a filter a
 // client could talk around. ctx = { user, scopes }.
 async function buildServer(ctx) {
-  const { McpServer } = await loadSdk();
+  const { McpServer, ResourceTemplate } = await loadSdk();
   const server = new McpServer(
     { name: 'cellarion', version: pkg.version },
     { instructions: INSTRUCTIONS }
@@ -81,7 +83,33 @@ async function buildServer(ctx) {
       budgetedHandler(tool, ctx, state)
     );
   }
+  // Resources ride the same structural scope gate and the same per-request
+  // call budget as tools (a resources/read does comparable DB work).
+  for (const rsrc of resourcesForScopes(ctx.scopes)) {
+    const meta = { title: rsrc.title, description: rsrc.description, mimeType: rsrc.mimeType };
+    const wrapped = budgetedResourceHandler(rsrc, ctx, state);
+    if (rsrc.uriTemplate) {
+      server.registerResource(rsrc.name, new ResourceTemplate(rsrc.uriTemplate, { list: undefined }), meta, wrapped);
+    } else {
+      server.registerResource(rsrc.name, rsrc.uri, meta, wrapped);
+    }
+  }
   return server;
+}
+
+// Resource variant of budgetedHandler. SDK callbacks: static resources get
+// (uri, extra); template resources get (uri, variables, extra). Over budget we
+// throw — the SDK surfaces it as a JSON-RPC error for resources/read (there is
+// no isError envelope for resources like there is for tool results).
+function budgetedResourceHandler(rsrc, ctx, state) {
+  return (uri, varsOrExtra) => {
+    state.calls += 1;
+    if (state.calls > MAX_CALLS_PER_REQUEST) {
+      throw new Error(`rate_limited: too many calls in one request (max ${MAX_CALLS_PER_REQUEST})`);
+    }
+    const params = rsrc.uriTemplate ? (varsOrExtra || {}) : {};
+    return rsrc.handler(uri, params, ctx);
+  };
 }
 
 // Serve one stateless Streamable HTTP request. A fresh server + transport per
@@ -106,4 +134,9 @@ async function handleMcpRequest(req, res, ctx) {
   await transport.handleRequest(req, res, req.body);
 }
 
-module.exports = { handleMcpRequest, buildServer, loadSdk, budgetedHandler, MAX_CALLS_PER_REQUEST };
+// buildServer/loadSdk are internal; the budget wrappers are exported for unit
+// tests (jest cannot load the ESM SDK, so buildServer is covered by smoke.js).
+module.exports = {
+  handleMcpRequest,
+  budgetedHandler, budgetedResourceHandler, MAX_CALLS_PER_REQUEST,
+};

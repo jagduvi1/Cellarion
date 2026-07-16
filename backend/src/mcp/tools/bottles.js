@@ -1,8 +1,11 @@
 // Bottle read tools: search/list, one-bottle detail, and the drinking log.
 //
-// Scoping mirrors the REST API exactly:
-//  - without cellar_id → the user's OWN bottles across cellars they OWN
-//    (same as GET /api/bottles: { user, cellar: { $in: ownedCellarIds } });
+// Scoping contract — IDENTICAL on the Meili and Mongo paths (the search index
+// has no per-user field, so a user filter there could only run AFTER
+// pagination, silently shortening pages and inflating totals):
+//  - without cellar_id → ALL bottles in cellars the user OWNS — the cellar-view
+//    semantics of the UI, including bottles shared-cellar editors added into
+//    the user's own cellars;
 //  - with cellar_id    → all bottles of that cellar after a member/owner
 //    access check (same as the per-cellar routes).
 //
@@ -16,11 +19,10 @@ const Rack = require('../../models/Rack');
 const { WINE_POPULATE, WINE_POPULATE_LIST, CONSUMED_STATUSES } = require('../../config/constants');
 const { registerTool } = require('../registry');
 const {
-  ok, fail, resolveCellarAccess, resolveBottleAccess, accessibleCellars,
+  ok, fail, objectId, MSG_CELLAR_NOT_FOUND, MSG_BOTTLE_NOT_FOUND,
+  resolveCellarAccess, resolveBottleAccess,
   wineSummary, bottleSummary, pageParams, hasContent,
 } = require('../toolUtil');
-
-const objectId = z.string().regex(/^[a-f0-9]{24}$/i, 'must be a 24-hex id');
 
 function statusToMongo(status) {
   if (status === 'all') return {};
@@ -32,10 +34,10 @@ registerTool({
   name: 'search_bottles',
   title: 'Search / list bottles',
   description:
-    'Searches the user\'s bottles. Filters: free-text query (wine name, producer, region, grape, notes), cellar_id, ' +
-    'status (active | consumed | all), vintage, wine type. Paginated and bounded; every item includes its rating, ' +
-    'so filter by rating yourself from the results. Call for any "what do I have…", "find my…", "do I own…" question. ' +
-    'Prefer filters over fetching everything.',
+    'Searches the bottles in the cellars the user owns (pass cellar_id to search one specific cellar, including shared ' +
+    'ones). Filters: free-text query (wine name, producer, region, grape, notes), status (active | consumed | all), ' +
+    'vintage, wine type. Paginated and bounded; every item includes its rating, so filter by rating yourself from the ' +
+    'results. Call for any "what do I have…", "find my…", "do I own…" question. Prefer filters over fetching everything.',
   scope: 'read',
   annotations: { readOnlyHint: true, openWorldHint: false },
   // No min_rating filter on purpose: stored ratings are on per-bottle scales
@@ -47,7 +49,11 @@ registerTool({
     query: z.string().max(200).optional().describe('Free-text search (name, producer, region, grape…)'),
     cellar_id: objectId.optional().describe('Restrict to one cellar (any cellar you own or are a member of)'),
     status: z.enum(['active', 'consumed', 'all']).default('active'),
-    vintage: z.string().max(10).optional().describe('e.g. "2015" or "NV"'),
+    // Alphanumeric only: the search index silently DROPS non-alphanumeric
+    // vintage filters while Mongo would exact-match them — rejecting here
+    // keeps the two paths agreeing instead of quietly diverging.
+    vintage: z.string().regex(/^[A-Za-z0-9]{1,10}$/, 'alphanumeric, e.g. "2015" or "NV"').optional()
+      .describe('e.g. "2015" or "NV"'),
     type: z.enum(['red', 'white', 'rosé', 'sparkling', 'dessert', 'fortified']).optional(),
     limit: z.number().int().min(1).max(50).default(20),
     offset: z.number().int().min(0).default(0),
@@ -60,7 +66,7 @@ registerTool({
     let cellarIds;
     if (args.cellar_id) {
       const access = await resolveCellarAccess(ctx.user.id, args.cellar_id);
-      if (!access) return fail('not_found', 'No such cellar, or you have no access to it. Use list_cellars for valid ids.');
+      if (!access) return fail('not_found', MSG_CELLAR_NOT_FOUND);
       cellarIds = [access.cellar._id];
     } else {
       cellarIds = await Cellar.find({ user: ctx.user.id, deletedAt: null }).distinct('_id');
@@ -78,14 +84,12 @@ registerTool({
           limit,
           offset,
         });
-        // Same ownership contract as the Mongo path below: without cellar_id
-        // this lists the user's OWN bottles, so re-apply the user filter here —
-        // the search index can't express it, and owned cellars may contain
-        // bottles added by shared-cellar editors.
-        const docs = await Bottle.find({
-          _id: { $in: res.ids },
-          ...(args.cellar_id ? {} : { user: ctx.user.id }),
-        }).populate(WINE_POPULATE_LIST).lean();
+        // Hydration only — NO extra filters here. The scope (owned cellars) is
+        // already inside the Meili query, and any post-pagination filter would
+        // shorten pages and inflate totals (the classic filter-after-paginate
+        // hole). Contract stays identical to the Mongo path below.
+        const docs = await Bottle.find({ _id: { $in: res.ids } })
+          .populate(WINE_POPULATE_LIST).lean();
         const byId = new Map(docs.map((d) => [String(d._id), d]));
         const items = res.ids.map((id) => byId.get(String(id))).filter(Boolean).map(bottleSummary);
         return ok(`${items.length} of ${res.estimatedTotalHits} matching bottle(s)`, items, {
@@ -98,12 +102,11 @@ registerTool({
       warnings.push('Text search engine unavailable — fell back to basic filters without free-text matching.');
     }
 
-    // Mongo fallback: cellar/status/vintage are DB-filterable; type and
-    // min_rating live on the populated wine / vary by rating scale, so they
-    // are dropped here with an explicit warning rather than half-applied.
+    // Mongo fallback: cellar/status/vintage are DB-filterable; type lives on
+    // the populated wine, so it is dropped with an explicit warning rather
+    // than half-applied.
     const filter = {
       cellar: { $in: cellarIds },
-      ...(args.cellar_id ? {} : { user: ctx.user.id }),
       ...statusToMongo(args.status),
       ...(args.vintage ? { vintage: args.vintage } : {}),
     };
@@ -131,15 +134,29 @@ registerTool({
   annotations: { readOnlyHint: true, openWorldHint: false },
   inputSchema: { bottle_id: objectId.describe('Bottle id from search_bottles / list_history') },
   handler: async (args, ctx) => {
-    const access = await resolveBottleAccess(ctx.user.id, args.bottle_id);
-    if (!access) return fail('not_found', 'No such bottle, or you have no access to it. Find ids via search_bottles.');
-    const { cellar, role } = access;
-    const b = await Bottle.findById(access.bottle._id).populate(WINE_POPULATE).lean();
-    const rack = await Rack.findOne({ 'slots.bottle': b._id, deletedAt: null })
-      .select('name slots.position slots.bottle').lean();
-    const slot = rack ? rack.slots.find((s) => String(s.bottle) === String(b._id)) : null;
-    const wd = b.wineDefinition;
-    return ok(`${wd ? wd.name : 'Bottle'} ${b.vintage}`, {
+    const r = await buildBottleDetail(ctx.user.id, args.bottle_id);
+    return r.error ? fail(r.error.code, r.error.message) : ok(r.summary, r.data);
+  },
+});
+
+// One implementation, two surfaces: the get_bottle tool above and the
+// cellar://bottle/{id} resource both read through this builder, so the access
+// check and the response shape can never drift apart.
+// Returns { error: { code, message } } or { summary, data }.
+async function buildBottleDetail(userId, bottleId) {
+  const access = await resolveBottleAccess(userId, bottleId);
+  if (!access) {
+    return { error: { code: 'not_found', message: MSG_BOTTLE_NOT_FOUND } };
+  }
+  const { cellar, role } = access;
+  const b = await Bottle.findById(access.bottle._id).populate(WINE_POPULATE).lean();
+  const rack = await Rack.findOne({ 'slots.bottle': b._id, deletedAt: null })
+    .select('name slots.position slots.bottle').lean();
+  const slot = rack ? rack.slots.find((s) => String(s.bottle) === String(b._id)) : null;
+  const wd = b.wineDefinition;
+  return {
+    summary: `${wd ? wd.name : 'Bottle'} ${b.vintage}`,
+    data: {
       bottle_id: b._id,
       wine: wd ? {
         ...wineSummary(wd),
@@ -165,21 +182,29 @@ registerTool({
         ? { opened_at: b.openedAt, preservation: b.preservationMethod || null, pours: (b.pours || []).length }
         : null,
       consumed: CONSUMED_STATUSES.includes(b.status)
-        ? { at: b.consumedAt, reason: b.consumedReason || b.status, note: b.consumedNote || null, rating: b.consumedRating ?? null }
+        ? {
+            at: b.consumedAt,
+            reason: b.consumedReason || b.status,
+            note: b.consumedNote || null,
+            rating: b.consumedRating ?? null,
+            // A bare "92" vs "4" is uninterpretable — always ship the scale.
+            rating_scale: b.consumedRating != null ? b.consumedRatingScale : null,
+          }
         : null,
       placement: slot ? { rack_id: rack._id, rack_name: rack.name, position: slot.position } : null,
       cellar: { cellar_id: cellar._id, name: cellar.name, your_role: role },
       added_at: b.addedToCellarAt || b.createdAt,
-    });
-  },
-});
+    },
+  };
+}
 
 registerTool({
   name: 'list_history',
   title: 'Drinking history (Cellar Book)',
   description:
-    'The user\'s consumption log: consumed / gifted / sold bottles, newest first, with dates, reasons, ratings and notes. ' +
-    'Call for "what did I drink…", tasting recaps, or to find a bottle_id to restore. Optional cellar and year filters.',
+    'The consumption log of the cellars the user owns: consumed / gifted / sold bottles, newest first, with dates, ' +
+    'reasons, ratings and notes. Pass cellar_id for one specific cellar (including shared ones — that shows every ' +
+    'member\'s consumption there). Call for "what did I drink…", tasting recaps, or to find a bottle_id to restore.',
   scope: 'read',
   annotations: { readOnlyHint: true, openWorldHint: false },
   inputSchema: {
@@ -193,10 +218,13 @@ registerTool({
     let cellarIds;
     if (args.cellar_id) {
       const access = await resolveCellarAccess(ctx.user.id, args.cellar_id);
-      if (!access) return fail('not_found', 'No such cellar, or you have no access to it.');
+      if (!access) return fail('not_found', MSG_CELLAR_NOT_FOUND);
       cellarIds = [access.cellar._id];
     } else {
-      cellarIds = (await accessibleCellars(ctx.user.id)).map((c) => c._id);
+      // Owned cellars only — same default scope as search_bottles. Membership
+      // cellars would mix co-members' drinking into "what did I drink", which
+      // the model then misattributes to the user.
+      cellarIds = await Cellar.find({ user: ctx.user.id, deletedAt: null }).distinct('_id');
     }
     const filter = { cellar: { $in: cellarIds }, status: { $in: CONSUMED_STATUSES } };
     if (args.year) {
@@ -215,8 +243,10 @@ registerTool({
       consumed_at: b.consumedAt,
       consumed_reason: b.consumedReason || b.status,
       consumed_rating: b.consumedRating ?? null,
+      consumed_rating_scale: b.consumedRating != null ? b.consumedRatingScale : null,
       consumed_note: b.consumedNote || null,
     }));
     return ok(`${items.length} of ${total} consumed bottle(s)`, items, { page: { limit, offset, total } });
   },
 });
+module.exports = { buildBottleDetail };

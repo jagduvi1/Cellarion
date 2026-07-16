@@ -13,5 +13,6 @@ require('./racks');
 require('./stats');
 require('./wines');
 require('./personal');
+require('./similar');
 
 module.exports = {};
