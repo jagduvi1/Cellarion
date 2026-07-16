@@ -164,7 +164,16 @@ function ConnectAiAuthorize() {
   const who = clientName || t('oauthConsent.anAiAssistant', 'An AI assistant');
   return shell(
     <>
-      <h1 className="oauth-consent-title">{t('oauthConsent.title', 'Connect your AI assistant')}</h1>
+      <h1 className="oauth-consent-title">
+        {t('oauthConsent.title', 'Connect your AI assistant')}
+        <span className="oauth-consent-beta">{t('oauthConsent.beta', 'Beta')}</span>
+      </h1>
+      {/* This is the moment access is granted, so the beta framing has to be
+          here too — not only back in Settings where the flow started. */}
+      <div className="alert alert-info">
+        {t('oauthConsent.betaNotice',
+          'Connecting an AI is a beta feature and you use it at your own risk — it is new and still being tested. Everything it changes is reversible, and you can revoke access at any time in Settings.')}
+      </div>
       <p className="oauth-consent-lead">
         <strong>{who}</strong>{' '}
         {t('oauthConsent.wants', 'wants to connect to your Cellarion cellar and will be able to:')}

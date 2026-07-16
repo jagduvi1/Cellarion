@@ -164,7 +164,9 @@
     "working": "Arbetar…",
     "failed": "Det gick inte att slutföra godkännandet. Försök igen.",
     "invalidRequest": "Den här auktoriseringslänken är ogiltig eller ofullständig. Starta anslutningen igen från din AI-assistent.",
-    "demoBlocked": "Att ansluta en AI-assistent är inte tillgängligt i demot. Skapa ett gratiskonto för att använda det."
+    "demoBlocked": "Att ansluta en AI-assistent är inte tillgängligt i demot. Skapa ett gratiskonto för att använda det.",
+    "beta": "Beta",
+    "betaNotice": "Att ansluta en AI är en betafunktion och du använder den på egen risk — den är ny och testas fortfarande. Allt den ändrar går att ångra, och du kan återkalla åtkomsten när som helst i Inställningar."
   },
   "settings": {
     "title": "Inställningar",

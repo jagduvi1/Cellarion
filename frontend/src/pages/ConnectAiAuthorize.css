@@ -8,6 +8,23 @@
   margin: 0 0 0.75rem;
   text-align: center;
 }
+
+/* "Beta" tag — same shape as the Room View / Discussions / Settings badges, so
+   a beta feature reads the same wherever it appears. Local to this page: the
+   consent screen renders outside the Settings stylesheet. */
+.oauth-consent-beta {
+  display: inline-block;
+  margin-left: 0.5rem;
+  vertical-align: middle;
+  font-size: 0.6rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 0.15rem 0.45rem;
+  border-radius: 4px;
+  background: var(--color-primary, #6366f1);
+  color: #fff;
+}
 .oauth-consent-lead {
   margin: 0 0 0.75rem;
 }
@@ -38,4 +55,3 @@
 .oauth-consent-actions .btn {
   min-width: 7rem;
 }
-</content>

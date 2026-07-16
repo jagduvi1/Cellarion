@@ -164,7 +164,9 @@
     "working": "Working…",
     "failed": "Could not complete the authorization. Please try again.",
     "invalidRequest": "This authorization link is invalid or incomplete. Start the connection again from your AI assistant.",
-    "demoBlocked": "Connecting an AI assistant is not available in the demo. Create a free account to use it."
+    "demoBlocked": "Connecting an AI assistant is not available in the demo. Create a free account to use it.",
+    "beta": "Beta",
+    "betaNotice": "Connecting an AI is a beta feature and you use it at your own risk — it is new and still being tested. Everything it changes is reversible, and you can revoke access at any time in Settings."
   },
   "settings": {
     "title": "Settings",
