@@ -47,9 +47,21 @@ function scopeSatisfies(tokenScopes, required) {
   return Array.isArray(tokenScopes) && tokenScopes.includes(required);
 }
 
-/** The subset of registered tools a token with `tokenScopes` may see and call. */
-function toolsForScopes(tokenScopes) {
-  return tools.filter((t) => scopeSatisfies(tokenScopes, t.scope));
+/**
+ * The subset of registered tools a caller may see and call. Filtered by token
+ * scope AND, when a tool declares `requireRole: ['somm', 'admin']`, by the
+ * caller's roles — role-gated tools are structurally INVISIBLE to callers
+ * without the role, not merely rejected. Roles come from the auth layer:
+ * fresh from the User document on every `cel_` token request (revoking the
+ * somm role cuts the tools off immediately); from the JWT claims for browser
+ * sessions (bounded by the 15-minute access-token lifetime, same as REST).
+ */
+function toolsForScopes(tokenScopes, roles = []) {
+  return tools.filter((t) => {
+    if (!scopeSatisfies(tokenScopes, t.scope)) return false;
+    if (t.requireRole && !t.requireRole.some((r) => roles.includes(r))) return false;
+    return true;
+  });
 }
 
 /** All registered tools (for tests / introspection). */

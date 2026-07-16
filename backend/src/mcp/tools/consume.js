@@ -163,12 +163,71 @@ registerTool({
       // must never gain delete-a-bottle power through undo.
       action: {
         $in: (ctx.scopes || []).includes('write')
-          ? ['consume', 'restore', 'add', 'update', 'bulk_add']
+          ? ['consume', 'restore', 'add', 'update', 'bulk_add', 'somm_maturity', 'somm_price']
           : ['consume', 'restore'],
       },
       createdAt: { $gte: new Date(Date.now() - RESTORE_WINDOW_MS) },
     }).sort({ createdAt: -1 });
     if (!last) return fail('not_found', 'No recent MCP action to undo — nothing has been changed through MCP in the last few days.');
+
+    // Somm curation rows reference registry data, not a bottle — handled first.
+    // The role is re-checked: a somm demoted since the action cannot keep
+    // rewriting shared data through undo.
+    if (last.action === 'somm_maturity' || last.action === 'somm_price') {
+      const roles = ctx.user?.roles || [];
+      if (!roles.includes('somm') && !roles.includes('admin')) {
+        return fail('forbidden_scope', 'Undoing sommelier curation needs the sommelier (or admin) role.');
+      }
+      // Load the maturity target BEFORE claiming the row, so a deleted
+      // profile leaves the ledger row un-consumed (retryable) instead of
+      // burning it on a no-op.
+      let profile = null;
+      if (last.action === 'somm_maturity') {
+        const WineVintageProfile = require('../../models/WineVintageProfile');
+        profile = await WineVintageProfile.findById(last.detail?.profileId);
+        if (!profile) return fail('conflict', 'That maturity profile no longer exists; nothing was changed.');
+      }
+      const claimed = await McpActionLog.findOneAndUpdate(
+        { _id: last._id, reversed: false },
+        { $set: { reversed: true, idempotencyKey: null } }
+      );
+      if (!claimed) return fail('conflict', 'That action is already being undone by another request.');
+
+      let sommEnvelope;
+      if (last.action === 'somm_price') {
+        const WineVintagePrice = require('../../models/WineVintagePrice');
+        const del = await WineVintagePrice.deleteOne({ _id: last.detail?.entryId, setBy: ctx.user.id });
+        sommEnvelope = {
+          summary: del.deletedCount
+            ? `Undid price entry — snapshot for vintage ${last.detail?.vintage} removed`
+            : 'Price snapshot was already gone; ledger marked undone.',
+          data: { undone: 'set_vintage_price', removed: !!del.deletedCount },
+        };
+      } else {
+        const prev = last.prev || {};
+        for (const f of ['earlyFrom', 'earlyUntil', 'peakFrom', 'peakUntil', 'lateFrom', 'lateUntil']) {
+          profile[f] = prev[f] === null || prev[f] === undefined ? undefined : prev[f];
+        }
+        profile.sommNotes = prev.sommNotes === null ? undefined : prev.sommNotes;
+        profile.status = prev.status || 'pending';
+        profile.relative = !!prev.relative;
+        profile.setBy = prev.setBy || null;
+        profile.setAt = prev.setAt || null;
+        await profile.save();
+        sommEnvelope = {
+          summary: `Undid maturity review — vintage ${last.detail?.vintage} back to ${profile.status}`,
+          data: { undone: 'set_vintage_maturity', profile_id: String(profile._id), status: profile.status },
+        };
+      }
+      await logAction(ctx, {
+        tool: 'undo_last',
+        action: last.action,
+        viaUndo: true,
+        detail: { undid: String(last._id) },
+        result: sommEnvelope,
+      });
+      return ok(sommEnvelope.summary, sommEnvelope.data);
+    }
 
     // Bulk rows reference MANY bottles (detail.bottles), no single last.bottle
     // — handled before the single-bottle access resolution below.

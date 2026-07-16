@@ -78,7 +78,7 @@ async function buildServer(ctx) {
     { instructions: INSTRUCTIONS }
   );
   const state = { calls: 0 };
-  for (const tool of toolsForScopes(ctx.scopes)) {
+  for (const tool of toolsForScopes(ctx.scopes, ctx.user?.roles || [])) {
     server.registerTool(
       tool.name,
       {

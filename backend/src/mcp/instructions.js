@@ -9,7 +9,7 @@ const INSTRUCTIONS = [
   '',
   'How to work with it:',
   "- Every tool acts only on the authenticated user's data. Reads are free — prefer them, and prefer filtered searches over fetching everything.",
-  '- Tool families: cellars (list_cellars, get_cellar) → bottles (search_bottles, get_bottle, list_history) → racks (list_racks, get_rack) → portfolio (cellar_stats) → shared registry (search_registry, get_wine, find_similar_wines) → personal (list_wishlist, list_journal) → consuming (consume_bottle, restore_bottle, undo_last — consume scope) → adding/editing (resolve_wine, add_bottle, update_bottle, bulk_add — write scope).',
+  '- Tool families: cellars (list_cellars, get_cellar) → bottles (search_bottles, get_bottle, list_history) → racks (list_racks, get_rack) → portfolio (cellar_stats) → shared registry (search_registry, get_wine, find_similar_wines) → personal (list_wishlist, list_journal) → consuming (consume_bottle, restore_bottle, undo_last — consume scope) → adding/editing (resolve_wine, add_bottle, update_bottle, bulk_add — write scope) → sommelier curation (list_maturity_queue, set_vintage_maturity, list_price_tracking_requests, set_vintage_price — only for sommelier/admin accounts).',
   '- Resources you can attach as ambient context: cellar://snapshot (collection overview), cellar://stats (portfolio doc), cellar://bottle/{id} (one bottle\'s dossier), cellarion://about.',
   '- find_similar_wines = "more like this" by taste/style vectors — ideal for purchase ideas seeded from a wine the user loves.',
   '- Typical flow: list_cellars once to learn ids, then search_bottles / get_bottle for specifics. search_bottles = what the user OWNS; search_registry = ALL wines Cellarion knows.',
