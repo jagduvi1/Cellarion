@@ -255,7 +255,9 @@
       "copy": "Copy",
       "copied": "Copied!",
       "securityNote": "Your AI sees only your own cellar data. Revoking the token in the API tokens section cuts the connection off instantly.",
-      "testError": "Could not verify right now (server busy or unreachable) — this says nothing about your token. Try again in a moment."
+      "testError": "Could not verify right now (server busy or unreachable) — this says nothing about your token. Try again in a moment.",
+      "beta": "Beta",
+      "betaNotice": "This is a beta feature and you use it at your own risk. It works, but it is new and still being tested — expect rough edges, and changes while we refine it. If you are unsure, connect with a read-only token: anything an AI changes can be undone under \"What your AI has changed\", and revoking the token cuts it off instantly."
     },
     "climateDevices": {
       "title": "Climate devices",

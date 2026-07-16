@@ -255,7 +255,9 @@
       "copy": "Kopiera",
       "copied": "Kopierat!",
       "securityNote": "Din AI ser bara dina egna källardata. Återkallar du din token i avsnittet API-tokens bryts anslutningen omedelbart.",
-      "testError": "Det gick inte att verifiera just nu (servern är upptagen eller onåbar) — det säger ingenting om din token. Försök igen om en stund."
+      "testError": "Det gick inte att verifiera just nu (servern är upptagen eller onåbar) — det säger ingenting om din token. Försök igen om en stund.",
+      "beta": "Beta",
+      "betaNotice": "Det här är en betafunktion och du använder den på egen risk. Den fungerar, men är ny och testas fortfarande — räkna med ojämnheter och att saker ändras medan vi finslipar. Är du osäker, anslut med en läsbehörig token: allt en AI ändrar kan ångras under \"Vad din AI har ändrat\", och återkallar du token bryts anslutningen omedelbart."
     },
     "climateDevices": {
       "title": "Klimatenheter",
