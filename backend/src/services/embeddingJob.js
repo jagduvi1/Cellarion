@@ -23,7 +23,7 @@
 const crypto = require('crypto');
 const { randomUUID } = require('crypto');
 const aiConfig = require('../config/aiConfig');
-const { embedSingle, buildEmbeddingText, isEmbeddingConfigured, activeEmbeddingModel } = require('./embedding');
+const { embedSingle, buildEmbeddingText, isEmbeddingConfigured } = require('./embedding');
 const vectorStore = require('./vectorStore');
 const WineEmbedding = require('../models/WineEmbedding');
 const Bottle = require('../models/Bottle');
@@ -99,7 +99,7 @@ async function start({ mode = 'incremental' } = {}) {
   job = {
     status: 'running',
     mode,
-    model: activeEmbeddingModel(cfg.embeddingModel),
+    model: cfg.embeddingModel, // provider-resolved by aiConfig.get()
     indexVersion: cfg.vectorIndex,
     total: 0,
     done: 0,
@@ -120,11 +120,9 @@ async function start({ mode = 'incremental' } = {}) {
 }
 
 async function runJob(cfg) {
-  const { vectorIndex, embeddingBatchDelayMs } = cfg;
-  // In openai embedding mode the model comes from EMBEDDING_MODEL env, not
-  // aiConfig — resolve once so WineEmbedding bookkeeping records the model
-  // that actually produced each vector.
-  const model = activeEmbeddingModel(cfg.embeddingModel);
+  // cfg.embeddingModel is provider-resolved by aiConfig.get(), so the
+  // WineEmbedding bookkeeping records the model that actually embedded.
+  const { embeddingModel: model, vectorIndex, embeddingBatchDelayMs } = cfg;
 
   try {
     // Ensure the Qdrant collection exists before we start
@@ -299,8 +297,7 @@ async function embedSinglePair(wineDefId, vintage) {
   const cfg = aiConfig.get();
   if (!cfg.chatEnabled) return;
 
-  const { vectorIndex } = cfg;
-  const model = activeEmbeddingModel(cfg.embeddingModel);
+  const { embeddingModel: model, vectorIndex } = cfg;
 
   try {
     const wine = await WineDefinition.findById(wineDefId)

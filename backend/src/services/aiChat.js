@@ -30,12 +30,11 @@ const { classifyMaturity, buildProfileMap, maturityLabel } = require('../utils/m
 
 const aiProvider = require('./aiProvider');
 
-// In openai mode every configured Claude name resolves to the same AI_MODEL,
-// so a "fallback" would just re-send the identical request to the identical
-// model (and log a fictitious second model). Compare resolved names instead.
+// aiConfig.get() returns provider-resolved model names (in openai mode the
+// fallback resolves to the same AI_MODEL as the primary), so comparing the
+// cfg values directly is enough to disable a pointless same-model "fallback".
 function canFallbackTo(cfg) {
-  return !!cfg.chatModelFallback &&
-    aiProvider.displayModel(cfg.chatModelFallback) !== aiProvider.displayModel(cfg.chatModel);
+  return !!cfg.chatModelFallback && cfg.chatModelFallback !== cfg.chatModel;
 }
 
 // ── In-memory event log (ring buffer, survives until restart) ─────────────
@@ -268,12 +267,12 @@ Reply with ONLY these two lines, no explanation. Always reply in English regardl
       || err.error?.type === 'overloaded_error';
     logEvent({
       phase: 'query-expansion',
-      primaryModel: aiProvider.displayModel(cfg.chatModel),
+      primaryModel: cfg.chatModel,
       status: err.status || null,
       errorType: err.error?.type || null,
       errorMessage: err.message || null,
       fallbackAttempted: isRetryable && canFallback,
-      fallbackModel: canFallback ? aiProvider.displayModel(cfg.chatModelFallback) : null,
+      fallbackModel: canFallback ? cfg.chatModelFallback : null,
     });
     if (isRetryable && canFallback) {
       try {
@@ -445,15 +444,15 @@ async function chat(userId, message, opts = {}) {
       || err.error?.type === 'overloaded_error';
     logEvent({
       phase: 'chat',
-      primaryModel: aiProvider.displayModel(cfg.chatModel),
+      primaryModel: cfg.chatModel,
       status: err.status || null,
       errorType: err.error?.type || null,
       errorMessage: err.message || null,
       fallbackAttempted: isRetryable && canFallback,
-      fallbackModel: canFallback ? aiProvider.displayModel(cfg.chatModelFallback) : null,
+      fallbackModel: canFallback ? cfg.chatModelFallback : null,
     });
     if (isRetryable && canFallback) {
-      console.warn(`[aiChat] Primary model failed (${aiProvider.displayModel(cfg.chatModel)}, status ${err.status}), retrying with fallback: ${aiProvider.displayModel(cfg.chatModelFallback)}`);
+      console.warn(`[aiChat] Primary model failed (${cfg.chatModel}, status ${err.status}), retrying with fallback: ${cfg.chatModelFallback}`);
       try {
         response = await client.messages.create({ ...callParams, model: cfg.chatModelFallback, ...thinkingOff(cfg.chatModelFallback) });
         _eventLog[_eventLog.length - 1].fallbackResult = 'ok';

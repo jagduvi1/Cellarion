@@ -358,7 +358,7 @@ router.get('/backups', async (req, res) => {
 // ---------------------------------------------------------------------------
 router.get('/ai', async (req, res) => {
   try {
-    const cfg = aiConfig.get();
+    const cfg = aiConfig.getRaw();
     const jobStatus = embeddingJob.getStatus();
     const enrichStatus = enrichmentJob.getStatus();
 
@@ -434,7 +434,7 @@ router.patch('/ai/chat-limit', async (req, res) => {
     return res.status(400).json({ error: 'limit must be an integer of -1 (unlimited) or greater' });
   }
   try {
-    const current = aiConfig.get();
+    const current = aiConfig.getRaw();
     const updated = { ...current, chatDailyLimit: limit };
     await updateSiteConfig('aiConfig', updated, req.user.id);
     aiConfig.set(updated);
@@ -466,7 +466,7 @@ function registerPromptRoute(path, configKey, maxLen, saveErrorMsg) {
       return res.status(400).json({ error: `prompt must be ${maxLen} characters or fewer` });
     }
     try {
-      const current = aiConfig.get();
+      const current = aiConfig.getRaw();
       const updated = { ...current, [configKey]: prompt.trim() };
       await updateSiteConfig('aiConfig', updated, req.user.id);
       aiConfig.set(updated);
@@ -489,7 +489,7 @@ function registerModelRoute(path, configKey, saveErrorMsg) {
     }
 
     try {
-      const current = aiConfig.get();
+      const current = aiConfig.getRaw();
       const updated = { ...current, [configKey]: model };
       await updateSiteConfig('aiConfig', updated, req.user.id);
       aiConfig.set(updated);
@@ -532,7 +532,7 @@ router.patch('/ai/chat-model', async (req, res) => {
   }
 
   try {
-    const current = aiConfig.get();
+    const current = aiConfig.getRaw();
     // Validate the invariant against the EFFECTIVE pair — an omitted
     // fallbackModel keeps the stored one, which must not equal the new model.
     const effectiveFallback = fallbackModel !== undefined ? fallbackModel : current.chatModelFallback;

@@ -89,12 +89,16 @@ function isConfigured() {
 }
 
 /**
- * The model name that will actually serve a request — for logging/telemetry.
- * In openai mode the requested model (a Claude name from aiConfig) is
- * replaced by AI_MODEL.
+ * The models that actually serve requests in openai mode, or null when the
+ * provider is Anthropic (aiConfig's stored Claude names then apply as-is).
+ * aiConfig.get() uses this to return provider-resolved model fields, so every
+ * consumer — logs, WineEmbedding bookkeeping, fallback comparison — sees the
+ * real model without having to remember a per-callsite translation.
  */
-function displayModel(requestedModel) {
-  return providerName() === 'openai' ? (process.env.AI_MODEL || requestedModel) : requestedModel;
+function effectiveModels() {
+  if (providerName() !== 'openai') return null;
+  const text = process.env.AI_MODEL || '';
+  return { text, vision: process.env.AI_VISION_MODEL || text };
 }
 
 // ── OpenAI-compatible adapter ───────────────────────────────────────────────
@@ -347,4 +351,4 @@ function _resetForTests() {
   _anthropicClients.clear();
 }
 
-module.exports = { providerName, assertConfigured, isConfigured, displayModel, getChatClient, toOpenAiMessages, _resetForTests };
+module.exports = { providerName, assertConfigured, isConfigured, effectiveModels, getChatClient, toOpenAiMessages, _resetForTests };

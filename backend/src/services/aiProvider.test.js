@@ -101,11 +101,13 @@ describe('provider selection', () => {
     expect(aiProvider.isConfigured()).toBe(true);
   });
 
-  test('displayModel substitutes AI_MODEL only in openai mode', () => {
-    expect(aiProvider.displayModel('claude-sonnet-5')).toBe('claude-sonnet-5');
+  test('effectiveModels is null in anthropic mode and env-derived in openai mode', () => {
+    expect(aiProvider.effectiveModels()).toBeNull();
     process.env.AI_PROVIDER = 'openai';
     process.env.AI_MODEL = 'llama3.1';
-    expect(aiProvider.displayModel('claude-sonnet-5')).toBe('llama3.1');
+    expect(aiProvider.effectiveModels()).toEqual({ text: 'llama3.1', vision: 'llama3.1' });
+    process.env.AI_VISION_MODEL = 'qwen2.5-vl';
+    expect(aiProvider.effectiveModels()).toEqual({ text: 'llama3.1', vision: 'qwen2.5-vl' });
   });
 
   test('getChatClient returns an Anthropic SDK client in anthropic mode', () => {

@@ -377,7 +377,49 @@ async function load() {
   }
 }
 
+/**
+ * The provider-resolved view: when AI_PROVIDER=openai (or
+ * EMBEDDING_PROVIDER=openai) the stored Claude/Voyage model names don't serve
+ * requests — the env-configured models do. get() substitutes them here, once,
+ * so every consumer (call params, event logs, WineEmbedding bookkeeping,
+ * fallback comparison) is honest by construction instead of each call site
+ * having to remember a translation helper. With default providers this
+ * returns the cache object untouched — zero cost, zero behavior change.
+ *
+ * Admin routes that DISPLAY or PERSIST the stored settings must use getRaw():
+ * resolving there would show env model names in the Claude pickers and, worse,
+ * write them back into SiteConfig on save.
+ */
 function get() {
+  // Lazy requires — resolved on first call, then served from Node's module
+  // cache. Keeps config/ free of load-order coupling to services/.
+  const { effectiveModels } = require('../services/aiProvider');
+  const { embeddingProviderName, activeEmbeddingModel } = require('../services/embedding');
+
+  const llm = effectiveModels(); // null unless AI_PROVIDER=openai
+  const embOpenAi = embeddingProviderName() === 'openai';
+  if (!llm && !embOpenAi) return cache;
+
+  const resolved = { ...cache };
+  if (llm) {
+    resolved.chatModel = llm.text;
+    // Same model as primary — canFallback comparisons then correctly disable
+    // the fallback (a "fallback" to the identical model is a pointless retry).
+    resolved.chatModelFallback = llm.text;
+    resolved.labelScanModel = llm.vision;
+    resolved.importLookupModel = llm.text;
+    resolved.maturitySuggestModel = llm.text;
+    resolved.priceSuggestModel = llm.text;
+    resolved.enrichmentModel = llm.text;
+  }
+  if (embOpenAi) {
+    resolved.embeddingModel = activeEmbeddingModel(cache.embeddingModel);
+  }
+  return resolved;
+}
+
+/** The stored (DB-backed) settings, unresolved — for admin display/persist. */
+function getRaw() {
   return cache;
 }
 
@@ -385,4 +427,4 @@ function set(value) {
   cache = { ...defaults, ...value };
 }
 
-module.exports = { load, get, set, defaults, DEFAULT_SYSTEM_PROMPT, DEFAULT_LABEL_SCAN_PROMPT, DEFAULT_IMPORT_LOOKUP_PROMPT, DEFAULT_TEXT_SEARCH_PROMPT, DEFAULT_MATURITY_SUGGEST_PROMPT, DEFAULT_MATURITY_SUGGEST_PROMPT_NV, DEFAULT_PRICE_SUGGEST_PROMPT, DEFAULT_ENRICHMENT_PROMPT, VALID_CHAT_MODELS };
+module.exports = { load, get, getRaw, set, defaults, DEFAULT_SYSTEM_PROMPT, DEFAULT_LABEL_SCAN_PROMPT, DEFAULT_IMPORT_LOOKUP_PROMPT, DEFAULT_TEXT_SEARCH_PROMPT, DEFAULT_MATURITY_SUGGEST_PROMPT, DEFAULT_MATURITY_SUGGEST_PROMPT_NV, DEFAULT_PRICE_SUGGEST_PROMPT, DEFAULT_ENRICHMENT_PROMPT, VALID_CHAT_MODELS };
