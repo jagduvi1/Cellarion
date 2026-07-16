@@ -2,12 +2,22 @@
 // taxonomy from MCP plan §5.4, and the standalone access checks (the service-
 // context equivalents of middleware/cellarAccess + middleware/bottleAccess —
 // same semantics, no req/res).
+const { z } = require('zod');
 const Cellar = require('../models/Cellar');
 const Bottle = require('../models/Bottle');
 const { getCellarRole } = require('../utils/cellarAccess');
 const { isValidId } = require('../utils/validation');
+const { CONSUMED_STATUSES } = require('../config/constants');
 
 const ROLE_LEVELS = { viewer: 1, editor: 2, owner: 3 };
+
+/** Shared zod shape for Mongo ids in tool input schemas. */
+const objectId = z.string().regex(/^[a-f0-9]{24}$/i, 'must be a 24-hex id');
+
+// Canonical not_found messages — identical wording for "missing" and "no
+// access" (no existence oracle), with the recovery hint the model needs.
+const MSG_CELLAR_NOT_FOUND = 'No such cellar, or you have no access to it. Use list_cellars for valid ids.';
+const MSG_BOTTLE_NOT_FOUND = 'No such bottle, or you have no access to it. Find ids via search_bottles.';
 
 /** Success envelope (§7): { summary, data, warnings?, page? } as one text part. */
 function ok(summary, data, extra = {}) {
@@ -107,6 +117,20 @@ function bottleSummary(b) {
 }
 
 /**
+ * Active (or consumed) bottle counts per cellar in one aggregation.
+ * Shared by list_cellars and the cellar://snapshot resource so the two
+ * surfaces can never disagree on what counts. Returns Map<cellarIdString, n>.
+ * cellarIds must be ObjectIds (aggregate does not cast).
+ */
+async function countBottlesByCellar(cellarIds, { consumed = false } = {}) {
+  const rows = await Bottle.aggregate([
+    { $match: { cellar: { $in: cellarIds }, status: consumed ? { $in: CONSUMED_STATUSES } : { $nin: CONSUMED_STATUSES } } },
+    { $group: { _id: '$cellar', n: { $sum: 1 } } },
+  ]);
+  return new Map(rows.map((r) => [String(r._id), r.n]));
+}
+
+/**
  * True when a (lean) subdocument carries any real value. Mongoose materializes
  * default subdocs (e.g. a never-enriched aiProfile of all-nulls); those should
  * serialize as null over MCP, not as empty shells the model misreads as data.
@@ -131,9 +155,13 @@ function pageParams(args, defLimit, maxLimit) {
 module.exports = {
   ok,
   fail,
+  objectId,
+  MSG_CELLAR_NOT_FOUND,
+  MSG_BOTTLE_NOT_FOUND,
   resolveCellarAccess,
   resolveBottleAccess,
   accessibleCellars,
+  countBottlesByCellar,
   wineSummary,
   bottleSummary,
   pageParams,

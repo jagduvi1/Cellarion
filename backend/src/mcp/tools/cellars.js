@@ -7,7 +7,7 @@ const Rack = require('../../models/Rack');
 const { CONSUMED_STATUSES } = require('../../config/constants');
 const { registerTool } = require('../registry');
 const { getCellarRole } = require('../../utils/cellarAccess');
-const { ok, fail, resolveCellarAccess, accessibleCellars } = require('../toolUtil');
+const { ok, fail, MSG_CELLAR_NOT_FOUND, resolveCellarAccess, accessibleCellars, countBottlesByCellar } = require('../toolUtil');
 
 registerTool({
   name: 'list_cellars',
@@ -21,11 +21,7 @@ registerTool({
   handler: async (_args, ctx) => {
     const cellars = await accessibleCellars(ctx.user.id);
     const ids = cellars.map((c) => c._id);
-    const counts = await Bottle.aggregate([
-      { $match: { cellar: { $in: ids }, status: { $nin: CONSUMED_STATUSES } } },
-      { $group: { _id: '$cellar', n: { $sum: 1 } } },
-    ]);
-    const countByCellar = new Map(counts.map((c) => [String(c._id), c.n]));
+    const countByCellar = await countBottlesByCellar(ids);
     const data = cellars.map((c) => ({
       cellar_id: c._id,
       name: c.name,
@@ -49,7 +45,7 @@ registerTool({
   inputSchema: { cellar_id: z.string().describe('Cellar id from list_cellars') },
   handler: async (args, ctx) => {
     const access = await resolveCellarAccess(ctx.user.id, args.cellar_id);
-    if (!access) return fail('not_found', 'No such cellar, or you have no access to it. Use list_cellars for valid ids.');
+    if (!access) return fail('not_found', MSG_CELLAR_NOT_FOUND);
     const { cellar, role } = access;
     const [active, consumed, racks] = await Promise.all([
       Bottle.countDocuments({ cellar: cellar._id, status: { $nin: CONSUMED_STATUSES } }),

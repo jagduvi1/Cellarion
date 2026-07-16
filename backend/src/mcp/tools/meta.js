@@ -16,6 +16,8 @@ registerTool({
   scope: 'public',
   annotations: { readOnlyHint: true, openWorldHint: false },
   inputSchema: {},
+  // Deliberately NOT the ok() {summary,data} envelope: this is the one
+  // self-describing tool; clients/tests parse its flat payload directly.
   handler: async () => {
     const info = {
       name: 'Cellarion',
@@ -27,6 +29,6 @@ registerTool({
       repository: 'https://github.com/jagduvi1/Cellarion',
       homepage: 'https://cellarion.app',
     };
-    return { content: [{ type: 'text', text: JSON.stringify(info, null, 2) }] };
+    return { content: [{ type: 'text', text: JSON.stringify(info) }] };
   },
 });

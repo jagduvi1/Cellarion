@@ -7,7 +7,7 @@ const pkg = require('../../package.json');
 const Bottle = require('../models/Bottle');
 const { CONSUMED_STATUSES } = require('../config/constants');
 const { registerResource } = require('./registry');
-const { accessibleCellars } = require('./toolUtil');
+const { accessibleCellars, countBottlesByCellar } = require('./toolUtil');
 const { getCellarRole } = require('../utils/cellarAccess');
 const { buildBottleDetail } = require('./tools/bottles');
 const { buildStats } = require('./tools/stats');
@@ -54,19 +54,10 @@ registerResource({
   handler: async (uri, _params, ctx) => {
     const cellars = await accessibleCellars(ctx.user.id);
     const ids = cellars.map((c) => c._id);
-    const [active, consumed] = await Promise.all([
-      Bottle.aggregate([
-        { $match: { cellar: { $in: ids }, status: { $nin: CONSUMED_STATUSES } } },
-        { $group: { _id: '$cellar', n: { $sum: 1 } } },
-      ]),
-      Bottle.aggregate([
-        { $match: { cellar: { $in: ids }, status: { $in: CONSUMED_STATUSES } } },
-        { $group: { _id: '$cellar', n: { $sum: 1 } } },
-      ]),
+    const [activeBy, consumedBy] = await Promise.all([
+      countBottlesByCellar(ids),
+      countBottlesByCellar(ids, { consumed: true }),
     ]);
-    const byId = (rows) => new Map(rows.map((r) => [String(r._id), r.n]));
-    const activeBy = byId(active);
-    const consumedBy = byId(consumed);
     const data = cellars.map((c) => ({
       cellar_id: c._id,
       name: c.name,
@@ -76,7 +67,7 @@ registerResource({
     }));
     return json(uri, {
       summary: `${data.length} cellar(s), ${data.reduce((s, c) => s + c.active_bottles, 0)} active bottle(s)`,
-      cellars: data,
+      data,
     });
   },
 });
@@ -89,7 +80,7 @@ registerResource({
   scope: 'read',
   handler: async (uri, _params, ctx) => {
     const r = await buildStats(ctx.user.id);
-    return json(uri, { summary: r.summary, ...r.data });
+    return json(uri, { summary: r.summary, data: r.data, ...r.extra });
   },
 });
 
@@ -101,6 +92,6 @@ registerResource({
   scope: 'read',
   handler: async (uri, params, ctx) => {
     const r = await buildBottleDetail(ctx.user.id, String(params.id || ''));
-    return json(uri, r.error ? { error: r.error } : { summary: r.summary, ...r.data });
+    return json(uri, r.error ? { error: r.error } : { summary: r.summary, data: r.data });
   },
 });
