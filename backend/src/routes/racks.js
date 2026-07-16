@@ -8,7 +8,11 @@ const Bottle = require('../models/Bottle');
 const CellarLayout = require('../models/CellarLayout');
 const { getCellarRole } = require('../utils/cellarAccess');
 const { getMaxPosition } = require('../utils/rackGeometry');
-const { placeBottleInRack, clearRackSlot } = require('../services/rackOps');
+const {
+  placeBottleInRack, clearRackSlot,
+  buildAnnotatedEntries, validateArrangementTarget, applyArrangement,
+} = require('../services/rackOps');
+const { ARRANGE_STRATEGIES, buildArrangePlan } = require('../utils/rackArrange');
 const { isValidId } = require('../utils/validation');
 const { logAudit } = require('../services/audit');
 const { classifyMaturity, buildProfileMap } = require('../utils/maturityUtils');
@@ -440,6 +444,138 @@ router.post('/:id/slots/:position/move', async (req, res) => {
     }
     console.error('Move slot error:', err);
     res.status(500).json({ error: 'Failed to move bottle' });
+  }
+});
+
+// ── Auto-arrange (one engine, two surfaces) ─────────────────────────────────
+// The SAME decision engine + atomic apply the MCP auto_arrange tool uses
+// (utils/rackArrange + rackOps.buildAnnotatedEntries/applyArrangement), so the
+// web Arrange modal and an AI caller can never drift. The web contract is
+// stateless: preview returns the full plan; apply takes it back and re-checks
+// EVERYTHING server-side — `before` must equal the rack's current occupancy
+// (staleness guard) and `target` must be a pure permutation of the current
+// bottles (validateArrangementTarget), so a hand-crafted request can reorder
+// but never inject, clone, or drop a bottle. Undo is the same apply endpoint
+// with target/before swapped — restoring the previous layout IS an arrangement.
+
+// POST /api/racks/:id/arrange/preview — body { strategy, positionOrder? }.
+// positionOrder is the client's geometric fill order (corner picker); the
+// server treats it as a priority list of positions, defaulting to ascending.
+router.post('/:id/arrange/preview', async (req, res) => {
+  try {
+    if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
+    const strategy = req.body?.strategy || 'maturity';
+    if (!ARRANGE_STRATEGIES.includes(strategy)) {
+      return res.status(400).json({ error: `Invalid strategy. Must be one of: ${ARRANGE_STRATEGIES.join(', ')}` });
+    }
+
+    const rack = await Rack.findOne({ _id: req.params.id, deletedAt: null }).populate({
+      path: 'slots.bottle',
+      select: 'vintage status drinkFrom drinkTo wineDefinition',
+      populate: { path: 'wineDefinition', select: 'name producer type' },
+    });
+    if (!rack) return res.status(404).json({ error: 'Rack not found' });
+
+    const cellarDoc = await Cellar.findById(rack.cellar);
+    const role = getCellarRole(cellarDoc, req.user.id);
+    if (!role || role === 'viewer') {
+      return res.status(403).json({ error: 'Not authorized to modify rack slots' });
+    }
+
+    const maxPos = getMaxPosition(rack);
+    let positionOrder;
+    if (req.body?.positionOrder !== undefined) {
+      const order = req.body.positionOrder;
+      const valid = Array.isArray(order) && order.length <= maxPos * 2 &&
+        order.every((p) => Number.isInteger(p) && p >= 1 && p <= maxPos) &&
+        new Set(order).size === order.length;
+      if (!valid) return res.status(400).json({ error: 'positionOrder must be unique integer positions within the rack' });
+      positionOrder = order;
+    }
+
+    const entries = await buildAnnotatedEntries(rack);
+    if (entries.length === 0) {
+      return res.json({ strategy, bottlesTotal: 0, changes: [], target: [], before: [] });
+    }
+    const disabled = new Set(rack.disabledPositions || []);
+    const usableCount = (positionOrder || Array.from({ length: maxPos }, (_, i) => i + 1))
+      .filter((p) => !disabled.has(p)).length;
+    if (entries.length > usableCount) {
+      return res.status(409).json({ error: `This rack holds ${entries.length} bottles but only ${usableCount} usable positions — free up or re-enable slots first.` });
+    }
+
+    const { target, changes } = buildArrangePlan(entries, maxPos, rack.disabledPositions || [], strategy, positionOrder);
+    const before = entries
+      .map((e) => ({ position: e.position, bottleId: String(e.bottle._id) }))
+      .sort((a, b) => a.position - b.position);
+    res.json({
+      strategy,
+      bottlesTotal: entries.length,
+      changes: changes.map((c) => ({
+        from: c.from,
+        to: c.to,
+        bottleId: String(c.bottle._id),
+        name: c.bottle?.wineDefinition?.name || '',
+        vintage: c.bottle?.vintage || '',
+      })),
+      target,
+      before,
+    });
+  } catch (err) {
+    console.error('Arrange preview error:', err);
+    res.status(500).json({ error: 'Failed to compute the arrangement' });
+  }
+});
+
+// POST /api/racks/:id/arrange/apply — body { target, before } (from preview,
+// or swapped for undo). One atomic save; 409 when the rack changed since.
+router.post('/:id/arrange/apply', async (req, res) => {
+  try {
+    if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
+    const { target, before } = req.body || {};
+    const MAX_ENTRIES = 1000; // far above any real rack; bounds the body work
+    if (!Array.isArray(target) || !Array.isArray(before) || target.length > MAX_ENTRIES || before.length > MAX_ENTRIES) {
+      return res.status(400).json({ error: 'target and before arrays are required' });
+    }
+
+    const rack = await Rack.findOne({ _id: req.params.id, deletedAt: null });
+    if (!rack) return res.status(404).json({ error: 'Rack not found' });
+
+    const cellarDoc = await Cellar.findById(rack.cellar);
+    const role = getCellarRole(cellarDoc, req.user.id);
+    if (!role || role === 'viewer') {
+      return res.status(403).json({ error: 'Not authorized to modify rack slots' });
+    }
+
+    // Staleness guard: the rack must hold EXACTLY the occupancy the plan was
+    // computed from — any placement, removal or move since = recompute.
+    const current = (rack.slots || [])
+      .filter((s) => s.bottle)
+      .map((s) => ({ position: s.position, bottleId: String(s.bottle) }))
+      .sort((a, b) => a.position - b.position);
+    const sortedBefore = [...before]
+      .map((t) => ({ position: t?.position, bottleId: String(t?.bottleId || '') }))
+      .sort((a, b) => a.position - b.position);
+    const unchanged = current.length === sortedBefore.length &&
+      current.every((s, i) => s.position === sortedBefore[i].position && s.bottleId === sortedBefore[i].bottleId);
+    if (!unchanged) {
+      return res.status(409).json({ error: 'The rack has changed since this plan was computed — reopen the organizer.' });
+    }
+
+    const valid = validateArrangementTarget(rack, target);
+    if (valid.error) return res.status(valid.error.status).json({ error: valid.error.message });
+
+    const applied = await applyArrangement(rack, target, req, { via: 'web', moved: target.length });
+    if (applied.error) return res.status(applied.error.status).json({ error: applied.error.message });
+
+    await rack.populate({
+      path: 'slots.bottle',
+      populate: { path: 'wineDefinition', populate: ['country', 'region', 'grapes'] }
+    });
+    res.json({ rack: await withMaturity(rack) });
+  } catch (err) {
+    console.error('Arrange apply error:', err);
+    res.status(500).json({ error: 'Failed to apply the arrangement' });
   }
 });
 

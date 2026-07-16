@@ -23,6 +23,23 @@ export const moveSlot = (apiFetch, rackId, fromPosition, toPosition) =>
     body: JSON.stringify({ toPosition }),
   });
 
+// Auto-arrange — server-side engine (same one the MCP auto_arrange tool uses).
+// preview computes the plan; apply takes it back ({ target, before }) and the
+// server re-validates everything. Undo = apply with target/before swapped.
+export const previewArrange = (apiFetch, rackId, { strategy, positionOrder }) =>
+  apiFetch(`/api/racks/${rackId}/arrange/preview`, {
+    method: 'POST',
+    headers: JSON_HEADERS,
+    body: JSON.stringify({ strategy, positionOrder }),
+  });
+
+export const applyArrange = (apiFetch, rackId, { target, before }) =>
+  apiFetch(`/api/racks/${rackId}/arrange/apply`, {
+    method: 'POST',
+    headers: JSON_HEADERS,
+    body: JSON.stringify({ target, before }),
+  });
+
 export const disableSlot = (apiFetch, rackId, position) =>
   apiFetch(`/api/racks/${rackId}/slots/${position}/disable`, { method: 'POST' });
 
