@@ -27,6 +27,7 @@
 const User = require('../models/User');
 const AiBudgetRequest = require('../models/AiBudgetRequest');
 const ApiToken = require('../models/ApiToken');
+const ExportLink = require('../models/ExportLink');
 const McpActionLog = require('../models/McpActionLog');
 const AiUsage = require('../models/AiUsage');
 const Bottle = require('../models/Bottle');
@@ -513,6 +514,17 @@ const REGISTRY = [
         .select('name scopes lastUsedAt createdAt revokedAt').limit(EXPORT_MAX).lean())
         .map(t => ({ name: t.name, scopes: t.scopes, lastUsedAt: t.lastUsedAt, createdAt: t.createdAt, revokedAt: t.revokedAt })),
     }),
+  },
+
+  // ── Export download links ──────────────────────────────────────────────
+  {
+    model: ExportLink, category: 'personal-data', userFields: ['user'],
+    // Hard-delete on erasure. An ExportLink is a throwaway one-hour download
+    // credential, not user data — the exportable data it points AT is exported
+    // through its own registry entries (cellars, account, …). Nothing to export
+    // here (and the tokenHash, like ApiToken's, never leaves the DB).
+    purge: (ctx) => ExportLink.deleteMany({ user: ctx.userId }),
+    exportFragment: null,
   },
 
   // ── MCP action ledger ───────────────────────────────────────────────────

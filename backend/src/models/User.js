@@ -307,6 +307,15 @@ const userSchema = new mongoose.Schema({
     type: Date,
     default: null
   },
+  // Last time an MCP export-link for the full GDPR account export was minted.
+  // That build spans ~35 collections and can be hundreds of MB, so the MCP
+  // path (an automated caller that could loop) throttles it to once per day.
+  // The web route GET /api/users/me/export stays unthrottled — a human clicking
+  // download is not the threat model this bounds.
+  lastAccountExportAt: {
+    type: Date,
+    default: null
+  },
   // ─── Ephemeral public demo accounts ──────────────────────────────────────
   // A demo account is a throwaway, auto-expiring user created by
   // POST /api/auth/demo-login so anonymous visitors can try Cellarion with a

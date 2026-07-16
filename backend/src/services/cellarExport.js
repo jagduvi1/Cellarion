@@ -16,13 +16,17 @@
  * included. Photos other people contributed (e.g. a shared wine's label) are
  * never bundled — the user only gets their own uploads.
  */
+const fs = require('fs');
+const archiver = require('archiver');
 const Cellar = require('../models/Cellar');
 const Bottle = require('../models/Bottle');
 const Rack = require('../models/Rack');
 const BottleImage = require('../models/BottleImage');
 const CellarLayout = require('../models/CellarLayout');
 const Review = require('../models/Review');
+const User = require('../models/User');
 const { buildProfileMap } = require('../utils/maturityUtils');
+const { safeUploadPath } = require('./imageProcessor');
 
 // Bound worst-case memory: a single export can't materialise more than this
 // many bottles/images. Far above any real cellar; a hit is flagged via
@@ -478,6 +482,101 @@ it to **create a new one**. Wines are matched against the destination's registry
 and auto-created when missing; an image you already have isn't stored twice.
 `;
 
+// ── Full-export weekly allowance + ZIP streaming ─────────────────────────────
+// Extracted from routes/users.js so the web full-export route AND the MCP
+// export-link redeem route run ONE implementation of the expensive image
+// archive: same weekly claim, same atomic-refund guards, same streaming. The
+// allowance lives on User.lastImageExportAt so it is per-account and survives
+// restarts (not per-IP like the global limiters), and the two surfaces share it
+// — MCP is not a bypass of the weekly cap.
+const IMAGE_EXPORT_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000;
+
+/**
+ * Atomically claim this user's weekly image-export allowance BEFORE the
+ * expensive build, so two concurrent requests can't both kick off a large
+ * archive. Replaces a non-atomic check-then-set that was bypassable under
+ * concurrency.
+ * @returns {Promise<{claimed:true, claimStamp:Date, priorStamp:Date|null}
+ *                   | {claimed:false, nextAvailableAt:Date}
+ *                   | {claimed:false, notFound:true}>}
+ */
+async function claimImageExportAllowance(userId) {
+  const now = new Date();
+  const cutoff = new Date(now.getTime() - IMAGE_EXPORT_COOLDOWN_MS);
+  const claimed = await User.findOneAndUpdate(
+    { _id: userId, $or: [{ lastImageExportAt: null }, { lastImageExportAt: { $lte: cutoff } }] },
+    { $set: { lastImageExportAt: now } },
+    { new: false } // pre-update doc, so we can read (and refund) the prior timestamp
+  );
+  if (claimed) return { claimed: true, claimStamp: now, priorStamp: claimed.lastImageExportAt };
+  const u = await User.findById(userId).select('lastImageExportAt');
+  if (!u) return { claimed: false, notFound: true };
+  return {
+    claimed: false,
+    nextAvailableAt: new Date(new Date(u.lastImageExportAt).getTime() + IMAGE_EXPORT_COOLDOWN_MS),
+  };
+}
+
+/**
+ * Give back a claimed weekly allowance (nothing chargeable, or a build failure).
+ * Guarded on OUR OWN claim timestamp so a later legitimate claim is never
+ * clobbered.
+ */
+async function refundImageExportAllowance(userId, claimStamp, priorStamp) {
+  if (!claimStamp) return;
+  await User.updateOne(
+    { _id: userId, lastImageExportAt: claimStamp },
+    { $set: { lastImageExportAt: priorStamp ?? null } }
+  );
+}
+
+/**
+ * Pipe a cellar export payload + the user's own image files to `res` as a ZIP.
+ * Sets no status/headers itself beyond the archive content type — the caller
+ * owns response headers (filename differs per surface). Resolves when the
+ * archive is finalised; rejects only on a pre-stream error the caller can still
+ * turn into a 500 (once piping starts, headers are sent and we can only tear
+ * the socket down).
+ */
+function streamCellarArchive(res, payload, imageFiles) {
+  return new Promise((resolve, reject) => {
+    const archive = archiver('zip', { zlib: { level: 6 } });
+    let settled = false;
+    archive.on('warning', (err) => {
+      if (err.code !== 'ENOENT') console.warn('[full-export] archive warning:', err.message);
+    });
+    archive.on('error', (err) => {
+      console.error('[full-export] archive error:', err.message);
+      if (settled) { res.destroy(err); return; }
+      settled = true;
+      reject(err);
+    });
+    archive.pipe(res);
+
+    archive.append(JSON.stringify(payload, null, 2), { name: 'data.json' });
+    archive.append(EXPORT_README, { name: 'README.md' });
+
+    // Append each on-disk file. safeUploadPath blocks path traversal; a missing
+    // file is skipped (the DB row can outlive a file that failed to write).
+    for (const file of imageFiles) {
+      let diskPath;
+      try {
+        diskPath = safeUploadPath(file.relPath);
+      } catch {
+        continue;
+      }
+      if (fs.existsSync(diskPath)) archive.file(diskPath, { name: file.archivePath });
+    }
+
+    archive.on('end', () => { if (!settled) { settled = true; resolve(); } });
+    archive.finalize().catch((err) => {
+      if (settled) return;
+      settled = true;
+      reject(err);
+    });
+  });
+}
+
 module.exports = {
   buildCellarDataExport,
   mapBottlesForExport,
@@ -485,4 +584,8 @@ module.exports = {
   urlToArchivePath,
   EXPORT_README,
   EXPORT_MAX,
+  IMAGE_EXPORT_COOLDOWN_MS,
+  claimImageExportAllowance,
+  refundImageExportAllowance,
+  streamCellarArchive,
 };
