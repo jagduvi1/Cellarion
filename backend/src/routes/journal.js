@@ -2,112 +2,19 @@ const express = require('express');
 const { requireAuth, requireNonDemo } = require('../middleware/auth');
 const JournalEntry = require('../models/JournalEntry');
 const Bottle = require('../models/Bottle');
-const User = require('../models/User');
 const WineDefinition = require('../models/WineDefinition');
 const { logAudit } = require('../services/audit');
-const { createNotification } = require('../services/notifications');
-const { stripHtml, escapeRegex } = require('../utils/sanitize');
+// Entry sanitisation / ref validation / create / delete live in
+// services/journalOps.js — ONE implementation shared with the MCP
+// capture_tasting_note tool, so the two surfaces cannot drift.
+const {
+  sanitizeEntry, validatePairingRefs, createEntry, deleteEntry, OCCASIONS,
+} = require('../services/journalOps');
+const { escapeRegex } = require('../utils/sanitize');
 const { isValidId } = require('../utils/validation');
-const { getCellarRole } = require('../utils/cellarAccess');
 
 const router = express.Router();
 router.use(requireAuth);
-const MAX_PAIRINGS = 20;
-const MAX_PEOPLE = 20;
-const MAX_PHOTOS = 10;
-const OCCASIONS = ['dinner', 'tasting', 'celebration', 'casual', 'gift', 'travel', 'other'];
-
-function sanitizeEntry(body) {
-  const {
-    date, title, occasion, people, pairings, mood, notes, photos, visibility
-  } = body;
-
-  const clean = {};
-
-  if (date) clean.date = new Date(date);
-  if (title != null) clean.title = stripHtml(String(title)).slice(0, 200);
-  if (occasion && OCCASIONS.includes(occasion)) clean.occasion = occasion;
-  if (mood != null) {
-    const m = parseInt(mood, 10);
-    if (Number.isInteger(m) && m >= 1 && m <= 5) clean.mood = m;
-    else {
-      // Reject instead of silently nulling — a PUT with mood: 7 used to
-      // erase the stored value without any indication.
-      const err = new Error('Mood must be a whole number between 1 and 5');
-      err.status = 400;
-      throw err;
-    }
-  }
-  if (notes != null) clean.notes = stripHtml(String(notes)).slice(0, 2000);
-  if (visibility && ['private', 'public'].includes(visibility)) clean.visibility = visibility;
-
-  if (Array.isArray(photos)) {
-    clean.photos = photos.slice(0, MAX_PHOTOS).filter(p => typeof p === 'string');
-  }
-
-  if (Array.isArray(people)) {
-    clean.people = people.slice(0, MAX_PEOPLE).map(p => ({
-      name: stripHtml(String(p.name || '')).slice(0, 100),
-      user: p.user && isValidId(p.user) ? p.user : null
-    })).filter(p => p.name.length > 0);
-  }
-
-  if (Array.isArray(pairings)) {
-    clean.pairings = pairings.slice(0, MAX_PAIRINGS).map(p => ({
-      dish: stripHtml(String(p.dish || '')).slice(0, 200),
-      bottle: p.bottle && isValidId(p.bottle) ? p.bottle : null,
-      wine: p.wine && isValidId(p.wine) ? p.wine : null,
-      wineName: stripHtml(String(p.wineName || '')).slice(0, 200),
-      notes: stripHtml(String(p.notes || '')).slice(0, 500)
-    }));
-  }
-
-  return clean;
-}
-
-/**
- * Ownership/existence validation for the references sanitizeEntry accepted by
- * shape alone (audit L-5). Mirrors sanitizeEntry's style: invalid references
- * are silently dropped (nulled), never a hard 400 — exactly like a malformed
- * ObjectId already is.
- *
- *  - pairings[].bottle must resolve to a bottle the author can access: their
- *    own bottle, or one in a cellar where they hold any role (getCellarRole,
- *    same check the bottles routes use). Otherwise a foreign bottle id would
- *    be populated back as {vintage, wine name/producer/type}.
- *  - pairings[].wine is a public WineDefinition ref → existence check only.
- */
-async function validatePairingRefs(clean, userId) {
-  if (!Array.isArray(clean.pairings) || clean.pairings.length === 0) return;
-
-  const bottleIds = [...new Set(clean.pairings.filter(p => p.bottle).map(p => String(p.bottle)))];
-  if (bottleIds.length) {
-    const bottles = await Bottle.find({ _id: { $in: bottleIds } })
-      .select('user cellar')
-      .populate('cellar', 'user members deletedAt')
-      .lean();
-    const accessible = new Set(
-      bottles
-        .filter(b =>
-          String(b.user) === String(userId) ||
-          (b.cellar && !b.cellar.deletedAt && getCellarRole(b.cellar, userId))
-        )
-        .map(b => String(b._id))
-    );
-    for (const p of clean.pairings) {
-      if (p.bottle && !accessible.has(String(p.bottle))) p.bottle = null;
-    }
-  }
-
-  const wineIds = [...new Set(clean.pairings.filter(p => p.wine).map(p => String(p.wine)))];
-  if (wineIds.length) {
-    const wines = await WineDefinition.find({ _id: { $in: wineIds } }).select('_id').lean();
-    const existing = new Set(wines.map(w => String(w._id)));
-    for (const p of clean.pairings) {
-      if (p.wine && !existing.has(String(p.wine))) p.wine = null;
-    }
-  }
-}
 
 /**
  * Read-time privacy gate for populated people[].user (audit L-5). A private
@@ -234,51 +141,15 @@ router.get('/', async (req, res) => {
 // notification spam (same class the follows route guards against).
 router.post('/', requireNonDemo, async (req, res) => {
   try {
-    const clean = sanitizeEntry(req.body);
+    const result = await createEntry(req.user.id, req.body, req);
+    if (result.error) return res.status(result.error.status).json({ error: result.error.message });
 
-    if (!clean.date || isNaN(clean.date.getTime())) {
-      return res.status(400).json({ error: 'Valid date is required' });
-    }
-
-    await validatePairingRefs(clean, req.user.id);
-
-    const entry = await JournalEntry.create({
-      user: req.user.id,
-      ...clean
-    });
-
-    const populated = await JournalEntry.findById(entry._id)
+    const populated = await JournalEntry.findById(result.entry._id)
       .populate(POPULATE_PAIRINGS)
       .lean();
 
-    // Notify tagged Cellarion users (if entry is public). req.user only
-    // carries JWT claims (id/roles/plan) — the name must come from the DB.
-    if (populated.visibility === 'public' && populated.people?.length > 0) {
-      const sender = await User.findById(req.user.id).select('username displayName').lean();
-      const senderName = sender?.displayName || sender?.username || 'Someone';
-      for (const person of populated.people) {
-        if (person.user && person.user._id?.toString() !== req.user.id) {
-          createNotification(
-            person.user._id,
-            'journal_mention',
-            'Journal Mention',
-            `${senderName} mentioned you in a journal entry: "${populated.title || 'Untitled'}"`,
-            // No link: journal entries are private to their owner (there is no
-            // route or endpoint to view another user's entry), so a per-entry
-            // deep link would 404. Keep the notification informational-only.
-            null,
-            undefined,
-            req.user.id // actor — lets GDPR erasure remove this on the mentioner's deletion
-          );
-        }
-      }
-    }
-
-    logAudit(req, 'journal.create', { type: 'journal', id: entry._id });
-
     res.status(201).json({ entry: redactPeople(populated, req.user.id) });
   } catch (err) {
-    if (err.status === 400) return res.status(400).json({ error: err.message });
     console.error('Create journal entry error:', err);
     res.status(500).json({ error: 'Failed to create journal entry' });
   }
@@ -316,10 +187,8 @@ router.delete('/:id', async (req, res) => {
   try {
     if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
 
-    const entry = await JournalEntry.findOneAndDelete({ _id: req.params.id, user: req.user.id });
-    if (!entry) return res.status(404).json({ error: 'Entry not found' });
-
-    logAudit(req, 'journal.delete', { type: 'journal', id: entry._id });
+    const result = await deleteEntry(req.user.id, req.params.id, req);
+    if (!result.deleted) return res.status(404).json({ error: 'Entry not found' });
 
     res.json({ success: true });
   } catch (err) {

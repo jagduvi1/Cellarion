@@ -44,9 +44,10 @@ const Bottle = require('../models/Bottle');
 const WineDefinition = require('../models/WineDefinition');
 const WineEmbedding = require('../models/WineEmbedding');
 const vectorStore = require('../services/vectorStore');
-const { allTools, allResources, resourcesForScopes } = require('./registry');
+const { allTools, allResources, allPrompts, resourcesForScopes } = require('./registry');
 const { budgetedResourceHandler, MAX_CALLS_PER_REQUEST } = require('./server');
 require('./tools');
+require('./prompts');
 
 const oid = (c) => c.repeat(24);
 const ME = oid('a');
@@ -240,12 +241,15 @@ describe('previously-uncovered handlers', () => {
     expect(body.data[1]).toMatchObject({ type: 'modular', rows: null, cols: null, modules: 2 });
   });
 
-  test('instructions drift guard: every tool name and resource URI is mentioned', () => {
+  test('instructions drift guard: every tool name, resource URI and prompt name is mentioned', () => {
     for (const t of allTools()) {
       expect(INSTRUCTIONS).toContain(t.name);
     }
     for (const r of allResources()) {
       expect(INSTRUCTIONS).toContain(r.uri || r.uriTemplate);
+    }
+    for (const p of allPrompts()) {
+      expect(INSTRUCTIONS).toContain(p.name);
     }
   });
 });

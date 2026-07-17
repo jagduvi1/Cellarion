@@ -21,6 +21,7 @@ jest.mock('./actionLedger', () => ({ logAction: jest.fn() }));
 jest.mock('./structuralUndo', () => ({ undoStructural: jest.fn() }));
 jest.mock('../models/WineVintageProfile', () => ({ findById: jest.fn() }));
 jest.mock('../models/WineVintagePrice', () => ({ deleteOne: jest.fn() }));
+jest.mock('../services/journalOps', () => ({ deleteEntry: jest.fn() }));
 
 const McpActionLog = require('../models/McpActionLog');
 const bottleOps = require('../services/bottleOps');
@@ -76,14 +77,80 @@ describe('revertLatest', () => {
 });
 
 describe('revertLedgerRow dispatch', () => {
-  test('structural actions delegate to undoStructural', async () => {
+  test('structural actions (incl. arrange) delegate to undoStructural', async () => {
     undoStructural.mockResolvedValue({ ok: true });
-    for (const action of ['cellar_create', 'rack_create', 'place', 'unplace', 'move']) {
+    for (const action of ['cellar_create', 'rack_create', 'place', 'unplace', 'move', 'arrange']) {
       undoStructural.mockClear();
       await revertLedgerRow({ _id: 'r', action }, ctx(), H);
       expect(undoStructural).toHaveBeenCalledTimes(1);
     }
     expect(resolveBottleAccess).not.toHaveBeenCalled();
+  });
+
+  test('tasting_note: deletes the entry via journalOps, restores the previous rating, claims atomically', async () => {
+    const { deleteEntry } = require('../services/journalOps');
+    deleteEntry.mockResolvedValue({ deleted: true });
+    const bottle = { _id: 'b1', save: jest.fn() };
+    resolveBottleAccess.mockResolvedValue({ bottle });
+    bottleOps.updateBottleFields.mockResolvedValue({ changes: {}, prev: {} });
+
+    const row = {
+      _id: 'r1', action: 'tasting_note', bottle: 'b1', cellar: 'c1',
+      detail: { journalId: 'j1' }, prev: { field: 'rating', rating: 4, ratingScale: '5' },
+    };
+    const res = await revertLedgerRow(row, ctx(), H);
+    expect(res.ok).toBe(true);
+    // Shared journalOps delete → the reversal is audited like a manual deletion.
+    expect(deleteEntry).toHaveBeenCalledWith('u1', 'j1', expect.anything(), { auditMeta: { via: 'undo' } });
+    expect(bottleOps.updateBottleFields).toHaveBeenCalledWith(bottle, { rating: 4, ratingScale: '5' }, expect.anything());
+    expect(McpActionLog.findOneAndUpdate).toHaveBeenCalledWith(
+      { _id: 'r1', reversed: false }, { $set: { reversed: true, idempotencyKey: null } });
+    expect(logAction.mock.calls[0][1]).toMatchObject({ viaUndo: true, action: 'tasting_note' });
+  });
+
+  test('tasting_note: consumed-rating snapshot restores directly on the bottle', async () => {
+    const { deleteEntry } = require('../services/journalOps');
+    deleteEntry.mockResolvedValue({ deleted: true });
+    const bottle = { _id: 'b2', consumedRating: 5, consumedRatingScale: '5', save: jest.fn() };
+    resolveBottleAccess.mockResolvedValue({ bottle });
+
+    const row = {
+      _id: 'r2', action: 'tasting_note', bottle: 'b2',
+      detail: { journalId: 'j2' }, prev: { field: 'consumedRating', consumedRating: null, consumedRatingScale: null },
+    };
+    const res = await revertLedgerRow(row, ctx(), H);
+    expect(res.ok).toBe(true);
+    expect(bottle.consumedRating).toBeUndefined(); // null snapshot → cleared
+    expect(bottle.save).toHaveBeenCalled();
+    expect(bottleOps.updateBottleFields).not.toHaveBeenCalled();
+  });
+
+  test('tasting_note: rating changed again since the note → entry removed but rating left as-is', async () => {
+    const { deleteEntry } = require('../services/journalOps');
+    deleteEntry.mockResolvedValue({ deleted: true });
+    // The tool set 4/5 (recorded in result); the user has since re-rated to 5/5.
+    const bottle = { _id: 'b4', rating: 5, ratingScale: '5', save: jest.fn() };
+    resolveBottleAccess.mockResolvedValue({ bottle });
+    const row = {
+      _id: 'r4', action: 'tasting_note', bottle: 'b4',
+      detail: { journalId: 'j4' }, prev: { field: 'rating', rating: 3, ratingScale: '5' },
+      result: { data: { rating_recorded: { field: 'rating', value: 4, scale: '5' } } },
+    };
+    const res = await revertLedgerRow(row, ctx(), H);
+    expect(res.ok).toBe(true);
+    expect(res.summary).toMatch(/rating left as-is/);
+    expect(bottleOps.updateBottleFields).not.toHaveBeenCalled(); // newer intent wins
+    expect(bottle.save).not.toHaveBeenCalled();
+  });
+
+  test('tasting_note: inaccessible bottle refuses before any deletion or claim', async () => {
+    const { deleteEntry } = require('../services/journalOps');
+    resolveBottleAccess.mockResolvedValue(null);
+    const res = await revertLedgerRow(
+      { _id: 'r3', action: 'tasting_note', bottle: 'gone', detail: { journalId: 'j3' } }, ctx(), H);
+    expect(res).toMatchObject({ ok: false, code: 'conflict' });
+    expect(deleteEntry).not.toHaveBeenCalled();
+    expect(McpActionLog.findOneAndUpdate).not.toHaveBeenCalled();
   });
 
   test('somm_maturity refused without somm/admin role — no mutation, no claim', async () => {

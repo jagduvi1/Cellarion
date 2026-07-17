@@ -92,9 +92,12 @@ async function placeBottleInRack(rack, position, bottleId, req) {
 
   // Clear the bottle from other racks in the cellar (this rack handled in
   // memory below — an external $pull would trip optimistic concurrency).
+  // $inc __v so a concurrent whole-slots writer on one of THOSE racks
+  // (auto_arrange apply/undo) VersionErrors instead of re-inserting the
+  // bottle it just lost — same reasoning as bottleOps.removeFromRacks.
   await Rack.updateMany(
     { _id: { $ne: rack._id }, cellar: rack.cellar, 'slots.bottle': bottleId },
-    { $pull: { slots: { bottle: bottleId } } }
+    { $pull: { slots: { bottle: bottleId } }, $inc: { __v: 1 } }
   );
 
   // The procedural one-per-slot / one-slot-per-bottle invariant.
@@ -184,6 +187,65 @@ async function moveBottleToCellar(bottle, sourceCellar, destCellar, req) {
   return { bottle, from: { cellarId: String(sourceCellar._id), cellarName: sourceCellar.name } };
 }
 
+/**
+ * Occupied slots of a (slots.bottle-populated) rack annotated with the same
+ * maturityStatus the rack views color by (routes/racks withMaturity) — the
+ * input shape utils/rackArrange.buildArrangePlan sorts on. Shared so an MCP
+ * auto_arrange and a future REST arrange endpoint classify identically.
+ */
+async function buildAnnotatedEntries(rack) {
+  const { classifyMaturity, buildProfileMap } = require('../utils/maturityUtils');
+  const bottles = (rack.slots || []).map((s) => s.bottle).filter(Boolean);
+  const profileMap = await buildProfileMap(bottles);
+  return (rack.slots || [])
+    .filter((s) => s.bottle)
+    .map((s) => {
+      const b = s.bottle.toObject ? s.bottle.toObject() : s.bottle;
+      b.maturityStatus = classifyMaturity(b, profileMap) || null;
+      return { position: s.position, bottle: b };
+    });
+}
+
+/**
+ * Apply a full slot assignment to an access-checked rack in ONE atomic save —
+ * no partial arrangements. `target` = [{ position, bottleId }]. Optimistic
+ * concurrency (Rack versionKey) turns a concurrent slot write into a clean
+ * conflict instead of a lost update. Audits rack.arrange with the given meta.
+ * Returns { rack } or { error: { status: 409|400, message, code: 'conflict' } }.
+ */
+async function applyArrangement(rack, target, req, meta = {}) {
+  // Re-validate geometry at WRITE time, not plan time: the rack may have been
+  // resized or had positions disabled since the plan was computed (a stored
+  // arrange preview is valid for 15 minutes) — every other placement surface
+  // refuses disabled/out-of-range positions, so this one must too.
+  const maxPos = getMaxPosition(rack);
+  const disabled = new Set(rack.disabledPositions || []);
+  const bad = target.find((t) => !Number.isInteger(t.position) || t.position < 1 || t.position > maxPos || disabled.has(t.position));
+  if (bad) {
+    return { error: { status: 409, code: 'conflict', message: `Position ${bad.position} is no longer usable (rack resized or slot disabled) — nothing was applied.` } };
+  }
+  // Slot-level rfidTags follow their bottle through the rewrite. No current
+  // writer sets them, but silently wiping a schema field on every arrange
+  // would be a trap for whichever feature starts using it.
+  const tagOf = new Map((rack.slots || []).filter((s) => s.rfidTag).map((s) => [String(s.bottle), s.rfidTag]));
+  rack.slots = target.map((t) => ({
+    position: t.position,
+    bottle: t.bottleId,
+    ...(tagOf.has(String(t.bottleId)) ? { rfidTag: tagOf.get(String(t.bottleId)) } : {}),
+  }));
+  try {
+    await rack.save();
+  } catch (err) {
+    if (err.name === 'VersionError') {
+      return { error: { status: 409, code: 'conflict', message: 'The rack was modified at the same moment — nothing was applied.' } };
+    }
+    throw err;
+  }
+  logAudit(req, 'rack.arrange', { type: 'rack', id: rack._id, cellarId: rack.cellar }, meta);
+  return { rack };
+}
+
 module.exports = {
   createCellar, createGridRack, placeBottleInRack, clearRackSlot, moveBottleToCellar,
+  buildAnnotatedEntries, applyArrangement,
 };

@@ -19,5 +19,11 @@ require('./bulk');
 require('./somm');
 require('./rack');
 require('./similar');
+require('./insights');
+require('./drinking');
+require('./journey');
+require('./semantic');
+require('./tasting');
+require('./arrange');
 
 module.exports = {};

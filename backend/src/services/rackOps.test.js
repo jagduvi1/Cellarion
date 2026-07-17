@@ -82,9 +82,12 @@ describe('placeBottleInRack', () => {
     const b1Slots = r.slots.filter((s) => String(s.bottle) === 'b1');
     expect(b1Slots).toEqual([{ position: 5, bottle: 'b1' }]);
     expect(r.slots.find((s) => s.position === 5 && s.bottle === 'bOccupant')).toBeUndefined();
+    // $inc __v: the cross-rack $pull must bump those racks' versions so a
+    // concurrent whole-slots save() on one of them (auto_arrange) conflicts
+    // cleanly instead of re-inserting the bottle it just lost.
     expect(Rack.updateMany).toHaveBeenCalledWith(
       { _id: { $ne: 'r1' }, cellar: 'c1', 'slots.bottle': 'b1' },
-      { $pull: { slots: { bottle: 'b1' } } }
+      { $pull: { slots: { bottle: 'b1' } }, $inc: { __v: 1 } }
     );
     expect(logAudit).toHaveBeenCalledWith(REQ, 'rack.slot_assign', expect.anything(), { position: 5 });
   });

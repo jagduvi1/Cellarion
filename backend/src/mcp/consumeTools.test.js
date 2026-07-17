@@ -285,7 +285,7 @@ describe('undo_last walk-backward + scope gating (e2e-caught regression)', () =>
     await tool('undo_last').handler({}, { ...CTX, scopes: ['consume', 'write'] });
     q = McpActionLog.findOne.mock.calls[0][0];
     expect(q.action.$in).toEqual(['consume', 'restore', 'add', 'update', 'bulk_add', 'somm_maturity', 'somm_price',
-      'cellar_create', 'rack_create', 'place', 'unplace', 'move']);
+      'cellar_create', 'rack_create', 'place', 'unplace', 'move', 'arrange', 'tasting_note']);
   });
 
   test('the reverse row is marked viaUndo and the undone row frees its idempotency key', async () => {

@@ -103,6 +103,40 @@ async function undoStructural(last, ctx, { ok, fail, logAction }) {
     return record({ summary: `Undid removal — bottle back in position ${pos}`, data: { undone: 'unplace_bottle', position: pos } });
   }
 
+  if (last.action === 'arrange') {
+    // Reverse = restore the pre-arrange slot assignment, but only while the
+    // rack still holds EXACTLY the applied arrangement — any placement or move
+    // since means restoring the snapshot would clobber newer intent.
+    const rack = await Rack.findOne({ _id: last.detail?.rackId, deletedAt: null });
+    if (!rack) return fail('conflict', 'That rack no longer exists; nothing was changed.');
+    const access = await resolveCellarAccess(ctx.user.id, rack.cellar, 'editor');
+    if (!access) return fail('conflict', 'You no longer have access to that rack; nothing was changed.');
+    const before = last.prev?.before;
+    const target = last.detail?.target;
+    if (!Array.isArray(before) || !Array.isArray(target)) {
+      return fail('conflict', 'That arrangement has no recorded previous layout; nothing was changed.');
+    }
+    const current = (rack.slots || [])
+      .filter((s) => s.bottle)
+      .map((s) => ({ position: s.position, bottleId: String(s.bottle) }))
+      .sort((a, b) => a.position - b.position);
+    const sortedTarget = [...target].sort((a, b) => a.position - b.position);
+    const matches = current.length === sortedTarget.length &&
+      current.every((x, i) => x.position === sortedTarget[i].position && x.bottleId === String(sortedTarget[i].bottleId));
+    if (!matches) {
+      return fail('conflict', 'The rack has changed since that arrangement; undo it manually. Nothing was changed.');
+    }
+    if (!(await claim(last))) return fail('conflict', 'That action is already being undone.');
+    // Same shared one-save apply the arrangement itself used (rackOps).
+    const { applyArrangement } = require('../services/rackOps');
+    const applied = await applyArrangement(rack, before, ctx.req, { via: 'undo', restored: before.length });
+    if (applied.error) return fail('conflict', `${applied.error.message} Nothing was restored.`);
+    return record({
+      summary: `Undid arrangement — rack "${rack.name}" restored to its previous layout`,
+      data: { undone: 'auto_arrange', rack_id: String(rack._id), bottles: before.length },
+    });
+  }
+
   if (last.action === 'move') {
     // Reverse = move the bottle back to its origin cellar (must still be owned
     // and the bottle still active). Arrives unplaced, same as any move.
