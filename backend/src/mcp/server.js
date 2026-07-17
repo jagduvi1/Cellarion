@@ -1,5 +1,5 @@
 const { toolsForScopes, resourcesForScopes, promptsForScopes } = require('./registry');
-const { INSTRUCTIONS } = require('./instructions');
+const { INSTRUCTIONS, PUBLIC_INSTRUCTIONS } = require('./instructions');
 const pkg = require('../../package.json');
 require('./tools');     // register all tools (side-effect)
 require('./resources'); // register all resources (side-effect)
@@ -80,9 +80,11 @@ function budgetedHandler(tool, ctx, state) {
 async function buildServer(ctx, opts = {}) {
   const { McpServer, ResourceTemplate } = await loadSdk();
   const server = new McpServer(
-    { name: 'cellarion', version: pkg.version },
+    // The anonymous surface announces itself distinctly — different name and
+    // instructions, so a client connected to both never confuses the two.
+    { name: ctx.anonymous ? 'cellarion-public' : 'cellarion', version: pkg.version },
     {
-      instructions: INSTRUCTIONS,
+      instructions: ctx.anonymous ? PUBLIC_INSTRUCTIONS : INSTRUCTIONS,
       ...(opts.session ? { capabilities: { resources: { subscribe: true, listChanged: false } } } : {}),
     }
   );

@@ -134,6 +134,18 @@ const CASES = [
     expect: { tool: 'mark_notification_read' },
     args: (a) => a.all === true || a.notification_id !== undefined,
   },
+
+  // ── Phase 6: public registry/guides tools (also on the personal surface) ──
+  {
+    id: 'when-to-drink-vintage',
+    prompt: 'When should a 2016 Barolo Monfortino be drunk? Is it ready now?',
+    expect: { anyOf: ['drink_window_for', 'search_registry'] }, // may resolve the wine id first
+  },
+  {
+    id: 'storage-guide',
+    prompt: 'Do you have a guide on how to store wine properly long-term?',
+    expect: { tool: 'list_guides' },
+  },
 ];
 
 module.exports = { CASES };

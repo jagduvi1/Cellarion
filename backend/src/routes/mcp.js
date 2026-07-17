@@ -1,6 +1,8 @@
 const express = require('express');
+const rateLimit = require('express-rate-limit');
 const router = express.Router();
 const { requireAuth, requireNonDemo } = require('../middleware/auth');
+const { rateLimitKey } = require('../utils/clientIp');
 const { handleMcpRequest, initStatefulSession } = require('../mcp/server');
 const { getSession } = require('../mcp/sessions');
 const mongoose = require('mongoose');
@@ -115,6 +117,43 @@ router.delete('/', requireAuth, requireNonDemo, async (req, res, next) => {
   } catch (err) {
     next(err);
   }
+});
+
+// ── Anonymous public MCP (plan Phase 6, §2.1) ───────────────────────────────
+// POST /api/mcp/public — NO auth: the shared wine registry + guides as an MCP
+// any AI can call (growth/AEO). The anonymous ctx carries scopes [] and
+// user null, so the registry's structural filter exposes ONLY 'public'-scoped
+// tools/resources (registry lookups, drink windows, guides, about) — personal
+// tools are not hidden, they are UNREGISTERED. Zero Cellarion AI spend by
+// design: every public tool is a DB/Meili/Qdrant read of public-site content.
+// Stateless only (no sessions, no SSE — nothing to subscribe to without a
+// user), behind a strict dedicated per-IP limiter on top of the global
+// apiLimiter. requireNonDemo is irrelevant here (no auth at all).
+const publicMcpLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 60, // strict by design (plan decision #4); each request ≤20 tool calls
+  keyGenerator: (req) => rateLimitKey(req),
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: (req, res) => res.status(429).json({
+    error: 'Public MCP rate limit reached — try again later, or connect a free Cellarion account for the full personal surface.',
+  }),
+});
+
+router.post('/public', publicMcpLimiter, async (req, res, next) => {
+  try {
+    await handleMcpRequest(req, res, { user: null, scopes: [], anonymous: true, req });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// The public surface is stateless: no session streams to open or terminate.
+router.get('/public', (req, res) => {
+  res.status(405).json({ error: 'The public MCP endpoint is POST-only (stateless).' });
+});
+router.delete('/public', (req, res) => {
+  res.status(405).json({ error: 'The public MCP endpoint is stateless — no session to terminate.' });
 });
 
 // ── Recent AI activity timeline (Phase 2d) ──────────────────────────────────

@@ -158,9 +158,9 @@ describe('find_similar_wines', () => {
     expect(res.content[0].text).not.toContain('INTERNAL'); // registry internals never serialize
   });
 
-  test('is read-scoped + readOnly, and limit is clamped to 10', async () => {
+  test('is PUBLIC-scoped ($0 stored-vector lookup — Phase 6 anonymous surface) + readOnly, and limit is clamped to 10', async () => {
     const t = tool('find_similar_wines');
-    expect(t.scope).toBe('read');
+    expect(t.scope).toBe('public');
     expect(t.annotations.readOnlyHint).toBe(true);
     WineEmbedding.findOne.mockReturnValue(chain({ qdrantPointId: 'uuid-1' }));
     vectorStore.getPoints.mockResolvedValue([{ id: 'uuid-1', vector: [0.1] }]);
@@ -250,6 +250,13 @@ describe('previously-uncovered handlers', () => {
     }
     for (const p of allPrompts()) {
       expect(INSTRUCTIONS).toContain(p.name);
+    }
+  });
+
+  test('public-instructions drift guard: every anonymous-surface tool is mentioned there too', () => {
+    const { PUBLIC_INSTRUCTIONS } = require('./instructions');
+    for (const t of allTools().filter((x) => x.scope === 'public')) {
+      expect(PUBLIC_INSTRUCTIONS).toContain(t.name);
     }
   });
 });

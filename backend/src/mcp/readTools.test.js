@@ -68,16 +68,24 @@ beforeEach(() => {
 });
 
 describe('registration invariants', () => {
-  test('every Phase-1 tool is read-scoped and readOnly-annotated', () => {
+  test('every personal-data Phase-1 tool is read-scoped and readOnly-annotated', () => {
     const expected = [
       'list_cellars', 'get_cellar', 'search_bottles', 'get_bottle', 'list_history',
-      'list_racks', 'get_rack', 'cellar_stats', 'search_registry', 'get_wine',
+      'list_racks', 'get_rack', 'cellar_stats',
       'list_wishlist', 'list_journal',
     ];
     for (const name of expected) {
       const t = tool(name);
       expect(t).toBeDefined();
       expect(t.scope).toBe('read');
+      expect(t.annotations.readOnlyHint).toBe(true);
+    }
+  });
+
+  test('registry tools are PUBLIC-scoped (shared public-site data — Phase 6 anonymous surface)', () => {
+    for (const name of ['search_registry', 'get_wine']) {
+      const t = tool(name);
+      expect(t.scope).toBe('public');
       expect(t.annotations.readOnlyHint).toBe(true);
     }
   });
