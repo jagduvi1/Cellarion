@@ -85,6 +85,20 @@ async function resolvePublicAddress(hostname) {
 
 function fetchOnce(urlObj, pinned) {
   return new Promise((resolve, reject) => {
+    // WALL-CLOCK deadline for the whole request (connect + headers + body).
+    // `timeout: TIMEOUT_MS` below is only a socket-INACTIVITY timer: an origin
+    // dribbling one byte per <10s under MAX_BYTES would evade it forever
+    // (slowloris). This absolute timer bounds the total, independent of
+    // activity. Cleared on settle so it never fires post-resolution.
+    let settled = false;
+    const finish = (fn) => (arg) => { if (settled) return; settled = true; clearTimeout(hardTimer); fn(arg); };
+    const done = finish(resolve);
+    const failed = finish(reject);
+    const hardTimer = setTimeout(() => {
+      req.destroy(new Error('image download exceeded the time limit'));
+    }, TIMEOUT_MS);
+    hardTimer.unref?.();
+
     const req = https.request(
       {
         protocol: urlObj.protocol,
@@ -101,21 +115,21 @@ function fetchOnce(urlObj, pinned) {
         const status = res.statusCode || 0;
         if ([301, 302, 303, 307, 308].includes(status)) {
           res.resume();
-          return resolve({ redirect: res.headers.location || null });
+          return done({ redirect: res.headers.location || null });
         }
         if (status !== 200) {
           res.resume();
-          return reject(new Error(`image URL answered HTTP ${status}`));
+          return failed(new Error(`image URL answered HTTP ${status}`));
         }
         const ct = String(res.headers['content-type'] || '').toLowerCase();
         if (ct && !ct.startsWith('image/')) {
           res.destroy();
-          return reject(new Error(`URL is not an image (content-type ${ct.split(';')[0]})`));
+          return failed(new Error(`URL is not an image (content-type ${ct.split(';')[0]})`));
         }
         const declared = parseInt(res.headers['content-length'], 10);
         if (Number.isFinite(declared) && declared > MAX_BYTES) {
           res.destroy();
-          return reject(new Error('image is larger than the 10 MB limit'));
+          return failed(new Error('image is larger than the 10 MB limit'));
         }
         const chunks = [];
         let size = 0;
@@ -123,16 +137,18 @@ function fetchOnce(urlObj, pinned) {
           size += c.length;
           if (size > MAX_BYTES) {
             res.destroy();
-            return reject(new Error('image is larger than the 10 MB limit'));
+            return failed(new Error('image is larger than the 10 MB limit'));
           }
           chunks.push(c);
         });
-        res.on('end', () => resolve({ buffer: Buffer.concat(chunks), contentType: ct || null }));
-        res.on('error', (e) => reject(new Error(`download failed: ${e.message}`)));
+        res.on('end', () => done({ buffer: Buffer.concat(chunks), contentType: ct || null }));
+        res.on('error', (e) => failed(new Error(`download failed: ${e.message}`)));
       }
     );
     req.on('timeout', () => { req.destroy(new Error('image download timed out')); });
-    req.on('error', (e) => reject(new Error(`download failed: ${e.message}`)));
+    // Routes both a real transport error AND the hard-deadline req.destroy()
+    // through the single-settle guard (its message is preserved).
+    req.on('error', (e) => failed(new Error(`download failed: ${e.message}`)));
     req.end();
   });
 }
