@@ -27,5 +27,6 @@ require('./tasting');
 require('./arrange');
 require('./notify');
 require('./publicContent');
+require('./images');
 
 module.exports = {};

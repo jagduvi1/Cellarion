@@ -22,6 +22,8 @@ jest.mock('./structuralUndo', () => ({ undoStructural: jest.fn() }));
 jest.mock('../models/WineVintageProfile', () => ({ findById: jest.fn() }));
 jest.mock('../models/WineVintagePrice', () => ({ deleteOne: jest.fn() }));
 jest.mock('../services/journalOps', () => ({ deleteEntry: jest.fn() }));
+jest.mock('../models/BottleImage', () => ({ findOne: jest.fn(), deleteOne: jest.fn() }));
+jest.mock('../services/imageProcessor', () => ({ unlinkImageFiles: jest.fn() }));
 
 const McpActionLog = require('../models/McpActionLog');
 const bottleOps = require('../services/bottleOps');
@@ -151,6 +153,32 @@ describe('revertLedgerRow dispatch', () => {
     expect(res).toMatchObject({ ok: false, code: 'conflict' });
     expect(deleteEntry).not.toHaveBeenCalled();
     expect(McpActionLog.findOneAndUpdate).not.toHaveBeenCalled();
+  });
+
+  test('attach_image: deletes the caller\'s own un-assigned image + its files, claims atomically', async () => {
+    const BottleImage = require('../models/BottleImage');
+    const { unlinkImageFiles } = require('../services/imageProcessor');
+    resolveBottleAccess.mockResolvedValue({ bottle: { _id: 'b7' } });
+    BottleImage.findOne.mockResolvedValue({ _id: 'img7' });
+    BottleImage.deleteOne.mockResolvedValue({ deletedCount: 1 });
+    const row = { _id: 'r7', action: 'attach_image', bottle: 'b7', cellar: 'c1', detail: { imageId: 'img7' } };
+    const res = await revertLedgerRow(row, ctx(), H);
+    expect(res.ok).toBe(true);
+    // Scoped to the caller's own, NOT-registry-assigned image (can't delete a shared wine photo).
+    expect(BottleImage.findOne).toHaveBeenCalledWith({ _id: 'img7', uploadedBy: 'u1', assignedToWine: false });
+    expect(unlinkImageFiles).toHaveBeenCalled();
+    expect(BottleImage.deleteOne).toHaveBeenCalledWith({ _id: 'img7' });
+    expect(McpActionLog.findOneAndUpdate).toHaveBeenCalledWith({ _id: 'r7', reversed: false }, { $set: { reversed: true, idempotencyKey: null } });
+    expect(res.data.image_removed).toBe(true);
+  });
+
+  test('attach_image: an already-gone image still marks the row undone (image_removed:false)', async () => {
+    const BottleImage = require('../models/BottleImage');
+    resolveBottleAccess.mockResolvedValue({ bottle: { _id: 'b8' } });
+    BottleImage.findOne.mockResolvedValue(null); // deleted in the app since
+    const res = await revertLedgerRow({ _id: 'r8', action: 'attach_image', bottle: 'b8', detail: { imageId: 'gone' } }, ctx(), H);
+    expect(res.ok).toBe(true);
+    expect(res.data.image_removed).toBe(false);
   });
 
   test('somm_maturity refused without somm/admin role — no mutation, no claim', async () => {

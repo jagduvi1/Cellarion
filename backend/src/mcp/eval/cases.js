@@ -146,6 +146,12 @@ const CASES = [
     prompt: 'Do you have a guide on how to store wine properly long-term?',
     expect: { tool: 'list_guides' },
   },
+  {
+    id: 'attach-photo',
+    prompt: 'Here is the label photo for that Barolo — https://example.com/barolo-label.jpg — put it on the bottle.',
+    expect: { anyOf: ['attach_bottle_image', 'search_bottles'] }, // may resolve the bottle id first
+    args: (a) => a.image_url === undefined || /barolo-label/.test(a.image_url),
+  },
 ];
 
 module.exports = { CASES };

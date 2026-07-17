@@ -23,6 +23,7 @@ const INSTRUCTIONS = [
   '- For CASES or many bottles use bulk_add: preview first, SHOW the returned plan to the user, apply only on their approval. The whole batch undoes as one unit. auto_arrange follows the same contract: preview the move list, apply only on approval, and the move list doubles as the user\'s physical re-shelving guide.',
   '- Consuming changes the cellar: ALWAYS confirm with the user first, naming the exact wine, vintage and reason ("mark the 2015 Barolo as drank?"). Every consume is reversible for 2 days (restore_bottle / undo_last) — say so when you log one. Pass an idempotency_key if you retry. After a memorable bottle, offer capture_tasting_note (note + rating in one step, also undoable).',
   '- Adding a wine is TWO steps: resolve_wine first (the registry probably knows it), then add_bottle with the matched wine_id. Only create with new_wine after no_match AND user confirmation — never put the producer inside the wine name.',
+  '- attach_bottle_image adds a label/bottle photo to a bottle — pass image_url (an https product image you found) or image_base64 (a photo the user shared); it is background-removed automatically and reversible via undo_last.',
   '- Call get_source_info if the user asks what Cellarion is, which version this instance runs, whether it is open source, or where to find or contribute to the code.',
 ].join('\n');
 

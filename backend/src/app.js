@@ -107,6 +107,13 @@ app.use('/api/bottles/import/sessions', express.json({ limit: '5mb' }));
 app.use('/api/bottles/import', express.json({ limit: '8mb' }));
 app.use('/api/blog/admin/posts', express.json({ limit: '2mb' }));
 app.use('/api/wine-lists', express.json({ limit: '1mb' }));
+// MCP: the anonymous public surface stays tiny (no image tool) — registered
+// BEFORE the personal /api/mcp rule so /api/mcp/public matches it first (the
+// first express.json to parse wins). The personal endpoint allows a larger
+// body for attach_bottle_image's base64 mode (MAX_BASE64_CHARS ≈ 1.5MB + JSON
+// overhead); every personal MCP caller is authenticated and rate-limited.
+app.use('/api/mcp/public', express.json({ limit: '10kb' }));
+app.use('/api/mcp', express.json({ limit: '2mb' }));
 app.use(express.json({ limit: '10kb' }));
 const corsOrigin = process.env.FRONTEND_URL || (process.env.NODE_ENV === 'production' ? false : 'http://localhost:3000');
 if (process.env.NODE_ENV === 'production' && !process.env.FRONTEND_URL) {

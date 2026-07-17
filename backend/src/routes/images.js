@@ -10,8 +10,9 @@ const Bottle = require('../models/Bottle');
 const Cellar = require('../models/Cellar');
 const { rateLimitKey } = require('../utils/clientIp');
 const { getCellarRole } = require('../utils/cellarAccess');
-const { processImage, hashImageBytes } = require('../services/imageProcessor');
-const { stripImageMetadata, sanitizeImageBuffer } = require('../services/imageSanitizer');
+const { processImage } = require('../services/imageProcessor');
+const { sanitizeImageBuffer } = require('../services/imageSanitizer');
+const { ingestBottleImage } = require('../services/imageOps');
 const { stripHtml } = require('../utils/sanitize');
 const { isValidId } = require('../utils/validation');
 const rateLimitsConfig = require('../config/rateLimits');
@@ -64,94 +65,11 @@ const imageUploadLimiter = rateLimit({
   }
 });
 
-const MAX_IMAGE_DIMENSION = 8000; // max width or height in pixels
-
-// Validate image file by checking magic bytes (first 12 bytes)
-function validateImageMagicBytes(filePath) {
-  const buf = Buffer.alloc(12);
-  const fd = fs.openSync(filePath, 'r');
-  try {
-    fs.readSync(fd, buf, 0, 12, 0);
-  } finally {
-    fs.closeSync(fd);
-  }
-
-  // JPEG: FF D8 FF
-  if (buf[0] === 0xFF && buf[1] === 0xD8 && buf[2] === 0xFF) return true;
-  // PNG: 89 50 4E 47
-  if (buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4E && buf[3] === 0x47) return true;
-  // WebP: RIFF....WEBP
-  if (buf[0] === 0x52 && buf[1] === 0x49 && buf[2] === 0x46 && buf[3] === 0x46 &&
-      buf[8] === 0x57 && buf[9] === 0x45 && buf[10] === 0x42 && buf[11] === 0x50) return true;
-
-  return false;
-}
-
-/**
- * Read image dimensions from file headers without decoding the full image.
- * Returns { width, height } or null if dimensions cannot be determined.
- */
-function getImageDimensions(filePath) {
-  try {
-    // Ensure filePath is within the expected upload directory
-    const resolved = path.resolve(filePath);
-    const originalsPrefix = path.resolve(ORIGINALS_DIR) + path.sep;
-    if (!resolved.startsWith(originalsPrefix)) return null;
-
-    const fd = fs.openSync(filePath, 'r');
-    try {
-      const header = Buffer.alloc(30);
-      fs.readSync(fd, header, 0, 30, 0);
-
-      // PNG: width at bytes 16-19, height at bytes 20-23 (big-endian in IHDR)
-      if (header[0] === 0x89 && header[1] === 0x50) {
-        return { width: header.readUInt32BE(16), height: header.readUInt32BE(20) };
-      }
-
-      // WebP: VP8 width/height at fixed offsets in RIFF container
-      if (header[0] === 0x52 && header[1] === 0x49 && header[8] === 0x57) {
-        // VP8 lossy
-        if (header[12] === 0x56 && header[13] === 0x50 && header[14] === 0x38 && header[15] === 0x20) {
-          const vp8 = Buffer.alloc(10);
-          fs.readSync(fd, vp8, 0, 10, 20);
-          // Frame tag at offset 3, then width/height as little-endian 16-bit
-          return { width: vp8.readUInt16LE(6) & 0x3FFF, height: vp8.readUInt16LE(8) & 0x3FFF };
-        }
-        // VP8L lossless
-        if (header[12] === 0x56 && header[13] === 0x50 && header[14] === 0x38 && header[15] === 0x4C) {
-          const vp8l = Buffer.alloc(5);
-          fs.readSync(fd, vp8l, 0, 5, 21);
-          const bits = vp8l.readUInt32LE(0);
-          return { width: (bits & 0x3FFF) + 1, height: ((bits >> 14) & 0x3FFF) + 1 };
-        }
-        return null;
-      }
-
-      // JPEG: scan for SOF0/SOF2 markers to find dimensions
-      if (header[0] === 0xFF && header[1] === 0xD8) {
-        const buf = Buffer.alloc(65536);
-        const bytesRead = fs.readSync(fd, buf, 0, buf.length, 0);
-        let pos = 2;
-        while (pos < bytesRead - 8) {
-          if (buf[pos] !== 0xFF) { pos++; continue; }
-          const marker = buf[pos + 1];
-          // SOF0 (0xC0) or SOF2 (0xC2) — baseline or progressive
-          if (marker === 0xC0 || marker === 0xC2) {
-            return { width: buf.readUInt16BE(pos + 7), height: buf.readUInt16BE(pos + 5) };
-          }
-          // Skip marker segment
-          const segLen = buf.readUInt16BE(pos + 2);
-          pos += 2 + segLen;
-        }
-      }
-    } finally {
-      fs.closeSync(fd);
-    }
-  } catch {
-    // If we can't read dimensions, let the upload proceed (fail open for dimension check)
-  }
-  return null;
-}
+// Header-level magic-byte + dimension pre-checks used to live here. They are
+// gone: the /upload route now hands the bytes to services/imageOps, whose
+// sanitizeImageBuffer decodes-validates-and-strips in one fail-CLOSED step
+// (the old dimension check failed OPEN on unreadable headers). The per-request
+// MAX_IMAGES_PER_BOTTLE cap still lives here for the link-to-bottle route.
 
 const router = express.Router();
 
@@ -173,34 +91,30 @@ function handleImageUpload(req, res, next) {
 // requireNonDemo: image upload writes a 10 MB original to disk and spawns a
 // rembg background-removal job (memory-heavy, shared with real users' label
 // scans). The demo is JSON-only / zero-compute by design, so uploads are off.
+//
+// Validation/sanitisation/persistence live in services/imageOps.js — ONE
+// implementation shared with the MCP attach_bottle_image tool, so the two
+// surfaces cannot drift. This route keeps multer (streaming disk upload) and
+// the authorization checks; the shared pipeline takes the bytes from there.
+// Note: sanitizeImageBuffer enforces the pixel cap FAIL-CLOSED (the previous
+// file-header dimension check failed open on unreadable headers).
 router.post('/upload', requireAuth, requireNonDemo, imageUploadLimiter, handleImageUpload, async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ error: 'No image file provided' });
     }
 
-    // Validate magic bytes to confirm the file is actually an image
-    if (!validateImageMagicBytes(req.file.path)) {
-      safeUnlink(req.file.path);
-      return res.status(400).json({ error: 'File content does not match a supported image format (JPEG, PNG, or WebP)' });
-    }
-
-    // Validate image dimensions to prevent pixel flood DoS
-    const dims = getImageDimensions(req.file.path);
-    if (dims && (dims.width > MAX_IMAGE_DIMENSION || dims.height > MAX_IMAGE_DIMENSION)) {
-      safeUnlink(req.file.path);
-      return res.status(400).json({ error: `Image dimensions too large (max ${MAX_IMAGE_DIMENSION}x${MAX_IMAGE_DIMENSION} pixels)` });
-    }
-
     const { bottleId, wineDefinitionId, credit } = req.body;
 
-    // Verify bottle ownership and image count if bottleId is provided
+    // Verify bottle ownership if bottleId is provided (access is the route's
+    // job; the per-bottle image cap lives in the shared pipeline).
+    let bottle = null;
     if (bottleId) {
       if (!mongoose.Types.ObjectId.isValid(bottleId)) {
         safeUnlink(req.file.path);
         return res.status(400).json({ error: 'Invalid bottleId' });
       }
-      const bottle = await Bottle.findById(bottleId);
+      bottle = await Bottle.findById(bottleId);
       if (!bottle) {
         safeUnlink(req.file.path);
         return res.status(404).json({ error: 'Bottle not found' });
@@ -210,11 +124,6 @@ router.post('/upload', requireAuth, requireNonDemo, imageUploadLimiter, handleIm
       if (!cellarRole || cellarRole === 'viewer') {
         safeUnlink(req.file.path);
         return res.status(403).json({ error: 'Not authorized to upload images for this bottle' });
-      }
-      const imageCount = await BottleImage.countDocuments({ bottle: bottleId });
-      if (imageCount >= MAX_IMAGES_PER_BOTTLE) {
-        safeUnlink(req.file.path);
-        return res.status(400).json({ error: `Maximum of ${MAX_IMAGES_PER_BOTTLE} images per bottle reached` });
       }
     }
 
@@ -229,53 +138,26 @@ router.post('/upload', requireAuth, requireNonDemo, imageUploadLimiter, handleIm
       return res.status(400).json({ error: 'Invalid wine definition ID' });
     }
 
-    // Re-encode in place to strip EXIF/GPS and other metadata before the
-    // file becomes reachable under /api/uploads (phone photos embed the
-    // owner's location). Decode failure also catches files that slipped
-    // past the header checks.
+    // Hand the bytes to the shared pipeline and drop the multer temp — the
+    // pipeline persists a sanitised re-encode under its own random name.
+    let buffer;
     try {
-      await stripImageMetadata(req.file.path);
-    } catch (err) {
-      console.error('Image sanitization failed:', err.message);
+      buffer = fs.readFileSync(req.file.path);
+    } finally {
       safeUnlink(req.file.path);
-      return res.status(400).json({ error: 'Image could not be processed — the file may be corrupt or too large' });
+    }
+    const result = await ingestBottleImage({
+      buffer,
+      userId: req.user.id,
+      bottle,
+      wineDefinitionId: wineDefinitionId ? String(wineDefinitionId) : null,
+      credit: sanitizedCredit,
+    }, req);
+    if (result.error) {
+      return res.status(result.error.status).json({ error: result.error.message });
     }
 
-    // Content hash of the stored bytes, so a later cellar export re-imported by
-    // this user dedups against the image they already have instead of writing a
-    // copy (see services/cellarImport.js). Stamped from the original here; once
-    // background removal finishes, processImage refreshes it from the cropped
-    // bytes (the version that actually gets exported). Best-effort — a hash
-    // failure must never block the upload.
-    let contentHash = null;
-    try {
-      // Re-derive the path from the fixed uploads dir + basename so it's provably
-      // confined there (multer already names the file with a random UUID; this also
-      // satisfies static path-injection analysis).
-      const storedPath = path.join(ORIGINALS_DIR, path.basename(req.file.path));
-      contentHash = hashImageBytes(fs.readFileSync(storedPath));
-    } catch (err) {
-      console.warn('Image content-hash failed (non-fatal):', err.message);
-    }
-
-    const image = new BottleImage({
-      bottle: bottleId || null,
-      wineDefinition: wineDefinitionId ? String(wineDefinitionId) : null,
-      uploadedBy: req.user.id,
-      originalUrl: `/api/uploads/originals/${req.file.filename}`,
-      status: 'uploaded',
-      credit: sanitizedCredit || null,
-      contentHash
-    });
-
-    await image.save();
-
-    // Fire-and-forget background removal
-    processImage(image._id).catch(err =>
-      console.error('Background processing error:', err.message)
-    );
-
-    res.status(201).json({ image });
+    res.status(201).json({ image: result.image });
   } catch (error) {
     console.error('Image upload error:', error);
     res.status(500).json({ error: 'Failed to upload image' });

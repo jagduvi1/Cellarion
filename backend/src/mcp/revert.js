@@ -16,7 +16,7 @@ const { resolveBottleAccess } = require('./toolUtil');
 // delete-a-bottle power through undo).
 const CONSUME_REVERSIBLE = ['consume', 'restore'];
 const WRITE_REVERSIBLE = ['add', 'update', 'bulk_add', 'somm_maturity', 'somm_price',
-  'cellar_create', 'rack_create', 'place', 'unplace', 'move', 'arrange', 'tasting_note'];
+  'cellar_create', 'rack_create', 'place', 'unplace', 'move', 'arrange', 'tasting_note', 'attach_image'];
 
 function reversibleActionsFor(scopes) {
   return (scopes || []).includes('write') ? [...CONSUME_REVERSIBLE, ...WRITE_REVERSIBLE] : CONSUME_REVERSIBLE;
@@ -35,6 +35,32 @@ async function revertLedgerRow(row, ctx, { ok, fail }) {
   if (['cellar_create', 'rack_create', 'place', 'unplace', 'move', 'arrange'].includes(row.action)) {
     const { undoStructural } = require('./structuralUndo');
     return undoStructural(row, ctx, { ok, fail, logAction });
+  }
+
+  // Attach image — delete the BottleImage row (and its files) the tool created.
+  // Access re-checked; only images NOT assigned to a shared registry wine are
+  // removable (an attach never assigns, so this always holds for our own row).
+  if (row.action === 'attach_image') {
+    const BottleImage = require('../models/BottleImage');
+    const { unlinkImageFiles } = require('../services/imageProcessor');
+    const access = await resolveBottleAccess(ctx.user.id, row.bottle, 'editor');
+    if (!access) return fail('conflict', 'The bottle from that photo is no longer accessible; nothing was changed.');
+    const claimed = await McpActionLog.findOneAndUpdate({ _id: row._id, reversed: false }, { $set: { reversed: true, idempotencyKey: null } });
+    if (!claimed) return fail('conflict', 'That action is already being undone by another request.');
+
+    const image = await BottleImage.findOne({ _id: row.detail?.imageId, uploadedBy: ctx.user.id, assignedToWine: false });
+    let removed = false;
+    if (image) {
+      try { await unlinkImageFiles(image); } catch { /* files may be gone; row removal is what matters */ }
+      await BottleImage.deleteOne({ _id: image._id });
+      removed = true;
+    }
+    const envelope = {
+      summary: `Undid photo attach${removed ? ' — image removed' : ' — image was already gone'}`,
+      data: { undone: 'attach_bottle_image', image_removed: removed },
+    };
+    await logAction(ctx, { tool: 'undo_last', action: 'attach_image', viaUndo: true, bottle: row.bottle, cellar: row.cellar, detail: { undid: String(row._id) }, result: envelope });
+    return ok(envelope.summary, envelope.data);
   }
 
   // Tasting note — remove the journal entry (via the shared journalOps delete,
