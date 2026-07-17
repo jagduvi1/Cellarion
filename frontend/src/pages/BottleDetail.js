@@ -21,6 +21,7 @@ import ConsumedDetails from '../components/bottle/ConsumedDetails';
 import EditForm from '../components/bottle/EditForm';
 import ViewDetails from '../components/bottle/ViewDetails';
 import BottleJourney from '../components/BottleJourney';
+import DialogBox from '../components/DialogBox';
 import JournalPrompt, { journalPromptOptedOut } from '../components/JournalPrompt';
 import './BottleDetail.css';
 
@@ -729,7 +730,12 @@ function BottleDetail() {
 
       {mistakeOpen && (
         <div className="modal-overlay" onClick={() => !mistakeBusy && setMistakeOpen(false)}>
-          <div className="modal-box" onClick={e => e.stopPropagation()}>
+          <DialogBox
+            className="modal-box"
+            onClick={e => e.stopPropagation()}
+            onClose={() => !mistakeBusy && setMistakeOpen(false)}
+            label={t('bottleDetail.mistakeTitle', 'Remove as a mistake?')}
+          >
             <h2>{t('bottleDetail.mistakeTitle', 'Remove as a mistake?')}</h2>
             <p>{t('bottleDetail.mistakeBody', 'This will permanently remove the bottle as if it had never been added. It will not appear in your stats, history, or search. This cannot be undone.')}</p>
             <div className="modal-actions">
@@ -752,7 +758,7 @@ function BottleDetail() {
                   : t('bottleDetail.mistakeConfirm', 'Yes, remove it')}
               </button>
             </div>
-          </div>
+          </DialogBox>
         </div>
       )}
 
@@ -811,7 +817,12 @@ function BottleDetail() {
 
         {openPickerOpen && (
           <div className="modal-overlay" onClick={() => !openingBusy && setOpenPickerOpen(false)}>
-            <div className="modal-box" onClick={e => e.stopPropagation()}>
+            <DialogBox
+              className="modal-box"
+              onClick={e => e.stopPropagation()}
+              onClose={() => !openingBusy && setOpenPickerOpen(false)}
+              label={t('openBottle.pickerTitle', 'Open this bottle')}
+            >
               <h2>{t('openBottle.pickerTitle', 'Open this bottle')}</h2>
               <p>{t('openBottle.pickerText', 'How will you preserve it? This sets the drink-by window — the bottle stays in your cellar until you finish it.')}</p>
               <div className="bd-open-methods">
@@ -839,7 +850,7 @@ function BottleDetail() {
                   {openingBusy ? t('common.saving', 'Saving...') : t('openBottle.confirmBtn', 'Open bottle')}
                 </button>
               </div>
-            </div>
+            </DialogBox>
           </div>
         )}
       </Suspense>

@@ -15,6 +15,7 @@ import JournalPrompt, { journalPromptOptedOut } from '../components/JournalPromp
 import { LENSES, getLensStyle, getLensLegend, bottleMatchesSearch } from '../utils/rackLens';
 import CellarNav from '../components/CellarNav';
 import CellarPageHeader from '../components/CellarPageHeader';
+import DialogBox from '../components/DialogBox';
 import './CellarRoom.css';
 
 const DEFAULT_DIMENSIONS = { width: 10, depth: 10, height: 3 };
@@ -1398,7 +1399,12 @@ export default function CellarRoom() {
           {/* Consume modal */}
           {consumeModal && (
             <div className="room-consume-overlay" onClick={() => setConsumeModal(null)}>
-              <div className="room-consume-modal" onClick={e => e.stopPropagation()}>
+              <DialogBox
+                className="room-consume-modal"
+                onClick={e => e.stopPropagation()}
+                onClose={() => setConsumeModal(null)}
+                label={t('bottleDetail.removeBottleTitle', 'Remove Bottle')}
+              >
                 <RoomConsumeForm
                   onSubmit={handleConsumeSubmit}
                   onCancel={() => setConsumeModal(null)}
@@ -1406,7 +1412,7 @@ export default function CellarRoom() {
                   defaultRatingScale={user?.preferences?.ratingScale}
                   t={t}
                 />
-              </div>
+              </DialogBox>
             </div>
           )}
 
@@ -1593,7 +1599,12 @@ export default function CellarRoom() {
       {/* Unsaved changes navigation blocker */}
       {pendingNavPath && (
         <div className="room-consume-overlay" onClick={() => setPendingNavPath(null)}>
-          <div className="room-consume-modal" onClick={e => e.stopPropagation()}>
+          <DialogBox
+            className="room-consume-modal"
+            onClick={e => e.stopPropagation()}
+            onClose={() => setPendingNavPath(null)}
+            label={t('room.unsavedChangesTitle', 'Unsaved Changes')}
+          >
             <h3>{t('room.unsavedChangesTitle', 'Unsaved Changes')}</h3>
             <p>{t('room.unsavedChangesMessage', 'You have unsaved changes to the room layout. Are you sure you want to leave?')}</p>
             <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end', marginTop: '1rem' }}>
@@ -1620,7 +1631,7 @@ export default function CellarRoom() {
                 {t('room.leaveWithoutSaving', 'Leave')}
               </button>
             </div>
-          </div>
+          </DialogBox>
         </div>
       )}
     </div>
