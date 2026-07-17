@@ -207,6 +207,38 @@ async function buildAnnotatedEntries(rack) {
 }
 
 /**
+ * Validate a CLIENT-SUPPLIED arrangement target against the rack's current
+ * state: it must be a pure PERMUTATION of the bottles currently in the rack
+ * (same multiset of bottle ids — nothing added, dropped, or duplicated) onto
+ * unique positions. Geometry (range/disabled) is applyArrangement's job.
+ * The REST arrange endpoint needs this because its client computes nothing —
+ * but a hand-crafted request must not be able to inject or clone bottles.
+ * Returns { ok: true } | { error: { status: 400, message } }.
+ */
+function validateArrangementTarget(rack, target) {
+  if (!Array.isArray(target) || target.length === 0) {
+    return { error: { status: 400, message: 'target must be a non-empty array of { position, bottleId }' } };
+  }
+  const positions = new Set();
+  for (const t of target) {
+    if (!t || !Number.isInteger(t.position) || typeof (t.bottleId ?? '') !== 'string' || !t.bottleId) {
+      return { error: { status: 400, message: 'each target entry needs an integer position and a bottleId' } };
+    }
+    if (positions.has(t.position)) {
+      return { error: { status: 400, message: `duplicate target position ${t.position}` } };
+    }
+    positions.add(t.position);
+  }
+  const current = (rack.slots || []).filter((s) => s.bottle).map((s) => String(s.bottle._id || s.bottle)).sort();
+  const proposed = target.map((t) => String(t.bottleId)).sort();
+  const same = current.length === proposed.length && current.every((id, i) => id === proposed[i]);
+  if (!same) {
+    return { error: { status: 400, message: 'target must contain exactly the bottles currently in this rack (a re-ordering, not an edit)' } };
+  }
+  return { ok: true };
+}
+
+/**
  * Apply a full slot assignment to an access-checked rack in ONE atomic save —
  * no partial arrangements. `target` = [{ position, bottleId }]. Optimistic
  * concurrency (Rack versionKey) turns a concurrent slot write into a clean
@@ -247,5 +279,5 @@ async function applyArrangement(rack, target, req, meta = {}) {
 
 module.exports = {
   createCellar, createGridRack, placeBottleInRack, clearRackSlot, moveBottleToCellar,
-  buildAnnotatedEntries, applyArrangement,
+  buildAnnotatedEntries, validateArrangementTarget, applyArrangement,
 };

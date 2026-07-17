@@ -79,15 +79,20 @@ const COMPARATORS = {
  * @param {number}   maxPosition        rack capacity (utils/rackGeometry getMaxPosition)
  * @param {number[]} disabledPositions
  * @param {string}   strategy           'maturity' | 'type' | 'vintage'
+ * @param {number[]} [positionOrder]    fill-priority order of all positions
+ *   (the web app's corner picker computes this geometrically client-side);
+ *   defaults to ascending 1..maxPosition
  * @returns {{
  *   target:  Array<{ position, bottleId }>,     // the full desired assignment
  *   changes: Array<{ bottle, from, to }>,       // bottles whose slot differs
  * }}
  */
-function buildArrangePlan(entries, maxPosition, disabledPositions, strategy) {
+function buildArrangePlan(entries, maxPosition, disabledPositions, strategy, positionOrder) {
   const disabled = new Set(disabledPositions || []);
-  const usable = Array.from({ length: maxPosition }, (_, i) => i + 1)
-    .filter((p) => !disabled.has(p));
+  const order = Array.isArray(positionOrder) && positionOrder.length > 0
+    ? positionOrder
+    : Array.from({ length: maxPosition }, (_, i) => i + 1);
+  const usable = order.filter((p) => !disabled.has(p));
 
   const occupied = (entries || []).filter((e) => e.bottle);
   const sorted = [...occupied].sort((a, b) =>

@@ -115,6 +115,25 @@ describe('mechanics', () => {
     expect(plan.target).toEqual([{ position: 1, bottleId: 'f'.repeat(24) }]);
   });
 
+  test('fills according to a custom positionOrder (the web corner picker)', () => {
+    const entries = [
+      { position: 1, bottle: bottle('a', { maturityStatus: 'declining' }) },
+      { position: 2, bottle: bottle('b', { maturityStatus: 'peak' }) },
+    ];
+    // Bottom-left first on a 2x2 grid: 3, 4, 1, 2
+    const final = posOf(buildArrangePlan(entries, 4, [], 'maturity', [3, 4, 1, 2]).target);
+    expect(final.get(3)).toBe('a'); // most urgent → first priority slot
+    expect(final.get(4)).toBe('b');
+  });
+
+  test('custom positionOrder still skips disabled positions', () => {
+    const entries = [
+      { position: 1, bottle: bottle('a', { maturityStatus: 'declining' }) },
+    ];
+    const final = posOf(buildArrangePlan(entries, 4, [3], 'maturity', [3, 4, 1, 2]).target);
+    expect(final.get(4)).toBe('a'); // 3 disabled → next in priority order
+  });
+
   test('ties break alphabetically by wine name (deterministic plans)', () => {
     const entries = [
       { position: 1, bottle: bottle('zin', { name: 'Zinfandel', maturityStatus: 'peak', vintage: '2018' }) },
