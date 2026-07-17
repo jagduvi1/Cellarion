@@ -66,6 +66,8 @@ const tokensRoute = require('./routes/tokens');
 const eventsRoute = require('./routes/events');
 const climateRoute = require('./routes/climate');
 const mcpRoute = require('./routes/mcp');
+const mcpOAuthRoute = require('./routes/mcpOAuth');
+const wellKnownOAuthRoute = require('./routes/wellKnownOAuth');
 const rateLimitsConfig = require('./config/rateLimits');
 const aiConfig = require('./config/aiConfig');
 const announcementConfig = require('./config/announcement');
@@ -133,6 +135,12 @@ app.use('/api/wine-lists/public', wineListPublicRoute);
 app.use('/sitemap.xml', sitemapRoute);
 app.use('/api/sitemap.xml', sitemapRoute);
 app.use('/api/og', ogRoute);
+
+// OAuth discovery documents (RFC 8414 + RFC 9728) for the MCP connector flow.
+// MUST be at the issuer origin root and never rate-limited/blocked, so they are
+// mounted here alongside sitemap/OG. ⚠️ PROD nginx must proxy /.well-known/oauth-*
+// to the backend — see docs/mcp-oauth.md.
+app.use('/.well-known', wellKnownOAuthRoute);
 
 // IndexNow key verification file
 const indexNowKey = process.env.INDEXNOW_KEY;
@@ -264,6 +272,10 @@ app.use('/api/stripe', stripeRoute);
 app.use('/api/tokens', tokensRoute);
 app.use('/api/events', eventsRoute);
 app.use('/api/climate', climateRoute);
+// OAuth 2.1 authorization server for the MCP connector (DCR + PKCE + token
+// exchange). Mounted BEFORE /api/mcp so /api/mcp/oauth/* resolves here and does
+// not fall through to the (exact-path) MCP endpoint router.
+app.use('/api/mcp/oauth', mcpOAuthRoute);
 // Model Context Protocol endpoint — lets an external AI (Claude Desktop, etc.)
 // read the connected user's own cellar over a scoped `cel_` token or a JWT.
 // Stateless Streamable HTTP; per-tool authorization lives in the MCP registry.

@@ -263,6 +263,60 @@ describe('authenticateApiToken', () => {
     expect(next).not.toHaveBeenCalled();
   });
 
+  // ── OAuth connections (origin:'oauth') ────────────────────────────────────
+  // An OAuth access token is a cel_ token PLUS an expiry and a single audience.
+  test('an EXPIRED OAuth access token → 401 (drives the client to refresh)', async () => {
+    ApiToken.findOne.mockResolvedValue(activeToken({ origin: 'oauth', expiresAt: new Date(Date.now() - 1000) }));
+    User.findById.mockReturnValue(selectable(activeUser()));
+    const res = mockRes(); const next = jest.fn();
+
+    await authenticateApiToken(mockReq('POST', '/api/mcp', '/'), res, next, RAW);
+
+    expect(res.status).toHaveBeenCalledWith(401);
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  test('a personal PAT (expiresAt null) never expires', async () => {
+    ApiToken.findOne.mockResolvedValue(activeToken({ expiresAt: null }));
+    User.findById.mockReturnValue(selectable(activeUser()));
+    const next = jest.fn();
+    await authenticateApiToken(mockReq(), mockRes(), next, RAW);
+    expect(next).toHaveBeenCalled();
+  });
+
+  test('an OAuth token is confined to POST /api/mcp — its RFC 8707 audience', async () => {
+    ApiToken.findOne.mockResolvedValue(activeToken({ origin: 'oauth', expiresAt: new Date(Date.now() + 60000) }));
+    User.findById.mockReturnValue(selectable(activeUser()));
+    const next = jest.fn();
+    await authenticateApiToken(mockReq('POST', '/api/mcp', '/'), mockRes(), next, RAW);
+    expect(next).toHaveBeenCalled(); // its own audience: allowed
+  });
+
+  test('an OAuth token CANNOT use the REST routes its read scope would otherwise grant', async () => {
+    // The consent screen promised the MCP endpoint — not the whole read surface.
+    for (const [method, baseUrl, path] of [
+      ['GET', '/api/stats', '/overview'],
+      ['GET', '/api/cellars', '/'],
+      ['GET', '/api/bottles', '/'],
+      ['GET', '/api/auth', '/whoami'],
+    ]) {
+      ApiToken.findOne.mockResolvedValue(activeToken({ origin: 'oauth', expiresAt: new Date(Date.now() + 60000) }));
+      User.findById.mockReturnValue(selectable(activeUser()));
+      const res = mockRes(); const next = jest.fn();
+      await authenticateApiToken(mockReq(method, baseUrl, path), res, next, RAW);
+      expect(res.status).toHaveBeenCalledWith(403);
+      expect(next).not.toHaveBeenCalled();
+    }
+  });
+
+  test('a personal read PAT still reaches those same REST routes (unaffected)', async () => {
+    ApiToken.findOne.mockResolvedValue(activeToken()); // origin defaults to personal
+    User.findById.mockReturnValue(selectable(activeUser()));
+    const next = jest.fn();
+    await authenticateApiToken(mockReq('GET', '/api/stats', '/overview'), mockRes(), next, RAW);
+    expect(next).toHaveBeenCalled();
+  });
+
   test('valid token on a NON-allowlisted route → 403, req.user never attached', async () => {
     ApiToken.findOne.mockResolvedValue(activeToken());
     User.findById.mockReturnValue(selectable(activeUser()));

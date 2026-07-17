@@ -98,6 +98,16 @@ function isApiTokenCredential(credential) {
   return typeof credential === 'string' && credential.startsWith(TOKEN_PREFIX);
 }
 
+/**
+ * The one request an OAuth-issued token may make: the MCP endpoint it was
+ * minted for. Exact-anchored, same shape as the allowlist patterns.
+ * Exported for direct unit testing.
+ */
+function isMcpEndpoint(method, path) {
+  const p = path.length > 1 && path.endsWith('/') ? path.slice(0, -1) : path;
+  return method === 'POST' && /^\/api\/mcp$/.test(p);
+}
+
 /** Default-deny scope check. Exported for direct unit testing. */
 function isRequestAllowed(scopes, method, path) {
   // Normalize: Express treats HEAD as GET, and a trailing slash as the same route.
@@ -125,6 +135,14 @@ async function authenticateApiToken(req, res, next, rawToken) {
       return res.status(401).json({ error: 'Invalid token' });
     }
 
+    // An OAuth access token expires (personal PATs have expiresAt === null and
+    // never do). A dead access token is a 401 so the MCP client runs its
+    // refresh grant — same status as a missing token; the WWW-Authenticate
+    // challenge on /api/mcp tells it where to refresh.
+    if (token.expiresAt && token.expiresAt.getTime() <= Date.now()) {
+      return res.status(401).json({ error: 'Token expired' });
+    }
+
     const user = await User.findById(token.user)
       .select('roles plan planExpiresAt deletionScheduledFor');
     // A token whose account is gone or pending deletion is dead — same policy
@@ -134,6 +152,20 @@ async function authenticateApiToken(req, res, next, rawToken) {
     }
 
     const path = (req.baseUrl || '') + (req.path || '');
+
+    // RFC 8707 audience enforcement for OAuth connections. An `origin:'oauth'`
+    // token was issued for ONE audience — the MCP endpoint (token.resource) —
+    // via a consent screen that described exactly that. Its cel_ scopes would
+    // otherwise also open the REST routes those scopes grant (read → GET
+    // /api/stats, /api/cellars, …; consume → POST /api/bottles/:id/consume),
+    // which is data the user consented to but NOT the surface they consented
+    // to. Confine it to the MCP endpoint regardless of scope, so the audience
+    // is real and a future entry in SCOPE_ALLOWLIST.read can never silently
+    // widen what a connected AI can reach. Personal PATs are unaffected.
+    if (token.origin === 'oauth' && !isMcpEndpoint(req.method, path)) {
+      return res.status(403).json({ error: 'This token is only valid for the MCP endpoint' });
+    }
+
     if (!isRequestAllowed(token.scopes, req.method, path)) {
       return res.status(403).json({ error: 'API token scope insufficient for this request' });
     }
@@ -166,6 +198,7 @@ module.exports = {
   isApiTokenCredential,
   authenticateApiToken,
   isRequestAllowed,
+  isMcpEndpoint,
   SCOPE_ALLOWLIST,
   TOKEN_EXCLUSIONS,
   LAST_USED_THROTTLE_MS,

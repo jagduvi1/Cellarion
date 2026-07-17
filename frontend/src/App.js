@@ -15,6 +15,7 @@ import './styles/common.css';
 const LandingPage     = lazy(() => import('./pages/LandingPage'));
 const Login           = lazy(() => import('./pages/Login'));
 const OAuthCallback   = lazy(() => import('./pages/OAuthCallback'));
+const ConnectAiAuthorize = lazy(() => import('./pages/ConnectAiAuthorize'));
 const VerifyEmail     = lazy(() => import('./pages/VerifyEmail'));
 const ResetPassword   = lazy(() => import('./pages/ResetPassword'));
 const PrivacyPolicy   = lazy(() => import('./pages/PrivacyPolicy'));
@@ -94,6 +95,10 @@ function AppRoutes() {
         {/* Public routes */}
         <Route path="/login" element={user ? <Navigate to="/cellars" replace /> : <Login />} />
         <Route path="/login/callback" element={<OAuthCallback />} />
+        {/* OAuth 2.1 consent for MCP AI connectors. NOT ProtectedRoute — the page
+            renders an inline login when logged out so the OAuth params survive
+            (a /login bounce would drop them). */}
+        <Route path="/connect-ai/authorize" element={<ConnectAiAuthorize />} />
         <Route path="/verify-email" element={<VerifyEmail />} />
         <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="/privacy" element={<PrivacyPolicy />} />

@@ -10,6 +10,7 @@ const McpActionLog = require('../models/McpActionLog');
 const { RESTORE_WINDOW_MS } = require('../services/bottleOps');
 const { revertLedgerRow, reversibleActionsFor } = require('../mcp/revert');
 const { findLiveLink, redeemExportLink } = require('../services/exportLinks');
+const { issuer } = require('../services/mcpOAuth');
 
 // JSON-RPC initialize marker (single message or batch). Local check — the
 // SDK's isInitializeRequest helper lives in the ESM package.
@@ -31,6 +32,27 @@ const SESSION_GONE = {
   error: { code: -32001, message: 'Session not found or expired — re-initialize (POST without Mcp-Session-Id).' },
   id: null,
 };
+
+// RFC 9728 §5.1: an unauthenticated/invalid request to the protected resource
+// MUST answer 401 with a WWW-Authenticate header pointing at the protected-
+// resource metadata, so an MCP client can discover the authorization server and
+// start the OAuth flow. requireAuth sends the 401 itself, so we patch res.status
+// to attach the header the moment a 401 is set. 401 ONLY — a 403 means the
+// credential is valid but insufficient (wrong scope, demo account), where
+// re-authenticating fixes nothing and the challenge would just nudge a client
+// into a pointless refresh loop. A 200 tool response carries no challenge.
+// Applied to the MCP endpoint only.
+function mcpChallenge(req, res, next) {
+  const prm = `${issuer()}/.well-known/oauth-protected-resource/api/mcp`;
+  const origStatus = res.status.bind(res);
+  res.status = (code) => {
+    if (code === 401) {
+      res.setHeader('WWW-Authenticate', `Bearer resource_metadata="${prm}"`);
+    }
+    return origStatus(code);
+  };
+  next();
+}
 
 // The action types a browser session can reverse (full personal authority =
 // consume + write). Excludes bulk_preview (changed nothing) and undo_add / other
@@ -56,7 +78,7 @@ const JWT_SCOPES = ['read', 'consume', 'write'];
 // are shared/throwaway (they also can't mint `cel_` tokens, so this closes the
 // only other way in). A `cel_` token never carries isDemo, so requireNonDemo is a
 // no-op for it and blocks only demo JWT sessions.
-router.post('/', requireAuth, requireNonDemo, async (req, res, next) => {
+router.post('/', mcpChallenge, requireAuth, requireNonDemo, async (req, res, next) => {
   try {
     const scopes = req.apiToken ? req.apiToken.scopes : JWT_SCOPES;
     // ctx.req rides along for the mutating tools: logAudit reads actor/ip/UA
@@ -96,7 +118,9 @@ router.post('/', requireAuth, requireNonDemo, async (req, res, next) => {
 // GET opens the session's standalone SSE stream (server→client pushes:
 // notifications/resources/updated). Without a session header there is no
 // stream to open — 405 keeps the old stateless contract for those callers.
-router.get('/', requireAuth, requireNonDemo, async (req, res, next) => {
+// mcpChallenge: an OAuth client probing with a stale token must get the RFC
+// 9728 WWW-Authenticate pointer here too, not only on POST.
+router.get('/', mcpChallenge, requireAuth, requireNonDemo, async (req, res, next) => {
   try {
     const session = sessionFor(req);
     if (session && session.transport) return await session.transport.handleRequest(req, res);

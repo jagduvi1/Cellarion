@@ -17,3 +17,12 @@ export const getMcpActivity = (apiFetch, { limit = 50, skip = 0 } = {}) =>
 // 409 conflict (already reverted / world moved on / too old), 404, 403, 400.
 export const revertMcpActivity = (apiFetch, id) =>
   apiFetch(`/api/mcp/activity/${id}/revert`, { method: 'POST', headers: JSON_HEADERS });
+
+// POST /api/mcp/oauth/approve — the OAuth 2.1 consent decision for a one-click
+// AI connector (the /connect-ai/authorize page). `body` carries the OAuth
+// request params the backend redirected here with, plus `approved` (true/false).
+// Returns { redirect } for BOTH approve and deny — the browser is sent there
+// (the external client's redirect_uri). JWT-only: the backend re-validates the
+// whole request server-side, so this is the user's consent, not a trust point.
+export const approveOAuthConnection = (apiFetch, body) =>
+  apiFetch('/api/mcp/oauth/approve', { method: 'POST', headers: JSON_HEADERS, body: JSON.stringify(body) });
