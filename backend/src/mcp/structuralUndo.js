@@ -93,8 +93,27 @@ async function undoStructural(last, ctx, { ok, fail, logAction }) {
     if (!access) return fail('conflict', 'You no longer have access to that rack; nothing was changed.');
     const bottleId = last.detail?.bottleId || last.bottle;
     if (!bottleId) return fail('conflict', 'That slot was already empty; nothing to undo.');
-    const maxPos = getMaxPosition(rack);
     const pos = last.detail?.position;
+    // Verify EVERYTHING before claiming (the move branch's discipline), so a
+    // reversal that would fail doesn't burn the ledger row:
+    //  - the bottle must still be active (grand-audit M2: without this, a
+    //    bottle consumed via the web since the unplace would be re-slotted,
+    //    breaking "consume frees the slot" — dead bottle in fill counts/3D);
+    //  - it must still live in this rack's cellar;
+    //  - the position must still exist (rack resized smaller since — the
+    //    previously-computed-but-unused maxPos check);
+    //  - the slot must be free.
+    const bottle = await Bottle.findById(bottleId);
+    if (!bottle) return fail('conflict', 'That bottle no longer exists; nothing was changed.');
+    if (bottle.status !== 'active') {
+      return fail('conflict', 'That bottle has been consumed since; nothing was changed.');
+    }
+    if (String(bottle.cellar) !== String(rack.cellar)) {
+      return fail('conflict', 'That bottle is no longer in this rack\'s cellar; nothing was changed.');
+    }
+    if (pos > getMaxPosition(rack)) {
+      return fail('conflict', 'That rack was resized and the slot no longer exists; nothing was changed.');
+    }
     const occupied = rack.slots.find((s) => s.position === pos && String(s.bottle) !== String(bottleId));
     if (occupied) return fail('conflict', `Position ${pos} is occupied again; cannot restore. Nothing was changed.`);
     if (!(await claim(last))) return fail('conflict', 'That action is already being undone.');

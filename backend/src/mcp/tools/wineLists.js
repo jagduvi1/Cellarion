@@ -39,8 +39,6 @@ function activeContainers(list) {
   return [{ section: null, entries: list.autoGroupEntries }];
 }
 
-const entryKey = (e) => `${String(e.wine?._id || e.wine)}|${e.vintage || 'NV'}|${e.bottleSize || '750ml'}`;
-
 function countEntries(list) {
   return list.structureMode === 'custom'
     ? (list.sections || []).reduce((n, s) => n + (s.entries?.length || 0), 0)
@@ -58,20 +56,23 @@ const entryOut = (e) => ({
   glass_price: e.byGlass ? (e.glassPrice ?? null) : undefined,
 });
 
-// Find every entry for a wine across BOTH containers (see module comment).
+// Find every entry for a wine in the ACTIVE container only — the same set
+// get_wine_list renders (grand-audit M4). Scanning both containers made a
+// wine present in both (a list mode-flipped from auto to custom) look like a
+// duplicate with identical disambiguators (permanently un-editable), and let
+// update_list_pricing edit an entry hidden from the rendered menu. The
+// inactive container's stale entries are ignored, matching what the user sees.
 // Returns [{ entry, section }].
 function findEntries(list, wineId, { vintage, bottleSize } = {}) {
   const hits = [];
-  const scan = (entries, section) => {
+  for (const { section, entries } of activeContainers(list)) {
     for (const e of entries || []) {
       if (String(e.wine?._id || e.wine) !== String(wineId)) continue;
       if (vintage !== undefined && (e.vintage || 'NV') !== vintage) continue;
       if (bottleSize !== undefined && (e.bottleSize || '750ml') !== bottleSize) continue;
       hits.push({ entry: e, section });
     }
-  };
-  for (const s of list.sections || []) scan(s.entries, s.title);
-  scan(list.autoGroupEntries, null);
+  }
   return hits;
 }
 
@@ -181,8 +182,12 @@ registerTool({
     if (!list) return fail('not_found', 'No such wine list. Use list_wine_lists for valid ids.');
     if (!wine) return fail('not_found', 'No such registry wine. Find the wine_id via search_registry or a bottle\'s wine.');
 
-    const vintage = args.vintage || 'NV';
-    const bottleSize = args.bottle_size || '750ml';
+    // Trim to match the schema (trim: true) BEFORE we save and record the
+    // ledger detail — otherwise the saved entry is "2019" while the undo
+    // detail keeps "2019 ", and winelist_add undo's strict compare misses the
+    // entry (grand-audit L7/L11), and the dupe check leaks near-duplicates.
+    const vintage = (args.vintage || 'NV').trim() || 'NV';
+    const bottleSize = (args.bottle_size || '750ml').trim() || '750ml';
     const dupes = findEntries(list, wine._id, { vintage, bottleSize });
     if (dupes.length) {
       return fail('conflict', `${wine.name} ${vintage} (${bottleSize}) is already on "${list.name}"${dupes[0].section ? ` in section "${dupes[0].section}"` : ''} — use update_list_pricing to change its prices.`);
@@ -300,8 +305,8 @@ registerTool({
     if (!list) return fail('not_found', 'No such wine list. Use list_wine_lists for valid ids.');
 
     const hits = findEntries(list, args.wine_id, {
-      ...(args.vintage !== undefined ? { vintage: args.vintage } : {}),
-      ...(args.bottle_size !== undefined ? { bottleSize: args.bottle_size } : {}),
+      ...(args.vintage !== undefined ? { vintage: args.vintage.trim() } : {}),
+      ...(args.bottle_size !== undefined ? { bottleSize: args.bottle_size.trim() } : {}),
     });
     if (!hits.length) return fail('not_found', 'That wine is not on this list. See get_wine_list; add it with add_to_list.');
     if (hits.length > 1) {

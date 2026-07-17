@@ -11,6 +11,17 @@ const eventBus = require('./eventBus');
 // the emit targets the acting user (each account watches its own stream).
 const STATS_CHANGED_PREFIXES = ['bottle.', 'cellar.'];
 
+// Invalidate a user's MCP read caches on any wine-data mutation (grand-audit
+// M3). Lazy-required so these MCP modules stay off audit's load path (they pull
+// the tool registry, whose search dep is ESM-only and unparseable by jest —
+// the #702 failure mode). Never throws: a cache miss must not fail a mutation.
+function bustMcpCaches(userId) {
+  try {
+    require('../mcp/tools/stats').bustStats(userId);
+    require('../mcp/resultCache').bustUser(userId);
+  } catch { /* cache is best-effort */ }
+}
+
 // Structured logger — outputs newline-delimited JSON to stdout.
 // In Docker this is captured by the container runtime.
 // Use pino-pretty in development: node server.js | pino-pretty
@@ -71,6 +82,12 @@ function logAudit(req, action, resource = {}, detail = {}) {
   // stream. System-actor events (req = null, e.g. retention jobs) are skipped:
   // there is no acting user to notify.
   if (entry.actor.userId && STATS_CHANGED_PREFIXES.some(p => action.startsWith(p))) {
+    // Bust the MCP read caches for the affected user BEFORE the push, so a
+    // client that re-reads cellar://stats (or calls cellar_stats / the
+    // insight tools) on the nudge recomputes instead of serving the stale 60s
+    // window (grand-audit M3). Lazy-require keeps the MCP modules off audit's
+    // load path. Same owner-resolution as the push below.
+    bustMcpCaches(entry.actor.userId);
     eventBus.emit(entry.actor.userId, 'stats_changed', { reason: action });
 
     // Shared cellars: /api/stats aggregates the OWNER's bottles, so when a
@@ -82,6 +99,7 @@ function logAudit(req, action, resource = {}, detail = {}) {
     const ownerFromReq = req?.cellar?.user;
     if (ownerFromReq) {
       if (String(ownerFromReq) !== String(entry.actor.userId)) {
+        bustMcpCaches(ownerFromReq);
         eventBus.emit(ownerFromReq, 'stats_changed', { reason: action });
       }
     } else if (resource.cellarId && eventBus.streamCounts().total > 0) {
@@ -94,6 +112,7 @@ function logAudit(req, action, resource = {}, detail = {}) {
         Cellar.findById(cellarId).select('user').lean()
           .then(cellar => {
             if (cellar && String(cellar.user) !== String(entry.actor.userId)) {
+              bustMcpCaches(cellar.user);
               eventBus.emit(cellar.user, 'stats_changed', { reason: action });
             }
           })
