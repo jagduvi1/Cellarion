@@ -45,7 +45,13 @@ function AdminMcp() {
     setLoading(true);
     setError(null);
     try {
-      setData(await adminGetMcpUsage(apiFetch, days));
+      // apiFetch resolves to a raw Response — parse it (and check ok) rather
+      // than storing the Response as `data` (which would make data.daily
+      // undefined and crash byDay on render).
+      const res = await adminGetMcpUsage(apiFetch, days);
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error || 'Failed to load');
+      setData(body);
     } catch (err) {
       setError(err.message || 'Failed to load');
     } finally {
@@ -61,7 +67,11 @@ function AdminMcp() {
     setSaving(true);
     setError(null);
     try {
-      await adminSetMcpSwitches(apiFetch, next);
+      // Only reflect the flip if the server actually accepted it — otherwise
+      // the UI would show "disabled" while the AI surface stays live.
+      const res = await adminSetMcpSwitches(apiFetch, next);
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body.error || 'Failed to save');
       setData((d) => ({ ...d, mcpConfig: next }));
     } catch (err) {
       setError(err.message || 'Failed to save');

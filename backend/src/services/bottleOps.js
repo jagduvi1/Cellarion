@@ -346,9 +346,18 @@ async function updateBottleFields(bottle, fields, req) {
     throw err;
   }
   require('./search').indexBottle(bottle._id);
+  // Audit in the SAME { field: { from, to } } shape the REST PUT /bottles/:id
+  // route emits, so CellarAudit renders both surfaces identically (a bare
+  // { field: newValue } here made the page crash when a value was cleared —
+  // grand-audit H2). `prev` holds the old value, `changes` the new (null on
+  // clear); both carry exactly the keys that changed.
+  const auditChanges = {};
+  for (const key of Object.keys(changes)) {
+    auditChanges[key] = { from: prev[key] ?? null, to: changes[key] };
+  }
   logAudit(req, 'bottle.update',
     { type: 'bottle', id: bottle._id, cellarId: bottle.cellar },
-    { changes });
+    { changes: auditChanges });
 
   return { bottle, changes, prev };
 }

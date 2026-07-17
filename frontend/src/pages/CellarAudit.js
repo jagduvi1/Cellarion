@@ -72,7 +72,14 @@ function formatDetail(action, detail, t) {
     const entries = Object.entries(detail.changes);
     if (entries.length === 0) return null;
     return entries
-      .map(([field, { from, to }]) => `${field}: ${fmtVal(from)} → ${fmtVal(to)}`)
+      .map(([field, change]) => {
+        // Normal shape is { from, to }; guard against a bare value (a legacy
+        // row, or any writer that logs { field: newValue }) so a single odd
+        // entry can't crash the whole audit page.
+        const from = change && typeof change === 'object' ? change.from : undefined;
+        const to = change && typeof change === 'object' ? change.to : change;
+        return `${field}: ${fmtVal(from)} → ${fmtVal(to)}`;
+      })
       .join(' · ');
   }
   return null;
