@@ -19,7 +19,7 @@ function PrivacyPolicy() {
       </Helmet>
       <div className="privacy-container">
         <h1>Privacy Policy</h1>
-        <p className="privacy-updated">Last updated: June 2026 — Version 2026-06</p>
+        <p className="privacy-updated">Last updated: July 2026 — Version 2026-07</p>
 
         <p>
           Cellarion ("we", "us", or "our") operates the Cellarion wine cellar management
@@ -40,7 +40,7 @@ function PrivacyPolicy() {
         <h2>2. Legal basis for processing</h2>
         <ul>
           <li><strong>Contract performance (Art. 6(1)(b) GDPR):</strong> processing your account data, cellar data, and preferences is necessary to provide the Cellarion service you signed up for.</li>
-          <li><strong>Consent (Art. 6(1)(a) GDPR):</strong> we process your data for optional features (email notifications, label scanning via AI) only with your explicit consent, which you can withdraw at any time.</li>
+          <li><strong>Consent (Art. 6(1)(a) GDPR):</strong> we process your data for optional features (email notifications, label scanning via AI, connecting an external AI assistant) only with your explicit consent, which you can withdraw at any time.</li>
           <li><strong>Legitimate interest (Art. 6(1)(f) GDPR):</strong> we maintain activity logs and security measures to protect the service and its users.</li>
         </ul>
 
@@ -52,6 +52,7 @@ function PrivacyPolicy() {
           <li><strong>Community / forum data:</strong> discussions and replies you post, reactions you add to other users' replies, threads you subscribe to ("watch"), and read-state markers tracking which threads you've opened (used to drive the unread indicator).</li>
           <li><strong>Activity logs:</strong> actions you take in the app (e.g. adding a bottle, logging in) are logged with your user ID, IP address, and browser user-agent for security and service maintenance purposes.</li>
           <li><strong>Consent records:</strong> timestamps of when you accepted this privacy policy and consented to data processing.</li>
+          <li><strong>AI-connector records:</strong> if you connect an AI assistant (see section 5), we store the connection's metadata (name, permission scopes, a hashed credential — never the plain token — and last-used time) and an action log of what the assistant did in your account (which tool ran, what changed, and the undo snapshot).</li>
         </ul>
 
         <h2>4. How we use your data</h2>
@@ -60,6 +61,7 @@ function PrivacyPolicy() {
           <li>To send you notifications you have opted into (drink-window alerts, email digests, push notifications).</li>
           <li>To process bottle label images for wine identification (when you use the label scanning feature).</li>
           <li>To maintain security, prevent abuse, and investigate incidents via activity logs.</li>
+          <li>To operate AI-assistant connections you set up yourself (see section 5), including the action trail that lets you review and undo changes a connected assistant made.</li>
         </ul>
 
         <h2>5. Data sharing and sub-processors</h2>
@@ -120,6 +122,20 @@ function PrivacyPolicy() {
           uses Stripe, Voyage AI and Cloudflare as noted above.
         </p>
 
+        <h3>AI assistants you connect (MCP)</h3>
+        <p>
+          Cellarion lets you connect an AI assistant of your choice (for example Claude or
+          ChatGPT) to your cellar via the Model Context Protocol (MCP), using a personal
+          access token or an authorization you approve on a consent screen. This feature is
+          entirely opt-in: no data flows to any AI assistant until you connect one yourself.
+        </p>
+        <ul>
+          <li><strong>What is shared:</strong> when your assistant queries Cellarion on your behalf, the data those requests return (bottles, cellars, tasting notes, statistics) is processed by that assistant's provider under <em>that provider's</em> privacy policy — so choose a provider you trust. Depending on your choice, this can involve a transfer outside the EU/EEA that you initiate.</li>
+          <li><strong>Who the assistant acts for:</strong> a connected assistant acts on your instructions, as your agent. Unlike the sub-processors listed above, its provider is chosen and engaged by you, not by Cellarion.</li>
+          <li><strong>Your controls:</strong> access is limited to the permission scopes you grant (read / consume / write / climate), every action the assistant takes is recorded in an activity trail you can review in the app, consequential changes require confirmation and are reversible, and you can revoke a connection at any time in Settings with immediate effect.</li>
+          <li><strong>Anonymous public tools:</strong> Cellarion also offers a public MCP endpoint that serves only shared, non-personal wine knowledge (wine facts, drink windows, guides). It requires no account and processes no personal data beyond standard rate-limiting metadata.</li>
+        </ul>
+
         <h2>6. Data security</h2>
         <p>
           All data is transmitted over HTTPS. Passwords are hashed with bcrypt (10 salt rounds)
@@ -132,6 +148,7 @@ function PrivacyPolicy() {
         <ul>
           <li><strong>Account data:</strong> retained for as long as your account is active.</li>
           <li><strong>Activity logs:</strong> automatically deleted after 90 days.</li>
+          <li><strong>AI-connector action log:</strong> automatically deleted after 90 days. The connection itself (token metadata) remains until you revoke it or delete your account.</li>
           <li><strong>Deleted cellars/racks:</strong> soft-deleted and permanently removed after 30 days.</li>
           <li><strong>Account deletion:</strong> when you request account deletion, there is a 7-day cooling-off period. After that, your personal data (account, cellar, bottles, journal, settings, forum reactions, thread subscriptions, read-state markers, reports) is permanently and irreversibly deleted.</li>
           <li><strong>Forum content (discussions and replies):</strong> to preserve multi-party conversations for other users, your forum posts are <em>anonymised</em> rather than hard-deleted — your authorship is replaced with "[Deleted user]" and the personal-data link is severed (GDPR Art. 17 compliant). The post text remains visible. If you need a specific post fully removed, contact support before requesting account deletion.</li>
@@ -146,7 +163,7 @@ function PrivacyPolicy() {
           <li><strong>Right to data portability (Art. 20):</strong> you can export all your data as JSON from Settings at any time.</li>
           <li><strong>Right to restrict processing (Art. 18):</strong> you can disable all notifications and set your profile to private to restrict how your data is used.</li>
           <li><strong>Right to object (Art. 21):</strong> you can opt out of all email and push notifications in Settings, or use the one-click unsubscribe link in any email.</li>
-          <li><strong>Right to withdraw consent (Art. 7):</strong> you can withdraw consent for optional data processing at any time by disabling the relevant features or deleting your account.</li>
+          <li><strong>Right to withdraw consent (Art. 7):</strong> you can withdraw consent for optional data processing at any time by disabling the relevant features, revoking a connected AI assistant in Settings, or deleting your account.</li>
         </ul>
         <p>
           To exercise any of these rights or if you have concerns about our data practices,
