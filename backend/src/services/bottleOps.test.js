@@ -194,6 +194,16 @@ describe('updateBottleFields (real execution)', () => {
     expect(b.drinkWindowNotifiedStatus).toBeNull();
   });
 
+  test('audit log uses the { field: { from, to } } shape CellarAudit renders (grand-audit H2)', async () => {
+    const b = liveBottle({ rating: 92, ratingScale: '100' });
+    await updateBottleFields(b, { rating: null, ratingScale: '5' }, REQ);
+    const call = logAudit.mock.calls.find((c) => c[1] === 'bottle.update');
+    // A CLEAR must log { from: <old>, to: null } — the bare { rating: null }
+    // shape is what crashed the audit page.
+    expect(call[3].changes.rating).toEqual({ from: 92, to: null });
+    expect(call[3].changes.ratingScale).toEqual({ from: '100', to: '5' });
+  });
+
   test('rating null CLEARS the rating (undo-of-rating-set path) with the ride-along scale', async () => {
     const b = liveBottle({ rating: 92, ratingScale: '100' });
     const res = await updateBottleFields(b, { rating: null, ratingScale: '5' }, REQ);

@@ -1,0 +1,62 @@
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import AdminMcp from './AdminMcp';
+
+// The bug this suite exists for (grand-audit H1): the page stored the raw
+// Response as `data`, so `byDay(data.daily)` iterated undefined and crashed the
+// whole app on every load. These tests drive the real parse path.
+
+vi.mock('react-i18next', () => ({
+  useTranslation: () => ({ t: (key, opts) => (opts && opts.count !== undefined ? `${key}:${opts.count}` : key) }),
+}));
+
+const apiFetch = vi.fn();
+vi.mock('../contexts/AuthContext', () => ({ useAuth: () => ({ apiFetch }) }));
+
+const getUsage = vi.fn();
+const setSwitches = vi.fn();
+vi.mock('../api/admin', () => ({
+  adminGetMcpUsage: (...a) => getUsage(...a),
+  adminSetMcpSwitches: (...a) => setSwitches(...a),
+}));
+
+const jsonRes = (body, ok = true) => ({ ok, json: () => Promise.resolve(body) });
+
+const USAGE = {
+  days: 30,
+  daily: [{ day: '2026-07-15T00:00:00.000Z', surface: 'personal', calls: 41, errors: 2 }],
+  topTools: [{ name: 'search_bottles', surface: 'personal', calls: 20, errors: 1 }],
+  connections: { bearer: { total: 3, activeLast7d: 2 }, oauth: { total: 5, activeLast7d: 4 } },
+  writesLast7d: 12,
+  mcpConfig: { enabled: 1, publicEnabled: 1 },
+};
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  getUsage.mockResolvedValue(jsonRes(USAGE));
+  setSwitches.mockResolvedValue(jsonRes({}));
+});
+
+test('parses the usage payload and renders it without crashing', async () => {
+  render(<AdminMcp />);
+  // The daily row must appear — proving byDay() ran over parsed data, not a Response.
+  await waitFor(() => expect(screen.getByText('2026-07-15')).toBeInTheDocument());
+  expect(screen.getByText('search_bottles')).toBeInTheDocument();
+});
+
+test('surfaces a server error instead of blanking', async () => {
+  getUsage.mockResolvedValue(jsonRes({ error: 'Failed to load MCP usage' }, false));
+  render(<AdminMcp />);
+  await waitFor(() => expect(screen.getByText('Failed to load MCP usage')).toBeInTheDocument());
+});
+
+test('a rejected kill-switch PATCH does not flip the UI (reports the error)', async () => {
+  setSwitches.mockResolvedValue(jsonRes({ error: 'nope' }, false));
+  const { container } = render(<AdminMcp />);
+  await waitFor(() => expect(screen.getByText('2026-07-15')).toBeInTheDocument());
+  const master = container.querySelector('input[type="checkbox"]');
+  expect(master.checked).toBe(true);
+  fireEvent.click(master);
+  await waitFor(() => expect(screen.getByText('nope')).toBeInTheDocument());
+  // Still on (server rejected) — no false "disabled" state.
+  expect(master.checked).toBe(true);
+});
