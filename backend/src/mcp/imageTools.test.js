@@ -134,7 +134,11 @@ describe('attach_bottle_image', () => {
   });
 
   test('idempotency replay short-circuits before fetch/pipeline', async () => {
-    McpActionLog.findOne.mockReturnValue(chain({ result: { summary: 'seen', data: {} } }));
+    // Claim-first replay (prior-audit M2).
+    McpActionLog.findOneAndUpdate.mockResolvedValueOnce({
+      lastErrorObject: { updatedExisting: true },
+      value: { pending: false, result: { summary: 'seen', data: {} } },
+    });
     const res = await tool('attach_bottle_image').handler({ bottle_id: oid('d'), image_url: 'https://x/y.jpg', idempotency_key: 'k1' }, CTX);
     expect(parse(res).summary).toBe('seen');
     expect(safeFetchImage).not.toHaveBeenCalled();

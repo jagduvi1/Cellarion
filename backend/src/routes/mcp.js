@@ -271,8 +271,10 @@ router.get('/activity', requireAuth, requireNonDemo, async (req, res, next) => {
     // Hide preview rows (bulk_add / auto_arrange): a preview that was
     // shown-then-declined changed nothing, so surfacing it as "AI activity" is
     // misleading (and it can never be reverted). Applied batches land as
-    // separate `bulk_add` / `arrange` rows.
-    const filter = { user: req.user.id, action: { $nin: ['bulk_preview', 'arrange_preview'] } };
+    // separate `bulk_add` / `arrange` rows. 'pending' rows are idempotency
+    // claim stubs (actionLedger.js) whose mutation hasn't completed — equally
+    // not activity.
+    const filter = { user: req.user.id, action: { $nin: ['bulk_preview', 'arrange_preview', 'pending'] } };
     const [rows, total] = await Promise.all([
       McpActionLog.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
       McpActionLog.countDocuments(filter),
@@ -300,7 +302,9 @@ router.post('/activity/:id/revert', requireAuth, requireNonDemo, async (req, res
     if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
       return res.status(404).json({ error: 'No such AI action on your account.' });
     }
-    const row = await McpActionLog.findOne({ _id: req.params.id, user: req.user.id });
+    // pending:$ne true — an idempotency claim stub is not a revertible action
+    // (its mutation hasn't completed; it's never shown in the timeline either).
+    const row = await McpActionLog.findOne({ _id: req.params.id, user: req.user.id, pending: { $ne: true } });
     if (!row) return res.status(404).json({ error: 'No such AI action on your account.' });
     if (row.reversed) return res.status(409).json({ error: 'That action has already been reverted.' });
     if (row.viaUndo) return res.status(400).json({ error: 'That entry is itself a revert and cannot be reverted.' });

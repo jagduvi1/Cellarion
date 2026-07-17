@@ -22,7 +22,10 @@ const mcpActionLogSchema = new mongoose.Schema({
   // (JWT) called the MCP directly. Never store the token itself.
   tokenId: { type: mongoose.Schema.Types.ObjectId, ref: 'ApiToken', default: null },
   tool: { type: String, required: true },
-  action: { type: String, enum: ['consume', 'restore', 'add', 'update', 'undo_add', 'bulk_preview', 'bulk_add', 'somm_maturity', 'somm_price', 'cellar_create', 'rack_create', 'place', 'unplace', 'move', 'arrange_preview', 'arrange', 'tasting_note', 'attach_image', 'winelist_add', 'winelist_price'], required: true },
+  // 'pending' is the idempotency CLAIM stub (see actionLedger.js): a row
+  // reserved atomically BEFORE the mutation runs, overwritten with the real
+  // action on success. Never shown in the timeline, never undo-eligible.
+  action: { type: String, enum: ['pending', 'consume', 'restore', 'add', 'update', 'undo_add', 'bulk_preview', 'bulk_add', 'somm_maturity', 'somm_price', 'cellar_create', 'rack_create', 'place', 'unplace', 'move', 'arrange_preview', 'arrange', 'tasting_note', 'attach_image', 'winelist_add', 'winelist_price'], required: true },
   bottle: { type: mongoose.Schema.Types.ObjectId, ref: 'Bottle' },
   cellar: { type: mongoose.Schema.Types.ObjectId, ref: 'Cellar' },
   // Small, non-PII operational detail (reason, ml, …) for the timeline.
@@ -34,6 +37,12 @@ const mcpActionLogSchema = new mongoose.Schema({
   // The ok()-envelope body originally returned — replayed verbatim on an
   // idempotent retry so the caller can't tell the difference.
   result: { type: mongoose.Schema.Types.Mixed, default: null },
+  // True while this row is an idempotency claim whose mutation has not yet
+  // completed (prior-audit M2: the claim is taken atomically BEFORE the write,
+  // so a concurrent same-key twin cannot double-execute). Cleared by logAction
+  // on success; deleted by releaseClaim when the tool fails; a crashed claim is
+  // reclaimable after a staleness window (and TTL-reaped regardless).
+  pending: { type: Boolean, default: false },
   // Set once undo_last (or a manual revert) has reversed this action.
   reversed: { type: Boolean, default: false },
   // True on rows created BY undo_last (the record of a reversal). Excluded

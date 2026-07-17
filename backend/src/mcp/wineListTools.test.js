@@ -142,10 +142,13 @@ describe('add_to_list', () => {
     expect(list.autoGroupEntries).toHaveLength(1);
     expect(list.autoGroupEntries[0]).toMatchObject({ wine: WINE, vintage: '2019', listPrice: 100, byGlass: true, glassPrice: 24, glassPriceManual: false });
     expect(list.save).toHaveBeenCalled();
-    expect(McpActionLog.create).toHaveBeenCalledWith(expect.objectContaining({
-      user: ME, tokenId: 't1', tool: 'add_to_list', action: 'winelist_add', idempotencyKey: 'k1',
+    // Keyed ledger writes complete the pending claim (claim-first, M2).
+    const [lQuery, lUpdate] = McpActionLog.findOneAndUpdate.mock.calls.at(-1);
+    expect(lQuery).toEqual({ user: ME, idempotencyKey: 'k1', pending: true });
+    expect(lUpdate.$set).toMatchObject({
+      tokenId: 't1', tool: 'add_to_list', action: 'winelist_add', idempotencyKey: 'k1', pending: false,
       detail: expect.objectContaining({ listId: LIST, wineId: WINE, vintage: '2019' }),
-    }));
+    });
     expect(logAudit).toHaveBeenCalledWith(CTX.req, 'winelist.entry.add', expect.any(Object), expect.objectContaining({ via: 'mcp' }));
   });
 
@@ -166,7 +169,11 @@ describe('add_to_list', () => {
   });
 
   test('idempotent replay returns the stored envelope without touching the list', async () => {
-    McpActionLog.findOne.mockReturnValue({ lean: () => Promise.resolve({ result: { summary: 'done before', data: {} } }) });
+    // Claim-first replay (prior-audit M2).
+    McpActionLog.findOneAndUpdate.mockResolvedValueOnce({
+      lastErrorObject: { updatedExisting: true },
+      value: { pending: false, result: { summary: 'done before', data: {} } },
+    });
     const res = await tool('add_to_list').handler({ list_id: LIST, wine_id: WINE, idempotency_key: 'k1' }, CTX);
     expect(parse(res).summary).toBe('done before');
     expect(WineList.findOne).not.toHaveBeenCalled();

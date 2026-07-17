@@ -109,6 +109,12 @@ async function placeBottleInRack(rack, position, bottleId, req) {
     if (err.name === 'VersionError') {
       return { error: { status: 409, message: 'This rack was modified by another request — refresh and retry.', code: 'conflict' } };
     }
+    // Unique slots.bottle index (prior-audit M4): a concurrent placement of
+    // this bottle into ANOTHER rack won the race — different documents, so
+    // only the index (not __v) can see it.
+    if (err.code === 11000) {
+      return { error: { status: 409, message: 'This bottle was just placed in another rack — refresh and retry.', code: 'conflict' } };
+    }
     throw err;
   }
   logAudit(req, 'rack.slot_assign', { type: 'rack', id: rack._id, cellarId: rack.cellar }, { position: pos });
@@ -270,6 +276,11 @@ async function applyArrangement(rack, target, req, meta = {}) {
   } catch (err) {
     if (err.name === 'VersionError') {
       return { error: { status: 409, code: 'conflict', message: 'The rack was modified at the same moment — nothing was applied.' } };
+    }
+    // Unique slots.bottle index (prior-audit M4): one of these bottles was
+    // concurrently placed into another rack — nothing was applied.
+    if (err.code === 11000) {
+      return { error: { status: 409, code: 'conflict', message: 'A bottle in this plan was just placed in another rack — nothing was applied.' } };
     }
     throw err;
   }

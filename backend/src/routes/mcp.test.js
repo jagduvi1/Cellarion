@@ -98,7 +98,8 @@ describe('GET /api/mcp/activity', () => {
     const body = await res.json();
 
     // caller-scoped query that hides never-applied previews (bulk + arrange)
-    expect(McpActionLog.find).toHaveBeenCalledWith({ user: 'u1', action: { $nin: ['bulk_preview', 'arrange_preview'] } });
+    // and pending idempotency-claim stubs (claim-first, prior-audit M2)
+    expect(McpActionLog.find).toHaveBeenCalledWith({ user: 'u1', action: { $nin: ['bulk_preview', 'arrange_preview', 'pending'] } });
     expect(body.total).toBe(3);
     expect(body.revert_window_days).toBe(5);
     expect(body.activity).toHaveLength(3);
@@ -161,7 +162,7 @@ describe('POST /api/mcp/activity/:id/revert', () => {
     McpActionLog.findOne.mockResolvedValue(null);
     const res = await request('POST', `/api/mcp/activity/${OID}/revert`);
     expect(res.status).toBe(404);
-    expect(McpActionLog.findOne).toHaveBeenCalledWith({ _id: OID, user: 'u1' });
+    expect(McpActionLog.findOne).toHaveBeenCalledWith({ _id: OID, user: 'u1', pending: { $ne: true } });
     expect(revertLedgerRow).not.toHaveBeenCalled();
   });
 
