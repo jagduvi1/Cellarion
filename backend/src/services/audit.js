@@ -15,7 +15,24 @@ const STATS_CHANGED_PREFIXES = ['bottle.', 'cellar.'];
 // M3). Lazy-required so these MCP modules stay off audit's load path (they pull
 // the tool registry, whose search dep is ESM-only and unparseable by jest —
 // the #702 failure mode). Never throws: a cache miss must not fail a mutation.
+//
+// Debounced per user (MCP-audit M10): a bulk_add of 24 bottles fires 24 bottle.
+// audits within milliseconds, each doing two full Map scans (up to ~4000 string
+// compares) for the SAME user — the first bust already cleared everything, the
+// rest are pure waste. Collapse repeats within a short window; the cache already
+// tolerates a 60s stale window, so a sub-window skip can never serve stale data
+// that a synchronous batch would have re-populated (reads don't run mid-batch).
+const lastBustAt = new Map(); // userId -> ms
+const BUST_DEBOUNCE_MS = 250;
 function bustMcpCaches(userId) {
+  if (!userId) return;
+  const key = String(userId);
+  const now = Date.now();
+  const prev = lastBustAt.get(key);
+  if (prev && now - prev < BUST_DEBOUNCE_MS) return; // already busted this instant
+  // Bounded: drop the oldest half rather than grow unbounded.
+  if (lastBustAt.size >= 5000) { let drop = 2500; for (const k of lastBustAt.keys()) { if (drop-- <= 0) break; lastBustAt.delete(k); } }
+  lastBustAt.set(key, now);
   try {
     require('../mcp/tools/stats').bustStats(userId);
     require('../mcp/resultCache').bustUser(userId);
