@@ -1,0 +1,162 @@
+/**
+ * SSRF-guarded image download for server-side "attach image by URL" (the MCP
+ * attach_bottle_image tool). The backend lives on a Docker network with
+ * internal services (mongo, meilisearch, qdrant, rembg) and on a VM with
+ * cloud metadata endpoints — a naive fetch(url) would let a caller aim
+ * requests at any of them. Guards, in order:
+ *
+ *   - https only, default port only (443) — product/CDN images are https.
+ *   - DNS is resolved FIRST and every A/AAAA record must be a public unicast
+ *     address; the connection is then PINNED to the validated address via a
+ *     custom `lookup`, so a DNS-rebinding flip between check and connect
+ *     cannot redirect the socket.
+ *   - Redirects are followed manually (≤3 hops), each hop re-validated from
+ *     scratch — a public host 302ing to http://169.254.169.254 is refused.
+ *   - 10s total timeout, response streaming capped at MAX_BYTES (abort, not
+ *     buffer-then-check), Content-Type must look like an image when present
+ *     (the byte-level truth is enforced downstream by sanitizeImageBuffer).
+ *
+ * Returns { buffer, contentType } or throws Error with a caller-safe message.
+ */
+const dns = require('dns');
+const net = require('net');
+const https = require('https');
+
+const MAX_BYTES = 10 * 1024 * 1024; // matches the REST upload cap
+const MAX_REDIRECTS = 3;
+const TIMEOUT_MS = 10 * 1000;
+
+/** True for any address a server-side fetch must never touch. */
+function isPrivateAddress(addr) {
+  const family = net.isIP(addr);
+  if (family === 4) {
+    const [a, b] = addr.split('.').map(Number);
+    return (
+      a === 0 || a === 10 || a === 127 ||
+      (a === 100 && b >= 64 && b <= 127) || // CGNAT
+      (a === 169 && b === 254) ||           // link-local / cloud metadata
+      (a === 172 && b >= 16 && b <= 31) ||
+      (a === 192 && b === 168) ||
+      (a === 198 && (b === 18 || b === 19)) ||
+      a >= 224                              // multicast + reserved
+    );
+  }
+  if (family === 6) {
+    const lower = addr.toLowerCase();
+    if (lower === '::' || lower === '::1') return true;
+    if (lower.startsWith('fe8') || lower.startsWith('fe9') || lower.startsWith('fea') || lower.startsWith('feb')) return true; // fe80::/10
+    if (lower.startsWith('fc') || lower.startsWith('fd')) return true; // fc00::/7
+    if (lower.startsWith('64:ff9b')) return true; // NAT64 — hides v4 targets
+    const v4 = lower.match(/::ffff:(\d+\.\d+\.\d+\.\d+)$/); // v4-mapped
+    if (v4) return isPrivateAddress(v4[1]);
+    return false;
+  }
+  return true; // not an IP at all — refuse
+}
+
+/** Resolve a hostname and return a validated public address, or throw. */
+async function resolvePublicAddress(hostname) {
+  // URL.hostname keeps the brackets on an IPv6 literal ([::1]); strip them so
+  // net.isIP classifies it as an address, not a name headed for DNS.
+  const host = hostname.startsWith('[') && hostname.endsWith(']') ? hostname.slice(1, -1) : hostname;
+  // A literal IP in the URL skips DNS — validate it directly.
+  if (net.isIP(host)) {
+    if (isPrivateAddress(host)) throw new Error('URL resolves to a private or reserved address');
+    return { address: host, family: net.isIP(host) };
+  }
+  let records;
+  try {
+    records = await dns.promises.lookup(host, { all: true, verbatim: true });
+  } catch {
+    throw new Error('URL hostname could not be resolved');
+  }
+  if (!records.length) throw new Error('URL hostname could not be resolved');
+  // EVERY record must be public — a mixed set is an attack, not a CDN.
+  for (const r of records) {
+    if (isPrivateAddress(r.address)) throw new Error('URL resolves to a private or reserved address');
+  }
+  return records[0];
+}
+
+function fetchOnce(urlObj, pinned) {
+  return new Promise((resolve, reject) => {
+    const req = https.request(
+      {
+        protocol: urlObj.protocol,
+        hostname: urlObj.hostname, // SNI + Host header stay the real name
+        port: 443,
+        path: urlObj.pathname + urlObj.search,
+        method: 'GET',
+        headers: { 'User-Agent': 'Cellarion-ImageFetch/1.0 (+https://cellarion.app)' },
+        timeout: TIMEOUT_MS,
+        // The pin: whatever DNS says NOW, connect to the address validated above.
+        lookup: (host, opts, cb) => cb(null, pinned.address, pinned.family),
+      },
+      (res) => {
+        const status = res.statusCode || 0;
+        if ([301, 302, 303, 307, 308].includes(status)) {
+          res.resume();
+          return resolve({ redirect: res.headers.location || null });
+        }
+        if (status !== 200) {
+          res.resume();
+          return reject(new Error(`image URL answered HTTP ${status}`));
+        }
+        const ct = String(res.headers['content-type'] || '').toLowerCase();
+        if (ct && !ct.startsWith('image/')) {
+          res.destroy();
+          return reject(new Error(`URL is not an image (content-type ${ct.split(';')[0]})`));
+        }
+        const declared = parseInt(res.headers['content-length'], 10);
+        if (Number.isFinite(declared) && declared > MAX_BYTES) {
+          res.destroy();
+          return reject(new Error('image is larger than the 10 MB limit'));
+        }
+        const chunks = [];
+        let size = 0;
+        res.on('data', (c) => {
+          size += c.length;
+          if (size > MAX_BYTES) {
+            res.destroy();
+            return reject(new Error('image is larger than the 10 MB limit'));
+          }
+          chunks.push(c);
+        });
+        res.on('end', () => resolve({ buffer: Buffer.concat(chunks), contentType: ct || null }));
+        res.on('error', (e) => reject(new Error(`download failed: ${e.message}`)));
+      }
+    );
+    req.on('timeout', () => { req.destroy(new Error('image download timed out')); });
+    req.on('error', (e) => reject(new Error(`download failed: ${e.message}`)));
+    req.end();
+  });
+}
+
+/**
+ * Download an image from a caller-supplied https URL with the full guard
+ * stack. Throws Error with a message safe to surface to the caller.
+ */
+async function safeFetchImage(rawUrl) {
+  let urlObj;
+  try {
+    urlObj = new URL(String(rawUrl));
+  } catch {
+    throw new Error('image_url is not a valid URL');
+  }
+  for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
+    if (urlObj.protocol !== 'https:') throw new Error('image_url must be https');
+    if (urlObj.port && urlObj.port !== '443') throw new Error('image_url must use the default https port');
+    if (urlObj.username || urlObj.password) throw new Error('image_url must not carry credentials');
+    const pinned = await resolvePublicAddress(urlObj.hostname);
+    const result = await fetchOnce(urlObj, pinned);
+    if (result.redirect !== undefined) {
+      if (!result.redirect) throw new Error('image URL redirected without a destination');
+      urlObj = new URL(result.redirect, urlObj); // relative redirects resolve against the current hop
+      continue; // full re-validation on the next loop
+    }
+    return result;
+  }
+  throw new Error(`image URL redirected more than ${MAX_REDIRECTS} times`);
+}
+
+module.exports = { safeFetchImage, isPrivateAddress, MAX_BYTES };
