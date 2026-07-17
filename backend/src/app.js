@@ -76,9 +76,18 @@ const { logAudit } = require('./services/audit');
 
 const app = express();
 
-// Trust two proxy hops: Traefik → frontend nginx → backend.
-// req.ip is used as fallback when CF-Connecting-IP is absent (local dev).
-app.set('trust proxy', 2);
+// How many reverse-proxy hops sit in front of Express, i.e. how many trailing
+// X-Forwarded-For entries Express may trust when resolving req.ip (the per-IP
+// rate-limit + audit key when CF-Connecting-IP is absent). Security audit M-3:
+// this MUST match the actual chain — trusting MORE hops than exist lets a client
+// forge req.ip via a spoofed XFF prefix and get a fresh bucket on every limiter.
+//   - Shipped compose (nginx → backend): 1 hop. This is the default.
+//   - Hosted prod (Cloudflare → Traefik → nginx → backend): set TRUST_PROXY_HOPS=2
+//     so req.ip resolves to the Cloudflare edge IP and getClientIp() can trust
+//     CF-Connecting-IP. Without it, req.ip collapses to Traefik's internal IP and
+//     every per-IP limiter shares one bucket. See utils/clientIp.js.
+const trustProxyHops = Number(process.env.TRUST_PROXY_HOPS ?? 1);
+app.set('trust proxy', Number.isFinite(trustProxyHops) ? trustProxyHops : 1);
 
 // Security headers — explicit config for production SaaS
 app.use(helmet({
