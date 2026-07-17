@@ -158,3 +158,70 @@ describe('force-close', () => {
     expect(eventBus.streamCounts().total).toBe(2);
   });
 });
+
+describe('in-process listeners (MCP sessions, plan §4)', () => {
+  test('listeners ride the same debounce as streams and receive (event, data)', () => {
+    const got = [];
+    eventBus.addListener('u1', (event, data) => got.push([event, data]));
+    eventBus.emit('u1', 'notification', { id: 'n1' });
+    expect(got).toHaveLength(0); // debounced
+    jest.advanceTimersByTime(eventBus.DEBOUNCE_MS);
+    expect(got).toEqual([['notification', { id: 'n1' }]]);
+  });
+
+  test('within a window the LAST event wins (coalesced like streams)', () => {
+    const got = [];
+    eventBus.addListener('u1', (event) => got.push(event));
+    eventBus.emit('u1', 'stats_changed', {});
+    eventBus.emit('u1', 'notification', {});
+    jest.advanceTimersByTime(eventBus.DEBOUNCE_MS);
+    expect(got).toEqual(['notification']);
+  });
+
+  test('a throwing listener does not break other listeners or streams', () => {
+    const res = mockRes();
+    eventBus.register('u1', res);
+    const got = [];
+    eventBus.addListener('u1', () => { throw new Error('boom'); });
+    eventBus.addListener('u1', (event) => got.push(event));
+    eventBus.emit('u1', 'stats_changed', {});
+    jest.advanceTimersByTime(eventBus.DEBOUNCE_MS);
+    expect(got).toEqual(['stats_changed']);
+    expect(res.written).toHaveLength(1);
+  });
+
+  test('unsubscribe stops delivery and cleans the per-user set', () => {
+    const got = [];
+    const unsub = eventBus.addListener('u1', (event) => got.push(event));
+    unsub();
+    eventBus.emit('u1', 'notification', {});
+    jest.advanceTimersByTime(eventBus.DEBOUNCE_MS);
+    expect(got).toHaveLength(0);
+  });
+
+  test('listeners fire even with zero SSE streams registered', () => {
+    const got = [];
+    eventBus.addListener('u9', (event) => got.push(event));
+    eventBus.emit('u9', 'notification', {});
+    jest.advanceTimersByTime(eventBus.DEBOUNCE_MS);
+    expect(got).toEqual(['notification']);
+  });
+
+  test('onDropUser / onDropToken hooks fire before stream teardown', () => {
+    const calls = [];
+    eventBus.onDropUser((u) => calls.push(['user', u]));
+    eventBus.onDropToken((t) => calls.push(['token', t]));
+    eventBus.dropUser('u1');
+    eventBus.dropToken('tok9');
+    expect(calls).toEqual([['user', 'u1'], ['token', 'tok9']]);
+  });
+
+  test('a throwing drop hook never blocks the teardown itself', () => {
+    const res = mockRes();
+    eventBus.register('u1', res);
+    eventBus.onDropUser(() => { throw new Error('hook boom'); });
+    eventBus.dropUser('u1');
+    expect(res.writableEnded).toBe(true);
+    expect(eventBus.streamCounts().total).toBe(0);
+  });
+});

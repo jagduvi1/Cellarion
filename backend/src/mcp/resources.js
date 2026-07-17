@@ -95,3 +95,34 @@ registerResource({
     return json(uri, r.error ? { error: r.error } : { summary: r.summary, data: r.data });
   },
 });
+
+registerResource({
+  name: 'alerts',
+  uri: 'cellarion://alerts',
+  title: 'Unread alerts',
+  description:
+    'The user\'s unread notifications, newest first (drink-window transitions, restock alerts, climate excursions, ' +
+    'community events). SUBSCRIBABLE on a stateful session: subscribe to be pushed notifications/resources/updated ' +
+    'whenever a new alert lands, then re-read this resource.',
+  scope: 'read',
+  handler: async (uri, _params, ctx) => {
+    // Lazy model require keeps the registry load path lean (same convention
+    // as the tool files).
+    const Notification = require('../models/Notification');
+    const [items, unread] = await Promise.all([
+      Notification.find({ user: ctx.user.id, read: false }).sort({ createdAt: -1 }).limit(20).lean(),
+      Notification.countDocuments({ user: ctx.user.id, read: false }),
+    ]);
+    return json(uri, {
+      summary: `${unread} unread alert(s)`,
+      data: items.map((n) => ({
+        notification_id: n._id,
+        type: n.type,
+        title: n.title,
+        message: n.message,
+        created_at: n.createdAt,
+      })),
+      ...(unread > items.length ? { warnings: [`Showing the newest ${items.length} of ${unread} unread — list_notifications pages through the rest.`] } : {}),
+    });
+  },
+});

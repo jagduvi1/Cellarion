@@ -25,5 +25,6 @@ require('./journey');
 require('./semantic');
 require('./tasting');
 require('./arrange');
+require('./notify');
 
 module.exports = {};

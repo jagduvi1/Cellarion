@@ -116,6 +116,24 @@ const CASES = [
     prompt: 'Rearrange my main rack so the bottles I should drink first end up on top.',
     expect: { anyOf: ['auto_arrange', 'list_racks', 'list_cellars'] }, // may resolve ids first; apply still needs a preview
   },
+
+  // ── Phase 4: proactive sommelier ─────────────────────────────────────────
+  {
+    id: 'any-alerts',
+    prompt: 'Anything in my cellar that needs my attention right now?',
+    expect: { anyOf: ['list_notifications', 'cellar_health_check'] },
+  },
+  {
+    id: 'climate-check',
+    prompt: 'Is the temperature in my cellar okay?',
+    expect: { anyOf: ['climate_status', 'list_cellars'] }, // may resolve the cellar id first
+  },
+  {
+    id: 'clear-alerts',
+    prompt: "Thanks, I've seen all those alerts — clear them.",
+    expect: { tool: 'mark_notification_read' },
+    args: (a) => a.all === true || a.notification_id !== undefined,
+  },
 ];
 
 module.exports = { CASES };

@@ -1,11 +1,33 @@
 const express = require('express');
 const router = express.Router();
 const { requireAuth, requireNonDemo } = require('../middleware/auth');
-const { handleMcpRequest } = require('../mcp/server');
+const { handleMcpRequest, initStatefulSession } = require('../mcp/server');
+const { getSession } = require('../mcp/sessions');
 const mongoose = require('mongoose');
 const McpActionLog = require('../models/McpActionLog');
 const { RESTORE_WINDOW_MS } = require('../services/bottleOps');
 const { revertLedgerRow, reversibleActionsFor } = require('../mcp/revert');
+
+// JSON-RPC initialize marker (single message or batch). Local check — the
+// SDK's isInitializeRequest helper lives in the ESM package.
+const isInitialize = (body) => (Array.isArray(body)
+  ? body.some((m) => m && m.method === 'initialize')
+  : body && body.method === 'initialize');
+
+// Resolve the caller's session from the Mcp-Session-Id header. Identity-bound:
+// wrong user, wrong credential kind, or expired all look identical (null) —
+// the 404 reply carries no oracle. Returns undefined when no header was sent.
+function sessionFor(req) {
+  const sid = req.headers['mcp-session-id'];
+  if (!sid) return undefined;
+  return getSession(sid, { userId: req.user.id, tokenId: req.apiToken?.id }) || null;
+}
+
+const SESSION_GONE = {
+  jsonrpc: '2.0',
+  error: { code: -32001, message: 'Session not found or expired — re-initialize (POST without Mcp-Session-Id).' },
+  id: null,
+};
 
 // The action types a browser session can reverse (full personal authority =
 // consume + write). Excludes bulk_preview (changed nothing) and undo_add / other
@@ -38,16 +60,55 @@ router.post('/', requireAuth, requireNonDemo, async (req, res, next) => {
     // from it (which also emits the stats_changed SSE nudge), and req.apiToken
     // lets the action ledger attribute the acting token (id only, never the
     // token value).
-    await handleMcpRequest(req, res, { user: req.user, scopes, req });
+    const ctx = { user: req.user, scopes, req };
+
+    // Session continuation: the header routes to the LIVE server built at
+    // initialize. requireAuth already ran — the id is routing, not authority.
+    const session = sessionFor(req);
+    if (session) {
+      session.callState.calls = 0; // the per-request call budget is per REQUEST
+      session.ctx.req = req;       // audit attribution follows the actual caller
+      return await session.transport.handleRequest(req, res, req.body);
+    }
+    if (session === null) return res.status(404).json(SESSION_GONE);
+
+    // New initialize → try to mint a stateful session (subscriptions, GET/SSE).
+    // Cap hit → stateless fallback: everything works except push.
+    if (isInitialize(req.body)) {
+      const handled = await initStatefulSession(req, res, ctx);
+      if (handled) return;
+    }
+    await handleMcpRequest(req, res, ctx);
   } catch (err) {
     next(err);
   }
 });
 
-// Stateless Streamable HTTP is POST-only; GET is for server→client SSE streams,
-// which stateless mode does not open. 405 lets clients fall back cleanly.
-router.get('/', requireAuth, requireNonDemo, (req, res) => {
-  res.status(405).json({ error: 'MCP endpoint is POST-only (stateless Streamable HTTP)' });
+// GET opens the session's standalone SSE stream (server→client pushes:
+// notifications/resources/updated). Without a session header there is no
+// stream to open — 405 keeps the old stateless contract for those callers.
+router.get('/', requireAuth, requireNonDemo, async (req, res, next) => {
+  try {
+    const session = sessionFor(req);
+    if (session) return await session.transport.handleRequest(req, res);
+    if (session === null) return res.status(404).json(SESSION_GONE);
+    res.status(405).json({ error: 'MCP endpoint is POST-only without a session (initialize first for SSE subscriptions)' });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// DELETE terminates the session (MCP spec). The SDK transport fires
+// onsessionclosed → the store tears down server, transport and bus listener.
+router.delete('/', requireAuth, requireNonDemo, async (req, res, next) => {
+  try {
+    const session = sessionFor(req);
+    if (session) return await session.transport.handleRequest(req, res);
+    if (session === null) return res.status(404).json(SESSION_GONE);
+    res.status(405).json({ error: 'Nothing to terminate — no Mcp-Session-Id header' });
+  } catch (err) {
+    next(err);
+  }
 });
 
 // ── Recent AI activity timeline (Phase 2d) ──────────────────────────────────

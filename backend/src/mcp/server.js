@@ -72,13 +72,21 @@ function budgetedHandler(tool, ctx, state) {
 // is not merely hidden from tools/list — it is uncallable (a tools/call for it
 // gets "unknown tool"). So scope enforcement is structural, not a filter a
 // client could talk around. ctx = { user, scopes }.
-async function buildServer(ctx) {
+//
+// opts.session (mcp/sessions.js) switches on STATEFUL extras: the resources
+// subscribe capability + handlers wired to the event bus (plan §4), and an
+// externally-owned call-budget state that the route resets per request (a
+// long-lived session must budget per REQUEST, not per lifetime).
+async function buildServer(ctx, opts = {}) {
   const { McpServer, ResourceTemplate } = await loadSdk();
   const server = new McpServer(
     { name: 'cellarion', version: pkg.version },
-    { instructions: INSTRUCTIONS }
+    {
+      instructions: INSTRUCTIONS,
+      ...(opts.session ? { capabilities: { resources: { subscribe: true, listChanged: false } } } : {}),
+    }
   );
-  const state = { calls: 0 };
+  const state = opts.callState || { calls: 0 };
   for (const tool of toolsForScopes(ctx.scopes, ctx.user?.roles || [])) {
     server.registerTool(
       tool.name,
@@ -112,7 +120,61 @@ async function buildServer(ctx) {
       budgetedPromptHandler(prompt, ctx, state)
     );
   }
+  if (opts.session) await wireSubscriptions(server, ctx, opts.session);
   return server;
+}
+
+// Which event-bus events invalidate which subscribable resources. The bus
+// stays dumb (nudges, no payloads) and so do the pushes: a client gets
+// notifications/resources/updated and re-reads the resource — same
+// refresh-on-nudge contract as the web app's /api/events/stream.
+const EVENT_RESOURCE_MAP = {
+  stats_changed: ['cellar://snapshot', 'cellar://stats'],
+  notification: ['cellarion://alerts'],
+};
+
+// Session mode: handle resources/subscribe + unsubscribe, and fan event-bus
+// nudges into notifications/resources/updated for the URIs this session
+// subscribed to. Only STATIC resources the caller's scopes can read are
+// subscribable (templates would need per-id invalidation the bus cannot give).
+async function wireSubscriptions(server, ctx, session) {
+  const types = await import('@modelcontextprotocol/sdk/types.js');
+  const subscribable = new Set(
+    resourcesForScopes(ctx.scopes).filter((r) => r.uri && Object.values(EVENT_RESOURCE_MAP).flat().includes(r.uri)).map((r) => r.uri)
+  );
+  server.server.setRequestHandler(types.SubscribeRequestSchema, async (request) => {
+    const uri = String(request.params?.uri || '');
+    if (!subscribable.has(uri)) {
+      throw new Error(`Resource ${uri} is not subscribable. Subscribable: ${[...subscribable].join(', ') || '(none for these scopes)'}`);
+    }
+    session.subscriptions.add(uri);
+    if (!session.busUnsub) {
+      session.busUnsub = eventBusRef().addListener(session.userId, (event) => {
+        session.lastSeenAt = Date.now(); // a live subscriber is not idle
+        for (const u of EVENT_RESOURCE_MAP[event] || []) {
+          if (session.subscriptions.has(u)) {
+            server.server.sendResourceUpdated({ uri: u }).catch((err) => {
+              // Most commonly: the client never opened (or lost) its
+              // standalone GET stream — the push has nowhere to go. Logged,
+              // not thrown: the subscription stays; the next push retries.
+              console.warn(`[mcp] resources/updated push for ${u} failed: ${err?.message || err}`);
+            });
+          }
+        }
+      });
+    }
+    return {};
+  });
+  server.server.setRequestHandler(types.UnsubscribeRequestSchema, async (request) => {
+    session.subscriptions.delete(String(request.params?.uri || ''));
+    return {};
+  });
+}
+
+// Lazy accessor keeps the event bus off this module's require path for tests
+// that mock it wholesale.
+function eventBusRef() {
+  return require('../services/eventBus');
 }
 
 // Prompt variant of budgetedHandler. Over budget we throw — the SDK surfaces
@@ -164,10 +226,43 @@ async function handleMcpRequest(req, res, ctx) {
   await transport.handleRequest(req, res, req.body);
 }
 
+// Initialize a STATEFUL session (plan §4): a long-lived server+transport pair
+// keyed by Mcp-Session-Id, giving the client a standalone GET/SSE stream and
+// resources/subscribe pushes. Returns true when the request was handled, or
+// false when a session cap was hit — the caller then falls back to stateless
+// mode, which degrades subscriptions only (every tool still works).
+async function initStatefulSession(req, res, ctx) {
+  const { createSession, destroySession } = require('./sessions');
+  const session = createSession({ userId: ctx.user.id, tokenId: ctx.req?.apiToken?.id });
+  if (!session) return false;
+  try {
+    const { StreamableHTTPServerTransport } = await loadSdk();
+    // The session owns a MUTABLE ctx: the route swaps ctx.req on every request
+    // so audit attribution (ip/UA/token) follows the actual caller. Concurrent
+    // POSTs on one session may interleave req refs — same-user cosmetic only.
+    session.ctx = { user: ctx.user, scopes: ctx.scopes, req: ctx.req };
+    const server = await buildServer(session.ctx, { session, callState: session.callState });
+    const transport = new StreamableHTTPServerTransport({
+      sessionIdGenerator: () => session.id,
+      // The SDK fires this on DELETE (explicit session termination).
+      onsessionclosed: () => destroySession(session.id, 'client_delete'),
+    });
+    transport.onclose = () => destroySession(session.id, 'transport_closed');
+    session.server = server;
+    session.transport = transport;
+    await server.connect(transport);
+    await transport.handleRequest(req, res, req.body);
+    return true;
+  } catch (err) {
+    destroySession(session.id, 'init_failed');
+    throw err;
+  }
+}
+
 // buildServer/loadSdk are internal; the budget wrappers are exported for unit
 // tests (jest cannot load the ESM SDK, so buildServer is covered by smoke.js).
 module.exports = {
-  handleMcpRequest,
+  handleMcpRequest, initStatefulSession,
   budgetedHandler, budgetedResourceHandler, budgetedPromptHandler, MAX_CALLS_PER_REQUEST,
-  takeMutationSlot, WRITE_WINDOW_MS,
+  takeMutationSlot, WRITE_WINDOW_MS, EVENT_RESOURCE_MAP,
 };

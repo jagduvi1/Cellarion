@@ -27,6 +27,16 @@ const streams = new Map();
 const timers = new Map();
 let totalStreams = 0;
 
+// userId -> Set<fn(event, data)> — in-process listeners (MCP session
+// subscriptions, plan §4). They ride the same per-user debounce as the SSE
+// streams; a listener that throws is dropped from that delivery only.
+const listeners = new Map();
+// Hooks invoked by dropUser/dropToken so OTHER session stores (MCP stateful
+// sessions) are torn down wherever SSE streams are — password change, token
+// revoke, account deletion — without those routes needing to know about them.
+const dropUserHooks = [];
+const dropTokenHooks = [];
+
 function safeWrite(res, frame) {
   if (res.destroyed || res.writableEnded) return;
   try { res.write(frame); } catch { /* socket died mid-write — close handler cleans up */ }
@@ -46,20 +56,55 @@ function safeEnd(res) {
 function emit(userId, event, data = {}) {
   const key = String(userId);
   const set = streams.get(key);
-  if (!set || set.size === 0) return;
+  const fns = listeners.get(key);
+  if ((!set || set.size === 0) && (!fns || fns.size === 0)) return;
 
   clearTimeout(timers.get(key));
   const timer = setTimeout(() => {
     timers.delete(key);
     const current = streams.get(key);
-    if (!current) return;
-    const frame = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
-    for (const entry of current) safeWrite(entry.res, frame);
+    if (current) {
+      const frame = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
+      for (const entry of current) safeWrite(entry.res, frame);
+    }
+    const currentFns = listeners.get(key);
+    if (currentFns) {
+      for (const fn of currentFns) {
+        try { fn(event, data); } catch { /* one bad listener must not break the fan-out */ }
+      }
+    }
   }, DEBOUNCE_MS);
   // Never hold the process open just for a pending nudge (also keeps Jest quiet)
   timer.unref?.();
   timers.set(key, timer);
 }
+
+/**
+ * Register an in-process listener for one user's events (same debounce as the
+ * SSE streams; within a window the LAST event wins). Returns an unsubscribe
+ * function. Listener counts are NOT capped here — callers (MCP sessions) have
+ * their own session caps.
+ */
+function addListener(userId, fn) {
+  const key = String(userId);
+  let set = listeners.get(key);
+  if (!set) {
+    set = new Set();
+    listeners.set(key, set);
+  }
+  set.add(fn);
+  return () => {
+    const cur = listeners.get(key);
+    if (!cur) return;
+    cur.delete(fn);
+    if (cur.size === 0) listeners.delete(key);
+  };
+}
+
+/** Register a hook invoked with (userId) whenever dropUser tears a user down. */
+function onDropUser(hook) { dropUserHooks.push(hook); }
+/** Register a hook invoked with (tokenId) whenever dropToken fires. */
+function onDropToken(hook) { dropTokenHooks.push(hook); }
 
 /**
  * Register an open SSE response. tokenId is set when the stream was
@@ -117,6 +162,9 @@ function unregister(userId, res) {
  */
 function dropUser(userId) {
   const key = String(userId);
+  for (const hook of dropUserHooks) {
+    try { hook(key); } catch { /* a failing hook must not block session teardown */ }
+  }
   const set = streams.get(key);
   if (!set) return;
   for (const entry of set) {
@@ -131,6 +179,9 @@ function dropUser(userId) {
 /** Force-close the streams a specific (revoked) API token authenticated. */
 function dropToken(tokenId) {
   const id = String(tokenId);
+  for (const hook of dropTokenHooks) {
+    try { hook(id); } catch { /* a failing hook must not block stream teardown */ }
+  }
   for (const [key, set] of streams) {
     for (const entry of set) {
       if (entry.tokenId === id) {
@@ -156,6 +207,9 @@ module.exports = {
   emit,
   register,
   unregister,
+  addListener,
+  onDropUser,
+  onDropToken,
   dropUser,
   dropToken,
   streamCounts,

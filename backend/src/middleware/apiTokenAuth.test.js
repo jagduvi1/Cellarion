@@ -91,10 +91,11 @@ describe('isRequestAllowed (default-deny)', () => {
     ['GET', '/api/auth/whoami/extra'],
     ['GET', '/api/auth/whoamix'],
     ['GET', '/api/auth/logout'],
-    // MCP is POST-only and exact-anchored: no GET, no sibling, no sub-path leaks
-    ['GET', '/api/mcp'],
+    // MCP is exact-anchored: no sibling, no sub-path leaks (GET/DELETE on the
+    // exact path are allowed since Phase 4 sessions — pinned separately below)
     ['POST', '/api/mcp/extra'],
     ['POST', '/api/mcpx'],
+    ['GET', '/api/mcp/activity'],
     // Writes are never granted by read
     ['POST', '/api/bottles'],
     ['DELETE', `/api/cellars/${oid}`],
@@ -162,19 +163,26 @@ describe('isRequestAllowed (default-deny)', () => {
     expect(isRequestAllowed(CONSUME, 'POST', '/api/mcp')).toBe(true);
     // climate (device credential) still reaches NOTHING but ingest.
     expect(isRequestAllowed(['climate'], 'POST', '/api/mcp')).toBe(false);
-    // POST-only + exact-anchored — GET (the 405 fallback) and sub-paths denied.
-    expect(isRequestAllowed(READ, 'GET', '/api/mcp')).toBe(false);
-    expect(isRequestAllowed(CONSUME, 'GET', '/api/mcp')).toBe(false);
+    // GET/DELETE are granted since stateful sessions (Phase 4): GET opens the
+    // session's SSE stream, DELETE terminates it — both no-ops without a live
+    // session bound to this exact token. Sub-paths stay exact-anchored-denied.
+    expect(isRequestAllowed(READ, 'GET', '/api/mcp')).toBe(true);
+    expect(isRequestAllowed(CONSUME, 'GET', '/api/mcp')).toBe(true);
+    expect(isRequestAllowed(READ, 'DELETE', '/api/mcp')).toBe(true);
+    expect(isRequestAllowed(['climate'], 'GET', '/api/mcp')).toBe(false);
     expect(isRequestAllowed(READ, 'POST', '/api/mcp/tools')).toBe(false);
+    expect(isRequestAllowed(READ, 'GET', '/api/mcp/activity')).toBe(false); // timeline stays JWT-only
   });
 
   test('write scope: MCP endpoint only — never any REST route', () => {
     const WRITE = ['write'];
     expect(isRequestAllowed(WRITE, 'POST', '/api/mcp')).toBe(true);
+    expect(isRequestAllowed(WRITE, 'GET', '/api/mcp')).toBe(true);   // session SSE stream
+    expect(isRequestAllowed(WRITE, 'DELETE', '/api/mcp')).toBe(true); // session termination
     expect(isRequestAllowed(WRITE, 'POST', '/api/bottles')).toBe(false);
     expect(isRequestAllowed(WRITE, 'PUT', '/api/bottles/' + 'a'.repeat(24))).toBe(false);
     expect(isRequestAllowed(WRITE, 'GET', '/api/cellars')).toBe(false);
-    expect(isRequestAllowed(WRITE, 'GET', '/api/mcp')).toBe(false);
+    expect(isRequestAllowed(WRITE, 'GET', '/api/mcp/activity')).toBe(false);
   });
 
   test('GET /api/auth/whoami is granted ONLY by read (own account id for HA reauth)', () => {
