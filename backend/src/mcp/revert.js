@@ -16,7 +16,8 @@ const { resolveBottleAccess } = require('./toolUtil');
 // delete-a-bottle power through undo).
 const CONSUME_REVERSIBLE = ['consume', 'restore'];
 const WRITE_REVERSIBLE = ['add', 'update', 'bulk_add', 'somm_maturity', 'somm_price',
-  'cellar_create', 'rack_create', 'place', 'unplace', 'move', 'arrange', 'tasting_note', 'attach_image'];
+  'cellar_create', 'rack_create', 'place', 'unplace', 'move', 'arrange', 'tasting_note', 'attach_image',
+  'winelist_add', 'winelist_price'];
 
 function reversibleActionsFor(scopes) {
   return (scopes || []).includes('write') ? [...CONSUME_REVERSIBLE, ...WRITE_REVERSIBLE] : CONSUME_REVERSIBLE;
@@ -106,6 +107,75 @@ async function revertLedgerRow(row, ctx, { ok, fail }) {
       data: { undone: 'capture_tasting_note', entry_removed: !!del.deleted, rating_restored: row.prev?.field ? ratingRestored : undefined },
     };
     await logAction(ctx, { tool: 'undo_last', action: 'tasting_note', viaUndo: true, bottle: row.bottle, cellar: row.cellar, detail: { undid: String(row._id) }, result: envelope });
+    return ok(envelope.summary, envelope.data);
+  }
+
+  // Wine-list curation — entry add/pricing on the caller's own list. The list
+  // is re-loaded user-scoped; the entry is located by the wine+vintage+size
+  // key recorded in detail (entries have no _id).
+  if (row.action === 'winelist_add' || row.action === 'winelist_price') {
+    const WineList = require('../models/WineList');
+    const d = row.detail || {};
+    const list = await WineList.findOne({ _id: d.listId, user: ctx.user.id });
+
+    const matches = (e) => String(e.wine) === String(d.wineId)
+      && (e.vintage || 'NV') === (d.vintage || 'NV')
+      && (e.bottleSize || '750ml') === (d.bottleSize || '750ml');
+    const containers = list
+      ? [...(list.sections || []).map((s) => s.entries), list.autoGroupEntries || []]
+      : [];
+
+    if (row.action === 'winelist_add') {
+      // Missing list or entry → the added line is already gone; claiming the
+      // row as reversed is the honest terminal state (same as attach_image).
+      const claimed = await McpActionLog.findOneAndUpdate({ _id: row._id, reversed: false }, { $set: { reversed: true, idempotencyKey: null } });
+      if (!claimed) return fail('conflict', 'That action is already being undone by another request.');
+      let removed = false;
+      for (const entries of containers) {
+        const i = entries.findIndex(matches);
+        if (i !== -1) { entries.splice(i, 1); removed = true; break; }
+      }
+      if (removed) {
+        try {
+          await list.save();
+        } catch (err) {
+          if (err?.name === 'VersionError') return fail('conflict', 'The list changed mid-undo — retry.');
+          throw err;
+        }
+      }
+      const envelope = {
+        summary: `Undid add to "${d.listName || 'wine list'}"${removed ? ' — entry removed' : ' — entry was already gone'}`,
+        data: { undone: 'add_to_list', list_id: d.listId, entry_removed: removed },
+      };
+      await logAction(ctx, { tool: 'undo_last', action: 'winelist_add', viaUndo: true, cellar: row.cellar, detail: { undid: String(row._id) }, result: envelope });
+      return ok(envelope.summary, envelope.data);
+    }
+
+    // winelist_price — restore the prev pricing snapshot; if the list or the
+    // entry is gone there is nothing to restore onto.
+    let entry = null;
+    for (const entries of containers) {
+      entry = entries.find(matches) || entry;
+    }
+    if (!entry) return fail('conflict', 'That wine-list entry no longer exists; nothing was changed.');
+    const claimed = await McpActionLog.findOneAndUpdate({ _id: row._id, reversed: false }, { $set: { reversed: true, idempotencyKey: null } });
+    if (!claimed) return fail('conflict', 'That action is already being undone by another request.');
+    const prev = row.prev || {};
+    entry.listPrice = prev.listPrice === null || prev.listPrice === undefined ? undefined : prev.listPrice;
+    entry.byGlass = !!prev.byGlass;
+    entry.glassPrice = prev.glassPrice === null || prev.glassPrice === undefined ? undefined : prev.glassPrice;
+    entry.glassPriceManual = !!prev.glassPriceManual;
+    try {
+      await list.save();
+    } catch (err) {
+      if (err?.name === 'VersionError') return fail('conflict', 'The list changed mid-undo — retry.');
+      throw err;
+    }
+    const envelope = {
+      summary: `Undid pricing change on "${d.listName || 'wine list'}" — previous prices restored`,
+      data: { undone: 'update_list_pricing', list_id: d.listId, restored: prev },
+    };
+    await logAction(ctx, { tool: 'undo_last', action: 'winelist_price', viaUndo: true, cellar: row.cellar, detail: { undid: String(row._id) }, result: envelope });
     return ok(envelope.summary, envelope.data);
   }
 
