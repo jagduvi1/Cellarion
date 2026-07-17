@@ -113,7 +113,23 @@ function budgetedHandler(tool, ctx, state) {
         return rateLimited('Too many cellar changes in a short time — wait a few minutes before mutating again. Reads still work.');
       }
     }
-    return withUsage(ctx, 'tool', tool.name, () => tool.handler(args || {}, ctx), (out) => out && out.isError);
+    const run = withUsage(ctx, 'tool', tool.name, () => tool.handler(args || {}, ctx), (out) => out && out.isError);
+    // Idempotency-claim hygiene (prior-audit M2): replay() reserves the key
+    // BEFORE the mutation; a call that then fails never reaches logAction, so
+    // its pending claim must be dropped here or the key stays locked until the
+    // stale window. One place instead of a release call in every tool's every
+    // fail path. Success paths are untouched (logAction completed the claim).
+    const key = args?.idempotency_key;
+    if (key && ctx.user && run && typeof run.then === 'function') {
+      const { releaseClaim } = require('./actionLedger');
+      return run.then(
+        // idempotencyBusy = the error IS the idempotency conflict — a live
+        // twin owns the claim; deleting it here would unlock a double-exec.
+        async (out) => { if (out && out.isError && !out.idempotencyBusy) await releaseClaim(ctx, key); return out; },
+        async (err) => { await releaseClaim(ctx, key); throw err; }
+      );
+    }
+    return run;
   };
 }
 

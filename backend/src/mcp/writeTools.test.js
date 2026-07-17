@@ -154,8 +154,10 @@ describe('add_bottle', () => {
     expect(opts).toMatchObject({ confirmCreate: true, skipSiblingMatch: false, createdVia: 'mcp' });
     expect(logAudit).toHaveBeenCalledWith(REQ, 'wine.create',
       { type: 'wine', id: oid('f') }, expect.objectContaining({ via: 'mcp' }));
-    const row = McpActionLog.create.mock.calls[0][0];
-    expect(row).toMatchObject({ user: ME, tokenId: 't1', action: 'add', idempotencyKey: 'k-add' });
+    // Keyed ledger writes complete the pending claim (claim-first, M2).
+    const [lQuery, lUpdate] = McpActionLog.findOneAndUpdate.mock.calls.at(-1);
+    expect(lQuery).toEqual({ user: ME, idempotencyKey: 'k-add', pending: true });
+    expect(lUpdate.$set).toMatchObject({ tokenId: 't1', action: 'add', idempotencyKey: 'k-add', pending: false });
     expect(bottleOps.addBottle.mock.calls[0][3]).toBe(REQ); // audit/SSE attribution rides the real req
   });
 
@@ -170,7 +172,12 @@ describe('add_bottle', () => {
   });
 
   test('idempotent replay short-circuits everything', async () => {
-    McpActionLog.findOne.mockReturnValue(chain({ result: { summary: 'Added once', data: { bottle_id: oid('d') } } }));
+    // Claim-first replay (prior-audit M2): the atomic upsert reports the key
+    // as already existing and completed — the stored envelope comes back.
+    McpActionLog.findOneAndUpdate.mockResolvedValueOnce({
+      lastErrorObject: { updatedExisting: true },
+      value: { pending: false, result: { summary: 'Added once', data: { bottle_id: oid('d') } } },
+    });
     const body = parse(await tool('add_bottle').handler(
       { cellar_id: oid('c'), wine_id: oid('f'), idempotency_key: 'k-add' }, CTX));
     expect(body.summary).toBe('Added once');

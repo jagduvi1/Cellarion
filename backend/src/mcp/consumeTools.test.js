@@ -136,15 +136,23 @@ describe('consume_bottle', () => {
     expect(body.data.status).toBe('gifted');
     expect(body.data.undo).toMatch(/restore_bottle/);
     expect(bottleOps.consumeBottle.mock.calls[0][2]).toBe(REQ);
-    const row = McpActionLog.create.mock.calls[0][0];
-    expect(row).toMatchObject({
-      user: ME, tokenId: 't1', tool: 'consume_bottle', action: 'consume', idempotencyKey: 'k1',
+    // Keyed ledger writes COMPLETE the pending claim in place (claim-first
+    // idempotency, prior-audit M2): the last findOneAndUpdate is logAction's.
+    const [query, update] = McpActionLog.findOneAndUpdate.mock.calls.at(-1);
+    expect(query).toEqual({ user: ME, idempotencyKey: 'k1', pending: true });
+    expect(update.$set).toMatchObject({
+      tokenId: 't1', tool: 'consume_bottle', action: 'consume', idempotencyKey: 'k1', pending: false,
     });
-    expect(JSON.stringify(row)).not.toMatch(/cel_/);
+    expect(JSON.stringify(update.$set)).not.toMatch(/cel_/);
   });
 
   test('idempotent replay: a seen key returns the ORIGINAL envelope without re-consuming', async () => {
-    McpActionLog.findOne.mockReturnValue(chain({ result: { summary: 'Consumed once', data: { bottle_id: oid('d') } } }));
+    // Claim-first replay (prior-audit M2): the upsert reports an existing
+    // completed row → replay, never a second consume.
+    McpActionLog.findOneAndUpdate.mockResolvedValueOnce({
+      lastErrorObject: { updatedExisting: true },
+      value: { pending: false, result: { summary: 'Consumed once', data: { bottle_id: oid('d') } } },
+    });
     const res = await tool('consume_bottle').handler({ bottle_id: oid('d'), idempotency_key: 'k1' }, CTX);
     expect(parse(res).summary).toBe('Consumed once');
     expect(bottleOps.consumeBottle).not.toHaveBeenCalled();

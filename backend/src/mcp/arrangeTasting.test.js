@@ -374,7 +374,12 @@ describe('capture_tasting_note', () => {
     res = await tool('capture_tasting_note').handler({ bottle_id: oid('9'), note: 'x' }, CTX);
     expect(parse(res).error.code).toBe('not_found');
 
-    McpActionLog.findOne.mockReturnValue(chain({ result: { summary: 'seen', data: {} } }));
+    // Claim-first replay (prior-audit M2): the upsert reports the key as
+    // completed → stored envelope, no second journal entry.
+    McpActionLog.findOneAndUpdate.mockResolvedValueOnce({
+      lastErrorObject: { updatedExisting: true },
+      value: { pending: false, result: { summary: 'seen', data: {} } },
+    });
     res = await tool('capture_tasting_note').handler({ bottle_id: oid('d'), note: 'x', idempotency_key: 'k1' }, CTX);
     expect(parse(res).summary).toBe('seen');
     expect(JournalEntry.create).not.toHaveBeenCalled();

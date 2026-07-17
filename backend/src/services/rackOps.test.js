@@ -26,7 +26,7 @@ const Rack = require('../models/Rack');
 const Bottle = require('../models/Bottle');
 const { logAudit } = require('./audit');
 const { removeFromRacks } = require('./bottleOps');
-const { createCellar, createGridRack, placeBottleInRack, clearRackSlot, moveBottleToCellar } = require('./rackOps');
+const { createCellar, createGridRack, placeBottleInRack, clearRackSlot, moveBottleToCellar, applyArrangement } = require('./rackOps');
 
 const REQ = { user: { id: 'u1', roles: ['user'] }, headers: {} };
 const selectable = (doc) => ({ select: jest.fn().mockResolvedValue(doc) });
@@ -96,6 +96,31 @@ describe('placeBottleInRack', () => {
     Bottle.findOne.mockReturnValue(selectable({ _id: 'b1' }));
     const r = rack(); r.save = jest.fn().mockRejectedValue(Object.assign(new Error('v'), { name: 'VersionError' }));
     expect((await placeBottleInRack(r, 5, 'b1', REQ)).error).toMatchObject({ status: 409, code: 'conflict' });
+  });
+
+  test('E11000 on save → conflict (unique slots.bottle index: bottle won a race into another rack)', async () => {
+    // Prior-audit M4: two placements of the same bottle into two DIFFERENT
+    // racks touch different documents, so only the unique multikey index can
+    // stop the second — its duplicate-key error must map to the same clean
+    // 409 the intra-rack VersionError path produces, not a 500.
+    Bottle.findOne.mockReturnValue(selectable({ _id: 'b1' }));
+    const r = rack(); r.save = jest.fn().mockRejectedValue(Object.assign(new Error('E11000 duplicate key'), { code: 11000 }));
+    const res = await placeBottleInRack(r, 5, 'b1', REQ);
+    expect(res.error).toMatchObject({ status: 409, code: 'conflict' });
+    expect(res.error.message).toMatch(/another rack/);
+  });
+});
+
+describe('applyArrangement', () => {
+  test('E11000 on save → conflict, nothing applied (same M4 mapping as place)', async () => {
+    const r = {
+      _id: 'r1', cellar: 'c1', disabledPositions: [], slots: [],
+      save: jest.fn().mockRejectedValue(Object.assign(new Error('E11000 duplicate key'), { code: 11000 })),
+    };
+    const res = await applyArrangement(r, [{ position: 1, bottleId: 'b1' }], REQ);
+    expect(res.error).toMatchObject({ status: 409, code: 'conflict' });
+    expect(res.error.message).toMatch(/another rack/);
+    expect(logAudit).not.toHaveBeenCalled();
   });
 });
 
