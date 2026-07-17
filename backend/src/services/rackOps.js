@@ -13,7 +13,7 @@ const Cellar = require('../models/Cellar');
 const Rack = require('../models/Rack');
 const Bottle = require('../models/Bottle');
 const { logAudit } = require('./audit');
-const { getMaxPosition } = require('../utils/rackGeometry');
+const { getMaxPosition, validateDoubleHeightRows } = require('../utils/rackGeometry');
 const { removeFromRacks } = require('./bottleOps');
 
 const { RACK_TYPES } = Rack;
@@ -38,11 +38,14 @@ async function createCellar({ name, description }, req) {
 }
 
 /**
- * Create a GRID-family rack in an access-checked cellar (v1: no modular racks
- * — that path has its own validation and the read tools treat it specially).
- * Mirrors the grid branch of POST /api/racks.
+ * Create a GRID-family rack in an access-checked cellar — the ONE
+ * implementation behind the grid branch of REST POST /api/racks and the MCP
+ * create_rack tool (the route delegates here; H1 of the 2026-07-17 MCP
+ * audit). Modular racks stay a REST-only route path (their validation has no
+ * MCP twin to drift against). typeConfig (double-height rows etc.) is
+ * accepted and validated; MCP simply doesn't pass it in v1.
  */
-async function createGridRack(cellarDoc, { name, type = 'grid', rows = 4, cols = 8 }, req) {
+async function createGridRack(cellarDoc, { name, type = 'grid', rows = 4, cols = 8, typeConfig }, req) {
   if (!name || !String(name).trim()) return { error: { status: 400, message: 'Rack name is required' } };
   if (type && !RACK_TYPES.includes(type)) {
     return { error: { status: 400, message: `Invalid rack type. Must be one of: ${RACK_TYPES.join(', ')}` } };
@@ -55,6 +58,11 @@ async function createGridRack(cellarDoc, { name, type = 'grid', rows = 4, cols =
     rows: rows || 4,
     cols: cols || 8,
   });
+  if (typeConfig) {
+    const dhrError = validateDoubleHeightRows(typeConfig, rack.type, rack.rows, false);
+    if (dhrError) return { error: { status: 400, message: dhrError } };
+    rack.typeConfig = typeConfig;
+  }
   try {
     await rack.save();
   } catch (err) {

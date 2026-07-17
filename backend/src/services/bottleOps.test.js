@@ -134,6 +134,7 @@ const BottleModel = require('../models/Bottle');
 const BottleImage = require('../models/BottleImage');
 const { embedSinglePair } = require('./embeddingJob');
 const { enrichWineById } = require('./enrichmentJob');
+const { getOrCreateDailySnapshot } = require('../utils/exchangeRates');
 const { addBottle, updateBottleFields, removeBottleCascade } = require('./bottleOps');
 
 const CELLAR = { _id: 'c1', user: 'owner1', name: 'Main Cellar' };
@@ -172,6 +173,65 @@ describe('addBottle (real execution)', () => {
     const res = await addBottle(CELLAR, WINE, {}, REQ);
     expect(res.bottle.vintage).toBe('NV');
     expect(res.bottle.priceSetAt).toBeUndefined();
+  });
+
+  // ── REST-parity surface (POST /api/bottles delegates here — MCP-audit H1) ──
+
+  test('currency is kept even WITHOUT a price (the audit-proven drift), snapshot only when priced', async () => {
+    const res = await addBottle(CELLAR, WINE, { currency: 'EUR' }, REQ);
+    expect(res.bottle.currency).toBe('EUR');
+    expect(res.bottle.price).toBeUndefined();
+    expect(res.bottle.priceSetAt).toBeUndefined();
+    expect(getOrCreateDailySnapshot).not.toHaveBeenCalled();
+
+    await addBottle(CELLAR, WINE, { price: 25, currency: 'EUR' }, REQ);
+    expect(getOrCreateDailySnapshot).toHaveBeenCalledTimes(1); // awaited pre-save, REST parity
+  });
+
+  test('location is stored HTML-stripped and capped with the REST message', async () => {
+    const res = await addBottle(CELLAR, WINE, { location: 'Shelf <i>2</i>' }, REQ);
+    expect(res.bottle.location).toBe('Shelf 2');
+    const err = (await addBottle(CELLAR, WINE, { location: 'x'.repeat(501) }, REQ)).error;
+    expect(err.status).toBe(400);
+    expect(err.message).toBe('Location is too long (max 500 characters)');
+  });
+
+  test('purchaseUrl: too-long and non-http(s) each get their REST message', async () => {
+    const long = (await addBottle(CELLAR, WINE, { purchaseUrl: 'https://x.com/' + 'a'.repeat(2050) }, REQ)).error;
+    expect(long.message).toBe('purchaseUrl is too long (max 2048 characters)');
+    const unsafe = (await addBottle(CELLAR, WINE, { purchaseUrl: 'javascript:alert(1)' }, REQ)).error;
+    expect(unsafe.message).toBe('purchaseUrl must be a valid http or https URL');
+  });
+
+  test('dateAdded backdates createdAt AND the journey seed', async () => {
+    const res = await addBottle(CELLAR, WINE, { dateAdded: '2024-03-01' }, REQ);
+    expect(res.bottle.createdAt).toEqual(new Date('2024-03-01'));
+    expect(res.bottle.addedToCellarAt).toEqual(new Date('2024-03-01'));
+    expect(res.bottle.cellarHistory[0].enteredAt).toEqual(new Date('2024-03-01'));
+  });
+
+  test('addToHistory creates the bottle directly as consumed, with its own audit action', async () => {
+    const res = await addBottle(CELLAR, WINE, {
+      addToHistory: true, consumedReason: 'gifted', consumedAt: '2025-12-31',
+      consumedNote: 'to Anna <b>x</b>', consumedRating: 4, consumedRatingScale: '5',
+    }, REQ);
+    const b = res.bottle;
+    expect(b.status).toBe('gifted');
+    expect(b.consumedReason).toBe('gifted');
+    expect(b.consumedAt).toEqual(new Date('2025-12-31'));
+    expect(b.consumedNote).toBe('to Anna x');
+    expect(b.consumedRating).toBe(4);
+    expect(b.consumedRatingScale).toBe('5');
+    expect(logAudit).toHaveBeenCalledWith(REQ, 'bottle.addToHistory', expect.anything(),
+      { wineName: 'Barolo', vintage: 'NV' });
+  });
+
+  test('addToHistory defaults the reason to drank; rejects an invalid reason / rating', async () => {
+    const res = await addBottle(CELLAR, WINE, { addToHistory: true }, REQ);
+    expect(res.bottle.status).toBe('drank');
+    expect(res.bottle.consumedAt).toBeInstanceOf(Date);
+    expect((await addBottle(CELLAR, WINE, { addToHistory: true, consumedReason: 'evaporated' }, REQ)).error.status).toBe(400);
+    expect((await addBottle(CELLAR, WINE, { addToHistory: true, consumedRating: 9 }, REQ)).error.status).toBe(400);
   });
 });
 
@@ -230,6 +290,97 @@ describe('updateBottleFields (real execution)', () => {
     const res = await updateBottleFields(b, { price: 25 }, REQ);
     expect(res.changes).toEqual({});
     expect(b.save).not.toHaveBeenCalled();
+  });
+
+  // ── REST-parity surface (PUT /api/bottles/:id delegates here — MCP-audit H1) ──
+
+  test('vintage is canonicalized, audited, and re-embeds the new (wine, vintage) pair', async () => {
+    const b = liveBottle({ wineDefinition: 'w9' });
+    const res = await updateBottleFields(b, { vintage: 2021 }, REQ);
+    expect(res.error).toBeUndefined();
+    expect(b.vintage).toBe('2021');
+    expect(res.changes.vintage).toBe('2021');
+    expect(embedSinglePair).toHaveBeenCalledWith('w9', '2021');
+    expect((await updateBottleFields(liveBottle(), { vintage: '20x9' }, REQ)).error.status).toBe(400);
+  });
+
+  test('vintage re-embed is skipped for demo users (zero AI spend guarantee)', async () => {
+    const b = liveBottle({ wineDefinition: 'w9' });
+    await updateBottleFields(b, { vintage: 2022 }, { user: { id: 'd1', isDemo: true }, headers: {} });
+    expect(b.vintage).toBe('2022');
+    expect(embedSinglePair).not.toHaveBeenCalled();
+  });
+
+  test('bottleSize is canonicalized on the way in', async () => {
+    const b = liveBottle({ bottleSize: '750ml' });
+    const res = await updateBottleFields(b, { bottleSize: '1.5L (Magnum)' }, REQ);
+    expect(b.bottleSize).toBe('1500ml');
+    expect(res.changes.bottleSize).toBe('1500ml');
+  });
+
+  test('re-sending an unchanged purchaseDate (ISO string vs stored Date) records NO phantom change', async () => {
+    const b = liveBottle({ purchaseDate: new Date('2026-05-01T00:00:00Z') });
+    const res = await updateBottleFields(b, { purchaseDate: '2026-05-01' }, REQ);
+    expect(res.changes).toEqual({});
+    expect(b.save).not.toHaveBeenCalled();
+  });
+
+  test('a full-form re-send with no real edits does NOT move priceSetAt (the FX-anchor drift fix)', async () => {
+    const anchor = new Date('2026-01-01');
+    const b = liveBottle({
+      priceSetAt: anchor, bottleSize: '750ml', notes: 'x',
+      purchaseDate: new Date('2026-05-01T00:00:00Z'),
+    });
+    // Exactly what the web edit form sends on save: every field, changed or not.
+    const res = await updateBottleFields(b, {
+      vintage: '2019', price: 25, currency: 'USD', bottleSize: '750ml',
+      purchaseDate: '2026-05-01', purchaseLocation: '', purchaseUrl: '',
+      notes: 'x', occasion: '', rating: null, ratingScale: '5',
+      drinkFrom: null, drinkTo: null,
+    }, REQ);
+    expect(res.changes).toEqual({});
+    expect(b.priceSetAt).toBe(anchor);
+    expect(getOrCreateDailySnapshot).not.toHaveBeenCalled();
+    expect(b.save).not.toHaveBeenCalled();
+  });
+
+  test('ratingScale alone: 400 on a RATED bottle, allowed on an unrated one (web-form parity)', async () => {
+    const rated = liveBottle({ rating: 4, ratingScale: '5' });
+    const err = (await updateBottleFields(rated, { ratingScale: '100' }, REQ)).error;
+    expect(err.status).toBe(400);
+    expect(err.message).toBe('Send rating together with ratingScale when changing the rating scale');
+
+    const unrated = liveBottle();
+    const res = await updateBottleFields(unrated, { ratingScale: '100' }, REQ);
+    expect(res.error).toBeUndefined();
+    expect(res.changes.ratingScale).toBe('100');
+  });
+
+  test("rating '' clears exactly like rating null", async () => {
+    const b = liveBottle({ rating: 4 });
+    const res = await updateBottleFields(b, { rating: '' }, REQ);
+    expect(b.rating).toBeNull();
+    expect(res.changes.rating).toBeNull();
+    expect(res.prev.rating).toBe(4);
+  });
+
+  test('VersionError on save → 409 with the REST retry message (PUT delegates the mapping here)', async () => {
+    const b = liveBottle();
+    b.save.mockRejectedValue({ name: 'VersionError' });
+    const res = await updateBottleFields(b, { price: 30 }, REQ);
+    expect(res.error.status).toBe(409);
+    expect(res.error.message).toBe('This bottle was modified by another request. Please refresh and try again.');
+  });
+
+  test('purchaseUrl and location validate with the REST messages; location is HTML-stripped', async () => {
+    expect((await updateBottleFields(liveBottle(), { purchaseUrl: 'javascript:alert(1)' }, REQ)).error.message)
+      .toBe('purchaseUrl must be a valid http or https URL');
+    expect((await updateBottleFields(liveBottle(), { location: 'x'.repeat(501) }, REQ)).error.message)
+      .toBe('Location is too long (max 500 characters)');
+    const b = liveBottle();
+    const res = await updateBottleFields(b, { location: 'Rack <b>3</b>' }, REQ);
+    expect(b.location).toBe('Rack 3');
+    expect(res.changes.location).toBe('Rack 3');
   });
 });
 

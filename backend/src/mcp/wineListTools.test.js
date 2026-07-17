@@ -14,7 +14,7 @@ jest.mock('../models/McpActionLog', () => ({ create: jest.fn(), findOne: jest.fn
 jest.mock('../services/audit', () => ({ logAudit: jest.fn() }));
 // revert.js and tools/write.js top-require bottleOps (which pulls the search/
 // meili chain) — mock the full surface they read at load, same as
-// sommTools.test.js (write.js joins UPDATABLE_FIELDS into its description).
+// sommTools.test.js.
 jest.mock('../services/bottleOps', () => ({
   consumeBottle: jest.fn(), restoreBottle: jest.fn(), removeFromRacks: jest.fn(),
   RESTORE_WINDOW_MS: 2 * 24 * 60 * 60 * 1000,

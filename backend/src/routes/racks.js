@@ -7,9 +7,9 @@ const Cellar = require('../models/Cellar');
 const Bottle = require('../models/Bottle');
 const CellarLayout = require('../models/CellarLayout');
 const { getCellarRole } = require('../utils/cellarAccess');
-const { getMaxPosition } = require('../utils/rackGeometry');
+const { getMaxPosition, validateDoubleHeightRows } = require('../utils/rackGeometry');
 const {
-  placeBottleInRack, clearRackSlot,
+  createGridRack, placeBottleInRack, clearRackSlot,
   buildAnnotatedEntries, validateArrangementTarget, applyArrangement,
 } = require('../services/rackOps');
 const { ARRANGE_STRATEGIES, buildArrangePlan } = require('../utils/rackArrange');
@@ -43,38 +43,9 @@ async function withMaturity(rackOrRacks) {
   return Array.isArray(rackOrRacks) ? out : out[0];
 }
 
-/**
- * Validate typeConfig.doubleHeightRows: grid racks (non-modular) only,
- * entries must be integers in [1, rows].
- *
- * POSITION NUMBERING CONTRACT (double-height rows): the base grid keeps
- * positions 1..rows*cols row-major EXACTLY as a plain grid — existing
- * bottles never move. Top-layer positions are APPENDED after rows*cols:
- * iterate valid double-height rows in ascending row order, each contributing
- * cols-1 positions left-to-right. Example 4x6 grid with doubleHeightRows
- * [2]: base 1..24 unchanged, top layer of row 2 = positions 25..29.
- * (The capacity math lives in utils/rackGeometry.js; the resize guard below
- * therefore also catches removing a double row while top-layer bottles are
- * still placed.)
- *
- * @returns {string|null} error message, or null when valid
- */
-function validateDoubleHeightRows(typeConfig, effectiveType, effectiveRows, effectiveModular) {
-  const dhr = typeConfig?.doubleHeightRows;
-  if (dhr === undefined || dhr === null) return null;
-  if (effectiveModular || (effectiveType || 'grid') !== 'grid') {
-    return 'Double-height rows are only supported on grid racks';
-  }
-  if (!Array.isArray(dhr)) {
-    return 'doubleHeightRows must be an array of row numbers';
-  }
-  for (const r of dhr) {
-    if (!Number.isInteger(r) || r < 1 || r > effectiveRows) {
-      return `doubleHeightRows entries must be whole row numbers between 1 and ${effectiveRows}`;
-    }
-  }
-  return null;
-}
+// typeConfig.doubleHeightRows request validation lives in utils/rackGeometry
+// (validateDoubleHeightRows) — shared with services/rackOps.createGridRack so
+// the create path and the update route below can't drift.
 
 // GET /api/racks/nfc/:id  — resolve a rack ID to its cellar (for NFC tag redirect)
 // Requires auth so only logged-in users can follow NFC links.
@@ -124,9 +95,10 @@ router.get('/', requireCellarAccess('viewer'), async (req, res) => {
 router.post('/', requireCellarAccess('editor'), async (req, res) => {
   try {
     const { name, rows, cols, type, typeConfig, isModular, modules } = req.body;
-    if (!name) return res.status(400).json({ error: 'cellar and name are required' });
+    if (!name) return res.status(400).json({ error: 'Rack name is required' });
 
-    // Validate modular rack modules
+    // Modular racks are a REST-only route path (no MCP twin to drift against;
+    // the read tools treat them specially).
     if (isModular && modules) {
       if (!Array.isArray(modules) || modules.length === 0) {
         return res.status(400).json({ error: 'Modular racks must have at least one module' });
@@ -139,40 +111,27 @@ router.post('/', requireCellarAccess('editor'), async (req, res) => {
           return res.status(400).json({ error: `Invalid module type: ${m.type}` });
         }
       }
-    } else if (type && !RACK_TYPES.includes(type)) {
-      return res.status(400).json({ error: `Invalid rack type. Must be one of: ${RACK_TYPES.join(', ')}` });
+      // Racks are owned by the cellar owner
+      const rack = new Rack({
+        cellar: req.cellar._id,
+        user: req.cellar.user,
+        name,
+        isModular: true,
+        modules,
+      });
+      await rack.save();
+      // cellarId so this rack appears in the cellar's audit page (which
+      // filters on resource.cellarId) — grand-audit M6.
+      logAudit(req, 'rack.create', { type: 'rack', id: rack._id, cellarId: rack.cellar }, { name: rack.name });
+      return res.status(201).json({ rack });
     }
 
-    // Racks are owned by the cellar owner
-    const rackData = {
-      cellar: req.cellar._id,
-      user: req.cellar.user,
-      name,
-    };
-
-    if (isModular && modules) {
-      rackData.isModular = true;
-      rackData.modules = modules;
-    } else {
-      rackData.type = type || 'grid';
-      rackData.rows = rows || 4;
-      rackData.cols = cols || 8;
-      if (typeConfig) {
-        const dhrError = validateDoubleHeightRows(typeConfig, rackData.type, rackData.rows, false);
-        if (dhrError) return res.status(400).json({ error: dhrError });
-        rackData.typeConfig = typeConfig;
-      }
-    }
-
-    const rack = new Rack(rackData);
-
-    await rack.save();
-    // cellarId so this rack appears in the cellar's audit page (which filters
-    // on resource.cellarId) — web-created racks were invisible there while
-    // MCP-created ones showed, since rackOps.createGridRack already records it
-    // (grand-audit M6). name in detail matches the MCP surface too.
-    logAudit(req, 'rack.create', { type: 'rack', id: rack._id, cellarId: rack.cellar }, { name: rack.name });
-    res.status(201).json({ rack });
+    // Grid family: ONE shared implementation with the MCP create_rack tool
+    // (plan §7) — type/typeConfig validation, ownership, duplicate-name 409
+    // and the rack.create audit all live in rackOps.createGridRack.
+    const result = await createGridRack(req.cellar, { name, type, rows, cols, typeConfig }, req);
+    if (result.error) return res.status(result.error.status).json({ error: result.error.message });
+    res.status(201).json({ rack: result.rack });
   } catch (err) {
     if (err.code === 11000) return res.status(409).json({ error: 'A rack with that name already exists in this cellar' });
     if (err.name === 'ValidationError') return res.status(400).json({ error: err.message });
