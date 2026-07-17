@@ -14,6 +14,21 @@
 const tools = [];
 
 /**
+ * Deprecation marker (docs/mcp-versioning.md): a deprecated tool/resource/
+ * prompt STAYS registered and callable through its sunset window, but its
+ * description — the text driving model tool-selection — leads with the
+ * deprecation and the migration path, so calling models steer themselves to
+ * the replacement without any client-side support.
+ */
+function applyDeprecation(def) {
+  if (!def.deprecated) return def;
+  if (typeof def.deprecated !== 'string' || !def.deprecated.trim()) {
+    throw new Error(`register(${def.name}): deprecated must be a non-empty migration message (e.g. "use search_bottles instead; removed after v1.90")`);
+  }
+  return { ...def, description: `[DEPRECATED — ${def.deprecated.trim()}] ${def.description || ''}`.trim() };
+}
+
+/**
  * Register an MCP tool. Throws on a duplicate name (a programming error).
  * @param {object} def
  * @param {string}   def.name          unique snake_case tool name
@@ -22,6 +37,7 @@ const tools = [];
  * @param {string}   def.scope         required token scope ('public' | 'read' | …)
  * @param {object}   [def.inputSchema] zod raw shape ({} = no params)
  * @param {object}   [def.annotations] MCP hints (readOnlyHint, destructiveHint, …)
+ * @param {string}   [def.deprecated]  migration message — see docs/mcp-versioning.md
  * @param {Function} def.handler       async (args, ctx) => ({ content: [...] })
  */
 function registerTool(def) {
@@ -37,7 +53,7 @@ function registerTool(def) {
   if (tools.some((t) => t.name === def.name)) {
     throw new Error(`registerTool: duplicate tool name "${def.name}"`);
   }
-  tools.push({ inputSchema: {}, annotations: {}, ...def });
+  tools.push(applyDeprecation({ inputSchema: {}, annotations: {}, ...def }));
 }
 
 /**
@@ -111,7 +127,7 @@ function registerResource(def) {
   if (resources.some((r) => r.name === def.name)) {
     throw new Error(`registerResource: duplicate resource name "${def.name}"`);
   }
-  resources.push({ mimeType: 'application/json', ...def });
+  resources.push(applyDeprecation({ mimeType: 'application/json', ...def }));
 }
 
 /** The subset of registered resources a token with `tokenScopes` may read. */
@@ -157,7 +173,7 @@ function registerPrompt(def) {
   if (prompts.some((p) => p.name === def.name)) {
     throw new Error(`registerPrompt: duplicate prompt name "${def.name}"`);
   }
-  prompts.push({ argsSchema: {}, ...def });
+  prompts.push(applyDeprecation({ argsSchema: {}, ...def }));
 }
 
 /** The subset of registered prompts a token with `tokenScopes` may use. */

@@ -48,3 +48,29 @@ describe('get_source_info handler', () => {
     expect(JSON.stringify(info)).not.toMatch(/secret|password|token|api[_-]?key|process\.env/i);
   });
 });
+
+describe('deprecation marker (docs/mcp-versioning.md)', () => {
+  test('a deprecated tool stays registered but its description LEADS with the migration path', () => {
+    registerTool({
+      name: 'zz_test_deprecated', title: 'Old tool', scope: 'read',
+      description: 'Does the old thing.',
+      deprecated: 'use zz_new_tool instead; removed after v1.99',
+      handler: async () => ({}),
+    });
+    const t = allTools().find((x) => x.name === 'zz_test_deprecated');
+    expect(t.description).toBe('[DEPRECATED — use zz_new_tool instead; removed after v1.99] Does the old thing.');
+    expect(t.deprecated).toBeTruthy();
+  });
+
+  test('an empty deprecation message is a programming error (the marker must carry a migration path)', () => {
+    expect(() => registerTool({
+      name: 'zz_test_deprecated_bad', scope: 'read', description: 'x',
+      deprecated: '   ', handler: async () => ({}),
+    })).toThrow(/migration message/i);
+  });
+
+  test('no live tool ships deprecated right now (drift guard — clean the marker after each sunset)', () => {
+    const live = allTools().filter((t) => t.deprecated && !t.name.startsWith('zz_test_'));
+    expect(live).toEqual([]);
+  });
+});
