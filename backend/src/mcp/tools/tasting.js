@@ -41,7 +41,7 @@ registerTool({
     idempotency_key: z.string().max(100).optional(),
   },
   handler: async (args, ctx) => {
-    const replayed = await replay(ctx, args.idempotency_key);
+    const replayed = await replay(ctx, args.idempotency_key, 'capture_tasting_note');
     if (replayed) return replayed;
 
     const access = await resolveBottleAccess(ctx.user.id, args.bottle_id, 'editor');

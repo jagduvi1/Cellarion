@@ -139,7 +139,7 @@ describe('consume_bottle', () => {
     // Keyed ledger writes COMPLETE the pending claim in place (claim-first
     // idempotency, prior-audit M2): the last findOneAndUpdate is logAction's.
     const [query, update] = McpActionLog.findOneAndUpdate.mock.calls.at(-1);
-    expect(query).toEqual({ user: ME, idempotencyKey: 'k1', pending: true });
+    expect(query).toEqual({ user: ME, tool: 'consume_bottle', idempotencyKey: 'k1', pending: true });
     expect(update.$set).toMatchObject({
       tokenId: 't1', tool: 'consume_bottle', action: 'consume', idempotencyKey: 'k1', pending: false,
     });

@@ -49,7 +49,7 @@ registerTool({
     idempotency_key: z.string().max(100).optional().describe('Unique key: a retry with the same key returns the original result'),
   },
   handler: async (args, ctx) => {
-    const replayed = await replay(ctx, args.idempotency_key);
+    const replayed = await replay(ctx, args.idempotency_key, 'consume_bottle');
     if (replayed) return replayed;
 
     const access = await resolveBottleAccess(ctx.user.id, args.bottle_id, 'editor');

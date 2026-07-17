@@ -11,7 +11,7 @@
 jest.mock('../models/Cellar', () => ({ findOne: jest.fn() }));
 jest.mock('../models/Rack', () => ({ findOne: jest.fn() }));
 jest.mock('../models/Bottle', () => ({ findById: jest.fn() }));
-jest.mock('../models/McpActionLog', () => ({ findOneAndUpdate: jest.fn() }));
+jest.mock('../models/McpActionLog', () => ({ findOneAndUpdate: jest.fn(), updateOne: jest.fn() }));
 jest.mock('../services/audit', () => ({ logAudit: jest.fn() }));
 jest.mock('../utils/rackGeometry', () => ({ getMaxPosition: jest.fn(() => 12) }));
 jest.mock('../services/rackOps', () => ({
@@ -44,6 +44,7 @@ beforeEach(() => {
   Rack.findOne.mockResolvedValue({ _id: RACK, cellar: CELLAR, slots: [] });
   resolveCellarAccess.mockResolvedValue({ cellar: { _id: CELLAR } });
   McpActionLog.findOneAndUpdate.mockResolvedValue({ _id: oid('f') });
+  McpActionLog.updateOne.mockResolvedValue({});
 });
 
 test('refuses to re-slot a CONSUMED bottle, and does NOT claim the row', async () => {
@@ -70,4 +71,19 @@ test('an active in-cellar bottle IS re-slotted (claims, then places)', async () 
   expect(res.ok).toBe(true);
   expect(McpActionLog.findOneAndUpdate).toHaveBeenCalled();
   expect(placeBottleInRack).toHaveBeenCalledWith(expect.any(Object), 3, BOTTLE, expect.any(Object));
+});
+
+// MCP-audit H3: the pre-claim checks pass, the row is claimed, THEN the
+// placement fails (e.g. the bottle was concurrently placed into another rack →
+// the new unique slots.bottle index returns E11000 → placeBottleInRack maps it
+// to {error}). Without unclaim the row would stay reversed:true and the action
+// would be permanently un-undoable. The row must be released so a retry works.
+test('a post-claim placement failure UNCLAIMS the row (stays retryable)', async () => {
+  Bottle.findById.mockResolvedValue({ _id: BOTTLE, status: 'active', cellar: CELLAR });
+  placeBottleInRack.mockResolvedValue({ error: { status: 409, code: 'conflict', message: 'This bottle was just placed in another rack — refresh and retry.' } });
+  const res = await undoStructural(unplaceRow(), CTX, helpers);
+  expect(res.ok).toBe(false);
+  expect(res.message).toMatch(/Cannot undo that removal|another rack/i);
+  expect(McpActionLog.findOneAndUpdate).toHaveBeenCalled(); // claimed
+  expect(McpActionLog.updateOne).toHaveBeenCalledWith({ _id: oid('f') }, { $set: { reversed: false } }); // unclaimed
 });

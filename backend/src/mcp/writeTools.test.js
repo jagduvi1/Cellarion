@@ -156,7 +156,7 @@ describe('add_bottle', () => {
       { type: 'wine', id: oid('f') }, expect.objectContaining({ via: 'mcp' }));
     // Keyed ledger writes complete the pending claim (claim-first, M2).
     const [lQuery, lUpdate] = McpActionLog.findOneAndUpdate.mock.calls.at(-1);
-    expect(lQuery).toEqual({ user: ME, idempotencyKey: 'k-add', pending: true });
+    expect(lQuery).toEqual({ user: ME, tool: 'add_bottle', idempotencyKey: 'k-add', pending: true });
     expect(lUpdate.$set).toMatchObject({ tokenId: 't1', action: 'add', idempotencyKey: 'k-add', pending: false });
     expect(bottleOps.addBottle.mock.calls[0][3]).toBe(REQ); // audit/SSE attribution rides the real req
   });

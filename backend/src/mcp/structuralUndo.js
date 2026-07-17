@@ -23,6 +23,19 @@ async function claim(last) {
   );
 }
 
+/**
+ * Release a claim so a failed structural undo stays retryable (MCP-audit H3).
+ * Every branch here claims BEFORE the mutating rackOps call, and that call can
+ * still fail after the pre-claim checks pass — a concurrent placement (the
+ * unique slots.bottle index → E11000), a VersionError, or a slot disabled since
+ * (applyArrangement re-validates geometry). Without this the row would stay
+ * reversed:true and the action becomes permanently un-undoable. Mirrors
+ * revert.js's unclaim.
+ */
+async function unclaim(rowId) {
+  await McpActionLog.updateOne({ _id: rowId }, { $set: { reversed: false } }).catch(() => {});
+}
+
 async function undoStructural(last, ctx, { ok, fail, logAction }) {
   const record = async (envelope, extra = {}) => {
     await logAction(ctx, {
@@ -44,7 +57,12 @@ async function undoStructural(last, ctx, { ok, fail, logAction }) {
     }
     if (!(await claim(last))) return fail('conflict', 'That action is already being undone.');
     cellar.deletedAt = new Date();
-    await cellar.save();
+    try {
+      await cellar.save();
+    } catch (err) {
+      await unclaim(last._id); // VersionError (concurrent edit) → keep the undo retryable (H3)
+      return fail('conflict', 'That cellar was modified at the same moment; nothing was changed — try the undo again.');
+    }
     logAudit(ctx.req, 'cellar.delete', { type: 'cellar', id: cellar._id, cellarId: cellar._id }, { via: 'undo' });
     return record({ summary: `Undid create — cellar "${cellar.name}" deleted`, data: { undone: 'create_cellar', cellar_id: String(cellar._id) } });
   }
@@ -60,7 +78,12 @@ async function undoStructural(last, ctx, { ok, fail, logAction }) {
     }
     if (!(await claim(last))) return fail('conflict', 'That action is already being undone.');
     rack.deletedAt = new Date();
-    await rack.save();
+    try {
+      await rack.save();
+    } catch (err) {
+      await unclaim(last._id); // VersionError (concurrent edit) → keep the undo retryable (H3)
+      return fail('conflict', 'That rack was modified at the same moment; nothing was changed — try the undo again.');
+    }
     logAudit(ctx.req, 'rack.delete', { type: 'rack', id: rack._id, cellarId: rack.cellar }, { via: 'undo' });
     return record({ summary: `Undid create — rack "${rack.name}" deleted`, data: { undone: 'create_rack', rack_id: String(rack._id) } });
   }
@@ -81,7 +104,7 @@ async function undoStructural(last, ctx, { ok, fail, logAction }) {
     }
     if (!(await claim(last))) return fail('conflict', 'That action is already being undone.');
     const result = await clearRackSlot(rack, last.detail.position, ctx.req);
-    if (result.error) return fail('conflict', `Cannot undo that placement: ${result.error.message}`);
+    if (result.error) { await unclaim(last._id); return fail('conflict', `Cannot undo that placement: ${result.error.message}`); }
     return record({ summary: `Undid placement — position ${last.detail.position} cleared`, data: { undone: 'place_bottle', cleared: true } });
   }
 
@@ -118,7 +141,7 @@ async function undoStructural(last, ctx, { ok, fail, logAction }) {
     if (occupied) return fail('conflict', `Position ${pos} is occupied again; cannot restore. Nothing was changed.`);
     if (!(await claim(last))) return fail('conflict', 'That action is already being undone.');
     const result = await placeBottleInRack(rack, pos, bottleId, ctx.req);
-    if (result.error) return fail('conflict', `Cannot undo that removal: ${result.error.message}`);
+    if (result.error) { await unclaim(last._id); return fail('conflict', `Cannot undo that removal: ${result.error.message}`); }
     return record({ summary: `Undid removal — bottle back in position ${pos}`, data: { undone: 'unplace_bottle', position: pos } });
   }
 
@@ -149,7 +172,7 @@ async function undoStructural(last, ctx, { ok, fail, logAction }) {
     // Same shared one-save apply the arrangement itself used (rackOps).
     const { applyArrangement } = require('../services/rackOps');
     const applied = await applyArrangement(rack, before, ctx.req, { via: 'undo', restored: before.length });
-    if (applied.error) return fail('conflict', `${applied.error.message} Nothing was restored.`);
+    if (applied.error) { await unclaim(last._id); return fail('conflict', `${applied.error.message} Nothing was restored.`); }
     return record({
       summary: `Undid arrangement — rack "${rack.name}" restored to its previous layout`,
       data: { undone: 'auto_arrange', rack_id: String(rack._id), bottles: before.length },
@@ -175,7 +198,7 @@ async function undoStructural(last, ctx, { ok, fail, logAction }) {
     if (!(await claim(last))) return fail('conflict', 'That action is already being undone.');
     const bottle = await Bottle.findById(access.bottle._id);
     const result = await moveBottleToCellar(bottle, access.cellar, origin, ctx.req);
-    if (result.error) return fail('conflict', `Cannot undo that move: ${result.error.message}`);
+    if (result.error) { await unclaim(last._id); return fail('conflict', `Cannot undo that move: ${result.error.message}`); }
     return record({ summary: `Undid move — bottle back in "${origin.name}" (unplaced)`, data: { undone: 'move_bottle', cellar_id: String(origin._id) } });
   }
 

@@ -144,7 +144,7 @@ describe('add_to_list', () => {
     expect(list.save).toHaveBeenCalled();
     // Keyed ledger writes complete the pending claim (claim-first, M2).
     const [lQuery, lUpdate] = McpActionLog.findOneAndUpdate.mock.calls.at(-1);
-    expect(lQuery).toEqual({ user: ME, idempotencyKey: 'k1', pending: true });
+    expect(lQuery).toEqual({ user: ME, tool: 'add_to_list', idempotencyKey: 'k1', pending: true });
     expect(lUpdate.$set).toMatchObject({
       tokenId: 't1', tool: 'add_to_list', action: 'winelist_add', idempotencyKey: 'k1', pending: false,
       detail: expect.objectContaining({ listId: LIST, wineId: WINE, vintage: '2019' }),
