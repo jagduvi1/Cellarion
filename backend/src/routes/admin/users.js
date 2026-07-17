@@ -3,6 +3,7 @@ const { requireAuth, requireRole } = require('../../middleware/auth');
 const User = require('../../models/User');
 const { PLAN_NAMES } = require('../../config/plans');
 const { logAudit } = require('../../services/audit');
+const eventBus = require('../../services/eventBus');
 const { parsePagination } = require('../../utils/pagination');
 const { isValidId } = require('../../utils/validation');
 const { escapeRegex } = require('../../utils/sanitize');
@@ -136,6 +137,13 @@ router.patch('/:id/roles', async (req, res) => {
     const previousRoles = [...user.roles];
     user.roles = [...new Set(roles)]; // deduplicate
     await user.save();
+
+    // A role change is a credential event: force every live push channel to
+    // re-authenticate. SSE streams reconnect with fresh claims, and stateful
+    // MCP sessions (which freeze roles at initialize — audit MED-1) are torn
+    // down so a demoted sommelier cannot keep the somm tool surface warm for
+    // the session TTL; the client transparently re-initializes.
+    eventBus.dropUser(user._id);
 
     logAudit(req, 'admin.user.roles.change',
       { type: 'user', id: user._id },

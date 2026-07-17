@@ -58,9 +58,12 @@ function scopeSatisfies(tokenScopes, required) {
  * scope AND, when a tool declares `requireRole: ['somm', 'admin']`, by the
  * caller's roles — role-gated tools are structurally INVISIBLE to callers
  * without the role, not merely rejected. Roles come from the auth layer:
- * fresh from the User document on every `cel_` token request (revoking the
- * somm role cuts the tools off immediately); from the JWT claims for browser
- * sessions (bounded by the 15-minute access-token lifetime, same as REST).
+ * fresh from the User document on every `cel_` token request; from the JWT
+ * claims for browser sessions (bounded by the 15-minute access-token
+ * lifetime, same as REST). Stateful MCP sessions freeze the role set at
+ * initialize — which is why the admin role-change route calls
+ * eventBus.dropUser to tear live sessions down; without that event a role
+ * change would only apply at the session's TTL (≤2h).
  */
 function toolsForScopes(tokenScopes, roles = []) {
   return tools.filter((t) => {

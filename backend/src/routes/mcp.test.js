@@ -13,7 +13,8 @@ process.env.JWT_SECRET = 'test-secret';
 const DAY = 86400000;
 const WINDOW = 5 * DAY;
 
-jest.mock('../mcp/server', () => ({ handleMcpRequest: jest.fn() }));
+jest.mock('../mcp/server', () => ({ handleMcpRequest: jest.fn(), initStatefulSession: jest.fn() }));
+jest.mock('../mcp/sessions', () => ({ getSession: jest.fn() }));
 jest.mock('../services/bottleOps', () => ({ RESTORE_WINDOW_MS: 5 * 86400000 }));
 jest.mock('../mcp/revert', () => ({
   revertLedgerRow: jest.fn(),
@@ -32,6 +33,8 @@ const http = require('http');
 const jwt = require('jsonwebtoken');
 const McpActionLog = require('../models/McpActionLog');
 const { revertLedgerRow } = require('../mcp/revert');
+const { handleMcpRequest, initStatefulSession } = require('../mcp/server');
+const { getSession } = require('../mcp/sessions');
 const mcpRouter = require('./mcp');
 
 let server, baseUrl;
@@ -206,5 +209,97 @@ describe('POST /api/mcp/activity/:id/revert', () => {
     expect(res.status).toBe(status);
     const body = await res.json();
     expect(body).toMatchObject({ error: 'nope', code });
+  });
+});
+
+describe('stateful session dispatch (plan §4)', () => {
+  const mkSession = () => ({
+    callState: { calls: 7 }, // stale from the previous request
+    ctx: { user: { id: 'u1' }, scopes: ['read'], req: null },
+    transport: { handleRequest: jest.fn(async (req, res) => res.status(200).json({ routed: true })) },
+  });
+
+  test('POST with Mcp-Session-Id routes to the session transport, resets the call budget, swaps req', async () => {
+    const session = mkSession();
+    getSession.mockReturnValue(session);
+    const res = await fetch(`${baseUrl}/api/mcp`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token()}`, 'Mcp-Session-Id': 'sid-1' },
+      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' }),
+    });
+    expect(res.status).toBe(200);
+    expect(getSession).toHaveBeenCalledWith('sid-1', { userId: 'u1', tokenId: undefined });
+    expect(session.transport.handleRequest).toHaveBeenCalledTimes(1);
+    expect(session.callState.calls).toBe(0);          // per-REQUEST budget reset
+    expect(session.ctx.req).toBeTruthy();             // audit attribution follows the caller
+    expect(handleMcpRequest).not.toHaveBeenCalled();  // never double-handled
+    expect(initStatefulSession).not.toHaveBeenCalled();
+  });
+
+  test('unknown/foreign/expired session id → 404 JSON-RPC error, nothing handled', async () => {
+    getSession.mockReturnValue(null);
+    const res = await fetch(`${baseUrl}/api/mcp`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token()}`, 'Mcp-Session-Id': 'stolen' },
+      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' }),
+    });
+    expect(res.status).toBe(404);
+    const body = await res.json();
+    expect(body.error.code).toBe(-32001);
+    expect(handleMcpRequest).not.toHaveBeenCalled();
+  });
+
+  test('initialize without a session header tries a stateful session first, falls back stateless on caps', async () => {
+    // "Handled" means the fn answered the HTTP request itself — mimic that.
+    initStatefulSession.mockImplementationOnce(async (req, r) => { r.status(200).json({ stateful: true }); return true; });
+    let res = await request('POST', '/api/mcp', { jsonrpc: '2.0', id: 1, method: 'initialize', params: {} });
+    expect(res.status).toBe(200);
+    expect(initStatefulSession).toHaveBeenCalledTimes(1);
+    expect(handleMcpRequest).not.toHaveBeenCalled();
+
+    initStatefulSession.mockResolvedValueOnce(false); // cap hit
+    handleMcpRequest.mockImplementationOnce(async (req, r) => r.status(200).json({ stateless: true }));
+    res = await request('POST', '/api/mcp', { jsonrpc: '2.0', id: 1, method: 'initialize', params: {} });
+    expect(res.status).toBe(200);
+    expect(handleMcpRequest).toHaveBeenCalledTimes(1);
+  });
+
+  test('non-initialize POST without a header stays stateless (no session minted)', async () => {
+    handleMcpRequest.mockImplementationOnce(async (req, r) => r.status(200).json({}));
+    await request('POST', '/api/mcp', { jsonrpc: '2.0', id: 1, method: 'tools/list' });
+    expect(initStatefulSession).not.toHaveBeenCalled();
+    expect(handleMcpRequest).toHaveBeenCalledTimes(1);
+  });
+
+  test('GET: session → transport (SSE); no header → 405; dead session → 404', async () => {
+    const session = mkSession();
+    getSession.mockReturnValue(session);
+    let res = await fetch(`${baseUrl}/api/mcp`, {
+      method: 'GET', headers: { Authorization: `Bearer ${token()}`, 'Mcp-Session-Id': 'sid-1' },
+    });
+    expect(res.status).toBe(200);
+    expect(session.transport.handleRequest).toHaveBeenCalledTimes(1);
+
+    res = await request('GET', '/api/mcp');
+    expect(res.status).toBe(405);
+
+    getSession.mockReturnValue(null);
+    res = await fetch(`${baseUrl}/api/mcp`, {
+      method: 'GET', headers: { Authorization: `Bearer ${token()}`, 'Mcp-Session-Id': 'gone' },
+    });
+    expect(res.status).toBe(404);
+  });
+
+  test('DELETE: session → transport (termination); no header → 405', async () => {
+    const session = mkSession();
+    getSession.mockReturnValue(session);
+    let res = await fetch(`${baseUrl}/api/mcp`, {
+      method: 'DELETE', headers: { Authorization: `Bearer ${token()}`, 'Mcp-Session-Id': 'sid-1' },
+    });
+    expect(res.status).toBe(200);
+    expect(session.transport.handleRequest).toHaveBeenCalledTimes(1);
+
+    res = await request('DELETE', '/api/mcp');
+    expect(res.status).toBe(405);
   });
 });
