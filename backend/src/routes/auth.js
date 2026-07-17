@@ -32,6 +32,22 @@ if (bcrypt.getRounds(DUMMY_HASH) !== User.BCRYPT_COST) {
   throw new Error(`DUMMY_HASH cost ${bcrypt.getRounds(DUMMY_HASH)} != BCRYPT_COST ${User.BCRYPT_COST} — regenerate DUMMY_HASH in routes/auth.js`);
 }
 
+// Enumeration-timing parity for /forgot-password + /resend-verification
+// (security audit L-8). The "account found" branch pays a token-generation +
+// user.save() write that the early-return branch skips, making a real account
+// measurably slower — a timing oracle the equalized login flow already closed.
+// A no-op write against a fresh random _id matches nothing (writes no data) but
+// pays the same index-lookup + Mongo round-trip. Best-effort: never fail the
+// request over it.
+async function equalizeLookupTiming() {
+  try {
+    await User.updateOne(
+      { _id: crypto.randomBytes(12).toString('hex') },
+      { $set: { updatedAt: new Date() } }
+    );
+  } catch { /* timing parity only — swallow */ }
+}
+
 // Rate limiter for auth endpoints — default 10 per 15 min (admin-configurable)
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -377,6 +393,7 @@ router.post('/resend-verification', resendLimiter, async (req, res) => {
     const user = await User.findOne({ email: email.toLowerCase() });
 
     if (!user || user.emailVerified || !EMAIL_VERIFICATION_ENABLED) {
+      await equalizeLookupTiming(); // L-8: match the found-branch write cost
       return res.status(200).json(genericResponse);
     }
 
@@ -570,6 +587,7 @@ router.post('/forgot-password', forgotLimiter, async (req, res) => {
     const user = await User.findOne({ email: email.toLowerCase() });
 
     if (!user) {
+      await equalizeLookupTiming(); // L-8: match the found-branch write cost
       return res.status(200).json(genericResponse);
     }
 

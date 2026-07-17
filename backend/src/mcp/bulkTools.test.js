@@ -35,7 +35,7 @@ jest.mock('../services/bottleOps', () => ({
   addBottle: jest.fn(), updateBottleFields: jest.fn(), removeBottleCascade: jest.fn(),
   UPDATABLE_FIELDS: ['price', 'currency', 'notes', 'occasion', 'rating', 'ratingScale', 'drinkFrom', 'drinkTo'],
 }));
-jest.mock('./mutationBudget', () => ({ takeMutationSlot: jest.fn(() => true), WRITE_WINDOW_MS: 15 * 60 * 1000 }));
+jest.mock('./mutationBudget', () => ({ takeMutationSlot: jest.fn(() => true), ipKeyFor: jest.fn(() => null), WRITE_WINDOW_MS: 15 * 60 * 1000 }));
 
 const mongoose = require('mongoose');
 const Cellar = require('../models/Cellar');
@@ -121,7 +121,7 @@ describe('apply', () => {
     const body = parse(res);
     expect(body.data.added_bottle_ids).toHaveLength(2);
     expect(body.data.wines_created).toBe(1);
-    expect(takeMutationSlot).toHaveBeenCalledWith(ME, 2); // whole batch upfront
+    expect(takeMutationSlot).toHaveBeenCalledWith(ME, 2, null); // whole batch upfront, with the per-IP key
     // Unconfirmed will_create → soft-zone stays live (confirmCreate false)
     expect(findOrCreateWine.mock.calls[0][2]).toMatchObject({ confirmCreate: false, skipSiblingMatch: false, createdVia: 'mcp' });
     const ledger = McpActionLog.create.mock.calls.at(-1)[0];

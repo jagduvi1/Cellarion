@@ -10,7 +10,7 @@
 jest.mock('../config/rateLimits', () => ({ get: jest.fn(() => ({ write: { max: 5 } })) }));
 
 const rateLimits = require('../config/rateLimits');
-const { takeMutationSlot, WRITE_WINDOW_MS } = require('./mutationBudget');
+const { takeMutationSlot, ipKeyFor, WRITE_WINDOW_MS, IP_WRITE_MULTIPLIER } = require('./mutationBudget');
 
 let now = 1_000_000;
 beforeEach(() => {
@@ -51,4 +51,35 @@ test('reads the LIVE write.max on each call (admin can tune it down)', () => {
   rateLimits.get.mockReturnValue({ write: { max: 2 } }); // admin lowered it
   expect(takeMutationSlot(u, 3)).toBe(false); // 3 > new cap 2
   expect(takeMutationSlot(u, 2)).toBe(true);
+});
+
+// Security audit L-18: a per-IP write budget bounds the amplification of many
+// distinct accounts sharing one NAT. Per-user cap 5, per-IP cap 5×4 = 20.
+test('a shared IP is capped across distinct users at max × IP_WRITE_MULTIPLIER', () => {
+  const ip = `ip-${now}`;
+  const perIpCap = 5 * IP_WRITE_MULTIPLIER; // 20
+  // Each distinct user can spend its full 5, but the IP tops out at 20.
+  let spent = 0;
+  for (let i = 0; spent < perIpCap; i++) {
+    expect(takeMutationSlot(`shared-${i}-${now}`, 5, ip)).toBe(true);
+    spent += 5;
+  }
+  // A brand-new user still has per-user room, but the IP budget is exhausted.
+  expect(takeMutationSlot(`shared-final-${now}`, 1, ip)).toBe(false);
+});
+
+test('all-or-nothing across BOTH dimensions — an IP-blocked call takes nothing per-user', () => {
+  const ip = `ip2-${now}`;
+  // Fill the IP window to its cap (20) via other users.
+  for (let i = 0; i < 4; i++) expect(takeMutationSlot(`filler-${i}-${now}`, 5, ip)).toBe(true);
+  const u = `victim-${now}`;
+  expect(takeMutationSlot(u, 5, ip)).toBe(false); // fits per-user but IP is full
+  // Because the refused call took nothing per-user, a call WITHOUT the ip key
+  // (fresh window) still has the full per-user budget available.
+  expect(takeMutationSlot(u, 5)).toBe(true);
+});
+
+test('ipKeyFor returns null without a request, a stable key with one', () => {
+  expect(ipKeyFor({})).toBeNull();
+  expect(ipKeyFor({ req: { ip: '203.0.113.7', headers: {} } })).toBe('203.0.113.7');
 });

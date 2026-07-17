@@ -72,7 +72,7 @@ const wellKnownOAuthRoute = require('./routes/wellKnownOAuth');
 const rateLimitsConfig = require('./config/rateLimits');
 const aiConfig = require('./config/aiConfig');
 const announcementConfig = require('./config/announcement');
-const { logAudit } = require('./services/audit');
+const { logAudit, logger } = require('./services/audit');
 
 const app = express();
 
@@ -291,7 +291,12 @@ app.use((req, res) => {
 // Centralized error handler — catches errors passed via next(err)
 // eslint-disable-next-line no-unused-vars
 app.use((err, req, res, next) => {
-  console.error(err);
+  // Log through pino with field discipline (security audit L-4): a raw
+  // console.error(err) dumped the full error + stack — potentially carrying
+  // request PII — onto the un-TTL'd stdout stream that audit.js is careful to
+  // keep PII out of. Log only the method/path/status + pino's err serializer
+  // (type/message/stack), never req.body/headers.
+  logger.error({ err, method: req.method, path: req.path, status: err.status || err.statusCode || 500 }, 'Unhandled request error');
   // If the response has already started (e.g. an SSE/stream route threw mid-
   // flight), we can't set a status/body — hand off to Express's default handler
   // which closes the connection.

@@ -25,7 +25,7 @@ const WineDefinition = require('../../models/WineDefinition');
 const { NEW_WINE_SHAPE } = require('./write');
 const { ok, fail, objectId, MSG_CELLAR_NOT_FOUND, resolveCellarAccess, wineSummary } = require('../toolUtil');
 const { logAction } = require('../actionLedger');
-const { takeMutationSlot } = require('../mutationBudget');
+const { takeMutationSlot, ipKeyFor } = require('../mutationBudget');
 
 const MAX_ITEMS = 24; // two cases — keeps one batch well inside the write budget
 const PREVIEW_FRESH_MS = 15 * 60 * 1000;
@@ -169,7 +169,7 @@ registerTool({
     if (!access) return fail('not_found', MSG_CELLAR_NOT_FOUND);
 
     // Whole batch charged upfront — all-or-nothing against the write budget.
-    if (!takeMutationSlot(String(ctx.user.id), items.length)) {
+    if (!takeMutationSlot(String(ctx.user.id), items.length, ipKeyFor(ctx))) {
       return fail('rate_limited', `Not enough write budget left for ${items.length} adds this window — wait a few minutes, or split the batch.`);
     }
     // ATOMIC claim — plain doc.save() gives no concurrency guard here (no

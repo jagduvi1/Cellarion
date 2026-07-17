@@ -26,7 +26,7 @@ const { buildAnnotatedEntries, applyArrangement } = require('../../services/rack
 const { isValidId } = require('../../utils/validation');
 const { ok, fail, objectId, resolveCellarAccess } = require('../toolUtil');
 const { logAction } = require('../actionLedger');
-const { takeMutationSlot } = require('../mutationBudget');
+const { takeMutationSlot, ipKeyFor } = require('../mutationBudget');
 
 const PREVIEW_FRESH_MS = 15 * 60 * 1000;
 const NOT_FOUND = 'No such rack, or you have no access to it. Use list_racks for valid ids.';
@@ -168,7 +168,7 @@ registerTool({
     // window refills in minutes and never double-applies, which is the side
     // to fail on.
     const moved = moveList?.length || target.length;
-    if (!takeMutationSlot(String(ctx.user.id), moved)) {
+    if (!takeMutationSlot(String(ctx.user.id), moved, ipKeyFor(ctx))) {
       return fail('rate_limited', `Not enough write budget left to move ${moved} bottle(s) this window — wait a few minutes.`);
     }
 
