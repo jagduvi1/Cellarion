@@ -201,6 +201,38 @@ async function createSupportTicket(userId, { category, subject, message } = {}) 
   return { ticket };
 }
 
+// Max follow-ups per ticket — it's a support conversation, not a chat channel.
+const TICKET_REPLY_CAP = 30;
+
+/**
+ * Append the USER's follow-up to their own ticket's conversation. The web
+ * reply box (POST /api/support/:id/reply) and the MCP reply_to_ticket tool
+ * share this. Closed tickets refuse — the path there is a fresh ticket. A
+ * user reply flips status back to 'open' so the ticket resurfaces in the
+ * admin queue (sorted by status + recency).
+ */
+async function replyToTicket(userId, ticketId, message) {
+  if (!mongoose.Types.ObjectId.isValid(String(ticketId))) {
+    return { error: err(404, 'Ticket not found') };
+  }
+  if (!message || !String(message).trim()) return { error: err(400, 'Message is required') };
+  if (String(message).trim().length > 5000) {
+    return { error: err(400, 'Message must be 5000 characters or fewer') };
+  }
+  const ticket = await SupportTicket.findOne({ _id: ticketId, user: userId });
+  if (!ticket) return { error: err(404, 'Ticket not found') };
+  if (ticket.status === 'closed') {
+    return { error: err(409, 'This ticket is closed — open a new ticket instead') };
+  }
+  if ((ticket.replies || []).length >= TICKET_REPLY_CAP) {
+    return { error: err(400, `This ticket already has ${TICKET_REPLY_CAP} replies — open a new ticket to continue`) };
+  }
+  ticket.replies.push({ author: 'user', by: userId, message: stripHtml(message) });
+  ticket.status = 'open';
+  await ticket.save();
+  return { ticket };
+}
+
 // ── Wine-addition request (the resolve-dead-end fallback) ─────────────────────
 
 /**
@@ -264,6 +296,8 @@ module.exports = {
   buildProfileUpdate,
   updateProfile,
   createSupportTicket,
+  replyToTicket,
+  TICKET_REPLY_CAP,
   createWineRequest,
   validateSourceUrl,
   // Exposed so the MCP tool descriptions/schemas can enumerate the same options.

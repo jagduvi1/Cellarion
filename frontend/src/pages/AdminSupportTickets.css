@@ -261,3 +261,10 @@
   font-size: 0.85rem;
   margin: 8px 0 0;
 }
+
+.admin-support-reply-date {
+  display: block;
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+  margin-top: 6px;
+}

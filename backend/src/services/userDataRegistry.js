@@ -493,15 +493,26 @@ const REGISTRY = [
     }),
   },
   {
-    model: SupportTicket, category: 'personal-data', userFields: ['user', 'respondedBy'],
+    model: SupportTicket, category: 'personal-data', userFields: ['user', 'respondedBy', 'replies.by'],
     purge: (ctx) => [
       SupportTicket.deleteMany({ user: ctx.userId }),
       // Clear this user's staff ref off OTHER users' tickets.
       SupportTicket.updateMany({ respondedBy: ctx.userId }, { $unset: { respondedBy: '' } }),
+      // Same for thread entries this user (as an admin) wrote on OTHER users'
+      // tickets: replies[].by is required, so re-point it to the [deleted]
+      // sentinel (the taxonomy-createdBy convention) instead of unsetting.
+      SupportTicket.updateMany(
+        { 'replies.by': ctx.userId },
+        { $set: { 'replies.$[el].by': ctx.deletedUserId } },
+        { arrayFilters: [{ 'el.by': ctx.userId }] }
+      ),
     ],
     exportFragment: async (ctx) => ({
-      supportTickets: markTrunc(ctx, 'supportTickets', await SupportTicket.find({ user: ctx.userId }).select('category subject message status adminResponse respondedAt createdAt').limit(EXPORT_MAX).lean())
-        .map(t => ({ category: t.category, subject: t.subject, message: t.message, status: t.status, adminResponse: t.adminResponse, respondedAt: t.respondedAt, createdAt: t.createdAt })),
+      supportTickets: markTrunc(ctx, 'supportTickets', await SupportTicket.find({ user: ctx.userId }).select('category subject message status adminResponse respondedAt replies createdAt').limit(EXPORT_MAX).lean())
+        .map(t => ({ category: t.category, subject: t.subject, message: t.message, status: t.status, adminResponse: t.adminResponse, respondedAt: t.respondedAt, createdAt: t.createdAt,
+          // The conversation, without the by refs (an admin's account id is
+          // not the exporting user's data — author side + text suffice).
+          replies: (t.replies || []).map(r => ({ author: r.author, message: r.message, createdAt: r.createdAt })) })),
     }),
   },
 

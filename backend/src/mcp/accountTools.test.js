@@ -39,6 +39,7 @@ jest.mock('../services/accountOps', () => ({
   updatePreferences: jest.fn(),
   updateProfile: jest.fn(),
   createSupportTicket: jest.fn(),
+  replyToTicket: jest.fn(),
   createWineRequest: jest.fn(),
   // The tool descriptions read these allow-lists at module load — keep them real-ish.
   ALLOWED_CURRENCIES: ['USD', 'EUR', 'SEK'],
@@ -213,10 +214,29 @@ describe('list_my_tickets (the read side of create_support_ticket)', () => {
       ticket_id: 't1', category: 'bug', subject: 'Rack view', message: 'It flickers',
       status: 'closed', admin_response: 'Fixed in 1.82',
       responded_at: new Date('2026-07-16').toISOString(), created_at: new Date('2026-07-15').toISOString(),
+      replies: [], can_reply: false, // closed → no follow-ups
     });
     expect(body.data[1].admin_response).toBeNull();
+    expect(body.data[1].can_reply).toBe(true);
     expect(body.summary).toContain('2 support ticket(s)');
     expect(body.page.total).toBe(2);
+  });
+
+  test('the conversation thread ships author+message+date, never the by refs', async () => {
+    SupportTicket.countDocuments.mockResolvedValue(1);
+    SupportTicket.find.mockReturnValue(ticketChain([{
+      _id: 't3', category: 'bug', subject: 'S', message: 'M', status: 'open', createdAt: new Date('2026-07-17'),
+      replies: [
+        { author: 'admin', by: 'admin-id-secret', message: 'Can you retry?', createdAt: new Date('2026-07-17') },
+        { author: 'user', by: ME, message: 'Still broken', createdAt: new Date('2026-07-17') },
+      ],
+    }]));
+    const body = parse(await tool('list_my_tickets').handler({}, CTX));
+    expect(body.data[0].replies).toEqual([
+      { author: 'admin', message: 'Can you retry?', created_at: new Date('2026-07-17').toISOString() },
+      { author: 'user', message: 'Still broken', created_at: new Date('2026-07-17').toISOString() },
+    ]);
+    expect(JSON.stringify(body)).not.toContain('admin-id-secret');
   });
 
   test('status filter narrows the query; paging clamps to the 50 cap', async () => {
@@ -226,5 +246,35 @@ describe('list_my_tickets (the read side of create_support_ticket)', () => {
     await tool('list_my_tickets').handler({ status: 'open', limit: 500 }, CTX);
     expect(SupportTicket.find).toHaveBeenCalledWith({ user: ME, status: 'open' });
     expect(chain.limit).toHaveBeenCalledWith(50);
+  });
+});
+
+describe('reply_to_ticket (continuing the support conversation)', () => {
+  test('is write-scoped and mutating (rides the mutation budget)', () => {
+    const t = tool('reply_to_ticket');
+    expect(t.scope).toBe('write');
+    expect(t.annotations.readOnlyHint).toBe(false);
+    expect(t.annotations.idempotentHint).toBe(false);
+  });
+
+  test('delegates to the shared accountOps service and audits via mcp', async () => {
+    accountOps.replyToTicket.mockResolvedValue({
+      ticket: { _id: 't1', subject: 'Room view crash', status: 'open', replies: [{}, {}] },
+    });
+    const body = parse(await tool('reply_to_ticket').handler({ ticket_id: 'f'.repeat(24), message: 'Still broken' }, CTX));
+    expect(accountOps.replyToTicket).toHaveBeenCalledWith(ME, 'f'.repeat(24), 'Still broken');
+    expect(body.data.status).toBe('open');
+    expect(body.data.replies).toBe(2);
+    expect(body.summary).toMatch(/reopened/i);
+    expect(logAudit).toHaveBeenCalledWith(CTX.req, 'support.ticket.replied', expect.any(Object), expect.objectContaining({ via: 'mcp' }));
+  });
+
+  test('maps service errors: 404→not_found, 409 closed→conflict, 400→invalid_input', async () => {
+    accountOps.replyToTicket.mockResolvedValue({ error: { status: 404, message: 'Ticket not found' } });
+    expect(parse(await tool('reply_to_ticket').handler({ ticket_id: 'f'.repeat(24), message: 'x' }, CTX)).error.code).toBe('not_found');
+    accountOps.replyToTicket.mockResolvedValue({ error: { status: 409, message: 'closed' } });
+    expect(parse(await tool('reply_to_ticket').handler({ ticket_id: 'f'.repeat(24), message: 'x' }, CTX)).error.code).toBe('conflict');
+    accountOps.replyToTicket.mockResolvedValue({ error: { status: 400, message: 'too long' } });
+    expect(parse(await tool('reply_to_ticket').handler({ ticket_id: 'f'.repeat(24), message: 'x' }, CTX)).error.code).toBe('invalid_input');
   });
 });

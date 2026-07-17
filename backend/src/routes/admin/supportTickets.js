@@ -57,7 +57,12 @@ router.put('/:id/respond', async (req, res) => {
     const ticket = await SupportTicket.findById(req.params.id);
     if (!ticket) return res.status(404).json({ error: 'Ticket not found' });
 
-    ticket.adminResponse = stripHtml(adminResponse);
+    const cleaned = stripHtml(adminResponse);
+    // adminResponse stays the LATEST response (pre-thread consumers render
+    // it); the conversation itself lives in replies[] — appended here so the
+    // thread view (web, admin, MCP list_my_tickets) shows every exchange.
+    ticket.adminResponse = cleaned;
+    ticket.replies.push({ author: 'admin', by: req.user.id, message: cleaned });
     ticket.respondedBy = req.user.id;
     ticket.respondedAt = new Date();
     ticket.status = newStatus;
