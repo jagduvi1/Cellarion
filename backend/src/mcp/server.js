@@ -150,9 +150,13 @@ async function wireSubscriptions(server, ctx, session) {
     session.subscriptions.add(uri);
     if (!session.busUnsub) {
       session.busUnsub = eventBusRef().addListener(session.userId, (event) => {
-        session.lastSeenAt = Date.now(); // a live subscriber is not idle
         for (const u of EVENT_RESOURCE_MAP[event] || []) {
           if (session.subscriptions.has(u)) {
+            // Only a DELIVERED push counts as session activity (audit LOW-2:
+            // refreshing on every user event — including web-app activity the
+            // session never subscribed to — would keep an otherwise-dead
+            // session, and any stale privileges in it, warm for the full 2h).
+            session.lastSeenAt = Date.now();
             server.server.sendResourceUpdated({ uri: u }).catch((err) => {
               // Most commonly: the client never opened (or lost) its
               // standalone GET stream — the push has nowhere to go. Logged,

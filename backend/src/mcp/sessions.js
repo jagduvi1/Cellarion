@@ -53,9 +53,20 @@ function ensureSweeper() {
  * initialize handshake assigns the id). Returns null when a cap is hit —
  * callers fall back to stateless mode, which degrades subscriptions only.
  */
+let lastGlobalCapWarn = 0;
+
 function createSession({ userId, tokenId }) {
   const userKey = String(userId);
-  if (sessions.size >= MAX_SESSIONS_GLOBAL) return null;
+  if (sessions.size >= MAX_SESSIONS_GLOBAL) {
+    // The cap silently degrades every other user to stateless mode (no
+    // subscriptions) — make sure the operator can see it happening
+    // (throttled, same convention as the event bus's stream cap).
+    if (Date.now() - lastGlobalCapWarn > 60_000) {
+      lastGlobalCapWarn = Date.now();
+      console.warn(`[mcp] global session cap (${MAX_SESSIONS_GLOBAL}) reached — new MCP sessions fall back to stateless`);
+    }
+    return null;
+  }
   if ((perUserCounts.get(userKey) || 0) >= MAX_SESSIONS_PER_USER) return null;
 
   const session = {

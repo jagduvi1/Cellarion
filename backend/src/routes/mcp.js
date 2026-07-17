@@ -64,13 +64,19 @@ router.post('/', requireAuth, requireNonDemo, async (req, res, next) => {
 
     // Session continuation: the header routes to the LIVE server built at
     // initialize. requireAuth already ran — the id is routing, not authority.
+    // The transport guard covers the unreachable-in-practice mid-init window
+    // (the id is only disclosed once initialize completes).
     const session = sessionFor(req);
-    if (session) {
-      session.callState.calls = 0; // the per-request call budget is per REQUEST
+    if (session && session.transport) {
+      // Per-REQUEST call budget: reset the session's shared counter. Two
+      // CONCURRENT posts on one session share it (same user; the apiLimiter
+      // counts the requests and the mutation budget is independent) — accepted,
+      // see audit LOW-1.
+      session.callState.calls = 0;
       session.ctx.req = req;       // audit attribution follows the actual caller
       return await session.transport.handleRequest(req, res, req.body);
     }
-    if (session === null) return res.status(404).json(SESSION_GONE);
+    if (session !== undefined) return res.status(404).json(SESSION_GONE);
 
     // New initialize → try to mint a stateful session (subscriptions, GET/SSE).
     // Cap hit → stateless fallback: everything works except push.
@@ -90,8 +96,8 @@ router.post('/', requireAuth, requireNonDemo, async (req, res, next) => {
 router.get('/', requireAuth, requireNonDemo, async (req, res, next) => {
   try {
     const session = sessionFor(req);
-    if (session) return await session.transport.handleRequest(req, res);
-    if (session === null) return res.status(404).json(SESSION_GONE);
+    if (session && session.transport) return await session.transport.handleRequest(req, res);
+    if (session !== undefined) return res.status(404).json(SESSION_GONE);
     res.status(405).json({ error: 'MCP endpoint is POST-only without a session (initialize first for SSE subscriptions)' });
   } catch (err) {
     next(err);
@@ -103,8 +109,8 @@ router.get('/', requireAuth, requireNonDemo, async (req, res, next) => {
 router.delete('/', requireAuth, requireNonDemo, async (req, res, next) => {
   try {
     const session = sessionFor(req);
-    if (session) return await session.transport.handleRequest(req, res);
-    if (session === null) return res.status(404).json(SESSION_GONE);
+    if (session && session.transport) return await session.transport.handleRequest(req, res);
+    if (session !== undefined) return res.status(404).json(SESSION_GONE);
     res.status(405).json({ error: 'Nothing to terminate — no Mcp-Session-Id header' });
   } catch (err) {
     next(err);
