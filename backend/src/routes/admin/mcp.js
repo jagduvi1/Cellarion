@@ -55,10 +55,12 @@ router.get('/usage', async (req, res) => {
           activeLast7d: { $sum: { $cond: [{ $gte: ['$lastUsedAt', weekAgo] }, 1, 0] } },
         } },
       ]),
-      // Real (non-preview) writes AIs performed in the last 7 days.
+      // Real writes AIs performed in the last 7 days — excludes preview stubs
+      // AND pending idempotency-claim stubs (MCP-audit M1/F4), same canonical
+      // set the activity timeline uses.
       McpActionLog.countDocuments({
         createdAt: { $gte: weekAgo },
-        action: { $nin: ['bulk_preview', 'arrange_preview'] },
+        action: { $nin: McpActionLog.NON_ACTIVITY_ACTIONS },
       }),
     ]);
 

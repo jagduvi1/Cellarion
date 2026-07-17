@@ -62,3 +62,10 @@ mcpActionLogSchema.index({ user: 1, createdAt: -1 });
 mcpActionLogSchema.index({ createdAt: 1 }, { expireAfterSeconds: 90 * 24 * 60 * 60 });
 
 module.exports = mongoose.model('McpActionLog', mcpActionLogSchema);
+
+// Actions that are NOT real AI activity: the two preview stubs (shown, maybe
+// declined — changed nothing) and the transient `pending` idempotency claim
+// stub (actionLedger.js). SINGLE SOURCE (MCP-audit M1/F4) so the activity
+// timeline, the admin write count, AND the GDPR export all exclude the same
+// set and can't drift — a stub must never surface as "what your AI did".
+module.exports.NON_ACTIVITY_ACTIONS = ['bulk_preview', 'arrange_preview', 'pending'];

@@ -9,7 +9,7 @@
 process.env.JWT_SECRET = 'test-secret';
 
 jest.mock('../../models/McpUsageStat', () => ({ aggregate: jest.fn() }));
-jest.mock('../../models/McpActionLog', () => ({ countDocuments: jest.fn() }));
+jest.mock('../../models/McpActionLog', () => ({ countDocuments: jest.fn(), NON_ACTIVITY_ACTIONS: ['bulk_preview', 'arrange_preview', 'pending'] }));
 jest.mock('../../models/ApiToken', () => ({ aggregate: jest.fn() }));
 jest.mock('../../models/User', () => ({ findById: jest.fn() }));
 

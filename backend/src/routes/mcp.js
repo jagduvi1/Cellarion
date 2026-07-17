@@ -12,6 +12,9 @@ const { revertLedgerRow, reversibleActionsFor } = require('../mcp/revert');
 const { findLiveLink, redeemExportLink } = require('../services/exportLinks');
 const { issuer } = require('../services/mcpOAuth');
 const rateLimitsConfig = require('../config/rateLimits');
+// The canonical personal-session scope set — single source (MCP-audit L1), used
+// for both the reversible-action set and the browser-revert ctx below.
+const { MCP_PERSONAL_SCOPES } = require('../config/constants');
 
 // Admin kill switches (config/rateLimits.js `mcp` group, runtime-tunable from
 // the Admin → MCP page). They gate AI protocol access ONLY — the browser-facing
@@ -77,7 +80,7 @@ function mcpChallenge(req, res, next) {
 // The action types a browser session can reverse (full personal authority =
 // consume + write). Excludes bulk_preview (changed nothing) and undo_add / other
 // viaUndo records — so a "preview then declined" row never shows a Revert button.
-const REVERSIBLE_ACTIONS = new Set(reversibleActionsFor(['consume', 'write']));
+const REVERSIBLE_ACTIONS = new Set(reversibleActionsFor(MCP_PERSONAL_SCOPES));
 
 // Scopes a caller has when talking to the MCP endpoint. For a personal API token
 // (`cel_…`) these are the token's OWN scopes — so a read-only token sees and can
@@ -87,7 +90,7 @@ const REVERSIBLE_ACTIONS = new Set(reversibleActionsFor(['consume', 'write']));
 // write-safety stack (registry-safe two-step add, conflict guards, idempotency
 // keys, the McpActionLog undo ledger, per-user mutation budget). Demo sessions
 // are blocked below; cel_ tokens opt into scopes explicitly at mint time.
-const { MCP_PERSONAL_SCOPES: JWT_SCOPES } = require('../config/constants');
+const JWT_SCOPES = MCP_PERSONAL_SCOPES;
 
 // POST /api/mcp — stateless Streamable HTTP MCP endpoint. Auth is the same
 // requireAuth as the REST API. For `cel_` tokens the SCOPE_ALLOWLIST grants this
@@ -274,7 +277,7 @@ router.get('/activity', requireAuth, requireNonDemo, async (req, res, next) => {
     // separate `bulk_add` / `arrange` rows. 'pending' rows are idempotency
     // claim stubs (actionLedger.js) whose mutation hasn't completed — equally
     // not activity.
-    const filter = { user: req.user.id, action: { $nin: ['bulk_preview', 'arrange_preview', 'pending'] } };
+    const filter = { user: req.user.id, action: { $nin: McpActionLog.NON_ACTIVITY_ACTIONS } };
     const [rows, total] = await Promise.all([
       McpActionLog.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
       McpActionLog.countDocuments(filter),
@@ -314,7 +317,7 @@ router.post('/activity/:id/revert', requireAuth, requireNonDemo, async (req, res
     // A logged-in session acts as the user with their full personal authority,
     // so every action class is reversible; the engine still re-checks per-bottle
     // access and somm role before touching anything.
-    const ctx = { user: req.user, scopes: ['read', 'consume', 'write'], req };
+    const ctx = { user: req.user, scopes: [...MCP_PERSONAL_SCOPES], req };
     const result = await revertLedgerRow(row, ctx, {
       ok: (summary, data) => ({ ok: true, summary, data }),
       fail: (code, message) => ({ ok: false, code, message }),
