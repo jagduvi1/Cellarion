@@ -24,6 +24,7 @@ import RackAuditModal from '../components/racks/RackAuditModal';
 import { LENSES, getLensStyle, getLensLegend, bottleMatchesSearch } from '../utils/rackLens';
 import CellarNav from '../components/CellarNav';
 import CellarPageHeader from '../components/CellarPageHeader';
+import DialogBox from '../components/DialogBox';
 import './CellarRacks.css';
 
 function CellarRacks() {
@@ -807,8 +808,13 @@ function CellarRacks() {
           }
         }
         return (
-          <div className="slot-modal-overlay" onClick={() => setActivePopup(null)} role="dialog" aria-modal="true">
-            <div className="slot-modal" onClick={e => e.stopPropagation()}>
+          <div className="slot-modal-overlay" onClick={() => setActivePopup(null)}>
+            <DialogBox
+              className="slot-modal"
+              onClick={e => e.stopPropagation()}
+              onClose={() => setActivePopup(null)}
+              labelledBy="slot-popup-heading"
+            >
               {activePopup.slot ? (
                 <FilledSlotContent
                   position={activePopup.position}
@@ -846,7 +852,7 @@ function CellarRacks() {
                   onClose={() => setActivePopup(null)}
                 />
               )}
-            </div>
+            </DialogBox>
           </div>
         );
       })()}
@@ -1206,7 +1212,7 @@ function EmptySlotContent({ position, zone, apiFetch, cellarId, canEdit, onAssig
   return (
     <>
       <div className="slot-popup-header">
-        <span className="slot-popup-title">
+        <span className="slot-popup-title" id="slot-popup-heading">
           {t('racks.slotPlaceBottle', { position })}
           {zone && (
             <span className="slot-zone-chip">
@@ -1341,7 +1347,7 @@ function DisabledSlotContent({ position, canEdit, onEnable, onClose }) {
   return (
     <>
       <div className="slot-popup-header">
-        <span className="slot-popup-title">{t('racks.disabledSlotTitle', { position })}</span>
+        <span className="slot-popup-title" id="slot-popup-heading">{t('racks.disabledSlotTitle', { position })}</span>
         <button className="slot-popup-close" onClick={onClose} aria-label="Close">&times;</button>
       </div>
       <p className="slot-disabled-note">{t('racks.disabledSlotNote')}</p>
@@ -1365,7 +1371,7 @@ function FilledSlotContent({ position, slot, zone, canEdit, onRemoveFromRack, on
   return (
     <>
       <div className="slot-popup-header">
-        <span className="slot-popup-title">
+        <span className="slot-popup-title" id="slot-popup-heading">
           {t('racks.slotTitle', { position })}
           {zone && (
             <span className="slot-zone-chip">
@@ -1445,7 +1451,12 @@ function ConsumeModal({ defaultRatingScale, onSubmit, onCancel, onPartial }) {
 
   return (
     <div className="slot-modal-overlay" onClick={onCancel}>
-      <div className="slot-modal consume-modal-box" onClick={e => e.stopPropagation()}>
+      <DialogBox
+        className="slot-modal consume-modal-box"
+        onClick={e => e.stopPropagation()}
+        onClose={onCancel}
+        label={t('bottleDetail.removeBottleTitle')}
+      >
         <div className="slot-popup-header">
           <span className="slot-popup-title">{t('bottleDetail.removeBottleTitle')}</span>
           <button className="slot-popup-close" onClick={onCancel} aria-label="Close">&times;</button>
@@ -1496,7 +1507,7 @@ function ConsumeModal({ defaultRatingScale, onSubmit, onCancel, onPartial }) {
             </button>
           </div>
         </form>
-      </div>
+      </DialogBox>
     </div>
   );
 }
@@ -1533,8 +1544,14 @@ function NfcLinkModal({ rack, onSave, onCancel }) {
   };
 
   return (
-    <div className="slot-modal-overlay" onClick={onCancel} role="dialog" aria-modal="true">
-      <div className="slot-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 400 }}>
+    <div className="slot-modal-overlay" onClick={onCancel}>
+      <DialogBox
+        className="slot-modal"
+        onClick={e => e.stopPropagation()}
+        style={{ maxWidth: 400 }}
+        onClose={onCancel}
+        label={t('nfc.linkTitle')}
+      >
         <div className="slot-popup-header">
           <span className="slot-popup-title">{t('nfc.linkTitle')}</span>
           <button className="slot-popup-close" onClick={onCancel} aria-label="Close">&times;</button>
@@ -1595,7 +1612,7 @@ function NfcLinkModal({ rack, onSave, onCancel }) {
             )}
           </div>
         </div>
-      </div>
+      </DialogBox>
     </div>
   );
 }

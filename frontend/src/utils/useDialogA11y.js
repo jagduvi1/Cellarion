@@ -22,7 +22,10 @@ export function useDialogA11y(onClose) {
 
   useEffect(() => {
     const box = boxRef.current;
-    if (box) {
+    // Move focus in ONLY if it isn't already inside — a child with autoFocus
+    // (e.g. a search input) has focused itself during commit, before this
+    // effect runs, and stealing focus to the first button would undo it.
+    if (box && !box.contains(document.activeElement)) {
       const focusable = box.querySelector(
         'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
       );
