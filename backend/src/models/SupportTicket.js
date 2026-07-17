@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const { SUPPORT_CATEGORIES } = require('../config/constants');
 
 // One follow-up message in a ticket's conversation. `author` disambiguates the
 // side (the user's AI/web reply vs an admin response); `by` records the actual
@@ -19,7 +20,7 @@ const supportTicketSchema = new mongoose.Schema({
   },
   category: {
     type: String,
-    enum: ['bug', 'help', 'feature', 'other'],
+    enum: SUPPORT_CATEGORIES,
     required: true,
     index: true
   },

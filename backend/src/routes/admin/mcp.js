@@ -11,7 +11,7 @@ router.use(requireAuth, requireRole('admin'));
 
 // Token scopes that mean "this credential can talk to /api/mcp" — climate-only
 // device tokens are not AI connections and are excluded from the counts.
-const MCP_SCOPES = ['read', 'consume', 'write'];
+const { MCP_PERSONAL_SCOPES: MCP_SCOPES } = require('../../config/constants');
 
 // GET /api/admin/mcp/usage?days=30 — the admin MCP overview: per-day call/error
 // series, top tools, connection counts, recent write volume, kill-switch state.

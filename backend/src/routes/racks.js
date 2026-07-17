@@ -167,7 +167,11 @@ router.post('/', requireCellarAccess('editor'), async (req, res) => {
     const rack = new Rack(rackData);
 
     await rack.save();
-    logAudit(req, 'rack.create', { type: 'rack', id: rack._id });
+    // cellarId so this rack appears in the cellar's audit page (which filters
+    // on resource.cellarId) — web-created racks were invisible there while
+    // MCP-created ones showed, since rackOps.createGridRack already records it
+    // (grand-audit M6). name in detail matches the MCP surface too.
+    logAudit(req, 'rack.create', { type: 'rack', id: rack._id, cellarId: rack.cellar }, { name: rack.name });
     res.status(201).json({ rack });
   } catch (err) {
     if (err.code === 11000) return res.status(409).json({ error: 'A rack with that name already exists in this cellar' });

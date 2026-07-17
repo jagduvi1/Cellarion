@@ -158,7 +158,8 @@ describe('addBottle (real execution)', () => {
     expect(b.user).toBe('owner1');             // owner = cellar owner
     expect(embedSinglePair).toHaveBeenCalledWith('w1', '2019');
     expect(enrichWineById).toHaveBeenCalledWith('w1', { budgetUserId: 'u1' });
-    expect(logAudit).toHaveBeenCalledWith(REQ, 'bottle.add', expect.anything(), { vintage: '2019' });
+    // wineName rides along so the Cellar Audit page shows what was added (M5).
+    expect(logAudit).toHaveBeenCalledWith(REQ, 'bottle.add', expect.anything(), { wineName: 'Barolo', vintage: '2019' });
   });
 
   test('rejects bad vintage / reversed drink window / oversized notes', async () => {

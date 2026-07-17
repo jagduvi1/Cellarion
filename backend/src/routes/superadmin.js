@@ -24,7 +24,7 @@ const { updateSiteConfig } = require('../utils/siteConfig');
 const { parsePagination } = require('../utils/pagination');
 const { escapeRegex } = require('../utils/sanitize');
 const { coerceStringQuery } = require('../utils/validation');
-const { SYSTEM_PROMPT_MAX_LENGTH, SCAN_PROMPT_MAX_LENGTH } = require('../config/constants');
+const { SYSTEM_PROMPT_MAX_LENGTH, SCAN_PROMPT_MAX_LENGTH, CONSUMED_STATUSES } = require('../config/constants');
 
 const router = express.Router();
 
@@ -53,8 +53,8 @@ router.get('/overview', async (req, res) => {
     ] = await Promise.all([
       User.countDocuments(),
       Bottle.countDocuments(),
-      Bottle.countDocuments({ status: { $nin: ['drank', 'gifted', 'sold', 'other'] } }),
-      Bottle.countDocuments({ status: { $in: ['drank', 'gifted', 'sold', 'other'] } }),
+      Bottle.countDocuments({ status: { $nin: CONSUMED_STATUSES } }),
+      Bottle.countDocuments({ status: { $in: CONSUMED_STATUSES } }),
       WineDefinition.countDocuments(),
       Cellar.countDocuments({ deletedAt: null }),
       BottleImage.countDocuments(),
