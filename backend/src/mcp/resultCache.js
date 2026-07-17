@@ -28,4 +28,17 @@ async function cachedResult(tool, userId, variant, compute) {
   return result;
 }
 
-module.exports = { cachedResult, TTL_MS };
+/**
+ * Drop every cached entry for one user — called when their cellar mutates
+ * (grand-audit M3), so the next read recomputes instead of serving a stale
+ * 60s window (e.g. a just-consumed bottle still ranked as a "tonight"
+ * candidate). Keys are `${tool}:${userId}:${variant}`.
+ */
+function bustUser(userId) {
+  const needle = `:${userId}:`;
+  for (const k of cache.keys()) {
+    if (k.includes(needle)) cache.delete(k);
+  }
+}
+
+module.exports = { cachedResult, bustUser, TTL_MS };

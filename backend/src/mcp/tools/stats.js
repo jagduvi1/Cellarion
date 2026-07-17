@@ -100,9 +100,27 @@ async function buildStats(userId, currencyOverride) {
     },
     extra: { warnings: ['Distributions truncated to top entries; full breakdowns are in the web app\'s Statistics page.'] },
   };
-  if (statsCache.size >= STATS_CACHE_MAX) statsCache.clear();
+  if (statsCache.size >= STATS_CACHE_MAX) {
+    // Evict the oldest half (insertion order) rather than a wholesale clear —
+    // one user's churn shouldn't cold-start everyone (grand-audit L29).
+    let drop = Math.ceil(STATS_CACHE_MAX / 2);
+    for (const k of statsCache.keys()) { if (drop-- <= 0) break; statsCache.delete(k); }
+  }
   statsCache.set(cacheKey, { at: Date.now(), result });
   return result;
 }
 
-module.exports = { buildStats };
+/**
+ * Drop this user's cached stats so the next read (tool or cellar://stats
+ * resource) recomputes — called on any cellar mutation (grand-audit M3), so
+ * the stats_changed push doesn't tell a subscriber to re-read stale numbers.
+ * Keys are `${userId}:${currency}:${scale}`.
+ */
+function bustStats(userId) {
+  const prefix = `${userId}:`;
+  for (const k of statsCache.keys()) {
+    if (k.startsWith(prefix)) statsCache.delete(k);
+  }
+}
+
+module.exports = { buildStats, bustStats };

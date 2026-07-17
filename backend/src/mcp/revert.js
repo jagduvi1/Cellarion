@@ -14,6 +14,16 @@ const { resolveBottleAccess } = require('./toolUtil');
 // Actions a caller may reverse given their scopes. Reversing a write-class
 // action needs the write grant (a consume-only token must never gain
 // delete-a-bottle power through undo).
+// Release a claim made before a mutation that then failed, so the ledger row
+// stays un-reversed and the undo can be retried (grand-audit M1: claiming
+// reversed:true and then hitting a VersionError on save() left the row marked
+// undone while nothing was actually restored — the retry then found nothing).
+// The idempotencyKey was nulled at claim time and stays null; that only means
+// the ORIGINAL action can't idempotency-replay, which is fine — it already ran.
+async function unclaim(rowId) {
+  await McpActionLog.updateOne({ _id: rowId }, { $set: { reversed: false } }).catch(() => {});
+}
+
 const CONSUME_REVERSIBLE = ['consume', 'restore'];
 const WRITE_REVERSIBLE = ['add', 'update', 'bulk_add', 'somm_maturity', 'somm_price',
   'cellar_create', 'rack_create', 'place', 'unplace', 'move', 'arrange', 'tasting_note', 'attach_image',
@@ -139,6 +149,7 @@ async function revertLedgerRow(row, ctx, { ok, fail }) {
         try {
           await list.save();
         } catch (err) {
+          await unclaim(row._id); // failed → let the undo be retried
           if (err?.name === 'VersionError') return fail('conflict', 'The list changed mid-undo — retry.');
           throw err;
         }
@@ -168,6 +179,7 @@ async function revertLedgerRow(row, ctx, { ok, fail }) {
     try {
       await list.save();
     } catch (err) {
+      await unclaim(row._id); // failed → let the undo be retried
       if (err?.name === 'VersionError') return fail('conflict', 'The list changed mid-undo — retry.');
       throw err;
     }
@@ -209,7 +221,13 @@ async function revertLedgerRow(row, ctx, { ok, fail }) {
       profile.relative = !!prev.relative;
       profile.setBy = prev.setBy || null;
       profile.setAt = prev.setAt || null;
-      await profile.save();
+      try {
+        await profile.save();
+      } catch (err) {
+        await unclaim(row._id); // failed → let the undo be retried (was unguarded, M1 class)
+        if (err?.name === 'VersionError') return fail('conflict', 'The profile changed mid-undo — retry.');
+        throw err;
+      }
       envelope = { summary: `Undid maturity review — vintage ${row.detail?.vintage} back to ${profile.status}`, data: { undone: 'set_vintage_maturity', profile_id: String(profile._id), status: profile.status } };
     }
     await logAction(ctx, { tool: 'undo_last', action: row.action, viaUndo: true, detail: { undid: String(row._id) }, result: envelope });

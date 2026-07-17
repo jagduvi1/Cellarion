@@ -7,7 +7,8 @@
  * claim (so a double-revert loses cleanly).
  */
 
-jest.mock('../models/McpActionLog', () => ({ findOne: jest.fn(), findOneAndUpdate: jest.fn() }));
+jest.mock('../models/McpActionLog', () => ({ findOne: jest.fn(), findOneAndUpdate: jest.fn(), updateOne: jest.fn() }));
+jest.mock('../models/WineList', () => ({ findOne: jest.fn() }));
 jest.mock('../config/constants', () => ({ CONSUMED_STATUSES: ['drank', 'gifted', 'sold', 'other'] }));
 jest.mock('../services/bottleOps', () => ({
   RESTORE_WINDOW_MS: 5 * 86400000,
@@ -42,6 +43,7 @@ const ctx = (over = {}) => ({ user: { id: 'u1', roles: ['user'] }, scopes: ['rea
 beforeEach(() => {
   jest.clearAllMocks();
   McpActionLog.findOneAndUpdate.mockResolvedValue({ _id: 'claimed' }); // claim succeeds by default
+  McpActionLog.updateOne.mockResolvedValue({}); // unclaim (M1) — resolves so .catch() is safe
 });
 
 describe('reversibleActionsFor (scope gate)', () => {
@@ -294,5 +296,40 @@ describe('revertLedgerRow dispatch', () => {
     const res = await revertLedgerRow({ _id: 'r', action: 'consume', bottle: 'b1' }, ctx(), H);
     expect(res).toMatchObject({ ok: false, code: 'conflict' });
     expect(bottleOps.restoreBottle).not.toHaveBeenCalled();
+  });
+});
+
+describe('winelist undo (grand-audit M1 — un-claim on failure)', () => {
+  const WineList = require('../models/WineList');
+  const oid = (c) => c.repeat(24);
+  const LIST = oid('1');
+  const WINE = oid('e');
+  const addRow = () => ({ _id: oid('f'), action: 'winelist_add', cellar: oid('c'),
+    detail: { listId: LIST, listName: 'Menu', wineId: WINE, vintage: '2019', bottleSize: '750ml' } });
+
+  const listWith = (entry, saveImpl) => ({
+    _id: LIST, sections: [], autoGroupEntries: entry ? [entry] : [],
+    save: saveImpl || jest.fn().mockResolvedValue(undefined),
+  });
+  const entry = () => ({ wine: WINE, vintage: '2019', bottleSize: '750ml', listPrice: 100 });
+
+  test('winelist_add undo pulls the active-container entry and claims the row', async () => {
+    const list = listWith(entry());
+    WineList.findOne.mockResolvedValue(list);
+    const res = await revertLedgerRow(addRow(), ctx(), H);
+    expect(res.ok).toBe(true);
+    expect(res.data.entry_removed).toBe(true);
+    expect(list.autoGroupEntries).toHaveLength(0);
+    expect(McpActionLog.findOneAndUpdate).toHaveBeenCalled();
+  });
+
+  test('a VersionError on save UN-CLAIMS the row so the undo can be retried', async () => {
+    const err = new Error('conflict'); err.name = 'VersionError';
+    const list = listWith(entry(), jest.fn().mockRejectedValue(err));
+    WineList.findOne.mockResolvedValue(list);
+    const res = await revertLedgerRow(addRow(), ctx(), H);
+    expect(res).toMatchObject({ ok: false, code: 'conflict' });
+    // The claim (reversed:true) must be released so a retry finds the row.
+    expect(McpActionLog.updateOne).toHaveBeenCalledWith({ _id: oid('f') }, { $set: { reversed: false } });
   });
 });
