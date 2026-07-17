@@ -61,7 +61,7 @@ registerTool({
   description:
     'Meaning-based search over wine taste/style embeddings — describe a flavour, mood or style in free text ' +
     '("earthy and rustic", "crisp mineral white like Chablis", "something for a rainy evening") and get the ' +
-    'closest wines. scope "registry" searches everything Cellarion knows (buying ideas); scope "mine" searches only ' +
+    'closest wines. search_scope "registry" searches everything Cellarion knows (buying ideas); search_scope "mine" searches only ' +
     'wines the user owns. Use search_bottles/search_registry for NAME lookups — this tool is for when no name ' +
     'exists, only a description. Uses a small slice of the user\'s daily AI budget per new query (repeats are free); ' +
     'only embedded wines are findable.',
@@ -105,7 +105,7 @@ registerTool({
         if (!Array.isArray(vector)) throw new Error('embedding returned no vector');
       } catch (err) {
         await debit.refund();
-        return fail('rate_limited', 'The embedding service is unavailable right now — use search_registry keywords; retrying later may help.');
+        return fail('unavailable', 'The embedding service is unavailable right now — use search_registry keywords; retrying later may help.');
       }
       if (vectorCache.size >= VECTOR_CACHE_MAX) {
         vectorCache.delete(vectorCache.keys().next().value); // oldest entry
@@ -140,7 +140,7 @@ registerTool({
     try {
       hits = await vectorStore.searchSimilar(indexVersion, vector, FETCH, filter ? { filter } : {});
     } catch {
-      return fail('rate_limited', 'The similarity index is unavailable (it may be down or rebuilding). Use search_registry for keyword matches; retrying later may help.');
+      return fail('unavailable', 'The similarity index is unavailable (it may be down or rebuilding). Use search_registry for keyword matches; retrying later may help.');
     }
     const best = new Map(); // wineDefinitionId -> { score, vintage }
     for (const h of hits || []) {

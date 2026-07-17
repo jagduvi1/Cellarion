@@ -81,8 +81,8 @@ registerTool({
     let vector;
     let hits;
     // One guard for BOTH Qdrant calls — a failure between them must not escape
-    // as a raw transport error. rate_limited is the closest taxonomy code (its
-    // retry semantics fit an outage); the message carries the real guidance.
+    // as a raw transport error. `unavailable` is the honest code for a backend
+    // outage (MCP-audit M3): an agent must NOT self-throttle as if rate_limited.
     try {
       const points = await vectorStore.getPoints(indexVersion, [emb.qdrantPointId]);
       vector = points?.[0]?.vector;
@@ -93,7 +93,7 @@ registerTool({
       }
       hits = await vectorStore.searchSimilar(indexVersion, vector, FETCH);
     } catch {
-      return fail('rate_limited', 'The similarity index is unavailable (it may be down or rebuilding). Use search_registry for keyword matches; retrying later may help.');
+      return fail('unavailable', 'The similarity index is unavailable (it may be down or rebuilding). Use search_registry for keyword matches; retrying later may help.');
     }
     const best = new Map(); // wineDefinitionId -> { score, vintage }
     for (const h of hits) {

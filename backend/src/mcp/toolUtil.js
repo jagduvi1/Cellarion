@@ -28,10 +28,14 @@ function ok(summary, data, extra = {}) {
 
 /**
  * Error envelope. `code` is from the §5.4 taxonomy: invalid_input | not_found |
- * forbidden_scope | budget_exhausted | conflict | rate_limited | busy. Messages
- * are written for the calling MODEL to self-correct from, not for humans.
+ * forbidden_scope | budget_exhausted | conflict | rate_limited | busy |
+ * unavailable. Messages are written for the calling MODEL to self-correct from,
+ * not for humans.
  * `busy` (MCP-audit M1) = an identical idempotency_key request is mid-flight;
  * retry the SAME key shortly (distinct from `conflict`, which is not retryable).
+ * `unavailable` (MCP-audit M3-low) = a backend dependency (Qdrant/embeddings/
+ * image service) is temporarily down or rebuilding — retry later; slowing the
+ * call cadence does NOT help (distinct from `rate_limited`, which it is not).
  */
 function fail(code, message) {
   return {

@@ -113,6 +113,17 @@ describe('place_bottle', () => {
     expect(parse(await tool('place_bottle').handler({ rack_id: oid('e'), position: 5, bottle_id: oid('d') }, CTX)).error.code).toBe('not_found');
     expect(rackOps.placeBottleInRack).not.toHaveBeenCalled();
   });
+
+  test('idempotency_key: a seen key replays the stored result without re-placing (MCP-audit M4-ergo)', async () => {
+    // Claim-first replay: the atomic upsert reports an existing completed row.
+    McpActionLog.findOneAndUpdate.mockResolvedValueOnce({
+      lastErrorObject: { updatedExisting: true },
+      value: { tool: 'place_bottle', pending: false, result: { summary: 'Placed once', data: { position: 5 } } },
+    });
+    const res = await tool('place_bottle').handler({ rack_id: oid('e'), position: 5, bottle_id: oid('d'), idempotency_key: 'k1' }, CTX);
+    expect(parse(res).summary).toBe('Placed once');
+    expect(rackOps.placeBottleInRack).not.toHaveBeenCalled(); // did NOT act twice
+  });
 });
 
 describe('move_bottle', () => {
