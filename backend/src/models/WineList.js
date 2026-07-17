@@ -230,10 +230,40 @@ const wineListSchema = new mongoose.Schema({
 // Indexes — user-only queries are served by the compound index prefix
 wineListSchema.index({ user: 1, cellar: 1 });
 
-// Update timestamp on save
+// Total-entry cap. A real restaurant menu is well under this; the cap exists
+// because the PUBLIC, unauthenticated PDF endpoint renders every entry
+// synchronously and buffers the whole document in the backend heap — without a
+// cap one account could publish a multi-thousand-entry list and DoS the whole
+// service via a few anonymous PDF requests (security audit H1). Enforced HERE
+// (pre-save) so every write path is covered: REST create/update/duplicate AND
+// the MCP add_to_list tool + its undo. Thrown as a ValidationError so the REST
+// routes (→400) and the MCP tool (→invalid_input) both surface it cleanly.
+const MAX_ENTRIES_PER_LIST = 500;
+
+/** Total entries across BOTH containers (autoGroupEntries + every section). */
+function countWineListEntries(doc) {
+  return (doc.autoGroupEntries?.length || 0) +
+    (doc.sections || []).reduce((n, s) => n + (s.entries?.length || 0), 0);
+}
+
+/** ValidationError when over the cap, else null. Exported so it's unit-testable
+ *  without a DB and reusable if a write path wants to pre-check. */
+function entryCapError(doc) {
+  const total = countWineListEntries(doc);
+  if (total > MAX_ENTRIES_PER_LIST) {
+    const err = new Error(`A wine list can have at most ${MAX_ENTRIES_PER_LIST} entries (this one has ${total}).`);
+    err.name = 'ValidationError';
+    return err;
+  }
+  return null;
+}
+
 wineListSchema.pre('save', function(next) {
   this.updatedAt = Date.now();
-  next();
+  next(entryCapError(this)); // null when within the cap
 });
 
 module.exports = mongoose.model('WineList', wineListSchema);
+module.exports.MAX_ENTRIES_PER_LIST = MAX_ENTRIES_PER_LIST;
+module.exports.countWineListEntries = countWineListEntries;
+module.exports.entryCapError = entryCapError;
