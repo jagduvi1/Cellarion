@@ -73,12 +73,6 @@ docker network create web        # once; skip if it already exists
 docker-compose up --build
 ```
 
-Then bring up the stack:
-
-```bash
-docker-compose up --build
-```
-
 | URL | Description |
 |-----|-------------|
 | http://localhost | Frontend (React SPA) — served via Traefik |
