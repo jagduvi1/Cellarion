@@ -74,6 +74,10 @@ registerTool({
     'restores the previous layout. Disabled slots stay empty; zone assignments are IGNORED (bottles may land in other ' +
     'zones) — warn the user if their rack uses zones; zone-aware arranging is web-app-only.',
   scope: 'write',
+  // Charges the write budget ITSELF — one slot per bottle moved on apply,
+  // nothing on preview — so the generic per-call charge in server.js must skip
+  // it or a 12-bottle arrange would cost 14 (MCP-audit M7).
+  selfBudgeted: true,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
   inputSchema: {
     mode: z.enum(['preview', 'apply']).default('preview'),

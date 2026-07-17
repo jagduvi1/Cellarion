@@ -20,16 +20,9 @@ const { registerTool } = require('../registry');
 const { logAudit } = require('../../services/audit');
 const { ok, fail, objectId, pageParams, wineSummary } = require('../toolUtil');
 const { logAction, replay } = require('../actionLedger');
-
-// Suggested glass price per the layout rule documented on the model:
-// listPrice / glassesPerBottle × (1 + glassMarkup/100), rounded to the
-// nearest glassRounding step. Null when there is no bottle price to derive from.
-function suggestGlassPrice(layout, listPrice) {
-  if (listPrice == null) return null;
-  const per = (listPrice / (layout?.glassesPerBottle || 6)) * (1 + (layout?.glassMarkup || 0) / 100);
-  const step = parseInt(layout?.glassRounding || '1', 10) || 1;
-  return Math.round(per / step) * step;
-}
+// Single source for the glass-price rule (MCP-audit M4) — identical to the web
+// editor's, and now floored at one step so a cheap wine no longer suggests 0.
+const { suggestGlassPrice } = require('../../utils/glassPrice');
 
 // The active entry container for writes; [{ section, entries }] for reads.
 function activeContainers(list) {
@@ -221,7 +214,7 @@ registerTool({
 
     const glassGiven = args.glass_price != null;
     const glassPrice = args.by_glass
-      ? (glassGiven ? args.glass_price : suggestGlassPrice(list.layout, args.list_price))
+      ? (glassGiven ? args.glass_price : suggestGlassPrice(args.list_price, list.layout))
       : undefined;
     container.push({
       wine: wine._id,
@@ -331,7 +324,7 @@ registerTool({
     // Turning by-glass on (or clearing the manual price) with no explicit
     // price → derive the suggestion from the current bottle price.
     if (entry.byGlass && entry.glassPrice == null) {
-      const suggested = suggestGlassPrice(list.layout, entry.listPrice);
+      const suggested = suggestGlassPrice(entry.listPrice, list.layout);
       if (suggested != null) { entry.glassPrice = suggested; entry.glassPriceManual = false; }
     }
 

@@ -20,6 +20,7 @@ const {
   updatePreferences, updateProfile, createSupportTicket, replyToTicket, createWineRequest,
   ALLOWED_CURRENCIES, ALLOWED_LANGUAGES, ALLOWED_RATING_SCALES,
   ALLOWED_RACK_NAV, ALLOWED_RESTOCK_SCOPE, ALLOWED_VISIBILITY, SUPPORT_CATEGORIES,
+  TICKET_REPLY_CAP,
 } = require('../../services/accountOps');
 
 /** Compact, PII-safe view of the caller's preferences. */
@@ -241,7 +242,10 @@ registerTool({
       admin_response: t.adminResponse || null,
       responded_at: t.respondedAt || null,
       replies: (t.replies || []).map((r) => ({ author: r.author, message: r.message, created_at: r.createdAt })),
-      can_reply: t.status !== 'closed',
+      // Mirror BOTH bounds reply_to_ticket enforces (MCP-audit M6): not closed
+      // AND under the reply cap (which counts admin replies too), so the model
+      // isn't told it can reply and then refused.
+      can_reply: t.status !== 'closed' && (t.replies || []).length < TICKET_REPLY_CAP,
       created_at: t.createdAt,
     }));
     const answered = data.filter((t) => t.admin_response).length;

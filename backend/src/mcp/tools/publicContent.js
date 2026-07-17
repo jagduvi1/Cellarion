@@ -7,6 +7,7 @@ const { z } = require('zod');
 const { registerTool } = require('../registry');
 const { isValidId } = require('../../utils/validation');
 const { ok, fail } = require('../toolUtil');
+const { siteBaseUrl } = require('../../utils/siteUrl');
 
 registerTool({
   name: 'drink_window_for',
@@ -111,7 +112,7 @@ registerTool({
       excerpt: p.excerpt || null,
       tags: p.tags || [],
       published_at: p.publishedAt,
-      public_url: `https://cellarion.app/blog/${p.slug}`,
+      public_url: `${siteBaseUrl()}/blog/${p.slug}`,
     })), { page: { limit, offset, total } });
   },
 });
@@ -139,7 +140,7 @@ registerTool({
       excerpt: post.excerpt || null,
       tags: post.tags || [],
       published_at: post.publishedAt,
-      public_url: `https://cellarion.app/blog/${post.slug}`,
+      public_url: `${siteBaseUrl()}/blog/${post.slug}`,
       content: truncated ? post.content.slice(0, GUIDE_MAX_CHARS) : post.content,
     }, truncated ? { warnings: [`Content truncated at ${GUIDE_MAX_CHARS} characters — the full article is at the public_url.`] } : {});
   },

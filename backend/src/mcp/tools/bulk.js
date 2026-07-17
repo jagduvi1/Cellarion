@@ -98,6 +98,10 @@ registerTool({
     "mode:'apply' and the preview_id. The whole batch is one undo_last unit. Prefer resolve_wine-verified wine_ids in " +
     'items; new_wine items follow the same registry rules as add_bottle.',
   scope: 'write',
+  // Charges the write budget ITSELF — one slot per item on apply, nothing on
+  // preview — so the generic per-call charge in server.js must skip it or a
+  // 12-bottle case would cost 14 (MCP-audit M7).
+  selfBudgeted: true,
   annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
   inputSchema: {
     mode: z.enum(['preview', 'apply']).default('preview'),
