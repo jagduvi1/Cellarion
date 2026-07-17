@@ -180,7 +180,7 @@ registerTool({
   scope: 'write',
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
   inputSchema: {
-    category: z.enum(['bug', 'help', 'feature', 'other']),
+    category: z.enum(SUPPORT_CATEGORIES),
     subject: z.string().min(1).max(200),
     message: z.string().min(1).max(5000),
   },

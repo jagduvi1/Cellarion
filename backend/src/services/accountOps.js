@@ -24,7 +24,7 @@ const ALLOWED_RATING_SCALES = ['5', '20', '100'];
 const ALLOWED_RACK_NAV = ['auto', 'room', 'rack'];
 const ALLOWED_RESTOCK_SCOPE = ['all', 'cellar'];
 const ALLOWED_VISIBILITY = ['public', 'private'];
-const SUPPORT_CATEGORIES = ['bug', 'help', 'feature', 'other'];
+const { SUPPORT_CATEGORIES } = require('../config/constants');
 
 const err = (status, message) => ({ status, message });
 

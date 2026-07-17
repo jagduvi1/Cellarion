@@ -672,7 +672,7 @@ async function searchDiscussions(query, { category, limit = 20, offset = 0 } = {
   }
   assertIndexReady('discussions');
 
-  const VALID_CATEGORIES = ['tasting-notes', 'food-pairing', 'recommendations', 'cellar-tips', 'general'];
+  const { CATEGORIES: VALID_CATEGORIES } = require('../models/Discussion');
   const filters = [];
   if (category && VALID_CATEGORIES.includes(String(category))) {
     filters.push(`category = "${category}"`);

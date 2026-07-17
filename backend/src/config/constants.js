@@ -80,8 +80,21 @@ const DISCUSSIONS_MAX_PER_PAGE = 50;
 // Maximum character lengths for discussion fields
 const DISCUSSION_MAX_LENGTHS = { title: 200, body: 5000, replyBody: 3000 };
 
+// The token scopes that reach the PERSONAL MCP surface (POST /api/mcp) — the
+// single source for the JWT-session grant, the OAuth grantable set, and the
+// admin usage-view connection filter, so adding a scope can't silently miss
+// one of the three (grand-audit M7). NOT the same as ApiToken.TOKEN_SCOPES,
+// which also includes 'climate' (device-only, never an MCP connection).
+const MCP_PERSONAL_SCOPES = ['read', 'consume', 'write'];
+
+// Support-ticket categories — single source for the model enum, the
+// accountOps validation, and the MCP tool's input schema (grand-audit M9).
+const SUPPORT_CATEGORIES = ['bug', 'help', 'feature', 'other'];
+
 module.exports = {
   CONSUMED_STATUSES,
+  MCP_PERSONAL_SCOPES,
+  SUPPORT_CATEGORIES,
   MS_PER_DAY,
   WINE_POPULATE,
   WINE_POPULATE_LIST,

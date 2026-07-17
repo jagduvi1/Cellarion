@@ -16,7 +16,7 @@ const ACCESS_TOKEN_TTL_SEC = 60 * 60; // 1 hour
 // The cel_ scopes an OAuth token may carry. offline_access is a meta-scope that
 // only signals "issue a refresh token" (we always do) — it is advertised for
 // client compatibility (claude.ai appends it) but never stored as a cel_ scope.
-const GRANTABLE_SCOPES = ['read', 'consume', 'write'];
+const { MCP_PERSONAL_SCOPES: GRANTABLE_SCOPES } = require('../config/constants');
 const SUPPORTED_SCOPES = [...GRANTABLE_SCOPES, 'offline_access'];
 
 /** Origin the AS + RS are served from (prod: https://cellarion.app). */

@@ -87,7 +87,7 @@ const REVERSIBLE_ACTIONS = new Set(reversibleActionsFor(['consume', 'write']));
 // write-safety stack (registry-safe two-step add, conflict guards, idempotency
 // keys, the McpActionLog undo ledger, per-user mutation budget). Demo sessions
 // are blocked below; cel_ tokens opt into scopes explicitly at mint time.
-const JWT_SCOPES = ['read', 'consume', 'write'];
+const { MCP_PERSONAL_SCOPES: JWT_SCOPES } = require('../config/constants');
 
 // POST /api/mcp — stateless Streamable HTTP MCP endpoint. Auth is the same
 // requireAuth as the REST API. For `cel_` tokens the SCOPE_ALLOWLIST grants this
