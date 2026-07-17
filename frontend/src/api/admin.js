@@ -180,6 +180,19 @@ export const superadminSaveAnnouncement = (apiFetch, data) =>
     body: JSON.stringify(data),
   });
 
+// ── MCP (usage overview + kill switches) ─────────────────────────────────────
+export const adminGetMcpUsage = (apiFetch, days = 30) =>
+  apiFetch(`/api/admin/mcp/usage?days=${days}`);
+
+// The kill switches live in the rateLimits config group; flipping them is a
+// partial PATCH that leaves every other group untouched.
+export const adminSetMcpSwitches = (apiFetch, { enabled, publicEnabled }) =>
+  apiFetch('/api/admin/settings/rate-limits', {
+    method: 'PATCH',
+    headers: J,
+    body: JSON.stringify({ mcp: { enabled, publicEnabled } }),
+  });
+
 // ── Settings (rate limits — used by SuperAdmin) ───────────────────────────────
 export const adminGetRateLimits = (apiFetch) =>
   apiFetch('/api/admin/settings/rate-limits');

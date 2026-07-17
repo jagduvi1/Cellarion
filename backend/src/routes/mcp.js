@@ -11,6 +11,26 @@ const { RESTORE_WINDOW_MS } = require('../services/bottleOps');
 const { revertLedgerRow, reversibleActionsFor } = require('../mcp/revert');
 const { findLiveLink, redeemExportLink } = require('../services/exportLinks');
 const { issuer } = require('../services/mcpOAuth');
+const rateLimitsConfig = require('../config/rateLimits');
+
+// Admin kill switches (config/rateLimits.js `mcp` group, runtime-tunable from
+// the Admin → MCP page). They gate AI protocol access ONLY — the browser-facing
+// routes below (activity timeline, revert, export-link download) stay up, so a
+// user can still review and unwind past AI actions while the switch is off.
+// 503 (not 403): the credential is fine, the surface is temporarily gone.
+function requireMcpEnabled(req, res, next) {
+  if (rateLimitsConfig.get().mcp?.enabled === 0) {
+    return res.status(503).json({ error: 'Cellarion\'s AI connector (MCP) is temporarily disabled by the administrator. Your cellar is untouched — try again later.' });
+  }
+  next();
+}
+function requirePublicMcpEnabled(req, res, next) {
+  const mcp = rateLimitsConfig.get().mcp || {};
+  if (mcp.enabled === 0 || mcp.publicEnabled === 0) {
+    return res.status(503).json({ error: 'The public Cellarion MCP endpoint is temporarily disabled. Try again later.' });
+  }
+  next();
+}
 
 // JSON-RPC initialize marker (single message or batch). Local check — the
 // SDK's isInitializeRequest helper lives in the ESM package.
@@ -78,7 +98,7 @@ const JWT_SCOPES = ['read', 'consume', 'write'];
 // are shared/throwaway (they also can't mint `cel_` tokens, so this closes the
 // only other way in). A `cel_` token never carries isDemo, so requireNonDemo is a
 // no-op for it and blocks only demo JWT sessions.
-router.post('/', mcpChallenge, requireAuth, requireNonDemo, async (req, res, next) => {
+router.post('/', requireMcpEnabled, mcpChallenge, requireAuth, requireNonDemo, async (req, res, next) => {
   try {
     const scopes = req.apiToken ? req.apiToken.scopes : JWT_SCOPES;
     // ctx.req rides along for the mutating tools: logAudit reads actor/ip/UA
@@ -120,7 +140,7 @@ router.post('/', mcpChallenge, requireAuth, requireNonDemo, async (req, res, nex
 // stream to open — 405 keeps the old stateless contract for those callers.
 // mcpChallenge: an OAuth client probing with a stale token must get the RFC
 // 9728 WWW-Authenticate pointer here too, not only on POST.
-router.get('/', mcpChallenge, requireAuth, requireNonDemo, async (req, res, next) => {
+router.get('/', requireMcpEnabled, mcpChallenge, requireAuth, requireNonDemo, async (req, res, next) => {
   try {
     const session = sessionFor(req);
     if (session && session.transport) return await session.transport.handleRequest(req, res);
@@ -133,7 +153,7 @@ router.get('/', mcpChallenge, requireAuth, requireNonDemo, async (req, res, next
 
 // DELETE terminates the session (MCP spec). The SDK transport fires
 // onsessionclosed → the store tears down server, transport and bus listener.
-router.delete('/', requireAuth, requireNonDemo, async (req, res, next) => {
+router.delete('/', requireMcpEnabled, requireAuth, requireNonDemo, async (req, res, next) => {
   try {
     const session = sessionFor(req);
     if (session && session.transport) return await session.transport.handleRequest(req, res);
@@ -165,7 +185,7 @@ const publicMcpLimiter = rateLimit({
   }),
 });
 
-router.post('/public', publicMcpLimiter, async (req, res, next) => {
+router.post('/public', requirePublicMcpEnabled, publicMcpLimiter, async (req, res, next) => {
   try {
     await handleMcpRequest(req, res, { user: null, scopes: [], anonymous: true, req });
   } catch (err) {

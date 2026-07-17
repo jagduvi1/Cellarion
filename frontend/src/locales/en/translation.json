@@ -67,6 +67,7 @@
     "blog": "Blog",
     "blogAdmin": "Blog",
     "adminStats": "Global Stats",
+    "adminMcp": "AI Connector",
     "moderators": "Moderators",
     "moderationReports": "Moderation",
     "badge": {
@@ -2547,6 +2548,29 @@
     "decidedBy": "by {{username}} on {{date}}",
     "prev": "Prev",
     "next": "Next"
+  },
+  "adminMcp": {
+    "title": "AI Connector (MCP)",
+    "lastNDays": "Last {{count}} days",
+    "last7Days": "Last 7 days",
+    "switchAll": "MCP enabled",
+    "switchAllDesc": "Master switch for the whole AI surface — personal connectors and the anonymous public endpoint. Off = every MCP request gets a clear 503; the in-app AI activity timeline and revert stay available.",
+    "switchPublic": "Public endpoint enabled",
+    "switchPublicDesc": "The anonymous, account-free wine-knowledge endpoint (/api/mcp/public). Turn off to shed anonymous load while keeping personal connectors running.",
+    "calls": "Calls",
+    "errors": "Errors",
+    "connections": "AI connections",
+    "connectionsSplit": "{{oauth}} OAuth · {{bearer}} tokens",
+    "activeConnections": "Active connections",
+    "writes": "Cellar changes by AI",
+    "dailyActivity": "Daily activity",
+    "topTools": "Top tools",
+    "day": "Day",
+    "personal": "Personal",
+    "public": "Public",
+    "tool": "Tool",
+    "surface": "Surface",
+    "noUsage": "No MCP usage recorded in this window yet."
   },
   "adminStats": {
     "title": "Global Stats",

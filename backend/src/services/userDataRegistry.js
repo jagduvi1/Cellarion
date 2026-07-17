@@ -100,6 +100,7 @@ const EXCLUDED = {
   WineNotDuplicate: 'no user reference (admin-confirmed distinct wine pairs; actor in AuditLog)',
   ClimateReading: 'no user reference (telemetry keyed by meta.device; purged + exported via the ClimateDevice entry)',
   OAuthClient: 'no user reference (a DCR-registered connector, not personal data — it is registered pre-login and shared across whoever connects it; the per-user tokens it mints live on ApiToken)',
+  McpUsageStat: 'no user reference (aggregate per-day MCP usage counters, 180-day TTL)',
 };
 
 const REGISTRY = [

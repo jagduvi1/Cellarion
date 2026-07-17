@@ -73,6 +73,14 @@ const defaults = {
     globalMax:      100,                // max concurrent live demo accounts
     ttlMs:          2 * 60 * 60 * 1000, // demo account lifetime (2 hours)
   },
+  // MCP kill switches (0/1 booleans, same runtime-tunable machinery as the
+  // demo and AI kill-switches above). `enabled: 0` shuts the WHOLE AI surface
+  // (personal /api/mcp AND anonymous /api/mcp/public) with a clear 503;
+  // `publicEnabled: 0` shuts only the anonymous endpoint. The browser-facing
+  // routes under /api/mcp (activity timeline, revert, export-link download)
+  // stay up either way — the switch cuts AI protocol access, not the human's
+  // review tools. Checked per request from this in-memory cache: zero DB cost.
+  mcp: { enabled: 1, publicEnabled: 1 },
 };
 
 let cache = {
@@ -88,6 +96,7 @@ let cache = {
   aiGlobalDailyCap: { ...defaults.aiGlobalDailyCap },
   imageUploadBurst: { ...defaults.imageUploadBurst },
   demo: { ...defaults.demo },
+  mcp: { ...defaults.mcp },
 };
 
 async function load() {
@@ -135,6 +144,10 @@ async function load() {
           createWindowMs: doc.value.demo?.createWindowMs ?? defaults.demo.createWindowMs,
           globalMax:      doc.value.demo?.globalMax      ?? defaults.demo.globalMax,
           ttlMs:          doc.value.demo?.ttlMs          ?? defaults.demo.ttlMs,
+        },
+        mcp: {
+          enabled:       doc.value.mcp?.enabled       ?? defaults.mcp.enabled,
+          publicEnabled: doc.value.mcp?.publicEnabled ?? defaults.mcp.publicEnabled,
         },
       };
     }
