@@ -216,7 +216,7 @@ describe('semantic_search_wines', () => {
     tryDebitAi.mockResolvedValue({ ok: true, refund });
     embedSingle.mockRejectedValue(new Error('voyage down'));
     const res = await tool('semantic_search_wines').handler({ query: 'unique failing query' }, ctxFor(oid('3')));
-    expect(parse(res).error.code).toBe('rate_limited');
+    expect(parse(res).error.code).toBe('unavailable'); // infra down, not the agent's cadence (M3)
     expect(refund).toHaveBeenCalled();
   });
 

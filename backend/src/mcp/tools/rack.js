@@ -108,8 +108,11 @@ registerTool({
     rack_id: objectId,
     position: z.number().int().min(1),
     bottle_id: objectId,
+    idempotency_key: z.string().max(100).optional().describe('Retry-safe key: a retry with the same key returns the original result instead of placing twice.'),
   },
   handler: async (args, ctx) => {
+    const replayed = await replay(ctx, args.idempotency_key, 'place_bottle');
+    if (replayed) return replayed;
     const access = await resolveRackAccess(ctx.user.id, args.rack_id, 'editor');
     if (!access) return fail('not_found', 'No such rack, or you have no access to it. Use list_racks for valid ids.');
     const result = await placeBottleInRack(access.rack, args.position, args.bottle_id, ctx.req);
@@ -129,7 +132,7 @@ registerTool({
       tool: 'place_bottle', action: 'place', bottle: args.bottle_id, cellar: access.rack.cellar,
       // Undo needs the rack + the slot to clear.
       detail: { rackId: String(access.rack._id), position: result.position, displaced: result.displaced },
-      result: envelope,
+      result: envelope, idempotencyKey: args.idempotency_key,
     });
     return ok(envelope.summary, envelope.data);
   },
@@ -144,8 +147,11 @@ registerTool({
   inputSchema: {
     rack_id: objectId,
     position: z.number().int().min(1),
+    idempotency_key: z.string().max(100).optional().describe('Retry-safe key: a retry with the same key returns the original result instead of acting twice.'),
   },
   handler: async (args, ctx) => {
+    const replayed = await replay(ctx, args.idempotency_key, 'unplace_bottle');
+    if (replayed) return replayed;
     const access = await resolveRackAccess(ctx.user.id, args.rack_id, 'editor');
     if (!access) return fail('not_found', 'No such rack, or you have no access to it. Use list_racks for valid ids.');
     const result = await clearRackSlot(access.rack, args.position, ctx.req);
@@ -157,7 +163,7 @@ registerTool({
     await logAction(ctx, {
       tool: 'unplace_bottle', action: 'unplace', bottle: result.cleared || undefined, cellar: access.rack.cellar,
       detail: { rackId: String(access.rack._id), position: args.position, bottleId: result.cleared },
-      result: envelope,
+      result: envelope, idempotencyKey: args.idempotency_key,
     });
     return ok(envelope.summary, envelope.data);
   },
@@ -174,8 +180,11 @@ registerTool({
   inputSchema: {
     bottle_id: objectId,
     to_cellar_id: objectId,
+    idempotency_key: z.string().max(100).optional().describe('Retry-safe key: a retry with the same key returns the original result instead of moving twice.'),
   },
   handler: async (args, ctx) => {
+    const replayed = await replay(ctx, args.idempotency_key, 'move_bottle');
+    if (replayed) return replayed;
     // Source: owner (matches REST requireBottleAccess('owner')).
     const access = await resolveBottleAccess(ctx.user.id, args.bottle_id, 'owner');
     if (!access) return fail('not_found', MSG_BOTTLE_NOT_FOUND);
@@ -196,7 +205,7 @@ registerTool({
     await logAction(ctx, {
       tool: 'move_bottle', action: 'move', bottle: bottle._id, cellar: dest.cellar._id,
       detail: { fromCellarId: result.from.cellarId, toCellarId: String(dest.cellar._id) },
-      result: envelope,
+      result: envelope, idempotencyKey: args.idempotency_key,
     });
     return ok(envelope.summary, envelope.data);
   },

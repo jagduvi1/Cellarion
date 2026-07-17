@@ -74,8 +74,8 @@ registerTool({
     const result = await ingestBottleImage({ buffer, userId: ctx.user.id, bottle, credit }, ctx.req);
     if (result.error) {
       // 4xx = the caller's image is bad (invalid_input); 5xx = a transient
-      // infra fault (rate_limited carries the right retry semantics).
-      return fail(result.error.status >= 500 ? 'rate_limited' : 'invalid_input', result.error.message);
+      // infra fault → `unavailable` (MCP-audit M3: not the agent's cadence).
+      return fail(result.error.status >= 500 ? 'unavailable' : 'invalid_input', result.error.message);
     }
     const image = result.image;
     logAudit(ctx.req, 'image.attach', { type: 'bottle', id: bottle._id, cellarId: bottle.cellar }, { via: 'mcp', imageId: String(image._id) });
