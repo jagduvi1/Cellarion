@@ -101,6 +101,8 @@ const EXCLUDED = {
   ClimateReading: 'no user reference (telemetry keyed by meta.device; purged + exported via the ClimateDevice entry)',
   OAuthClient: 'no user reference (a DCR-registered connector, not personal data — it is registered pre-login and shared across whoever connects it; the per-user tokens it mints live on ApiToken)',
   McpUsageStat: 'no user reference (aggregate per-day MCP usage counters, 180-day TTL)',
+  BackupStatus: 'no user reference (singleton backup health/status doc, not personal data)',
+  CommunityWinePrice: 'no user reference (k-anonymised aggregate community prices; never an individual\'s purchase)',
 };
 
 const REGISTRY = [

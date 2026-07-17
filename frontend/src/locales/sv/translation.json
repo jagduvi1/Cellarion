@@ -2351,7 +2351,7 @@
       "q5": "Hur importerar jag viner från Vivino eller CellarTracker?",
       "a5": "Cellarion stöder CSV-import. Exportera din samling från Vivino, CellarTracker eller något kalkylark, ladda sedan upp CSV-filen i Cellarions importverktyg. Det delade vinregistret deduplicerar poster automatiskt så att din data förblir ren och konsekvent i hela katalogen.",
       "q6": "Kan jag exportera min data och lämna när jag vill?",
-      "a6": "Ja — din data är din. Cellarion har en en-kliks dataexport som ger dig allt som JSON, plus CSV-import och -export för flaskor. Du kan radera ditt konto från Inställningar med 7 dagars betänketid. Data på den hostade tjänsten lagras på europeisk infrastruktur under GDPR."
+      "a6": "Ja — din data är din. Cellarion har en en-kliks dataexport som ger dig allt som JSON (eller en ZIP med dina bilder), plus CSV-import för flaskor. Du kan radera ditt konto från Inställningar med 7 dagars betänketid. Data på den hostade tjänsten lagras på europeisk infrastruktur under GDPR."
     }
   },
   "maturity": {
@@ -2462,7 +2462,6 @@
     "colWine": "Vin",
     "colFrom": "Från",
     "applyBtn": "Utför ({{count}} flyttar)",
-    "applying": "Flyttar… {{done}}/{{total}}",
     "applyingNow": "Utför…",
     "undoingNow": "Ångrar…",
     "previewLoading": "Beräknar planen…",
@@ -2479,7 +2478,6 @@
     "backToLast": "← Tillbaka till senaste organiseringen",
     "newPlanBtn": "Ny organisering…",
     "undoBtn": "Ångra ({{count}} flyttar)",
-    "undoing": "Ångrar… {{done}}/{{total}}",
     "undoneText": "Ångrat — flaskorna är tillbaka där de stod före organiseringen. Kom ihåg att återställa den fysiska hyllan också om du redan hade flyttat dem.",
     "undoUnavailable": "Hyllan har ändrats sedan dess — organiseringen kan inte längre ångras.",
     "undoError": "En flytt misslyckades under ångringen — hyllan kan ha ändrats. Stäng och kontrollera hyllan."
