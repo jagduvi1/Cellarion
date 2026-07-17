@@ -5,7 +5,9 @@
 # minimal cap_add set that step-down needs.
 services:
   mongo:
-    image: mongo:7
+    # Digest-pinned (security audit L-11): mongo:7 is a moving minor tag.
+    # Dependabot's docker ecosystem bumps this; the tag is kept for readability.
+    image: mongo:7@sha256:340c1c56fb10e95cf79ff547f8664b96bc6ead9909bc355238cbf865a9695a6f
     container_name: cellarion-mongo
     restart: unless-stopped
     security_opt:
@@ -247,7 +249,9 @@ services:
   # VITE_UMAMI_URL and VITE_UMAMI_WEBSITE_ID are set at build time, so this
   # service is optional and inert without those vars.
   umami:
-    image: ghcr.io/umami-software/umami:postgresql-latest
+    # Digest-pinned (security audit L-11): `:postgresql-latest` is a fully
+    # moving tag — the worst supply-chain case. Dependabot bumps it.
+    image: ghcr.io/umami-software/umami:postgresql-latest@sha256:8edfe4beaef13f9d1300619fa264ef250a3688df9cc54d24ca830ca31cb475ec
     container_name: cellarion-umami
     restart: unless-stopped
     # Opt-in: only starts with `docker compose --profile analytics up`. It is
@@ -285,7 +289,8 @@ services:
         condition: service_healthy
 
   umami-db:
-    image: postgres:16-alpine
+    # Digest-pinned (security audit L-11). Dependabot bumps it.
+    image: postgres:16-alpine@sha256:57c72fd2a128e416c7fcc499958864df5301e940bca0a56f58fddf30ffc07777
     container_name: cellarion-umami-db
     restart: unless-stopped
     profiles: ["analytics"]
