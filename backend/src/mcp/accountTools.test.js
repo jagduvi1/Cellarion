@@ -107,6 +107,7 @@ describe('get_preferences / get_profile', () => {
     const body = parse(await tool('get_profile').handler({}, CTX));
     expect(body.data).toEqual({
       username: 'jo', display_name: 'Jo', bio: 'Barolo', profile_visibility: 'public', followers: 3, following: 0,
+      supporter: false, // boolean courtesy flag only — tier/billing never leave (supporterAwareness.test.js)
     });
     expect(JSON.stringify(body)).not.toContain('jo@example.com');
   });
