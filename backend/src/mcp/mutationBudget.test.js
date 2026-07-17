@@ -83,3 +83,23 @@ test('ipKeyFor returns null without a request, a stable key with one', () => {
   expect(ipKeyFor({})).toBeNull();
   expect(ipKeyFor({ req: { ip: '203.0.113.7', headers: {} } })).toBe('203.0.113.7');
 });
+
+// MCP-audit M11 / security-audit L-18: the cap eviction replaced a wholesale
+// .clear() (which wiped EVERY in-flight window when a burst of distinct keys hit
+// the cap). This was claimed-but-untested. Fresh module for a clean map so the
+// insertion order — and thus which keys land in the evicted oldest half — is
+// deterministic.
+test('at WINDOWS_MAX it evicts the OLDEST half, not everyone', () => {
+  jest.isolateModules(() => {
+    const { takeMutationSlot } = require('./mutationBudget'); // max = 5 (mocked)
+    // Older keys fill the first half; then a recent caller spends its full cap.
+    for (let i = 0; i < 2600; i++) takeMutationSlot(`old-${i}`, 1);
+    expect(takeMutationSlot('recent', 5)).toBe(true);
+    expect(takeMutationSlot('recent', 1)).toBe(false); // exhausted
+    // Overflow past WINDOWS_MAX (5000) → evicts the oldest 2500 (old-0..old-2499).
+    for (let i = 0; i < 2500; i++) takeMutationSlot(`fill-${i}`, 1);
+    // `recent` was inserted after the evicted range, so its exhausted window
+    // SURVIVED the burst. A `.clear()` would have reset it → this would be true.
+    expect(takeMutationSlot('recent', 1)).toBe(false);
+  });
+});
