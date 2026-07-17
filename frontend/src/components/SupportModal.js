@@ -49,7 +49,7 @@ function SupportModal({ onClose }) {
           </p>
         </div>
         <div className="modal-actions">
-          <button className="btn-primary" onClick={onClose}>{t('common.close')}</button>
+          <button className="btn btn-primary" onClick={onClose}>{t('common.close')}</button>
         </div>
       </Modal>
     );
@@ -95,10 +95,10 @@ function SupportModal({ onClose }) {
         {error && <p className="support-modal-error">{error}</p>}
 
         <div className="modal-actions">
-          <button type="button" className="btn-secondary" onClick={onClose} disabled={submitting}>
+          <button type="button" className="btn btn-secondary" onClick={onClose} disabled={submitting}>
             {t('common.cancel')}
           </button>
-          <button type="submit" className="btn-primary" disabled={submitting}>
+          <button type="submit" className="btn btn-primary" disabled={submitting}>
             {submitting ? t('support.sending') : t('support.sendTicket')}
           </button>
         </div>

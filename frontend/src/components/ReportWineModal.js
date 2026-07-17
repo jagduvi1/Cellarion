@@ -48,7 +48,7 @@ function ReportWineModal({ wine, defaultReason, onClose }) {
           <p>{t('reportWine.sentBody')}</p>
         </div>
         <div className="modal-actions">
-          <button className="btn-primary" onClick={onClose}>{t('common.close')}</button>
+          <button className="btn btn-primary" onClick={onClose}>{t('common.close')}</button>
         </div>
       </Modal>
     );
@@ -89,7 +89,7 @@ function ReportWineModal({ wine, defaultReason, onClose }) {
         {error && <p className="report-wine-error">{error}</p>}
 
         <div className="modal-actions">
-          <button type="button" className="btn-secondary" onClick={onClose} disabled={submitting}>
+          <button type="button" className="btn btn-secondary" onClick={onClose} disabled={submitting}>
             {t('common.cancel')}
           </button>
           <button type="submit" className="btn-danger" disabled={submitting}>
