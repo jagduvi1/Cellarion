@@ -101,6 +101,14 @@ services:
       # Belt-and-braces with the Dockerfile ENV (audit L-22): secure refresh
       # cookie + redacted 5xx bodies must not depend on out-of-band config.
       - NODE_ENV=production
+      # Cap V8's heap BELOW the 640M cgroup limit below — without this V8 sizes
+      # its heap from HOST RAM (~2GB on a 4GB box) and the kernel OOM-killer
+      # fires before GC pressure, killing the whole container (grand-audit H4).
+      - NODE_OPTIONS=${NODE_OPTIONS:---max-old-space-size=480}
+      # Self-hosters on plain HTTP must set COOKIE_SECURE=false or the refresh
+      # cookie is dropped (Secure is otherwise inferred from NODE_ENV=production).
+      # The env block enumerates vars, so it must be forwarded to be settable.
+      - COOKIE_SECURE=${COOKIE_SECURE:-}
       - MONGO_URI=mongodb://mongo:27017/winecellar
       - JWT_SECRET=${JWT_SECRET}
       - ACCESS_TOKEN_EXPIRES_IN=${ACCESS_TOKEN_EXPIRES_IN:-15m}
@@ -110,7 +118,15 @@ services:
       - MEILI_URL=http://meilisearch:7700
       - MEILI_MASTER_KEY=${MEILI_MASTER_KEY}
       - MEILI_SEARCH_KEY=${MEILI_SEARCH_KEY:-}
+      # Recovery lever: set to 1 in .env to force a full Meili reindex on boot.
+      - MEILI_FORCE_REINDEX=${MEILI_FORCE_REINDEX:-}
       - REMBG_URL=http://rembg:5000
+      # Climate monitoring knobs (all optional; unset keeps in-code defaults).
+      # A GDPR storage-limitation lever — must be forwarded to be settable.
+      - CLIMATE_RETENTION_DAYS=${CLIMATE_RETENTION_DAYS:-}
+      - CLIMATE_MAX_DEVICES_PER_USER=${CLIMATE_MAX_DEVICES_PER_USER:-}
+      - CLIMATE_SUGGESTED_INTERVAL_S=${CLIMATE_SUGGESTED_INTERVAL_S:-}
+      - CLIMATE_MAX_READINGS_PER_DAY=${CLIMATE_MAX_READINGS_PER_DAY:-}
       - LOG_LEVEL=${LOG_LEVEL:-}
       - AUDIT_TTL_DAYS=${AUDIT_TTL_DAYS:-}
       - INDEXNOW_KEY=${INDEXNOW_KEY:-}
