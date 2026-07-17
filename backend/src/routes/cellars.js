@@ -1446,8 +1446,16 @@ router.delete('/:id', async (req, res) => {
     cellar.deletedAt = now;
     await cellar.save();
 
-    // Cascade soft-delete to all racks in this cellar
-    await Rack.updateMany({ cellar: cellar._id }, { deletedAt: now });
+    // Cascade soft-delete to the LIVE racks only ({ deletedAt: null }). Racks
+    // the user already soft-deleted individually keep their own (earlier)
+    // deletedAt — restamping "now" would reset their 30-day purge clock, and a
+    // later restore would flip them back as zombie racks the user had removed
+    // (grand-audit M13). Restore below re-activates only racks stamped with
+    // this exact timestamp, so the two sets never mix.
+    // Also free NFC tags: the rfidTag unique index has no deletedAt filter, so
+    // a soft-deleted rack would keep its tag claimed (blocking re-link on
+    // another rack) until the retention purge (grand-audit L14).
+    await Rack.updateMany({ cellar: cellar._id, deletedAt: null }, { $set: { deletedAt: now }, $unset: { rfidTag: '' } });
 
     // Wine lists and the 3D room layout are intentionally NOT removed here:
     // this is a reversible soft-delete (restorable for 30 days), so curated

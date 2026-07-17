@@ -355,7 +355,23 @@ const REGISTRY = [
   },
   {
     model: ReviewVote, category: 'personal-data', userFields: ['user'],
-    purge: (ctx) => ReviewVote.deleteMany({ user: ctx.userId }),
+    // Review.likesCount is $inc-maintained by the like/unlike route, so a bare
+    // deleteMany would leave phantom likes on public reviews forever
+    // (grand-audit M11). Reconcile the counter down per affected review BEFORE
+    // deleting — same discipline as the Follow entry below. Clamped at 0 so a
+    // pre-existing drift can't drive it negative.
+    purge: async (ctx) => {
+      const votes = await ReviewVote.find({ user: ctx.userId }).select('review').lean();
+      const perReview = {};
+      for (const v of votes) perReview[v.review] = (perReview[v.review] || 0) + 1;
+      const ops = Object.entries(perReview).map(([id, n]) => ({
+        updateOne: { filter: { _id: id, likesCount: { $gte: n } }, update: { $inc: { likesCount: -n } } },
+      }));
+      if (ops.length) await Review.bulkWrite(ops);
+      // Any counter that would have gone negative (drift): clamp to 0.
+      await Review.updateMany({ _id: { $in: Object.keys(perReview) }, likesCount: { $lt: 0 } }, [{ $set: { likesCount: 0 } }]);
+      await ReviewVote.deleteMany({ user: ctx.userId });
+    },
     // BUG FIX: schema has no `vote` field (only user/review/createdAt); the old
     // export emitted vote:undefined. Export the real fields.
     exportFragment: async (ctx) => ({
@@ -410,7 +426,7 @@ const REGISTRY = [
     },
   },
   {
-    model: Recommendation, category: 'personal-data', userFields: ['sender', 'recipient'],
+    model: Recommendation, category: 'personal-data', userFields: ['sender', 'recipient', 'recipientEmail'],
     // Anonymise the departing user's side instead of deleting, so the OTHER
     // party keeps the recommendation: a recipient keeps a from-[deleted] rec,
     // and a sender keeps a to-[deleted] entry in their sent list.
@@ -419,6 +435,11 @@ const REGISTRY = [
       // supplied) while anonymising the sender side.
       Recommendation.updateMany({ sender: ctx.userId }, { $set: { sender: ctx.deletedUserId }, $unset: { recipientEmail: '' } }),
       Recommendation.updateMany({ recipient: ctx.userId }, { $set: { recipient: ctx.deletedUserId } }),
+      // ALSO scrub the departing user's OWN address where it sits as the
+      // recipientEmail on OTHER users' sent recs — a recommendation sent to
+      // this email before they ever signed up leaves recipient:null, so the
+      // two updates above never touch it (grand-audit M10). Match by email.
+      ...(ctx.userEmail ? [Recommendation.updateMany({ recipientEmail: ctx.userEmail }, { $unset: { recipientEmail: '' } })] : []),
     ],
     exportFragment: async (ctx) => {
       const [sent, received] = await Promise.all([

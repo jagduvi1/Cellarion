@@ -55,13 +55,21 @@ router.post('/:id/restore', async (req, res) => {
       return res.status(404).json({ error: 'Deleted cellar not found' });
     }
 
+    // Capture the cellar's deletion timestamp BEFORE clearing it — the
+    // cascade stamped exactly this value on the racks that were live at
+    // delete time, so we can restore ONLY those and leave racks the user had
+    // individually deleted earlier (a different, earlier deletedAt) removed
+    // (grand-audit M13). Restoring every deletedAt!=null rack resurrected them
+    // as zombies.
+    const cellarDeletedAt = cellar.deletedAt;
     const restoredName = `RESTORED - ${cellar.name}`;
     cellar.name = restoredName;
     cellar.deletedAt = null;
     await cellar.save();
 
-    // Restore all racks that were cascade-deleted with this cellar
-    await Rack.updateMany({ cellar: cellar._id, deletedAt: { $ne: null } }, { $set: { deletedAt: null } });
+    // Restore only the racks cascade-deleted WITH this cellar (matching its
+    // exact deletedAt).
+    await Rack.updateMany({ cellar: cellar._id, deletedAt: cellarDeletedAt }, { $set: { deletedAt: null } });
 
     logAudit(req, 'cellar.restore', { cellarId: cellar._id }, { name: restoredName, owner: cellar.user });
 

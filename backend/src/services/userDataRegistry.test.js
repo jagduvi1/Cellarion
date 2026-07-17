@@ -148,3 +148,34 @@ describe('DiscussionReply purge — quote.authorName erasure (L-17)', () => {
     ]);
   });
 });
+
+describe('ReviewVote purge — reconciles Review.likesCount (grand-audit M11)', () => {
+  const ReviewVote = require('../models/ReviewVote');
+  const Review = require('../models/Review');
+  const entry = REGISTRY.find(e => e.model.modelName === 'ReviewVote');
+  const ctx = { userId: 'u1', deletedUserId: 'del1' };
+
+  test('decrements likesCount per liked review BEFORE deleting the votes', async () => {
+    const findSpy = jest.spyOn(ReviewVote, 'find').mockReturnValue({
+      select: () => ({ lean: () => Promise.resolve([{ review: 'rev1' }, { review: 'rev1' }, { review: 'rev2' }]) }),
+    });
+    const bulkSpy = jest.spyOn(Review, 'bulkWrite').mockResolvedValue({});
+    const clampSpy = jest.spyOn(Review, 'updateMany').mockResolvedValue({});
+    const delSpy = jest.spyOn(ReviewVote, 'deleteMany').mockResolvedValue({});
+
+    await entry.purge(ctx);
+
+    // rev1 had two of the user's likes → -2; rev2 → -1. Guarded by likesCount>=n.
+    const ops = bulkSpy.mock.calls[0][0];
+    expect(ops).toContainEqual({ updateOne: { filter: { _id: 'rev1', likesCount: { $gte: 2 } }, update: { $inc: { likesCount: -2 } } } });
+    expect(ops).toContainEqual({ updateOne: { filter: { _id: 'rev2', likesCount: { $gte: 1 } }, update: { $inc: { likesCount: -1 } } } });
+    expect(delSpy).toHaveBeenCalledWith({ user: 'u1' });
+
+    findSpy.mockRestore(); bulkSpy.mockRestore(); clampSpy.mockRestore(); delSpy.mockRestore();
+  });
+
+  test('registers recipientEmail on the Recommendation entry (M10)', () => {
+    const rec = REGISTRY.find(e => e.model.modelName === 'Recommendation');
+    expect(rec.userFields).toContain('recipientEmail');
+  });
+});

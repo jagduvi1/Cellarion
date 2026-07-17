@@ -20,6 +20,7 @@ jest.mock('../models/CellarValueSnapshot', () => ({ deleteMany: jest.fn() }));
 jest.mock('../models/ImportSession', () => ({ deleteMany: jest.fn() }));
 jest.mock('../models/PendingShare', () => ({ deleteMany: jest.fn() }));
 jest.mock('../models/WineList', () => ({ deleteMany: jest.fn() }));
+jest.mock('../models/ClimateDevice', () => ({ updateMany: jest.fn() }));
 jest.mock('../models/Cellar', () => ({ deleteOne: jest.fn() }));
 jest.mock('./wineListLogos', () => ({ deleteLogoFilesFor: jest.fn() }));
 jest.mock('./imageProcessor', () => ({ unlinkImageFiles: jest.fn() }));
@@ -33,6 +34,7 @@ const CellarValueSnapshot = require('../models/CellarValueSnapshot');
 const ImportSession = require('../models/ImportSession');
 const PendingShare = require('../models/PendingShare');
 const WineList = require('../models/WineList');
+const ClimateDevice = require('../models/ClimateDevice');
 const Cellar = require('../models/Cellar');
 const { deleteLogoFilesFor } = require('./wineListLogos');
 const { unlinkImageFiles } = require('./imageProcessor');
@@ -84,6 +86,8 @@ describe('purgeCellarPermanently', () => {
     expect(ImportSession.deleteMany).toHaveBeenCalledWith(cellarFilter);
     expect(PendingShare.deleteMany).toHaveBeenCalledWith(cellarFilter);
     expect(WineList.deleteMany).toHaveBeenCalledWith(cellarFilter);
+    // Climate devices belong to the user, not the cellar → detached, not deleted (M12).
+    expect(ClimateDevice.updateMany).toHaveBeenCalledWith(cellarFilter, { $set: { cellar: null } });
     expect(Cellar.deleteOne).toHaveBeenCalledWith({ _id: CELLAR_ID });
   });
 
