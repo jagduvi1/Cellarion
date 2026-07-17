@@ -136,6 +136,31 @@ describe('isRequestAllowed (default-deny)', () => {
     expect(isRequestAllowed(undefined, 'GET', '/api/stats')).toBe(false);
   });
 
+  test('MCP session verbs: GET/DELETE on the exact path are allowed per scope', () => {
+    for (const scopes of [READ, CONSUME, ['write']]) {
+      expect(isRequestAllowed(scopes, 'GET', '/api/mcp')).toBe(true);
+      expect(isRequestAllowed(scopes, 'DELETE', '/api/mcp')).toBe(true);
+    }
+    // …but never a sibling or sub-path (activity stays JWT-only).
+    expect(isRequestAllowed(READ, 'GET', '/api/mcp/activity')).toBe(false);
+    expect(isRequestAllowed(READ, 'DELETE', '/api/mcp/public')).toBe(false);
+  });
+
+  test('isMcpEndpoint (OAuth audience): all three session verbs on the exact path, nothing else', () => {
+    const { isMcpEndpoint } = require('./apiTokenAuth');
+    // The MCP session lifecycle: POST requests, GET SSE stream, DELETE terminate.
+    // Confining OAuth tokens to POST alone would let a connector initialize a
+    // session it could never stream from or terminate (#719 + #723 coordination).
+    for (const method of ['POST', 'GET', 'DELETE']) {
+      expect(isMcpEndpoint(method, '/api/mcp')).toBe(true);
+      expect(isMcpEndpoint(method, '/api/mcp/')).toBe(true); // trailing slash normalized
+    }
+    expect(isMcpEndpoint('PUT', '/api/mcp')).toBe(false);
+    expect(isMcpEndpoint('GET', '/api/mcp/activity')).toBe(false);
+    expect(isMcpEndpoint('POST', '/api/mcp/public')).toBe(false);
+    expect(isMcpEndpoint('GET', '/api/stats')).toBe(false);
+  });
+
   test('climate scope allows exactly POST /api/climate/ingest — the device credential', () => {
     const CLIMATE = ['climate'];
     expect(isRequestAllowed(CLIMATE, 'POST', '/api/climate/ingest')).toBe(true);
