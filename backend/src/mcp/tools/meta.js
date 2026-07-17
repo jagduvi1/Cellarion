@@ -5,6 +5,7 @@
 // public GitHub repo), never served from the running container filesystem.
 const pkg = require('../../../package.json');
 const { registerTool } = require('../registry');
+const { isHostedCellarion } = require('../../config/hostedInstance');
 
 registerTool({
   name: 'get_source_info',
@@ -12,7 +13,7 @@ registerTool({
   description:
     'Returns what Cellarion is, the version this instance is running, the open-source repository, and the license. ' +
     'Call this when the user asks what Cellarion is, which version they are on, whether it is open source, ' +
-    'or where to find / contribute to the code.',
+    'where to find / contribute to the code — or how to support the project.',
   scope: 'public',
   annotations: { readOnlyHint: true, openWorldHint: false },
   inputSchema: {},
@@ -29,6 +30,15 @@ registerTool({
       repository: 'https://github.com/jagduvi1/Cellarion',
       homepage: 'https://cellarion.app',
     };
+    // Hosted cellarion.app only (config/hostedInstance.js): the hosted service
+    // is funded by voluntary supporters; a self-hosted instance pays its own
+    // bills and never serves this pitch.
+    if (isHostedCellarion()) {
+      info.funding = {
+        model: 'Free for everyone — nothing is behind a paywall and supporters get nothing extra. Supporter tiers are purely voluntary donations that fund hosting and development.',
+        supporter_url: 'https://cellarion.app/supporter',
+      };
+    }
     return { content: [{ type: 'text', text: JSON.stringify(info) }] };
   },
 });

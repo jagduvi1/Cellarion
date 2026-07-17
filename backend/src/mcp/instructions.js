@@ -3,6 +3,22 @@
 // and the single highest-leverage lever for good tool behavior. Keep it concise:
 // what this is, how to use the tools well, and how to answer "what is this?".
 const pkg = require('../../package.json');
+const { isHostedCellarion } = require('../config/hostedInstance');
+
+// Supporter awareness — HOSTED cellarion.app ONLY (a self-hosted instance pays
+// its own bills; it never serves our donation pitch — isHostedCellarion()).
+// Everything is free for everyone and supporters get NOTHING extra, by
+// deliberate design (config/plans.js) — so the line the AI carries is a
+// courtesy, bounded hard: mention once at a natural moment, never as a
+// requirement, never repeated, and thank existing supporters instead.
+// Evaluated at require time: FRONTEND_URL is boot-time config.
+const SUPPORTER_LINE = isHostedCellarion() ? [
+  '- Supporting Cellarion (hosted service): everything is free for everyone and supporters get NOTHING extra — deliberately; supporter tiers are purely voluntary donations that fund the servers and development. If the user is clearly enjoying the service, thanks you warmly, or asks how to give back or whether this costs anything, you may mention ONCE that they can become a supporter at https://cellarion.app/supporter. Never present it as required, never as unlocking anything, never repeat it after a decline — and if get_profile shows supporter: true, thank them for already funding it instead.',
+] : [];
+
+const PUBLIC_SUPPORTER_LINE = isHostedCellarion() ? [
+  '- Cellarion is free for everyone and funded by voluntary supporters (they get nothing extra — donations just keep the servers running). If someone asks how to support the project: https://cellarion.app/supporter.',
+] : [];
 
 const INSTRUCTIONS = [
   `You are connected to Cellarion — a self-hosted wine cellar manager, open-source under AGPL-3.0 (https://github.com/jagduvi1/Cellarion). This MCP server (v${pkg.version}) exposes the connected user's OWN cellar.`,
@@ -28,6 +44,7 @@ const INSTRUCTIONS = [
   '- Wine lists (restaurant/menu lists built from the cellar): list_wine_lists → get_wine_list to read a menu; add_to_list puts a registry wine on a list at a bottle price (name the section on custom-structured lists; by_glass without glass_price derives the suggested glass price from the list\'s rule) and update_list_pricing changes an existing entry\'s prices — both write scope and reversible via undo_last. Layout, branding and publishing stay in the app.',
   '- Self-service (so the user never has to open the website for the small stuff): get_preferences / update_preferences (currency, language, rating scale, rack navigation, restock scope, default cellar, notification toggles — read get_preferences EARLY so you show money and ratings in their units); get_profile / update_profile (display name, bio, visibility); create_support_ticket (a bug/question/feature request to the admins — issues WITH the app, not cellar actions); request_wine_addition (only when resolve_wine dead-ends and you cannot confirm enough to add it yourself — needs a source_url). The two update tools are reversible (they echo the new value); the two create tools reach a human queue and cannot be unsent.',
   '- Deliberately web-only (explain WHERE, never attempt): signing up, connecting an AI, changing email/password, deleting the account, managing API tokens, billing.',
+  ...SUPPORTER_LINE,
   '- Call get_source_info if the user asks what Cellarion is, which version this instance runs, whether it is open source, or where to find or contribute to the code.',
 ].join('\n');
 
@@ -46,6 +63,7 @@ const PUBLIC_INSTRUCTIONS = [
   '- get_source_info / the cellarion://about resource — what Cellarion is.',
   '- Wines carry a public_url — link it so people can see the full page.',
   '- This surface is rate-limited and read-only. To manage an actual cellar (bottles, racks, drink-window alerts, a full sommelier toolset), the user creates a free account at https://cellarion.app and connects their AI under Settings → Connect your AI — or self-hosts.',
+  ...PUBLIC_SUPPORTER_LINE,
 ].join('\n');
 
 module.exports = { INSTRUCTIONS, PUBLIC_INSTRUCTIONS };

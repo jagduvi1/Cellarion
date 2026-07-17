@@ -6,6 +6,7 @@
 const pkg = require('../../package.json');
 const Bottle = require('../models/Bottle');
 const { CONSUMED_STATUSES } = require('../config/constants');
+const { isHostedCellarion } = require('../config/hostedInstance');
 const { registerResource } = require('./registry');
 const { accessibleCellars, countBottlesByCellar } = require('./toolUtil');
 const { getCellarRole } = require('../utils/cellarAccess');
@@ -37,6 +38,11 @@ registerResource({
         '- **License:** AGPL-3.0 — free software; users interacting over a network are entitled to the source.',
         '- **Source:** https://github.com/jagduvi1/Cellarion (read the code there; this server never serves its own filesystem)',
         '- **Hosted:** https://cellarion.app — free for everyone, no paywall. Self-hosting is fully supported (Docker Compose).',
+        // Hosted-only (config/hostedInstance.js): self-hosted instances never
+        // serve the donation pitch — they pay their own bills.
+        ...(isHostedCellarion() ? [
+          '- **Supporting the project:** funded by voluntary supporters who get nothing extra (all tiers are functionally identical, on purpose): https://cellarion.app/supporter',
+        ] : []),
         '',
         'This MCP server exposes the connected user\'s own cellar via scoped, revocable tokens.',
         'Reads are free; the expensive reasoning is yours to do. Cheers.',

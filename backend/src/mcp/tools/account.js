@@ -51,6 +51,11 @@ function profileView(user) {
     profile_visibility: user.profileVisibility || 'public',
     followers: user.followersCount || 0,
     following: user.followingCount || 0,
+    // Boolean only, never the tier or billing details. Lets a well-behaved AI
+    // THANK an existing supporter instead of suggesting they become one (see
+    // the supporter line in mcp/instructions.js). All tiers are functionally
+    // identical (config/plans.js) — this flag gates a courtesy, not a feature.
+    supporter: !!(user.plan && user.plan !== 'free'),
   };
 }
 

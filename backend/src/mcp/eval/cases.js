@@ -57,6 +57,15 @@ const CASES = [
     expect: { tool: 'get_source_info' },
   },
   {
+    id: 'support-the-project',
+    // The supporter-awareness path (hosted only): a grateful user asking how
+    // to give back should land on get_source_info, whose funding block (and
+    // the instructions line) carries the voluntary-supporter answer. A no-tool
+    // answer is acceptable — the instructions alone already contain the URL.
+    prompt: 'I love this app — is it really free? How can I support the project?',
+    expect: { anyOf: ['get_source_info'], orNone: true },
+  },
+  {
     id: 'consumed-vintage-year',
     prompt: 'Which bottles did I consume during 2025?',
     expect: { tool: 'list_history' },
