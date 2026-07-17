@@ -44,11 +44,16 @@ function isPrivateAddress(addr) {
   if (family === 6) {
     const lower = addr.toLowerCase();
     if (lower === '::' || lower === '::1') return true;
-    if (lower.startsWith('fe8') || lower.startsWith('fe9') || lower.startsWith('fea') || lower.startsWith('feb')) return true; // fe80::/10
-    if (lower.startsWith('fc') || lower.startsWith('fd')) return true; // fc00::/7
-    if (lower.startsWith('64:ff9b')) return true; // NAT64 — hides v4 targets
-    const v4 = lower.match(/::ffff:(\d+\.\d+\.\d+\.\d+)$/); // v4-mapped
-    if (v4) return isPrivateAddress(v4[1]);
+    if (/^fe[89ab]/.test(lower)) return true; // fe80::/10 link-local
+    if (/^f[cd]/.test(lower)) return true;    // fc00::/7 unique-local
+    if (lower.startsWith('64:ff9b')) return true; // NAT64 — hides a v4 target
+    // Refuse ANY IPv6 that embeds an IPv4 address: v4-mapped (::ffff:…) or the
+    // deprecated v4-compatible (::a.b.c.d). A legitimate image host never
+    // presents as one, and re-checking the inner v4 is a footgun — Node
+    // normalizes ::ffff:169.254.169.254 to the HEX form ::ffff:a9fe:a9fe, which
+    // a dotted-decimal-only check misses, smuggling the metadata endpoint past
+    // the guard. Blanket-refuse instead of parsing every textual form.
+    if (lower.startsWith('::ffff:') || /^::\d+\.\d+\.\d+\.\d+$/.test(lower) || /^::[0-9a-f]{1,4}:[0-9a-f]{1,4}$/.test(lower)) return true;
     return false;
   }
   return true; // not an IP at all — refuse

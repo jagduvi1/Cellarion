@@ -16,8 +16,15 @@ describe('isPrivateAddress', () => {
     // IPv4 — every blocked range
     '0.0.0.0', '10.1.2.3', '127.0.0.1', '100.64.0.1', '169.254.169.254', // cloud metadata
     '172.16.0.1', '172.31.255.255', '192.168.1.1', '198.18.0.1', '224.0.0.1', '255.255.255.255',
-    // IPv6 — loopback, link-local, ULA, NAT64, v4-mapped-private
-    '::1', '::', 'fe80::1', 'fc00::1', 'fd12:3456::1', '64:ff9b::7f00:1', '::ffff:127.0.0.1', '::ffff:10.0.0.1',
+    // IPv6 — loopback, link-local, ULA, NAT64
+    '::1', '::', 'fe80::1', 'fc00::1', 'fd12:3456::1', '64:ff9b::7f00:1',
+    // v4-mapped in EVERY textual form — incl. the hex form Node normalizes
+    // [::ffff:169.254.169.254] to (::ffff:a9fe:a9fe = AWS metadata). ALL
+    // embedded-v4 IPv6 literals are refused, even public ones, since no real
+    // image host presents as one and dotted-only checks miss the hex form.
+    '::ffff:127.0.0.1', '::ffff:10.0.0.1', '::ffff:a9fe:a9fe', '::ffff:8.8.8.8', '::ffff:0808:0808',
+    // deprecated v4-compatible
+    '::127.0.0.1', '::a9fe:a9fe',
     // not an IP at all
     'not-an-ip', '',
   ])('blocks %s', (addr) => {
@@ -27,8 +34,7 @@ describe('isPrivateAddress', () => {
   test.each([
     '1.1.1.1', '8.8.8.8', '93.184.216.34', // public v4
     '172.15.0.1', '172.32.0.1', '11.0.0.1', // just OUTSIDE the private ranges
-    '2606:4700:4700::1111', '2001:4860:4860::8888', // public v6
-    '::ffff:8.8.8.8', // v4-mapped PUBLIC is allowed
+    '2606:4700:4700::1111', '2001:4860:4860::8888', // public global v6
   ])('allows %s', (addr) => {
     expect(isPrivateAddress(addr)).toBe(false);
   });
