@@ -152,6 +152,40 @@ const CASES = [
     expect: { anyOf: ['attach_bottle_image', 'search_bottles'] }, // may resolve the bottle id first
     args: (a) => a.image_url === undefined || /barolo-label/.test(a.image_url),
   },
+
+  // ── Phase 7: self-service account tools ──
+  {
+    id: 'read-preferences',
+    prompt: 'What currency and rating scale is my account set to?',
+    expect: { tool: 'get_preferences' },
+  },
+  {
+    id: 'change-currency',
+    prompt: 'Change my display currency to Swedish kronor.',
+    // Imperative — a well-behaved model calls the tool; get_preferences first is
+    // also a defensible move (read the current value before changing it).
+    expect: { anyOf: ['update_preferences', 'get_preferences'] },
+  },
+  {
+    id: 'read-profile',
+    prompt: 'What does my public Cellarion profile say about me?',
+    expect: { tool: 'get_profile' },
+  },
+  {
+    id: 'update-bio',
+    prompt: 'Set my profile bio to: Barolo obsessive and weekend sommelier.',
+    expect: { anyOf: ['update_profile', 'get_profile'] },
+  },
+  {
+    id: 'report-a-bug',
+    prompt: "Please report a bug to the Cellarion team: the 3D room view won't load on my phone.",
+    expect: { tool: 'create_support_ticket' },
+  },
+  {
+    id: 'request-missing-wine',
+    prompt: "Cellarion doesn't have this wine and I don't know the producer — ask the team to add it. Here's the page: https://www.systembolaget.se/produkt/123",
+    expect: { anyOf: ['request_wine_addition', 'resolve_wine', 'search_registry'] },
+  },
 ];
 
 module.exports = { CASES };
