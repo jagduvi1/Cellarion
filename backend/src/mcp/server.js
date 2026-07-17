@@ -136,8 +136,8 @@ function budgetedHandler(tool, ctx, state) {
       return run.then(
         // idempotencyBusy = the error IS the idempotency conflict — a live
         // twin owns the claim; deleting it here would unlock a double-exec.
-        async (out) => { if (out && out.isError && !out.idempotencyBusy) await releaseClaim(ctx, key); return out; },
-        async (err) => { await releaseClaim(ctx, key); throw err; }
+        async (out) => { if (out && out.isError && !out.idempotencyBusy) await releaseClaim(ctx, key, tool.name); return out; },
+        async (err) => { await releaseClaim(ctx, key, tool.name); throw err; }
       );
     }
     return run;

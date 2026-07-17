@@ -172,7 +172,7 @@ registerTool({
     idempotency_key: z.string().max(100).optional(),
   },
   handler: async (args, ctx) => {
-    const replayed = await replay(ctx, args.idempotency_key);
+    const replayed = await replay(ctx, args.idempotency_key, 'add_to_list');
     if (replayed) return replayed;
 
     const [list, wine] = await Promise.all([
@@ -298,7 +298,7 @@ registerTool({
     if (args.list_price === undefined && args.by_glass === undefined && args.glass_price === undefined) {
       return fail('invalid_input', 'Nothing to change — pass list_price, by_glass and/or glass_price.');
     }
-    const replayed = await replay(ctx, args.idempotency_key);
+    const replayed = await replay(ctx, args.idempotency_key, 'update_list_pricing');
     if (replayed) return replayed;
 
     const list = await WineList.findOne({ _id: args.list_id, user: ctx.user.id });

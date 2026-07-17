@@ -38,7 +38,7 @@ registerTool({
     idempotency_key: z.string().max(100).optional(),
   },
   handler: async (args, ctx) => {
-    const replayed = await replay(ctx, args.idempotency_key);
+    const replayed = await replay(ctx, args.idempotency_key, 'attach_bottle_image');
     if (replayed) return replayed;
 
     if (!args.image_url && !args.image_base64) {

@@ -109,7 +109,7 @@ registerTool({
     idempotency_key: z.string().max(100).optional(),
   },
   handler: async (args, ctx) => {
-    const replayed = await replay(ctx, args.idempotency_key);
+    const replayed = await replay(ctx, args.idempotency_key, 'add_bottle');
     if (replayed) return replayed;
 
     if (!args.wine_id && !args.new_wine) {
@@ -219,7 +219,7 @@ registerTool({
     idempotency_key: z.string().max(100).optional(),
   },
   handler: async (args, ctx) => {
-    const replayed = await replay(ctx, args.idempotency_key);
+    const replayed = await replay(ctx, args.idempotency_key, 'update_bottle');
     if (replayed) return replayed;
 
     const access = await resolveBottleAccess(ctx.user.id, args.bottle_id, 'editor');

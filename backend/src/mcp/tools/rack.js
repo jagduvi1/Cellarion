@@ -41,7 +41,7 @@ registerTool({
     idempotency_key: z.string().max(100).optional(),
   },
   handler: async (args, ctx) => {
-    const replayed = await replay(ctx, args.idempotency_key);
+    const replayed = await replay(ctx, args.idempotency_key, 'create_cellar');
     if (replayed) return replayed;
     const result = await createCellar({ name: args.name, description: args.description }, ctx.req);
     if (result.error) {
@@ -75,7 +75,7 @@ registerTool({
     idempotency_key: z.string().max(100).optional(),
   },
   handler: async (args, ctx) => {
-    const replayed = await replay(ctx, args.idempotency_key);
+    const replayed = await replay(ctx, args.idempotency_key, 'create_rack');
     if (replayed) return replayed;
     const access = await resolveCellarAccess(ctx.user.id, args.cellar_id, 'editor');
     if (!access) return fail('not_found', MSG_CELLAR_NOT_FOUND);
