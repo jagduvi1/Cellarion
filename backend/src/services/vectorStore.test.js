@@ -51,4 +51,27 @@ describe('qdrant fetches', () => {
     await expect(vectorStore.searchSimilar('v1', [0.1], 5))
       .rejects.toThrow(/Qdrant POST .* timed out/);
   });
+
+  // Security audit L-5: optional Qdrant API-key auth, off by default.
+  describe('QDRANT_API_KEY header', () => {
+    const saved = process.env.QDRANT_API_KEY;
+    afterEach(() => {
+      if (saved === undefined) delete process.env.QDRANT_API_KEY;
+      else process.env.QDRANT_API_KEY = saved;
+    });
+
+    test('no api-key header is sent when QDRANT_API_KEY is unset', async () => {
+      delete process.env.QDRANT_API_KEY;
+      global.fetch.mockResolvedValue({ ok: true, json: async () => ({ result: [] }) });
+      await vectorStore.searchSimilar('v1', [0.1], 5);
+      expect(global.fetch.mock.calls[0][1].headers['api-key']).toBeUndefined();
+    });
+
+    test('the api-key header is sent when QDRANT_API_KEY is set', async () => {
+      process.env.QDRANT_API_KEY = 'secret-key';
+      global.fetch.mockResolvedValue({ ok: true, json: async () => ({ result: [] }) });
+      await vectorStore.searchSimilar('v1', [0.1], 5);
+      expect(global.fetch.mock.calls[0][1].headers['api-key']).toBe('secret-key');
+    });
+  });
 });

@@ -5,7 +5,9 @@
 # minimal cap_add set that step-down needs.
 services:
   mongo:
-    image: mongo:7
+    # Digest-pinned (security audit L-11): mongo:7 is a moving minor tag.
+    # Dependabot's docker ecosystem bumps this; the tag is kept for readability.
+    image: mongo:7@sha256:340c1c56fb10e95cf79ff547f8664b96bc6ead9909bc355238cbf865a9695a6f
     container_name: cellarion-mongo
     restart: unless-stopped
     security_opt:
@@ -76,6 +78,12 @@ services:
       - no-new-privileges:true
     cap_drop:
       - ALL
+    # Optional API-key auth (security audit L-5). Qdrant is internal-only and not
+    # host-published, so this defaults OFF (empty = no auth, unchanged behaviour).
+    # Set QDRANT_API_KEY in .env to require the key here AND on the backend below;
+    # the readiness endpoints used by the healthcheck stay key-exempt.
+    environment:
+      - QDRANT__SERVICE__API_KEY=${QDRANT_API_KEY:-}
     volumes:
       - qdrant-data:/qdrant/storage
     deploy:
@@ -109,7 +117,11 @@ services:
       # cookie is dropped (Secure is otherwise inferred from NODE_ENV=production).
       # The env block enumerates vars, so it must be forwarded to be settable.
       - COOKIE_SECURE=${COOKIE_SECURE:-}
-      - MONGO_URI=mongodb://mongo:27017/winecellar
+      # Reverse-proxy hop count for req.ip resolution (security audit M-3).
+      # Default 1 matches this shipped single-hop chain (nginx → backend). The
+      # hosted CF→Traefik→nginx deploy sets TRUST_PROXY_HOPS=2 in its .env.
+      - TRUST_PROXY_HOPS=${TRUST_PROXY_HOPS:-}
+      - MONGO_URI=${MONGO_URI:-mongodb://mongo:27017/winecellar}
       - JWT_SECRET=${JWT_SECRET}
       - ACCESS_TOKEN_EXPIRES_IN=${ACCESS_TOKEN_EXPIRES_IN:-15m}
       - PORT=5000
@@ -151,6 +163,9 @@ services:
       - EMBEDDING_DIMENSION=${EMBEDDING_DIMENSION:-}
       - EMBEDDING_TIMEOUT_MS=${EMBEDDING_TIMEOUT_MS:-}
       - QDRANT_URL=http://qdrant:6333
+      # Optional Qdrant API key (security audit L-5) — must match the qdrant
+      # service's QDRANT__SERVICE__API_KEY above. Empty = no auth (default).
+      - QDRANT_API_KEY=${QDRANT_API_KEY:-}
       - SUPER_ADMIN_EMAIL=${SUPER_ADMIN_EMAIL:-}
       - SUPER_ADMIN_IPS=${SUPER_ADMIN_IPS:-}
       - VAPID_PUBLIC_KEY=${VAPID_PUBLIC_KEY:-}
@@ -247,7 +262,9 @@ services:
   # VITE_UMAMI_URL and VITE_UMAMI_WEBSITE_ID are set at build time, so this
   # service is optional and inert without those vars.
   umami:
-    image: ghcr.io/umami-software/umami:postgresql-latest
+    # Digest-pinned (security audit L-11): `:postgresql-latest` is a fully
+    # moving tag — the worst supply-chain case. Dependabot bumps it.
+    image: ghcr.io/umami-software/umami:postgresql-latest@sha256:8edfe4beaef13f9d1300619fa264ef250a3688df9cc54d24ca830ca31cb475ec
     container_name: cellarion-umami
     restart: unless-stopped
     # Opt-in: only starts with `docker compose --profile analytics up`. It is
@@ -285,7 +302,8 @@ services:
         condition: service_healthy
 
   umami-db:
-    image: postgres:16-alpine
+    # Digest-pinned (security audit L-11). Dependabot bumps it.
+    image: postgres:16-alpine@sha256:57c72fd2a128e416c7fcc499958864df5301e940bca0a56f58fddf30ffc07777
     container_name: cellarion-umami-db
     restart: unless-stopped
     profiles: ["analytics"]

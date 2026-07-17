@@ -34,7 +34,9 @@ function VerifyEmail() {
     verifyEmail(token).then(result => {
       if (result.success) {
         setStatus('success');
-        setTimeout(() => navigate('/cellars', { replace: true }), 1500);
+        // Verification no longer logs the user in (security audit M-1) — send
+        // them to log in rather than into an authenticated view.
+        setTimeout(() => navigate('/login', { replace: true }), 1500);
       } else {
         setStatus('error');
         setErrorMessage(result.error || t('auth.verificationFailed'));

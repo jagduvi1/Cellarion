@@ -1677,10 +1677,26 @@ router.get('/:id/audit', async (req, res) => {
       return res.status(403).json({ error: 'Not authorized' });
     }
 
-    const logs = await AuditLog.find({ 'resource.cellarId': req.params.id })
+    // Return a MINIMISED projection (security audit M-2): the raw AuditLog docs
+    // carry actor.ipAddress, userAgent, and the actor's email — a cellar owner
+    // must not harvest collaborators' (incl. former collaborators', and any
+    // admin/somm actor's) IP + email. The app's own token layer already blocks
+    // this path for API tokens (apiTokenAuth TOKEN_EXCLUSIONS, "audit log incl.
+    // collaborator IPs and emails"); apply the same discipline to the web path.
+    // Populate username only, and drop ip/userAgent/email before responding.
+    const raw = await AuditLog.find({ 'resource.cellarId': req.params.id })
       .sort({ timestamp: -1 })
       .limit(100)
-      .populate('actor.userId', 'username email');
+      .populate('actor.userId', 'username')
+      .lean();
+
+    const logs = raw.map((l) => ({
+      _id: l._id,
+      action: l.action,
+      detail: l.detail,
+      timestamp: l.timestamp,
+      actor: { userId: l.actor?.userId ? { username: l.actor.userId.username } : null },
+    }));
 
     res.json({ logs });
   } catch (error) {

@@ -48,6 +48,12 @@ const rateLimited = (message) => ({
 // would. Batch tools (bulk_add) charge one slot PER ITEM through the same
 // module, so a case of 12 costs 12 — see mcp/mutationBudget.js.
 const { takeMutationSlot, ipKeyFor, WRITE_WINDOW_MS } = require('./mutationBudget');
+// Cross-request tool-call budget per caller (user id / anon IP) — caps read
+// amplification the per-request cap and per-IP HTTP limiter can't (M-4).
+const { withinCallBudget } = require('./callBudget');
+
+const callBudgetExceeded = () =>
+  rateLimited('Too many Cellarion tool calls in a short time — pause a moment and continue. This protects the shared service.');
 
 // Aggregate usage counters behind the admin view (GET /api/admin/mcp/usage).
 // record() is fire-and-forget and no-ops without a live Mongo connection, so
@@ -96,6 +102,11 @@ function budgetedHandler(tool, ctx, state) {
     if (state.calls > maxCalls) {
       recordUsage(ctx, 'tool', tool.name, true);
       return rateLimited(`Too many tool calls in one request (max ${maxCalls}). Send fewer calls per batch and paginate instead.`);
+    }
+    // Cross-request caller budget — bounds read amplification (M-4).
+    if (!withinCallBudget(ctx)) {
+      recordUsage(ctx, 'tool', tool.name, true);
+      return callBudgetExceeded();
     }
     if (tool.annotations?.readOnlyHint === false) {
       // Fail-closed for the anonymous surface (audit P6-L2): if a mutating
@@ -264,6 +275,10 @@ function budgetedPromptHandler(prompt, ctx, state) {
       recordUsage(ctx, 'prompt', prompt.name, true);
       throw new Error(`rate_limited: too many calls in one request (max ${maxCalls})`);
     }
+    if (!withinCallBudget(ctx)) {
+      recordUsage(ctx, 'prompt', prompt.name, true);
+      throw new Error('rate_limited: too many Cellarion tool calls in a short time');
+    }
     return withUsage(ctx, 'prompt', prompt.name, () => prompt.handler(args || {}, ctx));
   };
 }
@@ -280,6 +295,10 @@ function budgetedResourceHandler(rsrc, ctx, state) {
     if (state.calls > maxCalls) {
       recordUsage(ctx, 'resource', rsrc.name, true);
       throw new Error(`rate_limited: too many calls in one request (max ${maxCalls})`);
+    }
+    if (!withinCallBudget(ctx)) {
+      recordUsage(ctx, 'resource', rsrc.name, true);
+      throw new Error('rate_limited: too many Cellarion tool calls in a short time');
     }
     const params = rsrc.uriTemplate ? (varsOrExtra || {}) : {};
     return withUsage(ctx, 'resource', rsrc.name, () => rsrc.handler(uri, params, ctx));

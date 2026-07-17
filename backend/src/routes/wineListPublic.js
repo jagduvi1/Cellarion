@@ -95,6 +95,16 @@ router.get('/:shareToken/pdf', async (req, res) => {
     if (!wineList) return res.status(404).json({ error: 'Wine list not found or not published' });
     if (!(await cellarIsActive(wineList))) return res.status(404).json({ error: 'Wine list not found or not published' });
 
+    // Defence-in-depth for the synchronous, heap-buffered render (security
+    // audit H1): the write-side pre-save cap stops any NEW list exceeding
+    // MAX_ENTRIES_PER_LIST, but refuse to render a pre-existing over-cap list
+    // here too rather than block the event loop / OOM the worker.
+    const totalEntries = (wineList.autoGroupEntries?.length || 0) +
+      (wineList.sections || []).reduce((n, s) => n + (s.entries?.length || 0), 0);
+    if (totalEntries > (WineList.MAX_ENTRIES_PER_LIST || 500)) {
+      return res.status(413).json({ error: 'This wine list is too large to render as a PDF.' });
+    }
+
     const wineMap = await loadWineMap(wineList);
 
     // QR code on the printed PDF points at the web menu, which is what a
