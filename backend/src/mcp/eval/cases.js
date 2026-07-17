@@ -199,6 +199,12 @@ const CASES = [
     expect: { anyOf: ['list_my_tickets', 'list_notifications'] },
   },
   {
+    id: 'follow-up-on-ticket',
+    // Continuing the conversation — the model may need the ticket_id first.
+    prompt: 'Reply to my open support ticket: thanks for the fix, but the room view still crashes on Firefox.',
+    expect: { anyOf: ['reply_to_ticket', 'list_my_tickets'] },
+  },
+  {
     id: 'request-missing-wine',
     prompt: "Cellarion doesn't have this wine and I don't know the producer — ask the team to add it. Here's the page: https://www.systembolaget.se/produkt/123",
     expect: { anyOf: ['request_wine_addition', 'resolve_wine', 'search_registry'] },

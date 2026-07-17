@@ -60,7 +60,10 @@ function AdminSupportTickets() {
 
   const openTicket = (ticket) => {
     setSelected(ticket);
-    setResponseText(ticket.adminResponse || '');
+    // Responses APPEND to the conversation now — start each reply blank
+    // instead of pre-filling the previous response (which would tempt
+    // re-sending the same text as a new thread entry).
+    setResponseText('');
     setResponseStatus(ticket.status === 'open' ? 'in_progress' : ticket.status);
     setError(null);
     setSuccess(null);
@@ -187,15 +190,27 @@ function AdminSupportTickets() {
                 <p>{selected.message}</p>
               </div>
 
-              {selected.adminResponse && (
+              {(selected.replies || []).length > 0 ? (
+                // The conversation thread (admin responses + user follow-ups).
+                // Pre-thread tickets fall back to the single-response block.
+                (selected.replies || []).map((reply, i) => (
+                  <div key={i} className={reply.author === 'admin' ? 'admin-support-existing-response' : 'admin-support-message'}>
+                    <h4>{reply.author === 'admin' ? 'Support response' : 'User reply'}</h4>
+                    <p>{reply.message}</p>
+                    <span className="admin-support-reply-date">
+                      {reply.createdAt ? new Date(reply.createdAt).toLocaleString() : ''}
+                    </span>
+                  </div>
+                ))
+              ) : selected.adminResponse ? (
                 <div className="admin-support-existing-response">
                   <h4>Previous response</h4>
                   <p>{selected.adminResponse}</p>
                 </div>
-              )}
+              ) : null}
 
               <div className="admin-support-respond">
-                <h4>{selected.adminResponse ? 'Update response' : 'Reply'}</h4>
+                <h4>Reply to user</h4>
                 <textarea
                   value={responseText}
                   onChange={e => { setResponseText(e.target.value); setError(null); setSuccess(null); }}

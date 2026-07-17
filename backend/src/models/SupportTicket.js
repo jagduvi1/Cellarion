@@ -1,5 +1,15 @@
 const mongoose = require('mongoose');
 
+// One follow-up message in a ticket's conversation. `author` disambiguates the
+// side (the user's AI/web reply vs an admin response); `by` records the actual
+// account for admin attribution. No _id — replies are only ever read as a list.
+const ticketReplySchema = new mongoose.Schema({
+  author: { type: String, enum: ['user', 'admin'], required: true },
+  by: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  message: { type: String, required: true, trim: true, maxlength: 5000 },
+  createdAt: { type: Date, default: Date.now },
+}, { _id: false });
+
 const supportTicketSchema = new mongoose.Schema({
   user: {
     type: mongoose.Schema.Types.ObjectId,
@@ -35,6 +45,15 @@ const supportTicketSchema = new mongoose.Schema({
     type: String,
     trim: true,
     maxlength: 5000
+  },
+  // The conversation AFTER the opening message. Admin responses are appended
+  // here AND mirrored into adminResponse (latest) for pre-thread consumers;
+  // user follow-ups (web reply box or the MCP reply_to_ticket tool) live only
+  // here and flip status back to 'open'. Tickets created before threading
+  // have an empty array and just the message/adminResponse pair.
+  replies: {
+    type: [ticketReplySchema],
+    default: []
   },
   respondedBy: {
     type: mongoose.Schema.Types.ObjectId,

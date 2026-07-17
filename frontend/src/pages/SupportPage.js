@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
-import { getMySupportTickets, getMyWineReports } from '../api/support';
+import { getMySupportTickets, getMyWineReports, replySupportTicket } from '../api/support';
 import SupportModal from '../components/SupportModal';
 import './SupportPage.css';
 
@@ -15,6 +15,9 @@ function SupportPage() {
   const [error, setError] = useState(null);
   const [showModal, setShowModal] = useState(false);
   const [expanded, setExpanded] = useState(null);
+  const [replyText, setReplyText] = useState('');
+  const [replySending, setReplySending] = useState(false);
+  const [replyError, setReplyError] = useState(null);
 
   useEffect(() => {
     fetchData();
@@ -39,7 +42,32 @@ function SupportPage() {
     }
   };
 
-  const toggleExpand = (id) => setExpanded(exp => exp === id ? null : id);
+  const toggleExpand = (id) => {
+    setExpanded(exp => exp === id ? null : id);
+    setReplyText('');
+    setReplyError(null);
+  };
+
+  const sendReply = async (ticketId) => {
+    if (!replyText.trim() || replySending) return;
+    setReplySending(true);
+    setReplyError(null);
+    try {
+      const res = await replySupportTicket(apiFetch, ticketId, replyText.trim());
+      const data = await res.json();
+      if (!res.ok) {
+        setReplyError(data.error || t('support.replyFailed'));
+      } else {
+        setReplyText('');
+        // Refresh in place so the new entry shows in the thread immediately.
+        setTickets(ts => ts.map(tk => tk._id === ticketId ? data.ticket : tk));
+      }
+    } catch {
+      setReplyError(t('support.replyFailed'));
+    } finally {
+      setReplySending(false);
+    }
+  };
 
   return (
     <div className="support-page">
@@ -100,7 +128,20 @@ function SupportPage() {
                       <h4>{t('support.yourMessage')}</h4>
                       <p>{ticket.message}</p>
                     </div>
-                    {ticket.adminResponse && (
+                    {(ticket.replies || []).length > 0 ? (
+                      // The conversation thread. New responses live here; the
+                      // legacy single adminResponse block below only renders
+                      // for pre-thread tickets (empty replies array).
+                      (ticket.replies || []).map((reply, i) => (
+                        <div key={i} className={reply.author === 'admin' ? 'support-response' : 'support-message'}>
+                          <h4>{reply.author === 'admin' ? t('support.adminResponse') : t('support.yourReply')}</h4>
+                          <p>{reply.message}</p>
+                          <span className="support-response-date">
+                            {reply.createdAt ? new Date(reply.createdAt).toLocaleDateString() : ''}
+                          </span>
+                        </div>
+                      ))
+                    ) : ticket.adminResponse ? (
                       <div className="support-response">
                         <h4>{t('support.adminResponse')}</h4>
                         <p>{ticket.adminResponse}</p>
@@ -110,9 +151,30 @@ function SupportPage() {
                             : ''}
                         </span>
                       </div>
-                    )}
-                    {!ticket.adminResponse && (
+                    ) : (
                       <p className="support-awaiting">{t('support.awaitingResponse')}</p>
+                    )}
+                    {ticket.status !== 'closed' ? (
+                      <div className="support-reply-form">
+                        <textarea
+                          value={replyText}
+                          onChange={e => setReplyText(e.target.value)}
+                          placeholder={t('support.replyPlaceholder')}
+                          maxLength={5000}
+                          rows={3}
+                          disabled={replySending}
+                        />
+                        {replyError && <p className="support-error">{replyError}</p>}
+                        <button
+                          className="btn-primary"
+                          onClick={() => sendReply(ticket._id)}
+                          disabled={replySending || !replyText.trim()}
+                        >
+                          {replySending ? t('support.sendingReply') : t('support.sendReply')}
+                        </button>
+                      </div>
+                    ) : (
+                      <p className="support-awaiting">{t('support.closedNoReply')}</p>
                     )}
                   </div>
                 )}

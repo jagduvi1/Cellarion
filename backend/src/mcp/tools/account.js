@@ -17,7 +17,7 @@ const { registerTool } = require('../registry');
 const { ok, fail, pageParams } = require('../toolUtil');
 const { logAudit } = require('../../services/audit');
 const {
-  updatePreferences, updateProfile, createSupportTicket, createWineRequest,
+  updatePreferences, updateProfile, createSupportTicket, replyToTicket, createWineRequest,
   ALLOWED_CURRENCIES, ALLOWED_LANGUAGES, ALLOWED_RATING_SCALES,
   ALLOWED_RACK_NAV, ALLOWED_RESTOCK_SCOPE, ALLOWED_VISIBILITY, SUPPORT_CATEGORIES,
 } = require('../../services/accountOps');
@@ -205,9 +205,10 @@ registerTool({
   name: 'list_my_tickets',
   title: 'List your support tickets',
   description:
-    'The user\'s own support tickets with any admin response, newest first — the read side of ' +
-    'create_support_ticket. Call when the user asks whether support has replied, what the answer was, or what ' +
-    'they have filed. Optional status filter: open / in_progress / closed.',
+    'The user\'s own support tickets with the full conversation (admin responses + follow-ups), newest first — ' +
+    'the read side of create_support_ticket. Call when the user asks whether support has replied, what the answer ' +
+    'was, or what they have filed. Continue an open conversation with reply_to_ticket. Optional status filter: ' +
+    'open / in_progress / closed.',
   scope: 'read',
   annotations: { readOnlyHint: true, openWorldHint: false },
   inputSchema: {
@@ -226,7 +227,7 @@ registerTool({
       SupportTicket.find(filter)
         .sort({ createdAt: -1 }).skip(offset).limit(limit)
         // Same field set the GDPR export ships for tickets — nothing extra.
-        .select('category subject message status adminResponse respondedAt createdAt')
+        .select('category subject message status adminResponse respondedAt replies createdAt')
         .lean(),
     ]);
     const data = tickets.map((t) => ({
@@ -235,8 +236,12 @@ registerTool({
       subject: t.subject,
       message: t.message,
       status: t.status,
+      // Latest response for a quick answer; the full exchange in replies[].
+      // Pre-thread tickets have an empty replies array and just this field.
       admin_response: t.adminResponse || null,
       responded_at: t.respondedAt || null,
+      replies: (t.replies || []).map((r) => ({ author: r.author, message: r.message, created_at: r.createdAt })),
+      can_reply: t.status !== 'closed',
       created_at: t.createdAt,
     }));
     const answered = data.filter((t) => t.admin_response).length;
@@ -245,6 +250,38 @@ registerTool({
       data,
       { page: { limit, offset, total } }
     );
+  },
+});
+
+registerTool({
+  name: 'reply_to_ticket',
+  title: 'Reply on a support ticket',
+  description:
+    'Adds the user\'s follow-up to one of their support tickets — continuing the conversation after an admin ' +
+    'response (get the ticket_id and the current thread from list_my_tickets). Reopens the ticket for the admins. ' +
+    'Message ≤5000 chars. Confirm the wording with the user first; this reaches a human and cannot be unsent. ' +
+    'Closed tickets refuse — file a new ticket with create_support_ticket instead.',
+  scope: 'write',
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+  inputSchema: {
+    ticket_id: z.string().regex(/^[a-f0-9]{24}$/i).describe('From list_my_tickets'),
+    message: z.string().min(1).max(5000),
+  },
+  handler: async (args, ctx) => {
+    const { ticket, error } = await replyToTicket(ctx.user.id, args.ticket_id, args.message);
+    if (error) {
+      const code = error.status === 404 ? 'not_found' : error.status === 409 ? 'conflict' : 'invalid_input';
+      return fail(code, error.message);
+    }
+    logAudit(ctx.req, 'support.ticket.replied', { type: 'SupportTicket', id: ticket._id }, {
+      via: 'mcp', replies: ticket.replies.length,
+    });
+    return ok(`Reply added to "${ticket.subject}" — ticket reopened for the support team`, {
+      ticket_id: ticket._id,
+      status: ticket.status,
+      replies: ticket.replies.length,
+      note: 'The support team will see the follow-up; check back with list_my_tickets.',
+    });
   },
 });
 

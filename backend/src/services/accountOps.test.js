@@ -8,7 +8,7 @@
 
 jest.mock('../models/User', () => ({ findByIdAndUpdate: jest.fn() }));
 jest.mock('../models/Cellar', () => ({ findOne: jest.fn() }));
-jest.mock('../models/SupportTicket', () => ({ create: jest.fn() }));
+jest.mock('../models/SupportTicket', () => ({ create: jest.fn(), findOne: jest.fn() }));
 jest.mock('../models/WineRequest', () => jest.fn().mockImplementation(function (doc) {
   Object.assign(this, doc);
   this._id = 'wr1';
@@ -182,5 +182,48 @@ describe('createWineRequest', () => {
       image: null, user: UID, status: 'pending',
     }));
     expect(res.wineRequest.save).toHaveBeenCalled();
+  });
+});
+
+describe('replyToTicket', () => {
+  const { replyToTicket, TICKET_REPLY_CAP } = require('./accountOps');
+  const TID = 'f'.repeat(24);
+  const openTicket = (over = {}) => ({
+    _id: TID, user: UID, status: 'in_progress', replies: [], save: jest.fn().mockResolvedValue(undefined), ...over,
+  });
+
+  test('rejects a malformed id (404, no cast-500), empty and oversize messages', async () => {
+    expect((await replyToTicket(UID, 'not-an-id', 'hi')).error.status).toBe(404);
+    SupportTicket.findOne.mockResolvedValue(openTicket());
+    expect((await replyToTicket(UID, TID, '   ')).error.message).toMatch(/Message/);
+    expect((await replyToTicket(UID, TID, 'x'.repeat(5001))).error.status).toBe(400);
+  });
+
+  test('404s a foreign/missing ticket (user-scoped query), 409s a closed one', async () => {
+    SupportTicket.findOne.mockResolvedValue(null);
+    expect((await replyToTicket(UID, TID, 'hi')).error.status).toBe(404);
+    expect(SupportTicket.findOne).toHaveBeenCalledWith({ _id: TID, user: UID });
+    SupportTicket.findOne.mockResolvedValue(openTicket({ status: 'closed' }));
+    const closed = await replyToTicket(UID, TID, 'hi');
+    expect(closed.error.status).toBe(409);
+    expect(closed.error.message).toMatch(/closed/i);
+  });
+
+  test('caps the thread length', async () => {
+    SupportTicket.findOne.mockResolvedValue(openTicket({
+      replies: Array.from({ length: TICKET_REPLY_CAP }, () => ({ author: 'user', by: UID, message: 'x' })),
+    }));
+    expect((await replyToTicket(UID, TID, 'one more')).error.status).toBe(400);
+  });
+
+  test('appends the stripped reply as author:user and flips status back to open', async () => {
+    const ticket = openTicket();
+    SupportTicket.findOne.mockResolvedValue(ticket);
+    const res = await replyToTicket(UID, TID, 'Still <b>broken</b> on Firefox');
+    expect(res.error).toBeUndefined();
+    expect(ticket.replies).toHaveLength(1);
+    expect(ticket.replies[0]).toMatchObject({ author: 'user', by: UID, message: 'Still broken on Firefox' });
+    expect(ticket.status).toBe('open');
+    expect(ticket.save).toHaveBeenCalled();
   });
 });
