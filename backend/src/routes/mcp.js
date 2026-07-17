@@ -9,6 +9,7 @@ const mongoose = require('mongoose');
 const McpActionLog = require('../models/McpActionLog');
 const { RESTORE_WINDOW_MS } = require('../services/bottleOps');
 const { revertLedgerRow, reversibleActionsFor } = require('../mcp/revert');
+const { findLiveLink, redeemExportLink } = require('../services/exportLinks');
 
 // JSON-RPC initialize marker (single message or batch). Local check — the
 // SDK's isInitializeRequest helper lives in the ESM package.
@@ -154,6 +155,32 @@ router.get('/public', (req, res) => {
 });
 router.delete('/public', (req, res) => {
   res.status(405).json({ error: 'The public MCP endpoint is stateless — no session to terminate.' });
+});
+
+// GET /api/mcp/export/:token — redeem an export download link minted by the
+// export_cellar / get_account_export tools (services/exportLinks.js).
+//
+// DELIBERATELY UNAUTHENTICATED: the opaque `celx_` path token IS the credential
+// (256 bits, SHA-256-at-rest, one-hour TTL), so the link works when the user
+// clicks it in any browser — no Bearer header, and no login is minted from it.
+// Any Authorization header is ignored; a cel_ token can reach POST /api/mcp but
+// not this download (it never presents the celx_ token). The heavy builds are
+// throttled inside the service (weekly ZIP allowance shared with the web route,
+// daily account export), and the link expiry bounds a leaked URL's lifetime.
+router.get('/export/:token', async (req, res, next) => {
+  try {
+    const link = await findLiveLink(req.params.token);
+    if (!link) {
+      return res.status(404).json({ error: 'This download link is invalid or has expired. Ask your AI to generate a new export.' });
+    }
+    // Never let a PII-bearing export sit in a shared/proxy cache.
+    res.setHeader('Cache-Control', 'no-store');
+    const failure = await redeemExportLink(link, res, req);
+    if (failure) return res.status(failure.status).json({ error: failure.error });
+  } catch (err) {
+    if (res.headersSent) return res.destroy(err);
+    next(err);
+  }
 });
 
 // ── Recent AI activity timeline (Phase 2d) ──────────────────────────────────

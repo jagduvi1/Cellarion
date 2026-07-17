@@ -29,5 +29,6 @@ require('./notify');
 require('./publicContent');
 require('./images');
 require('./account');
+require('./export');
 
 module.exports = {};

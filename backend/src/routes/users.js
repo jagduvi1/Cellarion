@@ -1,6 +1,5 @@
 const express = require('express');
 const fs = require('fs');
-const archiver = require('archiver');
 const mongoose = require('mongoose');
 const User = require('../models/User');
 const Cellar = require('../models/Cellar');
@@ -36,7 +35,13 @@ const PriceTrackingSkip = require('../models/PriceTrackingSkip');
 const { requireAuth, requireNonDemo } = require('../middleware/auth');
 const { updatePreferences, updateProfile } = require('../services/accountOps');
 const { buildUserExport } = require('../services/userDataRegistry');
-const { buildCellarDataExport, EXPORT_README } = require('../services/cellarExport');
+const {
+  buildCellarDataExport,
+  IMAGE_EXPORT_COOLDOWN_MS,
+  claimImageExportAllowance,
+  refundImageExportAllowance,
+  streamCellarArchive,
+} = require('../services/cellarExport');
 const { safeUploadPath } = require('../services/imageProcessor');
 const { logAudit } = require('../services/audit');
 const eventBus = require('../services/eventBus');
@@ -245,7 +250,8 @@ router.get('/me/export', requireAuth, async (req, res) => {
 // Two endpoints share one builder:
 //   /me/data-export   → JSON only, no rate limit (cheap)
 //   /me/full-export   → ZIP (data.json + your own images + README), max 1×/week
-const IMAGE_EXPORT_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000;
+// The weekly claim/refund + ZIP streaming live in services/cellarExport.js,
+// shared with the MCP export-link redeem route.
 
 // Parse the ?cellar= scope: 'all' (default) or a cellar ObjectId. Responds 400
 // and returns null on a malformed id so the caller can bail.
@@ -285,45 +291,30 @@ router.get('/me/full-export', requireAuth, async (req, res) => {
   if (scope === null) return;
   // Claim bookkeeping hoisted out of the try so the catch can refund: a
   // transient build failure used to consume the weekly allowance and lock
-  // the user out of full export for 7 days.
+  // the user out of full export for 7 days. The claim/refund/stream cores are
+  // shared with the MCP export-link redeem route (services/cellarExport.js).
   let claimStamp = null;
   let claimedPrior;
   try {
-    // Atomically CLAIM the weekly allowance before the expensive build, so two
-    // concurrent requests (double-click / refresh) can't both pass a check and
-    // kick off two large archive builds. The conditional matches only when no
-    // image export has run inside the window; a null result means the slot is
-    // already taken (or the user is gone). This replaces a non-atomic
-    // check-then-set that was bypassable under concurrency.
-    const now = new Date();
-    const cutoff = new Date(now.getTime() - IMAGE_EXPORT_COOLDOWN_MS);
-    const claimed = await User.findOneAndUpdate(
-      { _id: req.user.id, $or: [{ lastImageExportAt: null }, { lastImageExportAt: { $lte: cutoff } }] },
-      { $set: { lastImageExportAt: now } },
-      { new: false } // pre-update doc, so we can read (and refund) the prior timestamp
-    );
-    if (!claimed) {
-      const u = await User.findById(req.user.id).select('lastImageExportAt');
-      if (!u) return res.status(404).json({ error: 'User not found' });
+    const claim = await claimImageExportAllowance(req.user.id);
+    if (!claim.claimed) {
+      if (claim.notFound) return res.status(404).json({ error: 'User not found' });
       return res.status(429).json({
         error: 'Full exports with images are limited to once per week.',
-        nextAvailableAt: new Date(new Date(u.lastImageExportAt).getTime() + IMAGE_EXPORT_COOLDOWN_MS),
+        nextAvailableAt: claim.nextAvailableAt,
       });
     }
-    claimStamp = now;
-    claimedPrior = claimed.lastImageExportAt;
+    claimStamp = claim.claimStamp;
+    claimedPrior = claim.priorStamp;
 
     const result = await buildCellarDataExport(req.user.id, scope);
 
     // Refund the allowance when there was nothing chargeable — no cellar, or a
     // data-only archive with no image files (preserving the prior "only count
-    // exports that bundle images" behaviour). Guarded on our own timestamp so a
-    // later legitimate claim is never clobbered.
+    // exports that bundle images" behaviour).
     if (!result || result.imageCount === 0) {
-      await User.updateOne(
-        { _id: req.user.id, lastImageExportAt: now },
-        { $set: { lastImageExportAt: claimed.lastImageExportAt } }
-      );
+      await refundImageExportAllowance(req.user.id, claimStamp, claimedPrior);
+      claimStamp = null; // refunded — the catch must not double-refund
       if (!result) return res.status(404).json({ error: 'No cellar found for that selection' });
     }
 
@@ -331,45 +322,13 @@ router.get('/me/full-export', requireAuth, async (req, res) => {
 
     res.setHeader('Content-Disposition', 'attachment; filename="cellarion-export.zip"');
     res.setHeader('Content-Type', 'application/zip');
-
-    const archive = archiver('zip', { zlib: { level: 6 } });
-    archive.on('warning', (err) => {
-      if (err.code !== 'ENOENT') console.warn('[full-export] archive warning:', err.message);
-    });
-    archive.on('error', (err) => {
-      console.error('[full-export] archive error:', err.message);
-      // Headers are already sent once piping starts, so we can only tear down.
-      if (!res.headersSent) res.status(500).json({ error: 'Failed to build archive' });
-      else res.destroy(err);
-    });
-    archive.pipe(res);
-
-    archive.append(JSON.stringify(result.payload, null, 2), { name: 'data.json' });
-    archive.append(EXPORT_README, { name: 'README.md' });
-
-    // Append each on-disk file. safeUploadPath blocks path traversal; a missing
-    // file is skipped (the DB row can outlive a file that failed to write).
-    for (const file of result.imageFiles) {
-      let diskPath;
-      try {
-        diskPath = safeUploadPath(file.relPath);
-      } catch {
-        continue;
-      }
-      if (fs.existsSync(diskPath)) archive.file(diskPath, { name: file.archivePath });
-    }
-
-    await archive.finalize();
+    await streamCellarArchive(res, result.payload, result.imageFiles);
   } catch (error) {
     console.error('Full export error:', error);
     // Refund the claimed allowance — guarded on our own timestamp so a later
     // legitimate claim is never clobbered (same guard as the empty-refund).
-    if (claimStamp) {
-      await User.updateOne(
-        { _id: req.user.id, lastImageExportAt: claimStamp },
-        { $set: { lastImageExportAt: claimedPrior ?? null } }
-      ).catch(err => console.error('[full-export] refund failed:', err.message));
-    }
+    await refundImageExportAllowance(req.user.id, claimStamp, claimedPrior)
+      .catch(err => console.error('[full-export] refund failed:', err.message));
     if (!res.headersSent) res.status(500).json({ error: 'Failed to export' });
   }
 });
