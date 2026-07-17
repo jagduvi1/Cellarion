@@ -30,5 +30,6 @@ require('./publicContent');
 require('./images');
 require('./account');
 require('./export');
+require('./wineLists');
 
 module.exports = {};

@@ -22,7 +22,7 @@ const mcpActionLogSchema = new mongoose.Schema({
   // (JWT) called the MCP directly. Never store the token itself.
   tokenId: { type: mongoose.Schema.Types.ObjectId, ref: 'ApiToken', default: null },
   tool: { type: String, required: true },
-  action: { type: String, enum: ['consume', 'restore', 'add', 'update', 'undo_add', 'bulk_preview', 'bulk_add', 'somm_maturity', 'somm_price', 'cellar_create', 'rack_create', 'place', 'unplace', 'move', 'arrange_preview', 'arrange', 'tasting_note', 'attach_image'], required: true },
+  action: { type: String, enum: ['consume', 'restore', 'add', 'update', 'undo_add', 'bulk_preview', 'bulk_add', 'somm_maturity', 'somm_price', 'cellar_create', 'rack_create', 'place', 'unplace', 'move', 'arrange_preview', 'arrange', 'tasting_note', 'attach_image', 'winelist_add', 'winelist_price'], required: true },
   bottle: { type: mongoose.Schema.Types.ObjectId, ref: 'Bottle' },
   cellar: { type: mongoose.Schema.Types.ObjectId, ref: 'Cellar' },
   // Small, non-PII operational detail (reason, ml, …) for the timeline.
