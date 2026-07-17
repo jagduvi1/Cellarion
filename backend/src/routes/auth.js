@@ -336,8 +336,21 @@ router.post('/login', authLimiter, async (req, res) => {
 });
 
 // GET /api/auth/verify-email?token=:token - Verify email address
-router.get('/verify-email', async (req, res) => {
-  const { token } = req.query;
+// POST (not GET) and issues NO session (security audit M-1). The email link
+// points at the SPA page /verify-email?token=…, which now POSTs the token here
+// from same-origin JS. This closes two holes in the old session-issuing GET:
+//   - login-CSRF / session-fixation: a cross-site GET to the old endpoint (or
+//     to the SPA page) let an attacker's verification token Set-Cookie the
+//     attacker's refresh cookie into a victim's browser (SameSite=Lax does not
+//     block storing it), silently logging the victim into the attacker's
+//     account. A POST is not triggerable by a plain cross-site navigation, and
+//     issuing no session removes the fixation entirely — the user logs in
+//     normally afterward.
+//   - one-time-token burn by mail-security prefetchers: link scanners issue
+//     GETs, not the SPA's POST, so they no longer consume the token.
+router.post('/verify-email', async (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  const { token } = req.body || {};
 
   if (!token) {
     return res.status(400).json({ error: 'Verification token is required' });
@@ -354,8 +367,7 @@ router.get('/verify-email', async (req, res) => {
     user.emailVerified = true;
     user.emailVerificationTokenHash = null;
     user.emailVerificationExpiresAt = null;
-
-    const accessToken = await issueTokens(user, res);
+    await user.save();
 
     logAudit(req, 'auth.email_verified',
       { type: 'user', id: user._id },
@@ -365,11 +377,8 @@ router.get('/verify-email', async (req, res) => {
     // Resolve any pending cellar shares for this email
     resolvePendingShares(user).catch(() => {});
 
-    res.json({
-      message: 'Email verified successfully.',
-      token: accessToken,
-      user: user.toJSON()
-    });
+    // No session is issued here — the client sends the user to log in.
+    res.json({ verified: true, message: 'Email verified successfully. Please log in.' });
   } catch (error) {
     console.error('Email verification error:', error);
     res.status(500).json({ error: 'Email verification failed' });

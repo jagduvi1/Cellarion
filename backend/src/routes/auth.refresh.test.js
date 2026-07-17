@@ -632,6 +632,47 @@ describe('POST /api/auth/reset-password', () => {
 });
 
 // ---------------------------------------------------------------------------
+// POST /api/auth/verify-email — must NOT issue a session (security audit M-1)
+// ---------------------------------------------------------------------------
+describe('POST /api/auth/verify-email', () => {
+  const withVerifyToken = (raw) => makeUserDoc({
+    emailVerified: false,
+    emailVerificationTokenHash: sha256(raw),
+    emailVerificationExpiresAt: new Date(NOW + 24 * 60 * 60 * 1000),
+    validateEmailVerificationToken(candidate) {
+      if (!this.emailVerificationTokenHash || !this.emailVerificationExpiresAt) return false;
+      if (Date.now() > this.emailVerificationExpiresAt.getTime()) return false;
+      return sha256(candidate) === this.emailVerificationTokenHash;
+    },
+  });
+
+  test('verifies the email and issues NO session (no token, no refresh cookie)', async () => {
+    const user = withVerifyToken('verify-raw-token');
+    const res = await request({ method: 'POST', path: '/api/auth/verify-email', body: { token: 'verify-raw-token' } });
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ verified: true, message: expect.any(String) });
+    // The login-CSRF/session-fixation fix: no access token, no refresh cookie.
+    expect(res.body.token).toBeUndefined();
+    expect(res.setCookies).toEqual([]);
+    expect(user.emailVerified).toBe(true);
+    expect(user.emailVerificationTokenHash).toBeNull();
+    expect(user.save).toHaveBeenCalled();
+  });
+
+  test('rejects an unknown/expired token without issuing a session', async () => {
+    makeUserDoc(); // a user exists, but no verification token matches
+    const res = await request({ method: 'POST', path: '/api/auth/verify-email', body: { token: 'nope' } });
+    expect(res.status).toBe(400);
+    expect(res.setCookies).toEqual([]);
+  });
+
+  test('400 with no token', async () => {
+    const res = await request({ method: 'POST', path: '/api/auth/verify-email', body: {} });
+    expect(res.status).toBe(400);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // GET /api/auth/whoami — minimal stable identity for scoped integrations
 // ---------------------------------------------------------------------------
 describe('GET /api/auth/whoami', () => {

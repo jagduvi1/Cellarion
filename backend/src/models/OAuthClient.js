@@ -41,7 +41,15 @@ const oauthClientSchema = new mongoose.Schema({
   softwareVersion: { type: String, default: null },
   createdAt: { type: Date, default: Date.now },
   lastUsedAt: { type: Date, default: null },
+  // Reap NEVER-USED clients only (security audit M-6): set to now+30d at
+  // registration and UNSET the first time the client completes a token
+  // exchange, so an actively-connected client persists forever and is never
+  // orphaned while a live token references it. TTL-at-date (expireAfterSeconds
+  // 0); a document with expiresAt null/absent is never expired.
+  expiresAt: { type: Date, default: null },
 });
+
+oauthClientSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
 
 /** Random public client id. Prefixed for readability in logs/DB. */
 oauthClientSchema.statics.generateClientId = function () {

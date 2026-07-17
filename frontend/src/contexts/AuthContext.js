@@ -277,13 +277,16 @@ export const AuthProvider = ({ children }) => {
 
   const verifyEmail = async (token) => {
     try {
-      const response = await fetch(`/api/auth/verify-email?token=${encodeURIComponent(token)}`, {
-        credentials: 'include'
+      // POST the token (security audit M-1): the endpoint verifies the email
+      // and issues NO session, so the user logs in normally afterward — this
+      // removes the old GET's login-CSRF/session-fixation and prefetch-burn.
+      const response = await fetch('/api/auth/verify-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token })
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'Verification failed');
-
-      applySession(data.token, data.user);
       return { success: true };
     } catch (error) {
       return { success: false, error: error.message };

@@ -30,9 +30,15 @@ function collectionName(indexVersion) {
 
 async function qdrantRequest(method, path, body) {
   const url = `${qdrantBase()}${path}`;
+  const headers = { 'Content-Type': 'application/json' };
+  // Optional Qdrant API key (security audit L-5). Qdrant is internal-only and
+  // not host-published, so this defaults off; a self-hoster who sets
+  // QDRANT_API_KEY (and QDRANT__SERVICE__API_KEY on the qdrant container) gets
+  // authenticated access, closing same-network container access.
+  if (process.env.QDRANT_API_KEY) headers['api-key'] = process.env.QDRANT_API_KEY;
   const opts = {
     method,
-    headers: { 'Content-Type': 'application/json' },
+    headers,
     signal: AbortSignal.timeout(QDRANT_TIMEOUT_MS)
   };
   if (body !== undefined) opts.body = JSON.stringify(body);
