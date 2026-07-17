@@ -141,17 +141,19 @@ async function createEntry(userId, body, req, opts = {}) {
 
   // Notify tagged Cellarion users (public entries only). The mention policy
   // lives HERE so no surface can accidentally re-introduce notification spam
-  // from private or machine-written entries.
-  if (entry.visibility === 'public' && entry.people?.some((p) => p.user)) {
+  // from private or machine-written entries. Decided from the VALIDATED input
+  // (`clean`), not the driver's return value — the created doc echo is a
+  // storage detail; the policy input is what was accepted for writing.
+  if (clean.visibility === 'public' && clean.people?.some((p) => p.user)) {
     const sender = await User.findById(userId).select('username displayName').lean();
     const senderName = sender?.displayName || sender?.username || 'Someone';
-    for (const person of entry.people) {
+    for (const person of clean.people) {
       if (person.user && String(person.user) !== String(userId)) {
         createNotification(
           person.user,
           'journal_mention',
           'Journal Mention',
-          `${senderName} mentioned you in a journal entry: "${entry.title || 'Untitled'}"`,
+          `${senderName} mentioned you in a journal entry: "${clean.title || 'Untitled'}"`,
           // No link: journal entries are private to their owner (there is no
           // route or endpoint to view another user's entry), so a per-entry
           // deep link would 404. Keep the notification informational-only.
