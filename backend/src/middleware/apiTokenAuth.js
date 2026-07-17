@@ -99,13 +99,16 @@ function isApiTokenCredential(credential) {
 }
 
 /**
- * The one request an OAuth-issued token may make: the MCP endpoint it was
- * minted for. Exact-anchored, same shape as the allowlist patterns.
- * Exported for direct unit testing.
+ * The one surface an OAuth-issued token may reach: the MCP endpoint it was
+ * minted for. Exact-anchored, same shape as the allowlist patterns. All three
+ * verbs of the MCP session lifecycle count as the audience (POST = requests,
+ * GET = the session's standalone SSE stream, DELETE = session termination) —
+ * confining to POST alone would let an OAuth connector initialize a session it
+ * could then never stream from or terminate. Exported for direct unit testing.
  */
 function isMcpEndpoint(method, path) {
   const p = path.length > 1 && path.endsWith('/') ? path.slice(0, -1) : path;
-  return method === 'POST' && /^\/api\/mcp$/.test(p);
+  return (method === 'POST' || method === 'GET' || method === 'DELETE') && /^\/api\/mcp$/.test(p);
 }
 
 /** Default-deny scope check. Exported for direct unit testing. */
