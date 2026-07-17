@@ -29,6 +29,7 @@ jest.mock('../models/McpActionLog', () => ({
   find: jest.fn(),
   findOne: jest.fn(),
   countDocuments: jest.fn(),
+  NON_ACTIVITY_ACTIONS: ['bulk_preview', 'arrange_preview', 'pending'],
 }));
 
 const express = require('express');

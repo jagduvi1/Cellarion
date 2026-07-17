@@ -584,9 +584,11 @@ const REGISTRY = [
     // Export what the connected AI changed (right of access) INCLUDING prev —
     // after a restore, the user's consumed note/rating snapshot may exist only
     // here for up to the TTL. Never the idempotency keys or stored result
-    // payloads (operational plumbing).
+    // payloads (operational plumbing). Excludes preview + pending claim stubs
+    // (MCP-audit M1/F4) — data-minimisation: those changed nothing and are the
+    // same rows hidden from the timeline.
     exportFragment: async (ctx) => ({
-      mcpActions: markTrunc(ctx, 'mcpActions', await McpActionLog.find({ user: ctx.userId })
+      mcpActions: markTrunc(ctx, 'mcpActions', await McpActionLog.find({ user: ctx.userId, action: { $nin: McpActionLog.NON_ACTIVITY_ACTIONS } })
         .select('tool action bottle cellar detail prev reversed createdAt').limit(EXPORT_MAX).lean())
         .map(a => ({ tool: a.tool, action: a.action, bottle: a.bottle, cellar: a.cellar, detail: a.detail, prev: a.prev || null, reversed: a.reversed, createdAt: a.createdAt })),
     }),
