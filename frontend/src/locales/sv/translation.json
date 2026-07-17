@@ -67,6 +67,7 @@
     "blog": "Blogg",
     "blogAdmin": "Blogg",
     "adminStats": "Global statistik",
+    "adminMcp": "AI-koppling",
     "moderators": "Moderatorer",
     "moderationReports": "Moderering",
     "badge": {
@@ -2547,6 +2548,29 @@
     "decidedBy": "av {{username}} den {{date}}",
     "prev": "Föregående",
     "next": "Nästa"
+  },
+  "adminMcp": {
+    "title": "AI-koppling (MCP)",
+    "lastNDays": "Senaste {{count}} dagarna",
+    "last7Days": "Senaste 7 dagarna",
+    "switchAll": "MCP aktiverad",
+    "switchAllDesc": "Huvudbrytare för hela AI-ytan — personliga kopplingar och den anonyma publika slutpunkten. Av = varje MCP-anrop får ett tydligt 503; AI-aktivitetsflödet och ångra i appen fortsätter fungera.",
+    "switchPublic": "Publik slutpunkt aktiverad",
+    "switchPublicDesc": "Den anonyma, kontofria vinkunskaps-slutpunkten (/api/mcp/public). Stäng av för att minska anonym last medan personliga kopplingar fortsätter fungera.",
+    "calls": "Anrop",
+    "errors": "Fel",
+    "connections": "AI-kopplingar",
+    "connectionsSplit": "{{oauth}} OAuth · {{bearer}} tokens",
+    "activeConnections": "Aktiva kopplingar",
+    "writes": "Källarändringar av AI",
+    "dailyActivity": "Daglig aktivitet",
+    "topTools": "Mest använda verktyg",
+    "day": "Dag",
+    "personal": "Personlig",
+    "public": "Publik",
+    "tool": "Verktyg",
+    "surface": "Yta",
+    "noUsage": "Ingen MCP-användning registrerad i det här intervallet ännu."
   },
   "adminStats": {
     "title": "Global statistik",

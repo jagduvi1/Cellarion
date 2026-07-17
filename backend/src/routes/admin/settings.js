@@ -34,7 +34,7 @@ router.get('/rate-limits', async (req, res) => {
 // accountLockout.threshold to 9999 effectively turns lockout off).
 router.patch('/rate-limits', async (req, res) => {
   try {
-    const { api, write, auth, accountLockout, chatBurst, chatConcurrentStreams, aiDailyBudget, aiImportPerRequestCap, aiGlobalDailyCap, demo } = req.body;
+    const { api, write, auth, accountLockout, chatBurst, chatConcurrentStreams, aiDailyBudget, aiImportPerRequestCap, aiGlobalDailyCap, demo, mcp } = req.body;
 
     const previous = { ...rateLimitsConfig.get() };
 
@@ -101,6 +101,13 @@ router.patch('/rate-limits', async (req, res) => {
       requireIntInRange('demo.ttlMs',          demo.ttlMs,          5 * 60_000, 24 * 60 * 60 * 1000);
     }
 
+    // MCP kill switches (0 = off, 1 = on). enabled=0 shuts the whole AI
+    // surface; publicEnabled=0 shuts only the anonymous endpoint.
+    if (mcp !== undefined) {
+      requireIntInRange('mcp.enabled',       mcp.enabled,       0, 1);
+      requireIntInRange('mcp.publicEnabled', mcp.publicEnabled, 0, 1);
+    }
+
     if (errors.length > 0) {
       return res.status(400).json({ error: errors[0], errors });
     }
@@ -140,6 +147,10 @@ router.patch('/rate-limits', async (req, res) => {
         createWindowMs: demo?.createWindowMs ?? previous.demo?.createWindowMs ?? rateLimitsConfig.defaults.demo.createWindowMs,
         globalMax:      demo?.globalMax      ?? previous.demo?.globalMax      ?? rateLimitsConfig.defaults.demo.globalMax,
         ttlMs:          demo?.ttlMs          ?? previous.demo?.ttlMs          ?? rateLimitsConfig.defaults.demo.ttlMs,
+      },
+      mcp: {
+        enabled:       mcp?.enabled       ?? previous.mcp?.enabled       ?? rateLimitsConfig.defaults.mcp.enabled,
+        publicEnabled: mcp?.publicEnabled ?? previous.mcp?.publicEnabled ?? rateLimitsConfig.defaults.mcp.publicEnabled,
       },
     };
 

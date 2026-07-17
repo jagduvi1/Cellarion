@@ -184,6 +184,7 @@ function Layout({ children }) {
                     <Link to="/admin/moderators" className={`nav-link nav-link--admin ${isActive('/admin/moderators') ? 'active' : ''}`}>{t('nav.moderators')}</Link>
                     <Link to="/admin/blog" className={`nav-link nav-link--admin ${isActive('/admin/blog') ? 'active' : ''}`}>{t('nav.blogAdmin')}</Link>
                     <Link to="/admin/stats" className={`nav-link nav-link--admin ${isActive('/admin/stats') ? 'active' : ''}`}>{t('nav.adminStats')}</Link>
+                    <Link to="/admin/mcp" className={`nav-link nav-link--admin ${isActive('/admin/mcp') ? 'active' : ''}`}>{t('nav.adminMcp')}</Link>
                   </>
                 )}
 
@@ -278,6 +279,7 @@ function Layout({ children }) {
                 <Link to="/admin/ai-budget-requests" className={`mobile-menu-link ${isActive('/admin/ai-budget-requests') ? 'active' : ''}`} onClick={closeMenu}>{t('nav.aiBudgetRequests')}</Link>
                 <Link to="/admin/blog" className={`mobile-menu-link ${isActive('/admin/blog') ? 'active' : ''}`} onClick={closeMenu}>{t('nav.blogAdmin')}</Link>
                 <Link to="/admin/stats" className={`mobile-menu-link ${isActive('/admin/stats') ? 'active' : ''}`} onClick={closeMenu}>{t('nav.adminStats')}</Link>
+                <Link to="/admin/mcp" className={`mobile-menu-link ${isActive('/admin/mcp') ? 'active' : ''}`} onClick={closeMenu}>{t('nav.adminMcp')}</Link>
               </div>
             )}
 

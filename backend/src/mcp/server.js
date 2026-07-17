@@ -49,16 +49,52 @@ const rateLimited = (message) => ({
 // module, so a case of 12 costs 12 — see mcp/mutationBudget.js.
 const { takeMutationSlot, WRITE_WINDOW_MS } = require('./mutationBudget');
 
+// Aggregate usage counters behind the admin view (GET /api/admin/mcp/usage).
+// record() is fire-and-forget and no-ops without a live Mongo connection, so
+// the directly-unit-tested wrappers below stay pure in jest.
+const McpUsageStat = require('../models/McpUsageStat');
+function recordUsage(ctx, kind, name, error) {
+  McpUsageStat.record({ surface: ctx.anonymous ? 'public' : 'personal', kind, name, error });
+}
+
+// Run a handler and count it into McpUsageStat WITHOUT changing its calling
+// convention: a sync value stays a sync value, a sync throw stays a sync
+// throw, a promise gets its settlement recorded in passing. Prompt handlers
+// are pure/synchronous and their tests pin that — wrapping everything in a
+// promise here would silently break them.
+function withUsage(ctx, kind, name, run, isError = () => false) {
+  let out;
+  try {
+    out = run();
+  } catch (err) {
+    recordUsage(ctx, kind, name, true);
+    throw err;
+  }
+  if (out && typeof out.then === 'function') {
+    return out.then(
+      (v) => { recordUsage(ctx, kind, name, !!isError(v)); return v; },
+      (err) => { recordUsage(ctx, kind, name, true); throw err; }
+    );
+  }
+  recordUsage(ctx, kind, name, !!isError(out));
+  return out;
+}
+
 // Wrap a tool handler with the per-request call budget (+ the per-user
 // mutation budget for non-read-only tools). `state` is shared by all tools of
 // ONE request's server instance (fresh per request in stateless mode).
 // Exported for unit testing — jest cannot load the ESM SDK, so buildServer
 // itself is covered by the smoke test instead.
+// Every exit path is counted into McpUsageStat (budget refusals included —
+// an admin diagnosing "why does my AI keep failing" needs to see them). The
+// wrapper stays synchronous on the refusal paths — callers (and tests) rely
+// on the original sync-value / sync-throw semantics.
 function budgetedHandler(tool, ctx, state) {
   return (args) => {
     state.calls += 1;
     const maxCalls = state.max || MAX_CALLS_PER_REQUEST;
     if (state.calls > maxCalls) {
+      recordUsage(ctx, 'tool', tool.name, true);
       return rateLimited(`Too many tool calls in one request (max ${maxCalls}). Send fewer calls per batch and paginate instead.`);
     }
     if (tool.annotations?.readOnlyHint === false) {
@@ -66,16 +102,18 @@ function budgetedHandler(tool, ctx, state) {
       // tool is ever mis-scoped 'public', refuse cleanly instead of running a
       // userless mutation (and crashing on ctx.user.id below).
       if (ctx.anonymous || !ctx.user) {
+        recordUsage(ctx, 'tool', tool.name, true);
         return {
           isError: true,
           content: [{ type: 'text', text: JSON.stringify({ error: { code: 'forbidden_scope', message: 'Mutations need an authenticated connection.' } }) }],
         };
       }
       if (!takeMutationSlot(String(ctx.user.id))) {
+        recordUsage(ctx, 'tool', tool.name, true);
         return rateLimited('Too many cellar changes in a short time — wait a few minutes before mutating again. Reads still work.');
       }
     }
-    return tool.handler(args || {}, ctx);
+    return withUsage(ctx, 'tool', tool.name, () => tool.handler(args || {}, ctx), (out) => out && out.isError);
   };
 }
 
@@ -199,32 +237,36 @@ function eventBusRef() {
   return require('../services/eventBus');
 }
 
-// Prompt variant of budgetedHandler. Over budget we throw — the SDK surfaces
-// it as a JSON-RPC error for prompts/get (same convention as resources).
+// Prompt variant of budgetedHandler. Over budget we throw — synchronously,
+// same as before instrumentation — and the SDK surfaces it as a JSON-RPC
+// error for prompts/get (same convention as resources).
 function budgetedPromptHandler(prompt, ctx, state) {
   return (args) => {
     state.calls += 1;
     const maxCalls = state.max || MAX_CALLS_PER_REQUEST;
     if (state.calls > maxCalls) {
+      recordUsage(ctx, 'prompt', prompt.name, true);
       throw new Error(`rate_limited: too many calls in one request (max ${maxCalls})`);
     }
-    return prompt.handler(args || {}, ctx);
+    return withUsage(ctx, 'prompt', prompt.name, () => prompt.handler(args || {}, ctx));
   };
 }
 
 // Resource variant of budgetedHandler. SDK callbacks: static resources get
 // (uri, extra); template resources get (uri, variables, extra). Over budget we
-// throw — the SDK surfaces it as a JSON-RPC error for resources/read (there is
-// no isError envelope for resources like there is for tool results).
+// throw — synchronously, same as before instrumentation — and the SDK surfaces
+// it as a JSON-RPC error for resources/read (there is no isError envelope for
+// resources like there is for tool results).
 function budgetedResourceHandler(rsrc, ctx, state) {
   return (uri, varsOrExtra) => {
     state.calls += 1;
     const maxCalls = state.max || MAX_CALLS_PER_REQUEST;
     if (state.calls > maxCalls) {
+      recordUsage(ctx, 'resource', rsrc.name, true);
       throw new Error(`rate_limited: too many calls in one request (max ${maxCalls})`);
     }
     const params = rsrc.uriTemplate ? (varsOrExtra || {}) : {};
-    return rsrc.handler(uri, params, ctx);
+    return withUsage(ctx, 'resource', rsrc.name, () => rsrc.handler(uri, params, ctx));
   };
 }
 
