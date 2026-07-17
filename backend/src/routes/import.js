@@ -868,11 +868,12 @@ router.post('/confirm', async (req, res) => {
 
           await bottle.save();
           created++;
+          // Index every created bottle (consumed history rows too — H3).
+          createdBottleIds.push(bottle._id);
           if (item.addToHistory) {
             createdHistory++;
           } else {
             createdActive++;
-            createdBottleIds.push(bottle._id);
           }
 
           // Queue rack placement for unmatched bottles too
@@ -961,11 +962,14 @@ router.post('/confirm', async (req, res) => {
 
         await bottle.save();
         created++;
+        // Index EVERY created bottle for Meilisearch, consumed history rows
+        // included — the History tab searches/filters via Meili, so leaving
+        // them out made imported consumed bottles unsearchable (grand-audit H3).
+        createdBottleIds.push(bottle._id);
         if (item.addToHistory) {
           createdHistory++;
         } else {
           createdActive++;
-          createdBottleIds.push(bottle._id);
         }
 
         // Queue rack placement — actual slot assignment runs per-rack after

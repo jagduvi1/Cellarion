@@ -490,8 +490,11 @@ router.post('/', requireNonDemo, async (req, res) => {
     await bottle.save();
     await bottle.populate(WINE_POPULATE);
 
-    // Index in Meilisearch (fire-and-forget) — skip if added directly as consumed
-    if (!addToHistory) searchService.indexBottle(bottle._id);
+    // Index in Meilisearch (fire-and-forget). Consumed ("add to history")
+    // bottles ARE indexed too — the History tab's search/filter path queries
+    // Meili with a consumed status filter, so skipping them made them silently
+    // vanish from filtered History (grand-audit H3). The index carries status.
+    searchService.indexBottle(bottle._id);
 
     // Seed the sommelier maturity queue for this wine+vintage (no-op for
     // "Unknown"; NV is included). Shared by every add/import path.
