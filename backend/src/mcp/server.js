@@ -1,5 +1,5 @@
 const { toolsForScopes, resourcesForScopes, promptsForScopes } = require('./registry');
-const { INSTRUCTIONS } = require('./instructions');
+const { INSTRUCTIONS, PUBLIC_INSTRUCTIONS } = require('./instructions');
 const pkg = require('../../package.json');
 require('./tools');     // register all tools (side-effect)
 require('./resources'); // register all resources (side-effect)
@@ -57,11 +57,23 @@ const { takeMutationSlot, WRITE_WINDOW_MS } = require('./mutationBudget');
 function budgetedHandler(tool, ctx, state) {
   return (args) => {
     state.calls += 1;
-    if (state.calls > MAX_CALLS_PER_REQUEST) {
-      return rateLimited(`Too many tool calls in one request (max ${MAX_CALLS_PER_REQUEST}). Send fewer calls per batch and paginate instead.`);
+    const maxCalls = state.max || MAX_CALLS_PER_REQUEST;
+    if (state.calls > maxCalls) {
+      return rateLimited(`Too many tool calls in one request (max ${maxCalls}). Send fewer calls per batch and paginate instead.`);
     }
-    if (tool.annotations?.readOnlyHint === false && !takeMutationSlot(String(ctx.user.id))) {
-      return rateLimited('Too many cellar changes in a short time — wait a few minutes before mutating again. Reads still work.');
+    if (tool.annotations?.readOnlyHint === false) {
+      // Fail-closed for the anonymous surface (audit P6-L2): if a mutating
+      // tool is ever mis-scoped 'public', refuse cleanly instead of running a
+      // userless mutation (and crashing on ctx.user.id below).
+      if (ctx.anonymous || !ctx.user) {
+        return {
+          isError: true,
+          content: [{ type: 'text', text: JSON.stringify({ error: { code: 'forbidden_scope', message: 'Mutations need an authenticated connection.' } }) }],
+        };
+      }
+      if (!takeMutationSlot(String(ctx.user.id))) {
+        return rateLimited('Too many cellar changes in a short time — wait a few minutes before mutating again. Reads still work.');
+      }
     }
     return tool.handler(args || {}, ctx);
   };
@@ -80,13 +92,19 @@ function budgetedHandler(tool, ctx, state) {
 async function buildServer(ctx, opts = {}) {
   const { McpServer, ResourceTemplate } = await loadSdk();
   const server = new McpServer(
-    { name: 'cellarion', version: pkg.version },
+    // The anonymous surface announces itself distinctly — different name and
+    // instructions, so a client connected to both never confuses the two.
+    { name: ctx.anonymous ? 'cellarion-public' : 'cellarion', version: pkg.version },
     {
-      instructions: INSTRUCTIONS,
+      instructions: ctx.anonymous ? PUBLIC_INSTRUCTIONS : INSTRUCTIONS,
       ...(opts.session ? { capabilities: { resources: { subscribe: true, listChanged: false } } } : {}),
     }
   );
   const state = opts.callState || { calls: 0 };
+  // The anonymous surface gets a tighter per-request batch budget (audit
+  // P6-L3): 20 read_guide calls at the 30k cap would be ~600KB from one
+  // unauthenticated 10KB request. Authenticated callers keep the full cap.
+  if (ctx.anonymous) state.max = 10;
   for (const tool of toolsForScopes(ctx.scopes, ctx.user?.roles || [])) {
     server.registerTool(
       tool.name,
@@ -186,8 +204,9 @@ function eventBusRef() {
 function budgetedPromptHandler(prompt, ctx, state) {
   return (args) => {
     state.calls += 1;
-    if (state.calls > MAX_CALLS_PER_REQUEST) {
-      throw new Error(`rate_limited: too many calls in one request (max ${MAX_CALLS_PER_REQUEST})`);
+    const maxCalls = state.max || MAX_CALLS_PER_REQUEST;
+    if (state.calls > maxCalls) {
+      throw new Error(`rate_limited: too many calls in one request (max ${maxCalls})`);
     }
     return prompt.handler(args || {}, ctx);
   };
@@ -200,8 +219,9 @@ function budgetedPromptHandler(prompt, ctx, state) {
 function budgetedResourceHandler(rsrc, ctx, state) {
   return (uri, varsOrExtra) => {
     state.calls += 1;
-    if (state.calls > MAX_CALLS_PER_REQUEST) {
-      throw new Error(`rate_limited: too many calls in one request (max ${MAX_CALLS_PER_REQUEST})`);
+    const maxCalls = state.max || MAX_CALLS_PER_REQUEST;
+    if (state.calls > maxCalls) {
+      throw new Error(`rate_limited: too many calls in one request (max ${maxCalls})`);
     }
     const params = rsrc.uriTemplate ? (varsOrExtra || {}) : {};
     return rsrc.handler(uri, params, ctx);

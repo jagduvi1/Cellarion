@@ -124,8 +124,29 @@ async function main() {
   if (sessionCounts().total !== 0) throw new Error(`session not torn down on DELETE (${sessionCounts().total} left)`);
   console.log('[smoke] session terminated (DELETE) + store empty');
 
+  // Anonymous public surface (Phase 6): scopes [] + user null exposes exactly
+  // the public tool set, the about resource, no prompts, and the distinct
+  // server identity/instructions.
+  app.post('/api/mcp/public', (req, res, next) =>
+    handleMcpRequest(req, res, { user: null, scopes: [], anonymous: true, req }).catch(next));
+  const anon = new Client({ name: 'mcp-smoke-anon', version: '0.0.0' });
+  await anon.connect(new StreamableHTTPClientTransport(new URL(`http://127.0.0.1:${port}/api/mcp/public`)));
+  const sv = anon.getServerVersion();
+  if (sv.name !== 'cellarion-public') throw new Error(`anon server should announce cellarion-public, got ${sv.name}`);
+  const anonTools = (await anon.listTools()).tools.map((t) => t.name).sort();
+  const EXPECT_ANON = ['drink_window_for', 'find_similar_wines', 'get_source_info', 'get_wine', 'list_guides', 'read_guide', 'search_registry'];
+  if (JSON.stringify(anonTools) !== JSON.stringify(EXPECT_ANON)) {
+    throw new Error(`anon tool surface wrong: ${anonTools.join(', ')}`);
+  }
+  const anonResources = (await anon.listResources()).resources.map((r) => r.uri);
+  if (anonResources.length !== 1 || anonResources[0] !== 'cellarion://about') {
+    throw new Error(`anon resources wrong: ${anonResources.join(', ')}`);
+  }
+  console.log('[smoke] anonymous surface: exactly the public tools + about, identity cellarion-public');
+  await anon.close();
+
   httpServer.close();
-  console.log('[smoke] OK — tools + resources + prompts + sessions/subscriptions round-trip clean on /api/mcp.');
+  console.log('[smoke] OK — tools + resources + prompts + sessions/subscriptions + anonymous surface clean.');
 }
 
 main().catch((e) => { console.error('[smoke] FAILED:', e); process.exit(1); });

@@ -26,5 +26,6 @@ require('./semantic');
 require('./tasting');
 require('./arrange');
 require('./notify');
+require('./publicContent');
 
 module.exports = {};

@@ -303,3 +303,38 @@ describe('stateful session dispatch (plan §4)', () => {
     expect(res.status).toBe(405);
   });
 });
+
+describe('anonymous public MCP (Phase 6)', () => {
+  test('POST /api/mcp/public needs NO auth and gets the anonymous ctx (scopes [], user null)', async () => {
+    handleMcpRequest.mockImplementationOnce(async (req, r) => r.status(200).json({ anon: true }));
+    const res = await fetch(`${baseUrl}/api/mcp/public`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }, // deliberately no Authorization
+      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'initialize', params: {} }),
+    });
+    expect(res.status).toBe(200);
+    const ctx = handleMcpRequest.mock.calls[0][2];
+    expect(ctx.user).toBeNull();
+    expect(ctx.scopes).toEqual([]);
+    expect(ctx.anonymous).toBe(true);
+    expect(initStatefulSession).not.toHaveBeenCalled(); // public = stateless, never sessions
+  });
+
+  test('a bearer header on the public endpoint is simply ignored (still anonymous)', async () => {
+    handleMcpRequest.mockImplementationOnce(async (req, r) => r.status(200).json({}));
+    await fetch(`${baseUrl}/api/mcp/public`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token()}` },
+      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' }),
+    });
+    expect(handleMcpRequest.mock.calls[0][2].user).toBeNull();
+  });
+
+  test('GET and DELETE /api/mcp/public → 405 (stateless surface, no sessions)', async () => {
+    let res = await fetch(`${baseUrl}/api/mcp/public`, { method: 'GET' });
+    expect(res.status).toBe(405);
+    res = await fetch(`${baseUrl}/api/mcp/public`, { method: 'DELETE' });
+    expect(res.status).toBe(405);
+    expect(getSession).not.toHaveBeenCalled();
+  });
+});

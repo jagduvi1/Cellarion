@@ -158,7 +158,10 @@ const isStripeWebhook = (req) => req.originalUrl.split('?')[0] === '/api/stripe/
 // Revisit again before AI-spending tools ship (enrichment adds cost beyond DB).
 const isMcp = (req) => {
   const p = req.originalUrl.split('?')[0];
-  return p === '/api/mcp' || p === '/api/mcp/';
+  // /api/mcp/public (anonymous, read-only) has its own strict dedicated
+  // limiter in routes/mcp.js — exempt from the write limiter like the
+  // personal endpoint (its calls are budgeted inside mcp/server.js).
+  return p === '/api/mcp' || p === '/api/mcp/' || p === '/api/mcp/public';
 };
 
 // Global API rate limiter — default 200 requests per 15 min per IP (admin-configurable)

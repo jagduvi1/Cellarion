@@ -22,7 +22,11 @@ registerTool({
     'from the shared registry, using vector similarity over wine embeddings. Call for "more like this", "what else is ' +
     'like my favourite Barolo", or to seed purchase ideas from a wine the user loves. Only wines that have been ' +
     'embedded are searchable — an empty result does not mean nothing similar exists.',
-  scope: 'read',
+  // 'public' (plan §3.17): the reference wine is already embedded, so this is
+  // a stored-vector Qdrant lookup — $0 per call and safe on the anonymous
+  // /api/mcp/public surface. The bottle_id input is guarded below (anonymous
+  // callers have no bottles).
+  scope: 'public',
   annotations: { readOnlyHint: true, openWorldHint: false },
   inputSchema: {
     wine_id: z.string().optional().describe('Registry wine id (from search_registry or a bottle\'s wine)'),
@@ -38,6 +42,11 @@ registerTool({
     let wineId = null;
     let preferVintage = null;
     if (args.bottle_id) {
+      // Anonymous callers (public MCP) have no bottles — refuse before any
+      // deref instead of leaking a confusing not_found.
+      if (!ctx.user) {
+        return fail('invalid_input', 'bottle_id needs an authenticated connection — on the public endpoint use wine_id (from search_registry).');
+      }
       const access = await resolveBottleAccess(ctx.user.id, args.bottle_id);
       if (!access) return fail('not_found', 'No such bottle, or you have no access to it. Find ids via search_bottles.');
       wineId = access.bottle.wineDefinition ? String(access.bottle.wineDefinition) : null;

@@ -21,7 +21,10 @@ registerTool({
     'Searches Cellarion\'s shared wine database (vintage-neutral wines, community data) by name, producer, region or ' +
     'grape. Returns up to 10 matches. Call to identify a wine the user mentions, before recommending, or to check ' +
     'whether a wine exists in the registry. This searches ALL known wines — use search_bottles for what the user owns.',
-  scope: 'read',
+  // 'public': registry data is public-site content (every wine has a public
+  // URL) — served to ANY authenticated token and to the anonymous
+  // /api/mcp/public surface (Phase 6).
+  scope: 'public',
   annotations: { readOnlyHint: true, openWorldHint: false },
   inputSchema: {
     query: z.string().min(2).max(200).describe('Wine name, producer, appellation or grape'),
@@ -64,7 +67,9 @@ registerTool({
     'Full registry record for one wine: producer, region, appellation, classification, grapes, community rating, and ' +
     'the AI tasting profile when the wine has been enriched. Vintage-neutral (bottles carry the vintage). ' +
     'Call after search_registry when the user wants depth on a specific wine.',
-  scope: 'read',
+  // 'public' — same rationale as search_registry: this is the public wine
+  // page's data over MCP.
+  scope: 'public',
   annotations: { readOnlyHint: true, openWorldHint: false },
   inputSchema: { wine_id: z.string().describe('Registry wine id from search_registry or a bottle\'s wine') },
   handler: async (args) => {
