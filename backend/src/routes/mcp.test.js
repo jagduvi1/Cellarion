@@ -16,11 +16,14 @@ const WINDOW = 5 * DAY;
 jest.mock('../mcp/server', () => ({ handleMcpRequest: jest.fn(), initStatefulSession: jest.fn() }));
 jest.mock('../mcp/sessions', () => ({ getSession: jest.fn() }));
 jest.mock('../services/bottleOps', () => ({ RESTORE_WINDOW_MS: 5 * 86400000 }));
+// Use the REAL reversibleActionsFor / action lists (only revertLedgerRow is
+// mocked) so the route's revertible-action set — built from this at load — can
+// never drift from revert.js. A hand-copied 12-action list here silently
+// dropped the 5 newest write actions, making their timeline-revert tests
+// structurally impossible (grand-audit H7).
 jest.mock('../mcp/revert', () => ({
+  ...jest.requireActual('../mcp/revert'),
   revertLedgerRow: jest.fn(),
-  // The route builds its revertible-action set from this at load time.
-  reversibleActionsFor: () => ['consume', 'restore', 'add', 'update', 'bulk_add',
-    'somm_maturity', 'somm_price', 'cellar_create', 'rack_create', 'place', 'unplace', 'move'],
 }));
 jest.mock('../models/McpActionLog', () => ({
   find: jest.fn(),
