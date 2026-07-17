@@ -44,6 +44,7 @@
   border-radius: 4px;
   background: var(--color-primary, #6366f1);
   color: #fff;
+  margin-left: 0.5rem; /* was an inline style on the title-badge span (M22) */
 }
 
 .room-mode-badge {

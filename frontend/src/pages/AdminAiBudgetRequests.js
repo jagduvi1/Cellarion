@@ -135,14 +135,14 @@ function AdminAiBudgetRequests() {
                   />
                 </label>
                 <button
-                  className="btn-primary"
+                  className="btn btn-primary"
                   disabled={submittingId === req._id}
                   onClick={() => handleDecide(req._id, 'approve')}
                 >
                   {submittingId === req._id ? '…' : t('adminAiBudget.approve')}
                 </button>
                 <button
-                  className="btn-secondary"
+                  className="btn btn-secondary"
                   disabled={submittingId === req._id}
                   onClick={() => handleDecide(req._id, 'deny')}
                 >

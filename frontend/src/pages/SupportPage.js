@@ -35,6 +35,9 @@ function SupportPage() {
       const reportData = await reportRes.json();
       if (ticketRes.ok) setTickets(ticketData.tickets || []);
       if (reportRes.ok) setWineReports(reportData.reports || []);
+      // A non-ok response set no data AND no error, so a 500 looked like the
+      // normal "you have no tickets" empty state (grand-audit M20).
+      if (!ticketRes.ok && !reportRes.ok) setError(t('support.failedLoad'));
     } catch {
       setError(t('support.failedLoad'));
     } finally {
@@ -73,7 +76,7 @@ function SupportPage() {
     <div className="support-page">
       <div className="support-header">
         <h1>{t('support.title')}</h1>
-        <button className="btn-primary" onClick={() => setShowModal(true)}>
+        <button className="btn btn-primary" onClick={() => setShowModal(true)}>
           {t('support.newTicket')}
         </button>
       </div>
@@ -108,6 +111,7 @@ function SupportPage() {
                   onClick={() => toggleExpand(ticket._id)}
                   role="button"
                   tabIndex={0}
+                  aria-expanded={expanded === ticket._id}
                   onKeyDown={e => e.key === 'Enter' && toggleExpand(ticket._id)}
                 >
                   <div className="support-card-meta">
@@ -160,13 +164,14 @@ function SupportPage() {
                           value={replyText}
                           onChange={e => setReplyText(e.target.value)}
                           placeholder={t('support.replyPlaceholder')}
+                          aria-label={t('support.replyPlaceholder')}
                           maxLength={5000}
                           rows={3}
                           disabled={replySending}
                         />
                         {replyError && <p className="support-error">{replyError}</p>}
                         <button
-                          className="btn-primary"
+                          className="btn btn-primary"
                           onClick={() => sendReply(ticket._id)}
                           disabled={replySending || !replyText.trim()}
                         >
@@ -196,6 +201,7 @@ function SupportPage() {
                   onClick={() => toggleExpand(report._id)}
                   role="button"
                   tabIndex={0}
+                  aria-expanded={expanded === report._id}
                   onKeyDown={e => e.key === 'Enter' && toggleExpand(report._id)}
                 >
                   <div className="support-card-meta">

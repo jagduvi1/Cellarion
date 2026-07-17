@@ -1033,7 +1033,7 @@ export default function CellarRoom() {
           title={`${cellar?.name || '...'} — ${t('room.title', 'Room View')}`}
           loading={loading}
           subtitle={t('room.subtitle', '3D cellar layout')}
-          titleBadge={<span className="room-beta-badge" style={{ marginLeft: '0.5rem' }}>Beta</span>}
+          titleBadge={<span className="room-beta-badge">{t('cellarDetail.beta', 'Beta')}</span>}
           actions={canEdit && (
             <>
               <button className="btn btn-secondary btn-small" onClick={() => setShowSettings(s => !s)}>
@@ -1061,7 +1061,7 @@ export default function CellarRoom() {
               {t('room.backToRacks', 'Racks')}
             </Link>
             <h1>{cellar?.name || '...'} — {t('room.title', 'Room View')}</h1>
-            <span className="room-beta-badge">Beta</span>
+            <span className="room-beta-badge">{t('cellarDetail.beta', 'Beta')}</span>
             <span className="room-mode-badge edit">{t('room.editMode', 'Edit')}</span>
           </div>
 

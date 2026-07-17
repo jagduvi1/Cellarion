@@ -208,14 +208,14 @@ function AdminWineReports() {
                   />
                   <div className="awr-action-buttons">
                     <button
-                      className="btn-primary"
+                      className="btn btn-primary"
                       onClick={() => handleAction('resolve')}
                       disabled={submitting}
                     >
                       {submitting ? '…' : 'Mark Resolved'}
                     </button>
                     <button
-                      className="btn-secondary"
+                      className="btn btn-secondary"
                       onClick={() => handleAction('dismiss')}
                       disabled={submitting}
                     >

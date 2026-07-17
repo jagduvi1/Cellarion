@@ -151,6 +151,7 @@
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
   background: none;
+  color: var(--color-text); /* else UA-black text on the dark panel (M19) */
   cursor: pointer;
 }
 
@@ -229,6 +230,10 @@
   padding: 10px;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
+  /* Themed surface/text — without these the UA-default white box + black text
+     stayed light-on-dark in dark mode (grand-audit M19). */
+  background: var(--color-input-bg, var(--color-surface));
+  color: var(--color-text);
   font-size: 0.9rem;
   font-family: inherit;
   resize: vertical;
@@ -247,6 +252,8 @@
   padding: 6px 10px;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
+  background: var(--color-input-bg, var(--color-surface));
+  color: var(--color-text);
   font-size: 0.875rem;
 }
 

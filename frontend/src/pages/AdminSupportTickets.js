@@ -228,7 +228,7 @@ function AdminSupportTickets() {
                     ))}
                   </select>
                   <button
-                    className="btn-primary"
+                    className="btn btn-primary"
                     onClick={handleRespond}
                     disabled={submitting}
                   >
@@ -236,7 +236,7 @@ function AdminSupportTickets() {
                   </button>
                   {selected.status !== 'closed' && (
                     <button
-                      className="btn-secondary"
+                      className="btn btn-secondary"
                       onClick={() => handleStatusOnly(selected._id, 'closed')}
                     >
                       Close ticket

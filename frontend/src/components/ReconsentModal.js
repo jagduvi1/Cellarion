@@ -50,10 +50,10 @@ export default function ReconsentModal() {
       </p>
       {error && <p className="error-message" role="alert">{error}</p>}
       <div className="modal-actions">
-        <button type="button" className="btn-secondary" onClick={logout} disabled={submitting}>
+        <button type="button" className="btn btn-secondary" onClick={logout} disabled={submitting}>
           {t('reconsent.logout')}
         </button>
-        <button type="button" className="btn-primary" onClick={handleAccept} disabled={submitting}>
+        <button type="button" className="btn btn-primary" onClick={handleAccept} disabled={submitting}>
           {submitting ? t('common.saving') : t('reconsent.acknowledge')}
         </button>
       </div>
