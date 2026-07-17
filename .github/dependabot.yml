@@ -1,0 +1,31 @@
+# Keeps the supply-chain pins current (security audit 2026-07-17, M-5 + L-11).
+# Both the SHA-pinned GitHub Actions and the @sha256 digest-pinned base images
+# are frozen on purpose — Dependabot is what turns "frozen" into "frozen but
+# maintained", opening a PR when a new version/digest is published so a pin can
+# never silently rot into an unpatched base. Weekly + grouped to stay low-noise
+# for a solo maintainer; npm is intentionally left out (handled manually).
+version: 2
+updates:
+  # CI workflow actions — Dependabot understands `@<sha> # vX.Y.Z` pins and
+  # bumps both the SHA and the version comment together.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      github-actions:
+        patterns: ["*"]
+
+  # Container base images: one entry per Dockerfile directory + the root for
+  # docker-compose.yml. All are digest-pinned, so these bump the @sha256.
+  - package-ecosystem: docker
+    directories:
+      - /backend
+      - /frontend
+      - /rembg
+      - /
+    schedule:
+      interval: weekly
+    groups:
+      docker-images:
+        patterns: ["*"]
