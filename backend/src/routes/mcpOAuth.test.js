@@ -105,6 +105,15 @@ describe('POST /register (DCR)', () => {
     const r = await jsonPost('/register', { redirect_uris: [] });
     expect(r.status).toBe(400);
   });
+
+  test('a new client is registered with a never-used TTL (expiresAt in the future)', async () => {
+    OAuthClient.create.mockResolvedValue({ _id: 'c1', clientId: 'mcpc_x', clientName: null, createdAt: new Date(), grantTypes: [], responseTypes: [] });
+    await jsonPost('/register', { redirect_uris: [REDIRECT] });
+    const created = OAuthClient.create.mock.calls[0][0];
+    expect(created.expiresAt).toBeInstanceOf(Date);
+    // ~30 days out — armed, so an abandoned registration is auto-reaped.
+    expect(created.expiresAt.getTime()).toBeGreaterThan(Date.now() + 20 * 24 * 60 * 60 * 1000);
+  });
 });
 
 describe('GET /authorize', () => {
@@ -250,6 +259,10 @@ describe('POST /token — authorization_code', () => {
     expect(created).toMatchObject({ user: USER, origin: 'oauth', oauthClientId: CLIENT.clientId, scopes: ['read', 'write'] });
     expect(created.tokenHash).toBeTruthy();
     expect(created.expiresAt).toBeInstanceOf(Date);
+    // First successful exchange makes the client permanent: clear the never-used TTL (M-6).
+    const upd = OAuthClient.updateOne.mock.calls[0];
+    expect(upd[0]).toEqual({ _id: CLIENT._id });
+    expect(upd[1].$unset).toEqual({ expiresAt: '' });
   });
 
   test('the connection cap is enforced', async () => {
