@@ -62,18 +62,15 @@ This is the primary way to use Cellarion. Create an account and start using the 
 
 ### Run the app
 
+The app is routed through Traefik, so create the external `web` Docker network **before** the first `up` (compose declares it external — the first command fails otherwise):
+
 ```bash
 git clone https://github.com/jagduvi1/Cellarion.git
 cd Cellarion
 cp .env.example .env
 # Edit .env and set JWT_SECRET and MEILI_MASTER_KEY to strong random strings
+docker network create web        # once; skip if it already exists
 docker-compose up --build
-```
-
-The app is routed through Traefik. Make sure the `web` Docker network exists before starting:
-
-```bash
-docker network create web
 ```
 
 Then bring up the stack:
