@@ -33,6 +33,14 @@
   color: var(--color-text);
 }
 
+.privacy-container h3 {
+  font-size: 1rem;
+  font-weight: 600;
+  margin-top: 1.5rem;
+  margin-bottom: 0.5rem;
+  color: var(--color-text);
+}
+
 .privacy-container p,
 .privacy-container li {
   line-height: 1.7;
