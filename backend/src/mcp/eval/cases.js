@@ -192,6 +192,13 @@ const CASES = [
     expect: { tool: 'create_support_ticket' },
   },
   {
+    id: 'support-replied-yet',
+    // The read side of the ticket flow. list_notifications is also a fair
+    // first move — the admin reply lands as a notification too.
+    prompt: 'Did Cellarion support ever answer the bug ticket I filed last week?',
+    expect: { anyOf: ['list_my_tickets', 'list_notifications'] },
+  },
+  {
     id: 'request-missing-wine',
     prompt: "Cellarion doesn't have this wine and I don't know the producer — ask the team to add it. Here's the page: https://www.systembolaget.se/produkt/123",
     expect: { anyOf: ['request_wine_addition', 'resolve_wine', 'search_registry'] },

@@ -14,7 +14,7 @@
 const { z } = require('zod');
 const User = require('../../models/User');
 const { registerTool } = require('../registry');
-const { ok, fail } = require('../toolUtil');
+const { ok, fail, pageParams } = require('../toolUtil');
 const { logAudit } = require('../../services/audit');
 const {
   updatePreferences, updateProfile, createSupportTicket, createWineRequest,
@@ -176,7 +176,7 @@ registerTool({
     'Files a support ticket to the Cellarion admins (a bug report, a question, a feature request). category is one ' +
     `of ${SUPPORT_CATEGORIES.join(' / ')}; subject ≤200 chars, message ≤5000. Use only for issues WITH the app itself — ` +
     'not for cellar actions you can do with other tools. Confirm the wording with the user first; this reaches a ' +
-    'human and cannot be unsent. Track replies in the web app (Settings → Support).',
+    'human and cannot be unsent. Track replies with list_my_tickets (or in the web app under Settings → Support).',
   scope: 'write',
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
   inputSchema: {
@@ -196,8 +196,55 @@ registerTool({
       ticket_id: ticket._id,
       category: ticket.category,
       status: ticket.status,
-      note: 'A Cellarion admin will respond; replies appear in the web app under Settings → Support.',
+      note: 'A Cellarion admin will respond — check back with list_my_tickets (replies also arrive as a notification and in the web app under Settings → Support).',
     });
+  },
+});
+
+registerTool({
+  name: 'list_my_tickets',
+  title: 'List your support tickets',
+  description:
+    'The user\'s own support tickets with any admin response, newest first — the read side of ' +
+    'create_support_ticket. Call when the user asks whether support has replied, what the answer was, or what ' +
+    'they have filed. Optional status filter: open / in_progress / closed.',
+  scope: 'read',
+  annotations: { readOnlyHint: true, openWorldHint: false },
+  inputSchema: {
+    status: z.enum(['open', 'in_progress', 'closed']).optional(),
+    limit: z.number().int().min(1).max(50).default(20),
+    offset: z.number().int().min(0).default(0),
+  },
+  handler: async (args, ctx) => {
+    // Lazy model require keeps the registry load path lean (file convention —
+    // see the alerts resource).
+    const SupportTicket = require('../../models/SupportTicket');
+    const { limit, offset } = pageParams(args, 20, 50);
+    const filter = { user: ctx.user.id, ...(args.status ? { status: args.status } : {}) };
+    const [total, tickets] = await Promise.all([
+      SupportTicket.countDocuments(filter),
+      SupportTicket.find(filter)
+        .sort({ createdAt: -1 }).skip(offset).limit(limit)
+        // Same field set the GDPR export ships for tickets — nothing extra.
+        .select('category subject message status adminResponse respondedAt createdAt')
+        .lean(),
+    ]);
+    const data = tickets.map((t) => ({
+      ticket_id: t._id,
+      category: t.category,
+      subject: t.subject,
+      message: t.message,
+      status: t.status,
+      admin_response: t.adminResponse || null,
+      responded_at: t.respondedAt || null,
+      created_at: t.createdAt,
+    }));
+    const answered = data.filter((t) => t.admin_response).length;
+    return ok(
+      `${total} support ticket(s)${args.status ? ` (${args.status})` : ''}${answered ? `, ${answered} shown with a response` : ''}`,
+      data,
+      { page: { limit, offset, total } }
+    );
   },
 });
 

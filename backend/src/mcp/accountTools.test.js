@@ -25,6 +25,7 @@ jest.mock('../models/Notification', () => ({
   find: jest.fn(), countDocuments: jest.fn(), updateOne: jest.fn(), updateMany: jest.fn(),
 }));
 jest.mock('../models/ClimateDevice', () => ({ find: jest.fn() }));
+jest.mock('../models/SupportTicket', () => ({ find: jest.fn(), countDocuments: jest.fn() }));
 jest.mock('../services/climateAlerts', () => ({ effectiveClimateConfig: jest.fn() }));
 jest.mock('../services/search', () => ({ getIsAvailable: jest.fn(() => false), search: jest.fn(), searchBottles: jest.fn() }));
 jest.mock('../services/statsService', () => ({ computeOverview: jest.fn(), buildEmptyStats: jest.fn() }));
@@ -181,5 +182,49 @@ describe('create_support_ticket / request_wine_addition', () => {
     const res = await tool('request_wine_addition').handler({ wine_name: 'X', source_url: 'bad' }, CTX);
     expect(res.isError).toBe(true);
     expect(parse(res).error.code).toBe('invalid_input');
+  });
+});
+
+describe('list_my_tickets (the read side of create_support_ticket)', () => {
+  const SupportTicket = require('../models/SupportTicket');
+  const ticketChain = (result) => {
+    const c = {};
+    for (const m of ['sort', 'skip', 'limit', 'select']) c[m] = jest.fn(() => c);
+    c.lean = jest.fn(() => Promise.resolve(result));
+    return c;
+  };
+
+  test('is read-scoped and read-only', () => {
+    const t = tool('list_my_tickets');
+    expect(t.scope).toBe('read');
+    expect(t.annotations.readOnlyHint).toBe(true);
+  });
+
+  test('queries ONLY the caller\'s tickets, maps the response shape incl. the admin reply', async () => {
+    SupportTicket.countDocuments.mockResolvedValue(2);
+    SupportTicket.find.mockReturnValue(ticketChain([
+      { _id: 't1', category: 'bug', subject: 'Rack view', message: 'It flickers', status: 'closed', adminResponse: 'Fixed in 1.82', respondedAt: new Date('2026-07-16'), createdAt: new Date('2026-07-15') },
+      { _id: 't2', category: 'help', subject: 'Import', message: 'CSV?', status: 'open', createdAt: new Date('2026-07-17') },
+    ]));
+    const body = parse(await tool('list_my_tickets').handler({}, CTX));
+    expect(SupportTicket.find).toHaveBeenCalledWith({ user: ME });
+    expect(SupportTicket.countDocuments).toHaveBeenCalledWith({ user: ME });
+    expect(body.data[0]).toEqual({
+      ticket_id: 't1', category: 'bug', subject: 'Rack view', message: 'It flickers',
+      status: 'closed', admin_response: 'Fixed in 1.82',
+      responded_at: new Date('2026-07-16').toISOString(), created_at: new Date('2026-07-15').toISOString(),
+    });
+    expect(body.data[1].admin_response).toBeNull();
+    expect(body.summary).toContain('2 support ticket(s)');
+    expect(body.page.total).toBe(2);
+  });
+
+  test('status filter narrows the query; paging clamps to the 50 cap', async () => {
+    SupportTicket.countDocuments.mockResolvedValue(0);
+    const chain = ticketChain([]);
+    SupportTicket.find.mockReturnValue(chain);
+    await tool('list_my_tickets').handler({ status: 'open', limit: 500 }, CTX);
+    expect(SupportTicket.find).toHaveBeenCalledWith({ user: ME, status: 'open' });
+    expect(chain.limit).toHaveBeenCalledWith(50);
   });
 });
