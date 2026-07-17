@@ -54,9 +54,46 @@ function isPrivateAddress(addr) {
     // a dotted-decimal-only check misses, smuggling the metadata endpoint past
     // the guard. Blanket-refuse instead of parsing every textual form.
     if (lower.startsWith('::ffff:') || /^::\d+\.\d+\.\d+\.\d+$/.test(lower) || /^::[0-9a-f]{1,4}:[0-9a-f]{1,4}$/.test(lower)) return true;
+    // Belt-and-suspenders (SSRF re-audit): the branch above matches the CANONICAL
+    // v4-mapped form, which is what URL and DNS canonicalization always emit. A
+    // future refactor that fed a NON-canonical, zero-uncompressed textual form
+    // (0:0:0:0:0:ffff:a9fe:a9fe) would slip past it. Structurally, ANY address
+    // whose first five 16-bit groups are zero and whose sixth is 0 (v4-compatible)
+    // or ffff (v4-mapped) embeds a v4 target — refuse it however the zeros are
+    // written. A real public address cannot have those leading 80/96 bits, so
+    // this never over-blocks a legitimate CDN (unlike a bare ':ffff:' substring
+    // match, which would trip on any public address carrying an ffff group).
+    const groups = expandV6Hex(lower);
+    if (groups && groups.slice(0, 5).every((g) => g === 0) && (groups[5] === 0 || groups[5] === 0xffff)) return true;
     return false;
   }
   return true; // not an IP at all — refuse
+}
+
+/**
+ * Expand a pure-hex IPv6 literal (no embedded dotted-v4 tail — those are handled
+ * by the regex branches above) to its eight 16-bit groups as numbers, or null if
+ * it is not a well-formed hex-group address. Used only to classify the embedded
+ * v4-mapped/compatible prefix independently of zero-compression.
+ */
+function expandV6Hex(addr) {
+  if (addr.includes('.')) return null;
+  const halves = addr.split('::');
+  if (halves.length > 2) return null;
+  const head = halves[0] ? halves[0].split(':') : [];
+  const tail = halves.length === 2 ? (halves[1] ? halves[1].split(':') : []) : null;
+  let groups;
+  if (tail === null) {
+    groups = head;
+  } else {
+    const missing = 8 - head.length - tail.length;
+    if (missing < 0) return null;
+    groups = [...head, ...Array(missing).fill('0'), ...tail];
+  }
+  if (groups.length !== 8) return null;
+  const nums = groups.map((g) => parseInt(g || '0', 16));
+  if (nums.some((n) => Number.isNaN(n) || n < 0 || n > 0xffff)) return null;
+  return nums;
 }
 
 /** Resolve a hostname and return a validated public address, or throw. */

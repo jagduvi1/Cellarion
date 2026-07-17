@@ -25,6 +25,10 @@ describe('isPrivateAddress', () => {
     '::ffff:127.0.0.1', '::ffff:10.0.0.1', '::ffff:a9fe:a9fe', '::ffff:8.8.8.8', '::ffff:0808:0808',
     // deprecated v4-compatible
     '::127.0.0.1', '::a9fe:a9fe',
+    // zero-UNCOMPRESSED hex forms of the same embedded-v4 addresses — the forms
+    // URL/DNS canonicalization would normally compress, caught structurally so a
+    // future non-canonical caller can't smuggle them past (SSRF re-audit note).
+    '0:0:0:0:0:ffff:a9fe:a9fe', '0000:0000:0000:0000:0000:ffff:a9fe:a9fe', '0:0:0:0:0:0:a9fe:a9fe',
     // not an IP at all
     'not-an-ip', '',
   ])('blocks %s', (addr) => {
@@ -35,6 +39,7 @@ describe('isPrivateAddress', () => {
     '1.1.1.1', '8.8.8.8', '93.184.216.34', // public v4
     '172.15.0.1', '172.32.0.1', '11.0.0.1', // just OUTSIDE the private ranges
     '2606:4700:4700::1111', '2001:4860:4860::8888', // public global v6
+    '2606:4700:ffff::1', // public v6 that merely CONTAINS an ffff group — must NOT over-block
   ])('allows %s', (addr) => {
     expect(isPrivateAddress(addr)).toBe(false);
   });
