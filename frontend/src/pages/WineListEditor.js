@@ -24,7 +24,12 @@ const AUTOSAVE_DELAY = 1500;
 const keyOf = (e) =>
   `${e.wine?._id || e.wine}|${e.vintage || 'NV'}|${e.bottleSize || '750ml'}`;
 
-/** Suggested glass price from the list's glass pricing rule. */
+/**
+ * Suggested glass price from the list's glass pricing rule.
+ * MUST stay identical to the backend's canonical copy in
+ * backend/src/utils/glassPrice.js (MCP-audit M4) — separate npm packages, one
+ * rule. If you change the formula, change it in BOTH places.
+ */
 const suggestGlassPrice = (listPrice, layout = {}) => {
   if (listPrice == null) return null;
   const glasses = layout.glassesPerBottle || 6;

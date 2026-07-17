@@ -49,6 +49,7 @@ jest.mock('../services/accountOps', () => ({
   ALLOWED_RESTOCK_SCOPE: ['all', 'cellar'],
   ALLOWED_VISIBILITY: ['public', 'private'],
   SUPPORT_CATEGORIES: ['bug', 'help', 'feature', 'other'],
+  TICKET_REPLY_CAP: 30,
 }));
 
 const User = require('../models/User');
@@ -220,6 +221,19 @@ describe('list_my_tickets (the read side of create_support_ticket)', () => {
     expect(body.data[1].can_reply).toBe(true);
     expect(body.summary).toContain('2 support ticket(s)');
     expect(body.page.total).toBe(2);
+  });
+
+  test('can_reply is false once the reply cap is reached, even on an OPEN ticket (M6)', async () => {
+    // reply_to_ticket refuses at TICKET_REPLY_CAP (admin replies count too), so
+    // an open thread already at the cap must report can_reply:false.
+    const replies = Array.from({ length: 30 }, (_, i) => ({ author: i % 2 ? 'admin' : 'user', message: `r${i}`, createdAt: new Date() }));
+    SupportTicket.countDocuments.mockResolvedValue(1);
+    SupportTicket.find.mockReturnValue(ticketChain([
+      { _id: 't3', category: 'bug', subject: 'Long thread', message: 'start', status: 'open', replies, createdAt: new Date() },
+    ]));
+    const body = parse(await tool('list_my_tickets').handler({}, CTX));
+    expect(body.data[0].status).toBe('open');
+    expect(body.data[0].can_reply).toBe(false); // at cap
   });
 
   test('the conversation thread ships author+message+date, never the by refs', async () => {

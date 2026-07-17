@@ -119,7 +119,10 @@ function budgetedHandler(tool, ctx, state) {
           content: [{ type: 'text', text: JSON.stringify({ error: { code: 'forbidden_scope', message: 'Mutations need an authenticated connection.' } }) }],
         };
       }
-      if (!takeMutationSlot(String(ctx.user.id), 1, ipKeyFor(ctx))) {
+      // Self-budgeted tools (bulk_add, auto_arrange) charge the write budget
+      // themselves — per ITEM on apply, nothing on preview — so the generic
+      // one-slot-per-call charge here would double-count (MCP-audit M7).
+      if (!tool.selfBudgeted && !takeMutationSlot(String(ctx.user.id), 1, ipKeyFor(ctx))) {
         recordUsage(ctx, 'tool', tool.name, true);
         return rateLimited('Too many cellar changes in a short time — wait a few minutes before mutating again. Reads still work.');
       }

@@ -8,6 +8,7 @@ const WineDefinition = require('../../models/WineDefinition');
 const { registerTool } = require('../registry');
 const { isValidId } = require('../../utils/validation');
 const { ok, fail, wineSummary, hasContent } = require('../toolUtil');
+const { siteBaseUrl } = require('../../utils/siteUrl');
 
 const REGISTRY_LIMIT = 10; // == USER_SEARCH_LIMIT in routes/wines.js
 
@@ -83,7 +84,7 @@ registerTool({
       lwin7: w.lwin?.lwin7 || null,
       community_rating: w.communityRating?.reviewCount ? w.communityRating : null,
       tasting_profile: hasContent(w.aiProfile) ? w.aiProfile : null,
-      public_url: w.slug ? `https://cellarion.app/wines/${w.slug}` : null,
+      public_url: w.slug ? `${siteBaseUrl()}/wines/${w.slug}` : null,
     });
   },
 });
