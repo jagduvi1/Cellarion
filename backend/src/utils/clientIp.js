@@ -7,10 +7,12 @@ const { isCloudflareIP } = require('./cloudflareIps');
  * Cellarion runs behind Cloudflare → Traefik → nginx → backend. The trust
  * model on this hop chain is:
  *
- *   - `req.ip` is resolved by Express against `trust proxy = 2`. With our
- *     chain, that means req.ip is the Cloudflare edge IP for requests that
- *     actually came through Cloudflare, and the attacker's IP for requests
- *     that hit the Hetzner origin directly (bypassing CF).
+ *   - `req.ip` is resolved by Express against `trust proxy` (TRUST_PROXY_HOPS,
+ *     default 1 for the shipped single-hop compose; set to 2 on the hosted
+ *     CF→Traefik→nginx chain). With the hosted value, req.ip is the Cloudflare
+ *     edge IP for requests that actually came through Cloudflare, and the
+ *     attacker's IP for requests that hit the Hetzner origin directly (bypassing
+ *     CF). Trusting more hops than exist is what M-3 warns against.
  *   - The CF-Connecting-IP header is only set by Cloudflare itself, but the
  *     header can be spoofed by anyone hitting the origin directly. Trusting
  *     it unconditionally — as an earlier version did — turned every rate
