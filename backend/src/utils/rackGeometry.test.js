@@ -1,6 +1,26 @@
-const { totalSlots, modularTotalSlots, getMaxPosition, validDoubleHeightRows } = require('./rackGeometry');
+const { totalSlots, modularTotalSlots, getMaxPosition, validDoubleHeightRows, validateDoubleHeightRows } = require('./rackGeometry');
 
 describe('rackGeometry', () => {
+  // Request-side validator (moved here from routes/racks.js so the create
+  // service and the update route share ONE implementation — MCP-audit H1).
+  describe('validateDoubleHeightRows (request validation)', () => {
+    it('accepts absent/null config and valid in-range rows', () => {
+      expect(validateDoubleHeightRows(undefined, 'grid', 4, false)).toBeNull();
+      expect(validateDoubleHeightRows({}, 'grid', 4, false)).toBeNull();
+      expect(validateDoubleHeightRows({ doubleHeightRows: null }, 'grid', 4, false)).toBeNull();
+      expect(validateDoubleHeightRows({ doubleHeightRows: [1, 4] }, 'grid', 4, false)).toBeNull();
+      // effectiveType undefined defaults to grid
+      expect(validateDoubleHeightRows({ doubleHeightRows: [2] }, undefined, 4, false)).toBeNull();
+    });
+    it('rejects non-grid, modular, non-array, and out-of-range entries', () => {
+      expect(validateDoubleHeightRows({ doubleHeightRows: [1] }, 'hex', 4, false)).toMatch(/only supported on grid/);
+      expect(validateDoubleHeightRows({ doubleHeightRows: [1] }, 'grid', 4, true)).toMatch(/only supported on grid/);
+      expect(validateDoubleHeightRows({ doubleHeightRows: 2 }, 'grid', 4, false)).toMatch(/must be an array/);
+      expect(validateDoubleHeightRows({ doubleHeightRows: [0] }, 'grid', 4, false)).toMatch(/between 1 and 4/);
+      expect(validateDoubleHeightRows({ doubleHeightRows: [5] }, 'grid', 4, false)).toMatch(/between 1 and 4/);
+      expect(validateDoubleHeightRows({ doubleHeightRows: [1.5] }, 'grid', 4, false)).toMatch(/between 1 and 4/);
+    });
+  });
   describe('totalSlots — grid', () => {
     it('returns rows × cols', () => {
       expect(totalSlots('grid', 4, 8)).toBe(32);

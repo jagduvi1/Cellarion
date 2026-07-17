@@ -13,27 +13,23 @@ const BottleImage = require('../models/BottleImage');
 const WineRequest = require('../models/WineRequest');
 const { getCellarRole } = require('../utils/cellarAccess');
 const { logAudit } = require('../services/audit');
-const { getOrCreateDailySnapshot, getSnapshotForDate } = require('../utils/exchangeRates');
+const { getSnapshotForDate } = require('../utils/exchangeRates');
 const { resolveRating } = require('../utils/ratingUtils');
-const { embedSinglePair } = require('../services/embeddingJob');
-const { enrichWineById } = require('../services/enrichmentJob');
 const { CONSUMED_STATUSES, WINE_POPULATE, WINE_POPULATE_LIST } = require('../config/constants');
-const { resolveRestockAlerts } = require('../services/restockChecker');
 const { unlinkImageFiles } = require('../services/imageProcessor');
 const { gatherPriceWarnings } = require('../services/priceWarnings');
 const { getCurrentRelease } = require('../services/communityPrice');
-const { stripHtml, isSafeUrl, escapeRegex } = require('../utils/sanitize');
-const { parseAndValidateVintage, parseDrinkYear } = require('../utils/validation');
-const { normalizeBottleSize, DEFAULT_SIZE } = require('../config/bottleSizes');
+const { stripHtml, escapeRegex } = require('../utils/sanitize');
 const { toNormalized } = require('../utils/ratingUtils');
 const { classifyMaturity, buildProfileMap } = require('../utils/maturityUtils');
-const { ensurePendingVintageProfile } = require('../utils/vintageProfile');
 const { parsePagination } = require('../utils/pagination');
 const mongoose = require('mongoose');
 const searchService = require('../services/search');
-// consume/restore logic + rack-slot freeing live in the shared service so the
-// REST routes and the MCP tools can never drift (plan §7).
-const { consumeBottle, restoreBottle, removeFromRacks, removeBottleCascade } = require('../services/bottleOps');
+// add/update/consume/restore/remove logic + rack-slot freeing live in the
+// shared service so the REST routes and the MCP tools can never drift (§7).
+const {
+  addBottle, updateBottleFields, consumeBottle, restoreBottle, removeFromRacks, removeBottleCascade,
+} = require('../services/bottleOps');
 const { moveBottleToCellar } = require('../services/rackOps');
 
 const router = express.Router();
@@ -347,76 +343,16 @@ router.get('/', async (req, res) => {
 // (consume, pour, move, arrange, edit, browse). "Sign up to add your bottles."
 router.post('/', requireNonDemo, async (req, res) => {
   try {
-    const {
-      cellar,
-      wineDefinition,
-      vintage,
-      price,
-      currency,
-      bottleSize,
-      purchaseDate,
-      purchaseLocation,
-      purchaseUrl,
-      location,
-      notes,
-      occasion,
-      rating,
-      ratingScale,
-      drinkFrom,
-      drinkTo,
-      // Migration helpers — let users backdate bottles or add directly to history
-      dateAdded,
-      addToHistory,
-      consumedAt,
-      consumedReason,
-      consumedNote,
-      consumedRating,
-      consumedRatingScale
-    } = req.body;
+    const { cellar, wineDefinition, price, currency } = req.body;
 
     if (!cellar || !wineDefinition) {
       return res.status(400).json({ error: 'Cellar and wine definition are required' });
     }
 
-    const vintageCheck = parseAndValidateVintage(vintage);
-    if (!vintageCheck.ok) return res.status(400).json({ error: vintageCheck.error });
-    const canonicalVintage = vintageCheck.value;
-
-    if (purchaseUrl) {
-      if (purchaseUrl.length > 2048) return res.status(400).json({ error: 'purchaseUrl is too long (max 2048 characters)' });
-      if (!isSafeUrl(purchaseUrl)) return res.status(400).json({ error: 'purchaseUrl must be a valid http or https URL' });
-    }
-    if (notes && notes.length > 5000) return res.status(400).json({ error: 'Notes are too long (max 5000 characters)' });
-    if (occasion && occasion.length > 500) return res.status(400).json({ error: 'Occasion is too long (max 500 characters)' });
-    if (location && location.length > 500) return res.status(400).json({ error: 'Location is too long (max 500 characters)' });
-    if (purchaseLocation && purchaseLocation.length > 500) return res.status(400).json({ error: 'Purchase location is too long (max 500 characters)' });
-
-    const { rating: resolvedRating, ratingScale: resolvedRatingScale, error: ratingError } = resolveRating(rating, ratingScale);
-    if (ratingError) return res.status(400).json({ error: ratingError });
-
-    // Personal per-bottle drink window — explicitly provided invalid values
-    // are a 400 (unlike the import pipeline, which drops them silently).
-    const drinkFromCheck = parseDrinkYear(drinkFrom, 'drinkFrom');
-    if (!drinkFromCheck.ok) return res.status(400).json({ error: drinkFromCheck.error });
-    const drinkToCheck = parseDrinkYear(drinkTo, 'drinkTo');
-    if (!drinkToCheck.ok) return res.status(400).json({ error: drinkToCheck.error });
-    if (drinkFromCheck.value !== undefined && drinkToCheck.value !== undefined && drinkFromCheck.value > drinkToCheck.value) {
-      return res.status(400).json({ error: 'drinkFrom cannot be after drinkTo' });
-    }
-
-    // Validate add-to-history fields
-    if (addToHistory) {
-      if (consumedReason && !CONSUMED_STATUSES.includes(consumedReason)) {
-        return res.status(400).json({ error: 'Invalid consumed reason' });
-      }
-    }
-    const { rating: resolvedConsumedRating, ratingScale: resolvedConsumedScale, error: consumeRatingError } =
-      addToHistory ? resolveRating(consumedRating, consumedRatingScale) : { rating: undefined, ratingScale: undefined, error: null };
-    if (consumeRatingError) return res.status(400).json({ error: consumeRatingError });
-
-    // Verify user has editor/owner access to this cellar. Soft-deleted cellars
-    // are rejected too — a bottle added there would be invisible everywhere
-    // (all cellar lists filter deletedAt) and effectively lost.
+    // Access + existence checks stay on the route — the shared service takes
+    // ACCESS-CHECKED docs (same contract as the MCP tools). Soft-deleted
+    // cellars are rejected too: a bottle added there would be invisible
+    // everywhere (all cellar lists filter deletedAt) and effectively lost.
     if (!mongoose.isValidObjectId(cellar)) {
       return res.status(400).json({ error: 'Invalid cellar ID' });
     }
@@ -428,8 +364,6 @@ router.post('/', requireNonDemo, async (req, res) => {
     if (!role || role === 'viewer') {
       return res.status(403).json({ error: 'Not authorized to add bottles to this cellar' });
     }
-
-    // Verify wine definition exists
     if (!mongoose.isValidObjectId(wineDefinition)) {
       return res.status(400).json({ error: 'Invalid wine definition ID' });
     }
@@ -438,90 +372,18 @@ router.post('/', requireNonDemo, async (req, res) => {
       return res.status(404).json({ error: 'Wine definition not found' });
     }
 
-    // Ensure today's rate snapshot exists so historical conversion works later.
-    // Non-fatal: price still saves if the API call fails.
-    const priceSetAt = (price !== undefined && price !== null && price !== '')
-      ? new Date()
-      : undefined;
-    if (priceSetAt) await getOrCreateDailySnapshot();
-
-    // Bottle always belongs to the cellar owner (clean ownership model)
-    const bottle = new Bottle({
-      cellar,
-      user: cellarDoc.user,
-      wineDefinition,
-      vintage: canonicalVintage,
-      price,
-      currency: currency || 'USD',
-      priceSetAt,
-      bottleSize: normalizeBottleSize(bottleSize) || DEFAULT_SIZE,
-      purchaseDate: purchaseDate || new Date(),
-      purchaseLocation: stripHtml(purchaseLocation),
-      purchaseUrl,
-      location: stripHtml(location),
-      notes: stripHtml(notes),
-      occasion: stripHtml(occasion),
-      rating: resolvedRating,
-      ratingScale: resolvedRatingScale,
-      drinkFrom: drinkFromCheck.value,
-      drinkTo: drinkToCheck.value
-    });
-
-    // Allow backdating the "added" date for cellar migration
-    if (dateAdded) bottle.createdAt = new Date(dateAdded);
-
-    // Seed the cellar journey: the bottle enters this cellar at its added date.
-    bottle.addedToCellarAt = bottle.createdAt;
-    bottle.cellarHistory = [{ cellar: cellarDoc._id, cellarName: cellarDoc.name, enteredAt: bottle.createdAt }];
-
-    // Allow creating bottles directly as consumed (add to history)
-    if (addToHistory) {
-      const reason = consumedReason || 'drank';
-      bottle.status = reason;
-      bottle.consumedReason = reason;
-      bottle.consumedAt = consumedAt ? new Date(consumedAt) : new Date();
-      if (consumedNote) bottle.consumedNote = stripHtml(consumedNote);
-      if (resolvedConsumedRating !== undefined) {
-        bottle.consumedRating = resolvedConsumedRating;
-        bottle.consumedRatingScale = resolvedConsumedScale;
-      }
-    }
-
-    await bottle.save();
+    // ONE shared implementation with the MCP add_bottle tool (plan §7):
+    // validation, defaults, priceSetAt + FX snapshot, journey seed, migration
+    // helpers (dateAdded / addToHistory), indexing, vintage-profile seed,
+    // audit and the gated AI side effects all live in bottleOps.addBottle.
+    const result = await addBottle(cellarDoc, wineDoc, req.body, req);
+    if (result.error) return res.status(result.error.status).json({ error: result.error.message });
+    const { bottle } = result;
     await bottle.populate(WINE_POPULATE);
 
-    // Index in Meilisearch (fire-and-forget). Consumed ("add to history")
-    // bottles ARE indexed too — the History tab's search/filter path queries
-    // Meili with a consumed status filter, so skipping them made them silently
-    // vanish from filtered History (grand-audit H3). The index carries status.
-    searchService.indexBottle(bottle._id);
-
-    // Seed the sommelier maturity queue for this wine+vintage (no-op for
-    // "Unknown"; NV is included). Shared by every add/import path.
-    await ensurePendingVintageProfile(wineDoc._id, canonicalVintage);
-
-    logAudit(req, addToHistory ? 'bottle.addToHistory' : 'bottle.add',
-      { type: 'bottle', id: bottle._id, cellarId: cellarDoc._id },
-      { wineName: bottle.wineDefinition?.name, vintage: bottle.vintage }
-    );
-
-    // Fire-and-forget: embed this (wine, vintage) pair for AI chat
-    embedSinglePair(wineDefinition, bottle.vintage).catch(err => console.error('Failed to embed wine-vintage pair after bottle creation:', err.message));
-
-    // Fire-and-forget: if this wine has no AI tasting profile yet (e.g. a brand-
-    // new wine the user just created), generate one — which also re-embeds the
-    // wine so Qdrant carries the taste data. No-op if already enriched / a batch
-    // enrichment job is running / AI isn't configured.
-    // (Demo accounts never reach this route — requireNonDemo blocks bottle-add —
-    // so no demo AI/Voyage spend occurs here.)
-    enrichWineById(wineDefinition, { budgetUserId: req.user.id }).catch(() => {});
-
-    // Fire-and-forget: auto-resolve any restock alerts for this wine
-    resolveRestockAlerts(req.user.id, wineDefinition, bottle._id).catch(() => {});
-
-    // Non-blocking sanity warnings on the entered price. Surfaced in the
-    // response so the form can highlight a likely mistake (100×, cents-as-
-    // units, etc.) without rejecting the save. See utils/priceValidation.
+    // Non-blocking sanity warnings on the entered price — a REST-only response
+    // affordance (the add form highlights a likely mistake — 100×, cents-as-
+    // units, etc. — without rejecting the save). See utils/priceValidation.
     let priceWarnings = [];
     if (typeof price === 'number' && price > 0) {
       try {
@@ -530,7 +392,7 @@ router.post('/', requireNonDemo, async (req, res) => {
           currency: currency || 'USD',
           userId: cellarDoc.user,
           wineDefinitionId: wineDefinition,
-          vintage: canonicalVintage,
+          vintage: bottle.vintage,
         });
       } catch (err) {
         console.warn('Price-warning gather failed (non-fatal):', err.message);
@@ -539,9 +401,6 @@ router.post('/', requireNonDemo, async (req, res) => {
 
     res.status(201).json({ bottle, priceWarnings });
   } catch (error) {
-    if (error.name === 'ValidationError') {
-      return res.status(400).json({ error: error.message });
-    }
     console.error('Create bottle error:', error);
     res.status(500).json({ error: 'Failed to create bottle' });
   }
@@ -612,146 +471,17 @@ router.put('/:id', requireBottleAccess('editor'), async (req, res) => {
   try {
     const { bottle } = req;
 
-    if (req.body.purchaseUrl) {
-      if (req.body.purchaseUrl.length > 2048) return res.status(400).json({ error: 'purchaseUrl is too long (max 2048 characters)' });
-      if (!isSafeUrl(req.body.purchaseUrl)) return res.status(400).json({ error: 'purchaseUrl must be a valid http or https URL' });
-    }
-    if (req.body.notes && req.body.notes.length > 5000) return res.status(400).json({ error: 'Notes are too long (max 5000 characters)' });
-    if (req.body.occasion && req.body.occasion.length > 500) return res.status(400).json({ error: 'Occasion is too long (max 500 characters)' });
-    if (req.body.location && req.body.location.length > 500) return res.status(400).json({ error: 'Location is too long (max 500 characters)' });
-    if (req.body.purchaseLocation && req.body.purchaseLocation.length > 500) return res.status(400).json({ error: 'Purchase location is too long (max 500 characters)' });
+    // ONE shared implementation with the MCP update_bottle tool (plan §7):
+    // validation, vintage/size coercion, change detection, priceSetAt
+    // anchoring, notifier-marker reset, re-index, vintage re-embed and the
+    // { field: { from, to } } audit all live in bottleOps.updateBottleFields.
+    // VersionError → 409 and ValidationError → 400 come back as { error }.
+    const result = await updateBottleFields(bottle, req.body, req);
+    if (result.error) return res.status(result.error.status).json({ error: result.error.message });
 
-    // Coerce vintage to its canonical form (or reject) before the generic
-    // field-diff loop assigns it onto the bottle.
-    if ('vintage' in req.body) {
-      const vintageCheck = parseAndValidateVintage(req.body.vintage);
-      if (!vintageCheck.ok) return res.status(400).json({ error: vintageCheck.error });
-      req.body.vintage = vintageCheck.value;
-    }
-
-    // Canonicalize bottle size on the way in (e.g. '1.5L (Magnum)' → '1500ml').
-    if (req.body.bottleSize !== undefined) {
-      req.body.bottleSize = normalizeBottleSize(req.body.bottleSize) || DEFAULT_SIZE;
-    }
-
-    // Validate the personal drink-window years before the generic field-diff
-    // loop assigns them. Explicitly provided invalid values → 400; null/''
-    // clears the field. The from<=to check uses effective values so a partial
-    // update can't invert a window against the bottle's stored other half.
-    for (const field of ['drinkFrom', 'drinkTo']) {
-      if (field in req.body) {
-        const check = parseDrinkYear(req.body[field], field);
-        if (!check.ok) return res.status(400).json({ error: check.error });
-        req.body[field] = check.value ?? null;
-      }
-    }
-    const effDrinkFrom = 'drinkFrom' in req.body ? req.body.drinkFrom : bottle.drinkFrom;
-    const effDrinkTo = 'drinkTo' in req.body ? req.body.drinkTo : bottle.drinkTo;
-    if (effDrinkFrom != null && effDrinkTo != null && effDrinkFrom > effDrinkTo) {
-      return res.status(400).json({ error: 'drinkFrom cannot be after drinkTo' });
-    }
-
-    // Update allowed fields — diff old vs new for the audit log
-    const updateFields = [
-      'vintage', 'price', 'currency', 'bottleSize',
-      'purchaseDate', 'purchaseLocation', 'purchaseUrl',
-      'location', 'notes', 'occasion', 'rating', 'ratingScale',
-      'drinkFrom', 'drinkTo'
-    ];
-
-    // Normalize a value to a comparable string (handles Date objects vs ISO strings)
-    const norm = v => {
-      if (v === null || v === undefined || v === '') return '';
-      if (v instanceof Date) return v.toISOString().slice(0, 10);
-      if (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}/.test(v)) {
-        try { return new Date(v).toISOString().slice(0, 10); } catch { return v; }
-      }
-      return String(v);
-    };
-
-    // A scale change without a rating value would leave the stored rating
-    // meaningless on the new scale (e.g. a 4/5 persisted as 4 on the 100
-    // scale, later clamped to 0 by toNormalized) — require both together.
-    if ('ratingScale' in req.body && !('rating' in req.body) && bottle.rating != null) {
-      return res.status(400).json({ error: 'Send rating together with ratingScale when changing the rating scale' });
-    }
-
-    const htmlFields = new Set(['purchaseLocation', 'location', 'notes', 'occasion']);
-    const changes = {};
-    updateFields.forEach(field => {
-      if (req.body[field] !== undefined) {
-        const oldVal = bottle[field];
-        const rawVal = req.body[field];
-        const newVal = htmlFields.has(field) ? stripHtml(rawVal) : rawVal;
-        if (norm(oldVal) !== norm(newVal)) {
-          changes[field] = { from: oldVal ?? null, to: newVal !== '' ? newVal : null };
-        }
-        bottle[field] = newVal;
-      }
-    });
-
-    // Validate and coerce rating if it was updated
-    if ('rating' in req.body) {
-      const { rating: r, ratingScale: rs, error: ratingError } = resolveRating(req.body.rating, bottle.ratingScale);
-      if (ratingError) return res.status(400).json({ error: ratingError });
-      bottle.rating = r;
-      bottle.ratingScale = rs;
-    }
-
-    // Re-anchor the price date whenever price or currency is being updated,
-    // and ensure today's rate snapshot exists for future lookups.
-    if ('price' in req.body || 'currency' in req.body) {
-      if (bottle.price !== null && bottle.price !== undefined) {
-        bottle.priceSetAt = new Date();
-        await getOrCreateDailySnapshot();
-      } else {
-        bottle.priceSetAt = undefined;
-      }
-    }
-
-    // A changed personal drink window invalidates the drink-window notifier's
-    // "already notified" marker: the notifier only rewrites the marker on a
-    // notifiable transition, so a stale status (e.g. 'peak' from the old window)
-    // would permanently suppress the alert for the NEW window (e.g. drinkFrom
-    // pushed out to 2030 → not-ready now, but 'peak' marker blocks the 2030
-    // peak alert forever). Clear it so the next notifier run re-evaluates from a
-    // clean slate. Only when a window bound actually changed (changes[field] is
-    // set only on a real value diff).
-    if (changes.drinkFrom || changes.drinkTo) {
-      bottle.drinkWindowNotifiedStatus = null;
-      bottle.drinkWindowNotifiedAt = null;
-    }
-
-    await bottle.save();
     await bottle.populate(WINE_POPULATE);
-
-    // Re-index in Meilisearch (fire-and-forget)
-    searchService.indexBottle(bottle._id);
-
-    if (Object.keys(changes).length > 0) {
-      logAudit(req, 'bottle.update',
-        { type: 'bottle', id: bottle._id, cellarId: bottle.cellar },
-        { changes }
-      );
-    }
-
-    // If vintage changed, the old (wine, oldVintage) embedding is still in Qdrant
-    // but won't match this bottle anymore (user changed the year). Embed the new pair.
-    // Skipped for demo accounts: a novel year misses the embedding cache and would
-    // fire a paid Voyage call, and a demo's ephemeral edits never need Qdrant
-    // coverage — keeps demo AI/Voyage spend at exactly zero.
-    if (changes.vintage && !req.user.isDemo) {
-      embedSinglePair(bottle.wineDefinition._id || bottle.wineDefinition, bottle.vintage).catch(err => console.error('Failed to embed wine-vintage pair after vintage update:', err.message));
-    }
-
     res.json({ bottle });
   } catch (error) {
-    if (error.name === 'VersionError') {
-      return res.status(409).json({ error: 'This bottle was modified by another request. Please refresh and try again.' });
-    }
-    if (error.name === 'ValidationError') {
-      return res.status(400).json({ error: error.message });
-    }
     console.error('Update bottle error:', error);
     res.status(500).json({ error: 'Failed to update bottle' });
   }

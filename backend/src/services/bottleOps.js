@@ -136,19 +136,23 @@ async function restoreBottle(bottle, req) {
 
 /**
  * Create a bottle in an ACCESS-CHECKED cellar for an EXISTING registry wine —
- * the shared core of REST POST /api/bottles and the MCP add_bottle tool.
- * Mirrors the route's field handling exactly (validation helpers, caps,
- * priceSetAt anchoring, owner = cellar owner) and fires the same post-save
- * side effects, so the two surfaces cannot drift. The enrichment/embedding
- * calls inherit their internal kill-switch + per-user budget gates.
+ * the ONE implementation behind REST POST /api/bottles and the MCP add_bottle
+ * tool (the route delegates here; H1 of the 2026-07-17 MCP audit). Covers the
+ * full REST field surface including the migration helpers (dateAdded backdate,
+ * addToHistory + consumed-* fields) and fires the same post-save side effects.
+ * The enrichment/embedding calls inherit their internal kill-switch + per-user
+ * budget gates.
  *
  * Returns { error: { status, message } } | { bottle }.
  */
 async function addBottle(cellarDoc, wineDoc, fields = {}, req) {
   const {
     vintage, price, currency, bottleSize,
-    purchaseDate, purchaseLocation, purchaseUrl,
+    purchaseDate, purchaseLocation, purchaseUrl, location,
     notes, occasion, rating, ratingScale, drinkFrom, drinkTo,
+    // Migration helpers — backdate the bottle, or add it directly to history.
+    dateAdded, addToHistory,
+    consumedAt, consumedReason, consumedNote, consumedRating, consumedRatingScale,
   } = fields;
 
   const parsedVintage = parseAndValidateVintage(vintage);
@@ -169,32 +173,58 @@ async function addBottle(cellarDoc, wineDoc, fields = {}, req) {
   if (notes && (typeof notes !== 'string' || notes.length > 5000)) {
     return { error: { status: 400, message: 'Notes are too long (max 5000 characters)' } };
   }
-  const capped = [['occasion', occasion], ['purchaseLocation', purchaseLocation]];
-  for (const pair of capped) {
-    if (pair[1] && (typeof pair[1] !== 'string' || pair[1].length > 500)) {
-      return { error: { status: 400, message: pair[0] + ' is too long (max 500 characters)' } };
+  const capped = [
+    ['Occasion', occasion], ['Purchase location', purchaseLocation], ['Location', location],
+  ];
+  for (const [label, value] of capped) {
+    if (value && (typeof value !== 'string' || value.length > 500)) {
+      return { error: { status: 400, message: `${label} is too long (max 500 characters)` } };
     }
   }
-  if (purchaseUrl && (typeof purchaseUrl !== 'string' || purchaseUrl.length > 2048 || !isSafeUrl(purchaseUrl))) {
-    return { error: { status: 400, message: 'purchaseUrl is not a valid http(s) URL' } };
+  if (purchaseUrl) {
+    if (typeof purchaseUrl !== 'string' || purchaseUrl.length > 2048) {
+      return { error: { status: 400, message: 'purchaseUrl is too long (max 2048 characters)' } };
+    }
+    if (!isSafeUrl(purchaseUrl)) {
+      return { error: { status: 400, message: 'purchaseUrl must be a valid http or https URL' } };
+    }
   }
 
+  // Add-to-history: reason must be a consumed status; its rating resolves on
+  // its own scale, independent of the pre-drink rating above.
+  if (addToHistory && consumedReason && !CONSUMED_STATUSES.includes(consumedReason)) {
+    return { error: { status: 400, message: 'Invalid consumed reason' } };
+  }
+  const { rating: resolvedConsumedRating, ratingScale: resolvedConsumedScale, error: consumedRatingError } =
+    addToHistory
+      ? resolveRatingUtil(consumedRating, consumedRatingScale)
+      : { rating: undefined, ratingScale: undefined, error: null };
+  if (consumedRatingError) return { error: { status: 400, message: consumedRatingError } };
+
   const hasPrice = price !== undefined && price !== null && price !== '';
+  // Ensure today's FX snapshot exists BEFORE responding, so an immediate read
+  // of the new bottle can time-anchor its price. Non-fatal: the helper returns
+  // null (never throws) when the rates API is down.
+  if (hasPrice) await require('../utils/exchangeRates').getOrCreateDailySnapshot();
+
   const doc = {
     user: cellarDoc.user, // bottle owner = cellar owner, same as the REST route
     cellar: cellarDoc._id,
     wineDefinition: wineDoc._id,
     vintage: parsedVintage.value,
+    // Kept even without a price — the add form lets users pick their currency
+    // before (or without) entering a price; the schema default fills 'USD'.
+    currency: currency || 'USD',
     bottleSize: normalizeBottleSize(bottleSize) || DEFAULT_SIZE,
     purchaseDate: purchaseDate || new Date(), // REST defaults this too
   };
   if (hasPrice) {
     doc.price = price;
-    doc.currency = currency || 'USD';
     doc.priceSetAt = new Date();
   }
   if (purchaseLocation) doc.purchaseLocation = stripHtml(purchaseLocation);
   if (purchaseUrl) doc.purchaseUrl = purchaseUrl;
+  if (location) doc.location = stripHtml(location);
   if (notes) doc.notes = stripHtml(notes);
   if (occasion) doc.occasion = stripHtml(occasion);
   if (resolvedRating !== undefined) {
@@ -205,10 +235,23 @@ async function addBottle(cellarDoc, wineDoc, fields = {}, req) {
   if (to.value !== undefined) doc.drinkTo = to.value;
 
   const bottle = new Bottle(doc);
-  // Seed the cellar journey exactly like the REST route: the bottle enters
-  // this cellar at its added date.
+  // Backdate BEFORE seeding the journey, which anchors on the added date.
+  if (dateAdded) bottle.createdAt = new Date(dateAdded);
+  // Seed the cellar journey: the bottle enters this cellar at its added date.
   bottle.addedToCellarAt = bottle.createdAt;
   bottle.cellarHistory = [{ cellar: cellarDoc._id, cellarName: cellarDoc.name, enteredAt: bottle.createdAt }];
+  // Migration helper: create the bottle directly as consumed history.
+  if (addToHistory) {
+    const reason = consumedReason || 'drank';
+    bottle.status = reason;
+    bottle.consumedReason = reason;
+    bottle.consumedAt = consumedAt ? new Date(consumedAt) : new Date();
+    if (consumedNote) bottle.consumedNote = stripHtml(consumedNote);
+    if (resolvedConsumedRating !== undefined) {
+      bottle.consumedRating = resolvedConsumedRating;
+      bottle.consumedRatingScale = resolvedConsumedScale;
+    }
+  }
   try {
     await bottle.save();
   } catch (err) {
@@ -216,7 +259,9 @@ async function addBottle(cellarDoc, wineDoc, fields = {}, req) {
     throw err;
   }
 
-  // Same post-save side effects as the REST route, same order.
+  // Post-save side effects, one order for both surfaces. Consumed
+  // (add-to-history) bottles ARE indexed too — the History tab's search path
+  // filters on status at query time (grand-audit H3).
   require('./search').indexBottle(bottle._id);
   try {
     const { ensurePendingVintageProfile } = require('../utils/vintageProfile');
@@ -225,12 +270,9 @@ async function addBottle(cellarDoc, wineDoc, fields = {}, req) {
   // Include wineName so the Cellar Audit page shows what was added, matching
   // the REST POST /bottles audit (grand-audit M5 — AI-added bottles showed a
   // bare vintage with no wine name). wineDoc is the resolved registry wine.
-  logAudit(req, 'bottle.add',
+  logAudit(req, addToHistory ? 'bottle.addToHistory' : 'bottle.add',
     { type: 'bottle', id: bottle._id, cellarId: cellarDoc._id },
     { wineName: wineDoc.name, vintage: bottle.vintage });
-  if (hasPrice) {
-    require('../utils/exchangeRates').getOrCreateDailySnapshot().catch(() => {});
-  }
   // Fire-and-forget AI enrichment — both calls carry their own kill-switch /
   // per-user budget gates (embeddingJob: chatEnabled; enrichmentJob: tryDebitAi).
   const { embedSinglePair } = require('./embeddingJob');
@@ -243,18 +285,41 @@ async function addBottle(cellarDoc, wineDoc, fields = {}, req) {
   return { bottle };
 }
 
-// Fields update_bottle may touch — the AI-useful subset of the REST PUT route.
-const UPDATABLE_FIELDS = ['price', 'currency', 'notes', 'occasion', 'rating', 'ratingScale', 'drinkFrom', 'drinkTo'];
+// Every field a bottle update may touch — ONE list for the REST PUT route and
+// the MCP update_bottle tool (whose schema exposes the AI-useful subset).
+const UPDATABLE_FIELDS = [
+  'vintage', 'price', 'currency', 'bottleSize',
+  'purchaseDate', 'purchaseLocation', 'purchaseUrl',
+  'location', 'notes', 'occasion', 'rating', 'ratingScale',
+  'drinkFrom', 'drinkTo',
+];
+
+// Normalize a value for change detection: Date objects and ISO-ish strings
+// compare by calendar day, and null/undefined/'' collapse to one "empty"
+// value — so the web form re-sending an unchanged field (it always sends the
+// FULL form) never records a phantom change.
+function normForCompare(v) {
+  if (v === null || v === undefined || v === '') return '';
+  if (v instanceof Date) return v.toISOString().slice(0, 10);
+  if (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}/.test(v)) {
+    try { return new Date(v).toISOString().slice(0, 10); } catch { return v; }
+  }
+  return String(v);
+}
 
 /**
- * Diff-based partial update of an access-checked bottle (MCP update_bottle).
- * Mirrors the REST PUT route's handling for the fields it covers: rating
- * resolution against the bottle's own scale, drink-window ordering +
- * notifier-marker reset, priceSetAt re-anchoring, HTML stripping, re-index,
- * bottle.update audit. Returns { error } | { bottle, changes, prev }.
+ * Diff-based partial update of an access-checked bottle — the ONE
+ * implementation behind REST PUT /api/bottles/:id and the MCP update_bottle
+ * tool (the route delegates here; H1 of the 2026-07-17 MCP audit). Handles
+ * the full REST field surface: vintage coercion (+ re-embed on change),
+ * bottle-size canonicalization, rating resolution against the bottle's own
+ * scale, drink-window ordering + notifier-marker reset, priceSetAt
+ * re-anchoring, HTML stripping, re-index, and the { field: { from, to } }
+ * audit shape CellarAudit renders.
+ * Returns { error } | { bottle, changes, prev }.
  */
 async function updateBottleFields(bottle, fields, req) {
-  fields = fields || {};
+  fields = { ...(fields || {}) }; // shallow copy — REST passes req.body
   const changes = {};
   const prev = {};
 
@@ -262,9 +327,32 @@ async function updateBottleFields(bottle, fields, req) {
       (typeof fields.notes !== 'string' || fields.notes.length > 5000)) {
     return { error: { status: 400, message: 'Notes are too long (max 5000 characters)' } };
   }
-  if (fields.occasion !== undefined && fields.occasion &&
-      (typeof fields.occasion !== 'string' || fields.occasion.length > 500)) {
-    return { error: { status: 400, message: 'occasion is too long (max 500 characters)' } };
+  const capped = [
+    ['Occasion', fields.occasion], ['Purchase location', fields.purchaseLocation], ['Location', fields.location],
+  ];
+  for (const [label, value] of capped) {
+    if (value && (typeof value !== 'string' || value.length > 500)) {
+      return { error: { status: 400, message: `${label} is too long (max 500 characters)` } };
+    }
+  }
+  if (fields.purchaseUrl) {
+    if (typeof fields.purchaseUrl !== 'string' || fields.purchaseUrl.length > 2048) {
+      return { error: { status: 400, message: 'purchaseUrl is too long (max 2048 characters)' } };
+    }
+    if (!isSafeUrl(fields.purchaseUrl)) {
+      return { error: { status: 400, message: 'purchaseUrl must be a valid http or https URL' } };
+    }
+  }
+
+  // Vintage: coerce to canonical form ('NV' / 'Unknown' / 'YYYY') or reject.
+  if (fields.vintage !== undefined) {
+    const p = parseAndValidateVintage(fields.vintage);
+    if (!p.ok) return { error: { status: 400, message: p.error } };
+    fields.vintage = p.value;
+  }
+  // Bottle size: canonicalize on the way in (e.g. '1.5L (Magnum)' → '1500ml').
+  if (fields.bottleSize !== undefined) {
+    fields.bottleSize = normalizeBottleSize(fields.bottleSize) || DEFAULT_SIZE;
   }
 
   // Drink window: validate the EFFECTIVE pair (new values overlaying current).
@@ -288,34 +376,40 @@ async function updateBottleFields(bottle, fields, req) {
     return { error: { status: 400, message: 'drinkFrom cannot be after drinkTo' } };
   }
 
-  if (fields.rating === null) {
+  if (fields.rating === null || fields.rating === '') {
     // Explicit clear — needed so undoing a rating-SET can restore "unrated"
-    // (resolveRating treats null as "no input" and would silently skip it,
+    // (resolveRating treats null/'' as "no input" and would silently skip it,
     // leaving the old rating stranded on a possibly-changed scale).
     // ratingScale may ride along (e.g. restoring the pre-update scale).
+    fields.rating = null;
   } else if (fields.rating !== undefined) {
     const scale = fields.ratingScale || bottle.ratingScale;
     const resolved = resolveRatingUtil(fields.rating, scale);
     if (resolved.error) return { error: { status: 400, message: resolved.error } };
     fields.rating = resolved.rating;
     fields.ratingScale = resolved.ratingScale;
-  } else if (fields.ratingScale !== undefined) {
-    return { error: { status: 400, message: 'ratingScale can only be changed together with rating' } };
+  } else if (fields.ratingScale !== undefined && bottle.rating != null) {
+    // A scale change without a rating value would leave the stored rating
+    // meaningless on the new scale (e.g. a 4/5 persisted as 4 on the 100
+    // scale, later clamped by toNormalized) — require both together. On an
+    // UNRATED bottle a scale-only change is harmless and allowed (the web
+    // form always sends the scale).
+    return { error: { status: 400, message: 'Send rating together with ratingScale when changing the rating scale' } };
   }
 
   const apply = (key, value) => {
-    const current = bottle[key] == null ? null : bottle[key];
-    const next = value == null ? null : value;
-    if (String(current) === String(next)) return;
+    if (normForCompare(bottle[key]) === normForCompare(value)) return;
     prev[key] = bottle[key] === undefined ? null : bottle[key];
     bottle[key] = value;
-    changes[key] = value == null ? null : value;
+    changes[key] = value === '' || value == null ? null : value;
   };
 
   for (const key of UPDATABLE_FIELDS) {
     if (fields[key] === undefined) continue;
     let value = fields[key];
-    if (key === 'notes' || key === 'occasion') value = value ? stripHtml(value) : value;
+    if (key === 'notes' || key === 'occasion' || key === 'purchaseLocation' || key === 'location') {
+      value = value ? stripHtml(value) : value;
+    }
     if (key === 'drinkFrom') value = fromYear;
     if (key === 'drinkTo') value = toYear;
     apply(key, value);
@@ -325,15 +419,18 @@ async function updateBottleFields(bottle, fields, req) {
     return { bottle, changes, prev };
   }
 
-  // Same semantics as the REST route: a price/currency touch re-anchors the
-  // price date (or clears it when the price itself is cleared); a drink-window
-  // change resets the notifier markers.
+  // A price/currency CHANGE re-anchors the price date (or clears it when the
+  // price itself is gone). Deliberately change-based, not presence-based: the
+  // web form re-sends every field on save, and a presence-based re-anchor
+  // moved the FX anchor date on every unrelated edit. The snapshot is awaited
+  // so an immediate read can time-anchor (non-fatal — returns null, never
+  // throws, when the rates API is down).
   if ('price' in changes || 'currency' in changes) {
-    if ('price' in changes && changes.price === null) {
-      bottle.priceSetAt = undefined;
-    } else {
+    if (bottle.price !== null && bottle.price !== undefined && bottle.price !== '') {
       bottle.priceSetAt = new Date();
-      require('../utils/exchangeRates').getOrCreateDailySnapshot().catch(() => {});
+      await require('../utils/exchangeRates').getOrCreateDailySnapshot();
+    } else {
+      bottle.priceSetAt = undefined;
     }
   }
   if ('drinkFrom' in changes || 'drinkTo' in changes) {
@@ -345,10 +442,20 @@ async function updateBottleFields(bottle, fields, req) {
     await bottle.save();
   } catch (err) {
     if (err?.name === 'ValidationError') return { error: { status: 400, message: err.message } };
-    if (err?.name === 'VersionError') return { error: { status: 409, message: 'The bottle was modified concurrently — retry.' } };
+    if (err?.name === 'VersionError') return { error: { status: 409, message: 'This bottle was modified by another request. Please refresh and try again.' } };
     throw err;
   }
   require('./search').indexBottle(bottle._id);
+  // Vintage changed: the old (wine, oldVintage) embedding is still in Qdrant
+  // but no longer matches this bottle — embed the new pair. Skipped for demo
+  // accounts (a novel year misses the cache and would fire a paid Voyage call).
+  if ('vintage' in changes && !req?.user?.isDemo) {
+    const wineId = bottle.wineDefinition && (bottle.wineDefinition._id || bottle.wineDefinition);
+    if (wineId) {
+      const { embedSinglePair } = require('./embeddingJob');
+      embedSinglePair(wineId, bottle.vintage).catch(() => {});
+    }
+  }
   // Audit in the SAME { field: { from, to } } shape the REST PUT /bottles/:id
   // route emits, so CellarAudit renders both surfaces identically (a bare
   // { field: newValue } here made the page crash when a value was cleared —

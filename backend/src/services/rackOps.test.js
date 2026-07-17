@@ -17,7 +17,12 @@ jest.mock('../models/Rack', () => {
 });
 jest.mock('../models/Bottle', () => ({ findOne: jest.fn(), findById: jest.fn() }));
 jest.mock('./audit', () => ({ logAudit: jest.fn() }));
-jest.mock('../utils/rackGeometry', () => ({ getMaxPosition: jest.fn(() => 32) }));
+jest.mock('../utils/rackGeometry', () => ({
+  getMaxPosition: jest.fn(() => 32),
+  // Real validator — createGridRack's typeConfig gate is part of the pinned
+  // contract (shared with the REST rack-update route).
+  validateDoubleHeightRows: jest.requireActual('../utils/rackGeometry').validateDoubleHeightRows,
+}));
 jest.mock('./bottleOps', () => ({ removeFromRacks: jest.fn().mockResolvedValue(undefined) }));
 jest.mock('./search', () => ({ indexBottle: jest.fn() }));
 
@@ -56,6 +61,28 @@ describe('createGridRack', () => {
     expect(res.rack.type).toBe('grid');
     expect(logAudit).toHaveBeenCalledWith(REQ, 'rack.create', expect.anything(), { name: 'A' });
     expect((await createGridRack(cellar, { name: 'B', type: 'modular' }, REQ)).error.status).toBe(400);
+  });
+
+  // typeConfig arrived with the REST POST /racks delegation (MCP-audit H1) —
+  // the grid branch of the route now runs through here, double-height rows
+  // included.
+  test('valid typeConfig.doubleHeightRows is stored; invalid rows / non-grid type are 400', async () => {
+    const res = await createGridRack(cellar, { name: 'DH', rows: 4, cols: 6, typeConfig: { doubleHeightRows: [2] } }, REQ);
+    expect(res.error).toBeUndefined();
+    expect(res.rack.typeConfig).toEqual({ doubleHeightRows: [2] });
+
+    const bad = await createGridRack(cellar, { name: 'DH2', rows: 4, cols: 6, typeConfig: { doubleHeightRows: [99] } }, REQ);
+    expect(bad.error.status).toBe(400);
+    expect(bad.error.message).toMatch(/between 1 and 4/);
+
+    const nonGrid = await createGridRack(cellar, { name: 'DH3', type: 'hex', typeConfig: { doubleHeightRows: [1] } }, REQ);
+    expect(nonGrid.error.status).toBe(400);
+    expect(nonGrid.error.message).toMatch(/only supported on grid racks/);
+  });
+
+  test('trims the rack name', async () => {
+    const res = await createGridRack(cellar, { name: '  Wall rack  ' }, REQ);
+    expect(res.rack.name).toBe('Wall rack');
   });
 });
 

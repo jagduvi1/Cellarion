@@ -20,7 +20,7 @@ const { registerTool } = require('../registry');
 // services/search → the ESM-only meilisearch package, which jest cannot parse
 // — a top-level require here would break every suite that loads the tool
 // registry (the #702 failure mode).
-const { addBottle, updateBottleFields, UPDATABLE_FIELDS } = require('../../services/bottleOps');
+const { addBottle, updateBottleFields } = require('../../services/bottleOps');
 const { logAudit } = require('../../services/audit');
 const { isValidId } = require('../../utils/validation');
 const {
@@ -198,11 +198,17 @@ registerTool({
   },
 });
 
+// The AI-useful subset of the shared service's UPDATABLE_FIELDS — the web
+// edit form covers the rest (vintage, bottle size, purchase metadata). Named
+// here, next to the inputSchema it must mirror, so description and schema
+// can't drift apart.
+const MCP_UPDATE_PARAMS = ['price', 'currency', 'notes', 'occasion', 'rating', 'rating_scale', 'drink_from', 'drink_to'];
+
 registerTool({
   name: 'update_bottle',
   title: 'Update a bottle (price, notes, rating, drink window, occasion)',
   description:
-    `Partially updates one bottle. Updatable: ${UPDATABLE_FIELDS.join(', ')} (snake_case params). Only send the ` +
+    `Partially updates one bottle. Updatable: ${MCP_UPDATE_PARAMS.join(', ')}. Only send the ` +
     'fields to change; confirm the change with the user first. Reversible via undo_last.',
   scope: 'write',
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },

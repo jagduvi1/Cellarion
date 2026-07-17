@@ -34,6 +34,39 @@ function validDoubleHeightRows(rows, cols, doubleHeightRows) {
 }
 
 /**
+ * Validate REQUEST-supplied typeConfig.doubleHeightRows before it is stored:
+ * grid racks (non-modular) only, entries must be integers in [1, rows]. The
+ * runtime counterpart above (validDoubleHeightRows) is defensive filtering of
+ * STORED data; this one rejects bad input with a message. Shared by the
+ * create path (services/rackOps.createGridRack — REST POST /api/racks and MCP
+ * both land there) and the REST rack-update route.
+ *
+ * See the POSITION NUMBERING CONTRACT in totalSlots below: the base grid
+ * keeps positions 1..rows*cols row-major exactly as a plain grid, and
+ * top-layer positions are appended after rows*cols — so this guard also
+ * catches removing a double row while top-layer bottles are still placed
+ * (via the routes' resize check on getMaxPosition).
+ *
+ * @returns {string|null} error message, or null when valid
+ */
+function validateDoubleHeightRows(typeConfig, effectiveType, effectiveRows, effectiveModular) {
+  const dhr = typeConfig?.doubleHeightRows;
+  if (dhr === undefined || dhr === null) return null;
+  if (effectiveModular || (effectiveType || 'grid') !== 'grid') {
+    return 'Double-height rows are only supported on grid racks';
+  }
+  if (!Array.isArray(dhr)) {
+    return 'doubleHeightRows must be an array of row numbers';
+  }
+  for (const r of dhr) {
+    if (!Number.isInteger(r) || r < 1 || r > effectiveRows) {
+      return `doubleHeightRows entries must be whole row numbers between 1 and ${effectiveRows}`;
+    }
+  }
+  return null;
+}
+
+/**
  * Total number of valid slot positions for a given rack configuration.
  */
 function totalSlots(type, rows, cols, typeConfig) {
@@ -127,4 +160,4 @@ function getMaxPosition(rack) {
   return totalSlots(rack.type || 'grid', rack.rows, rack.cols, rack.typeConfig);
 }
 
-module.exports = { totalSlots, modularTotalSlots, getMaxPosition, validDoubleHeightRows };
+module.exports = { totalSlots, modularTotalSlots, getMaxPosition, validDoubleHeightRows, validateDoubleHeightRows };
