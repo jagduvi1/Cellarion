@@ -1,11 +1,27 @@
 const express = require('express');
 const crypto = require('crypto');
+const rateLimit = require('express-rate-limit');
 const router = express.Router();
 const ApiToken = require('../models/ApiToken');
 const OAuthClient = require('../models/OAuthClient');
 const OAuthAuthCode = require('../models/OAuthAuthCode');
 const { requireAuth, requireNonDemo } = require('../middleware/auth');
+const { rateLimitKey } = require('../utils/clientIp');
 const { logAudit } = require('../services/audit');
+
+// Dedicated strict limiter for unauthenticated Dynamic Client Registration
+// (security audit M-6): /register persists an OAuthClient row per call and
+// otherwise rode only the 200/15min global write limiter — an IP-rotating
+// attacker could accumulate ~19k inert client rows/day. Real MCP clients
+// register once. 10/hour/IP is generous for that and shuts the flood.
+const registerLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 10,
+  keyGenerator: (req) => rateLimitKey(req),
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'invalid_request', error_description: 'Too many client registrations from this address; try again later.' },
+});
 const eventBus = require('../services/eventBus');
 const {
   issuer, resourceUrl, verifyPkce, grantedScopes, redirectUriRegistered,
@@ -58,7 +74,7 @@ function isValidRedirectUri(uri) {
 }
 
 // ── POST /register — Dynamic Client Registration (RFC 7591) ──────────────────
-router.post('/register', async (req, res) => {
+router.post('/register', registerLimiter, async (req, res) => {
   try {
     const body = req.body || {};
     const redirectUris = body.redirect_uris;
@@ -96,6 +112,9 @@ router.post('/register', async (req, res) => {
       responseTypes: ['code'],
       softwareId: typeof body.software_id === 'string' ? body.software_id.slice(0, 200) : null,
       softwareVersion: typeof body.software_version === 'string' ? body.software_version.slice(0, 50) : null,
+      // Auto-reap if it never completes a token exchange (M-6). Cleared on
+      // first use below, so a real connector persists.
+      expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
     });
 
     logAudit(req, 'oauth.client_registered', { type: 'oauthClient', id: client._id }, { clientName: client.clientName });
@@ -283,7 +302,8 @@ router.post('/token', async (req, res) => {
         resource: codeDoc.resource || resourceUrl(),
         ...cred.fields,
       });
-      OAuthClient.updateOne({ _id: client._id }, { $set: { lastUsedAt: new Date() } }).catch(() => {});
+      // Mark used → make the client permanent (drop the never-used TTL, M-6).
+      OAuthClient.updateOne({ _id: client._id }, { $set: { lastUsedAt: new Date() }, $unset: { expiresAt: '' } }).catch(() => {});
       logAudit(req, 'oauth.token_issued', { type: 'apiToken', id: token._id }, { clientId: client.clientId, scopes: codeDoc.scopes });
       res.setHeader('Cache-Control', 'no-store');
       return res.json(tokenResponse(cred.raw.access, cred.raw.refresh, codeDoc.scopes));
