@@ -8,10 +8,12 @@
 // response envelope. None of these functions write an audit log — the caller
 // owns audit attribution (it has the req), exactly as the extracted bottleOps /
 // rackOps services do.
+const net = require('net');
 const mongoose = require('mongoose');
 const User = require('../models/User');
 const Cellar = require('../models/Cellar');
 const SupportTicket = require('../models/SupportTicket');
+const { isPrivateAddress } = require('../utils/safeImageFetch');
 const WineRequest = require('../models/WineRequest');
 const { stripHtml } = require('../utils/sanitize');
 const { SUPPORTED_CURRENCIES } = require('../config/currencies');
@@ -247,13 +249,21 @@ function validateSourceUrl(url) {
   let parsed;
   try { parsed = new URL(url); } catch { return 'Please provide a valid URL'; }
   if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return 'URL must use http or https protocol';
-  const h = parsed.hostname.toLowerCase();
-  const private_ = [
-    /^localhost$/, /^127\.\d+\.\d+\.\d+$/, /^10\.\d+\.\d+\.\d+$/,
-    /^172\.(1[6-9]|2\d|3[01])\.\d+\.\d+$/, /^192\.168\.\d+\.\d+$/,
-    /^169\.254\.\d+\.\d+$/, /^0\.0\.0\.0$/, /^\[?::1?\]?$/,
-  ];
-  if (private_.some((p) => p.test(h))) return 'URLs pointing to private/internal addresses are not allowed';
+  // Strip the brackets URL keeps on an IPv6 .hostname so net.isIP can classify it.
+  const host = parsed.hostname.toLowerCase().replace(/^\[|\]$/g, '');
+  // localhost is a name, not an IP literal — reject it (and its subdomains) by name.
+  if (host === 'localhost' || host.endsWith('.localhost')) {
+    return 'URLs pointing to private/internal addresses are not allowed';
+  }
+  // For IP-literal hosts, reuse the structural private/reserved classifier the
+  // image-fetch SSRF guard uses (security audit L-1). WHATWG `new URL` already
+  // canonicalizes decimal/hex/octal IPv4 to dotted-quad; isPrivateAddress adds
+  // the IPv6 / ULA / link-local / v4-mapped forms the old lexical denylist
+  // missed. DNS names are intentionally left as-is: this value is stored and
+  // rendered as a link, never fetched by the server, so no DNS resolution here.
+  if (net.isIP(host) && isPrivateAddress(host)) {
+    return 'URLs pointing to private/internal addresses are not allowed';
+  }
   return null;
 }
 

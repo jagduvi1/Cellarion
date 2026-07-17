@@ -47,7 +47,7 @@ const rateLimited = (message) => ({
 // truth. An agent looping consumes hits exactly the wall a looping REST client
 // would. Batch tools (bulk_add) charge one slot PER ITEM through the same
 // module, so a case of 12 costs 12 — see mcp/mutationBudget.js.
-const { takeMutationSlot, WRITE_WINDOW_MS } = require('./mutationBudget');
+const { takeMutationSlot, ipKeyFor, WRITE_WINDOW_MS } = require('./mutationBudget');
 // Cross-request tool-call budget per caller (user id / anon IP) — caps read
 // amplification the per-request cap and per-IP HTTP limiter can't (M-4).
 const { withinCallBudget } = require('./callBudget');
@@ -119,7 +119,7 @@ function budgetedHandler(tool, ctx, state) {
           content: [{ type: 'text', text: JSON.stringify({ error: { code: 'forbidden_scope', message: 'Mutations need an authenticated connection.' } }) }],
         };
       }
-      if (!takeMutationSlot(String(ctx.user.id))) {
+      if (!takeMutationSlot(String(ctx.user.id), 1, ipKeyFor(ctx))) {
         recordUsage(ctx, 'tool', tool.name, true);
         return rateLimited('Too many cellar changes in a short time — wait a few minutes before mutating again. Reads still work.');
       }

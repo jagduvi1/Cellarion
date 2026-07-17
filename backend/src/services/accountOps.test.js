@@ -164,6 +164,22 @@ describe('validateSourceUrl', () => {
     expect(validateSourceUrl('http://192.168.1.1/x')).toMatch(/private\/internal/);
     expect(validateSourceUrl('not a url')).toMatch(/valid URL/);
   });
+
+  // Security audit L-1: the structural classifier closes forms the old lexical
+  // regex missed. WHATWG `new URL` canonicalizes decimal/hex/octal IPv4, and
+  // isPrivateAddress catches IPv6 loopback/ULA/link-local + v4-mapped.
+  test('rejects private targets in canonicalized-IPv4 and IPv6 forms', () => {
+    expect(validateSourceUrl('http://2130706433/')).toMatch(/private\/internal/);   // decimal 127.0.0.1
+    expect(validateSourceUrl('http://0x7f000001/')).toMatch(/private\/internal/);   // hex 127.0.0.1
+    expect(validateSourceUrl('http://[::1]/')).toMatch(/private\/internal/);        // IPv6 loopback
+    expect(validateSourceUrl('http://[fc00::1]/')).toMatch(/private\/internal/);    // IPv6 ULA
+    expect(validateSourceUrl('http://[fe80::1]/')).toMatch(/private\/internal/);    // IPv6 link-local
+    expect(validateSourceUrl('http://[::ffff:169.254.169.254]/')).toMatch(/private\/internal/); // v4-mapped metadata
+    expect(validateSourceUrl('http://100.64.0.1/')).toMatch(/private\/internal/);   // CGNAT
+    expect(validateSourceUrl('http://sub.localhost/')).toMatch(/private\/internal/); // localhost subdomain
+    // A genuine public host still passes.
+    expect(validateSourceUrl('https://www.vivino.com/wine/1')).toBeNull();
+  });
 });
 
 describe('createWineRequest', () => {

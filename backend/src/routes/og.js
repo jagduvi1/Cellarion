@@ -13,6 +13,7 @@ const { fromNormalized } = require('../utils/ratingUtils');
 const { isValidId } = require('../utils/validation');
 const { sanitizeForumHtml, sanitizeBlogHtml, extractFaqFromHtml, extractHowToFromHtml } = require('../utils/sanitizeHtml');
 const { stripHtml } = require('../utils/sanitize');
+const { rateLimitKey } = require('../utils/clientIp');
 
 const WINE_TYPES = ['red', 'white', 'rosé', 'sparkling', 'dessert', 'fortified'];
 const MIN_WINES = 3;
@@ -38,6 +39,11 @@ const router = express.Router();
 const ogLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 60,
+  // Key on the masked client IP (security audit L-10): the default keyGenerator
+  // uses the raw req.ip, so an IPv6 client could rotate the low 64 bits of its
+  // /64 for an unbounded number of (uncached, DB-hitting) OG renders. rateLimitKey
+  // collapses IPv6 to its /64 and honours the CF-Connecting-IP trust model.
+  keyGenerator: (req) => rateLimitKey(req),
   standardHeaders: true,
   legacyHeaders: false
 });
