@@ -34,6 +34,7 @@ const WishlistItem = require('../models/WishlistItem');
 const PriceTrackingRequest = require('../models/PriceTrackingRequest');
 const PriceTrackingSkip = require('../models/PriceTrackingSkip');
 const { requireAuth, requireNonDemo } = require('../middleware/auth');
+const { updatePreferences, updateProfile } = require('../services/accountOps');
 const { buildUserExport } = require('../services/userDataRegistry');
 const { buildCellarDataExport, EXPORT_README } = require('../services/cellarExport');
 const { safeUploadPath } = require('../services/imageProcessor');
@@ -93,114 +94,14 @@ router.post('/me/accept-policy', requireAuth, async (req, res) => {
 });
 
 // PATCH /api/users/preferences - Update current user's preferences
-// Source of truth lives in config/currencies.js (kept in sync with the frontend
-// currency picker) — the previous inline list had drifted and rejected NZD/JPY/
-// HKD/SGD/ZAR that the UI offered.
-const { SUPPORTED_CURRENCIES: ALLOWED_CURRENCIES } = require('../config/currencies');
-const ALLOWED_LANGUAGES = ['en', 'sv'];
-const ALLOWED_RATING_SCALES = ['5', '20', '100'];
-const ALLOWED_RACK_NAV = ['auto', 'room', 'rack'];
-
+// Validation allow-lists (currency source-of-truth = config/currencies.js) and
+// persistence now live in services/accountOps so the MCP tool shares them.
 router.patch('/preferences', requireAuth, async (req, res) => {
   try {
-    const { currency, language, ratingScale, rackNavigation, restockScope, defaultCellarId, notifications } = req.body;
-    const update = {};
-
-    // Notifications schema is per-category × per-channel (see User.js).
-    // Accepted leaves are explicitly allow-listed so a malicious client can't
-    // inject arbitrary keys into preferences.notifications.
-    if (notifications !== undefined && typeof notifications === 'object') {
-      const setLeaf = (path, value) => {
-        update[`preferences.notifications.${path}`] = !!value;
-      };
-      const dw = notifications.drinkWindow;
-      if (dw && typeof dw === 'object') {
-        if (dw.enabled !== undefined) setLeaf('drinkWindow.enabled', dw.enabled);
-        if (dw.email   !== undefined) setLeaf('drinkWindow.email', dw.email);
-        if (dw.push    !== undefined) setLeaf('drinkWindow.push', dw.push);
-      }
-      const cr = notifications.communityReply;
-      if (cr && typeof cr === 'object') {
-        if (cr.email !== undefined) setLeaf('communityReply.email', cr.email);
-        if (cr.push  !== undefined) setLeaf('communityReply.push', cr.push);
-      }
-      const cm = notifications.communityMention;
-      if (cm && typeof cm === 'object') {
-        if (cm.email !== undefined) setLeaf('communityMention.email', cm.email);
-        if (cm.push  !== undefined) setLeaf('communityMention.push', cm.push);
-      }
-      const cf = notifications.communityFollow;
-      if (cf && typeof cf === 'object') {
-        if (cf.push !== undefined) setLeaf('communityFollow.push', cf.push);
-      }
-    }
-
-    if (currency !== undefined) {
-      if (!ALLOWED_CURRENCIES.includes(currency.toUpperCase())) {
-        return res.status(400).json({ error: `Invalid currency. Allowed: ${ALLOWED_CURRENCIES.join(', ')}` });
-      }
-      update['preferences.currency'] = currency.toUpperCase();
-    }
-
-    if (language !== undefined) {
-      if (!ALLOWED_LANGUAGES.includes(language)) {
-        return res.status(400).json({ error: `Invalid language. Allowed: ${ALLOWED_LANGUAGES.join(', ')}` });
-      }
-      update['preferences.language'] = language;
-    }
-
-    if (ratingScale !== undefined) {
-      if (!ALLOWED_RATING_SCALES.includes(String(ratingScale))) {
-        return res.status(400).json({ error: `Invalid rating scale. Allowed: ${ALLOWED_RATING_SCALES.join(', ')}` });
-      }
-      update['preferences.ratingScale'] = String(ratingScale);
-    }
-
-    if (rackNavigation !== undefined) {
-      if (!ALLOWED_RACK_NAV.includes(rackNavigation)) {
-        return res.status(400).json({ error: `Invalid rack navigation. Allowed: ${ALLOWED_RACK_NAV.join(', ')}` });
-      }
-      update['preferences.rackNavigation'] = rackNavigation;
-    }
-
-    if (restockScope !== undefined) {
-      if (!['all', 'cellar'].includes(restockScope)) {
-        return res.status(400).json({ error: 'Invalid restock scope. Allowed: all, cellar' });
-      }
-      update['preferences.restockScope'] = restockScope;
-    }
-
-    if (defaultCellarId !== undefined) {
-      if (defaultCellarId === null) {
-        update['preferences.defaultCellarId'] = null;
-      } else {
-        if (!mongoose.Types.ObjectId.isValid(defaultCellarId)) {
-          return res.status(400).json({ error: 'Invalid cellar ID' });
-        }
-        const cellar = await Cellar.findOne({
-          _id: defaultCellarId,
-          deletedAt: null,
-          $or: [{ user: req.user.id }, { 'members.user': req.user.id }]
-        });
-        if (!cellar) {
-          return res.status(400).json({ error: 'Cellar not found or not accessible' });
-        }
-        update['preferences.defaultCellarId'] = defaultCellarId;
-      }
-    }
-
-    if (Object.keys(update).length === 0) {
-      return res.status(400).json({ error: 'No valid preferences provided' });
-    }
-
-    const user = await User.findByIdAndUpdate(
-      req.user.id,
-      { $set: update },
-      { new: true }
-    );
-
-    if (!user) return res.status(404).json({ error: 'User not found' });
-
+    // Validation + persistence live in services/accountOps so the MCP
+    // update_preferences tool applies byte-for-byte the same rules.
+    const { user, error } = await updatePreferences(req.user.id, req.body);
+    if (error) return res.status(error.status).json({ error: error.message });
     res.json({ user: user.toJSON() });
   } catch (error) {
     console.error('Update preferences error:', error);
@@ -211,43 +112,9 @@ router.patch('/preferences', requireAuth, async (req, res) => {
 // PATCH /api/users/profile - Update display name, bio, and visibility
 router.patch('/profile', requireAuth, async (req, res) => {
   try {
-    const { displayName, bio, profileVisibility } = req.body;
-    const update = {};
-
-    if (displayName !== undefined) {
-      const cleaned = stripHtml(displayName);
-      if (cleaned && cleaned.length > 50) {
-        return res.status(400).json({ error: 'Display name too long (max 50 characters)' });
-      }
-      update.displayName = cleaned || null;
-    }
-
-    if (bio !== undefined) {
-      const cleaned = stripHtml(bio);
-      if (cleaned && cleaned.length > 500) {
-        return res.status(400).json({ error: 'Bio too long (max 500 characters)' });
-      }
-      update.bio = cleaned || null;
-    }
-
-    if (profileVisibility !== undefined) {
-      if (!['public', 'private'].includes(profileVisibility)) {
-        return res.status(400).json({ error: 'Invalid visibility. Allowed: public, private' });
-      }
-      update.profileVisibility = profileVisibility;
-    }
-
-    if (Object.keys(update).length === 0) {
-      return res.status(400).json({ error: 'No valid fields provided' });
-    }
-
-    const user = await User.findByIdAndUpdate(
-      req.user.id,
-      { $set: update },
-      { new: true }
-    );
-
-    if (!user) return res.status(404).json({ error: 'User not found' });
+    // Shared with the MCP update_profile tool via services/accountOps.
+    const { user, error } = await updateProfile(req.user.id, req.body);
+    if (error) return res.status(error.status).json({ error: error.message });
 
     logAudit(req, 'user.profile.update', { type: 'user', id: user._id });
 

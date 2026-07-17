@@ -3,28 +3,12 @@ const { requireAuth, requireNonDemo } = require('../middleware/auth');
 const { logAudit } = require('../services/audit');
 const WineRequest = require('../models/WineRequest');
 const WineDefinition = require('../models/WineDefinition');
+const { createWineRequest } = require('../services/accountOps');
 
 const router = express.Router();
 
 // All routes require authentication
 router.use(requireAuth);
-
-// Validate a URL string — returns error message or null if valid
-function validateUrl(url) {
-  if (!url || typeof url !== 'string') return 'Source URL is required';
-  if (url.length > 2048) return 'URL is too long (max 2048 characters)';
-  let parsed;
-  try { parsed = new URL(url); } catch { return 'Please provide a valid URL'; }
-  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return 'URL must use http or https protocol';
-  const h = parsed.hostname.toLowerCase();
-  const private_ = [
-    /^localhost$/, /^127\.\d+\.\d+\.\d+$/, /^10\.\d+\.\d+\.\d+$/,
-    /^172\.(1[6-9]|2\d|3[01])\.\d+\.\d+$/, /^192\.168\.\d+\.\d+$/,
-    /^169\.254\.\d+\.\d+$/, /^0\.0\.0\.0$/, /^\[?::1?\]?$/
-  ];
-  if (private_.some(p => p.test(h))) return 'URLs pointing to private/internal addresses are not allowed';
-  return null;
-}
 
 // POST /api/wine-requests - Submit wine request (new_wine or grape_suggestion)
 // requireNonDemo: wine requests land in the admin review queue and persist after
@@ -61,31 +45,10 @@ router.post('/', requireNonDemo, async (req, res) => {
       return res.status(201).json({ wineRequest });
     }
 
-    // ── New wine request ──
-    if (!wineName) return res.status(400).json({ error: 'Wine name and source URL are required' });
-    const urlErr = validateUrl(sourceUrl);
-    if (urlErr) return res.status(400).json({ error: urlErr });
-
-    // Bound the free-text/image fields so a single request can't persist a
-    // multi-MB string (the route's body limit is 5mb) and bloat the admin queue.
-    const trimmedName = wineName.trim();
-    const trimmedImage = image ? String(image).trim() : '';
-    if (trimmedName.length > 300) {
-      return res.status(400).json({ error: 'Wine name must be 300 characters or fewer' });
-    }
-    if (trimmedImage.length > 500000) {
-      return res.status(400).json({ error: 'Image reference is too large' });
-    }
-
-    const wineRequest = new WineRequest({
-      requestType: 'new_wine',
-      wineName: trimmedName,
-      sourceUrl: sourceUrl.trim(),
-      image: trimmedImage || null,
-      user: req.user.id,
-      status: 'pending'
-    });
-    await wineRequest.save();
+    // ── New wine request ── (validation + creation shared with the MCP
+    // request_wine_addition tool via services/accountOps)
+    const { wineRequest, error } = await createWineRequest(req.user.id, { wineName, sourceUrl, image });
+    if (error) return res.status(error.status).json({ error: error.message });
     logAudit(req, 'wineRequest.create', { type: 'wineRequest', id: wineRequest._id });
     res.status(201).json({ wineRequest });
   } catch (error) {

@@ -3,43 +3,20 @@ const router = express.Router();
 const SupportTicket = require('../models/SupportTicket');
 const { requireAuth, requireNonDemo } = require('../middleware/auth');
 const { logAudit } = require('../services/audit');
-const { stripHtml } = require('../utils/sanitize');
-
-const VALID_CATEGORIES = ['bug', 'help', 'feature', 'other'];
+const { createSupportTicket } = require('../services/accountOps');
 
 // POST /api/support — submit a support ticket
 // requireNonDemo: support tickets land in the admin queue and would waste admin
 // attention on a throwaway account that's gone before anyone replies.
 router.post('/', requireAuth, requireNonDemo, async (req, res) => {
   try {
-    const { category, subject, message } = req.body;
-
-    if (!VALID_CATEGORIES.includes(category)) {
-      return res.status(400).json({ error: 'Invalid category' });
-    }
-    if (!subject || !subject.trim()) {
-      return res.status(400).json({ error: 'Subject is required' });
-    }
-    if (!message || !message.trim()) {
-      return res.status(400).json({ error: 'Message is required' });
-    }
-    if (subject.trim().length > 200) {
-      return res.status(400).json({ error: 'Subject must be 200 characters or fewer' });
-    }
-    if (message.trim().length > 5000) {
-      return res.status(400).json({ error: 'Message must be 5000 characters or fewer' });
-    }
-
-    const ticket = await SupportTicket.create({
-      user: req.user.id,
-      category,
-      subject: stripHtml(subject),
-      message: stripHtml(message)
-    });
+    // Validation + creation shared with the MCP create_support_ticket tool.
+    const { ticket, error } = await createSupportTicket(req.user.id, req.body || {});
+    if (error) return res.status(error.status).json({ error: error.message });
 
     logAudit(req, 'support.ticket.created', { type: 'SupportTicket', id: ticket._id }, {
-      category,
-      subject: subject.trim()
+      category: ticket.category,
+      subject: String(req.body.subject).trim()
     });
 
     res.status(201).json({ ticket });
