@@ -72,7 +72,10 @@ function McpActivitySection() {
 
   return (
     <div className="card settings-card">
-      <h2 className="settings-section-title">{t('settings.aiActivity.title')}</h2>
+      <h2 className="settings-section-title">
+        {t('settings.aiActivity.title')}
+        <span className="settings-beta-badge">{t('settings.aiConnect.beta', 'Beta')}</span>
+      </h2>
       <p className="settings-hint">
         {windowDays != null
           ? t('settings.aiActivity.hint', { days: windowDays })

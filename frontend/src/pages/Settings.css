@@ -26,6 +26,22 @@
   border-bottom: 1px solid var(--color-border);
 }
 
+/* "Beta" tag next to a settings section title — same shape as the Room View /
+   Discussions beta badges, so a beta feature reads the same wherever it is. */
+.settings-beta-badge {
+  display: inline-block;
+  margin-left: 0.5rem;
+  vertical-align: middle;
+  font-size: 0.6rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 0.15rem 0.45rem;
+  border-radius: 4px;
+  background: var(--color-primary, #6366f1);
+  color: #fff;
+}
+
 .settings-hint {
   font-size: 0.82rem;
   color: var(--color-text-muted);

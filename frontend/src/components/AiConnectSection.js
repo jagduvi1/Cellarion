@@ -85,7 +85,18 @@ export default function AiConnectSection() {
 
   return (
     <div className="card settings-card">
-      <h2 className="settings-section-title">{t('settings.aiConnect.title', 'Connect your AI')}</h2>
+      <h2 className="settings-section-title">
+        {t('settings.aiConnect.title', 'Connect your AI')}
+        <span className="settings-beta-badge">{t('settings.aiConnect.beta', 'Beta')}</span>
+      </h2>
+      {/* Shipped to production deliberately early so it gets real use — say so
+          plainly rather than letting people discover the rough edges the hard
+          way. The reassurance is real (read-only default, reversible, instant
+          revoke), so the warning doesn't need to be alarming to be honest. */}
+      <div className="alert alert-info">
+        {t('settings.aiConnect.betaNotice',
+          'This is a beta feature and you use it at your own risk. It works, but it is new and still being tested — expect rough edges, and changes while we refine it. If you are unsure, connect with a read-only token: anything an AI changes can be undone under "What your AI has changed", and revoking the token cuts it off instantly.')}
+      </div>
       <p className="settings-hint">
         {t('settings.aiConnect.hint',
           'Talk to your cellar from Claude Desktop, Claude Code, or any MCP-capable assistant: ask what to open tonight, where a bottle is stored, or what your collection is worth. Connections are read-only and use a personal token you can revoke at any time.')}
