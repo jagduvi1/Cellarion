@@ -247,7 +247,9 @@ registerTool({
       tool: 'bulk_add',
       action: 'bulk_add',
       cellar: access.cellar._id,
-      detail: { bottles: added, count: added.length, wines_created: winesCreated.length, failures: failures.length, previewId: String(preview._id) },
+      // createdWineIds: the ids (not just the count) so undo can garbage-collect
+      // a wine THIS batch minted when nothing else references it (registryGc).
+      detail: { bottles: added, count: added.length, wines_created: winesCreated.length, createdWineIds: winesCreated, failures: failures.length, previewId: String(preview._id) },
       result: envelope,
     });
     return ok(envelope.summary, envelope.data);

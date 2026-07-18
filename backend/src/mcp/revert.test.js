@@ -23,6 +23,7 @@ jest.mock('./structuralUndo', () => ({ undoStructural: jest.fn() }));
 jest.mock('../models/WineVintageProfile', () => ({ findById: jest.fn() }));
 jest.mock('../models/WineVintagePrice', () => ({ deleteOne: jest.fn() }));
 jest.mock('../services/journalOps', () => ({ deleteEntry: jest.fn() }));
+jest.mock('../services/registryGc', () => ({ gcOrphanMintedWine: jest.fn().mockResolvedValue({ removed: false }) }));
 jest.mock('../models/BottleImage', () => ({ findOne: jest.fn(), deleteOne: jest.fn() }));
 jest.mock('../services/imageProcessor', () => ({ unlinkImageFiles: jest.fn() }));
 
@@ -331,5 +332,54 @@ describe('winelist undo (grand-audit M1 — un-claim on failure)', () => {
     expect(res).toMatchObject({ ok: false, code: 'conflict' });
     // The claim (reversed:true) must be released so a retry finds the row.
     expect(McpActionLog.updateOne).toHaveBeenCalledWith({ _id: oid('f') }, { $set: { reversed: false } });
+  });
+});
+
+// Undo GC of minted registry wines (the launch-day orphan report): a batch or
+// single add that CREATED the wine rolls it back too — via registryGc's
+// conservative guards, never here.
+describe('undo rolls back wines the undone action minted', () => {
+  const { gcOrphanMintedWine } = require('../services/registryGc');
+
+  test('bulk_add undo calls the GC for each recorded createdWineId', async () => {
+    const b = { _id: 'b1', status: 'active', save: jest.fn() };
+    resolveBottleAccess.mockResolvedValue({ bottle: b });
+    bottleOps.removeBottleCascade.mockResolvedValue({ removed: true });
+    gcOrphanMintedWine.mockResolvedValue({ removed: true });
+    const row = { _id: 'r1', action: 'bulk_add', cellar: 'c1', detail: { bottles: ['b1'], createdWineIds: ['w1', 'w2'] } };
+    const res = await revertLedgerRow(row, ctx(), H);
+    expect(res.ok).toBe(true);
+    expect(gcOrphanMintedWine).toHaveBeenCalledTimes(2);
+    expect(gcOrphanMintedWine).toHaveBeenCalledWith('w1', expect.anything());
+    expect(res.data.removed_wine_ids).toEqual(['w1', 'w2']);
+    expect(res.summary).toMatch(/registry wine\(s\) rolled back/);
+  });
+
+  test('bulk_add undo without createdWineIds (older rows) never calls the GC', async () => {
+    const b = { _id: 'b1', status: 'active', save: jest.fn() };
+    resolveBottleAccess.mockResolvedValue({ bottle: b });
+    bottleOps.removeBottleCascade.mockResolvedValue({ removed: true });
+    const row = { _id: 'r1', action: 'bulk_add', cellar: 'c1', detail: { bottles: ['b1'] } };
+    const res = await revertLedgerRow(row, ctx(), H);
+    expect(res.ok).toBe(true);
+    expect(gcOrphanMintedWine).not.toHaveBeenCalled();
+  });
+
+  test('single add undo GCs only when the ledger says wine_created', async () => {
+    const b = { _id: 'b1', status: 'active', vintage: '2019', save: jest.fn() };
+    resolveBottleAccess.mockResolvedValue({ bottle: b });
+    bottleOps.removeBottleCascade.mockResolvedValue({ removed: true });
+    McpActionLog.findOne.mockReturnValue({ sort: () => Promise.resolve(null) });
+
+    gcOrphanMintedWine.mockResolvedValue({ removed: true });
+    let res = await revertLedgerRow({ _id: 'r2', action: 'add', bottle: 'b1', detail: { wine: 'w9', wine_created: true } }, ctx(), H);
+    expect(res.ok).toBe(true);
+    expect(gcOrphanMintedWine).toHaveBeenCalledWith('w9', expect.anything());
+    expect(res.data.removed_wine_id).toBe('w9');
+
+    gcOrphanMintedWine.mockClear();
+    res = await revertLedgerRow({ _id: 'r3', action: 'add', bottle: 'b1', detail: { wine: 'w9', wine_created: false } }, ctx(), H);
+    expect(res.ok).toBe(true);
+    expect(gcOrphanMintedWine).not.toHaveBeenCalled();
   });
 });

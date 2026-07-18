@@ -8,6 +8,14 @@ const WINE_STOP_WORDS = new Set([
   'wine', 'wines', 'winery', 'vineyard', 'vineyards', 'estate', 'estates',
   'cellars', 'cellar', 'reserve', 'selection', 'cuvee', 'cuvée',
   'château', 'chateau', 'domaine', 'domain', 'bodega', 'casa',
+  // House prefixes that labels include and databases omit (or vice versa) —
+  // "Cantina Bartolo Mascarello" IS "Bartolo Mascarello". Stripping them on
+  // the token axis lifts such pairs into the resolver's soft zone ("did you
+  // mean?") instead of silently minting a duplicate registry wine (the
+  // launch-day Barolo report). Comparison-only: display names keep prefixes.
+  'cantina', 'cantine', 'azienda', 'agricola', 'tenuta', 'tenute',
+  'cascina', 'fattoria', 'podere', 'poderi', 'vinicola',
+  'weingut', 'bodegas', 'maison', 'vinos', 'vina', 'viña',
   'the', 'le', 'la', 'de', 'di', 'del', 'della', 'des', 'du',
   'and', 'et', 'y', 'e', 'und'
 ]);

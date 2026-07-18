@@ -257,8 +257,19 @@ async function revertLedgerRow(row, ctx, { ok, fail }) {
         else removed.push(String(b._id));
       } catch (err) { failures.push({ bottle_id: String(b._id), error: err.message }); }
     }
-    const envelope = { summary: `Undid bulk add — ${removed.length} bottle(s) removed${failures.length ? `, ${failures.length} FAILED (remove those manually)` : ''}`, data: { undone: 'bulk_add', removed_bottle_ids: removed, ...(failures.length ? { failures } : {}) } };
-    await logAction(ctx, { tool: 'undo_last', action: 'undo_add', viaUndo: true, cellar: row.cellar, detail: { undid: String(row._id), count: resolved.length }, result: envelope });
+    // A batch that MINTED registry wines rolls them back too, when nothing
+    // else references them (the launch-day orphaned-wine + pending-maturity-
+    // profile report). Conservative guards + best-effort in registryGc.
+    const winesRemoved = [];
+    if (!failures.length && Array.isArray(row.detail?.createdWineIds)) {
+      const { gcOrphanMintedWine } = require('../services/registryGc');
+      for (const wid of row.detail.createdWineIds) {
+        const gc = await gcOrphanMintedWine(wid, ctx.req);
+        if (gc.removed) winesRemoved.push(String(wid));
+      }
+    }
+    const envelope = { summary: `Undid bulk add — ${removed.length} bottle(s) removed${winesRemoved.length ? `, ${winesRemoved.length} newly-created registry wine(s) rolled back` : ''}${failures.length ? `, ${failures.length} FAILED (remove those manually)` : ''}`, data: { undone: 'bulk_add', removed_bottle_ids: removed, ...(winesRemoved.length ? { removed_wine_ids: winesRemoved } : {}), ...(failures.length ? { failures } : {}) } };
+    await logAction(ctx, { tool: 'undo_last', action: 'undo_add', viaUndo: true, cellar: row.cellar, detail: { undid: String(row._id), count: resolved.length, ...(winesRemoved.length ? { winesRemoved } : {}) }, result: envelope });
     return ok(envelope.summary, envelope.data);
   }
 
@@ -273,7 +284,14 @@ async function revertLedgerRow(row, ctx, { ok, fail }) {
     const { removeBottleCascade } = require('../services/bottleOps');
     const result = await removeBottleCascade(bottle, ctx.req, 'bottle.undo');
     if (result.error) return fail('conflict', `Cannot undo that add: ${result.error.message} Nothing was changed.`);
-    envelope = { summary: `Undid add — ${bottleLabel(bottle)} removed from the cellar`, data: { undone: 'add_bottle', bottle_id: bottle._id } };
+    // If THIS add minted the registry wine (detail.wine_created), roll the
+    // wine + its seeded maturity profile back too when nothing else uses it.
+    let wineRolledBack = false;
+    if (row.detail?.wine_created && row.detail?.wine) {
+      const { gcOrphanMintedWine } = require('../services/registryGc');
+      wineRolledBack = (await gcOrphanMintedWine(row.detail.wine, ctx.req)).removed;
+    }
+    envelope = { summary: `Undid add — ${bottleLabel(bottle)} removed from the cellar${wineRolledBack ? ' (its newly-created registry wine was rolled back too)' : ''}`, data: { undone: 'add_bottle', bottle_id: bottle._id, ...(wineRolledBack ? { removed_wine_id: String(row.detail.wine) } : {}) } };
     reverseEntry = { action: 'undo_add', prev: null };
   } else if (row.action === 'update') {
     const { updateBottleFields } = require('../services/bottleOps');
