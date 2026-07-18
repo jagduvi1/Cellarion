@@ -315,8 +315,15 @@ const GRAPE_SYNONYMS = {
  */
 const resolveGrapeName = (name) => {
   if (!name || !name.trim()) return name;
-  const key = normalizeString(name);
-  return GRAPE_SYNONYMS[key] || name.trim();
+  // Blend percentages are not part of a variety name — the AI occasionally
+  // returns "70% Monastrell" / "Monastrell 70%" verbatim from a back label,
+  // which minted grape documents named "70% Monastrell" on prod. Strip the
+  // percentage and resolve what remains ("70%" alone → '' → caller drops it).
+  const stripped = name.trim()
+    .replace(/^\d{1,3}\s*%\s*/, '')
+    .replace(/\s*\d{1,3}\s*%$/, '');
+  const key = normalizeString(stripped);
+  return GRAPE_SYNONYMS[key] || stripped;
 };
 
 /**

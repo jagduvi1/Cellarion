@@ -389,6 +389,28 @@ describe('isJunkGrapeName', () => {
   });
 });
 
+describe('resolveGrapeName — blend-percentage artifacts (taxonomy audit 2026-07-18)', () => {
+  test('strips a leading percentage and resolves the remainder', () => {
+    // "70% Monastrell" existed as a Grape document on prod
+    expect(resolveGrapeName('70% Monastrell')).toBe('Mourvèdre');
+    expect(resolveGrapeName('25% Cabernet Sauvignon')).toBe('Cabernet Sauvignon');
+    expect(resolveGrapeName('5%Merlot')).toBe('Merlot');
+  });
+
+  test('strips a trailing percentage too', () => {
+    expect(resolveGrapeName('Monastrell 70%')).toBe('Mourvèdre');
+    expect(resolveGrapeName('Merlot 5 %')).toBe('Merlot');
+  });
+
+  test('a bare percentage strips to empty (caller drops it)', () => {
+    expect(resolveGrapeName('70%')).toBe('');
+  });
+
+  test('does not touch percentages inside a name', () => {
+    expect(resolveGrapeName('Syrah')).toBe('Syrah');
+  });
+});
+
 describe('resolveGrapeName — Sangiovese Grosso', () => {
   test('maps the Montalcino local name to Sangiovese', () => {
     expect(resolveGrapeName('Sangiovese Grosso')).toBe('Sangiovese');
