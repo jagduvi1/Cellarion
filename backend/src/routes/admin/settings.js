@@ -103,9 +103,16 @@ router.patch('/rate-limits', async (req, res) => {
 
     // MCP kill switches (0 = off, 1 = on). enabled=0 shuts the whole AI
     // surface; publicEnabled=0 shuts only the anonymous endpoint.
+    // userMax/ipMax are the protocol-endpoint limits (MCP-audit M8): per-USER
+    // fair share and the pre-auth per-IP flood guard. Floors keep a typo from
+    // effectively bricking the surface (userMax 10 ≈ one short exchange);
+    // ipMax must stay well above userMax or one shared egress IP throttles
+    // before any user reaches their own allowance.
     if (mcp !== undefined) {
       requireIntInRange('mcp.enabled',       mcp.enabled,       0, 1);
       requireIntInRange('mcp.publicEnabled', mcp.publicEnabled, 0, 1);
+      requireIntInRange('mcp.userMax',       mcp.userMax,       10, 100_000);
+      requireIntInRange('mcp.ipMax',         mcp.ipMax,         100, 1_000_000);
     }
 
     if (errors.length > 0) {
@@ -151,6 +158,8 @@ router.patch('/rate-limits', async (req, res) => {
       mcp: {
         enabled:       mcp?.enabled       ?? previous.mcp?.enabled       ?? rateLimitsConfig.defaults.mcp.enabled,
         publicEnabled: mcp?.publicEnabled ?? previous.mcp?.publicEnabled ?? rateLimitsConfig.defaults.mcp.publicEnabled,
+        userMax:       mcp?.userMax       ?? previous.mcp?.userMax       ?? rateLimitsConfig.defaults.mcp.userMax,
+        ipMax:         mcp?.ipMax         ?? previous.mcp?.ipMax         ?? rateLimitsConfig.defaults.mcp.ipMax,
       },
     };
 

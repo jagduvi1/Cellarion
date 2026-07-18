@@ -12,6 +12,7 @@ const { revertLedgerRow, reversibleActionsFor } = require('../mcp/revert');
 const { findLiveLink, redeemExportLink } = require('../services/exportLinks');
 const { issuer } = require('../services/mcpOAuth');
 const rateLimitsConfig = require('../config/rateLimits');
+const { logAudit } = require('../services/audit');
 // The canonical personal-session scope set — single source (MCP-audit L1), used
 // for both the reversible-action set and the browser-revert ctx below.
 const { MCP_PERSONAL_SCOPES } = require('../config/constants');
@@ -34,6 +35,54 @@ function requirePublicMcpEnabled(req, res, next) {
   }
   next();
 }
+
+// ── Dedicated protocol-endpoint limiters (MCP-audit M8) ─────────────────────
+// Hosted AI connectors (claude.ai, ChatGPT) egress from a SMALL shared IP
+// pool, so the global per-IP apiLimiter made every hosted user share one
+// 15-minute bucket — one chatty agent could starve everyone else's connector.
+// The personal protocol endpoint is therefore EXEMPT from apiLimiter (app.js
+// isMcp skip) and runs two layers of its own instead:
+//
+//   1. mcpIpLimiter (BEFORE auth): a deliberately HIGH per-IP ceiling that
+//      only bounds raw floods and credential probing. Unauthenticated junk is
+//      a cheap 401, and real fairness is the next layer's job — so this is
+//      sized for many legitimate users behind one shared egress IP.
+//   2. mcpUserLimiter (AFTER requireAuth): the fair-share ceiling, keyed by
+//      the VERIFIED user id — not the token (three tokens must not buy a 3×
+//      budget) and not the IP (shared egress must not pool strangers).
+//
+// Both read live admin-tunable numbers (config/rateLimits `mcp` group — the
+// same runtime machinery as the kill switches; the AdminMcp usage payload
+// already round-trips the whole group). Tool-call fan-out inside one request
+// stays bounded by callBudget + mutationBudget in mcp/server.js, and the
+// anonymous /public endpoint keeps its own strict per-IP limiter below.
+const mcpLimits = () => rateLimitsConfig.get().mcp || rateLimitsConfig.defaults.mcp;
+const mcpIpLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: () => mcpLimits().ipMax ?? rateLimitsConfig.defaults.mcp.ipMax,
+  keyGenerator: (req) => rateLimitKey(req),
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: (req, res) => {
+    logAudit(req, 'system.rate_limit_exceeded', {}, { limiter: 'mcp_ip', limit: mcpLimits().ipMax ?? rateLimitsConfig.defaults.mcp.ipMax });
+    res.status(429).json({ error: 'Too many MCP requests from this network — try again in a few minutes.' });
+  },
+});
+const mcpUserLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: () => mcpLimits().userMax ?? rateLimitsConfig.defaults.mcp.userMax,
+  // requireAuth has run — req.user.id is verified identity. The IP fallback is
+  // defense-in-depth only (unreachable in the mounted order).
+  keyGenerator: (req) => (req.user?.id ? `u:${req.user.id}` : rateLimitKey(req)),
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: (req, res) => {
+    logAudit(req, 'system.rate_limit_exceeded', {}, { limiter: 'mcp_user', limit: mcpLimits().userMax ?? rateLimitsConfig.defaults.mcp.userMax });
+    res.status(429).json({
+      error: 'This account has made too many MCP requests in a short time — wait a few minutes before retrying. Batch related tool calls into one request where possible.',
+    });
+  },
+});
 
 // JSON-RPC initialize marker (single message or batch). Local check — the
 // SDK's isInitializeRequest helper lives in the ESM package.
@@ -101,7 +150,7 @@ const JWT_SCOPES = MCP_PERSONAL_SCOPES;
 // are shared/throwaway (they also can't mint `cel_` tokens, so this closes the
 // only other way in). A `cel_` token never carries isDemo, so requireNonDemo is a
 // no-op for it and blocks only demo JWT sessions.
-router.post('/', requireMcpEnabled, mcpChallenge, requireAuth, requireNonDemo, async (req, res, next) => {
+router.post('/', requireMcpEnabled, mcpIpLimiter, mcpChallenge, requireAuth, requireNonDemo, mcpUserLimiter, async (req, res, next) => {
   try {
     const scopes = req.apiToken ? req.apiToken.scopes : JWT_SCOPES;
     // ctx.req rides along for the mutating tools: logAudit reads actor/ip/UA
@@ -143,7 +192,7 @@ router.post('/', requireMcpEnabled, mcpChallenge, requireAuth, requireNonDemo, a
 // stream to open — 405 keeps the old stateless contract for those callers.
 // mcpChallenge: an OAuth client probing with a stale token must get the RFC
 // 9728 WWW-Authenticate pointer here too, not only on POST.
-router.get('/', requireMcpEnabled, mcpChallenge, requireAuth, requireNonDemo, async (req, res, next) => {
+router.get('/', requireMcpEnabled, mcpIpLimiter, mcpChallenge, requireAuth, requireNonDemo, mcpUserLimiter, async (req, res, next) => {
   try {
     const session = sessionFor(req);
     if (session && session.transport) return await session.transport.handleRequest(req, res);
@@ -156,7 +205,7 @@ router.get('/', requireMcpEnabled, mcpChallenge, requireAuth, requireNonDemo, as
 
 // DELETE terminates the session (MCP spec). The SDK transport fires
 // onsessionclosed → the store tears down server, transport and bus listener.
-router.delete('/', requireMcpEnabled, requireAuth, requireNonDemo, async (req, res, next) => {
+router.delete('/', requireMcpEnabled, mcpIpLimiter, requireAuth, requireNonDemo, mcpUserLimiter, async (req, res, next) => {
   try {
     const session = sessionFor(req);
     if (session && session.transport) return await session.transport.handleRequest(req, res);

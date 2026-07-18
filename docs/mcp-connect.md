@@ -86,10 +86,18 @@ authorization server — RFC 9728).
 - **Per-user revocation**: deleting a token in Settings cuts its access on
   the next request; OAuth grants revoke the same way (they are ApiToken
   rows underneath).
+- **Protocol rate limits** (SuperAdmin → Settings → "AI connector (MCP)
+  limits"; `{ mcp: { userMax, ipMax } }` in the same PATCH): the personal
+  endpoint is limited **per user** (default 300 req / 15 min — one bucket
+  across all of a user's tokens and source IPs), not per IP — hosted
+  connectors (claude.ai, ChatGPT) egress from a small shared IP pool, so a
+  per-IP bucket would let one chatty agent starve every other hosted user.
+  A high per-IP pre-auth guard (default 5000 / 15 min) bounds
+  unauthenticated flooding and credential probing.
 - **Budgets**: per-request call cap (20; 10 anonymous), per-user mutation
   budget (shared with the REST write limiter), the AI daily budget for the
   few tools that spend AI (semantic search embeds), and the public
-  endpoint's dedicated per-IP limiter.
+  endpoint's dedicated per-IP limiter (60 / 15 min).
 
 ## Self-hosting notes
 

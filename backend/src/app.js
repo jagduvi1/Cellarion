@@ -171,11 +171,19 @@ const isStripeWebhook = (req) => req.originalUrl.split('?')[0] === '/api/stripe/
 // that writes — the HTTP write limiter can't tell them apart, so limiting it at
 // this layer would throttle the read-mostly handshake while providing no real
 // write protection. Per-tool authorization (registry scope filter) and, for
-// write tools, the write-safety layers govern MCP mutations instead. It stays
-// under the global apiLimiter, so it is never unbounded.
+// write tools, the write-safety layers govern MCP mutations instead.
+//
+// The MCP endpoints are ALSO exempt from the global per-IP apiLimiter
+// (MCP-audit M8): hosted AI connectors (claude.ai, ChatGPT) egress from a
+// small shared IP pool, so a per-IP bucket here made every hosted user share
+// one 15-minute allowance — one chatty agent starved the rest. The personal
+// endpoint carries its own TWO dedicated limiters in routes/mcp.js (a high
+// per-IP pre-auth flood guard + a per-USER fair-share ceiling after auth);
+// /api/mcp/public keeps its own strict per-IP limiter there (60/15min, far
+// below the global cap — anonymous callers have no user to key on).
 //
 // A JSON-RPC body may be a *batch* (array) of calls, so one HTTP request can
-// fan out to many tool invocations — apiLimiter counts requests, not calls.
+// fan out to many tool invocations — HTTP limiters count requests, not calls.
 // That amplification is capped in mcp/server.js at TWO layers: the per-request
 // tool-call budget (MAX_CALLS_PER_REQUEST) and, for MUTATING tools, a per-user
 // budget sharing the SAME admin-tunable number as this writeLimiter — so an
@@ -183,9 +191,6 @@ const isStripeWebhook = (req) => req.originalUrl.split('?')[0] === '/api/stripe/
 // Revisit again before AI-spending tools ship (enrichment adds cost beyond DB).
 const isMcp = (req) => {
   const p = req.originalUrl.split('?')[0];
-  // /api/mcp/public (anonymous, read-only) has its own strict dedicated
-  // limiter in routes/mcp.js — exempt from the write limiter like the
-  // personal endpoint (its calls are budgeted inside mcp/server.js).
   return p === '/api/mcp' || p === '/api/mcp/' || p === '/api/mcp/public';
 };
 
@@ -196,7 +201,7 @@ const apiLimiter = rateLimit({
   keyGenerator: (req) => rateLimitKey(req),
   standardHeaders: true,
   legacyHeaders: false,
-  skip: isStripeWebhook,
+  skip: (req) => isStripeWebhook(req) || isMcp(req),
   handler: (req, res) => {
     logAudit(req, 'system.rate_limit_exceeded', {}, { limiter: 'api', limit: rateLimitsConfig.get().api.max });
     res.status(429).json({ error: 'Too many requests, please try again later' });
