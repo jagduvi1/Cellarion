@@ -292,6 +292,128 @@ router.get('/help', ogLimiter, (req, res) => {
   }
 });
 
+// GET /og/connect-ai — server-rendered MCP set-up page for crawlers.
+//
+// This one matters more than a normal OG page: AI crawlers are exactly the
+// audience that should learn this instance HAS an MCP server, so the endpoints
+// are rendered as literal text rather than hidden behind client-side JS. The
+// copy is deliberately duplicated from the frontend's `connectAi` locale block
+// (short, stable, and the backend has no access to frontend locales) — keep the
+// two in sync when either changes.
+router.get('/connect-ai', ogLimiter, (req, res) => {
+  try {
+    const pageUrl = `${SITE_URL}/connect-ai`;
+    const title = 'Connect your AI to your wine cellar';
+    const metaDescription = 'Cellarion speaks the Model Context Protocol. Connect Claude, ChatGPT, VS Code, Cursor, Gemini CLI or any MCP client to your wine cellar.';
+    const personalEndpoint = `${SITE_URL}/api/mcp`;
+    const publicEndpoint = `${SITE_URL}/api/mcp/public`;
+
+    const steps = [
+      {
+        title: 'Claude (web, desktop and mobile)',
+        text: `Settings, then Connectors, then Add custom connector, and paste ${personalEndpoint}. Sign in with your Cellarion account and choose an access level.`,
+      },
+      {
+        title: 'ChatGPT',
+        text: `Settings, then Connectors, then Advanced, enable Developer mode, choose Create and paste ${personalEndpoint} with authentication set to OAuth.`,
+      },
+      {
+        title: 'Claude Code',
+        text: `Run: claude mcp add --transport http cellarion ${personalEndpoint}`,
+      },
+      {
+        title: 'VS Code, Cursor and Windsurf',
+        text: `Add ${personalEndpoint} as an HTTP MCP server in mcp.json.`,
+      },
+      {
+        title: 'Gemini CLI',
+        text: `Add ${personalEndpoint} as an httpUrl MCP server in ~/.gemini/settings.json.`,
+      },
+      {
+        title: 'Claude Desktop, LM Studio and other stdio clients',
+        text: 'Run the published bridge with: npx -y cellarion-mcp, setting CELLARION_TOKEN to a personal API token from Settings, then API tokens.',
+      },
+      {
+        title: 'No account needed',
+        text: `A public endpoint at ${publicEndpoint} serves the shared wine registry, grape and region profiles, sommelier drink windows and published guides to any AI, with no sign-up and no personal data.`,
+      },
+    ];
+
+    const jsonLd = {
+      '@context': 'https://schema.org',
+      '@graph': [
+        {
+          '@type': 'HowTo',
+          name: title,
+          description: metaDescription,
+          url: pageUrl,
+          step: steps.map((s, i) => ({
+            '@type': 'HowToStep',
+            position: i + 1,
+            name: s.title,
+            text: s.text,
+          })),
+        },
+        {
+          '@type': 'BreadcrumbList',
+          itemListElement: [
+            { '@type': 'ListItem', position: 1, name: 'Cellarion', item: SITE_URL },
+            { '@type': 'ListItem', position: 2, name: title, item: pageUrl },
+          ],
+        },
+      ],
+    };
+
+    const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>${esc(title)} — Cellarion</title>
+  <meta name="description" content="${esc(metaDescription)}" />
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="${esc(title)} — Cellarion" />
+  <meta property="og:description" content="${esc(metaDescription)}" />
+  <meta property="og:image" content="${esc(SITE_URL)}/cellarion-logo.jpg" />
+  <meta property="og:url" content="${esc(pageUrl)}" />
+  <meta property="og:site_name" content="Cellarion" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="${esc(title)} — Cellarion" />
+  <meta name="twitter:description" content="${esc(metaDescription)}" />
+  <link rel="canonical" href="${esc(pageUrl)}" />
+  <script type="application/ld+json">${serializeJsonLd(jsonLd)}</script>
+</head>
+<body>
+  <nav><a href="${esc(SITE_URL)}">Cellarion</a> / ${esc(title)}</nav>
+  <header>
+    <h1>${esc(title)}</h1>
+    <p>${esc(metaDescription)}</p>
+  </header>
+  <main>
+    <section>
+      <h2>Endpoints</h2>
+      <ul>
+        <li>Personal (your own cellar, requires sign-in): ${esc(personalEndpoint)} — Streamable HTTP, OAuth 2.1 with PKCE, or a personal bearer token.</li>
+        <li>Public (shared wine reference, no account): ${esc(publicEndpoint)} — Streamable HTTP, no authentication, read-only.</li>
+        <li>Discovery: ${esc(SITE_URL)}/.well-known/oauth-protected-resource/api/mcp</li>
+      </ul>
+    </section>
+    ${steps.map(s => `<section><h2>${esc(s.title)}</h2><p>${esc(s.text)}</p></section>`).join('\n    ')}
+  </main>
+  <footer>
+    <p><a href="${esc(SITE_URL)}">Cellarion</a> — track your wine collection, get drink-window alerts, and share cellars with friends. Open source, AGPL-3.0.</p>
+  </footer>
+</body>
+</html>`;
+
+    res.set('Content-Type', 'text/html; charset=utf-8');
+    res.set('Cache-Control', 'public, max-age=3600');
+    res.send(html);
+  } catch (err) {
+    console.error('[og] connect-ai page error:', err.message);
+    res.status(500).send('Error generating page');
+  }
+});
+
 // GET /og/wines/:idOrSlug — Full server-rendered HTML for search engine crawlers.
 // Nginx routes crawler user-agents here; real users get the SPA.
 // Accepts both ObjectId and slug. When given an ObjectId for a wine that has a slug,

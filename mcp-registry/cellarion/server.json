@@ -1,0 +1,59 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "app.cellarion/cellarion",
+  "title": "Cellarion",
+  "description": "Wine cellar manager: bottles, racks, drink windows, pairings and a shared wine registry.",
+  "version": "1.82.4",
+  "websiteUrl": "https://cellarion.app",
+  "repository": {
+    "url": "https://github.com/jagduvi1/Cellarion",
+    "source": "github",
+    "id": "1166341984",
+    "subfolder": "cellarion-mcp"
+  },
+  "icons": [
+    {
+      "src": "https://cellarion.app/logo512.png",
+      "mimeType": "image/png",
+      "sizes": ["512x512"]
+    },
+    {
+      "src": "https://cellarion.app/logo192.png",
+      "mimeType": "image/png",
+      "sizes": ["192x192"]
+    }
+  ],
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://cellarion.app/api/mcp"
+    }
+  ],
+  "packages": [
+    {
+      "registryType": "npm",
+      "registryBaseUrl": "https://registry.npmjs.org",
+      "identifier": "cellarion-mcp",
+      "version": "0.1.1",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "CELLARION_TOKEN",
+          "description": "Personal API token from Settings -> API tokens (starts with cel_).",
+          "isRequired": true,
+          "isSecret": true,
+          "format": "string"
+        },
+        {
+          "name": "CELLARION_URL",
+          "description": "Base URL of your Cellarion server. Leave unset for the hosted app.",
+          "isRequired": false,
+          "default": "https://cellarion.app",
+          "format": "string"
+        }
+      ]
+    }
+  ]
+}

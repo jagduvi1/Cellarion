@@ -391,6 +391,22 @@
   user-select: all;
   margin: 0;
 }
+.ai-connect-oneclick {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-top: 1rem;
+  padding: 0.85rem 1rem;
+  background: var(--color-info-bg);
+  border: 1px solid var(--color-info-border);
+  border-radius: var(--radius-md);
+}
+.ai-connect-oneclick .settings-hint {
+  margin: 0;
+  flex: 1;
+  min-width: 14rem;
+}
 .ai-connect-footnote {
   margin-top: 1rem;
 }

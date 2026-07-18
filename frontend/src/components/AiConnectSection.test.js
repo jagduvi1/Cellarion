@@ -47,6 +47,38 @@ describe('AiConnectSection', () => {
     expect(texts[1]).toContain('/api/mcp');
   });
 
+  test('self-hosted installs get NO claude.ai one-click link', () => {
+    // jsdom origin is http://localhost:3000, i.e. self-hosted. A claude.ai deep
+    // link would point at a server claude.ai cannot reach.
+    render(<AiConnectSection />);
+    expect(screen.queryByRole('link', { name: /Add to Claude in one click/ })).toBeNull();
+  });
+
+  test('on cellarion.app, offers a prefilled claude.ai connector link for /api/mcp', () => {
+    const original = window.location;
+    Object.defineProperty(window, 'location', {
+      value: new URL('https://cellarion.app'),
+      writable: true,
+      configurable: true,
+    });
+    try {
+      render(<AiConnectSection />);
+      const link = screen.getByRole('link', { name: /Add to Claude in one click/ });
+      const url = new URL(link.getAttribute('href'));
+      expect(url.origin).toBe('https://claude.ai');
+      expect(url.searchParams.get('modal')).toBe('add-custom-connector');
+      expect(url.searchParams.get('connectorUrl')).toBe('https://cellarion.app/api/mcp');
+      // Opening claude.ai must not hand it a window handle back to us.
+      expect(link).toHaveAttribute('rel', expect.stringContaining('noopener'));
+    } finally {
+      Object.defineProperty(window, 'location', {
+        value: original,
+        writable: true,
+        configurable: true,
+      });
+    }
+  });
+
   test('pasting a token fills it into every snippet (and never leaves the page)', () => {
     const { container } = render(<AiConnectSection />);
     fireEvent.change(screen.getByPlaceholderText(/paste your token/i), {

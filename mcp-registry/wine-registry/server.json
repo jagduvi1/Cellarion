@@ -1,0 +1,26 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "app.cellarion/wine-registry",
+  "title": "Cellarion Wine Registry",
+  "description": "Public wine registry and guides: search wines, grapes, regions, appellations. No account.",
+  "version": "1.82.4",
+  "websiteUrl": "https://cellarion.app",
+  "repository": {
+    "url": "https://github.com/jagduvi1/Cellarion",
+    "source": "github",
+    "id": "1166341984"
+  },
+  "icons": [
+    {
+      "src": "https://cellarion.app/logo512.png",
+      "mimeType": "image/png",
+      "sizes": ["512x512"]
+    }
+  ],
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://cellarion.app/api/mcp/public"
+    }
+  ]
+}

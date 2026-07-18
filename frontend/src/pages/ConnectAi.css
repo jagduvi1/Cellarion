@@ -1,0 +1,166 @@
+.connect-ai-page {
+  padding: 2rem 1rem 4rem;
+}
+
+.connect-ai-container {
+  max-width: 820px;
+  margin: 0 auto;
+}
+
+.connect-ai-header h1 {
+  font-family: var(--font-heading);
+  color: var(--color-text);
+  margin-bottom: 0.5rem;
+}
+
+.connect-ai-subtitle {
+  color: var(--color-text-secondary);
+  font-size: 1.05rem;
+  margin-bottom: 0.75rem;
+}
+
+.connect-ai-beta {
+  background: var(--color-info-bg);
+  color: var(--color-info);
+  border: 1px solid var(--color-info-border);
+  border-radius: var(--radius-md);
+  padding: 0.75rem 1rem;
+  font-size: 0.9rem;
+  margin-bottom: 2rem;
+}
+
+.connect-ai-oneclick {
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+  padding: 1.5rem;
+  margin-bottom: 2.5rem;
+  text-align: center;
+}
+
+.connect-ai-oneclick h2 {
+  font-family: var(--font-heading);
+  margin-bottom: 0.5rem;
+}
+
+.connect-ai-oneclick p {
+  color: var(--color-text-secondary);
+  margin-bottom: 1.25rem;
+}
+
+.connect-ai-section {
+  margin-bottom: 2.5rem;
+}
+
+.connect-ai-section > h2 {
+  font-family: var(--font-heading);
+  color: var(--color-text);
+  border-bottom: 1px solid var(--color-border-light);
+  padding-bottom: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.connect-ai-section > p {
+  color: var(--color-text-secondary);
+  margin-bottom: 1rem;
+}
+
+.connect-ai-scopes {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 1rem;
+}
+
+.connect-ai-scopes li {
+  padding: 0.6rem 0;
+  border-bottom: 1px solid var(--color-border-light);
+  color: var(--color-text-secondary);
+}
+
+.connect-ai-scopes li:last-child {
+  border-bottom: none;
+}
+
+.connect-ai-scopes strong {
+  color: var(--color-text);
+}
+
+.connect-ai-note {
+  font-size: 0.875rem;
+  color: var(--color-text-muted);
+}
+
+.connect-ai-client {
+  margin-bottom: 1.75rem;
+}
+
+.connect-ai-client h3 {
+  font-family: var(--font-heading);
+  font-size: 1.05rem;
+  color: var(--color-text);
+  margin-bottom: 0.35rem;
+}
+
+.connect-ai-client p {
+  color: var(--color-text-secondary);
+  font-size: 0.925rem;
+  margin-bottom: 0.65rem;
+}
+
+/* Snippet block: the copy button floats over the top-right of the code box.
+   The <pre> scrolls on its own so a long URL never widens the page. */
+.connect-ai-snippet-block {
+  position: relative;
+}
+
+.connect-ai-copy {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  z-index: 1;
+}
+
+.connect-ai-snippet {
+  background: var(--color-input-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: 0.85rem 1rem;
+  padding-right: 5.5rem;
+  margin: 0;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  color: var(--color-text);
+  white-space: pre;
+  overflow-x: auto;
+  user-select: all;
+}
+
+.connect-ai-footer {
+  border-top: 1px solid var(--color-border-light);
+  padding-top: 1.25rem;
+  color: var(--color-text-muted);
+  font-size: 0.9rem;
+}
+
+.connect-ai-footer a {
+  color: var(--color-primary);
+}
+
+@media (max-width: 600px) {
+  .connect-ai-page {
+    padding: 1.25rem 0.75rem 3rem;
+  }
+
+  /* On narrow screens the floating button would sit on top of the code, so
+     put it back in flow above the block. */
+  .connect-ai-copy {
+    position: static;
+    display: block;
+    margin-bottom: 0.5rem;
+  }
+
+  .connect-ai-snippet {
+    padding-right: 1rem;
+  }
+}
