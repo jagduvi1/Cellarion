@@ -89,7 +89,16 @@ const defaults = {
   //             user id (one chatty agent can only starve itself);
   //   ipMax   — pre-auth per-IP flood/credential-probe guard, sized for many
   //             users behind one shared egress IP (fairness is userMax's job).
-  mcp: { enabled: 1, publicEnabled: 1, userMax: 300, ipMax: 5000 },
+  //   registerMax — Dynamic Client Registration (RFC 7591) per IP per HOUR.
+  //             Same shared-egress problem, one step earlier: every NEW
+  //             connection from a hosted platform registers a client first, and
+  //             they all arrive from that platform's egress pool. At 10/hour the
+  //             eleventh person to connect that hour got a 429 with no way to
+  //             diagnose it — and a real launch day already reached 6/10 with
+  //             almost no users. It still has to stay bounded (each call
+  //             persists an OAuthClient row), so this is a raise, not a removal,
+  //             and it is now tunable without a deploy.
+  mcp: { enabled: 1, publicEnabled: 1, userMax: 300, ipMax: 5000, registerMax: 200 },
 };
 
 let cache = {
@@ -159,6 +168,7 @@ async function load() {
           publicEnabled: doc.value.mcp?.publicEnabled ?? defaults.mcp.publicEnabled,
           userMax:       doc.value.mcp?.userMax       ?? defaults.mcp.userMax,
           ipMax:         doc.value.mcp?.ipMax         ?? defaults.mcp.ipMax,
+          registerMax:   doc.value.mcp?.registerMax   ?? defaults.mcp.registerMax,
         },
       };
     }

@@ -189,9 +189,21 @@ const isStripeWebhook = (req) => req.originalUrl.split('?')[0] === '/api/stripe/
 // budget sharing the SAME admin-tunable number as this writeLimiter — so an
 // agent looping consumes hits exactly the wall a looping REST client would.
 // Revisit again before AI-spending tools ship (enrichment adds cost beyond DB).
+//
+// The OAuth endpoints under /api/mcp/oauth/ are exempt for the SAME shared-egress
+// reason. They were left behind when M8 exempted the protocol endpoint, so
+// /token, /authorize, /register and /revoke still rode both the per-IP apiLimiter
+// and the writeLimiter. Access tokens live one hour, so every connected client
+// refreshes at least hourly — and a hosted platform's entire user base does that
+// from one egress IP, which is exactly the bucket-sharing M8 removed next door.
+// A user whose refresh is 429'd is silently disconnected mid-conversation, and
+// the 429 body isn't OAuth-shaped either, so clients report it as a broken server.
+// Registration keeps its own dedicated per-IP limiter in routes/mcpOAuth.js —
+// the anti-flood guard that actually needs to be per-IP.
 const isMcp = (req) => {
   const p = req.originalUrl.split('?')[0];
-  return p === '/api/mcp' || p === '/api/mcp/' || p === '/api/mcp/public';
+  return p === '/api/mcp' || p === '/api/mcp/' || p === '/api/mcp/public'
+    || p.startsWith('/api/mcp/oauth/');
 };
 
 // Global API rate limiter — default 200 requests per 15 min per IP (admin-configurable)

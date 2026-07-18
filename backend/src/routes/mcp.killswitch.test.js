@@ -59,7 +59,9 @@ const post = (path, auth) => fetch(`${baseUrl}${path}`, {
 });
 
 test('defaults leave every MCP surface open', async () => {
-  expect(rateLimitsConfig.defaults.mcp).toEqual({ enabled: 1, publicEnabled: 1, userMax: 300, ipMax: 5000 });
+  expect(rateLimitsConfig.defaults.mcp).toEqual({
+    enabled: 1, publicEnabled: 1, userMax: 300, ipMax: 5000, registerMax: 200,
+  });
   const res = await post('/api/mcp/public');
   expect(res.status).toBe(200);
   expect((await res.json()).handled).toBe(true);
