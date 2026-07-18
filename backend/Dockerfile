@@ -1,7 +1,7 @@
 # Digest-pinned (security audit L-11) so a moved tag can't swap the base out
 # from under a build. Dependabot's docker ecosystem bumps this. Tag kept for
 # readability; the @sha256 is what's resolved.
-FROM node:20-alpine@sha256:fb4cd12c85ee03686f6af5362a0b0d56d50c58a04632e6c0fb8363f609372293
+FROM node:26-alpine@sha256:e88a35be04478413b7c71c455cd9865de9b9360e1f43456be5951032d7ac1a66
 
 # Bake production mode into the image: the refresh-cookie Secure flag and
 # 5xx error redaction key off NODE_ENV, and Express itself runs faster with
