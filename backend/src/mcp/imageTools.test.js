@@ -52,8 +52,8 @@ const CTX = { user: { id: ME }, scopes: ['write'], req: { user: { id: ME }, head
 const tool = (name) => allTools().find((t) => t.name === name);
 const parse = (res) => JSON.parse(res.content[0].text);
 
-const ownBottle = () => {
-  const b = { _id: new mongoose.Types.ObjectId(oid('d')), cellar: new mongoose.Types.ObjectId(oid('c')), vintage: '2015', status: 'active' };
+const ownBottle = (over = {}) => {
+  const b = { _id: new mongoose.Types.ObjectId(oid('d')), cellar: new mongoose.Types.ObjectId(oid('c')), vintage: '2015', status: 'active', ...over };
   Bottle.findById.mockReturnValue(chain(b));
   Cellar.findById.mockReturnValue(chain({ _id: b.cellar, user: ME, members: [], deletedAt: null }));
   return b;
@@ -76,20 +76,33 @@ describe('registration', () => {
 });
 
 describe('attach_bottle_image', () => {
-  test('image_url path: SSRF-guarded fetch → shared pipeline → ledger row', async () => {
-    ownBottle();
+  test('image_url path: SSRF-guarded fetch → shared pipeline WITH the wine linkage → ledger row', async () => {
+    ownBottle({ wineDefinition: new mongoose.Types.ObjectId(oid('f')) });
     safeFetchImage.mockResolvedValue({ buffer: Buffer.from('imgbytes'), contentType: 'image/jpeg' });
     const res = await tool('attach_bottle_image').handler({ bottle_id: oid('d'), image_url: 'https://cdn.example.com/label.jpg' }, CTX);
     const body = parse(res);
     expect(body.error).toBeUndefined();
     expect(safeFetchImage).toHaveBeenCalledWith('https://cdn.example.com/label.jpg');
-    // The bytes go to the SAME pipeline the web upload uses.
+    // The bytes go to the SAME pipeline the web upload uses — INCLUDING the
+    // wine link, so one photo shows on every bottle of the wine (the launch-day
+    // "attached 5 times for 5 identical bottles" report).
     expect(ingestBottleImage).toHaveBeenCalledWith(
-      expect.objectContaining({ userId: ME, buffer: expect.any(Buffer) }), CTX.req);
+      expect.objectContaining({ userId: ME, buffer: expect.any(Buffer), wineDefinitionId: oid('f') }), CTX.req);
     expect(body.data.source).toBe('url');
+    expect(body.data.shows_on_all_bottles_of_wine).toBe(true);
     const row = McpActionLog.create.mock.calls[0][0];
     expect(row.action).toBe('attach_image');
     expect(row.detail.imageId).toBeDefined();
+  });
+
+  test('a bottle with no registry wine yet attaches bottle-only (no wine linkage)', async () => {
+    ownBottle(); // pending-wine-request bottles have no wineDefinition
+    safeFetchImage.mockResolvedValue({ buffer: Buffer.from('imgbytes'), contentType: 'image/jpeg' });
+    const res = await tool('attach_bottle_image').handler({ bottle_id: oid('d'), image_url: 'https://cdn.example.com/label.jpg' }, CTX);
+    expect(parse(res).error).toBeUndefined();
+    expect(ingestBottleImage).toHaveBeenCalledWith(
+      expect.objectContaining({ wineDefinitionId: null }), CTX.req);
+    expect(parse(res).data.shows_on_all_bottles_of_wine).toBe(false);
   });
 
   test('image_base64 path: strips a data: prefix and decodes', async () => {
