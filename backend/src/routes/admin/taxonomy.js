@@ -11,6 +11,7 @@ const searchService = require('../../services/search');
 const { logAudit } = require('../../services/audit');
 const { isValidId } = require('../../utils/validation');
 const { distinctSizes, normalizeAll, remap } = require('../../services/bottleSizeMaintenance');
+const { mergeGrapes, mergeRegions, mergeCountries } = require('../../services/taxonomyMerge');
 const { BOTTLE_SIZES } = require('../../config/bottleSizes');
 
 const router = express.Router();
@@ -241,7 +242,7 @@ router.post('/regions', async (req, res) => {
 router.put('/regions/:id', async (req, res) => {
   try {
     if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
-    const { name, parentRegion, classification, styles,
+    const { name, parentRegion, classification, styles, synonyms,
             agingRules, prestigeLevel, typicalGrapes, permittedGrapes, description } = req.body;
 
     const region = await Region.findById(req.params.id);
@@ -278,6 +279,7 @@ router.put('/regions/:id', async (req, res) => {
     }
 
     if (classification !== undefined) region.classification = classification;
+    if (synonyms !== undefined) region.synonyms = synonyms;
     if (styles !== undefined) region.styles = styles;
     if (agingRules !== undefined) region.agingRules = agingRules;
     if (prestigeLevel !== undefined) region.prestigeLevel = prestigeLevel;
@@ -474,6 +476,43 @@ router.delete('/grapes/:id', async (req, res) => {
     res.status(500).json({ error: 'Failed to delete grape' });
   }
 });
+
+// ===== MERGES =====
+// Collapse a duplicate taxonomy doc into its canonical counterpart. All
+// references (wines, regions, appellations) are rewritten before the
+// duplicate is deleted; for grapes/regions the old name becomes a synonym on
+// the canonical doc so label scan / import can't re-mint the duplicate.
+
+const MERGERS = {
+  grapes: { fn: mergeGrapes, type: 'grape' },
+  regions: { fn: mergeRegions, type: 'region' },
+  countries: { fn: mergeCountries, type: 'country' },
+};
+
+for (const [path, { fn, type }] of Object.entries(MERGERS)) {
+  // POST /api/admin/taxonomy/{grapes|regions|countries}/merge - Body: { fromId, toId }
+  router.post(`/${path}/merge`, async (req, res) => {
+    try {
+      const { fromId, toId } = req.body || {};
+      if (!isValidId(fromId) || !isValidId(toId)) {
+        return res.status(400).json({ error: 'fromId and toId must be valid ids' });
+      }
+      const summary = await fn(fromId, toId);
+      logAudit(req, 'admin.taxonomy.merge',
+        { type, id: toId },
+        { from: fromId, ...summary }
+      );
+      // Affected wines are reindexed by the service; bottle documents
+      // denormalize taxonomy names too, so rebuild the bottles index.
+      searchService.fullSyncBottles();
+      res.json({ merged: true, ...summary });
+    } catch (error) {
+      if (error.status) return res.status(error.status).json({ error: error.message });
+      console.error(`Merge ${type} error:`, error);
+      res.status(500).json({ error: `Failed to merge ${type}` });
+    }
+  });
+}
 
 // ===== APPELLATIONS =====
 
