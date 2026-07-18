@@ -39,7 +39,7 @@ const { submitUrls } = require('../../services/indexNow');
 const { isValidId } = require('../../utils/validation');
 const { escapeRegex } = require('../../utils/sanitize');
 const { parsePagination } = require('../../utils/pagination');
-const { stripProducerPrefix } = require('../../utils/producerPrefix');
+const { stripProducerName } = require('../../utils/producerPrefix');
 
 const router = express.Router();
 
@@ -545,14 +545,16 @@ router.get('/duplicates', async (req, res) => {
   }
 });
 
-// GET /api/admin/wines/producer-in-name — wines whose name starts with their
-// own producer (e.g. producer "Meerlust", name "Meerlust Chardonnay"). Mostly
-// AI-import artefacts; the registry convention is a producer-free name.
+// GET /api/admin/wines/producer-in-name — wines whose name STARTS or ENDS
+// with their own producer (prefix: producer "Meerlust", name "Meerlust
+// Chardonnay"; suffix: producer "Mastroberardino", name "Fiano di Avellino
+// Mastroberardino" — the launch-day admin report). Mostly AI-import
+// artefacts; the registry convention is a producer-free name.
 //
-// A field-to-field prefix comparison needs $expr; there's no index for it, so
-// this is a collection scan — fine at the registry's ~3k-doc size. The char
-// right after the prefix must be a separator so producer "Chateau" doesn't
-// flag "Chateauneuf-du-Pape" (mirrors utils/producerPrefix.js).
+// A field-to-field comparison needs $expr; there's no index for it, so this
+// is a collection scan — fine at the registry's ~3k-doc size. The char right
+// AFTER a prefix / BEFORE a suffix must be a separator so producer "Chateau"
+// doesn't flag "Chateauneuf-du-Pape" (mirrors utils/producerPrefix.js).
 //
 // Returns: { wines: [{ _id, producer, name, proposedName, bottleCount, createdAt }], total, page, pages }
 router.get('/producer-in-name', async (req, res) => {
@@ -561,16 +563,29 @@ router.get('/producer-in-name', async (req, res) => {
       parsePagination(req.query, { limit: 50, maxLimit: 200 });
 
     const producerLen = { $strLenCP: { $ifNull: ['$producer', ''] } };
-    const filter = {
-      $expr: {
-        $and: [
-          { $gt: [producerLen, 0] },
-          { $gt: [{ $strLenCP: '$name' }, { $add: [producerLen, 1] }] },
-          { $eq: [{ $indexOfCP: [{ $toLower: '$name' }, { $toLower: { $ifNull: ['$producer', ''] } }] }, 0] },
-          { $in: [{ $substrCP: ['$name', producerLen, 1] }, [' ', '\t', '-', '–', '—']] },
-        ],
-      },
+    const nameLen = { $strLenCP: '$name' };
+    const lowerProducer = { $toLower: { $ifNull: ['$producer', ''] } };
+    const SEPARATORS = [' ', '\t', '-', '–', '—'];
+    const common = [
+      { $gt: [producerLen, 0] },
+      { $gt: [nameLen, { $add: [producerLen, 1] }] },
+    ];
+    const prefixExpr = {
+      $and: [
+        ...common,
+        { $eq: [{ $indexOfCP: [{ $toLower: '$name' }, lowerProducer] }, 0] },
+        { $in: [{ $substrCP: ['$name', producerLen, 1] }, SEPARATORS] },
+      ],
     };
+    const suffixStart = { $subtract: [nameLen, producerLen] };
+    const suffixExpr = {
+      $and: [
+        ...common,
+        { $eq: [{ $toLower: { $substrCP: ['$name', suffixStart, producerLen] } }, lowerProducer] },
+        { $in: [{ $substrCP: ['$name', { $subtract: [suffixStart, 1] }, 1] }, SEPARATORS] },
+      ],
+    };
+    const filter = { $expr: { $or: [prefixExpr, suffixExpr] } };
 
     const [wines, total] = await Promise.all([
       WineDefinition.find(filter)
@@ -597,7 +612,7 @@ router.get('/producer-in-name', async (req, res) => {
         _id: w._id,
         producer: w.producer,
         name: w.name,
-        proposedName: stripProducerPrefix(w.name, w.producer),
+        proposedName: stripProducerName(w.name, w.producer),
         bottleCount: bottleCounts.get(String(w._id)) || 0,
         createdAt: w.createdAt,
       })),
@@ -810,8 +825,9 @@ router.delete('/:id', async (req, res) => {
 });
 
 // POST /api/admin/wines/:id/strip-producer — remove the wine's own producer
-// prefix from its name (companion to GET /producer-in-name). Recomputes the
-// prefix check server-side so a stale client row can't rename arbitrarily.
+// (prefix OR suffix) from its name (companion to GET /producer-in-name).
+// Recomputes the check server-side so a stale client row can't rename
+// arbitrarily.
 router.post('/:id/strip-producer', async (req, res) => {
   try {
     if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
@@ -820,10 +836,10 @@ router.post('/:id/strip-producer', async (req, res) => {
       return res.status(404).json({ error: 'Wine not found' });
     }
 
-    const stripped = stripProducerPrefix(wine.name, wine.producer);
+    const stripped = stripProducerName(wine.name, wine.producer);
     if (!stripped) {
       return res.status(400).json({
-        error: 'Wine name does not start with its producer, or nothing would remain after stripping'
+        error: 'Wine name does not start or end with its producer, or nothing would remain after stripping'
       });
     }
 
