@@ -1,0 +1,1227 @@
+[
+ {
+  "name": "California",
+  "country": "United States",
+  "description": "**California** is the powerhouse of American wine, stretching down the western coast of the United States and responsible for the vast majority of the country's production.\n\n**Wines & grapes** — Just about every style is made here, but the signatures are ripe, generous Cabernet Sauvignon (especially from Napa Valley), buttery or crisp Chardonnay, spicy Zinfandel, and increasingly refined Pinot Noir from cooler coastal pockets like Sonoma and the Central Coast.\n\n**Character** — A warm, sunny climate delivers full-bodied, fruit-forward wines with plenty of ripeness and often a polished, oak-influenced style, though fog and ocean breezes let cooler sites hold onto freshness. **Good to know** — Napa Valley is the prestige address, but California spans dozens of climates, from the foggy coast to the hot Central Valley."
+ },
+ {
+  "name": "Burgundy",
+  "country": "France",
+  "description": "**Burgundy** (Bourgogne) is a historic region in eastern France, revered as the spiritual home of Pinot Noir and Chardonnay and famous for its intense focus on individual vineyard sites.\n\n**Wines & grapes** — Almost everything is red Pinot Noir or white Chardonnay, made as single-variety wines. The region also gives us Chablis (steely Chardonnay in the north) and Beaujolais to the south, where the Gamay grape rules.\n\n**Character** — A cool continental climate and limestone-rich soils produce wines of finesse, transparency, and remarkable expression of place, where neighbouring plots can taste distinctly different. **Good to know** — Burgundy's classification runs from regional wines up through Village, Premier Cru, and the rare, coveted Grand Cru vineyards."
+ },
+ {
+  "name": "Champagne",
+  "country": "France",
+  "description": "**Champagne** is the cool northern French region that gave its name to the world's most celebrated sparkling wine, made by a second fermentation in the bottle.\n\n**Wines & grapes** — Primarily sparkling wines built from three grapes: Chardonnay, Pinot Noir, and Pinot Meunier. Styles range from non-vintage blends to vintage cuvées, Blanc de Blancs (all Chardonnay), Blanc de Noirs, and rosé.\n\n**Character** — The chilly climate and chalky soils keep grapes high in acidity, which is the backbone of Champagne's freshness, fine bubbles, and ageworthiness, while lees ageing adds toasty, biscuity depth. **Good to know** — Only sparkling wine from this region may legally be called Champagne; similar wines made elsewhere go by other names."
+ },
+ {
+  "name": "Bordeaux",
+  "country": "France",
+  "description": "**Bordeaux** is a large, historically influential wine region in southwestern France centred on the Gironde estuary, famous above all for its structured, ageworthy red blends.\n\n**Wines & grapes** — Reds dominate, built mainly from Cabernet Sauvignon and Merlot (with Cabernet Franc, Petit Verdot, and Malbec in support). It also makes dry whites from Sauvignon Blanc and Sémillon, plus the sweet, botrytised wines of Sauternes.\n\n**Character** — The Left Bank (gravel soils) favours firm, Cabernet-led wines; the Right Bank (clay and limestone) leans on plush, Merlot-led ones. **Good to know** — The 1855 Classification ranked the top Médoc châteaux into five growths, a hierarchy still referenced today."
+ },
+ {
+  "name": "Tuscany",
+  "country": "Italy",
+  "description": "**Tuscany** (Toscana) is one of Italy's most iconic wine regions, set in the rolling hills of the country's centre and inseparable from the Sangiovese grape.\n\n**Wines & grapes** — Sangiovese is the star, driving Chianti, Brunello di Montalcino, and Vino Nobile di Montepulciano. The region also gave rise to the so-called Super Tuscans, bold reds often blending Sangiovese with Cabernet Sauvignon and Merlot, alongside the sweet Vin Santo.\n\n**Character** — A warm Mediterranean climate and varied hillside soils give reds marked by bright cherry fruit, savoury herbs, firm tannins, and lively acidity that suits the table. **Good to know** — Brunello di Montalcino must be made from 100% Sangiovese and given long ageing before release."
+ },
+ {
+  "name": "Piedmont",
+  "country": "Italy",
+  "description": "**Piedmont** (Piemonte) sits in the northwest of Italy, tucked against the Alps, and is prized for some of the country's most serious and long-lived red wines.\n\n**Wines & grapes** — The noble Nebbiolo grape makes the powerful, perfumed reds of Barolo and Barbaresco. Everyday drinking comes from Barbera and Dolcetto, while Moscato d'Asti and sparkling Asti offer sweet, low-alcohol whites.\n\n**Character** — A continental climate with autumn fog (nebbia, which lends Nebbiolo its name) yields wines high in tannin and acidity, with signature aromas of rose, tar, cherry, and dried herbs that unfold with age. **Good to know** — Barolo and Barbaresco are often called the \"king and queen\" of Italian wine."
+ },
+ {
+  "name": "Rhône Valley",
+  "country": "France",
+  "description": "**Rhône Valley** (Vallée du Rhône) follows the Rhône river through southeastern France and splits into two distinct halves with very different personalities.\n\n**Wines & grapes** — The steep northern Rhône makes Syrah-based reds (Côte-Rôtie, Hermitage) and whites from Viognier, Marsanne, and Roussanne. The broader, warmer south favours Grenache-led blends, most famously Châteauneuf-du-Pape, which can draw on more than a dozen permitted grapes.\n\n**Character** — Northern wines are focused and peppery; southern wines are warm, generous, and herb-scented, shaped by the drying Mistral wind and stony soils. **Good to know** — The rounded galets (large pebbles) of Châteauneuf-du-Pape store daytime heat and release it at night."
+ },
+ {
+  "name": "Central Otago",
+  "country": "New Zealand",
+  "description": "**Central Otago** lies in the mountainous interior of New Zealand's South Island and is one of the world's southernmost wine regions, best known for its Pinot Noir.\n\n**Wines & grapes** — Pinot Noir is the flagship, with smaller amounts of Pinot Gris, Riesling, Chardonnay, and aromatic whites.\n\n**Character** — Unusually for New Zealand, the climate is semi-continental rather than maritime, with hot days, cold nights, and dry autumns. This gives Pinot Noir deep colour, ripe dark-cherry fruit, and a vivid, fresh energy. **Good to know** — The dramatic landscape of lakes and mountains makes it one of the most scenic wine regions anywhere."
+ },
+ {
+  "name": "South Australia",
+  "country": "Australia",
+  "description": "**South Australia** is the engine room of Australian wine, producing a large share of the nation's output and home to many of its most famous names.\n\n**Wines & grapes** — Shiraz is the calling card, especially the rich, powerful reds of the Barossa Valley and McLaren Vale. The region also excels with Cabernet Sauvignon from Coonawarra, Riesling from the cool Clare and Eden Valleys, and Chardonnay from the Adelaide Hills.\n\n**Character** — Climates range from hot, dry inland valleys to cooler elevated sites, but the reds are typically full-bodied, ripe, and generous with dark fruit and spice. **Good to know** — The Barossa is home to some of the oldest continuously producing Shiraz vines on earth, having escaped the phylloxera louse."
+ },
+ {
+  "name": "Hawke's Bay",
+  "country": "New Zealand",
+  "description": "**Hawke's Bay** is a warm coastal region on the east side of New Zealand's North Island and one of the country's oldest and most versatile wine areas.\n\n**Wines & grapes** — Best known for Bordeaux-style reds from Merlot and Cabernet Sauvignon, plus Syrah and full-bodied Chardonnay. The gravelly Gimblett Gravels sub-zone is especially prized for reds.\n\n**Character** — A relatively sunny, sheltered climate lets red grapes ripen fully, giving structured, savoury wines with good depth, while the Chardonnays combine ripeness with freshness. **Good to know** — Hawke's Bay offers a warmer counterpoint to the cooler, Sauvignon-Blanc-dominated Marlborough region."
+ },
+ {
+  "name": "Pfalz",
+  "country": "Germany",
+  "description": "**Pfalz** (the Palatinate) is a sunny wine region in southwestern Germany, running along the eastern edge of the Haardt hills as a northern continuation of France's Alsace.\n\n**Wines & grapes** — Riesling is the leading grape, made in styles from bone-dry to sweet, alongside a strong showing of Pinot varieties: Pinot Gris (Grauburgunder), Pinot Blanc (Weissburgunder), and Pinot Noir (Spätburgunder).\n\n**Character** — One of Germany's warmest, driest regions, the Pfalz ripens grapes readily, producing Rieslings that are riper, rounder, and often drier than those of the cooler Mosel. **Good to know** — Its mild climate even allows figs and almonds to flourish among the vines."
+ },
+ {
+  "name": "Veneto",
+  "country": "Italy",
+  "description": "**Veneto** is a prolific region in northeastern Italy, running from Lake Garda toward Venice, and one of the country's largest producers by volume.\n\n**Wines & grapes** — It is famous for Prosecco (sparkling wine from the Glera grape), the reds of Valpolicella and the rich, dried-grape Amarone (from Corvina and friends), and crisp whites like Soave, made from Garganega.\n\n**Character** — A range of climates from alpine foothills to the warm plains supports everything from light, fresh everyday wines to concentrated, powerful reds. **Good to know** — Amarone is made by drying the grapes for months before pressing, a process called appassimento that concentrates sugar and flavour."
+ },
+ {
+  "name": "Napa Valley",
+  "country": "United States",
+  "description": "**Napa Valley** is a compact, sun-warmed valley in northern California, an hour or so above San Francisco, and it is the name that turned American wine into a serious global player.\n\n**Wines & grapes** — Cabernet Sauvignon is king here, producing rich, structured reds that are the region's calling card, often bottled as single-varietal wines or Bordeaux-style blends with Merlot and Cabernet Franc. Chardonnay is the leading white, and you will also find Sauvignon Blanc, Zinfandel, and Merlot.\n\n**Character** — The valley's warm days and cool, fog-influenced nights let grapes ripen fully while keeping their freshness, giving wines that are ripe, generous, and built to age. Distinct sub-areas such as Rutherford, Oakville, Stags Leap, and the mountain slopes each lend their own signature. **Good to know** — Napa reds are among the most collectible and priciest wines made outside Europe."
+ },
+ {
+  "name": "Mosel",
+  "country": "Germany",
+  "description": "**Mosel** follows the twisting Mosel River in western Germany, near the borders with Luxembourg and France, and is one of the world's great homes for Riesling.\n\n**Wines & grapes** — Riesling dominates overwhelmingly, made in a spectrum from bone-dry (trocken) to lusciously sweet late-harvest bottlings such as Spätlese, Auslese, and the rare Trockenbeerenauslese. Smaller amounts of Müller-Thurgau and Elbling are also grown.\n\n**Character** — The vines cling to breathtakingly steep slopes of blue and grey slate that soak up warmth and reflect it back, helping grapes ripen in this cool, northerly climate. The results are famously light in alcohol, vivid with citrus and orchard fruit, and threaded with a bright, mineral acidity. **Good to know** — The finest sites, like the Bernkasteler Doctor and Wehlener Sonnenuhr, are among Germany's most revered vineyards."
+ },
+ {
+  "name": "Sicily",
+  "country": "Italy",
+  "description": "**Sicily** is the large Mediterranean island off the toe of Italy, and one of the country's most exciting and fast-improving wine regions.\n\n**Wines & grapes** — Nero d'Avola is the signature red grape, giving warm, full-bodied wines, while the volcanic slopes of Mount Etna produce more delicate, age-worthy reds from Nerello Mascalese and crisp whites from Carricante. Native whites like Grillo, Catarratto, and Inzolia are widely planted, and the island is also the source of the fortified dessert wine Marsala.\n\n**Character** — Abundant sunshine and sea breezes shape ripe, sun-soaked wines, but the high-altitude, mineral-rich volcanic soils of Etna have earned a cult following for their freshness and finesse. **Good to know** — Sicily has shifted from bulk production toward quality, and Etna in particular is now spoken of alongside the world's great cool-climate reds."
+ },
+ {
+  "name": "Loire Valley",
+  "country": "France",
+  "description": "**Loire Valley** stretches along France's longest river, running west from the centre of the country toward the Atlantic coast, and is prized above all for elegant, food-friendly whites.\n\n**Wines & grapes** — It is a patchwork of styles: crisp Sauvignon Blanc from Sancerre and Pouilly-Fumé, versatile Chenin Blanc from Vouvray and Savennières (dry, sweet, and sparkling), light Cabernet Franc reds from Chinon and Bourgueil, and tangy Muscadet made from Melon de Bourgogne near the sea.\n\n**Character** — This is one of France's cooler regions, so freshness and bright acidity define the wines, along with a pronounced sense of the varied soils, from flinty limestone to schist. **Good to know** — The valley's sparkling Crémant de Loire and its long-lived sweet Chenins are among France's best-value classics."
+ },
+ {
+  "name": "Rheinhessen",
+  "country": "Germany",
+  "description": "**Rheinhessen** sits in a gentle, rolling stretch of land within a bend of the Rhine in western Germany, and is the country's largest wine region by area.\n\n**Wines & grapes** — Riesling is the flagship and produces the most distinguished wines, though Müller-Thurgau, Silvaner, and a growing amount of red Dornfelder and Spätburgunder (Pinot Noir) are also important. Both dry and off-dry styles are common.\n\n**Character** — Once known mainly for large volumes of soft, simple wine, Rheinhessen has been reinvented by a wave of quality-focused growers, especially along the steep slopes of the Rheinterrasse near Nierstein and Nackenheim. There the reddish slate and sandstone soils give Rieslings real depth and mineral drive. **Good to know** — Its younger generation of winemakers has made it one of Germany's most dynamic regions."
+ },
+ {
+  "name": "Languedoc-Roussillon",
+  "country": "France",
+  "description": "**Languedoc-Roussillon** is a vast sweep of vineyards along France's southern Mediterranean coast, running from the Rhône toward the Spanish border, and is one of the largest wine-producing areas in the world.\n\n**Wines & grapes** — Reds and rosés dominate, built from the classic southern French grapes Grenache, Syrah, Mourvèdre, and Carignan, often blended together. Whites come from Picpoul, Grenache Blanc, and others, and the region also makes distinctive fortified sweet wines (vins doux naturels) such as Banyuls and Muscat.\n\n**Character** — A sunny, dry Mediterranean climate yields warm, herby, generous wines carrying the scent of the local wild scrubland known as garrigue. **Good to know** — Long a source of everyday bulk wine, it now offers some of France's best value alongside ambitious appellations like Corbières, Minervois, and Pic Saint-Loup."
+ },
+ {
+  "name": "Rioja",
+  "country": "Spain",
+  "description": "**Rioja** is Spain's most famous wine region, set inland in the north along the Ebro River, and is renowned for its supple, oak-aged red wines.\n\n**Wines & grapes** — Tempranillo is the heart of Rioja's reds, usually blended with Garnacha (Grenache) and smaller amounts of Graciano and Mazuelo. Traditional white Rioja is made mainly from Viura, and both reds and whites can spend long periods maturing in barrel.\n\n**Character** — Wines are classified by ageing: Crianza, Reserva, and Gran Reserva mark increasing time in oak and bottle, with the classic style showing savoury, vanilla-and-leather notes from American oak alongside red fruit. **Good to know** — Rioja splits into three zones, Rioja Alta, Rioja Alavesa, and Rioja Oriental, and ranges from crowd-pleasing everyday bottles to profound, decades-lived Gran Reservas."
+ },
+ {
+  "name": "Mendoza",
+  "country": "Argentina",
+  "description": "**Mendoza** lies in the arid foothills of the Andes in western Argentina and is by far the country's most important wine region, responsible for the majority of its production.\n\n**Wines & grapes** — Malbec is the signature grape, producing deeply coloured, plush, dark-fruited reds that made Argentina's international name. Cabernet Sauvignon, Bonarda, and Syrah are also widely grown, along with the aromatic white Torrontés.\n\n**Character** — Vineyards sit at high altitude, sometimes above 1,000 metres, where intense sunlight and cool nights give ripe fruit with lively acidity and firm colour. The desert climate relies on meltwater irrigation channelled down from the snowcapped Andes. **Good to know** — Higher, cooler sub-zones like the Uco Valley have pushed Mendoza's Malbec toward greater freshness and elegance."
+ },
+ {
+  "name": "Stellenbosch",
+  "country": "South Africa",
+  "description": "**Stellenbosch** is South Africa's best-known fine-wine district, set among granite hills just inland from Cape Town, and is the historic centre of the country's quality wine trade.\n\n**Wines & grapes** — It is especially celebrated for structured reds, above all Cabernet Sauvignon and Bordeaux-style blends, along with Syrah/Shiraz, Pinotage (South Africa's own crossing), and characterful whites from Chenin Blanc and Sauvignon Blanc.\n\n**Character** — A warm but sea-cooled Mediterranean climate, combined with varied mountain slopes and diverse soils, allows a wide range of styles, with the reds tending toward ripe fruit and firm structure. **Good to know** — Stellenbosch is also home to South Africa's leading wine university and research, and many of the Cape's most acclaimed estates."
+ },
+ {
+  "name": "Western Cape",
+  "country": "South Africa",
+  "description": "**Western Cape** is the broad South African province that contains almost all of the country's vineyards, sweeping inland and along the coast from Cape Town.\n\n**Wines & grapes** — As an umbrella region it spans nearly every style the country makes: Chenin Blanc (its most-planted grape) and Sauvignon Blanc among the whites, and Cabernet Sauvignon, Syrah/Shiraz, and the local Pinotage among the reds.\n\n**Character** — The climate is largely Mediterranean, moderated by the cold Benguela Current off the Atlantic coast and by the cooling Cape Doctor wind, with ancient, weathered soils underfoot. Because it covers so many districts, from Stellenbosch and Paarl to cooler coastal sites, its wines vary widely. **Good to know** — Wines simply labelled Western Cape are often blends drawn from several districts across the province."
+ },
+ {
+  "name": "Douro",
+  "country": "Portugal",
+  "description": "**Douro** runs along the dramatic, terraced valley of the Douro River in northern Portugal and is the birthplace of Port, one of the world's classic fortified wines.\n\n**Wines & grapes** — Alongside sweet, fortified Port in its many styles (Ruby, Tawny, Vintage), the region increasingly makes highly regarded dry reds and whites. Both draw on a palette of native grapes such as Touriga Nacional, Touriga Franca, Tinta Roriz (Tempranillo), and Tinta Barroca.\n\n**Character** — Steeply terraced schist slopes bake under a hot, dry continental climate, concentrating the fruit into powerful, dark, structured wines. **Good to know** — One of the oldest demarcated wine regions in the world, the Douro's spectacular landscape is a UNESCO World Heritage Site, and its dry reds now rival its Ports for prestige."
+ },
+ {
+  "name": "Barossa Valley",
+  "country": "Australia",
+  "description": "**Barossa Valley** lies northeast of Adelaide in South Australia and is one of the country's most iconic wine regions, famous for bold, full-bodied reds.\n\n**Wines & grapes** — Shiraz is the star, giving rich, concentrated, dark-fruited wines with real power, and the valley is also known for Grenache, Mourvèdre (often blended GSM-style), and Cabernet Sauvignon. On the cooler high ground of the Eden Valley nearby, Riesling shines.\n\n**Character** — A warm, dry climate produces ripe, generous wines with soft tannins and a signature depth. Barossa is treasured above all for its old vines, some among the oldest continuously producing vineyards on earth, planted by 19th-century German settlers. **Good to know** — Wines from these ancient vines can be extraordinarily concentrated and long-lived."
+ },
+ {
+  "name": "Nahe",
+  "country": "Germany",
+  "description": "**Nahe** — a German wine region in the southwest, named for the Nahe river that winds through it before joining the Rhine near Bingen. It sits between the Mosel and Rheinhessen and is best known for expressive, mineral Riesling.\n\n**Wines & grapes** — Riesling is the star, made in styles from bone-dry to lusciously sweet. You will also find Müller-Thurgau, Weissburgunder (Pinot Blanc), Grauburgunder (Pinot Gris) and some Spätburgunder (Pinot Noir).\n\n**Character** — The Nahe is famous for its geological patchwork: within a short distance the soils shift between slate, volcanic rock, quartzite and sandstone. This variety gives the Rieslings a wide range of expression, often combining ripe stone-fruit flavours with firm, stony minerality and bright acidity.\n\n**Good to know** — It is one of Germany's smaller and often underrated regions, prized by enthusiasts for offering great quality at fair prices."
+ },
+ {
+  "name": "Baden",
+  "country": "Germany",
+  "description": "**Baden** — Germany's southernmost and warmest major wine region, a long, narrow strip running down the southwest of the country, much of it facing the Vosges mountains and Alsace across the Rhine.\n\n**Wines & grapes** — Unusually for Germany, red wine is a real strength here. Spätburgunder (Pinot Noir) leads, alongside the Pinot family of whites — Grauburgunder (Pinot Gris) and Weissburgunder (Pinot Blanc) — plus Riesling, Müller-Thurgau and the local Gutedel (Chasselas) in the far south.\n\n**Character** — The warmer, sunnier climate produces riper, rounder and often fuller-bodied wines than most of Germany. Volcanic soils in areas like the Kaiserstuhl add depth and structure, giving reds real substance and whites a generous, food-friendly weight.\n\n**Good to know** — Baden is the heartland of dry, Burgundian-styled German wine, reflecting its cultural and culinary closeness to neighbouring France."
+ },
+ {
+  "name": "Puglia",
+  "country": "Italy",
+  "description": "**Puglia** — the long region forming the heel of Italy's boot, running down the southeast Adriatic coast. It is one of the country's largest wine producers, historically a source of robust, sun-soaked reds.\n\n**Wines & grapes** — The signatures are Primitivo (genetically the same as Zinfandel) and Negroamaro, both making deep, warm, generous reds; Nero di Troia adds a more structured, tannic style further north around Foggia.\n\n**Character** — A hot, dry Mediterranean climate and flat, fertile plains give wines that are ripe, full-bodied and high in alcohol, with soft tannins and dark fruit, sometimes with a warm, almost baked or spicy edge.\n\n**Good to know** — Once known mainly for bulk wine and blending grapes shipped north, Puglia has increasingly focused on quality, and its Primitivo di Manduria and Salice Salentino bottlings offer great value."
+ },
+ {
+  "name": "Alsace",
+  "country": "France",
+  "description": "**Alsace** — a distinctive wine region in northeastern France, tucked between the Vosges mountains and the Rhine along the German border. Its history has shuffled between France and Germany, and this shows in both its grapes and its tall, flute-shaped bottles.\n\n**Wines & grapes** — Alsace is above all a white-wine region, and unusually for France it labels most wines by grape. Riesling and Gewürztraminer are the flagships, joined by Pinot Gris, Muscat and Pinot Blanc, with Pinot Noir the main red. It also makes fine sparkling Crémant d'Alsace.\n\n**Character** — The Vosges shelter the vineyards from rain, making this one of France's driest and sunniest areas. The wines are aromatic and full-flavoured, ranging from bracingly dry to richly sweet late-harvest styles.\n\n**Good to know** — Fifty-one Grand Cru vineyards mark its finest sites."
+ },
+ {
+  "name": "Finger Lakes",
+  "country": "United States",
+  "description": "**Finger Lakes** — a cool-climate wine region in upstate New York, USA, named for a group of long, narrow glacial lakes. It is the most important wine area on the American East Coast for serious European-style whites.\n\n**Wines & grapes** — Riesling is the calling card, made in styles from dry to sweet, alongside Chardonnay, Gewürztraminer and increasingly good Cabernet Franc and Pinot Noir among the reds.\n\n**Character** — The deep lakes act as heat reservoirs, moderating the harsh winters and protecting vines near their shores. The cool growing season yields wines with vibrant acidity, moderate alcohol and pure fruit — Rieslings here often show crisp citrus and orchard fruit with a lively, refreshing edge.\n\n**Good to know** — Its climate is frequently compared to Germany's, and Riesling is what put the region on the international map."
+ },
+ {
+  "name": "Castilla y León",
+  "country": "Spain",
+  "description": "**Castilla y León** — a large region on the high central plateau of northern Spain, spread across the Duero river basin. It holds several of the country's most celebrated appellations.\n\n**Wines & grapes** — Reds built on Tempranillo dominate, going by local names such as Tinto Fino in Ribera del Duero and Tinta de Toro in Toro; both make powerful, age-worthy wines. For whites, the Rueda zone specialises in fresh, aromatic Verdejo.\n\n**Character** — The plateau sits at high altitude with a continental climate: hot days and cold nights, with a big daily temperature swing. This helps the reds keep firm acidity and structure alongside deep, concentrated dark fruit, while the whites stay crisp and lively.\n\n**Good to know** — Ribera del Duero, Toro and Rueda are the headline DOs, but the wider region includes many others such as Bierzo (made from Mencía)."
+ },
+ {
+  "name": "Catalonia",
+  "country": "Spain",
+  "description": "**Catalonia** — a region in northeastern Spain centred on Barcelona, stretching from the Mediterranean coast into the mountainous interior. It is one of Spain's most dynamic and varied wine areas.\n\n**Wines & grapes** — It is the home of Cava, Spain's traditional-method sparkling wine, largely made in Penedès from Macabeo, Xarel·lo and Parellada. Priorat and neighbouring Montsant produce concentrated reds from old-vine Garnacha (Grenache) and Cariñena (Carignan), while Penedès also makes a wide range of still whites and reds, including international varieties.\n\n**Character** — Styles span from crisp, fresh sparkling and coastal whites to dense, mineral, powerful reds from the steep slate terraces (llicorella) of Priorat.\n\n**Good to know** — Priorat is one of only two Spanish regions to hold the top DOCa/DOQ status, the same tier as Rioja."
+ },
+ {
+  "name": "Rheingau",
+  "country": "Germany",
+  "description": "**Rheingau** — a compact, historic wine region in Germany where the Rhine briefly turns to flow east-to-west, giving a long stretch of south-facing slopes. Despite its small size it has an outsized reputation.\n\n**Wines & grapes** — Riesling rules here, made in dry to nobly sweet styles of real precision and longevity. Spätburgunder (Pinot Noir), particularly around Assmannshausen, is the notable red.\n\n**Character** — The river's east-west bend maximises sun exposure and reflects light and warmth onto the vineyards, while slate and other soils lend the Rieslings their structure. The wines tend to be fuller, firmer and more powerful than those of the Mosel, with pronounced minerality and the capacity to age for decades.\n\n**Good to know** — The Rheingau is a cradle of German wine history: it was here that Schloss Johannisberg helped pioneer late-harvest Spätlese wines."
+ },
+ {
+  "name": "Sonoma County",
+  "country": "United States",
+  "description": "**Sonoma County** — a large and varied wine region on the coast of Northern California, USA, just west of Napa Valley. It runs from the cool, fog-swept Pacific shore inland to warmer valleys, giving it a huge range of growing conditions.\n\n**Wines & grapes** — Cooler zones like the Russian River Valley and Sonoma Coast excel at Pinot Noir and Chardonnay; warmer inland areas such as Alexander Valley and Dry Creek Valley shine with Cabernet Sauvignon and old-vine Zinfandel.\n\n**Character** — With coastal fog and many small sub-appellations, Sonoma spans everything from bright, elegant cool-climate wines to rich, full-bodied reds. It generally feels a touch more rustic and diverse than its polished Napa neighbour.\n\n**Good to know** — It contains numerous distinct AVAs, so the county name covers many very different wine styles."
+ },
+ {
+  "name": "Marlborough",
+  "country": "New Zealand",
+  "description": "**Marlborough** — New Zealand's largest and most famous wine region, at the sunny northeastern tip of the South Island. It is the area that made New Zealand a global name in wine.\n\n**Wines & grapes** — Sauvignon Blanc is the overwhelming signature, defining a whole international style; the region also makes excellent Pinot Noir, Chardonnay, aromatic Riesling and Pinot Gris, plus traditional-method sparkling wine.\n\n**Character** — A cool, sunny climate with a big day-to-night temperature swing gives wines of intense aroma and zingy acidity. Marlborough Sauvignon Blanc is instantly recognisable — pungent and vivid, with passion fruit, gooseberry, fresh-cut grass and citrus.\n\n**Good to know** — Its rise from almost nothing in the 1970s to worldwide fame is one of the great modern wine success stories, and Sauvignon Blanc remains its calling card."
+ },
+ {
+  "name": "Campania",
+  "country": "Italy",
+  "description": "**Campania** — a region in southern Italy centred on Naples and the Amalfi coast, with a winemaking heritage stretching back to ancient Greek and Roman times. Its strength lies in distinctive native grapes.\n\n**Wines & grapes** — The great red is Aglianico, which reaches its peak in Taurasi — a deep, structured, tannic and long-lived wine sometimes called the Barolo of the south. Among whites, Fiano di Avellino, Greco di Tufo and the softer Falanghina all make characterful, mineral wines.\n\n**Character** — Volcanic soils around Mount Vesuvius and inland hills, plus varied altitudes, give the wines freshness, minerality and firm structure despite the warm southern climate.\n\n**Good to know** — Campania is one of Italy's finest homes for indigenous varieties, and its top wines age remarkably well for the region's latitude."
+ },
+ {
+  "name": "Southwest France",
+  "country": "France",
+  "description": "**Southwest France** — known in French as the Sud-Ouest, a loose grouping of scattered wine areas across the southwest of the country, inland and south of Bordeaux, reaching toward the Pyrenees. It is a treasure trove of local grapes found almost nowhere else.\n\n**Wines & grapes** — Reds are the highlight: Malbec makes the dark, firm wines of Cahors, and Tannat gives the powerful, tannic reds of Madiran. Bordeaux varieties like Merlot and the Cabernets appear widely, while distinctive whites come from grapes such as Gros and Petit Manseng, notably in the sweet and dry wines of Jurançon.\n\n**Character** — Styles are diverse but often robust and characterful, with many old regional varieties preserved here.\n\n**Good to know** — Historically overshadowed by neighbouring Bordeaux, the region offers great value and unusual, distinctive flavours."
+ },
+ {
+  "name": "Friuli-Venezia Giulia",
+  "country": "Italy",
+  "description": "**Friuli-Venezia Giulia** is a region tucked into the northeastern corner of Italy, between the Alps and the Adriatic where it borders Slovenia and Austria. It is best known as one of the country's finest sources of white wine.\n\n**Wines & grapes** — The reputation rests on crisp, textured whites from Friulano (the local signature), Pinot Grigio, Sauvignon, Ribolla Gialla, and Malvasia, along with aromatic Picolit dessert wines. Reds from Refosco, Schioppettino and international grapes are made too, and the region is a heartland of the amber \"orange\" skin-contact movement.\n\n**Character** — Cool air off the mountains and warmth from the sea give the wines both freshness and depth, with a purity and mineral cut that has become a Friulian trademark.\n\n**Good to know** — The top subzones Collio and Colli Orientali sit on a distinctive marl-and-sandstone soil that locals call ponca."
+ },
+ {
+  "name": "Oregon",
+  "country": "United States",
+  "description": "**Oregon** is a US state in the Pacific Northwest that has built an outsized wine reputation on a single grape. Its cool, green valleys have become one of the New World's benchmark homes for Pinot Noir.\n\n**Wines & grapes** — Pinot Noir dominates, joined by excellent Pinot Gris, Chardonnay and aromatic whites such as Riesling and Gewürztraminer. The Willamette Valley, running south of Portland, is the centre of gravity, while warmer southern valleys grow a broader mix.\n\n**Character** — A marginal, rainy, cool climate yields Pinot Noir that leans toward elegance and freshness rather than power, with red-fruit perfume and firm acidity.\n\n**Good to know** — The industry has a strong streak of small, hands-on, sustainability-minded producers, and Burgundian houses have invested here."
+ },
+ {
+  "name": "Gisborne",
+  "country": "New Zealand",
+  "description": "**Gisborne** sits on the eastern tip of New Zealand's North Island, one of the first places in the country to see the sunrise. It is known above all for white wine, and long styled itself as a Chardonnay capital.\n\n**Wines & grapes** — Chardonnay is the flagship, typically ripe and generous, alongside aromatic whites such as Gewürztraminer, Viognier and Pinot Gris. Some Merlot and other reds are grown, but the region's heart is clearly white.\n\n**Character** — Fertile plains and a warm, sunny maritime climate give wines that are round, fruit-forward and approachable, with softer acidity than New Zealand's cooler zones.\n\n**Good to know** — It is a relatively warm, high-yielding area, and a fair share of its fruit has historically fed larger blended bottlings."
+ },
+ {
+  "name": "Languedoc",
+  "country": "France",
+  "description": "**Languedoc** is a vast wine region sweeping along France's Mediterranean coast in the south, from the Rhône delta toward the Spanish border. Once famous mainly for volume, it is now a dynamic source of characterful, well-priced wine.\n\n**Wines & grapes** — Reds lead, built on Grenache, Syrah, Mourvèdre and Carignan, with appellations such as Corbières, Minervois, Faugères and Pic Saint-Loup. It also makes rosé, herby whites, and distinctive sparkling and fortified sweet wines.\n\n**Character** — A hot, dry, sunny climate and garrigue-scented hills give reds that are warm, spicy and full of dark fruit, often with a wild Mediterranean herbal edge.\n\n**Good to know** — Much wine here is sold under the broad Pays d'Oc label, which allows single-varietal bottlings."
+ },
+ {
+  "name": "Washington",
+  "country": "United States",
+  "description": "**Washington** is a US state in the Pacific Northwest and, after California, one of America's largest wine producers. Most vineyards lie not in the rainy west but in the arid, sunny interior east of the Cascade Mountains.\n\n**Wines & grapes** — It is a red-wine powerhouse, especially Cabernet Sauvignon, Merlot and Syrah, with strong Bordeaux-style blends. Whites such as Riesling and Chardonnay are also important, and Columbia Valley is the sprawling parent region.\n\n**Character** — Hot, dry days and cold nights over irrigated desert soils produce ripe yet structured reds with deep colour, firm tannins and bright acidity.\n\n**Good to know** — The far-northern latitude gives unusually long summer daylight, helping fruit ripen fully."
+ },
+ {
+  "name": "Abruzzo",
+  "country": "Italy",
+  "description": "**Abruzzo** lies in central Italy on the Adriatic side, a rugged region of high Apennine mountains that drop toward the coast. It is a reliable, good-value source of both red and white wine.\n\n**Wines & grapes** — The signature red is Montepulciano d'Abruzzo, deep and juicy, while the crisp white Trebbiano d'Abruzzo is the main white. A distinctive dark, cherry-scented rosé called Cerasuolo d'Abruzzo is also a local specialty.\n\n**Character** — Warm coastal sun tempered by cool mountain air gives reds that are rich and smooth with soft tannins and dark-fruit flavour, and whites that stay fresh.\n\n**Good to know** — Do not confuse the grape Montepulciano here with the Tuscan town of Montepulciano, which makes Sangiovese-based wine."
+ },
+ {
+  "name": "Clare Valley",
+  "country": "Australia",
+  "description": "**Clare Valley** is a wine region in South Australia, north of Adelaide, set among rolling hills at relatively high elevation. It is celebrated as one of Australia's premier homes for Riesling.\n\n**Wines & grapes** — Riesling is the star, made bone-dry, and it also produces excellent Shiraz and Cabernet Sauvignon. The combination of a great white and serious reds from one area is part of the valley's appeal.\n\n**Character** — Warm days and notably cool nights preserve acidity, giving Rieslings that are taut, dry and citrus-driven, famous for aging into toasty, lime-scented maturity, while the reds stay firm and structured.\n\n**Good to know** — Clare was an early Australian adopter of the screwcap closure, championed to protect its delicate Rieslings."
+ },
+ {
+  "name": "Niagara Peninsula",
+  "country": "Canada",
+  "description": "**Niagara Peninsula** is Canada's most important wine region, set in Ontario on the strip of land between Lake Ontario and Lake Erie near Niagara Falls. It is world-famous for one thing above all: icewine.\n\n**Wines & grapes** — Its signature is intensely sweet icewine, made from grapes such as Vidal and Riesling frozen on the vine. Beyond that it makes fine dry Riesling and Chardonnay, plus reds and rosés from Pinot Noir, Cabernet Franc and others.\n\n**Character** — A cool, continental climate moderated by the surrounding lakes lets grapes hang late, and the reliably cold winters make natural icewine possible year after year.\n\n**Good to know** — Canadian icewine is tightly regulated, requiring genuine natural freezing rather than artificial chilling."
+ },
+ {
+  "name": "Hunter Valley",
+  "country": "Australia",
+  "description": "**Hunter Valley** lies in New South Wales, north of Sydney, and is the oldest continuously producing wine region in Australia. It holds a special place in the country's wine history and identity.\n\n**Wines & grapes** — Its most distinctive wine is Semillon, picked early and made low in alcohol, and Shiraz is the classic red. Chardonnay and Verdelho are grown too, but Semillon and Shiraz define the valley's character.\n\n**Character** — The climate is warm and humid, unusual for fine wine, yet it yields a Semillon that is light and citrusy when young and transforms with age into a honeyed, toasty white, alongside earthy, medium-bodied Shiraz.\n\n**Good to know** — Aged Hunter Semillon is considered one of the wine world's great, and most unlikely, cellar treasures."
+ },
+ {
+  "name": "Jura",
+  "country": "France",
+  "description": "**Jura** is a small, mountainous French wine region east of Burgundy, near the Swiss border. Though tiny, it has a devoted following for its highly distinctive and unusual wines.\n\n**Wines & grapes** — Whites come from Chardonnay and the local Savagnin; reds and rosés from Poulsard, Trousseau and Pinot Noir. Its most famous style is Vin Jaune, a nutty, sherry-like white aged under a film of yeast, plus the sweet straw wine Vin de Paille and the sparkling Crémant du Jura.\n\n**Character** — A cool climate and marl soils, combined with deliberate oxidative aging, give many wines a savoury, nutty, curry-spice complexity unlike anywhere else.\n\n**Good to know** — Vin Jaune is bottled in the distinctive squat 62 cl clavelin."
+ },
+ {
+  "name": "Lombardy",
+  "country": "Italy",
+  "description": "**Lombardy** is a large, wealthy region in northern Italy centred on Milan, stretching from the Alps to the Po plain. It is home to some of Italy's most prestigious sparkling wine and a distinctive mountain red.\n\n**Wines & grapes** — Franciacorta, made by the traditional bottle-fermented method from Chardonnay and Pinot Nero, is the flagship and rivals fine Champagne. Valtellina in the Alpine north grows Nebbiolo (locally Chiavennasca), while Oltrepò Pavese produces a broad range of still and sparkling wines.\n\n**Character** — Cool, varied terrain gives elegant, high-acid sparkling wines and, in Valtellina, lighter, aromatic, high-altitude Nebbiolo grown on steep terraces.\n\n**Good to know** — Sforzato di Valtellina is a powerful dry red made from dried grapes, like a Nebbiolo take on Amarone."
+ },
+ {
+  "name": "Quebec",
+  "country": "Canada",
+  "description": "**Quebec** is a cold, northern province of eastern Canada with a small but growing wine industry, concentrated south of Montreal near the US border. Its winemakers work at the frigid edge of where grapes can ripen.\n\n**Wines & grapes** — Much of the vineyard is planted to cold-hardy hybrid varieties bred to survive harsh winters, producing dry whites, rosés and light reds. The province is especially known for sweet winter specialties, including icewine and its distinctive ice cider.\n\n**Character** — A short growing season and brutal winters shape the wines, which tend to be light, fresh and high in acidity, with the cold turned to advantage in the dessert styles.\n\n**Good to know** — Some growers physically bury or protect their vines to help them survive the deep winter freeze."
+ },
+ {
+  "name": "Provence",
+  "country": "France",
+  "description": "**Provence** ... — a sun-drenched region in the far south-east of France, running along the Mediterranean coast, and the spiritual home of dry rosé.\n\n**Wines & grapes** — Above all pale, dry rosé, typically blended from Grenache, Cinsault, Syrah and Mourvèdre. There are serious reds too, and a small amount of white; the coastal appellation of Bandol is prized for structured, age-worthy Mourvèdre-based reds, while Cassis is known for its whites.\n\n**Character** — The classic Provençal rosé is very pale, almost onion-skin pink, with crisp acidity and gentle notes of red berry, citrus and herbs. A warm, dry climate and cooling sea breezes shape the freshness.\n\n**Good to know** — Côtes de Provence is the largest appellation, and the region has done more than any other to make dry rosé a fashionable, year-round drink."
+ },
+ {
+  "name": "Niederösterreich",
+  "country": "Austria",
+  "description": "**Niederösterreich** ... — Lower Austria, the country's largest quality wine region, spread across the north-east around the Danube and its tributaries.\n\n**Wines & grapes** — Predominantly crisp, dry whites, led by Grüner Veltliner, Austria's signature grape, and fine Riesling. It contains celebrated sub-zones such as the Wachau, Kremstal and Kamptal, along with reds from around Vienna's fringes.\n\n**Character** — Cool continental conditions and steep terraced vineyards give whites with bright acidity, mineral drive and, in the case of Grüner Veltliner, a distinctive peppery, citrus-and-green-herb note. The best examples age gracefully.\n\n**Good to know** — The steep Wachau terraces along the Danube are among Austria's most scenic and highly regarded vineyard sites."
+ },
+ {
+  "name": "Swartland",
+  "country": "South Africa",
+  "description": "**Swartland** ... — a warm, dry-farmed region north of Cape Town in South Africa's Western Cape, and one of the country's most exciting sources of characterful wine.\n\n**Wines & grapes** — Old-vine Chenin Blanc is a calling card, alongside Rhône-inspired reds and whites built on Syrah, Grenache, Mourvèdre, Cinsault and other Mediterranean varieties.\n\n**Character** — Hot summers, granite and shale soils, and many old bush vines yield concentrated, textured wines. A wave of independent, minimal-intervention producers has given the area a reputation for expressive, terroir-focused bottlings rather than heavy, over-oaked styles.\n\n**Good to know** — Once known mainly for bulk wine and wheat, Swartland's revival over the past couple of decades has made it a byword for South African quality and originality."
+ },
+ {
+  "name": "Ahr",
+  "country": "Germany",
+  "description": "**Ahr** ... — one of Germany's smallest and most northerly wine regions, following the Ahr river valley south of Bonn, and unusually devoted to red wine.\n\n**Wines & grapes** — Chiefly Pinot Noir, known here as Spätburgunder, with some Portugieser and a little white. It is one of the rare German regions where red dominates.\n\n**Character** — Steep, slate and volcanic slopes trap warmth in a cool northern setting, producing red wines that are typically elegant, silky and relatively light-bodied, with red-cherry fruit and fine structure.\n\n**Good to know** — Despite the northern latitude, the sheltered, sun-catching valley walls make ripe red wine possible, and the Ahr's Pinot Noir has a devoted following."
+ },
+ {
+  "name": "Burgenland",
+  "country": "Austria",
+  "description": "**Burgenland** ... — a wine region in eastern Austria, along the Hungarian border, best known for its red wines and world-class sweet whites.\n\n**Wines & grapes** — Reds built on Blaufränkisch and Zweigelt lead the way, while the area around the shallow Lake Neusiedl is famous for luscious botrytis-affected dessert wines.\n\n**Character** — A warm, sunny, Pannonian climate ripens reds fully, giving wines with dark fruit, spice and firm but supple structure. The lake's humidity encourages noble rot, ideal for concentrated sweet wines.\n\n**Good to know** — Burgenland is the heartland of Austria's red-wine renaissance, with Blaufränkisch increasingly seen as its most serious and age-worthy variety."
+ },
+ {
+  "name": "Franken",
+  "country": "Germany",
+  "description": "**Franken** ... — a region in northern Bavaria, in southern Germany, set along the Main river around Würzburg, with a strong identity of its own.\n\n**Wines & grapes** — Dry whites are the focus, and Silvaner is the signature grape, alongside Müller-Thurgau and Riesling. Reds are a minor presence.\n\n**Character** — A cooler, more continental climate and varied soils give wines that are typically dry, earthy and firmly structured rather than fruity or floral, with Silvaner showing a distinctive savoury, minerally profile.\n\n**Good to know** — Many Franken wines are bottled in the traditional flask-shaped Bocksbeutel, a rounded flattened bottle that makes them instantly recognisable on the shelf."
+ },
+ {
+  "name": "Ontario",
+  "country": "Canada",
+  "description": "**Ontario** ... — Canada's largest wine province, with vineyards concentrated near the Great Lakes, most famously on the Niagara Peninsula.\n\n**Wines & grapes** — A cool-climate mix of Riesling, Chardonnay, Pinot Noir and Cabernet Franc, plus sparkling wine. Ontario is especially renowned for icewine, often from Vidal and Riesling.\n\n**Character** — The moderating effect of the lakes tempers a cold continental climate, allowing grapes to ripen while retaining bright acidity. Reliably freezing winters make Ontario one of the world's most consistent producers of intensely sweet, concentrated icewine.\n\n**Good to know** — Genuine icewine is made from grapes left to freeze on the vine and pressed while frozen, and Ontario's cold winters give it a global reputation for the style."
+ },
+ {
+  "name": "Roussillon",
+  "country": "France",
+  "description": "**Roussillon** ... — a warm, mountainous region in the far south of France, hugging the Mediterranean coast and the Spanish border near the eastern Pyrenees.\n\n**Wines & grapes** — Rich dry reds and whites built on Grenache, Syrah, Mourvèdre and Carignan, plus a proud tradition of fortified sweet wines (vins doux naturels) such as Banyuls, Maury and Rivesaltes.\n\n**Character** — Intense sunshine, low rainfall, dramatic schist and granite terraces, and old bush vines produce concentrated, full-bodied wines. The fortified sweet wines, made from very ripe Grenache, range from fresh and grapey to deep, nutty and oxidative.\n\n**Good to know** — Catalan culture runs deep here, and Roussillon is one of France's most important sources of traditional fortified wine."
+ },
+ {
+  "name": "Beaujolais",
+  "country": "France",
+  "description": "**Beaujolais** ... — a region in eastern France, just south of Burgundy, devoted almost entirely to juicy, food-friendly red wine.\n\n**Wines & grapes** — Almost all red, made from the Gamay grape, ranging from light everyday bottlings to the more structured wines of the ten named Crus such as Morgon, Fleurie and Moulin-à-Vent.\n\n**Character** — Granite soils in the north and a gentle climate give reds that are bright, fresh and low in tannin, bursting with red-berry fruit and floral notes; the Crus can add depth and the ability to age.\n\n**Good to know** — Beaujolais Nouveau, released each November just weeks after harvest, made the region famous, but its serious Crus deserve far more attention."
+ },
+ {
+  "name": "Umbria",
+  "country": "Italy",
+  "description": "**Umbria** ... — a landlocked region in central Italy, tucked beside Tuscany, sometimes called the country's green heart.\n\n**Wines & grapes** — Best known for the powerful red Sagrantino di Montefalco, made from the local Sagrantino grape, and for the crisp white Orvieto, based largely on Grechetto and Trebbiano. Sangiovese also features widely.\n\n**Character** — Hilly inland vineyards and a warm but continental climate give a mix of structured, deeply coloured reds and fresh, easygoing whites. Sagrantino is notably tannic and long-lived, one of Italy's most robust native reds.\n\n**Good to know** — Montefalco Sagrantino was once made mainly as a sweet passito wine, but today the dry version is Umbria's flagship."
+ },
+ {
+  "name": "Alentejo",
+  "country": "Portugal",
+  "description": "**Alentejo** ... — a vast, warm, sparsely populated region covering much of southern Portugal, inland from Lisbon.\n\n**Wines & grapes** — Mostly generous, ripe reds from native varieties such as Aragonez (Tempranillo), Trincadeira, Alicante Bouschet and Touriga Nacional, along with fuller-bodied whites from grapes like Antão Vaz and Arinto.\n\n**Character** — Hot, dry summers and rolling plains produce soft, fruit-forward, approachable reds with smooth tannins and warm spice. The region is also known for reviving the ancient tradition of fermenting wine in large clay amphorae, called talha.\n\n**Good to know** — Alentejo is one of Portugal's most commercially successful regions, popular for its easy, crowd-pleasing style and good value."
+ },
+ {
+  "name": "Alto Adige (Südtirol)",
+  "country": "Italy",
+  "description": "**Alto Adige (Südtirol)** ... — a small alpine region in Italy's far north, in the German-speaking province of South Tyrol, where valley vineyards climb steep mountain slopes.\n\n**Wines & grapes** — Best known for precise, aromatic whites such as Pinot Grigio, Pinot Bianco, Gewürztraminer and Chardonnay, plus reds from the local Schiava (Vernatsch) and Lagrein.\n\n**Character** — High altitude, big day-to-night temperature swings and abundant sunshine give whites with crystalline purity, bright acidity and clear varietal aromas. Lagrein makes a dark, structured red, while Schiava is light and easy.\n\n**Good to know** — The region's dual Italian-German identity is reflected in its bilingual wine names, and it is regarded as one of Italy's top sources of crisp mountain whites."
+ },
+ {
+  "name": "Central Valley",
+  "country": "Chile",
+  "description": "**Central Valley** — Chile's vast winemaking heartland, a long stretch of vineyards running south from near Santiago between the Andes and the coastal range. It supplies the bulk of the country's exported wine and takes in celebrated sub-zones such as Maipo, Colchagua, Curicó and Maule.\n\n**Wines & grapes** — Reds dominate, led by Cabernet Sauvignon, Merlot and the country's signature Carmenère, with plenty of Syrah too. Whites come mainly from Chardonnay and Sauvignon Blanc.\n\n**Character** — A warm, dry Mediterranean climate with reliable sunshine and cool nights, watered by snowmelt channelled down from the Andes. The wines tend to be ripe, generous and fruit-forward, offering dependable quality at every price level.\n\n**Good to know** — Carmenère, long confused with Merlot in these vineyards, has become Chile's calling-card grape."
+ },
+ {
+  "name": "Marche",
+  "country": "Italy",
+  "description": "**Marche** — A region on Italy's central Adriatic coast, tucked between the Apennine mountains and the sea. It is best known for crisp white wines built on the Verdicchio grape.\n\n**Wines & grapes** — Verdicchio is the star, giving fresh, savoury whites in zones such as Castelli di Jesi and Matelica. Reds lean on Montepulciano and Sangiovese, seen in appellations like Rosso Conero and Rosso Piceno.\n\n**Character** — Hillsides catch both sea breezes and mountain air, producing whites with a lively citrus edge and a characteristic almond note on the finish, and reds that are supple and approachable."
+ },
+ {
+  "name": "Emilia-Romagna",
+  "country": "Italy",
+  "description": "**Emilia-Romagna** — A large region spanning north-central Italy, from the Apennine foothills across a broad plain to the Adriatic. It is most famous internationally for Lambrusco, the lightly sparkling red.\n\n**Wines & grapes** — Lambrusco leads, made in styles from bone dry to sweet, all with a refreshing fizz. Romagna to the east contributes Sangiovese reds and the white grapes Albana and Pignoletto.\n\n**Character** — Fertile plains and rolling hills give mostly easy-drinking, food-friendly wines. Lambrusco's bright acidity and frothy texture make it a natural partner for the region's rich cured meats and cheeses.\n\n**Good to know** — Albana di Romagna was Italy's first white wine to earn DOCG status."
+ },
+ {
+  "name": "Castilla-La Mancha",
+  "country": "Spain",
+  "description": "**Castilla-La Mancha** — A sprawling, sun-baked plateau in central Spain south of Madrid, home to the largest concentration of vineyards on earth. Its heartland is the La Mancha appellation, alongside zones such as Valdepeñas.\n\n**Wines & grapes** — The white Airén, planted here in huge quantity, and the red Tempranillo (locally called Cencibel) are the mainstays, joined by Garnacha, Cabernet Sauvignon and others.\n\n**Character** — A harsh continental climate of blazing summers and cold winters over high, arid ground. Long the source of inexpensive bulk wine, the region increasingly turns out serious, value-driven reds.\n\n**Good to know** — Several single-estate Vino de Pago wines here carry Spain's highest quality designation."
+ },
+ {
+  "name": "Peloponnese",
+  "country": "Greece",
+  "description": "**Peloponnese** — A large peninsula forming the southern tip of mainland Greece, and one of the country's most important areas for quality wine. It holds historic appellations such as Nemea, Mantinia and Patras.\n\n**Wines & grapes** — Reds come chiefly from Agiorgitiko, grown around Nemea, while the aromatic white Moschofilero shines in the cooler highlands of Mantinia. Roditis and sweet Muscat from Patras add further variety.\n\n**Character** — Landscapes range from warm coastal plains to cool mountain vineyards at altitude, yielding everything from soft, juicy reds to fresh, floral whites. The native grapes give the wines a distinctly Greek personality."
+ },
+ {
+  "name": "Central Coast",
+  "country": "United States",
+  "description": "**Central Coast** — A long California wine region running down the Pacific coast from the San Francisco Bay area to Santa Barbara. It spans a huge range of climates and includes noted zones like Paso Robles, Santa Lucia Highlands, Edna Valley and Santa Barbara.\n\n**Wines & grapes** — Its breadth supports many grapes: cool coastal spots excel with Pinot Noir and Chardonnay, while warmer inland sites favour Syrah and other Rhône varieties, Cabernet Sauvignon and Zinfandel.\n\n**Character** — Fog and ocean influence cool the seaside vineyards, while inland valleys ripen richer, fuller reds. This variety of sites makes it one of California's most diverse growing regions."
+ },
+ {
+  "name": "Aragón",
+  "country": "Spain",
+  "description": "**Aragón** — A region in north-eastern Spain, inland from Catalonia, regarded as one of the great homes of the Garnacha grape. Its wines come from appellations such as Campo de Borja, Calatayud, Cariñena and Somontano.\n\n**Wines & grapes** — Old-vine Garnacha is the calling card, producing deep, warming reds, often blended with Tempranillo, Syrah or Cariñena. Somontano, in the Pyrenean foothills, also makes fresher reds and whites from international varieties.\n\n**Character** — A dry continental climate with hot days and cold nights over stony, poor soils yields concentrated, robust reds that offer excellent value for money."
+ },
+ {
+  "name": "New York",
+  "country": "United States",
+  "description": "**New York** — A cool-climate wine region in the north-eastern United States, and one of the country's older winegrowing areas. Its key districts are the Finger Lakes, Long Island and the Hudson River Valley.\n\n**Wines & grapes** — The Finger Lakes are celebrated for Riesling, together with other aromatic whites and Pinot Noir, while maritime Long Island focuses on Bordeaux grapes such as Merlot and Cabernet Franc. Native and hybrid varieties are grown too.\n\n**Character** — Deep lakes and coastal waters moderate the cold, letting grapes ripen through a short, cool season. The whites are marked by bright acidity and precision.\n\n**Good to know** — Finger Lakes Riesling is widely rated among America's finest."
+ },
+ {
+  "name": "Nelson",
+  "country": "New Zealand",
+  "description": "**Nelson** — A small, sunny wine region at the northern tip of New Zealand's South Island, just west of Marlborough, with a strong boutique, artisan character.\n\n**Wines & grapes** — Sauvignon Blanc and Chardonnay lead the whites, with excellent aromatic Riesling and Pinot Gris, while Pinot Noir is the main red.\n\n**Character** — A cool but bright maritime climate with plenty of sunshine hours gives wines with vibrant fruit and crisp acidity. Production is small in scale and firmly quality-focused."
+ },
+ {
+  "name": "Canterbury",
+  "country": "New Zealand",
+  "description": "**Canterbury** — A wine region on the east coast of New Zealand's South Island, around Christchurch, with the Waipara Valley as its best-known sub-district.\n\n**Wines & grapes** — Pinot Noir and Riesling are the standouts, supported by Chardonnay, Sauvignon Blanc and Pinot Gris.\n\n**Character** — A cool, relatively dry climate with a long ripening season produces elegant, aromatic whites and finely structured Pinot Noir. Waipara's warmer, sheltered sites add a little extra ripeness."
+ },
+ {
+  "name": "Texas",
+  "country": "United States",
+  "description": "**Texas** — A growing wine region in the southern United States, and one of the country's larger producers by volume. Most vineyards lie in the High Plains around Lubbock and in the Hill Country at the centre of the state.\n\n**Wines & grapes** — Warm-climate grapes do best, with Tempranillo, Mourvèdre, Sangiovese and Viognier among the varieties suited to the heat, alongside other Rhône and Mediterranean styles.\n\n**Character** — A hot, sunny climate tempered by high-altitude sites and cool nights on the plains gives ripe, full-bodied wines. The industry is young but improving quickly."
+ },
+ {
+  "name": "New South Wales",
+  "country": "Australia",
+  "description": "**New South Wales** — A major wine state in south-eastern Australia, home to the historic Hunter Valley and a spread of other districts including Riverina, Mudgee, Orange and the Canberra District.\n\n**Wines & grapes** — The Hunter is famous for long-lived Semillon and earthy Shiraz, while Riverina is known for luscious botrytis-affected sweet Semillon. Cooler, higher zones like Orange and Canberra add Chardonnay, Riesling and Shiraz.\n\n**Character** — Styles vary widely with climate, from the humid, subtropical Hunter to cool, elevated inland sites. Hunter Semillon, picked early and aged in bottle, is one of Australia's most distinctive whites.\n\n**Good to know** — The Hunter Valley is among the oldest wine regions in Australia."
+ },
+ {
+  "name": "Santa Barbara County",
+  "country": "United States",
+  "description": "**Santa Barbara County** — On California's Central Coast, north of Los Angeles, this is one of the state's most distinctive cool-climate zones, thanks to valleys that run east to west and funnel Pacific fog straight inland. It reached a wider audience after the film *Sideways* put its Pinot Noir in the spotlight.\n\n**Wines & grapes** — Pinot Noir and Chardonnay are the calling cards, grown in cooler sub-areas such as the Santa Rita Hills and Santa Maria Valley. Warmer pockets also do well with Syrah and other Rhône grapes.\n\n**Character** — The unusual transverse valleys draw in ocean air, giving long, slow ripening that keeps acidity fresh and flavours precise. Wines tend toward elegance rather than heft.\n\n**Good to know** — The Santa Rita Hills in particular is prized for taut, mineral Pinot Noir."
+ },
+ {
+  "name": "Paso Robles",
+  "country": "United States",
+  "description": "**Paso Robles** — Also on California's Central Coast but well inland, Paso Robles is a warm, sprawling region known for generous, sun-filled reds and a pioneering streak with Rhône grape varieties.\n\n**Wines & grapes** — Zinfandel is a longtime staple, alongside Cabernet Sauvignon and Rhône varieties such as Syrah and Grenache, often blended. Whites like Viognier and Roussanne are made too.\n\n**Character** — Hot days and notably cool nights — a wide daily temperature swing — let grapes ripen fully while holding on to acidity, producing bold, ripe, fruit-forward wines. The region is large and varied, from cooler limestone-rich hills in the west to warmer flats in the east.\n\n**Good to know** — It became a hub for the \"Rhône Rangers\" movement championing Syrah and Grenache in California."
+ },
+ {
+  "name": "Galicia",
+  "country": "Spain",
+  "description": "**Galicia** — In Spain's rainy, green northwest corner, on the Atlantic coast above Portugal, Galicia is celebrated above all for crisp, aromatic white wines.\n\n**Wines & grapes** — Albariño, grown mainly in Rías Baixas near the sea, is the signature — bright and citrusy. Inland areas make excellent whites from Godello and reds from Mencía, notably in Ribeira Sacra and Valdeorras.\n\n**Character** — The cool, wet, ocean-influenced climate — quite unlike the dry Spanish interior — gives wines high natural acidity, freshness and a saline lift that pairs beautifully with the region's seafood."
+ },
+ {
+  "name": "South Eastern Australia",
+  "country": "Australia",
+  "description": "**South Eastern Australia** — This is not a single place but a very large official zone covering most of Australia's vineyard land, stretching across several states. It exists mainly as a labelling category for blended wines.\n\n**Wines & grapes** — Because grapes can be sourced from anywhere within the zone, wines span the full range — Shiraz, Cabernet Sauvignon, Chardonnay, Sauvignon Blanc and more — usually made in an approachable, consistent style.\n\n**Character** — The name signals a wine blended across regions for reliability and value rather than a specific local identity, and it appears often on well-known everyday brands."
+ },
+ {
+  "name": "Setúbal Peninsula",
+  "country": "Portugal",
+  "description": "**Setúbal Peninsula** — Just south of Lisbon in Portugal, this coastal region is best known for a historic fortified sweet wine, though it makes plenty of dry table wine too.\n\n**Wines & grapes** — Its fame rests on Moscatel de Setúbal, a rich, aromatic fortified wine from Muscat grapes. Dry reds lean on Castelão and international varieties, with whites from Fernão Pires and others.\n\n**Character** — A warm, sunny, maritime climate suits both the honeyed, orange-peel intensity of the Moscatel and ripe, easy-drinking reds. The fortified wines can age remarkably well, deepening in colour and complexity."
+ },
+ {
+  "name": "Western Australia",
+  "country": "Australia",
+  "description": "**Western Australia** — Occupying the country's vast western third, this state produces only a small share of Australia's wine but a high proportion of its most acclaimed bottles.\n\n**Wines & grapes** — The standout grapes are Cabernet Sauvignon and Chardonnay, with fine Riesling, Sauvignon Blanc and Semillon as well. Margaret River is the best-known region, joined by the cooler Great Southern.\n\n**Character** — Many of the top areas enjoy a maritime climate moderated by the surrounding oceans, favouring structured, elegant wines with good balance rather than sheer power."
+ },
+ {
+  "name": "Liguria",
+  "country": "Italy",
+  "description": "**Liguria** — A thin, mountainous arc along Italy's northwest coast — the Italian Riviera — Liguria makes small quantities of distinctive wine on steep terraces above the sea.\n\n**Wines & grapes** — Whites dominate, chiefly Vermentino and Pigato, both crisp and herb-scented. Reds come from Rossese, notably around Dolceacqua, and the Cinque Terre is famous for its rare sweet Sciacchetrà.\n\n**Character** — Vineyards clinging to sheer coastal slopes, sea breezes and poor soils yield fresh, mineral, saline wines. Production is tiny and much of it is drunk locally, so bottles are prized finds."
+ },
+ {
+  "name": "Colchagua Valley",
+  "country": "Chile",
+  "description": "**Colchagua Valley** — Part of the larger Rapel Valley in Chile's Central Valley, Colchagua is one of the country's premier zones for full-bodied red wine.\n\n**Wines & grapes** — It is red-wine country above all — Cabernet Sauvignon, Carmenère, Syrah and Malbec — with the Apalta sub-area especially renowned for concentrated, age-worthy blends.\n\n**Character** — A warm, sunny valley climate cooled by ocean and mountain influences produces ripe, deeply coloured, richly fruited reds with firm structure. Carmenère, Chile's signature grape, thrives here."
+ },
+ {
+  "name": "Valais",
+  "country": "Switzerland",
+  "description": "**Valais** — In the sunny upper Rhône valley of southern Switzerland, Valais is the country's largest and one of its most varied wine regions, farmed on dramatic Alpine terraces.\n\n**Wines & grapes** — The workhorse white is Chasselas (known locally as Fendant), while Pinot Noir and Gamay make the red blend called Dôle. Valais is also a treasury of rare native grapes such as Petite Arvine, Amigne, Humagne and Cornalin.\n\n**Character** — Steep, sun-drenched slopes and a dry mountain climate give wines that are ripe yet fresh, ranging from easy-drinking whites to characterful, distinctly local specialties. Little leaves Switzerland, so these bottles are seldom seen abroad."
+ },
+ {
+  "name": "Pennsylvania",
+  "country": "United States",
+  "description": "**Pennsylvania** — A state in the northeastern United States with a small but growing wine industry spread across many family-run wineries.\n\n**Wines & grapes** — Growers work with a mix of hybrid grapes such as Chambourcin and cold-hardy classic varieties like Riesling, Chardonnay and Cabernet Franc, producing everything from dry table wines to sweeter styles.\n\n**Character** — A cool, humid continental climate makes grape-growing a challenge, so hardy varieties and careful site selection matter. The wines are mostly enjoyed regionally rather than widely exported."
+ },
+ {
+  "name": "Trentino-Alto Adige",
+  "country": "Italy",
+  "description": "**Trentino-Alto Adige** — Italy's northernmost wine region, tucked into the Alps near the Austrian border, combines two provinces: Italian-speaking Trentino and German-speaking Alto Adige (Südtirol).\n\n**Wines & grapes** — It is celebrated for crisp, aromatic whites — Pinot Grigio, Gewürztraminer, Pinot Bianco and Chardonnay — and for local reds such as Teroldego, Lagrein and the light Schiava. Trentino is also a source of fine traditional-method sparkling wine (Trentodoc).\n\n**Character** — High-altitude vineyards on Alpine slopes, cool nights and bright sunshine give wines of vivid freshness, purity and definition, especially the whites. The two provinces share geography but each keeps its own cultural and stylistic accent."
+ },
+ {
+  "name": "Margaret River",
+  "country": "Australia",
+  "description": "**Margaret River** — A maritime region in the far southwest of Western Australia, Margaret River is one of the country's most prestigious wine areas despite producing only a small fraction of its total output.\n\n**Wines & grapes** — It is renowned for structured, Bordeaux-style Cabernet Sauvignon and for refined Chardonnay, plus a distinctive blend of Sauvignon Blanc and Semillon.\n\n**Character** — Cooled and moderated by the Indian and Southern Oceans, with well-drained gravelly soils, the climate yields wines of elegance, balance and consistency. Quality is high and reputations well established.\n\n**Good to know** — Its Cabernet and Chardonnay regularly rank among Australia's finest."
+ },
+ {
+  "name": "Lehigh Valley",
+  "country": "United States",
+  "description": "**Lehigh Valley** ... — a wine-growing area in eastern Pennsylvania, United States, spread across the rolling farmland north of Philadelphia. It is one of the more established grape-growing pockets of the American Northeast.\n\n**Wines & grapes** — Producers here work with a mix of cold-hardy hybrids and classic European varieties. Whites such as Riesling and Chardonnay, and reds including Cabernet Franc, are grown alongside hybrid grapes bred to survive harsh winters, and both dry table wines and off-dry styles are made.\n\n**Character** — This is a cool, continental climate with cold winters and warm, humid summers, so growers favour varieties that ripen reliably and resist frost. The wines tend toward brighter acidity and moderate alcohol, and the region reflects the broader revival of serious winemaking in the eastern United States."
+ },
+ {
+  "name": "Jalisco",
+  "country": "Mexico",
+  "description": "**Jalisco** ... — a state in western Mexico, far better known as the heartland of tequila production than as a wine region. A small amount of grape wine is nonetheless made in its highland areas.\n\n**Wines & grapes** — Wine here is a niche pursuit compared with agave spirits. The higher-elevation zones grow international varieties, and small producers make modest quantities of red and white table wine.\n\n**Character** — Elevation is the key moderating factor, tempering the warmth of this southerly latitude so that grapes can hold their balance. Wine remains a minor and emerging part of Jalisco's drinks culture, which is dominated by tequila from the town of Tequila and the surrounding agave fields."
+ },
+ {
+  "name": "Tokaj",
+  "country": "Hungary",
+  "description": "**Tokaj** ... — a historic wine region in northeastern Hungary, extending slightly into Slovakia, and one of the world's most celebrated sources of sweet wine. Its name is attached to the legendary Tokaji Aszú.\n\n**Wines & grapes** — The signature style is Tokaji Aszú, made from grapes shrivelled by noble rot (botrytis) and measured historically in puttonyos of sweetness. Furmint is the leading grape, joined by Hárslevelű, Sárgamuskotály (Yellow Muscat) and others; the region also makes late-harvest Szamorodni and, increasingly, crisp dry whites from Furmint.\n\n**Character** — Volcanic soils, the meeting of the Bodrog and Tisza rivers, and autumn mists create ideal conditions for botrytis. The sweet wines are famous for their honeyed apricot and marmalade richness balanced by piercing acidity, giving them remarkable longevity.\n\n**Good to know** — Tokaji was prized at European royal courts and is sometimes called the \"wine of kings.\""
+ },
+ {
+  "name": "Northern Rhône",
+  "country": "France",
+  "description": "**Northern Rhône** ... — the upper stretch of France's Rhône Valley, running south from around Vienne along steep slopes above the river. It is one of the great homes of Syrah.\n\n**Wines & grapes** — Reds are made almost entirely from Syrah, in appellations such as Côte-Rôtie, Hermitage, Cornas and Crozes-Hermitage. Small amounts of Viognier may be co-fermented with Syrah in Côte-Rôtie, while whites come from Viognier (notably in Condrieu) plus Marsanne and Roussanne.\n\n**Character** — The vineyards cling to precipitous granite terraces that catch the sun, and the climate is more continental than the south. The best reds are deeply coloured and structured, with notes often described as black pepper, smoked meat and dark fruit, and they age superbly.\n\n**Good to know** — Hermitage and Côte-Rôtie are among the most collectible and long-lived wines of France."
+ },
+ {
+  "name": "Macedonia",
+  "country": "Greece",
+  "description": "**Macedonia** ... — a large region in northern Greece stretching from the Aegean coast toward the mountainous interior. It is one of the country's most important sources of serious red wine.\n\n**Wines & grapes** — The flagship grape is Xinomavro, the backbone of appellations such as Naoussa and Amyndeon, giving structured, age-worthy reds. Other local and international varieties are grown too, and the region produces still reds, rosés and some whites.\n\n**Character** — Climate ranges from warmer coastal zones to cooler, higher-altitude sites inland. Xinomavro is prized for its firm tannins, high acidity and savoury tomato-and-herb character, and it is often compared to Nebbiolo for its structure and capacity to age."
+ },
+ {
+  "name": "Martinborough",
+  "country": "New Zealand",
+  "description": "**Martinborough** ... — a small, highly regarded wine town in the Wairarapa district at the southern end of New Zealand's North Island. It built its reputation on one grape above all.\n\n**Wines & grapes** — Pinot Noir is the star here, producing wines of finesse and concentration. Aromatic whites also do well, including Sauvignon Blanc, Pinot Gris, Riesling and some Chardonnay.\n\n**Character** — Free-draining gravel terraces, low rainfall and cool, breezy conditions give small yields and intensely flavoured fruit. The Pinot Noirs are typically perfumed and silky with fine tannins, and Martinborough is regarded as one of New Zealand's benchmark regions for the variety despite its modest size."
+ },
+ {
+  "name": "Adelaide Hills",
+  "country": "Australia",
+  "description": "**Adelaide Hills** ... — a cool-climate wine region in the hills just east of the city of Adelaide in South Australia. It is one of Australia's leading sources of elegant, restrained styles.\n\n**Wines & grapes** — Sauvignon Blanc and Chardonnay are widely planted, along with Pinot Noir, and the cool conditions also make it a fine base for sparkling wine. Aromatic whites and cooler-climate Shiraz are made as well.\n\n**Character** — Elevation brings cooler temperatures and a longer growing season than the surrounding warm plains, preserving acidity and delicacy. The wines are known for their freshness, bright fruit and finer structure, offering a contrast to the bolder reds of nearby regions such as the Barossa and McLaren Vale."
+ },
+ {
+  "name": "Lazio",
+  "country": "Italy",
+  "description": "**Lazio** ... — a central Italian region surrounding Rome, stretching from the Tyrrhenian coast to the Apennine foothills. It is best known for the everyday white wines poured in the capital.\n\n**Wines & grapes** — The classic style is Frascati, a dry white based on Malvasia and Trebbiano grown in the volcanic hills south of Rome. The region also makes other whites and a growing amount of red wine from both local and international grapes.\n\n**Character** — Volcanic soils and a warm Mediterranean climate shape wines that are typically fresh, soft and approachable in youth. While long associated with simple carafe whites, Lazio has seen quality-focused producers raise the profile of both its whites and reds in recent years."
+ },
+ {
+  "name": "Murcia",
+  "country": "Spain",
+  "description": "**Murcia** ... — an autonomous region in southeastern Spain, inland from the Mediterranean coast. It is a warm, sun-drenched area that has become known for full-bodied reds.\n\n**Wines & grapes** — Monastrell (the grape known elsewhere as Mourvèdre) is the dominant variety, forming the core of denominations such as Jumilla, Yecla and Bullas. It yields deeply coloured, powerful reds, with rosés and some whites also produced.\n\n**Character** — The climate is hot and dry with poor soils and low rainfall, conditions that stress the vines and concentrate the fruit. The wines are typically rich and ripe, with dark berry flavours and generous alcohol, and the region offers notable value for boldly styled Mediterranean reds."
+ },
+ {
+  "name": "Waiheke Island",
+  "country": "New Zealand",
+  "description": "**Waiheke Island** ... — an island in the Hauraki Gulf a short ferry ride from Auckland, in New Zealand's warmer north. It is a boutique region known for premium reds in a country better known for white wine.\n\n**Wines & grapes** — Unusually for New Zealand, the island specialises in Bordeaux-style blends of Cabernet Sauvignon, Merlot and Cabernet Franc, along with impressive Syrah. Chardonnay and other whites are grown as well.\n\n**Character** — Surrounded by sea and enjoying a warm, sheltered maritime microclimate, Waiheke ripens red varieties that struggle in cooler parts of the country. Vineyards are small and land is scarce, so the wines are made in limited quantities and command premium prices, matching the island's reputation as an upmarket getaway."
+ },
+ {
+  "name": "Southern Rhône",
+  "country": "France",
+  "description": "**Southern Rhône** ... — the broad, sun-baked lower section of France's Rhône Valley, spreading out around Avignon and Orange. It is the volume heart of the Rhône and home to some of its most famous appellations.\n\n**Wines & grapes** — Reds are typically blends led by Grenache, supported by Syrah, Mourvèdre and other varieties. Châteauneuf-du-Pape is the flagship, alongside Gigondas, Vacqueyras and the vast Côtes du Rhône; the region also makes rosé (notably nearby Tavel) and some whites.\n\n**Character** — The climate is warmer and drier than the north, swept by the fierce Mistral wind, and famous sites are covered in large rounded stones (galets) that retain heat. The reds are generous and warming, with ripe red-fruit and garrigue-herb character.\n\n**Good to know** — Châteauneuf-du-Pape permits an unusually wide roster of grape varieties in its blends."
+ },
+ {
+  "name": "Salta",
+  "country": "Argentina",
+  "description": "**Salta** ... — a province in the far northwest of Argentina, home to some of the highest-altitude vineyards in the world. Its wines have a distinctive intensity born of extreme elevation.\n\n**Wines & grapes** — The signature grape is Torrontés, an aromatic white that reaches its finest expression here, especially around the Cafayate valley. Malbec is the leading red, joined by Cabernet Sauvignon and other varieties.\n\n**Character** — Vineyards planted high in the Andes — in places well over a thousand metres above sea level — bask in intense sunlight and cool nights, a combination that yields fruit with deep colour, firm acidity and pronounced aromatics. The Torrontés is floral and perfumed yet crisp, while the reds are concentrated and boldly flavoured."
+ },
+ {
+  "name": "Skåne",
+  "country": "Sweden",
+  "description": "**Skåne** is the southernmost province of Sweden and the heart of the country's small but fast-growing wine scene.\n\n**Wines & grapes** — Growers here lean on cold-hardy hybrid and PIWI varieties such as Solaris, along with Rondo and Regent for the reds; crisp whites and traditional-method sparkling wines are the calling cards.\n\n**Character** — This is genuine cool-climate viticulture at a high northern latitude, so the wines tend to be light-bodied, low in alcohol and bright with acidity. The short, mild summers and long daylight hours favour early-ripening grapes, and the whole region has the youthful, experimental feel of a wine culture still finding its feet."
+ },
+ {
+  "name": "Penedès",
+  "country": "Spain",
+  "description": "**Penedès** sits in Catalonia in north-east Spain, inland from Barcelona, and is best known as the homeland of Cava, Spain's traditional-method sparkling wine.\n\n**Wines & grapes** — The classic sparkling blend rests on the local trio of Macabeo, Xarel·lo and Parellada, while still wines range from crisp whites to reds made from both Spanish and international grapes such as Cabernet Sauvignon and Chardonnay.\n\n**Character** — Vineyards climb from the coastal plain up to cooler hillside terraces, and that spread of altitudes lets growers ripen everything from fresh sparkling-base whites to fuller reds. Penedès has long had a reputation for innovation and was an early Spanish adopter of modern winemaking and international varieties."
+ },
+ {
+  "name": "Aegean Islands",
+  "country": "Greece",
+  "description": "**Aegean Islands** is a Greek wine region covering the scattered islands of the Aegean Sea, including celebrated names like Santorini and Samos.\n\n**Wines & grapes** — The signature white is Assyrtiko, famous from Santorini for its steely intensity, while Samos is renowned for sweet Muscat. Reds and other whites appear across islands such as Limnos and Rhodes.\n\n**Character** — These are sun-drenched, wind-swept vineyards on volcanic and rocky soils, often worked in low, basket-trained forms that shield the vines from fierce Aegean gusts. The result is wines of high acidity, distinct minerality and a clear sense of their island origins.\n\n**Good to know** — On Santorini, vines are famously coiled into low baskets called *kouloura* to protect the fruit from wind and sun."
+ },
+ {
+  "name": "Andalusia",
+  "country": "Spain",
+  "description": "**Andalusia** is Spain's hot, sunny south, and its most famous contribution to the wine world is Sherry, the fortified wine from around Jerez.\n\n**Wines & grapes** — Palomino is the backbone of dry Sherry styles like Fino and Amontillado, while Pedro Ximénez and Moscatel go into the intensely sweet, dark versions. The region also makes Montilla-Moriles and Málaga wines in a similar mould.\n\n**Character** — The blazing climate and chalky white *albariza* soils are ideal for fortified wines, and the region's genius lies in how they are aged: biologically under a protective veil of *flor* yeast, or oxidatively for the darker styles, with barrels blended over time through the layered solera system.\n\n**Good to know** — *Flor*, a living film of yeast, is what gives Fino and Manzanilla their tangy, saline freshness."
+ },
+ {
+  "name": "Sardinia",
+  "country": "Italy",
+  "description": "**Sardinia** is a large Mediterranean island belonging to Italy, with a distinctive wine identity shaped by centuries of Spanish and local influence.\n\n**Wines & grapes** — Cannonau, the island's name for Grenache, makes warm, generous reds, while Vermentino produces fresh, aromatic whites, especially in the north. Carignano thrives in the sandy soils of the south.\n\n**Character** — Sun, sea breezes and varied terrain — from coastal sands to granite hills — give the wines both ripeness and lift. Sardinian reds are typically full and herb-scented, and the whites carry a saline, citrusy freshness that reflects the maritime setting."
+ },
+ {
+  "name": "Robertson",
+  "country": "South Africa",
+  "description": "**Robertson** lies inland in South Africa's Western Cape, in the Breede River valley, and has built its reputation especially on white wine.\n\n**Wines & grapes** — Chardonnay is the local star, but the region also turns out good Sauvignon Blanc and Colombard, along with increasingly serious Shiraz and other reds.\n\n**Character** — Robertson is unusual for the Cape in having lime-rich soils, which suit both vines and — historically — the horse studs the valley was known for. The climate is warm and dry, but cooling breezes drawn up the valley help preserve freshness, giving the Chardonnays a balance of ripe fruit and lively acidity."
+ },
+ {
+  "name": "Yarra Valley",
+  "country": "Australia",
+  "description": "**Yarra Valley** is a cool-climate wine region in Victoria, Australia, just north-east of Melbourne, and one of the country's most respected areas for elegant, restrained styles.\n\n**Wines & grapes** — Pinot Noir and Chardonnay lead the way, both as still wines and as the base for high-quality traditional-method sparkling. Cool-grown Shiraz and Cabernet Sauvignon also do well.\n\n**Character** — Its relatively cool, sometimes marginal climate means grapes ripen slowly, yielding wines with finesse, freshness and moderate alcohol rather than sheer power. The valley's mix of altitudes and aspects lets growers match varieties to sites with real precision.\n\n**Good to know** — As one of Victoria's oldest wine areas, it was a pioneer of cool-climate winemaking in Australia."
+ },
+ {
+  "name": "Bekaa Valley",
+  "country": "Lebanon",
+  "description": "**Bekaa Valley** is the beating heart of Lebanese wine, a high plateau set between mountain ranges in the east of the country.\n\n**Wines & grapes** — Reds dominate, built around French varieties like Cinsault, Cabernet Sauvignon, Syrah and Grenache, often in blends; there are also whites from grapes such as the local Obeideh and Merwah as well as international varieties.\n\n**Character** — Sitting at considerable altitude, the valley enjoys hot days and cool nights, plenty of sunshine and low disease pressure, conditions that ripen grapes fully while keeping good acidity. The wines are typically warm and full-bodied yet balanced.\n\n**Good to know** — Lebanon has one of the world's oldest winemaking traditions, stretching back to the ancient Phoenicians."
+ },
+ {
+  "name": "Vinho Verde",
+  "country": "Portugal",
+  "description": "**Vinho Verde** comes from the Minho region in the cool, green, rainy north-west of Portugal, and the name means \"green wine\" in the sense of young and fresh rather than any colour.\n\n**Wines & grapes** — It is best known for light, zesty whites, often with a faint natural spritz, made from grapes like Alvarinho, Loureiro, Trajadura and Arinto. Reds and rosés are also produced, though the crisp whites define the region.\n\n**Character** — The damp Atlantic climate and lush landscape yield wines that are low in alcohol, high in acidity and delightfully refreshing. Traditionally the vines were trained high to cope with the humidity, and the top expressions — especially single-varietal Alvarinho — can show real depth and structure."
+ },
+ {
+  "name": "Kakheti",
+  "country": "Georgia",
+  "description": "**Kakheti** in eastern Georgia is the country's most important wine region, at the centre of a winemaking culture that reaches back thousands of years.\n\n**Wines & grapes** — The dark-skinned Saperavi makes deep, robust reds, while Rkatsiteli and Mtsvane give the whites; many are made in the traditional amber (or \"orange\") style with extended skin contact.\n\n**Character** — What sets Kakheti apart is the ancient *qvevri* method, in which grapes ferment and age in large clay vessels buried in the ground, giving whites a tannic grip and savoury, nutty character unlike almost anywhere else.\n\n**Good to know** — Georgia is often described as one of the birthplaces of wine, and the qvevri tradition is recognised by UNESCO as intangible cultural heritage."
+ },
+ {
+  "name": "Eden Valley",
+  "country": "Australia",
+  "description": "**Eden Valley** is a cooler, higher-altitude wine region in South Australia, tucked into the hills adjoining the Barossa, and is prized above all for its whites.\n\n**Wines & grapes** — Riesling is the headline grape, producing dry, tightly focused whites with great ageing potential, while Shiraz here takes on a more elegant, spicy form than in the warmer valley floor below.\n\n**Character** — The elevation brings cooler nights and a longer growing season, so the wines gain a fineness and lift you don't always find in the Barossa. Eden Valley Riesling is famous for its citrus and floral notes when young and its toasty, honeyed complexity with age.\n\n**Good to know** — Some of Australia's oldest Riesling vineyards are found in these hills."
+ },
+ {
+  "name": "Tejo",
+  "country": "Portugal",
+  "description": "**Tejo** is a wine region in central Portugal named after the Tagus (Tejo) river, whose fertile plains and surrounding hills it straddles; it was formerly known as Ribatejo.\n\n**Wines & grapes** — A wide range of styles is made from both native and international grapes, with reds built on Castelão, Touriga Nacional and Trincadeira, and whites from Fernão Pires and Arinto among others.\n\n**Character** — The river shapes the region: the warmer, more fertile riverside land yields softer, approachable everyday wines, while the cooler, poorer soils away from the water give more structured, characterful bottles. Overall Tejo offers friendly, well-priced Portuguese wines with plenty of ripe, sunny fruit."
+ },
+ {
+  "name": "Minho",
+  "country": "Portugal",
+  "description": "**Minho** is a green, rainy province in the far northwest of Portugal, tucked between the Douro and the Spanish border, and it is the home of the country's most famous fresh white style, Vinho Verde.\n\n**Wines & grapes** — This is the heartland of Vinho Verde, mostly crisp whites from grapes such as Alvarinho, Loureiro, Trajadura and Arinto, though light reds and rosés are made too. Bottlings range from simple, faintly fizzy quaffers to serious, mineral single-varietal Alvarinho.\n\n**Character** — The Atlantic climate is cool and wet, so the wines tend to be low in alcohol, high in zippy acidity and often finished with a light spritz. Expect green-apple, citrus and floral notes and a clean, thirst-quenching bite.\n\n**Good to know** — \"Verde\" means young and fresh here, not literally green in colour."
+ },
+ {
+  "name": "Vin de France",
+  "country": "France",
+  "description": "**Vin de France** is not a place but France's most flexible national wine category, replacing the old \"Vin de Table\" tier and covering wine from anywhere in the country.\n\n**Wines & grapes** — Any style and almost any grape is allowed, and unusually for France, producers may name the grape variety and vintage on the label. It spans everything from cheap everyday bottles to ambitious \"declassified\" wines made outside the strict appellation rules.\n\n**Character** — Because it carries no geographic or stylistic constraints, quality varies enormously: some are simple blends, others are boundary-pushing cuvées from serious growers who want creative freedom.\n\n**Good to know** — A Vin de France label tells you little on its own, so the producer's name is your best guide to what's inside."
+ },
+ {
+  "name": "Dalmatia",
+  "country": "Croatia",
+  "description": "**Dalmatia** is Croatia's long, sun-soaked Adriatic coastline and its islands, one of the country's most historic and distinctive wine zones.\n\n**Wines & grapes** — The signature red is Plavac Mali, which gives dark, powerful wines, while whites lean on local grapes such as Pošip and Maraština. Plavac Mali is a descendant of Zinfandel, which is native to this coast, where it is known as Tribidrag or Crljenak Kaštelanski.\n\n**Character** — Baking Mediterranean sun, steep stony slopes and sea breezes produce concentrated, high-alcohol reds with ripe dark fruit and herbal, saline edges, alongside fresh, characterful whites.\n\n**Good to know** — Steep coastal sites like Dingač and Postup on the Pelješac peninsula are among Dalmatia's most prized vineyards."
+ },
+ {
+  "name": "Navarra",
+  "country": "Spain",
+  "description": "**Navarra** is a wine region in northern Spain, just east of Rioja, historically famous for rosé but today making a wide spread of styles.\n\n**Wines & grapes** — Garnacha (Grenache) is the traditional backbone, long used for vivid, fruity rosados, while reds and blends also feature Tempranillo, Cabernet Sauvignon and Merlot. Whites and sweet Moscatel are made as well.\n\n**Character** — The region bridges Atlantic, continental and Mediterranean influences, giving cooler, fresher wines in the north and riper, fuller ones in the warmer south. Overall the reds are approachable and fruit-forward, and the rosés bright and dry.\n\n**Good to know** — Navarra earned its early reputation on Garnacha rosé before international grapes broadened its range."
+ },
+ {
+  "name": "Castilla",
+  "country": "Spain",
+  "description": "**Castilla** is a broad wine designation covering the vast central Spanish plateau of Castilla-La Mancha, south of Madrid.\n\n**Wines & grapes** — As a regional (Vino de la Tierra) category it allows a huge palette of grapes, from the white workhorse Airén to reds like Tempranillo (locally Cencibel), Garnacha and international varieties such as Cabernet Sauvignon and Syrah.\n\n**Character** — This is high, dry, sun-drenched country with hot days and cold nights, producing generous, ripe, mostly affordable wines. The looser regional rules give growers freedom to blend and experiment beyond the stricter local appellations.\n\n**Good to know** — The wider Castilla-La Mancha area is one of the largest continuous vineyard expanses on earth."
+ },
+ {
+  "name": "Virginia",
+  "country": "United States",
+  "description": "**Virginia** is a wine state on the mid-Atlantic coast of the United States, with a long history dating back to early colonial attempts at winegrowing.\n\n**Wines & grapes** — Its calling-card grape is Viognier, giving perfumed, peachy whites, while reds often come from Bordeaux varieties and the hybrid Norton. Petit Verdot and Cabernet Franc do particularly well.\n\n**Character** — A humid, sometimes stormy continental climate makes viticulture challenging, but the wines tend toward a fresher, more restrained, European-leaning style than warmer US regions. Elegance and moderate alcohol are common threads.\n\n**Good to know** — Virginia has embraced Viognier almost as an unofficial signature grape."
+ },
+ {
+  "name": "Ohio",
+  "country": "United States",
+  "description": "**Ohio** is a wine-producing state in the American Midwest, with vineyards concentrated near Lake Erie and along the Ohio River valley.\n\n**Wines & grapes** — Cool-climate and hybrid grapes feature strongly, including Riesling, Chardonnay, Cabernet Franc and native or hybrid varieties like Catawba and Concord. Both dry table wines and sweeter styles are made.\n\n**Character** — The moderating effect of Lake Erie helps temper harsh winters, and the wines are generally fresh and light-to-medium bodied. Local grape varieties give some bottlings a distinctive, foxy or grapey character.\n\n**Good to know** — Ohio was one of the leading US wine states in the nineteenth century before later disruptions."
+ },
+ {
+  "name": "San Juan",
+  "country": "Argentina",
+  "description": "**San Juan** is Argentina's second-largest wine province, sitting in the arid west just north of Mendoza at the foot of the Andes.\n\n**Wines & grapes** — It is known for Syrah, which thrives in the heat, along with Bonarda, Malbec, and the aromatic white grape Torrontés. The region also has a long tradition of table grapes and brandy production.\n\n**Character** — This is a hot, dry, high-altitude desert irrigated by Andean meltwater, yielding ripe, deeply coloured, full-bodied reds with soft tannins. Elevation and cool nights help retain some freshness.\n\n**Good to know** — San Juan is often cited as one of the warmer, more sun-baked corners of Argentine wine country."
+ },
+ {
+  "name": "Wairarapa",
+  "country": "New Zealand",
+  "description": "**Wairarapa** is a small but respected wine region at the southern tip of New Zealand's North Island, centred on the town of Martinborough.\n\n**Wines & grapes** — It built its name on Pinot Noir, producing structured, savoury reds, and also makes fine aromatic whites such as Sauvignon Blanc, Pinot Gris and Riesling. Production is boutique in scale.\n\n**Character** — A cool, dry climate with free-draining river-terrace soils and marked day-night temperature swings gives wines of concentration, firm structure and vibrant acidity. The Pinot Noir often shows dark cherry, spice and earthy depth.\n\n**Good to know** — Despite tiny volumes, Wairarapa (and Martinborough in particular) sits among New Zealand's most highly regarded Pinot Noir zones."
+ },
+ {
+  "name": "King Valley, Victoria",
+  "country": "Australia",
+  "description": "**King Valley, Victoria** is an alpine wine region in northeast Victoria, Australia, rising from valley floor into the foothills of the Great Dividing Range.\n\n**Wines & grapes** — It is best known for Italian varieties, especially sparkling Prosecco (Glera) and reds like Sangiovese, Nebbiolo and Barbera, reflecting the area's strong Italian settler heritage. Cool-climate whites are also made.\n\n**Character** — Vineyards span a wide range of elevations, so styles shift from riper, fuller wines lower down to fresher, higher-acid wines up in the hills. The overall signature is cool-climate freshness and food-friendly structure.\n\n**Good to know** — The King Valley is often called the home of Australian Prosecco."
+ },
+ {
+  "name": "Victoria",
+  "country": "Australia",
+  "description": "**Victoria** is a diverse wine state in southeastern Australia, home to more distinct wine regions than any other part of the country.\n\n**Wines & grapes** — Its range is enormous: cool-climate Pinot Noir and Chardonnay from areas like the Yarra Valley and Mornington Peninsula, peppery Shiraz from central Victoria, and rich fortified \"stickies\" (Muscat and Topaque) from Rutherglen in the northeast.\n\n**Character** — Climates run from cool coastal and alpine zones to warm inland districts, so no single style defines the state; elegance and regional variety are the through-line. Many of Australia's most refined cool-climate wines come from here.\n\n**Good to know** — Rutherglen's fortified Muscats are among the world's greatest sweet wines."
+ },
+ {
+  "name": "Azores",
+  "country": "Portugal",
+  "description": "**Azores** is a remote Portuguese archipelago in the mid-Atlantic, where vines grow in one of the most dramatic wine landscapes anywhere.\n\n**Wines & grapes** — Production centres on distinctive whites from grapes such as Verdelho, Arinto dos Açores and Terrantez do Pico, giving mineral, saline, sometimes briny wines. Volumes are small and largely artisanal.\n\n**Character** — Vines are often planted in small stone-walled enclosures on black volcanic basalt to shelter them from wind and sea spray, and the wines carry a hallmark salty, volcanic minerality with brisk acidity.\n\n**Good to know** — The historic vineyard landscape on Pico Island is recognised for its striking lava-stone walls."
+ },
+ {
+  "name": "North Carolina",
+  "country": "United States",
+  "description": "**North Carolina** is a wine-producing state in the southeastern United States, straddling both a native-grape tradition near the coast and a growing vinifera scene in the hills of the west.\n\n**Wines & grapes** — The historic style is sweet wine from native muscadine grapes, especially the bronze Scuppernong. Cooler upland areas increasingly grow European varieties such as Cabernet, Merlot, Chardonnay and Viognier, along with hybrids.\n\n**Character** — The state spans a warm, humid coastal plain and cooler foothills of the Blue Ridge and Yadkin Valley, so styles range from soft, fruity muscadine wines to drier, more structured bottlings inland. It remains a small, regionally focused industry rather than a national force."
+ },
+ {
+  "name": "Vaud",
+  "country": "Switzerland",
+  "description": "**Vaud** is a canton in western Switzerland and one of the country's most important wine regions, wrapped around the northern shore of Lake Geneva and the Rhône valley.\n\n**Wines & grapes** — White wine dominates, built almost entirely on Chasselas, which here gives dry, delicate, mineral wines. Reds and rosés come mainly from Pinot Noir and Gamay.\n\n**Character** — The famous Lavaux terraces, stone-walled vineyards tumbling down to the lake, benefit from a triple reflection of sunlight from sky, water and walls. The wines are typically light, fresh and food-friendly, prized locally and rarely exported in quantity.\n\n**Good to know** — Chasselas from Vaud is often bottled by village, such as Dézaley or Épesses, each with its own reputation."
+ },
+ {
+  "name": "Tennessee",
+  "country": "United States",
+  "description": "**Tennessee** is a wine-producing state in the southeastern United States with a small but steadily developing industry spread across its varied terrain.\n\n**Wines & grapes** — Wineries here work with native muscadine grapes, cold-hardy hybrids and, in favourable spots, European varieties. Sweeter and fruit wines remain common, though drier table wines are increasingly made.\n\n**Character** — The climate is warm and humid, which suits robust native and hybrid vines more readily than delicate vinifera. Most production is aimed at local visitors and tasting rooms rather than wide distribution."
+ },
+ {
+  "name": "Kamptal",
+  "country": "Austria",
+  "description": "**Kamptal** is a leading white-wine region in Lower Austria, taking its name from the Kamp, a small tributary of the Danube whose valley is centred on the town of Langenlois.\n\n**Wines & grapes** — The signature wines are dry Grüner Veltliner and Riesling, ranging from bright everyday bottlings to age-worthy single-vineyard wines. Smaller amounts of other whites and some red are also produced.\n\n**Character** — A meeting of warm Pannonian air and cool northern currents gives the wines both ripeness and lively acidity. The famous Heiligenstein hill, with its ancient desert-sandstone soils, produces some of Austria's most respected Rieslings.\n\n**Good to know** — Kamptal uses the DAC system, which reserves the name for the region's typical Grüner Veltliner and Riesling styles."
+ },
+ {
+  "name": "Bairrada",
+  "country": "Portugal",
+  "description": "**Bairrada** is a wine region in central Portugal, set on clay-rich lowlands not far inland from the Atlantic coast between Coimbra and Aveiro.\n\n**Wines & grapes** — It is best known for firm, structured reds from the local Baga grape, along with crisp whites and a strong tradition of traditional-method sparkling wine. Arinto, Bical and Maria Gomes are common white varieties.\n\n**Character** — The maritime climate brings rain and cooling, so Baga ripens slowly and keeps high acidity and tannin, giving reds that can be austere young but reward patient cellaring. Chalky-clay soils reinforce the wines' freshness and longevity.\n\n**Good to know** — Bairrada's sparkling wines are among Portugal's most highly regarded."
+ },
+ {
+  "name": "Aargau",
+  "country": "Switzerland",
+  "description": "**Aargau** is a canton in northern Switzerland where vineyards follow the valleys of the Aare and Rhine rivers.\n\n**Wines & grapes** — Pinot Noir, locally called Blauburgunder, is the leading red, while whites lean on Müller-Thurgau (often labelled Riesling-Silvaner) and Riesling. Production is on a modest scale.\n\n**Character** — This is one of Switzerland's more northerly wine areas, so the climate is cool and the wines tend to be light, fresh and aromatic. Most is consumed within the country and rarely seen abroad."
+ },
+ {
+  "name": "Lyonnais",
+  "country": "France",
+  "description": "**Lyonnais** is a small wine area in eastern France in the hills just west and south of the city of Lyon, sitting between Beaujolais to the north and the northern Rhône to the south.\n\n**Wines & grapes** — The wines fall under the Coteaux du Lyonnais appellation. Reds and rosés are based on Gamay, while whites come mainly from Chardonnay and Aligoté.\n\n**Character** — Sharing granite-influenced soils and a Gamay tradition with neighbouring Beaujolais, the reds are bright, juicy and made for early drinking. It is a low-profile region whose wines are mostly enjoyed locally around Lyon."
+ },
+ {
+  "name": "Mittelrhein",
+  "country": "Germany",
+  "description": "**Mittelrhein** is a scenic German wine region running along the steep gorge of the Rhine, roughly between Bingen and Koblenz, where the river cuts through slate hillsides dotted with castles.\n\n**Wines & grapes** — Riesling is by far the dominant grape, giving racy, mineral whites, with some Pinot Noir (Spätburgunder) and other varieties in smaller amounts.\n\n**Character** — Vines cling to precipitous slate terraces that soak up heat and drain well, producing Rieslings with vivid acidity and pronounced stony character. It is one of Germany's smaller wine regions, and the difficult terrain means much is worked by hand.\n\n**Good to know** — The Rhine gorge here is a UNESCO World Heritage site, celebrated as much for its landscape as its wine."
+ },
+ {
+  "name": "Baden-Württemberg",
+  "country": "Germany",
+  "description": "**Baden-Württemberg** is a federal state in southwestern Germany that encompasses two of the country's notable wine regions, Baden and Württemberg.\n\n**Wines & grapes** — Baden, warmer and further south, is known for ripe Pinot family wines, including Spätburgunder (Pinot Noir) and the Pinot Blanc and Gris family, plus Müller-Thurgau. Württemberg is unusually red-focused, with Trollinger and Lemberger among its mainstays.\n\n**Character** — As an administrative rather than a single winemaking area, it covers a broad span of climates and soils, from the sun-warmed Rhine plain near the Kaiserstuhl to the cooler Neckar valley. Together the two regions make Germany a more red-friendly country than its Riesling image suggests."
+ },
+ {
+  "name": "Württemberg",
+  "country": "Germany",
+  "description": "**Württemberg** is a wine region in southwestern Germany centred on the Neckar valley and its tributaries around Stuttgart and Heilbronn.\n\n**Wines & grapes** — Unusually for Germany, it is a red-dominated region. Trollinger is the traditional local red, joined by Lemberger (Blaufränkisch), Schwarzriesling (Pinot Meunier) and Spätburgunder, alongside white Riesling.\n\n**Character** — Vineyards on warm valley slopes give reds that are typically soft, approachable and often enjoyed young and locally, with Lemberger producing the more structured, ageable examples. Much of the output is consumed within the region, where wine is a strong part of everyday culture.\n\n**Good to know** — Trollinger is something of a regional institution, tied closely to Swabian identity."
+ },
+ {
+  "name": "Corsica",
+  "country": "France",
+  "description": "**Corsica** is a mountainous Mediterranean island belonging to France, lying between the mainland and Italy, with a wine culture shaped by both influences.\n\n**Wines & grapes** — Reds and rosés rely on Nielluccio (closely related to Sangiovese) and the spicy Sciaccarello, while the aromatic Vermentino leads the whites. Rosé accounts for a large share of production.\n\n**Character** — Abundant sunshine, sea breezes and diverse granite and limestone soils give wines that are warm and herb-scented, echoing the island's wild maquis scrubland. Appellations such as Patrimonio and Ajaccio are among the most respected.\n\n**Good to know** — Corsica also has a tradition of sweet Muscat, notably Muscat du Cap Corse."
+ },
+ {
+  "name": "West Sussex",
+  "country": "England",
+  "description": "**West Sussex** is a county in southern England and part of the country's celebrated cool-climate sparkling-wine scene, sitting on the chalk of the South Downs.\n\n**Wines & grapes** — The focus is on traditional-method sparkling wine from Chardonnay, Pinot Noir and Pinot Meunier, alongside some still whites.\n\n**Character** — A cool climate and chalky soils, geologically similar to those of Champagne, preserve the high acidity that gives these sparkling wines their crisp, fresh, mineral style. The county is home to several of England's best-known sparkling-wine producers."
+ },
+ {
+  "name": "Auckland",
+  "country": "New Zealand",
+  "description": "**Auckland** ... — a wine region on New Zealand's North Island, wrapped around the country's largest city and reaching out to nearby islands like Waiheke. It is small in output but historically important, home to some of the country's oldest wineries.\n\n**Wines & grapes** — a warm-climate mix leaning toward Bordeaux reds such as Cabernet Sauvignon, Merlot and Cabernet Franc, along with Syrah and Chardonnay. Waiheke Island in particular has built a reputation for structured red blends.\n\n**Character** — the maritime climate is humid and comparatively warm for New Zealand, which favours later-ripening varieties that struggle further south. Wines tend to be riper and rounder than the crisp Sauvignon Blanc most people associate with the country, and boutique scale keeps volumes modest."
+ },
+ {
+  "name": "Trentino",
+  "country": "Italy",
+  "description": "**Trentino** ... — a mountainous region in northern Italy, forming the southern half of the Trentino-Alto Adige area around the city of Trento. Alpine valleys and the influence of Lake Garda shape a wide range of styles.\n\n**Wines & grapes** — whites from Pinot Grigio, Chardonnay and the local Nosiola, reds from Teroldego, Marzemino, Lagrein and international varieties, plus a strong tradition of traditional-method sparkling wine (Trentodoc) built on Chardonnay and Pinot Noir.\n\n**Character** — cool mountain air and big day-to-night temperature swings give the wines bright acidity and freshness. Elevation and the moderating lake produce clean, aromatic whites and lively sparkling wines, while Teroldego offers a deeper, dark-fruited red from the Campo Rotaliano plain."
+ },
+ {
+  "name": "North Coast, California",
+  "country": "United States",
+  "description": "**North Coast, California** ... — a large appellation in the United States covering the coastal counties north of San Francisco Bay, including Napa, Sonoma, Mendocino and Lake. It is one of California's most celebrated quality wine zones.\n\n**Wines & grapes** — a broad span of styles, led by Cabernet Sauvignon and Chardonnay, with important Pinot Noir, Zinfandel, Merlot and Sauvignon Blanc, plus sparkling wine in cooler pockets.\n\n**Character** — the defining factor is the Pacific: coastal fog and cool ocean air funnel inland, tempering the warm California sun and stretching out ripening. That range of microclimates, from foggy coastal ridges to warm inland valleys, lets the region make everything from crisp whites to powerful, age-worthy reds.\n\n**Good to know** — as an umbrella appellation it spans many famous smaller districts, so a North Coast label points to origin more than a single specific style."
+ },
+ {
+  "name": "Basilicata",
+  "country": "Italy",
+  "description": "**Basilicata** ... — a small, mountainous region in the arch of southern Italy's \"boot,\" better known for rugged landscapes than for large-scale wine. Its reputation rests largely on the volcanic slopes of Mount Vulture.\n\n**Wines & grapes** — the flagship is Aglianico, especially Aglianico del Vulture, a dark, structured red grown on volcanic soils. Smaller amounts of white and other reds are also made.\n\n**Character** — high altitude and cool nights slow ripening, giving Aglianico here firm tannins, bright acidity and real ageing potential. The volcanic terrain lends a savoury, mineral edge, and the wines are often compared to the more famous Aglianico of neighbouring Campania while keeping their own rustic, earthy identity."
+ },
+ {
+  "name": "North Coast",
+  "country": "United States",
+  "description": "**North Coast** ... — a wine region in the United States, referring to the coastal counties of California north of San Francisco Bay, home to renowned areas such as Napa, Sonoma and Mendocino. It is among the country's premier fine-wine zones.\n\n**Wines & grapes** — an extensive range topped by Cabernet Sauvignon and Chardonnay, alongside Pinot Noir, Zinfandel, Merlot and Sauvignon Blanc.\n\n**Character** — cool marine air and fog off the Pacific moderate what would otherwise be a hot climate, creating many distinct microclimates within one large appellation. The result runs from bright, fresh whites and elegant Pinot Noir near the coast to rich, structured Cabernet in warmer inland valleys."
+ },
+ {
+  "name": "Uco Valley",
+  "country": "Argentina",
+  "description": "**Uco Valley** ... — a high-altitude wine region in Argentina's Mendoza province, spreading across the foothills of the Andes to the south of Mendoza city. It has become one of the country's most exciting sources of premium wine.\n\n**Wines & grapes** — Malbec is king, but the cool elevation also suits Cabernet Franc, Cabernet Sauvignon, Chardonnay and aromatic whites, with fresh, high-toned styles increasingly the signature.\n\n**Character** — vineyards planted well above a thousand metres enjoy intense sunlight by day and cold nights, which preserves acidity and builds colour and aromatics. Stony, alluvial soils and the altitude give Uco Malbec more freshness, floral lift and firm structure than warmer, lower Mendoza sites.\n\n**Good to know** — the valley's cooler, higher plots have driven Argentina's move toward more elegant, terroir-focused wines."
+ },
+ {
+  "name": "Illinois",
+  "country": "United States",
+  "description": "**Illinois** ... — a wine-producing state in the American Midwest, with a small industry spread mainly across river valleys and rural districts rather than one concentrated hub.\n\n**Wines & grapes** — production centres on cold-hardy grapes suited to the climate, including the French-American hybrids Chambourcin, Vidal Blanc and Seyval Blanc and the native American Norton, made in a range from dry to sweet.\n\n**Character** — a continental climate with hot summers and cold winters favours grapes bred to survive frost, so hybrids dominate over classic European vinifera. Most wineries are modest, family-run operations serving local visitors, and the wines are generally approachable and made for early drinking."
+ },
+ {
+  "name": "Dão",
+  "country": "Portugal",
+  "description": "**Dão** ... — a historic wine region in north-central Portugal, set in a granite plateau ringed by mountains that shelter it from coastal and continental extremes. It is one of the country's classic sources of refined red wine.\n\n**Wines & grapes** — reds built around Touriga Nacional, with Tinta Roriz (Tempranillo), Alfrocheiro and Jaen, plus fresh whites led by the Encruzado grape.\n\n**Character** — granite soils, altitude and a protected climate give the reds firm structure, elegance and the ability to age gracefully, often described as more restrained and perfumed than the bolder wines of the nearby Douro. Encruzado, meanwhile, makes some of Portugal's finest dry whites.\n\n**Good to know** — long regarded alongside the Douro as one of Portugal's benchmark table-wine regions."
+ },
+ {
+  "name": "Wisconsin",
+  "country": "United States",
+  "description": "**Wisconsin** ... — a wine-producing state in the northern United States, with a small, dispersed industry shaped by its cold Midwestern climate.\n\n**Wines & grapes** — the emphasis is on cold-hardy hybrids such as Marquette, Frontenac, La Crescent and St. Croix, many developed to withstand harsh winters, along with fruit wines including the state's well-known cranberry wines.\n\n**Character** — long, freezing winters rule out most classic European vinifera, so growers rely on hybrids bred for survival and short seasons. Wineries are typically small and tourism-focused, and the wines range from crisp and dry to distinctly sweet, often reflecting local fruit as much as grapes."
+ },
+ {
+  "name": "Rapel Valley",
+  "country": "Chile",
+  "description": "**Rapel Valley** ... — a large and important wine region in Chile, lying in the country's Central Valley south of Santiago. It splits into two well-known sub-zones, Cachapoal to the north and Colchagua to the south.\n\n**Wines & grapes** — red-dominant, famed for Carménère, Cabernet Sauvignon, Merlot and Syrah, with Colchagua in particular known for rich, ripe reds.\n\n**Character** — a warm, sunny Mediterranean climate with reliable dry summers ripens red grapes fully, while cooling influences from the Andes and, in places, the Pacific help retain balance. The wines are typically generous, deeply coloured and fruit-forward, with Carménère offering the plummy, herbal signature that has become a Chilean calling card.\n\n**Good to know** — Colchagua's premium reds have done much to build Chile's international reputation."
+ },
+ {
+  "name": "McLaren Vale",
+  "country": "Australia",
+  "description": "**McLaren Vale** ... — a warm coastal wine region in South Australia, just south of Adelaide near the Gulf St Vincent. It is one of Australia's most respected sources of full-bodied red wine.\n\n**Wines & grapes** — Shiraz and Grenache are the stars, joined by Cabernet Sauvignon and a growing cast of Mediterranean varieties such as Mourvèdre, Tempranillo and Fiano suited to the climate.\n\n**Character** — a Mediterranean climate with hot, dry summers cooled by afternoon sea breezes yields ripe, generous reds with soft tannins and rich, dark fruit. Old bush-vine Grenache and diverse soils give real depth, and the region has embraced sustainable and organic farming.\n\n**Good to know** — its old-vine Grenache is increasingly prized as one of Australia's finest expressions of the grape."
+ },
+ {
+  "name": "Columbia Valley",
+  "country": "United States",
+  "description": "**Columbia Valley** ... — a vast wine region in the northwestern United States, covering much of eastern Washington and reaching into Oregon along the Columbia River. It is the backbone of Washington State's wine industry.\n\n**Wines & grapes** — a broad, balanced range led by Cabernet Sauvignon, Merlot and Syrah among reds, with Riesling, Chardonnay and Sauvignon Blanc among whites.\n\n**Character** — sheltered from Pacific rain by the Cascade Mountains, this high desert sees hot, sunny days and cold nights, plus long summer daylight at its northern latitude. That combination ripens grapes fully while preserving acidity, giving reds both power and freshness, and irrigation from the river makes viticulture possible in an otherwise arid landscape.\n\n**Good to know** — it is an umbrella appellation containing many notable smaller districts."
+ },
+ {
+  "name": "Balearic Islands",
+  "country": "Spain",
+  "description": "**Balearic Islands** are Spain's Mediterranean archipelago east of the mainland, with most winemaking concentrated on Mallorca and a smaller presence on Menorca, Ibiza and Formentera.\n\n**Wines & grapes** — Reds and rosés lead, built on native grapes such as Manto Negro and Callet, often blended with Cabernet Sauvignon, Syrah or Tempranillo. Whites come from local varieties like Prensal Blanc (Moll), alongside Chardonnay and Muscat. Mallorca's main quality zones are the DOs Binissalem and Pla i Llevant.\n\n**Character** — A warm, sunny, sea-tempered climate gives ripe, generous, easy-drinking wines. The islands have shifted from bulk output toward small estates reviving indigenous grapes, so bottlings can show real local personality.\n\n**Good to know** — Production is tiny and much of it is drunk on the islands, so bottles are a fun find for travellers and collectors of unusual Spanish wines."
+ },
+ {
+  "name": "Langhorne Creek",
+  "country": "Australia",
+  "description": "**Langhorne Creek** is a warm, flat wine region in South Australia, southeast of Adelaide near Lake Alexandrina, long prized as a source of soft, ripe fruit.\n\n**Wines & grapes** — It is red-wine country above all, best known for plush Cabernet Sauvignon and Shiraz, with Malbec, Merlot and some white varieties also grown.\n\n**Character** — Cooling afternoon breezes off the nearby lake moderate the heat and stretch out ripening, giving supple, rounded reds with sweet dark fruit and gentle tannins. Historically many grapes were sold to big producers for blending, but the region now has a growing number of estate wines under its own name.\n\n**Good to know** — The vineyards were traditionally watered by seasonal flooding of the Bremer and Angas rivers, an unusual natural irrigation that shaped the district's reputation for reliable, generous crops."
+ },
+ {
+  "name": "Texas Hill Country",
+  "country": "United States",
+  "description": "**Texas Hill Country** is a large wine region in central Texas, spreading across the rolling limestone hills west of Austin and San Antonio, and one of the anchors of the state's fast-growing wine scene.\n\n**Wines & grapes** — Growers have leaned into warm-climate, Mediterranean and Rhône grapes that suit the heat, including Tempranillo, Mourvèdre, Grenache and Sangiovese for reds, and Viognier, Roussanne and Blanc du Bois among whites. Tannat and Cabernet Sauvignon also feature.\n\n**Character** — Hot days, cooler nights and limestone-rich soils give ripe, full-bodied wines. Late frosts, hail and heat make it a challenging place to farm, so quality varies, but the best producers make characterful, food-friendly bottlings.\n\n**Good to know** — It is a popular tasting-room destination and a big driver of Texas wine tourism."
+ },
+ {
+  "name": "Queensland",
+  "country": "Australia",
+  "description": "**Queensland** is Australia's warm northeastern state, a smaller and less-known wine producer than the southern states but with a growing craft scene.\n\n**Wines & grapes** — A wide mix of varieties is grown, including Shiraz, Cabernet Sauvignon and Merlot for reds and Chardonnay, Verdelho and Semillon for whites, plus a taste for alternative Mediterranean grapes.\n\n**Character** — Most serious vineyards sit at altitude to escape the subtropical heat, giving fresher, more balanced wines than the lowland climate would suggest. The best-known quality zone is the elevated Granite Belt in the state's south.\n\n**Good to know** — Much of the wine is enjoyed locally and by visitors, making Queensland bottles an uncommon sight elsewhere."
+ },
+ {
+  "name": "Granite Belt, Queensland",
+  "country": "Australia",
+  "description": "**Granite Belt, Queensland** is the state's leading wine region, a high, cool plateau around Stanthorpe near the New South Wales border, named for its coarse granite soils.\n\n**Wines & grapes** — Shiraz, Cabernet Sauvignon and Merlot lead the reds, with Chardonnay, Verdelho and Semillon among the whites. The region is also known for championing unusual \"alternative\" varieties such as Tempranillo, Fiano and Durif.\n\n**Character** — At around 800 metres and higher, elevation brings cold nights and a genuine growing-season chill that keeps the wines fresh and structured despite Queensland's warm reputation. The decomposed-granite, sandy soils drain freely and add a lean, mineral edge.\n\n**Good to know** — Its \"Strange Bird\" trail celebrates lesser-known grapes, giving the region a distinct identity within Australian wine."
+ },
+ {
+  "name": "West Flanders",
+  "country": "Belgium",
+  "description": "**West Flanders** is a coastal province in the north of Belgium, part of the country's small but slowly expanding cool-climate wine scene.\n\n**Wines & grapes** — Production is limited and geared to fresh whites and sparkling wines, typically from cool-climate and disease-resistant grape varieties suited to a northern maritime setting.\n\n**Character** — The cool, damp, Atlantic-influenced climate makes for light, crisp, high-acid wines, and winemaking here is a niche, artisanal pursuit rather than a large industry. Bottles are made in tiny quantities and rarely travel far from home."
+ },
+ {
+  "name": "Savoie",
+  "country": "France",
+  "description": "**Savoie** is an alpine wine region in eastern France, tucked among the mountains and lakes near the Swiss and Italian borders, famous for crisp, high-altitude whites.\n\n**Wines & grapes** — Whites dominate, chiefly from Jacquère, along with Altesse (also called Roussette), Roussanne (known locally as Bergeron in Chignin) and Chasselas. Reds and rosés come mainly from Mondeuse, Gamay and Pinot Noir.\n\n**Character** — A cool mountain climate and stony, often limestone slopes give light-bodied, bright, refreshing wines with lively acidity and an almost saline, mineral snap. Most are meant to be drunk young.\n\n**Good to know** — Savoie wines pair naturally with alpine cheese dishes like fondue and raclette, and much of the output is enjoyed in the region's ski resorts."
+ },
+ {
+  "name": "Willamette Valley, Oregon",
+  "country": "United States",
+  "description": "**Willamette Valley, Oregon** is one of the Pacific Northwest's most celebrated wine regions, stretching south of Portland in the northwest United States, and one of the world's benchmark homes for cool-climate Pinot Noir.\n\n**Wines & grapes** — Pinot Noir is the signature grape, producing elegant, perfumed reds. Whites are led by Pinot Gris and Chardonnay, with Riesling and sparkling wine also important.\n\n**Character** — A cool, wet, marine-influenced climate and a long, gentle ripening season give wines of finesse, bright acidity and restraint rather than sheer power. Soils range from volcanic \"Jory\" red basalt to marine sedimentary types, and terroir-focused sub-AVAs like the Dundee Hills and Eola-Amity Hills are prized.\n\n**Good to know** — Its cool, damp autumns make vintages variable, rewarding careful growers and giving each year its own character."
+ },
+ {
+  "name": "Monterey County",
+  "country": "United States",
+  "description": "**Monterey County** is a major coastal wine region on California's Central Coast, running inland along the Salinas Valley south of Monterey Bay.\n\n**Wines & grapes** — Chardonnay and Pinot Noir are the calling cards, with Riesling, Pinot Gris, Syrah and Cabernet Sauvignon also widely planted. Cooler northern zones favour whites and Pinot, while warmer inland stretches ripen fuller reds.\n\n**Character** — Cold ocean air and strong afternoon winds funnel down the valley from the bay, dramatically cooling the vineyards and extending ripening, which builds vivid acidity and bright fruit. The county spans a wide range of sites, from breezy valley floors to the hillside Santa Lucia Highlands.\n\n**Good to know** — The Santa Lucia Highlands sub-appellation is especially esteemed for concentrated, sought-after Pinot Noir and Syrah."
+ },
+ {
+  "name": "Lisboa",
+  "country": "Portugal",
+  "description": "**Lisboa** is a large coastal wine region in west-central Portugal, running up the Atlantic seaboard north of the capital, and formerly known as Estremadura.\n\n**Wines & grapes** — It is one of Portugal's most productive regions, making reds, whites and rosés across many styles. Native grapes lead, including Castelão, Touriga Nacional and Aragonez (Tempranillo) for reds and Arinto, Fernão Pires and Vital for whites.\n\n**Character** — The cooling, sometimes windy Atlantic influence keeps many wines fresh and bright, and much of the output is well-priced, everyday drinking. Nested inside are distinctive smaller DOCs such as Bucelas for crisp Arinto whites, historic Colares grown in coastal sands, and Alenquer and Óbidos for reds.\n\n**Good to know** — Its blend of high volume and pockets of tradition makes it a great source of value and discovery."
+ },
+ {
+  "name": "Valle d'Aosta",
+  "country": "Italy",
+  "description": "**Valle d'Aosta** is Italy's smallest wine region, a narrow alpine valley in the far northwest, ringed by the highest peaks of the Alps near the French and Swiss borders.\n\n**Wines & grapes** — It grows a remarkable range of native and international grapes on steep terraces, including reds from Petit Rouge, Fumin and Nebbiolo (locally Picotendro or Picotener), and whites from Prié Blanc, Petite Arvine and Müller-Thurgau.\n\n**Character** — Some of Europe's highest vineyards, cool mountain air and stony slopes give light, fresh, high-acid wines with real alpine character, often made in tiny quantities by growers farming by hand. Its single DOC, Valle d'Aosta, covers the whole valley.\n\n**Good to know** — Prié Blanc from Morgex and La Salle ripens at extreme altitude on ungrafted vines, a mountain rarity."
+ },
+ {
+  "name": "Jumilla",
+  "country": "Spain",
+  "description": "**Jumilla** is a warm, arid wine region in southeastern Spain, straddling the Murcia and Castilla-La Mancha border, celebrated as a stronghold of the Monastrell grape.\n\n**Wines & grapes** — Powerful, dark reds from Monastrell (known elsewhere as Mourvèdre) are the signature, sometimes blended with Syrah, Tempranillo, Garnacha or Cabernet Sauvignon. Some fresh whites and rosés are also made.\n\n**Character** — Baking sun, very low rainfall and high-altitude limestone soils concentrate the fruit, giving ripe, full-bodied reds with dark berry flavours, a warm herbal note and often generous alcohol. Old bush-trained vines add depth.\n\n**Good to know** — Phylloxera reached Jumilla unusually late, its spread slowed by the region's sandy soils, and low-yielding old vines still make it a source of concentrated reds at excellent value."
+ },
+ {
+  "name": "Valencia",
+  "country": "Spain",
+  "description": "**Valencia** is a wine region on Spain's eastern Mediterranean coast, centred on the port city of the same name and long a hub for both everyday bottlings and, increasingly, more serious wines from its higher inland hills.\n\n**Wines & grapes** — Reds and rosés lean on Bobal, Monastrell and Tempranillo, while whites come from Merseguera, Macabeo and the aromatic Moscatel. The region is especially known for sweet Moscatel de Valencia, a fragrant, grapey dessert wine.\n\n**Character** — The warm Mediterranean climate ripens grapes easily, giving generous, fruit-forward reds and juicy rosés, while cooler vineyards at altitude inland lend more freshness and structure. It offers reliable value across a wide spread of styles.\n\n**Good to know** — Vineyards range from the coastal plain up into the Utiel-Requena plateau, so quality varies with elevation and site."
+ },
+ {
+  "name": "Castilla IGP",
+  "country": "Spain",
+  "description": "**Castilla IGP** is a broad regional wine category covering the vast central plateau of Castilla-La Mancha in the heart of Spain, used for wines that fall outside the stricter appellation rules yet still show regional origin.\n\n**Wines & grapes** — It spans reds, whites and rosés from a wide grape palette, including Tempranillo, Garnacha, Cabernet Sauvignon and Syrah for reds, and Airén, Verdejo and Sauvignon Blanc among the whites.\n\n**Character** — This is high, dry, sun-baked country with a strongly continental climate of hot days and cold nights, producing ripe, approachable wines. The flexible IGP framework gives growers room to blend international and Spanish varieties, making it a common source of good-value everyday bottles."
+ },
+ {
+  "name": "La Mancha",
+  "country": "Spain",
+  "description": "**La Mancha** is a huge wine region on the arid central plateau south of Madrid, one of the largest single denominated vineyard areas in the world and historically the engine of Spain's bulk wine output.\n\n**Wines & grapes** — The white Airén, planted across enormous acreage, remains a mainstay, while reds increasingly rely on Tempranillo (locally called Cencibel), alongside Garnacha, Cabernet Sauvignon and Syrah.\n\n**Character** — The climate is fiercely continental, with scorching summers, cold winters and very little rain, which keeps yields naturally in check and concentrates flavour. Modern winemaking has lifted quality considerably, and the region now turns out clean, fruity, affordable reds and whites.\n\n**Good to know** — The name is forever tied to Don Quixote's windswept plains."
+ },
+ {
+  "name": "Styria",
+  "country": "Austria",
+  "description": "**Styria** (Steiermark) is a wine region in the green, hilly southeast of Austria, close to the Slovenian border, celebrated above all for crisp, aromatic white wines.\n\n**Wines & grapes** — Sauvignon Blanc is the star, joined by Welschriesling, Morillon (the local name for Chardonnay), Weissburgunder and Muskateller. The western part is also known for Schilcher, a sharp rosé made from the Blauer Wildbacher grape.\n\n**Character** — Steep slopes, a mild but variable climate and diverse soils give whites of bright acidity, clarity and vivid fruit and herb aromatics. The wines are typically dry, lively and food-friendly, prized for their freshness rather than power."
+ },
+ {
+  "name": "Castile and León",
+  "country": "Spain",
+  "description": "**Castile and León** is a large region across the high plains of north-central Spain, drained by the Duero river and home to several of the country's most prestigious wine appellations.\n\n**Wines & grapes** — It is red-wine country at heart, with Tempranillo (known locally as Tinta del País or Tinta de Toro) driving the powerful reds of Ribera del Duero and Toro, and Mencía shaping the fresher reds of Bierzo. For whites, Verdejo from Rueda is the signature.\n\n**Character** — High altitude and a harsh continental climate of hot days and cold nights build deeply coloured, structured reds with firm tannins and good acidity.\n\n**Good to know** — Some of Spain's most sought-after wines come from within its borders."
+ },
+ {
+  "name": "Durbanville",
+  "country": "South Africa",
+  "description": "**Durbanville** is a cool-climate ward on the hills just north of Cape Town in South Africa's Coastal Region, benefiting from breezes and mist off the nearby Atlantic.\n\n**Wines & grapes** — It has built a strong reputation for Sauvignon Blanc, and also produces good Merlot, Cabernet Sauvignon and other whites.\n\n**Character** — Ocean influence tempers the summer heat, and the rolling clay-rich slopes hold moisture well, giving whites with zesty acidity and pronounced green, herbal and tropical notes. The reds tend to be firm and cool-fruited rather than jammy."
+ },
+ {
+  "name": "Constantia",
+  "country": "South Africa",
+  "description": "**Constantia** is a historic ward on the eastern slopes of the Cape Peninsula near Cape Town, one of the oldest wine-growing districts in the Southern Hemisphere and famous for centuries for its sweet wine.\n\n**Wines & grapes** — Its legendary product was Vin de Constance, a lusciously sweet Muscat once prized by European royalty. Today Sauvignon Blanc leads the modern lineup, alongside other whites and some elegant reds.\n\n**Character** — Cool sea breezes off False Bay and well-drained mountain soils give wines of freshness, precision and finesse. The Sauvignon Blancs are aromatic and racy, while the revived sweet Muscat remains a sought-after specialty.\n\n**Good to know** — Winemaking here dates back to the late 17th century."
+ },
+ {
+  "name": "Cerdon",
+  "country": "France",
+  "description": "**Cerdon** is a small area within the Bugey region of eastern France, in the foothills between the Jura and Savoie, best known for a distinctive pink sparkling wine.\n\n**Wines & grapes** — Its signature is Bugey-Cerdon, a lightly sparkling, off-dry rosé made mainly from Gamay with some Poulsard, produced by the ancestral method where fermentation finishes in the bottle.\n\n**Character** — The wine is delicately fizzy, pale pink, low in alcohol and gently sweet, with fresh red-berry and floral flavours. It is an easygoing, aromatic sparkler meant to be drunk young and well chilled."
+ },
+ {
+  "name": "Auvergne",
+  "country": "France",
+  "description": "**Auvergne** is a wine area in the volcanic heart of central France, in the Massif Central along the upper reaches of the Allier, producing wines under the Côtes d'Auvergne name.\n\n**Wines & grapes** — Gamay dominates the light, juicy reds and rosés, with Pinot Noir also planted, while Chardonnay accounts for the whites.\n\n**Character** — Volcanic and granitic soils, combined with a cool, hilly climate, give reds that are fresh, bright and relatively light-bodied, with vivid red fruit and a mineral edge. The wines are honest, drinkable and closer in spirit to Beaujolais and the Loire than to richer southern styles."
+ },
+ {
+  "name": "Calabria",
+  "country": "Italy",
+  "description": "**Calabria** forms the mountainous \"toe\" of southern Italy, a warm, sun-drenched region with a long winemaking history stretching back to ancient Greek settlers.\n\n**Wines & grapes** — The red Gaglioppo grape is the region's calling card, most famously in the wines of Cirò, while Magliocco adds to the reds and Greco Bianco supplies aromatic whites and sweet specialties.\n\n**Character** — Hot Mediterranean sunshine tempered by cooling mountain elevation yields reds that are firm, savoury and full of dark and red fruit, often with an earthy, herbal streak. Historically overlooked, Calabria is increasingly recognised for characterful wines from native grapes.\n\n**Good to know** — Greek colonists brought vines to these shores over two millennia ago."
+ },
+ {
+  "name": "Córdoba",
+  "country": "Argentina",
+  "description": "**Córdoba** is a province in central Argentina where winemaking, once widespread historically, is enjoying a modern revival in the high valleys of the Sierras.\n\n**Wines & grapes** — Growers work with a mix of varieties, including Malbec and other reds along with aromatic whites, reflecting the country's broad grape palette rather than a single specialty.\n\n**Character** — Vineyards planted at altitude in the mountain valleys benefit from strong sunshine, cool nights and clean air, which help preserve acidity and freshness in the wines. As an emerging region, its output is small but growing, driven by a wave of boutique producers exploring the terroir."
+ },
+ {
+  "name": "Central Victoria",
+  "country": "Australia",
+  "description": "**Central Victoria** is a wine zone in the state of Victoria, southeastern Australia, taking in respected districts such as Heathcote, Bendigo, Goulburn Valley, Nagambie Lakes and the Strathbogie Ranges.\n\n**Wines & grapes** — Shiraz is the flagship, especially the deep, rich reds of Heathcote grown on ancient Cambrian soils. Cabernet Sauvignon adds structure, while the Nagambie area is known for distinctive whites from Marsanne and Riesling.\n\n**Character** — A generally warm, continental climate moderated by elevation produces reds of ripe, generous dark fruit, good concentration and velvety texture. The zone balances powerful, age-worthy reds with elegant, long-lived whites.\n\n**Good to know** — Heathcote's red soils are prized by Shiraz specialists worldwide."
+ },
+ {
+  "name": "Citrusdal Berg",
+  "country": "South Africa",
+  "description": "**Citrusdal Berg** is a ward in South Africa's Western Cape, set in the rugged Cederberg mountains of the wider Olifants River region, well to the north of Cape Town.\n\n**Wines & grapes** — Chenin Blanc and Sauvignon Blanc anchor the whites, alongside reds such as Shiraz and Cabernet Sauvignon grown on the warmer, better-drained slopes.\n\n**Character** — The defining feature is altitude: some of the vineyards here sit among the highest in the country, where cool mountain nights and stony, sandstone-derived soils help the grapes hold onto freshness and acidity despite the dry, sun-drenched growing season.\n\n**Good to know** — The remote, high-lying sites have earned the area a reputation for elegant, mineral wines that punch above the region's small size."
+ },
+ {
+  "name": "Bretagne",
+  "country": "France",
+  "description": "**Bretagne** — better known in English as Brittany — is a peninsula in the far northwest of France, jutting into the Atlantic with a cool, wet, maritime climate.\n\n**Wines & grapes** — It has never been a classic wine region and is far better known for cider, while the Muscadet vineyards lie just to its south in the Loire. A modern, small-scale revival has seen a handful of growers plant vines, often favouring early-ripening and disease-tolerant varieties suited to the damp climate.\n\n**Character** — Cool temperatures, frequent rain and a short growing season make ripening a challenge, so what wine is made tends to be light and crisp. Production remains tiny and experimental rather than established."
+ },
+ {
+  "name": "Extremadura",
+  "country": "Spain",
+  "description": "**Extremadura** is a large, sparsely populated region in western Spain, bordering Portugal, with its vineyards concentrated in the Ribera del Guadiana appellation around the Guadiana river.\n\n**Wines & grapes** — Reds are led by Tempranillo (locally called Cencibel) and Garnacha, while whites draw on native varieties such as Pardina and Cayetana Blanca; the area has long supplied large volumes of everyday wine.\n\n**Character** — The climate is hot, dry and strongly continental, with baking summers that ripen grapes easily and yield generous, ripe, approachable styles. Long a source of bulk and distilling wine, it has gradually shifted toward more quality-focused bottlings while remaining one of Spain's better-value corners."
+ },
+ {
+  "name": "Hessen",
+  "country": "Germany",
+  "description": "**Hessen** is a federal state in western Germany. Its vineyards fall mainly within two officially designated wine regions: the celebrated Rheingau along the Rhine, and the small Hessische Bergstraße further east.\n\n**Wines & grapes** — Riesling is the signature grape, producing everything from bone-dry to lusciously sweet whites, with Pinot varieties (Spätburgunder and the Pinot Blanc/Gris family) also grown.\n\n**Character** — The best sites, especially in the Rheingau, sit on south-facing slopes above the river, where reflected warmth and slate or loess soils give Rieslings their trademark balance of ripe fruit, racy acidity and mineral cut.\n\n**Good to know** — Note that Rheinhessen, despite the similar name, lies in the neighbouring state of Rhineland-Palatinate, not in Hessen."
+ },
+ {
+  "name": "Lower Rhine (Niederrhein)",
+  "country": "Germany",
+  "description": "**Lower Rhine (Niederrhein)** is a region in western Germany following the Rhine as it flows north toward the Dutch border, beyond the traditional heartland of German viticulture.\n\n**Wines & grapes** — This is very marginal wine country rather than an established region; the cool, northerly climate favours what little is grown here toward early-ripening white varieties and light styles.\n\n**Character** — Sitting well north of Germany's classic vineyards, it has a cool, damp climate that makes fully ripening grapes difficult, so viticulture remains small-scale and modern rather than historically significant. Any wine produced tends to be light and fresh."
+ },
+ {
+  "name": "Thrace",
+  "country": "Bulgaria",
+  "description": "**Thrace** is a major wine region in southern Bulgaria, spread across the warm Thracian lowlands and one of the country's most important and historic zones for winemaking, a tradition stretching back to antiquity.\n\n**Wines & grapes** — Reds dominate, built around the native Mavrud grape prized for its depth and structure, alongside international varieties such as Cabernet Sauvignon and Merlot, plus local crossings like Rubin.\n\n**Character** — A warm, sunny continental climate tempered by surrounding hills gives ripe, full-bodied reds with good colour and firm tannins. The area blends deep-rooted local grapes with modern international styles.\n\n**Good to know** — The ancient Thracians who gave the region its name were among Europe's earliest wine cultures."
+ },
+ {
+  "name": "Crimea",
+  "country": "Ukraine",
+  "description": "**Crimea** is a Black Sea peninsula, part of Ukraine, with a long winemaking heritage centred on its southern coast.\n\n**Wines & grapes** — It is most famous for fortified and sweet dessert wines in the styles of Port, Madeira and Muscat, produced most notably at the historic Massandra cellars, as well as sparkling wine associated with the Novyi Svit house. Both native and international grapes are grown.\n\n**Character** — The sheltered southern coastline enjoys a mild, near-Mediterranean climate protected by mountains, ideal for ripening grapes to the high sugar levels that its rich, long-lived fortified wines require.\n\n**Good to know** — The Massandra collection holds one of the world's most storied libraries of aged fortified wines."
+ },
+ {
+  "name": "Snowy Mountains",
+  "country": "Australia",
+  "description": "**Snowy Mountains** is a high-altitude wine zone in the alpine country of New South Wales, in southeastern Australia.\n\n**Wines & grapes** — As a cool, elevated region it leans toward aromatic whites and cool-climate styles, along with fruit suited to sparkling-wine bases; plantings here are limited.\n\n**Character** — Defined by its elevation and mountain setting, the area has a genuinely cool climate with cold nights and a long, slow ripening season, which helps grapes retain bright acidity and fresh, restrained flavours. It remains a small and specialised corner of Australian viticulture."
+ },
+ {
+  "name": "Crete",
+  "country": "Greece",
+  "description": "**Crete** is the largest of the Greek islands, lying in the southern Aegean, with a winemaking history reaching back thousands of years to some of Europe's earliest wine cultures.\n\n**Wines & grapes** — The island is a treasury of indigenous grapes: whites like Vidiano, Vilana and Thrapsathiri, and reds such as Kotsifali, Mandilaria and the age-worthy Liatiko. Several appellations, including Peza, Archanes, Dafnes and Sitia, formalise these traditions.\n\n**Character** — The Mediterranean climate is warm and sunny, but mountain vineyards and cooling sea breezes lend the wines balance and aromatic lift. A modern revival has refocused Crete on its distinctive native varieties.\n\n**Good to know** — Liatiko-based wines, sometimes sweet, are among the island's most characterful and long-lived reds."
+ },
+ {
+  "name": "Secano Interior, Maule Valley",
+  "country": "Chile",
+  "description": "**Secano Interior, Maule Valley** refers to the dry-farmed interior of Chile's Maule Valley, in the country's Central Valley south of Santiago, where old vines grow on the hills between the coastal range and the central plain.\n\n**Wines & grapes** — The area is celebrated for old, unirrigated bush vines, above all País and Carignan, which yield concentrated, characterful reds; the local Carignan has become a flagship for the wider Maule.\n\n**Character** — \"Secano\" means dry-farmed, and these gnarled, low-yielding vines survive on rainfall alone in granite-rich soils, producing rustic yet vibrant reds with deep colour, firm structure and bright acidity that reflect their old-vine heritage."
+ },
+ {
+  "name": "Maule Valley",
+  "country": "Chile",
+  "description": "**Maule Valley** is one of Chile's largest and oldest wine regions, sitting in the southern part of the Central Valley, a few hours south of Santiago.\n\n**Wines & grapes** — It grows a broad palette, from Cabernet Sauvignon and Merlot to the historic País, but has earned recent acclaim for old-vine Carignan, often made from dry-farmed bush vines.\n\n**Character** — A warm Mediterranean climate with cool, wetter conditions than regions further north, plus a wealth of ungrafted, unirrigated old vines, gives Maule reds real depth, freshness and a sense of place.\n\n**Good to know** — A growers' movement has spotlighted the valley's ancient dry-farmed Carignan as one of Chile's most distinctive expressions."
+ },
+ {
+  "name": "Wakayama",
+  "country": "Japan",
+  "description": "**Wakayama** is a prefecture on Japan's Kii Peninsula, south of Osaka, facing the Pacific with a warm, humid climate.\n\n**Wines & grapes** — It is far better known for fruit growing — citrus such as mikan and ume plums — than for wine, and grape-wine production is small and local in scale.\n\n**Character** — The warm, rainy climate is challenging for viticulture, so what wine is made is produced on a modest, artisanal basis rather than as part of an established regional industry."
+ },
+ {
+  "name": "Akita",
+  "country": "Japan",
+  "description": "**Akita** is a prefecture in northern Japan, on the Sea of Japan side of the Tohoku region. It is far better known for rice and premium sake than for wine, though a handful of small wineries work in its cool northern climate.\n\n**Wines & grapes** — Output is limited and artisanal, typically light reds, whites and rosés from cold-hardy hybrids and adaptable vinifera grapes suited to short, cool growing seasons.\n\n**Character** — This is a marginal, snowy climate for the vine, so the wines tend to be fresh and modest in scale, made in tiny quantities by growers experimenting at the northern edge of Japanese viticulture."
+ },
+ {
+  "name": "Norrland",
+  "country": "Sweden",
+  "description": "**Norrland** is the vast northern portion of Sweden, a cold, sparsely populated area stretching toward the Arctic. It sits at the extreme frontier of grape growing and produces only a trickle of wine.\n\n**Wines & grapes** — Any wine here comes from cold-hardy hybrid grapes, and fruit and berry wines are more common than grape wine in such a climate.\n\n**Character** — With short summers, long daylight and harsh winters, the region is a challenging place for the vine; expect small-scale, experimental production rather than an established wine tradition."
+ },
+ {
+  "name": "Atlas Mountains",
+  "country": "Morocco",
+  "description": "**Atlas Mountains** refers to the mountain range running through Morocco, where vineyards planted at altitude escape some of the heat of the surrounding lowlands. It is part of Morocco's modest but long-standing wine scene.\n\n**Wines & grapes** — The focus is on reds and rosés, generally from French-origin varieties such as Carignan, Cinsault, Grenache and Syrah, styles rooted in the country's Mediterranean and colonial-era history.\n\n**Character** — Elevation brings cooler nights and a wider day-to-night temperature swing, helping the grapes keep freshness and colour in an otherwise warm, sun-drenched land."
+ },
+ {
+  "name": "Almaty",
+  "country": "Kazakhstan",
+  "description": "**Almaty** is a region in southeastern Kazakhstan, centred on the country's largest city and set against the foothills of the Tian Shan mountains. It is one of Kazakhstan's established grape-growing areas.\n\n**Wines & grapes** — Production covers reds and whites, drawing on international varieties along with grapes suited to the local continental conditions.\n\n**Character** — A sharply continental climate with hot summers and cold winters, tempered by mountain foothills, shapes wines from a country whose viticulture is small but has deep Central Asian roots."
+ },
+ {
+  "name": "Southern Kazakhstan",
+  "country": "Kazakhstan",
+  "description": "**Southern Kazakhstan** is a warm, southerly stretch of Kazakhstan and one of the country's principal areas for growing grapes. Viticulture here is aided by the milder winters relative to the country's north.\n\n**Wines & grapes** — Both reds and whites are made, from a mix of international and locally grown varieties suited to the region's heat and long growing season.\n\n**Character** — The climate is continental and sunny, giving ripe, generous fruit; wine here forms part of a Central Asian tradition that is small in scale but centuries old."
+ },
+ {
+  "name": "Zenata",
+  "country": "Morocco",
+  "description": "**Zenata** is a wine area on Morocco's Atlantic coast, near Casablanca, and one of the appellations within the country's system of protected origins. Its coastal setting sets it apart from Morocco's warmer interior.\n\n**Wines & grapes** — The emphasis is on reds and rosés, chiefly from French-associated varieties such as Cinsault, Carignan, Grenache and Syrah.\n\n**Character** — Cooling breezes off the Atlantic moderate the climate, helping the wines retain freshness; the region reflects Morocco's Mediterranean-influenced, French-shaped wine heritage."
+ },
+ {
+  "name": "Eastern Anatolia",
+  "country": "Turkey",
+  "description": "**Eastern Anatolia** is a high, rugged region in the east of Turkey and a heartland for the country's native grape varieties. It is one of the historic cradles of viticulture, in a part of the world where the vine has grown for millennia.\n\n**Wines & grapes** — The area is closely tied to indigenous Turkish reds, notably Öküzgözü and Boğazkere, which produce deeply coloured, structured wines.\n\n**Character** — Vineyards sit at high elevation under a harsh continental climate with hot summers and very cold winters. **Good to know** — its native grapes are prized for giving Turkish reds a distinctive identity unavailable anywhere else."
+ },
+ {
+  "name": "Galilee",
+  "country": "Israel",
+  "description": "**Galilee** is the mountainous north of Israel and is widely regarded as the country's finest wine region, taking in the Upper Galilee and the elevated Golan Heights. Cool air and altitude make it stand out in a generally warm land.\n\n**Wines & grapes** — Bordeaux varieties lead, especially Cabernet Sauvignon, Merlot and Syrah for reds, alongside whites such as Chardonnay and Sauvignon Blanc.\n\n**Character** — High elevation, cool nights and volcanic and limestone soils help the grapes ripen while keeping acidity and freshness. **Good to know** — many of Israel's most respected wineries source their top fruit from here."
+ },
+ {
+  "name": "Abava",
+  "country": "Latvia",
+  "description": "**Abava** takes its name from a river valley in Latvia and represents the northern, cold-climate fringe of European wine growing. Grape wine is a small and relatively recent pursuit in this Baltic country.\n\n**Wines & grapes** — What is made comes mainly from cold-hardy hybrid grapes, and fruit and berry wines are also common in the region.\n\n**Character** — The climate is cool and continental with a short growing season, so wines tend to be light and fresh, produced by small-scale growers working near the limits of viticulture."
+ },
+ {
+  "name": "Moselle Luxembourgeoise",
+  "country": "Luxembourg",
+  "description": "**Moselle Luxembourgeoise** is Luxembourg's stretch of the Moselle river valley, running along the country's eastern border, and is home to nearly all of its wine. It is a small but well-organised region with a strong white-wine and sparkling tradition.\n\n**Wines & grapes** — Whites dominate, including Riesling, Pinot Blanc, Pinot Gris, Auxerrois, Elbling and Rivaner (Müller-Thurgau), and the region is known for its crisp Crémant de Luxembourg sparkling wines.\n\n**Character** — A cool northern climate and steep riverside slopes give wines that are light, fresh and high in acidity. **Good to know** — the wines share much of the character of neighbouring German and French Moselle vineyards."
+ },
+ {
+  "name": "Sonoma Coast",
+  "country": "United States",
+  "description": "**Sonoma Coast** is a cool-climate California wine region running along the Pacific in Sonoma County. It has become one of the United States' most respected addresses for elegant, restrained New World wines.\n\n**Wines & grapes** — Pinot Noir and Chardonnay are the stars, joined by cool-climate Syrah, in styles that favour freshness and finesse over sheer power.\n\n**Character** — Ocean fog and chilly breezes off the Pacific slow ripening, preserving bright acidity and delicate aromatics in the grapes. **Good to know** — the coolest, most fog-influenced sites are sometimes bottled under the tighter West Sonoma Coast designation."
+ },
+ {
+  "name": "Granada",
+  "country": "Spain",
+  "description": "**Granada** is a province in Andalusia, in southern Spain, better known for its Moorish history than its wine, yet home to some of Europe's highest vineyards on the slopes below the Sierra Nevada. Its modern wine scene has grown around these mountain sites.\n\n**Wines & grapes** — Reds, whites and rosés are made from a broad mix of Spanish and international varieties, with high-altitude planting a defining theme.\n\n**Character** — Extreme elevation offsets the southern latitude, giving cool nights and a long ripening season that lend the wines surprising freshness for so warm a region."
+ },
+ {
+  "name": "Canary Islands, Tenerife",
+  "country": "Spain",
+  "description": "**Canary Islands, Tenerife** is a volcanic island off the northwest coast of Africa, part of Spain, whose vineyards climb the flanks of the Teide volcano and rank among the most dramatic in Europe.\n\n**Wines & grapes** — Both colours are made, largely from indigenous grapes rarely seen elsewhere: the red Listán Negro and the white Listán Blanco (the local name for Palomino), alongside aromatic Malvasía and other old varieties.\n\n**Character** — Because the islands escaped the phylloxera louse, many vines grow ungrafted and are extremely old, some trained in low braided ropes across black volcanic ash. The wines often show a smoky, mineral, slightly saline streak that reflects the porous volcanic soils and the tug of the Atlantic.\n\n**Good to know** — The high-altitude vineyards let growers keep freshness despite the subtropical latitude."
+ },
+ {
+  "name": "Moravia",
+  "country": "Czech Republic",
+  "description": "**Moravia** is the southeastern corner of the Czech Republic and the country's main winegrowing area, accounting for the great majority of Czech vineyards.\n\n**Wines & grapes** — The focus is on crisp white wines from varieties familiar across central Europe, such as Grüner Veltliner, Welschriesling, Müller-Thurgau and Riesling, with lighter reds also produced.\n\n**Character** — This is a cool, continental climate on the northern edge of viable viticulture, which favours bright acidity and fresh, aromatic whites rather than heavy, high-alcohol styles. Much of the wine is enjoyed young and locally."
+ },
+ {
+  "name": "Thermenregion",
+  "country": "Austria",
+  "description": "**Thermenregion** is a small Austrian wine region just south of Vienna, named for the warm thermal springs of the area.\n\n**Wines & grapes** — It is best known for distinctive white wines from two local grapes, Zierfandler and Rotgipfler, which are often blended together; the region also grows red varieties including Sankt Laurent and Pinot Noir.\n\n**Character** — The wines tend to be full-bodied and richly textured for Austrian whites, with ripe stone-fruit character balanced by firm acidity. The relatively warm, sheltered setting on the eastern slopes helps the fruit ripen fully."
+ },
+ {
+  "name": "Kent",
+  "country": "England",
+  "description": "**Kent** is a county in southeast England, long nicknamed the Garden of England, and one of the heartlands of the country's fast-growing wine scene.\n\n**Wines & grapes** — The specialty is traditional-method sparkling wine built from the Champagne trio of Chardonnay, Pinot Noir and Pinot Meunier; aromatic still whites, notably from Bacchus, are also made.\n\n**Character** — Kent's vineyards sit on chalk and greensand, the chalk belonging to the same seam that dips beneath the Channel and resurfaces in Champagne, and its cool, marginal climate preserves the high acidity that gives English sparkling wine its taut, refreshing edge.\n\n**Good to know** — Warmer recent vintages have made ripening far more reliable than a generation ago."
+ },
+ {
+  "name": "Gelderland",
+  "country": "Netherlands",
+  "description": "**Gelderland** is a province in the eastern Netherlands where a small number of vineyards have appeared as Dutch winemaking has slowly expanded.\n\n**Wines & grapes** — Production is modest and leans on cool-climate and disease-resistant hybrid varieties suited to a northern setting, making mostly white and some red and sparkling wines.\n\n**Character** — This is a cool, marginal growing climate, so the wines are typically light and fresh with lively acidity, made in small volumes and enjoyed largely within the region."
+ },
+ {
+  "name": "Hardanger",
+  "country": "Norway",
+  "description": "**Hardanger** is a fjord district in western Norway, one of the northernmost places in the world where fruit is cultivated for drinks.\n\n**Wines & grapes** — The area is far better known for its orchards and traditional ciders than for grape wine, and any grape production is tiny and experimental in this extreme climate.\n\n**Character** — Long summer daylight and the moderating effect of the fjord allow fruit to ripen despite the high latitude, giving crisp, aromatic and high-acid drinks. Expect small-scale, artisanal bottlings."
+ },
+ {
+  "name": "Sonoma Valley",
+  "country": "United States",
+  "description": "**Sonoma Valley** is a classic winegrowing valley in Sonoma County, north of San Francisco, and one of California's most historic wine districts.\n\n**Wines & grapes** — It produces a broad range: powerful Cabernet Sauvignon and old-vine Zinfandel from warmer sites, plus Chardonnay and Pinot Noir where cooling coastal air reaches in.\n\n**Character** — The valley is shaped by fog and breezes drawn up from San Pablo Bay, which stretch the ripening season and add freshness to the ripe, generous fruit. Soils and elevation vary widely between the valley floor and the surrounding hills.\n\n**Good to know** — Sonoma is often seen as a more laid-back, farm-rooted counterpart to neighbouring Napa."
+ },
+ {
+  "name": "Occitanie",
+  "country": "France",
+  "description": "**Occitanie** is a large administrative region sweeping across the south of France from the Mediterranean toward the Atlantic, taking in the historic Languedoc-Roussillon vineyards and part of the southwest.\n\n**Wines & grapes** — As one of the biggest wine-producing zones in the world, it makes every style: robust reds from Grenache, Syrah, Carignan and Mourvèdre, fresh whites and rosés, plus sparkling and fortified wines.\n\n**Character** — The sunny, dry Mediterranean climate ripens fruit easily, yielding warm, generous, herb-scented wines, while cooler hillsides and Atlantic-influenced pockets add variety.\n\n**Good to know** — The region spans everything from great-value everyday bottles to ambitious estate wines."
+ },
+ {
+  "name": "Zürich",
+  "country": "Switzerland",
+  "description": "**Zürich** is a canton in German-speaking Switzerland where vineyards cluster around the lake and river valleys near the city of the same name.\n\n**Wines & grapes** — The mainstay red is Pinot Noir, known locally as Blauburgunder, while the leading white is Müller-Thurgau, often called Riesling-Silvaner in Switzerland.\n\n**Character** — This is a cool, northerly climate, so the reds tend to be light and fragrant and the whites crisp and delicate. Production is small and rarely leaves the country, meaning most of these wines are enjoyed close to where they are grown."
+ },
+ {
+  "name": "North Otago",
+  "country": "New Zealand",
+  "description": "**North Otago** sits on the eastern side of New Zealand's South Island, just north of the better-known Central Otago, and centres on the emerging Waitaki Valley.\n\n**Wines & grapes** — The focus is on cool-climate varieties, especially elegant Pinot Noir along with aromatic whites such as Riesling and Pinot Gris.\n\n**Character** — What sets the area apart is its limestone-rich soils, unusual in New Zealand, which growers believe lend the wines a fine, mineral, tautly structured quality. The cool, sometimes frost-prone climate keeps acidity bright and the wines restrained rather than showy."
+ },
+ {
+  "name": "Mount Benson",
+  "country": "Australia",
+  "description": "**Mount Benson** is a small, coastal wine region on the Limestone Coast of South Australia, facing the Southern Ocean.\n\n**Wines & grapes** — Reds lead the way, particularly Shiraz and Cabernet Sauvignon, with some white varieties also grown.\n\n**Character** — Its position right by the sea gives a maritime, wind-swept climate that is more moderate than inland South Australia, producing reds that tend to be medium-bodied with fresh acidity and a savoury edge. The limestone-influenced soils give the wider coast its name."
+ },
+ {
+  "name": "Paarl",
+  "country": "South Africa",
+  "description": "**Paarl** is a warm inland district in South Africa's Western Cape, set around a large granite outcrop north of Stellenbosch and long a hub of the country's wine industry.\n\n**Wines & grapes** — It makes a wide spread of styles: full reds from Shiraz, Cabernet Sauvignon and Rhône varieties, versatile Chenin Blanc, and other whites, plus some fortified wines.\n\n**Character** — The climate is notably warmer than the coastal districts, so the wines are typically ripe, generous and full-bodied, though cooler, higher slopes add freshness. Soils range from granite to shale across the valley.\n\n**Good to know** — Paarl was historically the home of the KWV, the giant cooperative that once shaped South African wine."
+ },
+ {
+  "name": "Hokkaido",
+  "country": "Japan",
+  "description": "**Hokkaido** is Japan's northernmost main island and one of the country's most promising cool-climate wine frontiers, with vineyards clustered around towns like Yoichi and across the Sorachi area.\n\n**Wines & grapes** — Aromatic, crisp whites lead the way, made from cold-hardy varieties such as Kerner, Müller-Thurgau and Bacchus, alongside lighter reds and rosés from Zweigelt and Pinot Noir. A handful of growers also work with local and hybrid grapes suited to the cold.\n\n**Character** — Long, snowy winters and a short but bright growing season give the wines fresh acidity and restraint. The maritime setting and northern latitude make this a place for delicate, high-toned styles rather than big, ripe ones — and interest in it has grown quickly as Japanese wine has matured."
+ },
+ {
+  "name": "Lake Erie",
+  "country": "United States",
+  "description": "**Lake Erie** is a grape-growing belt along the southern shore of the Great Lake of the same name in the United States, a broad zone that has long been one of the largest vineyard areas in the eastern part of the country.\n\n**Wines & grapes** — Historically the region was dominated by Concord and other native American (labrusca) grapes grown for juice and jelly, but it now also produces wine from Riesling, Chardonnay, hybrids and other vinifera varieties.\n\n**Character** — The huge body of water acts as a heat buffer, softening winter cold and delaying spring frost, which lets vines survive and ripen where they otherwise might struggle. Wines range from sweet, grapey styles to crisp, cool-climate whites."
+ },
+ {
+  "name": "Maldonado",
+  "country": "Uruguay",
+  "description": "**Maldonado** is a coastal department in southeastern Uruguay, facing the Atlantic near the resort of Punta del Este, and one of the country's more exciting newer areas for quality wine.\n\n**Wines & grapes** — Tannat, Uruguay's signature red, is grown here, but the district is especially associated with fresher, coastal styles including Albariño and other whites, plus lighter reds.\n\n**Character** — Ocean breezes and cooler maritime conditions set it apart from Uruguay's more established inland vineyards, encouraging wines with bright acidity and a saline, refreshing edge. It remains a small, ambitious region still building its reputation."
+ },
+ {
+  "name": "Vale do Sao Francisco",
+  "country": "Brazil",
+  "description": "**Vale do Sao Francisco** is a wine region in the arid northeast of Brazil, spread along the São Francisco River not far from the equator — one of the few places on earth making wine in a genuinely tropical setting.\n\n**Wines & grapes** — Reds from Syrah lead here, with other international varieties grown for both still and sparkling wines.\n\n**Character** — The extraordinary feature is the climate: hot, dry and irrigated, with enough year-round warmth that vines never fully rest, allowing growers to prune for more than one harvest per year. The wines are warm and fruit-forward, and the region is a fascinating example of viticulture pushed to the tropics."
+ },
+ {
+  "name": "Istria",
+  "country": "Croatia",
+  "description": "**Istria** is a peninsula reaching into the Adriatic Sea in northwestern Croatia, a green, hilly area as famous for its olive oil and truffles as for its wine.\n\n**Wines & grapes** — The flagship white is Malvazija Istarska (Istrian Malvasia), which ranges from fresh and floral to richer, skin-contact and barrel-aged styles. The main red is Teran, a deeply coloured, tangy grape, alongside plantings of international varieties.\n\n**Character** — A Mediterranean climate tempered by the sea, combined with distinctive red and white soils, gives the wines vibrant acidity and a savoury, mineral quality. Istria has become one of the most respected wine areas of the eastern Adriatic."
+ },
+ {
+  "name": "Central Ranges",
+  "country": "Australia",
+  "description": "**Central Ranges** is a wine zone in New South Wales, Australia, sitting inland on the higher country west of the Blue Mountains and taking in districts such as Mudgee, Orange and Cowra.\n\n**Wines & grapes** — A wide spread of varieties is grown across its sub-regions, including Shiraz, Cabernet Sauvignon, Chardonnay and Sauvignon Blanc, with cooler, higher sites favouring more elegant styles.\n\n**Character** — Altitude is the defining thread here: many vineyards sit well above the surrounding plains, which brings cooler nights and helps the grapes keep freshness. That variation in elevation gives the zone real diversity, from ripe, generous reds to bright, restrained whites."
+ },
+ {
+  "name": "Geelong",
+  "country": "Australia",
+  "description": "**Geelong** is a cool-climate wine region in Victoria, Australia, spread across the countryside southwest of Melbourne near the shores of Port Phillip Bay and Bass Strait.\n\n**Wines & grapes** — It is best known for Pinot Noir and Chardonnay, along with peppery, cool-grown Shiraz and some aromatic whites.\n\n**Character** — The maritime setting brings breezy, moderate conditions and a fairly dry climate, which suits varieties that reward a long, gentle ripening season. Wines tend to show good structure, savoury complexity and lively acidity, and the region has earned a strong following for its Pinot in particular."
+ },
+ {
+  "name": "Hainaut",
+  "country": "Belgium",
+  "description": "**Hainaut** is a province in Wallonia, the French-speaking south of Belgium, and part of the country's small but growing modern wine scene.\n\n**Wines & grapes** — Production is modest and focused on cool-climate styles, including sparkling wines and light whites from varieties suited to a northern climate.\n\n**Character** — This is a marginal, cool region where careful site selection and a warming climate have made quality wine increasingly possible. Output is small-scale, and the wines tend toward freshness and delicacy rather than power."
+ },
+ {
+  "name": "Bugey, Ain",
+  "country": "France",
+  "description": "**Bugey, Ain** refers to the Bugey wine area in the Ain department of eastern France, tucked between Savoie, the Jura and the southern edge of Burgundy.\n\n**Wines & grapes** — Bugey makes reds, whites, rosés and, most famously, sparkling wines. Its best-known specialty is a lightly sparkling, sweet pink wine made largely from Gamay and Poulsard. Still wines come from Gamay, Pinot Noir and Mondeuse for reds, and Chardonnay and Altesse (Roussette) for whites.\n\n**Character** — A cool, foothill climate near the Alps gives the wines lively acidity and a fresh, mountain-fruited charm. Production is small and much of it is enjoyed locally, making Bugey something of an insider's find."
+ },
+ {
+  "name": "Kremstal",
+  "country": "Austria",
+  "description": "**Kremstal** is a leading white-wine region in Lower Austria, set along the Danube around the town of Krems, immediately downstream from the famous Wachau and next to Kamptal.\n\n**Wines & grapes** — The two great grapes are Grüner Veltliner, giving peppery, citrusy whites, and Riesling, producing more mineral, stone-fruited styles. Both range from crisp and everyday to concentrated, age-worthy bottlings.\n\n**Character** — Vineyards split between deep, wind-blown loess soils and rockier terraced slopes, with the river moderating the climate and warm days meeting cool nights. The result is dry, precise, structured whites.\n\n**Good to know** — It sits within Austria's celebrated stretch of Danube wine country, so its top wines share the freshness and longevity of their better-known neighbours."
+ },
+ {
+  "name": "Auvergne-Rhône-Alpes",
+  "country": "France",
+  "description": "**Auvergne-Rhône-Alpes** is a large administrative region in east-central France that stretches from the volcanic hills of the Auvergne across to the Alps, and as such it takes in several distinct wine areas rather than being a single appellation.\n\n**Wines & grapes** — Within its borders lie parts of the northern and southern Rhône (Syrah reds, Viognier and other whites), the Gamay reds of Beaujolais, the alpine whites and reds of Savoie and Bugey, and the smaller vineyards of the Auvergne.\n\n**Character** — Because it spans so much ground, the styles vary enormously, from powerful Rhône reds to featherlight mountain wines. What unites them is a French emphasis on place, with each sub-region shaped by its own soils and climate."
+ },
+ {
+  "name": "Marmara",
+  "country": "Turkey",
+  "description": "**Marmara** is a wine region in northwestern Turkey, wrapped around the Sea of Marmara and reaching into Turkish Thrace toward the borders with Greece and Bulgaria.\n\n**Wines & grapes** — It grows a mix of indigenous Turkish grapes, such as the red Papazkarası and Adakarası, alongside international varieties like Cabernet Sauvignon, Merlot and Chardonnay.\n\n**Character** — Cooled by the surrounding seas, this is one of Turkey's more temperate wine zones, giving fresher, more European-styled wines than the country's hotter interior. It is a key hub for Turkey's modern wine industry, blending native heritage with familiar international styles."
+ },
+ {
+  "name": "Lake County, California",
+  "country": "United States",
+  "description": "**Lake County, California** sits in the hills north of Napa and Sonoma, ringed around Clear Lake in the interior of California's North Coast. It has grown from a quiet grape-growing area into a source of well-regarded, well-priced wines.\n\n**Wines & grapes** — Sauvignon Blanc is a local calling card, joined by Cabernet Sauvignon, Zinfandel and other warm-climate reds. Sub-areas such as the Red Hills, with their volcanic soils, have become known for concentrated Cabernet.\n\n**Character** — High elevation and big shifts between hot days and cool nights give the wines bright acidity and firm structure. Strong mountain sunlight ripens the reds fully, while the cool nights help the whites keep their zip.\n\n**Good to know** — Much of the fruit was historically sold to producers elsewhere, so Lake County often offers strong value."
+ },
+ {
+  "name": "Šumadija and Western Serbia",
+  "country": "Serbia",
+  "description": "**Šumadija and Western Serbia** is one of Serbia's broad wine zones, covering the hilly heartland of central Serbia and the country's western uplands. It is among the more established grape-growing parts of the country.\n\n**Wines & grapes** — Both reds and whites are made, mixing international varieties with local Balkan grapes that have long been grown here.\n\n**Character** — A continental climate with warm summers and cool hillside sites shapes the wines, which range from everyday bottlings to more ambitious estate cuvées as Serbia's wine scene has revived."
+ },
+ {
+  "name": "Puerto Plata",
+  "country": "Dominican Republic",
+  "description": "**Puerto Plata** is a coastal province in the north of the Dominican Republic, on the Caribbean island of Hispaniola. It is far better known for beaches and tourism than for winemaking, and only a small amount of wine is associated with the area.\n\n**Wines & grapes** — Any production is on a modest, mostly local scale, and the tropical setting is not a traditional home for vineyards.\n\n**Character** — The hot, humid tropical climate makes conventional grape-growing very difficult, so wine here is a niche curiosity rather than an established regional style."
+ },
+ {
+  "name": "Zadar",
+  "country": "Croatia",
+  "description": "**Zadar** is a city and coastal area in northern Dalmatia, on Croatia's Adriatic shoreline. It is part of Croatia's long Mediterranean wine tradition rather than a single tightly-defined appellation.\n\n**Wines & grapes** — The area leans on indigenous Croatian coastal varieties, including local whites and Dalmatian reds, alongside some international grapes.\n\n**Character** — A sunny Mediterranean climate, sea breezes and stony coastal soils give fresh whites and warm, sun-ripened reds, often made by small family growers."
+ },
+ {
+  "name": "Šumadija",
+  "country": "Serbia",
+  "description": "**Šumadija** is a historic wine district in the hilly center of Serbia, around towns such as Kragujevac and Topola. It has deep roots in Serbian viticulture and is one of the country's most recognizable wine names.\n\n**Wines & grapes** — Both reds and whites are produced, blending international varieties with native Balkan grapes; the district has seen a wave of renewal from serious estates.\n\n**Character** — Gentle wooded hills and a continental climate of warm summers and cold winters shape the wines. The region's rolling, forested landscape gives it its name, which means \"woodland,\" and its cellars range from long-standing to newly ambitious."
+ },
+ {
+  "name": "Armagnac",
+  "country": "France",
+  "description": "**Armagnac** is a region in Gascony, in the southwest of France, celebrated as the home of France's oldest brandy. It gives its name to a distinctive grape spirit distilled from local white wine.\n\n**Wines & grapes** — The base wines are made from white grapes such as Ugni Blanc, Folle Blanche, Colombard and Baco, then distilled and aged in oak. The same area also turns out fresh, aromatic still whites under the wider Côtes de Gascogne name.\n\n**Character** — Armagnac is traditionally distilled once in a column still, giving a richer, more rustic spirit than Cognac, and it gains complexity through long barrel ageing.\n\n**Good to know** — Vintage-dated Armagnacs are prized, since the region keeps stocks from individual years for decades."
+ },
+ {
+  "name": "Niagara Escarpment",
+  "country": "Canada",
+  "description": "**Niagara Escarpment** is a cool-climate wine area on the Niagara Peninsula of Ontario, Canada, near Lake Ontario. It is one of Canada's leading regions for both table wines and its famous sweet wines.\n\n**Wines & grapes** — Riesling, Chardonnay and Pinot Noir do well in the cool conditions, and the region is renowned for icewine, most often from Vidal and Riesling grapes left to freeze on the vine.\n\n**Character** — The limestone ridge of the escarpment and the moderating influence of the lake temper the climate, protecting vines and lengthening the growing season. Cold winters make the concentrated, honeyed icewines possible, while the long, cool autumn preserves crisp acidity in the dry wines.\n\n**Good to know** — Icewine here is strictly regulated, with grapes harvested naturally frozen at low temperatures."
+ },
+ {
+  "name": "Cederberg",
+  "country": "South Africa",
+  "description": "**Cederberg** is a small, high-altitude wine area in the mountains north of Cape Town, in South Africa's Western Cape. It is home to some of the country's loftiest vineyards.\n\n**Wines & grapes** — Growers here work with both whites and reds, including crisp Sauvignon Blanc, Chenin Blanc and Chardonnay alongside structured reds such as Cabernet Sauvignon and Shiraz.\n\n**Character** — Vineyards planted high in the Cederberg range enjoy cold nights, clean air and big day-to-night temperature swings, which lock in freshness and bright acidity. The remote, rugged mountain setting and cool nights set these wines apart from South Africa's warmer coastal regions.\n\n**Good to know** — Its elevation makes it one of the highest and most isolated wine districts in South Africa."
+ },
+ {
+  "name": "Cafayate",
+  "country": "Argentina",
+  "description": "**Cafayate** is a high-altitude wine town in the Calchaquí Valleys of Salta province, in the far northwest of Argentina. It is the best-known winemaking hub of Argentina's northern highlands.\n\n**Wines & grapes** — Torrontés, Argentina's signature aromatic white, is the star here, giving floral, perfumed wines. Malbec and other reds also thrive, taking on deep color and concentration.\n\n**Character** — Vineyards sit at extreme elevations, often well above other wine regions, with intense sunlight, cool nights and a dry desert climate. That combination gives whites vivid aromatics and freshness, and reds firm structure with bright fruit.\n\n**Good to know** — Some of the world's highest commercial vineyards are found in this corner of Argentina."
+ },
+ {
+  "name": "Maipo Valley",
+  "country": "Chile",
+  "description": "**Maipo Valley** lies just south of Santiago in central Chile and is often called the classic heartland of Chilean red wine. It is one of the country's oldest and most prestigious regions.\n\n**Wines & grapes** — Cabernet Sauvignon is king here, producing some of Chile's most acclaimed reds, often blended with Merlot, Carmenère and Syrah. Warmer and cooler pockets within the valley suit a range of styles.\n\n**Character** — A Mediterranean climate of warm, dry summers, with cooling influences from the Andes and nearby coast, ripens grapes fully while keeping freshness. Wines from the higher, foothill vineyards near the mountains are especially prized for their structure and elegant, minty edge.\n\n**Good to know** — Many of Chile's landmark estates and flagship Cabernets are rooted in Maipo."
+ },
+ {
+  "name": "Riverland",
+  "country": "Australia",
+  "description": "**Riverland** is a large, warm inland region along the Murray River in South Australia. It is one of the country's biggest sources of grapes by volume and a workhorse of the Australian wine industry.\n\n**Wines & grapes** — A wide range of varieties is grown, including Chardonnay, Shiraz, Cabernet Sauvignon and other popular grapes, much of it going into approachable, everyday wines and blends.\n\n**Character** — The hot, dry climate and reliance on irrigation from the river favor ripe, generous, fruit-forward styles. While long associated with high-volume, value wines, the region has also seen growers experiment with hardy, warm-climate varieties suited to its sunshine.\n\n**Good to know** — Riverland produces a very large share of Australia's total wine grape crush."
+ },
+ {
+  "name": "Manchuela",
+  "country": "Spain",
+  "description": "**Manchuela** is a wine region in central-eastern Spain, in the Castilla-La Mancha area between the Júcar and Cabriel rivers. It has earned a reputation for characterful reds from a local grape.\n\n**Wines & grapes** — Bobal is the signature variety, giving deeply colored, fresh reds, often alongside Tempranillo, Garnacha and international grapes; some crisp whites and rosés are made too.\n\n**Character** — A high plateau setting with hot days, cool nights and limestone-rich soils helps the wines keep acidity and balance despite the warm climate. Modern producers have shown that old Bobal vines can yield lively, food-friendly reds rather than just bulk wine.\n\n**Good to know** — The region's elevation sets it apart from the flatter, hotter plains nearby."
+ },
+ {
+  "name": "Waipara",
+  "country": "New Zealand",
+  "description": "**Waipara** is a wine district in North Canterbury, on New Zealand's South Island, tucked into a river valley about an hour north of Christchurch.\n\n**Wines & grapes** — Aromatic whites lead the way, especially Riesling and Pinot Gris, alongside Chardonnay and Sauvignon Blanc, while Pinot Noir is the standout red.\n\n**Character** — The valley is sheltered from cool coastal winds by a range of hills, giving warm, dry days and long autumns that let fruit ripen slowly. Pockets of limestone in the soil are prized for lending finesse and mineral bite, particularly to the Rieslings and Pinot Noirs, which tend toward bright acidity and clear varietal definition."
+ },
+ {
+  "name": "Fleurieu Peninsula",
+  "country": "Australia",
+  "description": "**Fleurieu Peninsula** is a broad wine zone in South Australia, stretching south of Adelaide toward the coast and taking in several well-known districts.\n\n**Wines & grapes** — It is best known for full-bodied reds, above all Shiraz and Grenache, with Cabernet Sauvignon also widely planted; McLaren Vale and Langhorne Creek sit within its bounds.\n\n**Character** — Proximity to the sea brings cooling maritime breezes that temper the warm Mediterranean-style climate, helping the reds keep freshness alongside their generous ripe fruit. Expect wines that are plush and warm-hearted, with the softly structured, berry-rich profile that has made this corner of South Australia a reliable source of characterful reds."
+ },
+ {
+  "name": "Anjou",
+  "country": "France",
+  "description": "**Anjou** is a large wine district in the middle Loire Valley of western France, centred on the historic city of Angers.\n\n**Wines & grapes** — It makes wines in every colour: dry and sweet whites from Chenin Blanc, reds from Cabernet Franc, and a famous range of rosés, including the off-dry Rosé d'Anjou and the pinker, fuller Cabernet d'Anjou.\n\n**Character** — Soils shift from dark schist and slate in the west to softer limestone and sandstone in the east, a divide that shapes the wines' weight and mineral feel. The cool, temperate climate gives Chenin its trademark bracing acidity, which underpins everything from crisp dry whites to honeyed dessert wines built to age.\n\n**Good to know** — Chenin Blanc's high acidity is what lets Anjou's sweet whites last for decades."
+ },
+ {
+  "name": "Matakana",
+  "country": "New Zealand",
+  "description": "**Matakana** is a small, boutique wine district in New Zealand, set among rolling countryside north of Auckland on the North Island.\n\n**Wines & grapes** — Being warm, it favours reds such as Merlot, Cabernet and Syrah, along with Pinot Gris and other whites from its scattered small estates.\n\n**Character** — The climate is warm and humid with a strong maritime influence, and growers contend with autumn rain, which keeps yields modest and vineyards on the lookout for the right ripening years. Production is limited and artisanal, so the wines are largely enjoyed locally and rarely seen far from home."
+ },
+ {
+  "name": "Tikveš",
+  "country": "North Macedonia",
+  "description": "**Tikveš** is the largest and best-known wine region of North Macedonia, spread across the Vardar River valley in the centre of the country.\n\n**Wines & grapes** — Reds dominate, led by the native Vranec, a deeply coloured grape, alongside Kratošija; whites include Smederevka and the aromatic Temjanika.\n\n**Character** — The region enjoys a warm blend of continental and Mediterranean influences, with plenty of sunshine that ripens grapes fully and gives the reds their dark colour, ripe berry fruit and full body. It is a long-established wine-growing area with a substantial share of the nation's vineyards and a tradition of hearty, generous reds."
+ },
+ {
+  "name": "Cappadocia",
+  "country": "Turkey",
+  "description": "**Cappadocia** is a high-altitude wine area in central Anatolia, Turkey, famous more widely for its dramatic volcanic rock landscape and cave dwellings.\n\n**Wines & grapes** — Local grapes are the mainstay, especially the white Emir, native to the area, along with reds such as Öküzgözü, Boğazkere and Kalecik Karası drawn from Anatolia's grape heritage.\n\n**Character** — Vineyards sit on porous volcanic soils at considerable elevation, where hot days and cold nights on the Anatolian plateau help grapes hold acidity and freshness. The whites from Emir tend to be crisp and mineral, a reflection of the tuff-rich ground and the region's dry continental climate."
+ },
+ {
+  "name": "Cariñena DOP",
+  "country": "Spain",
+  "description": "**Cariñena DOP** is a Spanish wine appellation in the Aragón region, in the northeast, taking its name from the town of Cariñena south of Zaragoza.\n\n**Wines & grapes** — Reds are the heart of the region, built above all on old-vine Garnacha (Grenache), with the Cariñena grape (also called Mazuelo) and international varieties in support; some whites and rosés are also made.\n\n**Character** — The climate is warm and dry with a strong continental swing between hot days and cool nights, and the cold Cierzo wind sweeps through the vineyards. On stony, poor soils the old vines yield concentrated, warming reds with ripe dark fruit.\n\n**Good to know** — The town lends its name to the Cariñena grape, though the region today plants far more Garnacha."
+ },
+ {
+  "name": "Calatayud",
+  "country": "Spain",
+  "description": "**Calatayud** is a wine appellation in the Aragón region of northeast Spain, in the hills of Zaragoza province.\n\n**Wines & grapes** — It is celebrated for reds from old-vine Garnacha (Grenache), often grown on gnarled, low-yielding bush vines, with other varieties playing a supporting role.\n\n**Character** — Vineyards climb to notable altitude on rugged, stony slopes where slate and other poor soils force the vines to struggle, concentrating flavour. Warm days and cool nights preserve freshness, giving reds that combine ripe, dark-berried fruit with a lifted, energetic feel and good structure from the aged vines."
+ },
+ {
+  "name": "Yecla",
+  "country": "Spain",
+  "description": "**Yecla** is a compact wine appellation in the Murcia region of southeastern Spain, centred on the town of the same name.\n\n**Wines & grapes** — Robust reds define it, built chiefly on Monastrell (the grape known elsewhere as Mourvèdre), which thrives in the heat, alongside Garnacha and other varieties.\n\n**Character** — The climate is hot and dry with a semi-continental character, and the sun-baked conditions ripen Monastrell to give deeply coloured, full-bodied reds with ripe dark fruit and firm structure. Modest rainfall and stony soils keep yields low and flavours concentrated in this warm inland corner of Spain."
+ },
+ {
+  "name": "Bergerac",
+  "country": "France",
+  "description": "**Bergerac** is a wine district in southwest France, sitting along the Dordogne River just east of the Bordeaux region.\n\n**Wines & grapes** — It shares Bordeaux's grape palette, making reds from Merlot, Cabernet Sauvignon and Cabernet Franc, and whites both dry and sweet from Sémillon, Sauvignon Blanc and Muscadelle; the sweet-wine enclave of Monbazillac lies within its orbit.\n\n**Character** — The temperate, gently maritime-influenced climate produces reds that are typically softer and lighter than their Bordeaux neighbours, with fresh red-fruit character and approachable structure. Its long history and Bordeaux-like styles make it a friendly, well-priced source of classic southwest French wine.\n\n**Good to know** — Bergerac often offers Bordeaux-style wines at gentler prices."
+ },
+ {
+  "name": "Malokarpatská",
+  "country": "Slovakia",
+  "description": "**Malokarpatská** is a wine region in Slovakia, running along the Small Carpathian hills northeast of Bratislava.\n\n**Wines & grapes** — Whites are the strength, including Grüner Veltliner, Welschriesling and Riesling, while reds such as Frankovka modrá (Blaufränkisch) are also grown.\n\n**Character** — The wooded slopes give sheltered, sun-facing vineyard sites in a cool continental climate, favouring fresh, aromatic whites with lively acidity. It is one of the country's most historic wine-growing areas, with a long tradition centred on towns like Pezinok and Modra."
+ },
+ {
+  "name": "Carnuntum",
+  "country": "Austria",
+  "description": "**Carnuntum** is a wine region in Lower Austria, lying east of Vienna between the capital and the Slovak border.\n\n**Wines & grapes** — It has a strong reputation for reds, above all Zweigelt and Blaufränkisch, while whites such as Grüner Veltliner and Chardonnay are also made.\n\n**Character** — The warm Pannonian climate, with hot summers moderated by the Danube to the north, ripens the red grapes fully, giving wines that are supple and fruit-forward yet retain freshness. On varied soils of gravel, loess and loam, growers craft characterful reds that have raised the region's profile in recent decades."
+ },
+ {
+  "name": "Okanagan Valley",
+  "country": "Canada",
+  "description": "**Okanagan Valley** is the leading wine region of British Columbia, Canada, stretching along a chain of long lakes in the province's dry interior. It has become the country's best-known source of serious wine outside Ontario.\n\n**Wines & grapes** — Both colours are made across a wide palette. The cooler north favours aromatic whites such as Riesling, Pinot Gris, Chardonnay and Gewürztraminer, while the warmer, near-desert south ripens Bordeaux reds like Merlot and Cabernet, along with Syrah and Pinot Noir. Icewine is a specialty in colder vintages.\n\n**Character** — The valley's length gives it a striking range of climates, from cool lakeside sites to sun-baked benches near the US border. Warm days, cool nights and low rainfall produce wines with bright acidity and clear varietal definition.\n\n**Good to know** — The moderating effect of the lakes helps vines survive the sharp continental winters."
+ },
+ {
+  "name": "Nova Scotia",
+  "country": "Canada",
+  "description": "**Nova Scotia** is a cool-climate wine region on Canada's Atlantic coast, with much of its vineyard concentrated in the sheltered Annapolis Valley and around the Bay of Fundy.\n\n**Wines & grapes** — The signature is crisp, high-acid white and sparkling wine. Growers rely heavily on cold-hardy hybrids such as L'Acadie Blanc, Seyval Blanc and Vidal, alongside aromatic vinifera like Riesling. The province has its own appellation-style white blend, Tidal Bay, designed to express the maritime climate.\n\n**Character** — Cold winters, a short growing season and a strong ocean influence give the wines lean bodies, zesty acidity and low alcohol. These conditions suit traditional-method sparkling wine particularly well.\n\n**Good to know** — It is one of the coolest and most northerly wine regions in North America."
+ },
+ {
+  "name": "Wachau",
+  "country": "Austria",
+  "description": "**Wachau** is a small, prestigious white-wine region in Austria, set along a dramatic stretch of the Danube west of Vienna. Its steep terraced vineyards are among the most celebrated in Central Europe.\n\n**Wines & grapes** — It is almost entirely devoted to dry white wine from two grapes: Grüner Veltliner and Riesling. The region uses its own ripeness classification, from the light Steinfeder through Federspiel to the concentrated, powerful Smaragd.\n\n**Character** — Rocky terraced slopes, poor primary-rock soils and a meeting of warm Pannonian and cool northern air give the wines great precision, minerality and length. Grüner shows peppery, citrus notes; Riesling turns stony and stone-fruited.\n\n**Good to know** — Many of the terraces are dry-stone walled and worked entirely by hand."
+ },
+ {
+  "name": "Murrumbateman",
+  "country": "Australia",
+  "description": "**Murrumbateman** is a small wine district in New South Wales, Australia, sitting within the broader Canberra District wine region north of the national capital.\n\n**Wines & grapes** — It is best known for cool-climate reds and aromatic whites, with Shiraz and Riesling as the standout varieties. Co-fermented Shiraz-Viognier is something of a local calling card, and Chardonnay and other varieties are also grown.\n\n**Character** — Although it lies well inland, high elevation brings cool nights and a genuine continental climate, giving reds fragrant, peppery spice and firm structure, and whites bright, taut acidity.\n\n**Good to know** — The district punches above its size and helped establish Canberra's reputation for elegant, spicy Shiraz."
+ },
+ {
+  "name": "Villány",
+  "country": "Hungary",
+  "description": "**Villány** is Hungary's most famous red-wine region, lying in the warm far south of the country near the Croatian border. It has a long winemaking history and a reputation for full-bodied, structured reds.\n\n**Wines & grapes** — The focus is firmly on red wine. Bordeaux varieties such as Cabernet Sauvignon, Cabernet Franc and Merlot do well, alongside local grapes including Kékfrankos (Blaufränkisch) and Portugieser. Cabernet Franc, sometimes labelled Villányi Franc, is a particular local strength.\n\n**Character** — One of Hungary's warmest and sunniest areas, with limestone and loess soils, it ripens grapes fully to give deep, ripe, tannic reds often matured in oak.\n\n**Good to know** — It sits at the southern end of Hungary and is known for its lively wine-village culture."
+ }
+]
