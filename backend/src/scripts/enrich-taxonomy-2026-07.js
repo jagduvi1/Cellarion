@@ -58,6 +58,7 @@ const G = {
   'Picardan': { color: 'White', origin: 'France (Châteauneuf-du-Pape)' },
   'Grenache Gris': { color: 'White', origin: 'Spain / France (Roussillon)' },
   'Grolleau': { color: 'Red', origin: 'France (Loire Valley)' },
+  'Pinot Meunier': { color: 'Red', origin: 'France (Champagne)', desc: 'Champagne\'s quietly essential third grape — a Pinot Noir mutation that buds late and ripens early, bringing supple orchard fruit and roundness to the blend; increasingly bottled on its own by growers.', chars: ['orchard fruit', 'supple', 'round'], aging: 'Very good in Champagne blends' },
   'Gamay': { color: 'Red', origin: 'France (Beaujolais)', desc: 'The grape of Beaujolais, where granite crus like Morgon and Moulin-à-Vent turn its bright cherry fruit and crunchy acidity into wines of real depth.', chars: ['cherry', 'crunchy acidity', 'light-medium body'], aging: 'Cru Beaujolais ages 10+ years' },
   'Trousseau': { color: 'Red', origin: 'France (Jura)' },
   'Poulsard': { color: 'Red', origin: 'France (Jura)' },

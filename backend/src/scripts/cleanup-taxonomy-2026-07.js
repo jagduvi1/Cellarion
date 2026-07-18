@@ -52,6 +52,7 @@ const GRAPE_MERGES = [
   { from: 'Moscatel', to: 'Muscat of Alexandria', synonyms: false },  // Canary "Moscatel"
   { from: 'Bonarda', to: 'Croatina', synonyms: false },               // Colli Piacentini Bonarda
   { from: 'Picpoul', to: 'Picpoul Noir', synonyms: false },           // both wines are red CdP
+  { from: 'Refosco', to: 'Refosco dal Peduncolo Rosso', synonyms: false }, // Miani grows RdPR
 
   // Same variety, different name — old name becomes a synonym
   { from: 'Pinot Nero', to: 'Pinot Noir' },
