@@ -69,9 +69,11 @@ function reindexWines(wineIds) {
 
 /**
  * Merge grape `fromId` into `toId`.
+ * Pass `synonyms: false` when the duplicate's name is junk (a typo or a
+ * "70% Monastrell"-style artifact) that must not survive as a synonym.
  * @returns {Promise<{winesUpdated:number, regionsUpdated:number, synonymsAdded:string[]}>}
  */
-async function mergeGrapes(fromId, toId, { resync = true } = {}) {
+async function mergeGrapes(fromId, toId, { resync = true, synonyms = true } = {}) {
   const { from, to } = await loadPair(Grape, 'Grape', fromId, toId);
 
   const affectedWines = await WineDefinition.find({ grapes: from._id }).select('_id').lean();
@@ -88,7 +90,7 @@ async function mergeGrapes(fromId, toId, { resync = true } = {}) {
     regionsUpdated += res.modifiedCount;
   }
 
-  const synonymsAdded = absorbSynonyms(from, to);
+  const synonymsAdded = synonyms ? absorbSynonyms(from, to) : [];
   // Backfill enrichment the canonical doc lacks (merges never overwrite).
   for (const field of ['color', 'origin', 'agingPotential', 'prestige', 'description']) {
     if (!to[field] && from[field]) to[field] = from[field];

@@ -107,6 +107,18 @@ describe('mergeGrapes', () => {
     expect(to.synonyms).toEqual(['Cariñena', 'Mazuelo']);
   });
 
+  test('synonyms:false drops the duplicate name instead of absorbing it (junk names)', async () => {
+    const from = doc({ _id: 'g-dup', name: '70% Monastrell' });
+    const to = doc({ _id: 'g-canon', name: 'Mourvèdre', synonyms: ['Monastrell'] });
+    Grape.findById.mockImplementation(id => Promise.resolve(id === 'g-dup' ? from : to));
+
+    const summary = await mergeGrapes('g-dup', 'g-canon', { synonyms: false });
+
+    expect(summary.synonymsAdded).toEqual([]);
+    expect(to.synonyms).toEqual(['Monastrell']);
+    expect(from.deleteOne).toHaveBeenCalled();
+  });
+
   test('resync:false skips search reindex', async () => {
     const from = doc({ _id: 'g-dup', name: 'Durif' });
     const to = doc({ _id: 'g-canon', name: 'Petite Sirah' });

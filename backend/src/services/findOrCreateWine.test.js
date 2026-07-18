@@ -600,6 +600,20 @@ describe('taxonomy find-or-create dedup', () => {
     expect(ids).toEqual(['grape-new']);
   });
 
+  test('findOrCreateGrapes: blend percentages are stripped, bare percentages dropped', async () => {
+    Grape.findOne.mockResolvedValue({ _id: 'grape-mourvedre' });
+
+    // "70% Monastrell" → strip % → synonym-resolve → Mourvèdre; "30%" → dropped
+    const ids = await findOrCreateGrapes(['70% Monastrell', '30%'], USER_ID);
+
+    expect(Grape.findOne).toHaveBeenCalledTimes(1);
+    expect(Grape.findOne).toHaveBeenCalledWith({
+      $or: [{ normalizedName: 'mourvedre' }, { normalizedSynonyms: 'mourvedre' }],
+    });
+    expect(ids).toEqual(['grape-mourvedre']);
+    expect(Grape).not.toHaveBeenCalled(); // no junk doc created
+  });
+
   test('findOrCreateGrapes: existing grapes are reused, blanks skipped, non-array → []', async () => {
     const ids = await findOrCreateGrapes(['Grenache', '', '  ', 'Syrah'], USER_ID);
 

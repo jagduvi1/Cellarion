@@ -82,6 +82,7 @@ async function findOrCreateGrapes(names, userId) {
     // Resolve synonym → canonical name before lookup (e.g. "Shiraz" → "Syrah")
     const canonicalName = resolveGrapeName(name);
     const normalizedName = normalizeString(canonicalName);
+    if (!normalizedName) continue; // e.g. a bare percentage stripped to ''
     if (seen.has(normalizedName)) continue; // skip intra-call duplicates
     seen.add(normalizedName);
     // Match the canonical name OR a per-document synonym ("Tinta Roriz" finds
