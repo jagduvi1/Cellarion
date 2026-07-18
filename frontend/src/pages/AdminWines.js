@@ -238,8 +238,16 @@ function AdminWines() {
       const data = await res.json();
       if (res.ok) {
         const name = data.wine?.name || payload.name;
-        pushToast(editWine ? `Saved “${name}”` : `Created “${name}”`);
-        closeForm();
+        if (editWine) {
+          pushToast(`Saved “${name}”`);
+          closeForm();
+        } else {
+          // Stay in the drawer, flipped to edit mode: the image + credit
+          // section only renders for an existing wine, and "create, close,
+          // re-open to add the photo" was the papercut being fixed.
+          pushToast(`Created “${name}” — add its image below`);
+          setEditWine(data.wine);
+        }
         fetchWines();
       } else {
         setFormError(data.error || 'Failed to save wine');

@@ -17,6 +17,9 @@ jest.mock('../services/imageProcessor', () => ({
   processImage: jest.fn(() => Promise.resolve()),
   hashImageBytes: jest.fn(() => 'deadbeef'),
 }));
+// attachOfficialWineImage lazy-requires search (ESM meilisearch — unparseable
+// by jest) — mock at top level like every other suite.
+jest.mock('../services/search', () => ({ indexWine: jest.fn(), indexBottle: jest.fn() }));
 
 const fs = require('fs');
 jest.spyOn(fs.promises, 'writeFile').mockResolvedValue();
@@ -85,4 +88,47 @@ test('unverifiable sniffed format → 400 (never trust a fallback extension)', a
   const res = await ingestBottleImage({ buffer: Buffer.from('RAW'), userId: 'u1' }, REQ);
   expect(res.error.status).toBe(400);
   expect(fs.promises.writeFile).not.toHaveBeenCalled();
+});
+
+// ── attachOfficialWineImage — the admin one-shot (REST + MCP shared) ─────────
+describe('attachOfficialWineImage', () => {
+  // Monkey-patch the real model singleton — the service lazy-requires the same
+  // object, and a block-level jest.mock would not hoist.
+  const WineDefinition = require('../models/WineDefinition');
+  const searchService = require('../services/search');
+  const { attachOfficialWineImage } = require('./imageOps');
+
+  beforeEach(() => {
+    WineDefinition.findByIdAndUpdate = jest.fn().mockResolvedValue({});
+    BottleImage.updateMany = jest.fn().mockResolvedValue({});
+  });
+
+  test('ingests, pre-approves as the official public image, replaces the prior one, stamps wine.image + credit', async () => {
+    const res = await attachOfficialWineImage(
+      { buffer: Buffer.from('img'), wineDefinitionId: 'w1', credit: 'Photo: Systembolaget', userId: 'admin1' }, REQ
+    );
+    expect(res.error).toBeUndefined();
+    const img = res.image;
+    expect(img.status).toBe('approved');
+    expect(img.visibility).toBe('public');
+    expect(img.assignedToWine).toBe(true);
+    expect(img.reviewedBy).toBe('admin1');
+    expect(img.credit).toBe('Photo: Systembolaget');
+    // Any previous official image is demoted first.
+    expect(BottleImage.updateMany).toHaveBeenCalledWith(
+      { wineDefinition: 'w1', assignedToWine: true }, { assignedToWine: false });
+    expect(WineDefinition.findByIdAndUpdate).toHaveBeenCalledWith('w1',
+      expect.objectContaining({ imageCredit: 'Photo: Systembolaget' }));
+    expect(searchService.indexWine).toHaveBeenCalledWith('w1');
+  });
+
+  test('a rejected buffer fails closed — nothing approved, wine untouched', async () => {
+    sanitizeImageBuffer.mockRejectedValue(new Error('not an image'));
+    const res = await attachOfficialWineImage(
+      { buffer: Buffer.from('junk'), wineDefinitionId: 'w1', userId: 'admin1' }, REQ
+    );
+    expect(res.error.status).toBe(400);
+    expect(WineDefinition.findByIdAndUpdate).not.toHaveBeenCalled();
+    expect(BottleImage.updateMany).not.toHaveBeenCalled();
+  });
 });

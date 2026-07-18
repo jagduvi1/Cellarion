@@ -180,6 +180,62 @@ router.post('/', async (req, res) => {
   }
 });
 
+// POST /api/admin/wines/:id/image - set the wine's OFFICIAL image (pre-approved,
+// public, replaces any prior official image) from an https URL or base64 bytes,
+// with an optional credit/attribution. Shares ONE implementation with the MCP
+// admin_add_registry_wine tool (services/imageOps.attachOfficialWineImage);
+// bytes from a URL go through the same SSRF guard as the MCP attach tool.
+router.post('/:id/image', async (req, res) => {
+  try {
+    if (!mongoose.isValidObjectId(req.params.id)) {
+      return res.status(400).json({ error: 'Invalid wine ID' });
+    }
+    const wine = await WineDefinition.findById(req.params.id).select('_id name producer');
+    if (!wine) return res.status(404).json({ error: 'Wine not found' });
+
+    const { image_url: imageUrl, image_base64: imageBase64, credit } = req.body || {};
+    if (!imageUrl && !imageBase64) {
+      return res.status(400).json({ error: 'Provide image_url (https) or image_base64' });
+    }
+    if (imageUrl && imageBase64) {
+      return res.status(400).json({ error: 'Provide image_url OR image_base64, not both' });
+    }
+    if (credit && (typeof credit !== 'string' || credit.length > 200)) {
+      return res.status(400).json({ error: 'credit must be a string of at most 200 characters' });
+    }
+
+    let buffer;
+    if (imageUrl) {
+      const { safeFetchImage } = require('../../utils/safeImageFetch');
+      try {
+        buffer = (await safeFetchImage(String(imageUrl))).buffer;
+      } catch (err) {
+        return res.status(400).json({ error: `Could not fetch that image: ${err.message}` });
+      }
+    } else {
+      const b64 = String(imageBase64).replace(/^data:image\/[a-z+]+;base64,/i, '');
+      buffer = Buffer.from(b64, 'base64');
+      if (buffer.length === 0) return res.status(400).json({ error: 'image_base64 did not decode to any bytes' });
+    }
+
+    const { attachOfficialWineImage } = require('../../services/imageOps');
+    const result = await attachOfficialWineImage(
+      { buffer, wineDefinitionId: wine._id, credit: credit ? String(credit).trim() : null, userId: req.user.id },
+      req
+    );
+    if (result.error) return res.status(result.error.status).json({ error: result.error.message });
+
+    logAudit(req, 'admin.wine.image.set',
+      { type: 'wine', id: wine._id },
+      { imageId: String(result.image._id), credit: credit || null });
+
+    res.status(201).json({ image: result.image });
+  } catch (error) {
+    console.error('Set wine image error:', error);
+    res.status(500).json({ error: 'Failed to set the wine image' });
+  }
+});
+
 // GET /api/admin/wines/duplicates - Find potential duplicates
 // GET /api/admin/wines/duplicate-clusters
 //
