@@ -554,13 +554,16 @@ describe('taxonomy find-or-create dedup', () => {
     expect(Country.findOne).not.toHaveBeenCalled();
   });
 
-  test('findOrCreateRegion: lookup is scoped to the country (same name, different country ≠ dup)', async () => {
+  test('findOrCreateRegion: lookup is scoped to the country (same name, different country ≠ dup) and matches synonyms', async () => {
     const existing = { _id: 'region-1' };
     Region.findOne.mockResolvedValue(existing);
 
     const result = await findOrCreateRegion('Rhône', 'country-1', USER_ID);
 
-    expect(Region.findOne).toHaveBeenCalledWith({ country: 'country-1', normalizedName: 'rhone' });
+    expect(Region.findOne).toHaveBeenCalledWith({
+      country: 'country-1',
+      $or: [{ normalizedName: 'rhone' }, { normalizedSynonyms: 'rhone' }],
+    });
     expect(result).toBe(existing);
     expect(Region).not.toHaveBeenCalled();
   });

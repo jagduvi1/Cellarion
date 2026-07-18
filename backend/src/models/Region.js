@@ -1,5 +1,5 @@
 const mongoose = require('mongoose');
-const { slugify } = require('../utils/normalize');
+const { slugify, normalizeString } = require('../utils/normalize');
 
 const regionSchema = new mongoose.Schema({
   name: {
@@ -53,6 +53,18 @@ const regionSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Grape'
   }],
+  // Alternate names for the same region ("Piemonte" for Piedmont, "Douro
+  // Valley" for Douro). Mirrors the Grape synonym design: findOrCreateRegion
+  // matches these so a merged duplicate can't be re-minted by label scan.
+  synonyms: {
+    type: [String],
+    default: []
+  },
+  normalizedSynonyms: {
+    type: [String],
+    default: [],
+    index: true
+  },
   // Public-facing URL slug and curator description for /regions/:slug pages.
   slug: { type: String, trim: true, lowercase: true, unique: true, sparse: true, index: true },
   description: { type: String, trim: true, default: '' },
@@ -69,6 +81,17 @@ const regionSchema = new mongoose.Schema({
 
 // Compound index to prevent duplicate regions in same country
 regionSchema.index({ country: 1, normalizedName: 1 }, { unique: true });
+
+// Keep normalizedSynonyms in lockstep with synonyms (admin edits and the
+// taxonomy merge service both go through .save()).
+regionSchema.pre('save', function(next) {
+  if (this.isModified('synonyms') || this.isNew) {
+    this.normalizedSynonyms = (this.synonyms || [])
+      .map(s => normalizeString(s))
+      .filter(Boolean);
+  }
+  next();
+});
 
 // Auto-generate slug for new regions. Never overwrite an existing slug.
 regionSchema.pre('save', async function(next) {

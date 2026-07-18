@@ -57,7 +57,13 @@ async function findOrCreateRegion(name, countryId, userId) {
   // "Unknown"/placeholder → null region (the schema's representation of unknown)
   if (isUnknownName(name) || !countryId) return null;
   const normalizedName = normalizeString(name);
-  let region = await Region.findOne({ country: countryId, normalizedName });
+  // Match the canonical name OR a per-document synonym ("Piemonte" finds the
+  // Piedmont doc) — same design as the Grape lookup below, so a merged
+  // duplicate region can't be re-minted by the next label scan.
+  let region = await Region.findOne({
+    country: countryId,
+    $or: [{ normalizedName }, { normalizedSynonyms: normalizedName }],
+  });
   if (region) return region;
   region = new Region({ name: name.trim(), normalizedName, country: countryId, createdBy: userId });
   await region.save();
