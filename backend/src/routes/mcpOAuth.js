@@ -214,7 +214,30 @@ router.post('/approve', requireAuth, requireNonDemo, async (req, res) => {
       return res.status(400).json({ error: 'invalid resource' });
     }
 
-    const scopes = grantedScopes(scope);
+    // The user's scope CHOICE: the consent page may NARROW the client's
+    // requested scopes ("connect read-only" is a promise the launch post
+    // makes, and the consent moment is where it belongs). Rules: the choice
+    // must be a subset of what the client requested (offered = requested ∩
+    // grantable), and 'read' is the floor — every flow starts with lookups,
+    // so a read-less grant would just be a broken connector. `scopes` absent
+    // (older consent pages, direct API callers) → the full intersection,
+    // exactly the previous behavior.
+    const offered = grantedScopes(scope);
+    let scopes = offered;
+    if (req.body.scopes !== undefined) {
+      const chosen = req.body.scopes;
+      if (!Array.isArray(chosen) || chosen.length === 0 || chosen.some((s) => typeof s !== 'string')) {
+        return res.status(400).json({ error: 'scopes must be a non-empty array of scope strings' });
+      }
+      const invalid = chosen.filter((s) => !offered.includes(s));
+      if (invalid.length) {
+        return res.status(400).json({ error: `scopes not requested by the client: ${invalid.join(', ')}` });
+      }
+      if (!chosen.includes('read')) {
+        return res.status(400).json({ error: 'the read scope is required' });
+      }
+      scopes = offered.filter((s) => chosen.includes(s)); // canonical order, deduped
+    }
     const rawCode = OAuthAuthCode.generateCode();
     await OAuthAuthCode.create({
       codeHash: OAuthAuthCode.hashCode(rawCode),

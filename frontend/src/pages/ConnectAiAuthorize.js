@@ -25,6 +25,16 @@ const SCOPE_INFO = {
 };
 const GRANTABLE = ['read', 'consume', 'write'];
 
+// Access levels the user can choose at consent. Each level is a PREFIX of the
+// canonically-ordered offered scopes, so narrowing is the only possible
+// direction — the server re-validates (subset of the client's request, read
+// mandatory) either way. Labelled by the level's topmost capability.
+const LEVEL_LABELS = {
+  read: { key: 'levelRead', fallback: 'Read only — it can look, never change anything' },
+  consume: { key: 'levelConsume', fallback: 'Read + log drinking — it can also mark bottles opened or drunk (reversible)' },
+  write: { key: 'levelFull', fallback: 'Full access — it can also add and edit bottles, racks and cellars' },
+};
+
 function ConnectAiAuthorize() {
   const { t } = useTranslation();
   const { user, loading, apiFetch, login } = useAuth();
@@ -45,6 +55,10 @@ function ConnectAiAuthorize() {
   const [creds, setCreds] = useState({ username: '', password: '' });
   const [loginError, setLoginError] = useState(null);
   const [loggingIn, setLoggingIn] = useState(false);
+  // How much of the offered scope set the user grants — an index into
+  // `levelOptions` below; null = the full offered set (the default, and
+  // today's behavior for everyone who just clicks Approve).
+  const [chosenLevel, setChosenLevel] = useState(null);
 
   // The request is unusable without these three — show a hard error rather than
   // POSTing something the backend will reject.
@@ -55,6 +69,11 @@ function ConnectAiAuthorize() {
   const requested = scope.split(/\s+/).filter(Boolean);
   const displayScopes = GRANTABLE.filter((s) => requested.includes(s));
   if (displayScopes.length === 0) displayScopes.push('read');
+
+  // One selectable level per prefix of the offered set ("Read only" …
+  // "Full access"). A single-scope request renders as one pre-picked option.
+  const levelOptions = displayScopes.map((_, i) => displayScopes.slice(0, i + 1));
+  const grantScopes = chosenLevel === null ? displayScopes : levelOptions[chosenLevel];
 
   let redirectHost = '';
   try { redirectHost = new URL(redirectUri).host; } catch { /* shown-nothing */ }
@@ -72,6 +91,9 @@ function ConnectAiAuthorize() {
         state,
         resource,
         approved,
+        // The user's choice — a prefix of the offered set; the server
+        // re-validates (subset of the client's request, read mandatory).
+        ...(approved ? { scopes: grantScopes } : {}),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.redirect) {
@@ -176,13 +198,31 @@ function ConnectAiAuthorize() {
       </div>
       <p className="oauth-consent-lead">
         <strong>{who}</strong>{' '}
-        {t('oauthConsent.wants', 'wants to connect to your Cellarion cellar and will be able to:')}
+        {t('oauthConsent.wantsChoose', 'wants to connect to your Cellarion cellar. Choose how much it may do:')}
       </p>
-      <ul className="oauth-consent-scopes">
-        {displayScopes.map((s) => (
-          <li key={s}>{t(`oauthConsent.${SCOPE_INFO[s].key}`, SCOPE_INFO[s].fallback)}</li>
-        ))}
-      </ul>
+      <div className="oauth-consent-levels" role="radiogroup" aria-label={t('oauthConsent.accessLevel', 'Access level')}>
+        {levelOptions.map((scopes, i) => {
+          const top = scopes[scopes.length - 1];
+          const selected = grantScopes.length === scopes.length;
+          return (
+            <label key={top} className={`oauth-consent-level ${selected ? 'selected' : ''}`}>
+              <input
+                type="radio"
+                name="access-level"
+                checked={selected}
+                onChange={() => setChosenLevel(i)}
+                disabled={submitting}
+              />
+              <span className="oauth-consent-level-text">
+                <strong>{t(`oauthConsent.${LEVEL_LABELS[top].key}`, LEVEL_LABELS[top].fallback)}</strong>
+                <small>
+                  {scopes.map((s) => t(`oauthConsent.${SCOPE_INFO[s].key}`, SCOPE_INFO[s].fallback)).join(' · ')}
+                </small>
+              </span>
+            </label>
+          );
+        })}
+      </div>
       <p className="oauth-consent-muted">
         {t('oauthConsent.revokeNote', 'You can revoke this access anytime in Settings. You stay in control — the assistant confirms every change before it happens.')}
       </p>

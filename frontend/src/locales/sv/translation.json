@@ -167,7 +167,12 @@
     "invalidRequest": "Den här auktoriseringslänken är ogiltig eller ofullständig. Starta anslutningen igen från din AI-assistent.",
     "demoBlocked": "Att ansluta en AI-assistent är inte tillgängligt i demot. Skapa ett gratiskonto för att använda det.",
     "beta": "Beta",
-    "betaNotice": "Att ansluta en AI är en betafunktion och du använder den på egen risk — den är ny och testas fortfarande. Allt den ändrar går att ångra, och du kan återkalla åtkomsten när som helst i Inställningar."
+    "betaNotice": "Att ansluta en AI är en betafunktion och du använder den på egen risk — den är ny och testas fortfarande. Allt den ändrar går att ångra, och du kan återkalla åtkomsten när som helst i Inställningar.",
+    "wantsChoose": "vill ansluta till din Cellarion-källare. Välj hur mycket den får göra:",
+    "accessLevel": "Åtkomstnivå",
+    "levelRead": "Endast läsa — den kan titta men aldrig ändra något",
+    "levelConsume": "Läsa + logga drickande — den kan även markera flaskor som öppnade eller druckna (går att ångra)",
+    "levelFull": "Full åtkomst — den kan även lägga till och redigera flaskor, hyllor och källare"
   },
   "settings": {
     "title": "Inställningar",
