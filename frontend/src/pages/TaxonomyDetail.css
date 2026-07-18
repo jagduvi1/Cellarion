@@ -33,6 +33,34 @@
   max-width: 760px;
 }
 
+/* Rendered-markdown description (grape/country/region). The block wrapper
+   keeps the outer margin; child elements carry their own rhythm. Our
+   templates use bold section lead-ins, so `strong` is the visual anchor. */
+.taxonomy-markdown > :first-child { margin-top: 0; }
+.taxonomy-markdown > :last-child { margin-bottom: 0; }
+.taxonomy-markdown p { margin: 0 0 12px; }
+.taxonomy-markdown h2,
+.taxonomy-markdown h3,
+.taxonomy-markdown h4 {
+  font-family: var(--font-heading);
+  font-size: 1.02rem;
+  font-weight: 600;
+  color: var(--color-text);
+  margin: 20px 0 8px;
+  letter-spacing: -0.01em;
+}
+.taxonomy-markdown ul,
+.taxonomy-markdown ol { margin: 0 0 12px; padding-left: 1.25em; }
+.taxonomy-markdown li { margin-bottom: 4px; }
+.taxonomy-markdown strong { color: var(--color-text); font-weight: 600; }
+.taxonomy-markdown a { color: var(--color-primary); text-decoration: underline; }
+.taxonomy-markdown blockquote {
+  margin: 0 0 12px;
+  padding-left: 14px;
+  border-left: 3px solid var(--color-border-light);
+  color: var(--color-text-secondary);
+}
+
 .taxonomy-meta-pills {
   display: flex;
   flex-wrap: wrap;

@@ -3,9 +3,11 @@ import { useParams, Link, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import SEOHead from '../components/SEOHead';
 import Layout from '../components/Layout';
+import MarkdownText from '../components/MarkdownText';
 import { useAuth } from '../contexts/AuthContext';
 import SITE_URL from '../config/siteUrl';
 import { API_URL } from '../api/apiConstants';
+import stripMarkdown from '../utils/stripMarkdown';
 import './TaxonomyDetail.css';
 
 export default function RegionDetail() {
@@ -41,7 +43,7 @@ export default function RegionDetail() {
   const pages = Math.ceil(total / limit);
 
   const description = region.description || `Explore wines from ${region.name}${region.country?.name ? `, ${region.country.name}` : ''} tracked by Cellarion collectors.`;
-  const metaDescription = description.replace(/\n/g, ' ').slice(0, 157);
+  const metaDescription = stripMarkdown(description).slice(0, 157);
 
   const jsonLd = {
     '@context': 'https://schema.org',
@@ -84,7 +86,7 @@ export default function RegionDetail() {
       </div>
 
       {region.description && (
-        <p className="taxonomy-description">{region.description}</p>
+        <MarkdownText className="taxonomy-description taxonomy-markdown">{region.description}</MarkdownText>
       )}
 
       {region.typicalGrapes?.length > 0 && (

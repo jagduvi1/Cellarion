@@ -3,9 +3,11 @@ import { useParams, Link, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import SEOHead from '../components/SEOHead';
 import Layout from '../components/Layout';
+import MarkdownText from '../components/MarkdownText';
 import { useAuth } from '../contexts/AuthContext';
 import SITE_URL from '../config/siteUrl';
 import { API_URL } from '../api/apiConstants';
+import stripMarkdown from '../utils/stripMarkdown';
 import './TaxonomyDetail.css';
 
 export default function GrapeDetail() {
@@ -41,7 +43,7 @@ export default function GrapeDetail() {
   const pages = Math.ceil(total / limit);
 
   const description = grape.description || `Discover wines made from ${grape.name}${grape.origin ? ` originating in ${grape.origin}` : ''}.`;
-  const metaDescription = description.replace(/\n/g, ' ').slice(0, 157);
+  const metaDescription = stripMarkdown(description).slice(0, 157);
 
   const jsonLd = {
     '@context': 'https://schema.org',
@@ -80,7 +82,7 @@ export default function GrapeDetail() {
       </div>
 
       {grape.description && (
-        <p className="taxonomy-description">{grape.description}</p>
+        <MarkdownText className="taxonomy-description taxonomy-markdown">{grape.description}</MarkdownText>
       )}
 
       {grape.characteristics?.length > 0 && (
