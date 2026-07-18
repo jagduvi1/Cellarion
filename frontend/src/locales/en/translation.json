@@ -167,7 +167,12 @@
     "invalidRequest": "This authorization link is invalid or incomplete. Start the connection again from your AI assistant.",
     "demoBlocked": "Connecting an AI assistant is not available in the demo. Create a free account to use it.",
     "beta": "Beta",
-    "betaNotice": "Connecting an AI is a beta feature and you use it at your own risk — it is new and still being tested. Everything it changes is reversible, and you can revoke access at any time in Settings."
+    "betaNotice": "Connecting an AI is a beta feature and you use it at your own risk — it is new and still being tested. Everything it changes is reversible, and you can revoke access at any time in Settings.",
+    "wantsChoose": "wants to connect to your Cellarion cellar. Choose how much it may do:",
+    "accessLevel": "Access level",
+    "levelRead": "Read only — it can look, never change anything",
+    "levelConsume": "Read + log drinking — it can also mark bottles opened or drunk (reversible)",
+    "levelFull": "Full access — it can also add and edit bottles, racks and cellars"
   },
   "settings": {
     "title": "Settings",

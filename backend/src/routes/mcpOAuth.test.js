@@ -203,6 +203,51 @@ describe('POST /approve (consent, JWT-only)', () => {
     expect(r.status).toBe(400);
     expect(OAuthAuthCode.create).not.toHaveBeenCalled();
   });
+
+  // ── The user's scope choice (consent-page picker) ─────────────────────────
+  const approveWith = (extra) => jsonPost('/approve', {
+    client_id: CLIENT.clientId, redirect_uri: REDIRECT, code_challenge: CHALLENGE,
+    code_challenge_method: 'S256', scope: 'read consume write', resource: RESOURCE, approved: true, ...extra,
+  }, { Authorization: `Bearer ${jwtFor()}` });
+
+  test('the user may NARROW the grant: chosen ["read"] mints a read-only code', async () => {
+    OAuthClient.findOne.mockResolvedValue(CLIENT);
+    OAuthAuthCode.create.mockResolvedValue({});
+    const r = await approveWith({ scopes: ['read'] });
+    expect(r.status).toBe(200);
+    expect(OAuthAuthCode.create.mock.calls[0][0].scopes).toEqual(['read']);
+  });
+
+  test('the choice cannot EXCEED the client request: write when only read was requested → 400', async () => {
+    OAuthClient.findOne.mockResolvedValue(CLIENT);
+    const r = await approveWith({ scope: 'read', scopes: ['read', 'write'] });
+    expect(r.status).toBe(400);
+    expect((await r.json()).error).toMatch(/not requested/);
+    expect(OAuthAuthCode.create).not.toHaveBeenCalled();
+  });
+
+  test('read is the floor: a choice without it → 400', async () => {
+    OAuthClient.findOne.mockResolvedValue(CLIENT);
+    const r = await approveWith({ scopes: ['consume', 'write'] });
+    expect(r.status).toBe(400);
+    expect((await r.json()).error).toMatch(/read scope is required/);
+    expect(OAuthAuthCode.create).not.toHaveBeenCalled();
+  });
+
+  test.each([[[]], ['not-an-array'], [[42]]])('malformed scopes (%j) → 400', async (scopes) => {
+    OAuthClient.findOne.mockResolvedValue(CLIENT);
+    const r = await approveWith({ scopes });
+    expect(r.status).toBe(400);
+    expect(OAuthAuthCode.create).not.toHaveBeenCalled();
+  });
+
+  test('absent scopes keeps the previous behavior: the full requested∩grantable set', async () => {
+    OAuthClient.findOne.mockResolvedValue(CLIENT);
+    OAuthAuthCode.create.mockResolvedValue({});
+    const r = await approveWith({});
+    expect(r.status).toBe(200);
+    expect(OAuthAuthCode.create.mock.calls[0][0].scopes).toEqual(['read', 'consume', 'write']);
+  });
 });
 
 describe('POST /token — authorization_code', () => {
