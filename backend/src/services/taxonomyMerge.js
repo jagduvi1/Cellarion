@@ -107,28 +107,31 @@ async function mergeGrapes(fromId, toId, { resync = true, synonyms = true } = {}
 /**
  * Merge region `fromId` into `toId`. Both regions must belong to the same
  * country — cross-country merges would desync WineDefinition.country.
+ * Pass `synonyms: false` when the duplicate's name is junk (an "X or Y"
+ * label-scan artifact, or a name that belongs to a different place) that
+ * must not survive as a synonym on the canonical region.
  * @returns {Promise<{winesUpdated:number, childRegionsUpdated:number, appellationsUpdated:number, synonymsAdded:string[]}>}
  */
-async function mergeRegions(fromId, toId, { resync = true } = {}) {
+async function mergeRegions(fromId, toId, { resync = true, synonyms = true } = {}) {
   const { from, to } = await loadPair(Region, 'Region', fromId, toId);
   if (String(from.country) !== String(to.country)) {
     const err = new Error('Cannot merge regions from different countries');
     err.status = 400;
     throw err;
   }
-  return mergeRegionDocs(from, to, { resync });
+  return mergeRegionDocs(from, to, { resync, synonyms });
 }
 
 /** Reference rewrite + delete for a loaded region pair (no country check —
  *  mergeCountries needs this for name collisions across the two countries). */
-async function mergeRegionDocs(from, to, { resync = true } = {}) {
+async function mergeRegionDocs(from, to, { resync = true, synonyms = true } = {}) {
   const affectedWines = await WineDefinition.find({ region: from._id }).select('_id').lean();
   await WineDefinition.updateMany({ region: from._id }, { $set: { region: to._id } });
 
   const children = await Region.updateMany({ parentRegion: from._id }, { $set: { parentRegion: to._id } });
   const apps = await Appellation.updateMany({ region: from._id }, { $set: { region: to._id } });
 
-  const synonymsAdded = absorbSynonyms(from, to);
+  const synonymsAdded = synonyms ? absorbSynonyms(from, to) : [];
   for (const field of ['classification', 'prestigeLevel', 'description']) {
     if (!to[field] && from[field]) to[field] = from[field];
   }
