@@ -45,14 +45,34 @@ describe('identity binding', () => {
 });
 
 describe('caps', () => {
-  test('per-user cap: the 4th session is refused; destroy frees a slot', () => {
+  test('per-user cap EVICTS the least-recently-seen session — the new client always seats', () => {
+    // The launch-day Desktop report: refusing the 4th session degraded the NEW
+    // connection to stateless, which Claude Desktop treats as a broken server.
+    const a = sessions.createSession({ userId: 'u1' });
+    jest.advanceTimersByTime(1000);
+    const b = sessions.createSession({ userId: 'u1' });
+    jest.advanceTimersByTime(1000);
+    const c = sessions.createSession({ userId: 'u1' });
+    jest.advanceTimersByTime(1000);
+    jest.setSystemTime(Date.now());
+    // b becomes most-recently-seen; a stays the stalest.
+    expect(sessions.getSession(b.id, { userId: 'u1', tokenId: null })).toBe(b);
+
+    const d = sessions.createSession({ userId: 'u1' });
+    expect(d).not.toBeNull(); // seated, not refused
+    expect(sessions.getSession(a.id, { userId: 'u1', tokenId: null })).toBeNull(); // stalest evicted
+    expect(sessions.getSession(b.id, { userId: 'u1', tokenId: null })).toBe(b);    // survivors intact
+    expect(sessions.getSession(c.id, { userId: 'u1', tokenId: null })).toBe(c);
+    expect(sessions.createSession({ userId: 'u2' })).not.toBeNull(); // other users unaffected
+  });
+
+  test('destroy frees a slot without waiting for eviction', () => {
     const a = sessions.createSession({ userId: 'u1' });
     sessions.createSession({ userId: 'u1' });
     sessions.createSession({ userId: 'u1' });
-    expect(sessions.createSession({ userId: 'u1' })).toBeNull();
-    expect(sessions.createSession({ userId: 'u2' })).not.toBeNull(); // other users unaffected
     sessions.destroySession(a.id);
-    expect(sessions.createSession({ userId: 'u1' })).not.toBeNull();
+    const d = sessions.createSession({ userId: 'u1' });
+    expect(d).not.toBeNull();
   });
 
   test('global cap refuses new sessions across all users', () => {

@@ -67,7 +67,25 @@ function createSession({ userId, tokenId }) {
     }
     return null;
   }
-  if ((perUserCounts.get(userKey) || 0) >= MAX_SESSIONS_PER_USER) return null;
+  // Per-user cap: EVICT the user's least-recently-seen session instead of
+  // refusing. Refusing degraded the NEW connection to stateless — and Claude
+  // Desktop treats a session-less initialize as a broken server: it bailed
+  // out and revoked its fresh grant (launch-day report: connecting a 4th
+  // client silently failed while old claude.ai sessions kept the 3 slots
+  // alive via SSE refreshes). The newest connection is the one the user is
+  // actually at; their stalest one dies, exactly like the event bus treats
+  // its stream cap. Global cap stays a refusal — evicting ANOTHER user's
+  // live session to seat this one would trade a known cost for a stranger's.
+  if ((perUserCounts.get(userKey) || 0) >= MAX_SESSIONS_PER_USER) {
+    let oldest = null;
+    for (const s of sessions.values()) {
+      if (s.userId === userKey && (!oldest || s.lastSeenAt < oldest.lastSeenAt)) oldest = s;
+    }
+    if (oldest) {
+      destroySession(oldest.id, 'evicted_for_new_session');
+    }
+    if ((perUserCounts.get(userKey) || 0) >= MAX_SESSIONS_PER_USER) return null; // defensive: eviction failed
+  }
 
   const session = {
     id: crypto.randomUUID(),
