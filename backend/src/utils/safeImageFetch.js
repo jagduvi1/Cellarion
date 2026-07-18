@@ -120,6 +120,25 @@ async function resolvePublicAddress(hostname) {
   return records[0];
 }
 
+/**
+ * The DNS pin as a lookup implementation. Node's socket layer calls lookup in
+ * TWO conventions: the classic single-address form, and — when Happy Eyeballs
+ * (autoSelectFamily, default-on since Node 20) probes — with `opts.all: true`,
+ * expecting an ARRAY of { address, family } entries. Answering the all:true
+ * call in the classic form makes Node read `undefined` as the address list and
+ * reject the connection with ERR_INVALID_IP_ADDRESS ("Invalid IP address:
+ * undefined") — which silently broke EVERY attach-by-URL in production. Handle
+ * both conventions; the pin holds either way (only the pre-validated address
+ * is ever returned, whatever DNS would say now).
+ */
+function pinnedLookup(pinned) {
+  return (host, opts, cb) => {
+    if (typeof opts === 'function') { cb = opts; opts = {}; }
+    if (opts && opts.all) return cb(null, [{ address: pinned.address, family: pinned.family }]);
+    return cb(null, pinned.address, pinned.family);
+  };
+}
+
 function fetchOnce(urlObj, pinned) {
   return new Promise((resolve, reject) => {
     // WALL-CLOCK deadline for the whole request (connect + headers + body).
@@ -146,7 +165,10 @@ function fetchOnce(urlObj, pinned) {
         headers: { 'User-Agent': 'Cellarion-ImageFetch/1.0 (+https://cellarion.app)' },
         timeout: TIMEOUT_MS,
         // The pin: whatever DNS says NOW, connect to the address validated above.
-        lookup: (host, opts, cb) => cb(null, pinned.address, pinned.family),
+        lookup: pinnedLookup(pinned),
+        // One pinned address — there is nothing for Happy Eyeballs to race, and
+        // disabling it keeps the classic lookup convention the primary path.
+        autoSelectFamily: false,
       },
       (res) => {
         const status = res.statusCode || 0;
@@ -158,8 +180,14 @@ function fetchOnce(urlObj, pinned) {
           res.resume();
           return failed(new Error(`image URL answered HTTP ${status}`));
         }
+        // Content-Type is a fast-fail HINT only — the byte-level truth is
+        // enforced downstream by sanitizeImageBuffer (decode + format sniff,
+        // fail closed). Generic application/octet-stream is how some product
+        // CDNs (e.g. Systembolaget's) serve images, so it flows through to the
+        // byte check; declared NON-image types (text/html, application/json …)
+        // still fail fast without downloading the body.
         const ct = String(res.headers['content-type'] || '').toLowerCase();
-        if (ct && !ct.startsWith('image/')) {
+        if (ct && !ct.startsWith('image/') && !ct.startsWith('application/octet-stream')) {
           res.destroy();
           return failed(new Error(`URL is not an image (content-type ${ct.split(';')[0]})`));
         }
@@ -217,4 +245,4 @@ async function safeFetchImage(rawUrl) {
   throw new Error(`image URL redirected more than ${MAX_REDIRECTS} times`);
 }
 
-module.exports = { safeFetchImage, isPrivateAddress, MAX_BYTES };
+module.exports = { safeFetchImage, isPrivateAddress, pinnedLookup, MAX_BYTES };

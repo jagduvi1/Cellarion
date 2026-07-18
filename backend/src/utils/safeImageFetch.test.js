@@ -9,7 +9,7 @@
  * (dns pinning, redirect re-validation) is exercised by the live e2e.
  */
 
-const { isPrivateAddress, safeFetchImage } = require('./safeImageFetch');
+const { isPrivateAddress, safeFetchImage, pinnedLookup } = require('./safeImageFetch');
 
 describe('isPrivateAddress', () => {
   test.each([
@@ -62,5 +62,47 @@ describe('safeFetchImage input validation (pre-network)', () => {
     await expect(safeFetchImage('https://169.254.169.254/latest/meta-data/')).rejects.toThrow(/private or reserved/);
     await expect(safeFetchImage('https://127.0.0.1/x.jpg')).rejects.toThrow(/private or reserved/);
     await expect(safeFetchImage('https://[::1]/x.jpg')).rejects.toThrow(/private or reserved/);
+  });
+});
+
+// The DNS pin must speak BOTH lookup callback conventions. Node 20's Happy
+// Eyeballs (autoSelectFamily, default-on) calls lookup with { all: true } and
+// expects an ARRAY — answering in the classic (addr, family) form made Node
+// throw ERR_INVALID_IP_ADDRESS ("Invalid IP address: undefined") and broke
+// every attach-by-URL in production on launch day. These pin both shapes.
+describe('pinnedLookup (Happy Eyeballs convention)', () => {
+  const pinned = { address: '93.184.216.34', family: 4 };
+
+  test('classic convention: (err, address, family)', (done) => {
+    pinnedLookup(pinned)('example.com', {}, (err, address, family) => {
+      expect(err).toBeNull();
+      expect(address).toBe('93.184.216.34');
+      expect(family).toBe(4);
+      done();
+    });
+  });
+
+  test('all:true convention (autoSelectFamily): (err, [{ address, family }])', (done) => {
+    pinnedLookup(pinned)('example.com', { all: true }, (err, entries) => {
+      expect(err).toBeNull();
+      expect(entries).toEqual([{ address: '93.184.216.34', family: 4 }]);
+      done();
+    });
+  });
+
+  test('opts-omitted form: (host, cb)', (done) => {
+    pinnedLookup(pinned)('example.com', (err, address, family) => {
+      expect(err).toBeNull();
+      expect(address).toBe('93.184.216.34');
+      expect(family).toBe(4);
+      done();
+    });
+  });
+
+  test('the pin ignores whatever host it is asked for', (done) => {
+    pinnedLookup(pinned)('evil-rebind.example', { all: true }, (err, entries) => {
+      expect(entries[0].address).toBe('93.184.216.34');
+      done();
+    });
   });
 });

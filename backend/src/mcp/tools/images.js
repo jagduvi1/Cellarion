@@ -27,7 +27,8 @@ registerTool({
     'Adds a label or bottle photo to one of the user\'s bottles, from an image URL (https) or base64 image data ' +
     '(JPEG/PNG/WebP). Use image_url for a product image you found on the web (e.g. a retailer\'s wine page); use ' +
     'image_base64 for a photo the user shared directly. The image is background-removed automatically after upload. ' +
-    'Confirm with the user which bottle before attaching. Reversible via undo_last.',
+    'Attach ONCE per wine: the photo shows on ALL the user\'s bottles of that wine, so never repeat the same photo ' +
+    'for duplicate bottles. Confirm with the user which bottle before attaching. Reversible via undo_last.',
   scope: 'write',
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
   inputSchema: {
@@ -70,8 +71,16 @@ registerTool({
     }
 
     // Shared pipeline: validate + strip metadata + persist + background-remove.
+    // wineDefinitionId makes the photo WINE-linked exactly like the web upload
+    // (routes/images.js): it then shows on all the user's bottles of this wine
+    // and enters the registry-image review pipeline. Without it the photo was
+    // stranded on the single bottle — the "attached 5 times for 5 identical
+    // bottles" launch-day report.
     const credit = args.credit ? String(args.credit).slice(0, 200) : null;
-    const result = await ingestBottleImage({ buffer, userId: ctx.user.id, bottle, credit }, ctx.req);
+    const wineDefinitionId = bottle.wineDefinition
+      ? String(bottle.wineDefinition._id || bottle.wineDefinition)
+      : null;
+    const result = await ingestBottleImage({ buffer, userId: ctx.user.id, bottle, wineDefinitionId, credit }, ctx.req);
     if (result.error) {
       // 4xx = the caller's image is bad (invalid_input); 5xx = a transient
       // infra fault → `unavailable` (MCP-audit M3: not the agent's cadence).
@@ -81,12 +90,13 @@ registerTool({
     logAudit(ctx.req, 'image.attach', { type: 'bottle', id: bottle._id, cellarId: bottle.cellar }, { via: 'mcp', imageId: String(image._id) });
 
     const envelope = {
-      summary: `Attached a photo to vintage ${bottle.vintage} (background removal in progress)`,
+      summary: `Attached a photo to vintage ${bottle.vintage}${wineDefinitionId ? ' — it shows on all bottles of this wine' : ''} (background removal in progress)`,
       data: {
         image_id: image._id,
         bottle_id: bottle._id,
         status: image.status,
         source: args.image_url ? 'url' : 'upload',
+        shows_on_all_bottles_of_wine: !!wineDefinitionId,
         undo: 'undo_last removes the photo',
       },
     };
