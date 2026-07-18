@@ -27,6 +27,7 @@ require('./tasting');
 require('./arrange');
 require('./notify');
 require('./publicContent');
+require('./taxonomy');
 require('./images');
 require('./account');
 require('./export');
