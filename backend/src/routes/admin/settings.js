@@ -108,11 +108,15 @@ router.patch('/rate-limits', async (req, res) => {
     // effectively bricking the surface (userMax 10 ≈ one short exchange);
     // ipMax must stay well above userMax or one shared egress IP throttles
     // before any user reaches their own allowance.
+    // registerMax bounds OAuth Dynamic Client Registration per IP per hour. The
+    // floor is 10 (the old hardcoded value) rather than 0 — dropping it lower
+    // would block new connections outright rather than merely slow abuse.
     if (mcp !== undefined) {
       requireIntInRange('mcp.enabled',       mcp.enabled,       0, 1);
       requireIntInRange('mcp.publicEnabled', mcp.publicEnabled, 0, 1);
       requireIntInRange('mcp.userMax',       mcp.userMax,       10, 100_000);
       requireIntInRange('mcp.ipMax',         mcp.ipMax,         100, 1_000_000);
+      requireIntInRange('mcp.registerMax',   mcp.registerMax,   10, 100_000);
     }
 
     if (errors.length > 0) {
@@ -160,6 +164,7 @@ router.patch('/rate-limits', async (req, res) => {
         publicEnabled: mcp?.publicEnabled ?? previous.mcp?.publicEnabled ?? rateLimitsConfig.defaults.mcp.publicEnabled,
         userMax:       mcp?.userMax       ?? previous.mcp?.userMax       ?? rateLimitsConfig.defaults.mcp.userMax,
         ipMax:         mcp?.ipMax         ?? previous.mcp?.ipMax         ?? rateLimitsConfig.defaults.mcp.ipMax,
+        registerMax:   mcp?.registerMax   ?? previous.mcp?.registerMax   ?? rateLimitsConfig.defaults.mcp.registerMax,
       },
     };
 

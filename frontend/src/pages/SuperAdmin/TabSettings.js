@@ -140,9 +140,9 @@ function PerIpLimitsPanel({ apiFetch, config, defaults, error }) {
 // hosted connectors (claude.ai, ChatGPT) call from a small shared IP pool, so
 // /api/mcp is exempt from the per-IP limits above and throttled per USER
 // instead, with a high per-IP guard against unauthenticated flooding. The
-// on/off kill switches live on the Admin → AI Connector page; only the two
-// numbers are edited here. PATCHes only { mcp: { userMax, ipMax } } — the
-// backend's field-level merge leaves the switches untouched.
+// on/off kill switches live on the Admin → AI Connector page; only the three
+// numbers are edited here. PATCHes only { mcp: { userMax, ipMax, registerMax } }
+// — the backend's field-level merge leaves the switches untouched.
 function McpLimitsPanel({ apiFetch, config, defaults, error }) {
   const [form,   setForm]   = useState(null);
   const [saving, setSaving] = useState(false);
@@ -151,8 +151,9 @@ function McpLimitsPanel({ apiFetch, config, defaults, error }) {
   useEffect(() => {
     if (config) {
       setForm({
-        userMax: String(config.mcp?.userMax ?? defaults?.mcp?.userMax ?? ''),
-        ipMax:   String(config.mcp?.ipMax   ?? defaults?.mcp?.ipMax   ?? ''),
+        userMax:     String(config.mcp?.userMax     ?? defaults?.mcp?.userMax     ?? ''),
+        ipMax:       String(config.mcp?.ipMax       ?? defaults?.mcp?.ipMax       ?? ''),
+        registerMax: String(config.mcp?.registerMax ?? defaults?.mcp?.registerMax ?? ''),
       });
     }
   }, [config, defaults]);
@@ -161,7 +162,11 @@ function McpLimitsPanel({ apiFetch, config, defaults, error }) {
     setSaving(true); setMsg(null);
     try {
       const res = await adminSaveRateLimits(apiFetch, {
-        mcp: { userMax: Number(form.userMax), ipMax: Number(form.ipMax) },
+        mcp: {
+          userMax: Number(form.userMax),
+          ipMax: Number(form.ipMax),
+          registerMax: Number(form.registerMax),
+        },
       });
       if (!res.ok) { const d = await res.json(); setMsg({ ok: false, text: d.error || 'Save failed' }); }
       else setMsg({ ok: true, text: 'Saved — takes effect immediately' });
@@ -195,6 +200,15 @@ function McpLimitsPanel({ apiFetch, config, defaults, error }) {
         defaultValue={defaults?.mcp?.ipMax}
         onChange={v => setForm(f => ({ ...f, ipMax: v }))}
         min={100} max={1000000}
+      />
+      <NumberField
+        label="New connections"
+        unit="registrations / hour / IP"
+        hint="OAuth client registrations; every NEW connection needs one, and a whole platform's users share one egress IP"
+        value={form.registerMax}
+        defaultValue={defaults?.mcp?.registerMax}
+        onChange={v => setForm(f => ({ ...f, registerMax: v }))}
+        min={10} max={100000}
       />
     </PanelShell>
   );

@@ -8,15 +8,24 @@ const OAuthAuthCode = require('../models/OAuthAuthCode');
 const { requireAuth, requireNonDemo } = require('../middleware/auth');
 const { rateLimitKey } = require('../utils/clientIp');
 const { logAudit } = require('../services/audit');
+const rateLimitsConfig = require('../config/rateLimits');
 
 // Dedicated strict limiter for unauthenticated Dynamic Client Registration
 // (security audit M-6): /register persists an OAuthClient row per call and
 // otherwise rode only the 200/15min global write limiter — an IP-rotating
-// attacker could accumulate ~19k inert client rows/day. Real MCP clients
-// register once. 10/hour/IP is generous for that and shuts the flood.
+// attacker could accumulate ~19k inert client rows/day, so it still needs a
+// per-IP bound of its own.
+//
+// The original 10/hour was sized for "real MCP clients register once", which is
+// true per CLIENT and wrong per IP: hosted platforms egress from a shared pool,
+// so the bucket is really "new connections per hour across every user of that
+// platform" — and Claude Desktop re-registers on each reconnect attempt, so a
+// single user retrying can burn several. Launch day hit 6/10 in one hour with
+// almost no users. Now admin-tunable (SuperAdmin → rate limits, mcp.registerMax)
+// so a bad default can be corrected without a deploy.
 const registerLimiter = rateLimit({
   windowMs: 60 * 60 * 1000,
-  max: 10,
+  max: () => rateLimitsConfig.get().mcp.registerMax,
   keyGenerator: (req) => rateLimitKey(req),
   standardHeaders: true,
   legacyHeaders: false,
