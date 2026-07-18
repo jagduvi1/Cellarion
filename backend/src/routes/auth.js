@@ -494,6 +494,16 @@ router.post('/change-password', requireAuth, requireNonDemo, authLimiter, async 
       return res.status(404).json({ error: 'User not found' });
     }
 
+    // SSO-only account: there is no current password to verify. The UI hides
+    // this form for hasPassword:false and offers the set-password (reset-email)
+    // flow instead — this guard catches direct API calls with an honest answer.
+    if (!user.password) {
+      return res.status(403).json({
+        error: 'This account signs in with Google and has no password yet. Use "Set a password" to create one.',
+        code: 'no_password',
+      });
+    }
+
     const isMatch = await user.comparePassword(currentPassword);
     if (!isMatch) {
       logAudit(req, 'auth.change_password.failed',

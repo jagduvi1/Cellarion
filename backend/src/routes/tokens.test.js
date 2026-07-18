@@ -84,8 +84,19 @@ describe('POST /api/tokens', () => {
     expect(res.status).toBe(400);
   });
 
-  test('wrong password → 403 (NOT 401 — apiFetch auto-refreshes and re-submits on 401) and an audit entry, no token created', async () => {
+  test('SSO-only account (no password) → 403 with code no_password, pointing at set-password', async () => {
     User.findById.mockResolvedValue({ _id: 'u1', comparePassword: jest.fn().mockResolvedValue(false) });
+    const res = await request('POST', '/api/tokens', validBody);
+    expect(res.status).toBe(403);
+    const body = await res.json();
+    expect(body.code).toBe('no_password');
+    expect(body.error).toMatch(/set one first/i);
+    expect(ApiToken.create).not.toHaveBeenCalled();
+    expect(logAudit).toHaveBeenCalledWith(expect.anything(), 'token.create_failed', expect.anything(), { reason: 'no_password' });
+  });
+
+  test('wrong password → 403 (NOT 401 — apiFetch auto-refreshes and re-submits on 401) and an audit entry, no token created', async () => {
+    User.findById.mockResolvedValue({ _id: 'u1', password: 'bcrypt-hash', comparePassword: jest.fn().mockResolvedValue(false) });
     const res = await request('POST', '/api/tokens', validBody);
     expect(res.status).toBe(403);
     expect(ApiToken.create).not.toHaveBeenCalled();
@@ -93,7 +104,7 @@ describe('POST /api/tokens', () => {
   });
 
   test('active-token cap → 400', async () => {
-    User.findById.mockResolvedValue({ _id: 'u1', comparePassword: jest.fn().mockResolvedValue(true) });
+    User.findById.mockResolvedValue({ _id: 'u1', password: 'bcrypt-hash', comparePassword: jest.fn().mockResolvedValue(true) });
     ApiToken.countDocuments.mockResolvedValue(10);
     const res = await request('POST', '/api/tokens', validBody);
     expect(res.status).toBe(400);
@@ -101,7 +112,7 @@ describe('POST /api/tokens', () => {
   });
 
   test('happy path: returns plaintext once, stores only the hash, audits the id', async () => {
-    User.findById.mockResolvedValue({ _id: 'u1', comparePassword: jest.fn().mockResolvedValue(true) });
+    User.findById.mockResolvedValue({ _id: 'u1', password: 'bcrypt-hash', comparePassword: jest.fn().mockResolvedValue(true) });
     ApiToken.countDocuments.mockResolvedValue(0);
     ApiToken.create.mockImplementation(async (doc) => ({ ...doc, _id: 't1', createdAt: new Date() }));
 
@@ -124,7 +135,7 @@ describe('POST /api/tokens', () => {
   });
 
   test('duplicate scopes are de-duplicated', async () => {
-    User.findById.mockResolvedValue({ _id: 'u1', comparePassword: jest.fn().mockResolvedValue(true) });
+    User.findById.mockResolvedValue({ _id: 'u1', password: 'bcrypt-hash', comparePassword: jest.fn().mockResolvedValue(true) });
     ApiToken.countDocuments.mockResolvedValue(0);
     ApiToken.create.mockImplementation(async (doc) => ({ ...doc, _id: 't1', createdAt: new Date() }));
 

@@ -318,6 +318,15 @@ router.post('/devices', requireAuth, authLimiter, async (req, res) => {
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
+    // SSO-only account: no password exists to confirm with — point at the
+    // set-password flow instead of reporting "incorrect" (see routes/tokens.js).
+    if (!user.password) {
+      logAudit(req, 'climate.device.create_failed', { type: 'user', id: user._id }, { reason: 'no_password' });
+      return res.status(403).json({
+        error: 'This account signs in with Google and has no password yet. Set one first (Settings → Set a password), then register the device.',
+        code: 'no_password',
+      });
+    }
     const isMatch = await user.comparePassword(password);
     if (!isMatch) {
       logAudit(req, 'climate.device.create_failed', { type: 'user', id: user._id }, { reason: 'incorrect_password' });

@@ -391,7 +391,7 @@ describe('POST /api/climate/devices', () => {
   });
 
   test('wrong password → 403 + audit, nothing created', async () => {
-    User.findById.mockResolvedValue({ _id: 'u1', comparePassword: jest.fn().mockResolvedValue(false) });
+    User.findById.mockResolvedValue({ _id: 'u1', password: 'bcrypt-hash', comparePassword: jest.fn().mockResolvedValue(false) });
     const res = await request('POST', '/api/climate/devices', validBody);
     expect(res.status).toBe(403);
     expect(ApiToken.create).not.toHaveBeenCalled();
@@ -399,8 +399,18 @@ describe('POST /api/climate/devices', () => {
     expect(logAudit).toHaveBeenCalledWith(expect.anything(), 'climate.device.create_failed', expect.anything(), { reason: 'incorrect_password' });
   });
 
+  test('SSO-only account (no password) → 403 with code no_password, nothing created', async () => {
+    User.findById.mockResolvedValue({ _id: 'u1', comparePassword: jest.fn().mockResolvedValue(false) });
+    const res = await request('POST', '/api/climate/devices', validBody);
+    expect(res.status).toBe(403);
+    expect((await res.json()).code).toBe('no_password');
+    expect(ApiToken.create).not.toHaveBeenCalled();
+    expect(ClimateDevice.create).not.toHaveBeenCalled();
+    expect(logAudit).toHaveBeenCalledWith(expect.anything(), 'climate.device.create_failed', expect.anything(), { reason: 'no_password' });
+  });
+
   test('device cap → 400', async () => {
-    User.findById.mockResolvedValue({ _id: 'u1', comparePassword: jest.fn().mockResolvedValue(true) });
+    User.findById.mockResolvedValue({ _id: 'u1', password: 'bcrypt-hash', comparePassword: jest.fn().mockResolvedValue(true) });
     ClimateDevice.countDocuments.mockResolvedValue(5);
     const res = await request('POST', '/api/climate/devices', validBody);
     expect(res.status).toBe(400);
@@ -408,7 +418,7 @@ describe('POST /api/climate/devices', () => {
   });
 
   test('active-token cap → 400 (each device consumes a token slot)', async () => {
-    User.findById.mockResolvedValue({ _id: 'u1', comparePassword: jest.fn().mockResolvedValue(true) });
+    User.findById.mockResolvedValue({ _id: 'u1', password: 'bcrypt-hash', comparePassword: jest.fn().mockResolvedValue(true) });
     ClimateDevice.countDocuments.mockResolvedValue(0);
     ApiToken.countDocuments.mockResolvedValue(10);
     const res = await request('POST', '/api/climate/devices', validBody);
@@ -417,7 +427,7 @@ describe('POST /api/climate/devices', () => {
   });
 
   test('happy path mints a climate-scoped token (shown once) and creates the device', async () => {
-    User.findById.mockResolvedValue({ _id: 'u1', comparePassword: jest.fn().mockResolvedValue(true) });
+    User.findById.mockResolvedValue({ _id: 'u1', password: 'bcrypt-hash', comparePassword: jest.fn().mockResolvedValue(true) });
     ClimateDevice.countDocuments.mockResolvedValue(0);
     ApiToken.countDocuments.mockResolvedValue(0);
     ApiToken.create.mockImplementation(async (doc) => ({ ...doc, _id: 'tok9' }));
@@ -444,7 +454,7 @@ describe('POST /api/climate/devices', () => {
   });
 
   test('cellar assignment requires owner/editor role', async () => {
-    User.findById.mockResolvedValue({ _id: 'u1', comparePassword: jest.fn().mockResolvedValue(true) });
+    User.findById.mockResolvedValue({ _id: 'u1', password: 'bcrypt-hash', comparePassword: jest.fn().mockResolvedValue(true) });
     ClimateDevice.countDocuments.mockResolvedValue(0);
     ApiToken.countDocuments.mockResolvedValue(0);
     Cellar.findOne.mockResolvedValue({ _id: OID2, user: 'other' });
@@ -456,7 +466,7 @@ describe('POST /api/climate/devices', () => {
   });
 
   test('a failed device insert never leaves an orphaned live token', async () => {
-    User.findById.mockResolvedValue({ _id: 'u1', comparePassword: jest.fn().mockResolvedValue(true) });
+    User.findById.mockResolvedValue({ _id: 'u1', password: 'bcrypt-hash', comparePassword: jest.fn().mockResolvedValue(true) });
     ClimateDevice.countDocuments.mockResolvedValue(0);
     ApiToken.countDocuments.mockResolvedValue(0);
     ApiToken.create.mockImplementation(async (doc) => ({ ...doc, _id: 'tok9' }));

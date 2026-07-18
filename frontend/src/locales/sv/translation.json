@@ -214,6 +214,15 @@
       "pushNotConfigured": "Push-aviseringar är inte konfigurerade på denna server.",
       "pushHint": "Push levererar aviseringar till din enhet även när Cellarion är stängt."
     },
+    "setPassword": {
+      "title": "Skapa ett lösenord",
+      "hint": "Du loggar in med Google. Med ett lösenord kan du även logga in med e-post + lösenord, och använda funktioner som ber om lösenordet som extra bekräftelse (API-nycklar, klimatenheter).",
+      "notice": "Du loggar in med Google, så kontot har inget lösenord ännu — och den här åtgärden ber om ett som extra bekräftelse.",
+      "cta": "Mejla mig en länk för att skapa lösenord",
+      "sending": "Skickar…",
+      "sent": "Länk skickad — kolla din inkorg. När du har skapat ett lösenord loggas du ut överallt en gång; logga in igen med Google eller ditt nya lösenord.",
+      "error": "Kunde inte skicka mejlet — försök igen."
+    },
     "changePassword": {
       "title": "Byt lösenord",
       "hint": "Välj ett starkt lösenord: minst 12 tecken med en versal, en gemen, en siffra och ett specialtecken. När du byter lösenord loggas du ut på alla andra enheter.",
