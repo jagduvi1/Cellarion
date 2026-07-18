@@ -117,9 +117,9 @@
   margin: 0.25rem 0 0;
 }
 
-/* ── Beta Notice ─────────────────────────────────────────────────────────── */
+/* ── Import support notice ─────────────────────────────────────────────────────────── */
 
-.import-beta-notice {
+.import-support-notice {
   background: rgba(var(--color-primary-rgb), 0.1);
   border: 1px solid rgba(var(--color-primary-rgb), 0.3);
   border-radius: 6px;
@@ -129,12 +129,12 @@
   margin-bottom: 1.5rem;
 }
 
-.import-beta-notice a {
+.import-support-notice a {
   color: var(--color-primary);
   text-decoration: none;
 }
 
-.import-beta-notice a:hover {
+.import-support-notice a:hover {
   text-decoration: underline;
 }
 

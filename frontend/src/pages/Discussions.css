@@ -19,17 +19,6 @@
   letter-spacing: -0.01em;
 }
 
-.discussions__beta-badge {
-  font-size: 0.6rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  padding: 0.1rem 0.4rem;
-  border-radius: 3px;
-  background: var(--color-surface-hover);
-  color: var(--color-text-muted);
-}
-
 /* ── Search bar ── */
 .discussions__search {
   display: flex;

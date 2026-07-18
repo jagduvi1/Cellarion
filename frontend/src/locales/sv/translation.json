@@ -642,7 +642,6 @@
     "tabOverview": "Översikt",
     "viewRackLayout": "Visa hyllayout",
     "consumedBottles": "Konsumerade flaskor",
-    "beta": "Beta",
     "sortBottlesAria": "Sortera flaskor",
     "removeFilterAria": "Ta bort {{label}}",
     "groupBottleCount_one": "{{count}} flaska",
@@ -1789,7 +1788,6 @@
   },
   "discussions": {
     "community": "Gemenskap",
-    "beta": "Beta",
     "reviews": "Omdömen",
     "discussions": "Diskussioner",
     "all": "Alla",
@@ -3042,9 +3040,9 @@
   "importBottles": {
     "title": "Importera flaskor",
     "backToCellar": "Tillbaka till källaren",
-    "betaNotice": "Den här funktionen är i beta. Om något inte importeras som du förväntar dig, mejla <1>{{email}}</1> och bifoga ett litet exempel på filen du försöker importera — vi tittar på det och antingen fixar det eller berättar hur du får igenom den.",
-    "betaEmailSubject": "Importproblem",
-    "betaEmailBody": "Hej, jag stötte på ett problem när jag importerade flaskor till Cellarion. Ett exempel på filen jag försökte importera är bifogat.",
+    "supportNotice": "Om något inte importeras som du förväntar dig, mejla <1>{{email}}</1> och bifoga ett litet exempel på filen du försöker importera — vi tittar på det och antingen fixar det eller berättar hur du får igenom den.",
+    "supportEmailSubject": "Importproblem",
+    "supportEmailBody": "Hej, jag stötte på ett problem när jag importerade flaskor till Cellarion. Ett exempel på filen jag försökte importera är bifogat.",
     "steps": {
       "upload": "Ladda upp",
       "review": "Granska",

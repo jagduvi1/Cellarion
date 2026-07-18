@@ -642,7 +642,6 @@
     "tabOverview": "Overview",
     "viewRackLayout": "View rack layout",
     "consumedBottles": "Consumed bottles",
-    "beta": "Beta",
     "sortBottlesAria": "Sort bottles",
     "removeFilterAria": "Remove {{label}}",
     "groupBottleCount_one": "{{count}} bottle",
@@ -1789,7 +1788,6 @@
   },
   "discussions": {
     "community": "Community",
-    "beta": "Beta",
     "reviews": "Reviews",
     "discussions": "Discussions",
     "all": "All",
@@ -3042,9 +3040,9 @@
   "importBottles": {
     "title": "Import Bottles",
     "backToCellar": "Back to Cellar",
-    "betaNotice": "This feature is in beta. If anything doesn't import the way you expect, email <1>{{email}}</1> and attach a small example of the file you're trying to import — we'll take a look and either fix it or tell you how to get it through.",
-    "betaEmailSubject": "Import issue",
-    "betaEmailBody": "Hi, I ran into an issue importing bottles into Cellarion. A sample of the file I tried to import is attached.",
+    "supportNotice": "If anything doesn't import the way you expect, email <1>{{email}}</1> and attach a small example of the file you're trying to import — we'll take a look and either fix it or tell you how to get it through.",
+    "supportEmailSubject": "Import issue",
+    "supportEmailBody": "Hi, I ran into an issue importing bottles into Cellarion. A sample of the file I tried to import is attached.",
     "steps": {
       "upload": "Upload",
       "review": "Review",

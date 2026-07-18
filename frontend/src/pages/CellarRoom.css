@@ -35,18 +35,6 @@
   gap: 0.5rem;
 }
 
-.room-beta-badge {
-  font-size: 0.65rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  padding: 0.15rem 0.45rem;
-  border-radius: 4px;
-  background: var(--color-primary, #6366f1);
-  color: #fff;
-  margin-left: 0.5rem; /* was an inline style on the title-badge span (M22) */
-}
-
 .room-mode-badge {
   font-size: 0.75rem;
   padding: 0.15rem 0.6rem;
