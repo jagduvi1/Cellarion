@@ -49,6 +49,16 @@ router.post('/', requireAuth, requireNonDemo, authLimiter, async (req, res) => {
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
+    // SSO-only accounts have no password at all — comparePassword would return
+    // a truthful-but-misleading "incorrect". Tell them the actual fix (the UI
+    // keys on the code to show the set-password flow instead of the field).
+    if (!user.password) {
+      logAudit(req, 'token.create_failed', { type: 'user', id: user._id }, { reason: 'no_password' });
+      return res.status(403).json({
+        error: 'This account signs in with Google and has no password yet. Set one first (Settings → Set a password), then create the token.',
+        code: 'no_password',
+      });
+    }
     const isMatch = await user.comparePassword(password);
     if (!isMatch) {
       logAudit(req, 'token.create_failed', { type: 'user', id: user._id }, { reason: 'incorrect_password' });

@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import Modal from './Modal';
+import SetPasswordNotice from './SetPasswordNotice';
 import { listApiTokens, createApiToken, revokeApiToken } from '../api/tokens';
 
 // Personal API tokens (Settings card). Scoped machine credentials for
@@ -16,7 +17,7 @@ const ALL_SCOPES = ['read', 'consume', 'write'];
 
 function ApiTokensSection() {
   const { t } = useTranslation();
-  const { apiFetch } = useAuth();
+  const { apiFetch, user } = useAuth();
 
   const [tokens, setTokens] = useState([]);
   const [listError, setListError] = useState(null);
@@ -207,19 +208,25 @@ function ApiTokensSection() {
                   </label>
                 ))}
               </div>
-              <div className="form-group">
-                <label htmlFor="api-token-password">{t('settings.apiTokens.passwordLabel')}</label>
-                <input
-                  id="api-token-password"
-                  type="password"
-                  className="input"
-                  autoComplete="current-password"
-                  value={password}
-                  onChange={e => setPassword(e.target.value)}
-                  required
-                />
-                <p className="settings-hint">{t('settings.apiTokens.passwordHint')}</p>
-              </div>
+              {user?.hasPassword === false ? (
+                // SSO-only account: nothing to confirm with — offer the email
+                // set-password flow instead of a field they can't fill.
+                <SetPasswordNotice />
+              ) : (
+                <div className="form-group">
+                  <label htmlFor="api-token-password">{t('settings.apiTokens.passwordLabel')}</label>
+                  <input
+                    id="api-token-password"
+                    type="password"
+                    className="input"
+                    autoComplete="current-password"
+                    value={password}
+                    onChange={e => setPassword(e.target.value)}
+                    required
+                  />
+                  <p className="settings-hint">{t('settings.apiTokens.passwordHint')}</p>
+                </div>
+              )}
 
               {createError && <div className="alert alert-error">{createError}</div>}
 
@@ -227,7 +234,7 @@ function ApiTokensSection() {
                 <button type="button" className="btn btn-secondary" onClick={closeCreate} disabled={creating}>
                   {t('common.cancel')}
                 </button>
-                <button type="submit" className="btn btn-primary" disabled={creating}>
+                <button type="submit" className="btn btn-primary" disabled={creating || user?.hasPassword === false}>
                   {creating ? t('settings.apiTokens.creatingBtn') : t('settings.apiTokens.createConfirmBtn')}
                 </button>
               </div>

@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import Modal from './Modal';
+import SetPasswordNotice from './SetPasswordNotice';
 import { listClimateDevices, createClimateDevice, updateClimateDevice, deleteClimateDevice } from '../api/climate';
 import { listCellars } from '../api/cellars';
 
@@ -12,7 +13,7 @@ import { listCellars } from '../api/cellars';
 // be labeled / calibration-adjusted here.
 function ClimateDevicesSection() {
   const { t } = useTranslation();
-  const { apiFetch } = useAuth();
+  const { apiFetch, user } = useAuth();
 
   const [devices, setDevices] = useState([]);
   const [maxDevices, setMaxDevices] = useState(5);
@@ -260,19 +261,25 @@ function ClimateDevicesSection() {
                 <label htmlFor="climate-device-cellar">{t('settings.climateDevices.cellarLabel')}</label>
                 {cellarSelect(cellarId, setCellarId, 'climate-device-cellar')}
               </div>
-              <div className="form-group">
-                <label htmlFor="climate-device-password">{t('settings.climateDevices.passwordLabel')}</label>
-                <input
-                  id="climate-device-password"
-                  type="password"
-                  className="input"
-                  autoComplete="current-password"
-                  value={password}
-                  onChange={e => setPassword(e.target.value)}
-                  required
-                />
-                <p className="settings-hint">{t('settings.climateDevices.passwordHint')}</p>
-              </div>
+              {user?.hasPassword === false ? (
+                // SSO-only account: nothing to confirm with — offer the email
+                // set-password flow instead of a field they can't fill.
+                <SetPasswordNotice />
+              ) : (
+                <div className="form-group">
+                  <label htmlFor="climate-device-password">{t('settings.climateDevices.passwordLabel')}</label>
+                  <input
+                    id="climate-device-password"
+                    type="password"
+                    className="input"
+                    autoComplete="current-password"
+                    value={password}
+                    onChange={e => setPassword(e.target.value)}
+                    required
+                  />
+                  <p className="settings-hint">{t('settings.climateDevices.passwordHint')}</p>
+                </div>
+              )}
 
               {createError && <div className="alert alert-error">{createError}</div>}
 
@@ -280,7 +287,7 @@ function ClimateDevicesSection() {
                 <button type="button" className="btn btn-secondary" onClick={closeCreate} disabled={creating}>
                   {t('common.cancel')}
                 </button>
-                <button type="submit" className="btn btn-primary" disabled={creating}>
+                <button type="submit" className="btn btn-primary" disabled={creating || user?.hasPassword === false}>
                   {creating ? t('settings.climateDevices.creatingBtn') : t('settings.climateDevices.createConfirmBtn')}
                 </button>
               </div>

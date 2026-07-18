@@ -12,6 +12,7 @@ import { isPushSupported, getPushPermissionState, subscribeToPush, unsubscribeFr
 import { downloadBlobObject } from '../utils/downloadBlob';
 import ApiTokensSection from '../components/ApiTokensSection';
 import AiConnectSection from '../components/AiConnectSection';
+import SetPasswordNotice from '../components/SetPasswordNotice';
 import McpActivitySection from '../components/McpActivitySection';
 import ClimateDevicesSection from '../components/ClimateDevicesSection';
 import { journalPromptOptedOut, setJournalPromptOptOut } from '../components/JournalPrompt';
@@ -415,8 +416,18 @@ function Settings() {
         </form>
       </div>
 
+      {/* ── Set-password card: SSO-only accounts (no password) get the email
+             set-password flow instead of a change form they can't fill ── */}
+      {!user?.isDemo && user?.hasPassword === false && (
+      <div className="card settings-card">
+        <h2 className="settings-section-title">{t('settings.setPassword.title', 'Set a password')}</h2>
+        <SetPasswordNotice text={t('settings.setPassword.hint',
+          'You sign in with Google. Setting a password also lets you log in with email + password, and unlocks actions that ask for a password as extra confirmation (API tokens, climate devices).')} />
+      </div>
+      )}
+
       {/* ── Change password card (hidden for demo accounts — no credential changes) ── */}
-      {!user?.isDemo && (
+      {!user?.isDemo && user?.hasPassword !== false && (
       <div className="card settings-card">
         <h2 className="settings-section-title">{t('settings.changePassword.title')}</h2>
         <p className="settings-hint">{t('settings.changePassword.hint')}</p>

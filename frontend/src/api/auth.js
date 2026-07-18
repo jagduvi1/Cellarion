@@ -12,3 +12,15 @@ export const changePassword = (apiFetch, { currentPassword, newPassword }) =>
     headers: JSON_HEADERS,
     body: JSON.stringify({ currentPassword, newPassword })
   });
+
+// POST /api/auth/forgot-password — body: { email }. Deliberately plain fetch
+// (the endpoint is unauthenticated): the login page uses it for forgotten
+// passwords, and Settings reuses it so an SSO-only account can SET its first
+// password through the same email-verified reset flow (SetPasswordNotice).
+// The response is always the same generic 200 to prevent email enumeration.
+export const requestPasswordReset = (email) =>
+  fetch('/api/auth/forgot-password', {
+    method: 'POST',
+    headers: JSON_HEADERS,
+    body: JSON.stringify({ email })
+  });

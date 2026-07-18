@@ -214,6 +214,15 @@
       "pushNotConfigured": "Push notifications are not configured on this server.",
       "pushHint": "Push delivers notifications to your device even when Cellarion is closed."
     },
+    "setPassword": {
+      "title": "Set a password",
+      "hint": "You sign in with Google. Setting a password also lets you log in with email + password, and unlocks actions that ask for a password as extra confirmation (API tokens, climate devices).",
+      "notice": "You sign in with Google, so this account has no password yet — and this action asks for one as extra confirmation.",
+      "cta": "Email me a set-password link",
+      "sending": "Sending…",
+      "sent": "Link sent — check your inbox. After you set a password you'll be signed out everywhere once; sign back in with Google or your new password.",
+      "error": "Could not send the email — please try again."
+    },
     "changePassword": {
       "title": "Change password",
       "hint": "Choose a strong password: at least 12 characters with an uppercase letter, a lowercase letter, a number, and a special character. Changing your password signs you out on all other devices.",
