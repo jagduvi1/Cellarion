@@ -437,3 +437,29 @@ describe('resolveGrapeName — spelling variants merged 2026-07-11', () => {
     expect(resolveGrapeName('Weisser Burgunder')).toBe('Pinot Blanc');
   });
 });
+
+describe('producer house prefixes (the launch-day Barolo duplicate)', () => {
+  const { tokenSimilarity, combinedSimilarity } = require('./normalize');
+
+  test('"Cantina Bartolo Mascarello" tokens equal "Bartolo Mascarello"', () => {
+    expect(tokenSimilarity('Cantina Bartolo Mascarello', 'Bartolo Mascarello')).toBe(1);
+    expect(tokenSimilarity('Azienda Agricola Montevertine', 'Montevertine')).toBe(1);
+    expect(tokenSimilarity('Tenuta San Guido', 'San Guido')).toBe(1);
+    expect(tokenSimilarity('Weingut Keller', 'Keller')).toBe(1);
+  });
+
+  test('combined producer similarity clears the resolver soft zone', () => {
+    // With name (0.45) and appellation (0.10) identical, the wine-level score
+    // is 0.55 + 0.45 × producerSim — producerSim ≥ 0.75 puts the pair at
+    // ≥ 0.8875, safely above SOFT_ZONE_MIN (0.85), so the resolver surfaces
+    // "did you mean?" instead of silently minting a duplicate. Before the
+    // stop-word fix this pair scored ~0.65 and fell through to no_match.
+    expect(combinedSimilarity('Cantina Bartolo Mascarello', 'Bartolo Mascarello')).toBeGreaterThanOrEqual(0.75);
+  });
+
+  test('distinct producers do NOT collapse to auto-match territory', () => {
+    // Sharing a stripped prefix must not make different houses near-identical:
+    // candidates at worst (soft zone asks the user), never a silent merge.
+    expect(combinedSimilarity('Cantina Rossi', 'Cantina Bianchi')).toBeLessThan(0.6);
+  });
+});
