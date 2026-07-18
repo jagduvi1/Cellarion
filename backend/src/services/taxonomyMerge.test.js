@@ -163,6 +163,22 @@ describe('mergeRegions', () => {
   });
 });
 
+describe('mergeRegions synonyms:false', () => {
+  test('junk region names are dropped instead of absorbed', async () => {
+    const from = doc({ _id: 'r-junk', name: 'Mosel or Rheingau', country: 'c-de',
+      styles: [], typicalGrapes: [], permittedGrapes: [] });
+    const to = doc({ _id: 'r-canon', name: 'Mosel', country: 'c-de',
+      styles: [], typicalGrapes: [], permittedGrapes: [] });
+    Region.findById.mockImplementation(id => Promise.resolve(id === 'r-junk' ? from : to));
+
+    const summary = await mergeRegions('r-junk', 'r-canon', { synonyms: false });
+
+    expect(summary.synonymsAdded).toEqual([]);
+    expect(to.synonyms).toEqual([]);
+    expect(from.deleteOne).toHaveBeenCalled();
+  });
+});
+
 describe('mergeCountries', () => {
   test('moves non-colliding regions, folds colliding ones, rewrites wines + appellations', async () => {
     const from = doc({ _id: 'c-dup', name: 'Unknown' });
