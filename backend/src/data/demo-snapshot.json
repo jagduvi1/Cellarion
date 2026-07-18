@@ -2,7 +2,7 @@
   "schema": "cellarion-export@1",
   "exportedAt": null,
   "cellarCount": 4,
-  "bottleCount": 261,
+  "bottleCount": 257,
   "imageCount": 36,
   "reviewCount": 0,
   "maturityCount": 82,
@@ -388,7 +388,7 @@
           "reviews": []
         },
         {
-          "wineName": "Barolo Azelia",
+          "wineName": "Barolo",
           "producer": "Azelia",
           "vintage": "2019",
           "country": "Italy",
@@ -417,7 +417,7 @@
           "images": []
         },
         {
-          "wineName": "Barolo Azelia",
+          "wineName": "Barolo",
           "producer": "Azelia",
           "vintage": "2019",
           "country": "Italy",
@@ -446,7 +446,7 @@
           "images": []
         },
         {
-          "wineName": "Barolo Azelia",
+          "wineName": "Barolo",
           "producer": "Azelia",
           "vintage": "2019",
           "country": "Italy",
@@ -2087,7 +2087,7 @@
           "images": []
         },
         {
-          "wineName": "Barolo Azelia",
+          "wineName": "Barolo",
           "producer": "Azelia",
           "vintage": "2019",
           "country": "Italy",
@@ -5086,12 +5086,12 @@
           "images": []
         },
         {
-          "wineName": "La Tâche",
-          "producer": "Domaine de la Romanée-Conti",
+          "wineName": "Chambertin Grand Cru",
+          "producer": "Domaine Trapet",
           "vintage": "2017",
           "country": "France",
           "region": "Burgundy",
-          "appellation": "La Tâche Grand Cru",
+          "appellation": "Chambertin Grand Cru",
           "type": "red",
           "grapes": [
             "Pinot Noir"
@@ -5105,12 +5105,12 @@
               "enteredAt": "2021-04-04T00:00:00.000Z"
             }
           ],
-          "price": 3200,
+          "price": 460,
           "currency": "EUR",
           "purchaseDate": "2021-04-04",
           "drinkFrom": 2027,
-          "drinkTo": 2050,
-          "rating": 97,
+          "drinkTo": 2045,
+          "rating": 95,
           "ratingScale": "100",
           "rackName": "Wine Fridge",
           "rackPosition": 4,
@@ -5120,12 +5120,12 @@
           "images": []
         },
         {
-          "wineName": "La Tâche",
-          "producer": "Domaine de la Romanée-Conti",
+          "wineName": "Chambertin Grand Cru",
+          "producer": "Domaine Trapet",
           "vintage": "2019",
           "country": "France",
           "region": "Burgundy",
-          "appellation": "La Tâche Grand Cru",
+          "appellation": "Chambertin Grand Cru",
           "type": "red",
           "grapes": [
             "Pinot Noir"
@@ -5139,13 +5139,13 @@
               "enteredAt": "2022-05-05T00:00:00.000Z"
             }
           ],
-          "price": 3200,
+          "price": 460,
           "currency": "EUR",
           "purchaseDate": "2022-05-05",
           "purchaseLocation": "Auction",
           "drinkFrom": 2027,
-          "drinkTo": 2050,
-          "rating": 97,
+          "drinkTo": 2045,
+          "rating": 95,
           "ratingScale": "100",
           "rackName": "Wine Fridge",
           "rackPosition": 5,
@@ -5190,13 +5190,13 @@
           "images": []
         },
         {
-          "wineName": "Wehlener Sonnenuhr Riesling Auslese",
+          "wineName": "Joh Jos Prüm Wehlener Sonnenuhr Spätlese",
           "producer": "Joh. Jos. Prüm",
           "vintage": "2020",
           "country": "Germany",
           "region": "Mosel",
           "appellation": "Wehlener Sonnenuhr",
-          "type": "dessert",
+          "type": "white",
           "grapes": [
             "Riesling"
           ],
@@ -5209,13 +5209,13 @@
               "enteredAt": "2024-07-07T00:00:00.000Z"
             }
           ],
-          "price": 45,
+          "price": 38,
           "currency": "EUR",
           "purchaseDate": "2024-07-07",
           "purchaseLocation": "Millesima",
           "drinkFrom": 2024,
-          "drinkTo": 2045,
-          "rating": 92,
+          "drinkTo": 2040,
+          "rating": 91,
           "ratingScale": "100",
           "rackName": "Wine Fridge",
           "rackPosition": 7,
@@ -5225,13 +5225,13 @@
           "images": []
         },
         {
-          "wineName": "Wehlener Sonnenuhr Riesling Auslese",
+          "wineName": "Joh Jos Prüm Wehlener Sonnenuhr Spätlese",
           "producer": "Joh. Jos. Prüm",
           "vintage": "2021",
           "country": "Germany",
           "region": "Mosel",
           "appellation": "Wehlener Sonnenuhr",
-          "type": "dessert",
+          "type": "white",
           "grapes": [
             "Riesling"
           ],
@@ -5244,13 +5244,13 @@
               "enteredAt": "2018-08-08T00:00:00.000Z"
             }
           ],
-          "price": 45,
+          "price": 38,
           "currency": "EUR",
           "purchaseDate": "2018-08-08",
           "purchaseLocation": "K&L Wines",
           "drinkFrom": 2024,
-          "drinkTo": 2045,
-          "rating": 92,
+          "drinkTo": 2040,
+          "rating": 91,
           "ratingScale": "100",
           "rackName": "Wine Fridge",
           "rackPosition": 8,
@@ -5330,16 +5330,16 @@
           "images": []
         },
         {
-          "wineName": "Pétrus",
-          "producer": "Pétrus",
+          "wineName": "Château Ausone",
+          "producer": "Château d'Ausone",
           "vintage": "2010",
           "country": "France",
           "region": "Bordeaux",
-          "appellation": "Pomerol",
+          "appellation": "Saint-Émilion Grand Cru",
           "type": "red",
           "grapes": [
-            "Merlot",
-            "Cabernet Franc"
+            "Cabernet Franc",
+            "Merlot"
           ],
           "bottleSize": "750ml",
           "dateAdded": "2021-11-11",
@@ -5350,11 +5350,11 @@
               "enteredAt": "2021-11-11T00:00:00.000Z"
             }
           ],
-          "price": 4100,
+          "price": 680,
           "currency": "EUR",
           "purchaseDate": "2021-11-11",
           "purchaseLocation": "Systembolaget",
-          "drinkFrom": 2022,
+          "drinkFrom": 2024,
           "drinkTo": 2050,
           "rackName": "Wine Fridge",
           "rackPosition": 11,
@@ -5364,11 +5364,11 @@
           "images": []
         },
         {
-          "wineName": "La Mouline",
+          "wineName": "Château d'Ampuis",
           "producer": "E. Guigal",
           "vintage": "2016",
           "country": "France",
-          "region": "Rhône",
+          "region": "Rhône Valley",
           "appellation": "Côte-Rôtie",
           "type": "red",
           "grapes": [
@@ -5384,11 +5384,11 @@
               "enteredAt": "2022-12-12T00:00:00.000Z"
             }
           ],
-          "price": 380,
+          "price": 115,
           "currency": "EUR",
           "purchaseDate": "2022-12-12",
           "purchaseLocation": "Millesima",
-          "rating": 96,
+          "rating": 94,
           "ratingScale": "100",
           "rackName": "Wine Fridge",
           "rackPosition": 12,
@@ -5398,11 +5398,11 @@
           "images": []
         },
         {
-          "wineName": "La Mouline",
+          "wineName": "Château d'Ampuis",
           "producer": "E. Guigal",
           "vintage": "2017",
           "country": "France",
-          "region": "Rhône",
+          "region": "Rhône Valley",
           "appellation": "Côte-Rôtie",
           "type": "red",
           "grapes": [
@@ -5418,11 +5418,11 @@
               "enteredAt": "2023-01-13T00:00:00.000Z"
             }
           ],
-          "price": 380,
+          "price": 115,
           "currency": "EUR",
           "purchaseDate": "2023-01-13",
           "purchaseLocation": "K&L Wines",
-          "rating": 96,
+          "rating": 94,
           "ratingScale": "100",
           "rackName": "Cellar Rack",
           "rackPosition": 1,
@@ -5535,16 +5535,15 @@
           "images": []
         },
         {
-          "wineName": "Único",
-          "producer": "Vega Sicilia",
+          "wineName": "Aalto",
+          "producer": "Aalto",
           "vintage": "2011",
           "country": "Spain",
           "region": "Castilla y León",
           "appellation": "Ribera del Duero",
           "type": "red",
           "grapes": [
-            "Tempranillo",
-            "Cabernet Sauvignon"
+            "Tempranillo"
           ],
           "bottleSize": "750ml",
           "dateAdded": "2020-05-17",
@@ -5555,13 +5554,13 @@
               "enteredAt": "2020-05-17T00:00:00.000Z"
             }
           ],
-          "price": 420,
+          "price": 48,
           "currency": "EUR",
           "purchaseDate": "2020-05-17",
           "purchaseLocation": "Millesima",
           "drinkFrom": 2024,
-          "drinkTo": 2045,
-          "rating": 97,
+          "drinkTo": 2035,
+          "rating": 92,
           "ratingScale": "100",
           "rackName": "Cellar Rack",
           "rackPosition": 5,
@@ -5571,16 +5570,15 @@
           "images": []
         },
         {
-          "wineName": "Único",
-          "producer": "Vega Sicilia",
+          "wineName": "Aalto",
+          "producer": "Aalto",
           "vintage": "2012",
           "country": "Spain",
           "region": "Castilla y León",
           "appellation": "Ribera del Duero",
           "type": "red",
           "grapes": [
-            "Tempranillo",
-            "Cabernet Sauvignon"
+            "Tempranillo"
           ],
           "bottleSize": "750ml",
           "dateAdded": "2021-06-18",
@@ -5591,13 +5589,13 @@
               "enteredAt": "2021-06-18T00:00:00.000Z"
             }
           ],
-          "price": 420,
+          "price": 48,
           "currency": "EUR",
           "purchaseDate": "2021-06-18",
           "purchaseLocation": "K&L Wines",
           "drinkFrom": 2024,
-          "drinkTo": 2045,
-          "rating": 97,
+          "drinkTo": 2035,
+          "rating": 92,
           "ratingScale": "100",
           "rackName": "Cellar Rack",
           "rackPosition": 6,
@@ -5642,18 +5640,19 @@
           "images": []
         },
         {
-          "wineName": "Monte Bello",
-          "producer": "Ridge",
+          "wineName": "Opus One",
+          "producer": "Opus One",
           "vintage": "2018",
-          "country": "USA",
-          "region": "Santa Cruz Mountains",
-          "appellation": "Santa Cruz Mountains",
+          "country": "United States",
+          "region": "California",
+          "appellation": "Napa Valley",
           "type": "red",
           "grapes": [
             "Cabernet Sauvignon",
             "Merlot",
+            "Cabernet Franc",
             "Petit Verdot",
-            "Cabernet Franc"
+            "Malbec"
           ],
           "bottleSize": "750ml",
           "dateAdded": "2023-08-20",
@@ -5664,13 +5663,13 @@
               "enteredAt": "2023-08-20T00:00:00.000Z"
             }
           ],
-          "price": 260,
+          "price": 390,
           "currency": "USD",
           "purchaseDate": "2023-08-20",
           "purchaseLocation": "Auction",
           "drinkFrom": 2026,
-          "drinkTo": 2050,
-          "rating": 96,
+          "drinkTo": 2045,
+          "rating": 95,
           "ratingScale": "100",
           "rackName": "Cellar Rack",
           "rackPosition": 8,
@@ -5680,18 +5679,19 @@
           "images": []
         },
         {
-          "wineName": "Monte Bello",
-          "producer": "Ridge",
+          "wineName": "Opus One",
+          "producer": "Opus One",
           "vintage": "2019",
-          "country": "USA",
-          "region": "Santa Cruz Mountains",
-          "appellation": "Santa Cruz Mountains",
+          "country": "United States",
+          "region": "California",
+          "appellation": "Napa Valley",
           "type": "red",
           "grapes": [
             "Cabernet Sauvignon",
             "Merlot",
+            "Cabernet Franc",
             "Petit Verdot",
-            "Cabernet Franc"
+            "Malbec"
           ],
           "bottleSize": "750ml",
           "dateAdded": "2024-09-21",
@@ -5702,13 +5702,13 @@
               "enteredAt": "2024-09-21T00:00:00.000Z"
             }
           ],
-          "price": 260,
+          "price": 390,
           "currency": "USD",
           "purchaseDate": "2024-09-21",
           "purchaseLocation": "Systembolaget",
           "drinkFrom": 2026,
-          "drinkTo": 2050,
-          "rating": 96,
+          "drinkTo": 2045,
+          "rating": 95,
           "ratingScale": "100",
           "rackName": "Cellar Rack",
           "rackPosition": 9,
@@ -5718,7 +5718,7 @@
           "images": []
         },
         {
-          "wineName": "Château Mouton Rothschild",
+          "wineName": "Château Mouton-Rothschild",
           "producer": "Château Mouton Rothschild",
           "vintage": "2016",
           "country": "France",
@@ -5795,12 +5795,12 @@
           "images": []
         },
         {
-          "wineName": "Scharzhofberger Riesling Kabinett",
-          "producer": "Egon Müller",
+          "wineName": "Scharzhofberger Riesling GG",
+          "producer": "Van Volxem",
           "vintage": "2020",
           "country": "Germany",
           "region": "Mosel",
-          "appellation": "Scharzhofberg",
+          "appellation": "Scharzhofberger",
           "type": "white",
           "grapes": [
             "Riesling"
@@ -5814,7 +5814,7 @@
               "enteredAt": "2020-12-24T00:00:00.000Z"
             }
           ],
-          "price": 320,
+          "price": 52,
           "currency": "EUR",
           "purchaseDate": "2020-12-24",
           "rackName": "Cellar Rack",
@@ -5825,12 +5825,12 @@
           "images": []
         },
         {
-          "wineName": "Scharzhofberger Riesling Kabinett",
-          "producer": "Egon Müller",
+          "wineName": "Scharzhofberger Riesling GG",
+          "producer": "Van Volxem",
           "vintage": "2022",
           "country": "Germany",
           "region": "Mosel",
-          "appellation": "Scharzhofberg",
+          "appellation": "Scharzhofberger",
           "type": "white",
           "grapes": [
             "Riesling"
@@ -5844,7 +5844,7 @@
               "enteredAt": "2021-01-25T00:00:00.000Z"
             }
           ],
-          "price": 320,
+          "price": 52,
           "currency": "EUR",
           "purchaseDate": "2021-01-25",
           "purchaseLocation": "Auction",
@@ -5856,12 +5856,12 @@
           "images": []
         },
         {
-          "wineName": "Puligny-Montrachet Les Combettes",
+          "wineName": "Chevalier-Montrachet Grand Cru",
           "producer": "Domaine Leflaive",
           "vintage": "2019",
           "country": "France",
           "region": "Burgundy",
-          "appellation": "Puligny-Montrachet 1er Cru",
+          "appellation": "Chevalier-Montrachet Grand Cru",
           "type": "white",
           "grapes": [
             "Chardonnay"
@@ -5875,13 +5875,13 @@
               "enteredAt": "2022-02-26T00:00:00.000Z"
             }
           ],
-          "price": 285,
+          "price": 690,
           "currency": "EUR",
           "purchaseDate": "2022-02-26",
           "purchaseLocation": "Systembolaget",
-          "drinkFrom": 2023,
-          "drinkTo": 2035,
-          "rating": 93,
+          "drinkFrom": 2026,
+          "drinkTo": 2040,
+          "rating": 96,
           "ratingScale": "100",
           "rackName": "Cellar Rack",
           "rackPosition": 14,
@@ -5891,12 +5891,12 @@
           "images": []
         },
         {
-          "wineName": "Puligny-Montrachet Les Combettes",
+          "wineName": "Chevalier-Montrachet Grand Cru",
           "producer": "Domaine Leflaive",
           "vintage": "2020",
           "country": "France",
           "region": "Burgundy",
-          "appellation": "Puligny-Montrachet 1er Cru",
+          "appellation": "Chevalier-Montrachet Grand Cru",
           "type": "white",
           "grapes": [
             "Chardonnay"
@@ -5910,13 +5910,13 @@
               "enteredAt": "2023-03-27T00:00:00.000Z"
             }
           ],
-          "price": 285,
+          "price": 690,
           "currency": "EUR",
           "purchaseDate": "2023-03-27",
           "purchaseLocation": "Millesima",
-          "drinkFrom": 2023,
-          "drinkTo": 2035,
-          "rating": 93,
+          "drinkFrom": 2026,
+          "drinkTo": 2040,
+          "rating": 96,
           "ratingScale": "100",
           "rackName": "Cellar Rack",
           "rackPosition": 15,
@@ -6033,12 +6033,12 @@
           "images": []
         },
         {
-          "wineName": "Le Mesnil Blanc de Blancs",
-          "producer": "Champagne Salon",
+          "wineName": "Grand Cru Millésime Extra-Brut Le Mesnil-sur-Oger",
+          "producer": "Pierre Moncuit",
           "vintage": "2012",
           "country": "France",
           "region": "Champagne",
-          "appellation": "Champagne AOC",
+          "appellation": "Champagne Grand Cru",
           "type": "sparkling",
           "grapes": [
             "Chardonnay"
@@ -6052,13 +6052,13 @@
               "enteredAt": "2020-07-04T00:00:00.000Z"
             }
           ],
-          "price": 1900,
+          "price": 58,
           "currency": "EUR",
           "purchaseDate": "2020-07-04",
           "purchaseLocation": "Systembolaget",
           "drinkFrom": 2024,
-          "drinkTo": 2042,
-          "rating": 97,
+          "drinkTo": 2034,
+          "rating": 92,
           "ratingScale": "100",
           "rackName": "Cellar Rack",
           "rackPosition": 19,
@@ -6103,83 +6103,12 @@
           "images": []
         },
         {
-          "wineName": "Almaviva",
-          "producer": "Almaviva",
-          "vintage": "2019",
-          "country": "Chile",
-          "region": "Maipo Valley",
-          "appellation": "Puente Alto",
-          "type": "red",
-          "grapes": [
-            "Cabernet Sauvignon",
-            "Carmenère",
-            "Cabernet Franc",
-            "Petit Verdot"
-          ],
-          "bottleSize": "750ml",
-          "dateAdded": "2022-09-06",
-          "addedToCellarAt": "2022-09-06T00:00:00.000Z",
-          "cellarHistory": [
-            {
-              "cellarName": "Imported Collection",
-              "enteredAt": "2022-09-06T00:00:00.000Z"
-            }
-          ],
-          "price": 145,
-          "currency": "USD",
-          "purchaseDate": "2022-09-06",
-          "purchaseLocation": "K&L Wines",
-          "drinkFrom": 2025,
-          "drinkTo": 2045,
-          "rating": 94,
-          "ratingScale": "100",
-          "rackName": "Double Deep",
-          "rackPosition": 1,
-          "reviews": [],
-          "images": []
-        },
-        {
-          "wineName": "Almaviva",
-          "producer": "Almaviva",
-          "vintage": "2021",
-          "country": "Chile",
-          "region": "Maipo Valley",
-          "appellation": "Puente Alto",
-          "type": "red",
-          "grapes": [
-            "Cabernet Sauvignon",
-            "Carmenère",
-            "Cabernet Franc",
-            "Petit Verdot"
-          ],
-          "bottleSize": "750ml",
-          "dateAdded": "2023-10-07",
-          "addedToCellarAt": "2023-10-07T00:00:00.000Z",
-          "cellarHistory": [
-            {
-              "cellarName": "Imported Collection",
-              "enteredAt": "2023-10-07T00:00:00.000Z"
-            }
-          ],
-          "price": 145,
-          "currency": "USD",
-          "purchaseDate": "2023-10-07",
-          "drinkFrom": 2025,
-          "drinkTo": 2045,
-          "rating": 94,
-          "ratingScale": "100",
-          "rackName": "Double Deep",
-          "rackPosition": 5,
-          "reviews": [],
-          "images": []
-        },
-        {
-          "wineName": "Riesling trocken",
-          "producer": "Weingut Keller",
+          "wineName": "Riesling von der Fels",
+          "producer": "Keller",
           "vintage": "2022",
           "country": "Germany",
           "region": "Rheinhessen",
-          "appellation": "",
+          "appellation": "Westhofen",
           "type": "white",
           "grapes": [
             "Riesling"
@@ -6193,7 +6122,7 @@
               "enteredAt": "2024-11-08T00:00:00.000Z"
             }
           ],
-          "price": 28,
+          "price": 32,
           "currency": "EUR",
           "purchaseDate": "2024-11-08",
           "purchaseLocation": "Auction",
@@ -6344,12 +6273,12 @@
           "images": []
         },
         {
-          "wineName": "La Tâche",
-          "producer": "Domaine de la Romanée-Conti",
+          "wineName": "Chambertin Grand Cru",
+          "producer": "Domaine Trapet",
           "vintage": "2017",
           "country": "France",
           "region": "Burgundy",
-          "appellation": "La Tâche Grand Cru",
+          "appellation": "Chambertin Grand Cru",
           "type": "red",
           "grapes": [
             "Pinot Noir"
@@ -6363,12 +6292,12 @@
               "enteredAt": "2021-03-12T00:00:00.000Z"
             }
           ],
-          "price": 3200,
+          "price": 460,
           "currency": "EUR",
           "purchaseDate": "2021-03-12",
           "drinkFrom": 2027,
-          "drinkTo": 2050,
-          "rating": 97,
+          "drinkTo": 2045,
+          "rating": 95,
           "ratingScale": "100",
           "rackName": "Double Deep",
           "rackPosition": 4,
@@ -6376,12 +6305,12 @@
           "images": []
         },
         {
-          "wineName": "La Tâche",
-          "producer": "Domaine de la Romanée-Conti",
+          "wineName": "Chambertin Grand Cru",
+          "producer": "Domaine Trapet",
           "vintage": "2019",
           "country": "France",
           "region": "Burgundy",
-          "appellation": "La Tâche Grand Cru",
+          "appellation": "Chambertin Grand Cru",
           "type": "red",
           "grapes": [
             "Pinot Noir"
@@ -6395,13 +6324,13 @@
               "enteredAt": "2022-04-13T00:00:00.000Z"
             }
           ],
-          "price": 3200,
+          "price": 460,
           "currency": "EUR",
           "purchaseDate": "2022-04-13",
           "purchaseLocation": "Auction",
           "drinkFrom": 2027,
-          "drinkTo": 2050,
-          "rating": 97,
+          "drinkTo": 2045,
+          "rating": 95,
           "ratingScale": "100",
           "rackName": "Double Deep",
           "rackPosition": 8,
@@ -6409,13 +6338,13 @@
           "images": []
         },
         {
-          "wineName": "Wehlener Sonnenuhr Riesling Auslese",
+          "wineName": "Joh Jos Prüm Wehlener Sonnenuhr Spätlese",
           "producer": "Joh. Jos. Prüm",
           "vintage": "2019",
           "country": "Germany",
           "region": "Mosel",
           "appellation": "Wehlener Sonnenuhr",
-          "type": "dessert",
+          "type": "white",
           "grapes": [
             "Riesling"
           ],
@@ -6428,13 +6357,13 @@
               "enteredAt": "2023-05-14T00:00:00.000Z"
             }
           ],
-          "price": 45,
+          "price": 38,
           "currency": "EUR",
           "purchaseDate": "2023-05-14",
           "purchaseLocation": "Systembolaget",
           "drinkFrom": 2024,
-          "drinkTo": 2045,
-          "rating": 92,
+          "drinkTo": 2040,
+          "rating": 91,
           "ratingScale": "100",
           "rackName": "Double Deep",
           "rackPosition": 9,
@@ -6442,13 +6371,13 @@
           "images": []
         },
         {
-          "wineName": "Wehlener Sonnenuhr Riesling Auslese",
+          "wineName": "Joh Jos Prüm Wehlener Sonnenuhr Spätlese",
           "producer": "Joh. Jos. Prüm",
           "vintage": "2020",
           "country": "Germany",
           "region": "Mosel",
           "appellation": "Wehlener Sonnenuhr",
-          "type": "dessert",
+          "type": "white",
           "grapes": [
             "Riesling"
           ],
@@ -6461,13 +6390,13 @@
               "enteredAt": "2024-06-15T00:00:00.000Z"
             }
           ],
-          "price": 45,
+          "price": 38,
           "currency": "EUR",
           "purchaseDate": "2024-06-15",
           "purchaseLocation": "Millesima",
           "drinkFrom": 2024,
-          "drinkTo": 2045,
-          "rating": 92,
+          "drinkTo": 2040,
+          "rating": 91,
           "ratingScale": "100",
           "rackName": "Double Deep",
           "rackPosition": 13,
@@ -6475,13 +6404,13 @@
           "images": []
         },
         {
-          "wineName": "Wehlener Sonnenuhr Riesling Auslese",
+          "wineName": "Joh Jos Prüm Wehlener Sonnenuhr Spätlese",
           "producer": "Joh. Jos. Prüm",
           "vintage": "2021",
           "country": "Germany",
           "region": "Mosel",
           "appellation": "Wehlener Sonnenuhr",
-          "type": "dessert",
+          "type": "white",
           "grapes": [
             "Riesling"
           ],
@@ -6494,13 +6423,13 @@
               "enteredAt": "2018-07-16T00:00:00.000Z"
             }
           ],
-          "price": 45,
+          "price": 38,
           "currency": "EUR",
           "purchaseDate": "2018-07-16",
           "purchaseLocation": "K&L Wines",
           "drinkFrom": 2024,
-          "drinkTo": 2045,
-          "rating": 92,
+          "drinkTo": 2040,
+          "rating": 91,
           "ratingScale": "100",
           "rackName": "Double Deep",
           "rackPosition": 10,
@@ -6574,16 +6503,16 @@
           "images": []
         },
         {
-          "wineName": "Pétrus",
-          "producer": "Pétrus",
+          "wineName": "Château Ausone",
+          "producer": "Château d'Ausone",
           "vintage": "2010",
           "country": "France",
           "region": "Bordeaux",
-          "appellation": "Pomerol",
+          "appellation": "Saint-Émilion Grand Cru",
           "type": "red",
           "grapes": [
-            "Merlot",
-            "Cabernet Franc"
+            "Cabernet Franc",
+            "Merlot"
           ],
           "bottleSize": "750ml",
           "dateAdded": "2021-10-19",
@@ -6594,11 +6523,11 @@
               "enteredAt": "2021-10-19T00:00:00.000Z"
             }
           ],
-          "price": 4100,
+          "price": 680,
           "currency": "EUR",
           "purchaseDate": "2021-10-19",
           "purchaseLocation": "Systembolaget",
-          "drinkFrom": 2022,
+          "drinkFrom": 2024,
           "drinkTo": 2050,
           "rackName": "Double Deep",
           "rackPosition": 15,
@@ -6606,11 +6535,11 @@
           "images": []
         },
         {
-          "wineName": "La Mouline",
+          "wineName": "Château d'Ampuis",
           "producer": "E. Guigal",
           "vintage": "2016",
           "country": "France",
-          "region": "Rhône",
+          "region": "Rhône Valley",
           "appellation": "Côte-Rôtie",
           "type": "red",
           "grapes": [
@@ -6626,11 +6555,11 @@
               "enteredAt": "2022-11-20T00:00:00.000Z"
             }
           ],
-          "price": 380,
+          "price": 115,
           "currency": "EUR",
           "purchaseDate": "2022-11-20",
           "purchaseLocation": "Millesima",
-          "rating": 96,
+          "rating": 94,
           "ratingScale": "100",
           "rackName": "Double Deep",
           "rackPosition": 12,
@@ -6638,11 +6567,11 @@
           "images": []
         },
         {
-          "wineName": "La Mouline",
+          "wineName": "Château d'Ampuis",
           "producer": "E. Guigal",
           "vintage": "2017",
           "country": "France",
-          "region": "Rhône",
+          "region": "Rhône Valley",
           "appellation": "Côte-Rôtie",
           "type": "red",
           "grapes": [
@@ -6658,11 +6587,11 @@
               "enteredAt": "2023-12-21T00:00:00.000Z"
             }
           ],
-          "price": 380,
+          "price": 115,
           "currency": "EUR",
           "purchaseDate": "2023-12-21",
           "purchaseLocation": "K&L Wines",
-          "rating": 96,
+          "rating": 94,
           "ratingScale": "100",
           "rackName": "Double Deep",
           "rackPosition": 16,
@@ -6774,16 +6703,15 @@
           "images": []
         },
         {
-          "wineName": "Único",
-          "producer": "Vega Sicilia",
+          "wineName": "Aalto",
+          "producer": "Aalto",
           "vintage": "2011",
           "country": "Spain",
           "region": "Castilla y León",
           "appellation": "Ribera del Duero",
           "type": "red",
           "grapes": [
-            "Tempranillo",
-            "Cabernet Sauvignon"
+            "Tempranillo"
           ],
           "bottleSize": "750ml",
           "dateAdded": "2020-04-25",
@@ -6794,13 +6722,13 @@
               "enteredAt": "2020-04-25T00:00:00.000Z"
             }
           ],
-          "price": 420,
+          "price": 48,
           "currency": "EUR",
           "purchaseDate": "2020-04-25",
           "purchaseLocation": "Millesima",
           "drinkFrom": 2024,
-          "drinkTo": 2045,
-          "rating": 97,
+          "drinkTo": 2035,
+          "rating": 92,
           "ratingScale": "100",
           "rackName": "Basement 1",
           "rackPosition": 4,
@@ -6810,16 +6738,15 @@
           "images": []
         },
         {
-          "wineName": "Único",
-          "producer": "Vega Sicilia",
+          "wineName": "Aalto",
+          "producer": "Aalto",
           "vintage": "2012",
           "country": "Spain",
           "region": "Castilla y León",
           "appellation": "Ribera del Duero",
           "type": "red",
           "grapes": [
-            "Tempranillo",
-            "Cabernet Sauvignon"
+            "Tempranillo"
           ],
           "bottleSize": "750ml",
           "dateAdded": "2021-05-26",
@@ -6830,13 +6757,13 @@
               "enteredAt": "2021-05-26T00:00:00.000Z"
             }
           ],
-          "price": 420,
+          "price": 48,
           "currency": "EUR",
           "purchaseDate": "2021-05-26",
           "purchaseLocation": "K&L Wines",
           "drinkFrom": 2024,
-          "drinkTo": 2045,
-          "rating": 97,
+          "drinkTo": 2035,
+          "rating": 92,
           "ratingScale": "100",
           "rackName": "Basement 1",
           "rackPosition": 5,
@@ -6881,18 +6808,19 @@
           "images": []
         },
         {
-          "wineName": "Monte Bello",
-          "producer": "Ridge",
+          "wineName": "Opus One",
+          "producer": "Opus One",
           "vintage": "2018",
-          "country": "USA",
-          "region": "Santa Cruz Mountains",
-          "appellation": "Santa Cruz Mountains",
+          "country": "United States",
+          "region": "California",
+          "appellation": "Napa Valley",
           "type": "red",
           "grapes": [
             "Cabernet Sauvignon",
             "Merlot",
+            "Cabernet Franc",
             "Petit Verdot",
-            "Cabernet Franc"
+            "Malbec"
           ],
           "bottleSize": "750ml",
           "dateAdded": "2023-07-01",
@@ -6903,13 +6831,13 @@
               "enteredAt": "2023-07-01T00:00:00.000Z"
             }
           ],
-          "price": 260,
+          "price": 390,
           "currency": "USD",
           "purchaseDate": "2023-07-01",
           "purchaseLocation": "Auction",
           "drinkFrom": 2026,
-          "drinkTo": 2050,
-          "rating": 96,
+          "drinkTo": 2045,
+          "rating": 95,
           "ratingScale": "100",
           "rackName": "Basement 2",
           "rackPosition": 1,
@@ -6919,18 +6847,19 @@
           "images": []
         },
         {
-          "wineName": "Monte Bello",
-          "producer": "Ridge",
+          "wineName": "Opus One",
+          "producer": "Opus One",
           "vintage": "2019",
-          "country": "USA",
-          "region": "Santa Cruz Mountains",
-          "appellation": "Santa Cruz Mountains",
+          "country": "United States",
+          "region": "California",
+          "appellation": "Napa Valley",
           "type": "red",
           "grapes": [
             "Cabernet Sauvignon",
             "Merlot",
+            "Cabernet Franc",
             "Petit Verdot",
-            "Cabernet Franc"
+            "Malbec"
           ],
           "bottleSize": "750ml",
           "dateAdded": "2024-08-02",
@@ -6941,13 +6870,13 @@
               "enteredAt": "2024-08-02T00:00:00.000Z"
             }
           ],
-          "price": 260,
+          "price": 390,
           "currency": "USD",
           "purchaseDate": "2024-08-02",
           "purchaseLocation": "Systembolaget",
           "drinkFrom": 2026,
-          "drinkTo": 2050,
-          "rating": 96,
+          "drinkTo": 2045,
+          "rating": 95,
           "ratingScale": "100",
           "rackName": "Basement 2",
           "rackPosition": 2,
@@ -6957,7 +6886,7 @@
           "images": []
         },
         {
-          "wineName": "Château Mouton Rothschild",
+          "wineName": "Château Mouton-Rothschild",
           "producer": "Château Mouton Rothschild",
           "vintage": "2016",
           "country": "France",
@@ -7034,12 +6963,12 @@
           "images": []
         },
         {
-          "wineName": "Scharzhofberger Riesling Kabinett",
-          "producer": "Egon Müller",
+          "wineName": "Scharzhofberger Riesling GG",
+          "producer": "Van Volxem",
           "vintage": "2020",
           "country": "Germany",
           "region": "Mosel",
-          "appellation": "Scharzhofberg",
+          "appellation": "Scharzhofberger",
           "type": "white",
           "grapes": [
             "Riesling"
@@ -7053,7 +6982,7 @@
               "enteredAt": "2020-11-05T00:00:00.000Z"
             }
           ],
-          "price": 320,
+          "price": 52,
           "currency": "EUR",
           "purchaseDate": "2020-11-05",
           "rackName": "Basement 2",
@@ -7064,12 +6993,12 @@
           "images": []
         },
         {
-          "wineName": "Scharzhofberger Riesling Kabinett",
-          "producer": "Egon Müller",
+          "wineName": "Scharzhofberger Riesling GG",
+          "producer": "Van Volxem",
           "vintage": "2022",
           "country": "Germany",
           "region": "Mosel",
-          "appellation": "Scharzhofberg",
+          "appellation": "Scharzhofberger",
           "type": "white",
           "grapes": [
             "Riesling"
@@ -7083,7 +7012,7 @@
               "enteredAt": "2021-12-06T00:00:00.000Z"
             }
           ],
-          "price": 320,
+          "price": 52,
           "currency": "EUR",
           "purchaseDate": "2021-12-06",
           "purchaseLocation": "Auction",
@@ -7095,12 +7024,12 @@
           "images": []
         },
         {
-          "wineName": "Puligny-Montrachet Les Combettes",
+          "wineName": "Chevalier-Montrachet Grand Cru",
           "producer": "Domaine Leflaive",
           "vintage": "2019",
           "country": "France",
           "region": "Burgundy",
-          "appellation": "Puligny-Montrachet 1er Cru",
+          "appellation": "Chevalier-Montrachet Grand Cru",
           "type": "white",
           "grapes": [
             "Chardonnay"
@@ -7114,13 +7043,13 @@
               "enteredAt": "2022-01-07T00:00:00.000Z"
             }
           ],
-          "price": 285,
+          "price": 690,
           "currency": "EUR",
           "purchaseDate": "2022-01-07",
           "purchaseLocation": "Systembolaget",
-          "drinkFrom": 2023,
-          "drinkTo": 2035,
-          "rating": 93,
+          "drinkFrom": 2026,
+          "drinkTo": 2040,
+          "rating": 96,
           "ratingScale": "100",
           "rackName": "Basement 3",
           "rackPosition": 1,
@@ -7130,12 +7059,12 @@
           "images": []
         },
         {
-          "wineName": "Puligny-Montrachet Les Combettes",
+          "wineName": "Chevalier-Montrachet Grand Cru",
           "producer": "Domaine Leflaive",
           "vintage": "2020",
           "country": "France",
           "region": "Burgundy",
-          "appellation": "Puligny-Montrachet 1er Cru",
+          "appellation": "Chevalier-Montrachet Grand Cru",
           "type": "white",
           "grapes": [
             "Chardonnay"
@@ -7149,13 +7078,13 @@
               "enteredAt": "2023-02-08T00:00:00.000Z"
             }
           ],
-          "price": 285,
+          "price": 690,
           "currency": "EUR",
           "purchaseDate": "2023-02-08",
           "purchaseLocation": "Millesima",
-          "drinkFrom": 2023,
-          "drinkTo": 2035,
-          "rating": 93,
+          "drinkFrom": 2026,
+          "drinkTo": 2040,
+          "rating": 96,
           "ratingScale": "100",
           "rackName": "Basement 3",
           "rackPosition": 2,
@@ -7272,12 +7201,12 @@
           "images": []
         },
         {
-          "wineName": "Le Mesnil Blanc de Blancs",
-          "producer": "Champagne Salon",
+          "wineName": "Grand Cru Millésime Extra-Brut Le Mesnil-sur-Oger",
+          "producer": "Pierre Moncuit",
           "vintage": "2012",
           "country": "France",
           "region": "Champagne",
-          "appellation": "Champagne AOC",
+          "appellation": "Champagne Grand Cru",
           "type": "sparkling",
           "grapes": [
             "Chardonnay"
@@ -7291,13 +7220,13 @@
               "enteredAt": "2020-06-12T00:00:00.000Z"
             }
           ],
-          "price": 1900,
+          "price": 58,
           "currency": "EUR",
           "purchaseDate": "2020-06-12",
           "purchaseLocation": "Systembolaget",
           "drinkFrom": 2024,
-          "drinkTo": 2042,
-          "rating": 97,
+          "drinkTo": 2034,
+          "rating": 92,
           "ratingScale": "100",
           "rackName": "Basement 3",
           "rackPosition": 6,
@@ -7342,87 +7271,12 @@
           "images": []
         },
         {
-          "wineName": "Almaviva",
-          "producer": "Almaviva",
-          "vintage": "2019",
-          "country": "Chile",
-          "region": "Maipo Valley",
-          "appellation": "Puente Alto",
-          "type": "red",
-          "grapes": [
-            "Cabernet Sauvignon",
-            "Carmenère",
-            "Cabernet Franc",
-            "Petit Verdot"
-          ],
-          "bottleSize": "750ml",
-          "dateAdded": "2022-08-14",
-          "addedToCellarAt": "2022-08-14T00:00:00.000Z",
-          "cellarHistory": [
-            {
-              "cellarName": "Imported Collection",
-              "enteredAt": "2022-08-14T00:00:00.000Z"
-            }
-          ],
-          "price": 145,
-          "currency": "USD",
-          "purchaseDate": "2022-08-14",
-          "purchaseLocation": "K&L Wines",
-          "drinkFrom": 2025,
-          "drinkTo": 2045,
-          "rating": 94,
-          "ratingScale": "100",
-          "rackName": "Storage Box",
-          "rackPosition": 2,
-          "rackRow": 1,
-          "rackCol": 2,
-          "reviews": [],
-          "images": []
-        },
-        {
-          "wineName": "Almaviva",
-          "producer": "Almaviva",
-          "vintage": "2021",
-          "country": "Chile",
-          "region": "Maipo Valley",
-          "appellation": "Puente Alto",
-          "type": "red",
-          "grapes": [
-            "Cabernet Sauvignon",
-            "Carmenère",
-            "Cabernet Franc",
-            "Petit Verdot"
-          ],
-          "bottleSize": "750ml",
-          "dateAdded": "2023-09-15",
-          "addedToCellarAt": "2023-09-15T00:00:00.000Z",
-          "cellarHistory": [
-            {
-              "cellarName": "Imported Collection",
-              "enteredAt": "2023-09-15T00:00:00.000Z"
-            }
-          ],
-          "price": 145,
-          "currency": "USD",
-          "purchaseDate": "2023-09-15",
-          "drinkFrom": 2025,
-          "drinkTo": 2045,
-          "rating": 94,
-          "ratingScale": "100",
-          "rackName": "Storage Box",
-          "rackPosition": 3,
-          "rackRow": 1,
-          "rackCol": 3,
-          "reviews": [],
-          "images": []
-        },
-        {
-          "wineName": "Riesling trocken",
-          "producer": "Weingut Keller",
+          "wineName": "Riesling von der Fels",
+          "producer": "Keller",
           "vintage": "2022",
           "country": "Germany",
           "region": "Rheinhessen",
-          "appellation": "",
+          "appellation": "Westhofen",
           "type": "white",
           "grapes": [
             "Riesling"
@@ -7436,7 +7290,7 @@
               "enteredAt": "2024-10-16T00:00:00.000Z"
             }
           ],
-          "price": 28,
+          "price": 32,
           "currency": "EUR",
           "purchaseDate": "2024-10-16",
           "purchaseLocation": "Auction",
@@ -7566,12 +7420,12 @@
           "images": []
         },
         {
-          "wineName": "La Tâche",
-          "producer": "Domaine de la Romanée-Conti",
+          "wineName": "Chambertin Grand Cru",
+          "producer": "Domaine Trapet",
           "vintage": "2017",
           "country": "France",
           "region": "Burgundy",
-          "appellation": "La Tâche Grand Cru",
+          "appellation": "Chambertin Grand Cru",
           "type": "red",
           "grapes": [
             "Pinot Noir"
@@ -7585,12 +7439,12 @@
               "enteredAt": "2021-02-20T00:00:00.000Z"
             }
           ],
-          "price": 3200,
+          "price": 460,
           "currency": "EUR",
           "purchaseDate": "2021-02-20",
           "drinkFrom": 2027,
-          "drinkTo": 2050,
-          "rating": 97,
+          "drinkTo": 2045,
+          "rating": 95,
           "ratingScale": "100",
           "rackName": "Storage Box",
           "rackPosition": 8,
@@ -7600,12 +7454,12 @@
           "images": []
         },
         {
-          "wineName": "La Tâche",
-          "producer": "Domaine de la Romanée-Conti",
+          "wineName": "Chambertin Grand Cru",
+          "producer": "Domaine Trapet",
           "vintage": "2019",
           "country": "France",
           "region": "Burgundy",
-          "appellation": "La Tâche Grand Cru",
+          "appellation": "Chambertin Grand Cru",
           "type": "red",
           "grapes": [
             "Pinot Noir"
@@ -7619,13 +7473,13 @@
               "enteredAt": "2022-03-21T00:00:00.000Z"
             }
           ],
-          "price": 3200,
+          "price": 460,
           "currency": "EUR",
           "purchaseDate": "2022-03-21",
           "purchaseLocation": "Auction",
           "drinkFrom": 2027,
-          "drinkTo": 2050,
-          "rating": 97,
+          "drinkTo": 2045,
+          "rating": 95,
           "ratingScale": "100",
           "rackName": "Storage Box",
           "rackPosition": 9,
@@ -7635,13 +7489,13 @@
           "images": []
         },
         {
-          "wineName": "Wehlener Sonnenuhr Riesling Auslese",
+          "wineName": "Joh Jos Prüm Wehlener Sonnenuhr Spätlese",
           "producer": "Joh. Jos. Prüm",
           "vintage": "2019",
           "country": "Germany",
           "region": "Mosel",
           "appellation": "Wehlener Sonnenuhr",
-          "type": "dessert",
+          "type": "white",
           "grapes": [
             "Riesling"
           ],
@@ -7654,13 +7508,13 @@
               "enteredAt": "2023-04-22T00:00:00.000Z"
             }
           ],
-          "price": 45,
+          "price": 38,
           "currency": "EUR",
           "purchaseDate": "2023-04-22",
           "purchaseLocation": "Systembolaget",
           "drinkFrom": 2024,
-          "drinkTo": 2045,
-          "rating": 92,
+          "drinkTo": 2040,
+          "rating": 91,
           "ratingScale": "100",
           "rackName": "Storage Box",
           "rackPosition": 10,
@@ -7670,13 +7524,13 @@
           "images": []
         },
         {
-          "wineName": "Wehlener Sonnenuhr Riesling Auslese",
+          "wineName": "Joh Jos Prüm Wehlener Sonnenuhr Spätlese",
           "producer": "Joh. Jos. Prüm",
           "vintage": "2020",
           "country": "Germany",
           "region": "Mosel",
           "appellation": "Wehlener Sonnenuhr",
-          "type": "dessert",
+          "type": "white",
           "grapes": [
             "Riesling"
           ],
@@ -7689,13 +7543,13 @@
               "enteredAt": "2024-05-23T00:00:00.000Z"
             }
           ],
-          "price": 45,
+          "price": 38,
           "currency": "EUR",
           "purchaseDate": "2024-05-23",
           "purchaseLocation": "Millesima",
           "drinkFrom": 2024,
-          "drinkTo": 2045,
-          "rating": 92,
+          "drinkTo": 2040,
+          "rating": 91,
           "ratingScale": "100",
           "rackName": "Storage Box",
           "rackPosition": 11,
@@ -7705,13 +7559,13 @@
           "images": []
         },
         {
-          "wineName": "Wehlener Sonnenuhr Riesling Auslese",
+          "wineName": "Joh Jos Prüm Wehlener Sonnenuhr Spätlese",
           "producer": "Joh. Jos. Prüm",
           "vintage": "2021",
           "country": "Germany",
           "region": "Mosel",
           "appellation": "Wehlener Sonnenuhr",
-          "type": "dessert",
+          "type": "white",
           "grapes": [
             "Riesling"
           ],
@@ -7724,13 +7578,13 @@
               "enteredAt": "2018-06-24T00:00:00.000Z"
             }
           ],
-          "price": 45,
+          "price": 38,
           "currency": "EUR",
           "purchaseDate": "2018-06-24",
           "purchaseLocation": "K&L Wines",
           "drinkFrom": 2024,
-          "drinkTo": 2045,
-          "rating": 92,
+          "drinkTo": 2040,
+          "rating": 91,
           "ratingScale": "100",
           "rackName": "Storage Box",
           "rackPosition": 12,
@@ -7810,16 +7664,16 @@
           "images": []
         },
         {
-          "wineName": "Pétrus",
-          "producer": "Pétrus",
+          "wineName": "Château Ausone",
+          "producer": "Château d'Ausone",
           "vintage": "2010",
           "country": "France",
           "region": "Bordeaux",
-          "appellation": "Pomerol",
+          "appellation": "Saint-Émilion Grand Cru",
           "type": "red",
           "grapes": [
-            "Merlot",
-            "Cabernet Franc"
+            "Cabernet Franc",
+            "Merlot"
           ],
           "bottleSize": "750ml",
           "dateAdded": "2021-09-27",
@@ -7830,11 +7684,11 @@
               "enteredAt": "2021-09-27T00:00:00.000Z"
             }
           ],
-          "price": 4100,
+          "price": 680,
           "currency": "EUR",
           "purchaseDate": "2021-09-27",
           "purchaseLocation": "Systembolaget",
-          "drinkFrom": 2022,
+          "drinkFrom": 2024,
           "drinkTo": 2050,
           "rackName": "Storage Box",
           "rackPosition": 15,
@@ -7844,11 +7698,11 @@
           "images": []
         },
         {
-          "wineName": "La Mouline",
+          "wineName": "Château d'Ampuis",
           "producer": "E. Guigal",
           "vintage": "2016",
           "country": "France",
-          "region": "Rhône",
+          "region": "Rhône Valley",
           "appellation": "Côte-Rôtie",
           "type": "red",
           "grapes": [
@@ -7864,21 +7718,21 @@
               "enteredAt": "2022-10-01T00:00:00.000Z"
             }
           ],
-          "price": 380,
+          "price": 115,
           "currency": "EUR",
           "purchaseDate": "2022-10-01",
           "purchaseLocation": "Millesima",
-          "rating": 96,
+          "rating": 94,
           "ratingScale": "100",
           "reviews": [],
           "images": []
         },
         {
-          "wineName": "La Mouline",
+          "wineName": "Château d'Ampuis",
           "producer": "E. Guigal",
           "vintage": "2017",
           "country": "France",
-          "region": "Rhône",
+          "region": "Rhône Valley",
           "appellation": "Côte-Rôtie",
           "type": "red",
           "grapes": [
@@ -7894,11 +7748,11 @@
               "enteredAt": "2023-11-02T00:00:00.000Z"
             }
           ],
-          "price": 380,
+          "price": 115,
           "currency": "EUR",
           "purchaseDate": "2023-11-02",
           "purchaseLocation": "K&L Wines",
-          "rating": 96,
+          "rating": 94,
           "ratingScale": "100",
           "reviews": [],
           "images": []
@@ -7996,16 +7850,15 @@
           "images": []
         },
         {
-          "wineName": "Único",
-          "producer": "Vega Sicilia",
+          "wineName": "Aalto",
+          "producer": "Aalto",
           "vintage": "2011",
           "country": "Spain",
           "region": "Castilla y León",
           "appellation": "Ribera del Duero",
           "type": "red",
           "grapes": [
-            "Tempranillo",
-            "Cabernet Sauvignon"
+            "Tempranillo"
           ],
           "bottleSize": "750ml",
           "dateAdded": "2020-03-06",
@@ -8016,28 +7869,27 @@
               "enteredAt": "2020-03-06T00:00:00.000Z"
             }
           ],
-          "price": 420,
+          "price": 48,
           "currency": "EUR",
           "purchaseDate": "2020-03-06",
           "purchaseLocation": "Millesima",
           "drinkFrom": 2024,
-          "drinkTo": 2045,
-          "rating": 97,
+          "drinkTo": 2035,
+          "rating": 92,
           "ratingScale": "100",
           "reviews": [],
           "images": []
         },
         {
-          "wineName": "Único",
-          "producer": "Vega Sicilia",
+          "wineName": "Aalto",
+          "producer": "Aalto",
           "vintage": "2012",
           "country": "Spain",
           "region": "Castilla y León",
           "appellation": "Ribera del Duero",
           "type": "red",
           "grapes": [
-            "Tempranillo",
-            "Cabernet Sauvignon"
+            "Tempranillo"
           ],
           "bottleSize": "750ml",
           "dateAdded": "2021-04-07",
@@ -8048,13 +7900,13 @@
               "enteredAt": "2021-04-07T00:00:00.000Z"
             }
           ],
-          "price": 420,
+          "price": 48,
           "currency": "EUR",
           "purchaseDate": "2021-04-07",
           "purchaseLocation": "K&L Wines",
           "drinkFrom": 2024,
-          "drinkTo": 2045,
-          "rating": 97,
+          "drinkTo": 2035,
+          "rating": 92,
           "ratingScale": "100",
           "reviews": [],
           "images": []
@@ -8091,18 +7943,19 @@
           "images": []
         },
         {
-          "wineName": "Monte Bello",
-          "producer": "Ridge",
+          "wineName": "Opus One",
+          "producer": "Opus One",
           "vintage": "2018",
-          "country": "USA",
-          "region": "Santa Cruz Mountains",
-          "appellation": "Santa Cruz Mountains",
+          "country": "United States",
+          "region": "California",
+          "appellation": "Napa Valley",
           "type": "red",
           "grapes": [
             "Cabernet Sauvignon",
             "Merlot",
+            "Cabernet Franc",
             "Petit Verdot",
-            "Cabernet Franc"
+            "Malbec"
           ],
           "bottleSize": "750ml",
           "dateAdded": "2023-06-09",
@@ -8113,30 +7966,31 @@
               "enteredAt": "2023-06-09T00:00:00.000Z"
             }
           ],
-          "price": 260,
+          "price": 390,
           "currency": "USD",
           "purchaseDate": "2023-06-09",
           "purchaseLocation": "Auction",
           "drinkFrom": 2026,
-          "drinkTo": 2050,
-          "rating": 96,
+          "drinkTo": 2045,
+          "rating": 95,
           "ratingScale": "100",
           "reviews": [],
           "images": []
         },
         {
-          "wineName": "Monte Bello",
-          "producer": "Ridge",
+          "wineName": "Opus One",
+          "producer": "Opus One",
           "vintage": "2019",
-          "country": "USA",
-          "region": "Santa Cruz Mountains",
-          "appellation": "Santa Cruz Mountains",
+          "country": "United States",
+          "region": "California",
+          "appellation": "Napa Valley",
           "type": "red",
           "grapes": [
             "Cabernet Sauvignon",
             "Merlot",
+            "Cabernet Franc",
             "Petit Verdot",
-            "Cabernet Franc"
+            "Malbec"
           ],
           "bottleSize": "750ml",
           "dateAdded": "2024-07-10",
@@ -8147,19 +8001,19 @@
               "enteredAt": "2024-07-10T00:00:00.000Z"
             }
           ],
-          "price": 260,
+          "price": 390,
           "currency": "USD",
           "purchaseDate": "2024-07-10",
           "purchaseLocation": "Systembolaget",
           "drinkFrom": 2026,
-          "drinkTo": 2050,
-          "rating": 96,
+          "drinkTo": 2045,
+          "rating": 95,
           "ratingScale": "100",
           "reviews": [],
           "images": []
         },
         {
-          "wineName": "Château Mouton Rothschild",
+          "wineName": "Château Mouton-Rothschild",
           "producer": "Château Mouton Rothschild",
           "vintage": "2016",
           "country": "France",
@@ -8228,12 +8082,12 @@
           "images": []
         },
         {
-          "wineName": "Scharzhofberger Riesling Kabinett",
-          "producer": "Egon Müller",
+          "wineName": "Scharzhofberger Riesling GG",
+          "producer": "Van Volxem",
           "vintage": "2020",
           "country": "Germany",
           "region": "Mosel",
-          "appellation": "Scharzhofberg",
+          "appellation": "Scharzhofberger",
           "type": "white",
           "grapes": [
             "Riesling"
@@ -8247,19 +8101,19 @@
               "enteredAt": "2020-10-13T00:00:00.000Z"
             }
           ],
-          "price": 320,
+          "price": 52,
           "currency": "EUR",
           "purchaseDate": "2020-10-13",
           "reviews": [],
           "images": []
         },
         {
-          "wineName": "Scharzhofberger Riesling Kabinett",
-          "producer": "Egon Müller",
+          "wineName": "Scharzhofberger Riesling GG",
+          "producer": "Van Volxem",
           "vintage": "2022",
           "country": "Germany",
           "region": "Mosel",
-          "appellation": "Scharzhofberg",
+          "appellation": "Scharzhofberger",
           "type": "white",
           "grapes": [
             "Riesling"
@@ -8273,7 +8127,7 @@
               "enteredAt": "2021-11-14T00:00:00.000Z"
             }
           ],
-          "price": 320,
+          "price": 52,
           "currency": "EUR",
           "purchaseDate": "2021-11-14",
           "purchaseLocation": "Auction",
@@ -8281,12 +8135,12 @@
           "images": []
         },
         {
-          "wineName": "Puligny-Montrachet Les Combettes",
+          "wineName": "Chevalier-Montrachet Grand Cru",
           "producer": "Domaine Leflaive",
           "vintage": "2019",
           "country": "France",
           "region": "Burgundy",
-          "appellation": "Puligny-Montrachet 1er Cru",
+          "appellation": "Chevalier-Montrachet Grand Cru",
           "type": "white",
           "grapes": [
             "Chardonnay"
@@ -8300,24 +8154,24 @@
               "enteredAt": "2022-12-15T00:00:00.000Z"
             }
           ],
-          "price": 285,
+          "price": 690,
           "currency": "EUR",
           "purchaseDate": "2022-12-15",
           "purchaseLocation": "Systembolaget",
-          "drinkFrom": 2023,
-          "drinkTo": 2035,
-          "rating": 93,
+          "drinkFrom": 2026,
+          "drinkTo": 2040,
+          "rating": 96,
           "ratingScale": "100",
           "reviews": [],
           "images": []
         },
         {
-          "wineName": "Puligny-Montrachet Les Combettes",
+          "wineName": "Chevalier-Montrachet Grand Cru",
           "producer": "Domaine Leflaive",
           "vintage": "2020",
           "country": "France",
           "region": "Burgundy",
-          "appellation": "Puligny-Montrachet 1er Cru",
+          "appellation": "Chevalier-Montrachet Grand Cru",
           "type": "white",
           "grapes": [
             "Chardonnay"
@@ -8331,13 +8185,13 @@
               "enteredAt": "2023-01-16T00:00:00.000Z"
             }
           ],
-          "price": 285,
+          "price": 690,
           "currency": "EUR",
           "purchaseDate": "2023-01-16",
           "purchaseLocation": "Millesima",
-          "drinkFrom": 2023,
-          "drinkTo": 2035,
-          "rating": 93,
+          "drinkFrom": 2026,
+          "drinkTo": 2040,
+          "rating": 96,
           "ratingScale": "100",
           "reviews": [],
           "images": []
