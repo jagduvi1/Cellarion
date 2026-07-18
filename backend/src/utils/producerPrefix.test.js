@@ -46,3 +46,39 @@ describe('stripProducerPrefix', () => {
     expect(stripProducerPrefix('Meerlust Chardonnay', undefined)).toBeNull();
   });
 });
+
+// ── Suffix twin + the shared entry point (launch-day admin report) ──────────
+describe('stripProducerSuffix', () => {
+  const { stripProducerSuffix, stripProducerName } = require('./producerPrefix');
+
+  test('strips a trailing producer — the five real Mastroberardino rows', () => {
+    const P = 'Mastroberardino';
+    expect(stripProducerSuffix('Stilema Taurasi Mastroberardino', P)).toBe('Stilema Taurasi');
+    expect(stripProducerSuffix('Lacrimarosa Mastroberardino', P)).toBe('Lacrimarosa');
+    expect(stripProducerSuffix('Fiano di Avellino Mastroberardino', P)).toBe('Fiano di Avellino');
+    expect(stripProducerSuffix('Radici Taurasi Riserva Antonio Mastroberardino', P)).toBe('Radici Taurasi Riserva Antonio');
+    expect(stripProducerSuffix('Radici Fiano di Avellino Mastroberardino', P)).toBe('Radici Fiano di Avellino');
+  });
+
+  test('requires a separator before the suffix — a substring tail never counts', () => {
+    expect(stripProducerSuffix('NeroRossi', 'Rossi')).toBeNull();
+    expect(stripProducerSuffix('Barbera - Rossi', 'Rossi')).toBe('Barbera');
+  });
+
+  test('never strips to nothing, never fires on a prefix-only case', () => {
+    expect(stripProducerSuffix('Mastroberardino', 'Mastroberardino')).toBeNull();
+    expect(stripProducerSuffix(' Mastroberardino', 'Mastroberardino')).toBeNull();
+    expect(stripProducerSuffix('Meerlust Chardonnay', 'Meerlust')).toBeNull();
+  });
+
+  test('stripProducerName handles either end, prefix first, and loops clean both-ends input', () => {
+    expect(stripProducerName('Meerlust Chardonnay', 'Meerlust')).toBe('Chardonnay');
+    expect(stripProducerName('Fiano di Avellino Mastroberardino', 'Mastroberardino')).toBe('Fiano di Avellino');
+    // Both ends: one call strips the prefix; the create-time loop applies it
+    // again for the suffix.
+    const once = stripProducerName('Guigal Côte-Rôtie Guigal', 'Guigal');
+    expect(once).toBe('Côte-Rôtie Guigal');
+    expect(stripProducerName(once, 'Guigal')).toBe('Côte-Rôtie');
+    expect(stripProducerName('Chardonnay', 'Meerlust')).toBeNull();
+  });
+});

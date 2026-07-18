@@ -20,7 +20,7 @@ const Grape = require('../models/Grape');
 const searchService = require('./search');
 const { generateWineKey, normalizeString, resolveGrapeName, resolveCountryName, isUnknownName, isJunkGrapeName } = require('../utils/normalize');
 const { scoreAllMatches } = require('./wineMatching');
-const { stripProducerPrefix } = require('../utils/producerPrefix');
+const { stripProducerName } = require('../utils/producerPrefix');
 const { escapeRegex } = require('../utils/sanitize');
 
 // Auto-match when combined score >= SIMILARITY_THRESHOLD (near-identical — e.g.
@@ -142,12 +142,14 @@ async function findOrCreateWine({ name, producer, country, region, appellation, 
 
   // 0. Registry canon: a wine's name never embeds its producer. Cellar-format
   // imports and the occasional non-compliant AI response arrive as
-  // name "Amisfield Pinot Noir" + producer "Amisfield" — canonicalize BEFORE
-  // any matching so that input resolves to (or creates) the producer-free
-  // entry instead of minting a producer-in-name duplicate the admin tool has
-  // to clean up later. Loop: concatenated sources can double the prefix.
-  for (let rest = stripProducerPrefix(trimmedName, trimmedProducer); rest;
-       rest = stripProducerPrefix(trimmedName, trimmedProducer)) {
+  // name "Amisfield Pinot Noir" + producer "Amisfield" — or as a SUFFIX,
+  // "Fiano di Avellino Mastroberardino" (the launch-day admin report) —
+  // canonicalize BEFORE any matching so that input resolves to (or creates)
+  // the producer-free entry instead of minting a producer-in-name duplicate
+  // the admin tool has to clean up later. Loop: concatenated sources can
+  // repeat the producer on either end.
+  for (let rest = stripProducerName(trimmedName, trimmedProducer); rest;
+       rest = stripProducerName(trimmedName, trimmedProducer)) {
     trimmedName = rest;
   }
 
