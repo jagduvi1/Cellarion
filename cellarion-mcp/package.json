@@ -1,7 +1,8 @@
 {
   "name": "cellarion-mcp",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Connect your AI (Claude Desktop, Cursor, …) to your Cellarion wine cellar — a stdio MCP bridge to a Cellarion server.",
+  "mcpName": "app.cellarion/cellarion",
   "type": "module",
   "bin": {
     "cellarion-mcp": "index.js"

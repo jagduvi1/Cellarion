@@ -174,6 +174,71 @@
     "levelConsume": "Read + log drinking — it can also mark bottles opened or drunk (reversible)",
     "levelFull": "Full access — it can also add and edit bottles, racks and cellars"
   },
+  "connectAi": {
+    "title": "Connect your AI to your wine cellar",
+    "subtitle": "Cellarion speaks the Model Context Protocol, so you can run your cellar from Claude, ChatGPT or any MCP client.",
+    "beta": "The AI connector is in beta. Everything an assistant changes is listed in your account and can be undone.",
+    "copy": "Copy",
+    "copied": "Copied",
+    "oneClick": {
+      "title": "One click with Claude",
+      "body": "Opens Claude with the connector details filled in. You still sign in and choose an access level.",
+      "cta": "Add Cellarion to Claude"
+    },
+    "access": {
+      "title": "What the assistant may do",
+      "body": "You pick an access level when you connect, and you can revoke it at any time from your settings.",
+      "readTitle": "Read",
+      "readBody": "Look at your cellars, bottles, racks and notes. Changes nothing.",
+      "consumeTitle": "Read and drink",
+      "consumeBody": "Also mark bottles as consumed. Every consumption can be restored.",
+      "writeTitle": "Full access",
+      "writeBody": "Also add and edit bottles, and organise racks and cellars.",
+      "tokenNote": "Set-ups that use a URL sign you in with OAuth, so there is nothing to paste. Only the stdio bridge needs a personal API token: mint one under Settings → API tokens and put it where those snippets say cel_YOUR_TOKEN_HERE."
+    },
+    "clientsTitle": "Set-up per client",
+    "clients": {
+      "claude": {
+        "title": "Claude (web, desktop and mobile)",
+        "body": "Settings → Connectors → Add custom connector, then paste the URL below. You sign in with your Cellarion account and choose what the assistant may do."
+      },
+      "claudeDesktop": {
+        "title": "Claude Desktop (local bridge)",
+        "body": "Prefer a local connection, or self-hosting? Add this to claude_desktop_config.json. It runs on your machine and talks to your server with a personal API token."
+      },
+      "claudeCode": {
+        "title": "Claude Code",
+        "body": "One command in your terminal."
+      },
+      "chatgpt": {
+        "title": "ChatGPT",
+        "body": "Settings → Connectors → Advanced → enable Developer mode, then Create and paste the URL below with authentication set to OAuth."
+      },
+      "vscode": {
+        "title": "VS Code (GitHub Copilot)",
+        "body": "Add to .vscode/mcp.json in your workspace, or your user mcp.json."
+      },
+      "cursor": {
+        "title": "Cursor and Windsurf",
+        "body": "Add to ~/.cursor/mcp.json (Cursor) or the equivalent Windsurf config."
+      },
+      "gemini": {
+        "title": "Gemini CLI",
+        "body": "Add to ~/.gemini/settings.json."
+      },
+      "stdio": {
+        "title": "LM Studio, Jan, LibreChat, Open WebUI, Goose",
+        "body": "These connect over stdio. Use the same bridge as Claude Desktop — it works with any MCP client that can run a command."
+      }
+    },
+    "publicTitle": "The open wine registry — no account needed",
+    "publicBody": "Cellarion also runs a public endpoint that any AI can use without signing up. It serves the shared wine registry, grape and region profiles, sommelier drink windows and our published guides. It holds no personal data and changes nothing.",
+    "rawTitle": "Raw protocol details",
+    "rawBody": "For anything that speaks MCP directly.",
+    "selfHostNote": "These URLs point at this install. All OAuth discovery URLs are derived from FRONTEND_URL, so set it to the address your users actually reach.",
+    "helpLink": "Browse the help centre",
+    "privacyLink": "How your data is handled"
+  },
   "settings": {
     "title": "Settings",
     "signedInAs": "Signed in as",
@@ -295,6 +360,9 @@
       "copy": "Copy",
       "copied": "Copied!",
       "securityNote": "Your AI sees only your own cellar data. Revoking the token in the API tokens section cuts the connection off instantly.",
+      "oneClickCta": "Add to Claude in one click",
+      "oneClickHint": "Opens Claude with the connector prefilled — no token needed. You sign in and pick an access level there.",
+      "docsLink": "Set-up guides for every client",
       "testError": "Could not verify right now (server busy or unreachable) — this says nothing about your token. Try again in a moment.",
       "beta": "Beta",
       "betaNotice": "This is a beta feature and you use it at your own risk. It works, but it is new and still being tested — expect rough edges, and changes while we refine it. If you are unsure, connect with a read-only token: anything an AI changes can be undone under \"What your AI has changed\", and revoking the token cuts it off instantly."
@@ -2163,6 +2231,7 @@
     "searchPlaceholder": "Search help topics...",
     "noResults": "No matching topics found. Try a different search term.",
     "goTo": "Go to {{name}}",
+    "connectAiLink": "Run your cellar from Claude, ChatGPT or any AI assistant",
     "sections": {
       "cellars": {
         "title": "Cellars",
@@ -2346,6 +2415,7 @@
     "createAccount": "Create a free account",
     "openCellar": "Open My Cellar",
     "footerSourceLink": "Source on GitHub",
+    "footerConnectAi": "Connect your AI",
     "footerCopy": "Cellarion",
     "metaTitle": "Cellarion — Wine Cellar App | Track Your Wine Collection Online",
     "metaDescription": "Track your wine collection with Cellarion. Log every bottle, visualise racks, get drink-window alerts, and share cellars with friends. Free wine cellar app at cellarion.app.",

@@ -154,6 +154,10 @@ function Help() {
             );
           })}
         </div>
+
+        <p className="help-connect-ai">
+          <a href="/connect-ai">{t('help.connectAiLink')} &rarr;</a>
+        </p>
       </div>
     </div>
   );

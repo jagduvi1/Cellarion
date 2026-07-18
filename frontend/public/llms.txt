@@ -5,6 +5,7 @@
 ## Start here
 - [Home](https://cellarion.app/): what Cellarion is, the full feature list, and FAQ.
 - [Help](https://cellarion.app/help): how to track a wine collection, drink windows, racks, sharing, import/export.
+- [Connect your AI](https://cellarion.app/connect-ai): set-up instructions for Claude, ChatGPT, VS Code, Cursor, Gemini CLI and any other MCP client.
 - [Blog](https://cellarion.app/blog): guides on wine storage, ageing, drink windows, and cellar management.
 - [Community](https://cellarion.app/community): discussions among wine collectors and enthusiasts.
 
@@ -15,8 +16,10 @@
 - [Grapes](https://cellarion.app/grapes/)
 
 ## Connect your AI (MCP)
-- Cellarion has a built-in MCP (Model Context Protocol) server. Connect Claude, ChatGPT, or any MCP-capable assistant to your account to search your cellar, ask what to open tonight, pair wines with dishes, add and consume bottles, and organise racks — with scoped permissions, a reviewable activity trail, and one-click undo. Set it up under Settings → Connect your AI.
+- Cellarion has a built-in MCP (Model Context Protocol) server. Connect Claude, ChatGPT, or any MCP-capable assistant to your account to search your cellar, ask what to open tonight, pair wines with dishes, add and consume bottles, and organise racks — with scoped permissions, a reviewable activity trail, and one-click undo. Set it up under Settings → Connect your AI, or follow the per-client guides at https://cellarion.app/connect-ai.
+- Personal endpoint: https://cellarion.app/api/mcp (Streamable HTTP; OAuth 2.1 with PKCE, or a personal `cel_` bearer token). Discovery: https://cellarion.app/.well-known/oauth-protected-resource/api/mcp
 - AI clients can also use Cellarion anonymously: a public MCP endpoint at https://cellarion.app/api/mcp/public serves the shared wine registry, drink-window knowledge, and guides — no account required, no personal data involved.
+- A stdio bridge is published on npm as `cellarion-mcp` for clients that cannot speak remote HTTP: `npx -y cellarion-mcp`.
 
 ## Key facts
 - Platforms: a web app that runs in any browser, plus an Android app on Google Play (https://play.google.com/store/apps/details?id=app.cellarion.twa). iPhone users can install it to the home screen as a web app.

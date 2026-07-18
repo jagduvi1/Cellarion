@@ -174,6 +174,71 @@
     "levelConsume": "Läsa + logga drickande — den kan även markera flaskor som öppnade eller druckna (går att ångra)",
     "levelFull": "Full åtkomst — den kan även lägga till och redigera flaskor, hyllor och källare"
   },
+  "connectAi": {
+    "title": "Koppla din AI till din vinkällare",
+    "subtitle": "Cellarion talar Model Context Protocol, så du kan sköta din källare från Claude, ChatGPT eller vilken MCP-klient som helst.",
+    "beta": "AI-kopplingen är i beta. Allt en assistent ändrar listas i ditt konto och går att ångra.",
+    "copy": "Kopiera",
+    "copied": "Kopierat",
+    "oneClick": {
+      "title": "Ett klick med Claude",
+      "body": "Öppnar Claude med kopplingens uppgifter ifyllda. Du loggar fortfarande in och väljer åtkomstnivå.",
+      "cta": "Lägg till Cellarion i Claude"
+    },
+    "access": {
+      "title": "Vad assistenten får göra",
+      "body": "Du väljer åtkomstnivå när du kopplar, och du kan när som helst återkalla den i dina inställningar.",
+      "readTitle": "Läsa",
+      "readBody": "Se dina källare, flaskor, hyllor och anteckningar. Ändrar ingenting.",
+      "consumeTitle": "Läsa och dricka",
+      "consumeBody": "Kan även markera flaskor som druckna. Varje druckning går att återställa.",
+      "writeTitle": "Full åtkomst",
+      "writeBody": "Kan även lägga till och redigera flaskor samt organisera hyllor och källare.",
+      "tokenNote": "Uppsättningar som använder en adress loggar in dig med OAuth, så det finns inget att klistra in. Bara stdio-bryggan behöver en personlig API-token: skapa en under Inställningar → API-tokens och lägg in den där de kodexemplen säger cel_YOUR_TOKEN_HERE."
+    },
+    "clientsTitle": "Inställningar per klient",
+    "clients": {
+      "claude": {
+        "title": "Claude (webb, dator och mobil)",
+        "body": "Inställningar → Kopplingar → Lägg till egen koppling, klistra sedan in adressen nedan. Du loggar in med ditt Cellarion-konto och väljer vad assistenten får göra."
+      },
+      "claudeDesktop": {
+        "title": "Claude Desktop (lokal brygga)",
+        "body": "Föredrar du en lokal koppling, eller kör du själv? Lägg till detta i claude_desktop_config.json. Den körs på din dator och pratar med din server via en personlig API-token."
+      },
+      "claudeCode": {
+        "title": "Claude Code",
+        "body": "Ett kommando i terminalen."
+      },
+      "chatgpt": {
+        "title": "ChatGPT",
+        "body": "Inställningar → Kopplingar → Avancerat → slå på utvecklarläge, välj sedan Skapa och klistra in adressen nedan med autentisering satt till OAuth."
+      },
+      "vscode": {
+        "title": "VS Code (GitHub Copilot)",
+        "body": "Lägg till i .vscode/mcp.json i din arbetsyta, eller i din egen mcp.json."
+      },
+      "cursor": {
+        "title": "Cursor och Windsurf",
+        "body": "Lägg till i ~/.cursor/mcp.json (Cursor) eller motsvarande konfiguration i Windsurf."
+      },
+      "gemini": {
+        "title": "Gemini CLI",
+        "body": "Lägg till i ~/.gemini/settings.json."
+      },
+      "stdio": {
+        "title": "LM Studio, Jan, LibreChat, Open WebUI, Goose",
+        "body": "Dessa kopplar via stdio. Använd samma brygga som för Claude Desktop — den fungerar med alla MCP-klienter som kan köra ett kommando."
+      }
+    },
+    "publicTitle": "Det öppna vinregistret — inget konto behövs",
+    "publicBody": "Cellarion kör också en öppen endpoint som vilken AI som helst kan använda utan att registrera sig. Den ger det delade vinregistret, druv- och regionprofiler, sommelierernas dricktidsfönster och våra publicerade guider. Den innehåller inga personuppgifter och ändrar ingenting.",
+    "rawTitle": "Tekniska protokolluppgifter",
+    "rawBody": "För allt som talar MCP direkt.",
+    "selfHostNote": "Dessa adresser pekar på den här installationen. Alla OAuth-adresser härleds från FRONTEND_URL, så sätt den till adressen dina användare faktiskt når.",
+    "helpLink": "Bläddra i hjälpcentret",
+    "privacyLink": "Så hanteras dina uppgifter"
+  },
   "settings": {
     "title": "Inställningar",
     "signedInAs": "Inloggad som",
@@ -295,6 +360,9 @@
       "copy": "Kopiera",
       "copied": "Kopierat!",
       "securityNote": "Din AI ser bara dina egna källardata. Återkallar du din token i avsnittet API-tokens bryts anslutningen omedelbart.",
+      "oneClickCta": "Lägg till i Claude med ett klick",
+      "oneClickHint": "Öppnar Claude med kopplingen ifylld — ingen token behövs. Du loggar in och väljer åtkomstnivå där.",
+      "docsLink": "Guider för alla klienter",
       "testError": "Det gick inte att verifiera just nu (servern är upptagen eller onåbar) — det säger ingenting om din token. Försök igen om en stund.",
       "beta": "Beta",
       "betaNotice": "Det här är en betafunktion och du använder den på egen risk. Den fungerar, men är ny och testas fortfarande — räkna med ojämnheter och att saker ändras medan vi finslipar. Är du osäker, anslut med en läsbehörig token: allt en AI ändrar kan ångras under \"Vad din AI har ändrat\", och återkallar du token bryts anslutningen omedelbart."
@@ -2163,6 +2231,7 @@
     "searchPlaceholder": "Sök hjälpämnen...",
     "noResults": "Inga matchande ämnen hittades. Prova ett annat sökord.",
     "goTo": "Gå till {{name}}",
+    "connectAiLink": "Sköt din källare från Claude, ChatGPT eller vilken AI-assistent som helst",
     "sections": {
       "cellars": {
         "title": "Källare",
@@ -2346,6 +2415,7 @@
     "createAccount": "Skapa ett gratis konto",
     "openCellar": "Öppna min källare",
     "footerSourceLink": "Källkod på GitHub",
+    "footerConnectAi": "Koppla din AI",
     "footerCopy": "Cellarion",
     "metaTitle": "Cellarion — Vinkällar-app | Spåra din vinsamling online",
     "metaDescription": "Spåra din vinsamling med Cellarion. Logga varje flaska, visualisera ställ, få drickfönster-aviseringar och dela källare med vänner. Gratis vinkällar-app på cellarion.app.",

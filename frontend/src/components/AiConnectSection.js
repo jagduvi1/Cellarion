@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { HOSTED_ORIGIN, isHostedOrigin, claudeOneClickUrl } from '../utils/mcpConnect';
 
 /**
  * Settings section: "Connect your AI" — copy-paste MCP configs for Claude
@@ -11,8 +12,6 @@ import { useTranslation } from 'react-i18next';
  * sent anywhere except the same-origin test call to /api/auth/whoami, the
  * endpoint built for exactly this "is my token valid?" check.
  */
-const HOSTED_ORIGIN = 'https://cellarion.app';
-
 function buildSnippets(rawToken) {
   const token = rawToken.trim() || 'cel_YOUR_TOKEN_HERE';
   const origin = window.location.origin;
@@ -139,6 +138,23 @@ export default function AiConnectSection() {
         </div>
       )}
 
+      {isHostedOrigin(window.location.origin) && (
+        <div className="ai-connect-oneclick">
+          <a
+            className="btn btn-primary btn-small"
+            href={claudeOneClickUrl(window.location.origin)}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            {t('settings.aiConnect.oneClickCta', 'Add to Claude in one click')}
+          </a>
+          <span className="settings-hint">
+            {t('settings.aiConnect.oneClickHint',
+              'Opens Claude with the connector prefilled — no token needed. You sign in and pick an access level there.')}
+          </span>
+        </div>
+      )}
+
       <Snippet
         label={t('settings.aiConnect.claudeDesktopTitle', 'Claude Desktop (claude_desktop_config.json)')}
         text={snippets.desktop}
@@ -155,6 +171,10 @@ export default function AiConnectSection() {
       <p className="settings-hint ai-connect-footnote">
         {t('settings.aiConnect.securityNote',
           'Your AI sees only your own cellar data. Revoking the token in the API tokens section cuts the connection off instantly.')}
+        {' '}
+        <a href="/connect-ai" target="_blank" rel="noopener noreferrer">
+          {t('settings.aiConnect.docsLink', 'Set-up guides for every client')}
+        </a>
       </p>
     </div>
   );

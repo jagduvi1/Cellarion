@@ -24,6 +24,7 @@ Allow: /regions/
 Allow: /countries/
 Allow: /grapes/
 Allow: /help
+Allow: /connect-ai
 Allow: /privacy
 Allow: /community
 Allow: /api/sitemap.xml
@@ -71,6 +72,7 @@ Allow: /regions/
 Allow: /countries/
 Allow: /grapes/
 Allow: /help
+Allow: /connect-ai
 Allow: /privacy
 Allow: /community
 Allow: /api/sitemap.xml

@@ -146,6 +146,18 @@
 
 /* ─── No results ─── */
 
+.help-connect-ai {
+  margin-top: 2rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--color-border-light);
+  text-align: center;
+}
+
+.help-connect-ai a {
+  color: var(--color-primary);
+  font-weight: 500;
+}
+
 .help-no-results {
   text-align: center;
   padding: 2rem;

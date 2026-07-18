@@ -280,6 +280,7 @@ export default function LandingPage() {
             <img src={theme === 'dark' ? LOGO_DARK : LOGO_LIGHT} alt="" className="landing-footer-logo-img" /> Cellarion
           </span>
           <div className="landing-footer-links">
+            <Link to="/connect-ai">{t('landing.footerConnectAi')}</Link>
             <Link to="/privacy">Privacy</Link>
             {contactEmail && (
               <a href={`mailto:${contactEmail}`}>{contactEmail}</a>
