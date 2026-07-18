@@ -98,4 +98,41 @@ async function ingestBottleImage({ buffer, userId, bottle = null, wineDefinition
   return { image };
 }
 
-module.exports = { ingestBottleImage, MAX_IMAGES_PER_BOTTLE };
+/**
+ * Admin surface: ingest an image and make it the wine's OFFICIAL photo in one
+ * step — pre-approved (public), replacing any prior official image, with the
+ * credit stored on both the image and the wine. ONE implementation for the
+ * admin REST route and the admin MCP tool, mirroring what
+ * routes/admin/images.js approve does for user uploads (minus original-file
+ * deletion — background removal still needs the source; imageProcessor's
+ * post-process hook upgrades wine.image to the clean version when it's ready).
+ *
+ * Caller must have verified the wine exists and the actor is an admin.
+ */
+async function attachOfficialWineImage({ buffer, wineDefinitionId, credit = null, userId }, req) {
+  const ingest = await ingestBottleImage({ buffer, userId, wineDefinitionId, credit }, req);
+  if (ingest.error) return ingest;
+  const image = ingest.image;
+
+  await BottleImage.updateMany(
+    { wineDefinition: wineDefinitionId, assignedToWine: true },
+    { assignedToWine: false }
+  );
+  image.status = 'approved';
+  image.visibility = 'public';
+  image.reviewedBy = userId;
+  image.reviewedAt = new Date();
+  image.assignedToWine = true;
+  await image.save();
+
+  const WineDefinition = require('../models/WineDefinition');
+  await WineDefinition.findByIdAndUpdate(wineDefinitionId, {
+    image: image.processedUrl || image.originalUrl,
+    imageCredit: credit || null,
+  });
+  require('./search').indexWine(wineDefinitionId);
+
+  return { image };
+}
+
+module.exports = { ingestBottleImage, attachOfficialWineImage, MAX_IMAGES_PER_BOTTLE };

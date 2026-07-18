@@ -112,11 +112,28 @@ async function processImage(imageId) {
     image.contentHash = hashImageBytes(resultBuffer);
     await image.save();
 
+    // Official wine images (assignedToWine) may have been APPROVED before (or
+    // while) this job ran — admin-direct uploads are, and a web approval of an
+    // 'uploaded' image races it. Re-read the flag (this job's doc snapshot
+    // predates the approval), keep the approval, and upgrade the WINE's display
+    // image from the original to the clean processed version — previously an
+    // early approval pinned originalUrl on the wine forever.
+    const official = await BottleImage.findById(imageId).select('assignedToWine wineDefinition status');
+    if (official?.assignedToWine && official.wineDefinition) {
+      if (official.status !== 'approved') {
+        await BottleImage.updateOne({ _id: imageId }, { status: 'approved' });
+      }
+      const WineDefinition = require('../models/WineDefinition');
+      await WineDefinition.findByIdAndUpdate(official.wineDefinition, { image: image.processedUrl });
+      require('./search').indexWine(official.wineDefinition);
+    }
+
     console.log(`Image ${imageId} processed successfully`);
   } catch (error) {
     console.error(`Image processing failed for ${imageId}:`, error.message);
-    // Revert to uploaded so it can be retried
-    image.status = 'uploaded';
+    // Revert to uploaded so it can be retried — but never demote an official
+    // (assignedToWine) image's approval; reprocessAllImages retries those too.
+    image.status = image.assignedToWine ? 'approved' : 'uploaded';
     await image.save();
   }
 }

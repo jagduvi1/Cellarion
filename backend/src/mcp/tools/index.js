@@ -32,5 +32,6 @@ require('./images');
 require('./account');
 require('./export');
 require('./wineLists');
+require('./adminRegistry');
 
 module.exports = {};
