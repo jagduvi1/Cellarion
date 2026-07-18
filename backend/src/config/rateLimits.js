@@ -80,7 +80,16 @@ const defaults = {
   // routes under /api/mcp (activity timeline, revert, export-link download)
   // stay up either way — the switch cuts AI protocol access, not the human's
   // review tools. Checked per request from this in-memory cache: zero DB cost.
-  mcp: { enabled: 1, publicEnabled: 1 },
+  //
+  // Protocol-endpoint rate limits (MCP-audit M8): hosted AI connectors
+  // (claude.ai, ChatGPT) egress from a SMALL shared IP pool, so the global
+  // per-IP apiLimiter made every hosted user share one 15-minute bucket. The
+  // personal endpoint instead runs its own two-layer limit (routes/mcp.js):
+  //   userMax — fair-share ceiling per 15 min, keyed by the AUTHENTICATED
+  //             user id (one chatty agent can only starve itself);
+  //   ipMax   — pre-auth per-IP flood/credential-probe guard, sized for many
+  //             users behind one shared egress IP (fairness is userMax's job).
+  mcp: { enabled: 1, publicEnabled: 1, userMax: 300, ipMax: 5000 },
 };
 
 let cache = {
@@ -148,6 +157,8 @@ async function load() {
         mcp: {
           enabled:       doc.value.mcp?.enabled       ?? defaults.mcp.enabled,
           publicEnabled: doc.value.mcp?.publicEnabled ?? defaults.mcp.publicEnabled,
+          userMax:       doc.value.mcp?.userMax       ?? defaults.mcp.userMax,
+          ipMax:         doc.value.mcp?.ipMax         ?? defaults.mcp.ipMax,
         },
       };
     }

@@ -136,6 +136,70 @@ function PerIpLimitsPanel({ apiFetch, config, defaults, error }) {
   );
 }
 
+// The AI connector's own two-layer protocol limit (backend routes/mcp.js):
+// hosted connectors (claude.ai, ChatGPT) call from a small shared IP pool, so
+// /api/mcp is exempt from the per-IP limits above and throttled per USER
+// instead, with a high per-IP guard against unauthenticated flooding. The
+// on/off kill switches live on the Admin → AI Connector page; only the two
+// numbers are edited here. PATCHes only { mcp: { userMax, ipMax } } — the
+// backend's field-level merge leaves the switches untouched.
+function McpLimitsPanel({ apiFetch, config, defaults, error }) {
+  const [form,   setForm]   = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [msg,    setMsg]    = useState(null);
+
+  useEffect(() => {
+    if (config) {
+      setForm({
+        userMax: String(config.mcp?.userMax ?? defaults?.mcp?.userMax ?? ''),
+        ipMax:   String(config.mcp?.ipMax   ?? defaults?.mcp?.ipMax   ?? ''),
+      });
+    }
+  }, [config, defaults]);
+
+  const save = async () => {
+    setSaving(true); setMsg(null);
+    try {
+      const res = await adminSaveRateLimits(apiFetch, {
+        mcp: { userMax: Number(form.userMax), ipMax: Number(form.ipMax) },
+      });
+      if (!res.ok) { const d = await res.json(); setMsg({ ok: false, text: d.error || 'Save failed' }); }
+      else setMsg({ ok: true, text: 'Saved — takes effect immediately' });
+    } catch { setMsg({ ok: false, text: 'Network error' }); }
+    finally { setSaving(false); }
+  };
+
+  if (error)  return null; // the Per-IP panel already shows the shared load error
+  if (!form)  return <div className="sa-loading">Loading MCP limits...</div>;
+
+  return (
+    <PanelShell
+      title="AI connector (MCP) limits"
+      intro="The MCP endpoint is limited per USER, not per IP — hosted AI connectors share a small egress IP pool, so a per-IP bucket would let one chatty agent starve everyone. Keep the per-IP flood guard well above the per-user number. On/off switches are on Admin → AI Connector."
+      saving={saving} onSave={save} msg={msg}
+    >
+      <NumberField
+        label="Per-user requests"
+        unit="req / 15 min"
+        hint="fair share per account, across all their tokens and IPs"
+        value={form.userMax}
+        defaultValue={defaults?.mcp?.userMax}
+        onChange={v => setForm(f => ({ ...f, userMax: v }))}
+        min={10} max={100000}
+      />
+      <NumberField
+        label="Per-IP flood guard"
+        unit="req / 15 min"
+        hint="pre-auth ceiling per source IP; bounds probing, not fairness"
+        value={form.ipMax}
+        defaultValue={defaults?.mcp?.ipMax}
+        onChange={v => setForm(f => ({ ...f, ipMax: v }))}
+        min={100} max={1000000}
+      />
+    </PanelShell>
+  );
+}
+
 function AccountLockoutPanel({ apiFetch, config, defaults, error }) {
   const [form,   setForm]   = useState(null);
   const [saving, setSaving] = useState(false);
@@ -417,6 +481,7 @@ export default function TabSettings() {
     <>
       <ContactEmailPanel apiFetch={apiFetch} />
       <PerIpLimitsPanel apiFetch={apiFetch} {...rateLimits} />
+      <McpLimitsPanel apiFetch={apiFetch} {...rateLimits} />
       <AccountLockoutPanel apiFetch={apiFetch} {...rateLimits} />
       <ChatLimitsPanel apiFetch={apiFetch} {...rateLimits} />
       <AiBudgetPanel apiFetch={apiFetch} {...rateLimits} />
