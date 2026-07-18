@@ -2084,11 +2084,11 @@ function ImportBottles() {
       </div>
 
       {contactEmail && (
-        <div className="import-beta-notice">
+        <div className="import-support-notice">
           <Trans
-            i18nKey="importBottles.betaNotice"
+            i18nKey="importBottles.supportNotice"
             values={{ email: contactEmail }}
-            components={{ 1: <a href={`mailto:${contactEmail}?subject=${encodeURIComponent(t('importBottles.betaEmailSubject'))}&body=${encodeURIComponent(t('importBottles.betaEmailBody'))}`}>{contactEmail}</a> }}
+            components={{ 1: <a href={`mailto:${contactEmail}?subject=${encodeURIComponent(t('importBottles.supportEmailSubject'))}&body=${encodeURIComponent(t('importBottles.supportEmailBody'))}`}>{contactEmail}</a> }}
           />
         </div>
       )}

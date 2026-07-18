@@ -453,7 +453,7 @@ function ContactEmailPanel({ apiFetch }) {
       </div>
       <div className="sa-panel-body">
         <div style={{ fontSize: 11, color: 'var(--sa-text-dim)', marginBottom: 12 }}>
-          Shown in beta notices and support prompts across the app.
+          Shown in support prompts across the app (e.g. the import page's "email us" notice).
         </div>
         <div className="sa-kv">
           <div className="sa-kv-row">
