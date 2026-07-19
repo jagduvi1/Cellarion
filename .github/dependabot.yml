@@ -29,3 +29,12 @@ updates:
     groups:
       docker-images:
         patterns: ["*"]
+    ignore:
+      # Node majors are chosen by LTS status, not by "newest". Dependabot offers
+      # the Current line the moment it exists (it proposed 26 in #751, three
+      # months before 26 becomes LTS on 2026-10-28), and re-proposes it weekly.
+      # Digest bumps WITHIN the pinned major still come through — this only
+      # suppresses the major hop, which we take deliberately when a line goes
+      # Active LTS. Bump/remove this when moving to the next LTS.
+      - dependency-name: node
+        update-types: ["version-update:semver-major"]
