@@ -78,6 +78,9 @@ registerTool({
       status: p.status,
       relative_nv: !!p.relative,
       phases: PHASE_FIELDS.reduce((acc, f) => ((acc[f] = p[f] ?? null), acc), {}),
+      // Somm-gated tool, so the curator's own note comes back with the row.
+      // Kept out of drink_window_for, which is public — see publicContent.js.
+      somm_notes: p.sommNotes || null,
     }));
     return ok(`${pending} pending in the maturity queue (showing ${data.length} of ${total} ${status})`, data, {
       page: { limit, offset, total },
@@ -176,6 +179,7 @@ registerTool({
         vintage: profile.vintage,
         relative_nv: isNv,
         phases: next,
+        somm_notes: profile.sommNotes || null,
         undo: 'undo_last restores the previous values and review state',
       },
     };

@@ -109,6 +109,25 @@ describe('list_maturity_queue', () => {
     expect(body.data[0].profile_id).toBe(oid('1'));
     expect(body.data[0].phases).toHaveProperty('peakFrom', null);
   });
+
+  // #787: the note was fetched but dropped in the row mapping — write-only data.
+  test('reviewed rows carry the curator note; absent note reads as null', async () => {
+    WineVintageProfile.countDocuments.mockResolvedValueOnce(2).mockResolvedValueOnce(0);
+    WineVintageProfile.find.mockReturnValue(chain([
+      {
+        _id: oid('1'), vintage: '2023', status: 'reviewed', relative: false,
+        sommNotes: 'Drink young — fruit fades fast.',
+        wineDefinition: { _id: oid('f'), name: 'Pinot Noir', producer: 'Matua', grapes: [] },
+      },
+      {
+        _id: oid('2'), vintage: '2019', status: 'reviewed', relative: false,
+        wineDefinition: { _id: oid('f'), name: 'Barolo', producer: 'P', grapes: [] },
+      },
+    ]));
+    const body = parse(await tool('list_maturity_queue').handler({ status: 'reviewed' }, SOMM_CTX));
+    expect(body.data[0].somm_notes).toBe('Drink young — fruit fades fast.');
+    expect(body.data[1].somm_notes).toBeNull();
+  });
 });
 
 describe('set_vintage_maturity', () => {
@@ -144,6 +163,25 @@ describe('set_vintage_maturity', () => {
     expect(parse(res).error).toBeUndefined();
     expect(p2.relative).toBe(true);
     expect(p2.status).toBe('reviewed');
+  });
+
+  // #787: the write landed but the response echoed phases only, so a curator
+  // had no way to confirm the note saved.
+  test('echoes the note it just saved, and the pre-existing note when none is sent', async () => {
+    const p = profile();
+    let body = parse(await tool('set_vintage_maturity').handler(
+      { profile_id: oid('1'), peak_from: 2026, somm_notes: 'Hold two more years.' }, SOMM_CTX));
+    expect(body.error).toBeUndefined();
+    expect(p.sommNotes).toBe('Hold two more years.');
+    expect(body.data.somm_notes).toBe('Hold two more years.');
+
+    profile({ sommNotes: 'Existing note.' });
+    body = parse(await tool('set_vintage_maturity').handler({ profile_id: oid('1'), peak_from: 2026 }, SOMM_CTX));
+    expect(body.data.somm_notes).toBe('Existing note.');
+
+    profile();
+    body = parse(await tool('set_vintage_maturity').handler({ profile_id: oid('1'), peak_from: 2026 }, SOMM_CTX));
+    expect(body.data.somm_notes).toBeNull();
   });
 
   test('prev snapshot captures phases + review state for undo; audit uses the REST action string', async () => {
