@@ -253,7 +253,7 @@ Rules:
 - body/tannin/acidity/sweetness: use one of the listed values, or null if not applicable (e.g. tannin for a white wine should usually be "low" or null).
 - flavors: concrete aromas/flavours (e.g. "dark cherry", "tobacco", "citrus zest"). Avoid vague words like "nice" or "complex".
 - foodPairings: real dishes/categories (e.g. "grilled lamb", "hard cheese", "roast chicken").
-- description: 2-3 sentences, warm but not pretentious. Light Markdown allowed (bold a key flavour at most). No headings, lists, or tables.
+- description: 2-3 sentences, warm but not pretentious. PLAIN TEXT ONLY — no Markdown of any kind: no **bold**, no *italics*, no headings, lists, links, or tables. The field is shown verbatim in places that do not render Markdown.
 - confidence: 1.0 = you know this exact wine well, 0.7 = confident from producer + style, 0.5 = grape/region knowledge only, 0.3 = rough inference.
 - Never invent awards, scores, or specific vintages' weather. If the wine is completely unrecognisable and its grapes/region are unknown, return {"error":"unknown"}.`;
 
