@@ -96,7 +96,7 @@ const wineDefinitionSchema = new mongoose.Schema({
     sweetness:    { type: String, default: null, trim: true },  // dry | off-dry | sweet
     flavors:      { type: [String], default: [] },              // e.g. ['dark cherry', 'tar']
     foodPairings: { type: [String], default: [] },              // e.g. ['braised beef']
-    description:  { type: String, default: null, trim: true },  // short markdown prose for display
+    description:  { type: String, default: null, trim: true },  // short PLAIN-TEXT prose; markdown stripped at write (enrichmentJob)
     confidence:   { type: Number, default: null },             // 0..1 — how sure the AI is
     model:        { type: String, default: null, trim: true }, // model that produced it
     generatedAt:  { type: Date,   default: null },             // when it was generated

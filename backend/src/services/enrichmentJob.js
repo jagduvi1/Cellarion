@@ -22,6 +22,7 @@
 
 const mongoose = require('mongoose');
 const aiConfig = require('../config/aiConfig');
+const { stripMarkdown } = require('../utils/stripMarkdown');
 const { tryDebitAi, isRefundableFailure } = require('./aiBudget');
 const { suggestProfile } = require('./labelScan');
 const aiProvider = require('./aiProvider');
@@ -208,7 +209,11 @@ async function enrichWine(wine, model) {
           sweetness:    data.sweetness ?? null,
           flavors:      Array.isArray(data.flavors) ? data.flavors.slice(0, 10) : [],
           foodPairings: Array.isArray(data.foodPairings) ? data.foodPairings.slice(0, 8) : [],
-          description:  typeof data.description === 'string' ? data.description.trim() : null,
+          // Strip markdown, don't just trim: the model reaches for emphasis even
+          // when told not to, and the raw string is served un-rendered by the MCP
+          // tools. Load-bearing half of the fix — the prompt is only advisory,
+          // and a self-hoster can override it via SiteConfig.
+          description:  typeof data.description === 'string' ? (stripMarkdown(data.description) || null) : null,
           confidence:   typeof data.confidence === 'number' ? data.confidence : null,
           model:        model || aiConfig.get().enrichmentModel,
           generatedAt:  new Date(),
