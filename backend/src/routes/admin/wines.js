@@ -7,7 +7,8 @@ const {
   combinedSimilarity,
   trigramSimilarity,
   tokenSimilarity,
-  normalizeString
+  normalizeString,
+  normalizeProducerKey
 } = require('../../utils/normalize');
 const { scoreWineMatch } = require('../../services/wineMatching');
 const WineDefinition = require('../../models/WineDefinition');
@@ -263,10 +264,15 @@ router.get('/duplicate-clusters', async (req, res) => {
       .populate('region', 'name')
       .lean();
 
-    // Group by normalised producer
+    // Group by normalised producer KEY: wine stop words + corporate suffixes
+    // stripped, so "Kumeu River Wines Limited" and "Kumeu River" land in the
+    // same bucket and the pairwise scorer + merge UI can surface them (ticket
+    // #2B). Bucketing only ever MERGES buckets (fewer distinct keys), never
+    // splits, so existing clusters can't regress; every surfaced cluster is
+    // admin-reviewed before any merge, so over-grouping is safe.
     const byProducer = new Map();
     for (const wine of wines) {
-      const key = normalizeString(wine.producer || '');
+      const key = normalizeProducerKey(wine.producer || '');
       if (!key) continue;
       let group = byProducer.get(key);
       if (!group) { group = []; byProducer.set(key, group); }
