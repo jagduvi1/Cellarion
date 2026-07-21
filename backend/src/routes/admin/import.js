@@ -2,7 +2,7 @@ const express = require('express');
 const multer = require('multer');
 const { parse } = require('csv-parse');
 const { requireAuth, requireRole } = require('../../middleware/auth');
-const { generateWineKey, normalizeString, resolveCountryName, isUnknownName } = require('../../utils/normalize');
+const { generateWineKey, normalizeString, normalizeAppellation, resolveCountryName, isUnknownName } = require('../../utils/normalize');
 const WineDefinition = require('../../models/WineDefinition');
 const Country = require('../../models/Country');
 const Region = require('../../models/Region');
@@ -115,7 +115,7 @@ function mapRow(row, format) {
     name: (row.Wine || '').trim() || null,
     country: (row.Country || '').trim() || null,
     region: (row.Region || '').trim() || null,
-    appellation: (row.Appellation || '').trim() || null,
+    appellation: normalizeAppellation((row.Appellation || '').trim()) || null,
     type: mapType(null, null, row.WineType),
     classification: (row.Classification || '').trim() || null,
     status: 'Live',

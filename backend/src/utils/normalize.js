@@ -54,6 +54,29 @@ const tokenize = (str) => {
   return tokens;
 };
 
+// Classification-tier suffixes some labels/imports append to an appellation and
+// others omit, splitting one appellation into variants ("Barolo" vs "Barolo
+// DOCG"). The tier belongs in the separate classification field, so the
+// canonical appellation is the place name with a trailing tier stripped. Only
+// unambiguous 3–4 char tiers — deliberately NOT 'do'/'ao', which collide with
+// real place-name words.
+const APPELLATION_TIER_RX = /[\s,]+(docg|doca|doc|aoc|aop|ava|igt|igp)\.?$/i;
+
+/**
+ * Canonicalize an appellation by stripping a trailing classification tier
+ * ("Barolo DOCG" → "Barolo", "Napa Valley AVA" → "Napa Valley"). Preserves the
+ * casing/spacing of the place part; never returns empty (falls back to the
+ * trimmed original). Passes null/undefined through unchanged.
+ */
+const normalizeAppellation = (appellation) => {
+  if (appellation == null) return appellation;
+  const original = String(appellation).trim();
+  let s = original;
+  let prev;
+  do { prev = s; s = s.replace(APPELLATION_TIER_RX, '').trim(); } while (s && s !== prev);
+  return s || original;
+};
+
 /**
  * Corporate / legal-form suffixes that vary between a wine label and a registry
  * entry for the SAME producer ("Kumeu River" vs "Kumeu River Wines Limited").
@@ -618,6 +641,7 @@ module.exports = {
   generateWineSlug,
   GRAPE_SYNONYMS,
   normalizeProducerKey,
+  normalizeAppellation,
   resolveGrapeName,
   resolveCountryName,
   isUnknownName,
