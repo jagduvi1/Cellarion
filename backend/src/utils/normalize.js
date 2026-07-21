@@ -62,13 +62,21 @@ const tokenize = (str) => {
 // real place-name words.
 const APPELLATION_TIER_TOKENS = new Set(['docg', 'doca', 'doc', 'aoc', 'aop', 'ava', 'igt', 'igp']);
 
+// Strip trailing characters (any in `chars`) without a `$`-anchored quantifier
+// regex — a plain scan, so it can never be a polynomial-ReDoS shape.
+const trimTrailingChars = (str, chars) => {
+  let end = str.length;
+  while (end > 0 && chars.includes(str[end - 1])) end -= 1;
+  return str.slice(0, end);
+};
+
 /**
  * Canonicalize an appellation by stripping a trailing classification tier
  * ("Barolo DOCG" → "Barolo", "Napa Valley AVA" → "Napa Valley"). Preserves the
  * casing/accents of the place part; never returns empty (falls back to the
  * trimmed original). Passes null/undefined through unchanged.
  *
- * Token-based (no trailing-quantifier regex) so it stays strictly linear.
+ * Token-based + regex-free trailing strip, so it stays strictly linear.
  */
 const normalizeAppellation = (appellation) => {
   if (appellation == null) return appellation;
@@ -76,12 +84,11 @@ const normalizeAppellation = (appellation) => {
   const parts = original.split(/\s+/);
   // Drop trailing tier token(s), tolerating a trailing dot/comma on each.
   while (parts.length > 1) {
-    const last = parts[parts.length - 1].replace(/[.,]+$/, '').toLowerCase();
+    const last = trimTrailingChars(parts[parts.length - 1], '.,').toLowerCase();
     if (!APPELLATION_TIER_TOKENS.has(last)) break;
     parts.pop();
   }
-  let result = parts.join(' ').trim();
-  while (result.endsWith(',')) result = result.slice(0, -1).trim();
+  const result = trimTrailingChars(parts.join(' '), ' ,').trim();
   return result || original;
 };
 
