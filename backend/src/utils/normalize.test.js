@@ -1,6 +1,7 @@
 const {
   normalizeString,
   tokenize,
+  normalizeProducerKey,
   generateWineKey,
   levenshteinDistance,
   calculateSimilarity,
@@ -461,5 +462,27 @@ describe('producer house prefixes (the launch-day Barolo duplicate)', () => {
     // Sharing a stripped prefix must not make different houses near-identical:
     // candidates at worst (soft zone asks the user), never a silent merge.
     expect(combinedSimilarity('Cantina Rossi', 'Cantina Bianchi')).toBeLessThan(0.6);
+  });
+});
+
+describe('normalizeProducerKey (ticket #2B: dup-cluster bucketing)', () => {
+  test('a corporate suffix + a wine stop word collapse to the same key', () => {
+    // The exact repro: two registry strings for one producer must bucket together.
+    expect(normalizeProducerKey('Kumeu River Wines Limited')).toBe('kumeu river');
+    expect(normalizeProducerKey('Kumeu River')).toBe('kumeu river');
+  });
+
+  test('common legal forms are stripped', () => {
+    expect(normalizeProducerKey('Foo Bar Ltd')).toBe(normalizeProducerKey('Foo Bar'));
+    expect(normalizeProducerKey('Weingut Müller GmbH')).toBe(normalizeProducerKey('Müller'));
+  });
+
+  test('genuinely different producers keep different keys', () => {
+    expect(normalizeProducerKey('Kumeu River')).not.toBe(normalizeProducerKey('Cloudy Bay'));
+  });
+
+  test('empty / all-stopword producer yields an empty key (bucket skipped)', () => {
+    expect(normalizeProducerKey('')).toBe('');
+    expect(normalizeProducerKey('Wines Ltd')).toBe('');
   });
 });

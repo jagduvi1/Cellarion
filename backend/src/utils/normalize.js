@@ -55,6 +55,32 @@ const tokenize = (str) => {
 };
 
 /**
+ * Corporate / legal-form suffixes that vary between a wine label and a registry
+ * entry for the SAME producer ("Kumeu River" vs "Kumeu River Wines Limited").
+ * Distinct from WINE_STOP_WORDS (which also governs wine-NAME matching) — these
+ * are producer-specific and stripped only when building a producer COMPARISON
+ * key, never from a display string.
+ */
+const PRODUCER_CORP_SUFFIXES = new Set([
+  'ltd', 'limited', 'inc', 'incorporated', 'llc', 'llp', 'plc',
+  'gmbh', 'ag', 'sa', 'sas', 'sarl', 'srl', 'spa', 'sl', 'bv', 'nv',
+  'pty', 'co', 'company', 'corp', 'corporation', 'ab', 'oy', 'as', 'kg', 'kft',
+]);
+
+/**
+ * Normalize a producer to a comparison/bucketing key: drop wine stop words AND
+ * corporate suffixes, so "Kumeu River Wines Limited" and "Kumeu River" collapse
+ * to the same key ("kumeu river"). Comparison-only — never overwrites the
+ * stored display producer. Returns '' for an all-stopword/empty producer.
+ */
+const normalizeProducerKey = (producer) => {
+  return tokenize(producer)
+    .filter((t) => !PRODUCER_CORP_SUFFIXES.has(t))
+    .join(' ')
+    .trim();
+};
+
+/**
  * Generate a normalized key for wine deduplication
  * Combines producer + wine name + appellation
  */
@@ -591,6 +617,7 @@ module.exports = {
   generateWineKey,
   generateWineSlug,
   GRAPE_SYNONYMS,
+  normalizeProducerKey,
   resolveGrapeName,
   resolveCountryName,
   isUnknownName,
