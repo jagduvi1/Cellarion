@@ -61,7 +61,10 @@ registerTool({
   description:
     'Meaning-based search over wine taste/style embeddings — describe a flavour, mood or style in free text ' +
     '("earthy and rustic", "crisp mineral white like Chablis", "something for a rainy evening") and get the ' +
-    'closest wines. search_scope "registry" searches everything Cellarion knows (buying ideas); search_scope "mine" searches only ' +
+    'closest wines. ALWAYS pass `query` in ENGLISH: the wine profiles are indexed in English, so a non-English ' +
+    'query matches poorly (it anchors on literal foreign words instead of style) — if the user described the wine ' +
+    'in another language, translate the description to English before calling. search_scope "registry" searches ' +
+    'everything Cellarion knows (buying ideas); search_scope "mine" searches only ' +
     'wines the user owns. Use search_bottles/search_registry for NAME lookups — this tool is for when no name ' +
     'exists, only a description. Uses a small slice of the user\'s daily AI budget per new query (repeats are free); ' +
     'only embedded wines are findable.',
