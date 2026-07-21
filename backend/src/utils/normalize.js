@@ -590,6 +590,7 @@ module.exports = {
   tokenize,
   generateWineKey,
   generateWineSlug,
+  GRAPE_SYNONYMS,
   resolveGrapeName,
   resolveCountryName,
   isUnknownName,

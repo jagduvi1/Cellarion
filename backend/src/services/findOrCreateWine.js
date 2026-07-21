@@ -21,6 +21,7 @@ const searchService = require('./search');
 const { generateWineKey, normalizeString, resolveGrapeName, resolveCountryName, isUnknownName, isJunkGrapeName } = require('../utils/normalize');
 const { scoreAllMatches } = require('./wineMatching');
 const { stripProducerName } = require('../utils/producerPrefix');
+const { buildSurfaceForms, inferGrapeIds } = require('./grapeInference');
 const { escapeRegex } = require('../utils/sanitize');
 
 // Auto-match when combined score >= SIMILARITY_THRESHOLD (near-identical — e.g.
@@ -239,7 +240,17 @@ async function findOrCreateWine({ name, producer, country, region, appellation, 
   }
 
   const regionDoc = await findOrCreateRegion(region, countryDoc._id, userId);
-  const grapeIds = await findOrCreateGrapes(grapes, userId);
+  let grapeIds = await findOrCreateGrapes(grapes, userId);
+
+  // Ticket #2A: when no grapes were supplied, infer them from the name
+  // ("… Pinot Noir" → Pinot Noir) so the wine still counts in the Statistics
+  // by-grape breakdown and the grapes= filter. trimmedName already has the
+  // producer stripped (step 0). Only tags grapes already in the taxonomy —
+  // never mints one — and stays silent when nothing matches.
+  if (grapeIds.length === 0) {
+    const grapeDocs = await Grape.find({}).select('name normalizedName normalizedSynonyms').lean();
+    grapeIds = inferGrapeIds(trimmedName, trimmedAppellation, buildSurfaceForms(grapeDocs));
+  }
 
   const validTypes = ['red', 'white', 'rosé', 'sparkling', 'dessert', 'fortified'];
   const wineType = validTypes.includes(type) ? type : 'red';
