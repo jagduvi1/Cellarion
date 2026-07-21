@@ -3,6 +3,7 @@ const {
   tokenize,
   normalizeProducerKey,
   generateWineKey,
+  normalizeAppellation,
   levenshteinDistance,
   calculateSimilarity,
   generateTrigrams,
@@ -79,6 +80,32 @@ describe('tokenize', () => {
 });
 
 // ─── generateWineKey ─────────────────────────────────────────────────────────
+
+describe('normalizeAppellation (ticket #2C: tier-suffix proliferation)', () => {
+  test('strips the trailing classification tier', () => {
+    expect(normalizeAppellation('Barolo DOCG')).toBe('Barolo');
+    expect(normalizeAppellation('Barolo')).toBe('Barolo');
+    expect(normalizeAppellation('Napa Valley AVA')).toBe('Napa Valley');
+    expect(normalizeAppellation('Chianti Classico DOCG')).toBe('Chianti Classico');
+    expect(normalizeAppellation('Rueda, DO')).toBe('Rueda, DO'); // 'do' deliberately NOT stripped
+  });
+
+  test('the two Barolo variants converge to one canonical form', () => {
+    expect(normalizeAppellation('Barolo DOCG')).toBe(normalizeAppellation('Barolo'));
+  });
+
+  test('does not strip a tier token that is part of the place name', () => {
+    // No trailing tier here — "Classico" is part of the name, left intact.
+    expect(normalizeAppellation('Chianti Classico')).toBe('Chianti Classico');
+  });
+
+  test('passes null/undefined through and never returns empty', () => {
+    expect(normalizeAppellation(null)).toBeNull();
+    expect(normalizeAppellation(undefined)).toBeUndefined();
+    expect(normalizeAppellation('DOCG')).toBe('DOCG'); // all-tier input preserved, not emptied
+    expect(normalizeAppellation('   Barolo   DOCG ')).toBe('Barolo');
+  });
+});
 
 describe('generateWineKey', () => {
   test('produces a consistent colon-delimited key', () => {

@@ -18,7 +18,7 @@ const Country = require('../models/Country');
 const Region = require('../models/Region');
 const Grape = require('../models/Grape');
 const searchService = require('./search');
-const { generateWineKey, normalizeString, resolveGrapeName, resolveCountryName, isUnknownName, isJunkGrapeName } = require('../utils/normalize');
+const { generateWineKey, normalizeString, normalizeAppellation, resolveGrapeName, resolveCountryName, isUnknownName, isJunkGrapeName } = require('../utils/normalize');
 const { scoreAllMatches } = require('./wineMatching');
 const { stripProducerName } = require('../utils/producerPrefix');
 const { buildSurfaceForms, inferGrapeIds } = require('./grapeInference');
@@ -139,7 +139,10 @@ async function findOrCreateWine({ name, producer, country, region, appellation, 
   const MAX_FIELD = 200;
   let trimmedName = name.trim().slice(0, MAX_FIELD);
   const trimmedProducer = producer.trim().slice(0, MAX_FIELD);
-  const trimmedAppellation = (typeof appellation === 'string' ? appellation.trim() : '').slice(0, MAX_FIELD);
+  // Canonicalize the appellation (strip a trailing DOCG/DOC/AOC/… tier) so
+  // "Barolo" and "Barolo DOCG" resolve to / create ONE registry appellation
+  // instead of two (ticket #2C). The tier belongs in classification.
+  const trimmedAppellation = normalizeAppellation((typeof appellation === 'string' ? appellation.trim() : '')).slice(0, MAX_FIELD);
 
   // 0. Registry canon: a wine's name never embeds its producer. Cellar-format
   // imports and the occasional non-compliant AI response arrive as

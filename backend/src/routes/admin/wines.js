@@ -8,7 +8,8 @@ const {
   trigramSimilarity,
   tokenSimilarity,
   normalizeString,
-  normalizeProducerKey
+  normalizeProducerKey,
+  normalizeAppellation
 } = require('../../utils/normalize');
 const { scoreWineMatch } = require('../../services/wineMatching');
 const WineDefinition = require('../../models/WineDefinition');
@@ -148,7 +149,7 @@ router.post('/', async (req, res) => {
       producer: producer.trim(),
       country,
       region: region || null,
-      appellation: appellation?.trim(),
+      appellation: normalizeAppellation(appellation?.trim()),
       grapes: grapes || [],
       type: type || 'red',
       image: image || null,
@@ -664,7 +665,7 @@ router.put('/:id', async (req, res) => {
     if (producer) wine.producer = producer.trim();
     if (country) wine.country = country;
     if (region !== undefined) wine.region = region || null;
-    if (appellation !== undefined) wine.appellation = appellation?.trim();
+    if (appellation !== undefined) wine.appellation = normalizeAppellation(appellation?.trim());
     if (grapes !== undefined) wine.grapes = grapes;
     if (type) wine.type = type;
 
