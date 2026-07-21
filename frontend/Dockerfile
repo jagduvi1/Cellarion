@@ -1,6 +1,6 @@
 # ── Stage 1: build React app ──────────────────────────────────────────────────
 # Digest-pinned (security audit L-11); Dependabot's docker ecosystem bumps it.
-FROM node:20-alpine@sha256:fb4cd12c85ee03686f6af5362a0b0d56d50c58a04632e6c0fb8363f609372293 AS builder
+FROM node:24-alpine@sha256:a0b9bf06e4e6193cf7a0f58816cc935ff8c2a908f81e6f1a95432d679c54fbfd AS builder
 
 WORKDIR /app
 

@@ -40,7 +40,7 @@ This is the primary way to use Cellarion. Create an account and start using the 
 - **MongoDB 7** — Database (Mongoose 8)
 - **Express 4** — Backend API
 - **React 19** — Frontend (React Router 6)
-- **Node.js 20** — Runtime
+- **Node.js 24 (LTS)** — Runtime
 - **Meilisearch** — Fuzzy search engine
 - **Qdrant** — Vector database for AI cellar chat
 - **Voyage AI** — Wine embedding generation

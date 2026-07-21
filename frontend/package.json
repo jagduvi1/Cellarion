@@ -3,6 +3,9 @@
   "version": "1.83.1",
   "private": true,
   "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
   "dependencies": {
     "@react-three/drei": "^10.7.7",
     "@react-three/fiber": "^9.5.0",

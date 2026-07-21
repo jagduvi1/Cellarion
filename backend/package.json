@@ -3,6 +3,9 @@
   "version": "1.83.1",
   "description": "Wine cellar management backend",
   "main": "server.js",
+  "engines": {
+    "node": ">=24"
+  },
   "scripts": {
     "start": "node server.js",
     "dev": "nodemon server.js",
