@@ -7,9 +7,24 @@
  * Composite score = name × 0.45 + producer × 0.45 + appellation × 0.10
  */
 
-const { combinedSimilarity, normalizeString } = require('../utils/normalize');
+const { combinedSimilarity, normalizeString, normalizeProducerKey } = require('../utils/normalize');
 
 const WEIGHTS = { name: 0.45, producer: 0.45, appellation: 0.10 };
+
+/**
+ * Producer-axis similarity, compared on producer KEYS ("Kumeu River Wines
+ * Limited" → "kumeu river") instead of raw strings. Corporate suffixes and
+ * house prefixes used to drag the SAME winery to ~0.5 similarity, which put a
+ * producer-variant duplicate at ~0.77 composite — under the soft zone, so it
+ * was silently created (registry duplicate analysis 2026-07-22). On equal keys
+ * the axis now scores 1. Falls back to the raw comparison whenever either side
+ * has no key left (an all-stopword producer like "Domaine").
+ */
+function producerSimilarity(a, b) {
+  const keyA = normalizeProducerKey(a || '');
+  const keyB = normalizeProducerKey(b || '');
+  return keyA && keyB ? combinedSimilarity(keyA, keyB) : combinedSimilarity(a, b);
+}
 
 /**
  * Score a single wine candidate against a query.
@@ -23,7 +38,7 @@ const WEIGHTS = { name: 0.45, producer: 0.45, appellation: 0.10 };
  */
 function scoreWineMatch(candidate, query, { redistribute = true } = {}) {
   const nameScore     = combinedSimilarity(candidate.name, query.name);
-  const producerScore = combinedSimilarity(candidate.producer, query.producer);
+  const producerScore = producerSimilarity(candidate.producer, query.producer);
 
   let score = nameScore * WEIGHTS.name + producerScore * WEIGHTS.producer;
 

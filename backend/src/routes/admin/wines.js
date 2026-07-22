@@ -41,7 +41,9 @@ const { submitUrls } = require('../../services/indexNow');
 const { isValidId } = require('../../utils/validation');
 const { escapeRegex } = require('../../utils/sanitize');
 const { parsePagination } = require('../../utils/pagination');
-const { stripProducerName } = require('../../utils/producerPrefix');
+const { stripProducerName, stripProducerKeyPrefix, canonicalizeWineName } = require('../../utils/producerPrefix');
+const Country = require('../../models/Country');
+const { findOrCreateWine } = require('../../services/findOrCreateWine');
 
 const router = express.Router();
 
@@ -133,28 +135,72 @@ router.get('/', async (req, res) => {
 });
 
 // POST /api/admin/wines - Create wine definition
+//
+// This endpoint used to bypass EVERY dedup layer (step-0 strip, sibling match,
+// fuzzy soft zone) and rely on the raw unique key alone, so only verbatim
+// duplicates were stopped (dup analysis 2026-07-22, RC4). It now canonicalizes
+// like every other write surface and probes the shared matcher first; a
+// likely duplicate returns 409 with the candidates so the admin can link or
+// merge instead — or resubmit with confirmCreate:true after an explicit
+// "create anyway".
 router.post('/', async (req, res) => {
   try {
-    const { name, producer, country, region, appellation, grapes, type, image } = req.body;
+    const { name, producer, country, region, appellation, grapes, type, image, confirmCreate } = req.body;
 
     if (!name || !producer || !country) {
       return res.status(400).json({ error: 'Name, producer, and country are required' });
     }
+    if (typeof name !== 'string' || typeof producer !== 'string') {
+      return res.status(400).json({ error: 'Name and producer must be strings' });
+    }
+    if (!isValidId(String(country))) {
+      return res.status(400).json({ error: 'Invalid country' });
+    }
+
+    const cleanProducer = producer.trim();
+    const cleanName = canonicalizeWineName(name, cleanProducer);
+    const cleanAppellation = normalizeAppellation(typeof appellation === 'string' ? appellation.trim() : null) || null;
+
+    if (!confirmCreate) {
+      const countryDoc = await Country.findById(String(country)).select('name').lean().catch(() => null);
+      const probe = await findOrCreateWine(
+        {
+          name: cleanName, producer: cleanProducer, country: countryDoc?.name || '',
+          region: '', appellation: cleanAppellation || '', type, grapes: [],
+        },
+        req.user.id,
+        { matchOnly: true }
+      );
+      const dupes = probe.wine ? [{ wine: probe.wine, score: 1 }] : (probe.candidates || []);
+      if (dupes.length > 0) {
+        return res.status(409).json({
+          error: 'Very similar registry wine(s) already exist — link or merge instead, or create anyway if this is genuinely different.',
+          candidates: dupes.map(d => ({
+            _id: d.wine._id,
+            name: d.wine.name,
+            producer: d.wine.producer,
+            appellation: d.wine.appellation || null,
+            score: d.score,
+          })),
+        });
+      }
+    }
 
     // Generate normalized key for deduplication
-    const normalizedKey = generateWineKey(name, producer, appellation);
+    const normalizedKey = generateWineKey(cleanName, cleanProducer, cleanAppellation);
 
     const wine = new WineDefinition({
-      name: name.trim(),
-      producer: producer.trim(),
+      name: cleanName,
+      producer: cleanProducer,
       country,
       region: region || null,
-      appellation: normalizeAppellation(appellation?.trim()),
+      appellation: cleanAppellation,
       grapes: grapes || [],
       type: type || 'red',
       image: image || null,
       normalizedKey,
-      createdBy: req.user.id
+      createdBy: req.user.id,
+      createdVia: 'ui'
     });
 
     await wine.save();
@@ -552,16 +598,96 @@ router.get('/duplicates', async (req, res) => {
   }
 });
 
+// GET /api/admin/wines/canonical-collisions — the standing duplicate queue
+// (dup analysis 2026-07-22, phases 1-2). Groups wines by canonicalKey; every
+// group of ≥2 is either a real duplicate (→ merge tool) or a legitimate
+// same-name collision (→ dismiss via the not-a-duplicate flow, which hides it
+// here too). DIFF-COUNTRY / DIFF-TYPE flags mark likely false positives
+// (Domaine Chandon Napa vs Bodegas Chandon Mendoza). Healthy steady state:
+// zero sets — new canonical duplicates can't be minted (findOrCreateWine
+// resolves them), so anything appearing here entered via a raced write or a
+// pre-backfill row and deserves a look.
+router.get('/canonical-collisions', async (req, res) => {
+  try {
+    const wines = await WineDefinition.find({ canonicalKey: { $ne: null } })
+      .select('name producer appellation type country canonicalKey createdAt createdVia')
+      .populate('country', 'name')
+      .lean();
+
+    const groups = new Map();
+    for (const w of wines) {
+      let group = groups.get(w.canonicalKey);
+      if (!group) { group = []; groups.set(w.canonicalKey, group); }
+      group.push(w);
+    }
+    const collisions = [...groups.entries()].filter(([, arr]) => arr.length >= 2);
+
+    // Sets where the admin has dismissed EVERY pair stop resurfacing.
+    const notDup = await WineNotDuplicate.find({}).select('wineA wineB').lean();
+    const dismissed = new Set(notDup.map(d => `${d.wineA}|${d.wineB}`));
+    const pairKey = (a, b) => (String(a) < String(b) ? `${a}|${b}` : `${b}|${a}`);
+    const active = collisions.filter(([, arr]) => {
+      for (let i = 0; i < arr.length; i++) {
+        for (let j = i + 1; j < arr.length; j++) {
+          if (!dismissed.has(pairKey(arr[i]._id, arr[j]._id))) return true;
+        }
+      }
+      return false;
+    });
+
+    const ids = active.flatMap(([, arr]) => arr.map(w => w._id));
+    const bottleCounts = new Map();
+    if (ids.length > 0) {
+      const counts = await Bottle.aggregate([
+        { $match: { wineDefinition: { $in: ids } } },
+        { $group: { _id: '$wineDefinition', count: { $sum: 1 } } },
+      ]);
+      for (const c of counts) bottleCounts.set(String(c._id), c.count);
+    }
+
+    const totalBottles = (arr) => arr.reduce((s, w) => s + (bottleCounts.get(String(w._id)) || 0), 0);
+    const sets = active
+      .map(([key, arr]) => ({
+        canonicalKey: key,
+        flags: [
+          new Set(arr.map(w => String(w.country?._id || ''))).size > 1 ? 'DIFF-COUNTRY' : null,
+          new Set(arr.map(w => w.type)).size > 1 ? 'DIFF-TYPE' : null,
+        ].filter(Boolean),
+        wines: arr
+          .map(w => ({
+            _id: w._id,
+            name: w.name,
+            producer: w.producer,
+            appellation: w.appellation || null,
+            type: w.type,
+            country: w.country?.name || null,
+            createdAt: w.createdAt,
+            createdVia: w.createdVia || null,
+            bottleCount: bottleCounts.get(String(w._id)) || 0,
+          }))
+          .sort((a, b) => b.bottleCount - a.bottleCount),
+      }))
+      .sort((a, b) => totalBottles(groups.get(b.canonicalKey)) - totalBottles(groups.get(a.canonicalKey)));
+
+    res.json({ sets, total: sets.length, scannedCount: wines.length });
+  } catch (error) {
+    console.error('Canonical collisions error:', error);
+    res.status(500).json({ error: 'Failed to list canonical collisions' });
+  }
+});
+
 // GET /api/admin/wines/producer-in-name — wines whose name STARTS or ENDS
 // with their own producer (prefix: producer "Meerlust", name "Meerlust
 // Chardonnay"; suffix: producer "Mastroberardino", name "Fiano di Avellino
-// Mastroberardino" — the launch-day admin report). Mostly AI-import
-// artefacts; the registry convention is a producer-free name.
+// Mastroberardino" — the launch-day admin report), INCLUDING producer
+// variants where only the comparison-key tokens are embedded (name "Felton
+// Road Block 3 Pinot Noir", producer "Felton Road Wines Ltd" — the shape the
+// old exact-string $expr scan could never see). Mostly AI-import artefacts;
+// the registry convention is a producer-free name.
 //
-// A field-to-field comparison needs $expr; there's no index for it, so this
-// is a collection scan — fine at the registry's ~3k-doc size. The char right
-// AFTER a prefix / BEFORE a suffix must be a separator so producer "Chateau"
-// doesn't flag "Chateauneuf-du-Pape" (mirrors utils/producerPrefix.js).
+// The key-token check has no aggregation mirror, so the scan runs in Node —
+// same full-fetch pattern (and cost) as the duplicate-clusters scan above,
+// fine at the registry's ~4k-doc size.
 //
 // Returns: { wines: [{ _id, producer, name, proposedName, bottleCount, createdAt }], total, page, pages }
 router.get('/producer-in-name', async (req, res) => {
@@ -569,57 +695,37 @@ router.get('/producer-in-name', async (req, res) => {
     const { limit: parsedLimit, offset: skip, page: parsedPage } =
       parsePagination(req.query, { limit: 50, maxLimit: 200 });
 
-    const producerLen = { $strLenCP: { $ifNull: ['$producer', ''] } };
-    const nameLen = { $strLenCP: '$name' };
-    const lowerProducer = { $toLower: { $ifNull: ['$producer', ''] } };
-    const SEPARATORS = [' ', '\t', '-', '–', '—'];
-    const common = [
-      { $gt: [producerLen, 0] },
-      { $gt: [nameLen, { $add: [producerLen, 1] }] },
-    ];
-    const prefixExpr = {
-      $and: [
-        ...common,
-        { $eq: [{ $indexOfCP: [{ $toLower: '$name' }, lowerProducer] }, 0] },
-        { $in: [{ $substrCP: ['$name', producerLen, 1] }, SEPARATORS] },
-      ],
-    };
-    const suffixStart = { $subtract: [nameLen, producerLen] };
-    const suffixExpr = {
-      $and: [
-        ...common,
-        { $eq: [{ $toLower: { $substrCP: ['$name', suffixStart, producerLen] } }, lowerProducer] },
-        { $in: [{ $substrCP: ['$name', { $subtract: [suffixStart, 1] }, 1] }, SEPARATORS] },
-      ],
-    };
-    const filter = { $expr: { $or: [prefixExpr, suffixExpr] } };
+    const all = await WineDefinition.find({})
+      .select('name producer createdAt')
+      .sort({ producer: 1, name: 1 })
+      .lean();
 
-    const [wines, total] = await Promise.all([
-      WineDefinition.find(filter)
-        .select('name producer createdAt')
-        .sort({ producer: 1, name: 1 })
-        .skip(skip)
-        .limit(parsedLimit)
-        .lean(),
-      WineDefinition.countDocuments(filter),
-    ]);
+    const flagged = [];
+    for (const w of all) {
+      const proposedName = stripProducerName(w.name, w.producer)
+        ?? stripProducerKeyPrefix(w.name, w.producer);
+      if (proposedName) flagged.push({ ...w, proposedName });
+    }
+
+    const total = flagged.length;
+    const pageRows = flagged.slice(skip, skip + parsedLimit);
 
     // Bottle counts for the page's rows in one aggregate
     const bottleCounts = new Map();
-    if (wines.length > 0) {
+    if (pageRows.length > 0) {
       const counts = await Bottle.aggregate([
-        { $match: { wineDefinition: { $in: wines.map(w => w._id) } } },
+        { $match: { wineDefinition: { $in: pageRows.map(w => w._id) } } },
         { $group: { _id: '$wineDefinition', count: { $sum: 1 } } },
       ]);
       for (const c of counts) bottleCounts.set(String(c._id), c.count);
     }
 
     res.json({
-      wines: wines.map(w => ({
+      wines: pageRows.map(w => ({
         _id: w._id,
         producer: w.producer,
         name: w.name,
-        proposedName: stripProducerName(w.name, w.producer),
+        proposedName: w.proposedName,
         bottleCount: bottleCounts.get(String(w._id)) || 0,
         createdAt: w.createdAt,
       })),
@@ -843,21 +949,25 @@ router.post('/:id/strip-producer', async (req, res) => {
       return res.status(404).json({ error: 'Wine not found' });
     }
 
-    const stripped = stripProducerName(wine.name, wine.producer);
+    const stripped = stripProducerName(wine.name, wine.producer)
+      ?? stripProducerKeyPrefix(wine.name, wine.producer);
     if (!stripped) {
       return res.status(400).json({
         error: 'Wine name does not start or end with its producer, or nothing would remain after stripping'
       });
     }
 
-    // If the same producer already has a wine with the stripped name, renaming
-    // would create the very duplicate the registry avoids — the admin should
-    // resolve that pair via the duplicates tool instead.
-    const conflict = await WineDefinition.findOne({
+    // If the same producer — under ANY spelling that shares the comparison key
+    // ("Felton Road" vs "Felton Road Wines Ltd") — already has a wine with the
+    // stripped name, renaming would just surface the very duplicate the
+    // registry avoids: the admin should MERGE that pair via the duplicates
+    // tool instead (the merge keeps bottles; a rename would collide).
+    const producerKey = normalizeProducerKey(wine.producer);
+    const nameTwins = await WineDefinition.find({
       _id: { $ne: wine._id },
-      producer: new RegExp(`^${escapeRegex(wine.producer)}$`, 'i'),
       name: new RegExp(`^${escapeRegex(stripped)}$`, 'i'),
-    }).select('name producer');
+    }).select('name producer').limit(10).lean();
+    const conflict = nameTwins.find(t => producerKey && normalizeProducerKey(t.producer) === producerKey);
     if (conflict) {
       return res.status(409).json({
         error: `"${conflict.name}" by ${conflict.producer} already exists — merge these via the duplicates tool instead.`,

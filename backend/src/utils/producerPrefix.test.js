@@ -82,3 +82,76 @@ describe('stripProducerSuffix', () => {
     expect(stripProducerName('Chardonnay', 'Meerlust')).toBeNull();
   });
 });
+
+// ── Key-token twin: producer VARIANTS (registry duplicate analysis 2026-07-22) ─
+describe('stripProducerKeyPrefix', () => {
+  const { stripProducerKeyPrefix } = require('./producerPrefix');
+
+  test('strips the key run when the producer string is a variant — the July prod duplicates', () => {
+    expect(stripProducerKeyPrefix('Felton Road Block 3 Pinot Noir', 'Felton Road Wines Ltd'))
+      .toBe('Block 3 Pinot Noir');
+    expect(stripProducerKeyPrefix('Maude Kids Block Pinot Noir', 'Maude Wines'))
+      .toBe('Kids Block Pinot Noir');
+    expect(stripProducerKeyPrefix('St Hugo Cabernet Sauvignon', 'St Hugo Wines'))
+      .toBe('Cabernet Sauvignon');
+    expect(stripProducerKeyPrefix('Cloudy Bay Sauvignon Blanc', 'Cloudy Bay Vineyards'))
+      .toBe('Sauvignon Blanc');
+  });
+
+  test('skips leading house/stop words that the comparison key drops', () => {
+    // key("La Vialla") = "vialla"; "Fattoria" and "La" belong to the producer reference
+    expect(stripProducerKeyPrefix('Fattoria La Vialla Chianti', 'La Vialla')).toBe('Chianti');
+    // key("La Rioja Alta, S.A.") = "rioja alta"
+    expect(stripProducerKeyPrefix('La Rioja Alta Gran Reserva 904', 'La Rioja Alta, S.A.'))
+      .toBe('Gran Reserva 904');
+  });
+
+  test('preserves original casing and punctuation of the remainder', () => {
+    expect(stripProducerKeyPrefix("Miner Family The Iliad", 'Miner Family Winery'))
+      .toBe('The Iliad');
+  });
+
+  test('never strips a SUFFIX — legitimate names end with the producer key', () => {
+    // "Les Forts de Latour" IS the second wine's name; key("Château Latour") = "latour"
+    expect(stripProducerKeyPrefix('Les Forts de Latour', 'Château Latour')).toBeNull();
+  });
+
+  test('requires the FULL key run — partial producer overlap never strips', () => {
+    expect(stripProducerKeyPrefix('Felton Something Pinot Noir', 'Felton Road Wines Ltd')).toBeNull();
+    expect(stripProducerKeyPrefix('Block 3 Pinot Noir', 'Felton Road Wines Ltd')).toBeNull();
+  });
+
+  test('never strips to nothing', () => {
+    expect(stripProducerKeyPrefix('Felton Road', 'Felton Road Wines Ltd')).toBeNull();
+    expect(stripProducerKeyPrefix('Fattoria La Vialla', 'La Vialla')).toBeNull();
+  });
+
+  test('word-boundary safe — a producer key inside a longer word never strips', () => {
+    // normalize("Felton-Road") = "feltonroad" ≠ token "felton"
+    expect(stripProducerKeyPrefix('Felton-Road Block 3', 'Felton Road Wines Ltd')).toBeNull();
+  });
+
+  test('returns null for empty inputs or an all-stopword producer', () => {
+    expect(stripProducerKeyPrefix('', 'Felton Road Wines Ltd')).toBeNull();
+    expect(stripProducerKeyPrefix('Chardonnay Reserve', 'Domaine')).toBeNull();
+    expect(stripProducerKeyPrefix(null, 'Felton Road')).toBeNull();
+    expect(stripProducerKeyPrefix('Felton Road Riesling', undefined)).toBeNull();
+  });
+});
+
+// ── The shared step-0: loop both strippers until stable ─────────────────────
+describe('canonicalizeWineName', () => {
+  const { canonicalizeWineName } = require('./producerPrefix');
+
+  test('strips exact and key-variant embeds, repeatedly, until stable', () => {
+    expect(canonicalizeWineName('Meerlust Chardonnay', 'Meerlust')).toBe('Chardonnay');
+    expect(canonicalizeWineName('Felton Road Block 3 Pinot Noir', 'Felton Road Wines Ltd')).toBe('Block 3 Pinot Noir');
+    expect(canonicalizeWineName('Felton Road Felton Road Block 3 Pinot Noir', 'Felton Road Wines Ltd')).toBe('Block 3 Pinot Noir');
+  });
+
+  test('returns the trimmed input when nothing strips', () => {
+    expect(canonicalizeWineName('  Block 3 Pinot Noir ', 'Felton Road Wines Ltd')).toBe('Block 3 Pinot Noir');
+    expect(canonicalizeWineName('Les Forts de Latour', 'Château Latour')).toBe('Les Forts de Latour');
+    expect(canonicalizeWineName('', 'Whoever')).toBe('');
+  });
+});

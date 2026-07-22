@@ -1,3 +1,5 @@
+const { normalizeString, normalizeProducerKey, tokenize } = require('./normalize');
+
 /**
  * Detect and strip a redundant producer prefix from a wine name.
  *
@@ -59,4 +61,69 @@ function stripProducerName(name, producer) {
   return stripProducerPrefix(name, producer) ?? stripProducerSuffix(name, producer);
 }
 
-module.exports = { stripProducerPrefix, stripProducerSuffix, stripProducerName };
+/**
+ * Variant-tolerant twin of stripProducerPrefix: strips the producer's
+ * COMPARISON-KEY tokens off the FRONT of a name, so the exact-string blind
+ * spot — name "Felton Road Block 3 Pinot Noir" with producer "Felton Road
+ * Wines Ltd" — still canonicalizes (registry duplicate analysis 2026-07-22:
+ * every observed variant embed was a prefix).
+ *
+ * Rules, in order:
+ *   - Leading words that normalize away entirely (house/stop words: "Fattoria",
+ *     "La", "Weingut") may precede the key run — they belong to the producer
+ *     reference even though the comparison key drops them.
+ *   - The FULL key-token run must then match word-for-word (normalized), so a
+ *     partial producer overlap never strips.
+ *   - Something meaningful must remain.
+ *   - Suffixes are deliberately NOT handled here: legitimate wine names END
+ *     with the producer key ("Les Forts de Latour" — Château Latour), so
+ *     suffix stripping stays exact-string only (stripProducerSuffix).
+ *
+ * Operates on whitespace-split display words and compares their normalized
+ * forms, so the remainder keeps its original casing and punctuation.
+ *
+ * @returns {string|null} the cleaned name, or null when no safe strip applies.
+ */
+function stripProducerKeyPrefix(name, producer) {
+  const n = typeof name === 'string' ? name.trim() : '';
+  if (!n) return null;
+  const keyTokens = normalizeProducerKey(producer || '').split(' ').filter(Boolean);
+  if (keyTokens.length === 0) return null;
+
+  const words = n.split(/\s+/);
+  let start = 0;
+  while (start < words.length && tokenize(words[start]).length === 0) start += 1;
+  if (start + keyTokens.length >= words.length) return null; // nothing meaningful would remain
+  for (let i = 0; i < keyTokens.length; i++) {
+    if (normalizeString(words[start + i]) !== keyTokens[i]) return null;
+  }
+
+  const remainder = words.slice(start + keyTokens.length).join(' ').replace(/^[\s\-–—]+/, '').trim();
+  return remainder.length > 0 ? remainder : null;
+}
+
+/**
+ * Fully canonicalize a wine name against its producer: repeatedly strip the
+ * exact producer (either end) and the producer key-token prefix until stable.
+ * Returns the final name — the trimmed input when nothing strips. This is the
+ * ONE step-0 shared by every registry write surface (findOrCreateWine, admin
+ * create, wine-request approval), so what counts as "producer-free" can never
+ * drift between them.
+ */
+function canonicalizeWineName(name, producer) {
+  let n = typeof name === 'string' ? name.trim() : '';
+  for (let rest = stripProducerName(n, producer) ?? stripProducerKeyPrefix(n, producer);
+       rest;
+       rest = stripProducerName(n, producer) ?? stripProducerKeyPrefix(n, producer)) {
+    n = rest;
+  }
+  return n;
+}
+
+module.exports = {
+  stripProducerPrefix,
+  stripProducerSuffix,
+  stripProducerName,
+  stripProducerKeyPrefix,
+  canonicalizeWineName,
+};
