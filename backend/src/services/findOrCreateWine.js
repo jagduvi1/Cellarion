@@ -21,6 +21,7 @@ const searchService = require('./search');
 const { generateWineKey, normalizeString, normalizeAppellation, resolveGrapeName, resolveCountryName, isUnknownName, isJunkGrapeName } = require('../utils/normalize');
 const { scoreAllMatches } = require('./wineMatching');
 const { canonicalizeWineName } = require('../utils/producerPrefix');
+const { computeCanonicalKey, canonicalSiblingPrefix } = require('../utils/wineIdentity');
 const { buildSurfaceForms, inferGrapeIds } = require('./grapeInference');
 const { escapeRegex } = require('../utils/sanitize');
 
@@ -177,22 +178,52 @@ async function findOrCreateWine({ name, producer, country, region, appellation, 
   let wine = await WineDefinition.findOne({ normalizedKey }).populate(POPULATE);
   if (wine) return { wine, created: false };
 
+  // 1a. Canonical-identity match: collapses producer spelling variants,
+  // producer-in-name embeds and appellation tiers, so ANY spelling of an
+  // already-registered wine lands here before fuzzy scoring ever runs — a
+  // canonical duplicate cannot be minted because this lookup finds the
+  // original first (dup analysis 2026-07-22, phase 1). ≥2 hits mean the
+  // registry ALREADY holds a duplicate cluster for this identity — never pick
+  // one arbitrarily; fall through so the soft zone / admin queue handles it.
+  // Deliberately not gated on skipSiblingMatch: like the exact key above, an
+  // identity-level hit is the same wine (the different-country guard covers
+  // the distinct-winery collisions).
+  const canonicalKey = computeCanonicalKey(trimmedName, trimmedProducer, trimmedAppellation);
+  const canonicalHits = await WineDefinition.find({ canonicalKey })
+    .limit(2)
+    .populate(POPULATE);
+  if (canonicalHits.length === 1 && !conflictsCountry(canonicalHits[0])) {
+    return { wine: canonicalHits[0], created: false };
+  }
+
   // 1b. Sibling match: same producer + same canonical name, ANY appellation.
   // Import files and AI output often carry a different appellation granularity
   // than the registry ("Cromwell" vs the registry's "Central Otago") — the
   // full-key match above misses and the fuzzy score lands around 0.90, below
   // the auto-match threshold, so without this step a non-interactive caller
-  // (confirmCreate) would mint a near-duplicate. A UNIQUE producer+name hit is
-  // overwhelmingly the same wine; with several siblings we fall through to the
-  // fuzzy scorer so the soft zone can disambiguate instead of picking one
-  // arbitrarily. The anchored regex is a prefix scan on the normalizedKey index.
+  // (confirmCreate) would mint a near-duplicate. A UNIQUE hit is overwhelmingly
+  // the same wine; with several siblings we fall through to the fuzzy scorer so
+  // the soft zone can disambiguate instead of picking one arbitrarily.
+  // Canonical prefix first (variant-tolerant); the raw normalizedKey prefix is
+  // kept as a fallback for rows that predate canonicalKey on instances that
+  // haven't run the backfill — they converge organically as docs save.
   if (!skipSiblingMatch) {
-    const siblingPrefix = `${normalizeString(trimmedProducer)}:${normalizeString(trimmedName)}:`;
-    const siblings = await WineDefinition.find({ normalizedKey: new RegExp(`^${escapeRegex(siblingPrefix)}`) })
+    const canonicalSiblings = await WineDefinition.find({
+      canonicalKey: new RegExp(`^${escapeRegex(canonicalSiblingPrefix(trimmedName, trimmedProducer))}`),
+    })
       .limit(2)
       .populate(POPULATE);
-    if (siblings.length === 1 && !conflictsCountry(siblings[0])) {
-      return { wine: siblings[0], created: false };
+    if (canonicalSiblings.length === 1 && !conflictsCountry(canonicalSiblings[0])) {
+      return { wine: canonicalSiblings[0], created: false };
+    }
+    if (canonicalSiblings.length === 0) {
+      const siblingPrefix = `${normalizeString(trimmedProducer)}:${normalizeString(trimmedName)}:`;
+      const siblings = await WineDefinition.find({ normalizedKey: new RegExp(`^${escapeRegex(siblingPrefix)}`) })
+        .limit(2)
+        .populate(POPULATE);
+      if (siblings.length === 1 && !conflictsCountry(siblings[0])) {
+        return { wine: siblings[0], created: false };
+      }
     }
   }
 

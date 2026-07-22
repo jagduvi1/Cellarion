@@ -52,6 +52,8 @@ const express = require('express');
 const http = require('http');
 const jwt = require('jsonwebtoken');
 const WineDefinition = require('../../models/WineDefinition');
+const WineNotDuplicate = require('../../models/WineNotDuplicate');
+const Bottle = require('../../models/Bottle');
 const Country = require('../../models/Country');
 const { findOrCreateWine } = require('../../services/findOrCreateWine');
 const { generateWineKey } = require('../../utils/normalize');
@@ -161,4 +163,53 @@ test('operator-injection shapes are rejected with 400, nothing queried', async (
 
   expect(Country.findById).not.toHaveBeenCalled();
   expect(WineDefinition).not.toHaveBeenCalled();
+});
+
+test('canonical-collisions groups by canonicalKey, flags likely false positives, sorts by bottles', async () => {
+  const rows = [
+    { _id: 'a', name: 'Garden Spritz', producer: 'Domaine Chandon', appellation: null, type: 'sparkling', country: { _id: 'c-us', name: 'United States' }, canonicalKey: 'chandon:garden spritz:', createdAt: 'd1', createdVia: null },
+    { _id: 'b', name: 'Garden Spritz', producer: 'Bodegas Chandon', appellation: null, type: 'sparkling', country: { _id: 'c-ar', name: 'Argentina' }, canonicalKey: 'chandon:garden spritz:', createdAt: 'd2', createdVia: 'import' },
+    { _id: 'solo', name: 'Solo Wine', producer: 'X', appellation: null, type: 'red', country: { _id: 'c-us', name: 'United States' }, canonicalKey: 'x:solo wine:', createdAt: 'd3', createdVia: null },
+  ];
+  WineDefinition.find.mockReturnValue({
+    select: jest.fn().mockReturnValue({
+      populate: jest.fn().mockReturnValue({ lean: jest.fn().mockResolvedValue(rows) }),
+    }),
+  });
+  WineNotDuplicate.find.mockReturnValue({
+    select: jest.fn().mockReturnValue({ lean: jest.fn().mockResolvedValue([]) }),
+  });
+  Bottle.aggregate.mockResolvedValue([{ _id: 'b', count: 4 }]);
+
+  const res = await fetch(`${baseUrl}/api/admin/wines/canonical-collisions`, {
+    headers: { Authorization: `Bearer ${adminToken()}` },
+  });
+  expect(res.status).toBe(200);
+  const data = await res.json();
+  expect(data.total).toBe(1); // the solo wine is not a collision
+  expect(data.sets[0].flags).toContain('DIFF-COUNTRY');
+  expect(data.sets[0].wines.map(w => w._id)).toEqual(['b', 'a']); // most-bottled first
+  expect(data.sets[0].wines[0].bottleCount).toBe(4);
+});
+
+test('canonical-collisions hides sets where every pair was dismissed as not-a-duplicate', async () => {
+  const rows = [
+    { _id: 'a', name: 'W', producer: 'P1', appellation: null, type: 'red', country: { _id: 'c1', name: 'France' }, canonicalKey: 'p:w:', createdAt: 'd1', createdVia: null },
+    { _id: 'b', name: 'W', producer: 'P2', appellation: null, type: 'red', country: { _id: 'c1', name: 'France' }, canonicalKey: 'p:w:', createdAt: 'd2', createdVia: null },
+  ];
+  WineDefinition.find.mockReturnValue({
+    select: jest.fn().mockReturnValue({
+      populate: jest.fn().mockReturnValue({ lean: jest.fn().mockResolvedValue(rows) }),
+    }),
+  });
+  WineNotDuplicate.find.mockReturnValue({
+    select: jest.fn().mockReturnValue({ lean: jest.fn().mockResolvedValue([{ wineA: 'a', wineB: 'b' }]) }),
+  });
+  Bottle.aggregate.mockResolvedValue([]);
+
+  const res = await fetch(`${baseUrl}/api/admin/wines/canonical-collisions`, {
+    headers: { Authorization: `Bearer ${adminToken()}` },
+  });
+  const data = await res.json();
+  expect(data.total).toBe(0);
 });
