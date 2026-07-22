@@ -609,9 +609,13 @@ Uses Jest. Covers auth middleware, cellar access control, wine normalisation/sim
 
 1. Fork the repo and create a feature branch off `main`
 2. Make your changes
-3. Run the tests (`cd frontend && npm test -- --watchAll=false` and `cd backend && npm test`)
+3. Run the tests (`cd frontend && npm test` and `cd backend && npm test`)
 4. Smoke-test in Docker: `docker-compose up --build`
 5. Submit a pull request with a clear description of your changes
+
+### Translations
+
+Want Cellarion in your language? Translations are contributed through Weblate — no coding required. See [TRANSLATING.md](TRANSLATING.md) to get started. (Please don't PR edits to `translation.json` files directly; they conflict with Weblate's sync.)
 
 ---
 
