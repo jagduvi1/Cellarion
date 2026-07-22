@@ -598,6 +598,84 @@ router.get('/duplicates', async (req, res) => {
   }
 });
 
+// GET /api/admin/wines/canonical-collisions — the standing duplicate queue
+// (dup analysis 2026-07-22, phases 1-2). Groups wines by canonicalKey; every
+// group of ≥2 is either a real duplicate (→ merge tool) or a legitimate
+// same-name collision (→ dismiss via the not-a-duplicate flow, which hides it
+// here too). DIFF-COUNTRY / DIFF-TYPE flags mark likely false positives
+// (Domaine Chandon Napa vs Bodegas Chandon Mendoza). Healthy steady state:
+// zero sets — new canonical duplicates can't be minted (findOrCreateWine
+// resolves them), so anything appearing here entered via a raced write or a
+// pre-backfill row and deserves a look.
+router.get('/canonical-collisions', async (req, res) => {
+  try {
+    const wines = await WineDefinition.find({ canonicalKey: { $ne: null } })
+      .select('name producer appellation type country canonicalKey createdAt createdVia')
+      .populate('country', 'name')
+      .lean();
+
+    const groups = new Map();
+    for (const w of wines) {
+      let group = groups.get(w.canonicalKey);
+      if (!group) { group = []; groups.set(w.canonicalKey, group); }
+      group.push(w);
+    }
+    const collisions = [...groups.entries()].filter(([, arr]) => arr.length >= 2);
+
+    // Sets where the admin has dismissed EVERY pair stop resurfacing.
+    const notDup = await WineNotDuplicate.find({}).select('wineA wineB').lean();
+    const dismissed = new Set(notDup.map(d => `${d.wineA}|${d.wineB}`));
+    const pairKey = (a, b) => (String(a) < String(b) ? `${a}|${b}` : `${b}|${a}`);
+    const active = collisions.filter(([, arr]) => {
+      for (let i = 0; i < arr.length; i++) {
+        for (let j = i + 1; j < arr.length; j++) {
+          if (!dismissed.has(pairKey(arr[i]._id, arr[j]._id))) return true;
+        }
+      }
+      return false;
+    });
+
+    const ids = active.flatMap(([, arr]) => arr.map(w => w._id));
+    const bottleCounts = new Map();
+    if (ids.length > 0) {
+      const counts = await Bottle.aggregate([
+        { $match: { wineDefinition: { $in: ids } } },
+        { $group: { _id: '$wineDefinition', count: { $sum: 1 } } },
+      ]);
+      for (const c of counts) bottleCounts.set(String(c._id), c.count);
+    }
+
+    const totalBottles = (arr) => arr.reduce((s, w) => s + (bottleCounts.get(String(w._id)) || 0), 0);
+    const sets = active
+      .map(([key, arr]) => ({
+        canonicalKey: key,
+        flags: [
+          new Set(arr.map(w => String(w.country?._id || ''))).size > 1 ? 'DIFF-COUNTRY' : null,
+          new Set(arr.map(w => w.type)).size > 1 ? 'DIFF-TYPE' : null,
+        ].filter(Boolean),
+        wines: arr
+          .map(w => ({
+            _id: w._id,
+            name: w.name,
+            producer: w.producer,
+            appellation: w.appellation || null,
+            type: w.type,
+            country: w.country?.name || null,
+            createdAt: w.createdAt,
+            createdVia: w.createdVia || null,
+            bottleCount: bottleCounts.get(String(w._id)) || 0,
+          }))
+          .sort((a, b) => b.bottleCount - a.bottleCount),
+      }))
+      .sort((a, b) => totalBottles(groups.get(b.canonicalKey)) - totalBottles(groups.get(a.canonicalKey)));
+
+    res.json({ sets, total: sets.length, scannedCount: wines.length });
+  } catch (error) {
+    console.error('Canonical collisions error:', error);
+    res.status(500).json({ error: 'Failed to list canonical collisions' });
+  }
+});
+
 // GET /api/admin/wines/producer-in-name — wines whose name STARTS or ENDS
 // with their own producer (prefix: producer "Meerlust", name "Meerlust
 // Chardonnay"; suffix: producer "Mastroberardino", name "Fiano di Avellino

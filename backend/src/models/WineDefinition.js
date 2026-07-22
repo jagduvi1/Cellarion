@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 const { generateWineSlug } = require('../utils/normalize');
+const { computeCanonicalKey } = require('../utils/wineIdentity');
 
 const wineDefinitionSchema = new mongoose.Schema({
   name: {
@@ -108,6 +109,17 @@ const wineDefinitionSchema = new mongoose.Schema({
     unique: true,
     index: true
   },
+  // Canonical identity for duplicate PREVENTION (utils/wineIdentity.js):
+  // collapses producer variants, producer-in-name embeds and appellation
+  // tiers. Deliberately NON-unique — distinct wineries can share a key
+  // (Domaine vs Bodegas Chandon); collisions feed the admin review queue.
+  // Maintained by the pre-validate hook; null only on rows predating the
+  // field that haven't been saved or backfilled yet.
+  canonicalKey: {
+    type: String,
+    index: true,
+    default: null
+  },
   // Vintage-neutral, human-readable slug used in public URLs (/wines/:slug).
   // Sparse so older docs without a slug don't violate the unique index until
   // the migration runs. Once set, never auto-regenerated on rename — URLs are
@@ -165,6 +177,17 @@ wineDefinitionSchema.index({ type: 1, name: 1 });
 // Update timestamp on save
 wineDefinitionSchema.pre('save', function(next) {
   this.updatedAt = Date.now();
+  next();
+});
+
+// Keep canonicalKey in sync with the identity fields. pre-validate (not
+// pre-save) so plain doc.validate() computes it too. Covers every save-based
+// write path (create, admin PUT rename, strip-producer); scripted updateOne
+// callers must set it themselves (backfill-canonical-key.js does).
+wineDefinitionSchema.pre('validate', function(next) {
+  if (!this.canonicalKey || this.isModified('name') || this.isModified('producer') || this.isModified('appellation')) {
+    this.canonicalKey = computeCanonicalKey(this.name, this.producer, this.appellation);
+  }
   next();
 });
 

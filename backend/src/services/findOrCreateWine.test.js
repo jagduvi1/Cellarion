@@ -81,15 +81,21 @@ const EXISTING_WINE = { _id: 'wine-existing', name: 'Clos des Papes' };
 const findOneChain = (doc) => ({ populate: jest.fn().mockResolvedValue(doc) });
 
 /**
- * Query-shape dispatcher for WineDefinition.find — the service issues three
+ * Query-shape dispatcher for WineDefinition.find — the service issues five
  * differently-chained find() queries, so a single mockReturnValue can't serve
  * them all:
- *   { normalizedKey: RegExp } → .limit(2).populate(...)   (step 1b sibling lookup)
- *   { _id: { $in: ids } }     → .populate(...)            (Meilisearch id fetch)
- *   { $text: ... }            → .populate(...).limit(20)  (Mongo text fallback)
+ *   { canonicalKey: string } → .limit(2).populate(...)   (step 1a canonical identity)
+ *   { canonicalKey: RegExp } → .limit(2).populate(...)   (step 1b canonical sibling)
+ *   { normalizedKey: RegExp } → .limit(2).populate(...)  (step 1b raw-sibling fallback)
+ *   { _id: { $in: ids } }     → .populate(...)           (Meilisearch id fetch)
+ *   { $text: ... }            → .populate(...).limit(20) (Mongo text fallback)
  */
-function primeFind({ siblings = [], meiliDocs = [], textDocs = [] } = {}) {
+function primeFind({ canonicalHits = [], canonicalSiblings = [], siblings = [], meiliDocs = [], textDocs = [] } = {}) {
   WineDefinition.find.mockImplementation((q) => {
+    if (q && q.canonicalKey) {
+      const docs = q.canonicalKey instanceof RegExp ? canonicalSiblings : canonicalHits;
+      return { limit: jest.fn().mockReturnValue({ populate: jest.fn().mockResolvedValue(docs) }) };
+    }
     if (q && q.normalizedKey) {
       return { limit: jest.fn().mockReturnValue({ populate: jest.fn().mockResolvedValue(siblings) }) };
     }
@@ -346,6 +352,56 @@ describe('findOrCreateWine — nearMiss reporting on confirmed create', () => {
 
     expect(result.created).toBe(true);
     expect(result.nearMiss).toBeUndefined();
+  });
+});
+
+describe('findOrCreateWine — canonical-identity match (step 1a)', () => {
+  // The lookup-first design from the 2026-07-22 dup analysis: any spelling of
+  // an already-registered wine resolves to it BEFORE fuzzy scoring, so a
+  // canonical duplicate cannot be minted.
+  const CANONICAL_HIT = { _id: 'wine-canon', name: 'Block 3 Pinot Noir', producer: 'Felton Road' };
+
+  test('a single canonical hit returns the existing wine — variant input, no fuzzy, no create', async () => {
+    primeFind({ canonicalHits: [CANONICAL_HIT] });
+
+    const result = await findOrCreateWine(
+      { ...INPUT, name: 'Felton Road Block 3 Pinot Noir', producer: 'Felton Road Wines Ltd', appellation: 'Bannockburn' },
+      USER_ID
+    );
+
+    expect(result).toEqual({ wine: CANONICAL_HIT, created: false });
+    expect(scoreAllMatches).not.toHaveBeenCalled();
+    expect(WineDefinition).not.toHaveBeenCalled();
+  });
+
+  test('two canonical hits (a pre-existing duplicate cluster) fall through — never picks one arbitrarily', async () => {
+    primeFind({ canonicalHits: [{ _id: 'dup-a' }, { _id: 'dup-b' }] });
+
+    const result = await findOrCreateWine(INPUT, USER_ID);
+
+    expect(result.created).toBe(true); // empty fuzzy → creates; the cluster stays for the admin queue
+  });
+
+  test('a canonical hit with a conflicting country is not linked', async () => {
+    primeFind({ canonicalHits: [{ _id: 'wine-ar', name: 'Garden Spritz', country: { name: 'Argentina' } }] });
+
+    const result = await findOrCreateWine(
+      { name: 'Garden Spritz', producer: 'Chandon', country: 'United States', region: '', appellation: '', type: 'sparkling', grapes: ['Chardonnay'] },
+      USER_ID
+    );
+
+    expect(result.created).toBe(true);
+  });
+
+  test('canonical SIBLING (same identity, other appellation) matches when unique', async () => {
+    primeFind({ canonicalSiblings: [CANONICAL_HIT] });
+
+    const result = await findOrCreateWine(
+      { ...INPUT, name: 'Felton Road Block 3 Pinot Noir', producer: 'Felton Road Wines Ltd', appellation: 'Central Otago' },
+      USER_ID
+    );
+
+    expect(result).toEqual({ wine: CANONICAL_HIT, created: false });
   });
 });
 
