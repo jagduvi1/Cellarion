@@ -138,3 +138,20 @@ describe('stripProducerKeyPrefix', () => {
     expect(stripProducerKeyPrefix('Felton Road Riesling', undefined)).toBeNull();
   });
 });
+
+// ── The shared step-0: loop both strippers until stable ─────────────────────
+describe('canonicalizeWineName', () => {
+  const { canonicalizeWineName } = require('./producerPrefix');
+
+  test('strips exact and key-variant embeds, repeatedly, until stable', () => {
+    expect(canonicalizeWineName('Meerlust Chardonnay', 'Meerlust')).toBe('Chardonnay');
+    expect(canonicalizeWineName('Felton Road Block 3 Pinot Noir', 'Felton Road Wines Ltd')).toBe('Block 3 Pinot Noir');
+    expect(canonicalizeWineName('Felton Road Felton Road Block 3 Pinot Noir', 'Felton Road Wines Ltd')).toBe('Block 3 Pinot Noir');
+  });
+
+  test('returns the trimmed input when nothing strips', () => {
+    expect(canonicalizeWineName('  Block 3 Pinot Noir ', 'Felton Road Wines Ltd')).toBe('Block 3 Pinot Noir');
+    expect(canonicalizeWineName('Les Forts de Latour', 'Château Latour')).toBe('Les Forts de Latour');
+    expect(canonicalizeWineName('', 'Whoever')).toBe('');
+  });
+});

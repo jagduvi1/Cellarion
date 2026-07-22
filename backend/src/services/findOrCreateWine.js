@@ -20,7 +20,7 @@ const Grape = require('../models/Grape');
 const searchService = require('./search');
 const { generateWineKey, normalizeString, normalizeAppellation, resolveGrapeName, resolveCountryName, isUnknownName, isJunkGrapeName } = require('../utils/normalize');
 const { scoreAllMatches } = require('./wineMatching');
-const { stripProducerName, stripProducerKeyPrefix } = require('../utils/producerPrefix');
+const { canonicalizeWineName } = require('../utils/producerPrefix');
 const { buildSurfaceForms, inferGrapeIds } = require('./grapeInference');
 const { escapeRegex } = require('../utils/sanitize');
 
@@ -153,15 +153,8 @@ async function findOrCreateWine({ name, producer, country, region, appellation, 
   // the admin tool has to clean up later. The key-prefix twin also catches
   // producer VARIANTS — name "Felton Road Block 3 Pinot Noir" with producer
   // "Felton Road Wines Ltd" — which the exact-string strip can't see (the
-  // shape behind most July-2026 prod duplicates). Loop: concatenated sources
-  // can repeat the producer on either end.
-  for (let rest = stripProducerName(trimmedName, trimmedProducer)
-         ?? stripProducerKeyPrefix(trimmedName, trimmedProducer);
-       rest;
-       rest = stripProducerName(trimmedName, trimmedProducer)
-         ?? stripProducerKeyPrefix(trimmedName, trimmedProducer)) {
-    trimmedName = rest;
-  }
+  // shape behind most July-2026 prod duplicates).
+  trimmedName = canonicalizeWineName(trimmedName, trimmedProducer);
 
   // Different-country guard for every non-exact auto-link below: an identical
   // canonical producer+name can still be two wineries (Domaine Chandon, Napa
@@ -229,6 +222,11 @@ async function findOrCreateWine({ name, producer, country, region, appellation, 
     }
   }
 
+  // When creation proceeds PAST a soft-zone-level top candidate (confirmCreate
+  // callers skip the "did you mean?" gate), report that near-miss back so
+  // non-interactive callers (cellar import) can audit-log it for later review.
+  let nearMiss = null;
+
   if (candidates.length > 0) {
     const ranked = scoreAllMatches(
       { name: trimmedName, producer: trimmedProducer, appellation: trimmedAppellation },
@@ -253,6 +251,15 @@ async function findOrCreateWine({ name, producer, country, region, appellation, 
         .slice(0, SOFT_ZONE_TOP_N)
         .map(r => ({ wine: r.wine, score: Math.round(r.score * 100) / 100 }));
       return { wine: null, candidates: softCandidates };
+    }
+
+    if (ranked[0].score >= SOFT_ZONE_MIN) {
+      nearMiss = {
+        wineId: ranked[0].wine._id,
+        name: ranked[0].wine.name,
+        producer: ranked[0].wine.producer,
+        score: Math.round(ranked[0].score * 100) / 100,
+      };
     }
   }
 
@@ -316,7 +323,9 @@ async function findOrCreateWine({ name, producer, country, region, appellation, 
   // Sync to Meilisearch (fire-and-forget)
   searchService.indexWine(newWine._id);
 
-  return { wine: newWine, created: true };
+  return nearMiss
+    ? { wine: newWine, created: true, nearMiss }
+    : { wine: newWine, created: true };
 }
 
 module.exports = { findOrCreateWine, findOrCreateCountry, findOrCreateRegion, findOrCreateGrapes };

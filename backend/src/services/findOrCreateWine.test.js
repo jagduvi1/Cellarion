@@ -319,6 +319,36 @@ describe('findOrCreateWine — different-country guard', () => {
   });
 });
 
+describe('findOrCreateWine — nearMiss reporting on confirmed create', () => {
+  // confirmCreate callers (cellar import) skip the soft-zone prompt by design.
+  // When creation proceeds PAST a >=0.85 candidate, the caller needs to know —
+  // that shape is exactly what used to mint silent duplicates, and the import
+  // path audit-logs it for admin review.
+  test('creating past a soft-zone candidate reports it as nearMiss', async () => {
+    const near = { _id: 'wine-near', name: 'Clos des Papes', producer: 'Paul Avril' };
+    primeCandidates([{ wine: near, score: 0.9 }]);
+
+    const result = await findOrCreateWine(INPUT, USER_ID, { confirmCreate: true });
+
+    expect(result.created).toBe(true);
+    expect(result.nearMiss).toEqual({
+      wineId: 'wine-near',
+      name: 'Clos des Papes',
+      producer: 'Paul Avril',
+      score: 0.9,
+    });
+  });
+
+  test('a clean create (no soft-zone candidate) reports no nearMiss', async () => {
+    primeCandidates([{ wine: { _id: 'wine-far', name: 'Other' }, score: 0.4 }]);
+
+    const result = await findOrCreateWine(INPUT, USER_ID, { confirmCreate: true });
+
+    expect(result.created).toBe(true);
+    expect(result.nearMiss).toBeUndefined();
+  });
+});
+
 describe('findOrCreateWine — sibling match (step 1b)', () => {
   // Same producer + same canonical name but a different appellation granularity
   // ("Cromwell" vs "Central Otago") misses the exact key and fuzzy-scores ~0.90

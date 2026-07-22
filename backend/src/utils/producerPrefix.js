@@ -102,4 +102,28 @@ function stripProducerKeyPrefix(name, producer) {
   return remainder.length > 0 ? remainder : null;
 }
 
-module.exports = { stripProducerPrefix, stripProducerSuffix, stripProducerName, stripProducerKeyPrefix };
+/**
+ * Fully canonicalize a wine name against its producer: repeatedly strip the
+ * exact producer (either end) and the producer key-token prefix until stable.
+ * Returns the final name — the trimmed input when nothing strips. This is the
+ * ONE step-0 shared by every registry write surface (findOrCreateWine, admin
+ * create, wine-request approval), so what counts as "producer-free" can never
+ * drift between them.
+ */
+function canonicalizeWineName(name, producer) {
+  let n = typeof name === 'string' ? name.trim() : '';
+  for (let rest = stripProducerName(n, producer) ?? stripProducerKeyPrefix(n, producer);
+       rest;
+       rest = stripProducerName(n, producer) ?? stripProducerKeyPrefix(n, producer)) {
+    n = rest;
+  }
+  return n;
+}
+
+module.exports = {
+  stripProducerPrefix,
+  stripProducerSuffix,
+  stripProducerName,
+  stripProducerKeyPrefix,
+  canonicalizeWineName,
+};

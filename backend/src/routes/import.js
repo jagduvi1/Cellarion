@@ -396,7 +396,7 @@ router.post('/validate', aiBurstLimiter, async (req, res) => {
           const wineData = (importGrapes.length > 0 && !aiHasGrapes)
             ? { ...pr.aiIdentified, grapes: importGrapes }
             : pr.aiIdentified;
-          const { wine, created } = await findOrCreateWine(wineData, req.user.id);
+          const { wine, created } = await findOrCreateWine(wineData, req.user.id, { createdVia: 'import' });
           createdWineCache.set(key, { wine, created });
           pr.aiWine = wine;
           pr.aiWineCreated = created;

@@ -41,7 +41,9 @@ const { submitUrls } = require('../../services/indexNow');
 const { isValidId } = require('../../utils/validation');
 const { escapeRegex } = require('../../utils/sanitize');
 const { parsePagination } = require('../../utils/pagination');
-const { stripProducerName, stripProducerKeyPrefix } = require('../../utils/producerPrefix');
+const { stripProducerName, stripProducerKeyPrefix, canonicalizeWineName } = require('../../utils/producerPrefix');
+const Country = require('../../models/Country');
+const { findOrCreateWine } = require('../../services/findOrCreateWine');
 
 const router = express.Router();
 
@@ -133,28 +135,72 @@ router.get('/', async (req, res) => {
 });
 
 // POST /api/admin/wines - Create wine definition
+//
+// This endpoint used to bypass EVERY dedup layer (step-0 strip, sibling match,
+// fuzzy soft zone) and rely on the raw unique key alone, so only verbatim
+// duplicates were stopped (dup analysis 2026-07-22, RC4). It now canonicalizes
+// like every other write surface and probes the shared matcher first; a
+// likely duplicate returns 409 with the candidates so the admin can link or
+// merge instead — or resubmit with confirmCreate:true after an explicit
+// "create anyway".
 router.post('/', async (req, res) => {
   try {
-    const { name, producer, country, region, appellation, grapes, type, image } = req.body;
+    const { name, producer, country, region, appellation, grapes, type, image, confirmCreate } = req.body;
 
     if (!name || !producer || !country) {
       return res.status(400).json({ error: 'Name, producer, and country are required' });
     }
+    if (typeof name !== 'string' || typeof producer !== 'string') {
+      return res.status(400).json({ error: 'Name and producer must be strings' });
+    }
+    if (!isValidId(String(country))) {
+      return res.status(400).json({ error: 'Invalid country' });
+    }
+
+    const cleanProducer = producer.trim();
+    const cleanName = canonicalizeWineName(name, cleanProducer);
+    const cleanAppellation = normalizeAppellation(typeof appellation === 'string' ? appellation.trim() : null) || null;
+
+    if (!confirmCreate) {
+      const countryDoc = await Country.findById(String(country)).select('name').lean().catch(() => null);
+      const probe = await findOrCreateWine(
+        {
+          name: cleanName, producer: cleanProducer, country: countryDoc?.name || '',
+          region: '', appellation: cleanAppellation || '', type, grapes: [],
+        },
+        req.user.id,
+        { matchOnly: true }
+      );
+      const dupes = probe.wine ? [{ wine: probe.wine, score: 1 }] : (probe.candidates || []);
+      if (dupes.length > 0) {
+        return res.status(409).json({
+          error: 'Very similar registry wine(s) already exist — link or merge instead, or create anyway if this is genuinely different.',
+          candidates: dupes.map(d => ({
+            _id: d.wine._id,
+            name: d.wine.name,
+            producer: d.wine.producer,
+            appellation: d.wine.appellation || null,
+            score: d.score,
+          })),
+        });
+      }
+    }
 
     // Generate normalized key for deduplication
-    const normalizedKey = generateWineKey(name, producer, appellation);
+    const normalizedKey = generateWineKey(cleanName, cleanProducer, cleanAppellation);
 
     const wine = new WineDefinition({
-      name: name.trim(),
-      producer: producer.trim(),
+      name: cleanName,
+      producer: cleanProducer,
       country,
       region: region || null,
-      appellation: normalizeAppellation(appellation?.trim()),
+      appellation: cleanAppellation,
       grapes: grapes || [],
       type: type || 'red',
       image: image || null,
       normalizedKey,
-      createdBy: req.user.id
+      createdBy: req.user.id,
+      createdVia: 'ui'
     });
 
     await wine.save();
