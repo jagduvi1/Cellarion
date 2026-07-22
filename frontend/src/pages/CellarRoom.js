@@ -1432,7 +1432,7 @@ export default function CellarRoom() {
           {selectedRackIds.length > 1 && isEditMode && (
             <div className="room-rack-detail">
               <div className="room-rack-detail-header">
-                <h4>{selectedRackIds.length} {t('room.racksSelected', 'racks selected')}</h4>
+                <h4>{t('room.racksSelected', { count: selectedRackIds.length })}</h4>
               </div>
               <p style={{ opacity: 0.6, fontSize: '12px' }}>
                 {t('room.shiftClickHint', 'Shift+click to add/remove racks')}

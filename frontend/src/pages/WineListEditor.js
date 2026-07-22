@@ -726,7 +726,7 @@ function WineListEditor() {
               onChange={e => setWineSearch(e.target.value)}
               className="search-input"
             />
-            <span className="text-muted-sm">{selectedCount} {t('wineLists.of')} {wines.length} {t('wineLists.selected')}</span>
+            <span className="text-muted-sm">{t('wineLists.selectedOf', { selected: selectedCount, total: wines.length })}</span>
           </div>
 
           {/* Wine selection list */}
