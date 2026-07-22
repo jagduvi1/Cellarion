@@ -109,13 +109,19 @@ router.put('/:id/resolve', async (req, res) => {
       if (!name || !producer || !country) {
         return res.status(400).json({ error: 'Name, producer, and country are required to create wine' });
       }
+      if (typeof name !== 'string' || typeof producer !== 'string') {
+        return res.status(400).json({ error: 'Name and producer must be strings' });
+      }
+      if (!isValidId(String(country))) {
+        return res.status(400).json({ error: 'Invalid country' });
+      }
 
-      const cleanProducer = String(producer).trim();
-      const cleanName = canonicalizeWineName(String(name), cleanProducer);
-      const cleanAppellation = normalizeAppellation(typeof appellation === 'string' ? appellation.trim() : appellation) || null;
+      const cleanProducer = producer.trim();
+      const cleanName = canonicalizeWineName(name, cleanProducer);
+      const cleanAppellation = normalizeAppellation(typeof appellation === 'string' ? appellation.trim() : null) || null;
 
       if (!req.body.confirmCreate) {
-        const countryDoc = await Country.findById(country).select('name').lean().catch(() => null);
+        const countryDoc = await Country.findById(String(country)).select('name').lean().catch(() => null);
         const probe = await findOrCreateWine(
           {
             name: cleanName, producer: cleanProducer, country: countryDoc?.name || '',

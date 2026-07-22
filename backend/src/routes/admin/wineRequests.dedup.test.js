@@ -128,6 +128,17 @@ test('confirmCreate skips the probe (explicit "create anyway")', async () => {
   expect(WineDefinition).toHaveBeenCalled();
 });
 
+test('operator-injection shapes are rejected with 400, nothing queried', async () => {
+  let res = await resolve({ ...CREATE_BODY, wineData: { ...CREATE_BODY.wineData, producer: { $gt: '' } } });
+  expect(res.status).toBe(400);
+
+  res = await resolve({ ...CREATE_BODY, wineData: { ...CREATE_BODY.wineData, country: { $ne: null } } });
+  expect(res.status).toBe(400);
+
+  expect(Country.findById).not.toHaveBeenCalled();
+  expect(WineDefinition).not.toHaveBeenCalled();
+});
+
 test('a duplicate-key race resolves the request by LINKING the existing wine', async () => {
   const existing = { _id: 'wine-existing', name: 'Barolo del Comune', producer: 'Cantina Rossi' };
   WineDefinition.mockImplementation(function (doc) {

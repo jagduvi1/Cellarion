@@ -151,3 +151,14 @@ test('confirmCreate skips the probe entirely (explicit "create anyway")', async 
   expect(findOrCreateWine).not.toHaveBeenCalled();
   expect(WineDefinition).toHaveBeenCalled();
 });
+
+test('operator-injection shapes are rejected with 400, nothing queried', async () => {
+  let res = await postWine({ ...BODY, name: { $gt: '' } });
+  expect(res.status).toBe(400);
+
+  res = await postWine({ ...BODY, country: { $ne: null } });
+  expect(res.status).toBe(400);
+
+  expect(Country.findById).not.toHaveBeenCalled();
+  expect(WineDefinition).not.toHaveBeenCalled();
+});
