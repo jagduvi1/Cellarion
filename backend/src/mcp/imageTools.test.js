@@ -105,6 +105,17 @@ describe('attach_bottle_image', () => {
     expect(parse(res).data.shows_on_all_bottles_of_wine).toBe(false);
   });
 
+  test('credit + roles are forwarded RAW to the shared pipeline — the admin gate lives there, not here', async () => {
+    ownBottle();
+    safeFetchImage.mockResolvedValue({ buffer: Buffer.from('imgbytes'), contentType: 'image/jpeg' });
+    const roleCtx = { ...CTX, user: { id: ME, roles: ['user'] } };
+    const res = await tool('attach_bottle_image').handler(
+      { bottle_id: oid('d'), image_url: 'https://cdn.example.com/label.jpg', credit: 'Photo: somewhere' }, roleCtx);
+    expect(parse(res).error).toBeUndefined();
+    expect(ingestBottleImage).toHaveBeenCalledWith(
+      expect.objectContaining({ credit: 'Photo: somewhere', userRoles: ['user'] }), roleCtx.req);
+  });
+
   test('image_base64 path: strips a data: prefix and decodes', async () => {
     ownBottle();
     const b64 = Buffer.from('hello-png').toString('base64');

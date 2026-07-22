@@ -268,7 +268,7 @@ router.post('/:id/image', async (req, res) => {
 
     const { attachOfficialWineImage } = require('../../services/imageOps');
     const result = await attachOfficialWineImage(
-      { buffer, wineDefinitionId: wine._id, credit: credit ? String(credit).trim() : null, userId: req.user.id },
+      { buffer, wineDefinitionId: wine._id, credit: credit ? String(credit).trim() : null, userId: req.user.id, userRoles: req.user.roles },
       req
     );
     if (result.error) return res.status(result.error.status).json({ error: result.error.message });
