@@ -21,9 +21,22 @@ const BottleImage = require('../models/BottleImage');
 const { ORIGINALS_DIR } = require('../config/upload');
 const { sanitizeImageBuffer, detectImageFormat } = require('./imageSanitizer');
 const { processImage, hashImageBytes } = require('./imageProcessor');
+const { stripHtml } = require('../utils/sanitize');
 
 const MAX_IMAGES_PER_BOTTLE = 20;
 const EXT_FOR = { jpeg: 'jpg', png: 'png', webp: 'webp' };
+
+/**
+ * Image credits (attribution on wine-library photos) are ADMIN-only, on every
+ * surface. The gate lives HERE — in the shared pipeline, not in each caller —
+ * so REST and MCP cannot drift: a non-admin's credit is silently dropped, an
+ * admin's is HTML-stripped and capped, exactly like the web upload always did.
+ */
+function sanitizeCredit(credit, userRoles) {
+  const isAdmin = Array.isArray(userRoles) && userRoles.includes('admin');
+  if (!isAdmin || !credit || typeof credit !== 'string') return null;
+  return stripHtml(credit).trim().slice(0, 200) || null;
+}
 
 /**
  * Validate, sanitise and persist one image buffer for a bottle (and/or a
@@ -32,13 +45,14 @@ const EXT_FOR = { jpeg: 'jpg', png: 'png', webp: 'webp' };
  * @param {object} opts
  * @param {Buffer}  opts.buffer            raw image bytes (≤ the caller's cap)
  * @param {string}  opts.userId            uploader
+ * @param {string[]} [opts.userRoles]      uploader's roles — credit only sticks for admins
  * @param {object}  [opts.bottle]          access-checked bottle doc (editor+)
  * @param {string}  [opts.wineDefinitionId] pre-validated registry wine id
- * @param {string}  [opts.credit]          pre-sanitised credit (admin flows)
+ * @param {string}  [opts.credit]          RAW credit — gated + sanitised here (admin-only)
  * @param {object}  req                    for downstream audit attribution
  * @returns {{ image }} | {{ error: { status, message } }}
  */
-async function ingestBottleImage({ buffer, userId, bottle = null, wineDefinitionId = null, credit = null }, req) {
+async function ingestBottleImage({ buffer, userId, userRoles = [], bottle = null, wineDefinitionId = null, credit = null }, req) {
   if (!Buffer.isBuffer(buffer) || buffer.length === 0) {
     return { error: { status: 400, message: 'No image data provided' } };
   }
@@ -87,7 +101,7 @@ async function ingestBottleImage({ buffer, userId, bottle = null, wineDefinition
     uploadedBy: userId,
     originalUrl: `/api/uploads/originals/${filename}`,
     status: 'uploaded',
-    credit: credit || null,
+    credit: sanitizeCredit(credit, userRoles),
     contentHash,
   });
   await image.save();
@@ -107,10 +121,11 @@ async function ingestBottleImage({ buffer, userId, bottle = null, wineDefinition
  * deletion — background removal still needs the source; imageProcessor's
  * post-process hook upgrades wine.image to the clean version when it's ready).
  *
- * Caller must have verified the wine exists and the actor is an admin.
+ * Caller must have verified the wine exists and the actor is an admin
+ * (userRoles is still forwarded so the shared credit gate applies uniformly).
  */
-async function attachOfficialWineImage({ buffer, wineDefinitionId, credit = null, userId }, req) {
-  const ingest = await ingestBottleImage({ buffer, userId, wineDefinitionId, credit }, req);
+async function attachOfficialWineImage({ buffer, wineDefinitionId, credit = null, userId, userRoles = [] }, req) {
+  const ingest = await ingestBottleImage({ buffer, userId, userRoles, wineDefinitionId, credit }, req);
   if (ingest.error) return ingest;
   const image = ingest.image;
 
@@ -128,7 +143,8 @@ async function attachOfficialWineImage({ buffer, wineDefinitionId, credit = null
   const WineDefinition = require('../models/WineDefinition');
   await WineDefinition.findByIdAndUpdate(wineDefinitionId, {
     image: image.processedUrl || image.originalUrl,
-    imageCredit: credit || null,
+    // The GATED credit from the shared pipeline — never the raw caller input.
+    imageCredit: image.credit,
   });
   require('./search').indexWine(wineDefinitionId);
 

@@ -98,7 +98,8 @@ describe('official image + credit', () => {
   test('image_url path fetches through the SSRF guard and one-shots the official image with credit', async () => {
     findOrCreateWine.mockResolvedValue({ wine: WINE, created: true });
     safeFetchImage.mockResolvedValue({ buffer: Buffer.from('img') });
-    attachOfficialWineImage.mockResolvedValue({ image: { _id: oid('9'), status: 'approved' } });
+    // The pipeline gates + sanitises the credit; the tool reports the STORED value.
+    attachOfficialWineImage.mockResolvedValue({ image: { _id: oid('9'), status: 'approved', credit: 'Photo: Systembolaget' } });
     const res = await tool('admin_add_registry_wine').handler({
       name: 'Barolo', producer: 'Bartolo Mascarello', country: 'Italy', type: 'red',
       image_url: 'https://cdn.example.com/label.webp', image_credit: 'Photo: Systembolaget',

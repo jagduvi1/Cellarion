@@ -13,7 +13,6 @@ const { getCellarRole } = require('../utils/cellarAccess');
 const { processImage } = require('../services/imageProcessor');
 const { sanitizeImageBuffer } = require('../services/imageSanitizer');
 const { ingestBottleImage } = require('../services/imageOps');
-const { stripHtml } = require('../utils/sanitize');
 const { isValidId } = require('../utils/validation');
 const rateLimitsConfig = require('../config/rateLimits');
 const { logAudit } = require('../services/audit');
@@ -127,12 +126,6 @@ router.post('/upload', requireAuth, requireNonDemo, imageUploadLimiter, handleIm
       }
     }
 
-    // Only admins can set image credits (wine library images)
-    const isAdmin = req.user.roles && req.user.roles.includes('admin');
-    const sanitizedCredit = (isAdmin && credit && typeof credit === 'string')
-      ? stripHtml(credit).slice(0, 200)
-      : null;
-
     if (wineDefinitionId && !mongoose.isValidObjectId(String(wineDefinitionId))) {
       safeUnlink(req.file.path);
       return res.status(400).json({ error: 'Invalid wine definition ID' });
@@ -149,9 +142,12 @@ router.post('/upload', requireAuth, requireNonDemo, imageUploadLimiter, handleIm
     const result = await ingestBottleImage({
       buffer,
       userId: req.user.id,
+      // Credit is gated INSIDE the shared pipeline (admin-only + stripHtml) —
+      // one implementation with the MCP attach tool, so the gate can't drift.
+      userRoles: req.user.roles,
       bottle,
       wineDefinitionId: wineDefinitionId ? String(wineDefinitionId) : null,
-      credit: sanitizedCredit,
+      credit,
     }, req);
     if (result.error) {
       return res.status(result.error.status).json({ error: result.error.message });

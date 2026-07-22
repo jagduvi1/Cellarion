@@ -112,16 +112,19 @@ registerTool({
       const { attachOfficialWineImage } = require('../../services/imageOps');
       const credit = args.image_credit ? String(args.image_credit).trim() : null;
       const result = await attachOfficialWineImage(
-        { buffer, wineDefinitionId: wineDoc._id, credit, userId: ctx.user.id }, ctx.req
+        { buffer, wineDefinitionId: wineDoc._id, credit, userId: ctx.user.id, userRoles: ctx.user.roles }, ctx.req
       );
       if (result.error) {
         return fail(result.error.status >= 500 ? 'unavailable' : 'invalid_input',
           `Wine ${created ? 'created' : 'resolved'} (wine_id ${wineDoc._id}) but the image failed: ${result.error.message}`);
       }
+      // Report the credit the shared gate actually STORED (HTML-stripped),
+      // not the raw input — audit and caller see the truth.
+      const storedCredit = result.image.credit ?? null;
       logAudit(ctx.req, 'admin.wine.image.set',
         { type: 'wine', id: wineDoc._id },
-        { via: 'mcp', imageId: String(result.image._id), credit });
-      imageInfo = { image_id: result.image._id, status: result.image.status, credit };
+        { via: 'mcp', imageId: String(result.image._id), credit: storedCredit });
+      imageInfo = { image_id: result.image._id, status: result.image.status, credit: storedCredit };
     }
 
     return ok(
