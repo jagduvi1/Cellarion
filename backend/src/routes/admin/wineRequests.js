@@ -3,7 +3,10 @@ const { requireAuth, requireRole } = require('../../middleware/auth');
 const WineRequest = require('../../models/WineRequest');
 const WineDefinition = require('../../models/WineDefinition');
 const Bottle = require('../../models/Bottle');
-const { generateWineKey } = require('../../utils/normalize');
+const { generateWineKey, normalizeAppellation } = require('../../utils/normalize');
+const { canonicalizeWineName } = require('../../utils/producerPrefix');
+const Country = require('../../models/Country');
+const { findOrCreateWine } = require('../../services/findOrCreateWine');
 const searchService = require('../../services/search');
 const { logAudit } = require('../../services/audit');
 const { createNotification } = require('../../services/notifications');
@@ -95,29 +98,75 @@ router.put('/:id/resolve', async (req, res) => {
         searchService.indexWine(linkedWine._id);
       }
     } else if (createNew && wineData) {
-      // Create new wine definition
+      // Create new wine definition — through the same canonicalization + dedup
+      // probe as every other write surface (this branch used to bypass all of
+      // it and also skipped the appellation tier-strip; dup analysis
+      // 2026-07-22 RC4). A likely duplicate returns 409 with candidates so the
+      // admin links the request to the existing wine instead — or resubmits
+      // with confirmCreate:true after an explicit "create anyway".
       const { name, producer, country, region, appellation, grapes, type, image } = wineData;
 
       if (!name || !producer || !country) {
         return res.status(400).json({ error: 'Name, producer, and country are required to create wine' });
       }
 
-      const normalizedKey = generateWineKey(name, producer, appellation);
+      const cleanProducer = String(producer).trim();
+      const cleanName = canonicalizeWineName(String(name), cleanProducer);
+      const cleanAppellation = normalizeAppellation(typeof appellation === 'string' ? appellation.trim() : appellation) || null;
+
+      if (!req.body.confirmCreate) {
+        const countryDoc = await Country.findById(country).select('name').lean().catch(() => null);
+        const probe = await findOrCreateWine(
+          {
+            name: cleanName, producer: cleanProducer, country: countryDoc?.name || '',
+            region: '', appellation: cleanAppellation || '', type, grapes: [],
+          },
+          req.user.id,
+          { matchOnly: true }
+        );
+        const dupes = probe.wine ? [{ wine: probe.wine, score: 1 }] : (probe.candidates || []);
+        if (dupes.length > 0) {
+          return res.status(409).json({
+            error: 'Very similar registry wine(s) already exist — link the request to one of them instead, or create anyway if genuinely different.',
+            candidates: dupes.map(d => ({
+              _id: d.wine._id,
+              name: d.wine.name,
+              producer: d.wine.producer,
+              appellation: d.wine.appellation || null,
+              score: d.score,
+            })),
+          });
+        }
+      }
+
+      const normalizedKey = generateWineKey(cleanName, cleanProducer, cleanAppellation);
 
       linkedWine = new WineDefinition({
-        name: name.trim(),
-        producer: producer.trim(),
+        name: cleanName,
+        producer: cleanProducer,
         country,
         region: region || null,
-        appellation: appellation?.trim(),
+        appellation: cleanAppellation,
         grapes: grapes || [],
         type: type || 'red',
         image: image || wineRequest.image || null,
         normalizedKey,
-        createdBy: req.user.id
+        createdBy: req.user.id,
+        createdVia: 'ui'
       });
 
-      await linkedWine.save();
+      try {
+        await linkedWine.save();
+      } catch (err) {
+        if (err.code === 11000) {
+          // Identical normalizedKey already exists (race or a probe edge) —
+          // same wine by definition, so resolve the request by LINKING it.
+          linkedWine = await WineDefinition.findOne({ normalizedKey });
+          if (!linkedWine) throw err;
+        } else {
+          throw err;
+        }
+      }
 
       // Sync to search index (fire-and-forget)
       searchService.indexWine(linkedWine._id);

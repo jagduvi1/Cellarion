@@ -40,6 +40,7 @@ const WineVintageProfile = require('../models/WineVintageProfile');
 
 const searchService = require('./search');
 const { findOrCreateWine } = require('./findOrCreateWine');
+const { logAudit } = require('./audit');
 const { unlinkImageFiles, safeUploadPath } = require('./imageProcessor');
 const { sanitizeImageBuffer, detectImageFormat } = require('./imageSanitizer');
 const { ORIGINALS_DIR, PROCESSED_DIR } = require('../config/upload');
@@ -377,15 +378,34 @@ async function resolveWine(item, userId, cache, result, demoMode = false) {
   if (!name) return { error: 'Wine name or producer is required' };
 
   try {
-    const { wine, created } = await findOrCreateWine(
+    const { wine, created, nearMiss } = await findOrCreateWine(
       { name, producer: producer || name, country: item.country, region: item.region,
         appellation: item.appellation, type: item.type,
         grapes: Array.isArray(item.grapes) ? item.grapes : [] },
       userId,
-      { confirmCreate: true, matchOnly: demoMode } // demo: match existing only; else match >= 0.95 or create
+      { confirmCreate: true, matchOnly: demoMode, createdVia: 'import' } // demo: match existing only; else match >= 0.95 or create
     );
     if (wine) {
-      if (created) result.winesCreated++;
+      if (created) {
+        result.winesCreated++;
+        // confirmCreate skips the soft-zone prompt by design (imports must not
+        // stall) — but a creation that sailed past a >=0.85 candidate is the
+        // exact shape that used to mint duplicates, so leave an audit trail
+        // the admin can review (dup analysis 2026-07-22, RC5).
+        if (nearMiss) {
+          result.winesCreatedNearMiss = (result.winesCreatedNearMiss || 0) + 1;
+          logAudit(
+            { user: { id: String(userId), roles: ['user'] } },
+            'wine.create.near_match',
+            { type: 'wine', id: wine._id },
+            {
+              name: wine.name, producer: wine.producer,
+              nearWineId: String(nearMiss.wineId), nearName: nearMiss.name,
+              nearProducer: nearMiss.producer, score: nearMiss.score,
+            }
+          );
+        }
+      }
       return { wineDefinitionId: wine._id };
     }
   } catch (err) {

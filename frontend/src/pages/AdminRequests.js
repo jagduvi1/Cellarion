@@ -30,6 +30,7 @@ function AdminRequests() {
   const [grapes, setGrapes] = useState([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
+  const [serverDupes, setServerDupes] = useState(null);
   const [linkSearch, setLinkSearch] = useState('');
   const [linkResults, setLinkResults] = useState([]);
   const [linkSearching, setLinkSearching] = useState(false);
@@ -179,6 +180,7 @@ function AdminRequests() {
     dupReqIdRef.current += 1;
     setDuplicates([]);
     setError(null);
+    setServerDupes(null);
     setLinkSearch('');
     setLinkResults([]);
     setAiLookup({ loading: false, error: null });
@@ -243,9 +245,10 @@ function AdminRequests() {
     }
   };
 
-  const handleResolve = async () => {
+  const handleResolve = async (confirmCreate = false) => {
     setSubmitting(true);
     setError(null);
+    setServerDupes(null);
     try {
       const body = { adminNotes: resolveData.adminNotes };
       if (resolveData.mode === 'apply_grapes') {
@@ -253,6 +256,9 @@ function AdminRequests() {
       } else if (resolveData.mode === 'create') {
         body.createNew = true;
         body.wineData = resolveData.wineData;
+        // Only after the admin explicitly chose "create anyway" — skips the
+        // server-side duplicate probe.
+        if (confirmCreate) body.confirmCreate = true;
       } else {
         body.wineDefinitionId = resolveData.wineDefinitionId;
       }
@@ -263,6 +269,11 @@ function AdminRequests() {
       if (res.ok) {
         setSelected(null);
         fetchRequests();
+      } else if (res.status === 409 && data.candidates?.length) {
+        // Server-side dedup probe found near-identical registry wine(s) —
+        // surface them so the admin links the request instead of creating.
+        setServerDupes(data.candidates);
+        setError(data.error || 'Very similar registry wines already exist');
       } else {
         setError(data.error || 'Failed to resolve request');
       }
@@ -415,6 +426,28 @@ function AdminRequests() {
               {selected.status === 'pending' && (
                 <div className="resolve-panel card">
                   {error && <div className="alert alert-error">{error}</div>}
+                  {serverDupes?.length > 0 && resolveData.mode === 'create' && (
+                    <div className="alert alert-info">
+                      <strong>{t('admin.requests.dupTitle', 'Possible duplicates found')}</strong>
+                      <ul style={{ margin: '8px 0 8px 18px' }}>
+                        {serverDupes.map((c) => (
+                          <li key={c._id}>
+                            “{c.name}” — {c.producer}{c.appellation ? ` (${c.appellation})` : ''}
+                          </li>
+                        ))}
+                      </ul>
+                      <div>{t('admin.requests.dupHint', 'Link the request to one of these instead — or create anyway if it is genuinely different.')}</div>
+                      <button
+                        type="button"
+                        className="btn btn-secondary"
+                        style={{ marginTop: 8 }}
+                        disabled={submitting}
+                        onClick={() => handleResolve(true)}
+                      >
+                        {t('admin.requests.dupCreateAnyway', 'Create anyway')}
+                      </button>
+                    </div>
+                  )}
 
                   {selected.requestType === 'grape_suggestion' ? (
                     // ── Grape suggestion: pick grapes to apply ──
@@ -657,7 +690,7 @@ function AdminRequests() {
 
                   <div className="form-actions">
                     <button
-                      onClick={handleResolve}
+                      onClick={() => handleResolve()}
                       className="btn btn-success"
                       disabled={submitting}
                     >
