@@ -14,6 +14,14 @@
 import en from './en/translation.json';
 import sv from './sv/translation.json';
 
+// Picks up every locale automatically so community languages added via
+// Weblate are covered without touching this file.
+const bundles = Object.fromEntries(
+  Object.entries(import.meta.glob('./*/translation.json', { eager: true }))
+    .map(([path, mod]) => [path.split('/')[1], mod.default])
+);
+const otherLocales = Object.entries(bundles).filter(([code]) => code !== 'en');
+
 const flatten = (obj, prefix = '') =>
   Object.entries(obj).flatMap(([k, v]) => {
     const key = prefix ? `${prefix}.${k}` : k;
@@ -21,26 +29,63 @@ const flatten = (obj, prefix = '') =>
   });
 
 const enKeys = flatten(en);
-const svKeys = flatten(sv);
 
 const get = (obj, path) => path.split('.').reduce((o, k) => (o == null ? undefined : o[k]), obj);
 
+// CLDR plural categories differ per language (Swedish has one/other, Polish
+// adds few/many, …), so parity is compared on plural-suffix-stripped keys.
+const PLURAL_SUFFIX = /_(zero|one|two|few|many|other)$/;
+const normalize = (keys) => [...new Set(keys.map((k) => k.replace(PLURAL_SUFFIX, '')))];
+
+// "{{count, number}}" → "count" — the format part is per-string, the
+// variable name must survive translation exactly.
+const placeholders = (str) =>
+  [...str.matchAll(/\{\{\s*([^,}\s]+)\s*(?:,[^}]*)?\}\}/g)].map((m) => m[1]);
+
 describe('translation files', () => {
-  test('en and sv mirror each other key-for-key', () => {
-    const missingInSv = enKeys.filter((k) => !svKeys.includes(k));
-    const missingInEn = svKeys.filter((k) => !enKeys.includes(k));
-    expect({ missingInSv, missingInEn }).toEqual({ missingInSv: [], missingInEn: [] });
+  test.each(otherLocales)('%s mirrors en key-for-key (ignoring plural suffixes)', (code, bundle) => {
+    const keys = normalize(flatten(bundle));
+    const base = normalize(enKeys);
+    const missing = base.filter((k) => !keys.includes(k));
+    const orphaned = keys.filter((k) => !base.includes(k));
+    expect({ missing, orphaned }).toEqual({ missing: [], orphaned: [] });
   });
 
-  test('no key resolves to an empty string in either locale', () => {
-    const blank = (locale, keys, obj) =>
-      keys.filter((k) => typeof get(obj, k) === 'string' && get(obj, k).trim() === '').map((k) => `${locale}:${k}`);
-    expect([...blank('en', enKeys, en), ...blank('sv', svKeys, sv)]).toEqual([]);
+  test.each(Object.entries(bundles))('%s has no key resolving to an empty string', (code, bundle) => {
+    const blank = flatten(bundle).filter((k) => {
+      const v = get(bundle, k);
+      return typeof v === 'string' && v.trim() === '';
+    });
+    expect(blank).toEqual([]);
   });
 
-  test('every leaf is a string (a stray object or null breaks interpolation)', () => {
-    const nonString = enKeys.filter((k) => typeof get(en, k) !== 'string');
+  test.each(Object.entries(bundles))('%s: every leaf is a string (a stray object or null breaks interpolation)', (code, bundle) => {
+    const nonString = flatten(bundle).filter((k) => typeof get(bundle, k) !== 'string');
     expect(nonString).toEqual([]);
+  });
+
+  // A translated string may only use placeholders that exist in its English
+  // source — a renamed or invented placeholder renders as literal "{{...}}".
+  // Subset (not equality) because plural _one forms may legitimately drop
+  // {{count}} ("one bottle").
+  test.each(otherLocales)('%s uses no placeholder that en does not have', (code, bundle) => {
+    const enAllowed = new Map();
+    for (const k of enKeys) {
+      const norm = k.replace(PLURAL_SUFFIX, '');
+      const set = enAllowed.get(norm) || new Set();
+      placeholders(get(en, k)).forEach((p) => set.add(p));
+      enAllowed.set(norm, set);
+    }
+    const bad = flatten(bundle).flatMap((k) => {
+      const v = get(bundle, k);
+      if (typeof v !== 'string') return [];
+      const allowed = enAllowed.get(k.replace(PLURAL_SUFFIX, ''));
+      if (!allowed) return [];
+      return placeholders(v)
+        .filter((p) => !allowed.has(p))
+        .map((p) => `${k}: {{${p}}}`);
+    });
+    expect(bad).toEqual([]);
   });
 
   // The public MCP connect page is the one surface whose copy is load-bearing
