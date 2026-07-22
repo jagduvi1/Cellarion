@@ -90,6 +90,41 @@ describe('scoreWineMatch', () => {
   });
 });
 
+// ─── producer variants — comparison-key axis (dup analysis 2026-07-22) ──────
+
+describe('scoreWineMatch — producer variants', () => {
+  test('corporate-suffix variant of the same producer scores as an exact producer match', () => {
+    // Raw-string comparison used to score this ~0.77 — below the soft zone, so
+    // the duplicate was created silently. Key comparison makes it auto-match.
+    const candidate = { name: "Mate's Vineyard Chardonnay", producer: 'Kumeu River', appellation: 'Kumeu' };
+    const query = { name: "Mate's Vineyard Chardonnay", producer: 'Kumeu River Wines Limited', appellation: 'Kumeu' };
+    expect(scoreWineMatch(candidate, query)).toBeGreaterThanOrEqual(0.95);
+  });
+
+  test('house-prefix variant (Weingut …) scores as the same producer', () => {
+    const candidate = { name: 'Grüner Veltliner', producer: 'Steininger', appellation: 'Kamptal' };
+    const query = { name: 'Grüner Veltliner', producer: 'Weingut Steininger', appellation: 'Kamptal' };
+    expect(scoreWineMatch(candidate, query)).toBeGreaterThanOrEqual(0.95);
+  });
+
+  test('shared producer key but different appellation lands in the ASK zone, not auto-match', () => {
+    // The Garden Spritz shape: two REAL wineries share the key "chandon".
+    // The differing appellation must keep this under 0.95 so callers ask
+    // instead of silently linking two distinct wineries.
+    const candidate = { name: 'Garden Spritz', producer: 'Domaine Chandon', appellation: 'Napa Valley' };
+    const query = { name: 'Garden Spritz', producer: 'Bodegas Chandon', appellation: 'Mendoza' };
+    const score = scoreWineMatch(candidate, query);
+    expect(score).toBeLessThan(0.95);
+    expect(score).toBeGreaterThanOrEqual(0.85);
+  });
+
+  test('genuinely different producers still score far apart', () => {
+    const candidate = { name: 'Pinot Noir', producer: 'Felton Road', appellation: 'Bannockburn' };
+    const query = { name: 'Pinot Noir', producer: 'Cloudy Bay', appellation: 'Bannockburn' };
+    expect(scoreWineMatch(candidate, query)).toBeLessThan(0.85);
+  });
+});
+
 // ─── findBestMatch ───────────────────────────────────────────────────────────
 
 describe('findBestMatch', () => {

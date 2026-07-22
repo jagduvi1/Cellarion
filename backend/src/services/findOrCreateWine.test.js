@@ -215,6 +215,110 @@ describe('findOrCreateWine — producer-prefix canonicalization (step 0)', () =>
   });
 });
 
+describe('findOrCreateWine — producer-VARIANT key-prefix canonicalization (step 0, dup analysis 2026-07-22)', () => {
+  // The exact-string strip is blind when the producer field is a variant:
+  // name "Felton Road Block 3 Pinot Noir" + producer "Felton Road Wines Ltd"
+  // never matched, minted a duplicate, and scored just 0.62 against the real
+  // record — the shape behind most July-2026 prod duplicates. The key-token
+  // prefix strip closes it.
+  test('variant producer key prefix is stripped before the exact-key lookup', async () => {
+    WineDefinition.findOne.mockReturnValue(findOneChain(EXISTING_WINE));
+
+    const result = await findOrCreateWine(
+      { ...INPUT, name: 'Felton Road Block 3 Pinot Noir', producer: 'Felton Road Wines Ltd', appellation: 'Bannockburn' },
+      USER_ID
+    );
+
+    expect(WineDefinition.findOne).toHaveBeenCalledWith({
+      normalizedKey: generateWineKey('Block 3 Pinot Noir', 'Felton Road Wines Ltd', 'Bannockburn'),
+    });
+    expect(result).toEqual({ wine: EXISTING_WINE, created: false });
+  });
+
+  test('created wines store the key-stripped name', async () => {
+    const result = await findOrCreateWine(
+      { ...INPUT, name: 'Maude Kids Block Pinot Noir', producer: 'Maude Wines' },
+      USER_ID
+    );
+
+    expect(result.created).toBe(true);
+    expect(WineDefinition.mock.calls[0][0].name).toBe('Kids Block Pinot Noir');
+  });
+
+  test('a name ENDING with the producer key is left alone — "Les Forts de Latour" is a real wine name', async () => {
+    await findOrCreateWine(
+      { ...INPUT, name: 'Les Forts de Latour', producer: 'Château Latour', appellation: 'Pauillac' },
+      USER_ID
+    );
+
+    expect(WineDefinition.mock.calls[0][0].name).toBe('Les Forts de Latour');
+  });
+});
+
+describe('findOrCreateWine — different-country guard', () => {
+  // Identical canonical producer+name can still be two wineries (Domaine
+  // Chandon, Napa vs Bodegas Chandon, Mendoza — the Garden Spritz false
+  // positive). A stated-and-conflicting country must block every silent link.
+  const QUERY = {
+    name: 'Garden Spritz',
+    producer: 'Chandon',
+    country: 'United States',
+    region: '',
+    appellation: 'Napa Valley',
+    type: 'sparkling',
+    grapes: ['Chardonnay'],
+  };
+
+  test('a single sibling with a conflicting country is NOT auto-linked (falls through to create)', async () => {
+    const sibling = { _id: 'wine-ar', name: 'Garden Spritz', country: { name: 'Argentina' } };
+    primeFind({ siblings: [sibling] });
+
+    const result = await findOrCreateWine(QUERY, USER_ID);
+
+    expect(result.created).toBe(true);
+    expect(result.wine).not.toBe(sibling);
+  });
+
+  test('a single sibling with the SAME country still auto-links — aliases resolve ("USA" = "United States")', async () => {
+    const sibling = { _id: 'wine-us', name: 'Garden Spritz', country: { name: 'United States' } };
+    primeFind({ siblings: [sibling] });
+
+    const result = await findOrCreateWine({ ...QUERY, country: 'USA' }, USER_ID);
+
+    expect(result).toEqual({ wine: sibling, created: false });
+  });
+
+  test('a >=0.95 fuzzy hit with a conflicting country falls to the soft zone instead of auto-linking', async () => {
+    const candidate = { _id: 'wine-ar', name: 'Garden Spritz', country: { name: 'Argentina' } };
+    primeCandidates([{ wine: candidate, score: 0.96 }]);
+
+    const result = await findOrCreateWine(QUERY, USER_ID);
+
+    expect(result.wine).toBeNull();
+    expect(result.candidates).toHaveLength(1);
+    expect(result.candidates[0].wine).toBe(candidate);
+  });
+
+  test('auto-match skips a conflicting-country candidate but takes the next confident one', async () => {
+    const wrongCountry = { _id: 'wine-ar', name: 'Garden Spritz', country: { name: 'Argentina' } };
+    const rightCountry = { _id: 'wine-us', name: 'Garden Spritz', country: { name: 'United States' } };
+    primeCandidates([{ wine: wrongCountry, score: 0.97 }, { wine: rightCountry, score: 0.96 }]);
+
+    const result = await findOrCreateWine(QUERY, USER_ID);
+
+    expect(result).toEqual({ wine: rightCountry, created: false });
+  });
+
+  test('with confirmCreate, a conflicting-country near-match creates the new wine', async () => {
+    const candidate = { _id: 'wine-ar', name: 'Garden Spritz', country: { name: 'Argentina' } };
+    primeCandidates([{ wine: candidate, score: 0.96 }]);
+
+    const result = await findOrCreateWine(QUERY, USER_ID, { confirmCreate: true });
+
+    expect(result.created).toBe(true);
+  });
+});
+
 describe('findOrCreateWine — sibling match (step 1b)', () => {
   // Same producer + same canonical name but a different appellation granularity
   // ("Cromwell" vs "Central Otago") misses the exact key and fuzzy-scores ~0.90

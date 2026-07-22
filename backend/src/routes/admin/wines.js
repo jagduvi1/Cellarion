@@ -41,7 +41,7 @@ const { submitUrls } = require('../../services/indexNow');
 const { isValidId } = require('../../utils/validation');
 const { escapeRegex } = require('../../utils/sanitize');
 const { parsePagination } = require('../../utils/pagination');
-const { stripProducerName } = require('../../utils/producerPrefix');
+const { stripProducerName, stripProducerKeyPrefix } = require('../../utils/producerPrefix');
 
 const router = express.Router();
 
@@ -555,13 +555,15 @@ router.get('/duplicates', async (req, res) => {
 // GET /api/admin/wines/producer-in-name — wines whose name STARTS or ENDS
 // with their own producer (prefix: producer "Meerlust", name "Meerlust
 // Chardonnay"; suffix: producer "Mastroberardino", name "Fiano di Avellino
-// Mastroberardino" — the launch-day admin report). Mostly AI-import
-// artefacts; the registry convention is a producer-free name.
+// Mastroberardino" — the launch-day admin report), INCLUDING producer
+// variants where only the comparison-key tokens are embedded (name "Felton
+// Road Block 3 Pinot Noir", producer "Felton Road Wines Ltd" — the shape the
+// old exact-string $expr scan could never see). Mostly AI-import artefacts;
+// the registry convention is a producer-free name.
 //
-// A field-to-field comparison needs $expr; there's no index for it, so this
-// is a collection scan — fine at the registry's ~3k-doc size. The char right
-// AFTER a prefix / BEFORE a suffix must be a separator so producer "Chateau"
-// doesn't flag "Chateauneuf-du-Pape" (mirrors utils/producerPrefix.js).
+// The key-token check has no aggregation mirror, so the scan runs in Node —
+// same full-fetch pattern (and cost) as the duplicate-clusters scan above,
+// fine at the registry's ~4k-doc size.
 //
 // Returns: { wines: [{ _id, producer, name, proposedName, bottleCount, createdAt }], total, page, pages }
 router.get('/producer-in-name', async (req, res) => {
@@ -569,57 +571,37 @@ router.get('/producer-in-name', async (req, res) => {
     const { limit: parsedLimit, offset: skip, page: parsedPage } =
       parsePagination(req.query, { limit: 50, maxLimit: 200 });
 
-    const producerLen = { $strLenCP: { $ifNull: ['$producer', ''] } };
-    const nameLen = { $strLenCP: '$name' };
-    const lowerProducer = { $toLower: { $ifNull: ['$producer', ''] } };
-    const SEPARATORS = [' ', '\t', '-', '–', '—'];
-    const common = [
-      { $gt: [producerLen, 0] },
-      { $gt: [nameLen, { $add: [producerLen, 1] }] },
-    ];
-    const prefixExpr = {
-      $and: [
-        ...common,
-        { $eq: [{ $indexOfCP: [{ $toLower: '$name' }, lowerProducer] }, 0] },
-        { $in: [{ $substrCP: ['$name', producerLen, 1] }, SEPARATORS] },
-      ],
-    };
-    const suffixStart = { $subtract: [nameLen, producerLen] };
-    const suffixExpr = {
-      $and: [
-        ...common,
-        { $eq: [{ $toLower: { $substrCP: ['$name', suffixStart, producerLen] } }, lowerProducer] },
-        { $in: [{ $substrCP: ['$name', { $subtract: [suffixStart, 1] }, 1] }, SEPARATORS] },
-      ],
-    };
-    const filter = { $expr: { $or: [prefixExpr, suffixExpr] } };
+    const all = await WineDefinition.find({})
+      .select('name producer createdAt')
+      .sort({ producer: 1, name: 1 })
+      .lean();
 
-    const [wines, total] = await Promise.all([
-      WineDefinition.find(filter)
-        .select('name producer createdAt')
-        .sort({ producer: 1, name: 1 })
-        .skip(skip)
-        .limit(parsedLimit)
-        .lean(),
-      WineDefinition.countDocuments(filter),
-    ]);
+    const flagged = [];
+    for (const w of all) {
+      const proposedName = stripProducerName(w.name, w.producer)
+        ?? stripProducerKeyPrefix(w.name, w.producer);
+      if (proposedName) flagged.push({ ...w, proposedName });
+    }
+
+    const total = flagged.length;
+    const pageRows = flagged.slice(skip, skip + parsedLimit);
 
     // Bottle counts for the page's rows in one aggregate
     const bottleCounts = new Map();
-    if (wines.length > 0) {
+    if (pageRows.length > 0) {
       const counts = await Bottle.aggregate([
-        { $match: { wineDefinition: { $in: wines.map(w => w._id) } } },
+        { $match: { wineDefinition: { $in: pageRows.map(w => w._id) } } },
         { $group: { _id: '$wineDefinition', count: { $sum: 1 } } },
       ]);
       for (const c of counts) bottleCounts.set(String(c._id), c.count);
     }
 
     res.json({
-      wines: wines.map(w => ({
+      wines: pageRows.map(w => ({
         _id: w._id,
         producer: w.producer,
         name: w.name,
-        proposedName: stripProducerName(w.name, w.producer),
+        proposedName: w.proposedName,
         bottleCount: bottleCounts.get(String(w._id)) || 0,
         createdAt: w.createdAt,
       })),
@@ -843,21 +825,25 @@ router.post('/:id/strip-producer', async (req, res) => {
       return res.status(404).json({ error: 'Wine not found' });
     }
 
-    const stripped = stripProducerName(wine.name, wine.producer);
+    const stripped = stripProducerName(wine.name, wine.producer)
+      ?? stripProducerKeyPrefix(wine.name, wine.producer);
     if (!stripped) {
       return res.status(400).json({
         error: 'Wine name does not start or end with its producer, or nothing would remain after stripping'
       });
     }
 
-    // If the same producer already has a wine with the stripped name, renaming
-    // would create the very duplicate the registry avoids — the admin should
-    // resolve that pair via the duplicates tool instead.
-    const conflict = await WineDefinition.findOne({
+    // If the same producer — under ANY spelling that shares the comparison key
+    // ("Felton Road" vs "Felton Road Wines Ltd") — already has a wine with the
+    // stripped name, renaming would just surface the very duplicate the
+    // registry avoids: the admin should MERGE that pair via the duplicates
+    // tool instead (the merge keeps bottles; a rename would collide).
+    const producerKey = normalizeProducerKey(wine.producer);
+    const nameTwins = await WineDefinition.find({
       _id: { $ne: wine._id },
-      producer: new RegExp(`^${escapeRegex(wine.producer)}$`, 'i'),
       name: new RegExp(`^${escapeRegex(stripped)}$`, 'i'),
-    }).select('name producer');
+    }).select('name producer').limit(10).lean();
+    const conflict = nameTwins.find(t => producerKey && normalizeProducerKey(t.producer) === producerKey);
     if (conflict) {
       return res.status(409).json({
         error: `"${conflict.name}" by ${conflict.producer} already exists — merge these via the duplicates tool instead.`,

@@ -20,7 +20,7 @@ const Grape = require('../models/Grape');
 const searchService = require('./search');
 const { generateWineKey, normalizeString, normalizeAppellation, resolveGrapeName, resolveCountryName, isUnknownName, isJunkGrapeName } = require('../utils/normalize');
 const { scoreAllMatches } = require('./wineMatching');
-const { stripProducerName } = require('../utils/producerPrefix');
+const { stripProducerName, stripProducerKeyPrefix } = require('../utils/producerPrefix');
 const { buildSurfaceForms, inferGrapeIds } = require('./grapeInference');
 const { escapeRegex } = require('../utils/sanitize');
 
@@ -150,12 +150,34 @@ async function findOrCreateWine({ name, producer, country, region, appellation, 
   // "Fiano di Avellino Mastroberardino" (the launch-day admin report) —
   // canonicalize BEFORE any matching so that input resolves to (or creates)
   // the producer-free entry instead of minting a producer-in-name duplicate
-  // the admin tool has to clean up later. Loop: concatenated sources can
-  // repeat the producer on either end.
-  for (let rest = stripProducerName(trimmedName, trimmedProducer); rest;
-       rest = stripProducerName(trimmedName, trimmedProducer)) {
+  // the admin tool has to clean up later. The key-prefix twin also catches
+  // producer VARIANTS — name "Felton Road Block 3 Pinot Noir" with producer
+  // "Felton Road Wines Ltd" — which the exact-string strip can't see (the
+  // shape behind most July-2026 prod duplicates). Loop: concatenated sources
+  // can repeat the producer on either end.
+  for (let rest = stripProducerName(trimmedName, trimmedProducer)
+         ?? stripProducerKeyPrefix(trimmedName, trimmedProducer);
+       rest;
+       rest = stripProducerName(trimmedName, trimmedProducer)
+         ?? stripProducerKeyPrefix(trimmedName, trimmedProducer)) {
     trimmedName = rest;
   }
+
+  // Different-country guard for every non-exact auto-link below: an identical
+  // canonical producer+name can still be two wineries (Domaine Chandon, Napa
+  // vs Bodegas Chandon, Mendoza — the "Garden Spritz" false positive). When
+  // BOTH sides state a country and they disagree, never link silently — fall
+  // through so the soft zone (or creation) decides.
+  const queryCountryKey = (typeof country === 'string' && country.trim() && !isUnknownName(country))
+    ? normalizeString(resolveCountryName(country))
+    : '';
+  const conflictsCountry = (candidate) => {
+    if (!queryCountryKey) return false;
+    const candidateCountry = candidate && candidate.country && candidate.country.name
+      ? normalizeString(candidate.country.name)
+      : '';
+    return Boolean(candidateCountry && candidateCountry !== queryCountryKey);
+  };
 
   // 1. Exact match by normalizedKey
   const normalizedKey = generateWineKey(trimmedName, trimmedProducer, trimmedAppellation);
@@ -176,7 +198,9 @@ async function findOrCreateWine({ name, producer, country, region, appellation, 
     const siblings = await WineDefinition.find({ normalizedKey: new RegExp(`^${escapeRegex(siblingPrefix)}`) })
       .limit(2)
       .populate(POPULATE);
-    if (siblings.length === 1) return { wine: siblings[0], created: false };
+    if (siblings.length === 1 && !conflictsCountry(siblings[0])) {
+      return { wine: siblings[0], created: false };
+    }
   }
 
   // 2. Fuzzy similarity search
@@ -212,9 +236,12 @@ async function findOrCreateWine({ name, producer, country, region, appellation, 
       { redistribute: false }
     );
 
-    // Auto-match: top score is confident enough
-    if (ranked[0].score >= SIMILARITY_THRESHOLD) {
-      return { wine: ranked[0].wine, created: false };
+    // Auto-match: best confident hit that doesn't conflict on country. A
+    // conflicting >=0.95 candidate falls through to the soft zone below, so
+    // the caller/user still sees it — it just never links silently.
+    const autoHit = ranked.find(r => r.score >= SIMILARITY_THRESHOLD && !conflictsCountry(r.wine));
+    if (autoHit) {
+      return { wine: autoHit.wine, created: false };
     }
 
     // Soft zone: top score is suggestive but not confident. Surface up to N
