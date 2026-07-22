@@ -169,7 +169,7 @@ export default function RackRenderer({
             ) : rack.type && rack.type !== 'grid' ? (
               <span className="rack-type-badge">{t(`racks.type_${rack.type}`)}</span>
             ) : null}
-            {(rack.slots || []).length}/{layout.totalSlots - disabledSet.size} {t('racks.filled')}
+            {t('racks.filled', { filled: (rack.slots || []).length, total: layout.totalSlots - disabledSet.size })}
           </span>
         </div>
         <div className="rack-header-actions">

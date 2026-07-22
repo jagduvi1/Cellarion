@@ -367,7 +367,7 @@ function AdminWines() {
       <div className="page-header">
         <div>
           <h1>{t('admin.wines.title')}</h1>
-          {!loading && <p className="page-subtitle">{total.toLocaleString()} {t('admin.wines.wineDefinitions')}</p>}
+          {!loading && <p className="page-subtitle">{t('admin.wines.wineDefinitions', { count: total })}</p>}
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <button className="btn btn-secondary" onClick={() => setShowDuplicatesScanner(true)} title="Scan the wine registry for likely duplicates">
@@ -645,7 +645,7 @@ function AdminWines() {
 
       {/* Wine list */}
       <div className="wines-meta">
-        <span>{t('admin.wines.totalCount', { count: total })}</span>
+        <span>{t('admin.wines.wineDefinitions', { count: total })}</span>
       </div>
 
       {listError && !loading && (

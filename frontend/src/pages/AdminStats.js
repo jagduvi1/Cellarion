@@ -175,7 +175,7 @@ function AdminStats() {
             />
             <span>{t('adminStats.excludeAdmins')}</span>
             {stats.excludeAdmins && stats.adminsExcludedCount > 0 && (
-              <span className="admin-stats-toggle-info"> ({stats.adminsExcludedCount} {t('adminStats.adminsHidden')})</span>
+              <span className="admin-stats-toggle-info"> ({t('adminStats.adminsHidden', { count: stats.adminsExcludedCount })})</span>
             )}
           </label>
           <span className="admin-stats-meta-sep">·</span>
@@ -195,10 +195,15 @@ function AdminStats() {
       <section>
         <h2>{t('adminStats.section.overview')}</h2>
         <div className="admin-stats-cards">
-          <StatCard label={t('adminStats.totalUsers')}        value={fmt(overview.totalUsers)} sublabel={`${fmt(overview.usersWithBottles)} ${t('adminStats.withBottles')}`} />
+          <StatCard label={t('adminStats.totalUsers')}        value={fmt(overview.totalUsers)} sublabel={t('adminStats.withBottles', { count: overview.usersWithBottles ?? 0 })} />
           <StatCard label={t('adminStats.totalCellars')}      value={fmt(overview.totalCellars)} />
-          <StatCard label={t('adminStats.activeBottles')}     value={fmt(overview.activeBottles)} sublabel={`${fmt(overview.totalBottles)} ${t('adminStats.allTime')}`} />
-          <StatCard label={t('adminStats.consumedBottles')}   value={fmt(overview.consumedBottles)} sublabel={`${fmt(overview.drankBottles)} ${t('adminStats.drank')} · ${fmt(overview.giftedBottles)} ${t('adminStats.gifted')} · ${fmt(overview.soldBottles)} ${t('adminStats.sold')} · ${fmt(overview.otherBottles)} ${t('adminStats.other')}`} />
+          <StatCard label={t('adminStats.activeBottles')}     value={fmt(overview.activeBottles)} sublabel={t('adminStats.allTime', { count: overview.totalBottles ?? 0 })} />
+          <StatCard label={t('adminStats.consumedBottles')}   value={fmt(overview.consumedBottles)} sublabel={[
+            t('adminStats.drank', { count: overview.drankBottles ?? 0 }),
+            t('adminStats.gifted', { count: overview.giftedBottles ?? 0 }),
+            t('adminStats.sold', { count: overview.soldBottles ?? 0 }),
+            t('adminStats.other', { count: overview.otherBottles ?? 0 }),
+          ].join(' · ')} />
           <StatCard label={t('adminStats.avgPerUser')}        value={fmt(overview.avgBottlesPerUser)} />
           <StatCard label={t('adminStats.avgPerCellar')}      value={fmt(overview.avgBottlesPerCellar)} />
           <StatCard label={t('adminStats.uniqueWines')}       value={fmt(overview.totalWineDefinitions)} sublabel={t('adminStats.inLibrary')} />
@@ -250,13 +255,13 @@ function AdminStats() {
             <StatCard
               label={t('adminStats.loggedIn30d')}
               value={fmt(retention.loggedIn30d)}
-              sublabel={`${fmt(retention.loggedIn7d)} ${t('adminStats.loggedIn7d')}`}
+              sublabel={t('adminStats.loggedIn7d', { count: retention.loggedIn7d ?? 0 })}
               tooltip={t('adminStats.loginAuditTooltip')}
             />
             <StatCard
               label={t('adminStats.repeatLoginUsers')}
               value={fmt(retention.repeatLoginUsers)}
-              sublabel={`${fmt(retention.loginUsers)} ${t('adminStats.loginUsers')}`}
+              sublabel={t('adminStats.loginUsers', { count: retention.loginUsers ?? 0 })}
               tooltip={t('adminStats.loginAuditTooltip')}
             />
           </div>
@@ -267,9 +272,9 @@ function AdminStats() {
       <section>
         <h2>{t('adminStats.section.activity')}</h2>
         <div className="admin-stats-cards">
-          <StatCard label={t('adminStats.newUsers30')}        value={fmt(activity.newUsers30)} sublabel={`${fmt(activity.newUsers90)} ${t('adminStats.in90Days')}`} />
-          <StatCard label={t('adminStats.bottlesAdded30')}    value={fmt(activity.bottlesAdded30)} sublabel={`${fmt(activity.bottlesAdded90)} ${t('adminStats.in90Days')}`} />
-          <StatCard label={t('adminStats.bottlesConsumed30')} value={fmt(activity.bottlesConsumed30)} sublabel={`${fmt(activity.bottlesConsumed90)} ${t('adminStats.in90Days')}`} />
+          <StatCard label={t('adminStats.newUsers30')}        value={fmt(activity.newUsers30)} sublabel={t('adminStats.countIn90Days', { count: activity.newUsers90 ?? 0 })} />
+          <StatCard label={t('adminStats.bottlesAdded30')}    value={fmt(activity.bottlesAdded30)} sublabel={t('adminStats.countIn90Days', { count: activity.bottlesAdded90 ?? 0 })} />
+          <StatCard label={t('adminStats.bottlesConsumed30')} value={fmt(activity.bottlesConsumed30)} sublabel={t('adminStats.countIn90Days', { count: activity.bottlesConsumed90 ?? 0 })} />
         </div>
       </section>
 
@@ -301,7 +306,7 @@ function AdminStats() {
         <h2>{t('adminStats.section.subscriptions')}</h2>
         <div className="admin-stats-cards">
           <StatCard label={t('adminStats.paidUsers')}          value={fmt(plans.paidUsers)} />
-          <StatCard label={t('adminStats.expiringIn7d')}       value={fmt(plans.expiringIn7d)} sublabel={`${fmt(plans.expiringIn30d)} ${t('adminStats.in30Days')}`} accent={plans.expiringIn7d > 0 ? 'warn' : null} />
+          <StatCard label={t('adminStats.expiringIn7d')}       value={fmt(plans.expiringIn7d)} sublabel={t('adminStats.in30Days', { count: plans.expiringIn30d ?? 0 })} accent={plans.expiringIn7d > 0 ? 'warn' : null} />
           <StatCard label={t('adminStats.withStripeCustomer')} value={fmt(plans.withStripeCustomer)} />
         </div>
         {plans.distribution && plans.distribution.length > 0 && (
@@ -369,7 +374,7 @@ function AdminStats() {
       <section>
         <h2>{t('adminStats.section.ratings')}</h2>
         <div className="admin-stats-cards">
-          <StatCard label={t('adminStats.avgRating')}    value={ratings.avgNormalized != null ? `${ratings.avgNormalized}/100` : '—'} sublabel={`${fmt(ratings.ratedCount)} ${t('adminStats.ratedBottles')}`} />
+          <StatCard label={t('adminStats.avgRating')}    value={ratings.avgNormalized != null ? `${ratings.avgNormalized}/100` : '—'} sublabel={t('adminStats.ratedBottles', { count: ratings.ratedCount ?? 0 })} />
         </div>
         <div className="admin-stats-grid">
           {ratings.distribution && ratings.distribution.length > 0 && (
@@ -410,7 +415,7 @@ function AdminStats() {
       <section>
         <h2>{t('adminStats.section.vintage')}</h2>
         <div className="admin-stats-cards">
-          <StatCard label={t('adminStats.avgVintageAge')}  value={vintage.avgAge != null ? `${vintage.avgAge} ${t('adminStats.years')}` : '—'} />
+          <StatCard label={t('adminStats.avgVintageAge')}  value={vintage.avgAge != null ? t('adminStats.years', { count: vintage.avgAge }) : '—'} />
           <StatCard label={t('adminStats.oldestVintage')}  value={fmtYear(vintage.oldest)} />
           <StatCard label={t('adminStats.newestVintage')}  value={fmtYear(vintage.newest)} />
           <StatCard label={t('adminStats.withVintage')}    value={fmt(vintage.withVintageCount)} sublabel={t('adminStats.bottlesUnit')} />
@@ -554,8 +559,8 @@ function AdminStats() {
       <section>
         <h2>{t('adminStats.section.library')}</h2>
         <div className="admin-stats-cards">
-          <StatCard label={t('adminStats.totalWineDefs')}    value={fmt(library.totalWineDefinitions)} sublabel={`${fmt(library.wineDefinitionsWithBottles)} ${t('adminStats.withBottlesShort')}`} />
-          <StatCard label={t('adminStats.profilesReviewed')} value={fmt(library.profilesReviewed)} sublabel={`${fmt(library.profilesTotal)} ${t('adminStats.profilesTotal')}`} />
+          <StatCard label={t('adminStats.totalWineDefs')}    value={fmt(library.totalWineDefinitions)} sublabel={t('adminStats.withBottlesShort', { count: library.wineDefinitionsWithBottles ?? 0 })} />
+          <StatCard label={t('adminStats.profilesReviewed')} value={fmt(library.profilesReviewed)} sublabel={t('adminStats.profilesTotal', { count: library.profilesTotal ?? 0 })} />
           <StatCard label={t('adminStats.profilesPending')}  value={fmt(library.profilesPending)} accent={library.profilesPending > 50 ? 'warn' : null} />
           <StatCard label={t('adminStats.pendingWineRequests')} value={fmt(library.pendingWineRequests)} accent={library.pendingWineRequests > 5 ? 'warn' : null} />
           <StatCard label={t('adminStats.pendingImageReviews')} value={fmt(library.pendingImageReviews)} accent={library.pendingImageReviews > 10 ? 'warn' : null} />
@@ -595,9 +600,9 @@ function AdminStats() {
                   {cellarSizeDistribution.filter(c => c.cellars > 0).map((c, i) => (
                     <tr key={`${c.bucket}-${i}`}>
                       <td className="admin-stats-name">
-                        {c.bucket === 'other' ? t('adminStats.cellarSizeOther') : `${c.bucket} ${t('adminStats.bottlesUnit')}`}
+                        {c.bucket === 'other' ? t('adminStats.cellarSizeOther') : t('adminStats.cellarSizeBucket', { bucket: c.bucket })}
                       </td>
-                      <td className="admin-stats-count">{fmt(c.cellars)} {t('adminStats.cellarsUnit')}</td>
+                      <td className="admin-stats-count">{t('adminStats.cellarsUnit', { count: c.cellars ?? 0 })}</td>
                     </tr>
                   ))}
                 </tbody>

@@ -618,7 +618,7 @@ function AdminRequests() {
                           {duplicates.map(d => (
                             <div key={d.wine._id} className="duplicate-item">
                               <span>{d.wine.name} by {d.wine.producer}</span>
-                              <span className="similarity">{Math.round(d.scores.overall * 100)}{t('admin.requests.match')}</span>
+                              <span className="similarity">{t('admin.requests.match', { percent: Math.round(d.scores.overall * 100) })}</span>
                               <button
                                 className="btn btn-secondary btn-small"
                                 onClick={() => {
