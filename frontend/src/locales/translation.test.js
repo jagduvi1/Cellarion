@@ -88,6 +88,25 @@ describe('translation files', () => {
     expect(bad).toEqual([]);
   });
 
+  // A key ending in _one/_other/… is a CLDR plural family to i18next AND to
+  // Weblate — which scaffolds "missing" sibling forms as empty strings. Enum
+  // lookups must therefore never use a plural suffix (nest them instead:
+  // bottles.statusLabels.other), and real plural families in the source
+  // language must be complete: English has exactly one + other.
+  test('en plural families are complete and never collide with enum keys', () => {
+    const forms = new Map();
+    for (const k of enKeys) {
+      const m = k.match(PLURAL_SUFFIX);
+      if (!m) continue;
+      const base = k.replace(PLURAL_SUFFIX, '');
+      forms.set(base, [...(forms.get(base) || []), m[1]]);
+    }
+    const broken = [...forms.entries()]
+      .filter(([base, f]) => !(f.includes('one') && f.includes('other')) || enKeys.includes(base))
+      .map(([base, f]) => `${base} (forms: ${f.join(',')}${enKeys.includes(base) ? ' + bare base key' : ''})`);
+    expect(broken).toEqual([]);
+  });
+
   // The public MCP connect page is the one surface whose copy is load-bearing
   // for distribution — it is what a stranger reads before trusting us with
   // their cellar. Pin its shape so a partial merge cannot half-ship it.

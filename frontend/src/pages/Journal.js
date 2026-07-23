@@ -140,7 +140,7 @@ export default function Journal() {
         <select className="input journal-occasion-filter" value={occasion} onChange={e => setOccasion(e.target.value)}>
           <option value="">{t('journal.allOccasions', 'All occasions')}</option>
           {Object.keys(OCCASION_ICONS).map(o => (
-            <option key={o} value={o}>{OCCASION_ICONS[o]} {t(`journal.occasion_${o}`, o)}</option>
+            <option key={o} value={o}>{OCCASION_ICONS[o]} {t(`journal.occasions.${o}`, o)}</option>
           ))}
         </select>
       </div>

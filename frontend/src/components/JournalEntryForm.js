@@ -133,7 +133,7 @@ export default function JournalEntryForm({ existing, onClose, onSaved, prefilled
             <label>{t('journal.occasion', 'Occasion')}</label>
             <select className="input" value={occasion} onChange={e => setOccasion(e.target.value)}>
               {OCCASIONS.map(o => (
-                <option key={o} value={o}>{t(`journal.occasion_${o}`, o)}</option>
+                <option key={o} value={o}>{t(`journal.occasions.${o}`, o)}</option>
               ))}
             </select>
           </div>
