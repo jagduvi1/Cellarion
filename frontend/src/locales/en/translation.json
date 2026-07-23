@@ -3421,6 +3421,8 @@
       "activeBottles": "Active bottles",
       "consumedHistory": "Consumed (history)",
       "wishlistAdded": "Added to wishlist",
+      "allWishlistedNote_one": "Your wine was added to your wishlist.",
+      "allWishlistedNote_other": "All {{count}} wines were added to your wishlist.",
       "skipped": "Skipped",
       "errors": "Errors",
       "racksCreated_one": "Rack created",

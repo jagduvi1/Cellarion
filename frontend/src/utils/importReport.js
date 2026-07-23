@@ -35,6 +35,11 @@
  */
 export function summariseImportOutcome(importResult, userSkippedCount = 0, unresolvedCount = 0) {
   const created = importResult?.created ?? 0;
+  // Rows that became WishlistItems instead of bottles (addToWishlist). They
+  // never increment `created`, so success math must count them separately —
+  // otherwise a perfect wishlist-only import reads as "0 of N imported".
+  const wishlistCreated = importResult?.wishlistCreated ?? 0;
+  const succeeded = created + wishlistCreated;
   const backendSkipped = importResult?.skipped?.length ?? 0;
   const errorCount = importResult?.errors?.length ?? 0;
   const unplacedCount = importResult?.unplaced?.length ?? 0;
@@ -43,13 +48,15 @@ export function summariseImportOutcome(importResult, userSkippedCount = 0, unres
   const missedCount = skippedCount + errorCount + unresolvedCount;
   return {
     created,
+    wishlistCreated,
+    succeeded,
     totalRows,
     skippedCount,
     errorCount,
     unplacedCount,
     unresolvedCount,
     missedCount,
-    fullSuccess: Boolean(importResult) && missedCount === 0 && unplacedCount === 0 && created === totalRows,
+    fullSuccess: Boolean(importResult) && missedCount === 0 && unplacedCount === 0 && succeeded === totalRows,
   };
 }
 
@@ -121,7 +128,7 @@ export function buildOutcomeRows({ importResult, submittedRows = [], userSkipped
  * @returns {string} CSV text (no BOM; the caller prepends one for Excel)
  */
 export function buildImportReportCsv({ importResult, submittedRows = [], userSkippedRows = [], unresolvedRows = [], userSkippedReason, unresolvedReason } = {}) {
-  const { created, totalRows, skippedCount, errorCount, unplacedCount, unresolvedCount } =
+  const { succeeded, totalRows, skippedCount, errorCount, unplacedCount, unresolvedCount } =
     summariseImportOutcome(importResult, userSkippedRows.length, unresolvedRows.length);
 
   // The summary line is intentionally left unquoted (it's for humans; the
@@ -134,7 +141,7 @@ export function buildImportReportCsv({ importResult, submittedRows = [], userSki
     ...(unresolvedCount > 0 ? [`${unresolvedCount} not imported`] : []),
     `${unplacedCount} imported but unplaced`,
   ];
-  const summary = `# Import report: ${created} of ${totalRows} rows imported (${parts.join(', ')})`;
+  const summary = `# Import report: ${succeeded} of ${totalRows} rows imported (${parts.join(', ')})`;
   const header = 'index,wineName,producer,vintage,outcome,reason';
   const lines = buildOutcomeRows({ importResult, submittedRows, userSkippedRows, unresolvedRows, userSkippedReason, unresolvedReason })
     .map(r => [r.index, r.wineName, r.producer, r.vintage, r.outcome, r.reason].map(csvEscape).join(','));

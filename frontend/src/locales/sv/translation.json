@@ -3421,6 +3421,8 @@
       "activeBottles": "Aktiva flaskor",
       "consumedHistory": "Konsumerade (historik)",
       "wishlistAdded": "Tillagda i önskelistan",
+      "allWishlistedNote_one": "Ditt vin lades till i din önskelista.",
+      "allWishlistedNote_other": "Alla {{count}} viner lades till i din önskelista.",
       "skipped": "Överhoppade",
       "errors": "Fel",
       "racksCreated_one": "Hylla skapad",

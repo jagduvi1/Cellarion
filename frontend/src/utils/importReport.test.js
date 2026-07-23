@@ -56,6 +56,36 @@ describe('summariseImportOutcome', () => {
     expect(out.created).toBe(0);
     expect(out.totalRows).toBe(0);
   });
+
+  it('counts wishlist rows as successes — a perfect wishlist-only import is a full success', () => {
+    const out = summariseImportOutcome(
+      { created: 0, wishlistCreated: 3, total: 3, skipped: [], errors: [], unplaced: [] },
+      0
+    );
+    expect(out.fullSuccess).toBe(true);
+    expect(out.succeeded).toBe(3);
+    expect(out.wishlistCreated).toBe(3);
+    expect(out.created).toBe(0);
+  });
+
+  it('mixed bottle + wishlist rows both count toward success', () => {
+    const out = summariseImportOutcome(
+      { created: 2, wishlistCreated: 1, total: 3, skipped: [], errors: [], unplaced: [] },
+      0
+    );
+    expect(out.fullSuccess).toBe(true);
+    expect(out.succeeded).toBe(3);
+  });
+
+  it('wishlist import with a skipped duplicate is not a full success', () => {
+    const out = summariseImportOutcome(
+      { created: 0, wishlistCreated: 2, total: 3, skipped: [{ index: 1, reason: 'Already on your wishlist' }], errors: [], unplaced: [] },
+      0
+    );
+    expect(out.fullSuccess).toBe(false);
+    expect(out.succeeded).toBe(2);
+    expect(out.skippedCount).toBe(1);
+  });
 });
 
 describe('csvEscape', () => {

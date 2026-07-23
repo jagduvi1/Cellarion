@@ -166,8 +166,9 @@ function ImportBottles() {
   // CellarTracker "what transfers" disclosure panel (upload step)
   const [ctDisclosureDismissed, setCtDisclosureDismissed] = useState(false);
   // Vivino "full wine list" (scan history) detection + the user's choice of
-  // what its rows become: 'history' (consumed bottles, default) or 'cellar'
-  // (active bottles). See isVivinoScanHistory in importMappers.
+  // what its rows become: 'history' (consumed bottles, default), 'wishlist'
+  // (WishlistItems) or 'cellar' (active bottles). See isVivinoScanHistory
+  // in importMappers.
   const [vivinoScanHistory, setVivinoScanHistory] = useState(false);
   const [vivinoImportMode, setVivinoImportMode] = useState('history');
 
@@ -998,6 +999,12 @@ function ImportBottles() {
   // column with no quantity/purchase data). Importing those as active
   // bottles silently inflates the cellar with wines drunk years ago, so the
   // destination is an explicit choice, defaulting to drinking history.
+  const VIVINO_MODE_OPTIONS = [
+    { mode: 'history', titleKey: 'importBottles.vivinoHistory.historyTitle', descKey: 'importBottles.vivinoHistory.historyDesc', recommended: true },
+    { mode: 'wishlist', titleKey: 'importBottles.vivinoHistory.wishlistTitle', descKey: 'importBottles.vivinoHistory.wishlistDesc' },
+    { mode: 'cellar', titleKey: 'importBottles.vivinoHistory.cellarTitle', descKey: 'importBottles.vivinoHistory.cellarDesc' },
+  ];
+
   const renderVivinoHistoryChoice = () => detectedFormat === 'vivino' && vivinoScanHistory && (
     <div className="ct-disclosure-panel vivino-history-panel">
       <div className="ct-disclosure-head">
@@ -1005,48 +1012,24 @@ function ImportBottles() {
       </div>
       <p className="vivino-history-body">{t('importBottles.vivinoHistory.body')}</p>
       <div className="vivino-history-options" role="radiogroup" aria-label={t('importBottles.vivinoHistory.title')}>
-        <label className={`vivino-history-option ${vivinoImportMode === 'history' ? 'selected' : ''}`}>
-          <input
-            type="radio"
-            name="vivino-import-mode"
-            value="history"
-            checked={vivinoImportMode === 'history'}
-            onChange={() => setVivinoImportMode('history')}
-          />
-          <span className="vivino-history-option-text">
-            <strong>
-              {t('importBottles.vivinoHistory.historyTitle')}
-              <span className="vivino-history-recommended">{t('importBottles.vivinoHistory.recommended')}</span>
-            </strong>
-            <span className="vivino-history-option-desc">{t('importBottles.vivinoHistory.historyDesc')}</span>
-          </span>
-        </label>
-        <label className={`vivino-history-option ${vivinoImportMode === 'wishlist' ? 'selected' : ''}`}>
-          <input
-            type="radio"
-            name="vivino-import-mode"
-            value="wishlist"
-            checked={vivinoImportMode === 'wishlist'}
-            onChange={() => setVivinoImportMode('wishlist')}
-          />
-          <span className="vivino-history-option-text">
-            <strong>{t('importBottles.vivinoHistory.wishlistTitle')}</strong>
-            <span className="vivino-history-option-desc">{t('importBottles.vivinoHistory.wishlistDesc')}</span>
-          </span>
-        </label>
-        <label className={`vivino-history-option ${vivinoImportMode === 'cellar' ? 'selected' : ''}`}>
-          <input
-            type="radio"
-            name="vivino-import-mode"
-            value="cellar"
-            checked={vivinoImportMode === 'cellar'}
-            onChange={() => setVivinoImportMode('cellar')}
-          />
-          <span className="vivino-history-option-text">
-            <strong>{t('importBottles.vivinoHistory.cellarTitle')}</strong>
-            <span className="vivino-history-option-desc">{t('importBottles.vivinoHistory.cellarDesc')}</span>
-          </span>
-        </label>
+        {VIVINO_MODE_OPTIONS.map(({ mode, titleKey, descKey, recommended }) => (
+          <label key={mode} className={`vivino-history-option ${vivinoImportMode === mode ? 'selected' : ''}`}>
+            <input
+              type="radio"
+              name="vivino-import-mode"
+              value={mode}
+              checked={vivinoImportMode === mode}
+              onChange={() => setVivinoImportMode(mode)}
+            />
+            <span className="vivino-history-option-text">
+              <strong>
+                {t(titleKey)}
+                {recommended && <span className="vivino-history-recommended">{t('importBottles.vivinoHistory.recommended')}</span>}
+              </strong>
+              <span className="vivino-history-option-desc">{t(descKey)}</span>
+            </span>
+          </label>
+        ))}
       </div>
     </div>
   );
@@ -1952,7 +1935,7 @@ function ImportBottles() {
   };
 
   const renderDoneStep = () => {
-    const { created, totalRows, skippedCount, errorCount, unplacedCount, unresolvedCount, missedCount, fullSuccess } =
+    const { created, wishlistCreated, succeeded, totalRows, skippedCount, errorCount, unplacedCount, unresolvedCount, missedCount, fullSuccess } =
       summariseImportOutcome(importResult, userSkippedRows.length, unresolvedRows.length);
 
     // Everything that didn't become a bottle, with per-row reasons: rows the
@@ -1980,13 +1963,19 @@ function ImportBottles() {
         <>
           <div className="done-icon">&#10003;</div>
           <h2>{t('importBottles.done.title')}</h2>
-          <p className="done-subtitle">{t('importBottles.done.allImportedNote', { count: created })}</p>
+          <p className="done-subtitle">
+            {/* Wishlist-only imports create no bottles — "made it into your
+                cellar" would be wrong, so they get their own success note. */}
+            {wishlistCreated > 0 && created === 0
+              ? t('importBottles.done.allWishlistedNote', { count: wishlistCreated })
+              : t('importBottles.done.allImportedNote', { count: succeeded })}
+          </p>
         </>
       ) : (
         <>
           <div className="done-icon done-icon-warn">!</div>
           <h2>{t('importBottles.done.partialTitle', {
-            created: created.toLocaleString(),
+            created: succeeded.toLocaleString(),
             total: totalRows.toLocaleString()
           })}</h2>
           <p className="done-subtitle done-partial-note">
