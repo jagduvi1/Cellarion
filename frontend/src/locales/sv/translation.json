@@ -2438,7 +2438,7 @@
       "q4": "Är Cellarion verkligen gratis?",
       "a4": "Ja. Alla grundfunktioner på cellarion.app är gratis — spåra obegränsat antal flaskor, organisera källare, få drickfönster-aviseringar, dela med vänner och exportera din data när som helst. Det finns inga kreditkortsuppmaningar, inga premiumnivåer som låser grundfunktioner, och vi säljer inte annonser eller din data.",
       "q5": "Hur importerar jag viner från Vivino eller CellarTracker?",
-      "a5": "Cellarion stöder CSV-import. Exportera din samling från Vivino, CellarTracker eller något kalkylark, ladda sedan upp CSV-filen i Cellarions importverktyg. Det delade vinregistret deduplicerar poster automatiskt så att din data förblir ren och konsekvent i hela katalogen.",
+      "a5": "Cellarion stöder CSV-import. Exportera din samling från Vivino, CellarTracker eller något kalkylark, ladda sedan upp CSV-filen i Cellarions importverktyg. Observera att Vivinos nedladdning \"full wine list\" är din skanningshistorik, inte din källare — Cellarion upptäcker detta och erbjuder att importera den som dryckeshistorik (med dina betyg, recensioner och anteckningar) i stället för som flaskor i lager. Det delade vinregistret deduplicerar poster automatiskt så att din data förblir ren och konsekvent i hela katalogen.",
       "q6": "Kan jag exportera min data och lämna när jag vill?",
       "a6": "Ja — din data är din. Cellarion har en en-kliks dataexport som ger dig allt som JSON (eller en ZIP med dina bilder), plus CSV-import för flaskor. Du kan radera ditt konto från Inställningar med 7 dagars betänketid. Data på den hostade tjänsten lagras på europeisk infrastruktur under GDPR."
     }
@@ -3185,7 +3185,9 @@
       "ctTruncatedTitle": "Bara 25 rader hittades — exporten kan vara avklippt.",
       "ctTruncated": "Det här ser ut som en export av en enda sida (exakt 25 rader). Välj 'All wines' istället för 'Only wines on this page' i CellarTracker innan du exporterar, annars kan större delen av din källare saknas i importen.",
       "ctPendingSkipped_one": "{{count}} väntande (olevererad) flaska importerades inte: {{wines}}. Cellarion hanterar inte flaskor du ännu inte har fått — importera igen efter leverans.",
-      "ctPendingSkipped_other": "{{count}} väntande (olevererade) flaskor importerades inte: {{wines}}. Cellarion hanterar inte flaskor du ännu inte har fått — importera igen efter leverans."
+      "ctPendingSkipped_other": "{{count}} väntande (olevererade) flaskor importerades inte: {{wines}}. Cellarion hanterar inte flaskor du ännu inte har fått — importera igen efter leverans.",
+      "noIdentitySkipped_one": "{{count}} rad hoppades över eftersom den saknar vinnamn och producent (oftast en misslyckad etikettskanning).",
+      "noIdentitySkipped_other": "{{count}} rader hoppades över eftersom de saknar vinnamn och producent (oftast misslyckade etikettskanningar)."
     },
     "ctTables": {
       "list": "List-tabellen",
@@ -3211,6 +3213,15 @@
       "notCarriedWishlist": "Önskelistor",
       "notCarriedWhy": "CellarTrackers exportfiler innehåller helt enkelt inte det här, så ingen import kan ta med det."
     },
+    "vivinoHistory": {
+      "title": "Det här ser ut som din Vivino-skanningshistorik",
+      "body": "Den här filen listar varje vin du har skannat eller recenserat på Vivino — inte flaskorna som just nu finns i din källare. Dina betyg, recensioner, personliga anteckningar och drickfönster följer med oavsett. Välj vad vinerna ska bli:",
+      "historyTitle": "Dryckeshistorik",
+      "recommended": "Rekommenderas",
+      "historyDesc": "Varje vin läggs till som en konsumerad flaska, daterad till när du skannade det. Det visas i din historik och statistik, inte bland dina flaskor i lager.",
+      "cellarTitle": "Flaskor i min källare",
+      "cellarDesc": "Varje vin läggs till som en flaska du äger just nu. Välj bara detta om listan verkligen motsvarar vad som finns i din källare."
+    },
     "upload": {
       "resumeReviewTitle": "Dina matchade resultat finns kvar",
       "resumeReviewMeta": "Gå tillbaka till granskningen för att behålla varje matchning, överhoppning och manuellt val. Att matcha om nedan börjar om granskningen.",
@@ -3226,7 +3237,7 @@
       "oenoTitle": "Oeno by Vintec",
       "genericTitle": "Generisk CSV",
       "cellarionDesc": "Ladda ner från valfri källare via ⋯ → Exportera (JSON). Flaskor från alla källare i filen importeras till källaren du väljer här — för att återskapa hela källare med hyllor och layout, använd Importera källare i Inställningar istället.",
-      "vivinoDesc": "Exportera din samling från Vivino-appens inställningar",
+      "vivinoDesc": "Källarexporter importeras som flaskor; nedladdningen \"full wine list\" (din skanningshistorik) kan importeras som dryckeshistorik",
       "cellartrackerDesc": "Exportera från CellarTracker via My Cellar → Download",
       "oenoDesc": "Äkta Oeno by Vintec-export — CSV i två sektioner med skåpdefinitioner + flaskor. Skåp, hyllplan och flaskhistorik importeras automatiskt.",
       "genericDesc": "Valfri CSV med kolumnerna Wine, Producer och Vintage",

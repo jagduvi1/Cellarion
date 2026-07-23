@@ -8,6 +8,8 @@ import {
   parseOenoExport,
   detectOenoExportBoundary,
   parseLocaleNumber,
+  parseVivinoDrinkWindow,
+  isVivinoScanHistory,
 } from './importMappers';
 
 // ---------------------------------------------------------------------------
@@ -478,6 +480,85 @@ describe('parseAndMap', () => {
     expect(result.items[0].vintage).toBe('2018');
   });
 
+  // Vivino's "full wine list" download (scan history) — the real header row
+  // from the app-settings export.
+  const VIVINO_HISTORY_HEADER =
+    'Winery,Wine name,Vintage,Region,Country,Regional wine style,Average rating,' +
+    'Scan date,Scan/Review Location,Your rating,Your review,Personal Note,' +
+    'Wine type,Drinking Window,Link to wine,Label image';
+
+  describe('Vivino scan-history export', () => {
+    it('flags the scan-history format and maps the user columns', () => {
+      const csv = VIVINO_HISTORY_HEADER + '\n' +
+        'Château Test,Cuvée Test,2020,Graves,France,Bordeaux Red,3.7,' +
+        '2026-05-06 11:36:35,,4.0,Lovely nose,cadeau zouzou,' +
+        'Red Wine,2026 2034,https://www.vivino.com/wines/1,https://images.vivino.com/labels/x.jpg';
+      const result = parseAndMap(csv);
+      expect(result.format).toBe('vivino');
+      expect(result.vivinoScanHistory).toBe(true);
+      const item = result.items[0];
+      expect(item.wineName).toBe('Cuvée Test');
+      expect(item.producer).toBe('Château Test');
+      // "Your rating" — never the "Average rating" community score
+      expect(item.rating).toBe(4.0);
+      expect(item.ratingScale).toBe('5');
+      // "Your review" + "Personal Note" both land in notes
+      expect(item.notes).toBe('Lovely nose\ncadeau zouzou');
+      expect(item.drinkFrom).toBe(2026);
+      expect(item.drinkTo).toBe(2034);
+      expect(item.scanDate).toBe('2026-05-06');
+    });
+
+    it('never imports the Average rating community score', () => {
+      const csv = VIVINO_HISTORY_HEADER + '\n' +
+        'Château Test,Cuvée Test,2020,Graves,France,Bordeaux Red,3.7,' +
+        '2026-05-06 11:36:35,,,,,Red Wine,,,';
+      const item = parseAndMap(csv).items[0];
+      expect(item.rating).toBeUndefined();
+    });
+
+    it('counts identity-less rows (failed scans) in a warning', () => {
+      const csv = VIVINO_HISTORY_HEADER + '\n' +
+        ',,,,,,,2026-04-09 16:44:14,,,,,,,,https://images.vivino.com/labels/x.jpg\n' +
+        'Château Test,Cuvée Test,2020,Graves,France,Bordeaux Red,3.7,,,,,,Red Wine,,,';
+      const result = parseAndMap(csv);
+      expect(result.items).toHaveLength(1);
+      expect(result.warnings).toContainEqual({ code: 'no-identity-skipped', count: 1 });
+    });
+
+    it('does NOT flag a Vivino cellar export (has Quantity) as scan history', () => {
+      const csv = 'Wine name,Winery,Vintage,Quantity,Purchase date\nMargaux,Chateau Margaux,2015,2,2024-01-05';
+      const result = parseAndMap(csv);
+      expect(result.format).toBe('vivino');
+      expect(result.vivinoScanHistory).toBeUndefined();
+    });
+  });
+
+  describe('parseVivinoDrinkWindow', () => {
+    it('parses the "YYYY YYYY" pair', () => {
+      expect(parseVivinoDrinkWindow('2026 2034')).toEqual({ drinkFrom: 2026, drinkTo: 2034 });
+    });
+    it('tolerates a dash separator', () => {
+      expect(parseVivinoDrinkWindow('2026 - 2034')).toEqual({ drinkFrom: 2026, drinkTo: 2034 });
+    });
+    it('returns nulls for blank, single-year, or inverted values', () => {
+      expect(parseVivinoDrinkWindow('')).toEqual({ drinkFrom: null, drinkTo: null });
+      expect(parseVivinoDrinkWindow('2026')).toEqual({ drinkFrom: null, drinkTo: null });
+      expect(parseVivinoDrinkWindow('2034 2026')).toEqual({ drinkFrom: null, drinkTo: null });
+    });
+  });
+
+  describe('isVivinoScanHistory', () => {
+    it('matches the full-wine-list header set', () => {
+      expect(isVivinoScanHistory(VIVINO_HISTORY_HEADER.split(','))).toBe(true);
+    });
+    it('rejects headers with inventory columns', () => {
+      expect(isVivinoScanHistory(['Wine name', 'Winery', 'Scan date', 'Quantity'])).toBe(false);
+      expect(isVivinoScanHistory(['Wine name', 'Winery', 'Scan date', 'Purchase date'])).toBe(false);
+      expect(isVivinoScanHistory(['Wine name', 'Winery', 'Vintage'])).toBe(false);
+    });
+  });
+
   it('maps generic CSV correctly', () => {
     const csv = 'Wine,Producer,Vintage,Country\nSassicaia,Tenuta San Guido,2017,Italy';
     const result = parseAndMap(csv);
@@ -539,11 +620,12 @@ describe('parseAndMap', () => {
     expect(result.items[0].producer).toBe('Chateau Margaux');
   });
 
-  it('skips rows with no wine name and no producer', () => {
+  it('skips rows with no wine name and no producer, with a warning', () => {
     const csv = 'Wine,Producer,Vintage\n,,2015\nMargaux,CM,2016';
     const result = parseAndMap(csv);
     expect(result.items).toHaveLength(1);
     expect(result.items[0].wineName).toBe('Margaux');
+    expect(result.warnings).toEqual([{ code: 'no-identity-skipped', count: 1 }]);
   });
 
   it('handles BOM-prefixed CSV', () => {

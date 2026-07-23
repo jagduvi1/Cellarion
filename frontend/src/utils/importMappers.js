@@ -36,6 +36,9 @@
  *   grapes        - [string] grape varieties (from Varietal/MasterVarietal)
  *   drinkFrom     - integer drink-window start year, or null
  *   drinkTo       - integer drink-window end year, or null
+ * Vivino imports also emit drinkFrom/drinkTo (from "Drinking Window") plus a
+ * transient `scanDate` that the import UI turns into consumedAt for
+ * scan-history files (see isVivinoScanHistory) and strips otherwise.
  * …and, when a CT Location's bin codes follow a consistent pattern, the rack
  * fields above are auto-derived per bottle (see applyCtRackAutoMap +
  * binCodeParser.js). The freeform `location` string is always kept as well.
@@ -450,6 +453,23 @@ function mapRackFields(get) {
 }
 
 // ── Vivino Mapper ───────────────────────────────────────────────────────────
+//
+// Vivino has TWO CSV exports with different meanings:
+//
+//   A. Cellar export — the user's current inventory. Carries Quantity /
+//      Purchase date / Price columns. Rows are bottles they own.
+//   B. "Full wine list" (app settings → download your data) — the user's
+//      SCAN HISTORY: one row per wine ever scanned or reviewed, with a
+//      "Scan date" column and no quantity or purchase data. Rows are mostly
+//      wines the user drank, not bottles in the cellar.
+//
+// Both share the same column vocabulary, so one mapper handles them; the
+// history file is fingerprinted by isVivinoScanHistory() below and the
+// import UI lets the user choose whether its rows become drinking history
+// (default) or active bottles.
+//
+// Vivino's "Average rating" is the community score and is never imported —
+// same policy as CellarTracker's `CT` column. Only "Your rating" is.
 
 function mapWineType(typeStr) {
   if (!typeStr) return 'red';
@@ -463,16 +483,55 @@ function mapWineType(typeStr) {
   return 'red';
 }
 
+/**
+ * Vivino "Drinking Window" is two space-separated years ("2026 2034").
+ * Tolerates a dash separator ("2026 - 2034"). Returns { drinkFrom, drinkTo }
+ * as integers, or nulls when the value doesn't contain a usable pair —
+ * matching the CT mappers' null convention for "no window".
+ */
+export function parseVivinoDrinkWindow(value) {
+  const years = (value || '').match(/\b(19|20)\d{2}\b/g);
+  if (!years || years.length < 2) return { drinkFrom: null, drinkTo: null };
+  const from = parseInt(years[0], 10);
+  const to = parseInt(years[years.length - 1], 10);
+  if (from > to) return { drinkFrom: null, drinkTo: null };
+  return { drinkFrom: from, drinkTo: to };
+}
+
+/**
+ * Fingerprint Vivino's "full wine list" (scan history) export: it has a
+ * "Scan date" column and none of the inventory columns (Quantity / Purchase
+ * date) a cellar export carries. parseAndMap surfaces this as
+ * `vivinoScanHistory: true` so the import UI can offer the history-vs-cellar
+ * destination choice instead of silently inflating the cellar with every
+ * wine the user ever scanned.
+ */
+export function isVivinoScanHistory(headers) {
+  const h = new Set(headers.map((s) => s.toLowerCase().trim()));
+  return h.has('scan date') && !h.has('quantity') && !h.has('purchase date');
+}
+
 function mapVivinoRow(row) {
   // Vivino CSV columns vary but common ones:
   // "Wine name", "Winery", "Vintage", "Country", "Region", "Appellation",
   // "Wine type", "Price", "Currency", "Rating", "Note", "Quantity",
   // "Purchase date", "Store name", "Bottle size"
+  // The "full wine list" export adds: "Average rating" (community — never
+  // imported), "Scan date", "Your rating", "Your review", "Personal Note",
+  // "Drinking Window", "Link to wine", "Label image".
   const get = makeGetter(row);
 
-  const rating = parseLocaleNumber(get(['Rating', 'My Rating', 'rating']));
+  const rating = parseLocaleNumber(get(['Your rating', 'Rating', 'My Rating', 'rating']));
   const price = parseLocaleNumber(get(['Price', 'price', 'Purchase Price']));
   const qty = parseInt(get(['Quantity', 'quantity', 'Qty', 'Count']), 10);
+  const { drinkFrom, drinkTo } = parseVivinoDrinkWindow(get(['Drinking Window', 'Drinking window']));
+
+  // "Your review" is the published review text, "Personal Note" the private
+  // note — both are the user's own words, so carry both (joined) into notes.
+  const notes = [
+    get(['Your review', 'Note', 'Notes', 'note', 'notes', 'Tasting Note', 'Review']),
+    get(['Personal Note', 'Personal note']),
+  ].filter(Boolean).join('\n');
 
   return {
     wineName: get(['Wine name', 'Wine Name', 'wine name', 'Wine', 'wine']),
@@ -488,9 +547,15 @@ function mapVivinoRow(row) {
     quantity: isNaN(qty) || qty < 1 ? 1 : qty,
     purchaseDate: get(['Purchase date', 'Purchase Date', 'purchase date', 'Date']),
     purchaseLocation: get(['Store name', 'Store', 'store', 'Purchase Location']),
-    notes: get(['Note', 'Notes', 'note', 'notes', 'Tasting Note', 'Review']),
+    notes,
     rating: isNaN(rating) ? undefined : rating,
     ratingScale: inferRatingScale(rating),
+    drinkFrom,
+    drinkTo,
+    // Scan-history exports: when the user picks "drinking history" in the
+    // import UI, this becomes consumedAt. Stripped before items are sent to
+    // the backend either way (see ImportBottles' mode transform).
+    scanDate: tryParseDate(get(['Scan date', 'Scan Date'])),
     location: get(['Location', 'location', 'Bin', 'bin']),
     ...mapRackFields(get),
   };
@@ -1461,11 +1526,16 @@ export function applyCtRackAutoMap(items) {
  *             ctTable?: string, warnings?: object[] }}
  *   `ctTable` identifies which CellarTracker table was fingerprinted
  *   ('list'|'inventory'|'bottles'|'consumed'|'purchase'|'pending').
+ *   `vivinoScanHistory` is true when a Vivino file matches the scan-history
+ *   fingerprint (see isVivinoScanHistory) \u2014 the UI then offers importing the
+ *   rows as drinking history instead of active bottles.
  *   `warnings` are non-blocking notices:
  *     { code: 'ct-truncated' }                       \u2014 exactly 25 data rows
  *       (CellarTracker's "Only wines on this page" default page size)
  *     { code: 'ct-pending-skipped', count, wines }   \u2014 undelivered bottles
  *       skipped (Cellarion has no on-order state)
+ *     { code: 'no-identity-skipped', count }         \u2014 rows with neither a
+ *       wine name nor a producer skipped (e.g. failed Vivino scans)
  * @throws Error with code 'ct-error-page' for HTML error pages, or
  *   'ct-availability' for CT's Availability statistics table.
  */
@@ -1525,6 +1595,7 @@ export function parseAndMap(text, forceFormat) {
   // Map rows and expand quantity > 1 into individual items
   const items = [];
   const ctPendingSkipped = { count: 0, wines: [] };
+  let noIdentitySkipped = 0;
   for (const row of rows) {
     const mapped = mapper(row);
 
@@ -1543,8 +1614,10 @@ export function parseAndMap(text, forceFormat) {
     if (mapped.consumedAt)   mapped.consumedAt   = tryParseDate(mapped.consumedAt);
     if (mapped.dateAdded)    mapped.dateAdded    = tryParseDate(mapped.dateAdded);
 
-    // Skip rows with no wine name and no producer
-    if (!mapped.wineName && !mapped.producer) continue;
+    // Skip rows with no wine name and no producer \u2014 counted so the upload
+    // step can say so instead of the rows just vanishing (Vivino scan
+    // history routinely contains label-image-only rows for failed scans).
+    if (!mapped.wineName && !mapped.producer) { noIdentitySkipped++; continue; }
 
     // `?? 1` not `|| 1`: CT List rows can legitimately carry quantity 0
     // (fully pending wines) and must expand to zero items. All other
@@ -1581,12 +1654,16 @@ export function parseAndMap(text, forceFormat) {
       wines: ctPendingSkipped.wines,
     });
   }
+  if (noIdentitySkipped > 0) {
+    warnings.push({ code: 'no-identity-skipped', count: noIdentitySkipped });
+  }
 
   return {
     items,
     format,
     headers,
     ...(ctTable ? { ctTable } : {}),
+    ...(format === 'vivino' && isVivinoScanHistory(headers) ? { vivinoScanHistory: true } : {}),
     ...(ctRackAutoMap ? { ctRackAutoMap } : {}),
     ...(warnings.length > 0 ? { warnings } : {}),
   };
