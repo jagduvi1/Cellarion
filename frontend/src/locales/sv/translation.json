@@ -3219,6 +3219,8 @@
       "historyTitle": "Dryckeshistorik",
       "recommended": "Rekommenderas",
       "historyDesc": "Varje vin läggs till som en konsumerad flaska, daterad till när du skannade det. Det visas i din historik och statistik, inte bland dina flaskor i lager.",
+      "wishlistTitle": "Min önskelista",
+      "wishlistDesc": "Varje vin läggs till i din önskelista (dubbletter hoppas över). Endast viner som matchats mot registret kan läggas till.",
       "cellarTitle": "Flaskor i min källare",
       "cellarDesc": "Varje vin läggs till som en flaska du äger just nu. Välj bara detta om listan verkligen motsvarar vad som finns i din källare."
     },
@@ -3418,6 +3420,7 @@
       "title": "Importen är klar",
       "activeBottles": "Aktiva flaskor",
       "consumedHistory": "Konsumerade (historik)",
+      "wishlistAdded": "Tillagda i önskelistan",
       "skipped": "Överhoppade",
       "errors": "Fel",
       "racksCreated_one": "Hylla skapad",

@@ -3219,6 +3219,8 @@
       "historyTitle": "Drinking history",
       "recommended": "Recommended",
       "historyDesc": "Each wine is added as a consumed bottle, dated to when you scanned it. It appears in your history and statistics, not among your in-stock bottles.",
+      "wishlistTitle": "My wishlist",
+      "wishlistDesc": "Each wine is added to your wishlist (duplicates are skipped). Only wines matched to the registry can be wishlisted.",
       "cellarTitle": "Bottles in my cellar",
       "cellarDesc": "Each wine is added as a bottle you currently own. Only pick this if the list really matches what's in your cellar."
     },
@@ -3418,6 +3420,7 @@
       "title": "Import Complete",
       "activeBottles": "Active bottles",
       "consumedHistory": "Consumed (history)",
+      "wishlistAdded": "Added to wishlist",
       "skipped": "Skipped",
       "errors": "Errors",
       "racksCreated_one": "Rack created",

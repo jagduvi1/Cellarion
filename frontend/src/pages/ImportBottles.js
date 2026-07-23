@@ -504,10 +504,15 @@ function ImportBottles() {
   // scanDate before anything is sent to the backend. In history mode every
   // scan becomes a consumed bottle: consumedAt = scan date and the user's
   // Vivino rating doubles as the drinking rating (it was given at scan
-  // time). The transformed items flow into the validate results, which is
+  // time). In wishlist mode every row becomes a WishlistItem instead of a
+  // bottle. The transformed items flow into the validate results, which is
   // what both the session draft and the confirm payload are built from.
   const prepareItems = () => parsedItems.map(({ scanDate, ...item }) => {
-    if (!vivinoScanHistory || vivinoImportMode !== 'history') return item;
+    if (!vivinoScanHistory) return item;
+    if (vivinoImportMode === 'wishlist') {
+      return { ...item, addToWishlist: true };
+    }
+    if (vivinoImportMode !== 'history') return item;
     return {
       ...item,
       addToHistory: true,
@@ -1014,6 +1019,19 @@ function ImportBottles() {
               <span className="vivino-history-recommended">{t('importBottles.vivinoHistory.recommended')}</span>
             </strong>
             <span className="vivino-history-option-desc">{t('importBottles.vivinoHistory.historyDesc')}</span>
+          </span>
+        </label>
+        <label className={`vivino-history-option ${vivinoImportMode === 'wishlist' ? 'selected' : ''}`}>
+          <input
+            type="radio"
+            name="vivino-import-mode"
+            value="wishlist"
+            checked={vivinoImportMode === 'wishlist'}
+            onChange={() => setVivinoImportMode('wishlist')}
+          />
+          <span className="vivino-history-option-text">
+            <strong>{t('importBottles.vivinoHistory.wishlistTitle')}</strong>
+            <span className="vivino-history-option-desc">{t('importBottles.vivinoHistory.wishlistDesc')}</span>
           </span>
         </label>
         <label className={`vivino-history-option ${vivinoImportMode === 'cellar' ? 'selected' : ''}`}>
@@ -1988,6 +2006,12 @@ function ImportBottles() {
             <div className="done-stat">
               <span className="done-number">{importResult.createdHistory}</span>
               <span>{t('importBottles.done.consumedHistory')}</span>
+            </div>
+          )}
+          {importResult.wishlistCreated > 0 && (
+            <div className="done-stat">
+              <span className="done-number">{importResult.wishlistCreated}</span>
+              <span>{t('importBottles.done.wishlistAdded')}</span>
             </div>
           )}
           {skippedCount > 0 && (
