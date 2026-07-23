@@ -3215,7 +3215,7 @@
     },
     "vivinoHistory": {
       "title": "This looks like your Vivino scan history",
-      "body": "This file lists every wine you've scanned or reviewed on Vivino — not the bottles currently in your cellar. Your ratings, reviews, personal notes and drinking windows come along either way. Choose what these wines should become:",
+      "body": "This file lists every wine you've scanned or reviewed on Vivino — not the bottles currently in your cellar. Your ratings, reviews, personal notes and drinking windows come along either way. Choose what these wines should become — the choice applies to every row in this file. If your list mixes wines you still own, wines you've drunk and wines you just want, import the file once per destination and skip the other rows during review, or split the CSV first.",
       "historyTitle": "Drinking history",
       "recommended": "Recommended",
       "historyDesc": "Each wine is added as a consumed bottle, dated to when you scanned it. It appears in your history and statistics, not among your in-stock bottles.",

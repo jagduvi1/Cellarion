@@ -3215,7 +3215,7 @@
     },
     "vivinoHistory": {
       "title": "Det här ser ut som din Vivino-skanningshistorik",
-      "body": "Den här filen listar varje vin du har skannat eller recenserat på Vivino — inte flaskorna som just nu finns i din källare. Dina betyg, recensioner, personliga anteckningar och drickfönster följer med oavsett. Välj vad vinerna ska bli:",
+      "body": "Den här filen listar varje vin du har skannat eller recenserat på Vivino — inte flaskorna som just nu finns i din källare. Dina betyg, recensioner, personliga anteckningar och drickfönster följer med oavsett. Välj vad vinerna ska bli — valet gäller alla rader i filen. Om din lista blandar viner du fortfarande äger, viner du har druckit och viner du bara önskar dig, importera filen en gång per destination och hoppa över övriga rader vid granskningen, eller dela upp CSV-filen först.",
       "historyTitle": "Dryckeshistorik",
       "recommended": "Rekommenderas",
       "historyDesc": "Varje vin läggs till som en konsumerad flaska, daterad till när du skannade det. Det visas i din historik och statistik, inte bland dina flaskor i lager.",
