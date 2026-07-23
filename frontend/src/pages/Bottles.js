@@ -13,7 +13,7 @@ const FILTER_KEYS = [
 ];
 
 // English fallbacks — the displayed labels come from the locale files
-// (statistics.typeLabels.* / bottles.status_*) via t() in chipLabels below.
+// (statistics.typeLabels.* / bottles.statusLabels.*) via t() in chipLabels below.
 const TYPE_LABELS = {
   red: 'Red', white: 'White', 'rosé': 'Rosé', sparkling: 'Sparkling',
   dessert: 'Dessert', fortified: 'Fortified',
@@ -157,7 +157,7 @@ function Bottles() {
     if (filters.purchaseYear) labels.purchaseYear = t('bottles.chipPurchased', 'Purchased: {{value}}', { value: filters.purchaseYear });
     if (filters.consumedYear) labels.consumedYear = t('bottles.chipConsumed', 'Consumed: {{value}}', { value: filters.consumedYear });
     if (filters.status) {
-      const statusName = t(`bottles.status_${filters.status}`, STATUS_LABELS[filters.status] || filters.status);
+      const statusName = t(`bottles.statusLabels.${filters.status}`, STATUS_LABELS[filters.status] || filters.status);
       labels.status = t('bottles.chipStatus', 'Status: {{value}}', { value: statusName });
     }
     return labels;
