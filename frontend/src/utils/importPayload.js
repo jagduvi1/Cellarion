@@ -47,5 +47,8 @@ export function buildImportItem(r, selection) {
     consumedRating: r.item.consumedRating,
     consumedRatingScale: r.item.consumedRatingScale,
     consumedNote: r.item.consumedNote,
+    // Wishlist destination (e.g. Vivino scan-history sent to the wishlist):
+    // the backend creates a WishlistItem instead of a Bottle.
+    addToWishlist: r.item.addToWishlist,
   };
 }

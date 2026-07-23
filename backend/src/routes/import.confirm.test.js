@@ -79,6 +79,11 @@ jest.mock('../models/WineRequest', () => {
   return WineRequest;
 });
 
+jest.mock('../models/WishlistItem', () => ({
+  findOne: jest.fn(),
+  create: jest.fn(),
+}));
+
 const express = require('express');
 const http = require('http');
 const jwt = require('jsonwebtoken');
@@ -86,6 +91,7 @@ const Cellar = require('../models/Cellar');
 const WineDefinition = require('../models/WineDefinition');
 const Bottle = require('../models/Bottle');
 const WineRequest = require('../models/WineRequest');
+const WishlistItem = require('../models/WishlistItem');
 const { ensurePendingVintageProfile } = require('../utils/vintageProfile');
 const importRouter = require('./import');
 
@@ -143,6 +149,8 @@ beforeEach(() => {
   Cellar.findById.mockResolvedValue({ _id: CELLAR_ID, name: 'Main', user: USER_ID, members: [], deletedAt: null });
   wineDoc = { _id: WINE_ID, name: 'Test Wine', producer: 'Test Prod', grapes: ['g-existing'] };
   WineDefinition.findById.mockResolvedValue(wineDoc);
+  WishlistItem.findOne.mockResolvedValue(null);
+  WishlistItem.create.mockImplementation(async (data) => ({ _id: 'wish-1', ...data }));
 });
 
 // ── Regression: items without the new fields ────────────────────────────────
@@ -152,11 +160,13 @@ describe('additive regression (items without grapes/drink windows)', () => {
     const { status, body } = await confirm([{ wineDefinition: WINE_ID, vintage: '2018', notes: 'plain row' }]);
 
     expect(status).toBe(200);
-    // Response shape unchanged
+    // Response shape unchanged (wishlistCreated is additive — 0 when no
+    // items carry addToWishlist)
     expect(body).toEqual({
       created: 1,
       createdActive: 1,
       createdHistory: 0,
+      wishlistCreated: 0,
       skipped: [],
       errors: [],
       total: 1,
@@ -299,5 +309,93 @@ describe('item.drinkFrom / item.drinkTo', () => {
     expect(body.created).toBe(1);
     expect(Bottle.__instances[0].drinkFrom).toBeUndefined();
     expect(Bottle.__instances[0].drinkTo).toBeUndefined();
+  });
+});
+
+// ── Wishlist destination (item.addToWishlist) ────────────────────────────────
+
+describe('item.addToWishlist', () => {
+  test('creates a WishlistItem for the importing user instead of a Bottle', async () => {
+    const { status, body } = await confirm([
+      { wineDefinition: WINE_ID, vintage: '2018', notes: 'sounded great', addToWishlist: true },
+    ]);
+
+    expect(status).toBe(200);
+    expect(body.wishlistCreated).toBe(1);
+    expect(body.created).toBe(0);
+    expect(body.errors).toEqual([]);
+    expect(Bottle.__instances).toHaveLength(0);
+    expect(WishlistItem.create).toHaveBeenCalledWith({
+      user: USER_ID,
+      wineDefinition: WINE_ID,
+      vintage: '2018',
+      notes: 'sounded great',
+      priority: 'medium',
+    });
+  });
+
+  test('skips rows already on the wishlist (same wine + vintage, wanted)', async () => {
+    WishlistItem.findOne.mockResolvedValue({ _id: 'existing-wish' });
+    const { body } = await confirm([
+      { wineDefinition: WINE_ID, vintage: '2018', addToWishlist: true },
+    ]);
+
+    expect(body.wishlistCreated).toBe(0);
+    expect(body.skipped).toEqual([{ index: 0, reason: 'Already on your wishlist' }]);
+    expect(WishlistItem.create).not.toHaveBeenCalled();
+    expect(WishlistItem.findOne).toHaveBeenCalledWith({
+      user: USER_ID,
+      wineDefinition: WINE_ID,
+      status: 'wanted',
+      vintage: '2018',
+    });
+  });
+
+  test('dedups repeated wine+vintage rows within one batch (scan histories repeat wines)', async () => {
+    const { body } = await confirm([
+      { wineDefinition: WINE_ID, vintage: '2018', addToWishlist: true },
+      { wineDefinition: WINE_ID, vintage: '2018', addToWishlist: true },
+      { wineDefinition: WINE_ID, vintage: '2019', addToWishlist: true },
+    ]);
+
+    expect(body.wishlistCreated).toBe(2);
+    expect(body.skipped).toEqual([{ index: 1, reason: 'Duplicate wishlist row in this import' }]);
+    expect(WishlistItem.create).toHaveBeenCalledTimes(2);
+  });
+
+  test('request-wine rows cannot be wishlisted — per-row error, no WineRequest created', async () => {
+    const { body } = await confirm([
+      { requestWine: true, wineName: 'Mystery', producer: 'Someone', vintage: '2019', addToWishlist: true },
+      { wineDefinition: WINE_ID, vintage: '2018', addToWishlist: true },
+    ]);
+
+    expect(body.wishlistCreated).toBe(1);
+    expect(body.errors).toEqual([
+      { index: 0, reason: 'Only wines matched to the registry can be added to the wishlist' },
+    ]);
+    expect(WineRequest.__instances).toHaveLength(0);
+  });
+
+  test('mixed batch: wishlist rows and bottle rows are both honoured', async () => {
+    const { body } = await confirm([
+      { wineDefinition: WINE_ID, vintage: '2018', addToWishlist: true },
+      { wineDefinition: WINE_ID, vintage: '2018' },
+    ]);
+
+    expect(body.wishlistCreated).toBe(1);
+    expect(body.created).toBe(1);
+    expect(body.createdActive).toBe(1);
+    expect(Bottle.__instances).toHaveLength(1);
+  });
+
+  test('NV vintage rows use the canonical NV identity for dedup', async () => {
+    const { body } = await confirm([
+      { wineDefinition: WINE_ID, vintage: '', addToWishlist: true },
+      { wineDefinition: WINE_ID, vintage: 'NV', addToWishlist: true },
+    ]);
+
+    // '' and 'NV' both canonicalise to 'NV' → second row is an in-batch dupe
+    expect(body.wishlistCreated).toBe(1);
+    expect(body.skipped).toEqual([{ index: 1, reason: 'Duplicate wishlist row in this import' }]);
   });
 });

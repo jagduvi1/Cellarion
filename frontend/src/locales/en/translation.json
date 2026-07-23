@@ -2438,7 +2438,7 @@
       "q4": "Is Cellarion really free?",
       "a4": "Yes. All core features at cellarion.app are free — track unlimited bottles, organise cellars, get drink-window alerts, share with friends, and export your data anytime. There are no credit-card prompts, no premium tiers gating basic functionality, and we don't sell ads or your data.",
       "q5": "How do I import wines from Vivino or CellarTracker?",
-      "a5": "Cellarion supports CSV import. Export your collection from Vivino, CellarTracker, or any spreadsheet, then upload the CSV in Cellarion's import tool. The shared wine registry deduplicates entries automatically so your data stays clean and consistent across the whole catalogue.",
+      "a5": "Cellarion supports CSV import. Export your collection from Vivino, CellarTracker, or any spreadsheet, then upload the CSV in Cellarion's import tool. Note that Vivino's \"full wine list\" download is your scan history, not your cellar — Cellarion detects this and offers to import it as drinking history (with your ratings, reviews and notes) instead of as bottles in stock. The shared wine registry deduplicates entries automatically so your data stays clean and consistent across the whole catalogue.",
       "q6": "Can I export my data and leave any time?",
       "a6": "Yes — your data is yours. Cellarion includes a one-click data export that gives you everything as JSON (or a ZIP with your images), plus CSV import for bottles. You can delete your account from Settings with a 7-day cooling-off window. Hosted data lives on European infrastructure under GDPR."
     }
@@ -3185,7 +3185,9 @@
       "ctTruncatedTitle": "Only 25 rows found — this export may be cut off.",
       "ctTruncated": "This looks like a single-page export (exactly 25 rows). In CellarTracker, choose 'All wines' instead of 'Only wines on this page' before exporting, or your import may be missing most of your cellar.",
       "ctPendingSkipped_one": "{{count}} pending (undelivered) bottle was not imported: {{wines}}. Cellarion doesn't track bottles you haven't received yet — re-import after delivery.",
-      "ctPendingSkipped_other": "{{count}} pending (undelivered) bottles were not imported: {{wines}}. Cellarion doesn't track bottles you haven't received yet — re-import after delivery."
+      "ctPendingSkipped_other": "{{count}} pending (undelivered) bottles were not imported: {{wines}}. Cellarion doesn't track bottles you haven't received yet — re-import after delivery.",
+      "noIdentitySkipped_one": "{{count}} row was skipped because it has no wine name or producer (usually a failed label scan).",
+      "noIdentitySkipped_other": "{{count}} rows were skipped because they have no wine name or producer (usually failed label scans)."
     },
     "ctTables": {
       "list": "List table",
@@ -3211,6 +3213,17 @@
       "notCarriedWishlist": "Wishlists",
       "notCarriedWhy": "CellarTracker's export files simply don't include these, so no importer can carry them over."
     },
+    "vivinoHistory": {
+      "title": "This looks like your Vivino scan history",
+      "body": "This file lists every wine you've scanned or reviewed on Vivino — not the bottles currently in your cellar. Your ratings, reviews, personal notes and drinking windows come along either way. Choose what these wines should become:",
+      "historyTitle": "Drinking history",
+      "recommended": "Recommended",
+      "historyDesc": "Each wine is added as a consumed bottle, dated to when you scanned it. It appears in your history and statistics, not among your in-stock bottles.",
+      "wishlistTitle": "My wishlist",
+      "wishlistDesc": "Each wine is added to your wishlist (duplicates are skipped). Only wines matched to the registry can be wishlisted.",
+      "cellarTitle": "Bottles in my cellar",
+      "cellarDesc": "Each wine is added as a bottle you currently own. Only pick this if the list really matches what's in your cellar."
+    },
     "upload": {
       "resumeReviewTitle": "Your matched results are still here",
       "resumeReviewMeta": "Return to review to keep every match, skip and manual selection. Re-matching below starts the review over.",
@@ -3226,7 +3239,7 @@
       "oenoTitle": "Oeno by Vintec",
       "genericTitle": "Generic CSV",
       "cellarionDesc": "Download from any cellar via ⋯ → Export (JSON). Bottles from all cellars in the file are imported into the cellar you pick here — to recreate whole cellars with racks and layout, use Import Cellar in Settings instead.",
-      "vivinoDesc": "Export your collection from Vivino app settings",
+      "vivinoDesc": "Cellar exports import as bottles; the \"full wine list\" download (your scan history) can import as drinking history",
       "cellartrackerDesc": "Export from CellarTracker via My Cellar → Download",
       "oenoDesc": "Real Oeno-by-Vintec export — two-section CSV with cabinet definitions + bottles. Cabinets, shelves, and bottle history all import automatically.",
       "genericDesc": "Any CSV with Wine, Producer, Vintage columns",
@@ -3407,6 +3420,9 @@
       "title": "Import Complete",
       "activeBottles": "Active bottles",
       "consumedHistory": "Consumed (history)",
+      "wishlistAdded": "Added to wishlist",
+      "allWishlistedNote_one": "Your wine was added to your wishlist.",
+      "allWishlistedNote_other": "All {{count}} wines were added to your wishlist.",
       "skipped": "Skipped",
       "errors": "Errors",
       "racksCreated_one": "Rack created",
