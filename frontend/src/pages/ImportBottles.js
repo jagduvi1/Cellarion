@@ -35,6 +35,12 @@ import './ImportBottles.css';
 
 const STEPS = ['upload', 'review', 'importing', 'done'];
 
+// Mirrors backend config/constants MAX_IMPORT_SIZE: /confirm hard-rejects
+// bigger batches in one request, while /validate runs in 25-row slices and
+// happily validates any size — so without an upfront warning a larger file
+// only fails at the very last click, after all the review work.
+const MAX_IMPORT_ROWS = 2000;
+
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
 const FORMAT_LABEL_KEYS = {
@@ -842,6 +848,16 @@ function ImportBottles() {
     setUnresolvedRows(unresolvedAtReview);
     const items = importableRows.map(buildImportItem);
 
+    // Mirror of the backend cap: /confirm refuses more than MAX_IMPORT_ROWS
+    // in one request — fail here with guidance instead of a bare 400 after
+    // the whole review.
+    if (items.length > MAX_IMPORT_ROWS) {
+      setError(t('importBottles.errors.tooManyRows', { count: items.length, max: MAX_IMPORT_ROWS }));
+      setStep('review');
+      setImporting(false);
+      return;
+    }
+
     try {
       const res = await confirmImport(apiFetch, { cellarId, items, positionAnchor, rackConfigs, defaultCurrency: importCurrency });
       const data = await res.json();
@@ -874,8 +890,14 @@ function ImportBottles() {
   // The CT truncation warning gets elevated styling + a bold headline: a
   // 25-row page export silently missing 90% of a cellar is the single worst
   // "looked like it worked" outcome an import can have.
-  const renderImportWarnings = () => importWarnings.length > 0 && (
+  const renderImportWarnings = () => (importWarnings.length > 0 || parsedItems.length > MAX_IMPORT_ROWS) && (
     <div className="import-parse-warnings">
+      {parsedItems.length > MAX_IMPORT_ROWS && (
+        <div className="import-parse-warning-banner import-parse-warning-strong" role="alert">
+          <strong>{t('importBottles.warnings.tooManyRowsTitle', { count: parsedItems.length })}</strong>{' '}
+          {t('importBottles.warnings.tooManyRows', { max: MAX_IMPORT_ROWS })}
+        </div>
+      )}
       {importWarnings.map((w, i) => (
         <div
           key={i}
