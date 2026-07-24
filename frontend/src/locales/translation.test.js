@@ -6,9 +6,13 @@
  * every `connectAi.*` key could be deleted from both locales and the whole UI
  * suite would still pass. This suite is the thing that actually reads them.
  *
- * `sv` mirrors `en` key-for-key by convention: i18n.js sets fallbackLng 'en',
- * so a missing Swedish key degrades silently to English rather than failing
- * loudly — which is exactly why it needs a test.
+ * Locales are Weblate-managed and may legitimately lag `en` — i18n.js sets
+ * fallbackLng 'en', so untranslated keys degrade to English until a
+ * translator catches up. What is never legitimate: keys `en` doesn't have
+ * (stale leftovers, typo'd renames), empty strings, or placeholders the
+ * English source lacks. That's what this suite polices; the connectAi block
+ * below additionally pins full coverage for the one page where partial
+ * translation would be load-bearing.
  */
 
 import en from './en/translation.json';
@@ -43,12 +47,13 @@ const placeholders = (str) =>
   [...str.matchAll(/\{\{\s*([^,}\s]+)\s*(?:,[^}]*)?\}\}/g)].map((m) => m[1]);
 
 describe('translation files', () => {
-  test.each(otherLocales)('%s mirrors en key-for-key (ignoring plural suffixes)', (code, bundle) => {
+  // Missing keys are allowed (a Weblate-managed language mid-translation is
+  // the normal state); orphaned keys are not.
+  test.each(otherLocales)('%s has no keys that en lacks (ignoring plural suffixes)', (code, bundle) => {
     const keys = normalize(flatten(bundle));
     const base = normalize(enKeys);
-    const missing = base.filter((k) => !keys.includes(k));
     const orphaned = keys.filter((k) => !base.includes(k));
-    expect({ missing, orphaned }).toEqual({ missing: [], orphaned: [] });
+    expect(orphaned).toEqual([]);
   });
 
   test.each(Object.entries(bundles))('%s has no key resolving to an empty string', (code, bundle) => {
