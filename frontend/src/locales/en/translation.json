@@ -3176,12 +3176,15 @@
       "validationNetwork": "Network error during validation",
       "importFailed": "Import failed",
       "importNetwork": "Network error during import",
+      "tooManyRows": "Cannot import {{count}} rows in one run — the cap is {{max}}. Skip rows during review, or split the file and import the rest in a second run.",
       "ctErrorPage": "This file is a CellarTracker error page, not an export — log in to CellarTracker and re-export.",
       "ctAvailability": "This is CellarTracker's Availability table — drinking-window statistics, not a cellar export. Export the List or Inventory table instead.",
       "ctAllPending_one": "The only bottle in this file is a pending (undelivered) purchase — Cellarion doesn't track bottles you haven't received yet.",
       "ctAllPending_other": "All {{count}} bottles in this file are pending (undelivered) purchases — Cellarion doesn't track bottles you haven't received yet."
     },
     "warnings": {
+      "tooManyRowsTitle": "{{count}} rows — more than one import run can take.",
+      "tooManyRows": "Imports are capped at {{max}} rows per run. Split the file and import the parts one at a time (the destination choice applies per file), or skip rows during review — anything above the cap is refused at the final step.",
       "ctTruncatedTitle": "Only 25 rows found — this export may be cut off.",
       "ctTruncated": "This looks like a single-page export (exactly 25 rows). In CellarTracker, choose 'All wines' instead of 'Only wines on this page' before exporting, or your import may be missing most of your cellar.",
       "ctPendingSkipped_one": "{{count}} pending (undelivered) bottle was not imported: {{wines}}. Cellarion doesn't track bottles you haven't received yet — re-import after delivery.",
