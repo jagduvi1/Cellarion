@@ -10,6 +10,7 @@ import en from './locales/en/translation.json';
 
 const DYNAMIC_LOCALES = {
   sv: () => import('./locales/sv/translation.json'),
+  de: () => import('./locales/de/translation.json'),
 };
 
 i18n
@@ -23,7 +24,7 @@ i18n
     // don't treat their absence at init as "unsupported".
     partialBundledLanguages: true,
     fallbackLng: 'en',
-    supportedLngs: ['en', 'sv'],
+    supportedLngs: ['en', 'sv', 'de'],
     detection: {
       order: ['localStorage', 'navigator'],
       caches: ['localStorage'],
