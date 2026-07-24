@@ -392,6 +392,20 @@ describe('capture_tasting_note', () => {
     expect(tool('capture_tasting_note').selfBudgeted).toBe(true);
     expect(takeMutationSlot).toHaveBeenCalledWith(ME, 1, null);
   });
+
+  test('a THROWN consumed-rating save (VersionError) still compensates: entry deleted, conflict, no ledger row (audit M1)', async () => {
+    const b = ownBottle({ status: 'drank', consumedRating: null, consumedRatingScale: null });
+    b.save.mockRejectedValue(Object.assign(new Error('version conflict'), { name: 'VersionError' }));
+    JournalEntry.create.mockResolvedValue({ _id: new mongoose.Types.ObjectId(oid('9')) });
+    JournalEntry.findOneAndDelete.mockResolvedValue({ _id: oid('9') });
+
+    const res = await tool('capture_tasting_note').handler({ bottle_id: oid('d'), note: 'x', rating: 5 }, CTX);
+    const body = parse(res);
+    expect(body.error.code).toBe('conflict');
+    expect(body.error.message).toContain('Nothing was saved');
+    expect(JournalEntry.findOneAndDelete).toHaveBeenCalledWith({ _id: expect.anything(), user: ME });
+    expect(McpActionLog.create).not.toHaveBeenCalled();
+  });
 });
 
 describe('capture_tasting_note — occasion form (bottles[])', () => {
@@ -519,6 +533,27 @@ describe('capture_tasting_note — occasion form (bottles[])', () => {
     expect(body.error.message).toContain(oid('b'));
     // b1's previous rating restored, entry compensated away, no ledger row.
     expect(bottleOps.updateBottleFields).toHaveBeenNthCalledWith(3, b1, { rating: 3, ratingScale: '5' }, CTX.req);
+    expect(JournalEntry.findOneAndDelete).toHaveBeenCalledWith({ _id: expect.anything(), user: ME });
+    expect(McpActionLog.create).not.toHaveBeenCalled();
+  });
+
+  test('a THROW mid-batch (consumed save rejects) rolls back applied ratings and deletes the entry (audit M1)', async () => {
+    const { b1, b2 } = wireTwo();
+    b2.save.mockRejectedValue(Object.assign(new Error('version conflict'), { name: 'VersionError' }));
+    JournalEntry.create.mockResolvedValue({ _id: new mongoose.Types.ObjectId(oid('9')) });
+    JournalEntry.findOneAndDelete.mockResolvedValue({ _id: oid('9') });
+    bottleOps.updateBottleFields
+      .mockResolvedValueOnce({ changes: { rating: 4 }, prev: { rating: 3 } }) // b1 apply ok
+      .mockResolvedValueOnce({ changes: {}, prev: {} });                       // b1 rollback
+
+    const res = await tool('capture_tasting_note').handler({
+      bottles: [{ bottle_id: oid('d'), rating: 4 }, { bottle_id: oid('b'), rating: 5 }], note: 'x',
+    }, CTX);
+    const body = parse(res);
+    expect(body.error.code).toBe('conflict');
+    expect(body.error.message).toContain(oid('b'));
+    expect(body.error.message).toContain('Nothing was saved');
+    expect(bottleOps.updateBottleFields).toHaveBeenNthCalledWith(2, b1, { rating: 3, ratingScale: '5' }, CTX.req);
     expect(JournalEntry.findOneAndDelete).toHaveBeenCalledWith({ _id: expect.anything(), user: ME });
     expect(McpActionLog.create).not.toHaveBeenCalled();
   });
