@@ -1,6 +1,6 @@
 # ── Stage 1: build React app ──────────────────────────────────────────────────
 # Digest-pinned (security audit L-11); Dependabot's docker ecosystem bumps it.
-FROM node:20-alpine@sha256:fb4cd12c85ee03686f6af5362a0b0d56d50c58a04632e6c0fb8363f609372293 AS builder
+FROM node:24-alpine@sha256:a0b9bf06e4e6193cf7a0f58816cc935ff8c2a908f81e6f1a95432d679c54fbfd AS builder
 
 WORKDIR /app
 
@@ -31,7 +31,7 @@ RUN npm run build
 # (uid 101), so an nginx compromise never holds root in the container (audit
 # L-25). Non-root cannot bind <1024, so the server listens on 8080 — compose
 # and Traefik map onto that port.
-FROM nginxinc/nginx-unprivileged:alpine@sha256:a718212f9cf21e241f14067333000a3f0930292f5354fe0db269e9a2a2596b9e
+FROM nginxinc/nginx-unprivileged:alpine@sha256:18d67281256ded39ff65e010ae4f831be18f19356f83c60bc546492c7eb6dd23
 
 COPY --from=builder /app/dist /usr/share/nginx/html
 COPY nginx.conf /etc/nginx/conf.d/default.conf

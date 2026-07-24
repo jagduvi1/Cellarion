@@ -90,6 +90,28 @@ test('unverifiable sniffed format → 400 (never trust a fallback extension)', a
   expect(fs.promises.writeFile).not.toHaveBeenCalled();
 });
 
+// ── credit gate — lives IN the pipeline so REST and MCP cannot drift ─────────
+test('credit from a NON-admin is silently dropped', async () => {
+  const res = await ingestBottleImage(
+    { buffer: Buffer.from('RAW'), userId: 'u1', userRoles: ['user'], credit: 'Photo: me' }, REQ);
+  expect(res.image.credit).toBeNull();
+});
+
+test('credit with no roles at all (caller forgot to pass them) is dropped — fail closed', async () => {
+  const res = await ingestBottleImage(
+    { buffer: Buffer.from('RAW'), userId: 'u1', credit: 'Photo: me' }, REQ);
+  expect(res.image.credit).toBeNull();
+});
+
+test('credit from an admin sticks, HTML-stripped and capped at 200 chars', async () => {
+  const res = await ingestBottleImage(
+    { buffer: Buffer.from('RAW'), userId: 'a1', userRoles: ['user', 'admin'], credit: ' <b>Photo</b>: Systembolaget ' }, REQ);
+  expect(res.image.credit).toBe('Photo: Systembolaget');
+  const long = await ingestBottleImage(
+    { buffer: Buffer.from('RAW'), userId: 'a1', userRoles: ['admin'], credit: 'x'.repeat(500) }, REQ);
+  expect(long.image.credit).toHaveLength(200);
+});
+
 // ── attachOfficialWineImage — the admin one-shot (REST + MCP shared) ─────────
 describe('attachOfficialWineImage', () => {
   // Monkey-patch the real model singleton — the service lazy-requires the same
@@ -105,7 +127,7 @@ describe('attachOfficialWineImage', () => {
 
   test('ingests, pre-approves as the official public image, replaces the prior one, stamps wine.image + credit', async () => {
     const res = await attachOfficialWineImage(
-      { buffer: Buffer.from('img'), wineDefinitionId: 'w1', credit: 'Photo: Systembolaget', userId: 'admin1' }, REQ
+      { buffer: Buffer.from('img'), wineDefinitionId: 'w1', credit: 'Photo: Systembolaget', userId: 'admin1', userRoles: ['admin'] }, REQ
     );
     expect(res.error).toBeUndefined();
     const img = res.image;
@@ -120,6 +142,16 @@ describe('attachOfficialWineImage', () => {
     expect(WineDefinition.findByIdAndUpdate).toHaveBeenCalledWith('w1',
       expect.objectContaining({ imageCredit: 'Photo: Systembolaget' }));
     expect(searchService.indexWine).toHaveBeenCalledWith('w1');
+  });
+
+  test('wine.imageCredit gets the GATED credit — a non-admin actor cannot stamp one', async () => {
+    const res = await attachOfficialWineImage(
+      { buffer: Buffer.from('img'), wineDefinitionId: 'w1', credit: 'Photo: me', userId: 'u1', userRoles: ['user'] }, REQ
+    );
+    expect(res.error).toBeUndefined();
+    expect(res.image.credit).toBeNull();
+    expect(WineDefinition.findByIdAndUpdate).toHaveBeenCalledWith('w1',
+      expect.objectContaining({ imageCredit: null }));
   });
 
   test('a rejected buffer fails closed — nothing approved, wine untouched', async () => {

@@ -57,6 +57,7 @@ function AdminWines() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
   const [formError, setFormError] = useState(null);
+  const [dupCandidates, setDupCandidates] = useState(null);
   const [imageCredit, setImageCredit] = useState('');
   const galleryRef = useRef(null);
 
@@ -216,13 +217,15 @@ function AdminWines() {
     setEditWine(null);
     setFormData(emptyForm);
     setFormError(null);
+    setDupCandidates(null);
     setImageCredit('');
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const handleSubmit = async (e, confirmCreate = false) => {
+    e?.preventDefault();
     setSubmitting(true);
     setFormError(null);
+    setDupCandidates(null);
     try {
       const payload = {
         name: formData.name.trim(),
@@ -232,6 +235,9 @@ function AdminWines() {
         type: formData.type,
         appellation: formData.appellation.trim() || null,
         grapes: formData.grapes,
+        // Only meaningful on create: skips the server-side duplicate probe
+        // after the admin explicitly chose "create anyway".
+        ...(confirmCreate && !editWine ? { confirmCreate: true } : {}),
       };
 
       const res = await adminSaveWine(apiFetch, payload, editWine?._id);
@@ -249,6 +255,11 @@ function AdminWines() {
           setEditWine(data.wine);
         }
         fetchWines();
+      } else if (res.status === 409 && data.candidates?.length) {
+        // The registry already has very similar wine(s) — show them so the
+        // admin links/merges instead, with an explicit "create anyway" out.
+        setDupCandidates(data.candidates);
+        setFormError(data.error || 'Very similar registry wines already exist');
       } else {
         setFormError(data.error || 'Failed to save wine');
       }
@@ -356,7 +367,7 @@ function AdminWines() {
       <div className="page-header">
         <div>
           <h1>{t('admin.wines.title')}</h1>
-          {!loading && <p className="page-subtitle">{total.toLocaleString()} {t('admin.wines.wineDefinitions')}</p>}
+          {!loading && <p className="page-subtitle">{t('admin.wines.wineDefinitions', { count: total })}</p>}
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <button className="btn btn-secondary" onClick={() => setShowDuplicatesScanner(true)} title="Scan the wine registry for likely duplicates">
@@ -424,6 +435,28 @@ function AdminWines() {
           }
         >
           {formError && <div className="alert alert-error">{formError}</div>}
+          {!editWine && dupCandidates?.length > 0 && (
+            <div className="alert alert-info">
+              <strong>{t('admin.wines.dupTitle')}</strong>
+              <ul style={{ margin: '8px 0 8px 18px' }}>
+                {dupCandidates.map((c) => (
+                  <li key={c._id}>
+                    “{c.name}” — {c.producer}{c.appellation ? ` (${c.appellation})` : ''}
+                  </li>
+                ))}
+              </ul>
+              <div>{t('admin.wines.dupHint')}</div>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                style={{ marginTop: 8 }}
+                disabled={submitting}
+                onClick={(e) => handleSubmit(e, true)}
+              >
+                {t('admin.wines.dupCreateAnyway')}
+              </button>
+            </div>
+          )}
           <form id="wine-form" onSubmit={handleSubmit}>
             <div className="wine-form-grid">
               <div className="form-group">
@@ -612,7 +645,7 @@ function AdminWines() {
 
       {/* Wine list */}
       <div className="wines-meta">
-        <span>{t('admin.wines.totalCount', { count: total })}</span>
+        <span>{t('admin.wines.wineDefinitions', { count: total })}</span>
       </div>
 
       {listError && !loading && (

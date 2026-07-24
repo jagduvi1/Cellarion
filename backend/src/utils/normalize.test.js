@@ -1,7 +1,9 @@
 const {
   normalizeString,
   tokenize,
+  normalizeProducerKey,
   generateWineKey,
+  normalizeAppellation,
   levenshteinDistance,
   calculateSimilarity,
   generateTrigrams,
@@ -78,6 +80,32 @@ describe('tokenize', () => {
 });
 
 // ─── generateWineKey ─────────────────────────────────────────────────────────
+
+describe('normalizeAppellation (ticket #2C: tier-suffix proliferation)', () => {
+  test('strips the trailing classification tier', () => {
+    expect(normalizeAppellation('Barolo DOCG')).toBe('Barolo');
+    expect(normalizeAppellation('Barolo')).toBe('Barolo');
+    expect(normalizeAppellation('Napa Valley AVA')).toBe('Napa Valley');
+    expect(normalizeAppellation('Chianti Classico DOCG')).toBe('Chianti Classico');
+    expect(normalizeAppellation('Rueda, DO')).toBe('Rueda, DO'); // 'do' deliberately NOT stripped
+  });
+
+  test('the two Barolo variants converge to one canonical form', () => {
+    expect(normalizeAppellation('Barolo DOCG')).toBe(normalizeAppellation('Barolo'));
+  });
+
+  test('does not strip a tier token that is part of the place name', () => {
+    // No trailing tier here — "Classico" is part of the name, left intact.
+    expect(normalizeAppellation('Chianti Classico')).toBe('Chianti Classico');
+  });
+
+  test('passes null/undefined through and never returns empty', () => {
+    expect(normalizeAppellation(null)).toBeNull();
+    expect(normalizeAppellation(undefined)).toBeUndefined();
+    expect(normalizeAppellation('DOCG')).toBe('DOCG'); // all-tier input preserved, not emptied
+    expect(normalizeAppellation('   Barolo   DOCG ')).toBe('Barolo');
+  });
+});
 
 describe('generateWineKey', () => {
   test('produces a consistent colon-delimited key', () => {
@@ -461,5 +489,27 @@ describe('producer house prefixes (the launch-day Barolo duplicate)', () => {
     // Sharing a stripped prefix must not make different houses near-identical:
     // candidates at worst (soft zone asks the user), never a silent merge.
     expect(combinedSimilarity('Cantina Rossi', 'Cantina Bianchi')).toBeLessThan(0.6);
+  });
+});
+
+describe('normalizeProducerKey (ticket #2B: dup-cluster bucketing)', () => {
+  test('a corporate suffix + a wine stop word collapse to the same key', () => {
+    // The exact repro: two registry strings for one producer must bucket together.
+    expect(normalizeProducerKey('Kumeu River Wines Limited')).toBe('kumeu river');
+    expect(normalizeProducerKey('Kumeu River')).toBe('kumeu river');
+  });
+
+  test('common legal forms are stripped', () => {
+    expect(normalizeProducerKey('Foo Bar Ltd')).toBe(normalizeProducerKey('Foo Bar'));
+    expect(normalizeProducerKey('Weingut Müller GmbH')).toBe(normalizeProducerKey('Müller'));
+  });
+
+  test('genuinely different producers keep different keys', () => {
+    expect(normalizeProducerKey('Kumeu River')).not.toBe(normalizeProducerKey('Cloudy Bay'));
+  });
+
+  test('empty / all-stopword producer yields an empty key (bucket skipped)', () => {
+    expect(normalizeProducerKey('')).toBe('');
+    expect(normalizeProducerKey('Wines Ltd')).toBe('');
   });
 });

@@ -54,6 +54,70 @@ const tokenize = (str) => {
   return tokens;
 };
 
+// Classification-tier suffixes some labels/imports append to an appellation and
+// others omit, splitting one appellation into variants ("Barolo" vs "Barolo
+// DOCG"). The tier belongs in the separate classification field, so the
+// canonical appellation is the place name with a trailing tier stripped. Only
+// unambiguous 3–4 char tiers — deliberately NOT 'do'/'ao', which collide with
+// real place-name words.
+const APPELLATION_TIER_TOKENS = new Set(['docg', 'doca', 'doc', 'aoc', 'aop', 'ava', 'igt', 'igp']);
+
+// Strip trailing characters (any in `chars`) without a `$`-anchored quantifier
+// regex — a plain scan, so it can never be a polynomial-ReDoS shape.
+const trimTrailingChars = (str, chars) => {
+  let end = str.length;
+  while (end > 0 && chars.includes(str[end - 1])) end -= 1;
+  return str.slice(0, end);
+};
+
+/**
+ * Canonicalize an appellation by stripping a trailing classification tier
+ * ("Barolo DOCG" → "Barolo", "Napa Valley AVA" → "Napa Valley"). Preserves the
+ * casing/accents of the place part; never returns empty (falls back to the
+ * trimmed original). Passes null/undefined through unchanged.
+ *
+ * Token-based + regex-free trailing strip, so it stays strictly linear.
+ */
+const normalizeAppellation = (appellation) => {
+  if (appellation == null) return appellation;
+  const original = String(appellation).trim();
+  const parts = original.split(/\s+/);
+  // Drop trailing tier token(s), tolerating a trailing dot/comma on each.
+  while (parts.length > 1) {
+    const last = trimTrailingChars(parts[parts.length - 1], '.,').toLowerCase();
+    if (!APPELLATION_TIER_TOKENS.has(last)) break;
+    parts.pop();
+  }
+  const result = trimTrailingChars(parts.join(' '), ' ,').trim();
+  return result || original;
+};
+
+/**
+ * Corporate / legal-form suffixes that vary between a wine label and a registry
+ * entry for the SAME producer ("Kumeu River" vs "Kumeu River Wines Limited").
+ * Distinct from WINE_STOP_WORDS (which also governs wine-NAME matching) — these
+ * are producer-specific and stripped only when building a producer COMPARISON
+ * key, never from a display string.
+ */
+const PRODUCER_CORP_SUFFIXES = new Set([
+  'ltd', 'limited', 'inc', 'incorporated', 'llc', 'llp', 'plc',
+  'gmbh', 'ag', 'sa', 'sas', 'sarl', 'srl', 'spa', 'sl', 'bv', 'nv',
+  'pty', 'co', 'company', 'corp', 'corporation', 'ab', 'oy', 'as', 'kg', 'kft',
+]);
+
+/**
+ * Normalize a producer to a comparison/bucketing key: drop wine stop words AND
+ * corporate suffixes, so "Kumeu River Wines Limited" and "Kumeu River" collapse
+ * to the same key ("kumeu river"). Comparison-only — never overwrites the
+ * stored display producer. Returns '' for an all-stopword/empty producer.
+ */
+const normalizeProducerKey = (producer) => {
+  return tokenize(producer)
+    .filter((t) => !PRODUCER_CORP_SUFFIXES.has(t))
+    .join(' ')
+    .trim();
+};
+
 /**
  * Generate a normalized key for wine deduplication
  * Combines producer + wine name + appellation
@@ -590,6 +654,9 @@ module.exports = {
   tokenize,
   generateWineKey,
   generateWineSlug,
+  GRAPE_SYNONYMS,
+  normalizeProducerKey,
+  normalizeAppellation,
   resolveGrapeName,
   resolveCountryName,
   isUnknownName,

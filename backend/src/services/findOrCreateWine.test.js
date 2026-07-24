@@ -81,15 +81,21 @@ const EXISTING_WINE = { _id: 'wine-existing', name: 'Clos des Papes' };
 const findOneChain = (doc) => ({ populate: jest.fn().mockResolvedValue(doc) });
 
 /**
- * Query-shape dispatcher for WineDefinition.find — the service issues three
+ * Query-shape dispatcher for WineDefinition.find — the service issues five
  * differently-chained find() queries, so a single mockReturnValue can't serve
  * them all:
- *   { normalizedKey: RegExp } → .limit(2).populate(...)   (step 1b sibling lookup)
- *   { _id: { $in: ids } }     → .populate(...)            (Meilisearch id fetch)
- *   { $text: ... }            → .populate(...).limit(20)  (Mongo text fallback)
+ *   { canonicalKey: string } → .limit(2).populate(...)   (step 1a canonical identity)
+ *   { canonicalKey: RegExp } → .limit(2).populate(...)   (step 1b canonical sibling)
+ *   { normalizedKey: RegExp } → .limit(2).populate(...)  (step 1b raw-sibling fallback)
+ *   { _id: { $in: ids } }     → .populate(...)           (Meilisearch id fetch)
+ *   { $text: ... }            → .populate(...).limit(20) (Mongo text fallback)
  */
-function primeFind({ siblings = [], meiliDocs = [], textDocs = [] } = {}) {
+function primeFind({ canonicalHits = [], canonicalSiblings = [], siblings = [], meiliDocs = [], textDocs = [] } = {}) {
   WineDefinition.find.mockImplementation((q) => {
+    if (q && q.canonicalKey) {
+      const docs = q.canonicalKey instanceof RegExp ? canonicalSiblings : canonicalHits;
+      return { limit: jest.fn().mockReturnValue({ populate: jest.fn().mockResolvedValue(docs) }) };
+    }
     if (q && q.normalizedKey) {
       return { limit: jest.fn().mockReturnValue({ populate: jest.fn().mockResolvedValue(siblings) }) };
     }
@@ -212,6 +218,190 @@ describe('findOrCreateWine — producer-prefix canonicalization (step 0)', () =>
     await findOrCreateWine({ ...INPUT, name: 'Paul Avril' }, USER_ID);
 
     expect(WineDefinition.mock.calls[0][0].name).toBe('Paul Avril');
+  });
+});
+
+describe('findOrCreateWine — producer-VARIANT key-prefix canonicalization (step 0, dup analysis 2026-07-22)', () => {
+  // The exact-string strip is blind when the producer field is a variant:
+  // name "Felton Road Block 3 Pinot Noir" + producer "Felton Road Wines Ltd"
+  // never matched, minted a duplicate, and scored just 0.62 against the real
+  // record — the shape behind most July-2026 prod duplicates. The key-token
+  // prefix strip closes it.
+  test('variant producer key prefix is stripped before the exact-key lookup', async () => {
+    WineDefinition.findOne.mockReturnValue(findOneChain(EXISTING_WINE));
+
+    const result = await findOrCreateWine(
+      { ...INPUT, name: 'Felton Road Block 3 Pinot Noir', producer: 'Felton Road Wines Ltd', appellation: 'Bannockburn' },
+      USER_ID
+    );
+
+    expect(WineDefinition.findOne).toHaveBeenCalledWith({
+      normalizedKey: generateWineKey('Block 3 Pinot Noir', 'Felton Road Wines Ltd', 'Bannockburn'),
+    });
+    expect(result).toEqual({ wine: EXISTING_WINE, created: false });
+  });
+
+  test('created wines store the key-stripped name', async () => {
+    const result = await findOrCreateWine(
+      { ...INPUT, name: 'Maude Kids Block Pinot Noir', producer: 'Maude Wines' },
+      USER_ID
+    );
+
+    expect(result.created).toBe(true);
+    expect(WineDefinition.mock.calls[0][0].name).toBe('Kids Block Pinot Noir');
+  });
+
+  test('a name ENDING with the producer key is left alone — "Les Forts de Latour" is a real wine name', async () => {
+    await findOrCreateWine(
+      { ...INPUT, name: 'Les Forts de Latour', producer: 'Château Latour', appellation: 'Pauillac' },
+      USER_ID
+    );
+
+    expect(WineDefinition.mock.calls[0][0].name).toBe('Les Forts de Latour');
+  });
+});
+
+describe('findOrCreateWine — different-country guard', () => {
+  // Identical canonical producer+name can still be two wineries (Domaine
+  // Chandon, Napa vs Bodegas Chandon, Mendoza — the Garden Spritz false
+  // positive). A stated-and-conflicting country must block every silent link.
+  const QUERY = {
+    name: 'Garden Spritz',
+    producer: 'Chandon',
+    country: 'United States',
+    region: '',
+    appellation: 'Napa Valley',
+    type: 'sparkling',
+    grapes: ['Chardonnay'],
+  };
+
+  test('a single sibling with a conflicting country is NOT auto-linked (falls through to create)', async () => {
+    const sibling = { _id: 'wine-ar', name: 'Garden Spritz', country: { name: 'Argentina' } };
+    primeFind({ siblings: [sibling] });
+
+    const result = await findOrCreateWine(QUERY, USER_ID);
+
+    expect(result.created).toBe(true);
+    expect(result.wine).not.toBe(sibling);
+  });
+
+  test('a single sibling with the SAME country still auto-links — aliases resolve ("USA" = "United States")', async () => {
+    const sibling = { _id: 'wine-us', name: 'Garden Spritz', country: { name: 'United States' } };
+    primeFind({ siblings: [sibling] });
+
+    const result = await findOrCreateWine({ ...QUERY, country: 'USA' }, USER_ID);
+
+    expect(result).toEqual({ wine: sibling, created: false });
+  });
+
+  test('a >=0.95 fuzzy hit with a conflicting country falls to the soft zone instead of auto-linking', async () => {
+    const candidate = { _id: 'wine-ar', name: 'Garden Spritz', country: { name: 'Argentina' } };
+    primeCandidates([{ wine: candidate, score: 0.96 }]);
+
+    const result = await findOrCreateWine(QUERY, USER_ID);
+
+    expect(result.wine).toBeNull();
+    expect(result.candidates).toHaveLength(1);
+    expect(result.candidates[0].wine).toBe(candidate);
+  });
+
+  test('auto-match skips a conflicting-country candidate but takes the next confident one', async () => {
+    const wrongCountry = { _id: 'wine-ar', name: 'Garden Spritz', country: { name: 'Argentina' } };
+    const rightCountry = { _id: 'wine-us', name: 'Garden Spritz', country: { name: 'United States' } };
+    primeCandidates([{ wine: wrongCountry, score: 0.97 }, { wine: rightCountry, score: 0.96 }]);
+
+    const result = await findOrCreateWine(QUERY, USER_ID);
+
+    expect(result).toEqual({ wine: rightCountry, created: false });
+  });
+
+  test('with confirmCreate, a conflicting-country near-match creates the new wine', async () => {
+    const candidate = { _id: 'wine-ar', name: 'Garden Spritz', country: { name: 'Argentina' } };
+    primeCandidates([{ wine: candidate, score: 0.96 }]);
+
+    const result = await findOrCreateWine(QUERY, USER_ID, { confirmCreate: true });
+
+    expect(result.created).toBe(true);
+  });
+});
+
+describe('findOrCreateWine — nearMiss reporting on confirmed create', () => {
+  // confirmCreate callers (cellar import) skip the soft-zone prompt by design.
+  // When creation proceeds PAST a >=0.85 candidate, the caller needs to know —
+  // that shape is exactly what used to mint silent duplicates, and the import
+  // path audit-logs it for admin review.
+  test('creating past a soft-zone candidate reports it as nearMiss', async () => {
+    const near = { _id: 'wine-near', name: 'Clos des Papes', producer: 'Paul Avril' };
+    primeCandidates([{ wine: near, score: 0.9 }]);
+
+    const result = await findOrCreateWine(INPUT, USER_ID, { confirmCreate: true });
+
+    expect(result.created).toBe(true);
+    expect(result.nearMiss).toEqual({
+      wineId: 'wine-near',
+      name: 'Clos des Papes',
+      producer: 'Paul Avril',
+      score: 0.9,
+    });
+  });
+
+  test('a clean create (no soft-zone candidate) reports no nearMiss', async () => {
+    primeCandidates([{ wine: { _id: 'wine-far', name: 'Other' }, score: 0.4 }]);
+
+    const result = await findOrCreateWine(INPUT, USER_ID, { confirmCreate: true });
+
+    expect(result.created).toBe(true);
+    expect(result.nearMiss).toBeUndefined();
+  });
+});
+
+describe('findOrCreateWine — canonical-identity match (step 1a)', () => {
+  // The lookup-first design from the 2026-07-22 dup analysis: any spelling of
+  // an already-registered wine resolves to it BEFORE fuzzy scoring, so a
+  // canonical duplicate cannot be minted.
+  const CANONICAL_HIT = { _id: 'wine-canon', name: 'Block 3 Pinot Noir', producer: 'Felton Road' };
+
+  test('a single canonical hit returns the existing wine — variant input, no fuzzy, no create', async () => {
+    primeFind({ canonicalHits: [CANONICAL_HIT] });
+
+    const result = await findOrCreateWine(
+      { ...INPUT, name: 'Felton Road Block 3 Pinot Noir', producer: 'Felton Road Wines Ltd', appellation: 'Bannockburn' },
+      USER_ID
+    );
+
+    expect(result).toEqual({ wine: CANONICAL_HIT, created: false });
+    expect(scoreAllMatches).not.toHaveBeenCalled();
+    expect(WineDefinition).not.toHaveBeenCalled();
+  });
+
+  test('two canonical hits (a pre-existing duplicate cluster) fall through — never picks one arbitrarily', async () => {
+    primeFind({ canonicalHits: [{ _id: 'dup-a' }, { _id: 'dup-b' }] });
+
+    const result = await findOrCreateWine(INPUT, USER_ID);
+
+    expect(result.created).toBe(true); // empty fuzzy → creates; the cluster stays for the admin queue
+  });
+
+  test('a canonical hit with a conflicting country is not linked', async () => {
+    primeFind({ canonicalHits: [{ _id: 'wine-ar', name: 'Garden Spritz', country: { name: 'Argentina' } }] });
+
+    const result = await findOrCreateWine(
+      { name: 'Garden Spritz', producer: 'Chandon', country: 'United States', region: '', appellation: '', type: 'sparkling', grapes: ['Chardonnay'] },
+      USER_ID
+    );
+
+    expect(result.created).toBe(true);
+  });
+
+  test('canonical SIBLING (same identity, other appellation) matches when unique', async () => {
+    primeFind({ canonicalSiblings: [CANONICAL_HIT] });
+
+    const result = await findOrCreateWine(
+      { ...INPUT, name: 'Felton Road Block 3 Pinot Noir', producer: 'Felton Road Wines Ltd', appellation: 'Central Otago' },
+      USER_ID
+    );
+
+    expect(result).toEqual({ wine: CANONICAL_HIT, created: false });
   });
 });
 

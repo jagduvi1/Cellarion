@@ -320,7 +320,7 @@ function RestockCard({ item, t, onDismiss }) {
         <span className="restock-card__icon">{STATUS_ICONS[item.status]}</span>
         <span className="restock-card__name">{item.name}</span>
         <span className="restock-card__stock">
-          {item.stock} {t('restock.inStock', 'in stock')}
+          {t('restock.inStock', { count: item.stock })}
         </span>
         {item.status !== 'healthy' && onDismiss && (
           <button

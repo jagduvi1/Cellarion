@@ -1551,6 +1551,59 @@
   color: var(--color-text-muted);
 }
 
+/* ── Vivino scan-history destination choice (upload step) ────────────────── */
+
+.vivino-history-body {
+  margin: 0 0 0.75rem;
+  color: var(--color-text-secondary);
+}
+
+.vivino-history-options {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.vivino-history-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+}
+
+.vivino-history-option.selected {
+  border-color: var(--color-primary);
+  background: var(--color-surface-hover);
+}
+
+.vivino-history-option input {
+  margin-top: 0.2rem;
+  flex-shrink: 0;
+}
+
+.vivino-history-option-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.vivino-history-option-desc {
+  font-size: 0.85rem;
+  color: var(--color-text-secondary);
+}
+
+.vivino-history-recommended {
+  margin-left: 0.5rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--color-success);
+}
+
 /* ── Honest reporting: done-step partial-success state ───────────────────── */
 
 .done-icon-warn {

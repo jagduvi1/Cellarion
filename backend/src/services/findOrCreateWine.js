@@ -18,9 +18,11 @@ const Country = require('../models/Country');
 const Region = require('../models/Region');
 const Grape = require('../models/Grape');
 const searchService = require('./search');
-const { generateWineKey, normalizeString, resolveGrapeName, resolveCountryName, isUnknownName, isJunkGrapeName } = require('../utils/normalize');
+const { generateWineKey, normalizeString, normalizeAppellation, resolveGrapeName, resolveCountryName, isUnknownName, isJunkGrapeName } = require('../utils/normalize');
 const { scoreAllMatches } = require('./wineMatching');
-const { stripProducerName } = require('../utils/producerPrefix');
+const { canonicalizeWineName } = require('../utils/producerPrefix');
+const { computeCanonicalKey, canonicalSiblingPrefix } = require('../utils/wineIdentity');
+const { buildSurfaceForms, inferGrapeIds } = require('./grapeInference');
 const { escapeRegex } = require('../utils/sanitize');
 
 // Auto-match when combined score >= SIMILARITY_THRESHOLD (near-identical — e.g.
@@ -138,7 +140,10 @@ async function findOrCreateWine({ name, producer, country, region, appellation, 
   const MAX_FIELD = 200;
   let trimmedName = name.trim().slice(0, MAX_FIELD);
   const trimmedProducer = producer.trim().slice(0, MAX_FIELD);
-  const trimmedAppellation = (typeof appellation === 'string' ? appellation.trim() : '').slice(0, MAX_FIELD);
+  // Canonicalize the appellation (strip a trailing DOCG/DOC/AOC/… tier) so
+  // "Barolo" and "Barolo DOCG" resolve to / create ONE registry appellation
+  // instead of two (ticket #2C). The tier belongs in classification.
+  const trimmedAppellation = normalizeAppellation((typeof appellation === 'string' ? appellation.trim() : '')).slice(0, MAX_FIELD);
 
   // 0. Registry canon: a wine's name never embeds its producer. Cellar-format
   // imports and the occasional non-compliant AI response arrive as
@@ -146,33 +151,80 @@ async function findOrCreateWine({ name, producer, country, region, appellation, 
   // "Fiano di Avellino Mastroberardino" (the launch-day admin report) —
   // canonicalize BEFORE any matching so that input resolves to (or creates)
   // the producer-free entry instead of minting a producer-in-name duplicate
-  // the admin tool has to clean up later. Loop: concatenated sources can
-  // repeat the producer on either end.
-  for (let rest = stripProducerName(trimmedName, trimmedProducer); rest;
-       rest = stripProducerName(trimmedName, trimmedProducer)) {
-    trimmedName = rest;
-  }
+  // the admin tool has to clean up later. The key-prefix twin also catches
+  // producer VARIANTS — name "Felton Road Block 3 Pinot Noir" with producer
+  // "Felton Road Wines Ltd" — which the exact-string strip can't see (the
+  // shape behind most July-2026 prod duplicates).
+  trimmedName = canonicalizeWineName(trimmedName, trimmedProducer);
+
+  // Different-country guard for every non-exact auto-link below: an identical
+  // canonical producer+name can still be two wineries (Domaine Chandon, Napa
+  // vs Bodegas Chandon, Mendoza — the "Garden Spritz" false positive). When
+  // BOTH sides state a country and they disagree, never link silently — fall
+  // through so the soft zone (or creation) decides.
+  const queryCountryKey = (typeof country === 'string' && country.trim() && !isUnknownName(country))
+    ? normalizeString(resolveCountryName(country))
+    : '';
+  const conflictsCountry = (candidate) => {
+    if (!queryCountryKey) return false;
+    const candidateCountry = candidate && candidate.country && candidate.country.name
+      ? normalizeString(candidate.country.name)
+      : '';
+    return Boolean(candidateCountry && candidateCountry !== queryCountryKey);
+  };
 
   // 1. Exact match by normalizedKey
   const normalizedKey = generateWineKey(trimmedName, trimmedProducer, trimmedAppellation);
   let wine = await WineDefinition.findOne({ normalizedKey }).populate(POPULATE);
   if (wine) return { wine, created: false };
 
+  // 1a. Canonical-identity match: collapses producer spelling variants,
+  // producer-in-name embeds and appellation tiers, so ANY spelling of an
+  // already-registered wine lands here before fuzzy scoring ever runs — a
+  // canonical duplicate cannot be minted because this lookup finds the
+  // original first (dup analysis 2026-07-22, phase 1). ≥2 hits mean the
+  // registry ALREADY holds a duplicate cluster for this identity — never pick
+  // one arbitrarily; fall through so the soft zone / admin queue handles it.
+  // Deliberately not gated on skipSiblingMatch: like the exact key above, an
+  // identity-level hit is the same wine (the different-country guard covers
+  // the distinct-winery collisions).
+  const canonicalKey = computeCanonicalKey(trimmedName, trimmedProducer, trimmedAppellation);
+  const canonicalHits = await WineDefinition.find({ canonicalKey })
+    .limit(2)
+    .populate(POPULATE);
+  if (canonicalHits.length === 1 && !conflictsCountry(canonicalHits[0])) {
+    return { wine: canonicalHits[0], created: false };
+  }
+
   // 1b. Sibling match: same producer + same canonical name, ANY appellation.
   // Import files and AI output often carry a different appellation granularity
   // than the registry ("Cromwell" vs the registry's "Central Otago") — the
   // full-key match above misses and the fuzzy score lands around 0.90, below
   // the auto-match threshold, so without this step a non-interactive caller
-  // (confirmCreate) would mint a near-duplicate. A UNIQUE producer+name hit is
-  // overwhelmingly the same wine; with several siblings we fall through to the
-  // fuzzy scorer so the soft zone can disambiguate instead of picking one
-  // arbitrarily. The anchored regex is a prefix scan on the normalizedKey index.
+  // (confirmCreate) would mint a near-duplicate. A UNIQUE hit is overwhelmingly
+  // the same wine; with several siblings we fall through to the fuzzy scorer so
+  // the soft zone can disambiguate instead of picking one arbitrarily.
+  // Canonical prefix first (variant-tolerant); the raw normalizedKey prefix is
+  // kept as a fallback for rows that predate canonicalKey on instances that
+  // haven't run the backfill — they converge organically as docs save.
   if (!skipSiblingMatch) {
-    const siblingPrefix = `${normalizeString(trimmedProducer)}:${normalizeString(trimmedName)}:`;
-    const siblings = await WineDefinition.find({ normalizedKey: new RegExp(`^${escapeRegex(siblingPrefix)}`) })
+    const canonicalSiblings = await WineDefinition.find({
+      canonicalKey: new RegExp(`^${escapeRegex(canonicalSiblingPrefix(trimmedName, trimmedProducer))}`),
+    })
       .limit(2)
       .populate(POPULATE);
-    if (siblings.length === 1) return { wine: siblings[0], created: false };
+    if (canonicalSiblings.length === 1 && !conflictsCountry(canonicalSiblings[0])) {
+      return { wine: canonicalSiblings[0], created: false };
+    }
+    if (canonicalSiblings.length === 0) {
+      const siblingPrefix = `${normalizeString(trimmedProducer)}:${normalizeString(trimmedName)}:`;
+      const siblings = await WineDefinition.find({ normalizedKey: new RegExp(`^${escapeRegex(siblingPrefix)}`) })
+        .limit(2)
+        .populate(POPULATE);
+      if (siblings.length === 1 && !conflictsCountry(siblings[0])) {
+        return { wine: siblings[0], created: false };
+      }
+    }
   }
 
   // 2. Fuzzy similarity search
@@ -201,6 +253,11 @@ async function findOrCreateWine({ name, producer, country, region, appellation, 
     }
   }
 
+  // When creation proceeds PAST a soft-zone-level top candidate (confirmCreate
+  // callers skip the "did you mean?" gate), report that near-miss back so
+  // non-interactive callers (cellar import) can audit-log it for later review.
+  let nearMiss = null;
+
   if (candidates.length > 0) {
     const ranked = scoreAllMatches(
       { name: trimmedName, producer: trimmedProducer, appellation: trimmedAppellation },
@@ -208,9 +265,12 @@ async function findOrCreateWine({ name, producer, country, region, appellation, 
       { redistribute: false }
     );
 
-    // Auto-match: top score is confident enough
-    if (ranked[0].score >= SIMILARITY_THRESHOLD) {
-      return { wine: ranked[0].wine, created: false };
+    // Auto-match: best confident hit that doesn't conflict on country. A
+    // conflicting >=0.95 candidate falls through to the soft zone below, so
+    // the caller/user still sees it — it just never links silently.
+    const autoHit = ranked.find(r => r.score >= SIMILARITY_THRESHOLD && !conflictsCountry(r.wine));
+    if (autoHit) {
+      return { wine: autoHit.wine, created: false };
     }
 
     // Soft zone: top score is suggestive but not confident. Surface up to N
@@ -222,6 +282,15 @@ async function findOrCreateWine({ name, producer, country, region, appellation, 
         .slice(0, SOFT_ZONE_TOP_N)
         .map(r => ({ wine: r.wine, score: Math.round(r.score * 100) / 100 }));
       return { wine: null, candidates: softCandidates };
+    }
+
+    if (ranked[0].score >= SOFT_ZONE_MIN) {
+      nearMiss = {
+        wineId: ranked[0].wine._id,
+        name: ranked[0].wine.name,
+        producer: ranked[0].wine.producer,
+        score: Math.round(ranked[0].score * 100) / 100,
+      };
     }
   }
 
@@ -239,7 +308,17 @@ async function findOrCreateWine({ name, producer, country, region, appellation, 
   }
 
   const regionDoc = await findOrCreateRegion(region, countryDoc._id, userId);
-  const grapeIds = await findOrCreateGrapes(grapes, userId);
+  let grapeIds = await findOrCreateGrapes(grapes, userId);
+
+  // Ticket #2A: when no grapes were supplied, infer them from the name
+  // ("… Pinot Noir" → Pinot Noir) so the wine still counts in the Statistics
+  // by-grape breakdown and the grapes= filter. trimmedName already has the
+  // producer stripped (step 0). Only tags grapes already in the taxonomy —
+  // never mints one — and stays silent when nothing matches.
+  if (grapeIds.length === 0) {
+    const grapeDocs = await Grape.find({}).select('name normalizedName normalizedSynonyms').lean();
+    grapeIds = inferGrapeIds(trimmedName, trimmedAppellation, buildSurfaceForms(grapeDocs));
+  }
 
   const validTypes = ['red', 'white', 'rosé', 'sparkling', 'dessert', 'fortified'];
   const wineType = validTypes.includes(type) ? type : 'red';
@@ -275,7 +354,9 @@ async function findOrCreateWine({ name, producer, country, region, appellation, 
   // Sync to Meilisearch (fire-and-forget)
   searchService.indexWine(newWine._id);
 
-  return { wine: newWine, created: true };
+  return nearMiss
+    ? { wine: newWine, created: true, nearMiss }
+    : { wine: newWine, created: true };
 }
 
 module.exports = { findOrCreateWine, findOrCreateCountry, findOrCreateRegion, findOrCreateGrapes };

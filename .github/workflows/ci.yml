@@ -1,0 +1,99 @@
+name: CI
+
+# Test gate on PRs into main. Until this existed, release-docker.yml was the
+# ONLY workflow that touched the app — and it triggers on `release: published`,
+# i.e. it builds and pushes :latest with no tests run at all. A base-image or
+# dependency change that broke the build or the suite was therefore discovered
+# on the prod VM, after `pull + up -d`. This moves that signal left of the tag.
+#
+# Deliberately does NOT push images: `push: false` proves the three Dockerfiles
+# still build without touching GHCR or needing registry credentials.
+#
+# Public repo → GitHub-hosted Actions minutes are free, so this is cost-free.
+
+on:
+  pull_request:
+    branches: [main]
+  # Lets a branch be checked before opening the PR, and gives a manual re-run.
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+# A new push to the same PR cancels the previous run — a solo maintainer does
+# not need three stale runs competing for the queue.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  backend:
+    name: Backend tests (Node 24)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          # Must track backend/Dockerfile's FROM. Testing on a different major
+          # than we ship would defeat the point of the gate.
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install
+        working-directory: backend
+        run: npm ci
+
+      - name: Test
+        working-directory: backend
+        run: npm test
+
+  frontend:
+    name: Frontend tests (Node 24)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      # --legacy-peer-deps mirrors frontend/Dockerfile:8 — React 19 against
+      # deps that still declare a ^18 peer. Dropping it fails the install.
+      - name: Install
+        working-directory: frontend
+        run: npm ci --legacy-peer-deps
+
+      - name: Test
+        working-directory: frontend
+        run: npm test
+
+  images:
+    name: Docker build (${{ matrix.context }})
+    runs-on: ubuntu-latest
+    strategy:
+      # Report every broken context in one run, not just the first.
+      fail-fast: false
+      matrix:
+        context: [backend, frontend, rembg]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
+
+      # Same three contexts release-docker.yml publishes, built the same way but
+      # never pushed. The backend Dockerfile's `RUN node -e "require('sharp')"`
+      # makes a missing musl prebuilt fail HERE rather than on first upload.
+      - name: Build ${{ matrix.context }}
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        with:
+          context: ./${{ matrix.context }}
+          push: false
+          cache-from: type=gha,scope=${{ matrix.context }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.context }}

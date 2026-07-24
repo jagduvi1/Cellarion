@@ -254,6 +254,7 @@ async function seed() {
       BottleModel.distinct('_id'),
     ]);
     for (const id of wineIds) await searchService.indexWine(id);
+    require('./models/WineRequest'); // WINE_POPULATE refs it; standalone runs must register it
     await searchService.bulkIndexBottles(bottleIds);
     console.log(`\nIndexed ${wineIds.length} wines + ${bottleIds.length} bottles into Meilisearch.`);
   }

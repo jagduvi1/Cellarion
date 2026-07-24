@@ -384,4 +384,217 @@ describe('capture_tasting_note', () => {
     expect(parse(res).summary).toBe('seen');
     expect(JournalEntry.create).not.toHaveBeenCalled();
   });
+
+  test('single form self-budgets exactly one write slot (selfBudgeted, M7)', async () => {
+    ownBottle();
+    JournalEntry.create.mockResolvedValue({ _id: new mongoose.Types.ObjectId(oid('9')) });
+    await tool('capture_tasting_note').handler({ bottle_id: oid('d'), note: 'x' }, CTX);
+    expect(tool('capture_tasting_note').selfBudgeted).toBe(true);
+    expect(takeMutationSlot).toHaveBeenCalledWith(ME, 1, null);
+  });
+});
+
+describe('capture_tasting_note — occasion form (bottles[])', () => {
+  /** Two own bottles in one cellar: b1 active (rated 3/5), b2 consumed. */
+  const wireTwo = (b1over = {}, b2over = {}) => {
+    const b1 = {
+      _id: new mongoose.Types.ObjectId(oid('d')), cellar: new mongoose.Types.ObjectId(oid('c')),
+      status: 'active', vintage: '2015', rating: 3, ratingScale: '5',
+      save: jest.fn().mockResolvedValue({}), ...b1over,
+    };
+    const b2 = {
+      _id: new mongoose.Types.ObjectId(oid('b')), cellar: new mongoose.Types.ObjectId(oid('c')),
+      status: 'drank', vintage: '2018', consumedRating: null, consumedRatingScale: null,
+      save: jest.fn().mockResolvedValue({}), ...b2over,
+    };
+    const map = { [oid('d')]: b1, [oid('b')]: b2 };
+    Bottle.findById.mockImplementation((id) => chain(map[String(id)] || null));
+    Cellar.findById.mockReturnValue(chain({ _id: b1.cellar, user: ME, members: [], deletedAt: null }));
+    Bottle.find.mockReturnValue(chain([b1, b2].map((b) => ({ _id: b._id, user: ME, cellar: { user: ME, members: [], deletedAt: null } }))));
+    return { b1, b2 };
+  };
+
+  test('one evening → ONE entry: N pairings, title/people/mood, per-bottle ratings, occasion ledger row', async () => {
+    const { b1, b2 } = wireTwo();
+    bottleOps.updateBottleFields.mockResolvedValue({ changes: { rating: 4 }, prev: { rating: 3 } });
+    JournalEntry.create.mockResolvedValue({ _id: new mongoose.Types.ObjectId(oid('9')), visibility: 'private' });
+
+    const res = await tool('capture_tasting_note').handler({
+      bottles: [
+        { bottle_id: oid('d'), dish: 'pizza bianca', notes: '<i>floral</i>, taut', rating: 4 },
+        { bottle_id: oid('b'), rating: 90, rating_scale: '100' },
+      ],
+      note: 'great night', title: 'Pizza night', people: ['Anna', 'Erik'], mood: 5, occasion: 'dinner',
+    }, CTX);
+    const body = parse(res);
+    expect(body.error).toBeUndefined();
+
+    // ONE journal entry carrying the whole evening.
+    expect(JournalEntry.create).toHaveBeenCalledTimes(1);
+    const entry = JournalEntry.create.mock.calls[0][0];
+    expect(entry.title).toBe('Pizza night');
+    expect(entry.mood).toBe(5);
+    expect(entry.occasion).toBe('dinner');
+    expect(entry.visibility).toBe('private');
+    expect(entry.people).toEqual([{ name: 'Anna', user: null }, { name: 'Erik', user: null }]); // names only, never account-linked
+    expect(entry.pairings).toHaveLength(2);
+    expect(entry.pairings[0]).toMatchObject({ bottle: String(b1._id), dish: 'pizza bianca', notes: 'floral, taut' });
+    expect(entry.pairings[1]).toMatchObject({ bottle: String(b2._id), dish: '' });
+
+    // Ratings land per bottle: active → updateBottleFields, consumed → consumed fields.
+    expect(bottleOps.updateBottleFields).toHaveBeenCalledWith(b1, { rating: 4, ratingScale: '5' }, CTX.req);
+    expect(b2.consumedRating).toBe(90);
+    expect(b2.consumedRatingScale).toBe('100');
+    expect(b2.save).toHaveBeenCalled();
+
+    // One slot per bottle, charged by the tool itself.
+    expect(takeMutationSlot).toHaveBeenCalledWith(ME, 2, null);
+
+    // One ledger row for the whole occasion, with everything undo needs.
+    const row = McpActionLog.create.mock.calls[0][0];
+    expect(row.action).toBe('tasting_note');
+    expect(row.bottle).toBeNull();
+    expect(String(row.cellar)).toBe(oid('c')); // single shared cellar
+    expect(row.detail.bottles).toEqual([
+      { bottle: oid('d'), rating_changed: true },
+      { bottle: oid('b'), rating_changed: true },
+    ]);
+    expect(row.prev.ratings).toEqual([
+      { bottle: oid('d'), field: 'rating', set: { value: 4, scale: '5' }, rating: 3, ratingScale: '5' },
+      { bottle: oid('b'), field: 'consumedRating', set: { value: 90, scale: '100' }, consumedRating: null, consumedRatingScale: null },
+    ]);
+    expect(body.data.bottles).toHaveLength(2);
+    expect(body.data.bottles[1].rating_recorded).toMatchObject({ field: 'consumedRating', value: 90, scale: '100' });
+  });
+
+  test('form validation: both/neither forms, top-level rating with bottles, duplicate bottles → invalid_input', async () => {
+    wireTwo();
+    const bad = [
+      {},
+      { bottle_id: oid('d'), bottles: [{ bottle_id: oid('b') }], note: 'x' },
+      { bottles: [{ bottle_id: oid('d') }], note: 'x', rating: 4 },
+      { bottles: [{ bottle_id: oid('d') }, { bottle_id: oid('d') }], note: 'x' },
+    ];
+    for (const args of bad) {
+      const res = await tool('capture_tasting_note').handler(args, CTX);
+      expect(parse(res).error.code).toBe('invalid_input');
+    }
+    expect(JournalEntry.create).not.toHaveBeenCalled();
+    expect(takeMutationSlot).not.toHaveBeenCalled();
+  });
+
+  test('entry with no text at all → invalid_input (a note, a title, or per-bottle notes is required)', async () => {
+    wireTwo();
+    const res = await tool('capture_tasting_note').handler({ bottles: [{ bottle_id: oid('d') }, { bottle_id: oid('b') }] }, CTX);
+    expect(parse(res).error.code).toBe('invalid_input');
+    expect(JournalEntry.create).not.toHaveBeenCalled();
+  });
+
+  test('any inaccessible bottle → not_found BEFORE any write or budget charge', async () => {
+    const { b1 } = wireTwo();
+    Bottle.findById.mockImplementation((id) => chain(String(id) === oid('d') ? b1 : null));
+    const res = await tool('capture_tasting_note').handler(
+      { bottles: [{ bottle_id: oid('d') }, { bottle_id: oid('b') }], note: 'x' }, CTX);
+    const body = parse(res);
+    expect(body.error.code).toBe('not_found');
+    expect(body.error.message).toContain(oid('b'));
+    expect(JournalEntry.create).not.toHaveBeenCalled();
+    expect(takeMutationSlot).not.toHaveBeenCalled();
+  });
+
+  test('rating failure mid-batch rolls back applied ratings and deletes the entry (all-or-nothing)', async () => {
+    const { b1 } = wireTwo({}, { status: 'active', rating: null, ratingScale: null });
+    JournalEntry.create.mockResolvedValue({ _id: new mongoose.Types.ObjectId(oid('9')) });
+    JournalEntry.findOneAndDelete.mockResolvedValue({ _id: oid('9') });
+    bottleOps.updateBottleFields
+      .mockResolvedValueOnce({ changes: { rating: 4 }, prev: { rating: 3 } }) // b1 apply ok
+      .mockResolvedValueOnce({ error: { status: 400, message: 'nope' } })      // b2 apply fails
+      .mockResolvedValueOnce({ changes: {}, prev: {} });                       // b1 rollback
+
+    const res = await tool('capture_tasting_note').handler({
+      bottles: [{ bottle_id: oid('d'), rating: 4 }, { bottle_id: oid('b'), rating: 5 }], note: 'x',
+    }, CTX);
+    const body = parse(res);
+    expect(body.error.code).toBe('invalid_input');
+    expect(body.error.message).toContain(oid('b'));
+    // b1's previous rating restored, entry compensated away, no ledger row.
+    expect(bottleOps.updateBottleFields).toHaveBeenNthCalledWith(3, b1, { rating: 3, ratingScale: '5' }, CTX.req);
+    expect(JournalEntry.findOneAndDelete).toHaveBeenCalledWith({ _id: expect.anything(), user: ME });
+    expect(McpActionLog.create).not.toHaveBeenCalled();
+  });
+});
+
+describe('capture_tasting_note — occasion undo (revert.js branch)', () => {
+  const { revertLedgerRow } = require('./revert');
+  const H = { ok: (s, d) => ({ ok: true, summary: s, data: d }), fail: (c, m) => ({ ok: false, code: c, message: m }) };
+  const UCTX = { user: { id: ME }, scopes: ['write'], req: {} };
+
+  const occasionRow = () => ({
+    _id: new mongoose.Types.ObjectId(oid('f')),
+    action: 'tasting_note',
+    cellar: new mongoose.Types.ObjectId(oid('c')),
+    detail: {
+      journalId: oid('9'),
+      count: 2,
+      bottles: [{ bottle: oid('d'), rating_changed: true }, { bottle: oid('b'), rating_changed: true }],
+    },
+    prev: {
+      ratings: [
+        { bottle: oid('d'), field: 'rating', set: { value: 4, scale: '5' }, rating: 3, ratingScale: '5' },
+        { bottle: oid('b'), field: 'consumedRating', set: { value: 90, scale: '100' }, consumedRating: null, consumedRatingScale: null },
+      ],
+    },
+  });
+
+  const wireTwoForUndo = (b1over = {}, b2over = {}) => {
+    const b1 = {
+      _id: new mongoose.Types.ObjectId(oid('d')), cellar: new mongoose.Types.ObjectId(oid('c')),
+      status: 'active', vintage: '2015', rating: 4, ratingScale: '5', // still carries what the note set
+      save: jest.fn().mockResolvedValue({}), ...b1over,
+    };
+    const b2 = {
+      _id: new mongoose.Types.ObjectId(oid('b')), cellar: new mongoose.Types.ObjectId(oid('c')),
+      status: 'drank', vintage: '2018', consumedRating: 90, consumedRatingScale: '100',
+      save: jest.fn().mockResolvedValue({}), ...b2over,
+    };
+    const map = { [oid('d')]: b1, [oid('b')]: b2 };
+    Bottle.findById.mockImplementation((id) => chain(map[String(id)] || null));
+    Cellar.findById.mockReturnValue(chain({ _id: b1.cellar, user: ME, members: [], deletedAt: null }));
+    return { b1, b2 };
+  };
+
+  test('removes the entry and restores every rating still carrying what the note set', async () => {
+    const { b1, b2 } = wireTwoForUndo();
+    JournalEntry.findOneAndDelete.mockResolvedValue({ _id: oid('9') });
+    bottleOps.updateBottleFields.mockResolvedValue({ changes: { rating: 3 }, prev: { rating: 4 } });
+
+    const res = await revertLedgerRow(occasionRow(), UCTX, H);
+    expect(res.ok).toBe(true);
+    expect(res.data).toMatchObject({ undone: 'capture_tasting_note', entry_removed: true, ratings_restored: 2, ratings_skipped: 0 });
+    expect(bottleOps.updateBottleFields).toHaveBeenCalledWith(b1, { rating: 3, ratingScale: '5' }, UCTX.req);
+    expect(b2.consumedRating).toBeUndefined(); // prev was null → cleared
+    expect(b2.save).toHaveBeenCalled();
+    // Row claimed atomically before touching anything.
+    expect(McpActionLog.findOneAndUpdate).toHaveBeenCalledWith(
+      { _id: occasionRow()._id, reversed: false }, { $set: { reversed: true, idempotencyKey: null } });
+  });
+
+  test('a bottle re-rated by hand since is left as-is (changed-since guard, per bottle)', async () => {
+    const { b2 } = wireTwoForUndo({ rating: 5 }); // user re-rated b1 after the note
+    JournalEntry.findOneAndDelete.mockResolvedValue({ _id: oid('9') });
+
+    const res = await revertLedgerRow(occasionRow(), UCTX, H);
+    expect(res.ok).toBe(true);
+    expect(res.data).toMatchObject({ ratings_restored: 1, ratings_skipped: 1 });
+    expect(bottleOps.updateBottleFields).not.toHaveBeenCalled(); // b1 skipped
+    expect(b2.save).toHaveBeenCalled(); // b2 still restored
+  });
+
+  test('any rating-bottle no longer accessible → conflict, claim not burned, nothing deleted', async () => {
+    Bottle.findById.mockReturnValue(chain(null));
+    const res = await revertLedgerRow(occasionRow(), UCTX, H);
+    expect(res).toMatchObject({ ok: false, code: 'conflict' });
+    expect(McpActionLog.findOneAndUpdate).not.toHaveBeenCalled();
+    expect(JournalEntry.findOneAndDelete).not.toHaveBeenCalled();
+  });
 });

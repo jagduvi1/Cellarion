@@ -375,7 +375,7 @@ router.post('/find-or-create', requireAuth, requireNonDemo, async (req, res) => 
       // skipSiblingMatch: the user has already reviewed the suggested matches
       // (that's what confirmCreate means here) — an appellation-variant sibling
       // must not silently override their explicit "create a new wine anyway".
-      { confirmCreate: !!confirmCreate, skipSiblingMatch: !!confirmCreate }
+      { confirmCreate: !!confirmCreate, skipSiblingMatch: !!confirmCreate, createdVia: 'ui' }
     );
 
     // Soft-zone: hand the candidates back so the UI can prompt the user
@@ -412,7 +412,7 @@ router.post('/identify-text', requireAuth, aiBurstLimiter, asyncHandler(async (r
       return res.json({ wine: null, reason: result.debugReason });
     }
 
-    const { wine, created } = await findOrCreateWine(result.data, req.user.id);
+    const { wine, created } = await findOrCreateWine(result.data, req.user.id, { createdVia: 'ai' });
     return res.json({ wine: wine.toObject ? wine.toObject() : wine, created });
   } catch (err) {
     await debit.refund();

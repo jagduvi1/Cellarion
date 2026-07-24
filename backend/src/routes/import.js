@@ -39,6 +39,7 @@ const { validatePriceSanity } = require('../utils/priceValidation');
 const { computeUserMediansByCurrency } = require('../services/priceWarnings');
 const { runConcurrent } = require('../utils/concurrency');
 const WineRequest = require('../models/WineRequest');
+const WishlistItem = require('../models/WishlistItem');
 const ImportSession = require('../models/ImportSession');
 
 const router = express.Router();
@@ -396,7 +397,7 @@ router.post('/validate', aiBurstLimiter, async (req, res) => {
           const wineData = (importGrapes.length > 0 && !aiHasGrapes)
             ? { ...pr.aiIdentified, grapes: importGrapes }
             : pr.aiIdentified;
-          const { wine, created } = await findOrCreateWine(wineData, req.user.id);
+          const { wine, created } = await findOrCreateWine(wineData, req.user.id, { createdVia: 'import' });
           createdWineCache.set(key, { wine, created });
           pr.aiWine = wine;
           pr.aiWineCreated = created;
@@ -563,7 +564,11 @@ router.post('/validate', aiBurstLimiter, async (req, res) => {
  *                     user's own per-bottle drink window (Bottle.drinkFrom/
  *                     drinkTo — never the shared registry). Invalid values
  *                     are silently dropped, never failing the row.
- * Response: { created, skipped, errors[] }
+ *   addToWishlist   — the row becomes a WishlistItem for the importing user
+ *                     instead of a Bottle (requires a matched registry wine;
+ *                     request-wine rows are reported as per-row errors).
+ *                     Duplicates — in-batch or already-wanted — are skipped.
+ * Response: { created, skipped, errors[], wishlistCreated, ... }
  */
 router.post('/confirm', async (req, res) => {
   try {
@@ -727,6 +732,14 @@ router.post('/confirm', async (req, res) => {
     // Oeno-export rows with a Consumed On date.
     let createdActive = 0;
     let createdHistory = 0;
+    // Rows flagged addToWishlist (e.g. a Vivino scan-history import sent to
+    // the wishlist) become WishlistItems for the IMPORTING user — wishlists
+    // are personal, unlike bottles which belong to the cellar owner.
+    let wishlistCreated = 0;
+    // In-batch wishlist dedup: scan-history files routinely list the same
+    // wine several times. Keyed wineDefinition|vintage, same identity the
+    // existing-wishlist duplicate check uses.
+    const wishlistSeen = new Set();
     const skipped = [];
     const errors = [];
     const createdBottleIds = []; // Track IDs for Meilisearch bulk sync
@@ -757,6 +770,58 @@ router.post('/confirm', async (req, res) => {
 
       try {
         let wineDoc = null;
+
+        // Wishlist destination (e.g. a Vivino scan-history import sent to
+        // the wishlist): the row becomes a WishlistItem instead of a Bottle.
+        // WishlistItem requires a registry wine, so request-wine rows can't
+        // be wishlisted — reported per-row, never failing the batch.
+        if (item.addToWishlist) {
+          if (item.requestWine || !item.wineDefinition) {
+            errors.push({ index: i, reason: 'Only wines matched to the registry can be added to the wishlist' });
+            continue;
+          }
+          if (!mongoose.Types.ObjectId.isValid(item.wineDefinition)) {
+            errors.push({ index: i, reason: 'Invalid wine definition ID' });
+            continue;
+          }
+          const wishWine = await WineDefinition.findById(item.wineDefinition);
+          if (!wishWine) {
+            errors.push({ index: i, reason: 'Wine definition not found' });
+            continue;
+          }
+
+          // Dedup within this batch, then against the existing wishlist —
+          // same identity POST /api/wishlist uses (user + wine + vintage,
+          // 'wanted' only, blank vintage matching null/absent/'').
+          const wishKey = `${item.wineDefinition}|${canonicalVintage || ''}`;
+          if (wishlistSeen.has(wishKey)) {
+            skipped.push({ index: i, reason: 'Duplicate wishlist row in this import' });
+            continue;
+          }
+          const dupFilter = { user: req.user.id, wineDefinition: item.wineDefinition, status: 'wanted' };
+          if (canonicalVintage) {
+            dupFilter.vintage = canonicalVintage;
+          } else {
+            dupFilter.$or = [{ vintage: null }, { vintage: { $exists: false } }, { vintage: '' }];
+          }
+          const existingWish = await WishlistItem.findOne(dupFilter);
+          if (existingWish) {
+            wishlistSeen.add(wishKey);
+            skipped.push({ index: i, reason: 'Already on your wishlist' });
+            continue;
+          }
+
+          await WishlistItem.create({
+            user: req.user.id,
+            wineDefinition: item.wineDefinition,
+            vintage: canonicalVintage || undefined,
+            notes: (stripHtml(item.notes) || '').slice(0, 2000) || undefined,
+            priority: 'medium'
+          });
+          wishlistSeen.add(wishKey);
+          wishlistCreated++;
+          continue;
+        }
 
         // Optional personal drink window (drinkFrom/drinkTo years, e.g.
         // CellarTracker BeginConsume/EndConsume) — stored on the bottle
@@ -1070,6 +1135,7 @@ router.post('/confirm', async (req, res) => {
       created,
       createdActive,
       createdHistory,
+      wishlistCreated,
       skipped: skipped.length,
       errors: errors.length,
       total: items.length,
@@ -1083,6 +1149,7 @@ router.post('/confirm', async (req, res) => {
       created,
       createdActive,
       createdHistory,
+      wishlistCreated,
       skipped,
       errors,
       total: items.length,

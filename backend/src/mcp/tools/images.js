@@ -35,7 +35,7 @@ registerTool({
     bottle_id: objectId.describe('The bottle to attach the photo to (from search_bottles / add_bottle)'),
     image_url: z.string().url().optional().describe('https URL of the image (retailer/CDN product image)'),
     image_base64: z.string().max(MAX_BASE64_CHARS).optional().describe('Base64 image data (no data: prefix needed); alternative to image_url'),
-    credit: z.string().max(200).optional().describe('Optional attribution/source note'),
+    credit: z.string().max(200).optional().describe('Optional attribution/source note — admin accounts only; silently ignored for regular users (matches the web app)'),
     idempotency_key: z.string().max(100).optional(),
   },
   handler: async (args, ctx) => {
@@ -76,11 +76,14 @@ registerTool({
     // and enters the registry-image review pipeline. Without it the photo was
     // stranded on the single bottle — the "attached 5 times for 5 identical
     // bottles" launch-day report.
-    const credit = args.credit ? String(args.credit).slice(0, 200) : null;
+    // credit is gated + sanitised INSIDE the shared pipeline (admin-only,
+    // stripHtml) — same rule as the web upload route, one implementation.
     const wineDefinitionId = bottle.wineDefinition
       ? String(bottle.wineDefinition._id || bottle.wineDefinition)
       : null;
-    const result = await ingestBottleImage({ buffer, userId: ctx.user.id, bottle, wineDefinitionId, credit }, ctx.req);
+    const result = await ingestBottleImage({
+      buffer, userId: ctx.user.id, userRoles: ctx.user.roles, bottle, wineDefinitionId, credit: args.credit || null,
+    }, ctx.req);
     if (result.error) {
       // 4xx = the caller's image is bad (invalid_input); 5xx = a transient
       // infra fault → `unavailable` (MCP-audit M3: not the agent's cadence).

@@ -25,6 +25,23 @@ const DeleteCellarModal = lazy(() => import('../components/DeleteCellarModal').t
 
 const BOTTLES_PER_PAGE = 30;
 
+// Persist the per-cellar filter/sort selection for the tab session so that
+// opening a bottle and hitting browser-back doesn't wipe it (the bottle page is
+// a separate route, so CellarDetail unmounts and remounts on the way back).
+// Deep-link URL params still take priority; this is only the fallback.
+const FILTERS_STORAGE_PREFIX = 'cellarFilters:';
+const buildDefaultFilters = () => ({
+  search: '', type: [], country: [], region: [], appellation: [],
+  grapes: [], vintage: [], minRating: '', maturity: '', unplaced: '', sort: '-createdAt'
+});
+const readSavedFilters = (cellarId) => {
+  try {
+    const raw = sessionStorage.getItem(FILTERS_STORAGE_PREFIX + cellarId);
+    if (raw) return { ...buildDefaultFilters(), ...JSON.parse(raw) };
+  } catch { /* private mode / bad JSON — fall back to defaults */ }
+  return null;
+};
+
 function CellarDetail() {
   const { t } = useTranslation();
   const { id } = useParams();
@@ -55,19 +72,27 @@ function CellarDetail() {
   // over as local state.
   const [activeTab, setActiveTab] = useState(() => searchParams.get('tab') === 'overview' ? 'overview' : 'bottles');
   const [showFilterModal, setShowFilterModal] = useState(false);
-  const [filters, setFilters] = useState(() => ({
-    search: searchParams.get('search') || '',
-    type: searchParams.get('type')?.split(',').filter(Boolean) || [],
-    country: searchParams.get('country')?.split(',').filter(Boolean) || [],
-    region: searchParams.get('region')?.split(',').filter(Boolean) || [],
-    appellation: searchParams.get('appellation')?.split(',').filter(Boolean) || [],
-    grapes: searchParams.get('grapes')?.split(',').filter(Boolean) || [],
-    vintage: searchParams.get('vintage')?.split(',').filter(Boolean) || [],
-    minRating: searchParams.get('minRating') || '',
-    maturity: searchParams.get('maturity') || '',
-    unplaced: searchParams.get('unplaced') || '',
-    sort: searchParams.get('sort') || '-createdAt'
-  }));
+  const [filters, setFilters] = useState(() => {
+    // A deep link with any filter param wins (shared/bookmarked URL). Otherwise
+    // restore the last-used selection for this cellar so browser-back keeps it.
+    const hasUrlFilters = ['search', 'type', 'country', 'region', 'appellation',
+      'grapes', 'vintage', 'minRating', 'maturity', 'unplaced', 'sort']
+      .some(k => searchParams.has(k));
+    if (!hasUrlFilters) return readSavedFilters(id) || buildDefaultFilters();
+    return {
+      search: searchParams.get('search') || '',
+      type: searchParams.get('type')?.split(',').filter(Boolean) || [],
+      country: searchParams.get('country')?.split(',').filter(Boolean) || [],
+      region: searchParams.get('region')?.split(',').filter(Boolean) || [],
+      appellation: searchParams.get('appellation')?.split(',').filter(Boolean) || [],
+      grapes: searchParams.get('grapes')?.split(',').filter(Boolean) || [],
+      vintage: searchParams.get('vintage')?.split(',').filter(Boolean) || [],
+      minRating: searchParams.get('minRating') || '',
+      maturity: searchParams.get('maturity') || '',
+      unplaced: searchParams.get('unplaced') || '',
+      sort: searchParams.get('sort') || '-createdAt'
+    };
+  });
   const [facets, setFacets] = useState(null);
   const [baseFacets, setBaseFacets] = useState(null);
   const [facetMeta, setFacetMeta] = useState(null);
@@ -121,6 +146,14 @@ function CellarDetail() {
       setSearchParams({}, { replace: true });
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Remember the filter/sort selection per cellar so it survives leaving the
+  // page (e.g. opening a bottle and coming back). Restored by the initializer.
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(FILTERS_STORAGE_PREFIX + id, JSON.stringify(filters));
+    } catch { /* quota / private mode — persistence is best-effort */ }
+  }, [id, filters]);
 
   // Serialize array filters for dependency comparison
   const filterKey = [

@@ -165,6 +165,12 @@ function ImportBottles() {
   const [aiSearchingRow, setAiSearchingRow] = useState(null); // index of fuzzy row doing forced AI search
   // CellarTracker "what transfers" disclosure panel (upload step)
   const [ctDisclosureDismissed, setCtDisclosureDismissed] = useState(false);
+  // Vivino "full wine list" (scan history) detection + the user's choice of
+  // what its rows become: 'history' (consumed bottles, default), 'wishlist'
+  // (WishlistItems) or 'cellar' (active bottles). See isVivinoScanHistory
+  // in importMappers.
+  const [vivinoScanHistory, setVivinoScanHistory] = useState(false);
+  const [vivinoImportMode, setVivinoImportMode] = useState('history');
 
   // AI daily budget (rows with aiSkipped fell back to fuzzy matching).
   // Status from GET /api/ai-budget/status: { dailyMax, usedToday, override, pendingRequest }
@@ -410,6 +416,8 @@ function ImportBottles() {
         setImportWarnings(parsed.warnings || []);
         setCtTextFallback(parsed.ctRackAutoMap?.textFallback || []);
         setCtDisclosureDismissed(false); // new file → show the CT disclosure again
+        setVivinoScanHistory(!!parsed.vivinoScanHistory);
+        setVivinoImportMode('history'); // new file → back to the recommended default
         setFileName(file.name);
 
         // Build per-rack summary + seed editable config with format-aware
@@ -493,11 +501,36 @@ function ImportBottles() {
     }
   }, [apiFetch, cellarId, t]);
 
+  // Apply the Vivino scan-history mode choice and strip the transient
+  // scanDate before anything is sent to the backend. In history mode every
+  // scan becomes a consumed bottle: consumedAt = scan date and the user's
+  // Vivino rating doubles as the drinking rating (it was given at scan
+  // time). In wishlist mode every row becomes a WishlistItem instead of a
+  // bottle. The transformed items flow into the validate results, which is
+  // what both the session draft and the confirm payload are built from.
+  const prepareItems = () => parsedItems.map(({ scanDate, ...item }) => {
+    if (!vivinoScanHistory) return item;
+    if (vivinoImportMode === 'wishlist') {
+      return { ...item, addToWishlist: true };
+    }
+    if (vivinoImportMode !== 'history') return item;
+    return {
+      ...item,
+      addToHistory: true,
+      consumedReason: 'drank',
+      ...(scanDate ? { consumedAt: scanDate } : {}),
+      ...(item.rating !== undefined
+        ? { consumedRating: item.rating, consumedRatingScale: item.ratingScale }
+        : {}),
+    };
+  });
+
   const handleValidate = async () => {
     setValidating(true);
     setError(null);
 
-    const total = parsedItems.length;
+    const preparedItems = prepareItems();
+    const total = preparedItems.length;
     setValidationProgress({ done: 0, total });
 
     const allResults = [];
@@ -506,7 +539,7 @@ function ImportBottles() {
     try {
       for (let offset = 0; offset < total; offset += VALIDATE_BATCH_SIZE) {
         // Re-index each batch so indices match their position in parsedItems
-        const batch = parsedItems.slice(offset, offset + VALIDATE_BATCH_SIZE);
+        const batch = preparedItems.slice(offset, offset + VALIDATE_BATCH_SIZE);
 
         const data = await validateBatch(batch);
 
@@ -877,6 +910,7 @@ function ImportBottles() {
             count: w.count,
             wines: (w.wines || []).join(', ')
           })}
+          {w.code === 'no-identity-skipped' && t('importBottles.warnings.noIdentitySkipped', { count: w.count })}
         </div>
       ))}
     </div>
@@ -958,6 +992,46 @@ function ImportBottles() {
       </div>
     </div>
 
+  );
+
+  // Vivino "full wine list" exports are scan HISTORY — every label the user
+  // ever scanned — not a cellar inventory (fingerprint: a "Scan date"
+  // column with no quantity/purchase data). Importing those as active
+  // bottles silently inflates the cellar with wines drunk years ago, so the
+  // destination is an explicit choice, defaulting to drinking history.
+  const VIVINO_MODE_OPTIONS = [
+    { mode: 'history', titleKey: 'importBottles.vivinoHistory.historyTitle', descKey: 'importBottles.vivinoHistory.historyDesc', recommended: true },
+    { mode: 'wishlist', titleKey: 'importBottles.vivinoHistory.wishlistTitle', descKey: 'importBottles.vivinoHistory.wishlistDesc' },
+    { mode: 'cellar', titleKey: 'importBottles.vivinoHistory.cellarTitle', descKey: 'importBottles.vivinoHistory.cellarDesc' },
+  ];
+
+  const renderVivinoHistoryChoice = () => detectedFormat === 'vivino' && vivinoScanHistory && (
+    <div className="ct-disclosure-panel vivino-history-panel">
+      <div className="ct-disclosure-head">
+        <strong>{t('importBottles.vivinoHistory.title')}</strong>
+      </div>
+      <p className="vivino-history-body">{t('importBottles.vivinoHistory.body')}</p>
+      <div className="vivino-history-options" role="radiogroup" aria-label={t('importBottles.vivinoHistory.title')}>
+        {VIVINO_MODE_OPTIONS.map(({ mode, titleKey, descKey, recommended }) => (
+          <label key={mode} className={`vivino-history-option ${vivinoImportMode === mode ? 'selected' : ''}`}>
+            <input
+              type="radio"
+              name="vivino-import-mode"
+              value={mode}
+              checked={vivinoImportMode === mode}
+              onChange={() => setVivinoImportMode(mode)}
+            />
+            <span className="vivino-history-option-text">
+              <strong>
+                {t(titleKey)}
+                {recommended && <span className="vivino-history-recommended">{t('importBottles.vivinoHistory.recommended')}</span>}
+              </strong>
+              <span className="vivino-history-option-desc">{t(descKey)}</span>
+            </span>
+          </label>
+        ))}
+      </div>
+    </div>
   );
 
   const renderUploadStep = () => (
@@ -1077,6 +1151,7 @@ function ImportBottles() {
 
       {parsedItems.length > 0 && renderImportWarnings()}
       {parsedItems.length > 0 && renderCtDisclosure()}
+      {parsedItems.length > 0 && renderVivinoHistoryChoice()}
 
       {parsedItems.length > 0 && parsedItems.some(i => i.price) && (
         <CurrencyPicker
@@ -1860,7 +1935,7 @@ function ImportBottles() {
   };
 
   const renderDoneStep = () => {
-    const { created, totalRows, skippedCount, errorCount, unplacedCount, unresolvedCount, missedCount, fullSuccess } =
+    const { created, wishlistCreated, succeeded, totalRows, skippedCount, errorCount, unplacedCount, unresolvedCount, missedCount, fullSuccess } =
       summariseImportOutcome(importResult, userSkippedRows.length, unresolvedRows.length);
 
     // Everything that didn't become a bottle, with per-row reasons: rows the
@@ -1888,13 +1963,19 @@ function ImportBottles() {
         <>
           <div className="done-icon">&#10003;</div>
           <h2>{t('importBottles.done.title')}</h2>
-          <p className="done-subtitle">{t('importBottles.done.allImportedNote', { count: created })}</p>
+          <p className="done-subtitle">
+            {/* Wishlist-only imports create no bottles — "made it into your
+                cellar" would be wrong, so they get their own success note. */}
+            {wishlistCreated > 0 && created === 0
+              ? t('importBottles.done.allWishlistedNote', { count: wishlistCreated })
+              : t('importBottles.done.allImportedNote', { count: succeeded })}
+          </p>
         </>
       ) : (
         <>
           <div className="done-icon done-icon-warn">!</div>
           <h2>{t('importBottles.done.partialTitle', {
-            created: created.toLocaleString(),
+            created: succeeded.toLocaleString(),
             total: totalRows.toLocaleString()
           })}</h2>
           <p className="done-subtitle done-partial-note">
@@ -1914,6 +1995,12 @@ function ImportBottles() {
             <div className="done-stat">
               <span className="done-number">{importResult.createdHistory}</span>
               <span>{t('importBottles.done.consumedHistory')}</span>
+            </div>
+          )}
+          {importResult.wishlistCreated > 0 && (
+            <div className="done-stat">
+              <span className="done-number">{importResult.wishlistCreated}</span>
+              <span>{t('importBottles.done.wishlistAdded')}</span>
             </div>
           )}
           {skippedCount > 0 && (

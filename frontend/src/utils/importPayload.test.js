@@ -59,6 +59,14 @@ describe('buildImportItem', () => {
     expect(out.wineDefinition).toBeUndefined();
   });
 
+  test('forwards addToWishlist (Vivino scan-history wishlist mode)', () => {
+    const out = buildImportItem(
+      { item: { wineName: 'X', producer: 'Y', vintage: '2018', addToWishlist: true } },
+      'w1'
+    );
+    expect(out.addToWishlist).toBe(true);
+  });
+
   test('forwards internalSlot for cellarion round-trips', () => {
     const out = buildImportItem(
       { item: { wineName: 'X', producer: 'Y', rackName: 'Hex', rackPosition: 11, internalSlot: true } },
