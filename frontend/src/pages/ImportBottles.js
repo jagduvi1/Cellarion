@@ -8,6 +8,7 @@ import { searchWines } from '../api/wines';
 import { getRacks } from '../api/racks';
 import { parseAndMap, parseJSON, summariseRacks, getDefaultRackConfig, getDefaultAnchor, decodeImportBuffer } from '../utils/importMappers';
 import { buildImportItem as buildImportItemPayload } from '../utils/importPayload';
+import { prepareImportItems } from '../utils/importPrepare';
 import { describePriceWarning } from '../utils/priceValidation';
 import { summariseImportOutcome, buildImportReportCsv } from '../utils/importReport';
 import {
@@ -501,29 +502,10 @@ function ImportBottles() {
     }
   }, [apiFetch, cellarId, t]);
 
-  // Apply the Vivino scan-history mode choice and strip the transient
-  // scanDate before anything is sent to the backend. In history mode every
-  // scan becomes a consumed bottle: consumedAt = scan date and the user's
-  // Vivino rating doubles as the drinking rating (it was given at scan
-  // time). In wishlist mode every row becomes a WishlistItem instead of a
-  // bottle. The transformed items flow into the validate results, which is
-  // what both the session draft and the confirm payload are built from.
-  const prepareItems = () => parsedItems.map(({ scanDate, ...item }) => {
-    if (!vivinoScanHistory) return item;
-    if (vivinoImportMode === 'wishlist') {
-      return { ...item, addToWishlist: true };
-    }
-    if (vivinoImportMode !== 'history') return item;
-    return {
-      ...item,
-      addToHistory: true,
-      consumedReason: 'drank',
-      ...(scanDate ? { consumedAt: scanDate } : {}),
-      ...(item.rating !== undefined
-        ? { consumedRating: item.rating, consumedRatingScale: item.ratingScale }
-        : {}),
-    };
-  });
+  // Vivino scan-history mode transform — extracted to utils/importPrepare.js
+  // (unit-tested there) so mode/date/rating mapping can't silently drop
+  // fields between the review screen and the created bottles.
+  const prepareItems = () => prepareImportItems(parsedItems, { vivinoScanHistory, vivinoImportMode });
 
   const handleValidate = async () => {
     setValidating(true);
