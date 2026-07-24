@@ -96,7 +96,14 @@ async function revertLedgerRow(row, ctx, { ok, fail }) {
       const claimed = await McpActionLog.findOneAndUpdate({ _id: row._id, reversed: false }, { $set: { reversed: true, idempotencyKey: null } });
       if (!claimed) return fail('conflict', 'That action is already being undone by another request.');
 
-      const del = await deleteEntry(ctx.user.id, row.detail?.journalId, ctx.req, { auditMeta: { via: 'undo' } });
+      let del;
+      try {
+        del = await deleteEntry(ctx.user.id, row.detail?.journalId, ctx.req, { auditMeta: { via: 'undo' } });
+      } catch (err) {
+        await unclaim(row._id); // nothing restored yet → let the undo be retried
+        if (err?.name === 'VersionError') return fail('conflict', 'The journal entry changed mid-undo — retry.');
+        throw err;
+      }
       let restored = 0; let skipped = 0; let failed = 0;
       for (const { r, bottle } of restorable) {
         // Same changed-since guard as the single-bottle path: only restore
@@ -110,10 +117,14 @@ async function revertLedgerRow(row, ctx, { ok, fail }) {
           const result = await updateBottleFields(bottle, { rating: r.rating, ratingScale: r.ratingScale || undefined }, ctx.req);
           if (result.error) failed += 1; else restored += 1;
         } else {
-          bottle.consumedRating = r.consumedRating ?? undefined;
-          bottle.consumedRatingScale = r.consumedRatingScale || undefined;
-          await bottle.save();
-          restored += 1;
+          try {
+            bottle.consumedRating = r.consumedRating ?? undefined;
+            bottle.consumedRatingScale = r.consumedRatingScale || undefined;
+            await bottle.save();
+            restored += 1;
+          } catch {
+            failed += 1; // a throw counts like a returned error → honest ratings_failed report
+          }
         }
       }
       const parts = [];
@@ -133,7 +144,14 @@ async function revertLedgerRow(row, ctx, { ok, fail }) {
     const claimed = await McpActionLog.findOneAndUpdate({ _id: row._id, reversed: false }, { $set: { reversed: true, idempotencyKey: null } });
     if (!claimed) return fail('conflict', 'That action is already being undone by another request.');
 
-    const del = await deleteEntry(ctx.user.id, row.detail?.journalId, ctx.req, { auditMeta: { via: 'undo' } });
+    let del;
+    try {
+      del = await deleteEntry(ctx.user.id, row.detail?.journalId, ctx.req, { auditMeta: { via: 'undo' } });
+    } catch (err) {
+      await unclaim(row._id); // nothing restored yet → let the undo be retried
+      if (err?.name === 'VersionError') return fail('conflict', 'The journal entry changed mid-undo — retry.');
+      throw err;
+    }
     let ratingRestored = false;
     let ratingSkipped = false;
     if (row.prev && row.prev.field) {
@@ -152,10 +170,12 @@ async function revertLedgerRow(row, ctx, { ok, fail }) {
         const result = await updateBottleFields(bottle, { rating: row.prev.rating, ratingScale: row.prev.ratingScale || undefined }, ctx.req);
         ratingRestored = !result.error;
       } else {
-        bottle.consumedRating = row.prev.consumedRating ?? undefined;
-        bottle.consumedRatingScale = row.prev.consumedRatingScale || undefined;
-        await bottle.save();
-        ratingRestored = true;
+        try {
+          bottle.consumedRating = row.prev.consumedRating ?? undefined;
+          bottle.consumedRatingScale = row.prev.consumedRatingScale || undefined;
+          await bottle.save();
+          ratingRestored = true;
+        } catch { /* stays false → reported as "rating could NOT be restored" */ }
       }
     }
     const ratingNote = !row.prev?.field ? ''

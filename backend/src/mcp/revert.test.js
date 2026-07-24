@@ -158,6 +158,50 @@ describe('revertLedgerRow dispatch', () => {
     expect(McpActionLog.findOneAndUpdate).not.toHaveBeenCalled();
   });
 
+  test('tasting_note: deleteEntry THROW after the claim unclaims the row so the undo can be retried', async () => {
+    const { deleteEntry } = require('../services/journalOps');
+    deleteEntry.mockRejectedValue(Object.assign(new Error('v'), { name: 'VersionError' }));
+    resolveBottleAccess.mockResolvedValue({ bottle: { _id: 'b5', save: jest.fn() } });
+    const row = {
+      _id: 'r5', action: 'tasting_note', bottle: 'b5',
+      detail: { journalId: 'j5' }, prev: { field: 'rating', rating: 4, ratingScale: '5' },
+    };
+    const res = await revertLedgerRow(row, ctx(), H);
+    expect(res).toMatchObject({ ok: false, code: 'conflict' });
+    expect(McpActionLog.updateOne).toHaveBeenCalledWith({ _id: 'r5' }, { $set: { reversed: false } });
+    expect(logAction).not.toHaveBeenCalled();
+  });
+
+  test('tasting_note (occasion): deleteEntry THROW unclaims; a consumed-restore throw counts as failed, not thrown', async () => {
+    const { deleteEntry } = require('../services/journalOps');
+    const mkRow = () => ({
+      _id: 'r6', action: 'tasting_note', cellar: 'c1',
+      detail: { journalId: 'j6', count: 2, bottles: [{ bottle: 'ba', rating_changed: true }, { bottle: 'bb', rating_changed: true }] },
+      prev: {
+        ratings: [
+          { bottle: 'ba', field: 'consumedRating', set: { value: 90, scale: '100' }, consumedRating: null, consumedRatingScale: null },
+          { bottle: 'bb', field: 'consumedRating', set: { value: 80, scale: '100' }, consumedRating: null, consumedRatingScale: null },
+        ],
+      },
+    });
+    const ba = { _id: 'ba', consumedRating: 90, consumedRatingScale: '100', save: jest.fn().mockResolvedValue({}) };
+    const bb = { _id: 'bb', consumedRating: 80, consumedRatingScale: '100', save: jest.fn().mockRejectedValue(Object.assign(new Error('v'), { name: 'VersionError' })) };
+    resolveBottleAccess.mockImplementation((_u, id) => Promise.resolve({ bottle: id === 'ba' ? ba : bb }));
+
+    // 1) deleteEntry throws → conflict + unclaim, nothing restored yet.
+    deleteEntry.mockRejectedValueOnce(Object.assign(new Error('v'), { name: 'VersionError' }));
+    let res = await revertLedgerRow(mkRow(), ctx(), H);
+    expect(res).toMatchObject({ ok: false, code: 'conflict' });
+    expect(McpActionLog.updateOne).toHaveBeenCalledWith({ _id: 'r6' }, { $set: { reversed: false } });
+    expect(ba.save).not.toHaveBeenCalled();
+
+    // 2) deleteEntry ok, bb's restore save throws → honest partial report.
+    deleteEntry.mockResolvedValue({ deleted: true });
+    res = await revertLedgerRow(mkRow(), ctx(), H);
+    expect(res.ok).toBe(true);
+    expect(res.data).toMatchObject({ ratings_restored: 1, ratings_failed: 1 });
+  });
+
   test('attach_image: deletes the caller\'s own un-assigned image + its files, claims atomically', async () => {
     const BottleImage = require('../models/BottleImage');
     const { unlinkImageFiles } = require('../services/imageProcessor');

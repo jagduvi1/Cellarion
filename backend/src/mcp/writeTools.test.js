@@ -26,7 +26,7 @@ jest.mock('../models/JournalEntry', () => ({ find: jest.fn(), countDocuments: je
 jest.mock('../models/WineDefinition', () => ({ find: jest.fn(), findById: jest.fn() }));
 jest.mock('../models/User', () => ({ findById: jest.fn() }));
 jest.mock('../models/WineEmbedding', () => ({ findOne: jest.fn() }));
-jest.mock('../models/McpActionLog', () => ({ create: jest.fn(), findOne: jest.fn(), findOneAndUpdate: jest.fn() }));
+jest.mock('../models/McpActionLog', () => ({ create: jest.fn(), findOne: jest.fn(), findOneAndUpdate: jest.fn(), deleteOne: jest.fn(() => Promise.resolve({})) }));
 jest.mock('../utils/rackGeometry', () => ({ getMaxPosition: jest.fn(() => 12) }));
 jest.mock('../services/search', () => ({
   getIsAvailable: jest.fn(() => false), search: jest.fn(), searchBottles: jest.fn(),
@@ -205,6 +205,17 @@ describe('update_bottle', () => {
     body = parse(await tool('update_bottle').handler({ bottle_id: oid('d'), price: 30 }, CTX));
     expect(body.data.changes).toEqual({});
     expect(McpActionLog.create).not.toHaveBeenCalled();
+  });
+
+  test('no-change WITH an idempotency_key releases the claim so a same-key retry re-runs instead of busy (audit M11)', async () => {
+    ownBottle();
+    bottleOps.updateBottleFields.mockResolvedValue({ bottle: { _id: oid('d') }, changes: {}, prev: {} });
+    const body = parse(await tool('update_bottle').handler({ bottle_id: oid('d'), price: 30, idempotency_key: 'k7' }, CTX));
+    expect(body.data.changes).toEqual({});
+    expect(McpActionLog.create).not.toHaveBeenCalled();
+    // The pending claim stub must not be stranded — it would turn every
+    // same-key retry into `busy` until CLAIM_STALE_MS.
+    expect(McpActionLog.deleteOne).toHaveBeenCalledWith({ user: ME, tool: 'update_bottle', idempotencyKey: 'k7', pending: true });
   });
 
   test('foreign bottle → not_found, service untouched', async () => {
