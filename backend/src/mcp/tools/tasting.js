@@ -204,17 +204,29 @@ registerTool({
 
     // 2. The ratings (pre-validated above). All-or-nothing: a failure rolls
     //    back the already-applied ones and removes the just-created entry.
+    //    THROWN failures (VersionError from a concurrent edit on the direct
+    //    consumed-rating save, document deleted mid-flight) compensate exactly
+    //    like returned ones — an escaping throw would strand the entry and the
+    //    earlier ratings with no ledger row for undo, and the released
+    //    idempotency claim would let a same-key retry double-write (audit
+    //    2026-07-24 M1). Thrown = concurrency-shaped → `conflict`; returned =
+    //    validation-shaped → `invalid_input`, as before.
     const applied = [];
     for (const r of resolved) {
       if (!r.change) continue;
-      const result = await applyRatingChange(r.bottle, r.change, ctx.req);
+      let result;
+      try {
+        result = await applyRatingChange(r.bottle, r.change, ctx.req);
+      } catch (err) {
+        result = { error: { thrown: true, message: err?.message || 'unexpected write failure.' } };
+      }
       if (result.error) {
         let rollbackFailed = 0;
         for (const a of applied.reverse()) {
           if (!(await rollbackRatingChange(a.bottle, a.change, ctx.req))) rollbackFailed += 1;
         }
         await deleteEntry(ctx.user.id, entry._id, ctx.req, { auditMeta: { via: 'mcp', compensation: true } });
-        return fail('invalid_input',
+        return fail(result.error.thrown ? 'conflict' : 'invalid_input',
           `Could not set the rating${multi ? ` on bottle ${r.item.bottle_id}` : ''}: ${result.error.message} Nothing was saved.`
           + (rollbackFailed ? ` (${rollbackFailed} earlier rating(s) could not be rolled back — re-check them.)` : ''));
       }
