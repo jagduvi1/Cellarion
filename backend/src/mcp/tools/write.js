@@ -27,7 +27,7 @@ const {
   ok, fail, objectId, MSG_CELLAR_NOT_FOUND, MSG_BOTTLE_NOT_FOUND,
   resolveCellarAccess, resolveBottleAccess, wineSummary,
 } = require('../toolUtil');
-const { logAction, replay } = require('../actionLedger');
+const { logAction, replay, releaseClaim } = require('../actionLedger');
 
 const NEW_WINE_SHAPE = {
   name: z.string().trim().min(1).max(200).describe('Wine name WITHOUT the producer in it (e.g. "Sauvignon Blanc", not "Cloudy Bay Sauvignon Blanc")'),
@@ -245,6 +245,11 @@ registerTool({
     if (result.error) return fail('invalid_input', result.error.message);
 
     if (Object.keys(result.changes).length === 0) {
+      // No mutation → logAction never runs, so the claim replay() took above
+      // would stay pending and turn every same-key retry into a bogus `busy`
+      // for CLAIM_STALE_MS (audit 2026-07-24 M11). Release it: a retry simply
+      // re-runs and no-ops again.
+      await releaseClaim(ctx, args.idempotency_key, 'update_bottle');
       return ok('No changes — every value already matched', { bottle_id: bottle._id, changes: {} });
     }
     const envelope = {
