@@ -79,6 +79,55 @@ async function revertLedgerRow(row, ctx, { ok, fail }) {
   // previous rating.
   if (row.action === 'tasting_note') {
     const { deleteEntry } = require('../services/journalOps');
+
+    // Occasion rows (detail.bottles) — ONE entry, ratings on several bottles.
+    // Access is re-checked for every bottle whose rating would be restored;
+    // the entry itself is the caller's own, so bottles that got no rating
+    // don't gate the undo (unlike the single-bottle path below, where the one
+    // bottle IS the action).
+    if (Array.isArray(row.detail?.bottles)) {
+      const ratings = row.prev?.ratings || [];
+      const restorable = [];
+      for (const r of ratings) {
+        const a = await resolveBottleAccess(ctx.user.id, r.bottle, 'editor');
+        if (!a) return fail('conflict', `Bottle ${r.bottle} from that note is no longer accessible; nothing was changed.`);
+        restorable.push({ r, bottle: a.bottle });
+      }
+      const claimed = await McpActionLog.findOneAndUpdate({ _id: row._id, reversed: false }, { $set: { reversed: true, idempotencyKey: null } });
+      if (!claimed) return fail('conflict', 'That action is already being undone by another request.');
+
+      const del = await deleteEntry(ctx.user.id, row.detail?.journalId, ctx.req, { auditMeta: { via: 'undo' } });
+      let restored = 0; let skipped = 0; let failed = 0;
+      for (const { r, bottle } of restorable) {
+        // Same changed-since guard as the single-bottle path: only restore
+        // while the bottle still carries the rating THIS action set (r.set).
+        const current = r.field === 'rating'
+          ? { value: bottle.rating ?? null, scale: bottle.ratingScale || '5' }
+          : { value: bottle.consumedRating ?? null, scale: bottle.consumedRatingScale || '5' };
+        if (r.set && (current.value !== r.set.value || current.scale !== r.set.scale)) { skipped += 1; continue; }
+        if (r.field === 'rating') {
+          const { updateBottleFields } = require('../services/bottleOps');
+          const result = await updateBottleFields(bottle, { rating: r.rating, ratingScale: r.ratingScale || undefined }, ctx.req);
+          if (result.error) failed += 1; else restored += 1;
+        } else {
+          bottle.consumedRating = r.consumedRating ?? undefined;
+          bottle.consumedRatingScale = r.consumedRatingScale || undefined;
+          await bottle.save();
+          restored += 1;
+        }
+      }
+      const parts = [];
+      if (restored) parts.push(`${restored} rating(s) restored`);
+      if (skipped) parts.push(`${skipped} rating(s) left as-is (changed again since)`);
+      if (failed) parts.push(`${failed} rating(s) could NOT be restored`);
+      const envelope = {
+        summary: `Undid tasting note (${row.detail.count || row.detail.bottles.length} wines)${del.deleted ? ' — journal entry removed' : ' — entry was already gone'}${parts.length ? `, ${parts.join(', ')}` : ''}`,
+        data: { undone: 'capture_tasting_note', entry_removed: !!del.deleted, ratings_restored: restored, ratings_skipped: skipped, ...(failed ? { ratings_failed: failed } : {}) },
+      };
+      await logAction(ctx, { tool: 'undo_last', action: 'tasting_note', viaUndo: true, cellar: row.cellar, detail: { undid: String(row._id) }, result: envelope });
+      return ok(envelope.summary, envelope.data);
+    }
+
     const access = await resolveBottleAccess(ctx.user.id, row.bottle, 'editor');
     if (!access) return fail('conflict', 'The bottle from that note is no longer accessible; nothing was changed.');
     const claimed = await McpActionLog.findOneAndUpdate({ _id: row._id, reversed: false }, { $set: { reversed: true, idempotencyKey: null } });
