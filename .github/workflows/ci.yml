@@ -14,6 +14,12 @@ name: CI
 on:
   pull_request:
     branches: [main]
+  # The MERGED state of main must be verified too: two PRs green in isolation
+  # can still break combined, and a release is tagged from main's HEAD — which
+  # otherwise never ran CI (bit v1.87.0: #818 then #817 merged sequentially,
+  # so the tagged tree was CI-unverified; audit 2026-07-24 M13).
+  push:
+    branches: [main]
   # Lets a branch be checked before opening the PR, and gives a manual re-run.
   workflow_dispatch: {}
 
