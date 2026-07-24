@@ -3,6 +3,20 @@ import SITE_URL from '../config/siteUrl';
 
 const DEFAULT_IMAGE = `${SITE_URL}/cellarion-logo.jpg`;
 
+// Serialize JSON-LD for embedding inside <script type="application/ld+json">.
+// JSON.stringify does NOT escape `<`/`>`/`&`, and react-helmet-async applies
+// script children via innerHTML — a user-influenced field containing
+// `</script>` (e.g. a registry wine name on WineDetail) could otherwise break
+// out of the script element. Same escaping as the crawler-side twin
+// (backend/src/routes/og.js serializeJsonLd): the JSON stays valid and parses
+// to identical data, while breakout becomes impossible.
+export function serializeJsonLd(obj) {
+  return JSON.stringify(obj)
+    .replace(/</g, '\\u003c')
+    .replace(/>/g, '\\u003e')
+    .replace(/&/g, '\\u0026');
+}
+
 // Single source of truth for public-page SEO meta. Each public page passes its variable
 // bits and gets a complete Helmet block (canonical, OG, Twitter, hreflang, JSON-LD) with
 // no opportunity to forget a tag.
@@ -54,7 +68,7 @@ export default function SEOHead({
         <meta property="article:modified_time" content={articleMeta.modifiedTime} />
       )}
       {jsonLd && (
-        <script type="application/ld+json">{JSON.stringify(jsonLd)}</script>
+        <script type="application/ld+json">{serializeJsonLd(jsonLd)}</script>
       )}
     </Helmet>
   );
