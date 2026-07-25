@@ -133,6 +133,15 @@
   margin-top: 0.1rem;
 }
 
+/* Sits under the cards and explains what the user counts can and cannot see. */
+.admin-mcp-note {
+  margin: -0.75rem 0 1.5rem;
+  font-size: 0.8rem;
+  line-height: 1.5;
+  color: var(--color-text-secondary);
+  max-width: 70ch;
+}
+
 /* Panels */
 .admin-mcp-panels {
   display: grid;

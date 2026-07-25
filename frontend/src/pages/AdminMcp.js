@@ -87,6 +87,7 @@ function AdminMcp() {
     errors: acc.errors + r.errors,
   }), { calls: 0, errors: 0 });
   const conn = data?.connections;
+  const users = data?.users;
 
   return (
     <div className="admin-mcp-page">
@@ -153,8 +154,24 @@ function AdminMcp() {
               value={fmt((conn?.bearer.activeLast7d || 0) + (conn?.oauth.activeLast7d || 0))}
               sublabel={t('adminMcp.last7Days')}
             />
-            <StatCard label={t('adminMcp.writes')} value={fmt(data.writesLast7d)} sublabel={t('adminMcp.last7Days')} />
+            <StatCard
+              label={t('adminMcp.users')}
+              value={fmt(users?.connected)}
+              sublabel={t('adminMcp.usersSplit', { oauth: fmt(users?.oauthConnected || 0) })}
+            />
+            <StatCard
+              label={t('adminMcp.activeUsers')}
+              value={fmt(users?.oauthActiveLast7d)}
+              sublabel={t('adminMcp.activeUsersSub')}
+            />
+            <StatCard
+              label={t('adminMcp.writes')}
+              value={fmt(data.writesLast7d)}
+              sublabel={t('adminMcp.writesBy', { count: users?.wroteLast7d || 0 })}
+            />
           </div>
+
+          <p className="admin-mcp-note">{t('adminMcp.usersNote')}</p>
 
           <div className="admin-mcp-panels">
             <div className="admin-mcp-panel">
