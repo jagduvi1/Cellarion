@@ -6,11 +6,13 @@ import useVersion from '../hooks/useVersion';
 import { updateProfile } from '../api/profiles';
 import { changePassword } from '../api/auth';
 import { CURRENCIES } from '../config/currencies';
+import { findLanguage } from '../config/locales';
 import { PLANS } from '../config/plans';
 import { SCALE_META, VALID_SCALES } from '../utils/ratingUtils';
 import { isPushSupported, getPushPermissionState, subscribeToPush, unsubscribeFromPush, getCurrentEndpoint, getDeviceStatus, sendTestPush } from '../utils/pushSubscription';
 import { downloadBlobObject } from '../utils/downloadBlob';
 import ApiTokensSection from '../components/ApiTokensSection';
+import LanguagePicker from '../components/LanguagePicker';
 import AiConnectSection from '../components/AiConnectSection';
 import SetPasswordNotice from '../components/SetPasswordNotice';
 import McpActivitySection from '../components/McpActivitySection';
@@ -24,7 +26,15 @@ function Settings() {
   const navigate = useNavigate();
   const appVersion = useVersion();
   const [currency, setCurrency] = useState(user?.preferences?.currency || 'USD');
-  const [language, setLanguage] = useState(user?.preferences?.language || i18n.language?.split('-')[0] || 'en');
+  // Matched to a locale this build actually has: a stored regional tag (pt-BR)
+  // or a language whose translation has since been withdrawn would otherwise
+  // leave the select showing English while state said otherwise — a control
+  // that lies about the saved value. A language below the listing floor is kept
+  // (the picker adds it back as an option) rather than silently reset.
+  const [language, setLanguage] = useState(() => {
+    const stored = user?.preferences?.language || i18n.language || 'en';
+    return findLanguage(stored)?.code || 'en';
+  });
   const [ratingScale, setRatingScale] = useState(user?.preferences?.ratingScale || '5');
   const [rackNavigation, setRackNavigation] = useState(user?.preferences?.rackNavigation || 'auto');
   const [restockScope, setRestockScope] = useState(user?.preferences?.restockScope || 'all');
@@ -694,15 +704,7 @@ function Settings() {
             <p className="settings-hint">
               {t('settings.languageHint')}
             </p>
-            <select
-              id="language-select"
-              className="input settings-select"
-              value={language}
-              onChange={e => setLanguage(e.target.value)}
-            >
-              <option value="en">{t('settings.languageEn')}</option>
-              <option value="sv">{t('settings.languageSv')}</option>
-            </select>
+            <LanguagePicker value={language} onChange={setLanguage} />
           </div>
 
           <div className="form-group">

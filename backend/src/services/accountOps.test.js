@@ -38,7 +38,18 @@ describe('buildPreferencesUpdate', () => {
 
   test('validates language, rating scale, rack nav and restock scope against their allow-lists', async () => {
     expect((await buildPreferencesUpdate(UID, { language: 'sv' })).update).toEqual({ 'preferences.language': 'sv' });
-    expect((await buildPreferencesUpdate(UID, { language: 'de' })).error.status).toBe(400);
+    // A community translation must be storable the day its locale folder lands,
+    // without a backend release: language is validated by shape, not membership.
+    expect((await buildPreferencesUpdate(UID, { language: 'de' })).update).toEqual({ 'preferences.language': 'de' });
+    expect((await buildPreferencesUpdate(UID, { language: 'pt-BR' })).update).toEqual({ 'preferences.language': 'pt-BR' });
+    expect((await buildPreferencesUpdate(UID, { language: 'not a language' })).error.status).toBe(400);
+    expect((await buildPreferencesUpdate(UID, { language: '<script>' })).error.status).toBe(400);
+    expect((await buildPreferencesUpdate(UID, { language: 42 })).error.status).toBe(400);
+    // Shape alone bounds nothing — the subtag group repeats, so a megabyte of
+    // "-ab" satisfies the pattern and would then be echoed by every /me
+    // response, the GDPR export and the browser's localStorage.
+    expect((await buildPreferencesUpdate(UID, { language: `en${'-ab'.repeat(600000)}` })).error.status).toBe(400);
+    expect((await buildPreferencesUpdate(UID, { language: `en${'-ab'.repeat(20)}` })).error.status).toBe(400);
     // numeric ratingScale is coerced to the string enum
     expect((await buildPreferencesUpdate(UID, { ratingScale: 100 })).update).toEqual({ 'preferences.ratingScale': '100' });
     expect((await buildPreferencesUpdate(UID, { ratingScale: '7' })).error.status).toBe(400);

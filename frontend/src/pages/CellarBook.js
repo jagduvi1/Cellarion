@@ -84,7 +84,9 @@ function CellarBook() {
 
   const book = useMemo(() => buildCellarBook(racks, bottles), [racks, bottles]);
 
-  const printedAt = new Date().toLocaleDateString(i18n.language === 'sv' ? 'sv-SE' : undefined, {
+  // The printed book is a durable artifact — its date must match the language
+  // the rest of the page is in, not the browser's locale.
+  const printedAt = new Date().toLocaleDateString(i18n.language || undefined, {
     year: 'numeric', month: 'long', day: 'numeric',
   });
 

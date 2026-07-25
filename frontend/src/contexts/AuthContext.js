@@ -1,4 +1,5 @@
 import React, { createContext, useState, useContext, useEffect, useRef, useCallback } from 'react';
+import { findLanguage } from '../config/locales';
 import { createApiFetch } from '../utils/apiFetch';
 import i18n from '../i18n';
 
@@ -47,8 +48,14 @@ export const AuthProvider = ({ children }) => {
   const applySession = (token, userData) => {
     storeToken(token);
     setUser(userData);
-    if (userData?.preferences?.language) {
-      i18n.changeLanguage(userData.preferences.language);
+    // An explicit account preference is honoured even for an incomplete
+    // ("beta") language — the beta rule only governs automatic detection, never
+    // a choice the user made. A code whose locale no longer exists (translation
+    // withdrawn, or set from another install) is ignored rather than applied,
+    // so the session falls back to English instead of a stale half-language.
+    const preferred = userData?.preferences?.language;
+    if (preferred && findLanguage(preferred)) {
+      i18n.changeLanguage(preferred);
     }
   };
 

@@ -21,7 +21,18 @@ const { SUPPORTED_CURRENCIES } = require('../config/currencies');
 // Allow-lists — the single source of truth the REST routes previously kept
 // inline. Kept here so the MCP tools validate byte-for-byte identically.
 const ALLOWED_CURRENCIES = SUPPORTED_CURRENCIES;
-const ALLOWED_LANGUAGES = ['en', 'sv'];
+// Validated by SHAPE, not by membership: the set of UI languages lives in the
+// frontend (one directory per locale, shipped by Weblate) and the backend image
+// never sees those files. An allow-list here would silently 400 every new
+// community translation until someone remembered to edit this line. A stored
+// code the frontend doesn't have is harmless — i18next falls back to English.
+const LANGUAGE_TAG = /^[a-z]{2,3}(-[A-Za-z0-9]{2,8})*$/;
+// The subtag group repeats, so shape alone puts no ceiling on length: a 1.8 MB
+// "tag" of repeated subtags satisfies the pattern and would then ride along in
+// every /me response, the GDPR export and localStorage. Every other string in
+// this validator is capped; this one is no different. 35 is the practical
+// BCP-47 maximum.
+const LANGUAGE_TAG_MAX = 35;
 const ALLOWED_RATING_SCALES = ['5', '20', '100'];
 const ALLOWED_RACK_NAV = ['auto', 'room', 'rack'];
 const ALLOWED_RESTOCK_SCOPE = ['all', 'cellar'];
@@ -75,8 +86,8 @@ async function buildPreferencesUpdate(userId, body = {}) {
   }
 
   if (language !== undefined) {
-    if (!ALLOWED_LANGUAGES.includes(language)) {
-      return { error: err(400, `Invalid language. Allowed: ${ALLOWED_LANGUAGES.join(', ')}`) };
+    if (typeof language !== 'string' || language.length > LANGUAGE_TAG_MAX || !LANGUAGE_TAG.test(language)) {
+      return { error: err(400, 'Invalid language. Expected a language tag such as en, sv or fr.') };
     }
     update['preferences.language'] = language;
   }
@@ -312,7 +323,8 @@ module.exports = {
   validateSourceUrl,
   // Exposed so the MCP tool descriptions/schemas can enumerate the same options.
   ALLOWED_CURRENCIES,
-  ALLOWED_LANGUAGES,
+  LANGUAGE_TAG,
+  LANGUAGE_TAG_MAX,
   ALLOWED_RATING_SCALES,
   ALLOWED_RACK_NAV,
   ALLOWED_RESTOCK_SCOPE,

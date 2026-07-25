@@ -1,4 +1,5 @@
 import { Helmet } from 'react-helmet-async';
+import { SHIPPED_CODES } from 'virtual:locale-coverage';
 import SITE_URL from '../config/siteUrl';
 import './PrivacyPolicy.css';
 
@@ -13,8 +14,9 @@ function PrivacyPolicy() {
         <meta property="og:description" content="Cellarion privacy policy. Learn how we collect, use, and protect your personal data under GDPR." />
         <meta property="og:url" content={`${SITE_URL}/privacy`} />
         <link rel="canonical" href={`${SITE_URL}/privacy`} />
-        <link rel="alternate" hrefLang="en" href={`${SITE_URL}/privacy`} />
-        <link rel="alternate" hrefLang="sv" href={`${SITE_URL}/privacy`} />
+        {SHIPPED_CODES.map((code) => (
+          <link key={code} rel="alternate" hrefLang={code} href={`${SITE_URL}/privacy`} />
+        ))}
         <link rel="alternate" hrefLang="x-default" href={`${SITE_URL}/privacy`} />
       </Helmet>
       <div className="privacy-container">

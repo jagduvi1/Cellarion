@@ -14,6 +14,7 @@ const { isValidId } = require('../utils/validation');
 const { sanitizeForumHtml, sanitizeBlogHtml, extractFaqFromHtml, extractHowToFromHtml } = require('../utils/sanitizeHtml');
 const { stripHtml } = require('../utils/sanitize');
 const { rateLimitKey } = require('../utils/clientIp');
+const { CRAWLER_LANGUAGES } = require('../config/languages');
 
 const WINE_TYPES = ['red', 'white', 'rosé', 'sparkling', 'dessert', 'fortified'];
 const MIN_WINES = 3;
@@ -32,6 +33,18 @@ function serializeJsonLd(obj) {
     .replace(/</g, '\\u003c')
     .replace(/>/g, '\\u003e')
     .replace(/&/g, '\\u0026');
+}
+
+/**
+ * hreflang alternates for a crawler-rendered page. One entry per language the
+ * site is offered in, plus x-default. Both this and the SPA's SEOHead advertise
+ * the same finished languages — they previously disagreed, with this side
+ * omitting Swedish entirely.
+ */
+function hreflangLinks(pageUrl) {
+  return [...CRAWLER_LANGUAGES, 'x-default']
+    .map((lang) => `  <link rel="alternate" hreflang="${lang}" href="${esc(pageUrl)}" />`)
+    .join('\n');
 }
 
 const router = express.Router();
@@ -113,7 +126,7 @@ router.get('/home', ogLimiter, (req, res) => {
           url: SITE_URL,
           name: 'Cellarion',
           description: LANDING.metaDescription,
-          inLanguage: ['en', 'sv'],
+          inLanguage: CRAWLER_LANGUAGES,
         },
         {
           '@type': 'Organization',
@@ -171,8 +184,7 @@ router.get('/home', ogLimiter, (req, res) => {
   <meta name="twitter:description" content="${esc(LANDING.metaDescription)}" />
   <meta name="twitter:image" content="${esc(logo)}" />
   <link rel="canonical" href="${esc(pageUrl)}" />
-  <link rel="alternate" hreflang="en" href="${esc(pageUrl)}" />
-  <link rel="alternate" hreflang="x-default" href="${esc(pageUrl)}" />
+${hreflangLinks(pageUrl)}
   <script type="application/ld+json">${serializeJsonLd(jsonLd)}</script>
 </head>
 <body>
@@ -938,8 +950,7 @@ function taxonomyHtml({ title, description, metaDescription, pageUrl, itemType, 
   <meta name="twitter:title" content="${esc(title)}" />
   <meta name="twitter:description" content="${esc(metaDescription)}" />
   <link rel="canonical" href="${esc(pageUrl)}" />
-  <link rel="alternate" hrefLang="en" href="${esc(pageUrl)}" />
-  <link rel="alternate" hrefLang="x-default" href="${esc(pageUrl)}" />
+${hreflangLinks(pageUrl)}
   <script type="application/ld+json">${serializeJsonLd(jsonLd)}</script>
 </head>
 <body>
