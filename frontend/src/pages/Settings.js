@@ -6,7 +6,7 @@ import useVersion from '../hooks/useVersion';
 import { updateProfile } from '../api/profiles';
 import { changePassword } from '../api/auth';
 import { CURRENCIES } from '../config/currencies';
-import { LANGUAGE_OPTIONS } from '../config/locales';
+import { findLanguage } from '../config/locales';
 import { PLANS } from '../config/plans';
 import { SCALE_META, VALID_SCALES } from '../utils/ratingUtils';
 import { isPushSupported, getPushPermissionState, subscribeToPush, unsubscribeFromPush, getCurrentEndpoint, getDeviceStatus, sendTestPush } from '../utils/pushSubscription';
@@ -26,13 +26,14 @@ function Settings() {
   const navigate = useNavigate();
   const appVersion = useVersion();
   const [currency, setCurrency] = useState(user?.preferences?.currency || 'USD');
-  // Matched to an actual option: a stored regional tag (pt-BR) or a language
-  // whose translation has since been withdrawn would otherwise leave the select
-  // showing English while state said otherwise — a control that lies about the
-  // saved value.
+  // Matched to a locale this build actually has: a stored regional tag (pt-BR)
+  // or a language whose translation has since been withdrawn would otherwise
+  // leave the select showing English while state said otherwise — a control
+  // that lies about the saved value. A language below the listing floor is kept
+  // (the picker adds it back as an option) rather than silently reset.
   const [language, setLanguage] = useState(() => {
-    const base = String(user?.preferences?.language || i18n.language || 'en').split('-')[0];
-    return LANGUAGE_OPTIONS.some((l) => l.code === base) ? base : 'en';
+    const stored = user?.preferences?.language || i18n.language || 'en';
+    return findLanguage(stored)?.code || 'en';
   });
   const [ratingScale, setRatingScale] = useState(user?.preferences?.ratingScale || '5');
   const [rackNavigation, setRackNavigation] = useState(user?.preferences?.rackNavigation || 'auto');

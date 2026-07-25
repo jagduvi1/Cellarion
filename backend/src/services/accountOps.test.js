@@ -45,6 +45,11 @@ describe('buildPreferencesUpdate', () => {
     expect((await buildPreferencesUpdate(UID, { language: 'not a language' })).error.status).toBe(400);
     expect((await buildPreferencesUpdate(UID, { language: '<script>' })).error.status).toBe(400);
     expect((await buildPreferencesUpdate(UID, { language: 42 })).error.status).toBe(400);
+    // Shape alone bounds nothing — the subtag group repeats, so a megabyte of
+    // "-ab" satisfies the pattern and would then be echoed by every /me
+    // response, the GDPR export and the browser's localStorage.
+    expect((await buildPreferencesUpdate(UID, { language: `en${'-ab'.repeat(600000)}` })).error.status).toBe(400);
+    expect((await buildPreferencesUpdate(UID, { language: `en${'-ab'.repeat(20)}` })).error.status).toBe(400);
     // numeric ratingScale is coerced to the string enum
     expect((await buildPreferencesUpdate(UID, { ratingScale: 100 })).update).toEqual({ 'preferences.ratingScale': '100' });
     expect((await buildPreferencesUpdate(UID, { ratingScale: '7' })).error.status).toBe(400);

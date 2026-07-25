@@ -18,7 +18,7 @@ const { ok, fail, pageParams } = require('../toolUtil');
 const { logAudit } = require('../../services/audit');
 const {
   updatePreferences, updateProfile, createSupportTicket, replyToTicket, createWineRequest,
-  ALLOWED_CURRENCIES, LANGUAGE_TAG, ALLOWED_RATING_SCALES,
+  ALLOWED_CURRENCIES, LANGUAGE_TAG, LANGUAGE_TAG_MAX, ALLOWED_RATING_SCALES,
   ALLOWED_RACK_NAV, ALLOWED_RESTOCK_SCOPE, ALLOWED_VISIBILITY, SUPPORT_CATEGORIES,
   TICKET_REPLY_CAP,
 } = require('../../services/accountOps');
@@ -103,7 +103,7 @@ registerTool({
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
   inputSchema: {
     currency: z.string().length(3).optional(),
-    language: z.string().regex(LANGUAGE_TAG).optional(),
+    language: z.string().max(LANGUAGE_TAG_MAX).regex(LANGUAGE_TAG).optional(),
     rating_scale: z.enum(['5', '20', '100']).optional(),
     rack_navigation: z.enum(['auto', 'room', 'rack']).optional(),
     restock_scope: z.enum(['all', 'cellar']).optional(),

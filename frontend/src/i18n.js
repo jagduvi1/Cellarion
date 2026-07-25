@@ -15,7 +15,28 @@ import en from './locales/en/translation.json';
 const LOADERS = import.meta.glob('./locales/*/translation.json');
 const loaderFor = (code) => LOADERS[`./locales/${code}/translation.json`];
 
-const baseOf = (lng) => String(lng || '').split('-')[0];
+const baseOf = (lng) => String(lng || '').split(/[-_]/)[0];
+
+/**
+ * The locale directory that should answer for a language tag.
+ *
+ * Exact match first, base subtag second, and a regional directory as a last
+ * resort. Reducing straight to the base would strand a `pt-BR` (or `zh-Hans`)
+ * directory: the loader key is the directory name, so `pt` would find nothing,
+ * the bundle would never register, and the interface would sit in English with
+ * nothing logged. i18next has the matching quirk — with `pt-BR` in
+ * supportedLngs it drops `pt` from the resolution chain entirely — so the
+ * bundle has to be registered under the code that actually matched.
+ */
+export const resolveLocaleCode = (lng, codes = Object.keys(LOADERS).map((p) => p.split('/')[2])) => {
+  const tag = String(lng || '');
+  if (!tag) return undefined;
+  return (
+    codes.find((code) => code === tag) ||
+    codes.find((code) => code === baseOf(tag)) ||
+    codes.find((code) => baseOf(code) === baseOf(tag))
+  );
+};
 
 /**
  * First of the browser's preferred languages that we offer as finished.
@@ -23,11 +44,12 @@ const baseOf = (lng) => String(lng || '').split('-')[0];
  * Incomplete ("beta") languages are opt-in only: they are selectable in
  * Settings and load fine once chosen, but nobody is dropped into a
  * half-translated UI merely because their browser is set to that language.
- * Matching is on the base subtag because i18next resolves `fr-CA` to `fr`, so
- * a check against full tags would let region-suffixed values slip through.
+ * Comparison tolerates region subtags on either side — a `fr-CA` browser must
+ * not slip past a gate listing `fr`, and a `pt-PT` browser should still be
+ * offered a shipped `pt-BR` rather than English.
  */
-export const shippedNavigatorLanguage = (preferred = []) =>
-  preferred.map(baseOf).find((code) => SHIPPED_CODES.includes(code));
+export const shippedNavigatorLanguage = (preferred = [], codes = SHIPPED_CODES) =>
+  preferred.map((tag) => resolveLocaleCode(tag, codes)).find(Boolean);
 
 const detector = new LanguageDetector();
 
@@ -56,9 +78,13 @@ i18n
     // (Settings, or a saved account preference) is always honoured.
     supportedLngs: LOCALE_CODES,
     detection: {
-      order: ['localStorage', 'shippedNavigator'],
+      // `?lng=fr` first: it is how a translator previews a language that is not
+      // in the menu yet (see TRANSLATING.md). Explicit, so it may select an
+      // incomplete language — unlike the navigator lookup, which may not.
+      order: ['querystring', 'localStorage', 'shippedNavigator'],
       caches: ['localStorage'],
       lookupLocalStorage: 'i18nextLng',
+      lookupQuerystring: 'lng',
     },
     interpolation: {
       escapeValue: false,
@@ -66,15 +92,15 @@ i18n
   });
 
 async function ensureLocaleLoaded(lng) {
-  const base = baseOf(lng);
-  const loader = loaderFor(base);
-  if (!loader || i18n.hasResourceBundle(base, 'translation')) return;
+  const code = resolveLocaleCode(lng);
+  const loader = code && loaderFor(code);
+  if (!loader || i18n.hasResourceBundle(code, 'translation')) return;
   try {
     const mod = await loader();
-    i18n.addResourceBundle(base, 'translation', mod.default, true, true);
+    i18n.addResourceBundle(code, 'translation', mod.default, true, true);
     // Re-trigger languageChanged so already-mounted components re-render
     // with the freshly loaded strings instead of the English fallback.
-    if (baseOf(i18n.language) === base) {
+    if (resolveLocaleCode(i18n.language) === code) {
       i18n.changeLanguage(i18n.language);
     }
   } catch {
@@ -88,7 +114,10 @@ async function ensureLocaleLoaded(lng) {
 // it in step here fixes all routes at once, for every locale.
 function syncDocumentLanguage(lng) {
   if (typeof document !== 'undefined') {
-    document.documentElement.lang = baseOf(lng) || 'en';
+    // The full tag, not the base: pt-BR is more useful to a screen reader than
+    // pt. Underscores (Weblate's other code style) are normalised because
+    // `lang="pt_BR"` is not a valid BCP-47 tag.
+    document.documentElement.lang = String(lng || 'en').replace('_', '-') || 'en';
   }
 }
 

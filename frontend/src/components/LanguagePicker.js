@@ -1,21 +1,22 @@
 import { useTranslation } from 'react-i18next';
-import { LANGUAGE_OPTIONS, HAS_BETA_LANGUAGES } from '../config/locales';
+import { languageOptionsFor, HAS_BETA_LANGUAGES } from '../config/locales';
 
 const WEBLATE_URL = 'https://hosted.weblate.org/projects/cellarion/';
 
 /**
  * Interface-language picker.
  *
- * Offers every language present in this build, finished or not. An unfinished
- * one is labelled with how far along it is rather than hidden: a translator has
- * to be able to run the app in their own work-in-progress, and a reader who
- * would rather have 60 % of their own language than 100 % English should be
- * allowed to choose that. What incompleteness never does is choose for them —
- * automatic browser-language detection skips beta languages entirely
- * (src/i18n.js).
+ * Offers every language with enough translated to be worth choosing, finished
+ * or not. An unfinished one is labelled with how far along it is rather than
+ * hidden: a translator has to be able to run the app in their own
+ * work-in-progress, and a reader who would rather have 60 % of their own
+ * language than 100 % English should be allowed to choose that. What
+ * incompleteness never does is choose for them — automatic browser-language
+ * detection skips beta languages entirely (src/i18n.js).
  */
 export default function LanguagePicker({ id = 'language-select', value, onChange }) {
   const { t } = useTranslation();
+  const options = languageOptionsFor(value);
 
   return (
     <>
@@ -25,7 +26,7 @@ export default function LanguagePicker({ id = 'language-select', value, onChange
         value={value}
         onChange={(e) => onChange(e.target.value)}
       >
-        {LANGUAGE_OPTIONS.map(({ code, label, beta, percent }) => (
+        {options.map(({ code, label, beta, percent }) => (
           <option key={code} value={code}>
             {beta
               ? t('settings.languageBetaOption', '{{language}} (beta · {{percent}}%)', {

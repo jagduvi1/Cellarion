@@ -25,6 +25,14 @@ export const isStaffKey = (key) => /^admin/.test(key) || key.startsWith('moderat
 // labelled beta and never auto-selected from the browser's language list.
 export const BETA_BELOW = 0.9;
 
+// Below this, a language isn't offered in the menu at all. Weblate creates a
+// locale file the moment a language is requested, so without a floor the picker
+// would advertise languages that are literally empty — an option that changes
+// nothing when chosen reads as a broken app, not as an invitation. It stays
+// selectable for anyone who already has it saved, and `?lng=<code>` previews it
+// (see TRANSLATING.md), so a translator can still watch their work land.
+export const LIST_ABOVE = 0.1;
+
 // No /g flag — shared safely between callers (a global regex would carry
 // lastIndex across .test() calls).
 export const PLURAL_SUFFIX = /_(zero|one|two|few|many|other)$/;

@@ -2,6 +2,7 @@ import { render, screen, fireEvent } from '@testing-library/react';
 
 vi.mock('virtual:locale-coverage', () => ({
   BETA_BELOW: 0.9,
+  LIST_ABOVE: 0.1,
   LOCALES: [
     { code: 'en', translated: 100, total: 100, ratio: 1, beta: false },
     { code: 'sv', translated: 99, total: 100, ratio: 0.99, beta: false },

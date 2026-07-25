@@ -10,6 +10,7 @@
 
 vi.mock('virtual:locale-coverage', () => ({
   BETA_BELOW: 0.9,
+  LIST_ABOVE: 0.1,
   LOCALES: [
     { code: 'en', translated: 100, total: 100, ratio: 1, beta: false },
     { code: 'sv', translated: 99, total: 100, ratio: 0.99, beta: false },
@@ -19,7 +20,41 @@ vi.mock('virtual:locale-coverage', () => ({
   SHIPPED_CODES: ['en', 'sv'],
 }));
 
-const { default: i18n, shippedNavigatorLanguage } = await import('./i18n');
+const { default: i18n, shippedNavigatorLanguage, resolveLocaleCode } = await import('./i18n');
+
+describe('resolving a language tag to a locale directory', () => {
+  // Weblate names the directory after the language code, which for a regional
+  // variant is 'pt-BR' (or 'pt_BR'). Reducing to the base subtag would look for
+  // a 'pt' directory that does not exist, register nothing, and leave the
+  // interface in English with nothing logged anywhere.
+  const dirs = ['en', 'fr', 'pt-BR', 'sv'];
+
+  test('prefers an exact directory match', () => {
+    expect(resolveLocaleCode('pt-BR', dirs)).toBe('pt-BR');
+    expect(resolveLocaleCode('sv', dirs)).toBe('sv');
+  });
+
+  test('falls back to the base subtag when the region has no directory', () => {
+    expect(resolveLocaleCode('sv-SE', dirs)).toBe('sv');
+    expect(resolveLocaleCode('fr-CA', dirs)).toBe('fr');
+  });
+
+  test('finds a regional directory for a bare base tag', () => {
+    // A preference saved as 'pt' should still reach the only Portuguese we have.
+    expect(resolveLocaleCode('pt', dirs)).toBe('pt-BR');
+  });
+
+  test('tolerates the underscore code style Weblate can also write', () => {
+    expect(resolveLocaleCode('pt_BR', ['en', 'pt_BR'])).toBe('pt_BR');
+    expect(resolveLocaleCode('pt-BR', ['en', 'pt_BR'])).toBe('pt_BR');
+  });
+
+  test('gives nothing for a language this build does not have', () => {
+    expect(resolveLocaleCode('ja', dirs)).toBeUndefined();
+    expect(resolveLocaleCode('', dirs)).toBeUndefined();
+    expect(resolveLocaleCode(undefined, dirs)).toBeUndefined();
+  });
+});
 
 describe('automatic browser-language detection', () => {
   test('picks a finished language', () => {
@@ -43,6 +78,14 @@ describe('automatic browser-language detection', () => {
     expect(shippedNavigatorLanguage(['sv-FI'])).toBe('sv');
   });
 
+  test('offers a shipped regional language to a browser asking for a sibling region', () => {
+    // pt-BR is finished; a pt-PT browser is better served by it than by English.
+    expect(shippedNavigatorLanguage(['pt-PT'], ['en', 'pt-BR'])).toBe('pt-BR');
+    // …but only when that language actually shipped: a beta pt-BR is not in the
+    // list it is given, so the answer stays English.
+    expect(shippedNavigatorLanguage(['pt-PT'], ['en', 'sv'])).toBeUndefined();
+  });
+
   test('gives no answer for languages nobody has translated, leaving the fallback to i18next', () => {
     expect(shippedNavigatorLanguage(['ja-JP', 'ko'])).toBeUndefined();
     expect(shippedNavigatorLanguage([])).toBeUndefined();
@@ -53,7 +96,15 @@ describe('i18next wiring', () => {
   test('consults our gated detector instead of the raw navigator one', () => {
     // If 'navigator' ever reappears in this list, beta languages become
     // automatic again and every test above stops meaning anything.
-    expect(i18n.options.detection.order).toEqual(['localStorage', 'shippedNavigator']);
+    expect(i18n.options.detection.order).toEqual(['querystring', 'localStorage', 'shippedNavigator']);
+    expect(i18n.options.detection.order).not.toContain('navigator');
+  });
+
+  test('lets ?lng= preview a language, ahead of any stored choice', () => {
+    // How a translator sees work-in-progress that is not in the menu yet. It
+    // ranks above localStorage so the preview wins for that visit.
+    expect(i18n.options.detection.order.indexOf('querystring')).toBe(0);
+    expect(i18n.options.detection.lookupQuerystring).toBe('lng');
   });
 
   test('supports every locale in the build, beta included', () => {

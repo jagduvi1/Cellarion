@@ -44,6 +44,7 @@ jest.mock('../services/accountOps', () => ({
   // The tool descriptions read these allow-lists at module load — keep them real-ish.
   ALLOWED_CURRENCIES: ['USD', 'EUR', 'SEK'],
   LANGUAGE_TAG: /^[a-z]{2,3}(-[A-Za-z0-9]{2,8})*$/,
+  LANGUAGE_TAG_MAX: 35,
   ALLOWED_RATING_SCALES: ['5', '20', '100'],
   ALLOWED_RACK_NAV: ['auto', 'room', 'rack'],
   ALLOWED_RESTOCK_SCOPE: ['all', 'cellar'],

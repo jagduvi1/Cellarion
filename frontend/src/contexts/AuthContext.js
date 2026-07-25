@@ -1,5 +1,5 @@
 import React, { createContext, useState, useContext, useEffect, useRef, useCallback } from 'react';
-import { LOCALE_CODES } from 'virtual:locale-coverage';
+import { findLanguage } from '../config/locales';
 import { createApiFetch } from '../utils/apiFetch';
 import i18n from '../i18n';
 
@@ -54,7 +54,7 @@ export const AuthProvider = ({ children }) => {
     // withdrawn, or set from another install) is ignored rather than applied,
     // so the session falls back to English instead of a stale half-language.
     const preferred = userData?.preferences?.language;
-    if (preferred && LOCALE_CODES.includes(String(preferred).split('-')[0])) {
+    if (preferred && findLanguage(preferred)) {
       i18n.changeLanguage(preferred);
     }
   };
