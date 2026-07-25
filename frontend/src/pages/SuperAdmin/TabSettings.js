@@ -140,9 +140,10 @@ function PerIpLimitsPanel({ apiFetch, config, defaults, error }) {
 // hosted connectors (claude.ai, ChatGPT) call from a small shared IP pool, so
 // /api/mcp is exempt from the per-IP limits above and throttled per USER
 // instead, with a high per-IP guard against unauthenticated flooding. The
-// on/off kill switches live on the Admin → AI Connector page; only the three
-// numbers are edited here. PATCHes only { mcp: { userMax, ipMax, registerMax } }
-// — the backend's field-level merge leaves the switches untouched.
+// on/off kill switches live on the Admin → AI Connector page; only the four
+// numbers are edited here. PATCHes only
+// { mcp: { userMax, ipMax, registerMax, oauthMax } } — the backend's
+// field-level merge leaves the switches untouched.
 function McpLimitsPanel({ apiFetch, config, defaults, error }) {
   const [form,   setForm]   = useState(null);
   const [saving, setSaving] = useState(false);
@@ -154,6 +155,7 @@ function McpLimitsPanel({ apiFetch, config, defaults, error }) {
         userMax:     String(config.mcp?.userMax     ?? defaults?.mcp?.userMax     ?? ''),
         ipMax:       String(config.mcp?.ipMax       ?? defaults?.mcp?.ipMax       ?? ''),
         registerMax: String(config.mcp?.registerMax ?? defaults?.mcp?.registerMax ?? ''),
+        oauthMax:    String(config.mcp?.oauthMax    ?? defaults?.mcp?.oauthMax    ?? ''),
       });
     }
   }, [config, defaults]);
@@ -166,6 +168,7 @@ function McpLimitsPanel({ apiFetch, config, defaults, error }) {
           userMax: Number(form.userMax),
           ipMax: Number(form.ipMax),
           registerMax: Number(form.registerMax),
+          oauthMax: Number(form.oauthMax),
         },
       });
       if (!res.ok) { const d = await res.json(); setMsg({ ok: false, text: d.error || 'Save failed' }); }
@@ -209,6 +212,15 @@ function McpLimitsPanel({ apiFetch, config, defaults, error }) {
         defaultValue={defaults?.mcp?.registerMax}
         onChange={v => setForm(f => ({ ...f, registerMax: v }))}
         min={10} max={100000}
+      />
+      <NumberField
+        label="OAuth sign-in flow"
+        unit="req / 15 min / IP"
+        hint="authorize, approve, token and revoke combined. Every connected client refreshes its token at least hourly and a whole platform does that from one egress IP — keep this high; too low disconnects people mid-conversation"
+        value={form.oauthMax}
+        defaultValue={defaults?.mcp?.oauthMax}
+        onChange={v => setForm(f => ({ ...f, oauthMax: v }))}
+        min={100} max={1000000}
       />
     </PanelShell>
   );

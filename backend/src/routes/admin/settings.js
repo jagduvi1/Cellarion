@@ -111,12 +111,18 @@ router.patch('/rate-limits', async (req, res) => {
     // registerMax bounds OAuth Dynamic Client Registration per IP per hour. The
     // floor is 10 (the old hardcoded value) rather than 0 — dropping it lower
     // would block new connections outright rather than merely slow abuse.
+    // oauthMax bounds the rest of the OAuth AS per IP per 15 min. Its floor is
+    // deliberately high (100): every connected client refreshes its access
+    // token at least hourly and a hosted platform does that for its whole user
+    // base from one egress IP, so a low value here disconnects real people
+    // mid-conversation — the exact failure the exemption existed to prevent.
     if (mcp !== undefined) {
       requireIntInRange('mcp.enabled',       mcp.enabled,       0, 1);
       requireIntInRange('mcp.publicEnabled', mcp.publicEnabled, 0, 1);
       requireIntInRange('mcp.userMax',       mcp.userMax,       10, 100_000);
       requireIntInRange('mcp.ipMax',         mcp.ipMax,         100, 1_000_000);
       requireIntInRange('mcp.registerMax',   mcp.registerMax,   10, 100_000);
+      requireIntInRange('mcp.oauthMax',      mcp.oauthMax,      100, 1_000_000);
     }
 
     if (errors.length > 0) {
@@ -165,6 +171,7 @@ router.patch('/rate-limits', async (req, res) => {
         userMax:       mcp?.userMax       ?? previous.mcp?.userMax       ?? rateLimitsConfig.defaults.mcp.userMax,
         ipMax:         mcp?.ipMax         ?? previous.mcp?.ipMax         ?? rateLimitsConfig.defaults.mcp.ipMax,
         registerMax:   mcp?.registerMax   ?? previous.mcp?.registerMax   ?? rateLimitsConfig.defaults.mcp.registerMax,
+        oauthMax:      mcp?.oauthMax      ?? previous.mcp?.oauthMax      ?? rateLimitsConfig.defaults.mcp.oauthMax,
       },
     };
 

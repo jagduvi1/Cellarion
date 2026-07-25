@@ -409,3 +409,48 @@ describe('POST /revoke', () => {
     expect(r.status).toBe(200);
   });
 });
+
+// Security audit 2026-07-25 L-2. These endpoints declare a urlencoded parser
+// (which only ever yields strings), but app.js mounts express.json() on the
+// /api/mcp PREFIX — and that matches /api/mcp/oauth/* — so a caller sending
+// Content-Type: application/json can put an object where a token string
+// belongs. Hashing it threw a TypeError that surfaced as a 500 with a stack
+// trace instead of the RFC-shaped error. Not exploitable (the throw happens
+// before any query, so no operator reaches Mongo) — but a 500 on an
+// unauthenticated endpoint is both a bad contract and log noise.
+describe('non-string credentials are rejected, never 500 (L-2)', () => {
+  const NON_STRINGS = [
+    ['an operator object', { $ne: null }],
+    ['an array',           ['x']],
+    ['a number',           1234],
+  ];
+
+  test.each(NON_STRINGS)('/token authorization_code: %s code → 400 invalid_request', async (_l, code) => {
+    OAuthClient.findOne.mockResolvedValue(CLIENT);
+    const r = await jsonPost('/token', {
+      grant_type: 'authorization_code', client_id: CLIENT.clientId, code, code_verifier: VERIFIER,
+    });
+    expect(r.status).toBe(400);
+    expect((await r.json()).error).toBe('invalid_request');
+    // Never reached the code lookup.
+    expect(OAuthAuthCode.findOneAndUpdate).not.toHaveBeenCalled();
+  });
+
+  test.each(NON_STRINGS)('/token refresh_token: %s refresh_token → 400 invalid_request', async (_l, refresh_token) => {
+    OAuthClient.findOne.mockResolvedValue(CLIENT);
+    const r = await jsonPost('/token', {
+      grant_type: 'refresh_token', client_id: CLIENT.clientId, refresh_token,
+    });
+    expect(r.status).toBe(400);
+    expect((await r.json()).error).toBe('invalid_request');
+    expect(ApiToken.findOne).not.toHaveBeenCalled();
+  });
+
+  test.each(NON_STRINGS)('/revoke: %s token → 200 (RFC 7009) and no lookup', async (_l, token) => {
+    OAuthClient.findOne.mockResolvedValue(CLIENT);
+    const r = await jsonPost('/revoke', { client_id: CLIENT.clientId, token });
+    // RFC 7009 §2.2: an invalid token is still a success — just never a 500.
+    expect(r.status).toBe(200);
+    expect(ApiToken.findOne).not.toHaveBeenCalled();
+  });
+});

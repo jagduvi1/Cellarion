@@ -629,6 +629,31 @@ describe('POST /api/auth/reset-password', () => {
     expect(after.status).toBe(401);
     expect(after.body).toEqual({ error: 'Invalid or expired refresh token' });
   });
+
+  // Same L-2 guard as /verify-email — this endpoint hashes the token first too.
+  test.each([
+    ['an operator object', { $ne: null }],
+    ['an array',           ['a']],
+    ['a number',           12345],
+  ])('400, never 500, when the token is %s', async (_label, token) => {
+    seedWithResetToken();
+    const res = await request({
+      path: '/api/auth/reset-password',
+      body: { token, password: NEW_PASSWORD },
+    });
+    expect(res.status).toBe(400);
+  });
+
+  test('a non-string token never reaches the User lookup', async () => {
+    seedWithResetToken();
+    User.findOne.mockClear();
+    const res = await request({
+      path: '/api/auth/reset-password',
+      body: { token: { $ne: null }, password: NEW_PASSWORD },
+    });
+    expect(res.status).toBe(400);
+    expect(User.findOne).not.toHaveBeenCalled();
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -669,6 +694,31 @@ describe('POST /api/auth/verify-email', () => {
   test('400 with no token', async () => {
     const res = await request({ method: 'POST', path: '/api/auth/verify-email', body: {} });
     expect(res.status).toBe(400);
+  });
+
+  // Security audit 2026-07-25 L-2. A JSON object is truthy, so the old
+  // truthiness check let it reach crypto's update(), which throws a TypeError
+  // the catch turned into a 500 + a full stack trace on an UNAUTHENTICATED
+  // endpoint. Nothing was exploitable (it throws before the Mongo query, so no
+  // operator ever reached the database) — but the answer must be 400.
+  test.each([
+    ['an operator object', { $ne: null }],
+    ['an array',           ['a']],
+    ['a number',           12345],
+    ['a boolean',          true],
+  ])('400, never 500, when the token is %s', async (_label, token) => {
+    const res = await request({ method: 'POST', path: '/api/auth/verify-email', body: { token } });
+    expect(res.status).toBe(400);
+    expect(res.setCookies).toEqual([]);
+  });
+
+  test('a non-string token never reaches the User lookup', async () => {
+    User.findOne.mockClear();
+    const res = await request({
+      method: 'POST', path: '/api/auth/verify-email', body: { token: { $ne: null } },
+    });
+    expect(res.status).toBe(400);
+    expect(User.findOne).not.toHaveBeenCalled();
   });
 });
 

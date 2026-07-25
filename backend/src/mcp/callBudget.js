@@ -45,11 +45,23 @@ function takeCallSlot(key, max) {
   return w.count <= max;
 }
 
-/** The budget key + cap for a request context (anon → IP, else → user id). */
+/**
+ * The budget key + cap for a request context (anon → IP, else → user id).
+ *
+ * The anonymous key uses rateLimitKey, NOT getClientIp: a client is routinely
+ * assigned a whole IPv6 /64, so keying on the full /128 let one rotate the low
+ * 64 bits for a fresh budget per request. This was the last per-IP key in the
+ * codebase still on the unmasked address after the L-10 sweep (security audit
+ * 2026-07-25 L-1) — and it mattered here because the HTTP limiter in front
+ * (publicMcpLimiter) IS /64-masked, so the two disagreed on what "one client"
+ * means and the effective anonymous ceiling was ~3x the intended one.
+ * (middleware/superAdmin.js keeps getClientIp on purpose — an IP allowlist
+ * needs the exact address.)
+ */
 function budgetFor(ctx) {
   if (ctx.anonymous || !ctx.user) {
     let ip = 'anon';
-    try { ip = require('../utils/clientIp').getClientIp(ctx.req) || 'anon'; } catch { /* no req in unit tests */ }
+    try { ip = require('../utils/clientIp').rateLimitKey(ctx.req) || 'anon'; } catch { /* no req in unit tests */ }
     return { key: `ip:${ip}`, max: PUBLIC_CALL_MAX };
   }
   return { key: `u:${ctx.user.id}`, max: USER_CALL_MAX };

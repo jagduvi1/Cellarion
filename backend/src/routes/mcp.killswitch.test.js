@@ -58,10 +58,18 @@ const post = (path, auth) => fetch(`${baseUrl}${path}`, {
   body: JSON.stringify({ jsonrpc: '2.0', method: 'tools/list', id: 1 }),
 });
 
+// Exact-shape on purpose: a new knob in this group must be a deliberate edit
+// here, not something that slips in unnoticed. Every LIMIT must also be a real
+// number — an undefined max makes express-rate-limit treat its endpoint as
+// unlimited, which is how the OAuth AS ended up unbounded (audit M-1).
 test('defaults leave every MCP surface open', async () => {
   expect(rateLimitsConfig.defaults.mcp).toEqual({
-    enabled: 1, publicEnabled: 1, userMax: 300, ipMax: 5000, registerMax: 200,
+    enabled: 1, publicEnabled: 1, userMax: 300, ipMax: 5000, registerMax: 200, oauthMax: 2000,
   });
+  for (const knob of ['userMax', 'ipMax', 'registerMax', 'oauthMax']) {
+    expect(typeof rateLimitsConfig.defaults.mcp[knob]).toBe('number');
+    expect(rateLimitsConfig.defaults.mcp[knob]).toBeGreaterThan(0);
+  }
   const res = await post('/api/mcp/public');
   expect(res.status).toBe(200);
   expect((await res.json()).handled).toBe(true);

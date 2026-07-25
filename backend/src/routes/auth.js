@@ -352,7 +352,13 @@ router.post('/verify-email', async (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
   const { token } = req.body || {};
 
-  if (!token) {
+  // typeof, not truthiness (security audit 2026-07-25 L-2): a JSON body value
+  // like {"token":{"$ne":null}} is truthy, and crypto's update() then throws a
+  // TypeError that the catch below turns into a 500 with a full stack trace.
+  // Nothing is exploitable — it throws BEFORE the Mongo query, so no operator
+  // ever reaches the database — but an unauthenticated endpoint should answer
+  // 400 for a malformed token instead of logging noise on request.
+  if (typeof token !== 'string' || !token) {
     return res.status(400).json({ error: 'Verification token is required' });
   }
 
@@ -635,7 +641,9 @@ router.post('/forgot-password', forgotLimiter, async (req, res) => {
 router.post('/reset-password', authLimiter, async (req, res) => {
   const { token, password } = req.body;
 
-  if (!token || !password) {
+  // typeof on the token for the same reason as /verify-email (L-2). `password`
+  // needs no guard here — Mongoose casts/validates it and answers 400.
+  if (typeof token !== 'string' || !token || !password) {
     return res.status(400).json({ error: 'Token and new password are required' });
   }
 
