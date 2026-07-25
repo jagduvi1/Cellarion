@@ -15,8 +15,10 @@
  * translation would be load-bearing.
  */
 
+import { SHIPPED_CODES } from 'virtual:locale-coverage';
+
 import en from './en/translation.json';
-import sv from './sv/translation.json';
+import { flatten, get, stripPlural, PLURAL_SUFFIX } from './coverage.js';
 
 // Picks up every locale automatically so community languages added via
 // Weblate are covered without touching this file.
@@ -26,20 +28,12 @@ const bundles = Object.fromEntries(
 );
 const otherLocales = Object.entries(bundles).filter(([code]) => code !== 'en');
 
-const flatten = (obj, prefix = '') =>
-  Object.entries(obj).flatMap(([k, v]) => {
-    const key = prefix ? `${prefix}.${k}` : k;
-    return v && typeof v === 'object' && !Array.isArray(v) ? flatten(v, key) : [key];
-  });
-
 const enKeys = flatten(en);
 
-const get = (obj, path) => path.split('.').reduce((o, k) => (o == null ? undefined : o[k]), obj);
-
 // CLDR plural categories differ per language (Swedish has one/other, Polish
-// adds few/many, …), so parity is compared on plural-suffix-stripped keys.
-const PLURAL_SUFFIX = /_(zero|one|two|few|many|other)$/;
-const normalize = (keys) => [...new Set(keys.map((k) => k.replace(PLURAL_SUFFIX, '')))];
+// adds few/many, …), so parity is compared on plural-suffix-stripped keys —
+// the same normalisation the coverage percentage counts units by.
+const normalize = (keys) => [...new Set(keys.map(stripPlural))];
 
 // "{{count, number}}" → "count" — the format part is per-string, the
 // variable name must survive translation exactly.
@@ -118,8 +112,12 @@ describe('translation files', () => {
   describe('connectAi (public MCP set-up page)', () => {
     const CLIENTS = ['claude', 'claudeDesktop', 'claudeCode', 'chatgpt', 'vscode', 'cursor', 'gemini', 'stdio'];
 
-    test.each(['en', 'sv'])('%s has the full connectAi block', (locale) => {
-      const bundle = locale === 'en' ? en : sv;
+    // Applies to every language the app offers as finished, so "ready to ship"
+    // is CI-enforced rather than a judgement call — and reads the bundle by
+    // code, not by a ternary that would silently test Swedish for every locale
+    // added to the list.
+    test.each(SHIPPED_CODES)('%s has the full connectAi block', (locale) => {
+      const bundle = bundles[locale];
       const block = bundle.connectAi;
       expect(block).toBeDefined();
 
@@ -150,7 +148,7 @@ describe('translation files', () => {
   });
 
   test('the pages linking to /connect-ai have their link labels', () => {
-    for (const bundle of [en, sv]) {
+    for (const bundle of SHIPPED_CODES.map((code) => bundles[code])) {
       expect(typeof bundle.landing.footerConnectAi).toBe('string');
       expect(typeof bundle.help.connectAiLink).toBe('string');
       expect(typeof bundle.settings.aiConnect.oneClickCta).toBe('string');

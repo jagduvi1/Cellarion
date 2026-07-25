@@ -32,8 +32,15 @@ Cellarion's interface is community-translated. Thank you for helping!
 ## How a new language gets shipped
 
 1. Request the language in Weblate (or open a GitHub discussion) and start translating.
-2. When the language reaches **~90 % translated**, we enable it in the app (`frontend/src/i18n.js` — it is added to `supportedLngs` and the lazy-loading table) in the next release.
-3. Untranslated strings fall back to English, so a shipped language degrades gracefully while you finish it.
+2. **Your language appears in the app as soon as its first strings land** — Weblate opens a pull request, and once that is merged the language shows up in Settings → Language on the next release. Until it is complete it is labelled with how far along it is, e.g. `Français (beta · 62 %)`, and untranslated text stays in English.
+3. Anyone can select a beta language deliberately, but nobody is switched into one automatically: browser-language detection only ever selects a finished language, and only finished languages are declared to search engines.
+4. At **90 % of user-facing strings** the label and the restrictions drop off by themselves — no code change, no waiting for someone to add your language to a list.
+
+### What counts toward the percentage
+
+The admin back-office (`admin*`, `moderationReports` — roughly 14 % of all strings) is **excluded from the calculation**. Translate everything a normal user can reach and you are at 100 %, whether or not you ever touch the admin panels. Those strings are still translatable and welcome — they just don't gate your language.
+
+Coverage is counted in *units*, the same way Weblate counts them: a plural family is one unit however many forms your language needs, so languages with richer plural rules aren't penalised. The maths lives in `frontend/src/locales/coverage.js`; the number the app shows is computed at build time from the locale files themselves, so it is never stale.
 
 ## Notes for developers
 
@@ -42,4 +49,6 @@ Cellarion's interface is community-translated. Thank you for helping!
 - Don't build sentences by concatenating strings or placing numbers next to `t()` calls — put the whole sentence in one key and interpolate (`{{count}}`, `{{name}}`). Word order differs across languages.
 - Renaming a key discards its existing translations in every language. Reword the English value only when the *meaning* changes (Weblate then flags translations for review); avoid renaming keys casually.
 - **Never end a key in `_one`, `_other`, `_zero`, `_two`, `_few` or `_many` unless it is a real plural.** Those suffixes mark CLDR plural families for i18next *and* Weblate — an enum key like `status_other` ("other" status) gets mistaken for an incomplete plural and Weblate scaffolds empty sibling forms. Nest enums instead (`bottles.statusLabels.other`), and give every real plural family both `_one` and `_other` in English (no bare base key as the singular).
+- **Nothing needs adding to a list when a language arrives.** `frontend/src/i18n.js` discovers locales from the directories themselves (`import.meta.glob`), and completeness comes from the `virtual:locale-coverage` module built by `frontend/vite-plugins/localeCoverage.js`. Dropping in `fr/translation.json` is the whole change.
+- **When a language crosses 90 % it graduates automatically** — except for one hand-maintained mirror: `backend/src/config/languages.js` (`CRAWLER_LANGUAGES`), which the crawler-rendered pages in `routes/og.js` use for `hreflang`. The backend image doesn't ship the locale files, so add the language there in the release that announces it.
 - `frontend/src/locales/translation.test.js` enforces structural integrity (no keys en lacks, placeholder consistency, plural-family completeness, no empty strings — locales may lag en; untranslated keys fall back to English) and runs in CI on every PR.

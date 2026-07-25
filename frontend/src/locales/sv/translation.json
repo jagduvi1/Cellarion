@@ -247,8 +247,6 @@
     "currencyHint": "Används som standard i flaskformulär och prisfält.",
     "language": "Språk",
     "languageHint": "Välj ditt föredragna visningsspråk.",
-    "languageEn": "English",
-    "languageSv": "Svenska",
     "saveBtn": "Spara",
     "savingBtn": "Sparar…",
     "savedMsg": "Sparat",

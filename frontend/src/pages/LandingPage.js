@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
+import { SHIPPED_CODES } from 'virtual:locale-coverage';
 import SEOHead from '../components/SEOHead';
 import DiscussionsFeedWidget from '../components/DiscussionsFeedWidget';
 import SITE_URL from '../config/siteUrl';
@@ -73,8 +74,7 @@ export default function LandingPage() {
       .catch(() => {});
   }, []);
 
-  const lang = i18n.language?.startsWith('sv') ? 'sv' : 'en';
-  const altLang = lang === 'sv' ? 'en' : 'sv';
+  const lang = i18n.language?.split('-')[0] || 'en';
 
   // WebSite + Organization JSON-LD
   const jsonLd = {
@@ -86,7 +86,9 @@ export default function LandingPage() {
         url: SITE_URL,
         name: 'Cellarion',
         description: t('landing.metaDescription'),
-        inLanguage: [lang, altLang],
+        // The languages the site is actually available in, not a two-slot flip
+        // that reported en+sv to a French visitor.
+        inLanguage: SHIPPED_CODES,
       },
       {
         '@type': 'Organization',

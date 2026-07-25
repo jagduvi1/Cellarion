@@ -18,7 +18,7 @@ const { ok, fail, pageParams } = require('../toolUtil');
 const { logAudit } = require('../../services/audit');
 const {
   updatePreferences, updateProfile, createSupportTicket, replyToTicket, createWineRequest,
-  ALLOWED_CURRENCIES, ALLOWED_LANGUAGES, ALLOWED_RATING_SCALES,
+  ALLOWED_CURRENCIES, LANGUAGE_TAG, ALLOWED_RATING_SCALES,
   ALLOWED_RACK_NAV, ALLOWED_RESTOCK_SCOPE, ALLOWED_VISIBILITY, SUPPORT_CATEGORIES,
   TICKET_REPLY_CAP,
 } = require('../../services/accountOps');
@@ -94,7 +94,8 @@ registerTool({
   title: 'Update account preferences',
   description:
     `Changes one or more settings; send only the fields to change. currency (a 3-letter code from ${ALLOWED_CURRENCIES.slice(0, 6).join('/')}…), ` +
-    `language (${ALLOWED_LANGUAGES.join('/')}), rating_scale (${ALLOWED_RATING_SCALES.join('/')}), rack_navigation ` +
+    `language (a language tag such as en/sv/fr — the interface falls back to English wherever that language ` +
+    `is not translated yet), rating_scale (${ALLOWED_RATING_SCALES.join('/')}), rack_navigation ` +
     `(${ALLOWED_RACK_NAV.join('/')}), restock_scope (${ALLOWED_RESTOCK_SCOPE.join('/')}), default_cellar_id (a cellar the ` +
     'user owns, or null to clear), and notification email/push toggles. Confirm the change with the user first. ' +
     'Cosmetic and reversible — the response echoes the new settings, so set a value back to undo.',
@@ -102,7 +103,7 @@ registerTool({
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
   inputSchema: {
     currency: z.string().length(3).optional(),
-    language: z.enum(['en', 'sv']).optional(),
+    language: z.string().regex(LANGUAGE_TAG).optional(),
     rating_scale: z.enum(['5', '20', '100']).optional(),
     rack_navigation: z.enum(['auto', 'room', 'rack']).optional(),
     restock_scope: z.enum(['all', 'cellar']).optional(),

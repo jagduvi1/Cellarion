@@ -1,4 +1,5 @@
 import { Helmet } from 'react-helmet-async';
+import { SHIPPED_CODES } from 'virtual:locale-coverage';
 import SITE_URL from '../config/siteUrl';
 
 const DEFAULT_IMAGE = `${SITE_URL}/cellarion-logo.jpg`;
@@ -54,13 +55,13 @@ export default function SEOHead({
       <meta name="twitter:description" content={description} />
       <meta name="twitter:image" content={imageUrl} />
       <link rel="canonical" href={url} />
-      {hreflang === 'public' && (
-        <>
-          <link rel="alternate" hrefLang="en" href={url} />
-          <link rel="alternate" hrefLang="sv" href={url} />
-          <link rel="alternate" hrefLang="x-default" href={url} />
-        </>
-      )}
+      {/* Only languages past the completeness bar are declared to crawlers —
+          pointing Google at a half-translated page is worse than not claiming
+          the language at all. Beta locales are opt-in inside the app only. */}
+      {hreflang === 'public' && SHIPPED_CODES.map((code) => (
+        <link key={code} rel="alternate" hrefLang={code} href={url} />
+      ))}
+      {hreflang === 'public' && <link rel="alternate" hrefLang="x-default" href={url} />}
       {articleMeta?.publishedTime && (
         <meta property="article:published_time" content={articleMeta.publishedTime} />
       )}

@@ -49,8 +49,11 @@ export default function OpenBottlePanel({ bottle, canEdit, onBottleChange, onFin
     }
   };
 
+  // Format in the language the user chose, not the one their OS happens to be
+  // in — and via i18n.language rather than a per-locale ternary, which also
+  // fixes the old `=== 'sv'` missing region-suffixed values like sv-SE.
   const dateFmt = (d) =>
-    new Date(d).toLocaleDateString(i18n.language === 'sv' ? 'sv-SE' : undefined, {
+    new Date(d).toLocaleDateString(i18n.language || undefined, {
       month: 'short', day: 'numeric',
     });
 

@@ -43,7 +43,7 @@ jest.mock('../services/accountOps', () => ({
   createWineRequest: jest.fn(),
   // The tool descriptions read these allow-lists at module load — keep them real-ish.
   ALLOWED_CURRENCIES: ['USD', 'EUR', 'SEK'],
-  ALLOWED_LANGUAGES: ['en', 'sv'],
+  LANGUAGE_TAG: /^[a-z]{2,3}(-[A-Za-z0-9]{2,8})*$/,
   ALLOWED_RATING_SCALES: ['5', '20', '100'],
   ALLOWED_RACK_NAV: ['auto', 'room', 'rack'],
   ALLOWED_RESTOCK_SCOPE: ['all', 'cellar'],

@@ -1,11 +1,17 @@
 import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
 
+import localeCoverage from './vite-plugins/localeCoverage.js';
+
 export default defineConfig({
   plugins: [
     react({
       include: /\.(js|jsx|ts|tsx)$/,
     }),
+    // Supplies `virtual:locale-coverage` — per-language completeness, counted
+    // over user-facing strings only. Drives which languages are offered and
+    // which are flagged beta.
+    localeCoverage(),
   ],
   server: {
     port: 3000,
