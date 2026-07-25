@@ -26,6 +26,7 @@ const USAGE = {
   daily: [{ day: '2026-07-15T00:00:00.000Z', surface: 'personal', calls: 41, errors: 2 }],
   topTools: [{ name: 'search_bottles', surface: 'personal', calls: 20, errors: 1 }],
   connections: { bearer: { total: 3, activeLast7d: 2 }, oauth: { total: 5, activeLast7d: 4 } },
+  users: { connected: 7, oauthConnected: 4, oauthActiveLast7d: 3, wroteLast7d: 2 },
   writesLast7d: 12,
   mcpConfig: { enabled: 1, publicEnabled: 1 },
 };
@@ -41,6 +42,27 @@ test('parses the usage payload and renders it without crashing', async () => {
   // The daily row must appear — proving byDay() ran over parsed data, not a Response.
   await waitFor(() => expect(screen.getByText('2026-07-15')).toBeInTheDocument());
   expect(screen.getByText('search_bottles')).toBeInTheDocument();
+});
+
+test('renders the distinct-user counts next to the connection counts', async () => {
+  render(<AdminMcp />);
+  // 8 connections (3 bearer + 5 oauth) but 7 users — both must be on screen, so
+  // "connections" can never be misread as "people".
+  await waitFor(() => expect(screen.getByText('8')).toBeInTheDocument());
+  expect(screen.getByText('7')).toBeInTheDocument();
+  expect(screen.getByText('3')).toBeInTheDocument();
+  expect(screen.getByText('adminMcp.usersSplit')).toBeInTheDocument();
+  expect(screen.getByText('adminMcp.usersNote')).toBeInTheDocument();
+});
+
+test('survives a payload with no users block (older backend)', async () => {
+  const withoutUsers = { ...USAGE };
+  delete withoutUsers.users;
+  getUsage.mockResolvedValue(jsonRes(withoutUsers));
+  render(<AdminMcp />);
+  // Renders em-dashes rather than crashing on users.connected.
+  await waitFor(() => expect(screen.getByText('2026-07-15')).toBeInTheDocument());
+  expect(screen.getAllByText('—').length).toBeGreaterThan(0);
 });
 
 test('surfaces a server error instead of blanking', async () => {

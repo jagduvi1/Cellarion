@@ -9,7 +9,7 @@
 process.env.JWT_SECRET = 'test-secret';
 
 jest.mock('../../models/McpUsageStat', () => ({ aggregate: jest.fn() }));
-jest.mock('../../models/McpActionLog', () => ({ countDocuments: jest.fn(), NON_ACTIVITY_ACTIONS: ['bulk_preview', 'arrange_preview', 'pending'] }));
+jest.mock('../../models/McpActionLog', () => ({ countDocuments: jest.fn(), aggregate: jest.fn(), NON_ACTIVITY_ACTIONS: ['bulk_preview', 'arrange_preview', 'pending'] }));
 jest.mock('../../models/ApiToken', () => ({ aggregate: jest.fn() }));
 jest.mock('../../models/User', () => ({ findById: jest.fn() }));
 
@@ -40,6 +40,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   McpUsageStat.aggregate.mockResolvedValue([]);
   ApiToken.aggregate.mockResolvedValue([]);
+  McpActionLog.aggregate.mockResolvedValue([]);
   McpActionLog.countDocuments.mockResolvedValue(0);
 });
 
@@ -63,6 +64,9 @@ test('returns the overview shape with empty data', async () => {
     bearer: { total: 0, activeLast7d: 0 },
     oauth: { total: 0, activeLast7d: 0 },
   });
+  expect(body.users).toEqual({
+    connected: 0, oauthConnected: 0, oauthActiveLast7d: 0, wroteLast7d: 0,
+  });
   expect(body.writesLast7d).toBe(0);
   // Kill-switch state rides along for the toggles.
   expect(body.mcpConfig).toEqual(rateLimitsConfig.get().mcp);
@@ -78,10 +82,13 @@ test('maps aggregates into the daily series, top tools and connection split', as
     .mockResolvedValueOnce([
       { _id: { name: 'search_bottles', surface: 'personal' }, calls: 20, errors: 1 },
     ]);
-  ApiToken.aggregate.mockResolvedValue([
-    { _id: 'bearer', total: 3, activeLast7d: 2 },
-    { _id: 'oauth', total: 5, activeLast7d: 4 },
-  ]);
+  ApiToken.aggregate
+    .mockResolvedValueOnce([
+      { _id: 'bearer', total: 3, activeLast7d: 2 },
+      { _id: 'oauth', total: 5, activeLast7d: 4 },
+    ])
+    .mockResolvedValueOnce([{ _id: null, connected: 6, oauthConnected: 4, oauthActiveLast7d: 2 }]);
+  McpActionLog.aggregate.mockResolvedValue([{ n: 2 }]);
   McpActionLog.countDocuments.mockResolvedValue(12);
 
   const body = await (await getUsage(tokenFor(ADMIN_ID, ['admin']))).json();
@@ -97,6 +104,45 @@ test('maps aggregates into the daily series, top tools and connection split', as
     oauth: { total: 5, activeLast7d: 4 },
   });
   expect(body.writesLast7d).toBe(12);
+  // 8 live connections but only 6 people behind them — the whole point of the
+  // second aggregation.
+  expect(body.users).toEqual({
+    connected: 6, oauthConnected: 4, oauthActiveLast7d: 2, wroteLast7d: 2,
+  });
+});
+
+test('the user pipelines count people, not tokens or rows', async () => {
+  await getUsage(tokenFor(ADMIN_ID, ['admin']));
+
+  // Second ApiToken.aggregate call = the user counts. It must collapse to one
+  // row per user BEFORE counting, or a user with three connectors counts three
+  // times.
+  const [userPipeline] = ApiToken.aggregate.mock.calls[1];
+  const groups = userPipeline.filter((s) => s.$group);
+  expect(groups[0].$group._id).toBe('$user');
+  expect(groups[1].$group.connected).toEqual({ $sum: 1 });
+  // Active users are OAuth-only on purpose: a bearer token's lastUsedAt is also
+  // bumped by Home Assistant REST polling, which is not MCP activity.
+  expect(JSON.stringify(groups[0].$group.oauthActive)).toContain('refreshTokenHash');
+
+  const [writerPipeline] = McpActionLog.aggregate.mock.calls[0];
+  expect(writerPipeline.some((s) => s.$group && s.$group._id === '$user')).toBe(true);
+  // Preview/claim stubs are not activity — same canonical exclusion the
+  // timeline and the GDPR export use.
+  expect(writerPipeline[0].$match.action).toEqual({
+    $nin: ['bulk_preview', 'arrange_preview', 'pending'],
+  });
+});
+
+test('no user identifiers are returned — only counts', async () => {
+  ApiToken.aggregate
+    .mockResolvedValueOnce([])
+    .mockResolvedValueOnce([{ _id: null, connected: 2, oauthConnected: 1, oauthActiveLast7d: 1 }]);
+  const body = await (await getUsage(tokenFor(ADMIN_ID, ['admin']))).json();
+  // The aggregation's grouping key must never ride along into the response
+  // (GDPR data minimisation: the page reports how many, never who).
+  expect(body.users._id).toBeUndefined();
+  expect(Object.values(body.users).every((v) => typeof v === 'number')).toBe(true);
 });
 
 test('clamps the days window to 1..90', async () => {
