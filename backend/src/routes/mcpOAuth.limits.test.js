@@ -111,6 +111,72 @@ describe('global limiter exemption for /api/mcp/oauth/*', () => {
   });
 });
 
+// Security audit 2026-07-25 M-1. Exempting /api/mcp/oauth/* from the global
+// limiters (above) was right, but it left the four remaining AS endpoints with
+// NO ceiling at all — and nginx carries no limit_req, so a self-hosted instance
+// had nothing in front of them. The exemption must coexist with a dedicated,
+// generous, admin-tunable bound.
+describe('the OAuth AS has its own ceiling (M-1)', () => {
+  test('oauthMax has a default, is in the mcp group, and is sized for shared egress', () => {
+    expect(rateLimitsConfig.defaults.mcp).toHaveProperty('oauthMax');
+    expect(rateLimitsConfig.get().mcp).toHaveProperty('oauthMax');
+    // Must stay far above the per-user protocol allowance: a whole platform's
+    // user base refreshes hourly through one egress IP.
+    expect(rateLimitsConfig.defaults.mcp.oauthMax)
+      .toBeGreaterThan(rateLimitsConfig.defaults.mcp.userMax);
+  });
+
+  test('the limiter reads the CURRENT value, so a change takes effect without a deploy', () => {
+    const previous = rateLimitsConfig.get();
+    try {
+      rateLimitsConfig.set({ ...previous, mcp: { ...previous.mcp, oauthMax: 123 } });
+      expect(rateLimitsConfig.get().mcp.oauthMax).toBe(123);
+    } finally {
+      rateLimitsConfig.set(previous);
+    }
+  });
+
+  test('a stored config predating oauthMax falls back to the default, never undefined', () => {
+    const previous = rateLimitsConfig.get();
+    try {
+      const { oauthMax, ...withoutOauthMax } = previous.mcp;
+      rateLimitsConfig.set({ ...previous, mcp: withoutOauthMax });
+      // The route resolves `get().mcp?.oauthMax ?? defaults.mcp.oauthMax` —
+      // an undefined max would make express-rate-limit treat it as unlimited,
+      // which is exactly the bug being fixed.
+      const live = rateLimitsConfig.get().mcp?.oauthMax ?? rateLimitsConfig.defaults.mcp.oauthMax;
+      expect(live).toBeGreaterThan(0);
+    } finally {
+      rateLimitsConfig.set(previous);
+    }
+  });
+
+  // Asserted against the SOURCE rather than by requiring the router: pulling
+  // routes/mcpOAuth.js in drags the model + service graph behind it (~1 min in
+  // CI) to prove a one-line wiring fact, and express-rate-limit's middleware is
+  // anonymous on the layer stack so runtime introspection can't identify it
+  // reliably anyway. Every AS route must name a limiter in its own declaration
+  // — that is exactly what regressed, and what a future edit could silently
+  // drop.
+  test('every OAuth AS route declares a limiter', () => {
+    const src = require('fs').readFileSync(require('path').join(__dirname, 'mcpOAuth.js'), 'utf8');
+
+    const expected = {
+      '/register':  'registerLimiter',
+      '/authorize': 'oauthLimiter',
+      '/approve':   'oauthLimiter',
+      '/token':     'oauthLimiter',
+      '/revoke':    'oauthLimiter',
+    };
+
+    for (const [route, limiter] of Object.entries(expected)) {
+      const decl = new RegExp(`router\\.(get|post)\\('${route}',([^)]*?)(async|\\()`, 's').exec(src);
+      expect(decl && decl[2]).toBeTruthy();
+      expect(decl[2]).toContain(limiter);
+    }
+  });
+});
+
 describe('DCR limit is admin-tunable', () => {
   test('registerMax has a default and is exposed in the mcp config group', () => {
     expect(rateLimitsConfig.defaults.mcp.registerMax).toBeGreaterThan(10);

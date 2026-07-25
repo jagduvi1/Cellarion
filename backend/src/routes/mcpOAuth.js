@@ -31,6 +31,44 @@ const registerLimiter = rateLimit({
   legacyHeaders: false,
   message: { error: 'invalid_request', error_description: 'Too many client registrations from this address; try again later.' },
 });
+
+// Ceiling for the REST of the authorization server (security audit 2026-07-25
+// M-1). /authorize, /approve, /token and /revoke are exempt from the global
+// apiLimiter + writeLimiter (app.js `isMcp`) because a hosted platform's whole
+// user base refreshes hourly from one egress IP — but that exemption left them
+// with NO bound whatsoever, and frontend/nginx.conf carries no limit_req, so a
+// self-hosted instance had nothing at all in front of four unauthenticated
+// DB-touching endpoints.
+//
+// This is a ceiling that EXISTS, not a tight one: the number is sized for
+// shared egress and admin-tunable (SuperAdmin → rate limits, mcp.oauthMax) so a
+// bad default is correctable without a deploy — the same lesson registerMax
+// learned on launch day. One shared bucket across the four endpoints keeps the
+// accounting simple; per-endpoint precision would buy nothing here because the
+// point is bounding aggregate load, not shaping it.
+//
+// Note this is NOT a credential-guessing control: auth codes and refresh tokens
+// are 256-bit random, so brute force was never the exposure. What it bounds is
+// unauthenticated DB load and unbounded OAuthAuthCode row creation.
+const oauthLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: () => rateLimitsConfig.get().mcp?.oauthMax ?? rateLimitsConfig.defaults.mcp.oauthMax,
+  keyGenerator: (req) => rateLimitKey(req),
+  standardHeaders: true,
+  legacyHeaders: false,
+  // RFC 6749 §5.2-shaped body: an OAuth client that gets a bare {error:"..."}
+  // string reports "broken server" rather than surfacing the real reason.
+  handler: (req, res) => {
+    logAudit(req, 'system.rate_limit_exceeded', {}, {
+      limiter: 'mcp_oauth',
+      limit: rateLimitsConfig.get().mcp?.oauthMax ?? rateLimitsConfig.defaults.mcp.oauthMax,
+    });
+    res.status(429).json({
+      error: 'temporarily_unavailable',
+      error_description: 'Too many OAuth requests from this address; try again in a few minutes.',
+    });
+  },
+});
 const eventBus = require('../services/eventBus');
 const {
   issuer, resourceUrl, verifyPkce, grantedScopes, redirectUriRegistered,
@@ -146,7 +184,7 @@ router.post('/register', registerLimiter, async (req, res) => {
 });
 
 // ── GET /authorize — validate, then hand off to the frontend consent page ────
-router.get('/authorize', async (req, res) => {
+router.get('/authorize', oauthLimiter, async (req, res) => {
   try {
     const { client_id, redirect_uri, response_type, code_challenge, code_challenge_method, scope, state, resource } = req.query;
 
@@ -193,7 +231,7 @@ router.get('/authorize', async (req, res) => {
 // logged-in user, never a cel_ token or a demo account. Re-validates the whole
 // request against the DB — the browser round-trip through the consent page is
 // UX, not trust.
-router.post('/approve', requireAuth, requireNonDemo, async (req, res) => {
+router.post('/approve', oauthLimiter, requireAuth, requireNonDemo, async (req, res) => {
   try {
     const { client_id, redirect_uri, code_challenge, code_challenge_method, scope, state, resource, approved } = req.body || {};
 
@@ -295,7 +333,7 @@ async function authenticateClient(req) {
 }
 
 // ── POST /token — code exchange + refresh rotation ───────────────────────────
-router.post('/token', async (req, res) => {
+router.post('/token', oauthLimiter, async (req, res) => {
   try {
     const client = await authenticateClient(req);
     if (!client) return oauthError(res, 401, 'invalid_client', 'client authentication failed');
@@ -303,7 +341,15 @@ router.post('/token', async (req, res) => {
 
     if (grantType === 'authorization_code') {
       const { code, code_verifier, redirect_uri, resource } = req.body;
-      if (!code || !code_verifier) return oauthError(res, 400, 'invalid_request', 'code and code_verifier are required');
+      // typeof, not truthiness (L-2). The urlencoded parser below only ever
+      // yields strings, but app.js mounts express.json() on the /api/mcp
+      // PREFIX — which matches /api/mcp/oauth/* — so a caller sending
+      // Content-Type: application/json can put an object here. hashCode()
+      // would then throw a TypeError and the catch would answer 500 instead of
+      // the RFC-shaped invalid_request. (verifyPkce already guards its own.)
+      if (typeof code !== 'string' || !code || !code_verifier) {
+        return oauthError(res, 400, 'invalid_request', 'code and code_verifier are required');
+      }
 
       // Single-use: atomically claim the code (consumedAt null → now). A replay
       // or a lost-response retry finds it already consumed and is rejected.
@@ -343,7 +389,9 @@ router.post('/token', async (req, res) => {
 
     if (grantType === 'refresh_token') {
       const { refresh_token } = req.body;
-      if (!refresh_token) return oauthError(res, 400, 'invalid_request', 'refresh_token is required');
+      if (typeof refresh_token !== 'string' || !refresh_token) {
+        return oauthError(res, 400, 'invalid_request', 'refresh_token is required');
+      }
       const presented = ApiToken.hashToken(refresh_token);
       // Look up the connection by the CURRENT refresh hash.
       const token = await ApiToken.findOne({ refreshTokenHash: presented, origin: 'oauth', revokedAt: null });
@@ -397,12 +445,15 @@ router.post('/token', async (req, res) => {
 });
 
 // ── POST /revoke — RFC 7009 ──────────────────────────────────────────────────
-router.post('/revoke', async (req, res) => {
+router.post('/revoke', oauthLimiter, async (req, res) => {
   try {
     const client = await authenticateClient(req);
     if (!client) return oauthError(res, 401, 'invalid_client', 'client authentication failed');
     const { token } = req.body;
-    if (token) {
+    // typeof for the same JSON-content-type reason as /token (L-2). RFC 7009
+    // §2.2 says an unknown/invalid token is still a 200, so a malformed one
+    // simply falls through to the success response — never a 500.
+    if (typeof token === 'string' && token) {
       // Match either an access token (tokenHash) or a refresh token
       // (refreshTokenHash), but only this client's own OAuth connections.
       const hash = ApiToken.hashToken(token);

@@ -98,7 +98,18 @@ const defaults = {
   //             almost no users. It still has to stay bounded (each call
   //             persists an OAuthClient row), so this is a raise, not a removal,
   //             and it is now tunable without a deploy.
-  mcp: { enabled: 1, publicEnabled: 1, userMax: 300, ipMax: 5000, registerMax: 200 },
+  //   oauthMax — per-IP ceiling per 15 min across the REST of the OAuth
+  //             authorization server (/authorize, /approve, /token, /revoke).
+  //             Those four are exempt from the global apiLimiter/writeLimiter
+  //             for the shared-egress reason above — but the exemption left
+  //             them with NO bound at all (security audit 2026-07-25 M-1), and
+  //             nginx carries no limit_req either, so a self-hosted instance
+  //             had nothing. This restores a ceiling that EXISTS without
+  //             reintroducing a tight one: sized so a whole platform's user
+  //             base can refresh hourly from one egress IP and never see it.
+  //             registerMax stays separate — DCR persists a row per call and
+  //             needs the stricter, per-HOUR bound.
+  mcp: { enabled: 1, publicEnabled: 1, userMax: 300, ipMax: 5000, registerMax: 200, oauthMax: 2000 },
 };
 
 let cache = {
@@ -169,6 +180,7 @@ async function load() {
           userMax:       doc.value.mcp?.userMax       ?? defaults.mcp.userMax,
           ipMax:         doc.value.mcp?.ipMax         ?? defaults.mcp.ipMax,
           registerMax:   doc.value.mcp?.registerMax   ?? defaults.mcp.registerMax,
+          oauthMax:      doc.value.mcp?.oauthMax      ?? defaults.mcp.oauthMax,
         },
       };
     }
