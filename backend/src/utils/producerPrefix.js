@@ -74,7 +74,17 @@ function stripProducerSuffix(name, producer) {
   if (!/[\s\-–—]$/.test(rest)) return null;
 
   const remainder = rest.replace(/[\s\-–—]+$/, '').trim();
-  return remainder.length > 0 ? remainder : null;
+  if (remainder.length === 0) return null;
+  // Never leave a stranded connective at the tail: "La Viña de Madaras" with
+  // producer "Madaras" must NOT strip to "La Viña de" — exactly how prod's 10
+  // dangling-name rows were minted (support ticket 2026-07-26). When the
+  // producer token is grammatically part of the name, the full phrase IS the
+  // name (same family as "Les Forts de Latour"); keeping it beats writing a
+  // broken one. canonicalizeWineName loops this function on every registry
+  // write surface, so the guard closes the class at create time.
+  const lastToken = normalizeString(remainder).split(' ').filter(Boolean).pop();
+  if (lastToken && DANGLING_TAIL_WORDS.has(lastToken)) return null;
+  return remainder;
 }
 
 /**
