@@ -744,6 +744,53 @@ describe('taxonomy find-or-create dedup', () => {
     expect(Country.findOne).not.toHaveBeenCalled();
   });
 
+  test('findOrCreateCountry: an unrecognized string is rejected with 400 and mints NOTHING (the "Espalda" gate)', async () => {
+    Country.findOne.mockResolvedValue(null);
+
+    await expect(findOrCreateCountry('Espalda', USER_ID)).rejects.toMatchObject({
+      message: expect.stringContaining('Unrecognized country "Espalda"'),
+      status: 400,
+    });
+    expect(Country).not.toHaveBeenCalled(); // no `new Country(...)`
+  });
+
+  test('findOrCreateCountry: an EXISTING doc always passes, recognized or not (gate guards the mint only)', async () => {
+    // Prod still carries pre-gate junk ("Espalda") until the cleanup deletes
+    // it — matching an existing doc is not minting, so adds keep working while
+    // the taxonomy is repaired.
+    const existing = { _id: 'country-junk', name: 'Espalda' };
+    Country.findOne.mockResolvedValue(existing);
+
+    expect(await findOrCreateCountry('Espalda', USER_ID)).toBe(existing);
+    expect(Country).not.toHaveBeenCalled();
+  });
+
+  test('findOrCreateCountry: a real country absent from the taxonomy still mints (India)', async () => {
+    Country.findOne.mockResolvedValue(null);
+
+    const result = await findOrCreateCountry('India', USER_ID);
+
+    expect(Country).toHaveBeenCalledWith({
+      name: 'India',
+      normalizedName: 'india',
+      createdBy: USER_ID,
+    });
+    expect(result.save).toHaveBeenCalled();
+  });
+
+  test('findOrCreateCountry: an aliased local name resolves, passes the gate, and mints the CANONICAL name', async () => {
+    Country.findOne.mockResolvedValue(null);
+
+    await findOrCreateCountry('Moldavien', USER_ID); // sv → Moldova
+
+    expect(Country.findOne).toHaveBeenCalledWith({ normalizedName: 'moldova' });
+    expect(Country).toHaveBeenCalledWith({
+      name: 'Moldova',
+      normalizedName: 'moldova',
+      createdBy: USER_ID,
+    });
+  });
+
   test('findOrCreateRegion: lookup is scoped to the country (same name, different country ≠ dup) and matches synonyms', async () => {
     const existing = { _id: 'region-1' };
     Region.findOne.mockResolvedValue(existing);
