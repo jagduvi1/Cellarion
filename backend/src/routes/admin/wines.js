@@ -42,6 +42,10 @@ const { isValidId } = require('../../utils/validation');
 const { escapeRegex } = require('../../utils/sanitize');
 const { parsePagination } = require('../../utils/pagination');
 const { stripProducerName, stripProducerKeyPrefix, canonicalizeWineName } = require('../../utils/producerPrefix');
+const {
+  NAME_CHECKS, NAME_CHECK_IDS, DEFAULT_CHECK_IDS, NAME_CHECK_SELECT,
+  resolveCheck, runNameChecks,
+} = require('../../utils/nameChecks');
 const Country = require('../../models/Country');
 const { findOrCreateWine } = require('../../services/findOrCreateWine');
 
@@ -493,6 +497,91 @@ router.delete('/dismiss-duplicates', async (req, res) => {
   }
 });
 
+// POST /api/admin/wines/verify-checks — record that an admin read these wines
+// and confirmed they pass these specific name checks, so the scan stops
+// surfacing them FOR THOSE CHECKS ONLY. A check added later has no clearance
+// on any row and surfaces the whole registry. DELETE undoes it.
+// Body: { wineIds: [id, …], checks: [ruleId, …] }   (1..N ids)
+//
+// `checks` is required with no "all" default — a hidden default-to-everything
+// would be exactly the bare-flag semantics this design rejects; the client
+// always has the row's `checks` array to send. No MCP tool exists for this on
+// purpose: "a human checked this" asserted by an AI defeats the record.
+router.post('/verify-checks', async (req, res) => {
+  try {
+    const ids = [...new Set((Array.isArray(req.body?.wineIds) ? req.body.wineIds : []).filter(isValidId))];
+    if (ids.length < 1) return res.status(400).json({ error: 'wineIds must contain at least 1 valid id' });
+    if (ids.length > 500) return res.status(400).json({ error: 'At most 500 wineIds per call' });
+
+    const raw = Array.isArray(req.body?.checks) ? req.body.checks : null;
+    const specs = (raw || []).map(resolveCheck);
+    if (!raw || raw.length === 0 || specs.some(s => !s)) {
+      return res.status(400).json({ error: 'checks must be a non-empty array of known check ids' });
+    }
+    const checkIds = [...new Set(specs.map(s => s.id))];
+
+    const oids = ids.map(id => new mongoose.Types.ObjectId(id));
+    const wines = await WineDefinition.find({ _id: { $in: oids } })
+      .select(NAME_CHECK_SELECT).lean();
+    if (wines.length === 0) return res.status(404).json({ error: 'No matching wines' });
+
+    // Re-run the rules server-side, exactly as strip-producer recomputes its
+    // check — a stale client row must not be able to clear a rule the admin
+    // never actually saw on screen.
+    const now = new Date();
+    const ops = [];
+    const notFlagged = [];
+    for (const w of wines) {
+      const hit = runNameChecks(w, { checkIds, ignoreCleared: true });
+      if (!hit) { notFlagged.push(String(w._id)); continue; }
+      ops.push({ updateOne: {
+        filter: { _id: w._id },
+        // $addToSet is idempotent, so re-verifying is safe and ordering is
+        // irrelevant (no $pull/$push pairing on the same path).
+        update: { $addToSet: { verifiedChecks: { $each: hit.checks } }, $set: { verifiedAt: now } },
+      } });
+    }
+    // Nothing searchable, embeddable or public changed: deliberately NO
+    // searchService.indexWine, NO embedSinglePair, NO submitUrls.
+    const result = ops.length ? await WineDefinition.bulkWrite(ops, { ordered: false }) : { modifiedCount: 0 };
+
+    logAudit(req, 'admin.wine.verifyChecks', { type: 'wine', id: ids[0] },
+      { wineIds: ids, checks: checkIds, updated: result.modifiedCount || 0, notFlagged: notFlagged.length });
+    res.json({ message: 'Recorded', updated: result.modifiedCount || 0, checks: checkIds, notFlagged });
+  } catch (error) {
+    console.error('Verify checks error:', error);
+    res.status(500).json({ error: 'Failed to record verification' });
+  }
+});
+
+// DELETE /api/admin/wines/verify-checks — undo the above.
+// verifiedAt is deliberately left as-is: it is display/forensics metadata
+// ("last reviewed"), not the suppression key.
+router.delete('/verify-checks', async (req, res) => {
+  try {
+    const ids = [...new Set((Array.isArray(req.body?.wineIds) ? req.body.wineIds : []).filter(isValidId))];
+    if (ids.length < 1) return res.status(400).json({ error: 'wineIds must contain at least 1 valid id' });
+
+    const raw = Array.isArray(req.body?.checks) ? req.body.checks : null;
+    const specs = (raw || []).map(resolveCheck);
+    if (!raw || raw.length === 0 || specs.some(s => !s)) {
+      return res.status(400).json({ error: 'checks must be a non-empty array of known check ids' });
+    }
+    const checkIds = [...new Set(specs.map(s => s.id))];
+
+    const result = await WineDefinition.updateMany(
+      { _id: { $in: ids.map(id => new mongoose.Types.ObjectId(id)) } },
+      { $pull: { verifiedChecks: { $in: checkIds } } }
+    );
+    logAudit(req, 'admin.wine.unverifyChecks', { type: 'wine', id: ids[0] },
+      { wineIds: ids, checks: checkIds, updated: result.modifiedCount || 0 });
+    res.json({ message: 'Verification cleared', updated: result.modifiedCount || 0 });
+  } catch (error) {
+    console.error('Unverify checks error:', error);
+    res.status(500).json({ error: 'Failed to clear verification' });
+  }
+});
+
 router.get('/duplicates', async (req, res) => {
   try {
     const { name, producer, appellation, threshold = 0.75 } = req.query;
@@ -676,35 +765,59 @@ router.get('/canonical-collisions', async (req, res) => {
   }
 });
 
-// GET /api/admin/wines/producer-in-name — wines whose name STARTS or ENDS
-// with their own producer (prefix: producer "Meerlust", name "Meerlust
-// Chardonnay"; suffix: producer "Mastroberardino", name "Fiano di Avellino
-// Mastroberardino" — the launch-day admin report), INCLUDING producer
-// variants where only the comparison-key tokens are embedded (name "Felton
-// Road Block 3 Pinot Noir", producer "Felton Road Wines Ltd" — the shape the
-// old exact-string $expr scan could never see). Mostly AI-import artefacts;
-// the registry convention is a producer-free name.
+// GET /api/admin/wines/producer-in-name — the registry NAME-CHECK scan. The
+// path keeps its historical name (a rename churns working i18n keys and a
+// live client for zero functional gain) but it now runs every defaultActive
+// rule in utils/nameChecks.js:
+//   producer-in-name.v1        — name starts/ends with its own producer,
+//                                including key-token variants ("Felton Road
+//                                Block 3 Pinot Noir" / "Felton Road Wines Ltd")
+//   dangling-name-tail.v1      — name ends in a stranded connective
+//                                ("La Viña de" — support ticket 2026-07-26)
+//   name-equals-producer.v1    — name === producer, non-estate shape
+// plus the non-default estate cohort via ?check=name-equals-producer-estate.v1.
 //
-// The key-token check has no aggregation mirror, so the scan runs in Node —
-// same full-fetch pattern (and cost) as the duplicate-clusters scan above,
-// fine at the registry's ~4k-doc size.
+// Query params:
+//   ?check=<ruleId>      scope to one rule (default = every defaultActive rule)
+//   ?includeVerified=1   AUDIT VIEW — ignore clearances entirely, so a newly
+//                        added or refined rule can be validated against all
+//                        ~4.3k rows before its suppression is trusted
 //
-// Returns: { wines: [{ _id, producer, name, proposedName, bottleCount, createdAt }], total, page, pages }
+// Rows an admin cleared via POST /verify-checks are suppressed PER RULE. The
+// key-token check has no aggregation mirror, so the scan runs in Node — same
+// full-fetch pattern (and cost) as the duplicate-clusters scan above, fine at
+// the registry's ~4k-doc size.
+//
+// Returns: { wines: [{ _id, producer, name, proposedName, checks, verifiedChecks,
+//   verifiedAt, bottleCount, createdAt }], total, page, pages, clearedCount,
+//   scannedCount, checkIds, allCheckIds, checkLabelKeys }
 router.get('/producer-in-name', async (req, res) => {
   try {
     const { limit: parsedLimit, offset: skip, page: parsedPage } =
       parsePagination(req.query, { limit: 50, maxLimit: 200 });
 
+    const only = req.query.check;
+    if (only !== undefined && !resolveCheck(only)) {
+      return res.status(400).json({ error: 'Unknown check id' });
+    }
+    const checkIds = only ? [only] : DEFAULT_CHECK_IDS;
+    const ignoreCleared = req.query.includeVerified === '1' || req.query.includeVerified === 'true';
+
+    // Suppression is evaluated in Node, not as a Mongo clause, because a row
+    // may be cleared for one rule and outstanding for another — and `total`
+    // below is computed from flagged.length, so in-memory pagination stays
+    // honest.
     const all = await WineDefinition.find({})
-      .select('name producer createdAt')
+      .select(`${NAME_CHECK_SELECT} createdAt verifiedAt`)
       .sort({ producer: 1, name: 1 })
       .lean();
 
     const flagged = [];
+    let clearedCount = 0;
     for (const w of all) {
-      const proposedName = stripProducerName(w.name, w.producer)
-        ?? stripProducerKeyPrefix(w.name, w.producer);
-      if (proposedName) flagged.push({ ...w, proposedName });
+      const hit = runNameChecks(w, { checkIds, ignoreCleared });
+      if (hit) flagged.push({ ...w, ...hit });
+      else if (checkIds.some(id => (w.verifiedChecks || []).includes(id))) clearedCount += 1;
     }
 
     const total = flagged.length;
@@ -725,13 +838,21 @@ router.get('/producer-in-name', async (req, res) => {
         _id: w._id,
         producer: w.producer,
         name: w.name,
-        proposedName: w.proposedName,
+        proposedName: w.proposedName,           // null for the non-strippable rules
+        checks: w.checks,                       // rule ids this row trips
+        verifiedChecks: w.verifiedChecks || [], // for the audit view
+        verifiedAt: w.verifiedAt || null,
         bottleCount: bottleCounts.get(String(w._id)) || 0,
         createdAt: w.createdAt,
       })),
       total,
       page: parsedPage,
       pages: Math.ceil(total / parsedLimit),
+      clearedCount,
+      scannedCount: all.length,
+      checkIds,
+      allCheckIds: NAME_CHECK_IDS,
+      checkLabelKeys: NAME_CHECKS.reduce((m, c) => (m[c.id] = c.labelKey, m), {}),
     });
   } catch (error) {
     console.error('Producer-in-name scan error:', error);

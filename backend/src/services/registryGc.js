@@ -33,7 +33,7 @@ const { logAudit } = require('./audit');
 async function gcOrphanMintedWine(wineId, req) {
   try {
     if (!mongoose.isValidObjectId(wineId)) return { removed: false, reason: 'invalid id' };
-    const wine = await WineDefinition.findById(wineId).select('name producer');
+    const wine = await WineDefinition.findById(wineId).select('name producer verifiedChecks');
     if (!wine) return { removed: false, reason: 'already gone' };
 
     const bottleCount = await Bottle.countDocuments({ wineDefinition: wineId });
@@ -47,6 +47,12 @@ async function gcOrphanMintedWine(wineId, req) {
       status: { $ne: 'pending' },
     });
     if (reviewedProfiles > 0) return { removed: false, reason: 'a maturity profile was reviewed' };
+
+    // An admin cleared a data-quality check on this row — never let a user's
+    // undo silently delete curated registry data.
+    if ((wine.verifiedChecks || []).length > 0) {
+      return { removed: false, reason: 'an admin verified a data-quality check on it' };
+    }
 
     // Guards passed — clean up everything the mint created, quietest first.
     await WineVintageProfile.deleteMany({ wineDefinition: wineId, status: 'pending' });

@@ -66,6 +66,23 @@ describe('gcOrphanMintedWine guards', () => {
     expect((await gcOrphanMintedWine(WINE_ID, REQ)).removed).toBe(false);
     expect(WineDefinition.deleteOne).not.toHaveBeenCalled();
   });
+
+  test('an admin-verified data-quality check keeps it (user undo must not delete curated data)', async () => {
+    WineDefinition.findById.mockReturnValue(selectable({
+      _id: WINE_ID, name: 'Opus One', producer: 'Opus One',
+      verifiedChecks: ['name-equals-producer.v1'],
+    }));
+    const res = await gcOrphanMintedWine(WINE_ID, REQ);
+    expect(res.removed).toBe(false);
+    expect(res.reason).toContain('verified');
+    expect(WineDefinition.deleteOne).not.toHaveBeenCalled();
+  });
+
+  test('the findById projection includes verifiedChecks (or the guard would always pass)', async () => {
+    await gcOrphanMintedWine(WINE_ID, REQ);
+    const selectMock = WineDefinition.findById.mock.results[0].value.select;
+    expect(selectMock.mock.calls[0][0]).toContain('verifiedChecks');
+  });
 });
 
 describe('gcOrphanMintedWine happy path', () => {
