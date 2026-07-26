@@ -45,6 +45,12 @@ test('a new doc is born unreviewed', async () => {
   expect(doc.verifiedAt).toBeNull();
 });
 
+test('a new doc is a wine by default (nonWine false — quarantine is opt-in)', async () => {
+  const doc = baseDoc();
+  await doc.validate();
+  expect(doc.nonWine).toBe(false);
+});
+
 test('changing name clears both fields', async () => {
   const doc = await reviewedDoc();
   doc.name = 'Block 5 Pinot Noir';

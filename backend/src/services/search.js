@@ -216,7 +216,9 @@ async function fullSync() {
 
   try {
     await syncViaCursor(
-      WineDefinition.find()
+      // Quarantined non-wine rows (spirits/cider/sake kept for their owners —
+      // registry audit 2026-07-26, policy: keep, hide) never enter the index.
+      WineDefinition.find({ nonWine: { $ne: true } })
         .populate('country', 'name')
         .populate('region', 'name')
         .populate('grapes', 'name')
@@ -241,6 +243,13 @@ async function indexWine(wineId) {
       .lean();
 
     if (!wine) return;
+
+    // A wine flagged non-wine after having been indexed must LEAVE the index —
+    // indexWine is called on every save, so the flag toggle self-heals here.
+    if (wine.nonWine === true) {
+      await index.deleteDocument(String(wine._id));
+      return;
+    }
 
     await index.addDocuments([buildDocument(wine)], { primaryKey: 'id' });
   } catch (err) {
