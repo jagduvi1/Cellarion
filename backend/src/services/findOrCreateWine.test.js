@@ -28,11 +28,13 @@ jest.mock('../models/WineDefinition', () => {
 jest.mock('../models/Country', () => {
   const ctor = jest.fn();
   ctor.findOne = jest.fn();
+  ctor.exists = jest.fn();
   return ctor;
 });
 jest.mock('../models/Region', () => {
   const ctor = jest.fn();
   ctor.findOne = jest.fn();
+  ctor.exists = jest.fn();
   return ctor;
 });
 jest.mock('../models/Grape', () => {
@@ -40,6 +42,7 @@ jest.mock('../models/Grape', () => {
   ctor.findOne = jest.fn();
   return ctor;
 });
+jest.mock('../models/Appellation', () => ({ exists: jest.fn() }));
 jest.mock('./search', () => ({
   getIsAvailable: jest.fn(),
   search: jest.fn(),
@@ -51,6 +54,7 @@ const WineDefinition = require('../models/WineDefinition');
 const Country = require('../models/Country');
 const Region = require('../models/Region');
 const Grape = require('../models/Grape');
+const Appellation = require('../models/Appellation');
 const searchService = require('./search');
 const { scoreAllMatches } = require('./wineMatching');
 const { generateWineKey } = require('../utils/normalize');
@@ -146,6 +150,10 @@ beforeEach(() => {
   // Taxonomy defaults: everything already exists
   Country.findOne.mockResolvedValue({ _id: 'country-1' });
   Region.findOne.mockResolvedValue({ _id: 'region-1' });
+  // Producer-place gate defaults: the producer is NOT a known place
+  Country.exists.mockResolvedValue(null);
+  Region.exists.mockResolvedValue(null);
+  Appellation.exists.mockResolvedValue(null);
   // findOrCreateGrapes queries { $or: [{ normalizedName }, { normalizedSynonyms: … }] }
   Grape.findOne.mockImplementation(async (q) => {
     const normalizedName = q.$or ? q.$or[0].normalizedName : q.normalizedName;
@@ -682,6 +690,66 @@ describe('findOrCreateWine — creation', () => {
     expect(WineDefinition).not.toHaveBeenCalled();
   });
 
+  test('producer-place gate: a producer that IS a known place is rejected 400 at mint (audit RC-2)', async () => {
+    Region.exists.mockResolvedValue({ _id: 'region-bordeaux' });
+
+    await expect(findOrCreateWine({ ...INPUT, producer: 'Bordeaux' }, USER_ID)).rejects.toMatchObject({
+      message: expect.stringContaining('wine region, not a producer'),
+      status: 400,
+    });
+    expect(WineDefinition).not.toHaveBeenCalled();
+    // The gate consults all three taxonomies with the normalized producer.
+    expect(Region.exists).toHaveBeenCalledWith({
+      $or: [{ normalizedName: 'bordeaux' }, { normalizedSynonyms: 'bordeaux' }],
+    });
+    expect(Appellation.exists).toHaveBeenCalledWith({ normalizedName: 'bordeaux' });
+  });
+
+  test('producer-place gate: exact full-string match only — "Marchesi di Barolo" passes', async () => {
+    // The taxonomy holds "barolo"; the gate must query the FULL normalized
+    // producer, which no taxonomy row equals — mocks return null (default).
+    await findOrCreateWine({ ...INPUT, producer: 'Marchesi di Barolo' }, USER_ID);
+
+    expect(Appellation.exists).toHaveBeenCalledWith({ normalizedName: 'marchesi di barolo' });
+    expect(WineDefinition).toHaveBeenCalled(); // created normally
+  });
+
+  test('producer-place gate runs at MINT only — the exact-match path never queries it', async () => {
+    WineDefinition.findOne.mockReturnValue(findOneChain(EXISTING_WINE));
+
+    await findOrCreateWine({ ...INPUT, producer: 'Bordeaux' }, USER_ID);
+
+    expect(Country.exists).not.toHaveBeenCalled();
+    expect(Region.exists).not.toHaveBeenCalled();
+    expect(Appellation.exists).not.toHaveBeenCalled();
+  });
+
+  test('a single-character producer is rejected at mint ("G" — audit RC-5)', async () => {
+    await expect(findOrCreateWine({ ...INPUT, producer: 'G' }, USER_ID)).rejects.toMatchObject({
+      message: expect.stringContaining('not a usable producer name'),
+      status: 400,
+    });
+    expect(WineDefinition).not.toHaveBeenCalled();
+  });
+
+  test('step 0 strips a trailing vintage year before matching (registry is vintage-neutral)', async () => {
+    WineDefinition.findOne.mockReturnValue(findOneChain(EXISTING_WINE));
+
+    await findOrCreateWine({ ...INPUT, name: 'Clos des Papes 2019' }, USER_ID);
+
+    // The year never reaches the dedup key — same key as the year-free name.
+    expect(WineDefinition.findOne).toHaveBeenCalledWith({ normalizedKey: INPUT_KEY });
+  });
+
+  test('a leading-year brand name survives step 0 ("1924 Double Black")', async () => {
+    WineDefinition.findOne.mockReturnValue(findOneChain(null));
+
+    await findOrCreateWine({ ...INPUT, name: '1924 Double Black' }, USER_ID);
+
+    const doc = WineDefinition.mock.calls[0][0];
+    expect(doc.name).toBe('1924 Double Black');
+  });
+
   test('duplicate-key race (11000): returns the concurrently created wine as created: false', async () => {
     WineDefinition.mockImplementation(function (doc) {
       Object.assign(this, doc);
@@ -803,6 +871,28 @@ describe('taxonomy find-or-create dedup', () => {
     });
     expect(result).toBe(existing);
     expect(Region).not.toHaveBeenCalled();
+  });
+
+  test('findOrCreateRegion: a comma-packed hierarchy is never minted — null region instead (audit RC-8)', async () => {
+    Region.findOne.mockResolvedValue(null);
+
+    expect(await findOrCreateRegion('Bordeaux, Haut-Médoc', 'country-1', USER_ID)).toBeNull();
+    expect(await findOrCreateRegion('Niagara Peninsula, Ontario', 'country-1', USER_ID)).toBeNull();
+    expect(Region).not.toHaveBeenCalled(); // no `new Region(...)`
+  });
+
+  test('findOrCreateRegion: a region named like a COUNTRY is never minted ("Scotland" under England)', async () => {
+    Region.findOne.mockResolvedValue(null);
+
+    expect(await findOrCreateRegion('Scotland', 'country-england', USER_ID)).toBeNull();
+    expect(Region).not.toHaveBeenCalled();
+  });
+
+  test('findOrCreateRegion: an EXISTING doc still matches even when named like a country (matching ≠ minting)', async () => {
+    const existing = { _id: 'region-georgia-usa', name: 'Georgia' };
+    Region.findOne.mockResolvedValue(existing);
+
+    expect(await findOrCreateRegion('Georgia', 'country-usa', USER_ID)).toBe(existing);
   });
 
   test('findOrCreateRegion: creates when missing; returns null without a countryId', async () => {

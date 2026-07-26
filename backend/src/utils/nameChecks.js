@@ -64,9 +64,11 @@ const NAME_CHECKS = [
   },
   {
     // Defect (b) from the ticket. A SAFETY NET for rows already in the
-    // registry; preventing NEW ones is a guard in stripProducerSuffix itself
-    // (its own PR — it changes a function every write surface calls).
-    id: 'dangling-name-tail.v1',
+    // registry; preventing NEW ones is a guard in stripProducerSuffix itself.
+    // v2: DANGLING_TAIL_WORDS gained by/sans/a (registry audit 2026-07-26) —
+    // the id bump invalidates v1 clearances so every row is re-examined
+    // against the wider list (none existed at bump time).
+    id: 'dangling-name-tail.v2',
     labelKey: 'danglingTail',
     defaultActive: true,
     detect: (w) => {

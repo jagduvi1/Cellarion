@@ -60,9 +60,20 @@ const tokenize = (str) => {
 // others omit, splitting one appellation into variants ("Barolo" vs "Barolo
 // DOCG"). The tier belongs in the separate classification field, so the
 // canonical appellation is the place name with a trailing tier stripped. Only
-// unambiguous 3–4 char tiers — deliberately NOT 'do'/'ao', which collide with
-// real place-name words.
-const APPELLATION_TIER_TOKENS = new Set(['docg', 'doca', 'doc', 'aoc', 'aop', 'ava', 'igt', 'igp']);
+// unambiguous 2–4 char tiers — deliberately NOT 'do'/'ao' as TRAILING tokens,
+// which collide with real place-name words ('do' is safe as a LEADING token,
+// below). dop/doq/vqa/wo added per the 2026-07-26 registry audit (RC-4:
+// "Ontario VQA", "Swartland WO", "Priorat DOQ", ~20 "… DOP" rows survived the
+// old set). 'dac' stays out — "Kamptal DAC" is the official appellation form.
+const APPELLATION_TIER_TOKENS = new Set(['docg', 'doca', 'doc', 'aoc', 'aop', 'ava', 'igt', 'igp', 'dop', 'doq', 'vqa', 'wo']);
+
+// Tier tokens that may open an appellation ("DO Alicante", "DOCa Rioja",
+// "D.O. Valle Central", "IGT Toscana") — the majority of the tier pollution
+// the audit found was PREFIX-form, which the trailing loop can never see.
+// Narrower than the trailing set on purpose: "VQA Ontario" and "Wine of
+// Origin Western Cape" are the official forms of real appellations (audit
+// leave-alone list), so 'vqa'/'wo' are trailing-only.
+const APPELLATION_LEADING_TIER_TOKENS = new Set(['do', 'doca', 'docg', 'doc', 'aoc', 'aop', 'ava', 'igt', 'igp', 'dop', 'doq']);
 
 // Strip trailing characters (any in `chars`) without a `$`-anchored quantifier
 // regex — a plain scan, so it can never be a polynomial-ReDoS shape.
@@ -84,6 +95,12 @@ const normalizeAppellation = (appellation) => {
   if (appellation == null) return appellation;
   const original = String(appellation).trim();
   const parts = original.split(/\s+/);
+  // Drop leading tier token(s) — dots tolerated so "D.O." matches 'do'.
+  while (parts.length > 1) {
+    const first = parts[0].replace(/[.,]/g, '').toLowerCase();
+    if (!APPELLATION_LEADING_TIER_TOKENS.has(first)) break;
+    parts.shift();
+  }
   // Drop trailing tier token(s), tolerating a trailing dot/comma on each.
   while (parts.length > 1) {
     const last = trimTrailingChars(parts[parts.length - 1], '.,').toLowerCase();
@@ -92,6 +109,33 @@ const normalizeAppellation = (appellation) => {
   }
   const result = trimTrailingChars(parts.join(' '), ' ,').trim();
   return result || original;
+};
+
+// A vintage year TRAILING a wine name — imports and label scans routinely
+// append it ("Reserve Cabernet Sauvignon 2023"), but the registry is
+// vintage-neutral by construction: the year lives on Bottle.vintage.
+// TRAILING only, on purpose: leading years are brand names ("1924 Double
+// Black", "19 Crimes"), and a mid-name year is part of a cuvée. The window is
+// 1950–2049 so historic marks like "1865" (Viña San Pedro's brand) survive
+// even at the tail. Optional parens absorb "(2019)".
+const TRAILING_VINTAGE_RX = /[\s\-–—(]+(?:19[5-9]\d|20[0-4]\d)\)?$/;
+
+/**
+ * Strip trailing vintage-year token(s) from a wine name ("Rioja Reserva 2019"
+ * → "Rioja Reserva"). Loops for the double-stamp case ("X 2019 2019"); never
+ * returns empty — a name that IS just a year is left alone (junk, but honest
+ * junk beats an empty required field). Non-strings pass through unchanged.
+ */
+const stripTrailingVintage = (name) => {
+  if (typeof name !== 'string') return name;
+  let n = name.trim();
+  for (let next = n.replace(TRAILING_VINTAGE_RX, '').trim();
+       next !== n;
+       next = n.replace(TRAILING_VINTAGE_RX, '').trim()) {
+    if (!next) break;
+    n = next;
+  }
+  return n;
 };
 
 /**
@@ -678,6 +722,7 @@ module.exports = {
   GRAPE_SYNONYMS,
   normalizeProducerKey,
   normalizeAppellation,
+  stripTrailingVintage,
   resolveGrapeName,
   resolveCountryName,
   isRecognizedCountry,

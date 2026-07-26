@@ -17,8 +17,9 @@ const WineDefinition = require('../models/WineDefinition');
 const Country = require('../models/Country');
 const Region = require('../models/Region');
 const Grape = require('../models/Grape');
+const Appellation = require('../models/Appellation');
 const searchService = require('./search');
-const { generateWineKey, normalizeString, normalizeAppellation, resolveGrapeName, resolveCountryName, isRecognizedCountry, isUnknownName, isJunkGrapeName } = require('../utils/normalize');
+const { generateWineKey, normalizeString, normalizeAppellation, stripTrailingVintage, resolveGrapeName, resolveCountryName, isRecognizedCountry, isUnknownName, isJunkGrapeName } = require('../utils/normalize');
 const { scoreAllMatches } = require('./wineMatching');
 const { canonicalizeWineName } = require('../utils/producerPrefix');
 const { computeCanonicalKey, canonicalSiblingPrefix } = require('../utils/wineIdentity');
@@ -80,6 +81,16 @@ async function findOrCreateRegion(name, countryId, userId) {
     $or: [{ normalizedName }, { normalizedSynonyms: normalizedName }],
   });
   if (region) return region;
+  // Mint gates (registry audit 2026-07-26 RC-8). A comma means the caller
+  // packed a hierarchy into one string ("Bordeaux, Haut-Médoc", "Niagara
+  // Peninsula, Ontario") — never a region name; and a region that IS a
+  // recognized country name belongs in the country field, not here (prod grew
+  // region "Scotland" under country "England"). A null region is the honest
+  // state — the schema allows it, and an admin can add real taxonomy
+  // deliberately. (Cost: a US wine can't auto-mint a "Georgia" region — the
+  // one state that collides with a country name; an existing doc still
+  // matches above.)
+  if (String(name).includes(',') || isRecognizedCountry(name)) return null;
   region = new Region({ name: name.trim(), normalizedName, country: countryId, createdBy: userId });
   await region.save();
   return region;
@@ -158,7 +169,15 @@ async function findOrCreateWine({ name, producer, country, region, appellation, 
   // instead of two (ticket #2C). The tier belongs in classification.
   const trimmedAppellation = normalizeAppellation((typeof appellation === 'string' ? appellation.trim() : '')).slice(0, MAX_FIELD);
 
-  // 0. Registry canon: a wine's name never embeds its producer. Cellar-format
+  // 0. Registry canon: the registry is vintage-neutral — a trailing year on
+  // the name ("Reserve Cabernet Sauvignon 2023") belongs on the user's
+  // Bottle.vintage, never on the shared wine (audit 2026-07-26: 19 such rows;
+  // no write path stripped it). BEFORE the producer strip, so "Pinot Noir
+  // Amisfield 2019" sheds the year first and the suffix strip still sees the
+  // producer at the tail.
+  trimmedName = stripTrailingVintage(trimmedName);
+
+  // Registry canon: a wine's name never embeds its producer. Cellar-format
   // imports and the occasional non-compliant AI response arrive as
   // name "Amisfield Pinot Noir" + producer "Amisfield" — or as a SUFFIX,
   // "Fiano di Avellino Mastroberardino" (the launch-day admin report) —
@@ -312,7 +331,34 @@ async function findOrCreateWine({ name, producer, country, region, appellation, 
   // item instead of minting a WineDefinition + taxonomy per use.
   if (matchOnly) return { wine: null, noMatch: true };
 
-  // 3. Create new wine — resolve taxonomy first
+  // 3. Create new wine — producer sanity gate first (registry audit
+  // 2026-07-26, RC-2): a producer that IS a place is never right — the LWIN
+  // import's comma-split wrote "Bordeaux" / "California" / "Tuscany" into the
+  // producer field ~45 times, and every add matching such a string would
+  // compound it. Exact normalized full-string match only, so "Marchesi di
+  // Barolo" and "La Rioja Alta" pass while bare "Barolo" / "La Rioja" do not.
+  // Mint-time only (like the country gate): existing rows keep resolving
+  // above until the data cleanup re-points them.
+  const producerNorm = normalizeString(trimmedProducer);
+  if (producerNorm.length < 2) {
+    const err = new Error(`"${trimmedProducer}" is not a usable producer name`);
+    err.status = 400;
+    throw err;
+  }
+  const [placeCountry, placeRegion, placeAppellation] = await Promise.all([
+    Country.exists({ normalizedName: producerNorm }),
+    Region.exists({ $or: [{ normalizedName: producerNorm }, { normalizedSynonyms: producerNorm }] }),
+    Appellation.exists({ normalizedName: producerNorm }),
+  ]);
+  if (placeCountry || placeRegion || placeAppellation) {
+    const err = new Error(
+      `"${trimmedProducer}" is a wine region, not a producer — put the actual winery in the producer field`
+    );
+    err.status = 400;
+    throw err;
+  }
+
+  // Resolve taxonomy
   const countryDoc = await findOrCreateCountry(country, userId);
   if (!countryDoc) {
     const err = new Error('Country is required to create a wine');

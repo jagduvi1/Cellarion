@@ -80,6 +80,17 @@ describe('stripProducerSuffix', () => {
     expect(stripProducerSuffix('Blanc du Château Y', 'Château Y')).toBeNull();
   });
 
+  test('v2 additions: by / sans / bare a cannot be left stranded either (registry audit 2026-07-26)', () => {
+    // "The Barry Bros by Jim Barry" → stripping the producer would leave "The
+    // Barry Bros by" (a real prod row minted before the words were listed).
+    expect(stripProducerSuffix('The Barry Bros by Jim Barry', 'Jim Barry')).toBeNull();
+    expect(stripProducerSuffix('Vin Sans Soufre Ajouté', 'Soufre Ajouté')).toBeNull();
+    expect(stripProducerSuffix('Barolo Dedicato a Renina', 'Renina')).toBeNull();
+    // 'a' guards the TAIL only — a name merely containing 'a' still strips.
+    expect(stripProducerSuffix('Vigna a Sole Mastroberardino', 'Mastroberardino'))
+      .toBe('Vigna a Sole');
+  });
+
   test('the dangling guard only inspects the TAIL — interior connectives still strip', () => {
     // "di" is inside the remainder, tail is "Avellino" → legit strip.
     expect(stripProducerSuffix('Fiano di Avellino Mastroberardino', 'Mastroberardino'))

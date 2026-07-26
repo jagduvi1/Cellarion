@@ -60,8 +60,8 @@ describe('producer-in-name.v1', () => {
   });
 });
 
-describe('dangling-name-tail.v1', () => {
-  const detect = byId('dangling-name-tail.v1').detect;
+describe('dangling-name-tail.v2', () => {
+  const detect = byId('dangling-name-tail.v2').detect;
 
   test('flags the ticket row and its class', () => {
     expect(detect({ name: 'La Viña de', producer: 'Madaras' })).toBe('La Viña de');
@@ -79,6 +79,15 @@ describe('dangling-name-tail.v1', () => {
   test('never flags a one-word name (protects Yquem\'s "Y")', () => {
     expect(detect({ name: 'Y', producer: "Château d'Yquem" })).toBeNull();
     expect(detect({ name: 'de', producer: 'X' })).toBeNull(); // degenerate, still one word
+  });
+
+  test('v2 additions flag the audit rows the v1 list missed', () => {
+    expect(detect({ name: 'The Barry Bros by', producer: 'Jim Barry' })).toBe('The Barry Bros by');
+    expect(detect({ name: 'Vin Sans', producer: 'X' })).toBe('Vin Sans');
+    expect(detect({ name: 'Barolo Dedicato a', producer: 'Renieri' })).toBe('Barolo Dedicato a');
+    // …while mid-name occurrences of the same words stay clean.
+    expect(detect({ name: 'Sans Soufre Rouge', producer: 'X' })).toBeNull();
+    expect(detect({ name: 'Wine by the Sea', producer: 'X' })).toBeNull();
   });
 });
 
@@ -123,21 +132,21 @@ describe('runNameChecks — per-rule clearance semantics', () => {
   test('reports every tripped rule and the strip proposal', () => {
     const hit = runNameChecks(doubleHit);
     expect(hit.checks).toEqual(
-      expect.arrayContaining(['producer-in-name.v1', 'dangling-name-tail.v1'])
+      expect.arrayContaining(['producer-in-name.v1', 'dangling-name-tail.v2'])
     );
     expect(hit.proposedName).toBe('La Viña de');
   });
 
   test('a rule listed in verifiedChecks is skipped; others still report (per-rule granularity)', () => {
     const hit = runNameChecks({ ...doubleHit, verifiedChecks: ['producer-in-name.v1'] });
-    expect(hit.checks).toEqual(['dangling-name-tail.v1']);
+    expect(hit.checks).toEqual(['dangling-name-tail.v2']);
     expect(hit.proposedName).toBeNull(); // the proposing rule was cleared
   });
 
   test('all tripped rules cleared → null (row leaves the queue)', () => {
     expect(runNameChecks({
       ...doubleHit,
-      verifiedChecks: ['producer-in-name.v1', 'dangling-name-tail.v1'],
+      verifiedChecks: ['producer-in-name.v1', 'dangling-name-tail.v2'],
     })).toBeNull();
   });
 
@@ -148,15 +157,15 @@ describe('runNameChecks — per-rule clearance semantics', () => {
 
   test('ignoreCleared reports everything (the audit view)', () => {
     const hit = runNameChecks(
-      { ...doubleHit, verifiedChecks: ['producer-in-name.v1', 'dangling-name-tail.v1'] },
+      { ...doubleHit, verifiedChecks: ['producer-in-name.v1', 'dangling-name-tail.v2'] },
       { ignoreCleared: true }
     );
     expect(hit.checks).toHaveLength(2);
   });
 
   test('checkIds scopes the run (the ?check= path)', () => {
-    const hit = runNameChecks(doubleHit, { checkIds: ['dangling-name-tail.v1'] });
-    expect(hit.checks).toEqual(['dangling-name-tail.v1']);
+    const hit = runNameChecks(doubleHit, { checkIds: ['dangling-name-tail.v2'] });
+    expect(hit.checks).toEqual(['dangling-name-tail.v2']);
   });
 
   test('a clean wine returns null', () => {
