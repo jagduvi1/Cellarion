@@ -53,13 +53,27 @@ export const adminUndismissDuplicateCluster = (apiFetch, wineIds) =>
     body: JSON.stringify({ wineIds }),
   });
 
-// Wines whose name starts with their own producer (AI-import artefacts).
+// The registry name-check scan (historical path name — it now runs every
+// default rule in backend utils/nameChecks.js, not just producer-in-name).
 export const adminGetProducerInNameWines = (apiFetch, params) =>
   apiFetch(`/api/admin/wines/producer-in-name?${params}`);
 
 // Remove the wine's own producer prefix from its name.
 export const adminStripProducerFromName = (apiFetch, id) =>
   apiFetch(`/api/admin/wines/${id}/strip-producer`, { method: 'POST' });
+
+// Record that an admin read these wines and confirmed they pass these SPECIFIC
+// name checks, so the scan stops surfacing them for those checks only.
+// adminUnverify… reverses it (the undo).
+export const adminVerifyWineChecks = (apiFetch, wineIds, checks) =>
+  apiFetch('/api/admin/wines/verify-checks', {
+    method: 'POST', headers: J, body: JSON.stringify({ wineIds, checks }),
+  });
+
+export const adminUnverifyWineChecks = (apiFetch, wineIds, checks) =>
+  apiFetch('/api/admin/wines/verify-checks', {
+    method: 'DELETE', headers: J, body: JSON.stringify({ wineIds, checks }),
+  });
 
 // ── Taxonomy ─────────────────────────────────────────────────────────────────
 export const adminGetTaxonomy = (apiFetch, endpoint) =>
