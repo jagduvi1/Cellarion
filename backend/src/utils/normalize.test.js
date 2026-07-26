@@ -11,6 +11,7 @@ const {
   tokenSimilarity,
   combinedSimilarity,
   resolveCountryName,
+  isRecognizedCountry,
   isUnknownName,
   isJunkGrapeName,
   resolveGrapeName,
@@ -362,6 +363,56 @@ describe('resolveCountryName', () => {
   test('passes unknown countries through trimmed', () => {
     expect(resolveCountryName('  Uzbekistan  ')).toBe('Uzbekistan');
     expect(resolveCountryName('Atlantis')).toBe('Atlantis');
+  });
+});
+
+// ─── isRecognizedCountry ─────────────────────────────────────────────────────
+
+describe('isRecognizedCountry', () => {
+  test('false for falsy/blank input', () => {
+    expect(isRecognizedCountry(null)).toBe(false);
+    expect(isRecognizedCountry('')).toBe(false);
+    expect(isRecognizedCountry('   ')).toBe(false);
+  });
+
+  test('true for canonical names regardless of case and diacritics', () => {
+    expect(isRecognizedCountry('Spain')).toBe(true);
+    expect(isRecognizedCountry('spain')).toBe(true);
+    expect(isRecognizedCountry('FRANCE')).toBe(true);
+    expect(isRecognizedCountry('Türkiye')).toBe(true);
+    expect(isRecognizedCountry("Côte d'Ivoire")).toBe(true);
+  });
+
+  test('true through the alias layer (localized names resolve first)', () => {
+    expect(isRecognizedCountry('Tyskland')).toBe(true);       // sv → Germany
+    expect(isRecognizedCountry('España')).toBe(true);         // → Spain
+    expect(isRecognizedCountry('United Kingdom')).toBe(true); // → England
+    expect(isRecognizedCountry('USA')).toBe(true);            // → United States
+  });
+
+  test('true for real countries missing from the seeded taxonomy (India may be minted)', () => {
+    expect(isRecognizedCountry('India')).toBe(true);
+    expect(isRecognizedCountry('Thailand')).toBe(true);
+    expect(isRecognizedCountry('Uzbekistan')).toBe(true);
+  });
+
+  test('false for the prod junk this gate exists to stop', () => {
+    expect(isRecognizedCountry('Espalda')).toBe(false); // misread "España" (ticket 2026-07-26)
+    expect(isRecognizedCountry('Atlantis')).toBe(false);
+    expect(isRecognizedCountry('Back label')).toBe(false);
+    expect(isRecognizedCountry('Red')).toBe(false);
+  });
+
+  test('every canonical COUNTRY_ALIASES target is itself recognized (no alias can dead-end)', () => {
+    // Sample the targets rather than exporting the private map: each canonical
+    // value used in resolveCountryName's own tests above must pass the gate.
+    for (const target of [
+      'United States', 'England', 'Germany', 'Italy', 'France', 'Spain',
+      'New Zealand', 'Austria', 'South Africa', 'Czech Republic',
+      'Netherlands', 'Turkey', 'Russian Federation', 'Moldova', 'Denmark',
+    ]) {
+      expect(isRecognizedCountry(target)).toBe(true);
+    }
   });
 });
 

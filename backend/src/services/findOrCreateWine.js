@@ -18,7 +18,7 @@ const Country = require('../models/Country');
 const Region = require('../models/Region');
 const Grape = require('../models/Grape');
 const searchService = require('./search');
-const { generateWineKey, normalizeString, normalizeAppellation, resolveGrapeName, resolveCountryName, isUnknownName, isJunkGrapeName } = require('../utils/normalize');
+const { generateWineKey, normalizeString, normalizeAppellation, resolveGrapeName, resolveCountryName, isRecognizedCountry, isUnknownName, isJunkGrapeName } = require('../utils/normalize');
 const { scoreAllMatches } = require('./wineMatching');
 const { canonicalizeWineName } = require('../utils/producerPrefix');
 const { computeCanonicalKey, canonicalSiblingPrefix } = require('../utils/wineIdentity');
@@ -50,6 +50,19 @@ async function findOrCreateCountry(name, userId) {
   const normalizedName = normalizeString(canonicalName);
   let country = await Country.findOne({ normalizedName });
   if (country) return country;
+  // Mint gate (support ticket 2026-07-26): a garbled label scan produced the
+  // country "Espalda" (a misread "España") and this function happily created
+  // it — any user's add could pollute the shared taxonomy. Only a recognized
+  // real-world country may be minted; everything else is rejected loudly so
+  // the caller can correct it, instead of silently growing a junk Country the
+  // whole registry then trusts. Existing docs (matched above) are unaffected.
+  if (!isRecognizedCountry(canonicalName)) {
+    const err = new Error(
+      `Unrecognized country "${String(name).trim().slice(0, 80)}" — use the country's English name (e.g. "Spain")`
+    );
+    err.status = 400;
+    throw err;
+  }
   country = new Country({ name: canonicalName.trim(), normalizedName, createdBy: userId });
   await country.save();
   return country;

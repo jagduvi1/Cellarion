@@ -1,5 +1,7 @@
 // Normalization utilities for deduplication and fuzzy matching
 
+const { RECOGNIZED_COUNTRY_NAMES } = require('../data/countryNames');
+
 /**
  * Wine-domain stop words that don't add meaningful distinction
  * These are removed during tokenization for better matching
@@ -590,6 +592,25 @@ const resolveCountryName = (name) => {
   return COUNTRY_ALIASES[key] || name.trim();
 };
 
+// Built once at load; both sides go through normalizeString so case,
+// diacritics and punctuation can never cause a false rejection.
+const RECOGNIZED_COUNTRY_SET = new Set(RECOGNIZED_COUNTRY_NAMES.map(normalizeString));
+
+/**
+ * Is this a real country (after alias resolution)? The mint gate for
+ * findOrCreateCountry: "Espalda" / "Back label" / a hallucinated string must
+ * never become a Country document, while a real country that just isn't in
+ * the taxonomy yet (India, Thailand) may still be created legitimately.
+ * See data/countryNames.js for what "recognized" means.
+ *
+ * @param {string} name  Raw country name from label scan, AI lookup or import
+ * @returns {boolean}
+ */
+const isRecognizedCountry = (name) => {
+  if (!name || !name.trim()) return false;
+  return RECOGNIZED_COUNTRY_SET.has(normalizeString(resolveCountryName(name)));
+};
+
 /**
  * Placeholder values the AI (or an import file) uses when it doesn't actually
  * know the value — despite the prompts demanding null. The registry's
@@ -659,6 +680,7 @@ module.exports = {
   normalizeAppellation,
   resolveGrapeName,
   resolveCountryName,
+  isRecognizedCountry,
   isUnknownName,
   isJunkGrapeName,
   levenshteinDistance,
