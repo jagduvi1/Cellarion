@@ -71,6 +71,32 @@ describe('stripProducerSuffix', () => {
     expect(stripProducerSuffix('Meerlust Chardonnay', 'Meerlust')).toBeNull();
   });
 
+  test('never strips to a stranded connective — the "La Viña de" ticket class (2026-07-26)', () => {
+    // The two real prod rows this guard would have prevented:
+    expect(stripProducerSuffix('La Viña de Madaras', 'Madaras')).toBeNull();
+    expect(stripProducerSuffix('Re di Renieri', 'Renieri')).toBeNull();
+    // Other connectives from the shared list, either script:
+    expect(stripProducerSuffix('Cuvée von Weingut X', 'Weingut X')).toBeNull();
+    expect(stripProducerSuffix('Blanc du Château Y', 'Château Y')).toBeNull();
+  });
+
+  test('the dangling guard only inspects the TAIL — interior connectives still strip', () => {
+    // "di" is inside the remainder, tail is "Avellino" → legit strip.
+    expect(stripProducerSuffix('Fiano di Avellino Mastroberardino', 'Mastroberardino'))
+      .toBe('Fiano di Avellino');
+    // Diacritics/case on the tail token don't dodge the guard (normalizeString).
+    expect(stripProducerSuffix('Cuvée DU Domaine Z', 'Domaine Z')).toBeNull();
+  });
+
+  test('canonicalizeWineName keeps the full phrase when the strip would dangle', () => {
+    const { canonicalizeWineName } = require('./producerPrefix');
+    // The create-time loop must settle on the ORIGINAL name, not the broken one.
+    expect(canonicalizeWineName('La Viña de Madaras', 'Madaras')).toBe('La Viña de Madaras');
+    expect(canonicalizeWineName('Re di Renieri', 'Renieri')).toBe('Re di Renieri');
+    // Untouched happy path: a clean suffix embed still canonicalizes.
+    expect(canonicalizeWineName('Lacrimarosa Mastroberardino', 'Mastroberardino')).toBe('Lacrimarosa');
+  });
+
   test('stripProducerName handles either end, prefix first, and loops clean both-ends input', () => {
     expect(stripProducerName('Meerlust Chardonnay', 'Meerlust')).toBe('Chardonnay');
     expect(stripProducerName('Fiano di Avellino Mastroberardino', 'Mastroberardino')).toBe('Fiano di Avellino');
