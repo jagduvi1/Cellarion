@@ -1403,6 +1403,26 @@
         "empty": "No wines are flagged by the selected checks.",
         "networkError": "Network error"
       },
+      "lowConfidence": {
+        "button": "Low confidence",
+        "buttonTitle": "Wines the AI couldn't say anything meaningful about — often a sign the producer or other data is wrong",
+        "title": "Low-confidence wines",
+        "intro": "The enrichment model doubted these. Fix the data, or mark the row as reviewed — a re-enriched wine that is still doubtful comes back by itself.",
+        "found_one": "{{count}} wine in doubt",
+        "found_other": "{{count}} wines in doubt",
+        "reviewedNote": "{{count}} reviewed",
+        "thresholdLabel": "Confidence",
+        "includeReviewed": "Include reviewed",
+        "confidenceCol": "Conf.",
+        "doubtCol": "The model's doubt",
+        "producerSuspect": "Producer suspect",
+        "reviewBtn": "Mark reviewed",
+        "reviewTitle": "Record that you've checked this wine's data — it stays hidden until its profile is regenerated",
+        "reviewed": "Marked \"{{name}}\" as reviewed.",
+        "reviewedBadge": "Reviewed",
+        "unreviewBtn": "Unreview",
+        "empty": "No wines below this confidence threshold. The registry is in good shape."
+      },
       "defaultImageHint": "Click the star to set the default image for this wine."
     },
     "images": {

@@ -65,6 +65,17 @@ export const adminStripProducerFromName = (apiFetch, id) =>
 // Record that an admin read these wines and confirmed they pass these SPECIFIC
 // name checks, so the scan stops surfacing them for those checks only.
 // adminUnverify… reverses it (the undo).
+// The "model in doubt" queue: wines whose enrichment confidence is at or
+// below the threshold and not yet reviewed since their profile was generated.
+export const adminGetLowConfidenceWines = (apiFetch, params) =>
+  apiFetch(`/api/admin/wines/low-confidence?${params}`);
+
+export const adminMarkProfileReviewed = (apiFetch, id) =>
+  apiFetch(`/api/admin/wines/${id}/profile-reviewed`, { method: 'POST' });
+
+export const adminUnmarkProfileReviewed = (apiFetch, id) =>
+  apiFetch(`/api/admin/wines/${id}/profile-reviewed`, { method: 'DELETE' });
+
 export const adminVerifyWineChecks = (apiFetch, wineIds, checks) =>
   apiFetch('/api/admin/wines/verify-checks', {
     method: 'POST', headers: J, body: JSON.stringify({ wineIds, checks }),

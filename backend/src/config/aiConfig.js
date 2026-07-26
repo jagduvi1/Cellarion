@@ -247,7 +247,7 @@ Grapes: {{grapes}}
 Base the profile on what you genuinely know about this wine, producer, appellation, and grapes. Be factual and conservative — describe the wine's typical character, not marketing hyperbole. If you don't recognise the specific wine, infer a sensible profile from its grapes, region, and type, and lower your confidence accordingly.
 
 Return ONLY a raw JSON object (no markdown, no code fences, no extra text):
-{"body":"light|medium|full|null","tannin":"low|medium|high|null","acidity":"low|medium|high|null","sweetness":"dry|off-dry|sweet|null","flavors":["3-6 short flavour/aroma descriptors"],"foodPairings":["2-4 classic food pairings"],"description":"2-3 sentence plain-language tasting note for the owner","confidence":0.0}
+{"body":"light|medium|full|null","tannin":"low|medium|high|null","acidity":"low|medium|high|null","sweetness":"dry|off-dry|sweet|null","flavors":["3-6 short flavour/aroma descriptors"],"foodPairings":["2-4 classic food pairings"],"description":"2-3 sentence plain-language tasting note for the owner","confidence":0.0,"producerSuspect":false,"producerNote":null}
 
 Rules:
 - body/tannin/acidity/sweetness: use one of the listed values, or null if not applicable (e.g. tannin for a white wine should usually be "low" or null).
@@ -255,6 +255,8 @@ Rules:
 - foodPairings: real dishes/categories (e.g. "grilled lamb", "hard cheese", "roast chicken").
 - description: 2-3 sentences, warm but not pretentious. PLAIN TEXT ONLY — no Markdown of any kind: no **bold**, no *italics*, no headings, lists, links, or tables. The field is shown verbatim in places that do not render Markdown.
 - confidence: 1.0 = you know this exact wine well, 0.7 = confident from producer + style, 0.5 = grape/region knowledge only, 0.3 = rough inference.
+- producerSuspect: true when the Producer value above does not look like an actual winery — a cuvée range or brand line that belongs to another house (e.g. "Arcane" is Xavier Vignon's range, "Montes Alpha" is Viña Montes's line), a place name, a retailer/importer/bottler, or a label term. Judge only from what you genuinely know; an unfamiliar small producer is NOT suspect.
+- producerNote: when producerSuspect is true and you are confident of the real producer, name it in one short plain-text sentence (e.g. "Arcane is a range of Xavier Vignon"). Otherwise null — never guess a specific house you are unsure of.
 - Never invent awards, scores, or specific vintages' weather. If the wine is completely unrecognisable and its grapes/region are unknown, return {"error":"unknown"}.`;
 
 // Models that are known to work reliably for text chat.

@@ -610,6 +610,123 @@ router.post('/:id/non-wine', async (req, res) => {
   }
 });
 
+// POST /api/admin/wines/:id/profile-reviewed — record that an admin read this
+// low-confidence wine and judged its data correct as of the CURRENT profile.
+// DELETE undoes it. Self-invalidating by timestamp comparison (see GET above),
+// so there is nothing to clear on later edits.
+router.post('/:id/profile-reviewed', async (req, res) => {
+  try {
+    if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
+    const wine = await WineDefinition.findById(req.params.id).select('name producer');
+    if (!wine) return res.status(404).json({ error: 'Wine not found' });
+    const now = new Date();
+    await WineDefinition.updateOne({ _id: wine._id }, { $set: { profileReviewedAt: now } });
+    logAudit(req, 'admin.wine.profileReviewed', { type: 'wine', id: wine._id },
+      { name: wine.name, producer: wine.producer });
+    res.json({ message: 'Marked reviewed', profileReviewedAt: now });
+  } catch (error) {
+    console.error('Profile-reviewed error:', error);
+    res.status(500).json({ error: 'Failed to mark reviewed' });
+  }
+});
+
+router.delete('/:id/profile-reviewed', async (req, res) => {
+  try {
+    if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
+    const result = await WineDefinition.updateOne(
+      { _id: req.params.id }, { $set: { profileReviewedAt: null } });
+    if (!result.matchedCount) return res.status(404).json({ error: 'Wine not found' });
+    logAudit(req, 'admin.wine.profileUnreviewed', { type: 'wine', id: req.params.id }, {});
+    res.json({ message: 'Review cleared' });
+  } catch (error) {
+    console.error('Profile-unreviewed error:', error);
+    res.status(500).json({ error: 'Failed to clear review' });
+  }
+});
+
+// GET /api/admin/wines/low-confidence — the "model in doubt" review queue.
+// Surfaces wines whose enrichment confidence is at or below ?threshold
+// (default 0.3 — the band that caught the Arcane range-as-producer row),
+// EXCLUDING rows an admin already reviewed SINCE their profile was last
+// generated: profileReviewedAt >= aiProfile.generatedAt suppresses; a
+// re-enrichment bumps generatedAt past the review and the row re-surfaces
+// by comparison alone. ?includeReviewed=1 is the audit view. Sorted most
+// doubtful first. producerSuspect/producerNote ride along so the model's
+// specific worry is visible per row.
+router.get('/low-confidence', async (req, res) => {
+  try {
+    const { limit: parsedLimit, offset: skip, page: parsedPage } =
+      parsePagination(req.query, { limit: 50, maxLimit: 200 });
+    const rawT = Number(req.query.threshold);
+    const threshold = Number.isFinite(rawT) ? Math.min(Math.max(rawT, 0), 1) : 0.3;
+    const includeReviewed = req.query.includeReviewed === '1' || req.query.includeReviewed === 'true';
+
+    const base = {
+      nonWine: { $ne: true },
+      'aiProfile.confidence': { $ne: null, $lte: threshold },
+    };
+    const outstanding = {
+      ...base,
+      $expr: {
+        $or: [
+          { $eq: ['$profileReviewedAt', null] },
+          { $lt: ['$profileReviewedAt', '$aiProfile.generatedAt'] },
+        ],
+      },
+    };
+
+    const filter = includeReviewed ? base : outstanding;
+    const [rows, total, reviewedCount] = await Promise.all([
+      WineDefinition.find(filter)
+        .select('name producer appellation nonWine profileReviewedAt aiProfile.confidence aiProfile.description aiProfile.producerSuspect aiProfile.producerNote aiProfile.generatedAt')
+        .populate('region', 'name')
+        .populate('country', 'name')
+        .sort({ 'aiProfile.confidence': 1, producer: 1 })
+        .skip(skip)
+        .limit(parsedLimit)
+        .lean(),
+      WineDefinition.countDocuments(filter),
+      WineDefinition.countDocuments(base).then(async (all) =>
+        all - await WineDefinition.countDocuments(outstanding)),
+    ]);
+
+    const bottleCounts = new Map();
+    if (rows.length > 0) {
+      const counts = await Bottle.aggregate([
+        { $match: { wineDefinition: { $in: rows.map(w => w._id) } } },
+        { $group: { _id: '$wineDefinition', count: { $sum: 1 } } },
+      ]);
+      for (const c of counts) bottleCounts.set(String(c._id), c.count);
+    }
+
+    res.json({
+      wines: rows.map(w => ({
+        _id: w._id,
+        name: w.name,
+        producer: w.producer,
+        appellation: w.appellation || null,
+        region: w.region?.name || null,
+        country: w.country?.name || null,
+        confidence: w.aiProfile?.confidence ?? null,
+        description: w.aiProfile?.description || null,
+        producerSuspect: w.aiProfile?.producerSuspect === true,
+        producerNote: w.aiProfile?.producerNote || null,
+        generatedAt: w.aiProfile?.generatedAt || null,
+        profileReviewedAt: w.profileReviewedAt || null,
+        bottleCount: bottleCounts.get(String(w._id)) || 0,
+      })),
+      total,
+      page: parsedPage,
+      pages: Math.ceil(total / parsedLimit),
+      threshold,
+      reviewedCount,
+    });
+  } catch (error) {
+    console.error('Low-confidence list error:', error);
+    res.status(500).json({ error: 'Failed to list low-confidence wines' });
+  }
+});
+
 router.get('/duplicates', async (req, res) => {
   try {
     const { name, producer, appellation, threshold = 0.75 } = req.query;
