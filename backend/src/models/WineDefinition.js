@@ -147,6 +147,37 @@ const wineDefinitionSchema = new mongoose.Schema({
     enum: ['ui', 'import', 'mcp', 'ai', null],
     default: null
   },
+  // Human data-quality review (support ticket 2026-07-26): the registry's
+  // false-positive whitelist AND its skip-on-rescan record. Each entry is a
+  // RULE ID from utils/nameChecks.js that an admin has read this wine and
+  // confirmed it passes — deliberately NOT a bare `verified` boolean: a rule
+  // id nobody has cleared appears in no wine's array, so a NEW rule (or a
+  // REFINED one, whose id is bumped in the same commit) surfaces all ~4.3k
+  // rows by construction, where a bare flag would have silently suppressed
+  // every rule added after it was set.
+  //
+  // Cleared automatically when `name` or `producer` changes (pre-validate hook
+  // below). SCOPE RULE: only a rule whose verdict reads NOTHING but
+  // name + producer may consult this field — a rule reading country/region/
+  // grapes must check the taxonomy collections instead (renaming a Country
+  // writes nothing here, so no hook could ever invalidate it).
+  //
+  // Absent on rows predating the field; .lean() applies no defaults, so reads
+  // treat undefined as "nothing cleared" (also why no backfill is needed).
+  // Never bulk-set from a script — a machine asserting human review is what
+  // would make the record worthless.
+  verifiedChecks: {
+    type: [String],
+    default: undefined
+  },
+  // When the most recent clearance above was recorded. DISPLAY AND FORENSICS
+  // ONLY — never filter a scan on this: suppression is always per rule id, so
+  // a rule added tomorrow can't be pre-cleared by a timestamp set against
+  // yesterday's rule set. null on rows never reviewed.
+  verifiedAt: {
+    type: Date,
+    default: null
+  },
   createdAt: {
     type: Date,
     default: Date.now
@@ -180,13 +211,27 @@ wineDefinitionSchema.pre('save', function(next) {
   next();
 });
 
-// Keep canonicalKey in sync with the identity fields. pre-validate (not
-// pre-save) so plain doc.validate() computes it too. Covers every save-based
-// write path (create, admin PUT rename, strip-producer); scripted updateOne
-// callers must set it themselves (backfill-canonical-key.js does).
+// Keep canonicalKey in sync with the identity fields, and drop the human-review
+// record when the reviewed strings change. pre-validate (not pre-save) so plain
+// doc.validate() computes it too. Covers every save-based write path (create,
+// admin PUT rename, strip-producer); scripted updateOne callers must set
+// canonicalKey themselves (backfill-canonical-key.js does).
+//
+// verifiedChecks/verifiedAt watch ONLY name + producer, and unlike canonicalKey
+// they have NO scripted-caller blind spot: enumerated 2026-07-26, no updateOne/
+// updateMany/bulkWrite/findByIdAndUpdate caller in the codebase mutates either
+// field on an existing row (admin LWIN import wraps both in $ifNull, so it can
+// only fill them on upsert-insert).
 wineDefinitionSchema.pre('validate', function(next) {
   if (!this.canonicalKey || this.isModified('name') || this.isModified('producer') || this.isModified('appellation')) {
     this.canonicalKey = computeCanonicalKey(this.name, this.producer, this.appellation);
+  }
+  // !isNew: on a create both fields count as "modified" and the defaults are
+  // already empty — being explicit keeps a future born-verified admin-create
+  // flow from being silently undone here.
+  if (!this.isNew && (this.isModified('name') || this.isModified('producer'))) {
+    this.verifiedChecks = undefined;
+    this.verifiedAt = null;
   }
   next();
 });

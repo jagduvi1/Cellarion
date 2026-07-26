@@ -1,0 +1,24 @@
+// Jest Snapshot v1, https://jestjs.io/docs/snapshot-testing
+
+exports[`detect() source of dangling-name-tail.v1 is unchanged — bump the id if you edited it 1`] = `
+"w => {
+    const tokens = normalizeString(w.name || '').split(' ').filter(Boolean);
+    if (tokens.length < 2) return null; // a one-word name is not "dangling"
+    return DANGLING_TAIL_WORDS.has(tokens[tokens.length - 1]) ? w.name : null;
+  }"
+`;
+
+exports[`detect() source of name-equals-producer.v1 is unchanged — bump the id if you edited it 1`] = `"w => nameEqualsProducer(w) && !ESTATE_WORDS.has(firstToken(w)) ? w.name : null"`;
+
+exports[`detect() source of name-equals-producer-estate.v1 is unchanged — bump the id if you edited it 1`] = `"w => nameEqualsProducer(w) && ESTATE_WORDS.has(firstToken(w)) ? w.name : null"`;
+
+exports[`detect() source of producer-in-name.v1 is unchanged — bump the id if you edited it 1`] = `"w => stripProducerName(w.name, w.producer) ?? stripProducerKeyPrefix(w.name, w.producer)"`;
+
+exports[`rule ids are pinned (adding/removing/renaming a rule must be deliberate) 1`] = `
+[
+  "producer-in-name.v1",
+  "dangling-name-tail.v1",
+  "name-equals-producer.v1",
+  "name-equals-producer-estate.v1 (non-default)",
+]
+`;

@@ -1,6 +1,32 @@
 const { normalizeString, normalizeProducerKey, tokenize } = require('./normalize');
 
 /**
+ * Multi-character connectives / prepositions that cannot legitimately END a
+ * wine name. "La Viña de" (producer "Madaras") is the launch symptom of
+ * leaving one stranded: an exact-string suffix strip lopped the producer off
+ * the tail of "La Viña de Madaras" and kept the linking word (support ticket
+ * 2026-07-26; 10 such rows on prod).
+ *
+ * Lives HERE (not in nameChecks.js, which consumes it) so the suffix-strip
+ * guard below can use it without a circular require — nameChecks requires
+ * this module for its rules.
+ *
+ * Deliberately EXCLUDES bare single letters (Château d'Yquem's dry white is
+ * literally named "Y"; 'e'/'y' are Italian/Spanish "and") and bare ARTICLES
+ * (la, le, el, il, the, der, die, das open wine names far more often than
+ * they end them). Widen only from measured evidence —
+ * scripts/scan-name-anomalies.js reports the hit list — and bump the
+ * dangling-name-tail rule id in nameChecks.js when you do.
+ */
+const DANGLING_TAIL_WORDS = new Set([
+  'de', 'del', 'della', 'delle', 'dei', 'degli', 'di', 'du', 'des',
+  'da', 'dal', 'dalla', 'do', 'dos', 'das',
+  'von', 'vom', 'van', 'of', 'and', 'et', 'und', 'och',
+  'zu', 'zum', 'zur', 'au', 'aux', 'sur', 'sous', 'in', 'im', 'am',
+  'con', 'com', 'avec', 'mit', 'med',
+]);
+
+/**
  * Detect and strip a redundant producer prefix from a wine name.
  *
  * AI import lookups often store names like "Meerlust Chardonnay" for producer
@@ -121,6 +147,7 @@ function canonicalizeWineName(name, producer) {
 }
 
 module.exports = {
+  DANGLING_TAIL_WORDS,
   stripProducerPrefix,
   stripProducerSuffix,
   stripProducerName,
