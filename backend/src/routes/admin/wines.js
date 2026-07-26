@@ -582,6 +582,34 @@ router.delete('/verify-checks', async (req, res) => {
   }
 });
 
+// POST /api/admin/wines/:id/non-wine — quarantine (or restore) a row that is
+// not a wine (spirits/cider/sake; registry audit 2026-07-26, policy: keep,
+// hide). Body: { value: boolean }. The row and its owners' bottles keep
+// working; flagged rows leave the search index (indexWine self-heals), the
+// public taxonomy/OG/sitemap listings and the admin duplicate-scan pools.
+router.post('/:id/non-wine', async (req, res) => {
+  try {
+    if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
+    if (typeof req.body?.value !== 'boolean') {
+      return res.status(400).json({ error: 'value must be a boolean' });
+    }
+    const wine = await WineDefinition.findById(req.params.id);
+    if (!wine) return res.status(404).json({ error: 'Wine not found' });
+
+    wine.nonWine = req.body.value;
+    await wine.save();
+    // Self-healing index sync: indexWine removes flagged rows, re-adds restored ones.
+    searchService.indexWine(wine._id);
+
+    logAudit(req, 'admin.wine.nonWine', { type: 'wine', id: wine._id },
+      { value: req.body.value, name: wine.name, producer: wine.producer });
+    res.json({ message: req.body.value ? 'Quarantined as non-wine' : 'Restored as wine', nonWine: wine.nonWine });
+  } catch (error) {
+    console.error('Non-wine toggle error:', error);
+    res.status(500).json({ error: 'Failed to update non-wine flag' });
+  }
+});
+
 router.get('/duplicates', async (req, res) => {
   try {
     const { name, producer, appellation, threshold = 0.75 } = req.query;
@@ -807,7 +835,7 @@ router.get('/producer-in-name', async (req, res) => {
     // may be cleared for one rule and outstanding for another — and `total`
     // below is computed from flagged.length, so in-memory pagination stays
     // honest.
-    const all = await WineDefinition.find({})
+    const all = await WineDefinition.find({ nonWine: { $ne: true } })
       .select(`${NAME_CHECK_SELECT} createdAt verifiedAt`)
       .sort({ producer: 1, name: 1 })
       .lean();

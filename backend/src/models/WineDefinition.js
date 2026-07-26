@@ -147,6 +147,18 @@ const wineDefinitionSchema = new mongoose.Schema({
     enum: ['ui', 'import', 'mcp', 'ai', null],
     default: null
   },
+  // Non-wine quarantine (registry audit 2026-07-26; policy decided by Johan:
+  // KEEP, HIDE). Spirits/cider/sake rows imported by users stay in the
+  // registry — their owners' bottles keep working, direct wine pages render —
+  // but flagged rows are excluded from the Meilisearch index (registry
+  // search + type facets), public taxonomy/OG/sitemap listings, and the
+  // admin duplicate-scan pools. Exact-key resolution still matches them, so
+  // re-adding the same bottle attaches instead of minting a twin. Toggled via
+  // POST /api/admin/wines/:id/non-wine (admin only, audited).
+  nonWine: {
+    type: Boolean,
+    default: false
+  },
   // Human data-quality review (support ticket 2026-07-26): the registry's
   // false-positive whitelist AND its skip-on-rescan record. Each entry is a
   // RULE ID from utils/nameChecks.js that an admin has read this wine and

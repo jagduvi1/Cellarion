@@ -44,6 +44,7 @@ function getCachedList(key) {
 async function countWinesBy(field, { unwind = false } = {}) {
   const pipeline = unwind
     ? [
+        { $match: { nonWine: { $ne: true } } },
         // $setUnion dedups the array first: the old countDocuments({grapes: id})
         // counted a wine once however many times the grape appeared in its
         // array; a bare $unwind would count every occurrence.
@@ -52,7 +53,7 @@ async function countWinesBy(field, { unwind = false } = {}) {
         { $group: { _id: '$values', count: { $sum: 1 } } },
       ]
     : [
-        { $match: { [field]: { $ne: null } } },
+        { $match: { [field]: { $ne: null }, nonWine: { $ne: true } } },
         { $group: { _id: `$${field}`, count: { $sum: 1 } } },
       ];
   const rows = await WineDefinition.aggregate(pipeline);
@@ -114,7 +115,7 @@ router.get('/countries/:slug', async (req, res) => {
     const { limit, offset } = parsePagination(req.query, { limit: 24, maxLimit: 100 });
 
     const [wines, total, regions] = await Promise.all([
-      WineDefinition.find({ country: country._id })
+      WineDefinition.find({ country: country._id, nonWine: { $ne: true } })
         .select(WINE_PROJECTION)
         .populate('region', 'name slug')
         .populate('country', 'name slug')
@@ -122,7 +123,7 @@ router.get('/countries/:slug', async (req, res) => {
         .skip(offset)
         .limit(limit)
         .lean(),
-      WineDefinition.countDocuments({ country: country._id }),
+      WineDefinition.countDocuments({ country: country._id, nonWine: { $ne: true } }),
       Region.find({ country: country._id, slug: { $exists: true } })
         .select('name slug description')
         .sort({ name: 1 })
@@ -185,7 +186,7 @@ router.get('/regions/:slug', async (req, res) => {
     const { limit, offset } = parsePagination(req.query, { limit: 24, maxLimit: 100 });
 
     const [wines, total] = await Promise.all([
-      WineDefinition.find({ region: region._id })
+      WineDefinition.find({ region: region._id, nonWine: { $ne: true } })
         .select(WINE_PROJECTION)
         .populate('region', 'name slug')
         .populate('country', 'name slug')
@@ -194,7 +195,7 @@ router.get('/regions/:slug', async (req, res) => {
         .skip(offset)
         .limit(limit)
         .lean(),
-      WineDefinition.countDocuments({ region: region._id })
+      WineDefinition.countDocuments({ region: region._id, nonWine: { $ne: true } })
     ]);
 
     if (total < MIN_WINES) return res.status(404).json({ error: 'Region not found' });
@@ -250,7 +251,7 @@ router.get('/grapes/:slug', async (req, res) => {
     const { limit, offset } = parsePagination(req.query, { limit: 24, maxLimit: 100 });
 
     const [wines, total] = await Promise.all([
-      WineDefinition.find({ grapes: grape._id })
+      WineDefinition.find({ grapes: grape._id, nonWine: { $ne: true } })
         .select(WINE_PROJECTION)
         .populate('region', 'name slug')
         .populate('country', 'name slug')
@@ -258,7 +259,7 @@ router.get('/grapes/:slug', async (req, res) => {
         .skip(offset)
         .limit(limit)
         .lean(),
-      WineDefinition.countDocuments({ grapes: grape._id })
+      WineDefinition.countDocuments({ grapes: grape._id, nonWine: { $ne: true } })
     ]);
 
     if (total < MIN_WINES) return res.status(404).json({ error: 'Grape not found' });
@@ -282,7 +283,7 @@ router.get('/wine-types/:type', async (req, res) => {
     const { limit, offset } = parsePagination(req.query, { limit: 24, maxLimit: 100 });
 
     const [wines, total] = await Promise.all([
-      WineDefinition.find({ type })
+      WineDefinition.find({ type, nonWine: { $ne: true } })
         .select(WINE_PROJECTION)
         .populate('region', 'name slug')
         .populate('country', 'name slug')
@@ -290,7 +291,7 @@ router.get('/wine-types/:type', async (req, res) => {
         .skip(offset)
         .limit(limit)
         .lean(),
-      WineDefinition.countDocuments({ type })
+      WineDefinition.countDocuments({ type, nonWine: { $ne: true } })
     ]);
 
     res.set('Cache-Control', 'public, max-age=3600');

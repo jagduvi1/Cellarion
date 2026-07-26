@@ -55,6 +55,9 @@ const USER_SEARCH_LIMIT = 10;
 
 // MongoDB fallback search (used when Meilisearch is unavailable)
 async function mongoSearch(filter, sort, limit, offset, search) {
+  // Quarantined non-wine rows never surface in registry search — the Meili
+  // branch excludes them at index time; this is the fallback's mirror.
+  filter.nonWine = { $ne: true };
   let sortOptions = {};
   const sortField = sort.startsWith('-') ? sort.substring(1) : sort;
   const sortDir = sort.startsWith('-') ? -1 : 1;
