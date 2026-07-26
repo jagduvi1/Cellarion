@@ -105,7 +105,7 @@ const call = (method, path, body) => fetch(`${baseUrl}/api/admin/wines${path}`, 
 
 // Trips name-equals-producer.v1 (non-estate) and nothing else.
 const OPUS = { _id: WINE_A, name: 'Opus One', producer: 'Opus One' };
-// Trips dangling-name-tail.v1 only (the ticket's launch row).
+// Trips dangling-name-tail.v2 only (the ticket's launch row).
 const VINA = { _id: WINE_B, name: 'La Viña de', producer: 'Madaras' };
 
 describe('POST /verify-checks', () => {
@@ -231,7 +231,7 @@ describe('GET /producer-in-name — per-rule suppression', () => {
 
   test('cleared for a DIFFERENT rule → still surfaces (per-rule granularity)', async () => {
     WineDefinition.find.mockReturnValue(findChain([
-      { ...OPUS, verifiedChecks: ['dangling-name-tail.v1'] },
+      { ...OPUS, verifiedChecks: ['dangling-name-tail.v2'] },
     ]));
     const data = await (await get()).json();
     expect(data.total).toBe(1);
@@ -255,7 +255,7 @@ describe('GET /producer-in-name — per-rule suppression', () => {
     const data = await (await get()).json();
     expect(data.total).toBe(2);
     const vina = data.wines.find(w => w._id === WINE_B);
-    expect(vina.checks).toEqual(['dangling-name-tail.v1']);
+    expect(vina.checks).toEqual(['dangling-name-tail.v2']);
     expect(vina.proposedName).toBeNull();
     const meerlust = data.wines.find(w => w._id === WINE_A);
     expect(meerlust.checks).toEqual(['producer-in-name.v1']);
@@ -284,10 +284,10 @@ describe('GET /producer-in-name — per-rule suppression', () => {
     WineDefinition.find.mockReturnValue(findChain([OPUS]));
     const data = await (await get()).json();
     expect(data.checkIds).toEqual([
-      'producer-in-name.v1', 'dangling-name-tail.v1', 'name-equals-producer.v1',
+      'producer-in-name.v1', 'dangling-name-tail.v2', 'name-equals-producer.v1',
     ]);
     expect(data.allCheckIds).toContain('name-equals-producer-estate.v1');
-    expect(data.checkLabelKeys['dangling-name-tail.v1']).toBe('danglingTail');
+    expect(data.checkLabelKeys['dangling-name-tail.v2']).toBe('danglingTail');
     expect(data.scannedCount).toBe(1);
   });
 });

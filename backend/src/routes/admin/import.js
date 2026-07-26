@@ -2,7 +2,8 @@ const express = require('express');
 const multer = require('multer');
 const { parse } = require('csv-parse');
 const { requireAuth, requireRole } = require('../../middleware/auth');
-const { generateWineKey, normalizeString, normalizeAppellation, resolveCountryName, isUnknownName } = require('../../utils/normalize');
+const { generateWineKey, normalizeString, normalizeAppellation, resolveCountryName, isRecognizedCountry, isUnknownName } = require('../../utils/normalize');
+const { canonicalizeWineName } = require('../../utils/producerPrefix');
 const WineDefinition = require('../../models/WineDefinition');
 const Country = require('../../models/Country');
 const Region = require('../../models/Region');
@@ -80,16 +81,26 @@ function mapRow(row, format) {
     // Fallback: when PRODUCER_NAME or WINE is NA, parse DISPLAY_NAME.
     // LWIN DISPLAY_NAME format: "ProducerTitle ProducerName, SubRegion, WineName"
     // e.g. "G.D. Vajra, Barolo, Albe" → producer="G.D. Vajra", name="Albe"
+    //
+    // parts[0] is only trusted as the producer with THREE OR MORE parts —
+    // matching the documented format. A two-part display is as often
+    // "SubRegion, WineName" as "Producer, WineName", and trusting it wrote
+    // "Bordeaux" / "California" / "Tuscany" into the producer field ~45 times
+    // across four import waves (registry audit 2026-07-26, RC-2; the same
+    // split also truncated "…Côtes de Bordeaux" names mid-appellation). A row
+    // left without a producer fails the required-fields check downstream and
+    // lands in the import error report — visible beats corrupted.
     if (!producer || !name) {
       const display = lwinVal(row.DISPLAY_NAME);
       if (display) {
         const parts = display.split(',').map(p => p.trim()).filter(Boolean);
-        if (parts.length >= 2) {
+        if (parts.length >= 3) {
           if (!producer) producer = parts[0];
           if (!name)     name     = parts[parts.length - 1];
+        } else if (parts.length === 2) {
+          if (!name) name = parts[1];
         } else if (parts.length === 1) {
-          if (!producer) producer = parts[0];
-          if (!name)     name     = parts[0];
+          if (!name) name = parts[0];
         }
       }
     }
@@ -100,7 +111,9 @@ function mapRow(row, format) {
       name,
       country: lwinVal(row.COUNTRY),
       region: lwinVal(row.REGION),
-      appellation: lwinVal(row.SUB_REGION),
+      // Same tier-strip as the simple format below and findOrCreateWine —
+      // LWIN SUB_REGION carries "… DOCG"/"DO …" forms too (audit RC-4).
+      appellation: normalizeAppellation(lwinVal(row.SUB_REGION)),
       type: mapType(row.COLOUR, row.SUB_TYPE, null),
       classification: lwinVal(row.CLASSIFICATION),
       status: (row.STATUS || '').trim() || 'Live',
@@ -140,6 +153,21 @@ async function getOrCreateCountry(name, userId, cache) {
   // CSV in another language can't mint a duplicate Country document.
   const canonicalName = resolveCountryName(name);
   const normalized = normalizeString(canonicalName);
+  // Mint gate, same as findOrCreateCountry (#836): a CSV cell that is not a
+  // recognized real-world country must not become a Country document. THROWS
+  // rather than returning null — the flush uses bulkWrite, which bypasses the
+  // `country: required` validator, so a null here would insert a countryless
+  // wine instead of skipping the row. The throw is caught per-row and lands
+  // in the import error report. An EXISTING doc (matched below by upsert
+  // filter) still resolves — matching is not minting.
+  if (!isRecognizedCountry(canonicalName)) {
+    const existing = await Country.findOne({ normalizedName: normalized }).select('_id').lean();
+    if (!existing) {
+      throw new Error(`Unrecognized country "${String(name).trim().slice(0, 80)}"`);
+    }
+    cache.set(key, existing._id);
+    return existing._id;
+  }
   const doc = await Country.findOneAndUpdate(
     { normalizedName: normalized },
     { $setOnInsert: { name: canonicalName.trim(), normalizedName: normalized, createdBy: userId } },
@@ -359,6 +387,12 @@ router.post('/wines', csvUpload.single('file'), async (req, res) => {
       stats.total++;
 
       try {
+        // Step-0 name canon, same as findOrCreateWine: this path bulkWrites
+        // directly, so without it a producer-embedded name ("Vajra Albe" /
+        // producer "Vajra") mints the producer-in-name shape the admin tool
+        // then has to clean up (registry audit 2026-07-26).
+        mapped.name = canonicalizeWineName(mapped.name, mapped.producer);
+
         const countryId = await getOrCreateCountry(mapped.country, userId, countryCache);
         const regionId = await getOrCreateRegion(mapped.region, countryId, userId, regionCache);
         await getOrCreateAppellation(mapped.appellation, countryId, regionId, userId, appellationCache);
@@ -403,3 +437,6 @@ router.post('/wines', csvUpload.single('file'), async (req, res) => {
 });
 
 module.exports = router;
+// mapRow is exported for its unit tests (the DISPLAY_NAME fallback rules are
+// load-bearing — audit RC-2); it is pure and DB-free.
+module.exports.mapRow = mapRow;

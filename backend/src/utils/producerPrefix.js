@@ -14,9 +14,13 @@ const { normalizeString, normalizeProducerKey, tokenize } = require('./normalize
  * Deliberately EXCLUDES bare single letters (Château d'Yquem's dry white is
  * literally named "Y"; 'e'/'y' are Italian/Spanish "and") and bare ARTICLES
  * (la, le, el, il, the, der, die, das open wine names far more often than
- * they end them). Widen only from measured evidence —
- * scripts/scan-name-anomalies.js reports the hit list — and bump the
- * dangling-name-tail rule id in nameChecks.js when you do.
+ * they end them). The one single-letter exception is 'a' — as a standalone
+ * TAIL token it is the Romance preposition ("Barolo Dedicato a Renina"
+ * truncated to "…Dedicato a"), never a name ending. Widen only from measured
+ * evidence — scripts/scan-name-anomalies.js reports the hit list — and bump
+ * the dangling-name-tail rule id in nameChecks.js when you do (v1→v2:
+ * +by/+sans/+a, registry audit 2026-07-26 — "The Barry Bros by" and
+ * "Vin Sans" were still mintable).
  */
 const DANGLING_TAIL_WORDS = new Set([
   'de', 'del', 'della', 'delle', 'dei', 'degli', 'di', 'du', 'des',
@@ -24,6 +28,7 @@ const DANGLING_TAIL_WORDS = new Set([
   'von', 'vom', 'van', 'of', 'and', 'et', 'und', 'och',
   'zu', 'zum', 'zur', 'au', 'aux', 'sur', 'sous', 'in', 'im', 'am',
   'con', 'com', 'avec', 'mit', 'med',
+  'by', 'sans', 'a',
 ]);
 
 /**

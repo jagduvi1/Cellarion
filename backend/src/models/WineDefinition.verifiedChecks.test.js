@@ -27,14 +27,14 @@ const baseDoc = (overrides = {}) => new WineDefinition({
 // loaded document; the other paths don't matter (the hook ignores them).
 const reviewedDoc = async () => {
   const doc = baseDoc({
-    verifiedChecks: ['name-equals-producer.v1', 'dangling-name-tail.v1'],
+    verifiedChecks: ['name-equals-producer.v1', 'dangling-name-tail.v2'],
     verifiedAt: new Date('2026-07-26T10:00:00Z'),
   });
   doc.$isNew = false;
   doc.unmarkModified('name');
   doc.unmarkModified('producer');
   await doc.validate();
-  expect(doc.verifiedChecks).toEqual(['name-equals-producer.v1', 'dangling-name-tail.v1']);
+  expect(doc.verifiedChecks).toEqual(['name-equals-producer.v1', 'dangling-name-tail.v2']);
   return doc;
 };
 
@@ -79,7 +79,7 @@ test('THE FALSE-CLEAR GUARD: every other field change leaves the record intact',
     const doc = await reviewedDoc();
     mutate(doc);
     await doc.validate();
-    expect(doc.verifiedChecks).toEqual(['name-equals-producer.v1', 'dangling-name-tail.v1']);
+    expect(doc.verifiedChecks).toEqual(['name-equals-producer.v1', 'dangling-name-tail.v2']);
     expect(doc.verifiedAt).toEqual(new Date('2026-07-26T10:00:00Z'));
   }
 });
@@ -92,14 +92,14 @@ test('reassigning an IDENTICAL name does not clear (the admin PUT posts the whol
   doc.name = 'Block 3 Pinot Noir';
   doc.producer = 'Felton Road';
   await doc.validate();
-  expect(doc.verifiedChecks).toEqual(['name-equals-producer.v1', 'dangling-name-tail.v1']);
+  expect(doc.verifiedChecks).toEqual(['name-equals-producer.v1', 'dangling-name-tail.v2']);
   expect(doc.verifiedAt).toEqual(new Date('2026-07-26T10:00:00Z'));
 });
 
 test('validate with no modification leaves the record intact', async () => {
   const doc = await reviewedDoc();
   await doc.validate();
-  expect(doc.verifiedChecks).toEqual(['name-equals-producer.v1', 'dangling-name-tail.v1']);
+  expect(doc.verifiedChecks).toEqual(['name-equals-producer.v1', 'dangling-name-tail.v2']);
 });
 
 test('regression: canonicalKey still recomputes on an appellation change', async () => {
@@ -108,5 +108,5 @@ test('regression: canonicalKey still recomputes on an appellation change', async
   doc.appellation = 'Central Otago';
   await doc.validate();
   expect(doc.canonicalKey).not.toBe(before);
-  expect(doc.verifiedChecks).toEqual(['name-equals-producer.v1', 'dangling-name-tail.v1']);
+  expect(doc.verifiedChecks).toEqual(['name-equals-producer.v1', 'dangling-name-tail.v2']);
 });

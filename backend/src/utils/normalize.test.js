@@ -15,6 +15,7 @@ const {
   isUnknownName,
   isJunkGrapeName,
   resolveGrapeName,
+  stripTrailingVintage,
 } = require('./normalize');
 
 // ─── normalizeString ──────────────────────────────────────────────────────────
@@ -105,6 +106,65 @@ describe('normalizeAppellation (ticket #2C: tier-suffix proliferation)', () => {
     expect(normalizeAppellation(undefined)).toBeUndefined();
     expect(normalizeAppellation('DOCG')).toBe('DOCG'); // all-tier input preserved, not emptied
     expect(normalizeAppellation('   Barolo   DOCG ')).toBe('Barolo');
+  });
+
+  test('strips LEADING tier tokens — the prefix form the audit found surviving (RC-4)', () => {
+    expect(normalizeAppellation('DO Alicante')).toBe('Alicante');
+    expect(normalizeAppellation('DOCa Rioja')).toBe('Rioja');
+    expect(normalizeAppellation('IGT Toscana')).toBe('Toscana');
+    expect(normalizeAppellation('IGP Pays d\'Hérault')).toBe('Pays d\'Hérault');
+    expect(normalizeAppellation('D.O. Valle Central')).toBe('Valle Central'); // dots tolerated
+    expect(normalizeAppellation('DO')).toBe('DO'); // never emptied
+  });
+
+  test('audit additions to the trailing set: DOP / DOQ / VQA / WO', () => {
+    expect(normalizeAppellation('Sicilia DOP')).toBe('Sicilia');
+    expect(normalizeAppellation('Priorat DOQ')).toBe('Priorat');
+    expect(normalizeAppellation('Ontario VQA')).toBe('Ontario');
+    expect(normalizeAppellation('Swartland WO')).toBe('Swartland');
+  });
+
+  test('the audit leave-alone list survives untouched', () => {
+    // Official appellation forms — stripping them would corrupt real names.
+    expect(normalizeAppellation('VQA Ontario')).toBe('VQA Ontario');      // leading VQA is the official form
+    expect(normalizeAppellation('Wine of Origin Western Cape')).toBe('Wine of Origin Western Cape');
+    expect(normalizeAppellation('Kamptal DAC')).toBe('Kamptal DAC');      // DAC deliberately not a tier token
+    expect(normalizeAppellation('Vin de France')).toBe('Vin de France');
+    expect(normalizeAppellation('Muscat de Beaumes-de-Venise')).toBe('Muscat de Beaumes-de-Venise');
+  });
+});
+
+describe('stripTrailingVintage (registry is vintage-neutral — audit B2)', () => {
+  test('strips a trailing year token, with or without separator dashes/parens', () => {
+    expect(stripTrailingVintage('Reserve Cabernet Sauvignon 2023')).toBe('Reserve Cabernet Sauvignon');
+    expect(stripTrailingVintage('Rioja Reserva - 2019')).toBe('Rioja Reserva');
+    expect(stripTrailingVintage('Amarone (2016)')).toBe('Amarone');
+    expect(stripTrailingVintage('Barolo 1996')).toBe('Barolo');
+  });
+
+  test('loops the double-stamp case', () => {
+    expect(stripTrailingVintage('Bourgogne Rouge 2019 2019')).toBe('Bourgogne Rouge');
+  });
+
+  test('LEADING years are brand names and survive', () => {
+    expect(stripTrailingVintage('1924 Double Black')).toBe('1924 Double Black');
+    expect(stripTrailingVintage('19 Crimes')).toBe('19 Crimes');
+  });
+
+  test('years outside the 1950–2049 vintage window survive anywhere', () => {
+    expect(stripTrailingVintage('Cuvée 1865')).toBe('Cuvée 1865');   // Viña San Pedro's brand
+    expect(stripTrailingVintage('Reserva 1899')).toBe('Reserva 1899');
+    expect(stripTrailingVintage('Anno 2077')).toBe('Anno 2077');
+  });
+
+  test('never empties the name and passes non-strings through', () => {
+    expect(stripTrailingVintage('2019')).toBe('2019'); // name IS a year — honest junk beats empty
+    expect(stripTrailingVintage(null)).toBeNull();
+    expect(stripTrailingVintage(undefined)).toBeUndefined();
+  });
+
+  test('a mid-name year is part of the cuvée and survives', () => {
+    expect(stripTrailingVintage('Cuvée 2000 Réserve')).toBe('Cuvée 2000 Réserve');
   });
 });
 

@@ -772,7 +772,7 @@ router.get('/canonical-collisions', async (req, res) => {
 //   producer-in-name.v1        — name starts/ends with its own producer,
 //                                including key-token variants ("Felton Road
 //                                Block 3 Pinot Noir" / "Felton Road Wines Ltd")
-//   dangling-name-tail.v1      — name ends in a stranded connective
+//   dangling-name-tail.v2      — name ends in a stranded connective
 //                                ("La Viña de" — support ticket 2026-07-26)
 //   name-equals-producer.v1    — name === producer, non-estate shape
 // plus the non-default estate cohort via ?check=name-equals-producer-estate.v1.
