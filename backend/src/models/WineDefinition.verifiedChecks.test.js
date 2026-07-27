@@ -51,6 +51,14 @@ test('a new doc is a wine by default (nonWine false — quarantine is opt-in)', 
   expect(doc.nonWine).toBe(false);
 });
 
+test('a new doc starts unreviewed for the low-confidence queue, with no producer doubt', async () => {
+  const doc = baseDoc();
+  await doc.validate();
+  expect(doc.profileReviewedAt).toBeNull();
+  expect(doc.aiProfile.producerSuspect).toBe(false);
+  expect(doc.aiProfile.producerNote).toBeNull();
+});
+
 test('changing name clears both fields', async () => {
   const doc = await reviewedDoc();
   doc.name = 'Block 5 Pinot Noir';

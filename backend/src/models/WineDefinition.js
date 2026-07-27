@@ -99,8 +99,30 @@ const wineDefinitionSchema = new mongoose.Schema({
     foodPairings: { type: [String], default: [] },              // e.g. ['braised beef']
     description:  { type: String, default: null, trim: true },  // short PLAIN-TEXT prose; markdown stripped at write (enrichmentJob)
     confidence:   { type: Number, default: null },             // 0..1 — how sure the AI is
+    // The model's doubt about the producer FIELD itself — set true when it
+    // recognises the "producer" as a range/brand of another house, a place,
+    // a retailer or a label term ("Arcane" = Xavier Vignon's range — the row
+    // every string gate and 49 audit agents missed). producerNote carries the
+    // suggested real producer when the model is sure of it. Feeds the admin
+    // low-confidence review queue; never shown to end users.
+    producerSuspect: { type: Boolean, default: false },
+    producerNote:    { type: String,  default: null, trim: true },
     model:        { type: String, default: null, trim: true }, // model that produced it
     generatedAt:  { type: Date,   default: null },             // when it was generated
+  },
+  // When an admin last reviewed this wine in the low-confidence queue and
+  // judged its data correct. The clearance is SELF-INVALIDATING by comparison,
+  // not by hook: the queue shows rows where profileReviewedAt is null OR older
+  // than aiProfile.generatedAt — so a re-enriched wine (new profile, new
+  // doubt) re-surfaces automatically, and nothing needs to watch field edits
+  // (editing the wine re-enriches → new generatedAt → re-surfaces if still
+  // low-confidence). Deliberately NOT part of verifiedChecks: that record is
+  // scoped to name+producer string rules its pre-validate hook can fully
+  // invalidate; this one's verdict lives in aiProfile, which the hook must
+  // not watch (see the verifiedChecks scope rule above).
+  profileReviewedAt: {
+    type: Date,
+    default: null
   },
   // Normalized key for deduplication
   normalizedKey: {

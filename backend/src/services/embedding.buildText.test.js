@@ -28,6 +28,9 @@ const FULL_WINE = {
     sweetness: 'dry',
     flavors: ['dark cherry', 'thyme'],
     foodPairings: ['duck breast'],
+    // Review metadata inside aiProfile — must never reach the embed text.
+    producerSuspect: true,
+    producerNote: 'Suspect note that must not be embedded',
   },
   // Admin-review metadata — must never reach the embedding text.
   verifiedChecks: ['name-equals-producer.v1'],

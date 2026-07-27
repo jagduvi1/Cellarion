@@ -215,6 +215,14 @@ async function enrichWine(wine, model) {
           // and a self-hoster can override it via SiteConfig.
           description:  typeof data.description === 'string' ? (stripMarkdown(data.description) || null) : null,
           confidence:   typeof data.confidence === 'number' ? data.confidence : null,
+          // The model's own doubt about the producer FIELD (registry audit
+          // follow-up: "Arcane" — a range sold as a producer — sailed past
+          // every string gate AND 49 audit agents; only this model hedged).
+          // Strict true-check: absent on old/custom prompts → false.
+          producerSuspect: data.producerSuspect === true,
+          producerNote: typeof data.producerNote === 'string'
+            ? (stripMarkdown(data.producerNote).slice(0, 300) || null)
+            : null,
           model:        model || aiConfig.get().enrichmentModel,
           generatedAt:  new Date(),
         },
