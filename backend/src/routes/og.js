@@ -435,7 +435,13 @@ router.get('/wines/:idOrSlug', ogLimiter, async (req, res) => {
   try {
     const { idOrSlug } = req.params;
     const isId = isValidId(idOrSlug);
-    const filter = isId ? { _id: idOrSlug } : { slug: String(idOrSlug).toLowerCase() };
+    // Quarantined non-wines are 404 to crawlers, matching the taxonomy listing
+    // routes below and the sitemap. #844 hid them from every discovery surface
+    // but left this detail page serving their title/OG/JSON-LD in full to
+    // anything that had the URL (code audit 2026-07-27, M5).
+    const filter = isId
+      ? { _id: idOrSlug, nonWine: { $ne: true } }
+      : { slug: String(idOrSlug).toLowerCase(), nonWine: { $ne: true } };
 
     const wine = await WineDefinition.findOne(filter)
       .populate(['country', 'region', 'grapes'])

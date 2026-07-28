@@ -141,3 +141,39 @@ test('the name-check scan pool excludes quarantined rows at the query level', as
 
   expect(WineDefinition.find).toHaveBeenCalledWith({ nonWine: { $ne: true } });
 });
+
+// #844 promised, in its commit message AND in the /:id/non-wine route comment,
+// that flagged rows leave "the admin duplicate-scan pools" — but only the
+// name-check pool above actually got the filter. A quarantined whisky stayed a
+// merge candidate in all three of these (code audit 2026-07-27, H3). Asserted
+// per pool so a future pool added without the filter fails here, not in prod.
+describe('every duplicate/collision pool excludes quarantined rows', () => {
+  const chainReturning = (rows) => {
+    const lean = jest.fn().mockResolvedValue(rows);
+    const chain = {
+      select: jest.fn(() => chain),
+      populate: jest.fn(() => chain),
+      sort: jest.fn(() => chain),
+      limit: jest.fn(() => chain),
+      lean,
+      then: (resolve) => Promise.resolve(rows).then(resolve),
+    };
+    return chain;
+  };
+
+  test.each([
+    ['duplicate-clusters', '/api/admin/wines/duplicate-clusters'],
+    ['canonical-collisions', '/api/admin/wines/canonical-collisions'],
+  ])('%s filters nonWine', async (_label, path) => {
+    WineDefinition.find.mockImplementation(() => chainReturning([]));
+
+    await fetch(`${baseUrl}${path}`, {
+      headers: { Authorization: `Bearer ${adminToken()}` },
+    });
+
+    expect(WineDefinition.find).toHaveBeenCalled();
+    for (const call of WineDefinition.find.mock.calls) {
+      expect(call[0]).toMatchObject({ nonWine: { $ne: true } });
+    }
+  });
+});

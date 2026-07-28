@@ -309,7 +309,10 @@ router.get('/duplicate-clusters', async (req, res) => {
 
     // Fetch every wine — small projection so we don't pull the world.
     // Sort by producer so we can stream-group instead of building a large map.
-    const wines = await WineDefinition.find({})
+    // Quarantined non-wines are excluded: a whisky must never be offered as a
+    // merge candidate against a wine (#844's stated contract, which this pool
+    // was missed out of — code audit 2026-07-27, H3).
+    const wines = await WineDefinition.find({ nonWine: { $ne: true } })
       .select('name producer appellation image type country region')
       .populate('country', 'name')
       .populate('region', 'name')
@@ -741,11 +744,14 @@ router.get('/duplicates', async (req, res) => {
     // regex fallback as two separate queries and merge the candidates.
     const searchTerms = `${name} ${producer}`.trim();
     const CANDIDATE_LIMIT = 200;
+    // Both candidate queries exclude quarantined non-wines, same contract as
+    // the other duplicate pools (code audit 2026-07-27, H3).
     const [textHits, regexHits] = await Promise.all([
-      WineDefinition.find({ $text: { $search: searchTerms } })
+      WineDefinition.find({ $text: { $search: searchTerms }, nonWine: { $ne: true } })
         .populate(['country', 'region', 'grapes'])
         .limit(CANDIDATE_LIMIT),
       WineDefinition.find({
+        nonWine: { $ne: true },
         $or: [
           { name: new RegExp(escapeRegex(name.split(' ')[0]), 'i') },
           { producer: new RegExp(escapeRegex(producer.split(' ')[0]), 'i') }
@@ -843,7 +849,7 @@ router.get('/duplicates', async (req, res) => {
 // pre-backfill row and deserves a look.
 router.get('/canonical-collisions', async (req, res) => {
   try {
-    const wines = await WineDefinition.find({ canonicalKey: { $ne: null } })
+    const wines = await WineDefinition.find({ canonicalKey: { $ne: null }, nonWine: { $ne: true } })
       .select('name producer appellation type country canonicalKey createdAt createdVia')
       .populate('country', 'name')
       .lean();
@@ -917,7 +923,7 @@ router.get('/canonical-collisions', async (req, res) => {
 //   producer-in-name.v1        — name starts/ends with its own producer,
 //                                including key-token variants ("Felton Road
 //                                Block 3 Pinot Noir" / "Felton Road Wines Ltd")
-//   dangling-name-tail.v2      — name ends in a stranded connective
+//   dangling-name-tail.v3      — name ends in a stranded connective
 //                                ("La Viña de" — support ticket 2026-07-26)
 //   name-equals-producer.v1    — name === producer, non-estate shape
 // plus the non-default estate cohort via ?check=name-equals-producer-estate.v1.

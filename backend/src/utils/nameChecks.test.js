@@ -60,8 +60,8 @@ describe('producer-in-name.v1', () => {
   });
 });
 
-describe('dangling-name-tail.v2', () => {
-  const detect = byId('dangling-name-tail.v2').detect;
+describe('dangling-name-tail.v3', () => {
+  const detect = byId('dangling-name-tail.v3').detect;
 
   test('flags the ticket row and its class', () => {
     expect(detect({ name: 'La Viña de', producer: 'Madaras' })).toBe('La Viña de');
@@ -88,6 +88,18 @@ describe('dangling-name-tail.v2', () => {
     // …while mid-name occurrences of the same words stay clean.
     expect(detect({ name: 'Sans Soufre Rouge', producer: 'X' })).toBeNull();
     expect(detect({ name: 'Wine by the Sea', producer: 'X' })).toBeNull();
+  });
+
+  test('v3 flags a connective + article tail the last-token check walked past', () => {
+    // This scan is the declared safety net for what the create-time strip lets
+    // through, but both were written as last-token-only checks and so shared
+    // one blind spot: the article is last, the stranding "de" is not.
+    expect(detect({ name: 'Clos de la', producer: 'Pape' })).toBe('Clos de la');
+    expect(detect({ name: 'Weingut von der', producer: 'Nahe' })).toBe('Weingut von der');
+
+    // An article ending a name on its own is still legitimate.
+    expect(detect({ name: 'Château La Tour', producer: 'X' })).toBeNull();
+    expect(detect({ name: 'Bodega El Coto', producer: 'X' })).toBeNull();
   });
 });
 
@@ -132,21 +144,21 @@ describe('runNameChecks — per-rule clearance semantics', () => {
   test('reports every tripped rule and the strip proposal', () => {
     const hit = runNameChecks(doubleHit);
     expect(hit.checks).toEqual(
-      expect.arrayContaining(['producer-in-name.v1', 'dangling-name-tail.v2'])
+      expect.arrayContaining(['producer-in-name.v1', 'dangling-name-tail.v3'])
     );
     expect(hit.proposedName).toBe('La Viña de');
   });
 
   test('a rule listed in verifiedChecks is skipped; others still report (per-rule granularity)', () => {
     const hit = runNameChecks({ ...doubleHit, verifiedChecks: ['producer-in-name.v1'] });
-    expect(hit.checks).toEqual(['dangling-name-tail.v2']);
+    expect(hit.checks).toEqual(['dangling-name-tail.v3']);
     expect(hit.proposedName).toBeNull(); // the proposing rule was cleared
   });
 
   test('all tripped rules cleared → null (row leaves the queue)', () => {
     expect(runNameChecks({
       ...doubleHit,
-      verifiedChecks: ['producer-in-name.v1', 'dangling-name-tail.v2'],
+      verifiedChecks: ['producer-in-name.v1', 'dangling-name-tail.v3'],
     })).toBeNull();
   });
 
@@ -157,15 +169,15 @@ describe('runNameChecks — per-rule clearance semantics', () => {
 
   test('ignoreCleared reports everything (the audit view)', () => {
     const hit = runNameChecks(
-      { ...doubleHit, verifiedChecks: ['producer-in-name.v1', 'dangling-name-tail.v2'] },
+      { ...doubleHit, verifiedChecks: ['producer-in-name.v1', 'dangling-name-tail.v3'] },
       { ignoreCleared: true }
     );
     expect(hit.checks).toHaveLength(2);
   });
 
   test('checkIds scopes the run (the ?check= path)', () => {
-    const hit = runNameChecks(doubleHit, { checkIds: ['dangling-name-tail.v2'] });
-    expect(hit.checks).toEqual(['dangling-name-tail.v2']);
+    const hit = runNameChecks(doubleHit, { checkIds: ['dangling-name-tail.v3'] });
+    expect(hit.checks).toEqual(['dangling-name-tail.v3']);
   });
 
   test('a clean wine returns null', () => {

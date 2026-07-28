@@ -49,7 +49,7 @@ describe('stripProducerPrefix', () => {
 
 // ── Suffix twin + the shared entry point (launch-day admin report) ──────────
 describe('stripProducerSuffix', () => {
-  const { stripProducerSuffix, stripProducerName } = require('./producerPrefix');
+  const { stripProducerSuffix, stripProducerName, hasDanglingTail } = require('./producerPrefix');
 
   test('strips a trailing producer — the five real Mastroberardino rows', () => {
     const P = 'Mastroberardino';
@@ -89,6 +89,27 @@ describe('stripProducerSuffix', () => {
     // 'a' guards the TAIL only — a name merely containing 'a' still strips.
     expect(stripProducerSuffix('Vigna a Sole Mastroberardino', 'Mastroberardino'))
       .toBe('Vigna a Sole');
+  });
+
+  test('v3: a connective + article tail is stranded too (code audit 2026-07-27)', () => {
+    // The v1/v2 guard read only the FINAL token. Bare articles are excluded
+    // from DANGLING_TAIL_WORDS on purpose (they open names far more often than
+    // they end them), so when one trailed a connective the "de" doing the
+    // stranding sat second-to-last and was never inspected — "Clos de la Pape"
+    // stripped to "Clos de la".
+    expect(stripProducerSuffix('Clos de la Pape', 'Pape')).toBeNull();
+    expect(stripProducerSuffix('Weingut von der Nahe', 'Nahe')).toBeNull();
+    expect(stripProducerSuffix('Cascina di lo Barolo', 'Barolo')).toBeNull();
+
+    // …but an article ending a name WITHOUT a preceding connective is fine,
+    // which is why the article list can't simply join DANGLING_TAIL_WORDS.
+    expect(stripProducerSuffix('Château La Tour Blanche', 'Blanche')).toBe('Château La Tour');
+
+    // The scan in nameChecks.js shares this exact test, so the safety net can
+    // no longer disagree with the create-time guard it backs up.
+    expect(hasDanglingTail('Clos de la')).toBe(true);
+    expect(hasDanglingTail('Château La Tour')).toBe(false);
+    expect(hasDanglingTail('Cuvée des Amis')).toBe(false);
   });
 
   test('the dangling guard only inspects the TAIL — interior connectives still strip', () => {

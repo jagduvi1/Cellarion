@@ -32,6 +32,41 @@ const DANGLING_TAIL_WORDS = new Set([
 ]);
 
 /**
+ * Articles that are fine at the END of a name on their own (see the note above
+ * — they open names far more often than they end them, so a bare trailing
+ * article is not evidence of a bad strip) but NOT when a connective precedes
+ * them. "Clos de la Pape" with producer "Pape" strips to "Clos de la": the
+ * article is last, so the single-token check never sees the "de" that is doing
+ * the stranding. French/Italian ("de la", "di lo") and German ("von der",
+ * "an der") wine names produce this shape routinely.
+ */
+const TAIL_ARTICLES = new Set([
+  'la', 'le', 'les', 'el', 'los', 'las', 'il', 'lo', 'gli', 'the',
+  'der', 'die', 'das', 'den', 'dem',
+]);
+
+/**
+ * Does this candidate name end in a grammatically stranded connective?
+ *
+ * The ONE definition, shared by the create-time suffix-strip guard below and
+ * the dangling-name-tail scan in nameChecks.js. They were separately written
+ * last-token-only checks and so missed the same two-token shape (code audit
+ * 2026-07-27, H2); keeping one implementation means the safety net cannot
+ * again disagree with the guard it is meant to back up.
+ *
+ * @param {string} candidate - a proposed wine name
+ * @returns {boolean} true when the tail is stranded and the strip must be refused
+ */
+function hasDanglingTail(candidate) {
+  const tokens = normalizeString(candidate || '').split(' ').filter(Boolean);
+  if (tokens.length === 0) return false;
+  const last = tokens[tokens.length - 1];
+  if (DANGLING_TAIL_WORDS.has(last)) return true;
+  const prev = tokens[tokens.length - 2];
+  return Boolean(prev && TAIL_ARTICLES.has(last) && DANGLING_TAIL_WORDS.has(prev));
+}
+
+/**
  * Detect and strip a redundant producer prefix from a wine name.
  *
  * AI import lookups often store names like "Meerlust Chardonnay" for producer
@@ -87,8 +122,7 @@ function stripProducerSuffix(name, producer) {
   // name (same family as "Les Forts de Latour"); keeping it beats writing a
   // broken one. canonicalizeWineName loops this function on every registry
   // write surface, so the guard closes the class at create time.
-  const lastToken = normalizeString(remainder).split(' ').filter(Boolean).pop();
-  if (lastToken && DANGLING_TAIL_WORDS.has(lastToken)) return null;
+  if (hasDanglingTail(remainder)) return null;
   return remainder;
 }
 
@@ -163,6 +197,7 @@ function canonicalizeWineName(name, producer) {
 
 module.exports = {
   DANGLING_TAIL_WORDS,
+  hasDanglingTail,
   stripProducerPrefix,
   stripProducerSuffix,
   stripProducerName,
