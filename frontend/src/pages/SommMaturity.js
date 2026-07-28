@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import WineImage from '../components/WineImage';
 import ConfirmModal from '../components/ConfirmModal';
+import SommWineProfilePanel from '../components/SommWineProfilePanel';
 import './SommMaturity.css';
 
 const CURRENT_YEAR = new Date().getFullYear();
@@ -305,6 +306,13 @@ function ProfileCard({ profile, isPending, onSaved, onReset }) {
       {expanded && (
         <form className="somm-form" onSubmit={handleSave}>
           {err && <div className="alert alert-error">{err}</div>}
+
+          {/* The generated tasting profile, correctable in place. A curator
+              researching this wine's drink window is the person best placed to
+              catch a wrong profile — before this they worked around it and the
+              bad prose survived (support ticket 2026-07-28). */}
+          <SommWineProfilePanel wine={wine} />
+
 
           <div className="somm-form-hint-row">
             <p className="somm-form-hint">

@@ -1566,6 +1566,37 @@
       "requesterCount_one": "{{count}} requester",
       "requesterCount_other": "{{count}} requesters",
       "requesterNoteLabel": "Requester note"
+    },
+    "profile": {
+      "none": "No tasting profile yet.",
+      "addBtn": "Write one",
+      "aiGenerated": "AI-generated",
+      "curatorVerified": "Curator-verified",
+      "confidenceLabel": "model confidence",
+      "confidenceTitle": "The model's own self-rating, not a correctness score — a confident profile can still be wrong.",
+      "correctBtn": "Correct profile",
+      "saveBtn": "Save profile",
+      "editHint": "Leave a field blank to clear it. Saving marks the profile curator-verified, and the AI will not regenerate over it.",
+      "body": "Body",
+      "tannin": "Tannin",
+      "acidity": "Acidity",
+      "sweetness": "Sweetness",
+      "flavors": "Flavours",
+      "pairings": "Food pairings",
+      "description": "Tasting note",
+      "descriptionPlaceholder": "Two or three plain sentences the owner will read on the bottle page.",
+      "commaSeparated": "Comma-separated",
+      "unset": "— not set —",
+      "value": {
+        "light": "Light",
+        "medium": "Medium",
+        "full": "Full",
+        "low": "Low",
+        "high": "High",
+        "dry": "Dry",
+        "offdry": "Off-dry",
+        "sweet": "Sweet"
+      }
     }
   },
   "priceTracking": {

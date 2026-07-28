@@ -20,6 +20,15 @@ const { SUPPORTED_CURRENCIES } = require('../../config/currencies');
 const { isValidId } = require('../../utils/validation');
 const { ok, fail, objectId, pageParams } = require('../toolUtil');
 const { logAction } = require('../actionLedger');
+const {
+  PROFILE_ENUMS,
+  validateProfilePatch,
+  applyProfilePatch,
+  snapshotProfile,
+} = require('../../services/wineProfileOps');
+// services/search is required lazily at call time, not here: it pulls in the
+// Meili client and half the model layer at module load, which every consumer
+// of the tool registry would then have to stand up (registry.test.js does not).
 
 const SOMM_ROLES = ['somm', 'admin'];
 const PHASE_FIELDS = ['earlyFrom', 'earlyUntil', 'peakFrom', 'peakUntil', 'lateFrom', 'lateUntil'];
@@ -39,6 +48,24 @@ const wineLite = (wd) => (wd ? {
   type: wd.type || null,
   country: wd.country?.name || null,
   region: wd.region?.name || null,
+  appellation: wd.appellation || null,
+} : null);
+
+// The tasting profile as a curator needs to judge it: the values, plus WHO
+// wrote them and how sure the generator was. `confidence` is the model's own
+// self-rating and is not a correctness score — a 0.6 profile inverted the
+// facts about a Vintage Port — so it is labelled, not thresholded.
+const profileLite = (ap) => (ap && (ap.description || ap.body) ? {
+  body: ap.body || null,
+  tannin: ap.tannin || null,
+  acidity: ap.acidity || null,
+  sweetness: ap.sweetness || null,
+  flavors: ap.flavors || [],
+  food_pairings: ap.foodPairings || [],
+  description: ap.description || null,
+  source: ap.source || 'ai',
+  ai_confidence: ap.source === 'curator' ? null : (ap.confidence ?? null),
+  verified_at: ap.verifiedAt || null,
 } : null);
 
 registerTool({
@@ -68,7 +95,7 @@ registerTool({
       WineVintageProfile.find(filter)
         .sort({ status: 1, createdAt: -1 })
         .skip(offset).limit(limit)
-        .populate({ path: 'wineDefinition', select: 'name producer type', populate: ['country', 'region'] })
+        .populate({ path: 'wineDefinition', select: 'name producer type appellation aiProfile', populate: ['country', 'region'] })
         .lean(),
     ]);
     const data = profiles.map((p) => ({
@@ -78,6 +105,12 @@ registerTool({
       status: p.status,
       relative_nv: !!p.relative,
       phases: PHASE_FIELDS.reduce((acc, f) => ((acc[f] = p[f] ?? null), acc), {}),
+      // The generated tasting profile the curator is about to judge the drink
+      // window against. Returned so a wrong one can be corrected in the same
+      // pass with set_wine_profile, instead of the curator silently working
+      // around it and the bad prose surviving (support ticket 2026-07-28).
+      // `source` tells the model whether a human has already vetted this.
+      tasting_profile: profileLite(p.wineDefinition?.aiProfile),
       // Somm-gated tool, so the curator's own note comes back with the row.
       // Kept out of drink_window_for, which is public — see publicContent.js.
       somm_notes: p.sommNotes || null,
@@ -187,6 +220,101 @@ registerTool({
       tool: 'set_vintage_maturity',
       action: 'somm_maturity',
       detail: { profileId: String(profile._id), vintage: profile.vintage },
+      prev,
+      result: envelope,
+    });
+    return ok(envelope.summary, envelope.data);
+  },
+});
+
+registerTool({
+  name: 'set_wine_profile',
+  title: 'Sommelier: correct a wine\'s tasting profile',
+  description:
+    'Corrects the AI-generated tasting profile on a registry wine — body, tannin, acidity, sweetness, flavours, food ' +
+    'pairings and the prose description. Use when the somm says a generated profile is WRONG (the generator writes ' +
+    'confident prose for wines it only half-knows, e.g. describing a Vintage Port as "built for immediate drinking"). ' +
+    'Get wine_id from list_maturity_queue, search_registry or get_wine. FIELD-LEVEL: omit a field to leave it alone, ' +
+    'pass null to CLEAR it — clearing a description you do not trust is better than leaving fiction, and costs nothing ' +
+    'elsewhere because only the structured descriptors feed semantic search. Marks the profile curator-verified, which ' +
+    'permanently stops the AI regenerating over it. This is SHARED data shown to every owner of the wine — confirm the ' +
+    'values with the somm first. Reversible via undo_last.',
+  scope: 'write',
+  requireRole: SOMM_ROLES,
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+  inputSchema: {
+    wine_id: objectId.describe('From list_maturity_queue, search_registry or get_wine'),
+    body: z.enum(PROFILE_ENUMS.body).nullable().optional(),
+    tannin: z.enum(PROFILE_ENUMS.tannin).nullable().optional(),
+    acidity: z.enum(PROFILE_ENUMS.acidity).nullable().optional(),
+    sweetness: z.enum(PROFILE_ENUMS.sweetness).nullable().optional(),
+    flavors: z.array(z.string().max(40)).max(10).nullable().optional()
+      .describe('Concrete aromas, e.g. ["dried fig","walnut"]. Replaces the whole list.'),
+    food_pairings: z.array(z.string().max(60)).max(8).nullable().optional()
+      .describe('Replaces the whole list.'),
+    description: z.string().max(1000).nullable().optional()
+      .describe('Plain-text tasting note shown to owners. null clears it.'),
+  },
+  handler: async (args, ctx) => {
+    const denied = requireSomm(ctx);
+    if (denied) return denied;
+
+    // Same validator the REST route uses, so the two surfaces cannot drift.
+    // snake_case is the MCP convention; map to the model's camelCase first.
+    const patch = {};
+    for (const f of ['body', 'tannin', 'acidity', 'sweetness', 'description', 'flavors']) {
+      if (args[f] !== undefined) patch[f] = args[f];
+    }
+    if (args.food_pairings !== undefined) patch.foodPairings = args.food_pairings;
+
+    const check = validateProfilePatch(patch);
+    if (!check.ok) return fail('invalid_input', check.error);
+
+    const wine = await WineDefinition.findById(args.wine_id);
+    if (!wine) return fail('not_found', 'No such wine. Use search_registry to find it.');
+
+    const prev = snapshotProfile(wine);
+    applyProfilePatch(wine, check.clean, ctx.user.id);
+    try {
+      await wine.save();
+    } catch (err) {
+      if (err?.name === 'VersionError') return fail('conflict', 'The wine changed mid-write — retry.');
+      throw err;
+    }
+    require('../../services/search').indexWine(wine._id).catch(() => {});
+
+    // Same audit action string as the REST route — REST and MCP curation must
+    // audit identically (see this file's header).
+    logAudit(ctx.req, 'somm.wineProfile.update', { type: 'wine', id: wine._id }, {
+      wine: `${wine.producer} — ${wine.name}`,
+      fields: Object.keys(check.clean),
+      previousSource: prev.source,
+      via: 'mcp',
+    });
+
+    const envelope = {
+      summary: `Tasting profile updated for ${wine.producer} — ${wine.name} (now curator-verified)`,
+      data: {
+        wine_id: wine._id,
+        updated_fields: Object.keys(check.clean),
+        profile: {
+          body: wine.aiProfile.body,
+          tannin: wine.aiProfile.tannin,
+          acidity: wine.aiProfile.acidity,
+          sweetness: wine.aiProfile.sweetness,
+          flavors: wine.aiProfile.flavors,
+          food_pairings: wine.aiProfile.foodPairings,
+          description: wine.aiProfile.description,
+          source: wine.aiProfile.source,
+        },
+        note: 'The AI enrichment job will no longer overwrite this wine.',
+        undo: 'undo_last restores the previous profile and its provenance',
+      },
+    };
+    await logAction(ctx, {
+      tool: 'set_wine_profile',
+      action: 'somm_wine_profile',
+      detail: { wineId: String(wine._id), fields: Object.keys(check.clean) },
       prev,
       result: envelope,
     });

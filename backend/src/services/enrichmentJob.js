@@ -114,9 +114,20 @@ async function start({ mode = 'incremental', limit = 0 } = {}) {
 async function runJob(cfg) {
   try {
     // In incremental mode, only fetch wines without a profile yet.
+    //
+    // Either way, NEVER re-generate over a curator-corrected profile: a
+    // sommelier fixed that row by hand because the model got it wrong, and a
+    // full re-run would quietly restore the fiction. Incremental mode is
+    // already safe (a corrected row has a description), so this only bites in
+    // full mode — which is exactly the mode that would have destroyed the
+    // most work. See WineDefinition.aiProfile.source.
+    const keepCurated = { 'aiProfile.source': { $ne: 'curator' } };
     const filter = job.mode === 'full'
-      ? {}
-      : { $or: [{ 'aiProfile.description': null }, { 'aiProfile.description': { $exists: false } }] };
+      ? keepCurated
+      : {
+          ...keepCurated,
+          $or: [{ 'aiProfile.description': null }, { 'aiProfile.description': { $exists: false } }],
+        };
 
     let q = WineDefinition.find(filter)
       .populate('country', 'name')
@@ -286,6 +297,7 @@ async function enrichWineById(wineDefId, { budgetUserId } = {}) {
       .lean();
     if (!wine) return;
     if (wine.aiProfile && wine.aiProfile.description) return; // already enriched
+    if (wine.aiProfile && wine.aiProfile.source === 'curator') return; // hand-corrected — never regenerate
 
     if (budgetUserId) {
       const debit = await tryDebitAi(String(budgetUserId));

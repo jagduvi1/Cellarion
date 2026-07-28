@@ -109,6 +109,18 @@ const wineDefinitionSchema = new mongoose.Schema({
     producerNote:    { type: String,  default: null, trim: true },
     model:        { type: String, default: null, trim: true }, // model that produced it
     generatedAt:  { type: Date,   default: null },             // when it was generated
+    // Provenance. 'ai' = written by enrichmentJob; 'curator' = a sommelier or
+    // admin corrected it by hand (routes/somm/wineProfile.js or the MCP
+    // set_wine_profile tool). The distinction is load-bearing, not cosmetic:
+    // enrichmentJob's FULL mode re-generates every wine and would otherwise
+    // overwrite the correction, so it filters curator rows out. (Incremental
+    // mode was already safe — it only picks up rows with a null description.)
+    // Support ticket 2026-07-28: the generator emits confident fiction on
+    // wines it only half-knows, and a curator researching a drink window is
+    // the person best placed to fix it, so curation is the upgrade path.
+    source:       { type: String, default: 'ai', enum: ['ai', 'curator'] },
+    verifiedBy:   { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+    verifiedAt:   { type: Date, default: null },
   },
   // When an admin last reviewed this wine in the low-confidence queue and
   // judged its data correct. The clearance is SELF-INVALIDATING by comparison,

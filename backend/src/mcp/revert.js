@@ -260,6 +260,37 @@ async function revertLedgerRow(row, ctx, { ok, fail }) {
     return ok(envelope.summary, envelope.data);
   }
 
+  // Somm curation of a wine's tasting profile — restores the previous values
+  // AND the previous provenance, so undoing a correction hands the row back to
+  // the AI enrichment job exactly as it was (source 'ai' → eligible again).
+  if (row.action === 'somm_wine_profile') {
+    const roles = ctx.user?.roles || [];
+    if (!roles.includes('somm') && !roles.includes('admin')) {
+      return fail('forbidden_scope', 'Undoing sommelier curation needs the sommelier (or admin) role.');
+    }
+    const WineDefinition = require('../models/WineDefinition');
+    const { restoreProfile } = require('../services/wineProfileOps');
+    const wine = await WineDefinition.findById(row.detail?.wineId);
+    if (!wine) return fail('conflict', 'That wine no longer exists; nothing to undo.');
+
+    restoreProfile(wine, row.prev || {});
+    try {
+      await wine.save();
+    } catch (err) {
+      await unclaim(row._id); // failed → let the undo be retried
+      if (err?.name === 'VersionError') return fail('conflict', 'The wine changed mid-undo — retry.');
+      throw err;
+    }
+    require('../services/search').indexWine(wine._id).catch(() => {});
+
+    const envelope = {
+      summary: `Undid tasting-profile edit — ${wine.producer} — ${wine.name} back to ${wine.aiProfile?.source || 'ai'}-sourced`,
+      data: { undone: 'set_wine_profile', wine_id: String(wine._id), source: wine.aiProfile?.source || 'ai' },
+    };
+    await logAction(ctx, { tool: 'undo_last', action: row.action, viaUndo: true, detail: { undid: String(row._id) }, result: envelope });
+    return ok(envelope.summary, envelope.data);
+  }
+
   // Somm curation — registry data, role re-checked.
   if (row.action === 'somm_maturity' || row.action === 'somm_price') {
     const roles = ctx.user?.roles || [];
