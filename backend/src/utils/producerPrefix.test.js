@@ -105,6 +105,10 @@ describe('stripProducerSuffix', () => {
     // which is why the article list can't simply join DANGLING_TAIL_WORDS.
     expect(stripProducerSuffix('Château La Tour Blanche', 'Blanche')).toBe('Château La Tour');
 
+    // "de Die" is the Drôme town, not the German article — the one row the
+    // first cut of this rule wrongly flagged on prod.
+    expect(hasDanglingTail('Tradition Clairette de Die')).toBe(false);
+
     // The scan in nameChecks.js shares this exact test, so the safety net can
     // no longer disagree with the create-time guard it backs up.
     expect(hasDanglingTail('Clos de la')).toBe(true);
