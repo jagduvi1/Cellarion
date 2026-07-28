@@ -44,7 +44,9 @@
     "reason": "Reason",
     "error": "An error occurred",
     "optional": "optional",
-    "or": "or"
+    "or": "or",
+    "loadFailed": "Failed to load ({{status}})",
+    "actionFailed": "Failed ({{status}})"
   },
   "nav": {
     "myCellars": "My Cellars",

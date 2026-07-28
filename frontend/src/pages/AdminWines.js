@@ -875,6 +875,14 @@ function AdminWines() {
         />
       )}
 
+      {showLowConfidence && (
+        <WineLowConfidenceModal
+          apiFetch={apiFetch}
+          onClose={() => setShowLowConfidence(false)}
+          onChanged={fetchWines}
+        />
+      )}
+
       {/* Action-feedback toasts */}
       {toasts.length > 0 && (
         <div className="toast-stack" role="status" aria-live="polite">
