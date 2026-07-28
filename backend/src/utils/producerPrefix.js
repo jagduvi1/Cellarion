@@ -42,8 +42,14 @@ const DANGLING_TAIL_WORDS = new Set([
  */
 const TAIL_ARTICLES = new Set([
   'la', 'le', 'les', 'el', 'los', 'las', 'il', 'lo', 'gli', 'the',
-  'der', 'die', 'das', 'den', 'dem',
+  'der', 'das', 'den', 'dem',
 ]);
+// 'die' is deliberately NOT in that set. As a tail token after a connective it
+// is essentially never the German article — German takes the dative there
+// ("von der", "an der"), never "von die" — while "de Die" is the French town
+// in the Drôme that names a real appellation. Measured against prod
+// 2026-07-28: including it flagged exactly one row, Jaillance "Tradition
+// Clairette de Die", and that row is correct.
 
 /**
  * Does this candidate name end in a grammatically stranded connective?
