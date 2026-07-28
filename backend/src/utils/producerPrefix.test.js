@@ -109,6 +109,38 @@ describe('stripProducerSuffix', () => {
     // first cut of this rule wrongly flagged on prod.
     expect(hasDanglingTail('Tradition Clairette de Die')).toBe(false);
 
+    // 'an der' is the other common German locative. The docstring named it
+    // from the start but 'an' was missing from the word list, so the two-token
+    // test never fired on it.
+    expect(hasDanglingTail('Weingut an der')).toBe(true);
+    expect(stripProducerSuffix('Weingut an der Ruwer', 'Ruwer')).toBeNull();
+  });
+
+  test('ONLY the suffix strip is guarded — a prefix strip cannot strand a tail', () => {
+    const { stripProducerPrefix: pre, stripProducerKeyPrefix: keyPre, canonicalizeWineName } =
+      require('./producerPrefix');
+
+    // A prefix strip returns everything AFTER the producer, so the remainder's
+    // last token is the input's last token: it can only pass through a tail the
+    // input already had, never create one. Guarding it would be worse than
+    // useless — it would suppress the producer-in-name signal on exactly the
+    // rows that should carry both flags (see the runNameChecks double-hit test
+    // in nameChecks.test.js, which pins that contract).
+    expect(pre('Madaras La Viña de', 'Madaras')).toBe('La Viña de');
+    // normalizeProducerKey collapses the corporate suffix, so the key is just
+    // "madaras" and only that token comes off — the dangling tail rides along
+    // either way, which is the point being pinned here.
+    expect(keyPre('Madaras Wines La Viña de', 'Madaras Wines')).toBe('Wines La Viña de');
+
+    // The suffix strip is the one that turns a good name into a broken one,
+    // and it is guarded.
+    expect(stripProducerSuffix('La Viña de Madaras', 'Madaras')).toBeNull();
+
+    // Ordinary strips are untouched.
+    expect(canonicalizeWineName('Meerlust Chardonnay', 'Meerlust')).toBe('Chardonnay');
+    expect(canonicalizeWineName('Felton Road Block 3 Pinot Noir', 'Felton Road Wines Ltd'))
+      .toBe('Block 3 Pinot Noir');
+
     // The scan in nameChecks.js shares this exact test, so the safety net can
     // no longer disagree with the create-time guard it backs up.
     expect(hasDanglingTail('Clos de la')).toBe(true);

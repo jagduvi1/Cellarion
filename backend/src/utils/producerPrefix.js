@@ -26,7 +26,7 @@ const DANGLING_TAIL_WORDS = new Set([
   'de', 'del', 'della', 'delle', 'dei', 'degli', 'di', 'du', 'des',
   'da', 'dal', 'dalla', 'do', 'dos', 'das',
   'von', 'vom', 'van', 'of', 'and', 'et', 'und', 'och',
-  'zu', 'zum', 'zur', 'au', 'aux', 'sur', 'sous', 'in', 'im', 'am',
+  'zu', 'zum', 'zur', 'au', 'aux', 'sur', 'sous', 'in', 'im', 'am', 'an',
   'con', 'com', 'avec', 'mit', 'med',
   'by', 'sans', 'a',
 ]);
@@ -99,6 +99,13 @@ function stripProducerPrefix(name, producer) {
   if (!/^[\s\-–—]/.test(rest)) return null;
 
   const remainder = rest.replace(/^[\s\-–—]+/, '').trim();
+  // Deliberately NO dangling-tail guard here, unlike the suffix twin below.
+  // A prefix strip returns everything AFTER the producer, so the remainder's
+  // last token is always the input's last token — this function cannot create
+  // a stranded tail, it can only pass one through that the input already had.
+  // Guarding it anyway would suppress the producer-in-name signal on exactly
+  // the rows that need both flags: "Madaras La Viña de" must trip
+  // producer-in-name AND dangling-name-tail, not just the latter.
   return remainder.length > 0 ? remainder : null;
 }
 
@@ -180,6 +187,9 @@ function stripProducerKeyPrefix(name, producer) {
   }
 
   const remainder = words.slice(start + keyTokens.length).join(' ').replace(/^[\s\-–—]+/, '').trim();
+  // No dangling-tail guard, for the same reason as stripProducerPrefix above:
+  // this also takes words off the FRONT, so it cannot strand a tail that the
+  // input did not already have.
   return remainder.length > 0 ? remainder : null;
 }
 
