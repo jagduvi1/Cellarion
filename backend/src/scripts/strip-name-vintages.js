@@ -54,8 +54,28 @@ const tag = APPLY ? '✔' : '[dry]';
  * script originally did) found nothing while the rename ran anyway, quietly
  * dropping the year instead of moving it onto the bottle (code audit
  * 2026-07-27, H4). Verified on prod 2026-07-28: 0 bottles at null, 535 at 'NV'.
+ *
+ * Matched case-INSENSITIVELY, and 'Unknown' counts too:
+ *   - prod holds 26 bottles at 'Nv' next to 268 at 'NV' (sparkling alone), so
+ *     some write path is not going through parseAndValidateVintage, which
+ *     upper-cases. An exact-string list would repeat this script's original
+ *     mistake in a smaller way.
+ *   - 'Unknown' means "there IS a year, the owner can't read it" (see the
+ *     validator's docstring) — precisely the bottle a year recovered from the
+ *     wine name should fill in. 'NV' is more ambiguous, since it doubles as
+ *     the never-touched default, but a wine whose NAME ends in a year is a
+ *     vintage-dated wine that was misfiled rather than a true non-vintage
+ *     blend, so filling it is right there too.
+ * An owner's explicit year is still never overwritten — that is the point of
+ * restricting to these values at all.
  */
-const UNDATED = { vintage: { $in: [null, '', 'NV'] } };
+const UNDATED = {
+  $or: [
+    { vintage: null },
+    { vintage: '' },
+    { vintage: { $regex: /^\s*(nv|unknown)\s*$/i } },
+  ],
+};
 
 async function run() {
   await mongoose.connect(process.env.MONGO_URI || 'mongodb://mongo:27017/winecellar');
