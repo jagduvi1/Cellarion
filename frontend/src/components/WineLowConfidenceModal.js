@@ -40,6 +40,9 @@ function WineLowConfidenceModal({ apiFetch, onClose, onChanged }) {
   const [pendingUndo, setPendingUndo] = useState(null); // { wine }
   const [successMsg, setSuccessMsg] = useState(null);
   const successTimer = useRef(null);
+  const fetchGen = useRef(0);
+  // Net rows this session has removed from the outstanding set (see fetchPage).
+  const resolvedDelta = useRef(0);
 
   const showSuccess = (msg) => {
     clearTimeout(successTimer.current);
@@ -49,15 +52,27 @@ function WineLowConfidenceModal({ apiFetch, onClose, onChanged }) {
   useEffect(() => () => clearTimeout(successTimer.current), []);
 
   const fetchPage = useCallback(async (p) => {
+    const gen = ++fetchGen.current;
     setLoading(true);
     setError(null);
     try {
-      const params = new URLSearchParams({ page: p, limit: PAGE_SIZE, threshold });
+      // Address by explicit offset, not page. In the default view a row leaves
+      // the outstanding set the moment it is marked reviewed, so the set shrinks
+      // underneath us: a fixed page*limit offset would step straight over the
+      // rows that shifted up and silently skip them. Subtracting the number of
+      // rows we have resolved keeps the offset pointing at the first row this
+      // session has not seen. (With includeReviewed the set never shrinks.)
+      const drained = includeReviewed ? 0 : resolvedDelta.current;
+      const offset = Math.max(0, (p - 1) * PAGE_SIZE - drained);
+      const params = new URLSearchParams({ offset, limit: PAGE_SIZE, threshold });
       if (includeReviewed) params.set('includeReviewed', '1');
       const res = await adminGetLowConfidenceWines(apiFetch, params);
       const data = await res.json().catch(() => ({}));
+      // A newer fetch (page/threshold/filter change) started while this one was
+      // in flight — its result is the current truth, so drop ours.
+      if (gen !== fetchGen.current) return;
       if (!res.ok) {
-        setError(data.error || `Failed to load (${res.status})`);
+        setError(data.error || t('common.loadFailed', { status: res.status }));
         return;
       }
       setWines(data.wines || []);
@@ -66,13 +81,17 @@ function WineLowConfidenceModal({ apiFetch, onClose, onChanged }) {
       setReviewedCount(data.reviewedCount || 0);
       setRowErrors({});
     } catch {
-      setError('Network error');
+      if (gen === fetchGen.current) setError(t('common.networkError'));
     } finally {
-      setLoading(false);
+      if (gen === fetchGen.current) setLoading(false);
     }
-  }, [apiFetch, threshold, includeReviewed]);
+  }, [apiFetch, threshold, includeReviewed, t]);
 
   useEffect(() => { fetchPage(page); }, [fetchPage, page]);
+
+  // Changing the threshold or the reviewed filter swaps the underlying set, so
+  // the drain counter from the previous set no longer describes this one.
+  useEffect(() => { resolvedDelta.current = 0; }, [threshold, includeReviewed]);
 
   const removeRow = (wineId) => {
     const remaining = (wines || []).filter(w => w._id !== wineId);
@@ -91,7 +110,7 @@ function WineLowConfidenceModal({ apiFetch, onClose, onChanged }) {
     setRowErrors(prev => ({ ...prev, [wineId]: message }));
 
   const handleReviewed = async (wine) => {
-    if (pending) return;
+    if (pending || loading) return;
     setPending(wine._id);
     setRowError(wine._id, null);
     try {
@@ -100,10 +119,10 @@ function WineLowConfidenceModal({ apiFetch, onClose, onChanged }) {
       if (res.ok) {
         showSuccess(t('admin.wines.lowConfidence.reviewed', { name: wine.name }));
         setPendingUndo({ wine });
-        if (includeReviewed) fetchPage(page);
-        else removeRow(wine._id);
+        if (includeReviewed) { fetchPage(page); onChanged?.(); }
+        else { resolvedDelta.current += 1; removeRow(wine._id); }
       } else {
-        setRowError(wine._id, data.error || `Failed (${res.status})`);
+        setRowError(wine._id, data.error || t('common.actionFailed', { status: res.status }));
       }
     } catch {
       setRowError(wine._id, t('common.networkError'));
@@ -119,17 +138,24 @@ function WineLowConfidenceModal({ apiFetch, onClose, onChanged }) {
     try {
       const res = await adminUnmarkProfileReviewed(apiFetch, wine._id);
       if (res.ok) {
+        // The row rejoins the outstanding set, so give back the drain credit.
+        if (!includeReviewed) resolvedDelta.current = Math.max(0, resolvedDelta.current - 1);
         setPendingUndo(null);
         fetchPage(page);
         onChanged?.();
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setRowError(wine._id, data.error || t('common.actionFailed', { status: res.status }));
       }
-    } catch { /* banner stays; retry possible */ } finally {
+    } catch {
+      setRowError(wine._id, t('common.networkError'));
+    } finally {
       setPending(null);
     }
   };
 
   const handleUnreview = async (wine) => {
-    if (pending) return;
+    if (pending || loading) return;
     setPending(wine._id);
     setRowError(wine._id, null);
     try {
@@ -137,7 +163,7 @@ function WineLowConfidenceModal({ apiFetch, onClose, onChanged }) {
       if (res.ok) { fetchPage(page); onChanged?.(); }
       else {
         const data = await res.json().catch(() => ({}));
-        setRowError(wine._id, data.error || `Failed (${res.status})`);
+        setRowError(wine._id, data.error || t('common.actionFailed', { status: res.status }));
       }
     } catch {
       setRowError(wine._id, t('common.networkError'));
@@ -301,12 +327,12 @@ function WineLowConfidenceModal({ apiFetch, onClose, onChanged }) {
                   <td style={{ ...tdStyle, whiteSpace: 'nowrap', textAlign: 'right' }}>
                     {isReviewed(wine) ? (
                       <button type="button" className="btn btn-secondary btn-small"
-                        disabled={!!pending} onClick={() => handleUnreview(wine)}>
+                        disabled={loading || !!pending} onClick={() => handleUnreview(wine)}>
                         {t('admin.wines.lowConfidence.unreviewBtn')}
                       </button>
                     ) : (
                       <button type="button" className="btn btn-secondary btn-small"
-                        disabled={!!pending}
+                        disabled={loading || !!pending}
                         onClick={() => handleReviewed(wine)}
                         title={t('admin.wines.lowConfidence.reviewTitle')}>
                         {pending === wine._id ? t('common.saving') : t('admin.wines.lowConfidence.reviewBtn')}

@@ -6,9 +6,13 @@ vi.mock('../api/admin', () => ({
   adminUnmarkProfileReviewed: vi.fn(),
 }));
 
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({ t: (key) => key }),
-}));
+// `t` must keep a stable identity across renders, as react-i18next's real one
+// does — components list it in useCallback deps, so a fresh function per render
+// would spin those callbacks (and any effect keyed on them) forever.
+vi.mock('react-i18next', () => {
+  const t = (key, vars) => (vars ? `${key}:${JSON.stringify(vars)}` : key);
+  return { useTranslation: () => ({ t }) };
+});
 
 const {
   adminGetLowConfidenceWines,
@@ -84,8 +88,33 @@ test('the threshold picker refetches with the chosen value', async () => {
   await waitFor(() => {
     const params = adminGetLowConfidenceWines.mock.calls.at(-1)[1];
     expect(params.get('threshold')).toBe('0.4');
-    expect(params.get('page')).toBe('1');
+    expect(params.get('offset')).toBe('0');
   });
+});
+
+test('paging after a review offsets by rows drained, not by a fixed page size', async () => {
+  // A full page, so "Next" is reachable and the drain is observable.
+  const page1 = Array.from({ length: 50 }, (_, i) => ({ ...ARCANE, _id: `w${i}` }));
+  adminGetLowConfidenceWines.mockResolvedValue(
+    ok({ wines: page1, total: 120, page: 1, pages: 3, threshold: 0.3, reviewedCount: 0 })
+  );
+  adminMarkProfileReviewed.mockResolvedValue(ok({ profileReviewedAt: 'now' }));
+  renderModal();
+
+  await screen.findAllByText('admin.wines.lowConfidence.reviewBtn');
+  expect(adminGetLowConfidenceWines.mock.calls.at(-1)[1].get('offset')).toBe('0');
+
+  // Resolve two rows: they leave the outstanding set, shifting everything up by 2.
+  fireEvent.click(screen.getAllByText('admin.wines.lowConfidence.reviewBtn')[0]);
+  await waitFor(() => expect(adminMarkProfileReviewed).toHaveBeenCalledTimes(1));
+  fireEvent.click(screen.getAllByText('admin.wines.lowConfidence.reviewBtn')[0]);
+  await waitFor(() => expect(adminMarkProfileReviewed).toHaveBeenCalledTimes(2));
+
+  fireEvent.click(screen.getByText('common.next'));
+
+  // Naive offset would be 50 and skip the two rows that shifted into 48 and 49.
+  await waitFor(() =>
+    expect(adminGetLowConfidenceWines.mock.calls.at(-1)[1].get('offset')).toBe('48'));
 });
 
 test('the audit checkbox requests includeReviewed=1 and reviewed rows swap to Unreview', async () => {
