@@ -458,9 +458,13 @@ const PUBLIC_PROJECTION = 'name producer slug country region appellation grapes 
 router.get('/:idOrSlug/public', async (req, res) => {
   try {
     const { idOrSlug } = req.params;
+    // Unauthenticated share/preview surface — quarantined non-wines are hidden
+    // here for the same reason as on the OG page (code audit 2026-07-27, M5).
+    // The authenticated /:id route below deliberately still resolves them, so
+    // an owner's own bottle page keeps working: hiding, not breaking.
     const filter = isValidId(idOrSlug)
-      ? { _id: idOrSlug }
-      : { slug: String(idOrSlug).toLowerCase() };
+      ? { _id: idOrSlug, nonWine: { $ne: true } }
+      : { slug: String(idOrSlug).toLowerCase(), nonWine: { $ne: true } };
 
     const wine = await WineDefinition.findOne(filter)
       .populate(['country', 'region', 'grapes'])

@@ -17,11 +17,12 @@
  * producerPrefix.js / normalize.js, both of which have their own test suites.
  */
 const { normalizeString } = require('./normalize');
-// DANGLING_TAIL_WORDS lives in producerPrefix.js (which cannot require this
-// module back) so the suffix-strip guard and the dangling-tail rule share one
-// list — see its definition there for what it includes and why.
+// The dangling-tail TEST (not just its word list) lives in producerPrefix.js
+// (which cannot require this module back) so the create-time suffix-strip
+// guard and this scan share one implementation — see its definition there for
+// what counts as stranded and why.
 const {
-  stripProducerName, stripProducerKeyPrefix, DANGLING_TAIL_WORDS,
+  stripProducerName, stripProducerKeyPrefix, hasDanglingTail, DANGLING_TAIL_WORDS,
 } = require('./producerPrefix');
 
 // House/estate words that legitimately OPEN a wine name equal to its producer —
@@ -68,13 +69,18 @@ const NAME_CHECKS = [
     // v2: DANGLING_TAIL_WORDS gained by/sans/a (registry audit 2026-07-26) —
     // the id bump invalidates v1 clearances so every row is re-examined
     // against the wider list (none existed at bump time).
-    id: 'dangling-name-tail.v2',
+    // v3: delegate to producerPrefix.hasDanglingTail, which also catches a
+    // connective+article tail ("Clos de la"). This scan and the create-time
+    // guard had each written their own last-token-only test and so shared a
+    // blind spot — the net missed exactly what the guard let through (code
+    // audit 2026-07-27, H2). The id bump re-examines rows cleared under v2.
+    id: 'dangling-name-tail.v3',
     labelKey: 'danglingTail',
     defaultActive: true,
     detect: (w) => {
       const tokens = normalizeString(w.name || '').split(' ').filter(Boolean);
       if (tokens.length < 2) return null; // a one-word name is not "dangling"
-      return DANGLING_TAIL_WORDS.has(tokens[tokens.length - 1]) ? w.name : null;
+      return hasDanglingTail(w.name) ? w.name : null;
     },
   },
   {
