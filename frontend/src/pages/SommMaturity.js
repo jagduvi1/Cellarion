@@ -3,16 +3,11 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import WineImage from '../components/WineImage';
 import ConfirmModal from '../components/ConfirmModal';
-import Modal from '../components/Modal';
 import SommWineProfilePanel from '../components/SommWineProfilePanel';
-import { deferMaturityProfile, returnMaturityProfile } from '../api/somm';
+import { removeMaturityProfile } from '../api/somm';
 import './SommMaturity.css';
 
 const CURRENT_YEAR = new Date().getFullYear();
-
-// Backend sends ISO datetimes; <input type="date"> wants YYYY-MM-DD.
-const toDateInput = (iso) => (iso ? String(iso).slice(0, 10) : '');
-const formatDate = (iso) => (iso ? new Date(iso).toLocaleDateString() : '');
 
 // Compute current maturity phase from 6-field profile
 function getMaturityPhase(p) {
@@ -109,9 +104,8 @@ function SommMaturity() {
       : prev.filter(p => p._id !== updated._id)
   ));
   const handleReset  = (updated) => setProfiles(prev => prev.filter(p => p._id !== updated._id));
-  // Deferring drops the row from Pending; returning it drops the row from
-  // Deferred. Either way the card leaves the tab it was acted on from.
-  const handleMoved  = (updated) => setProfiles(prev => prev.filter(p => p._id !== updated._id));
+  // Removal deletes the row server-side, so only the id comes back.
+  const handleRemoved = (removedId) => setProfiles(prev => prev.filter(p => p._id !== removedId));
 
   return (
     <div className="somm-page">
@@ -129,9 +123,6 @@ function SommMaturity() {
         <button className={`somm-tab ${tab === 'reviewed' ? 'active' : ''}`} onClick={() => setTab('reviewed')}>
           {t('somm.maturity.reviewedTab')}
         </button>
-        <button className={`somm-tab ${tab === 'deferred' ? 'active' : ''}`} onClick={() => setTab('deferred')}>
-          {t('somm.maturity.deferredTab')}
-        </button>
       </div>
 
       {error && <div className="alert alert-error">{error}</div>}
@@ -140,9 +131,7 @@ function SommMaturity() {
         <div className="loading">{t('somm.maturity.loadingProfiles')}</div>
       ) : profiles.length === 0 ? (
         <div className="somm-empty">
-          {tab === 'pending' && t('somm.maturity.noPending')}
-          {tab === 'reviewed' && t('somm.maturity.noReviewed')}
-          {tab === 'deferred' && t('somm.maturity.noDeferred')}
+          {tab === 'pending' ? t('somm.maturity.noPending') : t('somm.maturity.noReviewed')}
         </div>
       ) : (
         <>
@@ -151,10 +140,10 @@ function SommMaturity() {
               <ProfileCard
                 key={profile._id}
                 profile={profile}
-                tab={tab}
+                isPending={tab === 'pending'}
                 onSaved={handleSaved}
                 onReset={handleReset}
-                onMoved={handleMoved}
+                onRemoved={handleRemoved}
               />
             ))}
           </div>
@@ -178,17 +167,12 @@ function SommMaturity() {
 }
 
 // ── Individual profile card with inline form ──────────────────────────────────
-function ProfileCard({ profile, tab, onSaved, onReset, onMoved }) {
+function ProfileCard({ profile, isPending, onSaved, onReset, onRemoved }) {
   const { t } = useTranslation();
   const { apiFetch } = useAuth();
   const wine       = profile.wineDefinition;
   const vintageInt = parseInt(profile.vintage);
   const isNv       = profile.vintage === 'NV';
-  const isPending  = tab === 'pending';
-  const isDeferredTab = tab === 'deferred';
-  // A deferred row shown in Pending is one whose return date has passed — the
-  // backend hands it back automatically (services/maturityOps.js).
-  const returnedFromDeferral = isPending && profile.status === 'deferred';
 
   const [expanded,  setExpanded]  = useState(isPending);
   const [saving,    setSaving]    = useState(false);
@@ -197,8 +181,8 @@ function ProfileCard({ profile, tab, onSaved, onReset, onMoved }) {
   const [aiMsg,     setAiMsg]     = useState(null);
   const [err,       setErr]       = useState(null);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
-  const [showDefer, setShowDefer] = useState(false);
-  const [returning, setReturning] = useState(false);
+  const [showRemoveConfirm, setShowRemoveConfirm] = useState(false);
+  const [removing, setRemoving] = useState(false);
 
   // For an NV profile not yet migrated to relative (offset) mode, start the
   // window blank so the somm enters durations fresh rather than stale years
@@ -262,18 +246,19 @@ function ProfileCard({ profile, tab, onSaved, onReset, onMoved }) {
     }
   };
 
-  const handleReturn = async () => {
-    setReturning(true);
+  const handleRemove = async () => {
+    setRemoving(true);
     setErr(null);
     try {
-      const res = await returnMaturityProfile(apiFetch, profile._id);
+      const res = await removeMaturityProfile(apiFetch, profile._id);
       const data = await res.json();
-      if (res.ok) onMoved(data.profile);
-      else setErr(data.error || t('somm.maturity.returnError'));
+      if (res.ok) onRemoved(profile._id);
+      else setErr(data.error || t('somm.maturity.removeError'));
     } catch {
       setErr('Network error');
     } finally {
-      setReturning(false);
+      setRemoving(false);
+      setShowRemoveConfirm(false);
     }
   };
 
@@ -328,14 +313,11 @@ function ProfileCard({ profile, tab, onSaved, onReset, onMoved }) {
 
         <div className="somm-card-right">
           <span className="somm-vintage-pill">{profile.vintage}</span>
-          {phase && !returnedFromDeferral ? (
+          {phase ? (
             <span className={`maturity-badge maturity-badge--${phase.cls}`}>{phase.label}</span>
           ) : (
-            <span className={`somm-status-pill ${returnedFromDeferral ? 'pending' : profile.status}`}>
-              {returnedFromDeferral && t('somm.maturity.statusReturned')}
-              {!returnedFromDeferral && profile.status === 'pending'  && t('somm.maturity.statusPending')}
-              {!returnedFromDeferral && profile.status === 'reviewed' && t('somm.maturity.statusReviewed')}
-              {!returnedFromDeferral && profile.status === 'deferred' && t('somm.maturity.statusDeferred')}
+            <span className={`somm-status-pill ${profile.status}`}>
+              {profile.status === 'pending' ? t('somm.maturity.statusPending') : t('somm.maturity.statusReviewed')}
             </span>
           )}
           <span className="somm-chevron">{expanded ? '▲' : '▼'}</span>
@@ -347,37 +329,12 @@ function ProfileCard({ profile, tab, onSaved, onReset, onMoved }) {
         <form className="somm-form" onSubmit={handleSave}>
           {err && <div className="alert alert-error">{err}</div>}
 
-          {profile.status === 'deferred' && (
-            <div className="somm-defer-banner">
-              <div>
-                <strong>
-                  {returnedFromDeferral
-                    ? t('somm.maturity.deferReturnedNow')
-                    : (profile.deferredUntil
-                      ? t('somm.maturity.deferReturnsOn', { date: formatDate(profile.deferredUntil) })
-                      : t('somm.maturity.deferIndefinite'))}
-                </strong>
-                {profile.deferredReason && <p className="somm-defer-reason">“{profile.deferredReason}”</p>}
-                {profile.deferredBy?.username && (
-                  <p className="somm-defer-by">
-                    {t('somm.maturity.deferredBy')} <strong>{profile.deferredBy.username}</strong>
-                    {profile.deferredAt && ` · ${formatDate(profile.deferredAt)}`}
-                  </p>
-                )}
-              </div>
-              {isDeferredTab && (
-                <button type="button" className="btn btn-secondary btn-small" onClick={handleReturn} disabled={returning}>
-                  {returning ? t('somm.maturity.returning') : t('somm.maturity.returnToQueue')}
-                </button>
-              )}
-            </div>
-          )}
-
           {/* The generated tasting profile, correctable in place. A curator
               researching this wine's drink window is the person best placed to
               catch a wrong profile — before this they worked around it and the
               bad prose survived (support ticket 2026-07-28). */}
           <SommWineProfilePanel wine={wine} />
+
 
           <div className="somm-form-hint-row">
             <p className="somm-form-hint">
@@ -517,15 +474,15 @@ function ProfileCard({ profile, tab, onSaved, onReset, onMoved }) {
             <button type="submit" className="btn btn-primary" disabled={saving}>
               {saving ? t('common.saving') : t('somm.maturity.markReviewed')}
             </button>
-            {/* The third exit: this vintage cannot be curated because the wine
-                was never released in it. Offered wherever the row is not
-                already carrying a curated window. */}
-            {profile.status !== 'reviewed' && (
-              <button type="button" className="btn btn-secondary" onClick={() => setShowDefer(true)}>
-                {profile.status === 'deferred' ? t('somm.maturity.deferEdit') : t('somm.maturity.deferAction')}
+            {/* The third exit: the wine was never released in this vintage, so
+                there is nothing to curate. Pending only — a reviewed row must
+                be reset first (its window is live data users already see). */}
+            {isPending && (
+              <button type="button" className="btn btn-secondary" onClick={() => setShowRemoveConfirm(true)} disabled={removing}>
+                {removing ? t('somm.maturity.removing') : t('somm.maturity.removeAction')}
               </button>
             )}
-            {tab === 'reviewed' && (
+            {!isPending && (
               <button type="button" className="btn btn-secondary" onClick={() => setShowResetConfirm(true)} disabled={resetting}>
                 {resetting ? t('somm.maturity.resetting') : t('somm.maturity.resetPending')}
               </button>
@@ -545,98 +502,17 @@ function ProfileCard({ profile, tab, onSaved, onReset, onMoved }) {
         />
       )}
 
-      {showDefer && (
-        <DeferModal
-          profile={profile}
-          onClose={() => setShowDefer(false)}
-          onDeferred={(updated) => { setShowDefer(false); onMoved(updated); }}
+      {showRemoveConfirm && (
+        <ConfirmModal
+          title={t('somm.maturity.removeTitle')}
+          message={t('somm.maturity.removeConfirm', { vintage: profile.vintage })}
+          confirmLabel={t('somm.maturity.removeAction')}
+          confirmClass="btn btn-danger btn-small"
+          onConfirm={handleRemove}
+          onCancel={() => setShowRemoveConfirm(false)}
         />
       )}
     </div>
-  );
-}
-
-// ── "Not released yet" dialog ─────────────────────────────────────────────────
-// The date is prefilled from the server's own default (defaultDeferUntil on
-// each row), so the rule for when a vintage plausibly exists lives in exactly
-// one place — services/maturityOps.js — instead of being re-derived here.
-function DeferModal({ profile, onClose, onDeferred }) {
-  const { t } = useTranslation();
-  const { apiFetch } = useAuth();
-  const [until, setUntil]     = useState(toDateInput(profile.deferredUntil || profile.defaultDeferUntil));
-  const [never, setNever]     = useState(profile.status === 'deferred' && !profile.deferredUntil);
-  const [reason, setReason]   = useState(profile.deferredReason || '');
-  const [saving, setSaving]   = useState(false);
-  const [err, setErr]         = useState(null);
-
-  const submit = async (e) => {
-    e.preventDefault();
-    setSaving(true);
-    setErr(null);
-    try {
-      const res = await deferMaturityProfile(apiFetch, profile._id, {
-        deferUntil: never ? null : until,
-        reason,
-      });
-      const data = await res.json();
-      if (res.ok) onDeferred(data.profile);
-      else setErr(data.error || t('somm.maturity.deferError'));
-    } catch {
-      setErr('Network error');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <Modal title={t('somm.maturity.deferTitle')} onClose={onClose}>
-      <form onSubmit={submit}>
-        {err && <div className="alert alert-error">{err}</div>}
-        <p className="somm-defer-explainer">
-          {t('somm.maturity.deferExplainer', { vintage: profile.vintage })}
-        </p>
-
-        <div className="form-group">
-          <label htmlFor={`defer-until-${profile._id}`}>{t('somm.maturity.deferUntilLabel')}</label>
-          <input
-            id={`defer-until-${profile._id}`}
-            type="date"
-            value={until}
-            disabled={never}
-            onChange={(e) => setUntil(e.target.value)}
-          />
-          <p className="somm-year-hint">{t('somm.maturity.deferUntilHint')}</p>
-        </div>
-
-        <div className="form-group">
-          <label className="somm-defer-never">
-            <input type="checkbox" checked={never} onChange={(e) => setNever(e.target.checked)} />
-            <span>{t('somm.maturity.deferNeverLabel')}</span>
-          </label>
-        </div>
-
-        <div className="form-group">
-          <label htmlFor={`defer-reason-${profile._id}`}>
-            {t('somm.maturity.deferReasonLabel')} <span className="somm-year-hint">{t('somm.maturity.sommNotesOptional')}</span>
-          </label>
-          <textarea
-            id={`defer-reason-${profile._id}`}
-            rows={2}
-            maxLength={500}
-            placeholder={t('somm.maturity.deferReasonPlaceholder')}
-            value={reason}
-            onChange={(e) => setReason(e.target.value)}
-          />
-        </div>
-
-        <div className="modal-actions">
-          <button type="button" className="btn btn-secondary" onClick={onClose}>{t('common.cancel')}</button>
-          <button type="submit" className="btn btn-primary" disabled={saving || (!never && !until)}>
-            {saving ? t('common.saving') : t('somm.maturity.deferConfirm')}
-          </button>
-        </div>
-      </form>
-    </Modal>
   );
 }
 

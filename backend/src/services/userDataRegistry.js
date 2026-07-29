@@ -758,16 +758,10 @@ const REGISTRY = [
     note: 'somm price contribution (shared data); portability of own contributions is a follow-up',
   },
   {
-    model: WineVintageProfile, category: 'creator-ref', userFields: ['setBy', 'deferredBy'],
+    model: WineVintageProfile, category: 'creator-ref', userFields: ['setBy'],
     // BUG FIX: also clear sommNotes (the old code unset setBy+setAt but left the
     // somm's authored notes on the now-anonymised profile, unlike WineVintagePrice).
-    // deferredBy/deferredReason follow the same rule — a deferral is a second,
-    // independent curator ref on this model, so it needs its own updateMany:
-    // the somm who deferred a row is usually not the one who reviewed it.
-    purge: async (ctx) => {
-      await WineVintageProfile.updateMany({ setBy: ctx.userId }, { $unset: { setBy: '', setAt: '', sommNotes: '' } });
-      await WineVintageProfile.updateMany({ deferredBy: ctx.userId }, { $unset: { deferredBy: '', deferredAt: '', deferredReason: '' } });
-    },
+    purge: (ctx) => WineVintageProfile.updateMany({ setBy: ctx.userId }, { $unset: { setBy: '', setAt: '', sommNotes: '' } }),
     exportFragment: null,
     note: 'somm maturity contribution (shared data); portability of own contributions is a follow-up',
   },

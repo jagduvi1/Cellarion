@@ -7,7 +7,6 @@ const WineRequest = require('../models/WineRequest');
 const BottleImage = require('../models/BottleImage');
 const Rack = require('../models/Rack');
 const AuditLog = require('../models/AuditLog');
-const { buildQueueFilter } = require('./maturityOps');
 
 // How far back the audit log retains entries (auth.login.success included).
 // Login-based retention figures are bounded by this window. Mirrors the TTL in
@@ -703,12 +702,7 @@ async function _computeGlobalStatsUncached({ excludeAdmins = true } = {}) {
     Rack.countDocuments(rackMatch),
     WineVintageProfile.countDocuments(),
     WineVintageProfile.countDocuments({ status: 'reviewed' }),
-    // "Pending" is the somm's actionable backlog, which since the deferral
-    // feature also includes deferred rows whose return date has passed — the
-    // literal {status:'pending'} count would under-report the queue this stat
-    // card exists to warn about. profilesTotal therefore no longer equals
-    // reviewed + pending: the gap is the deferrals still being held.
-    WineVintageProfile.countDocuments(buildQueueFilter('pending')),
+    WineVintageProfile.countDocuments({ status: 'pending' }),
     WineRequest.countDocuments({ ...requestMatch, status: 'pending' }),
     BottleImage.countDocuments({ ...imageMatch, status: { $in: ['uploaded', 'processing', 'processed'] } }),
     BottleImage.countDocuments(imageMatch),

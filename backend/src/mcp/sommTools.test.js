@@ -24,7 +24,7 @@ jest.mock('../models/WineDefinition', () => ({ find: jest.fn(), findById: jest.f
 jest.mock('../models/User', () => ({ findById: jest.fn() }));
 jest.mock('../models/WineEmbedding', () => ({ findOne: jest.fn() }));
 jest.mock('../models/McpActionLog', () => ({ create: jest.fn(), findOne: jest.fn(), findOneAndUpdate: jest.fn() }));
-jest.mock('../models/WineVintageProfile', () => ({ find: jest.fn(), findById: jest.fn(), countDocuments: jest.fn() }));
+jest.mock('../models/WineVintageProfile', () => ({ find: jest.fn(), findById: jest.fn(), countDocuments: jest.fn(), deleteOne: jest.fn(), findOneAndUpdate: jest.fn() }));
 jest.mock('../models/WineVintagePrice', () => {
   const M = jest.fn(function (doc) { Object.assign(this, doc); this._id = 'price-1'; this.save = jest.fn().mockResolvedValue(undefined); });
   M.aggregate = jest.fn().mockResolvedValue([]);
@@ -64,7 +64,7 @@ const USER_CTX = { user: { id: ME, roles: ['user'] }, scopes: ['read', 'write'],
 
 const tool = (name) => allTools().find((t) => t.name === name);
 const parse = (res) => JSON.parse(res.content[0].text);
-const SOMM_TOOLS = ['list_maturity_queue', 'set_vintage_maturity', 'defer_vintage_maturity', 'set_wine_profile', 'list_price_tracking_requests', 'set_vintage_price'];
+const SOMM_TOOLS = ['list_maturity_queue', 'set_vintage_maturity', 'remove_from_maturity_queue', 'set_wine_profile', 'list_price_tracking_requests', 'set_vintage_price'];
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -105,36 +105,9 @@ describe('list_maturity_queue', () => {
     const res = await tool('list_maturity_queue').handler({}, SOMM_CTX);
     const body = parse(res);
     expect(body.summary).toMatch(/7 pending/);
-    // "pending" is pending OR a deferral that has come due — see maturityOps.
-    expect(WineVintageProfile.find.mock.calls[0][0].$or).toEqual([
-      { status: 'pending' },
-      { status: 'deferred', deferredUntil: { $ne: null, $lte: expect.any(Date) } },
-    ]);
+    expect(WineVintageProfile.find.mock.calls[0][0]).toEqual({ status: 'pending' });
     expect(body.data[0].profile_id).toBe(oid('1'));
     expect(body.data[0].phases).toHaveProperty('peakFrom', null);
-  });
-
-  test('deferred rows carry their return date and reason; pending rows report neither', async () => {
-    WineVintageProfile.countDocuments.mockResolvedValueOnce(1).mockResolvedValueOnce(0);
-    WineVintageProfile.find.mockReturnValue(chain([{
-      _id: oid('1'), vintage: '2027', status: 'deferred', relative: false,
-      deferredUntil: new Date('2029-01-01T00:00:00Z'), deferredReason: 'not released',
-      wineDefinition: { _id: oid('f'), name: 'Barolo', producer: 'P', grapes: [] },
-    }]));
-    const body = parse(await tool('list_maturity_queue').handler({ status: 'deferred' }, SOMM_CTX));
-    expect(WineVintageProfile.find.mock.calls[0][0].status).toBe('deferred');
-    expect(body.data[0].deferral_reason).toBe('not released');
-    expect(new Date(body.data[0].deferred_until).toISOString()).toBe('2029-01-01T00:00:00.000Z');
-  });
-
-  test('an indefinite deferral reads as "indefinite", not null (null means "not deferred")', async () => {
-    WineVintageProfile.countDocuments.mockResolvedValueOnce(1).mockResolvedValueOnce(0);
-    WineVintageProfile.find.mockReturnValue(chain([{
-      _id: oid('1'), vintage: '2027', status: 'deferred', relative: false, deferredUntil: null,
-      wineDefinition: { _id: oid('f'), name: 'Barolo', producer: 'P', grapes: [] },
-    }]));
-    const body = parse(await tool('list_maturity_queue').handler({ status: 'deferred' }, SOMM_CTX));
-    expect(body.data[0].deferred_until).toBe('indefinite');
   });
 
   // #787: the note was fetched but dropped in the row mapping — write-only data.
@@ -211,33 +184,6 @@ describe('set_vintage_maturity', () => {
     expect(body.data.somm_notes).toBeNull();
   });
 
-  // A reviewed row must never keep a return date, whichever surface reviewed
-  // it — the REST route clears it, so this one has to as well.
-  test('reviewing a DEFERRED row clears the deferral, and undo puts the deferral back', async () => {
-    const until = new Date('2029-01-01T00:00:00Z');
-    const p = profile({
-      status: 'deferred', deferredUntil: until, deferredReason: 'not released',
-      deferredBy: oid('b'), deferredAt: new Date('2026-07-29T00:00:00Z'),
-    });
-    await tool('set_vintage_maturity').handler({ profile_id: oid('1'), peak_from: 2030 }, SOMM_CTX);
-    expect(p.status).toBe('reviewed');
-    expect(p.deferredUntil).toBeNull();
-    expect(p.deferredReason).toBe('');
-    expect(p.deferredBy).toBeNull();
-
-    const row = McpActionLog.create.mock.calls[0][0];
-    expect(row.prev).toMatchObject({ status: 'deferred', deferredReason: 'not released', deferredBy: oid('b') });
-
-    // …and the undo restores it rather than silently dropping the deferral.
-    McpActionLog.findOne.mockReturnValue(chain({ ...row, _id: 'sm2', reversed: false }));
-    McpActionLog.findOneAndUpdate.mockResolvedValue({ _id: 'sm2' });
-    WineVintageProfile.findById.mockReturnValue(chain(p));
-    await tool('undo_last').handler({}, { ...SOMM_CTX, scopes: ['consume', 'write'] });
-    expect(p.status).toBe('deferred');
-    expect(new Date(p.deferredUntil).toISOString()).toBe(until.toISOString());
-    expect(p.deferredReason).toBe('not released');
-  });
-
   test('prev snapshot captures phases + review state for undo; audit uses the REST action string', async () => {
     const p = profile({ peakFrom: 2020, peakUntil: 2030, status: 'reviewed', setBy: oid('b'), setAt: new Date('2026-01-01') });
     await tool('set_vintage_maturity').handler({ profile_id: oid('1'), peak_from: 2026, peak_until: 2040 }, SOMM_CTX);
@@ -250,103 +196,62 @@ describe('set_vintage_maturity', () => {
   });
 });
 
-describe('defer_vintage_maturity', () => {
-  // Dates are computed from today, not hardcoded: parseDeferUntil rejects the
-  // past, so a literal would quietly turn this suite red on a future date.
-  const futureISO = (years) => new Date(Date.UTC(new Date().getUTCFullYear() + years, 5, 1)).toISOString().slice(0, 10);
-
+describe('remove_from_maturity_queue', () => {
   const profile = (over = {}) => {
     const p = {
       _id: oid('1'), vintage: '2027', status: 'pending', relative: false,
-      deferredUntil: null, deferredReason: '', deferredBy: null, deferredAt: null,
       wineDefinition: { _id: oid('f'), name: 'Barolo' },
-      save: jest.fn().mockResolvedValue(undefined),
       ...over,
     };
     WineVintageProfile.findById.mockReturnValue(chain(p));
     return p;
   };
 
-  // The date RULE itself is pinned with a fixed clock in maturityOps.test.js;
-  // what matters here is that omitting defer_until reaches for that default
-  // instead of leaving the row without a return date.
-  test('omitting the date applies the computed default and leaves the phases untouched', async () => {
-    const p = profile({ peakFrom: 2040 });
-    const body = parse(await tool('defer_vintage_maturity').handler({ profile_id: oid('1') }, SOMM_CTX));
+  beforeEach(() => {
+    WineVintageProfile.deleteOne.mockResolvedValue({ deletedCount: 1 });
+  });
+
+  test('deletes a pending row; the ledger prev carries wine+vintage so undo can re-seed', async () => {
+    profile();
+    const body = parse(await tool('remove_from_maturity_queue').handler(
+      { profile_id: oid('1'), reason: '2027 not released' }, SOMM_CTX));
     expect(body.error).toBeUndefined();
-    expect(p.status).toBe('deferred');
-    expect(p.deferredUntil).toBeInstanceOf(Date);
-    expect(p.deferredUntil.getTime()).toBeGreaterThan(Date.now() + 300 * 24 * 60 * 60 * 1000);
-    expect(p.deferredBy).toBe(ME);
-    // A deferral is "no judgement yet" — writing windows would be a judgement.
-    expect(p.peakFrom).toBe(2040);
-    expect(p.save).toHaveBeenCalled();
-  });
-
-  test('explicit null defers indefinitely; a chosen date is honoured', async () => {
-    let p = profile();
-    parse(await tool('defer_vintage_maturity').handler({ profile_id: oid('1'), defer_until: null }, SOMM_CTX));
-    expect(p.deferredUntil).toBeNull();
-    expect(p.status).toBe('deferred');
-
-    p = profile();
-    const chosen = futureISO(4);
-    parse(await tool('defer_vintage_maturity').handler({ profile_id: oid('1'), defer_until: chosen }, SOMM_CTX));
-    expect(new Date(p.deferredUntil).toISOString()).toBe(`${chosen}T00:00:00.000Z`);
-  });
-
-  test('refuses a reviewed profile — reset it first rather than hiding curated data', async () => {
-    const p = profile({ status: 'reviewed' });
-    const body = parse(await tool('defer_vintage_maturity').handler({ profile_id: oid('1') }, SOMM_CTX));
-    expect(body.error.code).toBe('conflict');
-    expect(p.save).not.toHaveBeenCalled();
-    expect(p.status).toBe('reviewed');
-  });
-
-  test('rejects a past return date', async () => {
-    const p = profile();
-    const body = parse(await tool('defer_vintage_maturity').handler(
-      { profile_id: oid('1'), defer_until: '2020-01-01' }, SOMM_CTX));
-    expect(body.error.code).toBe('invalid_input');
-    expect(p.save).not.toHaveBeenCalled();
-  });
-
-  test('ledger row is undoable and snapshots the PREVIOUS deferral, not just pending', async () => {
-    const first = new Date('2028-01-01T00:00:00Z');
-    profile({ status: 'deferred', deferredUntil: first, deferredReason: 'first', deferredBy: oid('b') });
-    await tool('defer_vintage_maturity').handler(
-      { profile_id: oid('1'), defer_until: futureISO(5), reason: 'second' }, SOMM_CTX);
+    expect(WineVintageProfile.deleteOne).toHaveBeenCalledWith({ _id: oid('1') });
     const row = McpActionLog.create.mock.calls[0][0];
-    expect(row.action).toBe('somm_maturity_defer');
-    expect(row.prev).toMatchObject({ status: 'deferred', deferredReason: 'first', deferredBy: oid('b') });
-    expect(new Date(row.prev.deferredUntil).toISOString()).toBe('2028-01-01T00:00:00.000Z');
-    expect(logAudit).toHaveBeenCalledWith(SOMM_CTX.req, 'somm.maturity.defer',
-      expect.anything(), expect.objectContaining({ via: 'mcp' }));
+    expect(row.action).toBe('somm_maturity_remove');
+    // The row being deleted, wine+vintage is ALL the undo has to work from.
+    expect(row.prev).toEqual({ wineDefinition: oid('f'), vintage: '2027' });
+    expect(logAudit).toHaveBeenCalledWith(SOMM_CTX.req, 'somm.maturity.remove',
+      expect.anything(), expect.objectContaining({ reason: '2027 not released', via: 'mcp' }));
   });
 
-  test('undo puts the pair back exactly as it was', async () => {
+  test('refuses a reviewed row — reset it first rather than silently retiring curated data', async () => {
+    profile({ status: 'reviewed' });
+    const body = parse(await tool('remove_from_maturity_queue').handler({ profile_id: oid('1') }, SOMM_CTX));
+    expect(body.error.code).toBe('conflict');
+    expect(WineVintageProfile.deleteOne).not.toHaveBeenCalled();
+  });
+
+  test('undo re-seeds the pending stub via upsert and CLAIMS the ledger row', async () => {
     const row = {
-      _id: 'sd', action: 'somm_maturity_defer', reversed: false,
+      _id: 'sr', action: 'somm_maturity_remove', reversed: false,
       detail: { profileId: oid('1'), vintage: '2027' },
-      prev: { status: 'pending', deferredUntil: null, deferredReason: '', deferredBy: null, deferredAt: null },
+      prev: { wineDefinition: oid('f'), vintage: '2027' },
     };
     McpActionLog.findOne.mockReturnValue(chain(row));
     McpActionLog.findOneAndUpdate.mockResolvedValue(row);
-    const p = {
-      _id: oid('1'), status: 'deferred', deferredUntil: new Date('2029-01-01T00:00:00Z'),
-      deferredReason: 'not released', deferredBy: oid('b'), deferredAt: new Date(),
-      save: jest.fn().mockResolvedValue(undefined),
-    };
-    WineVintageProfile.findById.mockReturnValue(chain(p));
+    WineVintageProfile.findOneAndUpdate.mockResolvedValue({});
     const res = await tool('undo_last').handler({}, { ...SOMM_CTX, scopes: ['consume', 'write'] });
-    expect(parse(res).data.undone).toBe('defer_vintage_maturity');
-    expect(p.status).toBe('pending');
-    expect(p.deferredUntil).toBeNull();
-    expect(p.deferredReason).toBe('');
-    expect(p.save).toHaveBeenCalled();
-    // The ledger row must be CLAIMED, or undo_last would keep returning it.
+    expect(parse(res).data.undone).toBe('remove_from_maturity_queue');
+    // Upsert, not insert: a bottle add may already have re-seeded the pair, and
+    // the undo must land on "it is in the queue again" either way.
+    expect(WineVintageProfile.findOneAndUpdate).toHaveBeenCalledWith(
+      { wineDefinition: oid('f'), vintage: '2027' },
+      { $setOnInsert: { wineDefinition: oid('f'), vintage: '2027', status: 'pending' } },
+      { upsert: true }
+    );
     expect(McpActionLog.findOneAndUpdate).toHaveBeenCalledWith(
-      { _id: 'sd', reversed: false }, { $set: { reversed: true, idempotencyKey: null } });
+      { _id: 'sr', reversed: false }, { $set: { reversed: true, idempotencyKey: null } });
   });
 });
 

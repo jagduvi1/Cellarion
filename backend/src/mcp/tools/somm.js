@@ -26,17 +26,6 @@ const {
   applyProfilePatch,
   snapshotProfile,
 } = require('../../services/wineProfileOps');
-const {
-  buildQueueFilter,
-  parseDeferUntil,
-  parseDeferReason,
-  canDefer,
-  applyDefer,
-  clearDeferral,
-  snapshotDeferral,
-  isDeferralDue,
-  REASON_MAX,
-} = require('../../services/maturityOps');
 // services/search is required lazily at call time, not here: it pulls in the
 // Meili client and half the model layer at module load, which every consumer
 // of the tool registry would then have to stand up (registry.test.js does not).
@@ -83,16 +72,14 @@ registerTool({
   name: 'list_maturity_queue',
   title: 'Sommelier: list the maturity queue',
   description:
-    'Lists wine+vintage pairs awaiting drink-window review (every added bottle seeds one), newest first. Call when ' +
-    'the somm asks "anything in my maturity queue?" or before a review session. Use the returned profile_id with ' +
-    'set_vintage_maturity. status "pending" is the actionable queue and also includes deferred pairs whose return ' +
-    'date has passed; status "deferred" lists the ones still held back; "all" mixes every status together, so ' +
-    'prefer "pending" when the somm wants work to do.',
+    'Lists wine+vintage pairs awaiting drink-window review (every added bottle seeds one). Pending first, newest ' +
+    'first. Call when the somm asks "anything in my maturity queue?" or before a review session. Use the returned ' +
+    'profile_id with set_vintage_maturity.',
   scope: 'read',
   requireRole: SOMM_ROLES,
   annotations: { readOnlyHint: true, openWorldHint: false },
   inputSchema: {
-    status: z.enum(['pending', 'reviewed', 'deferred', 'all']).default('pending'),
+    status: z.enum(['pending', 'reviewed', 'all']).default('pending'),
     limit: z.number().int().min(1).max(50).default(20),
     offset: z.number().int().min(0).default(0),
   },
@@ -101,11 +88,10 @@ registerTool({
     if (denied) return denied;
     const { limit, offset } = pageParams(args, 20, 50);
     const status = args.status || 'pending';
-    const now = new Date();
-    const filter = buildQueueFilter(status, now);
+    const filter = status === 'all' ? {} : { status };
     const [total, pending, profiles] = await Promise.all([
       WineVintageProfile.countDocuments(filter),
-      WineVintageProfile.countDocuments(buildQueueFilter('pending', now)),
+      WineVintageProfile.countDocuments({ status: 'pending' }),
       WineVintageProfile.find(filter)
         .sort({ status: 1, createdAt: -1 })
         .skip(offset).limit(limit)
@@ -128,11 +114,6 @@ registerTool({
       // Somm-gated tool, so the curator's own note comes back with the row.
       // Kept out of drink_window_for, which is public — see publicContent.js.
       somm_notes: p.sommNotes || null,
-      // Deferral state, so the model never proposes a drink window for a pair a
-      // human already judged un-curatable — and can say when it comes back.
-      deferred_until: p.status === 'deferred' ? (p.deferredUntil || 'indefinite') : null,
-      deferral_reason: p.status === 'deferred' ? (p.deferredReason || null) : null,
-      deferral_due: isDeferralDue(p, now) || null,
     }));
     return ok(`${pending} pending in the maturity queue (showing ${data.length} of ${total} ${status})`, data, {
       page: { limit, offset, total },
@@ -203,13 +184,10 @@ registerTool({
     }
 
     // Snapshot for undo: phases + notes + review state, restored verbatim.
-    // The deferral rides along because reviewing CLEARS it below — without it
-    // in the snapshot, undoing a review of a deferred row would lose the
-    // deferral instead of putting the row back as it was.
     const prev = {
       ...PHASE_FIELDS.reduce((acc, f) => ((acc[f] = profile[f] ?? null), acc), {}),
-      ...snapshotDeferral(profile), // carries status too
       sommNotes: profile.sommNotes ?? null,
+      status: profile.status,
       relative: profile.relative,
       setBy: profile.setBy ? String(profile.setBy) : null,
       setAt: profile.setAt || null,
@@ -221,9 +199,6 @@ registerTool({
     profile.status = 'reviewed';
     profile.setBy = ctx.user.id;
     profile.setAt = new Date();
-    // Curating supersedes any deferral — mirrors routes/somm/maturity.js so a
-    // reviewed row can never keep a return date whichever surface set it.
-    clearDeferral(profile);
     await profile.save();
 
     logAudit(ctx.req, 'somm.maturity.review',
@@ -253,63 +228,56 @@ registerTool({
 });
 
 registerTool({
-  name: 'defer_vintage_maturity',
-  title: 'Sommelier: defer a vintage that does not exist yet',
+  name: 'remove_from_maturity_queue',
+  title: 'Sommelier: remove a vintage the wine was never released in',
   description:
-    'Takes a wine+vintage OUT of the maturity queue WITHOUT setting a drink window, for the case where the wine has ' +
-    'not been released in that vintage yet (a user typed a year the wine does not have — often while testing — or a ' +
-    'purchase year mistaken for a vintage). Use this instead of guessing values: the phases stay empty and the pair ' +
-    'returns to the queue automatically on the return date, so it still gets curated if that vintage becomes real. ' +
-    'Defaults to the vintage year + 2 (at least a year out). Pass defer_until null only when the vintage will never ' +
-    'exist. Does NOT hide the wine from users and does not touch any window already set. Reversible via undo_last.',
+    'Deletes a wine+vintage pair from the maturity queue WITHOUT setting a drink window, for the case where the wine ' +
+    'does not exist in that vintage (a user typed a year the wine was never released in — often while testing — or a ' +
+    'purchase year mistaken for a vintage). Use this instead of guessing values: inventing a window poisons shared ' +
+    'data. Not a quarantine — the next time anyone adds a bottle of this wine+vintage the pair re-enters the queue ' +
+    'like any other wine, so if that vintage becomes real it still gets curated. Refuses a reviewed pair (reset it ' +
+    'first). Reversible via undo_last.',
   scope: 'write',
   requireRole: SOMM_ROLES,
-  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+  annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
   inputSchema: {
     profile_id: objectId.describe('From list_maturity_queue'),
-    defer_until: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Use YYYY-MM-DD').nullable().optional()
-      .describe('Date the pair returns to the queue (YYYY-MM-DD). Omit for the default: two years after the vintage, at least a year from now. null = indefinite, only a curator brings it back.'),
-    reason: z.string().max(REASON_MAX).optional()
-      .describe('Why it cannot be curated, for the next curator — e.g. "2027 not released; user typed the purchase year".'),
+    reason: z.string().max(200).optional()
+      .describe('Why, for the audit trail — e.g. "2027 not released; user typed the purchase year".'),
   },
   handler: async (args, ctx) => {
     const denied = requireSomm(ctx);
     if (denied) return denied;
     const profile = await WineVintageProfile.findById(args.profile_id).populate('wineDefinition', 'name producer');
     if (!profile) return fail('not_found', 'No such maturity profile. Use list_maturity_queue for valid ids.');
+    if (profile.status === 'reviewed') {
+      return fail('conflict', 'This vintage is already reviewed — reset it to pending before removing it.');
+    }
 
-    const allowed = canDefer(profile);
-    if (!allowed.ok) return fail('conflict', allowed.error);
+    // Wine+vintage is all the undo needs: a removed row is the auto-seeded
+    // pending stub (phases and notes only exist on reviewed rows), so undoing
+    // is re-seeding, not restoring field values.
+    const prev = {
+      wineDefinition: String(profile.wineDefinition?._id || profile.wineDefinition),
+      vintage: profile.vintage,
+    };
+    await WineVintageProfile.deleteOne({ _id: profile._id });
 
-    const now = new Date();
-    const until = parseDeferUntil(args.defer_until, profile.vintage, now);
-    if (!until.ok) return fail('invalid_input', until.error);
-    const reason = parseDeferReason(args.reason);
-    if (!reason.ok) return fail('invalid_input', reason.error);
-
-    const prev = snapshotDeferral(profile);
-    applyDefer(profile, { until: until.value, reason: reason.value, userId: ctx.user.id, now });
-    await profile.save();
-
-    logAudit(ctx.req, 'somm.maturity.defer',
+    logAudit(ctx.req, 'somm.maturity.remove',
       { type: 'wine', id: profile.wineDefinition?._id || profile.wineDefinition },
-      { vintage: profile.vintage, deferredUntil: profile.deferredUntil, via: 'mcp' });
+      { vintage: profile.vintage, ...(args.reason ? { reason: args.reason } : {}), via: 'mcp' });
 
-    const returns = until.value ? until.value.toISOString().slice(0, 10) : 'never (indefinite)';
     const envelope = {
-      summary: `Deferred ${profile.wineDefinition?.name || 'wine'} ${profile.vintage} — returns to the queue ${returns}`,
+      summary: `Removed ${profile.wineDefinition?.name || 'wine'} ${profile.vintage} from the maturity queue — it returns if anyone adds a bottle of that wine+vintage`,
       data: {
-        profile_id: profile._id,
         vintage: profile.vintage,
-        status: profile.status,
-        deferred_until: until.value || null,
-        deferral_reason: profile.deferredReason || null,
+        removed: true,
         undo: 'undo_last puts it back in the queue',
       },
     };
     await logAction(ctx, {
-      tool: 'defer_vintage_maturity',
-      action: 'somm_maturity_defer',
+      tool: 'remove_from_maturity_queue',
+      action: 'somm_maturity_remove',
       detail: { profileId: String(profile._id), vintage: profile.vintage },
       prev,
       result: envelope,

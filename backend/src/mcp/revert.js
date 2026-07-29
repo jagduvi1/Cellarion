@@ -25,7 +25,7 @@ async function unclaim(rowId) {
 }
 
 const CONSUME_REVERSIBLE = ['consume', 'restore'];
-const WRITE_REVERSIBLE = ['add', 'update', 'bulk_add', 'somm_maturity', 'somm_maturity_defer',
+const WRITE_REVERSIBLE = ['add', 'update', 'bulk_add', 'somm_maturity', 'somm_maturity_remove',
   'somm_wine_profile', 'somm_price',
   'cellar_create', 'rack_create', 'place', 'unplace', 'move', 'arrange', 'tasting_note', 'attach_image',
   'winelist_add', 'winelist_price'];
@@ -298,33 +298,40 @@ async function revertLedgerRow(row, ctx, { ok, fail }) {
     return ok(envelope.summary, envelope.data);
   }
 
-  // Somm deferral — puts the pair back exactly as it was, including a PREVIOUS
-  // deferral (a re-defer with a new date undoes to the old one, not to pending).
-  if (row.action === 'somm_maturity_defer') {
+  // Somm queue removal — re-seeds the pending stub. An upsert, not an insert:
+  // if a new bottle add already brought the pair back (or a concurrent undo
+  // raced this one on the unique wine+vintage index), the row is simply found
+  // and the undo still lands on "it is in the queue again".
+  if (row.action === 'somm_maturity_remove') {
     const roles = ctx.user?.roles || [];
     if (!roles.includes('somm') && !roles.includes('admin')) {
       return fail('forbidden_scope', 'Undoing sommelier curation needs the sommelier (or admin) role.');
     }
-    const WineVintageProfile = require('../models/WineVintageProfile');
-    const { restoreDeferral } = require('../services/maturityOps');
-    const profile = await WineVintageProfile.findById(row.detail?.profileId);
-    if (!profile) return fail('conflict', 'That maturity profile no longer exists; nothing was changed.');
-
+    const prev = row.prev || {};
+    if (!prev.wineDefinition || !prev.vintage) {
+      return fail('conflict', 'That removal recorded no wine+vintage; nothing to undo.');
+    }
     const claimed = await McpActionLog.findOneAndUpdate({ _id: row._id, reversed: false }, { $set: { reversed: true, idempotencyKey: null } });
     if (!claimed) return fail('conflict', 'That action is already being undone by another request.');
 
-    restoreDeferral(profile, row.prev || {});
+    const WineVintageProfile = require('../models/WineVintageProfile');
     try {
-      await profile.save();
+      // Direct upsert rather than utils/vintageProfile's helper: that one
+      // swallows errors (seeding is best-effort), but an undo must fail
+      // loudly so the ledger row can be unclaimed and retried.
+      await WineVintageProfile.findOneAndUpdate(
+        { wineDefinition: prev.wineDefinition, vintage: prev.vintage },
+        { $setOnInsert: { wineDefinition: prev.wineDefinition, vintage: prev.vintage, status: 'pending' } },
+        { upsert: true }
+      );
     } catch (err) {
-      await unclaim(row._id); // failed → let the undo be retried
-      if (err?.name === 'VersionError') return fail('conflict', 'The profile changed mid-undo — retry.');
+      await unclaim(row._id); // nothing restored yet → let the undo be retried
       throw err;
     }
 
     const envelope = {
-      summary: `Undid deferral — vintage ${row.detail?.vintage} back to ${profile.status}`,
-      data: { undone: 'defer_vintage_maturity', profile_id: String(profile._id), status: profile.status },
+      summary: `Undid queue removal — vintage ${prev.vintage} is pending again`,
+      data: { undone: 'remove_from_maturity_queue', vintage: prev.vintage, status: 'pending' },
     };
     await logAction(ctx, { tool: 'undo_last', action: row.action, viaUndo: true, detail: { undid: String(row._id) }, result: envelope });
     return ok(envelope.summary, envelope.data);
@@ -356,12 +363,10 @@ async function revertLedgerRow(row, ctx, { ok, fail }) {
         profile[f] = prev[f] === null || prev[f] === undefined ? undefined : prev[f];
       }
       profile.sommNotes = prev.sommNotes === null ? undefined : prev.sommNotes;
+      profile.status = prev.status || 'pending';
       profile.relative = !!prev.relative;
       profile.setBy = prev.setBy || null;
       profile.setAt = prev.setAt || null;
-      // Also puts status back. Reviewing CLEARS a deferral, so undoing a review
-      // of a deferred row has to restore the deferral, not just drop it.
-      require('../services/maturityOps').restoreDeferral(profile, prev);
       try {
         await profile.save();
       } catch (err) {

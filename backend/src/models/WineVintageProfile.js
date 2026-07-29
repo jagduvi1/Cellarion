@@ -14,9 +14,6 @@ const mongoose = require('mongoose');
  * Status lifecycle:
  *   pending  → auto-created when a user adds a bottle with a year vintage
  *   reviewed → set by a somm (or admin) once the window values are filled in
- *   deferred → a somm took the pair out of the queue WITHOUT curating it,
- *              because the wine does not exist in that vintage yet (see the
- *              deferral fields below). Returns to pending on its own.
  */
 const wineVintageProfileSchema = new mongoose.Schema({
   wineDefinition: {
@@ -34,36 +31,10 @@ const wineVintageProfileSchema = new mongoose.Schema({
 
   status: {
     type: String,
-    enum: ['pending', 'reviewed', 'deferred'],
+    enum: ['pending', 'reviewed'],
     default: 'pending',
     index: true
   },
-
-  // ── Deferral ────────────────────────────────────────────────────────────────
-  // A curator hits a pair that CANNOT be curated: the user typed a vintage the
-  // wine has not been released for (most often someone testing the app). Both
-  // existing exits are wrong for it — inventing a drink window poisons shared
-  // data, and there was no discard at all. Deferring takes the row out of the
-  // queue with the values left empty, and brings it back when the vintage
-  // plausibly exists.
-  //
-  // deferredUntil is evaluated at READ time (services/maturityOps.js
-  // buildQueueFilter), so a due row rejoins the pending queue by itself — there
-  // is no scheduled job here to forget to run or to fail quietly.
-  // null = indefinite: the pair only returns if a curator sends it back.
-  deferredUntil: { type: Date, default: null, index: true },
-  deferredReason: {
-    type: String,
-    trim: true,
-    maxlength: [500, 'Deferral reason too long'],
-    default: ''
-  },
-  deferredBy: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
-    default: null
-  },
-  deferredAt: { type: Date, default: null },
 
   // When true (used for NV / non-vintage wines), the six phase numbers below are
   // year-OFFSETS after each bottle's purchase year — not absolute calendar years
