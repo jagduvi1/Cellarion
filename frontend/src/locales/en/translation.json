@@ -1337,7 +1337,19 @@
       "appellationRegionLabel": "Region (optional)",
       "appellationRegionNone": "No specific region",
       "confirmDeleteItem": "Are you sure you want to delete this item?",
-      "deleteWarning": "This action cannot be undone."
+      "deleteWarning": "This action cannot be undone.",
+      "wineCount_one": "{{count, number}} wine",
+      "wineCount_other": "{{count, number}} wines",
+      "wineCountTitle": "How many registry wines reference this entry",
+      "mergeBtn": "Merge…",
+      "mergeTitle": "Merge this entry into another — every wine is re-pointed and the old name becomes a synonym",
+      "mergeModalTitle": "Merge \"{{name}}\" into…",
+      "mergeExplainer": "\"{{name}}\" ({{wineCount}} wines) will be absorbed: every wine that references it is re-pointed to the target, its name becomes a synonym on the target so imports and label scans cannot re-create it, and the entry itself is deleted.",
+      "mergeTargetLabel": "Merge into",
+      "mergeTargetPlaceholder": "Choose the entry to keep…",
+      "mergeHint": "Merge the low-count variant into the canonical one — the target is the entry that survives.",
+      "mergeConfirm": "Merge",
+      "merging": "Merging…"
     },
     "wines": {
       "title": "Admin: Wine Library",
@@ -1425,7 +1437,26 @@
         "unreviewBtn": "Unreview",
         "empty": "No wines below this confidence threshold. The registry is in good shape."
       },
-      "defaultImageHint": "Click the star to set the default image for this wine."
+      "defaultImageHint": "Click the star to set the default image for this wine.",
+      "canonicalCollisions": {
+        "button": "Canonical collisions",
+        "buttonTitle": "Wines sharing one canonical identity key — the strongest duplicate signal",
+        "title": "Canonical-key collisions",
+        "explainer": "These wines collapse to the same identity once producer spelling, producer-in-name embeds and appellation tiers are folded away. Most sets are duplicates; some are legitimately distinct wineries (those are flagged). Merging happens in the duplicates scanner — this list is for judging.",
+        "count_one": "{{count}} collision set (scanned {{scanned}} wines)",
+        "count_other": "{{count}} collision sets (scanned {{scanned}} wines)",
+        "empty": "No collisions — all {{scanned}} scanned wines have a unique canonical identity.",
+        "flagDiffCountry": "Different countries",
+        "flagDiffType": "Different types",
+        "dismiss": "Not duplicates",
+        "dismissing": "Saving…",
+        "dismissTitle": "Record every pair in this set as distinct wines, so it stops resurfacing here and in the duplicates scanner",
+        "bottleCount_one": "{{count}} bottle",
+        "bottleCount_other": "{{count}} bottles",
+        "loadError": "Failed to load collisions",
+        "dismissError": "Failed to record the dismissal",
+        "mergeHint": "To merge a set: open \"Find duplicates\" and use the golden-record merge — it lets you pick the surviving value per field."
+      }
     },
     "images": {
       "title": "Admin: Image Review",

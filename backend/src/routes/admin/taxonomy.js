@@ -23,6 +23,51 @@ router.use(requireAuth, requireRole('admin'));
 // drop it after any successful admin mutation so renames/deletions show up
 // immediately instead of after the TTL.
 const { clearTaxonomyListCache } = require('../taxonomy');
+
+// ── Usage counts for the admin lists ─────────────────────────────────────────
+// The taxonomy UI gained merge/delete power (strategy 2026-07-29 R5), and both
+// verbs need the same context to be used safely: how many wines actually
+// reference this doc. Delete already refuses non-zero usage server-side; the
+// count makes that visible BEFORE the click, and for merges it tells the admin
+// which of two spellings is the real one (merge the 1-wine typo into the
+// 300-wine canonical, never the reverse).
+
+/** Map<idString, wineCount> for a ref field ('country' | 'region'). */
+async function wineCountsByRef(field) {
+  const rows = await WineDefinition.aggregate([
+    { $match: { [field]: { $ne: null } } },
+    { $group: { _id: `$${field}`, n: { $sum: 1 } } },
+  ]);
+  return new Map(rows.map(r => [String(r._id), r.n]));
+}
+
+/** Map<grapeIdString, wineCount> (grapes is an array field). */
+async function wineCountsByGrape() {
+  const rows = await WineDefinition.aggregate([
+    { $unwind: '$grapes' },
+    { $group: { _id: '$grapes', n: { $sum: 1 } } },
+  ]);
+  return new Map(rows.map(r => [String(r._id), r.n]));
+}
+
+/**
+ * Map<normalizedAppellation, wineCount>. Wines store the appellation as free
+ * text (not a ref — see routes/admin/import.js), so the join is by normalized
+ * string: the same normalization both writers apply.
+ */
+async function wineCountsByAppellation() {
+  const rows = await WineDefinition.aggregate([
+    { $match: { appellation: { $nin: [null, ''] } } },
+    { $group: { _id: '$appellation', n: { $sum: 1 } } },
+  ]);
+  const map = new Map();
+  for (const r of rows) {
+    const key = normalizeString(r._id || '');
+    if (!key) continue;
+    map.set(key, (map.get(key) || 0) + r.n);
+  }
+  return map;
+}
 router.use((req, res, next) => {
   if (req.method !== 'GET') {
     res.on('finish', () => {
@@ -37,8 +82,18 @@ router.use((req, res, next) => {
 // GET /api/admin/taxonomy/countries - List all countries
 router.get('/countries', async (req, res) => {
   try {
-    const countries = await Country.find().sort({ name: 1 });
-    res.json({ count: countries.length, countries });
+    const [countries, wineCounts, regionAgg] = await Promise.all([
+      Country.find().sort({ name: 1 }).lean(),
+      wineCountsByRef('country'),
+      Region.aggregate([{ $group: { _id: '$country', n: { $sum: 1 } } }]),
+    ]);
+    const regionCounts = new Map(regionAgg.map(r => [String(r._id), r.n]));
+    const rows = countries.map(c => ({
+      ...c,
+      wineCount: wineCounts.get(String(c._id)) || 0,
+      regionCount: regionCounts.get(String(c._id)) || 0,
+    }));
+    res.json({ count: rows.length, countries: rows });
   } catch (error) {
     console.error('Get countries error:', error);
     res.status(500).json({ error: 'Failed to get countries' });
@@ -168,14 +223,19 @@ router.get('/regions', async (req, res) => {
       filter.country = country;
     }
 
-    const regions = await Region.find(filter)
-      .populate('country', 'name')
-      .populate('parentRegion', 'name')
-      .populate('typicalGrapes', 'name')
-      .populate('permittedGrapes', 'name')
-      .sort({ name: 1 });
+    const [regions, wineCounts] = await Promise.all([
+      Region.find(filter)
+        .populate('country', 'name')
+        .populate('parentRegion', 'name')
+        .populate('typicalGrapes', 'name')
+        .populate('permittedGrapes', 'name')
+        .sort({ name: 1 })
+        .lean(),
+      wineCountsByRef('region'),
+    ]);
+    const rows = regions.map(r => ({ ...r, wineCount: wineCounts.get(String(r._id)) || 0 }));
 
-    res.json({ count: regions.length, regions });
+    res.json({ count: rows.length, regions: rows });
   } catch (error) {
     console.error('Get regions error:', error);
     res.status(500).json({ error: 'Failed to get regions' });
@@ -350,8 +410,12 @@ router.delete('/regions/:id', async (req, res) => {
 // GET /api/admin/taxonomy/grapes - List all grapes
 router.get('/grapes', async (req, res) => {
   try {
-    const grapes = await Grape.find().sort({ name: 1 });
-    res.json({ count: grapes.length, grapes });
+    const [grapes, wineCounts] = await Promise.all([
+      Grape.find().sort({ name: 1 }).lean(),
+      wineCountsByGrape(),
+    ]);
+    const rows = grapes.map(g => ({ ...g, wineCount: wineCounts.get(String(g._id)) || 0 }));
+    res.json({ count: rows.length, grapes: rows });
   } catch (error) {
     console.error('Get grapes error:', error);
     res.status(500).json({ error: 'Failed to get grapes' });
@@ -534,12 +598,22 @@ router.get('/appellations', async (req, res) => {
       filter.region = region;
     }
 
-    const appellations = await Appellation.find(filter)
-      .populate('country', 'name')
-      .populate('region', 'name')
-      .sort({ name: 1 });
+    const [appellations, wineCounts] = await Promise.all([
+      Appellation.find(filter)
+        .populate('country', 'name')
+        .populate('region', 'name')
+        .sort({ name: 1 })
+        .lean(),
+      wineCountsByAppellation(),
+    ]);
+    // Free-text join: wines carry the appellation as a string, so a doc's
+    // usage is every wine whose normalized string matches its normalizedName.
+    const rows = appellations.map(a => ({
+      ...a,
+      wineCount: wineCounts.get(a.normalizedName || normalizeString(a.name || '')) || 0,
+    }));
 
-    res.json({ count: appellations.length, appellations });
+    res.json({ count: rows.length, appellations: rows });
   } catch (error) {
     console.error('Get appellations error:', error);
     res.status(500).json({ error: 'Failed to get appellations' });

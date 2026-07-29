@@ -12,6 +12,7 @@ import Drawer from '../components/Drawer';
 import WineDuplicatesModal from '../components/WineDuplicatesModal';
 import WineProducerInNameModal from '../components/WineProducerInNameModal';
 import WineLowConfidenceModal from '../components/WineLowConfidenceModal';
+import WineCanonicalCollisionsModal from '../components/WineCanonicalCollisionsModal';
 import { WINE_TYPES } from '../config/wineTypes';
 import GrapePicker from '../components/GrapePicker';
 import ImageUpload from '../components/ImageUpload';
@@ -81,6 +82,7 @@ function AdminWines() {
   // Producer-in-name cleanup tool
   const [showProducerInName, setShowProducerInName] = useState(false);
   const [showLowConfidence, setShowLowConfidence] = useState(false);
+  const [showCollisions, setShowCollisions] = useState(false);
 
   // Taxonomy
   const [countries, setCountries] = useState([]);
@@ -380,6 +382,9 @@ function AdminWines() {
           </button>
           <button className="btn btn-secondary" onClick={() => setShowLowConfidence(true)} title={t('admin.wines.lowConfidence.buttonTitle')}>
             {t('admin.wines.lowConfidence.button')}
+          </button>
+          <button className="btn btn-secondary" onClick={() => setShowCollisions(true)} title={t('admin.wines.canonicalCollisions.buttonTitle')}>
+            {t('admin.wines.canonicalCollisions.button')}
           </button>
           <button className="btn btn-primary" onClick={openCreate}>
             {t('admin.wines.newWine')}
@@ -880,6 +885,13 @@ function AdminWines() {
           apiFetch={apiFetch}
           onClose={() => setShowLowConfidence(false)}
           onChanged={fetchWines}
+        />
+      )}
+
+      {showCollisions && (
+        <WineCanonicalCollisionsModal
+          apiFetch={apiFetch}
+          onClose={() => setShowCollisions(false)}
         />
       )}
 

@@ -4,9 +4,11 @@ import { useAuth } from '../contexts/AuthContext';
 import {
   adminGetTaxonomy, adminGetCountries, adminGetGrapes, adminGetRegions,
   adminCreateTaxonomy, adminUpdateTaxonomy, adminDeleteTaxonomy,
+  adminMergeTaxonomy,
 } from '../api/admin';
 import GrapePicker from '../components/GrapePicker';
 import ConfirmModal from '../components/ConfirmModal';
+import Modal from '../components/Modal';
 import BottleSizesAdmin from '../components/BottleSizesAdmin';
 import './AdminTaxonomy.css';
 
@@ -24,6 +26,14 @@ function AdminTaxonomy() {
   const [allGrapes, setAllGrapes] = useState([]);
   const [allRegions, setAllRegions] = useState([]); // for parent region / appellation dropdowns
   const [confirmDelete, setConfirmDelete] = useState(null); // id of item to delete
+  const [mergeItem, setMergeItem] = useState(null);         // item being merged away
+  const [mergeTarget, setMergeTarget] = useState('');       // toId
+  const [merging, setMerging] = useState(false);
+
+  // Merge backends exist for exactly these three (services/taxonomyMerge.js);
+  // appellations have no merge service — wines reference them by string, so a
+  // rename IS the merge there.
+  const MERGEABLE_TABS = ['countries', 'regions', 'grapes'];
 
   const endpoints = {
     countries: '/api/admin/taxonomy/countries',
@@ -160,6 +170,37 @@ function AdminTaxonomy() {
       setConfirmDelete(null);
     }
   };
+
+  const handleMerge = async () => {
+    if (!mergeItem || !mergeTarget) return;
+    setMerging(true);
+    setError(null);
+    try {
+      const res = await adminMergeTaxonomy(apiFetch, activeTab, mergeItem._id, mergeTarget);
+      const data = await res.json();
+      if (res.ok) {
+        setMergeItem(null);
+        setMergeTarget('');
+        fetchItems();
+      } else {
+        setError(data.error || 'Failed to merge');
+      }
+    } catch (err) {
+      setError('Network error');
+    } finally {
+      setMerging(false);
+    }
+  };
+
+  // Merge candidates: same taxon, never itself; regions only within the same
+  // country (the backend enforces this — mirroring it here keeps the dropdown
+  // from offering choices that would 400).
+  const mergeCandidates = mergeItem
+    ? items.filter(i =>
+        i._id !== mergeItem._id &&
+        (activeTab !== 'regions' ||
+          String(i.country?._id || i.country) === String(mergeItem.country?._id || mergeItem.country)))
+    : [];
 
   const handleEditClick = (item) => {
     setShowForm(false);
@@ -669,12 +710,29 @@ function AdminTaxonomy() {
               <div key={item._id} className={`taxonomy-item ${editItem?._id === item._id ? 'editing' : ''}`}>
                 <div className="taxonomy-item-content">{renderItem(item)}</div>
                 <div className="taxonomy-item-actions">
+                  {typeof item.wineCount === 'number' && (
+                    <span
+                      className={`taxonomy-usage ${item.wineCount === 0 ? 'taxonomy-usage--zero' : ''}`}
+                      title={t('admin.taxonomy.wineCountTitle')}
+                    >
+                      {t('admin.taxonomy.wineCount', { count: item.wineCount })}
+                    </span>
+                  )}
                   <button
                     onClick={() => handleEditClick(item)}
                     className="btn btn-secondary btn-small"
                   >
                     {t('common.edit')}
                   </button>
+                  {MERGEABLE_TABS.includes(activeTab) && (
+                    <button
+                      onClick={() => { setMergeItem(item); setMergeTarget(''); }}
+                      className="btn btn-secondary btn-small"
+                      title={t('admin.taxonomy.mergeTitle')}
+                    >
+                      {t('admin.taxonomy.mergeBtn')}
+                    </button>
+                  )}
                   <button
                     onClick={() => setConfirmDelete(item._id)}
                     className="btn btn-danger btn-small"
@@ -696,6 +754,49 @@ function AdminTaxonomy() {
           onConfirm={() => handleDelete(confirmDelete)}
           onCancel={() => setConfirmDelete(null)}
         />
+      )}
+
+      {mergeItem && (
+        <Modal
+          title={t('admin.taxonomy.mergeModalTitle', { name: mergeItem.name })}
+          onClose={() => { setMergeItem(null); setMergeTarget(''); }}
+        >
+          <p className="taxonomy-merge-explainer">
+            {t('admin.taxonomy.mergeExplainer', {
+              name: mergeItem.name,
+              wineCount: mergeItem.wineCount ?? 0,
+            })}
+          </p>
+          <div className="form-group">
+            <label htmlFor="taxonomy-merge-target">{t('admin.taxonomy.mergeTargetLabel')}</label>
+            <select
+              id="taxonomy-merge-target"
+              value={mergeTarget}
+              onChange={(e) => setMergeTarget(e.target.value)}
+            >
+              <option value="">{t('admin.taxonomy.mergeTargetPlaceholder')}</option>
+              {mergeCandidates.map(c => (
+                <option key={c._id} value={c._id}>
+                  {c.name}{typeof c.wineCount === 'number' ? ` (${t('admin.taxonomy.wineCount', { count: c.wineCount })})` : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+          <p className="taxonomy-merge-hint">{t('admin.taxonomy.mergeHint')}</p>
+          <div className="modal-actions">
+            <button type="button" className="btn btn-secondary" onClick={() => { setMergeItem(null); setMergeTarget(''); }}>
+              {t('common.cancel')}
+            </button>
+            <button
+              type="button"
+              className="btn btn-danger"
+              disabled={!mergeTarget || merging}
+              onClick={handleMerge}
+            >
+              {merging ? t('admin.taxonomy.merging') : t('admin.taxonomy.mergeConfirm')}
+            </button>
+          </div>
+        </Modal>
       )}
     </div>
   );
