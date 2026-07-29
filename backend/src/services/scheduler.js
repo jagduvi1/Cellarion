@@ -8,6 +8,7 @@ const { runRecommendationEmailScrub } = require('./recommendationRetentionJob');
 const { runSecurityAlertCheck } = require('./securityAlertJob');
 const { runClimateOfflineCheck } = require('./climateOfflineJob');
 const { runDemoSweep } = require('./demoSweepJob');
+const { runRegistryHealthCheck } = require('./registryHealthJob');
 
 /**
  * Start all scheduled cron jobs.
@@ -115,7 +116,21 @@ function startScheduler() {
     }
   });
 
-  console.log('[scheduler] Cron jobs registered (drink-window daily 06:00 UTC, value-snapshot weekly Sun 01:00 UTC, community-price weekly Sun 02:00 UTC, user-deletion daily 03:00 UTC, cellar-retention daily 04:00 UTC, recommendation-email-scrub daily 04:30 UTC, security-spike every 15 min, climate-offline every 15 min, demo-sweep every 15 min offset)');
+  // Registry health: weekly on Monday at 05:00 UTC (quiet slot — Sunday has
+  // the value/price jobs, 06:00 has drink-window). Read-only counts over the
+  // registry's detection nets; notifies admins only when a metric regresses
+  // against the previous run (strategy 2026-07-29 R6 — every net existed but
+  // nothing ran them on a schedule).
+  cron.schedule('0 5 * * 1', async () => {
+    console.log('[scheduler] Running registry health check…');
+    try {
+      await runRegistryHealthCheck();
+    } catch (err) {
+      console.error('[scheduler] Registry health check failed:', err);
+    }
+  });
+
+  console.log('[scheduler] Cron jobs registered (drink-window daily 06:00 UTC, value-snapshot weekly Sun 01:00 UTC, community-price weekly Sun 02:00 UTC, user-deletion daily 03:00 UTC, cellar-retention daily 04:00 UTC, recommendation-email-scrub daily 04:30 UTC, security-spike every 15 min, climate-offline every 15 min, demo-sweep every 15 min offset, registry-health weekly Mon 05:00 UTC)');
 }
 
 module.exports = { startScheduler };
