@@ -12,6 +12,7 @@ const { logAudit } = require('../../services/audit');
 const { isValidId } = require('../../utils/validation');
 const { distinctSizes, normalizeAll, remap } = require('../../services/bottleSizeMaintenance');
 const { mergeGrapes, mergeRegions, mergeCountries } = require('../../services/taxonomyMerge');
+const { listUnmatchedAppellations } = require('../../services/taxonomyReview');
 const { BOTTLE_SIZES } = require('../../config/bottleSizes');
 
 const router = express.Router();
@@ -611,66 +612,8 @@ for (const [path, { fn, type }] of Object.entries(MERGERS)) {
 // never rejected — adding a bottle must not be blocked by taxonomy.
 router.get('/appellations/unmatched', async (req, res) => {
   try {
-    const [existing, rows] = await Promise.all([
-      Appellation.find({}).select('normalizedName normalizedSynonyms').lean(),
-      WineDefinition.aggregate([
-        { $match: { appellation: { $nin: [null, ''] }, nonWine: { $ne: true } } },
-        { $group: { _id: { ap: '$appellation', country: '$country', region: '$region' }, n: { $sum: 1 } } },
-      ]),
-    ]);
-    const matched = new Set();
-    for (const a of existing) {
-      if (a.normalizedName) matched.add(a.normalizedName);
-      for (const s of a.normalizedSynonyms || []) matched.add(s);
-    }
-
-    // normalized → aggregate across raw-spelling/country/region variants
-    const groups = new Map();
-    for (const r of rows) {
-      // Tier-strip before grouping, mirroring the seed script: pre-guard rows
-      // ("… DO", "… DOCG") fold into their clean form instead of listing twice.
-      const cleaned = normalizeAppellation(r._id.ap || '') || r._id.ap || '';
-      const key = normalizeAppellationKey(cleaned);
-      if (!key || matched.has(key)) continue;
-      let g = groups.get(key);
-      if (!g) { g = { spellings: new Map(), countries: new Map(), regions: new Map(), total: 0 }; groups.set(key, g); }
-      g.total += r.n;
-      g.spellings.set(cleaned, (g.spellings.get(cleaned) || 0) + r.n);
-      if (r._id.country) g.countries.set(String(r._id.country), (g.countries.get(String(r._id.country)) || 0) + r.n);
-      if (r._id.region) g.regions.set(String(r._id.region), (g.regions.get(String(r._id.region)) || 0) + r.n);
-    }
-
-    const top = (map) => [...map.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || null;
-    const countryIds = new Set(), regionIds = new Set();
-    const items = [...groups.entries()].map(([normalized, g]) => {
-      const countryId = top(g.countries);
-      const regionId = top(g.regions);
-      if (countryId) countryIds.add(countryId);
-      if (regionId) regionIds.add(regionId);
-      return { normalized, name: top(g.spellings), wineCount: g.total, countryId, regionId };
-    }).sort((a, b) => b.wineCount - a.wineCount);
-
-    const [countries, regions] = await Promise.all([
-      Country.find({ _id: { $in: [...countryIds] } }).select('name').lean(),
-      Region.find({ _id: { $in: [...regionIds] } }).select('name country').lean(),
-    ]);
-    const countryName = new Map(countries.map(c => [String(c._id), c.name]));
-    const regionById = new Map(regions.map(r => [String(r._id), r]));
-
-    res.json({
-      total: items.length,
-      items: items.map(i => {
-        const region = i.regionId ? regionById.get(i.regionId) : null;
-        return {
-          ...i,
-          countryName: i.countryId ? countryName.get(i.countryId) || null : null,
-          // A majority region from a DIFFERENT country than the majority
-          // country would violate the Appellation schema — drop it.
-          regionId: region && String(region.country) === i.countryId ? i.regionId : null,
-          regionName: region && String(region.country) === i.countryId ? region.name : null,
-        };
-      }),
-    });
+    const items = await listUnmatchedAppellations();
+    res.json({ total: items.length, items });
   } catch (error) {
     console.error('Unmatched appellations error:', error);
     res.status(500).json({ error: 'Failed to list unmatched appellations' });
