@@ -53,6 +53,20 @@ export const adminUndismissDuplicateCluster = (apiFetch, wineIds) =>
     body: JSON.stringify({ wineIds }),
   });
 
+// Wines sharing one canonical identity key (spelling/embed/tier variants
+// collapsed). Distinct wineries CAN legitimately collide — that is why this
+// is a review list, not an auto-merge.
+export const adminGetCanonicalCollisions = (apiFetch) =>
+  apiFetch('/api/admin/wines/canonical-collisions');
+
+/** Merge one taxonomy doc into another. tab ∈ countries|regions|grapes. */
+export const adminMergeTaxonomy = (apiFetch, tab, fromId, toId) =>
+  apiFetch(`/api/admin/taxonomy/${tab}/merge`, {
+    method: 'POST',
+    headers: J,
+    body: JSON.stringify({ fromId, toId }),
+  });
+
 // The registry name-check scan (historical path name — it now runs every
 // default rule in backend utils/nameChecks.js, not just producer-in-name).
 export const adminGetProducerInNameWines = (apiFetch, params) =>
