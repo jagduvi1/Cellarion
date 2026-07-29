@@ -59,13 +59,13 @@ function AdminWineReports() {
     setSuccess(null);
   };
 
-  const handleAction = async (action) => {
+  const handleAction = async (action, opts = {}) => {
     setSubmitting(true);
     setError(null);
     setSuccess(null);
     try {
       const fn = action === 'resolve' ? adminResolveWineReport : adminDismissWineReport;
-      const res = await fn(apiFetch, selected._id, { adminNotes });
+      const res = await fn(apiFetch, selected._id, { adminNotes, ...(opts.apply ? { applySuggestion: true } : {}) });
       const data = await res.json();
       if (!res.ok) return setError(data.error || `Failed to ${action} report`);
       setSuccess(`Report ${action === 'resolve' ? 'resolved' : 'dismissed'}.`);
@@ -196,6 +196,15 @@ function AdminWineReports() {
                 </div>
               )}
 
+              {selected.suggestedField && (
+                <div className="awr-duplicate-ref">
+                  <h4>Suggested correction</h4>
+                  <p>
+                    <strong>{selected.suggestedField}</strong>: {String(selected.wineDefinition?.[selected.suggestedField] ?? '—')} → <strong>{selected.suggestedValue}</strong>
+                  </p>
+                </div>
+              )}
+
               {selected.status === 'pending' && (
                 <div className="awr-actions">
                   <h4>Admin notes <span className="optional">(optional)</span></h4>
@@ -207,8 +216,18 @@ function AdminWineReports() {
                     maxLength={2000}
                   />
                   <div className="awr-action-buttons">
+                    {selected.suggestedField && (
+                      <button
+                        className="btn btn-primary"
+                        onClick={() => handleAction('resolve', { apply: true })}
+                        disabled={submitting}
+                        title="Apply the suggested correction to the wine, then resolve"
+                      >
+                        {submitting ? '…' : 'Apply & Resolve'}
+                      </button>
+                    )}
                     <button
-                      className="btn btn-primary"
+                      className={selected.suggestedField ? 'btn btn-secondary' : 'btn btn-primary'}
                       onClick={() => handleAction('resolve')}
                       disabled={submitting}
                     >

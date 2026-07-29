@@ -14,7 +14,7 @@ const VALID_REASONS = ['wrong_info', 'duplicate', 'inappropriate', 'wrong_price'
 // must not spam it (same class as the guarded wine-requests route).
 router.post('/', requireAuth, requireNonDemo, async (req, res) => {
   try {
-    const { wineDefinitionId, reason, details, duplicateOfId } = req.body;
+    const { wineDefinitionId, reason, details, duplicateOfId, suggestedField, suggestedValue } = req.body;
 
     if (!wineDefinitionId || !mongoose.Types.ObjectId.isValid(wineDefinitionId)) {
       return res.status(400).json({ error: 'Invalid wineDefinitionId' });
@@ -29,6 +29,25 @@ router.post('/', requireAuth, requireNonDemo, async (req, res) => {
     }
     if (details && details.trim().length > 2000) {
       return res.status(400).json({ error: 'Details must be 2000 characters or fewer' });
+    }
+    // Structured correction (R7): both-or-neither, appliable fields only.
+    const SUGGESTABLE = ['name', 'producer', 'appellation', 'type'];
+    const WINE_TYPES = ['red', 'white', 'rosé', 'sparkling', 'dessert', 'fortified'];
+    const hasField = suggestedField != null && suggestedField !== '';
+    const hasValue = typeof suggestedValue === 'string' && suggestedValue.trim() !== '';
+    if (hasField !== hasValue) {
+      return res.status(400).json({ error: 'A suggested correction needs both the field and the new value' });
+    }
+    if (hasField) {
+      if (!SUGGESTABLE.includes(suggestedField)) {
+        return res.status(400).json({ error: `suggestedField must be one of: ${SUGGESTABLE.join(', ')}` });
+      }
+      if (suggestedValue.trim().length > 200) {
+        return res.status(400).json({ error: 'Suggested value must be 200 characters or fewer' });
+      }
+      if (suggestedField === 'type' && !WINE_TYPES.includes(suggestedValue.trim())) {
+        return res.status(400).json({ error: `Type must be one of: ${WINE_TYPES.join(', ')}` });
+      }
     }
 
     const wine = await WineDefinition.findById(wineDefinitionId).lean();
@@ -59,7 +78,9 @@ router.post('/', requireAuth, requireNonDemo, async (req, res) => {
       wineDefinition: wineRef,
       reason,
       details: details ? stripHtml(details) : undefined,
-      duplicateOf: (duplicateOfId && mongoose.Types.ObjectId.isValid(duplicateOfId)) ? duplicateOfId : undefined
+      duplicateOf: (duplicateOfId && mongoose.Types.ObjectId.isValid(duplicateOfId)) ? duplicateOfId : undefined,
+      suggestedField: hasField ? suggestedField : undefined,
+      suggestedValue: hasField ? stripHtml(suggestedValue.trim()) : undefined
     });
 
     logAudit(req, 'wine.report.created', { type: 'WineReport', id: report._id }, {

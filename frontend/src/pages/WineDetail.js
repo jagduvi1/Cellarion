@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, lazy, Suspense } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import ReactMarkdown from 'react-markdown';
@@ -14,6 +14,10 @@ import { getWineImageUrl } from '../utils/wineImageUrl';
 import { API_URL } from '../api/apiConstants';
 import './WineDetail.css';
 
+// Lazy like BottleDetail: the report modal is a rare interaction and must not
+// weigh on the public wine page bundle.
+const ReportWineModal = lazy(() => import('../components/ReportWineModal'));
+
 // Same regex used by the backend's isValidId — 24 hex chars = ObjectId, anything
 // else is treated as a slug.
 const OBJECT_ID_RE = /^[a-f0-9]{24}$/i;
@@ -23,6 +27,7 @@ export default function WineDetail() {
   const { idOrSlug } = useParams();
   const { user } = useAuth();
   const [wine, setWine] = useState(null);
+  const [showReport, setShowReport] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -265,7 +270,18 @@ export default function WineDetail() {
           <Link to="/cellars" className="btn btn-secondary">
             {t('wineDetail.backToCellars')}
           </Link>
+          {/* R7: the report link used to exist only on the bottle page — but
+              wrong shared data is most visible to NON-owners, right here. */}
+          <button type="button" className="btn btn-secondary" onClick={() => setShowReport(true)}>
+            {t('wineDetail.reportIssue')}
+          </button>
         </div>
+      )}
+
+      {showReport && (
+        <Suspense fallback={null}>
+          <ReportWineModal wine={wine} onClose={() => setShowReport(false)} />
+        </Suspense>
       )}
 
       <WineDiscussionsPanel wine={wine} />

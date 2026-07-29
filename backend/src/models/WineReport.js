@@ -29,6 +29,20 @@ const wineReportSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'WineDefinition'
   },
+  // Optional STRUCTURED correction (strategy 2026-07-29 R7): "this field
+  // should say this" instead of prose the admin has to re-type elsewhere.
+  // Only the one-click-appliable string fields — region/country are refs and
+  // stay free-text in `details`. Resolution can apply this in one action.
+  suggestedField: {
+    type: String,
+    enum: ['name', 'producer', 'appellation', 'type'],
+    default: undefined
+  },
+  suggestedValue: {
+    type: String,
+    trim: true,
+    maxlength: 200
+  },
   status: {
     type: String,
     enum: ['pending', 'resolved', 'dismissed'],
