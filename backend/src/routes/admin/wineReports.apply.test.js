@@ -10,7 +10,9 @@ process.env.JWT_SECRET = 'test-secret';
 
 jest.mock('../../models/WineReport', () => ({ findById: jest.fn(), find: jest.fn(), countDocuments: jest.fn() }));
 jest.mock('../../models/WineDefinition', () => ({ findById: jest.fn() }));
-jest.mock('../../services/search', () => ({ indexWine: jest.fn().mockResolvedValue(undefined) }));
+jest.mock('../../models/Bottle', () => ({ distinct: jest.fn().mockResolvedValue([]) }));
+jest.mock('../../services/search', () => ({ indexWine: jest.fn().mockResolvedValue(undefined), bulkIndexBottles: jest.fn().mockResolvedValue(undefined) }));
+jest.mock('../../services/appellationResolve', () => ({ resolveCanonicalAppellation: jest.fn(async (v) => v) }));
 jest.mock('../../services/audit', () => ({ logAudit: jest.fn() }));
 jest.mock('../../utils/cellarCred', () => ({ incrementCred: jest.fn().mockResolvedValue(undefined) }));
 
@@ -62,6 +64,20 @@ const wine = (over = {}) => ({
 beforeEach(() => jest.clearAllMocks());
 
 describe('resolve with applySuggestion', () => {
+  test('a NAME suggestion is canonicalized, not raw-assigned (audit R7-#1)', async () => {
+    // Trailing vintage + embedded producer — both defect classes the write
+    // pipeline strips must be stripped here too.
+    const r = report({ suggestedField: 'name', suggestedValue: 'Cave de Ribeauville Sylvaner  Grand 2022' });
+    const w = wine();
+    WineReport.findById.mockResolvedValue(r);
+    WineDefinition.findById.mockResolvedValue(w);
+    const res = await resolve({ applySuggestion: true });
+    expect(res.status).toBe(200);
+    expect(w.name).not.toMatch(/2022/);   // trailing vintage stripped
+    expect(w.name).not.toMatch(/ {2}/);   // internal whitespace collapsed
+    expect(w.name).toMatch(/Sylvaner/);
+  });
+
   test('applies the field, recomputes normalizedKey, saves, reindexes, audits both actions', async () => {
     const r = report();
     const w = wine();

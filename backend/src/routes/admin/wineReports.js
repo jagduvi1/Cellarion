@@ -2,8 +2,11 @@ const express = require('express');
 const router = express.Router();
 const WineReport = require('../../models/WineReport');
 const WineDefinition = require('../../models/WineDefinition');
+const Bottle = require('../../models/Bottle');
 const searchService = require('../../services/search');
-const { generateWineKey } = require('../../utils/normalize');
+const { generateWineKey, normalizeAppellation, stripTrailingVintage } = require('../../utils/normalize');
+const { canonicalizeWineName } = require('../../utils/producerPrefix');
+const { resolveCanonicalAppellation } = require('../../services/appellationResolve');
 const { requireAuth, requireRole } = require('../../middleware/auth');
 const { logAudit } = require('../../services/audit');
 const { stripHtml } = require('../../utils/sanitize');
@@ -81,7 +84,19 @@ router.put('/:id/resolve', async (req, res) => {
       if (!wine) return res.status(404).json({ error: 'The reported wine no longer exists' });
 
       const previous = wine[report.suggestedField] ?? null;
-      wine[report.suggestedField] = report.suggestedValue;
+      // Run the suggestion through the SAME field normalizers the write
+      // pipeline applies — a raw assignment would let a one-click apply
+      // reintroduce the exact defect classes the registry campaign closed:
+      // tier-suffixed appellations, trailing vintages, producer-in-name
+      // embeds (audit 2026-07-29 R7-#1). The reporter's text is untrusted
+      // input that merely happens to arrive via an admin's click.
+      let value = report.suggestedValue.trim().replace(/\s+/g, ' ');
+      if (report.suggestedField === 'name') {
+        value = canonicalizeWineName(stripTrailingVintage(value), wine.producer);
+      } else if (report.suggestedField === 'appellation') {
+        value = await resolveCanonicalAppellation(normalizeAppellation(value));
+      }
+      wine[report.suggestedField] = value;
       if (report.suggestedField !== 'type') {
         wine.normalizedKey = generateWineKey(wine.name, wine.producer, wine.appellation);
       }
@@ -96,6 +111,12 @@ router.put('/:id/resolve', async (req, res) => {
         throw err;
       }
       searchService.indexWine(wine._id).catch(() => {});
+      // Bottles denormalize wineName/producer/appellation into their own
+      // search index — without this, cellar search matches the OLD values
+      // indefinitely (mirrors the admin wine-edit route; audit R7-#3).
+      Bottle.distinct('_id', { wineDefinition: wine._id })
+        .then(ids => searchService.bulkIndexBottles(ids))
+        .catch(() => {});
       applied = { field: report.suggestedField, from: previous, to: report.suggestedValue };
       logAudit(req, 'admin.wine.update',
         { type: 'wine', id: wine._id },

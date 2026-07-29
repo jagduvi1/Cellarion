@@ -20,7 +20,15 @@ function ReportWineModal({ wine, defaultReason, onClose }) {
   const [success, setSuccess] = useState(false);
 
   const handleChange = (e) => {
-    setForm(f => ({ ...f, [e.target.name]: e.target.value }));
+    const { name, value } = e.target;
+    setForm(f => ({
+      ...f,
+      [name]: value,
+      // Suggestion inputs only exist for wrong_info — switching the reason
+      // hides them, and hidden stale state must not ride along in the submit
+      // (audit 2026-07-29 R7-#5). The backend enforces this too.
+      ...(name === 'reason' && value !== 'wrong_info' ? { suggestedField: '', suggestedValue: '' } : {}),
+    }));
     setError(null);
   };
 

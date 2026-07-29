@@ -34,15 +34,20 @@ async function resolveCanonicalAppellation(rawAppellation) {
   const normalized = normalizeAppellationKey(rawAppellation);
   if (!normalized) return rawAppellation;
   try {
-    // limit(2): one match → adopt. Two docs can share a name across countries
-    // (the unique index is per-country); adopt only when their display
-    // spellings agree — when even the curated docs disagree, the typed
-    // spelling is not obviously wrong and is left alone.
+    // Docs can share a name across countries (the unique index is per-country);
+    // adopt only when EVERY curated doc agrees on the display spelling — when
+    // even the curated docs disagree, the typed spelling is not obviously
+    // wrong and is left alone. limit(4) with an agree-all check (audit
+    // 2026-07-29 A5: limit(2) could see two agreeing docs and miss a third
+    // that disagrees); .sort keeps the answer deterministic across query
+    // plans. Adoption is re-capped at 200 chars — the doc name is admin
+    // input with its own validation, but the mint chokepoint's field cap must
+    // hold regardless of where the string came from (audit A1).
     const docs = await Appellation.find({
       $or: [{ normalizedName: normalized }, { normalizedSynonyms: normalized }],
-    }).select('name').limit(2).lean();
+    }).select('name').sort({ _id: 1 }).limit(4).lean();
     if (docs.length === 0) return rawAppellation;
-    if (docs.length === 1 || docs[0].name === docs[1].name) return docs[0].name;
+    if (docs.every(d => d.name === docs[0].name)) return docs[0].name.slice(0, 200);
     return rawAppellation;
   } catch (err) {
     console.warn('[appellationResolve] lookup failed (non-fatal, keeping input):', err.message);

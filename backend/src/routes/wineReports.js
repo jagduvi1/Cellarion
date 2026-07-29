@@ -38,6 +38,12 @@ router.post('/', requireAuth, requireNonDemo, async (req, res) => {
     if (hasField !== hasValue) {
       return res.status(400).json({ error: 'A suggested correction needs both the field and the new value' });
     }
+    // The frontend only offers the suggestion inputs for wrong_info, but a
+    // client is not a trust boundary — and stale state CAN leak a suggestion
+    // onto another reason (audit 2026-07-29 R7-#5). Enforce the pairing here.
+    if (hasField && reason !== 'wrong_info') {
+      return res.status(400).json({ error: 'A suggested correction is only valid with the "wrong info" reason' });
+    }
     if (hasField) {
       if (!SUGGESTABLE.includes(suggestedField)) {
         return res.status(400).json({ error: `suggestedField must be one of: ${SUGGESTABLE.join(', ')}` });
@@ -80,7 +86,10 @@ router.post('/', requireAuth, requireNonDemo, async (req, res) => {
       details: details ? stripHtml(details) : undefined,
       duplicateOf: (duplicateOfId && mongoose.Types.ObjectId.isValid(duplicateOfId)) ? duplicateOfId : undefined,
       suggestedField: hasField ? suggestedField : undefined,
-      suggestedValue: hasField ? stripHtml(suggestedValue.trim()) : undefined
+      // Collapse internal whitespace/newlines too — this string is destined
+      // for a registry field that feeds titles and JSON-LD, where an embedded
+      // newline corrupts rendering (stripHtml only strips tags + ends).
+      suggestedValue: hasField ? stripHtml(suggestedValue.trim().replace(/\s+/g, ' ')) : undefined
     });
 
     logAudit(req, 'wine.report.created', { type: 'WineReport', id: report._id }, {

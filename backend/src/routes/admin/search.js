@@ -26,11 +26,17 @@ router.post('/reindex', async (req, res) => {
     if (!searchService.getIsAvailable()) {
       return res.status(503).json({ error: 'Meilisearch is not available' });
     }
+    // fullSync returns the enqueued Meili task uids — addDocuments is 202 +
+    // async task, so without waitForTasks the response would mean "enqueued",
+    // not "searchable", and async indexing failures would be invisible
+    // (audit 2026-07-29). The wait makes the durations honest too.
     const t0 = Date.now();
-    await searchService.fullSync();
+    const wineTasks = await searchService.fullSync();
+    await searchService.waitForTasks(wineTasks);
     const winesMs = Date.now() - t0;
     const t1 = Date.now();
-    await searchService.fullSyncBottles();
+    const bottleTasks = await searchService.fullSyncBottles();
+    await searchService.waitForTasks(bottleTasks);
     const bottlesMs = Date.now() - t1;
 
     logAudit(req, 'admin.search.reindex', {}, { winesMs, bottlesMs });

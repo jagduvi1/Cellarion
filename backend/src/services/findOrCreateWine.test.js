@@ -149,7 +149,9 @@ beforeEach(() => {
   // Appellation adoption: default = not curated → typed spelling kept
   Appellation.find.mockReturnValue({
     select: jest.fn().mockReturnValue({
-      limit: jest.fn().mockReturnValue({ lean: jest.fn().mockResolvedValue([]) }),
+      sort: jest.fn().mockReturnValue({
+        limit: jest.fn().mockReturnValue({ lean: jest.fn().mockResolvedValue([]) }),
+      }),
     }),
   });
   searchService.getIsAvailable.mockReturnValue(false);
@@ -660,7 +662,9 @@ describe('findOrCreateWine — creation', () => {
   test('adopts the curated appellation spelling, and the keys follow it', async () => {
     Appellation.find.mockReturnValue({
       select: jest.fn().mockReturnValue({
-        limit: jest.fn().mockReturnValue({ lean: jest.fn().mockResolvedValue([{ name: 'Châteauneuf-du-Pape' }]) }),
+        sort: jest.fn().mockReturnValue({
+          limit: jest.fn().mockReturnValue({ lean: jest.fn().mockResolvedValue([{ name: 'Châteauneuf-du-Pape' }]) }),
+        }),
       }),
     });
     const result = await findOrCreateWine({ ...INPUT, appellation: 'Chateauneuf du Pape' }, USER_ID);
@@ -756,7 +760,9 @@ describe('findOrCreateWine — creation', () => {
     expect(Region.exists).toHaveBeenCalledWith({
       $or: [{ normalizedName: 'bordeaux' }, { normalizedSynonyms: 'bordeaux' }],
     });
-    expect(Appellation.exists).toHaveBeenCalledWith({ normalizedName: 'bordeaux' });
+    // Both folds queried: legacy docs may carry the old (hyphen-deleting)
+    // key until the backfill runs; new docs carry the appellation key.
+    expect(Appellation.exists).toHaveBeenCalledWith({ normalizedName: { $in: ['bordeaux', 'bordeaux'] } });
   });
 
   test('producer-place gate: exact full-string match only — "Marchesi di Barolo" passes', async () => {
@@ -764,7 +770,7 @@ describe('findOrCreateWine — creation', () => {
     // producer, which no taxonomy row equals — mocks return null (default).
     await findOrCreateWine({ ...INPUT, producer: 'Marchesi di Barolo' }, USER_ID);
 
-    expect(Appellation.exists).toHaveBeenCalledWith({ normalizedName: 'marchesi di barolo' });
+    expect(Appellation.exists).toHaveBeenCalledWith({ normalizedName: { $in: ['marchesi di barolo', 'marchesi di barolo'] } });
     expect(WineDefinition).toHaveBeenCalled(); // created normally
   });
 

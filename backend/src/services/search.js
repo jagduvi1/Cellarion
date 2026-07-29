@@ -195,27 +195,35 @@ const SYNC_CHUNK_SIZE = 2000;
 async function syncViaCursor(query, buildDoc, idx, label) {
   let batch = [];
   let total = 0;
+  // addDocuments only ENQUEUES a Meili task (202); collect the task uids so a
+  // caller that needs done-means-done (the admin force-reindex) can wait on
+  // them. Boot-time and fire-and-forget callers just ignore the return value —
+  // their behavior is unchanged (audit 2026-07-29, reindex "awaited" claim).
+  const taskUids = [];
   const cursor = query.cursor();
   for await (const doc of cursor) {
     batch.push(buildDoc(doc));
     if (batch.length >= SYNC_CHUNK_SIZE) {
-      await idx.addDocuments(batch, { primaryKey: 'id' });
+      const task = await idx.addDocuments(batch, { primaryKey: 'id' });
+      if (task?.taskUid != null) taskUids.push(task.taskUid);
       total += batch.length;
       batch = [];
     }
   }
   if (batch.length > 0) {
-    await idx.addDocuments(batch, { primaryKey: 'id' });
+    const task = await idx.addDocuments(batch, { primaryKey: 'id' });
+    if (task?.taskUid != null) taskUids.push(task.taskUid);
     total += batch.length;
   }
   console.log(`Meilisearch: synced ${total} ${label}`);
+  return taskUids;
 }
 
 async function fullSync() {
   if (!isAvailable) return;
 
   try {
-    await syncViaCursor(
+    return await syncViaCursor(
       // Quarantined non-wine rows (spirits/cider/sake kept for their owners —
       // registry audit 2026-07-26, policy: keep, hide) never enter the index.
       WineDefinition.find({ nonWine: { $ne: true } })
@@ -344,7 +352,7 @@ async function fullSyncBottles() {
 
   try {
     // Sync ALL bottles (active + consumed) so history search works too
-    await syncViaCursor(
+    return await syncViaCursor(
       Bottle.find().populate(WINE_POPULATE).lean(),
       buildBottleDocument,
       bottlesIndex,
@@ -703,10 +711,21 @@ function getIsAvailable() {
   return isAvailable;
 }
 
+/**
+ * Wait for enqueued Meili tasks to actually complete — done-means-done for
+ * callers like the admin force-reindex, where responding before indexing
+ * finishes recreates the stale-index window the button exists to close.
+ */
+async function waitForTasks(taskUids, { timeOutMs = 120000 } = {}) {
+  if (!isAvailable || !Array.isArray(taskUids) || taskUids.length === 0) return;
+  await client.waitForTasks(taskUids, { timeOutMs, intervalMs: 250 });
+}
+
 module.exports = {
   initialize,
   fullSync,
   fullSyncBottles,
+  waitForTasks,
   fullSyncDiscussions,
   indexWine,
   removeWine,

@@ -52,12 +52,16 @@ const { computeCanonicalKey } = require('../utils/wineIdentity');
     // prod-data dry run) — the double-space rows count toward the clean form.
     const spelling = String(w.producer).trim().replace(/\s+/g, ' ');
     let s = g.get(spelling);
-    if (!s) { s = { count: 0, oldest: w.createdAt, wines: [] }; g.set(spelling, s); }
+    // oldest seeds null and is only ever set by VOTING rows — seeding it from
+    // whichever row happens to iterate first let a quarantined row's ancient
+    // createdAt flip the tie-break against producerSpelling.js's identical
+    // rule (audit 2026-07-29 F1).
+    if (!s) { s = { count: 0, oldest: null, wines: [] }; g.set(spelling, s); }
     // Quarantined rows get rewritten too (consistency) but no vote (their
     // data is exactly what we don't want to canonize) — mirror producerSpelling.js.
     if (!w.nonWine) {
       s.count += 1;
-      if (w.createdAt < s.oldest) s.oldest = w.createdAt;
+      if (s.oldest === null || w.createdAt < s.oldest) s.oldest = w.createdAt;
     }
     s.wines.push(w);
   }
@@ -70,7 +74,7 @@ const { computeCanonicalKey } = require('../utils/wineIdentity');
     groupsToUnify += 1;
 
     const ranked = [...spellings.entries()].sort((a, b) =>
-      (b[1].count - a[1].count) || (a[1].oldest - b[1].oldest));
+      (b[1].count - a[1].count) || ((a[1].oldest ?? Infinity) - (b[1].oldest ?? Infinity)));
     const target = ranked[0][0];
     console.log(`  [${key}] → "${target}"  (${ranked.map(([sp, s]) => `"${sp}"×${s.count}`).join('  ')})`);
 
@@ -83,7 +87,10 @@ const { computeCanonicalKey } = require('../utils/wineIdentity');
         // Safety proof, per row: a pure spelling variant leaves canonicalKey
         // untouched. If it would change, this was NOT a trivial variant —
         // leave it for a human rather than silently altering identity keys.
-        const before = w.canonicalKey || computeCanonicalKey(w.name, spelling, w.appellation);
+        // Always compute BOTH sides fresh: a stored canonicalKey stamped by an
+        // older algorithm (the tier-token list grows, #842) would false-skip a
+        // pure spelling variant as "key drift" (audit 2026-07-29 F2).
+        const before = computeCanonicalKey(w.name, spelling, w.appellation);
         const after = computeCanonicalKey(w.name, target, w.appellation);
         if (before !== after) {
           skippedKeyDrift += 1;

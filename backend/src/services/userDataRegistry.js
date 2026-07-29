@@ -511,8 +511,10 @@ const REGISTRY = [
       WineReport.updateMany({ resolvedBy: ctx.userId }, { $unset: { resolvedBy: '' } }),
     ],
     exportFragment: async (ctx) => ({
-      reports: { wines: markTrunc(ctx, 'wineReports', await WineReport.find({ user: ctx.userId }).select('wineDefinition reason status createdAt').limit(EXPORT_MAX).lean())
-        .map(r => ({ reason: r.reason, status: r.status, createdAt: r.createdAt })) },
+      // details/suggestedField/suggestedValue are text the USER typed —
+      // portability requires they come back out (audit 2026-07-29 M1).
+      reports: { wines: markTrunc(ctx, 'wineReports', await WineReport.find({ user: ctx.userId }).select('wineDefinition reason status createdAt details suggestedField suggestedValue').limit(EXPORT_MAX).lean())
+        .map(r => ({ reason: r.reason, status: r.status, createdAt: r.createdAt, details: r.details, suggestedField: r.suggestedField, suggestedValue: r.suggestedValue })) },
     }),
   },
   {
