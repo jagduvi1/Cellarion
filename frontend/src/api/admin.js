@@ -59,6 +59,11 @@ export const adminUndismissDuplicateCluster = (apiFetch, wineIds) =>
 export const adminGetCanonicalCollisions = (apiFetch) =>
   apiFetch('/api/admin/wines/canonical-collisions');
 
+// Distinct wine-appellation strings no curated Appellation doc covers —
+// the review queue that keeps free-text appellations honest.
+export const adminGetUnmatchedAppellations = (apiFetch) =>
+  apiFetch('/api/admin/taxonomy/appellations/unmatched');
+
 /** Merge one taxonomy doc into another. tab ∈ countries|regions|grapes. */
 export const adminMergeTaxonomy = (apiFetch, tab, fromId, toId) =>
   apiFetch(`/api/admin/taxonomy/${tab}/merge`, {

@@ -25,6 +25,7 @@ const { canonicalizeWineName } = require('../utils/producerPrefix');
 const { computeCanonicalKey, canonicalSiblingPrefix } = require('../utils/wineIdentity');
 const { buildSurfaceForms, inferGrapeIds } = require('./grapeInference');
 const { resolveCanonicalProducerSpelling } = require('./producerSpelling');
+const { resolveCanonicalAppellation } = require('./appellationResolve');
 const { escapeRegex } = require('../utils/sanitize');
 
 // Auto-match when combined score >= SIMILARITY_THRESHOLD (near-identical — e.g.
@@ -163,12 +164,22 @@ async function findOrCreateWine({ name, producer, country, region, appellation, 
   // (full-document validation) and would make legacy rows that predate the cap
   // un-editable.
   const MAX_FIELD = 200;
-  let trimmedName = name.trim().slice(0, MAX_FIELD);
-  const trimmedProducer = producer.trim().slice(0, MAX_FIELD);
+  // Internal whitespace collapses too, not just the ends: a double space is
+  // invisible in every UI and every normalized key, so "Wrights  Estate" and
+  // "Wrights Estate" would otherwise coexist as two display spellings forever
+  // (found by the unify script's first prod-data dry run).
+  let trimmedName = name.trim().replace(/\s+/g, ' ').slice(0, MAX_FIELD);
+  const trimmedProducer = producer.trim().replace(/\s+/g, ' ').slice(0, MAX_FIELD);
   // Canonicalize the appellation (strip a trailing DOCG/DOC/AOC/… tier) so
   // "Barolo" and "Barolo DOCG" resolve to / create ONE registry appellation
   // instead of two (ticket #2C). The tier belongs in classification.
-  const trimmedAppellation = normalizeAppellation((typeof appellation === 'string' ? appellation.trim() : '')).slice(0, MAX_FIELD);
+  // Then adopt the curated spelling when the Appellation taxonomy knows this
+  // one (strategy R2) — BEFORE key generation, so a synonym ("Chateauneuf du
+  // Pape") produces the same normalizedKey as the canonical form and the
+  // exact-match stage collapses them instead of minting a sibling.
+  const trimmedAppellation = await resolveCanonicalAppellation(
+    normalizeAppellation((typeof appellation === 'string' ? appellation.trim() : '')).slice(0, MAX_FIELD)
+  );
 
   // 0. Registry canon: the registry is vintage-neutral — a trailing year on
   // the name ("Reserve Cabernet Sauvignon 2023") belongs on the user's

@@ -1,7 +1,7 @@
 const express = require('express');
 const mongoose = require('mongoose');
 const { requireAuth, requireRole } = require('../../middleware/auth');
-const { normalizeString } = require('../../utils/normalize');
+const { normalizeString, normalizeAppellation, normalizeAppellationKey } = require('../../utils/normalize');
 const Country = require('../../models/Country');
 const Region = require('../../models/Region');
 const Grape = require('../../models/Grape');
@@ -62,7 +62,7 @@ async function wineCountsByAppellation() {
   ]);
   const map = new Map();
   for (const r of rows) {
-    const key = normalizeString(r._id || '');
+    const key = normalizeAppellationKey(normalizeAppellation(r._id || '') || r._id || '');
     if (!key) continue;
     map.set(key, (map.get(key) || 0) + r.n);
   }
@@ -580,6 +580,81 @@ for (const [path, { fn, type }] of Object.entries(MERGERS)) {
 
 // ===== APPELLATIONS =====
 
+// GET /api/admin/taxonomy/appellations/unmatched — the appellation review
+// queue (strategy 2026-07-29 R2). Wines store appellations as free text; this
+// lists every distinct normalized string that NO curated Appellation doc (by
+// name or synonym) covers, with the majority display spelling and the
+// majority country/region so the admin can promote it in one click (the
+// existing create endpoint) or fix the wines. Unknown values are reviewed,
+// never rejected — adding a bottle must not be blocked by taxonomy.
+router.get('/appellations/unmatched', async (req, res) => {
+  try {
+    const [existing, rows] = await Promise.all([
+      Appellation.find({}).select('normalizedName normalizedSynonyms').lean(),
+      WineDefinition.aggregate([
+        { $match: { appellation: { $nin: [null, ''] }, nonWine: { $ne: true } } },
+        { $group: { _id: { ap: '$appellation', country: '$country', region: '$region' }, n: { $sum: 1 } } },
+      ]),
+    ]);
+    const matched = new Set();
+    for (const a of existing) {
+      if (a.normalizedName) matched.add(a.normalizedName);
+      for (const s of a.normalizedSynonyms || []) matched.add(s);
+    }
+
+    // normalized → aggregate across raw-spelling/country/region variants
+    const groups = new Map();
+    for (const r of rows) {
+      // Tier-strip before grouping, mirroring the seed script: pre-guard rows
+      // ("… DO", "… DOCG") fold into their clean form instead of listing twice.
+      const cleaned = normalizeAppellation(r._id.ap || '') || r._id.ap || '';
+      const key = normalizeAppellationKey(cleaned);
+      if (!key || matched.has(key)) continue;
+      let g = groups.get(key);
+      if (!g) { g = { spellings: new Map(), countries: new Map(), regions: new Map(), total: 0 }; groups.set(key, g); }
+      g.total += r.n;
+      g.spellings.set(cleaned, (g.spellings.get(cleaned) || 0) + r.n);
+      if (r._id.country) g.countries.set(String(r._id.country), (g.countries.get(String(r._id.country)) || 0) + r.n);
+      if (r._id.region) g.regions.set(String(r._id.region), (g.regions.get(String(r._id.region)) || 0) + r.n);
+    }
+
+    const top = (map) => [...map.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || null;
+    const countryIds = new Set(), regionIds = new Set();
+    const items = [...groups.entries()].map(([normalized, g]) => {
+      const countryId = top(g.countries);
+      const regionId = top(g.regions);
+      if (countryId) countryIds.add(countryId);
+      if (regionId) regionIds.add(regionId);
+      return { normalized, name: top(g.spellings), wineCount: g.total, countryId, regionId };
+    }).sort((a, b) => b.wineCount - a.wineCount);
+
+    const [countries, regions] = await Promise.all([
+      Country.find({ _id: { $in: [...countryIds] } }).select('name').lean(),
+      Region.find({ _id: { $in: [...regionIds] } }).select('name country').lean(),
+    ]);
+    const countryName = new Map(countries.map(c => [String(c._id), c.name]));
+    const regionById = new Map(regions.map(r => [String(r._id), r]));
+
+    res.json({
+      total: items.length,
+      items: items.map(i => {
+        const region = i.regionId ? regionById.get(i.regionId) : null;
+        return {
+          ...i,
+          countryName: i.countryId ? countryName.get(i.countryId) || null : null,
+          // A majority region from a DIFFERENT country than the majority
+          // country would violate the Appellation schema — drop it.
+          regionId: region && String(region.country) === i.countryId ? i.regionId : null,
+          regionName: region && String(region.country) === i.countryId ? region.name : null,
+        };
+      }),
+    });
+  } catch (error) {
+    console.error('Unmatched appellations error:', error);
+    res.status(500).json({ error: 'Failed to list unmatched appellations' });
+  }
+});
+
 // GET /api/admin/taxonomy/appellations - List (filter by country and/or region)
 router.get('/appellations', async (req, res) => {
   try {
@@ -610,7 +685,7 @@ router.get('/appellations', async (req, res) => {
     // usage is every wine whose normalized string matches its normalizedName.
     const rows = appellations.map(a => ({
       ...a,
-      wineCount: wineCounts.get(a.normalizedName || normalizeString(a.name || '')) || 0,
+      wineCount: wineCounts.get(a.normalizedName || normalizeAppellationKey(a.name || '')) || 0,
     }));
 
     res.json({ count: rows.length, appellations: rows });
@@ -623,19 +698,20 @@ router.get('/appellations', async (req, res) => {
 // POST /api/admin/taxonomy/appellations - Create appellation
 router.post('/appellations', async (req, res) => {
   try {
-    const { name, country, region } = req.body;
+    const { name, country, region, synonyms } = req.body;
 
     if (!name || !country) {
       return res.status(400).json({ error: 'Name and country are required' });
     }
 
-    const normalizedName = normalizeString(name);
+    const normalizedName = normalizeAppellationKey(name);
 
     const appellation = new Appellation({
       name: name.trim(),
       normalizedName,
       country,
       region: region || null,
+      synonyms: Array.isArray(synonyms) && synonyms.length ? synonyms : undefined,
       createdBy: req.user.id
     });
 
@@ -661,7 +737,7 @@ router.post('/appellations', async (req, res) => {
 router.put('/appellations/:id', async (req, res) => {
   try {
     if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
-    const { name, region } = req.body;
+    const { name, region, synonyms } = req.body;
 
     const appellation = await Appellation.findById(req.params.id);
     if (!appellation) {
@@ -670,9 +746,10 @@ router.put('/appellations/:id', async (req, res) => {
 
     if (name) {
       appellation.name = name.trim();
-      appellation.normalizedName = normalizeString(name);
+      appellation.normalizedName = normalizeAppellationKey(name);
     }
     if (region !== undefined) appellation.region = region || null;
+    if (synonyms !== undefined) appellation.synonyms = Array.isArray(synonyms) && synonyms.length ? synonyms : undefined;
 
     await appellation.save();
     await appellation.populate('country', 'name');

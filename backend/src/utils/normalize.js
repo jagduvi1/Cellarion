@@ -91,6 +91,20 @@ const trimTrailingChars = (str, chars) => {
  *
  * Token-based + regex-free trailing strip, so it stays strictly linear.
  */
+/**
+ * The comparison KEY for appellation identity (strategy 2026-07-29 R2).
+ *
+ * normalizeString DELETES hyphens, so "Châteauneuf-du-Pape" folds to
+ * 'chateauneufdupape' while the typed "Chateauneuf du Pape" folds to
+ * 'chateauneuf du pape' — two keys for one place, found on the first
+ * prod-data test of the appellation resolver. Hyphens become spaces FIRST so
+ * both forms share one key. Appellation-specific on purpose: normalizedKey /
+ * canonicalKey semantics must not change (unique index + 4k existing keys),
+ * so this fold applies only where Appellation docs are matched.
+ */
+const normalizeAppellationKey = (appellation) =>
+  normalizeString(String(appellation == null ? '' : appellation).replace(/-/g, ' '));
+
 const normalizeAppellation = (appellation) => {
   if (appellation == null) return appellation;
   const original = String(appellation).trim();
@@ -722,6 +736,7 @@ module.exports = {
   GRAPE_SYNONYMS,
   normalizeProducerKey,
   normalizeAppellation,
+  normalizeAppellationKey,
   stripTrailingVintage,
   resolveGrapeName,
   resolveCountryName,
