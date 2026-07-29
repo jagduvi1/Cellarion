@@ -161,11 +161,14 @@ registerTool({
   scope: 'read',
   requireRole: ['admin'],
   annotations: { readOnlyHint: true, openWorldHint: false },
-  inputSchema: {},
-  handler: async (_args, _ctx) => {
+  inputSchema: {
+    limit: z.number().int().min(1).max(100).default(30).describe('Newest first; the backlog can grow between reviews'),
+  },
+  handler: async (args, _ctx) => {
     const { listPendingRegions } = require('../../services/taxonomyReview');
-    const items = await listPendingRegions();
-    return ok(`${items.length} region(s) awaiting review`, items.map(r => ({
+    const all = await listPendingRegions();
+    const items = all.slice(0, args.limit || 30);
+    return ok(`${all.length} region(s) awaiting review (showing ${items.length})`, items.map(r => ({
       region_id: r._id,
       name: r.name,
       country: r.country,

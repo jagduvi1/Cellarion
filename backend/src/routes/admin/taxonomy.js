@@ -36,7 +36,8 @@ const { clearTaxonomyListCache } = require('../taxonomy');
 /** Map<idString, wineCount> for a ref field ('country' | 'region'). */
 async function wineCountsByRef(field) {
   const rows = await WineDefinition.aggregate([
-    { $match: { [field]: { $ne: null } } },
+    // Quarantined rows don't count as "in use" — mirror taxonomyReview.js.
+    { $match: { [field]: { $ne: null }, nonWine: { $ne: true } } },
     { $group: { _id: `$${field}`, n: { $sum: 1 } } },
   ]);
   return new Map(rows.map(r => [String(r._id), r.n]));
@@ -45,6 +46,7 @@ async function wineCountsByRef(field) {
 /** Map<grapeIdString, wineCount> (grapes is an array field). */
 async function wineCountsByGrape() {
   const rows = await WineDefinition.aggregate([
+    { $match: { nonWine: { $ne: true } } },
     { $unwind: '$grapes' },
     { $group: { _id: '$grapes', n: { $sum: 1 } } },
   ]);
@@ -58,7 +60,7 @@ async function wineCountsByGrape() {
  */
 async function wineCountsByAppellation() {
   const rows = await WineDefinition.aggregate([
-    { $match: { appellation: { $nin: [null, ''] } } },
+    { $match: { appellation: { $nin: [null, ''] }, nonWine: { $ne: true } } },
     { $group: { _id: '$appellation', n: { $sum: 1 } } },
   ]);
   const map = new Map();
@@ -551,6 +553,9 @@ router.post('/regions/:id/approve', async (req, res) => {
     if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
     const region = await Region.findById(req.params.id);
     if (!region) return res.status(404).json({ error: 'Region not found' });
+    // Idempotent like the MCP tool: a second click must not write a second
+    // audit entry for a no-op (audit 2026-07-29, REST/MCP drift).
+    if (!region.pendingReview) return res.json({ region, already: true });
     region.pendingReview = false;
     await region.save();
     logAudit(req, 'admin.taxonomy.approveRegion',
@@ -668,6 +673,12 @@ router.post('/appellations', async (req, res) => {
     if (!name || !country) {
       return res.status(400).json({ error: 'Name and country are required' });
     }
+    // The mint chokepoint caps wine fields at 200; a longer curated name would
+    // be adopted onto wines past that cap (audit 2026-07-29 A1). MCP already
+    // enforces this; the REST surface must match.
+    if (name.trim().length > 200) {
+      return res.status(400).json({ error: 'Appellation name must be 200 characters or fewer' });
+    }
 
     const normalizedName = normalizeAppellationKey(name);
 
@@ -710,6 +721,9 @@ router.put('/appellations/:id', async (req, res) => {
     }
 
     if (name) {
+      if (name.trim().length > 200) {
+        return res.status(400).json({ error: 'Appellation name must be 200 characters or fewer' });
+      }
       appellation.name = name.trim();
       appellation.normalizedName = normalizeAppellationKey(name);
     }

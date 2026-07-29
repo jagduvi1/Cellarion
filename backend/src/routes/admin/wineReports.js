@@ -1,6 +1,12 @@
 const express = require('express');
 const router = express.Router();
 const WineReport = require('../../models/WineReport');
+const WineDefinition = require('../../models/WineDefinition');
+const Bottle = require('../../models/Bottle');
+const searchService = require('../../services/search');
+const { generateWineKey, normalizeAppellation, stripTrailingVintage } = require('../../utils/normalize');
+const { canonicalizeWineName } = require('../../utils/producerPrefix');
+const { resolveCanonicalAppellation } = require('../../services/appellationResolve');
 const { requireAuth, requireRole } = require('../../middleware/auth');
 const { logAudit } = require('../../services/audit');
 const { stripHtml } = require('../../utils/sanitize');
@@ -33,7 +39,7 @@ router.get('/', async (req, res) => {
         .skip(offset)
         .limit(limit)
         .populate('user', 'username email')
-        .populate({ path: 'wineDefinition', select: 'name producer country type', populate: { path: 'country', select: 'name' } })
+        .populate({ path: 'wineDefinition', select: 'name producer country type appellation', populate: { path: 'country', select: 'name' } })
         .populate('duplicateOf', 'name producer')
         .populate('resolvedBy', 'username')
         .lean(),
@@ -47,16 +53,74 @@ router.get('/', async (req, res) => {
   }
 });
 
-// PUT /api/admin/wine-reports/:id/resolve — mark a wine report as resolved
+// PUT /api/admin/wine-reports/:id/resolve — mark a wine report as resolved.
+// Body: { adminNotes?, applySuggestion?: true }
+//
+// applySuggestion (R7): when the report carries a structured correction and
+// the admin agrees, resolving APPLIES it to the wine in the same action —
+// before this, resolution wrote nothing back and the admin re-typed the fix
+// in Admin → Wines (or, in practice, didn't). Applied via .save() so the
+// model hooks run (canonicalKey recompute + verifiedChecks invalidation),
+// with normalizedKey recomputed the same way the admin edit route does; a
+// unique-key collision means the correction would make this wine identical
+// to an existing one — that is a MERGE, refused here with a clear 409.
 router.put('/:id/resolve', async (req, res) => {
   try {
     if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
-    const { adminNotes } = req.body;
+    const { adminNotes, applySuggestion } = req.body;
 
     const report = await WineReport.findById(req.params.id);
     if (!report) return res.status(404).json({ error: 'Report not found' });
     if (report.status !== 'pending') {
       return res.status(400).json({ error: 'Report is already resolved or dismissed' });
+    }
+
+    let applied = null;
+    if (applySuggestion) {
+      if (!report.suggestedField || !report.suggestedValue) {
+        return res.status(400).json({ error: 'This report has no structured suggestion to apply' });
+      }
+      const wine = await WineDefinition.findById(report.wineDefinition);
+      if (!wine) return res.status(404).json({ error: 'The reported wine no longer exists' });
+
+      const previous = wine[report.suggestedField] ?? null;
+      // Run the suggestion through the SAME field normalizers the write
+      // pipeline applies — a raw assignment would let a one-click apply
+      // reintroduce the exact defect classes the registry campaign closed:
+      // tier-suffixed appellations, trailing vintages, producer-in-name
+      // embeds (audit 2026-07-29 R7-#1). The reporter's text is untrusted
+      // input that merely happens to arrive via an admin's click.
+      let value = report.suggestedValue.trim().replace(/\s+/g, ' ');
+      if (report.suggestedField === 'name') {
+        value = canonicalizeWineName(stripTrailingVintage(value), wine.producer);
+      } else if (report.suggestedField === 'appellation') {
+        value = await resolveCanonicalAppellation(normalizeAppellation(value));
+      }
+      wine[report.suggestedField] = value;
+      if (report.suggestedField !== 'type') {
+        wine.normalizedKey = generateWineKey(wine.name, wine.producer, wine.appellation);
+      }
+      try {
+        await wine.save();
+      } catch (err) {
+        if (err.code === 11000) {
+          return res.status(409).json({
+            error: 'Applying this correction would make the wine identical to an existing registry wine — merge them in Admin → Wines instead',
+          });
+        }
+        throw err;
+      }
+      searchService.indexWine(wine._id).catch(() => {});
+      // Bottles denormalize wineName/producer/appellation into their own
+      // search index — without this, cellar search matches the OLD values
+      // indefinitely (mirrors the admin wine-edit route; audit R7-#3).
+      Bottle.distinct('_id', { wineDefinition: wine._id })
+        .then(ids => searchService.bulkIndexBottles(ids))
+        .catch(() => {});
+      applied = { field: report.suggestedField, from: previous, to: report.suggestedValue };
+      logAudit(req, 'admin.wine.update',
+        { type: 'wine', id: wine._id },
+        { via: 'wine-report', field: applied.field, from: applied.from, to: applied.to });
     }
 
     report.status = 'resolved';
@@ -73,9 +137,9 @@ router.put('/:id/resolve', async (req, res) => {
     });
 
     await report.populate('user', 'username email');
-    await report.populate('wineDefinition', 'name producer country type');
+    await report.populate('wineDefinition', 'name producer country type appellation');
     await report.populate('resolvedBy', 'username');
-    res.json({ report });
+    res.json({ report, applied });
   } catch (err) {
     console.error('Admin resolve wine report error:', err);
     res.status(500).json({ error: 'Failed to resolve wine report' });
@@ -105,7 +169,7 @@ router.put('/:id/dismiss', async (req, res) => {
     });
 
     await report.populate('user', 'username email');
-    await report.populate('wineDefinition', 'name producer country type');
+    await report.populate('wineDefinition', 'name producer country type appellation');
     await report.populate('resolvedBy', 'username');
     res.json({ report });
   } catch (err) {

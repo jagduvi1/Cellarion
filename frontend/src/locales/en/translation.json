@@ -2229,7 +2229,8 @@
     "tastingProfile": "Tasting profile",
     "structure": "Structure",
     "flavours": "Flavours",
-    "pairsWith": "Pairs with"
+    "pairsWith": "Pairs with",
+    "reportIssue": "Report an issue"
   },
   "taxonomy": {
     "loading": "Loading…",
@@ -3829,6 +3830,15 @@
     "detailsPlaceholder": "Provide any additional information that will help us investigate…",
     "submitting": "Submitting…",
     "submit": "Submit Report",
-    "submitFailed": "Failed to submit report"
+    "submitFailed": "Failed to submit report",
+    "suggestField": "Suggest a correction",
+    "suggestFieldNone": "No specific field — described below",
+    "suggestValue": "Correct value",
+    "fields": {
+      "name": "Wine name",
+      "producer": "Producer",
+      "appellation": "Appellation",
+      "type": "Wine type"
+    }
   }
 }

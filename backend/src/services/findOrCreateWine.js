@@ -19,7 +19,7 @@ const Region = require('../models/Region');
 const Grape = require('../models/Grape');
 const Appellation = require('../models/Appellation');
 const searchService = require('./search');
-const { generateWineKey, normalizeString, normalizeAppellation, stripTrailingVintage, resolveGrapeName, resolveCountryName, isRecognizedCountry, isUnknownName, isJunkGrapeName } = require('../utils/normalize');
+const { generateWineKey, normalizeString, normalizeAppellation, normalizeAppellationKey, stripTrailingVintage, resolveGrapeName, resolveCountryName, isRecognizedCountry, isUnknownName, isJunkGrapeName } = require('../utils/normalize');
 const { scoreAllMatches } = require('./wineMatching');
 const { canonicalizeWineName } = require('../utils/producerPrefix');
 const { computeCanonicalKey, canonicalSiblingPrefix } = require('../utils/wineIdentity');
@@ -362,7 +362,13 @@ async function findOrCreateWine({ name, producer, country, region, appellation, 
   const [placeCountry, placeRegion, placeAppellation] = await Promise.all([
     Country.exists({ normalizedName: producerNorm }),
     Region.exists({ $or: [{ normalizedName: producerNorm }, { normalizedSynonyms: producerNorm }] }),
-    Appellation.exists({ normalizedName: producerNorm }),
+    // Appellation keys fold hyphens to spaces (normalizeAppellationKey) —
+    // querying with plain normalizeString would MISS every hyphenated
+    // appellation doc ("Châteauneuf-du-Pape") and silently reopen the
+    // place-as-producer hole for exactly the places the seed script promotes
+    // (audit 2026-07-29 A3). Both keys queried: legacy docs may still carry
+    // the old fold until the backfill script has run.
+    Appellation.exists({ normalizedName: { $in: [producerNorm, normalizeAppellationKey(trimmedProducer)] } }),
   ]);
   if (placeCountry || placeRegion || placeAppellation) {
     const err = new Error(

@@ -6,17 +6,29 @@ import { useAuth } from '../contexts/AuthContext';
 import './ReportWineModal.css';
 
 const REASON_VALUES = ['wrong_info', 'duplicate', 'wrong_price', 'wrong_tasting_profile', 'inappropriate', 'other'];
+// The one-click-appliable fields (mirrors the backend allowlist). Region and
+// country are references — describe those in the details text instead.
+const SUGGESTABLE_FIELDS = ['name', 'producer', 'appellation', 'type'];
+const WINE_TYPES = ['red', 'white', 'rosé', 'sparkling', 'dessert', 'fortified'];
 
 function ReportWineModal({ wine, defaultReason, onClose }) {
   const { t } = useTranslation();
   const { apiFetch } = useAuth();
-  const [form, setForm] = useState({ reason: defaultReason || 'wrong_info', details: '' });
+  const [form, setForm] = useState({ reason: defaultReason || 'wrong_info', details: '', suggestedField: '', suggestedValue: '' });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(false);
 
   const handleChange = (e) => {
-    setForm(f => ({ ...f, [e.target.name]: e.target.value }));
+    const { name, value } = e.target;
+    setForm(f => ({
+      ...f,
+      [name]: value,
+      // Suggestion inputs only exist for wrong_info — switching the reason
+      // hides them, and hidden stale state must not ride along in the submit
+      // (audit 2026-07-29 R7-#5). The backend enforces this too.
+      ...(name === 'reason' && value !== 'wrong_info' ? { suggestedField: '', suggestedValue: '' } : {}),
+    }));
     setError(null);
   };
 
@@ -30,6 +42,9 @@ function ReportWineModal({ wine, defaultReason, onClose }) {
         wineDefinitionId: wine._id,
         reason: form.reason,
         details: form.details || undefined,
+        ...(form.suggestedField && form.suggestedValue.trim()
+          ? { suggestedField: form.suggestedField, suggestedValue: form.suggestedValue.trim() }
+          : {}),
       });
       const data = await res.json();
       if (!res.ok) return setError(data.error || t('reportWine.submitFailed'));
@@ -72,6 +87,40 @@ function ReportWineModal({ wine, defaultReason, onClose }) {
             ))}
           </select>
         </label>
+
+        {form.reason === 'wrong_info' && (
+          <div className="report-wine-suggestion">
+            <label>
+              {t('reportWine.suggestField')} <span className="optional">{t('reportWine.optional')}</span>
+              <select name="suggestedField" value={form.suggestedField} onChange={handleChange}>
+                <option value="">{t('reportWine.suggestFieldNone')}</option>
+                {SUGGESTABLE_FIELDS.map(f => (
+                  <option key={f} value={f}>{t(`reportWine.fields.${f}`)}</option>
+                ))}
+              </select>
+            </label>
+            {form.suggestedField && (
+              <label>
+                {t('reportWine.suggestValue')}
+                {form.suggestedField === 'type' ? (
+                  <select name="suggestedValue" value={form.suggestedValue} onChange={handleChange}>
+                    <option value="">—</option>
+                    {WINE_TYPES.map(v => <option key={v} value={v}>{v}</option>)}
+                  </select>
+                ) : (
+                  <input
+                    type="text"
+                    name="suggestedValue"
+                    value={form.suggestedValue}
+                    onChange={handleChange}
+                    maxLength={200}
+                    placeholder={String(wine[form.suggestedField] || '')}
+                  />
+                )}
+              </label>
+            )}
+          </div>
+        )}
 
         <label>
           {t('reportWine.details')} <span className="optional">{t('reportWine.optional')}</span>

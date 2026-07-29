@@ -107,7 +107,9 @@ async function runRegistryHealthCheck() {
 
   const regressions = [];
   if (previous) {
-    const prev = previous.metrics instanceof Map ? Object.fromEntries(previous.metrics) : (previous.metrics || {});
+    // .lean() always yields the Map field as a plain object (Mongoose only
+    // hydrates SchemaMap on document init, never on lean queries).
+    const prev = previous.metrics || {};
     for (const [key, label] of Object.entries(METRIC_LABELS)) {
       const before = prev[key];
       // A metric added after the baseline was written has no `before` — skip

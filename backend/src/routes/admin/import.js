@@ -492,8 +492,25 @@ async function finalizeMintedWines(ids) {
       }
       // save(): the pre-validate hook recomputes canonicalKey the same way
       // (idempotent) and the slug hook skips non-new docs, which is why the
-      // slug is assigned by hand above.
-      await doc.save();
+      // slug is assigned by hand above. The slug probe is check-then-set, so
+      // a concurrent import can win the race — on a unique-index collision,
+      // bump the suffix and retry instead of abandoning the row unfinalized
+      // (audit 2026-07-29 F3: an abandoned row is exactly the invariant hole
+      // this function exists to close).
+      let attempt = 0;
+      for (;;) {
+        try {
+          await doc.save();
+          break;
+        } catch (err) {
+          if (err.code === 11000 && doc.slug && attempt < 5) {
+            attempt += 1;
+            doc.slug = `${doc.slug}-r${attempt}`;
+            continue;
+          }
+          throw err;
+        }
+      }
       done += 1;
     } catch (err) {
       console.warn(`[import] finalize failed for ${id} (non-fatal):`, err.message);

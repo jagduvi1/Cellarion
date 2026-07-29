@@ -13,7 +13,9 @@ const { resolveCanonicalAppellation } = require('./appellationResolve');
 
 const chain = (docs) => ({
   select: jest.fn().mockReturnValue({
-    limit: jest.fn().mockReturnValue({ lean: jest.fn().mockResolvedValue(docs) }),
+    sort: jest.fn().mockReturnValue({
+      limit: jest.fn().mockReturnValue({ lean: jest.fn().mockResolvedValue(docs) }),
+    }),
   }),
 });
 
