@@ -59,11 +59,13 @@ router.put('/:wineId', requireSommOrAdmin, async (req, res) => {
     applyProfilePatch(wine, check.clean, req.user.id);
     await wine.save();
 
-    // The structured descriptors feed buildEmbeddingText, so the embedding is
-    // now stale. It is textHash-keyed, so the next incremental embedding run
-    // picks this up by itself — no explicit invalidation needed. Meili does
-    // need a nudge, since it carries the profile fields for filtering.
+    // The structured descriptors feed buildEmbeddingText, so both indexes are
+    // now stale. Meili is nudged directly; Qdrant is re-embedded inline —
+    // relying on "the next incremental run" was wrong because NO run is
+    // scheduled, so a correction stayed invisible to semantic search until a
+    // manual job (mirrors enrichmentJob's own post-write re-embed).
     searchService.indexWine(wine._id).catch(() => {});
+    require('../../services/embeddingJob').reembedActiveVintages(wine._id).catch(() => {});
 
     logAudit(req, 'somm.wineProfile.update', { type: 'wine', id: wine._id }, {
       wine: `${wine.producer} — ${wine.name}`,

@@ -9,6 +9,7 @@ const { runSecurityAlertCheck } = require('./securityAlertJob');
 const { runClimateOfflineCheck } = require('./climateOfflineJob');
 const { runDemoSweep } = require('./demoSweepJob');
 const { runRegistryHealthCheck } = require('./registryHealthJob');
+const embeddingJob = require('./embeddingJob');
 
 /**
  * Start all scheduled cron jobs.
@@ -130,7 +131,25 @@ function startScheduler() {
     }
   });
 
-  console.log('[scheduler] Cron jobs registered (drink-window daily 06:00 UTC, value-snapshot weekly Sun 01:00 UTC, community-price weekly Sun 02:00 UTC, user-deletion daily 03:00 UTC, cellar-retention daily 04:00 UTC, recommendation-email-scrub daily 04:30 UTC, security-spike every 15 min, climate-offline every 15 min, demo-sweep every 15 min offset, registry-health weekly Mon 05:00 UTC)');
+  // Incremental embedding catch-all: weekly on Monday at 05:30 UTC (after the
+  // registry health check). Curation writes re-embed inline, but this sweeps
+  // up anything that slipped (a failed inline call, a script-driven change) —
+  // textHash-keyed, so an up-to-date registry makes this a near-no-op.
+  // "Already running" is fine, not an error: someone started a manual run.
+  cron.schedule('30 5 * * 1', async () => {
+    console.log('[scheduler] Running weekly incremental embedding sweep…');
+    try {
+      await embeddingJob.start({ mode: 'incremental' });
+    } catch (err) {
+      if (/already running/i.test(err.message)) {
+        console.log('[scheduler] Embedding job already running — sweep skipped');
+      } else {
+        console.error('[scheduler] Weekly embedding sweep failed:', err.message);
+      }
+    }
+  });
+
+  console.log('[scheduler] Cron jobs registered (drink-window daily 06:00 UTC, value-snapshot weekly Sun 01:00 UTC, community-price weekly Sun 02:00 UTC, user-deletion daily 03:00 UTC, cellar-retention daily 04:00 UTC, recommendation-email-scrub daily 04:30 UTC, security-spike every 15 min, climate-offline every 15 min, demo-sweep every 15 min offset, registry-health weekly Mon 05:00 UTC, embed-sweep weekly Mon 05:30 UTC)');
 }
 
 module.exports = { startScheduler };
