@@ -403,3 +403,80 @@ describe('removeBottleCascade (real execution)', () => {
     expect(b.deleteOne).not.toHaveBeenCalled();
   });
 });
+
+describe('open-bottle ops (openBottle / pourFromBottle / closeBottle)', () => {
+  const { openBottle, pourFromBottle, closeBottle } = require('./bottleOps');
+  const openDoc = (over = {}) => freshBottle({
+    openedAt: new Date('2026-07-28T19:00:00Z'), preservationMethod: 'vacuum',
+    pours: [], openBottleNotifiedAt: null, ...over,
+  });
+
+  test('openBottle guards: consumed, already open (with code), bad method, bad/future/ancient openedAt', async () => {
+    expect((await openBottle(freshBottle({ status: 'drank' }), { preservationMethod: 'vacuum' }, REQ)).error.message).toMatch(/already consumed/);
+    const already = await openBottle(openDoc(), { preservationMethod: 'vacuum' }, REQ);
+    expect(already.error.code).toBe('already_open');
+    expect((await openBottle(freshBottle(), { preservationMethod: 'freezer' }, REQ)).error.message).toMatch(/Invalid preservation method/);
+    expect((await openBottle(freshBottle(), { preservationMethod: 'vacuum', openedAt: 'not-a-date' }, REQ)).error.message).toMatch(/not a valid date/);
+    expect((await openBottle(freshBottle(), { preservationMethod: 'vacuum', openedAt: new Date(Date.now() + 86400000) }, REQ)).error.message).toMatch(/future/);
+    expect((await openBottle(freshBottle(), { preservationMethod: 'vacuum', openedAt: new Date(Date.now() - 91 * 86400000) }, REQ)).error.message).toMatch(/too far in the past/);
+  });
+
+  test('openBottle sets the open state, re-arms the expiry alert, saves, audits', async () => {
+    const bottle = freshBottle({ pours: [{ ml: 999 }], openBottleNotifiedAt: new Date() });
+    const res = await openBottle(bottle, { preservationMethod: 'coravin', openedAt: '2026-07-20' }, REQ);
+    expect(res.error).toBeUndefined();
+    expect(bottle.openedAt).toEqual(new Date('2026-07-20'));
+    expect(bottle.preservationMethod).toBe('coravin');
+    expect(bottle.pours).toEqual([]); // a fresh opening starts a fresh pour log
+    expect(bottle.openBottleNotifiedAt).toBeNull();
+    expect(bottle.save).toHaveBeenCalled();
+    expect(logAudit).toHaveBeenCalledWith(REQ, 'bottle.open',
+      { type: 'bottle', id: 'b1', cellarId: 'c1' }, { preservationMethod: 'coravin' });
+  });
+
+  test('pourFromBottle guards: consumed, not open (with code), ml bounds, MAX_POURS cap', async () => {
+    expect((await pourFromBottle(openDoc({ status: 'drank' }), {}, REQ)).error.message).toMatch(/already consumed/);
+    const closed = await pourFromBottle(freshBottle({ openedAt: null, pours: [] }), {}, REQ);
+    expect(closed.error.code).toBe('not_open');
+    expect((await pourFromBottle(openDoc(), { ml: 0 }, REQ)).error.message).toMatch(/between 1 and 6000/);
+    expect((await pourFromBottle(openDoc(), { ml: 6001 }, REQ)).error.message).toMatch(/between 1 and 6000/);
+    const full = openDoc({ pours: Array.from({ length: 100 }, () => ({ ml: 10 })) });
+    expect((await pourFromBottle(full, {}, REQ)).error.message).toMatch(/Too many pours/);
+  });
+
+  test('pourFromBottle defaults to a 125 ml glass, rounds, saves, audits with the ml', async () => {
+    const bottle = openDoc();
+    await pourFromBottle(bottle, {}, REQ);
+    expect(bottle.pours).toHaveLength(1);
+    expect(bottle.pours[0].ml).toBe(125);
+    expect(bottle.pours[0].at).toBeInstanceOf(Date);
+
+    await pourFromBottle(bottle, { ml: 99.6 }, REQ);
+    expect(bottle.pours[1].ml).toBe(100); // rounded
+    expect(logAudit).toHaveBeenLastCalledWith(REQ, 'bottle.pour',
+      { type: 'bottle', id: 'b1', cellarId: 'c1' }, { ml: 100 });
+  });
+
+  test('closeBottle refuses an unopened bottle (with code)', async () => {
+    const res = await closeBottle(freshBottle({ openedAt: null }), REQ);
+    expect(res.error.code).toBe('not_open');
+  });
+
+  test('closeBottle clears the open state and returns the prev snapshot the MCP undo restores', async () => {
+    const openedAt = new Date('2026-07-28T19:00:00Z');
+    const notified = new Date('2026-07-29T08:00:00Z');
+    const bottle = openDoc({ openedAt, pours: [{ at: openedAt, ml: 125 }], openBottleNotifiedAt: notified });
+    const res = await closeBottle(bottle, REQ);
+    expect(res.error).toBeUndefined();
+    expect(res.prevOpenState).toEqual({
+      openedAt, preservationMethod: 'vacuum',
+      pours: [{ at: openedAt, ml: 125 }], openBottleNotifiedAt: notified,
+    });
+    expect(bottle.openedAt).toBeNull();
+    expect(bottle.preservationMethod).toBeUndefined();
+    expect(bottle.pours).toEqual([]);
+    expect(bottle.openBottleNotifiedAt).toBeNull();
+    expect(bottle.save).toHaveBeenCalled();
+    expect(logAudit).toHaveBeenCalledWith(REQ, 'bottle.open_undo', { type: 'bottle', id: 'b1', cellarId: 'c1' });
+  });
+});

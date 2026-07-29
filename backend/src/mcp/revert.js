@@ -24,7 +24,7 @@ async function unclaim(rowId) {
   await McpActionLog.updateOne({ _id: rowId }, { $set: { reversed: false } }).catch(() => {});
 }
 
-const CONSUME_REVERSIBLE = ['consume', 'restore'];
+const CONSUME_REVERSIBLE = ['consume', 'restore', 'open', 'pour', 'close'];
 const WRITE_REVERSIBLE = ['add', 'update', 'bulk_add', 'somm_maturity', 'somm_maturity_remove',
   'somm_wine_profile', 'somm_price',
   'cellar_create', 'rack_create', 'place', 'unplace', 'move', 'arrange', 'tasting_note', 'attach_image',
@@ -416,6 +416,107 @@ async function revertLedgerRow(row, ctx, { ok, fail }) {
     }
     const envelope = { summary: `Undid bulk add — ${removed.length} bottle(s) removed${winesRemoved.length ? `, ${winesRemoved.length} newly-created registry wine(s) rolled back` : ''}${failures.length ? `, ${failures.length} FAILED (remove those manually)` : ''}`, data: { undone: 'bulk_add', removed_bottle_ids: removed, ...(winesRemoved.length ? { removed_wine_ids: winesRemoved } : {}), ...(failures.length ? { failures } : {}) } };
     await logAction(ctx, { tool: 'undo_last', action: 'undo_add', viaUndo: true, cellar: row.cellar, detail: { undid: String(row._id), count: resolved.length, ...(winesRemoved.length ? { winesRemoved } : {}) }, result: envelope });
+    return ok(envelope.summary, envelope.data);
+  }
+
+  // Open-bottle tracking: open / pour / close (issue #835). Changed-since
+  // guards compare against what THIS action recorded, so an undo never
+  // clobbers open-state the user changed by hand in between.
+  if (['open', 'pour', 'close'].includes(row.action)) {
+    const { closeBottle } = require('../services/bottleOps');
+    const { logAudit } = require('../services/audit');
+    const access = await resolveBottleAccess(ctx.user.id, row.bottle, 'editor');
+    if (!access) return fail('conflict', 'The bottle from that action is no longer accessible; nothing was changed.');
+    const { bottle } = access;
+
+    if (row.action === 'open') {
+      const openedAt = row.detail?.openedAt ? new Date(row.detail.openedAt).getTime() : null;
+      if (!bottle.openedAt || !openedAt || new Date(bottle.openedAt).getTime() !== openedAt) {
+        return fail('conflict', 'That open cannot be undone: the bottle\'s open state changed since. Use close_bottle to clear it explicitly. Nothing was changed.');
+      }
+      if ((bottle.pours || []).length > 0) {
+        return fail('conflict', 'That open cannot be undone: pours have been recorded since and undoing would discard them. Use close_bottle if you really want the open state (and its pours) cleared. Nothing was changed.');
+      }
+      const claimed = await McpActionLog.findOneAndUpdate({ _id: row._id, reversed: false }, { $set: { reversed: true, idempotencyKey: null } });
+      if (!claimed) return fail('conflict', 'That action is already being undone by another request.');
+      const result = await closeBottle(bottle, ctx.req);
+      if (result.error) {
+        await unclaim(row._id); // nothing changed → let the undo be retried
+        return fail('conflict', `Cannot undo that open: ${result.error.message}`);
+      }
+      const envelope = { summary: `Undid open — ${bottleLabel(bottle)} is unopened again`, data: { undone: 'open_bottle', bottle_id: bottle._id, open: false } };
+      await logAction(ctx, { tool: 'undo_last', action: 'close', viaUndo: true, bottle: bottle._id, cellar: bottle.cellar, detail: { undid: String(row._id) }, result: envelope });
+      return ok(envelope.summary, envelope.data);
+    }
+
+    if (row.action === 'pour') {
+      if (!bottle.openedAt) return fail('conflict', 'That pour cannot be undone: the bottle is no longer marked open. Nothing was changed.');
+      const count = row.detail?.count || 1;
+      const ml = row.detail?.ml;
+      const pours = bottle.pours || [];
+      // Only remove while the tail still IS this action's pours (same ml, at
+      // least count of them) — a hand-recorded pour since then wins.
+      const tail = pours.slice(-count);
+      if (tail.length < count || (ml != null && tail.some((p) => p.ml !== ml))) {
+        return fail('conflict', 'That pour cannot be undone: the recorded pours changed since. Nothing was changed.');
+      }
+      const claimed = await McpActionLog.findOneAndUpdate({ _id: row._id, reversed: false }, { $set: { reversed: true, idempotencyKey: null } });
+      if (!claimed) return fail('conflict', 'That action is already being undone by another request.');
+      let closedToo = false;
+      try {
+        bottle.pours.splice(bottle.pours.length - count, count);
+        // The pour that implicitly OPENED the bottle undoes the open too — but
+        // only while nothing else touched the open state (no pours left, same
+        // openedAt as the implicit open recorded).
+        const implicitAt = row.detail?.implicitOpen && row.detail?.openedAt ? new Date(row.detail.openedAt).getTime() : null;
+        if (implicitAt && bottle.pours.length === 0 && bottle.openedAt && new Date(bottle.openedAt).getTime() === implicitAt) {
+          bottle.openedAt = null;
+          bottle.preservationMethod = undefined;
+          bottle.openBottleNotifiedAt = null;
+          closedToo = true;
+        }
+        await bottle.save();
+      } catch (err) {
+        await unclaim(row._id); // nothing persisted → let the undo be retried
+        if (err?.name === 'VersionError') return fail('conflict', 'The bottle changed mid-undo — retry.');
+        throw err;
+      }
+      logAudit(ctx.req, closedToo ? 'bottle.open_undo' : 'bottle.pour_undo', { type: 'bottle', id: bottle._id, cellarId: bottle.cellar });
+      const envelope = {
+        summary: `Undid pour — ${count > 1 ? `${count} glasses` : 'a glass'} removed from ${bottleLabel(bottle)}${closedToo ? ' (and its implicit open cleared)' : ''}`,
+        data: { undone: 'pour_glass', bottle_id: bottle._id, pours_removed: count, open: !closedToo },
+      };
+      await logAction(ctx, { tool: 'undo_last', action: 'pour', viaUndo: true, bottle: bottle._id, cellar: bottle.cellar, detail: { undid: String(row._id) }, result: envelope });
+      return ok(envelope.summary, envelope.data);
+    }
+
+    // close — restore the prev open-state snapshot (openedAt, method, pours,
+    // notified marker). Refuse if the bottle was re-opened since: the newer
+    // open state is the user's current intent.
+    if (bottle.openedAt) {
+      return fail('conflict', 'That close cannot be undone: the bottle has been opened again since. Nothing was changed.');
+    }
+    const prev = row.prev || {};
+    if (!prev.openedAt) return fail('conflict', 'That close recorded no previous open state; nothing to restore.');
+    const claimed = await McpActionLog.findOneAndUpdate({ _id: row._id, reversed: false }, { $set: { reversed: true, idempotencyKey: null } });
+    if (!claimed) return fail('conflict', 'That action is already being undone by another request.');
+    try {
+      bottle.openedAt = new Date(prev.openedAt);
+      bottle.preservationMethod = prev.preservationMethod || undefined;
+      bottle.pours = (prev.pours || []).map((p) => ({ at: p.at, ml: p.ml }));
+      bottle.openBottleNotifiedAt = prev.openBottleNotifiedAt ? new Date(prev.openBottleNotifiedAt) : null;
+      await bottle.save();
+    } catch (err) {
+      await unclaim(row._id); // nothing persisted → let the undo be retried
+      if (err?.name === 'VersionError') return fail('conflict', 'The bottle changed mid-undo — retry.');
+      throw err;
+    }
+    logAudit(ctx.req, 'bottle.open', { type: 'bottle', id: bottle._id, cellarId: bottle.cellar }, { preservationMethod: bottle.preservationMethod, via: 'undo' });
+    const envelope = {
+      summary: `Undid close — ${bottleLabel(bottle)} is open again (${bottle.preservationMethod || 'unknown method'}, ${bottle.pours.length} pour(s) restored)`,
+      data: { undone: 'close_bottle', bottle_id: bottle._id, open: true, pours: bottle.pours.length },
+    };
+    await logAction(ctx, { tool: 'undo_last', action: 'open', viaUndo: true, bottle: bottle._id, cellar: bottle.cellar, detail: { undid: String(row._id) }, result: envelope });
     return ok(envelope.summary, envelope.data);
   }
 

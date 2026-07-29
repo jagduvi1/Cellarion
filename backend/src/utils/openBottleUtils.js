@@ -16,6 +16,12 @@ const PRESERVATION_FRESHNESS_DAYS = {
 const DEFAULT_FRESHNESS_DAYS = 2;
 const DAY_MS = 86400000;
 
+// The valid preservation methods ARE the freshness map's keys — one source for
+// the Bottle schema consumers, the REST/MCP validation (bottleOps) and the
+// MCP tool input enum.
+const PRESERVATION_METHODS = Object.keys(PRESERVATION_FRESHNESS_DAYS);
+const DEFAULT_POUR_ML = 125;
+
 /** Drink-by deadline: openedAt + the method's freshness window. Null when unopened. */
 function openBottleDeadline(bottle) {
   if (!bottle?.openedAt) return null;
@@ -42,6 +48,8 @@ function shouldNotifyOpenBottle(bottle, now = new Date()) {
 
 module.exports = {
   PRESERVATION_FRESHNESS_DAYS,
+  PRESERVATION_METHODS,
+  DEFAULT_POUR_ML,
   openBottleDeadline,
   openBottleDaysLeft,
   shouldNotifyOpenBottle,

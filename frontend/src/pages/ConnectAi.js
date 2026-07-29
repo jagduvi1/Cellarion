@@ -221,7 +221,7 @@ function ConnectAi() {
             <li>
               <strong>{t('connectAi.access.consumeTitle', 'Read and drink')}</strong>
               {' — '}
-              {t('connectAi.access.consumeBody', 'Also mark bottles as consumed. Every consumption can be restored.')}
+              {t('connectAi.access.consumeBody', 'Also mark bottles as consumed, and track open bottles (opened, glasses poured, preservation). All of it is reversible.')}
             </li>
             <li>
               <strong>{t('connectAi.access.writeTitle', 'Full access')}</strong>
