@@ -67,6 +67,14 @@ describe('gcOrphanMintedWine guards', () => {
     expect(WineDefinition.deleteOne).not.toHaveBeenCalled();
   });
 
+  test('only REVIEWED profiles are counted as curated — a deferral does not block', async () => {
+    // The guard must query status:'reviewed' exactly. With the old
+    // {$ne:'pending'} test, adding the 'deferred' status would silently have
+    // made every deferred orphan un-collectable.
+    await gcOrphanMintedWine(WINE_ID, REQ);
+    expect(WineVintageProfile.countDocuments).toHaveBeenCalledWith({ wineDefinition: WINE_ID, status: 'reviewed' });
+  });
+
   test('an admin-verified data-quality check keeps it (user undo must not delete curated data)', async () => {
     WineDefinition.findById.mockReturnValue(selectable({
       _id: WINE_ID, name: 'Opus One', producer: 'Opus One',
@@ -94,7 +102,9 @@ describe('gcOrphanMintedWine happy path', () => {
 
     const res = await gcOrphanMintedWine(WINE_ID, REQ);
     expect(res.removed).toBe(true);
-    expect(WineVintageProfile.deleteMany).toHaveBeenCalledWith({ wineDefinition: WINE_ID, status: 'pending' });
+    // Deferred rows go too: on a wine with no bottles left, "this vintage
+    // isn't real yet" is a reason to clean up, not a reason to keep.
+    expect(WineVintageProfile.deleteMany).toHaveBeenCalledWith({ wineDefinition: WINE_ID, status: { $in: ['pending', 'deferred'] } });
     expect(vectorStore.deletePoints).toHaveBeenCalledWith('v1', ['p1', 'p2']);
     expect(WineEmbedding.deleteMany).toHaveBeenCalledWith({ wineDefinition: WINE_ID });
     expect(searchService.removeWine).toHaveBeenCalledWith(WINE_ID);

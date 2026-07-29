@@ -42,9 +42,12 @@ async function gcOrphanMintedWine(wineId, req) {
     const officialImage = await BottleImage.countDocuments({ wineDefinition: wineId, assignedToWine: true });
     if (officialImage > 0) return { removed: false, reason: 'has an approved wine image' };
 
+    // Only a REVIEWED profile is curated data worth protecting. A deferred one
+    // is a somm saying "this vintage isn't real yet" — on a wine that now has
+    // no bottles at all, that is a reason to clean up, not to keep.
     const reviewedProfiles = await WineVintageProfile.countDocuments({
       wineDefinition: wineId,
-      status: { $ne: 'pending' },
+      status: 'reviewed',
     });
     if (reviewedProfiles > 0) return { removed: false, reason: 'a maturity profile was reviewed' };
 
@@ -55,7 +58,7 @@ async function gcOrphanMintedWine(wineId, req) {
     }
 
     // Guards passed — clean up everything the mint created, quietest first.
-    await WineVintageProfile.deleteMany({ wineDefinition: wineId, status: 'pending' });
+    await WineVintageProfile.deleteMany({ wineDefinition: wineId, status: { $in: ['pending', 'deferred'] } });
 
     // Un-approved images (rows + files). unlinkImageFiles is best-effort.
     const images = await BottleImage.find({ wineDefinition: wineId });

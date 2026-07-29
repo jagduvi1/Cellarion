@@ -15,3 +15,24 @@ export const updateSommWineProfile = (apiFetch, wineId, patch) =>
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(patch),
   });
+
+/**
+ * Take a wine+vintage out of the maturity queue without curating it, for a
+ * vintage the wine has not been released in.
+ *
+ * `deferUntil`: omit for the backend's default (vintage + 2 years, at least a
+ * year out); an ISO 'YYYY-MM-DD' for a chosen date; null for indefinite.
+ */
+export const deferMaturityProfile = (apiFetch, profileId, { deferUntil, reason } = {}) =>
+  apiFetch(`/api/somm/maturity/${profileId}/defer`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      ...(deferUntil !== undefined ? { deferUntil } : {}),
+      ...(reason ? { reason } : {}),
+    }),
+  });
+
+/** Send a deferred wine+vintage back to the pending queue now. */
+export const returnMaturityProfile = (apiFetch, profileId) =>
+  apiFetch(`/api/somm/maturity/${profileId}/defer`, { method: 'DELETE' });

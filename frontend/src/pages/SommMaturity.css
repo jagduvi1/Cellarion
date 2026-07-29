@@ -560,3 +560,51 @@
   gap: 0.5rem;
   flex-wrap: wrap;
 }
+
+/* ── Deferral ("not released yet") ── */
+.somm-status-pill.deferred { background: var(--color-info-bg); color: var(--color-info); border: 1px solid var(--color-info-border); }
+
+.somm-defer-banner {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  background: var(--color-info-bg);
+  border: 1px solid var(--color-info-border);
+  border-radius: var(--radius-sm);
+  padding: 0.75rem 1rem;
+  margin-bottom: 1rem;
+  font-size: 0.85rem;
+}
+
+.somm-defer-reason {
+  margin: 0.35rem 0 0;
+  color: var(--color-text);
+  font-style: italic;
+}
+
+.somm-defer-by {
+  margin: 0.35rem 0 0;
+  color: var(--color-text-muted);
+  font-size: 0.8rem;
+}
+
+.somm-defer-explainer {
+  margin: 0 0 1rem;
+  color: var(--color-text-muted);
+  font-size: 0.9rem;
+}
+
+.somm-defer-never {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.somm-defer-never input {
+  width: auto;
+  margin: 0;
+}

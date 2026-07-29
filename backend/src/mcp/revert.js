@@ -25,7 +25,8 @@ async function unclaim(rowId) {
 }
 
 const CONSUME_REVERSIBLE = ['consume', 'restore'];
-const WRITE_REVERSIBLE = ['add', 'update', 'bulk_add', 'somm_maturity', 'somm_price',
+const WRITE_REVERSIBLE = ['add', 'update', 'bulk_add', 'somm_maturity', 'somm_maturity_defer',
+  'somm_wine_profile', 'somm_price',
   'cellar_create', 'rack_create', 'place', 'unplace', 'move', 'arrange', 'tasting_note', 'attach_image',
   'winelist_add', 'winelist_price'];
 
@@ -273,6 +274,12 @@ async function revertLedgerRow(row, ctx, { ok, fail }) {
     const wine = await WineDefinition.findById(row.detail?.wineId);
     if (!wine) return fail('conflict', 'That wine no longer exists; nothing to undo.');
 
+    // Claim before mutating, like every other branch here: without it the row
+    // stays un-reversed, so undo_last keeps selecting the same edit forever and
+    // a concurrent twin can restore the same snapshot twice.
+    const claimed = await McpActionLog.findOneAndUpdate({ _id: row._id, reversed: false }, { $set: { reversed: true, idempotencyKey: null } });
+    if (!claimed) return fail('conflict', 'That action is already being undone by another request.');
+
     restoreProfile(wine, row.prev || {});
     try {
       await wine.save();
@@ -286,6 +293,38 @@ async function revertLedgerRow(row, ctx, { ok, fail }) {
     const envelope = {
       summary: `Undid tasting-profile edit — ${wine.producer} — ${wine.name} back to ${wine.aiProfile?.source || 'ai'}-sourced`,
       data: { undone: 'set_wine_profile', wine_id: String(wine._id), source: wine.aiProfile?.source || 'ai' },
+    };
+    await logAction(ctx, { tool: 'undo_last', action: row.action, viaUndo: true, detail: { undid: String(row._id) }, result: envelope });
+    return ok(envelope.summary, envelope.data);
+  }
+
+  // Somm deferral — puts the pair back exactly as it was, including a PREVIOUS
+  // deferral (a re-defer with a new date undoes to the old one, not to pending).
+  if (row.action === 'somm_maturity_defer') {
+    const roles = ctx.user?.roles || [];
+    if (!roles.includes('somm') && !roles.includes('admin')) {
+      return fail('forbidden_scope', 'Undoing sommelier curation needs the sommelier (or admin) role.');
+    }
+    const WineVintageProfile = require('../models/WineVintageProfile');
+    const { restoreDeferral } = require('../services/maturityOps');
+    const profile = await WineVintageProfile.findById(row.detail?.profileId);
+    if (!profile) return fail('conflict', 'That maturity profile no longer exists; nothing was changed.');
+
+    const claimed = await McpActionLog.findOneAndUpdate({ _id: row._id, reversed: false }, { $set: { reversed: true, idempotencyKey: null } });
+    if (!claimed) return fail('conflict', 'That action is already being undone by another request.');
+
+    restoreDeferral(profile, row.prev || {});
+    try {
+      await profile.save();
+    } catch (err) {
+      await unclaim(row._id); // failed → let the undo be retried
+      if (err?.name === 'VersionError') return fail('conflict', 'The profile changed mid-undo — retry.');
+      throw err;
+    }
+
+    const envelope = {
+      summary: `Undid deferral — vintage ${row.detail?.vintage} back to ${profile.status}`,
+      data: { undone: 'defer_vintage_maturity', profile_id: String(profile._id), status: profile.status },
     };
     await logAction(ctx, { tool: 'undo_last', action: row.action, viaUndo: true, detail: { undid: String(row._id) }, result: envelope });
     return ok(envelope.summary, envelope.data);

@@ -64,7 +64,7 @@ const USER_CTX = { user: { id: ME, roles: ['user'] }, scopes: ['read', 'write'],
 
 const tool = (name) => allTools().find((t) => t.name === name);
 const parse = (res) => JSON.parse(res.content[0].text);
-const SOMM_TOOLS = ['list_maturity_queue', 'set_vintage_maturity', 'list_price_tracking_requests', 'set_vintage_price'];
+const SOMM_TOOLS = ['list_maturity_queue', 'set_vintage_maturity', 'defer_vintage_maturity', 'set_wine_profile', 'list_price_tracking_requests', 'set_vintage_price'];
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -105,9 +105,36 @@ describe('list_maturity_queue', () => {
     const res = await tool('list_maturity_queue').handler({}, SOMM_CTX);
     const body = parse(res);
     expect(body.summary).toMatch(/7 pending/);
-    expect(WineVintageProfile.find.mock.calls[0][0]).toEqual({ status: 'pending' });
+    // "pending" is pending OR a deferral that has come due — see maturityOps.
+    expect(WineVintageProfile.find.mock.calls[0][0].$or).toEqual([
+      { status: 'pending' },
+      { status: 'deferred', deferredUntil: { $ne: null, $lte: expect.any(Date) } },
+    ]);
     expect(body.data[0].profile_id).toBe(oid('1'));
     expect(body.data[0].phases).toHaveProperty('peakFrom', null);
+  });
+
+  test('deferred rows carry their return date and reason; pending rows report neither', async () => {
+    WineVintageProfile.countDocuments.mockResolvedValueOnce(1).mockResolvedValueOnce(0);
+    WineVintageProfile.find.mockReturnValue(chain([{
+      _id: oid('1'), vintage: '2027', status: 'deferred', relative: false,
+      deferredUntil: new Date('2029-01-01T00:00:00Z'), deferredReason: 'not released',
+      wineDefinition: { _id: oid('f'), name: 'Barolo', producer: 'P', grapes: [] },
+    }]));
+    const body = parse(await tool('list_maturity_queue').handler({ status: 'deferred' }, SOMM_CTX));
+    expect(WineVintageProfile.find.mock.calls[0][0].status).toBe('deferred');
+    expect(body.data[0].deferral_reason).toBe('not released');
+    expect(new Date(body.data[0].deferred_until).toISOString()).toBe('2029-01-01T00:00:00.000Z');
+  });
+
+  test('an indefinite deferral reads as "indefinite", not null (null means "not deferred")', async () => {
+    WineVintageProfile.countDocuments.mockResolvedValueOnce(1).mockResolvedValueOnce(0);
+    WineVintageProfile.find.mockReturnValue(chain([{
+      _id: oid('1'), vintage: '2027', status: 'deferred', relative: false, deferredUntil: null,
+      wineDefinition: { _id: oid('f'), name: 'Barolo', producer: 'P', grapes: [] },
+    }]));
+    const body = parse(await tool('list_maturity_queue').handler({ status: 'deferred' }, SOMM_CTX));
+    expect(body.data[0].deferred_until).toBe('indefinite');
   });
 
   // #787: the note was fetched but dropped in the row mapping — write-only data.
@@ -193,6 +220,106 @@ describe('set_vintage_maturity', () => {
     expect(logAudit).toHaveBeenCalledWith(SOMM_CTX.req, 'somm.maturity.review',
       expect.anything(), expect.objectContaining({ via: 'mcp' }));
     expect(p.setBy).toBe(ME);
+  });
+});
+
+describe('defer_vintage_maturity', () => {
+  // Dates are computed from today, not hardcoded: parseDeferUntil rejects the
+  // past, so a literal would quietly turn this suite red on a future date.
+  const futureISO = (years) => new Date(Date.UTC(new Date().getUTCFullYear() + years, 5, 1)).toISOString().slice(0, 10);
+
+  const profile = (over = {}) => {
+    const p = {
+      _id: oid('1'), vintage: '2027', status: 'pending', relative: false,
+      deferredUntil: null, deferredReason: '', deferredBy: null, deferredAt: null,
+      wineDefinition: { _id: oid('f'), name: 'Barolo' },
+      save: jest.fn().mockResolvedValue(undefined),
+      ...over,
+    };
+    WineVintageProfile.findById.mockReturnValue(chain(p));
+    return p;
+  };
+
+  // The date RULE itself is pinned with a fixed clock in maturityOps.test.js;
+  // what matters here is that omitting defer_until reaches for that default
+  // instead of leaving the row without a return date.
+  test('omitting the date applies the computed default and leaves the phases untouched', async () => {
+    const p = profile({ peakFrom: 2040 });
+    const body = parse(await tool('defer_vintage_maturity').handler({ profile_id: oid('1') }, SOMM_CTX));
+    expect(body.error).toBeUndefined();
+    expect(p.status).toBe('deferred');
+    expect(p.deferredUntil).toBeInstanceOf(Date);
+    expect(p.deferredUntil.getTime()).toBeGreaterThan(Date.now() + 300 * 24 * 60 * 60 * 1000);
+    expect(p.deferredBy).toBe(ME);
+    // A deferral is "no judgement yet" — writing windows would be a judgement.
+    expect(p.peakFrom).toBe(2040);
+    expect(p.save).toHaveBeenCalled();
+  });
+
+  test('explicit null defers indefinitely; a chosen date is honoured', async () => {
+    let p = profile();
+    parse(await tool('defer_vintage_maturity').handler({ profile_id: oid('1'), defer_until: null }, SOMM_CTX));
+    expect(p.deferredUntil).toBeNull();
+    expect(p.status).toBe('deferred');
+
+    p = profile();
+    const chosen = futureISO(4);
+    parse(await tool('defer_vintage_maturity').handler({ profile_id: oid('1'), defer_until: chosen }, SOMM_CTX));
+    expect(new Date(p.deferredUntil).toISOString()).toBe(`${chosen}T00:00:00.000Z`);
+  });
+
+  test('refuses a reviewed profile — reset it first rather than hiding curated data', async () => {
+    const p = profile({ status: 'reviewed' });
+    const body = parse(await tool('defer_vintage_maturity').handler({ profile_id: oid('1') }, SOMM_CTX));
+    expect(body.error.code).toBe('conflict');
+    expect(p.save).not.toHaveBeenCalled();
+    expect(p.status).toBe('reviewed');
+  });
+
+  test('rejects a past return date', async () => {
+    const p = profile();
+    const body = parse(await tool('defer_vintage_maturity').handler(
+      { profile_id: oid('1'), defer_until: '2020-01-01' }, SOMM_CTX));
+    expect(body.error.code).toBe('invalid_input');
+    expect(p.save).not.toHaveBeenCalled();
+  });
+
+  test('ledger row is undoable and snapshots the PREVIOUS deferral, not just pending', async () => {
+    const first = new Date('2028-01-01T00:00:00Z');
+    profile({ status: 'deferred', deferredUntil: first, deferredReason: 'first', deferredBy: oid('b') });
+    await tool('defer_vintage_maturity').handler(
+      { profile_id: oid('1'), defer_until: futureISO(5), reason: 'second' }, SOMM_CTX);
+    const row = McpActionLog.create.mock.calls[0][0];
+    expect(row.action).toBe('somm_maturity_defer');
+    expect(row.prev).toMatchObject({ status: 'deferred', deferredReason: 'first', deferredBy: oid('b') });
+    expect(new Date(row.prev.deferredUntil).toISOString()).toBe('2028-01-01T00:00:00.000Z');
+    expect(logAudit).toHaveBeenCalledWith(SOMM_CTX.req, 'somm.maturity.defer',
+      expect.anything(), expect.objectContaining({ via: 'mcp' }));
+  });
+
+  test('undo puts the pair back exactly as it was', async () => {
+    const row = {
+      _id: 'sd', action: 'somm_maturity_defer', reversed: false,
+      detail: { profileId: oid('1'), vintage: '2027' },
+      prev: { status: 'pending', deferredUntil: null, deferredReason: '', deferredBy: null, deferredAt: null },
+    };
+    McpActionLog.findOne.mockReturnValue(chain(row));
+    McpActionLog.findOneAndUpdate.mockResolvedValue(row);
+    const p = {
+      _id: oid('1'), status: 'deferred', deferredUntil: new Date('2029-01-01T00:00:00Z'),
+      deferredReason: 'not released', deferredBy: oid('b'), deferredAt: new Date(),
+      save: jest.fn().mockResolvedValue(undefined),
+    };
+    WineVintageProfile.findById.mockReturnValue(chain(p));
+    const res = await tool('undo_last').handler({}, { ...SOMM_CTX, scopes: ['consume', 'write'] });
+    expect(parse(res).data.undone).toBe('defer_vintage_maturity');
+    expect(p.status).toBe('pending');
+    expect(p.deferredUntil).toBeNull();
+    expect(p.deferredReason).toBe('');
+    expect(p.save).toHaveBeenCalled();
+    // The ledger row must be CLAIMED, or undo_last would keep returning it.
+    expect(McpActionLog.findOneAndUpdate).toHaveBeenCalledWith(
+      { _id: 'sd', reversed: false }, { $set: { reversed: true, idempotencyKey: null } });
   });
 });
 
