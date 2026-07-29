@@ -401,11 +401,20 @@
     bottom: 0;
     left: 0;
     right: 0;
-    height: var(--bottom-nav-height);
+    /* The bar is border-box (global reset), so the safe-area padding must be
+       ADDED to the height — with height: var(--bottom-nav-height) alone the
+       ~34px home-indicator inset of an installed iOS PWA was carved OUT of the
+       64px, squeezing the items into ~29px: icons overflowed through the
+       border-top (the "stray line") and labels sat on the home indicator
+       (issue #861). In a Safari tab the inset is 0 and nothing changes. The
+       content box stays exactly --bottom-nav-height, and the total matches
+       every calc(var(--bottom-nav-height) + env(safe-area-inset-bottom))
+       offset elsewhere. */
+    height: calc(var(--bottom-nav-height) + env(safe-area-inset-bottom, 0px));
     background: var(--color-nav);
     border-top: 1px solid var(--color-nav-border);
     z-index: 200;
-    padding-bottom: env(safe-area-inset-bottom);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
     box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.06);
   }
 

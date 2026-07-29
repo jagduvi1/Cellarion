@@ -43,12 +43,13 @@
   .jump-to-reply-btn:hover { transform: none; }
 }
 
-/* Mobile: clear the bottom-nav (~64px tall) so the FAB doesn't overlap
-   the tab strip when the user is signed in. */
+/* Mobile: clear the bottom-nav so the FAB doesn't overlap the tab strip
+   when the user is signed in. The nav's total height is
+   --bottom-nav-height + the iOS home-indicator inset (issue #861). */
 @media (max-width: 768px) {
   .jump-to-reply-btn {
     right: 1rem;
-    bottom: calc(64px + 1rem);
+    bottom: calc(var(--bottom-nav-height, 64px) + 1rem + env(safe-area-inset-bottom, 0px));
     padding: 0.65rem 1rem;
     font-size: 0.9rem;
   }
