@@ -14,6 +14,7 @@ require('./stats');
 require('./wines');
 require('./personal');
 require('./consume');
+require('./openBottle');
 require('./write');
 require('./bulk');
 require('./somm');

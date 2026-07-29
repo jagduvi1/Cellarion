@@ -286,13 +286,13 @@ describe('undo_last walk-backward + scope gating (e2e-caught regression)', () =>
     await tool('undo_last').handler({}, CTX); // CTX has scopes ['consume'] only
     let q = McpActionLog.findOne.mock.calls[0][0];
     expect(q.viaUndo).toEqual({ $ne: true });
-    expect(q.action.$in).toEqual(['consume', 'restore']); // no add/update without write
+    expect(q.action.$in).toEqual(['consume', 'restore', 'open', 'pour', 'close']); // no add/update without write
 
     McpActionLog.findOne.mockClear();
     McpActionLog.findOne.mockReturnValue(chain(null));
     await tool('undo_last').handler({}, { ...CTX, scopes: ['consume', 'write'] });
     q = McpActionLog.findOne.mock.calls[0][0];
-    expect(q.action.$in).toEqual(['consume', 'restore', 'add', 'update', 'bulk_add', 'somm_maturity',
+    expect(q.action.$in).toEqual(['consume', 'restore', 'open', 'pour', 'close', 'add', 'update', 'bulk_add', 'somm_maturity',
       'somm_maturity_remove', 'somm_wine_profile', 'somm_price',
       'cellar_create', 'rack_create', 'place', 'unplace', 'move', 'arrange', 'tasting_note', 'attach_image',
       'winelist_add', 'winelist_price']);

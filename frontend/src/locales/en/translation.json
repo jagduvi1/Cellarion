@@ -194,7 +194,7 @@
       "readTitle": "Read",
       "readBody": "Look at your cellars, bottles, racks and notes. Changes nothing.",
       "consumeTitle": "Read and drink",
-      "consumeBody": "Also mark bottles as consumed. Every consumption can be restored.",
+      "consumeBody": "Also mark bottles as consumed, and track open bottles (opened, glasses poured, preservation). All of it is reversible.",
       "writeTitle": "Full access",
       "writeBody": "Also add and edit bottles, and organise racks and cellars.",
       "tokenNote": "Set-ups that use a URL sign you in with OAuth, so there is nothing to paste. Only the stdio bridge needs a personal API token: mint one under Settings → API tokens and put it where those snippets say cel_YOUR_TOKEN_HERE."

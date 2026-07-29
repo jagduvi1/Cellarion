@@ -134,6 +134,109 @@ async function restoreBottle(bottle, req) {
   return { bottle, from: previousStatus };
 }
 
+// ── Open-bottle (Coravin / preservation) tracking ────────────────────────────
+const { PRESERVATION_METHODS, DEFAULT_POUR_ML } = require('../utils/openBottleUtils');
+const MAX_POURS = 100;
+// How far back an explicit openedAt may be backdated ("I opened it last
+// weekend") — matches the longest preservation freshness window (coravin).
+const MAX_OPEN_BACKDATE_MS = 90 * 24 * 60 * 60 * 1000;
+
+/**
+ * Mark an ACTIVE bottle as opened (Coravin / re-corked / …). The bottle stays
+ * active and keeps its rack slot — it is still physically in the cellar.
+ * openedAt is optional backdating (≤90 days, never the future); default now.
+ * Mirrors POST /api/bottles/:id/open exactly.
+ * Returns { error } | { bottle }.
+ */
+async function openBottle(bottle, { preservationMethod, openedAt } = {}, req) {
+  if (CONSUMED_STATUSES.includes(bottle.status)) {
+    return { error: { status: 400, message: 'Bottle is already consumed' } };
+  }
+  if (bottle.openedAt) {
+    return { error: { status: 400, message: 'Bottle is already open', code: 'already_open' } };
+  }
+  if (!PRESERVATION_METHODS.includes(preservationMethod)) {
+    return { error: { status: 400, message: `Invalid preservation method (use one of: ${PRESERVATION_METHODS.join(', ')})` } };
+  }
+  let at = new Date();
+  if (openedAt !== undefined && openedAt !== null) {
+    at = new Date(openedAt);
+    if (Number.isNaN(at.getTime())) {
+      return { error: { status: 400, message: 'openedAt is not a valid date' } };
+    }
+    if (at.getTime() > Date.now() + 5 * 60 * 1000) {
+      return { error: { status: 400, message: 'openedAt cannot be in the future' } };
+    }
+    if (Date.now() - at.getTime() > MAX_OPEN_BACKDATE_MS) {
+      return { error: { status: 400, message: 'openedAt is too far in the past (max 90 days back)' } };
+    }
+  }
+  bottle.openedAt = at;
+  bottle.preservationMethod = preservationMethod;
+  bottle.pours = [];
+  bottle.openBottleNotifiedAt = null; // fresh opening → expiry alert re-arms
+  await bottle.save();
+  logAudit(req, 'bottle.open',
+    { type: 'bottle', id: bottle._id, cellarId: bottle.cellar },
+    { preservationMethod }
+  );
+  return { bottle };
+}
+
+/**
+ * Record a pour from an OPEN bottle (default: one 125 ml glass).
+ * Mirrors POST /api/bottles/:id/pour exactly.
+ * Returns { error } | { bottle }.
+ */
+async function pourFromBottle(bottle, { ml } = {}, req) {
+  if (CONSUMED_STATUSES.includes(bottle.status)) {
+    return { error: { status: 400, message: 'Bottle is already consumed' } };
+  }
+  if (!bottle.openedAt) {
+    return { error: { status: 400, message: 'Open the bottle first', code: 'not_open' } };
+  }
+  const amount = ml === undefined || ml === null ? DEFAULT_POUR_ML : Number(ml);
+  if (!Number.isFinite(amount) || amount < 1 || amount > 6000) {
+    return { error: { status: 400, message: 'Pour must be between 1 and 6000 ml' } };
+  }
+  if (bottle.pours.length >= MAX_POURS) {
+    return { error: { status: 400, message: 'Too many pours recorded for this bottle' } };
+  }
+  bottle.pours.push({ at: new Date(), ml: Math.round(amount) });
+  await bottle.save();
+  logAudit(req, 'bottle.pour',
+    { type: 'bottle', id: bottle._id, cellarId: bottle.cellar },
+    { ml: Math.round(amount) }
+  );
+  return { bottle };
+}
+
+/**
+ * Clear a bottle's open state WITHOUT consuming it (accidental open, or the
+ * evening is over and the bottle goes back unopened-looking). Clears pours too
+ * — callers that need to reverse this get the snapshot back in prevOpenState.
+ * Mirrors DELETE /api/bottles/:id/open exactly.
+ * Returns { error } | { bottle, prevOpenState }.
+ */
+async function closeBottle(bottle, req) {
+  if (!bottle.openedAt) {
+    return { error: { status: 400, message: 'Bottle is not open', code: 'not_open' } };
+  }
+  const prevOpenState = {
+    openedAt: bottle.openedAt,
+    preservationMethod: bottle.preservationMethod || null,
+    pours: (bottle.pours || []).map((p) => ({ at: p.at, ml: p.ml })),
+    openBottleNotifiedAt: bottle.openBottleNotifiedAt || null,
+  };
+  bottle.openedAt = null;
+  bottle.preservationMethod = undefined;
+  bottle.pours = [];
+  bottle.openBottleNotifiedAt = null;
+  await bottle.save();
+  logAudit(req, 'bottle.open_undo', { type: 'bottle', id: bottle._id, cellarId: bottle.cellar });
+  return { bottle, prevOpenState };
+}
+
 /**
  * Create a bottle in an ACCESS-CHECKED cellar for an EXISTING registry wine —
  * the ONE implementation behind REST POST /api/bottles and the MCP add_bottle
@@ -516,4 +619,6 @@ async function removeBottleCascade(bottle, req, auditAction) {
 module.exports = {
   consumeBottle, restoreBottle, removeFromRacks, RESTORE_WINDOW_MS,
   addBottle, updateBottleFields, removeBottleCascade, UPDATABLE_FIELDS,
+  openBottle, pourFromBottle, closeBottle,
+  PRESERVATION_METHODS, DEFAULT_POUR_ML, MAX_POURS,
 };

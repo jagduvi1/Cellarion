@@ -70,7 +70,7 @@ describe('revertLatest', () => {
     expect(q.user).toBe('u1');
     expect(q.reversed).toBe(false);
     expect(q.viaUndo).toEqual({ $ne: true });
-    expect(q.action.$in).toEqual(['consume', 'restore']); // no write actions without write scope
+    expect(q.action.$in).toEqual(['consume', 'restore', 'open', 'pour', 'close']); // no write actions without write scope
     expect(q.createdAt.$gte).toBeInstanceOf(Date);
   });
 
