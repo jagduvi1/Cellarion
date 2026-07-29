@@ -44,7 +44,8 @@ const notificationSchema = new mongoose.Schema({
       'ai_budget_denied',
       'climate_alert',
       'climate_recovered',
-      'climate_offline'
+      'climate_offline',
+      'registry_health'
     ],
     required: true
   },
