@@ -580,6 +580,78 @@ for (const [path, { fn, type }] of Object.entries(MERGERS)) {
 
 // ===== APPELLATIONS =====
 
+// GET /api/admin/taxonomy/appellations/unmatched — the appellation review
+// queue (strategy 2026-07-29 R2). Wines store appellations as free text; this
+// lists every distinct normalized string that NO curated Appellation doc (by
+// name or synonym) covers, with the majority display spelling and the
+// majority country/region so the admin can promote it in one click (the
+// existing create endpoint) or fix the wines. Unknown values are reviewed,
+// never rejected — adding a bottle must not be blocked by taxonomy.
+router.get('/appellations/unmatched', async (req, res) => {
+  try {
+    const [existing, rows] = await Promise.all([
+      Appellation.find({}).select('normalizedName normalizedSynonyms').lean(),
+      WineDefinition.aggregate([
+        { $match: { appellation: { $nin: [null, ''] }, nonWine: { $ne: true } } },
+        { $group: { _id: { ap: '$appellation', country: '$country', region: '$region' }, n: { $sum: 1 } } },
+      ]),
+    ]);
+    const matched = new Set();
+    for (const a of existing) {
+      if (a.normalizedName) matched.add(a.normalizedName);
+      for (const s of a.normalizedSynonyms || []) matched.add(s);
+    }
+
+    // normalized → aggregate across raw-spelling/country/region variants
+    const groups = new Map();
+    for (const r of rows) {
+      const key = normalizeString(r._id.ap || '');
+      if (!key || matched.has(key)) continue;
+      let g = groups.get(key);
+      if (!g) { g = { spellings: new Map(), countries: new Map(), regions: new Map(), total: 0 }; groups.set(key, g); }
+      g.total += r.n;
+      g.spellings.set(r._id.ap, (g.spellings.get(r._id.ap) || 0) + r.n);
+      if (r._id.country) g.countries.set(String(r._id.country), (g.countries.get(String(r._id.country)) || 0) + r.n);
+      if (r._id.region) g.regions.set(String(r._id.region), (g.regions.get(String(r._id.region)) || 0) + r.n);
+    }
+
+    const top = (map) => [...map.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || null;
+    const countryIds = new Set(), regionIds = new Set();
+    const items = [...groups.entries()].map(([normalized, g]) => {
+      const countryId = top(g.countries);
+      const regionId = top(g.regions);
+      if (countryId) countryIds.add(countryId);
+      if (regionId) regionIds.add(regionId);
+      return { normalized, name: top(g.spellings), wineCount: g.total, countryId, regionId };
+    }).sort((a, b) => b.wineCount - a.wineCount);
+
+    const [countries, regions] = await Promise.all([
+      Country.find({ _id: { $in: [...countryIds] } }).select('name').lean(),
+      Region.find({ _id: { $in: [...regionIds] } }).select('name country').lean(),
+    ]);
+    const countryName = new Map(countries.map(c => [String(c._id), c.name]));
+    const regionById = new Map(regions.map(r => [String(r._id), r]));
+
+    res.json({
+      total: items.length,
+      items: items.map(i => {
+        const region = i.regionId ? regionById.get(i.regionId) : null;
+        return {
+          ...i,
+          countryName: i.countryId ? countryName.get(i.countryId) || null : null,
+          // A majority region from a DIFFERENT country than the majority
+          // country would violate the Appellation schema — drop it.
+          regionId: region && String(region.country) === i.countryId ? i.regionId : null,
+          regionName: region && String(region.country) === i.countryId ? region.name : null,
+        };
+      }),
+    });
+  } catch (error) {
+    console.error('Unmatched appellations error:', error);
+    res.status(500).json({ error: 'Failed to list unmatched appellations' });
+  }
+});
+
 // GET /api/admin/taxonomy/appellations - List (filter by country and/or region)
 router.get('/appellations', async (req, res) => {
   try {
@@ -623,7 +695,7 @@ router.get('/appellations', async (req, res) => {
 // POST /api/admin/taxonomy/appellations - Create appellation
 router.post('/appellations', async (req, res) => {
   try {
-    const { name, country, region } = req.body;
+    const { name, country, region, synonyms } = req.body;
 
     if (!name || !country) {
       return res.status(400).json({ error: 'Name and country are required' });
@@ -636,6 +708,7 @@ router.post('/appellations', async (req, res) => {
       normalizedName,
       country,
       region: region || null,
+      synonyms: Array.isArray(synonyms) && synonyms.length ? synonyms : undefined,
       createdBy: req.user.id
     });
 
@@ -661,7 +734,7 @@ router.post('/appellations', async (req, res) => {
 router.put('/appellations/:id', async (req, res) => {
   try {
     if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
-    const { name, region } = req.body;
+    const { name, region, synonyms } = req.body;
 
     const appellation = await Appellation.findById(req.params.id);
     if (!appellation) {
@@ -673,6 +746,7 @@ router.put('/appellations/:id', async (req, res) => {
       appellation.normalizedName = normalizeString(name);
     }
     if (region !== undefined) appellation.region = region || null;
+    if (synonyms !== undefined) appellation.synonyms = Array.isArray(synonyms) && synonyms.length ? synonyms : undefined;
 
     await appellation.save();
     await appellation.populate('country', 'name');

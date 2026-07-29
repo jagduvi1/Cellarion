@@ -43,7 +43,7 @@ jest.mock('../models/Grape', () => {
   ctor.findOne = jest.fn();
   return ctor;
 });
-jest.mock('../models/Appellation', () => ({ exists: jest.fn() }));
+jest.mock('../models/Appellation', () => ({ exists: jest.fn(), find: jest.fn() }));
 jest.mock('./search', () => ({
   getIsAvailable: jest.fn(),
   search: jest.fn(),
@@ -146,6 +146,12 @@ beforeEach(() => {
   WineDefinition.findOne.mockReturnValue(findOneChain(null));
   // Producer-spelling adoption: default = producer is new to the registry
   WineDefinition.aggregate.mockResolvedValue([]);
+  // Appellation adoption: default = not curated → typed spelling kept
+  Appellation.find.mockReturnValue({
+    select: jest.fn().mockReturnValue({
+      limit: jest.fn().mockReturnValue({ lean: jest.fn().mockResolvedValue([]) }),
+    }),
+  });
   searchService.getIsAvailable.mockReturnValue(false);
   primeFind();
   scoreAllMatches.mockReturnValue([]);
@@ -646,6 +652,28 @@ describe('findOrCreateWine — creation', () => {
     const result = await findOrCreateWine(INPUT, USER_ID);
     expect(result.created).toBe(true);
     expect(WineDefinition.mock.calls[0][0].producer).toBe('Paul Avril');
+  });
+
+  // Strategy R2: a curated appellation's spelling is adopted BEFORE key
+  // generation, so a synonym produces the canonical normalizedKey and the
+  // exact-match stage collapses variants instead of minting siblings.
+  test('adopts the curated appellation spelling, and the keys follow it', async () => {
+    Appellation.find.mockReturnValue({
+      select: jest.fn().mockReturnValue({
+        limit: jest.fn().mockReturnValue({ lean: jest.fn().mockResolvedValue([{ name: 'Châteauneuf-du-Pape' }]) }),
+      }),
+    });
+    const result = await findOrCreateWine({ ...INPUT, appellation: 'Chateauneuf du Pape' }, USER_ID);
+    expect(result.created).toBe(true);
+    expect(WineDefinition.mock.calls[0][0].appellation).toBe('Châteauneuf-du-Pape');
+    // Same key as the canonical INPUT — the two spellings are ONE wine now.
+    expect(WineDefinition.mock.calls[0][0].normalizedKey).toBe(INPUT_KEY);
+  });
+
+  test('an un-curated appellation is stored verbatim — reviewed, never rejected', async () => {
+    const result = await findOrCreateWine({ ...INPUT, appellation: 'Völlig Neues Anbaugebiet' }, USER_ID);
+    expect(result.created).toBe(true);
+    expect(WineDefinition.mock.calls[0][0].appellation).toBe('Völlig Neues Anbaugebiet');
   });
 
   test('matchOnly: no match anywhere returns { noMatch: true } and creates NOTHING (registry-safe demo clone)', async () => {

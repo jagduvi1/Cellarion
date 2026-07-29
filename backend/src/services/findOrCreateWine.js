@@ -25,6 +25,7 @@ const { canonicalizeWineName } = require('../utils/producerPrefix');
 const { computeCanonicalKey, canonicalSiblingPrefix } = require('../utils/wineIdentity');
 const { buildSurfaceForms, inferGrapeIds } = require('./grapeInference');
 const { resolveCanonicalProducerSpelling } = require('./producerSpelling');
+const { resolveCanonicalAppellation } = require('./appellationResolve');
 const { escapeRegex } = require('../utils/sanitize');
 
 // Auto-match when combined score >= SIMILARITY_THRESHOLD (near-identical — e.g.
@@ -168,7 +169,13 @@ async function findOrCreateWine({ name, producer, country, region, appellation, 
   // Canonicalize the appellation (strip a trailing DOCG/DOC/AOC/… tier) so
   // "Barolo" and "Barolo DOCG" resolve to / create ONE registry appellation
   // instead of two (ticket #2C). The tier belongs in classification.
-  const trimmedAppellation = normalizeAppellation((typeof appellation === 'string' ? appellation.trim() : '')).slice(0, MAX_FIELD);
+  // Then adopt the curated spelling when the Appellation taxonomy knows this
+  // one (strategy R2) — BEFORE key generation, so a synonym ("Chateauneuf du
+  // Pape") produces the same normalizedKey as the canonical form and the
+  // exact-match stage collapses them instead of minting a sibling.
+  const trimmedAppellation = await resolveCanonicalAppellation(
+    normalizeAppellation((typeof appellation === 'string' ? appellation.trim() : '')).slice(0, MAX_FIELD)
+  );
 
   // 0. Registry canon: the registry is vintage-neutral — a trailing year on
   // the name ("Reserve Cabernet Sauvignon 2023") belongs on the user's

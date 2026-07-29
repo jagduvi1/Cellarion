@@ -10,6 +10,7 @@ import GrapePicker from '../components/GrapePicker';
 import ConfirmModal from '../components/ConfirmModal';
 import Modal from '../components/Modal';
 import BottleSizesAdmin from '../components/BottleSizesAdmin';
+import AppellationUnmatchedModal from '../components/AppellationUnmatchedModal';
 import './AdminTaxonomy.css';
 
 function AdminTaxonomy() {
@@ -27,6 +28,7 @@ function AdminTaxonomy() {
   const [allRegions, setAllRegions] = useState([]); // for parent region / appellation dropdowns
   const [confirmDelete, setConfirmDelete] = useState(null); // id of item to delete
   const [mergeItem, setMergeItem] = useState(null);         // item being merged away
+  const [showUnmatched, setShowUnmatched] = useState(false); // appellation review queue
   const [mergeTarget, setMergeTarget] = useState('');       // toId
   const [merging, setMerging] = useState(false);
 
@@ -244,7 +246,8 @@ function AdminTaxonomy() {
       setFormData({
         name: item.name,
         country: countryId,
-        region: item.region?._id || item.region || ''
+        region: item.region?._id || item.region || '',
+        synonyms: (item.synonyms || []).join(', ')
       });
     }
   };
@@ -287,7 +290,8 @@ function AdminTaxonomy() {
       return {
         name: fd.name,
         country: fd.country,
-        region: fd.region || null
+        region: fd.region || null,
+        synonyms: fd.synonyms ? fd.synonyms.split(',').map(s => s.trim()).filter(Boolean) : []
       };
     }
     return fd;
@@ -586,6 +590,15 @@ function AdminTaxonomy() {
         </select>
       </div>
       <div className="form-group">
+        <label>{t('admin.taxonomy.synonymsLabel')}</label>
+        <input
+          type="text"
+          value={formData.synonyms || ''}
+          onChange={(e) => setFormData({ ...formData, synonyms: e.target.value })}
+          placeholder={t('admin.taxonomy.appellationSynonymsPlaceholder')}
+        />
+      </div>
+      <div className="form-group">
         <label>{t('admin.taxonomy.appellationRegionLabel')}</label>
         <select
           value={formData.region || ''}
@@ -651,9 +664,16 @@ function AdminTaxonomy() {
       <div className="page-header">
         <h1>{t('admin.taxonomy.title')}</h1>
         {!isEditing && !isBottleSizes && (
-          <button onClick={() => { setShowForm(!showForm); setFormData({}); }} className="btn btn-primary">
-            {showForm ? t('common.cancel') : addBtnLabel}
-          </button>
+          <div style={{ display: 'flex', gap: 8 }}>
+            {activeTab === 'appellations' && (
+              <button onClick={() => setShowUnmatched(true)} className="btn btn-secondary" title={t('admin.taxonomy.unmatched.buttonTitle')}>
+                {t('admin.taxonomy.unmatched.button')}
+              </button>
+            )}
+            <button onClick={() => { setShowForm(!showForm); setFormData({}); }} className="btn btn-primary">
+              {showForm ? t('common.cancel') : addBtnLabel}
+            </button>
+          </div>
         )}
       </div>
 
@@ -753,6 +773,15 @@ function AdminTaxonomy() {
           warning={t('admin.taxonomy.deleteWarning', 'This action cannot be undone.')}
           onConfirm={() => handleDelete(confirmDelete)}
           onCancel={() => setConfirmDelete(null)}
+        />
+      )}
+
+      {showUnmatched && (
+        <AppellationUnmatchedModal
+          apiFetch={apiFetch}
+          countries={allCountries}
+          onClose={() => setShowUnmatched(false)}
+          onPromoted={fetchItems}
         />
       )}
 

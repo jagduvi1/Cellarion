@@ -1349,7 +1349,19 @@
       "mergeTargetPlaceholder": "Choose the entry to keep…",
       "mergeHint": "Merge the low-count variant into the canonical one — the target is the entry that survives.",
       "mergeConfirm": "Merge",
-      "merging": "Merging…"
+      "merging": "Merging…",
+      "appellationSynonymsPlaceholder": "Chateauneuf du Pape, Châteauneuf du Pape",
+      "unmatched": {
+        "button": "Review unmatched",
+        "buttonTitle": "Appellation strings on wines that no taxonomy entry covers yet",
+        "title": "Unmatched appellations",
+        "explainer": "Wines carry these appellation strings, but no taxonomy entry covers them. Promote the real ones — new wines then adopt the canonical spelling automatically — and fix the wines behind the typos. Rare or new appellations are normal here; adding a bottle is never blocked by taxonomy.",
+        "empty": "Every appellation on every wine is covered by the taxonomy.",
+        "promote": "Add to taxonomy",
+        "promoting": "Adding…",
+        "promoteError": "Failed to add appellation",
+        "loadError": "Failed to load unmatched appellations"
+      }
     },
     "wines": {
       "title": "Admin: Wine Library",
