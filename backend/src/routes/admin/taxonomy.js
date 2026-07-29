@@ -1,7 +1,7 @@
 const express = require('express');
 const mongoose = require('mongoose');
 const { requireAuth, requireRole } = require('../../middleware/auth');
-const { normalizeString } = require('../../utils/normalize');
+const { normalizeString, normalizeAppellation, normalizeAppellationKey } = require('../../utils/normalize');
 const Country = require('../../models/Country');
 const Region = require('../../models/Region');
 const Grape = require('../../models/Grape');
@@ -62,7 +62,7 @@ async function wineCountsByAppellation() {
   ]);
   const map = new Map();
   for (const r of rows) {
-    const key = normalizeString(r._id || '');
+    const key = normalizeAppellationKey(normalizeAppellation(r._id || '') || r._id || '');
     if (!key) continue;
     map.set(key, (map.get(key) || 0) + r.n);
   }
@@ -605,12 +605,15 @@ router.get('/appellations/unmatched', async (req, res) => {
     // normalized → aggregate across raw-spelling/country/region variants
     const groups = new Map();
     for (const r of rows) {
-      const key = normalizeString(r._id.ap || '');
+      // Tier-strip before grouping, mirroring the seed script: pre-guard rows
+      // ("… DO", "… DOCG") fold into their clean form instead of listing twice.
+      const cleaned = normalizeAppellation(r._id.ap || '') || r._id.ap || '';
+      const key = normalizeAppellationKey(cleaned);
       if (!key || matched.has(key)) continue;
       let g = groups.get(key);
       if (!g) { g = { spellings: new Map(), countries: new Map(), regions: new Map(), total: 0 }; groups.set(key, g); }
       g.total += r.n;
-      g.spellings.set(r._id.ap, (g.spellings.get(r._id.ap) || 0) + r.n);
+      g.spellings.set(cleaned, (g.spellings.get(cleaned) || 0) + r.n);
       if (r._id.country) g.countries.set(String(r._id.country), (g.countries.get(String(r._id.country)) || 0) + r.n);
       if (r._id.region) g.regions.set(String(r._id.region), (g.regions.get(String(r._id.region)) || 0) + r.n);
     }
@@ -682,7 +685,7 @@ router.get('/appellations', async (req, res) => {
     // usage is every wine whose normalized string matches its normalizedName.
     const rows = appellations.map(a => ({
       ...a,
-      wineCount: wineCounts.get(a.normalizedName || normalizeString(a.name || '')) || 0,
+      wineCount: wineCounts.get(a.normalizedName || normalizeAppellationKey(a.name || '')) || 0,
     }));
 
     res.json({ count: rows.length, appellations: rows });
@@ -701,7 +704,7 @@ router.post('/appellations', async (req, res) => {
       return res.status(400).json({ error: 'Name and country are required' });
     }
 
-    const normalizedName = normalizeString(name);
+    const normalizedName = normalizeAppellationKey(name);
 
     const appellation = new Appellation({
       name: name.trim(),
@@ -743,7 +746,7 @@ router.put('/appellations/:id', async (req, res) => {
 
     if (name) {
       appellation.name = name.trim();
-      appellation.normalizedName = normalizeString(name);
+      appellation.normalizedName = normalizeAppellationKey(name);
     }
     if (region !== undefined) appellation.region = region || null;
     if (synonyms !== undefined) appellation.synonyms = Array.isArray(synonyms) && synonyms.length ? synonyms : undefined;

@@ -31,7 +31,7 @@ const mongoose = require('mongoose');
 const WineDefinition = require('../models/WineDefinition');
 const Appellation = require('../models/Appellation');
 const User = require('../models/User');
-const { normalizeString } = require('../utils/normalize');
+const { normalizeAppellationKey, normalizeAppellation } = require('../utils/normalize');
 
 (async () => {
   const apply = process.argv.includes('--apply');
@@ -56,15 +56,19 @@ const { normalizeString } = require('../utils/normalize');
   // normalized → { spellings: Map<raw,{count,oldest}>, countries: Map<id,count>, regionsByCountry: Map<id, Map<regionId,count>>, total }
   const groups = new Map();
   for (const w of wines) {
-    const key = normalizeString(w.appellation);
+    // Tier-strip BEFORE grouping: strings stored before the write-path guard
+    // ("Ribera del Duero DO") must fold into their clean form, not become a
+    // tier-suffixed taxonomy doc — found on the first prod-data dry run.
+    const cleaned = normalizeAppellation(w.appellation) || w.appellation;
+    const key = normalizeAppellationKey(cleaned);
     if (!key || matched.has(key)) continue;
     let g = groups.get(key);
     if (!g) { g = { spellings: new Map(), countries: new Map(), regionsByCountry: new Map(), total: 0 }; groups.set(key, g); }
     g.total += 1;
-    const s = g.spellings.get(w.appellation) || { count: 0, oldest: w.createdAt };
+    const s = g.spellings.get(cleaned) || { count: 0, oldest: w.createdAt };
     s.count += 1;
     if (w.createdAt < s.oldest) s.oldest = w.createdAt;
-    g.spellings.set(w.appellation, s);
+    g.spellings.set(cleaned, s);
     const c = String(w.country || '');
     if (c) {
       g.countries.set(c, (g.countries.get(c) || 0) + 1);

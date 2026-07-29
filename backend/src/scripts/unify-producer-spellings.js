@@ -47,8 +47,12 @@ const { computeCanonicalKey } = require('../utils/wineIdentity');
     if (!key) continue;
     let g = groups.get(key);
     if (!g) { g = new Map(); groups.set(key, g); }
-    let s = g.get(w.producer);
-    if (!s) { s = { count: 0, oldest: w.createdAt, wines: [] }; g.set(w.producer, s); }
+    // Whitespace-collapsed spelling candidates: "Wrights  Estate" must never
+    // WIN a majority vote on the strength of its own duplication (first
+    // prod-data dry run) — the double-space rows count toward the clean form.
+    const spelling = String(w.producer).trim().replace(/\s+/g, ' ');
+    let s = g.get(spelling);
+    if (!s) { s = { count: 0, oldest: w.createdAt, wines: [] }; g.set(spelling, s); }
     // Quarantined rows get rewritten too (consistency) but no vote (their
     // data is exactly what we don't want to canonize) — mirror producerSpelling.js.
     if (!w.nonWine) {
@@ -71,8 +75,11 @@ const { computeCanonicalKey } = require('../utils/wineIdentity');
     console.log(`  [${key}] → "${target}"  (${ranked.map(([sp, s]) => `"${sp}"×${s.count}`).join('  ')})`);
 
     for (const [spelling, s] of spellings) {
-      if (spelling === target) continue;
       for (const w of s.wines) {
+        // Compare the STORED string, not the collapsed group spelling: a row
+        // stored with a double space groups under the clean form and still
+        // needs the rewrite.
+        if (w.producer === target) continue;
         // Safety proof, per row: a pure spelling variant leaves canonicalKey
         // untouched. If it would change, this was NOT a trivial variant —
         // leave it for a human rather than silently altering identity keys.

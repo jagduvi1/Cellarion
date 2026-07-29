@@ -1,5 +1,5 @@
 const mongoose = require('mongoose');
-const { normalizeString } = require('../utils/normalize');
+const { normalizeAppellationKey } = require('../utils/normalize');
 
 const appellationSchema = new mongoose.Schema({
   name: {
@@ -55,7 +55,7 @@ appellationSchema.index({ country: 1, normalizedName: 1 }, { unique: true });
 // every save-based admin edit maintains what the write-time lookup matches.
 appellationSchema.pre('save', function(next) {
   if (this.isModified('synonyms') || this.isNew) {
-    const normalized = (this.synonyms || []).map(s => normalizeString(s)).filter(Boolean);
+    const normalized = (this.synonyms || []).map(s => normalizeAppellationKey(s)).filter(Boolean);
     this.normalizedSynonyms = normalized.length ? normalized : undefined;
   }
   next();

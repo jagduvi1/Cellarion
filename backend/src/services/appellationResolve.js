@@ -21,7 +21,7 @@
  * must not be blocked by taxonomy.
  */
 const Appellation = require('../models/Appellation');
-const { normalizeString } = require('../utils/normalize');
+const { normalizeAppellationKey } = require('../utils/normalize');
 
 /**
  * @param {string} rawAppellation  tier-stripped, trimmed appellation string
@@ -31,7 +31,7 @@ const { normalizeString } = require('../utils/normalize');
  */
 async function resolveCanonicalAppellation(rawAppellation) {
   if (!rawAppellation) return rawAppellation;
-  const normalized = normalizeString(rawAppellation);
+  const normalized = normalizeAppellationKey(rawAppellation);
   if (!normalized) return rawAppellation;
   try {
     // limit(2): one match → adopt. Two docs can share a name across countries

@@ -31,6 +31,21 @@ describe('resolveCanonicalAppellation', () => {
     ]);
   });
 
+  // The reason normalizeAppellationKey exists: normalizeString DELETES
+  // hyphens, so the hyphenated and spaced forms of one place produced two
+  // different keys — found on the first prod-data test of this resolver.
+  test('hyphenated and spaced forms produce the SAME lookup key', async () => {
+    Appellation.find.mockReturnValue(chain([{ name: 'Châteauneuf-du-Pape' }]));
+    await resolveCanonicalAppellation('Châteauneuf-du-Pape');
+    const hyphenQ = Appellation.find.mock.calls[0][0].$or[0].normalizedName;
+    Appellation.find.mockClear();
+    Appellation.find.mockReturnValue(chain([{ name: 'Châteauneuf-du-Pape' }]));
+    await resolveCanonicalAppellation('Chateauneuf du Pape');
+    const spacedQ = Appellation.find.mock.calls[0][0].$or[0].normalizedName;
+    expect(hyphenQ).toBe(spacedQ);
+    expect(hyphenQ).toBe('chateauneuf du pape');
+  });
+
   test('an un-curated appellation passes through verbatim — reviewed, never rejected', async () => {
     Appellation.find.mockReturnValue(chain([]));
     expect(await resolveCanonicalAppellation('Vin de Garage de Jean')).toBe('Vin de Garage de Jean');
