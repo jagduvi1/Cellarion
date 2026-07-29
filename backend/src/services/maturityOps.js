@@ -37,8 +37,6 @@ const MAX_DEFER_YEARS = 50;
 
 const REASON_MAX = 500;
 
-const DEFERRAL_FIELDS = ['deferredUntil', 'deferredReason', 'deferredBy', 'deferredAt'];
-
 /** '2018' → 2018. NV, Unknown and anything not a bare 4-digit year → null. */
 function parseVintageYear(vintage) {
   const m = /^\d{4}$/.exec(String(vintage ?? '').trim());
@@ -228,7 +226,6 @@ module.exports = {
   MIN_DEFER_YEARS,
   MAX_DEFER_YEARS,
   REASON_MAX,
-  DEFERRAL_FIELDS,
   parseVintageYear,
   computeDefaultDeferUntil,
   buildQueueFilter,

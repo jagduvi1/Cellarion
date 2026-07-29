@@ -75,7 +75,12 @@ router.get('/', requireSommOrAdmin, async (req, res) => {
         })
         .populate({ path: 'setBy', select: 'username' })
         .populate({ path: 'deferredBy', select: 'username' })
-        .sort({ status: 1, createdAt: -1 }) // pending first, then newest
+        // Status is sorted lexicographically, so with three statuses the order
+        // is deferred → pending → reviewed. That only shows in the unfiltered
+        // "all" view (each tab filters to one status anyway), and within
+        // "pending" it puts rows that came back from deferral first — which is
+        // the right end of the queue for them.
+        .sort({ status: 1, createdAt: -1 })
         .skip(offset)
         .limit(limit)
         .lean(),
@@ -108,10 +113,15 @@ router.get('/lookup', async (req, res) => {
       return res.status(400).json({ error: 'Invalid wine ID' });
     }
 
+    // Any authenticated user reaches this (BottleDetail shows maturity status),
+    // unlike the somm-gated queue above — so the curator-facing deferral
+    // internals are excluded. Nothing outside the queue consumes them.
     const profile = await WineVintageProfile.findOne({
       wineDefinition: String(wine),
       vintage: String(vintage)
-    }).populate({ path: 'setBy', select: 'username' });
+    })
+      .select('-deferredReason -deferredBy -deferredAt')
+      .populate({ path: 'setBy', select: 'username' });
 
     if (!profile) {
       return res.json({ profile: null });

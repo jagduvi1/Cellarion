@@ -379,7 +379,6 @@ function ProfileCard({ profile, tab, onSaved, onReset, onMoved }) {
               bad prose survived (support ticket 2026-07-28). */}
           <SommWineProfilePanel wine={wine} />
 
-
           <div className="somm-form-hint-row">
             <p className="somm-form-hint">
               {t('somm.maturity.phaseHint')}

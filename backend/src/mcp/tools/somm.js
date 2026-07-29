@@ -32,6 +32,7 @@ const {
   parseDeferReason,
   canDefer,
   applyDefer,
+  clearDeferral,
   snapshotDeferral,
   isDeferralDue,
   REASON_MAX,
@@ -82,10 +83,11 @@ registerTool({
   name: 'list_maturity_queue',
   title: 'Sommelier: list the maturity queue',
   description:
-    'Lists wine+vintage pairs awaiting drink-window review (every added bottle seeds one). Pending first, newest ' +
-    'first. Call when the somm asks "anything in my maturity queue?" or before a review session. Use the returned ' +
-    'profile_id with set_vintage_maturity. status "pending" also includes deferred pairs whose return date has ' +
-    'passed; status "deferred" lists the ones still held back.',
+    'Lists wine+vintage pairs awaiting drink-window review (every added bottle seeds one), newest first. Call when ' +
+    'the somm asks "anything in my maturity queue?" or before a review session. Use the returned profile_id with ' +
+    'set_vintage_maturity. status "pending" is the actionable queue and also includes deferred pairs whose return ' +
+    'date has passed; status "deferred" lists the ones still held back; "all" mixes every status together, so ' +
+    'prefer "pending" when the somm wants work to do.',
   scope: 'read',
   requireRole: SOMM_ROLES,
   annotations: { readOnlyHint: true, openWorldHint: false },
@@ -201,10 +203,13 @@ registerTool({
     }
 
     // Snapshot for undo: phases + notes + review state, restored verbatim.
+    // The deferral rides along because reviewing CLEARS it below — without it
+    // in the snapshot, undoing a review of a deferred row would lose the
+    // deferral instead of putting the row back as it was.
     const prev = {
       ...PHASE_FIELDS.reduce((acc, f) => ((acc[f] = profile[f] ?? null), acc), {}),
+      ...snapshotDeferral(profile), // carries status too
       sommNotes: profile.sommNotes ?? null,
-      status: profile.status,
       relative: profile.relative,
       setBy: profile.setBy ? String(profile.setBy) : null,
       setAt: profile.setAt || null,
@@ -216,6 +221,9 @@ registerTool({
     profile.status = 'reviewed';
     profile.setBy = ctx.user.id;
     profile.setAt = new Date();
+    // Curating supersedes any deferral — mirrors routes/somm/maturity.js so a
+    // reviewed row can never keep a return date whichever surface set it.
+    clearDeferral(profile);
     await profile.save();
 
     logAudit(ctx.req, 'somm.maturity.review',

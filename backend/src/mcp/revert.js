@@ -356,10 +356,12 @@ async function revertLedgerRow(row, ctx, { ok, fail }) {
         profile[f] = prev[f] === null || prev[f] === undefined ? undefined : prev[f];
       }
       profile.sommNotes = prev.sommNotes === null ? undefined : prev.sommNotes;
-      profile.status = prev.status || 'pending';
       profile.relative = !!prev.relative;
       profile.setBy = prev.setBy || null;
       profile.setAt = prev.setAt || null;
+      // Also puts status back. Reviewing CLEARS a deferral, so undoing a review
+      // of a deferred row has to restore the deferral, not just drop it.
+      require('../services/maturityOps').restoreDeferral(profile, prev);
       try {
         await profile.save();
       } catch (err) {

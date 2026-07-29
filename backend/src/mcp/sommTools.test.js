@@ -33,7 +33,7 @@ jest.mock('../models/WineVintagePrice', () => {
 });
 jest.mock('../models/PriceTrackingRequest', () => ({ find: jest.fn(), findOne: jest.fn() }));
 jest.mock('../utils/rackGeometry', () => ({ getMaxPosition: jest.fn(() => 12) }));
-jest.mock('../services/search', () => ({ getIsAvailable: jest.fn(() => false), search: jest.fn(), searchBottles: jest.fn() }));
+jest.mock('../services/search', () => ({ getIsAvailable: jest.fn(() => false), search: jest.fn(), searchBottles: jest.fn(), indexWine: jest.fn().mockResolvedValue(undefined) }));
 jest.mock('../services/statsService', () => ({ computeOverview: jest.fn(), buildEmptyStats: jest.fn() }));
 jest.mock('../services/vectorStore', () => ({ getPoints: jest.fn(), searchSimilar: jest.fn() }));
 jest.mock('../config/aiConfig', () => ({ get: jest.fn(() => ({ vectorIndex: 'v1' })) }));
@@ -211,6 +211,33 @@ describe('set_vintage_maturity', () => {
     expect(body.data.somm_notes).toBeNull();
   });
 
+  // A reviewed row must never keep a return date, whichever surface reviewed
+  // it — the REST route clears it, so this one has to as well.
+  test('reviewing a DEFERRED row clears the deferral, and undo puts the deferral back', async () => {
+    const until = new Date('2029-01-01T00:00:00Z');
+    const p = profile({
+      status: 'deferred', deferredUntil: until, deferredReason: 'not released',
+      deferredBy: oid('b'), deferredAt: new Date('2026-07-29T00:00:00Z'),
+    });
+    await tool('set_vintage_maturity').handler({ profile_id: oid('1'), peak_from: 2030 }, SOMM_CTX);
+    expect(p.status).toBe('reviewed');
+    expect(p.deferredUntil).toBeNull();
+    expect(p.deferredReason).toBe('');
+    expect(p.deferredBy).toBeNull();
+
+    const row = McpActionLog.create.mock.calls[0][0];
+    expect(row.prev).toMatchObject({ status: 'deferred', deferredReason: 'not released', deferredBy: oid('b') });
+
+    // …and the undo restores it rather than silently dropping the deferral.
+    McpActionLog.findOne.mockReturnValue(chain({ ...row, _id: 'sm2', reversed: false }));
+    McpActionLog.findOneAndUpdate.mockResolvedValue({ _id: 'sm2' });
+    WineVintageProfile.findById.mockReturnValue(chain(p));
+    await tool('undo_last').handler({}, { ...SOMM_CTX, scopes: ['consume', 'write'] });
+    expect(p.status).toBe('deferred');
+    expect(new Date(p.deferredUntil).toISOString()).toBe(until.toISOString());
+    expect(p.deferredReason).toBe('not released');
+  });
+
   test('prev snapshot captures phases + review state for undo; audit uses the REST action string', async () => {
     const p = profile({ peakFrom: 2020, peakUntil: 2030, status: 'reviewed', setBy: oid('b'), setAt: new Date('2026-01-01') });
     await tool('set_vintage_maturity').handler({ profile_id: oid('1'), peak_from: 2026, peak_until: 2040 }, SOMM_CTX);
@@ -320,6 +347,65 @@ describe('defer_vintage_maturity', () => {
     // The ledger row must be CLAIMED, or undo_last would keep returning it.
     expect(McpActionLog.findOneAndUpdate).toHaveBeenCalledWith(
       { _id: 'sd', reversed: false }, { $set: { reversed: true, idempotencyKey: null } });
+  });
+});
+
+describe('set_wine_profile', () => {
+  const wine = (over = {}) => {
+    const w = {
+      _id: oid('f'), name: 'Vintage Port', producer: 'Sandeman',
+      aiProfile: { description: 'Built for immediate drinking.', source: 'ai', confidence: 0.6 },
+      markModified: jest.fn(),
+      save: jest.fn().mockResolvedValue(undefined),
+      ...over,
+    };
+    WineDefinition.findById.mockResolvedValue(w);
+    return w;
+  };
+
+  test('applies the patch, stamps curator provenance, and logs an undoable ledger row', async () => {
+    const w = wine();
+    const body = parse(await tool('set_wine_profile').handler(
+      { wine_id: oid('f'), description: 'Among the longest-ageing wines in the Douro.' }, SOMM_CTX));
+    expect(body.error).toBeUndefined();
+    expect(w.aiProfile.description).toBe('Among the longest-ageing wines in the Douro.');
+    // 'curator' is what stops enrichmentJob regenerating over the correction.
+    expect(w.aiProfile.source).toBe('curator');
+    expect(w.save).toHaveBeenCalled();
+    const row = McpActionLog.create.mock.calls[0][0];
+    expect(row.action).toBe('somm_wine_profile');
+    expect(row.prev).toMatchObject({ description: 'Built for immediate drinking.', source: 'ai' });
+    expect(logAudit).toHaveBeenCalledWith(SOMM_CTX.req, 'somm.wineProfile.update',
+      expect.anything(), expect.objectContaining({ via: 'mcp' }));
+  });
+
+  test('undo restores the values AND the provenance, and CLAIMS the ledger row', async () => {
+    // The claim is the point: without it undo_last keeps selecting the same
+    // edit forever and a concurrent twin can restore the snapshot twice.
+    const row = {
+      _id: 'sw', action: 'somm_wine_profile', reversed: false,
+      detail: { wineId: oid('f') },
+      prev: { description: 'Built for immediate drinking.', source: 'ai', verifiedBy: null, verifiedAt: null, profileReviewedAt: null },
+    };
+    McpActionLog.findOne.mockReturnValue(chain(row));
+    McpActionLog.findOneAndUpdate.mockResolvedValue(row);
+    const w = wine({ aiProfile: { description: 'Corrected.', source: 'curator' } });
+    const res = await tool('undo_last').handler({}, { ...SOMM_CTX, scopes: ['consume', 'write'] });
+    expect(parse(res).data.undone).toBe('set_wine_profile');
+    expect(w.aiProfile.source).toBe('ai');
+    expect(w.aiProfile.description).toBe('Built for immediate drinking.');
+    expect(McpActionLog.findOneAndUpdate).toHaveBeenCalledWith(
+      { _id: 'sw', reversed: false }, { $set: { reversed: true, idempotencyKey: null } });
+  });
+
+  test('a second undo of the same row is refused once it is claimed', async () => {
+    const row = { _id: 'sw', action: 'somm_wine_profile', reversed: false, detail: { wineId: oid('f') }, prev: {} };
+    McpActionLog.findOne.mockReturnValue(chain(row));
+    McpActionLog.findOneAndUpdate.mockResolvedValue(null); // already claimed
+    const w = wine();
+    const res = await tool('undo_last').handler({}, { ...SOMM_CTX, scopes: ['consume', 'write'] });
+    expect(parse(res).error.code).toBe('conflict');
+    expect(w.save).not.toHaveBeenCalled();
   });
 });
 

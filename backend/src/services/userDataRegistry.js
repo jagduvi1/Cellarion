@@ -758,10 +758,16 @@ const REGISTRY = [
     note: 'somm price contribution (shared data); portability of own contributions is a follow-up',
   },
   {
-    model: WineVintageProfile, category: 'creator-ref', userFields: ['setBy'],
+    model: WineVintageProfile, category: 'creator-ref', userFields: ['setBy', 'deferredBy'],
     // BUG FIX: also clear sommNotes (the old code unset setBy+setAt but left the
     // somm's authored notes on the now-anonymised profile, unlike WineVintagePrice).
-    purge: (ctx) => WineVintageProfile.updateMany({ setBy: ctx.userId }, { $unset: { setBy: '', setAt: '', sommNotes: '' } }),
+    // deferredBy/deferredReason follow the same rule — a deferral is a second,
+    // independent curator ref on this model, so it needs its own updateMany:
+    // the somm who deferred a row is usually not the one who reviewed it.
+    purge: async (ctx) => {
+      await WineVintageProfile.updateMany({ setBy: ctx.userId }, { $unset: { setBy: '', setAt: '', sommNotes: '' } });
+      await WineVintageProfile.updateMany({ deferredBy: ctx.userId }, { $unset: { deferredBy: '', deferredAt: '', deferredReason: '' } });
+    },
     exportFragment: null,
     note: 'somm maturity contribution (shared data); portability of own contributions is a follow-up',
   },
@@ -780,10 +786,17 @@ const REGISTRY = [
   // re-point it to the [deleted] sentinel so the ref doesn't dangle (createdBy
   // is `required`, so it can't be unset). Not exported — not the user's data.
   {
-    model: WineDefinition, category: 'creator-ref', userFields: ['createdBy'],
-    purge: (ctx) => WineDefinition.updateMany({ createdBy: ctx.userId }, { $set: { createdBy: ctx.deletedUserId } }),
+    model: WineDefinition, category: 'creator-ref', userFields: ['createdBy', 'aiProfile.verifiedBy'],
+    // aiProfile.verifiedBy is the curator who corrected the tasting profile.
+    // Reassigned rather than unset, like createdBy: the profile stays
+    // curator-sourced (which is what keeps the AI job from regenerating over
+    // it) and only the person is anonymised.
+    purge: async (ctx) => {
+      await WineDefinition.updateMany({ createdBy: ctx.userId }, { $set: { createdBy: ctx.deletedUserId } });
+      await WineDefinition.updateMany({ 'aiProfile.verifiedBy': ctx.userId }, { $set: { 'aiProfile.verifiedBy': ctx.deletedUserId } });
+    },
     exportFragment: null,
-    note: 'shared registry; required createdBy reassigned to [deleted] on erasure',
+    note: 'shared registry; required createdBy + aiProfile.verifiedBy reassigned to [deleted] on erasure',
   },
   {
     model: Country, category: 'creator-ref', userFields: ['createdBy'],
