@@ -958,6 +958,9 @@ describe('taxonomy find-or-create dedup', () => {
       normalizedName: 'rhone',
       country: 'country-1',
       createdBy: USER_ID,
+      // R3: a user-write mint is born flagged for admin review — visible,
+      // never blocking.
+      pendingReview: true,
     });
     expect(created.save).toHaveBeenCalled();
 

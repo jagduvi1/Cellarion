@@ -541,6 +541,28 @@ router.delete('/grapes/:id', async (req, res) => {
   }
 });
 
+// POST /api/admin/taxonomy/regions/:id/approve — clear the pendingReview flag
+// a user-write mint set (strategy 2026-07-29 R3). Approval is its own verb,
+// not a PUT side effect: editing a region to fix a typo must not silently
+// count as "a human vouched for this".
+router.post('/regions/:id/approve', async (req, res) => {
+  try {
+    if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
+    const region = await Region.findById(req.params.id);
+    if (!region) return res.status(404).json({ error: 'Region not found' });
+    region.pendingReview = false;
+    await region.save();
+    logAudit(req, 'admin.taxonomy.approveRegion',
+      { type: 'region', id: region._id },
+      { name: region.name }
+    );
+    res.json({ region });
+  } catch (error) {
+    console.error('Approve region error:', error);
+    res.status(500).json({ error: 'Failed to approve region' });
+  }
+});
+
 // ===== MERGES =====
 // Collapse a duplicate taxonomy doc into its canonical counterpart. All
 // references (wines, regions, appellations) are rewritten before the

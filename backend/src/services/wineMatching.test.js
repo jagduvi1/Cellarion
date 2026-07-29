@@ -209,3 +209,38 @@ describe('WEIGHTS', () => {
     expect(WEIGHTS).toEqual({ name: 0.45, producer: 0.45, appellation: 0.10 });
   });
 });
+
+// ─── Name-abbreviation expansion (scan bench 2026-07-29) ─────────────────────
+
+describe('scoreWineMatch — label abbreviation expansion', () => {
+  // The prod-photo scan bench measured every German GG label under the 0.75
+  // match floor purely on the "GG" vs "Großes Gewächs" token. The expansion is
+  // comparison-layer only — stored strings and keys never change.
+  test('GG on the label matches Großes Gewächs in the registry', () => {
+    const score = scoreWineMatch(
+      { name: 'Riesling Philippsbrunnen Großes Gewächs', producer: 'Weingut Philipp Kuhn' },
+      { name: 'Philippsbrunnen GG Riesling', producer: 'Philipp Kuhn' },
+      { redistribute: false }
+    );
+    expect(score).toBeGreaterThanOrEqual(0.85);
+  });
+
+  test('1er on the label matches Premier in the registry', () => {
+    const score = scoreWineMatch(
+      { name: 'Pouilly-Fuissé Premier Cru La Maréchaude', producer: 'Domaine Barraud' },
+      { name: 'Pouilly-Fuissé 1er Cru La Maréchaude', producer: 'Domaine Barraud' },
+      { redistribute: false }
+    );
+    expect(score).toBeGreaterThanOrEqual(0.95);
+  });
+
+  test('the expansion never fires inside a word', () => {
+    // "Eggenburg" must not become "Egroes gewachsenburg".
+    const same = scoreWineMatch(
+      { name: 'Eggenburg Riesling', producer: 'X' },
+      { name: 'Eggenburg Riesling', producer: 'X' },
+      { redistribute: false }
+    );
+    expect(same).toBeCloseTo(1.0, 5);
+  });
+});

@@ -11,6 +11,34 @@ const { combinedSimilarity, normalizeString, normalizeProducerKey } = require('.
 
 const WEIGHTS = { name: 0.45, producer: 0.45, appellation: 0.10 };
 
+// Label-abbreviation expansions applied to BOTH sides of the NAME comparison
+// only — never to stored strings or keys. German labels print "GG" where the
+// registry spells out "Großes Gewächs"; the prod-photo scan bench (2026-07-29)
+// measured "Philippsbrunnen GG Riesling" vs "Riesling Philippsbrunnen Großes
+// Gewächs" under the 0.75 match floor purely on this token, on every GG wine
+// tested. Comparison-layer only, so no key or display string ever changes.
+// normalizeString folds "Großes Gewächs" → 'groes gewachs' (ß deleted as
+// punctuation-class, ä→a) — the expansion must target that exact folded form
+// or it never matches the registry side.
+const NAME_ABBREVIATIONS = [
+  [/\bgg\b/g, 'groes gewachs'],
+  [/\b1er\b/g, 'premier'],
+];
+
+function expandNameAbbreviations(normalized) {
+  let out = normalized;
+  for (const [re, full] of NAME_ABBREVIATIONS) out = out.replace(re, full);
+  return out;
+}
+
+/** Name-axis similarity with abbreviation expansion on both sides. */
+function nameSimilarity(a, b) {
+  return combinedSimilarity(
+    expandNameAbbreviations(normalizeString(a || '')),
+    expandNameAbbreviations(normalizeString(b || ''))
+  );
+}
+
 /**
  * Producer-axis similarity, compared on producer KEYS ("Kumeu River Wines
  * Limited" → "kumeu river") instead of raw strings. Corporate suffixes and
@@ -37,7 +65,7 @@ function producerSimilarity(a, b) {
  * @returns {number} Composite score in [0, 1]
  */
 function scoreWineMatch(candidate, query, { redistribute = true } = {}) {
-  const nameScore     = combinedSimilarity(candidate.name, query.name);
+  const nameScore     = nameSimilarity(candidate.name, query.name);
   const producerScore = producerSimilarity(candidate.producer, query.producer);
 
   let score = nameScore * WEIGHTS.name + producerScore * WEIGHTS.producer;

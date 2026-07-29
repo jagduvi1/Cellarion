@@ -65,6 +65,14 @@ const regionSchema = new mongoose.Schema({
     default: [],
     index: true
   },
+  // True while this region was auto-minted by a user write (label scan,
+  // add-bottle, import) and no admin has looked at it yet (strategy 2026-07-29
+  // R3). Self-minting is why the collection needed cleanup scripts twice in
+  // July: any comma-free non-country string becomes taxonomy silently. The
+  // flag makes the mint VISIBLE instead of blocking it — a user adding a
+  // bottle is never held up by taxonomy review. Admin-created regions are
+  // born reviewed (flag absent).
+  pendingReview: { type: Boolean, default: false, index: true },
   // Public-facing URL slug and curator description for /regions/:slug pages.
   slug: { type: String, trim: true, lowercase: true, unique: true, sparse: true, index: true },
   description: { type: String, trim: true, default: '' },
