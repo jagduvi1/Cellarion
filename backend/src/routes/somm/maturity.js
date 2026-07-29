@@ -274,4 +274,48 @@ router.delete('/:id/reset', requireSommOrAdmin, async (req, res) => {
   }
 });
 
+/**
+ * DELETE /api/somm/maturity/:id
+ * Remove a wine+vintage from the queue WITHOUT curating it. Somm/admin only.
+ *
+ * For the pair that cannot be curated at all: the wine was never released in
+ * that vintage (a user typed a year it does not have, often while testing).
+ * Inventing a window would poison shared data, so the row is deleted outright.
+ * Nothing is remembered on purpose — the next time anyone adds a bottle of
+ * this wine+vintage, ensurePendingVintageProfile re-seeds the row and it
+ * re-enters the queue on the same schedule as every other wine. That IS the
+ * comeback mechanism: a bottle add is exactly the signal that the vintage now
+ * exists in the real world.
+ *
+ * A reviewed row is refused: it carries a curated window users already see,
+ * and deleting it would silently retire that data. Reset it first — an
+ * explicit, separately audited step.
+ */
+router.delete('/:id', requireSommOrAdmin, async (req, res) => {
+  try {
+    if (!isValidId(req.params.id)) return res.status(400).json({ error: 'Invalid ID' });
+    const profile = await WineVintageProfile.findById(req.params.id);
+    if (!profile) {
+      return res.status(404).json({ error: 'Profile not found' });
+    }
+    if (profile.status === 'reviewed') {
+      return res.status(409).json({ error: 'This vintage is already reviewed — reset it to pending before removing it.' });
+    }
+
+    await WineVintageProfile.deleteOne({ _id: profile._id });
+
+    // Shared-data mutation (the pair leaves every curator's queue) — audited
+    // like the review it stands in for.
+    logAudit(req, 'somm.maturity.remove',
+      { type: 'wine', id: profile.wineDefinition },
+      { vintage: profile.vintage }
+    );
+
+    res.json({ removed: true });
+  } catch (error) {
+    console.error('Remove maturity profile error:', error);
+    res.status(500).json({ error: 'Failed to remove profile' });
+  }
+});
+
 module.exports = router;

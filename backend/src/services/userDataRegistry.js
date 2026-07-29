@@ -780,10 +780,17 @@ const REGISTRY = [
   // re-point it to the [deleted] sentinel so the ref doesn't dangle (createdBy
   // is `required`, so it can't be unset). Not exported — not the user's data.
   {
-    model: WineDefinition, category: 'creator-ref', userFields: ['createdBy'],
-    purge: (ctx) => WineDefinition.updateMany({ createdBy: ctx.userId }, { $set: { createdBy: ctx.deletedUserId } }),
+    model: WineDefinition, category: 'creator-ref', userFields: ['createdBy', 'aiProfile.verifiedBy'],
+    // aiProfile.verifiedBy is the curator who corrected the tasting profile.
+    // Reassigned rather than unset, like createdBy: the profile stays
+    // curator-sourced (which is what keeps the AI job from regenerating over
+    // it) and only the person is anonymised.
+    purge: async (ctx) => {
+      await WineDefinition.updateMany({ createdBy: ctx.userId }, { $set: { createdBy: ctx.deletedUserId } });
+      await WineDefinition.updateMany({ 'aiProfile.verifiedBy': ctx.userId }, { $set: { 'aiProfile.verifiedBy': ctx.deletedUserId } });
+    },
     exportFragment: null,
-    note: 'shared registry; required createdBy reassigned to [deleted] on erasure',
+    note: 'shared registry; required createdBy + aiProfile.verifiedBy reassigned to [deleted] on erasure',
   },
   {
     model: Country, category: 'creator-ref', userFields: ['createdBy'],

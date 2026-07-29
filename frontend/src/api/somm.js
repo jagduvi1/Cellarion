@@ -15,3 +15,11 @@ export const updateSommWineProfile = (apiFetch, wineId, patch) =>
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(patch),
   });
+
+/**
+ * Remove a wine+vintage from the maturity queue without curating it — for a
+ * vintage the wine was never released in. The pair re-enters the queue
+ * automatically the next time anyone adds a bottle of that wine+vintage.
+ */
+export const removeMaturityProfile = (apiFetch, profileId) =>
+  apiFetch(`/api/somm/maturity/${profileId}`, { method: 'DELETE' });

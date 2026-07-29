@@ -24,7 +24,7 @@ jest.mock('../models/WineDefinition', () => ({ find: jest.fn(), findById: jest.f
 jest.mock('../models/User', () => ({ findById: jest.fn() }));
 jest.mock('../models/WineEmbedding', () => ({ findOne: jest.fn() }));
 jest.mock('../models/McpActionLog', () => ({ create: jest.fn(), findOne: jest.fn(), findOneAndUpdate: jest.fn() }));
-jest.mock('../models/WineVintageProfile', () => ({ find: jest.fn(), findById: jest.fn(), countDocuments: jest.fn() }));
+jest.mock('../models/WineVintageProfile', () => ({ find: jest.fn(), findById: jest.fn(), countDocuments: jest.fn(), deleteOne: jest.fn(), findOneAndUpdate: jest.fn() }));
 jest.mock('../models/WineVintagePrice', () => {
   const M = jest.fn(function (doc) { Object.assign(this, doc); this._id = 'price-1'; this.save = jest.fn().mockResolvedValue(undefined); });
   M.aggregate = jest.fn().mockResolvedValue([]);
@@ -33,7 +33,7 @@ jest.mock('../models/WineVintagePrice', () => {
 });
 jest.mock('../models/PriceTrackingRequest', () => ({ find: jest.fn(), findOne: jest.fn() }));
 jest.mock('../utils/rackGeometry', () => ({ getMaxPosition: jest.fn(() => 12) }));
-jest.mock('../services/search', () => ({ getIsAvailable: jest.fn(() => false), search: jest.fn(), searchBottles: jest.fn() }));
+jest.mock('../services/search', () => ({ getIsAvailable: jest.fn(() => false), search: jest.fn(), searchBottles: jest.fn(), indexWine: jest.fn().mockResolvedValue(undefined) }));
 jest.mock('../services/statsService', () => ({ computeOverview: jest.fn(), buildEmptyStats: jest.fn() }));
 jest.mock('../services/vectorStore', () => ({ getPoints: jest.fn(), searchSimilar: jest.fn() }));
 jest.mock('../config/aiConfig', () => ({ get: jest.fn(() => ({ vectorIndex: 'v1' })) }));
@@ -64,7 +64,7 @@ const USER_CTX = { user: { id: ME, roles: ['user'] }, scopes: ['read', 'write'],
 
 const tool = (name) => allTools().find((t) => t.name === name);
 const parse = (res) => JSON.parse(res.content[0].text);
-const SOMM_TOOLS = ['list_maturity_queue', 'set_vintage_maturity', 'list_price_tracking_requests', 'set_vintage_price'];
+const SOMM_TOOLS = ['list_maturity_queue', 'set_vintage_maturity', 'remove_from_maturity_queue', 'set_wine_profile', 'list_price_tracking_requests', 'set_vintage_price'];
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -193,6 +193,124 @@ describe('set_vintage_maturity', () => {
     expect(logAudit).toHaveBeenCalledWith(SOMM_CTX.req, 'somm.maturity.review',
       expect.anything(), expect.objectContaining({ via: 'mcp' }));
     expect(p.setBy).toBe(ME);
+  });
+});
+
+describe('remove_from_maturity_queue', () => {
+  const profile = (over = {}) => {
+    const p = {
+      _id: oid('1'), vintage: '2027', status: 'pending', relative: false,
+      wineDefinition: { _id: oid('f'), name: 'Barolo' },
+      ...over,
+    };
+    WineVintageProfile.findById.mockReturnValue(chain(p));
+    return p;
+  };
+
+  beforeEach(() => {
+    WineVintageProfile.deleteOne.mockResolvedValue({ deletedCount: 1 });
+  });
+
+  test('deletes a pending row; the ledger prev carries wine+vintage so undo can re-seed', async () => {
+    profile();
+    const body = parse(await tool('remove_from_maturity_queue').handler(
+      { profile_id: oid('1'), reason: '2027 not released' }, SOMM_CTX));
+    expect(body.error).toBeUndefined();
+    expect(WineVintageProfile.deleteOne).toHaveBeenCalledWith({ _id: oid('1') });
+    const row = McpActionLog.create.mock.calls[0][0];
+    expect(row.action).toBe('somm_maturity_remove');
+    // The row being deleted, wine+vintage is ALL the undo has to work from.
+    expect(row.prev).toEqual({ wineDefinition: oid('f'), vintage: '2027' });
+    expect(logAudit).toHaveBeenCalledWith(SOMM_CTX.req, 'somm.maturity.remove',
+      expect.anything(), expect.objectContaining({ reason: '2027 not released', via: 'mcp' }));
+  });
+
+  test('refuses a reviewed row — reset it first rather than silently retiring curated data', async () => {
+    profile({ status: 'reviewed' });
+    const body = parse(await tool('remove_from_maturity_queue').handler({ profile_id: oid('1') }, SOMM_CTX));
+    expect(body.error.code).toBe('conflict');
+    expect(WineVintageProfile.deleteOne).not.toHaveBeenCalled();
+  });
+
+  test('undo re-seeds the pending stub via upsert and CLAIMS the ledger row', async () => {
+    const row = {
+      _id: 'sr', action: 'somm_maturity_remove', reversed: false,
+      detail: { profileId: oid('1'), vintage: '2027' },
+      prev: { wineDefinition: oid('f'), vintage: '2027' },
+    };
+    McpActionLog.findOne.mockReturnValue(chain(row));
+    McpActionLog.findOneAndUpdate.mockResolvedValue(row);
+    WineVintageProfile.findOneAndUpdate.mockResolvedValue({});
+    const res = await tool('undo_last').handler({}, { ...SOMM_CTX, scopes: ['consume', 'write'] });
+    expect(parse(res).data.undone).toBe('remove_from_maturity_queue');
+    // Upsert, not insert: a bottle add may already have re-seeded the pair, and
+    // the undo must land on "it is in the queue again" either way.
+    expect(WineVintageProfile.findOneAndUpdate).toHaveBeenCalledWith(
+      { wineDefinition: oid('f'), vintage: '2027' },
+      { $setOnInsert: { wineDefinition: oid('f'), vintage: '2027', status: 'pending' } },
+      { upsert: true }
+    );
+    expect(McpActionLog.findOneAndUpdate).toHaveBeenCalledWith(
+      { _id: 'sr', reversed: false }, { $set: { reversed: true, idempotencyKey: null } });
+  });
+});
+
+describe('set_wine_profile', () => {
+  const wine = (over = {}) => {
+    const w = {
+      _id: oid('f'), name: 'Vintage Port', producer: 'Sandeman',
+      aiProfile: { description: 'Built for immediate drinking.', source: 'ai', confidence: 0.6 },
+      markModified: jest.fn(),
+      save: jest.fn().mockResolvedValue(undefined),
+      ...over,
+    };
+    WineDefinition.findById.mockResolvedValue(w);
+    return w;
+  };
+
+  test('applies the patch, stamps curator provenance, and logs an undoable ledger row', async () => {
+    const w = wine();
+    const body = parse(await tool('set_wine_profile').handler(
+      { wine_id: oid('f'), description: 'Among the longest-ageing wines in the Douro.' }, SOMM_CTX));
+    expect(body.error).toBeUndefined();
+    expect(w.aiProfile.description).toBe('Among the longest-ageing wines in the Douro.');
+    // 'curator' is what stops enrichmentJob regenerating over the correction.
+    expect(w.aiProfile.source).toBe('curator');
+    expect(w.save).toHaveBeenCalled();
+    const row = McpActionLog.create.mock.calls[0][0];
+    expect(row.action).toBe('somm_wine_profile');
+    expect(row.prev).toMatchObject({ description: 'Built for immediate drinking.', source: 'ai' });
+    expect(logAudit).toHaveBeenCalledWith(SOMM_CTX.req, 'somm.wineProfile.update',
+      expect.anything(), expect.objectContaining({ via: 'mcp' }));
+  });
+
+  test('undo restores the values AND the provenance, and CLAIMS the ledger row', async () => {
+    // The claim is the point: without it undo_last keeps selecting the same
+    // edit forever and a concurrent twin can restore the snapshot twice.
+    const row = {
+      _id: 'sw', action: 'somm_wine_profile', reversed: false,
+      detail: { wineId: oid('f') },
+      prev: { description: 'Built for immediate drinking.', source: 'ai', verifiedBy: null, verifiedAt: null, profileReviewedAt: null },
+    };
+    McpActionLog.findOne.mockReturnValue(chain(row));
+    McpActionLog.findOneAndUpdate.mockResolvedValue(row);
+    const w = wine({ aiProfile: { description: 'Corrected.', source: 'curator' } });
+    const res = await tool('undo_last').handler({}, { ...SOMM_CTX, scopes: ['consume', 'write'] });
+    expect(parse(res).data.undone).toBe('set_wine_profile');
+    expect(w.aiProfile.source).toBe('ai');
+    expect(w.aiProfile.description).toBe('Built for immediate drinking.');
+    expect(McpActionLog.findOneAndUpdate).toHaveBeenCalledWith(
+      { _id: 'sw', reversed: false }, { $set: { reversed: true, idempotencyKey: null } });
+  });
+
+  test('a second undo of the same row is refused once it is claimed', async () => {
+    const row = { _id: 'sw', action: 'somm_wine_profile', reversed: false, detail: { wineId: oid('f') }, prev: {} };
+    McpActionLog.findOne.mockReturnValue(chain(row));
+    McpActionLog.findOneAndUpdate.mockResolvedValue(null); // already claimed
+    const w = wine();
+    const res = await tool('undo_last').handler({}, { ...SOMM_CTX, scopes: ['consume', 'write'] });
+    expect(parse(res).error.code).toBe('conflict');
+    expect(w.save).not.toHaveBeenCalled();
   });
 });
 

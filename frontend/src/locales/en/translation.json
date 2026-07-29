@@ -1528,7 +1528,12 @@
       "aiSuggesting": "Suggesting…",
       "aiSuggestError": "Could not suggest a drink window",
       "aiSuggestFilled": "Suggestion applied — review and save",
-      "nvHint": "non-vintage: enter years after purchase"
+      "nvHint": "non-vintage: enter years after purchase",
+      "removeAction": "Remove from queue",
+      "removeTitle": "Remove from queue",
+      "removeConfirm": "The wine was never released in {{vintage}}? Removing takes the pair out of the queue without setting a drink window. If anyone adds a bottle of this wine and vintage again — for instance once it is actually released — it returns to the queue automatically.",
+      "removing": "Removing…",
+      "removeError": "Failed to remove from the queue"
     },
     "prices": {
       "title": "Price Queue",

@@ -228,6 +228,65 @@ registerTool({
 });
 
 registerTool({
+  name: 'remove_from_maturity_queue',
+  title: 'Sommelier: remove a vintage the wine was never released in',
+  description:
+    'Deletes a wine+vintage pair from the maturity queue WITHOUT setting a drink window, for the case where the wine ' +
+    'does not exist in that vintage (a user typed a year the wine was never released in — often while testing — or a ' +
+    'purchase year mistaken for a vintage). Use this instead of guessing values: inventing a window poisons shared ' +
+    'data. Not a quarantine — the next time anyone adds a bottle of this wine+vintage the pair re-enters the queue ' +
+    'like any other wine, so if that vintage becomes real it still gets curated. Refuses a reviewed pair (reset it ' +
+    'first). Reversible via undo_last.',
+  scope: 'write',
+  requireRole: SOMM_ROLES,
+  annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
+  inputSchema: {
+    profile_id: objectId.describe('From list_maturity_queue'),
+    reason: z.string().max(200).optional()
+      .describe('Why, for the audit trail — e.g. "2027 not released; user typed the purchase year".'),
+  },
+  handler: async (args, ctx) => {
+    const denied = requireSomm(ctx);
+    if (denied) return denied;
+    const profile = await WineVintageProfile.findById(args.profile_id).populate('wineDefinition', 'name producer');
+    if (!profile) return fail('not_found', 'No such maturity profile. Use list_maturity_queue for valid ids.');
+    if (profile.status === 'reviewed') {
+      return fail('conflict', 'This vintage is already reviewed — reset it to pending before removing it.');
+    }
+
+    // Wine+vintage is all the undo needs: a removed row is the auto-seeded
+    // pending stub (phases and notes only exist on reviewed rows), so undoing
+    // is re-seeding, not restoring field values.
+    const prev = {
+      wineDefinition: String(profile.wineDefinition?._id || profile.wineDefinition),
+      vintage: profile.vintage,
+    };
+    await WineVintageProfile.deleteOne({ _id: profile._id });
+
+    logAudit(ctx.req, 'somm.maturity.remove',
+      { type: 'wine', id: profile.wineDefinition?._id || profile.wineDefinition },
+      { vintage: profile.vintage, ...(args.reason ? { reason: args.reason } : {}), via: 'mcp' });
+
+    const envelope = {
+      summary: `Removed ${profile.wineDefinition?.name || 'wine'} ${profile.vintage} from the maturity queue — it returns if anyone adds a bottle of that wine+vintage`,
+      data: {
+        vintage: profile.vintage,
+        removed: true,
+        undo: 'undo_last puts it back in the queue',
+      },
+    };
+    await logAction(ctx, {
+      tool: 'remove_from_maturity_queue',
+      action: 'somm_maturity_remove',
+      detail: { profileId: String(profile._id), vintage: profile.vintage },
+      prev,
+      result: envelope,
+    });
+    return ok(envelope.summary, envelope.data);
+  },
+});
+
+registerTool({
   name: 'set_wine_profile',
   title: 'Sommelier: correct a wine\'s tasting profile',
   description:

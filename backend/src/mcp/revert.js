@@ -25,7 +25,8 @@ async function unclaim(rowId) {
 }
 
 const CONSUME_REVERSIBLE = ['consume', 'restore'];
-const WRITE_REVERSIBLE = ['add', 'update', 'bulk_add', 'somm_maturity', 'somm_price',
+const WRITE_REVERSIBLE = ['add', 'update', 'bulk_add', 'somm_maturity', 'somm_maturity_remove',
+  'somm_wine_profile', 'somm_price',
   'cellar_create', 'rack_create', 'place', 'unplace', 'move', 'arrange', 'tasting_note', 'attach_image',
   'winelist_add', 'winelist_price'];
 
@@ -273,6 +274,12 @@ async function revertLedgerRow(row, ctx, { ok, fail }) {
     const wine = await WineDefinition.findById(row.detail?.wineId);
     if (!wine) return fail('conflict', 'That wine no longer exists; nothing to undo.');
 
+    // Claim before mutating, like every other branch here: without it the row
+    // stays un-reversed, so undo_last keeps selecting the same edit forever and
+    // a concurrent twin can restore the same snapshot twice.
+    const claimed = await McpActionLog.findOneAndUpdate({ _id: row._id, reversed: false }, { $set: { reversed: true, idempotencyKey: null } });
+    if (!claimed) return fail('conflict', 'That action is already being undone by another request.');
+
     restoreProfile(wine, row.prev || {});
     try {
       await wine.save();
@@ -286,6 +293,45 @@ async function revertLedgerRow(row, ctx, { ok, fail }) {
     const envelope = {
       summary: `Undid tasting-profile edit — ${wine.producer} — ${wine.name} back to ${wine.aiProfile?.source || 'ai'}-sourced`,
       data: { undone: 'set_wine_profile', wine_id: String(wine._id), source: wine.aiProfile?.source || 'ai' },
+    };
+    await logAction(ctx, { tool: 'undo_last', action: row.action, viaUndo: true, detail: { undid: String(row._id) }, result: envelope });
+    return ok(envelope.summary, envelope.data);
+  }
+
+  // Somm queue removal — re-seeds the pending stub. An upsert, not an insert:
+  // if a new bottle add already brought the pair back (or a concurrent undo
+  // raced this one on the unique wine+vintage index), the row is simply found
+  // and the undo still lands on "it is in the queue again".
+  if (row.action === 'somm_maturity_remove') {
+    const roles = ctx.user?.roles || [];
+    if (!roles.includes('somm') && !roles.includes('admin')) {
+      return fail('forbidden_scope', 'Undoing sommelier curation needs the sommelier (or admin) role.');
+    }
+    const prev = row.prev || {};
+    if (!prev.wineDefinition || !prev.vintage) {
+      return fail('conflict', 'That removal recorded no wine+vintage; nothing to undo.');
+    }
+    const claimed = await McpActionLog.findOneAndUpdate({ _id: row._id, reversed: false }, { $set: { reversed: true, idempotencyKey: null } });
+    if (!claimed) return fail('conflict', 'That action is already being undone by another request.');
+
+    const WineVintageProfile = require('../models/WineVintageProfile');
+    try {
+      // Direct upsert rather than utils/vintageProfile's helper: that one
+      // swallows errors (seeding is best-effort), but an undo must fail
+      // loudly so the ledger row can be unclaimed and retried.
+      await WineVintageProfile.findOneAndUpdate(
+        { wineDefinition: prev.wineDefinition, vintage: prev.vintage },
+        { $setOnInsert: { wineDefinition: prev.wineDefinition, vintage: prev.vintage, status: 'pending' } },
+        { upsert: true }
+      );
+    } catch (err) {
+      await unclaim(row._id); // nothing restored yet → let the undo be retried
+      throw err;
+    }
+
+    const envelope = {
+      summary: `Undid queue removal — vintage ${prev.vintage} is pending again`,
+      data: { undone: 'remove_from_maturity_queue', vintage: prev.vintage, status: 'pending' },
     };
     await logAction(ctx, { tool: 'undo_last', action: row.action, viaUndo: true, detail: { undid: String(row._id) }, result: envelope });
     return ok(envelope.summary, envelope.data);

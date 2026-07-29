@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import WineImage from '../components/WineImage';
 import ConfirmModal from '../components/ConfirmModal';
 import SommWineProfilePanel from '../components/SommWineProfilePanel';
+import { removeMaturityProfile } from '../api/somm';
 import './SommMaturity.css';
 
 const CURRENT_YEAR = new Date().getFullYear();
@@ -103,6 +104,8 @@ function SommMaturity() {
       : prev.filter(p => p._id !== updated._id)
   ));
   const handleReset  = (updated) => setProfiles(prev => prev.filter(p => p._id !== updated._id));
+  // Removal deletes the row server-side, so only the id comes back.
+  const handleRemoved = (removedId) => setProfiles(prev => prev.filter(p => p._id !== removedId));
 
   return (
     <div className="somm-page">
@@ -140,6 +143,7 @@ function SommMaturity() {
                 isPending={tab === 'pending'}
                 onSaved={handleSaved}
                 onReset={handleReset}
+                onRemoved={handleRemoved}
               />
             ))}
           </div>
@@ -163,7 +167,7 @@ function SommMaturity() {
 }
 
 // ── Individual profile card with inline form ──────────────────────────────────
-function ProfileCard({ profile, isPending, onSaved, onReset }) {
+function ProfileCard({ profile, isPending, onSaved, onReset, onRemoved }) {
   const { t } = useTranslation();
   const { apiFetch } = useAuth();
   const wine       = profile.wineDefinition;
@@ -177,6 +181,8 @@ function ProfileCard({ profile, isPending, onSaved, onReset }) {
   const [aiMsg,     setAiMsg]     = useState(null);
   const [err,       setErr]       = useState(null);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
+  const [showRemoveConfirm, setShowRemoveConfirm] = useState(false);
+  const [removing, setRemoving] = useState(false);
 
   // For an NV profile not yet migrated to relative (offset) mode, start the
   // window blank so the somm enters durations fresh rather than stale years
@@ -237,6 +243,22 @@ function ProfileCard({ profile, isPending, onSaved, onReset }) {
     } finally {
       setResetting(false);
       setShowResetConfirm(false);
+    }
+  };
+
+  const handleRemove = async () => {
+    setRemoving(true);
+    setErr(null);
+    try {
+      const res = await removeMaturityProfile(apiFetch, profile._id);
+      const data = await res.json();
+      if (res.ok) onRemoved(profile._id);
+      else setErr(data.error || t('somm.maturity.removeError'));
+    } catch {
+      setErr('Network error');
+    } finally {
+      setRemoving(false);
+      setShowRemoveConfirm(false);
     }
   };
 
@@ -452,6 +474,14 @@ function ProfileCard({ profile, isPending, onSaved, onReset }) {
             <button type="submit" className="btn btn-primary" disabled={saving}>
               {saving ? t('common.saving') : t('somm.maturity.markReviewed')}
             </button>
+            {/* The third exit: the wine was never released in this vintage, so
+                there is nothing to curate. Pending only — a reviewed row must
+                be reset first (its window is live data users already see). */}
+            {isPending && (
+              <button type="button" className="btn btn-secondary" onClick={() => setShowRemoveConfirm(true)} disabled={removing}>
+                {removing ? t('somm.maturity.removing') : t('somm.maturity.removeAction')}
+              </button>
+            )}
             {!isPending && (
               <button type="button" className="btn btn-secondary" onClick={() => setShowResetConfirm(true)} disabled={resetting}>
                 {resetting ? t('somm.maturity.resetting') : t('somm.maturity.resetPending')}
@@ -469,6 +499,17 @@ function ProfileCard({ profile, isPending, onSaved, onReset }) {
           confirmClass="btn btn-danger btn-small"
           onConfirm={handleReset}
           onCancel={() => setShowResetConfirm(false)}
+        />
+      )}
+
+      {showRemoveConfirm && (
+        <ConfirmModal
+          title={t('somm.maturity.removeTitle')}
+          message={t('somm.maturity.removeConfirm', { vintage: profile.vintage })}
+          confirmLabel={t('somm.maturity.removeAction')}
+          confirmClass="btn btn-danger btn-small"
+          onConfirm={handleRemove}
+          onCancel={() => setShowRemoveConfirm(false)}
         />
       )}
     </div>
