@@ -435,3 +435,128 @@
     flex-wrap: wrap;
   }
 }
+
+/* ── Tasting-profile panel ─────────────────────────────────────────────────
+   Shown inside a maturity card so the curator judges the generated profile
+   against the drink window they are setting, and can correct it in place
+   (support ticket 2026-07-28). */
+
+.somm-profile-panel {
+  border: 1px solid var(--color-border-light);
+  border-radius: 8px;
+  padding: 0.75rem 0.9rem;
+  margin-bottom: 1rem;
+  background: var(--color-bg);
+}
+
+.somm-profile-panel--empty {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.somm-profile-empty-text {
+  font-size: 0.85rem;
+  color: var(--color-text-secondary);
+}
+
+.somm-profile-head {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.5rem;
+}
+
+.somm-profile-badge {
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  padding: 0.12rem 0.5rem;
+  border-radius: 999px;
+  border: 1px solid var(--color-border);
+}
+
+.somm-profile-badge--ai {
+  background: var(--color-info-bg);
+  border-color: var(--color-info-border);
+  color: var(--color-info);
+}
+
+.somm-profile-badge--curator {
+  background: var(--color-success-bg);
+  border-color: var(--color-success-border);
+  color: var(--color-success);
+}
+
+.somm-profile-confidence {
+  font-size: 0.75rem;
+  color: var(--color-text-secondary);
+}
+
+.somm-profile-edit-btn { margin-left: auto; }
+
+.somm-profile-descriptors {
+  margin: 0 0 0.35rem;
+  font-size: 0.82rem;
+  color: var(--color-text-secondary);
+  text-transform: capitalize;
+}
+
+.somm-profile-description {
+  margin: 0 0 0.4rem;
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.somm-profile-line {
+  margin: 0.15rem 0;
+  font-size: 0.82rem;
+  color: var(--color-text-secondary);
+}
+
+.somm-profile-hint {
+  margin: 0 0 0.6rem;
+  font-size: 0.8rem;
+  color: var(--color-text-secondary);
+}
+
+.somm-profile-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 0.6rem;
+  margin-bottom: 0.6rem;
+}
+
+.somm-profile-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  margin-bottom: 0.6rem;
+  font-size: 0.8rem;
+  color: var(--color-text-secondary);
+}
+
+.somm-profile-field select,
+.somm-profile-field input,
+.somm-profile-field textarea {
+  width: 100%;
+  padding: 0.4rem 0.5rem;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-size: 0.88rem;
+  font-family: inherit;
+}
+
+.somm-profile-field textarea { resize: vertical; }
+
+.somm-profile-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}

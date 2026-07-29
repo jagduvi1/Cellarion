@@ -45,8 +45,13 @@ router.get('/', requireSommOrAdmin, async (req, res) => {
     const [profiles, total] = await Promise.all([
       WineVintageProfile.find(filter)
         .populate({
+          // aiProfile rides along so a curator can see the generated tasting
+          // note next to the drink window they are about to set — the ticket's
+          // point being that a somm who spots wrong prose currently works
+          // around it silently and the bad data survives. appellation feeds
+          // the same judgement (a Vintage Port's style follows from Porto).
           path: 'wineDefinition',
-          select: 'name producer type image country region',
+          select: 'name producer type image country region appellation aiProfile',
           populate: [
             { path: 'country', select: 'name' },
             { path: 'region', select: 'name' }
