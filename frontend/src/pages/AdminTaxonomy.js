@@ -4,7 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import {
   adminGetTaxonomy, adminGetCountries, adminGetGrapes, adminGetRegions,
   adminCreateTaxonomy, adminUpdateTaxonomy, adminDeleteTaxonomy,
-  adminMergeTaxonomy,
+  adminMergeTaxonomy, adminApproveRegion,
 } from '../api/admin';
 import GrapePicker from '../components/GrapePicker';
 import ConfirmModal from '../components/ConfirmModal';
@@ -203,6 +203,16 @@ function AdminTaxonomy() {
         (activeTab !== 'regions' ||
           String(i.country?._id || i.country) === String(mergeItem.country?._id || mergeItem.country)))
     : [];
+
+  const handleApproveRegion = async (id) => {
+    setError(null);
+    try {
+      const res = await adminApproveRegion(apiFetch, id);
+      const data = await res.json();
+      if (res.ok) fetchItems();
+      else setError(data.error || 'Failed to approve');
+    } catch { setError('Network error'); }
+  };
 
   const handleEditClick = (item) => {
     setShowForm(false);
@@ -730,6 +740,19 @@ function AdminTaxonomy() {
               <div key={item._id} className={`taxonomy-item ${editItem?._id === item._id ? 'editing' : ''}`}>
                 <div className="taxonomy-item-content">{renderItem(item)}</div>
                 <div className="taxonomy-item-actions">
+                  {item.pendingReview && (
+                    <>
+                      <span className="taxonomy-badge taxonomy-badge--pending" title={t('admin.taxonomy.pendingRegionTitle')}>
+                        {t('admin.taxonomy.pendingRegion')}
+                      </span>
+                      <button
+                        onClick={() => handleApproveRegion(item._id)}
+                        className="btn btn-primary btn-small"
+                      >
+                        {t('admin.taxonomy.approveRegion')}
+                      </button>
+                    </>
+                  )}
                   {typeof item.wineCount === 'number' && (
                     <span
                       className={`taxonomy-usage ${item.wineCount === 0 ? 'taxonomy-usage--zero' : ''}`}

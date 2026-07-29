@@ -93,7 +93,9 @@ async function findOrCreateRegion(name, countryId, userId) {
   // one state that collides with a country name; an existing doc still
   // matches above.)
   if (String(name).includes(',') || isRecognizedCountry(name)) return null;
-  region = new Region({ name: name.trim(), normalizedName, country: countryId, createdBy: userId });
+  // pendingReview: a user write minted taxonomy — visible to admins (R3),
+  // never blocking the user.
+  region = new Region({ name: name.trim(), normalizedName, country: countryId, createdBy: userId, pendingReview: true });
   await region.save();
   return region;
 }

@@ -5,7 +5,7 @@ import {
   adminGetWines, adminGetWine, adminSaveWine, adminDeleteWine,
   adminMergeWine,
   adminGetCountries, adminGetGrapes, adminGetRegions, adminGetAppellations,
-  adminAssignImageToWine,
+  adminAssignImageToWine, adminReindexSearch,
 } from '../api/admin';
 import Modal from '../components/Modal';
 import Drawer from '../components/Drawer';
@@ -83,6 +83,21 @@ function AdminWines() {
   const [showProducerInName, setShowProducerInName] = useState(false);
   const [showLowConfidence, setShowLowConfidence] = useState(false);
   const [showCollisions, setShowCollisions] = useState(false);
+  const [reindexing, setReindexing] = useState(false);
+
+  const handleReindex = async () => {
+    setReindexing(true);
+    try {
+      const res = await adminReindexSearch(apiFetch);
+      const data = await res.json();
+      if (res.ok) pushToast(t('admin.wines.reindexDone', { winesMs: data.winesMs, bottlesMs: data.bottlesMs }));
+      else pushToast(data.error || t('admin.wines.reindexFailed'), 'error');
+    } catch {
+      pushToast(t('admin.wines.reindexFailed'), 'error');
+    } finally {
+      setReindexing(false);
+    }
+  };
 
   // Taxonomy
   const [countries, setCountries] = useState([]);
@@ -385,6 +400,9 @@ function AdminWines() {
           </button>
           <button className="btn btn-secondary" onClick={() => setShowCollisions(true)} title={t('admin.wines.canonicalCollisions.buttonTitle')}>
             {t('admin.wines.canonicalCollisions.button')}
+          </button>
+          <button className="btn btn-secondary" onClick={handleReindex} disabled={reindexing} title={t('admin.wines.reindexSearchTitle')}>
+            {reindexing ? '…' : t('admin.wines.reindexSearch')}
           </button>
           <button className="btn btn-primary" onClick={openCreate}>
             {t('admin.wines.newWine')}

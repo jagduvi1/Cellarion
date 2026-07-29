@@ -1361,7 +1361,10 @@
         "promoting": "Adding…",
         "promoteError": "Failed to add appellation",
         "loadError": "Failed to load unmatched appellations"
-      }
+      },
+      "pendingRegion": "New — unreviewed",
+      "pendingRegionTitle": "This region was created automatically by a user adding a wine and has not been reviewed by an admin",
+      "approveRegion": "Approve"
     },
     "wines": {
       "title": "Admin: Wine Library",
@@ -1468,7 +1471,11 @@
         "loadError": "Failed to load collisions",
         "dismissError": "Failed to record the dismissal",
         "mergeHint": "To merge a set: open \"Find duplicates\" and use the golden-record merge — it lets you pick the surviving value per field."
-      }
+      },
+      "reindexSearch": "Reindex search",
+      "reindexSearchTitle": "Rebuild the search indexes from the database — required after restoring a backup, or whenever search results look stale",
+      "reindexDone": "Search reindexed ({{winesMs}} ms wines, {{bottlesMs}} ms bottles)",
+      "reindexFailed": "Reindex failed"
     },
     "images": {
       "title": "Admin: Image Review",

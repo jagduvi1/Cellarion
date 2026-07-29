@@ -164,3 +164,9 @@
   color: var(--color-text-muted);
   font-size: 0.8rem;
 }
+
+.taxonomy-badge--pending {
+  background: var(--color-warning-bg);
+  border: 1px solid var(--color-warning-border);
+  color: var(--color-accent);
+}

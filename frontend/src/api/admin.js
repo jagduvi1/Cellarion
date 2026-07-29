@@ -64,6 +64,15 @@ export const adminGetCanonicalCollisions = (apiFetch) =>
 export const adminGetUnmatchedAppellations = (apiFetch) =>
   apiFetch('/api/admin/taxonomy/appellations/unmatched');
 
+/** Approve a user-minted region (clears its pendingReview flag). */
+export const adminApproveRegion = (apiFetch, regionId) =>
+  apiFetch(`/api/admin/taxonomy/regions/${regionId}/approve`, { method: 'POST' });
+
+// Force a full Meilisearch rebuild from the running process — the restore
+// runbook's missing step (a stale index silently disables the dedup net).
+export const adminReindexSearch = (apiFetch) =>
+  apiFetch('/api/admin/search/reindex', { method: 'POST' });
+
 /** Merge one taxonomy doc into another. tab ∈ countries|regions|grapes. */
 export const adminMergeTaxonomy = (apiFetch, tab, fromId, toId) =>
   apiFetch(`/api/admin/taxonomy/${tab}/merge`, {

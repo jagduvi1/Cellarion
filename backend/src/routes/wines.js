@@ -211,6 +211,8 @@ router.post('/scan-label', requireAuth, aiBurstLimiter, asyncHandler(async (req,
   // hardened /api/images/remove-bg-preview path. The sanitizer preserves the
   // DECODED format, so the media type is re-detected from the sanitized bytes
   // rather than trusting the client-declared mediaType.
+  // (Body limit for this path is 300kb — app.js — sized to the camera hook's
+  // 800px JPEG captures, the only client that calls this.)
   let safeBuffer;
   try {
     safeBuffer = await sanitizeImageBuffer(Buffer.from(image, 'base64'));

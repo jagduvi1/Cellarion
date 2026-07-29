@@ -141,3 +141,77 @@ describe('official image + credit', () => {
     expect(error.message).toContain(String(WINE._id));
   });
 });
+
+// ─── Taxonomy review queues over MCP (strategy 2026-07-29 R2/R3) ─────────────
+
+jest.mock('../services/taxonomyReview', () => ({
+  listPendingRegions: jest.fn(),
+  listUnmatchedAppellations: jest.fn(),
+}));
+jest.mock('../models/Region', () => ({ findById: jest.fn() }));
+jest.mock('../models/Appellation', () => {
+  const M = jest.fn(function (doc) { Object.assign(this, doc); this._id = 'ap-1'; this.save = jest.fn().mockResolvedValue(undefined); });
+  return M;
+});
+
+const { listPendingRegions, listUnmatchedAppellations } = require('../services/taxonomyReview');
+const Region = require('../models/Region');
+const Appellation = require('../models/Appellation');
+
+describe('taxonomy review tools', () => {
+  test('all four are admin-only and correctly scoped', () => {
+    for (const [name, scope] of [
+      ['list_region_review_queue', 'read'], ['approve_region', 'write'],
+      ['list_unmatched_appellations', 'read'], ['promote_appellation', 'write'],
+    ]) {
+      expect(tool(name)).toBeDefined();
+      expect(tool(name).requireRole).toEqual(['admin']);
+      expect(tool(name).scope).toBe(scope);
+    }
+    // Structural invisibility for non-admins — same guarantee as the somm tools.
+    const plain = toolsForScopes(['read', 'write'], ['user']).map((t) => t.name);
+    for (const n of ['list_region_review_queue', 'approve_region', 'list_unmatched_appellations', 'promote_appellation']) {
+      expect(plain).not.toContain(n);
+    }
+  });
+
+  test('list_region_review_queue returns the shared service view', async () => {
+    listPendingRegions.mockResolvedValue([{ _id: 'r1', name: 'Toscana', country: 'Italy', wineCount: 3, createdAt: new Date('2026-07-29') }]);
+    const body = parse(await tool('list_region_review_queue').handler({}, ADMIN_CTX));
+    expect(body.data[0]).toMatchObject({ region_id: 'r1', name: 'Toscana', wine_count: 3 });
+  });
+
+  test('approve_region clears the flag once, is idempotent, audits via mcp', async () => {
+    const r = { _id: oid('1'), name: 'Etna', pendingReview: true, save: jest.fn().mockResolvedValue(undefined) };
+    Region.findById.mockResolvedValue(r);
+    let body = parse(await tool('approve_region').handler({ region_id: oid('1') }, ADMIN_CTX));
+    expect(r.pendingReview).toBe(false);
+    expect(r.save).toHaveBeenCalled();
+    expect(logAudit).toHaveBeenCalledWith(ADMIN_CTX.req, 'admin.taxonomy.approveRegion',
+      expect.anything(), expect.objectContaining({ via: 'mcp' }));
+
+    // Second call: nothing to do, no second save.
+    r.save.mockClear();
+    body = parse(await tool('approve_region').handler({ region_id: oid('1') }, ADMIN_CTX));
+    expect(body.data.already).toBe(true);
+    expect(r.save).not.toHaveBeenCalled();
+  });
+
+  test('promote_appellation creates the doc with the appellation key and synonyms', async () => {
+    const body = parse(await tool('promote_appellation').handler(
+      { name: 'Châteauneuf-du-Pape', country_id: oid('c'), synonyms: ['Chateauneuf du Pape'] }, ADMIN_CTX));
+    expect(body.error).toBeUndefined();
+    const doc = Appellation.mock.calls[0][0];
+    // Hyphen-folded key — the whole point of normalizeAppellationKey.
+    expect(doc.normalizedName).toBe('chateauneuf du pape');
+    expect(doc.synonyms).toEqual(['Chateauneuf du Pape']);
+    expect(doc.createdBy).toBe(ADMIN_CTX.user.id);
+  });
+
+  test('promote_appellation surfaces the per-country unique conflict as conflict, not a crash', async () => {
+    Appellation.mockImplementationOnce(function () { this.save = jest.fn().mockRejectedValue({ code: 11000 }); });
+    const body = parse(await tool('promote_appellation').handler(
+      { name: 'Alsace', country_id: oid('c') }, ADMIN_CTX));
+    expect(body.error.code).toBe('conflict');
+  });
+});

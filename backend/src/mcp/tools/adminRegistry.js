@@ -142,3 +142,141 @@ registerTool({
 });
 
 module.exports = {};
+
+// ── Taxonomy review queues (strategy 2026-07-29 R2/R3) ───────────────────────
+// The same queues as Admin → Taxonomy, so an admin can run a review session
+// from chat: list → judge → approve/promote. Same shared service as the REST
+// routes (services/taxonomyReview.js) — the two surfaces cannot drift. Same
+// no-undo-ledger stance as admin_add_registry_wine: shared-registry changes
+// are audited, not personally undoable.
+
+registerTool({
+  name: 'list_region_review_queue',
+  title: 'ADMIN: regions minted by users, awaiting review',
+  description:
+    'ADMIN ONLY. Lists regions that were auto-created by a user adding a wine (label scan, add-bottle, import) and ' +
+    'that no admin has reviewed yet, newest first, with wine counts. A 1-wine region is usually a typo; judge each ' +
+    'against the wine(s) that carry it, then approve_region the real ones. Typos/duplicates are merged in ' +
+    'Admin → Taxonomy (merge is deliberately not exposed over MCP — it rewrites every referencing wine).',
+  scope: 'read',
+  requireRole: ['admin'],
+  annotations: { readOnlyHint: true, openWorldHint: false },
+  inputSchema: {},
+  handler: async (_args, _ctx) => {
+    const { listPendingRegions } = require('../../services/taxonomyReview');
+    const items = await listPendingRegions();
+    return ok(`${items.length} region(s) awaiting review`, items.map(r => ({
+      region_id: r._id,
+      name: r.name,
+      country: r.country,
+      wine_count: r.wineCount,
+      created_at: r.createdAt,
+    })));
+  },
+});
+
+registerTool({
+  name: 'approve_region',
+  title: 'ADMIN: approve a user-minted region',
+  description:
+    'ADMIN ONLY. Marks a user-minted region as reviewed (clears its queue flag). Approve ONLY after judging it is a ' +
+    'real wine region with the right spelling — for a typo or duplicate, do NOT approve; merge it in Admin → ' +
+    'Taxonomy instead. Not reversible via undo_last (audited admin action).',
+  scope: 'write',
+  requireRole: ['admin'],
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+  inputSchema: {
+    region_id: z.string().describe('From list_region_review_queue'),
+  },
+  handler: async (args, ctx) => {
+    if (!isValidId(args.region_id)) return fail('invalid_input', 'region_id must be a 24-hex Mongo id.');
+    const Region = require('../../models/Region');
+    const region = await Region.findById(args.region_id);
+    if (!region) return fail('not_found', 'No region with that id.');
+    if (!region.pendingReview) return ok(`"${region.name}" was already reviewed — nothing to do.`, { region_id: region._id, already: true });
+    region.pendingReview = false;
+    await region.save();
+    // Same audit action as the REST approve — the two surfaces audit identically.
+    logAudit(ctx.req, 'admin.taxonomy.approveRegion',
+      { type: 'region', id: region._id },
+      { name: region.name, via: 'mcp' });
+    return ok(`Approved region "${region.name}".`, { region_id: region._id, name: region.name });
+  },
+});
+
+registerTool({
+  name: 'list_unmatched_appellations',
+  title: 'ADMIN: appellation strings no taxonomy entry covers',
+  description:
+    'ADMIN ONLY. Wines store appellations as free text; this lists every distinct normalized string that no curated ' +
+    'Appellation entry (name or synonym) covers, with the majority display spelling, wine count and suggested ' +
+    'country/region. Promote the real ones with promote_appellation — new wines then adopt the canonical spelling ' +
+    'automatically. Rare/new appellations are normal here; users are never blocked by this queue.',
+  scope: 'read',
+  requireRole: ['admin'],
+  annotations: { readOnlyHint: true, openWorldHint: false },
+  inputSchema: {
+    limit: z.number().int().min(1).max(100).default(30).describe('Largest-first; the long tail is mostly 1-wine oddities'),
+  },
+  handler: async (args, _ctx) => {
+    const { listUnmatchedAppellations } = require('../../services/taxonomyReview');
+    const items = await listUnmatchedAppellations();
+    const page = items.slice(0, args.limit || 30);
+    return ok(`${items.length} unmatched appellation string(s) (showing ${page.length}, largest first)`, page.map(i => ({
+      name: i.name,
+      wine_count: i.wineCount,
+      suggested_country: i.countryName,
+      suggested_country_id: i.countryId,
+      suggested_region: i.regionName,
+      suggested_region_id: i.regionId,
+    })));
+  },
+});
+
+registerTool({
+  name: 'promote_appellation',
+  title: 'ADMIN: promote an appellation into the curated taxonomy',
+  description:
+    'ADMIN ONLY. Creates a curated Appellation entry — from then on, new wines typed/scanned with this appellation ' +
+    '(or any synonym) adopt the canonical spelling automatically. Use the suggested country from ' +
+    'list_unmatched_appellations unless you know better; the NAME is what users will see, so fix the spelling ' +
+    'here if the majority form is itself a typo. Not reversible via undo_last (delete in Admin → Taxonomy).',
+  scope: 'write',
+  requireRole: ['admin'],
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+  inputSchema: {
+    name: z.string().trim().min(1).max(200).describe('Canonical display spelling'),
+    country_id: z.string().describe('From list_unmatched_appellations suggested_country_id, or the admin taxonomy'),
+    region_id: z.string().optional().describe('Optional; must belong to the same country'),
+    synonyms: z.array(z.string().max(200)).max(10).optional().describe('Alternative spellings that should resolve to this entry'),
+  },
+  handler: async (args, ctx) => {
+    if (!isValidId(args.country_id)) return fail('invalid_input', 'country_id must be a 24-hex Mongo id.');
+    if (args.region_id && !isValidId(args.region_id)) return fail('invalid_input', 'region_id must be a 24-hex Mongo id.');
+    const Appellation = require('../../models/Appellation');
+    const { normalizeAppellationKey } = require('../../utils/normalize');
+    const appellation = new Appellation({
+      name: args.name,
+      normalizedName: normalizeAppellationKey(args.name),
+      country: args.country_id,
+      region: args.region_id || null,
+      synonyms: args.synonyms?.length ? args.synonyms : undefined,
+      createdBy: ctx.user.id,
+    });
+    try {
+      await appellation.save();
+    } catch (err) {
+      if (err.code === 11000) return fail('conflict', 'An appellation with that name already exists in that country.');
+      throw err;
+    }
+    logAudit(ctx.req, 'admin.taxonomy.create',
+      { type: 'appellation', id: appellation._id },
+      { name: appellation.name, via: 'mcp' });
+    return ok(`Appellation "${appellation.name}" is now curated — new wines will adopt this spelling.`, {
+      appellation_id: appellation._id,
+      name: appellation.name,
+    });
+  },
+});
+
+module.exports = {};
