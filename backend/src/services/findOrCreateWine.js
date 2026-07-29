@@ -24,6 +24,7 @@ const { scoreAllMatches } = require('./wineMatching');
 const { canonicalizeWineName } = require('../utils/producerPrefix');
 const { computeCanonicalKey, canonicalSiblingPrefix } = require('../utils/wineIdentity');
 const { buildSurfaceForms, inferGrapeIds } = require('./grapeInference');
+const { resolveCanonicalProducerSpelling } = require('./producerSpelling');
 const { escapeRegex } = require('../utils/sanitize');
 
 // Auto-match when combined score >= SIMILARITY_THRESHOLD (near-identical — e.g.
@@ -358,6 +359,13 @@ async function findOrCreateWine({ name, producer, country, region, appellation, 
     throw err;
   }
 
+  // Adopt the registry's majority spelling for this producer (accent, case
+  // and punctuation variants — "Cave de Ribeauville" → "Cave de Ribeauvillé").
+  // Display-only: every derived key (normalizedKey, canonicalKey, slug) folds
+  // both spellings identically, which is precisely why nothing upstream of
+  // this point needs recomputing and why no key-based net ever caught these.
+  const producerToStore = await resolveCanonicalProducerSpelling(trimmedProducer, producerNorm);
+
   // Resolve taxonomy
   const countryDoc = await findOrCreateCountry(country, userId);
   if (!countryDoc) {
@@ -384,7 +392,7 @@ async function findOrCreateWine({ name, producer, country, region, appellation, 
 
   const newWine = new WineDefinition({
     name: trimmedName,
-    producer: trimmedProducer,
+    producer: producerToStore,
     country: countryDoc._id,
     region: regionDoc?._id || null,
     appellation: trimmedAppellation || null,

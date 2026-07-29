@@ -2,8 +2,9 @@ const express = require('express');
 const multer = require('multer');
 const { parse } = require('csv-parse');
 const { requireAuth, requireRole } = require('../../middleware/auth');
-const { generateWineKey, normalizeString, normalizeAppellation, resolveCountryName, isRecognizedCountry, isUnknownName } = require('../../utils/normalize');
+const { generateWineKey, generateWineSlug, normalizeString, normalizeAppellation, resolveCountryName, isRecognizedCountry, isUnknownName } = require('../../utils/normalize');
 const { canonicalizeWineName } = require('../../utils/producerPrefix');
+const { computeCanonicalKey } = require('../../utils/wineIdentity');
 const WineDefinition = require('../../models/WineDefinition');
 const Country = require('../../models/Country');
 const Region = require('../../models/Region');
@@ -289,6 +290,7 @@ router.post('/wines', csvUpload.single('file'), async (req, res) => {
   let format = null;
   let batch = [];
   let rowIndex = 0;
+  const mintedIds = [];
 
   // Reusable flush closure with userId in scope
   const flush = async () => {
@@ -331,6 +333,14 @@ router.post('/wines', csvUpload.single('file'), async (req, res) => {
     const result = await WineDefinition.bulkWrite(ops, { ordered: false });
     stats.created += result.upsertedCount || 0;
     stats.updated += result.modifiedCount || 0;
+    // bulkWrite bypasses every mongoose hook, so rows minted here would be
+    // born without the identity invariants (canonicalKey, slug, createdVia)
+    // every other write path guarantees — the one hole the 2026-07-29
+    // registry strategy found in the write paths. Collect the ids of the
+    // rows this flush actually INSERTED and finalize them after the import.
+    for (const id of Object.values(result.upsertedIds || {})) {
+      mintedIds.push(id);
+    }
     batch = [];
   };
 
@@ -415,11 +425,18 @@ router.post('/wines', csvUpload.single('file'), async (req, res) => {
 
     await flush();
 
+    // Give the freshly minted rows the invariants the bulkWrite skipped.
+    // Only rows this import INSERTED — existing rows were $ifNull-protected
+    // and must not be touched (their keys/slugs/provenance are already right,
+    // and stamping createdVia would misattribute pre-import rows).
+    stats.finalized = await finalizeMintedWines(mintedIds);
+
     logAudit(req, 'admin.import.wines', {}, {
       total: stats.total,
       created: stats.created,
       updated: stats.updated,
       skipped: stats.skipped,
+      finalized: stats.finalized,
       errorCount: stats.errors.length,
     });
 
@@ -436,7 +453,59 @@ router.post('/wines', csvUpload.single('file'), async (req, res) => {
   }
 });
 
+/**
+ * Post-import invariant pass over the rows the bulkWrite INSERTED.
+ *
+ * bulkWrite runs no mongoose hooks, so without this the LWIN import was the
+ * one write path that minted wines with no canonicalKey (invisible to the
+ * duplicate-prevention lookup and the collision report), no slug (no public
+ * wine page) and no createdVia (unreviewable as a class). Slug collision
+ * handling mirrors the model's pre-save hook (-2/-3 suffix, never overwrite).
+ *
+ * Per-doc on purpose: only newly inserted rows are processed (a re-import of
+ * an existing file inserts nothing), and the slug uniqueness probe is a
+ * per-candidate indexed findOne — the same cost findOrCreateWine pays per
+ * mint. Failures are per-row and non-fatal: a finalize error must not fail an
+ * import whose data already landed.
+ *
+ * @returns {Promise<number>} rows finalized
+ */
+async function finalizeMintedWines(ids) {
+  let done = 0;
+  for (const id of ids) {
+    try {
+      const doc = await WineDefinition.findById(id).select('name producer appellation canonicalKey slug createdVia');
+      if (!doc) continue;
+      doc.canonicalKey = computeCanonicalKey(doc.name, doc.producer, doc.appellation);
+      if (!doc.createdVia) doc.createdVia = 'import';
+      if (!doc.slug) {
+        const base = generateWineSlug(doc.name, doc.producer);
+        if (base) {
+          let candidate = base;
+          for (let i = 2; i < 100; i++) {
+            const collision = await WineDefinition.findOne({ slug: candidate }).select('_id').lean();
+            if (!collision) break;
+            candidate = `${base}-${i}`;
+          }
+          doc.slug = candidate;
+        }
+      }
+      // save(): the pre-validate hook recomputes canonicalKey the same way
+      // (idempotent) and the slug hook skips non-new docs, which is why the
+      // slug is assigned by hand above.
+      await doc.save();
+      done += 1;
+    } catch (err) {
+      console.warn(`[import] finalize failed for ${id} (non-fatal):`, err.message);
+    }
+  }
+  return done;
+}
+
 module.exports = router;
 // mapRow is exported for its unit tests (the DISPLAY_NAME fallback rules are
 // load-bearing — audit RC-2); it is pure and DB-free.
 module.exports.mapRow = mapRow;
+// finalizeMintedWines exported for its unit tests — the invariant repair is
+// load-bearing (strategy 2026-07-29 R4).
+module.exports.finalizeMintedWines = finalizeMintedWines;

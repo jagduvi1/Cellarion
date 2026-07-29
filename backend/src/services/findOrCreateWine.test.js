@@ -23,6 +23,7 @@ jest.mock('../models/WineDefinition', () => {
   const ctor = jest.fn();
   ctor.findOne = jest.fn();
   ctor.find = jest.fn();
+  ctor.aggregate = jest.fn();
   return ctor;
 });
 jest.mock('../models/Country', () => {
@@ -143,6 +144,8 @@ beforeEach(() => {
   // Defaults: no exact match, no siblings, Meilisearch down, text fallback
   // empty → create path
   WineDefinition.findOne.mockReturnValue(findOneChain(null));
+  // Producer-spelling adoption: default = producer is new to the registry
+  WineDefinition.aggregate.mockResolvedValue([]);
   searchService.getIsAvailable.mockReturnValue(false);
   primeFind();
   scoreAllMatches.mockReturnValue([]);
@@ -620,6 +623,29 @@ describe('findOrCreateWine — creation', () => {
     expect(result.wine.save).toHaveBeenCalled();
     expect(result.wine.populate).toHaveBeenCalledWith(POPULATE);
     expect(searchService.indexWine).toHaveBeenCalledWith('wine-new');
+  });
+
+  // Strategy 2026-07-29 R1: an accent/case variant of an EXISTING producer
+  // must adopt the registry's majority spelling — the display split is the one
+  // axis no key-based net can catch, because every key folds it away.
+  test('adopts the registry majority producer spelling on create; the typed variant is not stored', async () => {
+    WineDefinition.aggregate.mockResolvedValue([
+      { _id: 'Cave de Ribeauvillé', count: 12, oldest: new Date('2026-01-01') },
+    ]);
+    const result = await findOrCreateWine(
+      { ...INPUT, producer: 'Paul Avril' }, USER_ID);
+    expect(result.created).toBe(true);
+    expect(WineDefinition.mock.calls[0][0].producer).toBe('Cave de Ribeauvillé');
+    // The keys were computed BEFORE adoption and must be spelling-invariant —
+    // normalizedKey still reflects the fold, which both spellings share.
+    expect(WineDefinition.mock.calls[0][0].normalizedKey).toBe(INPUT_KEY);
+  });
+
+  test('a producer new to the registry keeps the typed spelling', async () => {
+    WineDefinition.aggregate.mockResolvedValue([]);
+    const result = await findOrCreateWine(INPUT, USER_ID);
+    expect(result.created).toBe(true);
+    expect(WineDefinition.mock.calls[0][0].producer).toBe('Paul Avril');
   });
 
   test('matchOnly: no match anywhere returns { noMatch: true } and creates NOTHING (registry-safe demo clone)', async () => {
