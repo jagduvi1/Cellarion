@@ -4,11 +4,13 @@ vi.mock('virtual:locale-coverage', () => ({
   BETA_BELOW: 0.9,
   LIST_ABOVE: 0.1,
   LOCALES: [
-    { code: 'en', translated: 100, total: 100, ratio: 1, beta: false },
-    { code: 'sv', translated: 99, total: 100, ratio: 0.99, beta: false },
-    { code: 'fr', translated: 629, total: 1000, ratio: 0.629, beta: true },
+    { code: 'en', translated: 100, total: 100, ratio: 1, beta: false, unreviewed: false },
+    { code: 'sv', translated: 99, total: 100, ratio: 0.99, beta: false, unreviewed: true },
+    { code: 'fr', translated: 629, total: 1000, ratio: 0.629, beta: true, unreviewed: false },
+    // Bulk-drafted: full, but nobody has read it.
+    { code: 'de', translated: 1000, total: 1000, ratio: 1, beta: true, unreviewed: true },
   ],
-  LOCALE_CODES: ['en', 'fr', 'sv'],
+  LOCALE_CODES: ['de', 'en', 'fr', 'sv'],
   SHIPPED_CODES: ['en', 'sv'],
 }));
 
@@ -31,10 +33,27 @@ const LanguagePicker = (await import('./LanguagePicker')).default;
 const options = () => screen.getAllByRole('option').map((o) => o.textContent);
 
 describe('LanguagePicker', () => {
-  test('offers every language, finished ones under their own name', () => {
+  test('offers every language, the reviewed source language under its own name', () => {
     render(<LanguagePicker value="en" onChange={() => {}} />);
     expect(options()).toContain('English');
-    expect(options()).toContain('Svenska');
+  });
+
+  test('a complete language nobody has reviewed says so, without a percentage', () => {
+    // Swedish is 99% here: the number is not what a reader needs to know, the
+    // fact that no speaker has checked it is.
+    render(<LanguagePicker value="en" onChange={() => {}} />);
+    expect(options().find((o) => o.startsWith('Svenska'))).toBe('Svenska (unreviewed)');
+  });
+
+  test('a bulk-drafted language reads beta · unreviewed, never beta · 100%', () => {
+    // The wart this label exists to avoid: 100% filled, 0% read.
+    render(<LanguagePicker value="en" onChange={() => {}} />);
+    expect(options().find((o) => o.startsWith('Deutsch'))).toBe('Deutsch (beta · unreviewed)');
+  });
+
+  test('explains what unreviewed means', () => {
+    render(<LanguagePicker value="en" onChange={() => {}} />);
+    expect(screen.getByText(/no native speaker has checked it yet/i)).toBeInTheDocument();
   });
 
   test('marks an unfinished language with how far along it is', () => {

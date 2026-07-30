@@ -25,6 +25,45 @@ export const isStaffKey = (key) => /^admin/.test(key) || key.startsWith('moderat
 // labelled beta and never auto-selected from the browser's language list.
 export const BETA_BELOW = 0.9;
 
+// Languages whose first pass was drafted in bulk rather than typed by a
+// speaker. They stay beta at any percentage until a human review pass clears
+// them by hand.
+//
+// The percentage cannot make this call: coverage counts strings that are
+// *filled*, and a bulk-drafted locale is 100% full and 0% read — which is
+// exactly the state the beta label exists to disclose. Gating on Weblate's
+// "approved" count instead is not an option either; that lives in Weblate's
+// database, not in the locale files this module can see, and it would demote
+// Swedish (96% translated, 1% approved) the day it landed.
+//
+// Removing a code from this set is the same deliberate, announced step as any
+// other graduation out of beta — see TRANSLATING.md, and remember
+// backend/src/config/languages.js.
+export const MACHINE_DRAFTED = new Set(['fr', 'de']);
+
+// A regional variant inherits its base language's status: an `fr-CA` directory
+// branched from drafted `fr` is drafted too until reviewed.
+const listed = (set, code) =>
+  set.has(code) || set.has(String(code || '').split(/[-_]/)[0]);
+
+export const isMachineDrafted = (code) => listed(MACHINE_DRAFTED, code);
+
+// Languages no speaker has read yet. Distinct from MACHINE_DRAFTED on purpose:
+// Swedish was typed by a human but sits at 1% approved in Weblate (3,196
+// strings unreviewed), so it is unreviewed without being drafted.
+//
+// This flag is LABEL-ONLY. It deliberately does not touch `beta`, which is what
+// governs SHIPPED_CODES, browser auto-detection and hreflang — demoting a
+// language that is 98% translated and live in production would hand Swedish
+// users an English UI to make a point about review process. Honesty about
+// review status and fitness to ship are two different questions.
+//
+// Entries are cleared by hand as review lands; the app cannot see Weblate's
+// approved count (see MACHINE_DRAFTED above).
+export const UNREVIEWED = new Set(['fr', 'de', 'sv']);
+
+export const isUnreviewed = (code) => listed(UNREVIEWED, code);
+
 // Below this, a language isn't offered in the menu at all. Weblate creates a
 // locale file the moment a language is requested, so without a floor the picker
 // would advertise languages that are literally empty — an option that changes
@@ -78,8 +117,15 @@ export function coverageFor(en, bundle, options) {
   };
 }
 
-/** `{ code, translated, total, ratio, beta }` — the shape shipped to the app. */
+/** `{ code, translated, total, ratio, beta, unreviewed }` — shipped to the app. */
 export function localeStatus(code, en, bundle, options) {
   const { translated, total, ratio } = coverageFor(en, bundle, options);
-  return { code, translated, total, ratio, beta: ratio < BETA_BELOW };
+  return {
+    code,
+    translated,
+    total,
+    ratio,
+    beta: ratio < BETA_BELOW || isMachineDrafted(code),
+    unreviewed: isUnreviewed(code),
+  };
 }

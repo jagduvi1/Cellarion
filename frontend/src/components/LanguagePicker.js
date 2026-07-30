@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next';
-import { languageOptionsFor, HAS_BETA_LANGUAGES } from '../config/locales';
+import { languageOptionsFor, HAS_BETA_LANGUAGES, HAS_UNREVIEWED_LANGUAGES } from '../config/locales';
 
 const WEBLATE_URL = 'https://hosted.weblate.org/projects/cellarion/';
 
@@ -14,6 +14,32 @@ const WEBLATE_URL = 'https://hosted.weblate.org/projects/cellarion/';
  * incompleteness never does is choose for them — automatic browser-language
  * detection skips beta languages entirely (src/i18n.js).
  */
+/**
+ * What the entry says about itself.
+ *
+ * A percentage is only informative while there are blanks left to fill. A
+ * bulk-drafted language is 100% filled and 0% read, so "beta · 100%" would read
+ * as a contradiction — what is actually missing there is a human's eyes, and
+ * that is what the label says instead.
+ */
+const optionLabel = (t, { label, beta, unreviewed, percent }) => {
+  if (beta && unreviewed) {
+    return t('settings.languageBetaUnreviewedOption', '{{language}} (beta · unreviewed)', {
+      language: label,
+    });
+  }
+  if (beta) {
+    return t('settings.languageBetaOption', '{{language}} (beta · {{percent}}%)', {
+      language: label,
+      percent,
+    });
+  }
+  if (unreviewed) {
+    return t('settings.languageUnreviewedOption', '{{language}} (unreviewed)', { language: label });
+  }
+  return label;
+};
+
 export default function LanguagePicker({ id = 'language-select', value, onChange }) {
   const { t } = useTranslation();
   const options = languageOptionsFor(value);
@@ -26,22 +52,22 @@ export default function LanguagePicker({ id = 'language-select', value, onChange
         value={value}
         onChange={(e) => onChange(e.target.value)}
       >
-        {options.map(({ code, label, beta, percent }) => (
+        {options.map(({ code, label, beta, unreviewed, percent }) => (
           <option key={code} value={code}>
-            {beta
-              ? t('settings.languageBetaOption', '{{language}} (beta · {{percent}}%)', {
-                language: label,
-                percent,
-              })
-              : label}
+            {optionLabel(t, { label, beta, unreviewed, percent })}
           </option>
         ))}
       </select>
-      {HAS_BETA_LANGUAGES && (
+      {(HAS_BETA_LANGUAGES || HAS_UNREVIEWED_LANGUAGES) && (
         <p className="settings-hint">
-          {t(
+          {HAS_BETA_LANGUAGES && t(
             'settings.languageBetaHint',
             'Beta languages are community translations still in progress — anything not translated yet stays in English.'
+          )}
+          {HAS_BETA_LANGUAGES && HAS_UNREVIEWED_LANGUAGES && ' '}
+          {HAS_UNREVIEWED_LANGUAGES && t(
+            'settings.languageUnreviewedHint',
+            '“Unreviewed” means the translation is complete but no native speaker has checked it yet — if something reads wrong, you can fix it.'
           )}
           {' '}
           <a href={WEBLATE_URL} target="_blank" rel="noopener noreferrer">

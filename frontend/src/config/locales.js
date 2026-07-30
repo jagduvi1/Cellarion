@@ -51,6 +51,11 @@ export const LANGUAGE_OPTIONS = ALL_LANGUAGES.filter(
 
 export const HAS_BETA_LANGUAGES = LANGUAGE_OPTIONS.some((l) => l.beta);
 
+// A finished language can still be unreviewed (Swedish: 98% translated, 1%
+// approved), so the explanatory hint has its own condition rather than riding
+// along on the beta one.
+export const HAS_UNREVIEWED_LANGUAGES = LANGUAGE_OPTIONS.some((l) => l.unreviewed);
+
 export const baseCode = (code) => String(code || '').split(/[-_]/)[0];
 
 /**
