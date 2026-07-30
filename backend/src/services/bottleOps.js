@@ -184,11 +184,14 @@ async function openBottle(bottle, { preservationMethod, openedAt } = {}, req) {
 }
 
 /**
- * Record a pour from an OPEN bottle (default: one 125 ml glass).
- * Mirrors POST /api/bottles/:id/pour exactly.
+ * Record pours from an OPEN bottle (default: one 125 ml glass). `count`
+ * records a whole batch ALL-OR-NOTHING in one save — validation covers the
+ * full batch up front, so there is never a partially-committed batch (the
+ * MCP pour_glass ledger row can then always say recorded = requested).
+ * Mirrors POST /api/bottles/:id/pour exactly (REST always passes count 1).
  * Returns { error } | { bottle }.
  */
-async function pourFromBottle(bottle, { ml } = {}, req) {
+async function pourFromBottle(bottle, { ml, count } = {}, req) {
   if (CONSUMED_STATUSES.includes(bottle.status)) {
     return { error: { status: 400, message: 'Bottle is already consumed' } };
   }
@@ -199,14 +202,21 @@ async function pourFromBottle(bottle, { ml } = {}, req) {
   if (!Number.isFinite(amount) || amount < 1 || amount > 6000) {
     return { error: { status: 400, message: 'Pour must be between 1 and 6000 ml' } };
   }
-  if (bottle.pours.length >= MAX_POURS) {
+  const glasses = count === undefined || count === null ? 1 : Number(count);
+  if (!Number.isInteger(glasses) || glasses < 1 || glasses > 10) {
+    return { error: { status: 400, message: 'count must be an integer between 1 and 10' } };
+  }
+  if (bottle.pours.length + glasses > MAX_POURS) {
     return { error: { status: 400, message: 'Too many pours recorded for this bottle' } };
   }
-  bottle.pours.push({ at: new Date(), ml: Math.round(amount) });
+  const at = new Date();
+  for (let i = 0; i < glasses; i += 1) {
+    bottle.pours.push({ at, ml: Math.round(amount) });
+  }
   await bottle.save();
   logAudit(req, 'bottle.pour',
     { type: 'bottle', id: bottle._id, cellarId: bottle.cellar },
-    { ml: Math.round(amount) }
+    { ml: Math.round(amount), ...(glasses > 1 ? { count: glasses } : {}) }
   );
   return { bottle };
 }

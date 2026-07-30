@@ -457,6 +457,28 @@ describe('open-bottle ops (openBottle / pourFromBottle / closeBottle)', () => {
       { type: 'bottle', id: 'b1', cellarId: 'c1' }, { ml: 100 });
   });
 
+  test('pourFromBottle count batches ALL-OR-NOTHING: one save, full-batch cap check, audited with count', async () => {
+    const bottle = openDoc();
+    const res = await pourFromBottle(bottle, { ml: 150, count: 3 }, REQ);
+    expect(res.error).toBeUndefined();
+    expect(bottle.pours).toHaveLength(3);
+    expect(bottle.pours.every((p) => p.ml === 150)).toBe(true);
+    expect(bottle.save).toHaveBeenCalledTimes(1); // the whole batch is one commit
+    expect(logAudit).toHaveBeenLastCalledWith(REQ, 'bottle.pour',
+      { type: 'bottle', id: 'b1', cellarId: 'c1' }, { ml: 150, count: 3 });
+
+    // A batch that would cross MAX_POURS is refused up front — nothing partial.
+    const nearFull = openDoc({ pours: Array.from({ length: 98 }, () => ({ ml: 10 })) });
+    const capped = await pourFromBottle(nearFull, { count: 3 }, REQ);
+    expect(capped.error.message).toMatch(/Too many pours/);
+    expect(nearFull.pours).toHaveLength(98);
+    expect(nearFull.save).not.toHaveBeenCalled();
+
+    expect((await pourFromBottle(openDoc(), { count: 0 }, REQ)).error.message).toMatch(/between 1 and 10/);
+    expect((await pourFromBottle(openDoc(), { count: 11 }, REQ)).error.message).toMatch(/between 1 and 10/);
+    expect((await pourFromBottle(openDoc(), { count: 2.5 }, REQ)).error.message).toMatch(/between 1 and 10/);
+  });
+
   test('closeBottle refuses an unopened bottle (with code)', async () => {
     const res = await closeBottle(freshBottle({ openedAt: null }), REQ);
     expect(res.error.code).toBe('not_open');
