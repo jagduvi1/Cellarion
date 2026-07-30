@@ -229,6 +229,21 @@ async function pourFromBottle(bottle, { ml, count } = {}, req) {
  * Returns { error } | { bottle, prevOpenState }.
  */
 async function closeBottle(bottle, req) {
+  // A consumed bottle KEEPS openedAt/preservationMethod/pours as drinking
+  // history on its consumption record (Bottle schema) — those fields are no
+  // longer current state, so clearing them destroys the record rather than
+  // undoing a mistake. openBottle/pourFromBottle already gate on this; the
+  // guard belongs here rather than in the callers so REST and MCP inherit one
+  // implementation (security audit 2026-07-30 M-1: #866 fixed the MCP tools
+  // one at a time, which left DELETE /api/bottles/:id/open with no guard at
+  // all). To reverse the consume itself, restore the bottle first.
+  if (CONSUMED_STATUSES.includes(bottle.status)) {
+    return { error: {
+      status: 409,
+      code: 'consumed',
+      message: 'This bottle was already consumed — its open-bottle fields are preserved drinking history, not current state. Restore the bottle first if the consume was a mistake.',
+    } };
+  }
   if (!bottle.openedAt) {
     return { error: { status: 400, message: 'Bottle is not open', code: 'not_open' } };
   }
