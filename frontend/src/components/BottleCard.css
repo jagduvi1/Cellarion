@@ -102,6 +102,16 @@
   flex-wrap: wrap;
 }
 
+.bottle-note-preview {
+  font-size: 0.78rem;
+  font-style: italic;
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-top: 0.15rem;
+}
+
 .bottle-producer {
   white-space: nowrap;
   overflow: hidden;

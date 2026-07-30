@@ -19,7 +19,7 @@ const MATURITY_LABELS = {
  * Renders a single bottle in either list or card (grid) view.
  * Props: bottle, rackMap, cellarId, viewMode ('list' | 'card')
  */
-function BottleCard({ bottle, rackMap, cellarId, viewMode, groupCount = 1, onClick, showCellarBadge = false, compact = false, rackKnown = false }) {
+function BottleCard({ bottle, rackMap, cellarId, viewMode, groupCount = 1, onClick, showCellarBadge = false, compact = false, rackKnown = false, showNotes = false }) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -49,6 +49,20 @@ function BottleCard({ bottle, rackMap, cellarId, viewMode, groupCount = 1, onCli
   // onClick overrides navigation — used to expand a collapsed group instead.
   const handleClick = onClick || (() => navigate(`/cellars/${cellarId}/bottles/${bottle._id}`));
   const handleKey = e => e.key === 'Enter' && handleClick();
+
+  // Opt-in personal-note preview (list view only). Occasion ("Gift from Anna")
+  // leads, then the first line of the tasting notes; CSS clamps to one line.
+  // Suppressed for collapsed groups — members may carry different notes, so a
+  // single bottle's text would be misleading (same reasoning as the rack badge).
+  const occasion = (bottle.occasion || '').trim();
+  const firstNoteLine = (bottle.notes || '').split('\n')[0].trim();
+  const notePreview = showNotes && !isGroup && viewMode !== 'card'
+    ? [occasion, firstNoteLine].filter(Boolean).join(' · ')
+    : '';
+  // Desktop hover bonus (the ticket asked for a tooltip): full text on title.
+  const noteTitle = notePreview
+    ? [occasion, (bottle.notes || '').trim()].filter(Boolean).join('\n\n')
+    : undefined;
 
   if (viewMode === 'card') {
     return (
@@ -171,6 +185,9 @@ function BottleCard({ bottle, rackMap, cellarId, viewMode, groupCount = 1, onCli
           <span className="bottle-producer">{displayProducer}</span>
           {bottle.vintage && <span className="bottle-vintage">{bottle.vintage}</span>}
         </div>
+        {notePreview && (
+          <div className="bottle-note-preview" title={noteTitle}>{notePreview}</div>
+        )}
         <div className="bottle-badges">
           {cellarBadge && (
             <span className="cellar-badge" style={cellarBadgeColor ? { '--cellar-badge-color': cellarBadgeColor } : undefined}>
@@ -227,7 +244,7 @@ function BottleCard({ bottle, rackMap, cellarId, viewMode, groupCount = 1, onCli
 // values derived from the OTHER compared props (the bottle/group item) — if a
 // future caller closes over unrelated state, that handler must be stabilized
 // with useCallback instead.
-const COMPARED_PROPS = ['bottle', 'rackMap', 'cellarId', 'viewMode', 'groupCount', 'showCellarBadge', 'compact', 'rackKnown'];
+const COMPARED_PROPS = ['bottle', 'rackMap', 'cellarId', 'viewMode', 'groupCount', 'showCellarBadge', 'compact', 'rackKnown', 'showNotes'];
 export default memo(BottleCard, (prev, next) =>
   COMPARED_PROPS.every(key => prev[key] === next[key])
 );
