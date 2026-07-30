@@ -10,7 +10,7 @@
 import { LOCALES, SHIPPED_CODES, BETA_BELOW as VIRTUAL_BETA_BELOW } from 'virtual:locale-coverage';
 
 import en from './en/translation.json';
-import { BETA_BELOW, coverageFor, isStaffKey, localeStatus, flatten } from './coverage.js';
+import { BETA_BELOW, coverageFor, isMachineDrafted, isStaffKey, localeStatus, flatten } from './coverage.js';
 
 describe('coverageFor', () => {
   const source = {
@@ -78,6 +78,42 @@ describe('coverageFor', () => {
   });
 });
 
+describe('machine-drafted languages', () => {
+  const source = {
+    cellars: { title: 'Cellars' },
+    bottles: { count_one: '{{count}} bottle', count_other: '{{count}} bottles' },
+  };
+  const complete = {
+    cellars: { title: 'Caves' },
+    bottles: { count_one: '{{count}} bouteille', count_other: '{{count}} bouteilles' },
+  };
+
+  test('a fully-filled drafted locale is still beta — filled is not reviewed', () => {
+    const fr = localeStatus('fr', source, complete);
+    expect(fr.ratio).toBe(1);
+    expect(fr.beta).toBe(true);
+  });
+
+  test('an equally complete locale that was never drafted is not beta', () => {
+    expect(localeStatus('sv', source, complete)).toMatchObject({ ratio: 1, beta: false });
+  });
+
+  test('a regional variant inherits its base language draft status', () => {
+    expect(isMachineDrafted('fr-CA')).toBe(true);
+    expect(isMachineDrafted('fr_CA')).toBe(true);
+    expect(isMachineDrafted('sv')).toBe(false);
+    expect(isMachineDrafted(undefined)).toBe(false);
+  });
+
+  test('the flag only ever adds beta, never clears it', () => {
+    // A drafted locale that is also genuinely incomplete stays beta for both
+    // reasons — removing it from the set must not ship a half-empty language.
+    const half = { cellars: { title: 'Caves' } };
+    expect(localeStatus('fr', source, half).beta).toBe(true);
+    expect(localeStatus('de', source, half).ratio).toBeCloseTo(0.5);
+  });
+});
+
 describe('isStaffKey', () => {
   test.each([
     ['admin.users.title', true],
@@ -129,6 +165,18 @@ describe('virtual:locale-coverage (build-time plugin output)', () => {
 
   test('Swedish is complete enough to ship (guards against a locale regression)', () => {
     expect(LOCALES.find((l) => l.code === 'sv').beta).toBe(false);
+  });
+
+  test('the machine-drafted languages ship as beta however full they are', () => {
+    // The whole point of the flag: fr/de are ~100% filled, so without it they
+    // would be auto-selected from the browser and declared via hreflang before
+    // a single string had been read by a French or German speaker.
+    for (const code of ['fr', 'de']) {
+      const locale = LOCALES.find((l) => l.code === code);
+      expect(locale).toBeDefined();
+      expect(locale.beta).toBe(true);
+      expect(SHIPPED_CODES).not.toContain(code);
+    }
   });
 });
 

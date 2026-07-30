@@ -25,6 +25,27 @@ export const isStaffKey = (key) => /^admin/.test(key) || key.startsWith('moderat
 // labelled beta and never auto-selected from the browser's language list.
 export const BETA_BELOW = 0.9;
 
+// Languages whose first pass was drafted in bulk rather than typed by a
+// speaker. They stay beta at any percentage until a human review pass clears
+// them by hand.
+//
+// The percentage cannot make this call: coverage counts strings that are
+// *filled*, and a bulk-drafted locale is 100% full and 0% read — which is
+// exactly the state the beta label exists to disclose. Gating on Weblate's
+// "approved" count instead is not an option either; that lives in Weblate's
+// database, not in the locale files this module can see, and it would demote
+// Swedish (96% translated, 1% approved) the day it landed.
+//
+// Removing a code from this set is the same deliberate, announced step as any
+// other graduation out of beta — see TRANSLATING.md, and remember
+// backend/src/config/languages.js.
+export const MACHINE_DRAFTED = new Set(['fr', 'de']);
+
+// A regional variant inherits its base language's draft status: an `fr-CA`
+// directory branched from drafted `fr` is drafted too until reviewed.
+export const isMachineDrafted = (code) =>
+  MACHINE_DRAFTED.has(code) || MACHINE_DRAFTED.has(String(code || '').split(/[-_]/)[0]);
+
 // Below this, a language isn't offered in the menu at all. Weblate creates a
 // locale file the moment a language is requested, so without a floor the picker
 // would advertise languages that are literally empty — an option that changes
@@ -81,5 +102,5 @@ export function coverageFor(en, bundle, options) {
 /** `{ code, translated, total, ratio, beta }` — the shape shipped to the app. */
 export function localeStatus(code, en, bundle, options) {
   const { translated, total, ratio } = coverageFor(en, bundle, options);
-  return { code, translated, total, ratio, beta: ratio < BETA_BELOW };
+  return { code, translated, total, ratio, beta: ratio < BETA_BELOW || isMachineDrafted(code) };
 }
