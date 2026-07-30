@@ -726,6 +726,9 @@ function BottlesList({ bottles, rackMap, cellarId, hasMore, loadingMore, onLoadM
   const [density, setDensity] = useState(() => {
     try { return localStorage.getItem('cellarion_bottle_density') || 'comfortable'; } catch { return 'comfortable'; }
   });
+  const [showNotes, setShowNotes] = useState(() => {
+    try { return localStorage.getItem('cellarion_bottle_notes') === '1'; } catch { return false; }
+  });
   const [expandedGroups, setExpandedGroups] = useState(() => new Set());
 
   const setView = (mode) => {
@@ -738,8 +741,17 @@ function BottlesList({ bottles, rackMap, cellarId, hasMore, loadingMore, onLoadM
     try { localStorage.setItem('cellarion_bottle_density', mode); } catch {}
   };
 
+  const toggleNotes = () => {
+    setShowNotes(on => {
+      try { localStorage.setItem('cellarion_bottle_notes', on ? '0' : '1'); } catch {}
+      return !on;
+    });
+  };
+
   // Compact only applies to list view — the grid's height is driven by the image.
   const compact = viewMode === 'list' && density === 'compact';
+  // Notes preview likewise: the grid tiles have no room for a text line.
+  const notesOn = viewMode === 'list' && showNotes;
 
   const toggleGroup = (key) => {
     setExpandedGroups(prev => {
@@ -752,6 +764,17 @@ function BottlesList({ bottles, rackMap, cellarId, hasMore, loadingMore, onLoadM
   return (
     <>
       <div className="bottles-view-toggle">
+        {viewMode === 'list' && (
+          <button
+            className={`view-toggle-btn notes-toggle-btn ${showNotes ? 'active' : ''}`}
+            onClick={toggleNotes}
+            aria-label={t('cellarDetail.showNotes', 'Show notes')}
+            aria-pressed={showNotes}
+            title={t('cellarDetail.showNotes', 'Show notes')}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+          </button>
+        )}
         {viewMode === 'list' && (
           <button
             className={`view-toggle-btn density-toggle-btn ${density === 'compact' ? 'active' : ''}`}
@@ -795,6 +818,7 @@ function BottlesList({ bottles, rackMap, cellarId, hasMore, loadingMore, onLoadM
                 showCellarBadge
                 compact={compact}
                 rackKnown={rackKnown}
+                showNotes={notesOn}
               />
             );
           }
@@ -803,7 +827,7 @@ function BottlesList({ bottles, rackMap, cellarId, hasMore, loadingMore, onLoadM
             const rep = item.bottles[0];
             if (item.count === 1) {
               return (
-                <BottleCard key={rep._id} bottle={rep} rackMap={rackMap} cellarId={cellarId} viewMode={viewMode} compact={compact} rackKnown={rackKnown} />
+                <BottleCard key={rep._id} bottle={rep} rackMap={rackMap} cellarId={cellarId} viewMode={viewMode} compact={compact} rackKnown={rackKnown} showNotes={notesOn} />
               );
             }
             if (!expandedGroups.has(item.key)) {
@@ -818,6 +842,7 @@ function BottlesList({ bottles, rackMap, cellarId, hasMore, loadingMore, onLoadM
                   onClick={() => toggleGroup(item.key)}
                   compact={compact}
                   rackKnown={rackKnown}
+                  showNotes={notesOn}
                 />
               );
             }
@@ -831,14 +856,14 @@ function BottlesList({ bottles, rackMap, cellarId, hasMore, loadingMore, onLoadM
                   </button>
                 </div>
                 {item.bottles.map(b => (
-                  <BottleCard key={b._id} bottle={b} rackMap={rackMap} cellarId={cellarId} viewMode={viewMode} compact={compact} rackKnown={rackKnown} />
+                  <BottleCard key={b._id} bottle={b} rackMap={rackMap} cellarId={cellarId} viewMode={viewMode} compact={compact} rackKnown={rackKnown} showNotes={notesOn} />
                 ))}
               </Fragment>
             );
           }
           // Defensive fallback: a plain bottle item (responses are always grouped)
           return (
-            <BottleCard key={item._id} bottle={item} rackMap={rackMap} cellarId={cellarId} viewMode={viewMode} compact={compact} rackKnown={rackKnown} />
+            <BottleCard key={item._id} bottle={item} rackMap={rackMap} cellarId={cellarId} viewMode={viewMode} compact={compact} rackKnown={rackKnown} showNotes={notesOn} />
           );
         })}
       </div>
