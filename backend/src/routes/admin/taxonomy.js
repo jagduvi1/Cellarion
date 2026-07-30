@@ -12,7 +12,7 @@ const { logAudit } = require('../../services/audit');
 const { isValidId } = require('../../utils/validation');
 const { distinctSizes, normalizeAll, remap } = require('../../services/bottleSizeMaintenance');
 const { mergeGrapes, mergeRegions, mergeCountries } = require('../../services/taxonomyMerge');
-const { listUnmatchedAppellations } = require('../../services/taxonomyReview');
+const { listUnmatchedAppellations, appellationRefsError } = require('../../services/taxonomyReview');
 const { BOTTLE_SIZES } = require('../../config/bottleSizes');
 
 const router = express.Router();
@@ -731,6 +731,12 @@ router.post('/appellations', async (req, res) => {
     if (!country) {
       return res.status(400).json({ error: 'Country is required' });
     }
+    // Both refs verified: the ids must exist and the region must belong to the
+    // country (code audit 2026-07-30) — the schema declares the refs but
+    // enforces neither, so a cross-country region would sit silently wrong in
+    // curated taxonomy until the appellation-hierarchy work inherited it.
+    const refsError = await appellationRefsError(country, region);
+    if (refsError) return res.status(400).json({ error: refsError });
 
     let cleanSynonyms;
     if (synonyms !== undefined && synonyms !== null) {
@@ -787,7 +793,16 @@ router.put('/appellations/:id', async (req, res) => {
       appellation.name = name.trim();
       appellation.normalizedName = normalizeAppellationKey(name);
     }
-    if (region !== undefined) appellation.region = region || null;
+    if (region !== undefined) {
+      // Clearing (null/'') is always fine; SETTING a region re-validates it
+      // against the appellation's country — update was the easiest drift path,
+      // since a correctly created doc could be re-pointed at any region.
+      if (region) {
+        const refsError = await appellationRefsError(appellation.country, region);
+        if (refsError) return res.status(400).json({ error: refsError });
+      }
+      appellation.region = region || null;
+    }
     if (synonyms !== undefined) {
       // null clears the list, matching how the rest of the admin surface
       // distinguishes "leave alone" (absent) from "clear" (explicit null).
