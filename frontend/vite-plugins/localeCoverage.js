@@ -50,7 +50,7 @@ export default function localeCoverage({ localesDir = path.resolve(here, '../src
         // it against itself would be circular.
         if (code === 'en') {
           const { total } = localeStatus('en', en, en);
-          return { code: 'en', translated: total, total, ratio: 1, beta: false };
+          return { code: 'en', translated: total, total, ratio: 1, beta: false, unreviewed: false };
         }
         return localeStatus(code, en, read(code));
       });

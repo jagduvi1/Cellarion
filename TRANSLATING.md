@@ -43,7 +43,27 @@ Cellarion's interface is community-translated. Thank you for helping!
 
 French and German did not start from zero: their first pass was **drafted in bulk by the maintainers** so that reviewing beats typing. Those languages are listed in `MACHINE_DRAFTED` in [`frontend/src/locales/coverage.js`](frontend/src/locales/coverage.js) and **stay labelled beta at any percentage** — the percentage only knows that a string is *filled*, and a drafted locale is 100 % filled and 0 % read.
 
-What that means if you translate French or German: everything is already there, so your work is **reviewing, not filling in blanks**. In Weblate the queue you want is *unreviewed* strings, not *untranslated* ones — read what is there, fix what is wrong, and approve what is right. When enough of a language has been read by an actual speaker, a maintainer removes it from `MACHINE_DRAFTED` and it graduates the normal way.
+What that means if you translate French or German: everything is already there, so your work is **reviewing, not filling in blanks**. In Weblate the queue you want is *unreviewed* strings, not *untranslated* ones — read what is there, fix what is wrong, and approve what is right. The search query is:
+
+```
+state:translated NOT state:approved
+```
+
+When enough of a language has been read by an actual speaker, a maintainer removes it from `MACHINE_DRAFTED` and it graduates the normal way.
+
+### "Unreviewed" is tracked separately from "beta"
+
+A language can be complete and still unread, so those are two flags, not one:
+
+| | label in Settings → Language | offered in the menu | auto-selected from the browser | declared via hreflang |
+|---|---|---|---|---|
+| `en` | English | yes | yes | yes |
+| `sv` (98 %, 1 % approved) | `Svenska (unreviewed)` | yes | **yes** | **yes** |
+| `fr` / `de` (drafted) | `Français (beta · unreviewed)` | yes | no | no |
+
+`UNREVIEWED` in [`coverage.js`](frontend/src/locales/coverage.js) is **label-only**: it never changes whether a language ships. Swedish is honest about its review state without losing the auto-detection and search visibility it has had since v1.88.0 — telling Swedish users nothing is wrong, but handing them an English UI to make a point about process would be. Fitness to ship stays governed by `beta`.
+
+Drafted languages deliberately show no percentage. `beta · 100 %` reads as a contradiction; what is missing is a reader, not a string.
 
 ### What counts toward the percentage
 
