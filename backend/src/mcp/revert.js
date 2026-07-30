@@ -289,6 +289,9 @@ async function revertLedgerRow(row, ctx, { ok, fail }) {
       throw err;
     }
     require('../services/search').indexWine(wine._id).catch(() => {});
+    // The undo changes the embedding text back — Qdrant must follow, same as
+    // on the original correction.
+    require('../services/embeddingJob').reembedActiveVintages(wine._id).catch(() => {});
 
     const envelope = {
       summary: `Undid tasting-profile edit — ${wine.producer} — ${wine.name} back to ${wine.aiProfile?.source || 'ai'}-sourced`,

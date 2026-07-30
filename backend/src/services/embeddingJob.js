@@ -386,4 +386,24 @@ async function embedSinglePair(wineDefId, vintage) {
   }
 }
 
-module.exports = { start, requestStop, getStatus, embedSinglePair };
+/**
+ * Re-embed every ACTIVE vintage of one wine — the follow-through for any
+ * write that changes what buildEmbeddingText produces (curator profile
+ * corrections; enrichment already inlines the same loop). Without it the
+ * Qdrant vector keeps matching on the OLD profile until someone manually
+ * runs the batch job — for the Sandeman case that motivated #853, the wrong
+ * character would live on in semantic search after the curator fixed it.
+ * Best-effort by design: embedding lag must never fail a curation write.
+ */
+async function reembedActiveVintages(wineDefId) {
+  try {
+    const vintages = await Bottle.distinct('vintage', { wineDefinition: wineDefId, status: 'active' });
+    for (const v of vintages) {
+      await embedSinglePair(wineDefId, v).catch(() => {});
+    }
+  } catch (err) {
+    console.warn(`[embeddingJob] re-embed after correction failed (${wineDefId}):`, err.message);
+  }
+}
+
+module.exports = { start, requestStop, getStatus, embedSinglePair, reembedActiveVintages };
