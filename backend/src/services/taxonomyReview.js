@@ -32,14 +32,20 @@ const { isValidId } = require('../utils/validation');
  * @returns {Promise<string|null>} a human-readable error, or null when valid.
  */
 async function appellationRefsError(countryId, regionId) {
-  if (!countryId || !isValidId(String(countryId))) return 'A valid country id is required';
-  const countryExists = await Country.exists({ _id: countryId });
+  // Queries use the STRING that passed isValidId, never the raw input — the
+  // caller may hand us an ObjectId (the PUT path) or request-body junk, and
+  // querying the validated derivative is what keeps operator objects out of
+  // the filter (CodeQL js/sql-injection).
+  const countryKey = String(countryId ?? '');
+  if (!isValidId(countryKey)) return 'A valid country id is required';
+  const countryExists = await Country.exists({ _id: countryKey });
   if (!countryExists) return 'No country with that id';
   if (!regionId) return null;
-  if (!isValidId(String(regionId))) return 'Invalid region id';
-  const region = await Region.findById(regionId).select('name country').lean();
+  const regionKey = String(regionId);
+  if (!isValidId(regionKey)) return 'Invalid region id';
+  const region = await Region.findById(regionKey).select('name country').lean();
   if (!region) return 'No region with that id';
-  if (String(region.country) !== String(countryId)) {
+  if (String(region.country) !== countryKey) {
     return `Region "${region.name}" belongs to a different country than the appellation`;
   }
   return null;
