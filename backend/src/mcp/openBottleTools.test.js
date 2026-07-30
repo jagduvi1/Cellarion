@@ -25,7 +25,7 @@ jest.mock('../models/JournalEntry', () => ({ find: jest.fn(), countDocuments: je
 jest.mock('../models/WineDefinition', () => ({ find: jest.fn(), findById: jest.fn() }));
 jest.mock('../models/User', () => ({ findById: jest.fn() }));
 jest.mock('../models/WineEmbedding', () => ({ findOne: jest.fn() }));
-jest.mock('../models/McpActionLog', () => ({ create: jest.fn(), findOne: jest.fn(), findOneAndUpdate: jest.fn() }));
+jest.mock('../models/McpActionLog', () => ({ create: jest.fn(), findOne: jest.fn(), findOneAndUpdate: jest.fn(), updateOne: jest.fn() }));
 jest.mock('../utils/rackGeometry', () => ({ getMaxPosition: jest.fn(() => 12) }));
 jest.mock('../services/search', () => ({
   getIsAvailable: jest.fn(() => false), search: jest.fn(), searchBottles: jest.fn(),
@@ -82,6 +82,7 @@ beforeEach(() => {
   McpActionLog.findOne.mockReturnValue(chain(null));
   McpActionLog.create.mockResolvedValue({});
   McpActionLog.findOneAndUpdate.mockResolvedValue({ _id: 'claimed' });
+  McpActionLog.updateOne.mockResolvedValue({});
 });
 
 describe('scope gating + annotations', () => {
@@ -111,6 +112,18 @@ describe('open_bottle', () => {
     const res = await tool('open_bottle').handler({ bottle_id: oid('d') }, CTX);
     expect(parse(res).error.code).toBe('not_found');
     expect(bottleOps.openBottle).not.toHaveBeenCalled();
+  });
+
+  test('consumed bottle with preserved open history → conflict, never a false "already open" success', async () => {
+    // consume keeps openedAt/pours as drinking history — the shortcut must not
+    // report a drunk bottle as currently open (2026-07-30 audit).
+    ownBottle({ status: 'drank', consumedReason: 'drank', consumedAt: new Date('2026-07-25'), openedAt: new Date('2026-07-24'), preservationMethod: 'coravin', pours: [{ ml: 125 }] });
+    const res = await tool('open_bottle').handler({ bottle_id: oid('d') }, CTX);
+    const body = parse(res);
+    expect(body.error.code).toBe('conflict');
+    expect(body.error.message).toMatch(/already consumed/);
+    expect(bottleOps.openBottle).not.toHaveBeenCalled();
+    expect(McpActionLog.create).not.toHaveBeenCalled();
   });
 
   test('already-open bottle → idempotent ok reporting existing state, NO second ledger row (issue #835)', async () => {
@@ -164,8 +177,8 @@ describe('pour_glass', () => {
       bottle.preservationMethod = preservationMethod;
       return { bottle };
     });
-    bottleOps.pourFromBottle.mockImplementation(async (bottle, { ml }) => {
-      bottle.pours.push({ at: new Date(), ml: ml || 125 });
+    bottleOps.pourFromBottle.mockImplementation(async (bottle, { ml, count }) => {
+      for (let i = 0; i < (count || 1); i += 1) bottle.pours.push({ at: new Date(), ml: ml || 125 });
       return { bottle };
     });
     const res = await tool('pour_glass').handler({ bottle_id: oid('d') }, CTX);
@@ -179,17 +192,46 @@ describe('pour_glass', () => {
     expect(row.detail).toMatchObject({ count: 1, ml: 125, implicitOpen: true, openedAt: doc.openedAt });
   });
 
-  test('open bottle: no implicit open; glasses=3 records three pours at the given ml', async () => {
+  test('open bottle: no implicit open; glasses=3 is ONE all-or-nothing service call (single save)', async () => {
     ownBottle({ openedAt: new Date(), preservationMethod: 'vacuum' });
-    bottleOps.pourFromBottle.mockImplementation(async (bottle, { ml }) => {
-      bottle.pours.push({ at: new Date(), ml });
+    bottleOps.pourFromBottle.mockImplementation(async (bottle, { ml, count }) => {
+      for (let i = 0; i < (count || 1); i += 1) bottle.pours.push({ at: new Date(), ml });
       return { bottle };
     });
     const res = await tool('pour_glass').handler({ bottle_id: oid('d'), glasses: 3, ml: 100 }, CTX);
     expect(bottleOps.openBottle).not.toHaveBeenCalled();
-    expect(bottleOps.pourFromBottle).toHaveBeenCalledTimes(3);
+    expect(bottleOps.pourFromBottle).toHaveBeenCalledTimes(1);
+    expect(bottleOps.pourFromBottle.mock.calls[0][1]).toEqual({ ml: 100, count: 3 });
     expect(parse(res).data.poured_ml).toBe(300);
     expect(McpActionLog.create.mock.calls[0][0].detail).toMatchObject({ count: 3, ml: 100, implicitOpen: false });
+  });
+
+  test('consumed bottle → conflict; the open-state history is never touched', async () => {
+    ownBottle({ status: 'drank', consumedReason: 'drank', openedAt: new Date('2026-07-20'), preservationMethod: 'vacuum', pours: [{ ml: 125 }] });
+    const res = await tool('pour_glass').handler({ bottle_id: oid('d') }, CTX);
+    const body = parse(res);
+    expect(body.error.code).toBe('conflict');
+    expect(body.error.message).toMatch(/restore_bottle/);
+    expect(bottleOps.openBottle).not.toHaveBeenCalled();
+    expect(bottleOps.pourFromBottle).not.toHaveBeenCalled();
+  });
+
+  test('pour failure after an implicit open rolls the open back (no orphaned unledgered state)', async () => {
+    const doc = ownBottle();
+    const openedAt = new Date('2026-07-30T18:00:00Z');
+    bottleOps.openBottle.mockImplementation(async (bottle) => {
+      bottle.openedAt = openedAt;
+      bottle.preservationMethod = 'recorked';
+      return { bottle };
+    });
+    bottleOps.pourFromBottle.mockResolvedValue({ error: { status: 400, message: 'Too many pours recorded for this bottle' } });
+    // The rollback re-loads the bottle fresh; hand it the same (still ours,
+    // untouched) open state so the compensation may proceed.
+    bottleOps.closeBottle.mockResolvedValue({ bottle: doc, prevOpenState: {} });
+    const res = await tool('pour_glass').handler({ bottle_id: oid('d'), glasses: 2 }, CTX);
+    expect(parse(res).error.code).toBe('invalid_input');
+    expect(bottleOps.closeBottle).toHaveBeenCalledTimes(1); // the compensation
+    expect(McpActionLog.create).not.toHaveBeenCalled();     // nothing to ledger
   });
 
   test('idempotent replay: a seen key returns the ORIGINAL envelope without pouring again', async () => {
@@ -203,16 +245,26 @@ describe('pour_glass', () => {
     expect(McpActionLog.create).not.toHaveBeenCalled();
   });
 
-  test('service faults on the first pour surface as invalid_input', async () => {
+  test('service faults on an already-open bottle surface as invalid_input (no rollback — the open is not ours)', async () => {
     ownBottle({ openedAt: new Date(), preservationMethod: 'vacuum' });
     bottleOps.pourFromBottle.mockResolvedValue({ error: { status: 400, message: 'Too many pours recorded for this bottle' } });
     const res = await tool('pour_glass').handler({ bottle_id: oid('d') }, CTX);
     expect(parse(res).error.code).toBe('invalid_input');
+    expect(bottleOps.closeBottle).not.toHaveBeenCalled();
     expect(McpActionLog.create).not.toHaveBeenCalled();
   });
 });
 
 describe('close_bottle', () => {
+  test('consumed bottle → conflict; preserved open history is never wiped', async () => {
+    ownBottle({ status: 'drank', consumedReason: 'drank', openedAt: new Date('2026-07-24'), preservationMethod: 'coravin', pours: [{ ml: 125 }] });
+    const res = await tool('close_bottle').handler({ bottle_id: oid('d') }, CTX);
+    const body = parse(res);
+    expect(body.error.code).toBe('conflict');
+    expect(body.error.message).toMatch(/consumption record/);
+    expect(bottleOps.closeBottle).not.toHaveBeenCalled();
+  });
+
   test('not-open bottle → conflict pointing at consume_bottle', async () => {
     ownBottle();
     bottleOps.closeBottle.mockResolvedValue({ error: { status: 400, message: 'Bottle is not open', code: 'not_open' } });
@@ -242,6 +294,43 @@ describe('close_bottle', () => {
 
 describe('undo_last on open/pour/close', () => {
   const bottleRef = () => new mongoose.Types.ObjectId(oid('d'));
+
+  test('refuses ALL three undos once the bottle was consumed since (history is part of the consumption record)', async () => {
+    // A web-UI consume writes no MCP ledger row, so the pour row is still the
+    // newest candidate — but the pours it would splice out are preserved
+    // drinking history now (2026-07-30 audit).
+    const openedAt = new Date('2026-07-28T19:00:00Z');
+    const entry = { _id: 'log0', action: 'pour', bottle: bottleRef(), reversed: false, detail: { count: 1, ml: 125, implicitOpen: false } };
+    McpActionLog.findOne.mockReturnValue(chain(entry));
+    const doc = ownBottle({ status: 'drank', consumedReason: 'drank', openedAt, preservationMethod: 'vacuum', pours: [{ at: openedAt, ml: 125 }] });
+    const res = await tool('undo_last').handler({}, CTX);
+    const body = parse(res);
+    expect(body.error.code).toBe('conflict');
+    expect(body.error.message).toMatch(/consumed since/);
+    expect(doc.save).not.toHaveBeenCalled();
+    expect(bottleOps.closeBottle).not.toHaveBeenCalled();
+    // Not claimed either — the row stays available (the guard fired before the claim).
+    expect(McpActionLog.findOneAndUpdate).not.toHaveBeenCalled();
+  });
+
+  test('open-undo: a thrown VersionError from closeBottle unclaims the row so the undo can be retried (M1 class)', async () => {
+    const openedAt = new Date('2026-07-28T19:00:00Z');
+    const entry = { _id: 'log7', action: 'open', bottle: bottleRef(), reversed: false, detail: { preservationMethod: 'vacuum', openedAt } };
+    McpActionLog.findOne.mockReturnValue(chain(entry));
+    ownBottle({ openedAt, preservationMethod: 'vacuum', pours: [] });
+    const versionError = new Error('No matching document found');
+    versionError.name = 'VersionError';
+    bottleOps.closeBottle.mockRejectedValue(versionError);
+    const res = await tool('undo_last').handler({}, CTX);
+    const body = parse(res);
+    expect(body.error.code).toBe('conflict');
+    expect(body.error.message).toMatch(/mid-undo/);
+    // Claimed, then released again so a retry finds the row un-reversed.
+    expect(McpActionLog.findOneAndUpdate).toHaveBeenCalledWith(
+      { _id: 'log7', reversed: false }, { $set: { reversed: true, idempotencyKey: null } });
+    expect(McpActionLog.updateOne).toHaveBeenCalledWith({ _id: 'log7' }, { $set: { reversed: false } });
+    expect(McpActionLog.create).not.toHaveBeenCalled(); // no viaUndo row — nothing was undone
+  });
 
   test('undoes an open via the shared closeBottle op', async () => {
     const openedAt = new Date('2026-07-28T19:00:00Z');

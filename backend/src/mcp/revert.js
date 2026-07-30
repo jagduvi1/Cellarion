@@ -432,6 +432,14 @@ async function revertLedgerRow(row, ctx, { ok, fail }) {
     if (!access) return fail('conflict', 'The bottle from that action is no longer accessible; nothing was changed.');
     const { bottle } = access;
 
+    // Consumed since the action: the open-bottle fields on a consumed record
+    // are preserved DRINKING HISTORY (consume deliberately keeps them) — an
+    // undo must never rewrite or erase them. Same invariant the restore-undo
+    // branch enforces on status (2026-07-30 audit).
+    if (CONSUMED_STATUSES.includes(bottle.status)) {
+      return fail('conflict', 'That cannot be undone: the bottle has been consumed since, and its open-bottle history is part of the consumption record now. Use restore_bottle first if the consume itself was the mistake. Nothing was changed.');
+    }
+
     if (row.action === 'open') {
       const openedAt = row.detail?.openedAt ? new Date(row.detail.openedAt).getTime() : null;
       if (!bottle.openedAt || !openedAt || new Date(bottle.openedAt).getTime() !== openedAt) {
@@ -442,7 +450,14 @@ async function revertLedgerRow(row, ctx, { ok, fail }) {
       }
       const claimed = await McpActionLog.findOneAndUpdate({ _id: row._id, reversed: false }, { $set: { reversed: true, idempotencyKey: null } });
       if (!claimed) return fail('conflict', 'That action is already being undone by another request.');
-      const result = await closeBottle(bottle, ctx.req);
+      let result;
+      try {
+        result = await closeBottle(bottle, ctx.req);
+      } catch (err) {
+        await unclaim(row._id); // nothing persisted → let the undo be retried (M1 class)
+        if (err?.name === 'VersionError') return fail('conflict', 'The bottle changed mid-undo — retry.');
+        throw err;
+      }
       if (result.error) {
         await unclaim(row._id); // nothing changed → let the undo be retried
         return fail('conflict', `Cannot undo that open: ${result.error.message}`);

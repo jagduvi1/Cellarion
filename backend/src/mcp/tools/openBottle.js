@@ -22,10 +22,24 @@ const { openBottle, pourFromBottle, closeBottle } = require('../../services/bott
 const {
   PRESERVATION_FRESHNESS_DAYS, PRESERVATION_METHODS, DEFAULT_POUR_ML, openBottleDeadline,
 } = require('../../utils/openBottleUtils');
+const { CONSUMED_STATUSES } = require('../../config/constants');
 const { logAction, replay } = require('../actionLedger');
 const { ok, fail, objectId, MSG_BOTTLE_NOT_FOUND, resolveBottleAccess } = require('../toolUtil');
 
 const bottleLabel = (b) => `bottle ${b._id} (vintage ${b.vintage})`;
+
+/**
+ * Consumed bottles KEEP openedAt/preservationMethod/pours as drinking history
+ * (Bottle schema), so every handler here must gate on status BEFORE trusting
+ * openedAt — otherwise open_bottle would report a drunk bottle as "open and
+ * drinkable" and close_bottle would erase preserved history (2026-07-30 audit).
+ */
+function consumedConflict(bottle, hint) {
+  const when = bottle.consumedAt ? ` on ${new Date(bottle.consumedAt).toISOString().slice(0, 10)}` : '';
+  return fail('conflict',
+    `This bottle was already consumed (${bottle.consumedReason || bottle.status}${when}) — its open-bottle fields are ` +
+    `preserved drinking history, not current state. ${hint} Use restore_bottle first if the consume was a mistake.`);
+}
 
 /** ml poured so far + remaining estimate from the bottle's size ('750ml' …). */
 function pourTotals(bottle) {
@@ -75,6 +89,12 @@ registerTool({
     const access = await resolveBottleAccess(ctx.user.id, args.bottle_id, 'editor');
     if (!access) return fail('not_found', MSG_BOTTLE_NOT_FOUND);
     const { bottle } = access;
+
+    // BEFORE the already-open shortcut: a consumed bottle may still carry
+    // openedAt as history and must never be reported as currently open.
+    if (CONSUMED_STATUSES.includes(bottle.status)) {
+      return consumedConflict(bottle, 'A consumed bottle cannot be opened.');
+    }
 
     // Idempotent by state (issue #835): a repeat call reports the existing
     // open state instead of erroring — and records nothing new to undo.
@@ -136,6 +156,10 @@ registerTool({
     if (!access) return fail('not_found', MSG_BOTTLE_NOT_FOUND);
     const { bottle } = access;
 
+    if (CONSUMED_STATUSES.includes(bottle.status)) {
+      return consumedConflict(bottle, 'A consumed bottle cannot be poured from.');
+    }
+
     // Implicit open (issue #835): "I just poured a glass of X" should not
     // require a separate open_bottle round-trip.
     let implicitOpen = false;
@@ -145,22 +169,27 @@ registerTool({
       implicitOpen = true;
     }
 
+    // ONE all-or-nothing service call for the whole batch (single save): the
+    // per-glass loop this replaces committed up to 10 separate saves before
+    // the ledger row, so a mid-batch failure left pours (and the implicit
+    // open) persisted but unledgered — invisible to undo_last, and re-poured
+    // by a same-key retry after the claim was released (2026-07-30 audit).
     const glasses = args.glasses || 1;
-    let poured = 0;
-    for (let i = 0; i < glasses; i += 1) {
-      const result = await pourFromBottle(bottle, { ml: args.ml }, ctx.req);
-      if (result.error) {
-        // A partial batch (e.g. the MAX_POURS cap mid-loop) is still recorded
-        // honestly: fail only when NOTHING was poured this call.
-        if (poured === 0) return fail('invalid_input', result.error.message);
-        break;
-      }
-      poured += 1;
+    let result;
+    try {
+      result = await pourFromBottle(bottle, { ml: args.ml, count: glasses }, ctx.req);
+    } catch (err) {
+      if (implicitOpen) await rollbackImplicitOpen(bottle, ctx.req);
+      throw err; // server wrapper releases the idempotency claim — with the rollback, nothing persisted
+    }
+    if (result.error) {
+      if (implicitOpen) await rollbackImplicitOpen(bottle, ctx.req);
+      return fail('invalid_input', result.error.message);
     }
 
     const state = openState(bottle);
     const envelope = {
-      summary: `Recorded ${poured > 1 ? `${poured} glasses` : 'a glass'} from ${bottleLabel(bottle)}` +
+      summary: `Recorded ${glasses > 1 ? `${glasses} glasses` : 'a glass'} from ${bottleLabel(bottle)}` +
         `${implicitOpen ? ' (bottle marked open)' : ''}` +
         `${state.remaining_ml != null ? ` — about ${state.remaining_ml} ml left` : ''}`,
       data: { bottle_id: bottle._id, ...state, undo: 'undo_last reverses this pour' },
@@ -171,7 +200,7 @@ registerTool({
       bottle: bottle._id,
       cellar: bottle.cellar,
       detail: {
-        count: poured, // ACTUAL pours recorded (a capped batch may be partial) — the undo removes exactly these
+        count: glasses, // the batch is all-or-nothing, so recorded = requested
         ml: args.ml || DEFAULT_POUR_ML,
         implicitOpen,
         ...(implicitOpen ? { openedAt: bottle.openedAt } : {}),
@@ -183,6 +212,24 @@ registerTool({
     return ok(envelope.summary, envelope.data);
   },
 });
+
+/**
+ * Best-effort rollback of an implicit open whose pour then failed: without it
+ * the open would stay committed with NO ledger row — invisible to undo_last
+ * and the activity timeline. Re-loads the bottle (after a VersionError our
+ * copy is stale) and clears the open state only while it is provably still
+ * OUR untouched open (same openedAt, no pours). Never throws — if the
+ * rollback loses a race, the leftover open is at least visible in the app.
+ */
+async function rollbackImplicitOpen(bottle, req) {
+  try {
+    const Bottle = require('../../models/Bottle');
+    const fresh = await Bottle.findById(bottle._id);
+    if (!fresh || !fresh.openedAt || (fresh.pours || []).length > 0) return;
+    if (new Date(fresh.openedAt).getTime() !== new Date(bottle.openedAt).getTime()) return;
+    await closeBottle(fresh, req);
+  } catch { /* best-effort */ }
+}
 
 registerTool({
   name: 'close_bottle',
@@ -198,6 +245,12 @@ registerTool({
     const access = await resolveBottleAccess(ctx.user.id, args.bottle_id, 'editor');
     if (!access) return fail('not_found', MSG_BOTTLE_NOT_FOUND);
     const { bottle } = access;
+
+    // A consumed bottle's open-bottle fields ARE the drinking history the
+    // consumption record preserves — close_bottle must never wipe them.
+    if (CONSUMED_STATUSES.includes(bottle.status)) {
+      return consumedConflict(bottle, 'Its open-bottle history stays on the consumption record.');
+    }
 
     const result = await closeBottle(bottle, ctx.req);
     if (result.error) {
