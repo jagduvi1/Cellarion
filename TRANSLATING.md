@@ -73,6 +73,8 @@ Coverage is counted in *units*, the same way Weblate counts them: a plural famil
 
 ## Notes for developers
 
+- **Administering the Weblate project** (inviting reviewers, granting the Review role, what never to click, billing and trial state) is documented separately in [`docs/weblate-operations.md`](docs/weblate-operations.md).
+
 - **Never delete "unused-looking" keys.** Many keys are referenced dynamically — e.g. `t(`support.status.${ticket.status}`)` resolves keys that no grep for the literal key will find. The locale test suite, not string search, is the authority.
 - New user-facing strings go into `en/translation.json` in the same PR as the code. Don't machine-translate them into the other languages — leave that to Weblate, where translators see them as new work. (Bootstrapping a whole *new* language in one deliberate pass is the one exception, and it comes with a `MACHINE_DRAFTED` entry so nothing ships as reviewed that nobody has read.)
 - Don't build sentences by concatenating strings or placing numbers next to `t()` calls — put the whole sentence in one key and interpolate (`{{count}}`, `{{name}}`). Word order differs across languages.
