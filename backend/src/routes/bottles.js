@@ -633,6 +633,15 @@ router.post('/:id/pour', requireBottleAccess('editor'), async (req, res) => {
 router.delete('/:id/pour', requireBottleAccess('editor'), async (req, res) => {
   try {
     const { bottle } = req;
+    // Same invariant closeBottle enforces: on a consumed bottle the pours are
+    // preserved drinking history on the consumption record, not a live tally
+    // (security audit 2026-07-30 M-1). This handler is inline rather than a
+    // bottleOps call, so it needs its own copy of the guard.
+    if (CONSUMED_STATUSES.includes(bottle.status)) {
+      return res.status(409).json({
+        error: 'This bottle was already consumed — its recorded pours are preserved drinking history. Restore the bottle first if the consume was a mistake.',
+      });
+    }
     if (!bottle.pours || bottle.pours.length === 0) {
       return res.status(400).json({ error: 'No pours to undo' });
     }

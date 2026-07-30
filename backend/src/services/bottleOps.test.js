@@ -484,6 +484,35 @@ describe('open-bottle ops (openBottle / pourFromBottle / closeBottle)', () => {
     expect(res.error.code).toBe('not_open');
   });
 
+  // Security audit 2026-07-30 M-1. A consumed bottle KEEPS its open-bottle
+  // fields as drinking history on the consumption record, so closing it
+  // destroys data instead of undoing a mistake. The guard lives in the service
+  // (not the callers) precisely so REST DELETE /api/bottles/:id/open inherits
+  // it — that route was the hole #866's per-tool guards left open.
+  test('closeBottle refuses a CONSUMED bottle and mutates NOTHING (the drinking history is the record)', async () => {
+    const openedAt = new Date('2026-07-28T19:00:00Z');
+    for (const status of ['drank', 'gifted', 'sold', 'other']) {
+      const bottle = openDoc({ status, openedAt, pours: [{ at: openedAt, ml: 125 }] });
+      const res = await closeBottle(bottle, REQ);
+      expect(res.error.status).toBe(409);
+      expect(res.error.code).toBe('consumed');
+      expect(res.error.message).toMatch(/already consumed/);
+      // The whole point: the history survives the refused call untouched.
+      expect(bottle.openedAt).toEqual(openedAt);
+      expect(bottle.preservationMethod).toBe('vacuum');
+      expect(bottle.pours).toEqual([{ at: openedAt, ml: 125 }]);
+      expect(bottle.save).not.toHaveBeenCalled();
+      expect(logAudit).not.toHaveBeenCalledWith(REQ, 'bottle.open_undo', expect.anything());
+    }
+  });
+
+  test('closeBottle checks consumed BEFORE not_open — a consumed, never-opened bottle still says consumed', async () => {
+    // Order matters for the message the user sees: "not open" would send them
+    // looking for an open state that was never the problem.
+    const res = await closeBottle(freshBottle({ status: 'drank', openedAt: null }), REQ);
+    expect(res.error.code).toBe('consumed');
+  });
+
   test('closeBottle clears the open state and returns the prev snapshot the MCP undo restores', async () => {
     const openedAt = new Date('2026-07-28T19:00:00Z');
     const notified = new Date('2026-07-29T08:00:00Z');

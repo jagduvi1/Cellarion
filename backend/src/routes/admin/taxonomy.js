@@ -608,6 +608,62 @@ for (const [path, { fn, type }] of Object.entries(MERGERS)) {
 
 // ===== APPELLATIONS =====
 
+// Input validation for the two write routes below, mirroring the MCP
+// promote_appellation schema byte-for-byte (name ≤200; synonyms at most 10
+// strings of ≤200 chars) so the two curation surfaces cannot drift. REST
+// previously validated neither the synonym element type nor the array length,
+// and normalizedSynonyms is an INDEXED multikey field, so an unbounded array
+// grew the index — while a non-string element failed the Mongoose cast into a
+// 500 (security audit 2026-07-30 L-1).
+const APPELLATION_NAME_MAX = 200;
+const APPELLATION_SYNONYMS_MAX = 10;
+
+/**
+ * typeof, not truthiness (security audit 2026-07-30 L-2): a JSON body value
+ * like {"$ne":null} is truthy, and the .trim() below would throw a TypeError
+ * that the route's catch turns into a 500. Nothing is exploitable — it throws
+ * before any Mongo query — but the answer should be a 400.
+ *
+ * @returns {string|null} the error message, or null when the name is valid.
+ */
+function appellationNameError(name) {
+  if (typeof name !== 'string' || !name.trim()) return 'Appellation name is required';
+  // The mint chokepoint caps wine fields at 200; a longer curated name would be
+  // adopted onto wines past that cap (audit 2026-07-29 A1).
+  if (name.trim().length > APPELLATION_NAME_MAX) {
+    return `Appellation name must be ${APPELLATION_NAME_MAX} characters or fewer`;
+  }
+  return null;
+}
+
+/**
+ * @returns {{error: string}|{value: string[]|undefined}} trimmed, de-duplicated
+ *   synonyms — `undefined` rather than [] when nothing survives, matching the
+ *   schema's `default: undefined` so an empty list leaves no array behind for
+ *   the normalizedSynonyms lookup to scan.
+ */
+function validateAppellationSynonyms(synonyms) {
+  if (!Array.isArray(synonyms)) return { error: 'synonyms must be an array of strings' };
+  if (synonyms.length > APPELLATION_SYNONYMS_MAX) {
+    return { error: `At most ${APPELLATION_SYNONYMS_MAX} synonyms per appellation` };
+  }
+  const out = [];
+  const seen = new Set();
+  for (const raw of synonyms) {
+    if (typeof raw !== 'string') return { error: 'synonyms must be an array of strings' };
+    const value = raw.trim().replace(/\s+/g, ' ');
+    if (!value) continue;
+    if (value.length > APPELLATION_NAME_MAX) {
+      return { error: `Each synonym must be ${APPELLATION_NAME_MAX} characters or fewer` };
+    }
+    const key = value.toLowerCase();
+    if (seen.has(key)) continue; // an admin pasting a list shouldn't create dupes
+    seen.add(key);
+    out.push(value);
+  }
+  return { value: out.length ? out : undefined };
+}
+
 // GET /api/admin/taxonomy/appellations/unmatched — the appellation review
 // queue (strategy 2026-07-29 R2). Wines store appellations as free text; this
 // lists every distinct normalized string that NO curated Appellation doc (by
@@ -670,14 +726,17 @@ router.post('/appellations', async (req, res) => {
   try {
     const { name, country, region, synonyms } = req.body;
 
-    if (!name || !country) {
-      return res.status(400).json({ error: 'Name and country are required' });
+    const nameError = appellationNameError(name);
+    if (nameError) return res.status(400).json({ error: nameError });
+    if (!country) {
+      return res.status(400).json({ error: 'Country is required' });
     }
-    // The mint chokepoint caps wine fields at 200; a longer curated name would
-    // be adopted onto wines past that cap (audit 2026-07-29 A1). MCP already
-    // enforces this; the REST surface must match.
-    if (name.trim().length > 200) {
-      return res.status(400).json({ error: 'Appellation name must be 200 characters or fewer' });
+
+    let cleanSynonyms;
+    if (synonyms !== undefined && synonyms !== null) {
+      const checked = validateAppellationSynonyms(synonyms);
+      if (checked.error) return res.status(400).json({ error: checked.error });
+      cleanSynonyms = checked.value;
     }
 
     const normalizedName = normalizeAppellationKey(name);
@@ -687,7 +746,7 @@ router.post('/appellations', async (req, res) => {
       normalizedName,
       country,
       region: region || null,
-      synonyms: Array.isArray(synonyms) && synonyms.length ? synonyms : undefined,
+      synonyms: cleanSynonyms,
       createdBy: req.user.id
     });
 
@@ -720,15 +779,26 @@ router.put('/appellations/:id', async (req, res) => {
       return res.status(404).json({ error: 'Appellation not found' });
     }
 
-    if (name) {
-      if (name.trim().length > 200) {
-        return res.status(400).json({ error: 'Appellation name must be 200 characters or fewer' });
-      }
+    // An absent name leaves it alone (partial update); a PRESENT one is
+    // validated, so a non-string can no longer reach .trim().
+    if (name !== undefined && name !== null) {
+      const nameError = appellationNameError(name);
+      if (nameError) return res.status(400).json({ error: nameError });
       appellation.name = name.trim();
       appellation.normalizedName = normalizeAppellationKey(name);
     }
     if (region !== undefined) appellation.region = region || null;
-    if (synonyms !== undefined) appellation.synonyms = Array.isArray(synonyms) && synonyms.length ? synonyms : undefined;
+    if (synonyms !== undefined) {
+      // null clears the list, matching how the rest of the admin surface
+      // distinguishes "leave alone" (absent) from "clear" (explicit null).
+      if (synonyms === null) {
+        appellation.synonyms = undefined;
+      } else {
+        const checked = validateAppellationSynonyms(synonyms);
+        if (checked.error) return res.status(400).json({ error: checked.error });
+        appellation.synonyms = checked.value;
+      }
+    }
 
     await appellation.save();
     await appellation.populate('country', 'name');
@@ -809,3 +879,8 @@ router.post('/bottle-sizes/normalize-all', async (req, res) => {
 });
 
 module.exports = router;
+// The appellation input validators are exported for their unit tests (same
+// pattern as admin/import.js mapRow): they are pure and DB-free, and they are
+// the half of the REST/MCP parity contract that lives on this side.
+module.exports.appellationNameError = appellationNameError;
+module.exports.validateAppellationSynonyms = validateAppellationSynonyms;
