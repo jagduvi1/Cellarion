@@ -256,6 +256,12 @@ registerTool({
   handler: async (args, ctx) => {
     if (!isValidId(args.country_id)) return fail('invalid_input', 'country_id must be a 24-hex Mongo id.');
     if (args.region_id && !isValidId(args.region_id)) return fail('invalid_input', 'region_id must be a 24-hex Mongo id.');
+    // The schema's "must belong to the same country" was documentation, not
+    // validation (code audit 2026-07-30) — enforce it via the shared guard so
+    // this surface and the REST twin cannot drift.
+    const { appellationRefsError } = require('../../services/taxonomyReview');
+    const refsError = await appellationRefsError(args.country_id, args.region_id);
+    if (refsError) return fail('invalid_input', refsError);
     const Appellation = require('../../models/Appellation');
     const { normalizeAppellationKey } = require('../../utils/normalize');
     const appellation = new Appellation({

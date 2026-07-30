@@ -15,6 +15,41 @@ const Region = require('../models/Region');
 const Country = require('../models/Country');
 const Appellation = require('../models/Appellation');
 const { normalizeAppellation, normalizeAppellationKey } = require('../utils/normalize');
+const { isValidId } = require('../utils/validation');
+
+/**
+ * Ref validation for an Appellation write (code audit 2026-07-30: "appellation
+ * region not checked against country"). The schema declares country and region
+ * refs but Mongoose verifies neither that the ids exist nor that the region
+ * belongs to the country — listUnmatchedAppellations() below even drops
+ * cross-country suggestions on the assumption the schema enforces this, which
+ * it never did. Every write surface (REST create/update, MCP
+ * promote_appellation) shares this one check so the invariant holds no matter
+ * what the caller sends and the surfaces cannot drift.
+ *
+ * @param {*} countryId  required — the appellation's country
+ * @param {*} regionId   optional — validated only when set
+ * @returns {Promise<string|null>} a human-readable error, or null when valid.
+ */
+async function appellationRefsError(countryId, regionId) {
+  // Queries use the STRING that passed isValidId, never the raw input — the
+  // caller may hand us an ObjectId (the PUT path) or request-body junk, and
+  // querying the validated derivative is what keeps operator objects out of
+  // the filter (CodeQL js/sql-injection).
+  const countryKey = String(countryId ?? '');
+  if (!isValidId(countryKey)) return 'A valid country id is required';
+  const countryExists = await Country.exists({ _id: countryKey });
+  if (!countryExists) return 'No country with that id';
+  if (!regionId) return null;
+  const regionKey = String(regionId);
+  if (!isValidId(regionKey)) return 'Invalid region id';
+  const region = await Region.findById(regionKey).select('name country').lean();
+  if (!region) return 'No region with that id';
+  if (String(region.country) !== countryKey) {
+    return `Region "${region.name}" belongs to a different country than the appellation`;
+  }
+  return null;
+}
 
 /**
  * Regions minted by user writes and not yet reviewed, newest first, each with
@@ -100,11 +135,12 @@ async function listUnmatchedAppellations() {
       ...i,
       countryName: i.countryId ? countryName.get(i.countryId) || null : null,
       // A majority region from a DIFFERENT country than the majority country
-      // would violate the Appellation schema — drop it.
+      // would be rejected by appellationRefsError at promotion time — drop it
+      // from the suggestion instead of suggesting an invalid promotion.
       regionId: regionOk ? i.regionId : null,
       regionName: regionOk ? region.name : null,
     };
   });
 }
 
-module.exports = { listPendingRegions, listUnmatchedAppellations };
+module.exports = { listPendingRegions, listUnmatchedAppellations, appellationRefsError };

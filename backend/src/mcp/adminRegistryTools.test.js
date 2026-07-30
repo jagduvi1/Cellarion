@@ -147,6 +147,7 @@ describe('official image + credit', () => {
 jest.mock('../services/taxonomyReview', () => ({
   listPendingRegions: jest.fn(),
   listUnmatchedAppellations: jest.fn(),
+  appellationRefsError: jest.fn(), // resolves undefined → guard passes
 }));
 jest.mock('../models/Region', () => ({ findById: jest.fn() }));
 jest.mock('../models/Appellation', () => {
@@ -154,7 +155,7 @@ jest.mock('../models/Appellation', () => {
   return M;
 });
 
-const { listPendingRegions, listUnmatchedAppellations } = require('../services/taxonomyReview');
+const { listPendingRegions, listUnmatchedAppellations, appellationRefsError } = require('../services/taxonomyReview');
 const Region = require('../models/Region');
 const Appellation = require('../models/Appellation');
 
@@ -213,5 +214,15 @@ describe('taxonomy review tools', () => {
     const body = parse(await tool('promote_appellation').handler(
       { name: 'Alsace', country_id: oid('c') }, ADMIN_CTX));
     expect(body.error.code).toBe('conflict');
+  });
+
+  test('promote_appellation runs the shared ref guard — "must belong to the same country" is now enforced, not documented (audit 2026-07-30)', async () => {
+    appellationRefsError.mockResolvedValueOnce('Region "Rioja" belongs to a different country than the appellation');
+    const body = parse(await tool('promote_appellation').handler(
+      { name: 'Somontano', country_id: oid('c'), region_id: oid('d') }, ADMIN_CTX));
+    expect(body.error.code).toBe('invalid_input');
+    expect(body.error.message).toMatch(/different country/);
+    expect(appellationRefsError).toHaveBeenCalledWith(oid('c'), oid('d'));
+    expect(Appellation).not.toHaveBeenCalled();
   });
 });
