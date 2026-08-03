@@ -12,7 +12,10 @@ const GITHUB_URL = 'https://github.com/jagduvi1/Cellarion';
  * thing you see) and inside the bottom donate card (the last thing you see).
  * `compact` drops the reassurance line so the top instance stays punchy.
  */
-function DonateActions({ compact, hasStripeSubscription, checkoutLoading, onCheckout, onManage, actionError, t }) {
+function DonateActions({
+  compact, hasStripeSubscription, checkoutLoading, onCheckout, onManage,
+  actionError, billingInterval, onIntervalChange, t,
+}) {
   if (hasStripeSubscription) {
     return (
       <>
@@ -26,8 +29,28 @@ function DonateActions({ compact, hasStripeSubscription, checkoutLoading, onChec
       </>
     );
   }
+
+  const yearly = billingInterval === 'year';
+  // Yearly figures come from PLANS.annualPrice rather than price × 12 so the
+  // label can never drift from the Stripe Price if one is ever discounted.
+  const amount = (tier) =>
+    `$${(yearly ? PLANS[tier].annualPrice : PLANS[tier].price).toFixed(2)}`;
+
   return (
     <>
+      <div className="billing-toggle" role="group" aria-label={t('supporter.billingIntervalLabel')}>
+        {['month', 'year'].map((iv) => (
+          <button
+            key={iv}
+            type="button"
+            className={`billing-toggle-btn${billingInterval === iv ? ' is-active' : ''}`}
+            aria-pressed={billingInterval === iv}
+            onClick={() => onIntervalChange(iv)}
+          >
+            {t(iv === 'month' ? 'supporter.billingMonthly' : 'supporter.billingYearly')}
+          </button>
+        ))}
+      </div>
       <div className="donate-buttons">
         <button
           className="btn btn-primary donate-btn"
@@ -36,7 +59,7 @@ function DonateActions({ compact, hasStripeSubscription, checkoutLoading, onChec
         >
           {checkoutLoading === 'supporter'
             ? t('common.saving')
-            : t('supporter.supporterCta', { amount: `$${PLANS.supporter.price.toFixed(2)}` })}
+            : t(yearly ? 'supporter.supporterCtaYear' : 'supporter.supporterCta', { amount: amount('supporter') })}
         </button>
         <button
           className="btn btn-secondary donate-btn"
@@ -45,10 +68,14 @@ function DonateActions({ compact, hasStripeSubscription, checkoutLoading, onChec
         >
           {checkoutLoading === 'patron'
             ? t('common.saving')
-            : t('supporter.patronCta', { amount: `$${PLANS.patron.price.toFixed(2)}` })}
+            : t(yearly ? 'supporter.patronCtaYear' : 'supporter.patronCta', { amount: amount('patron') })}
         </button>
       </div>
-      {!compact && <p className="donate-reassure">{t('supporter.reassure')}</p>}
+      {!compact && (
+        <p className="donate-reassure">
+          {t(yearly ? 'supporter.reassureYear' : 'supporter.reassure')}
+        </p>
+      )}
       {actionError && <p className="plans-trial-error">{actionError}</p>}
     </>
   );
@@ -59,6 +86,8 @@ function Supporter() {
   const { user, apiFetch } = useAuth();
   const [actionError, setActionError] = useState(null);
   const [checkoutLoading, setCheckoutLoading] = useState(null);
+  // Named billingInterval, not interval — `setInterval` would shadow the DOM global.
+  const [billingInterval, setBillingInterval] = useState('month');
 
   // Derived boolean from User.toJSON — the raw stripeSubscriptionId is no
   // longer serialised to the client (data minimisation).
@@ -67,7 +96,7 @@ function Supporter() {
   async function handleCheckout(plan) {
     setCheckoutLoading(plan);
     try {
-      const res = await createCheckout(apiFetch, plan);
+      const res = await createCheckout(apiFetch, plan, billingInterval);
       const data = await res.json();
       if (data.url) {
         window.location.href = data.url;
@@ -109,6 +138,8 @@ function Supporter() {
     onCheckout: handleCheckout,
     onManage: handleManageSubscription,
     actionError,
+    billingInterval,
+    onIntervalChange: setBillingInterval,
     t,
   };
 

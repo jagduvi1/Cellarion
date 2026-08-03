@@ -26,6 +26,10 @@
 process.env.STRIPE_SECRET_KEY = 'sk_test_dummy';
 process.env.STRIPE_SUPPORTER_PRICE_ID = 'price_supporter';
 process.env.STRIPE_PATRON_PRICE_ID = 'price_patron';
+process.env.STRIPE_SUPPORTER_ANNUAL_PRICE_ID = 'price_supporter_year';
+// STRIPE_PATRON_ANNUAL_PRICE_ID is deliberately LEFT UNSET — it pins the
+// "annual price not configured" branch that a self-hoster with monthly-only
+// prices would hit.
 
 // Every request authenticates as the same user — the race is intra-user.
 jest.mock('../middleware/auth', () => ({
@@ -84,8 +88,10 @@ afterAll((done) => {
   server.close(() => done()); // swallow close's arg — jest's done() fails on any truthy value
 });
 
-const checkout = (plan = 'supporter') => new Promise((resolve, reject) => {
-  const body = JSON.stringify({ plan });
+// `interval` omitted entirely when not given, so these calls reproduce an
+// older client that only knows about `plan`.
+const checkout = (plan = 'supporter', interval) => new Promise((resolve, reject) => {
+  const body = JSON.stringify(interval === undefined ? { plan } : { plan, interval });
   const req = http.request({
     port,
     path: '/api/stripe/checkout',
@@ -247,5 +253,59 @@ describe('POST /api/stripe/checkout — first-checkout customer race (L-6)', () 
     expect(r.status).toBe(200);
     expect(mockStripe.customers.del).toHaveBeenCalledWith('cus_dup');
     expect(mockStripe.checkout.sessions.create.mock.calls[0][0].customer).toBe('cus_winner');
+  });
+});
+
+describe('POST /api/stripe/checkout — annual billing interval', () => {
+  const sessionParams = () => mockStripe.checkout.sessions.create.mock.calls[0][0];
+
+  test('omitting interval still bills MONTHLY (older clients must not silently switch)', async () => {
+    const r = await checkout('supporter');
+
+    expect(r.status).toBe(200);
+    expect(sessionParams().line_items).toEqual([{ price: 'price_supporter', quantity: 1 }]);
+    expect(sessionParams().subscription_data.metadata.interval).toBe('month');
+  });
+
+  test("interval 'year' uses the ANNUAL price while granting the same tier", async () => {
+    const r = await checkout('supporter', 'year');
+
+    expect(r.status).toBe(200);
+    expect(sessionParams().line_items).toEqual([{ price: 'price_supporter_year', quantity: 1 }]);
+    // The tier written to metadata — and therefore applied by the webhook — is
+    // still plain 'supporter'. Entitlement must not learn about cadence.
+    expect(sessionParams().subscription_data.metadata.plan).toBe('supporter');
+    expect(sessionParams().subscription_data.metadata.interval).toBe('year');
+  });
+
+  test('monthly and annual carry DIFFERENT idempotency keys in the same 10s bucket', async () => {
+    await checkout('supporter', 'month');
+    await checkout('supporter', 'year');
+
+    const [k1, k2] = mockStripe.checkout.sessions.create.mock.calls.map(([, o]) => o.idempotencyKey);
+    // Same user + same bucket: only the price id separates them. If it didn't,
+    // toggling monthly→yearly and clicking would replay the monthly session.
+    expect(k1).toBe(`checkout:u1:price_supporter:${BUCKET}`);
+    expect(k2).toBe(`checkout:u1:price_supporter_year:${BUCKET}`);
+    expect(k1).not.toBe(k2);
+  });
+
+  test('an unknown interval is rejected with 400 before Stripe is touched', async () => {
+    const r = await checkout('supporter', 'week');
+
+    expect(r.status).toBe(400);
+    expect(r.body.error).toBe('Invalid billing interval');
+    expect(mockStripe.checkout.sessions.create).not.toHaveBeenCalled();
+    expect(mockStripe.customers.create).not.toHaveBeenCalled();
+  });
+
+  test('an interval with no configured price 500s instead of falling back to the other cadence', async () => {
+    // STRIPE_PATRON_ANNUAL_PRICE_ID is unset (see top of file).
+    const r = await checkout('patron', 'year');
+
+    expect(r.status).toBe(500);
+    expect(r.body.error).toBe('Stripe price not configured for this plan');
+    // Critically: it must NOT have silently billed the monthly patron price.
+    expect(mockStripe.checkout.sessions.create).not.toHaveBeenCalled();
   });
 });

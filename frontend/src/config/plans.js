@@ -6,6 +6,10 @@
  * Every tier is functionally identical — all features (including the daily
  * Cellar Chat allowance) are free for everyone. The paid tiers are purely
  * voluntary donations to fund development; they unlock nothing extra.
+ *
+ * `annualPrice` is the yearly figure shown when the billing toggle is set to
+ * yearly. It is display only — the charged amount comes from the Stripe Price
+ * behind STRIPE_<TIER>_ANNUAL_PRICE_ID on the backend.
  */
 export const PLANS = {
   free: {
@@ -30,6 +34,7 @@ export const PLANS = {
     label: 'Supporter',
     description: 'Chip in to help fund development — no extra features, just our thanks.',
     price: 1.5,
+    annualPrice: 18,
     featureList: [
       'Everything in Enthusiast (all features are free)',
       'Support independent development',
@@ -40,6 +45,7 @@ export const PLANS = {
     label: 'Patron',
     description: 'Support Cellarion at a higher level — no extra features, just bigger thanks.',
     price: 5.5,
+    annualPrice: 66,
     featureList: [
       'Everything in Enthusiast (all features are free)',
       'Support independent development even more',
