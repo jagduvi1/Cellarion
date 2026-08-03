@@ -5,6 +5,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { PLANS } from '../config/plans';
 import NotificationBell from './NotificationBell';
+import useUnreadBlog from '../hooks/useUnreadBlog';
 import InstallPrompt from './InstallPrompt';
 import AnnouncementBanner from './AnnouncementBanner';
 import DemoBanner from './DemoBanner';
@@ -22,6 +23,7 @@ function Layout({ children }) {
   const navigate = useNavigate();
   const location = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const unreadBlog = useUnreadBlog();
 
   const handleLogout = () => {
     logout();
@@ -36,6 +38,21 @@ function Layout({ children }) {
 
   const planLabel = user ? (PLANS[user.plan]?.label || user.plan || 'Free') : null;
   const roles = user?.roles || [];
+
+  // Built once and rendered into both the desktop nav and the mobile menu. The
+  // blog link exists twice, and a badge added to only one of them is the usual
+  // way this half-ships — sharing the node makes them impossible to drift apart.
+  const blogBadge = unreadBlog > 0 ? (
+    <span
+      className="badge badge--unread"
+      aria-label={t('nav.blogUnread', { count: unreadBlog })}
+    >
+      {/* Same 9+ cap as the notification bell, so two counters in the same bar
+          don't disagree about how they round. The aria-label keeps the exact
+          number for screen readers. */}
+      {unreadBlog > 9 ? '9+' : unreadBlog}
+    </span>
+  ) : null;
 
   return (
     <div className="layout">
@@ -126,6 +143,7 @@ function Layout({ children }) {
                   className={`nav-link ${isActive('/blog') ? 'active' : ''}`}
                 >
                   {t('nav.blog')}
+                  {blogBadge}
                 </Link>
                 <Link
                   to="/supporter"
@@ -254,7 +272,7 @@ function Layout({ children }) {
               <Link to="/restock" className={`mobile-menu-link ${isActive('/restock') ? 'active' : ''}`} onClick={closeMenu}>{t('nav.restock')}</Link>
               <Link to="/wine-requests" className={`mobile-menu-link ${isActive('/wine-requests') ? 'active' : ''}`} onClick={closeMenu}>{t('nav.myRequests')}</Link>
               <Link to="/cellar-chat" className={`mobile-menu-link ${isActive('/cellar-chat') ? 'active' : ''}`} onClick={closeMenu}>{t('nav.cellarChat')}</Link>
-              <Link to="/blog" className={`mobile-menu-link ${isActive('/blog') ? 'active' : ''}`} onClick={closeMenu}>{t('nav.blog')}</Link>
+              <Link to="/blog" className={`mobile-menu-link ${isActive('/blog') ? 'active' : ''}`} onClick={closeMenu}>{t('nav.blog')}{blogBadge}</Link>
               <Link to="/supporter" className={`mobile-menu-link ${isActive('/supporter') ? 'active' : ''}`} onClick={closeMenu}>{t('nav.supporter')}</Link>
               <Link to="/support" className={`mobile-menu-link ${isActive('/support') ? 'active' : ''}`} onClick={closeMenu}>{t('nav.support')}</Link>
             </div>

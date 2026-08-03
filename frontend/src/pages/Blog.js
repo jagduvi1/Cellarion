@@ -3,9 +3,16 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { getBlogPosts, getBlogTags } from '../api/blog';
 import { useAuth } from '../contexts/AuthContext';
+import { markBlogSeen } from '../hooks/useUnreadBlog';
 import SEOHead from '../components/SEOHead';
 import SITE_URL from '../config/siteUrl';
 import './Blog.css';
+
+// The blog carries 86 tags. Rendering them all put every post below the fold on
+// a phone — you scrolled past the entire filter to reach the thing you came
+// for. Collapsed to the most-used handful (the endpoint sorts by post count),
+// with the rest one tap away.
+const COLLAPSED_TAG_COUNT = 8;
 
 function Blog() {
   const { t } = useTranslation();
@@ -16,6 +23,7 @@ function Blog() {
   const [total, setTotal] = useState(0);
   const [pages, setPages] = useState(1);
   const [loading, setLoading] = useState(true);
+  const [showAllTags, setShowAllTags] = useState(false);
 
   const page = Math.max(1, parseInt(searchParams.get('page'), 10) || 1);
   const activeTag = searchParams.get('tag') || '';
@@ -54,6 +62,11 @@ function Blog() {
   useEffect(() => { fetchPosts(); }, [fetchPosts]);
   useEffect(() => { fetchTags(); }, [fetchTags]);
 
+  // Opening the index counts as reading the list — that is what the nav badge
+  // claims to track. Fires once on mount rather than per page/tag change, so
+  // paging through the archive doesn't keep rewriting the timestamp.
+  useEffect(() => { markBlogSeen(); }, []);
+
   const setPage = (p) => {
     const params = new URLSearchParams(searchParams);
     params.set('page', p);
@@ -65,6 +78,16 @@ function Blog() {
     if (tag) params.set('tag', tag);
     setSearchParams(params);
   };
+
+  // The active tag is always kept visible, even when it falls outside the
+  // collapsed set: a filter you can see the effect of but not the control for
+  // reads as a broken page, and you'd have no way to switch it off.
+  const visibleTags = showAllTags
+    ? tags
+    : [...new Set([
+        ...tags.slice(0, COLLAPSED_TAG_COUNT),
+        ...(activeTag ? [activeTag] : []),
+      ])];
 
   const formatDate = (dateStr) => {
     if (!dateStr) return '';
@@ -115,7 +138,7 @@ function Blog() {
           >
             {t('blog.allPosts')}
           </button>
-          {tags.map(tag => (
+          {visibleTags.map(tag => (
             <button
               key={tag}
               className={`blog-tag ${activeTag === tag ? 'active' : ''}`}
@@ -124,6 +147,20 @@ function Blog() {
               {tag}
             </button>
           ))}
+          {tags.length > COLLAPSED_TAG_COUNT && (
+            <button
+              className="blog-tag blog-tag--toggle"
+              onClick={() => setShowAllTags(v => !v)}
+              aria-expanded={showAllTags}
+            >
+              {showAllTags
+                ? t('blog.showFewerTags')
+                : /* `total`, not `count`: passing `count` makes i18next look for
+                     plural forms this label has no use for — the toggle only
+                     appears above the collapse threshold, so "1" never renders. */
+                  t('blog.showAllTags', { total: tags.length })}
+            </button>
+          )}
         </div>
       )}
 

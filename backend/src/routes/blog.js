@@ -48,11 +48,22 @@ router.get('/', async (req, res) => {
   }
 });
 
-// GET /api/blog/tags — List all tags from published posts
+// GET /api/blog/tags — Tags from published posts, most-used first
+//
+// Ordered by how many posts carry the tag rather than alphabetically. The blog
+// page shows only the first handful before a "show all" toggle, and with 86
+// tags the alphabetical head ("3d", "ai", "analytics") is close to the least
+// useful slice available. Ties break alphabetically so the order is stable.
+// Response shape is unchanged — an array of tag strings.
 router.get('/tags', async (req, res) => {
   try {
-    const tags = await BlogPost.distinct('tags', { status: 'published' });
-    res.json({ tags: tags.sort() });
+    const rows = await BlogPost.aggregate([
+      { $match: { status: 'published' } },
+      { $unwind: '$tags' },
+      { $group: { _id: '$tags', count: { $sum: 1 } } },
+      { $sort: { count: -1, _id: 1 } },
+    ]);
+    res.json({ tags: rows.map((row) => row._id) });
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch tags' });
   }
