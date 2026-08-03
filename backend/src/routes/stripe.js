@@ -18,10 +18,38 @@ function getStripe() {
   return stripe;
 }
 
-/** Map Stripe Price IDs → Cellarion plan names */
+/**
+ * Billing intervals a checkout may request. The interval is orthogonal to the
+ * tier: an annual Supporter and a monthly Supporter both get plan 'supporter',
+ * so PLAN_RANK, Cellar-Cred and admin grants never need to know the cadence.
+ */
+const INTERVALS = ['month', 'year'];
+
+/** Env var holding the Stripe Price ID for each (tier, interval) pair. */
+const PRICE_ENV = {
+  supporter: { month: 'STRIPE_SUPPORTER_PRICE_ID', year: 'STRIPE_SUPPORTER_ANNUAL_PRICE_ID' },
+  patron: { month: 'STRIPE_PATRON_PRICE_ID', year: 'STRIPE_PATRON_ANNUAL_PRICE_ID' },
+};
+
+/**
+ * Resolve the Stripe Price ID for a (tier, interval) pair, or undefined when
+ * that combination has no price configured. The annual prices are OPTIONAL —
+ * a self-hoster who only created the two monthly prices keeps working, and the
+ * checkout route refuses the unconfigured interval rather than quietly billing
+ * a different cadence than the one the user clicked.
+ */
+function priceIdFor(plan, interval) {
+  return process.env[PRICE_ENV[plan]?.[interval]] || undefined;
+}
+
+/** Map Stripe Price IDs → Cellarion plan names, across both billing intervals. */
 function planFromPriceId(priceId) {
-  if (priceId === process.env.STRIPE_SUPPORTER_PRICE_ID) return 'supporter';
-  if (priceId === process.env.STRIPE_PATRON_PRICE_ID) return 'patron';
+  if (!priceId) return null;
+  for (const plan of Object.keys(PRICE_ENV)) {
+    for (const interval of INTERVALS) {
+      if (priceId === priceIdFor(plan, interval)) return plan;
+    }
+  }
   return null;
 }
 
@@ -69,16 +97,21 @@ async function applyStripePlan(userId, plan, subscriptionId) {
 // ── POST /api/stripe/checkout — Create a Stripe Checkout Session ──
 router.post('/checkout', requireAuth, async (req, res) => {
   try {
-    const { plan } = req.body;
+    const { plan, interval = 'month' } = req.body;
     if (!plan || !['supporter', 'patron'].includes(plan)) {
       return res.status(400).json({ error: 'Invalid plan' });
     }
+    // Defaults to 'month' so an older client (or the MCP/API caller that only
+    // knows about `plan`) keeps getting exactly what it got before.
+    if (!INTERVALS.includes(interval)) {
+      return res.status(400).json({ error: 'Invalid billing interval' });
+    }
 
-    const priceId = plan === 'supporter'
-      ? process.env.STRIPE_SUPPORTER_PRICE_ID
-      : process.env.STRIPE_PATRON_PRICE_ID;
-
+    const priceId = priceIdFor(plan, interval);
     if (!priceId) {
+      // Name the missing env var in the log (never in the response) so a
+      // self-hoster who only created monthly prices can diagnose this.
+      console.error(`[stripe] no price configured for ${plan}/${interval} — set ${PRICE_ENV[plan][interval]}`);
       return res.status(500).json({ error: 'Stripe price not configured for this plan' });
     }
 
@@ -182,11 +215,15 @@ router.post('/checkout', requireAuth, async (req, res) => {
       success_url: `${frontendUrl}/supporter?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${frontendUrl}/supporter`,
       subscription_data: {
-        metadata: { userId: user._id.toString(), plan }
+        // `plan` stays the tier — the webhook applies it verbatim. `interval`
+        // is recorded for support/analytics only; nothing entitlement-related
+        // reads it, so a monthly and an annual Supporter are indistinguishable
+        // to the rest of the app, which is the point.
+        metadata: { userId: user._id.toString(), plan, interval }
       }
     }, { idempotencyKey });
 
-    logAudit(req, 'stripe.checkout_created', {}, { plan });
+    logAudit(req, 'stripe.checkout_created', {}, { plan, interval });
     res.json({ url: session.url });
   } catch (error) {
     console.error('Stripe checkout error:', error.message);

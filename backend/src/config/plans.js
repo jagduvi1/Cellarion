@@ -6,7 +6,11 @@
  * The paid tiers are purely voluntary donations to fund development; they
  * unlock nothing extra.
  *
- * price: monthly price in USD (0 = free)
+ * price:       monthly price in USD (0 = free)
+ * annualPrice: yearly price in USD, omitted on the free tier. Display only —
+ *              the amount actually charged comes from the Stripe Price whose
+ *              id is in STRIPE_<TIER>_ANNUAL_PRICE_ID, so if you change one you
+ *              must change the other.
  */
 const PLANS = {
   free: {
@@ -31,6 +35,7 @@ const PLANS = {
     label: 'Supporter',
     description: 'Chip in to help fund development — no extra features, just our thanks.',
     price: 1.5,
+    annualPrice: 18,
     featureList: [
       'Everything in Enthusiast (all features are free)',
       'Support independent development',
@@ -41,6 +46,7 @@ const PLANS = {
     label: 'Patron',
     description: 'Support Cellarion at a higher level — no extra features, just bigger thanks.',
     price: 5.5,
+    annualPrice: 66,
     featureList: [
       'Everything in Enthusiast (all features are free)',
       'Support independent development even more',
