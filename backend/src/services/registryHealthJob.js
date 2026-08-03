@@ -75,7 +75,14 @@ async function computeMetrics() {
     ]),
     WineDefinition.countDocuments({
       nonWine: { $ne: true },
-      'aiProfile.confidence': { $ne: null, $lte: LOW_CONFIDENCE_THRESHOLD },
+      // Mirrors the admin queue in routes/admin/wines.js: a null confidence is
+      // an unvouched-for row, not a confident one, and excluding it meant the
+      // watchdog could never count the rows most worth counting.
+      $or: [
+        { 'aiProfile.confidence': null },
+        { 'aiProfile.confidence': { $lte: LOW_CONFIDENCE_THRESHOLD } },
+      ],
+      'aiProfile.generatedAt': { $ne: null },
       $expr: {
         $or: [
           { $eq: ['$profileReviewedAt', null] },

@@ -30,8 +30,24 @@ const COLLAPSED_TAG_COUNT = 8;
 export function visibleTagsFor(tags, activeTag, showAll, collapsedCount = COLLAPSED_TAG_COUNT) {
   const all = Array.isArray(tags) ? tags : [];
   if (showAll) return all;
-  const keepActive = activeTag && all.includes(activeTag) ? [activeTag] : [];
-  return [...new Set([...all.slice(0, collapsedCount), ...keepActive])];
+  const match = matchedTag(all, activeTag);
+  return [...new Set([...all.slice(0, collapsedCount), ...(match ? [match] : [])])];
+}
+
+/**
+ * The stored tag an `?tag=` value refers to, or undefined.
+ *
+ * Case-insensitive, because the two ends already disagree: tags are stored
+ * lowercased, and the posts endpoint lowercases `req.query.tag` before
+ * filtering — so `?tag=Feature` really does filter the list. A case-sensitive
+ * check here dropped the pill anyway, leaving a filtered page with nothing
+ * marked active and no visible explanation, which is the exact failure the
+ * active-tag rule exists to prevent.
+ */
+export function matchedTag(tags, activeTag) {
+  if (!activeTag) return undefined;
+  const wanted = String(activeTag).toLowerCase();
+  return (Array.isArray(tags) ? tags : []).find((t) => t === wanted);
 }
 
 function Blog() {
@@ -100,6 +116,10 @@ function Blog() {
   };
 
   const visibleTags = visibleTagsFor(tags, activeTag, showAllTags);
+  // The stored spelling of the active tag, so the highlight uses the same
+  // case-insensitive rule as the visibility check above. Comparing the raw
+  // query value would highlight nothing for `?tag=Feature`.
+  const activeStored = matchedTag(tags, activeTag);
 
   const formatDate = (dateStr) => {
     if (!dateStr) return '';
@@ -153,7 +173,7 @@ function Blog() {
           {visibleTags.map(tag => (
             <button
               key={tag}
-              className={`blog-tag ${activeTag === tag ? 'active' : ''}`}
+              className={`blog-tag ${activeStored === tag ? 'active' : ''}`}
               onClick={() => setTag(tag)}
             >
               {tag}

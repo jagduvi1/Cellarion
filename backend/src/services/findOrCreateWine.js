@@ -19,7 +19,7 @@ const Region = require('../models/Region');
 const Grape = require('../models/Grape');
 const Appellation = require('../models/Appellation');
 const searchService = require('./search');
-const { generateWineKey, normalizeString, normalizeAppellation, normalizeAppellationKey, stripTrailingVintage, resolveGrapeName, resolveCountryName, isRecognizedCountry, isUnknownName, isJunkGrapeName } = require('../utils/normalize');
+const { generateWineKey, normalizeString, normalizeAppellation, normalizeAppellationKey, stripTrailingVintage, resolveGrapeName, resolveCountryName, isRecognizedCountry, isUnknownName, isJunkGrapeName, sanitizeTaxonomyName } = require('../utils/normalize');
 const { scoreAllMatches } = require('./wineMatching');
 const { canonicalizeWineName } = require('../utils/producerPrefix');
 const { computeCanonicalKey, canonicalSiblingPrefix } = require('../utils/wineIdentity');
@@ -82,25 +82,6 @@ const MAX_FIELD = 200;
 
 // Mirrors the route's cap so the import callers, which have none, get it too.
 const MAX_GRAPES = 20;
-
-/**
- * Bound a taxonomy name before it can be minted.
- *
- * The route caps `region` and grape names, but the two import callers
- * (services/cellarImport.js and routes/import.js) hand them straight through
- * from an uploaded file or a model response — so the cap has to live here, at
- * the chokepoint, not at one of three entrances.
- *
- * Interior whitespace collapses for the same reason `name`/`producer` collapse
- * it: two spellings that differ by a space are one wine to a human and two rows
- * to the registry. Newlines matter more than cosmetics here — these values are
- * substituted into the enrichment prompt, and a multi-line region name is how
- * you smuggle instructions into it.
- */
-function sanitizeTaxonomyName(value) {
-  if (typeof value !== 'string') return '';
-  return value.replace(/\s+/g, ' ').trim().slice(0, MAX_FIELD);
-}
 
 async function findOrCreateRegion(rawName, countryId, userId) {
   const name = sanitizeTaxonomyName(rawName);

@@ -369,16 +369,46 @@ async function suggestProfile({ name, producer, vintage, country, region, appell
       .trim()
       .slice(0, 200);
 
-  const prompt = aiConfig.get().enrichmentPrompt
-    .replace('{{name}}', field(name))
-    .replace('{{producer}}', field(producer))
-    .replace('{{vintage}}', field(vintage) || 'NV')
-    .replace('{{country}}', field(country))
-    .replace('{{region}}', field(region))
-    .replace('{{appellation}}', field(appellation))
-    .replace('{{classification}}', field(classification))
-    .replace('{{type}}', field(type))
-    .replace('{{grapes}}', field(Array.isArray(grapes) ? grapes.slice(0, 20).join(', ') : grapes));
+  // Per NAME, not on the joined string: capping the join truncated the tail of a
+  // large blend and could cut a varietal mid-word before it reached a prompt
+  // whose answer is written back to the shared registry.
+  const grapeList = (Array.isArray(grapes) ? grapes : [grapes])
+    .map(field)
+    .filter(Boolean)
+    .slice(0, 20)
+    .join(', ');
+
+  /**
+   * Substitute one placeholder.
+   *
+   * The replacement is a FUNCTION, and that is the whole point: with a string
+   * replacement, `String.prototype.replace` honours `$&`, `` $` ``, `$'` and
+   * `$$` inside it — even when the search pattern is a plain string. A wine
+   * named `$'` therefore expanded to the entire remainder of the template,
+   * giving an attacker a well-formed prompt followed by their own trailing
+   * instruction, and a ~30x token bill. A replacer function is inserted
+   * literally and honours nothing.
+   *
+   * replaceAll, not replace, because the template is superadmin-overridable via
+   * SiteConfig — a custom one that uses a placeholder twice would otherwise
+   * leave the second occurrence unsubstituted and ship `{{producer}}` verbatim.
+   */
+  const put = (template, token, value) => template.replaceAll(token, () => value);
+
+  let prompt = aiConfig.get().enrichmentPrompt;
+  for (const [token, value] of [
+    ['{{name}}', field(name)],
+    ['{{producer}}', field(producer)],
+    ['{{vintage}}', field(vintage) || 'NV'],
+    ['{{country}}', field(country)],
+    ['{{region}}', field(region)],
+    ['{{appellation}}', field(appellation)],
+    ['{{classification}}', field(classification)],
+    ['{{type}}', field(type)],
+    ['{{grapes}}', grapeList],
+  ]) {
+    prompt = put(prompt, token, value);
+  }
 
   return callClaudeJson({
     client,

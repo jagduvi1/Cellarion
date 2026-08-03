@@ -1,7 +1,7 @@
 const express = require('express');
 const mongoose = require('mongoose');
 const { requireAuth, requireRole } = require('../../middleware/auth');
-const { normalizeString, normalizeAppellation, normalizeAppellationKey } = require('../../utils/normalize');
+const { normalizeString, normalizeAppellation, normalizeAppellationKey, sanitizeTaxonomyName } = require('../../utils/normalize');
 const Country = require('../../models/Country');
 const Region = require('../../models/Region');
 const Grape = require('../../models/Grape');
@@ -268,7 +268,10 @@ router.post('/regions', async (req, res) => {
     hierarchy.push(name);
 
     const region = new Region({
-      name: name.trim(),
+      // Bounded like every other write path — the display name is stored
+      // separately from normalizedName and was only trimmed, so it could hold
+      // newlines and unbounded length (security audit 2026-08-03).
+      name: sanitizeTaxonomyName(name),
       normalizedName,
       country,
       parentRegion: parentRegion || null,
@@ -314,7 +317,9 @@ router.put('/regions/:id', async (req, res) => {
     }
 
     if (name) {
-      region.name = name.trim();
+      // Rename is the path that made a create-only guard pointless: a region
+      // minted correctly could be renamed to anything afterwards.
+      region.name = sanitizeTaxonomyName(name);
       region.normalizedName = normalizeString(name);
     }
 
@@ -437,7 +442,7 @@ router.post('/grapes', async (req, res) => {
     const normalizedName = normalizeString(name);
 
     const grape = new Grape({
-      name: name.trim(),
+      name: sanitizeTaxonomyName(name),
       normalizedName,
       synonyms: synonyms || [],
       color: color || null,
@@ -476,7 +481,7 @@ router.put('/grapes/:id', async (req, res) => {
     }
 
     if (name) {
-      grape.name = name.trim();
+      grape.name = sanitizeTaxonomyName(name);
       grape.normalizedName = normalizeString(name);
     }
     if (synonyms !== undefined) grape.synonyms = synonyms;

@@ -41,6 +41,28 @@ const normalizeString = (str) => {
     .trim();
 };
 
+/** Longest a stored taxonomy display name may be. */
+const MAX_TAXONOMY_NAME = 200;
+
+/**
+ * Bound a taxonomy DISPLAY name before it is stored.
+ *
+ * `normalizeString` already collapses whitespace for the lookup key, but the
+ * display name is stored separately and was only ever `.trim()`ed \u2014 so a region
+ * or grape could hold interior newlines and unbounded length. That matters twice
+ * over: two names differing by a space are one thing to a human and two rows to
+ * the registry, and these values are substituted into the enrichment prompt,
+ * where a newline is how you make injected text look like a new instruction.
+ *
+ * Belongs here rather than beside any one caller: creation goes through
+ * findOrCreateWine, but the admin taxonomy routes RENAME existing rows, and a
+ * guard that only covers create is not a chokepoint (security audit 2026-08-03).
+ */
+const sanitizeTaxonomyName = (value) => {
+  if (typeof value !== 'string') return '';
+  return value.replace(/\p{C}/gu, ' ').replace(/\s+/g, ' ').trim().slice(0, MAX_TAXONOMY_NAME);
+};
+
 /**
  * Tokenize a string and remove wine-domain stop words
  * Used for more sophisticated matching
@@ -735,6 +757,8 @@ const generateWineSlug = (name, producer) => {
 
 module.exports = {
   normalizeString,
+  sanitizeTaxonomyName,
+  MAX_TAXONOMY_NAME,
   slugify,
   tokenize,
   generateWineKey,

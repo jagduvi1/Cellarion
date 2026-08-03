@@ -664,9 +664,23 @@ router.get('/low-confidence', async (req, res) => {
     const threshold = Number.isFinite(rawT) ? Math.min(Math.max(rawT, 0), 1) : 0.3;
     const includeReviewed = req.query.includeReviewed === '1' || req.query.includeReviewed === 'true';
 
+    // A null confidence means the generator gave us nothing usable — no number,
+    // a non-numeric string, or Infinity from a `1e400` in the JSON. That is not
+    // a confident row; it is a row nobody can vouch for, and `$ne: null` was
+    // excluding exactly those from the queue built to catch them. Sanitising bad
+    // model output to null (security audit 2026-08-03, M-2) only made that worse
+    // — it routed every unusable value into the one state guaranteed to hide.
+    // Unknown now means "review me", which is also how the two rows already
+    // sitting invisible in prod get seen.
     const base = {
       nonWine: { $ne: true },
-      'aiProfile.confidence': { $ne: null, $lte: threshold },
+      $or: [
+        { 'aiProfile.confidence': null },
+        { 'aiProfile.confidence': { $lte: threshold } },
+      ],
+      // Only rows that were actually enriched — without this, every wine that
+      // has no aiProfile at all would match the null branch above.
+      'aiProfile.generatedAt': { $ne: null },
     };
     const outstanding = {
       ...base,

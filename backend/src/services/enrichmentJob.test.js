@@ -174,12 +174,26 @@ describe('descriptor sanitization at the write point', () => {
  * and the MCP tools, while a curator editing the same field was held to 40/60.
  */
 describe('bounds on model output', () => {
-  test('confidence above 1 clamps instead of hiding the row from the review queue', async () => {
+  test('confidence above 1 clamps to 1', async () => {
+    // Note this does NOT put the row in the review queue — a clamped 1.0 is
+    // still above any sane threshold. Queue visibility for unusable values is
+    // the query's job (routes/admin/wines.js), not the clamp's; an earlier
+    // version of this test claimed otherwise and was wrong.
     const p = profile('Fine.');
     p.data.confidence = 7;
     suggestProfile.mockResolvedValue(p);
     await enrichWineById(WINE_ID);
     expect(persisted().confidence).toBe(1);
+  });
+
+  test('Infinity from a 1e400 in the model JSON does not persist as a number', async () => {
+    // JSON.parse('{"confidence":1e400}') yields Infinity without throwing, and
+    // Infinity survived the old `typeof === 'number'` check.
+    const p = profile('Fine.');
+    p.data.confidence = JSON.parse('{"c":1e400}').c;
+    suggestProfile.mockResolvedValue(p);
+    await enrichWineById(WINE_ID);
+    expect(persisted().confidence).toBeNull();
   });
 
   test('a negative confidence clamps to 0', async () => {
@@ -198,6 +212,11 @@ describe('bounds on model output', () => {
     expect(persisted().confidence).toBe(0.4);
   });
 
+  // These persist as null — "we don't know" — which is honest. What makes that
+  // safe is that the admin queue and the registry watchdog now MATCH null
+  // instead of excluding it with `$ne: null`. Storing null without that change
+  // is what made the first version of this fix cosmetic: every unusable value
+  // was routed into the one state guaranteed to hide the row.
   test.each([['high'], [NaN], [null], [undefined], [{}]])(
     'an unusable confidence %p persists as null rather than a junk number', async (val) => {
       const p = profile('Fine.');

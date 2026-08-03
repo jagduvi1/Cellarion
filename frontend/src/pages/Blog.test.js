@@ -8,7 +8,7 @@
  * failed silently in the sense that the page looked entirely normal.
  */
 import { describe, it, expect } from 'vitest';
-import { visibleTagsFor } from './Blog';
+import { visibleTagsFor, matchedTag } from './Blog';
 
 const TAGS = ['feature', 'release', 'guide', 'wine-storage', 'community', 'ai', 'mcp', 'gdpr', 'undo', 'wishlist'];
 
@@ -53,5 +53,33 @@ describe('visibleTagsFor', () => {
   it('survives a missing or non-array tag list', () => {
     expect(visibleTagsFor(undefined, 'feature', false, 8)).toEqual([]);
     expect(visibleTagsFor(null, '', true, 8)).toEqual([]);
+  });
+});
+
+describe('matchedTag — case handling', () => {
+  it('matches a mixed-case query value against the lowercased stored tags', () => {
+    // The server lowercases req.query.tag before filtering, so ?tag=Feature
+    // really does filter the list. A case-sensitive check here dropped the pill
+    // anyway, leaving a filtered page with nothing marked active.
+    expect(matchedTag(TAGS, 'Feature')).toBe('feature');
+    expect(matchedTag(TAGS, 'WINE-STORAGE')).toBe('wine-storage');
+  });
+
+  it('returns the stored spelling, so the highlight compares equal', () => {
+    expect(visibleTagsFor(TAGS, 'FEATURE', false, 8)).toContain('feature');
+  });
+
+  it('keeps a mixed-case active tag visible when it is outside the collapsed set', () => {
+    expect(visibleTagsFor(TAGS, 'WishList', false, 8)).toContain('wishlist');
+  });
+
+  it('still rejects a value that is not a tag in any case', () => {
+    expect(matchedTag(TAGS, '⚠ Verify Your Account')).toBeUndefined();
+    expect(matchedTag(TAGS, 'not-a-tag')).toBeUndefined();
+  });
+
+  it('is safe with no active tag or no list', () => {
+    expect(matchedTag(TAGS, '')).toBeUndefined();
+    expect(matchedTag(undefined, 'feature')).toBeUndefined();
   });
 });
