@@ -1923,6 +1923,8 @@
     "title": "Blog",
     "subtitle": "News, tips, and updates from the Cellarion team",
     "allPosts": "All Posts",
+    "showAllTags": "All {{total}} tags",
+    "showFewerTags": "Fewer tags",
     "loading": "Loading...",
     "noPosts": "No blog posts yet.",
     "postNotFound": "Post not found.",

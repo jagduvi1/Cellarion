@@ -47,6 +47,19 @@
   border-color: var(--color-accent);
 }
 
+/* The expander is a control, not a filter — dashed and unfilled so it reads as
+   "there is more behind this" rather than as one more tag you could select. */
+.blog-tag--toggle {
+  border-style: dashed;
+  font-weight: 600;
+}
+
+.blog-tag--toggle:hover {
+  background: var(--color-surface);
+  color: var(--color-accent);
+  border-color: var(--color-accent);
+}
+
 .blog-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
