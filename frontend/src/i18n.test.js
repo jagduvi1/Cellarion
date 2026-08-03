@@ -20,7 +20,8 @@ vi.mock('virtual:locale-coverage', () => ({
   SHIPPED_CODES: ['en', 'sv'],
 }));
 
-const { default: i18n, shippedNavigatorLanguage, resolveLocaleCode } = await import('./i18n');
+const { default: i18n, shippedNavigatorLanguage, resolveLocaleCode, hasLanguagePreview } =
+  await import('./i18n');
 
 describe('resolving a language tag to a locale directory', () => {
   // Weblate names the directory after the language code, which for a regional
@@ -129,5 +130,36 @@ describe('explicit choices', () => {
     expect(document.documentElement.lang).toBe('fr');
     await i18n.changeLanguage('sv');
     expect(document.documentElement.lang).toBe('sv');
+  });
+});
+
+/**
+ * `?lng=` is the preview a translator works from, and AuthContext consults this
+ * to decide whether to leave it alone. The regression it guards against is
+ * silent: a signed-in translator opens ?lng=fr, sees French for one frame, and
+ * concludes the feature is broken — which is exactly the report that prompted
+ * these tests.
+ */
+describe('detecting a ?lng= preview', () => {
+  test('recognises the preview parameter, wherever it sits in the query', () => {
+    expect(hasLanguagePreview('?lng=fr')).toBe(true);
+    expect(hasLanguagePreview('?sort=name&lng=et')).toBe(true);
+  });
+
+  test('an empty value still counts — `?lng=` is an explicit act', () => {
+    // i18next resolves the empty value to nothing and moves down its detection
+    // order; what matters here is that a stored preference does not overwrite
+    // whatever it settled on.
+    expect(hasLanguagePreview('?lng=')).toBe(true);
+  });
+
+  test('is false for ordinary URLs, so saved preferences still apply', () => {
+    expect(hasLanguagePreview('')).toBe(false);
+    expect(hasLanguagePreview('?sort=name')).toBe(false);
+  });
+
+  test('does not match a parameter that merely contains lng', () => {
+    expect(hasLanguagePreview('?lngx=fr')).toBe(false);
+    expect(hasLanguagePreview('?mylng=fr')).toBe(false);
   });
 });

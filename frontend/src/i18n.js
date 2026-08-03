@@ -51,6 +51,24 @@ export const resolveLocaleCode = (lng, codes = Object.keys(LOADERS).map((p) => p
 export const shippedNavigatorLanguage = (preferred = [], codes = SHIPPED_CODES) =>
   preferred.map((tag) => resolveLocaleCode(tag, codes)).find(Boolean);
 
+// The querystring key i18next detects below. Exported because one other place
+// has to recognise a preview — AuthContext, which must not overwrite it with
+// the stored account preference — and a second hard-coded 'lng' there would be
+// free to drift out of step with this one.
+export const LANGUAGE_QUERY_PARAM = 'lng';
+
+/**
+ * Whether this page load carries an explicit `?lng=` preview.
+ *
+ * Deliberately reads the live URL rather than a router value: the preview is a
+ * property of how the document was opened, and it has to be answerable during
+ * session restore, before any router exists.
+ */
+export const hasLanguagePreview = (search) =>
+  new URLSearchParams(
+    search ?? (typeof window === 'undefined' ? '' : window.location.search)
+  ).has(LANGUAGE_QUERY_PARAM);
+
 const detector = new LanguageDetector();
 
 detector.addDetector({
@@ -84,7 +102,7 @@ i18n
       order: ['querystring', 'localStorage', 'shippedNavigator'],
       caches: ['localStorage'],
       lookupLocalStorage: 'i18nextLng',
-      lookupQuerystring: 'lng',
+      lookupQuerystring: LANGUAGE_QUERY_PARAM,
     },
     interpolation: {
       escapeValue: false,

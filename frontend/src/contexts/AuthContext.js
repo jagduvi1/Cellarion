@@ -1,7 +1,7 @@
 import React, { createContext, useState, useContext, useEffect, useRef, useCallback } from 'react';
 import { findLanguage } from '../config/locales';
 import { createApiFetch } from '../utils/apiFetch';
-import i18n from '../i18n';
+import i18n, { hasLanguagePreview } from '../i18n';
 
 const AuthContext = createContext();
 
@@ -53,6 +53,15 @@ export const AuthProvider = ({ children }) => {
     // a choice the user made. A code whose locale no longer exists (translation
     // withdrawn, or set from another install) is ignored rather than applied,
     // so the session falls back to English instead of a stale half-language.
+    //
+    // A `?lng=` preview outranks the stored preference: it is a choice made
+    // just now, against one made months ago. Without this guard the detector
+    // picks the preview at boot and this line reverts it a beat later, so the
+    // page flashes the language and settles back — and since every screen worth
+    // previewing (racks, bottle lists, a cellar) sits behind this login, the
+    // preview TRANSLATING.md promises "on any page" would work only while
+    // signed out, which is precisely backwards for a translator.
+    if (hasLanguagePreview()) return;
     const preferred = userData?.preferences?.language;
     if (preferred && findLanguage(preferred)) {
       i18n.changeLanguage(preferred);
