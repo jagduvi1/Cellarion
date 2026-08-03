@@ -154,6 +154,15 @@
   color: #065f46;
 }
 
+/* Unread blog posts. Deliberately the brand colour rather than the danger red
+   the notification bell uses — an unread announcement is an invitation, not an
+   alert, and borrowing the alert colour would train people to ignore both. */
+.badge--unread {
+  background: var(--color-primary);
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+}
+
 .badge--plan { font-weight: 600; }
 .badge--plan-free      { background: var(--badge-plan-free-bg); color: var(--badge-plan-free-text); }
 .badge--plan-supporter { background: var(--badge-plan-basic-bg); color: var(--badge-plan-basic-text); }

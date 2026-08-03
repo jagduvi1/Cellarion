@@ -3,6 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { getBlogPosts, getBlogTags } from '../api/blog';
 import { useAuth } from '../contexts/AuthContext';
+import { markBlogSeen } from '../hooks/useUnreadBlog';
 import SEOHead from '../components/SEOHead';
 import SITE_URL from '../config/siteUrl';
 import './Blog.css';
@@ -53,6 +54,11 @@ function Blog() {
 
   useEffect(() => { fetchPosts(); }, [fetchPosts]);
   useEffect(() => { fetchTags(); }, [fetchTags]);
+
+  // Opening the index counts as reading the list — that is what the nav badge
+  // claims to track. Fires once on mount rather than per page/tag change, so
+  // paging through the archive doesn't keep rewriting the timestamp.
+  useEffect(() => { markBlogSeen(); }, []);
 
   const setPage = (p) => {
     const params = new URLSearchParams(searchParams);
