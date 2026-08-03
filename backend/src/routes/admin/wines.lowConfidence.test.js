@@ -99,7 +99,18 @@ describe('GET /low-confidence', () => {
 
     const filter = WineDefinition.find.mock.calls[0][0];
     expect(filter.nonWine).toEqual({ $ne: true });
-    expect(filter['aiProfile.confidence']).toEqual({ $ne: null, $lte: 0.3 });
+    // Null is MATCHED, not excluded. An unusable model answer (a non-number,
+    // or Infinity from a 1e400 in the JSON) sanitises to null, and the old
+    // `$ne: null` shut exactly those rows out of the queue built to catch
+    // them — so sanitising made them permanently unreviewable (audit
+    // 2026-08-03, adversarial pass).
+    expect(filter.$or).toEqual([
+      { 'aiProfile.confidence': null },
+      { 'aiProfile.confidence': { $lte: 0.3 } },
+    ]);
+    // Scoped to rows that were actually enriched, or every un-enriched wine
+    // would match the null branch.
+    expect(filter['aiProfile.generatedAt']).toEqual({ $ne: null });
     // The self-invalidation contract: suppression is a COMPARISON, so a
     // re-enriched profile (new generatedAt) re-surfaces the row with no hook.
     expect(filter.$expr).toEqual({
@@ -122,7 +133,18 @@ describe('GET /low-confidence', () => {
     await get('?includeReviewed=1');
     const filter = WineDefinition.find.mock.calls[0][0];
     expect(filter.$expr).toBeUndefined();
-    expect(filter['aiProfile.confidence']).toEqual({ $ne: null, $lte: 0.3 });
+    // Null is MATCHED, not excluded. An unusable model answer (a non-number,
+    // or Infinity from a 1e400 in the JSON) sanitises to null, and the old
+    // `$ne: null` shut exactly those rows out of the queue built to catch
+    // them — so sanitising made them permanently unreviewable (audit
+    // 2026-08-03, adversarial pass).
+    expect(filter.$or).toEqual([
+      { 'aiProfile.confidence': null },
+      { 'aiProfile.confidence': { $lte: 0.3 } },
+    ]);
+    // Scoped to rows that were actually enriched, or every un-enriched wine
+    // would match the null branch.
+    expect(filter['aiProfile.generatedAt']).toEqual({ $ne: null });
   });
 
   test('rows carry the model doubt fields and bottle counts', async () => {

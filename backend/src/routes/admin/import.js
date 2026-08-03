@@ -2,7 +2,7 @@ const express = require('express');
 const multer = require('multer');
 const { parse } = require('csv-parse');
 const { requireAuth, requireRole } = require('../../middleware/auth');
-const { generateWineKey, generateWineSlug, normalizeString, normalizeAppellation, resolveCountryName, isRecognizedCountry, isUnknownName } = require('../../utils/normalize');
+const { generateWineKey, generateWineSlug, normalizeString, normalizeAppellation, resolveCountryName, isRecognizedCountry, isUnknownName, sanitizeTaxonomyName } = require('../../utils/normalize');
 const { canonicalizeWineName } = require('../../utils/producerPrefix');
 const { computeCanonicalKey } = require('../../utils/wineIdentity');
 const WineDefinition = require('../../models/WineDefinition');
@@ -192,7 +192,7 @@ async function getOrCreateRegion(name, countryId, userId, cache) {
     { country: countryId, normalizedName: normalized },
     {
       $setOnInsert: {
-        name: name.trim(),
+        name: sanitizeTaxonomyName(name),
         normalizedName: normalized,
         country: countryId,
         createdBy: userId,

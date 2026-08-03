@@ -14,6 +14,42 @@ import './Blog.css';
 // with the rest one tap away.
 const COLLAPSED_TAG_COUNT = 8;
 
+/**
+ * The tags to render: the most-used handful, plus the active one so a filter
+ * always has a visible control to switch it off.
+ *
+ * `activeTag` is only honoured when it is a tag we actually have. It comes
+ * straight off the query string, and rendering it unchecked turned
+ * `?tag=<anything>` into an attacker-chosen pill sitting among the real ones —
+ * React escapes it so it is not XSS, but it is a convincing place to put
+ * "⚠ Verify your account". A tag we don't have matches no posts anyway.
+ *
+ * Exported for the tests: the filtering rule is the security-relevant part and
+ * is far easier to pin here than through a rendered page.
+ */
+export function visibleTagsFor(tags, activeTag, showAll, collapsedCount = COLLAPSED_TAG_COUNT) {
+  const all = Array.isArray(tags) ? tags : [];
+  if (showAll) return all;
+  const match = matchedTag(all, activeTag);
+  return [...new Set([...all.slice(0, collapsedCount), ...(match ? [match] : [])])];
+}
+
+/**
+ * The stored tag an `?tag=` value refers to, or undefined.
+ *
+ * Case-insensitive, because the two ends already disagree: tags are stored
+ * lowercased, and the posts endpoint lowercases `req.query.tag` before
+ * filtering — so `?tag=Feature` really does filter the list. A case-sensitive
+ * check here dropped the pill anyway, leaving a filtered page with nothing
+ * marked active and no visible explanation, which is the exact failure the
+ * active-tag rule exists to prevent.
+ */
+export function matchedTag(tags, activeTag) {
+  if (!activeTag) return undefined;
+  const wanted = String(activeTag).toLowerCase();
+  return (Array.isArray(tags) ? tags : []).find((t) => t === wanted);
+}
+
 function Blog() {
   const { t } = useTranslation();
   const { apiFetch } = useAuth();
@@ -79,15 +115,11 @@ function Blog() {
     setSearchParams(params);
   };
 
-  // The active tag is always kept visible, even when it falls outside the
-  // collapsed set: a filter you can see the effect of but not the control for
-  // reads as a broken page, and you'd have no way to switch it off.
-  const visibleTags = showAllTags
-    ? tags
-    : [...new Set([
-        ...tags.slice(0, COLLAPSED_TAG_COUNT),
-        ...(activeTag ? [activeTag] : []),
-      ])];
+  const visibleTags = visibleTagsFor(tags, activeTag, showAllTags);
+  // The stored spelling of the active tag, so the highlight uses the same
+  // case-insensitive rule as the visibility check above. Comparing the raw
+  // query value would highlight nothing for `?tag=Feature`.
+  const activeStored = matchedTag(tags, activeTag);
 
   const formatDate = (dateStr) => {
     if (!dateStr) return '';
@@ -141,7 +173,7 @@ function Blog() {
           {visibleTags.map(tag => (
             <button
               key={tag}
-              className={`blog-tag ${activeTag === tag ? 'active' : ''}`}
+              className={`blog-tag ${activeStored === tag ? 'active' : ''}`}
               onClick={() => setTag(tag)}
             >
               {tag}

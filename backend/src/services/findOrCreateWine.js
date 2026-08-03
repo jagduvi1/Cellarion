@@ -19,7 +19,7 @@ const Region = require('../models/Region');
 const Grape = require('../models/Grape');
 const Appellation = require('../models/Appellation');
 const searchService = require('./search');
-const { generateWineKey, normalizeString, normalizeAppellation, normalizeAppellationKey, stripTrailingVintage, resolveGrapeName, resolveCountryName, isRecognizedCountry, isUnknownName, isJunkGrapeName } = require('../utils/normalize');
+const { generateWineKey, normalizeString, normalizeAppellation, normalizeAppellationKey, stripTrailingVintage, resolveGrapeName, resolveCountryName, isRecognizedCountry, isUnknownName, isJunkGrapeName, sanitizeTaxonomyName } = require('../utils/normalize');
 const { scoreAllMatches } = require('./wineMatching');
 const { canonicalizeWineName } = require('../utils/producerPrefix');
 const { computeCanonicalKey, canonicalSiblingPrefix } = require('../utils/wineIdentity');
@@ -71,9 +71,22 @@ async function findOrCreateCountry(name, userId) {
   return country;
 }
 
-async function findOrCreateRegion(name, countryId, userId) {
+// Cap stored/compared field lengths at this single create chokepoint (covers
+// the find-or-create route, CSV import, cellar-format import and label-scan).
+// This bounds both the fuzzy-match cost and the persisted document size WITHOUT
+// a schema maxlength validator — a validator re-runs on every .save() (full-
+// document validation) and would make legacy rows that predate the cap
+// un-editable. Module scope, not function scope: the taxonomy helpers below are
+// called from the import paths too and need the same bound.
+const MAX_FIELD = 200;
+
+// Mirrors the route's cap so the import callers, which have none, get it too.
+const MAX_GRAPES = 20;
+
+async function findOrCreateRegion(rawName, countryId, userId) {
+  const name = sanitizeTaxonomyName(rawName);
   // "Unknown"/placeholder → null region (the schema's representation of unknown)
-  if (isUnknownName(name) || !countryId) return null;
+  if (!name || isUnknownName(name) || !countryId) return null;
   const normalizedName = normalizeString(name);
   // Match the canonical name OR a per-document synonym ("Piemonte" finds the
   // Piedmont doc) — same design as the Grape lookup below, so a merged
@@ -100,8 +113,12 @@ async function findOrCreateRegion(name, countryId, userId) {
   return region;
 }
 
-async function findOrCreateGrapes(names, userId) {
-  if (!Array.isArray(names) || names.length === 0) return [];
+async function findOrCreateGrapes(rawNames, userId) {
+  if (!Array.isArray(rawNames) || rawNames.length === 0) return [];
+  // Same chokepoint argument as findOrCreateRegion: the route caps the count and
+  // each name, the import callers cap neither. Non-strings are dropped rather
+  // than coerced — one reaching isJunkGrapeName's .trim() is a 500.
+  const names = rawNames.map(sanitizeTaxonomyName).filter(Boolean).slice(0, MAX_GRAPES);
   const ids = [];
   const seen = new Set(); // deduplicate within the same call (e.g. AI returns "Shiraz" + "Syrah")
   for (const name of names) {
@@ -166,13 +183,6 @@ async function findOrCreateGrapes(names, userId) {
  *   callers passing model output must normalize types first (identify-text does).
  */
 async function findOrCreateWine({ name, producer, country, region, appellation, type, grapes }, userId, { confirmCreate = false, skipSiblingMatch = false, matchOnly = false, createdVia = null } = {}) {
-  // Cap stored/compared field lengths at this single create chokepoint (covers
-  // the find-or-create route, CSV import, cellar-format import and label-scan).
-  // This bounds both the fuzzy-match cost and the persisted document size
-  // WITHOUT a schema maxlength validator — a validator re-runs on every .save()
-  // (full-document validation) and would make legacy rows that predate the cap
-  // un-editable.
-  const MAX_FIELD = 200;
   // Internal whitespace collapses too, not just the ends: a double space is
   // invisible in every UI and every normalized key, so "Wrights  Estate" and
   // "Wrights Estate" would otherwise coexist as two display spellings forever

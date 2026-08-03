@@ -162,3 +162,85 @@ describe('descriptor sanitization at the write point', () => {
     expect(persisted().producerSuspect).toBe(true);
   });
 });
+
+/**
+ * Bounds on model output (security audit 2026-08-03, M-2 and L-4).
+ *
+ * Two different failures, both silent. The confidence number decides whether a
+ * row is ever reviewed — the low-confidence queue filters on `$lte: threshold`,
+ * so a model persuaded to answer 1.0 makes its own row invisible to the humans
+ * meant to check it. And the list/prose fields were capped by COUNT but not by
+ * LENGTH, so unbounded strings reached the shared registry, the embedding text
+ * and the MCP tools, while a curator editing the same field was held to 40/60.
+ */
+describe('bounds on model output', () => {
+  test('confidence above 1 clamps to 1', async () => {
+    // Note this does NOT put the row in the review queue — a clamped 1.0 is
+    // still above any sane threshold. Queue visibility for unusable values is
+    // the query's job (routes/admin/wines.js), not the clamp's; an earlier
+    // version of this test claimed otherwise and was wrong.
+    const p = profile('Fine.');
+    p.data.confidence = 7;
+    suggestProfile.mockResolvedValue(p);
+    await enrichWineById(WINE_ID);
+    expect(persisted().confidence).toBe(1);
+  });
+
+  test('Infinity from a 1e400 in the model JSON does not persist as a number', async () => {
+    // JSON.parse('{"confidence":1e400}') yields Infinity without throwing, and
+    // Infinity survived the old `typeof === 'number'` check.
+    const p = profile('Fine.');
+    p.data.confidence = JSON.parse('{"c":1e400}').c;
+    suggestProfile.mockResolvedValue(p);
+    await enrichWineById(WINE_ID);
+    expect(persisted().confidence).toBeNull();
+  });
+
+  test('a negative confidence clamps to 0', async () => {
+    const p = profile('Fine.');
+    p.data.confidence = -3;
+    suggestProfile.mockResolvedValue(p);
+    await enrichWineById(WINE_ID);
+    expect(persisted().confidence).toBe(0);
+  });
+
+  test('a numeric string is accepted and clamped, not stored as a string', async () => {
+    const p = profile('Fine.');
+    p.data.confidence = '0.4';
+    suggestProfile.mockResolvedValue(p);
+    await enrichWineById(WINE_ID);
+    expect(persisted().confidence).toBe(0.4);
+  });
+
+  // These persist as null — "we don't know" — which is honest. What makes that
+  // safe is that the admin queue and the registry watchdog now MATCH null
+  // instead of excluding it with `$ne: null`. Storing null without that change
+  // is what made the first version of this fix cosmetic: every unusable value
+  // was routed into the one state guaranteed to hide the row.
+  test.each([['high'], [NaN], [null], [undefined], [{}]])(
+    'an unusable confidence %p persists as null rather than a junk number', async (val) => {
+      const p = profile('Fine.');
+      p.data.confidence = val;
+      suggestProfile.mockResolvedValue(p);
+      await enrichWineById(WINE_ID);
+      expect(persisted().confidence).toBeNull();
+    });
+
+  test('list entries are truncated to the same length the curator path enforces', async () => {
+    const p = profile('Fine.');
+    p.data.flavors = ['x'.repeat(500), 'tar'];
+    p.data.foodPairings = ['y'.repeat(500)];
+    suggestProfile.mockResolvedValue(p);
+    await enrichWineById(WINE_ID);
+    expect(persisted().flavors[0]).toHaveLength(40);
+    expect(persisted().flavors[1]).toBe('tar');
+    expect(persisted().foodPairings[0]).toHaveLength(60);
+  });
+
+  test('an unbounded description is truncated before it reaches the shared registry', async () => {
+    const p = profile('z'.repeat(9000));
+    suggestProfile.mockResolvedValue(p);
+    await enrichWineById(WINE_ID);
+    expect(persisted().description).toHaveLength(1000);
+  });
+});
