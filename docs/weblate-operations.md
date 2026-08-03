@@ -55,7 +55,7 @@ The project menu is `Languages · Components · Diagnostics · Overview · Searc
 | I want to… | Path |
 |---|---|
 | Invite a contributor, grant Review | **Operations → Users** |
-| Turn on AI/machine suggestions | **Operations → Settings → Automatic suggestions** |
+| Add an automatic-suggestion engine | **Operations → Automatic suggestions** (a page of its own, *not* a Settings tab) |
 | Fix JSON indentation on write | **Operations → Settings → Files → File format parameters** |
 | Pull the repo after a release | **Operations → Update** (usually automatic via webhook) |
 | See who contributed, with counts | **Insights → Credits** (pick a date range) |
@@ -72,10 +72,13 @@ Reviews are **on**, which is what makes the Approved column exist.
 - Because project access is **Public**, any signed-in user can already **edit** any unapproved string. Contributors need no permission from you to fix something wrong.
 - **Approving requires the `Review` role.** Ordinary translators cannot approve, and they can no longer edit a string *once it is approved* — approval effectively locks it to reviewers.
 - Grant it at **Operations → Users**: add an existing user by username (they confirm by invitation) or invite by e-mail (they register, then get access). Pick the **Review** team, not Administration — Administration also hands over settings, VCS and access control.
-- **Scope teams per language.** Teams can be limited by language as well as project, and that limit applies to reviewing/saving/suggesting. Make `Reviewers (sv)`, `Reviewers (fr)`, `Reviewers (de)` rather than one global team, so a French volunteer can't approve Swedish.
+- **Scope the grant to one language**, so a French volunteer can't approve Swedish. Two ways, both fine:
+  - Set a **Language limit** on the user directly in the *Add a user* form — the built-in project-wide `Review` team plus a limit is the fewest moving parts.
+  - Or make `Reviewers (sv)` / `(fr)` / `(de)` teams under the **Teams** tab and add people to those. More typing, but the Teams table then shows at a glance who can approve what, which is worth having once there is more than one reviewer.
+- ⚠️ **Whichever you choose, check the language you picked matches the locale directory.** See §7 — `Swedish (sv_SV)` is a plausible-looking wrong answer that grants nothing at all.
 - Trust is earned in-band: let people translate, read their work under **Insights → Credits**/**History**, then promote the good ones. Don't wait for pre-trusted strangers.
 
-⚠️ **Until at least one Review team exists, nobody — including possibly you — can move the Approved %.** Verify by opening an unreviewed string and looking for the Approve control; if it's missing, add yourself too.
+A `Review` team covering **all languages** already exists — Weblate creates it when the review workflow is on, so there is nothing to build before you can approve. If you are in **Administration**, you have review rights through that alone. Confirm rather than assume: open an unreviewed string and look for the Approve control. If it isn't there, add yourself to a Review team.
 
 ---
 
@@ -113,14 +116,16 @@ Each of these has already happened once.
 - **Set JSON indentation to 2** under Settings → Files → File format parameters. The default of 4 produced a 379 KB whole-file first diff. (The old "Customize JSON output" add-on was removed in Weblate 5.13.)
 - **Stale keys**: when `en` drops a key, translations keep it and CI fails on the orphan. Fix with the **Cleanup translation files** add-on, or one-off via **Cleanup unused** under Repository maintenance. It only removes keys absent from the base file — it does not inject empty strings, and it does no code analysis, so dynamic keys are safe.
 - **Do not poll `hosted.weblate.org`** with scripts or monitors. Their fail2ban banned the office IP for a day around a GitHub OAuth login. Use a browser; use mobile data if it looks unreachable. Anthropic's fetcher is blocked by their bot protection too, so an AI assistant cannot verify project pages for you.
-- **Machine suggestions are off until you add an engine** (Operations → Settings → Automatic suggestions). Keyless: Weblate Translation Memory, Glosbe, MyMemory. AI engines (Anthropic, OpenAI, DeepL, Google) need your own API key — use a separate key with a spend cap, because the project is public and every translator's click bills it.
+- **Automatic suggestions are *already on*, and the page is not where you'd look.** It's **Operations → Automatic suggestions** — its own page, a sibling of Settings, not a tab inside it. (Settings has exactly five tabs: Basic, Access, Workflow, Commit messages, Components.) Hosted Weblate installs three engines **site wide** for every project: Weblate Translation Memory, LibreTranslate, and Apertium APy. The keyless ones worth adding on top are **MyMemory** (the best single addition for our languages) and **Glosbe**. **Anthropic sits third in the Available list — don't.** It, and OpenAI/DeepL/Google/Azure/Amazon, bill your own API key on every translator's click, and this project is public. If you ever want one, use a separate key with a hard spend cap.
+- **Weblate Translation Memory is nearly empty until you tick "Use shared translation memory"** (Settings → **Workflow** tab). Without it the engine can only offer strings this project has already translated — near-useless on a young locale. Ticking it opens the cross-project pool, at the price of contributing ours back to it.
+- **Scope a review team to the language the repo actually uses.** Weblate's language list contains near-miss entries: picking `Swedish (sv_SV)` for a `Reviewers (sv)` team looks right and silently grants nothing, because our locale directory — and therefore the project's language object — is plain `sv`. (`sv_SV` isn't even Sweden; that's `SE`.) The failure is invisible: members simply never see an Approve control, with nothing to explain why. Check the code on the team against the directory name under `frontend/src/locales/`.
 - **Do not use Operations → Automatic translation** (the bulk one). It writes machine output in as real translations, which is how you end up with a "100 % translated" language nobody has read.
 
 ---
 
 ## 8. Billing and hosting
 
-- Plan and trial state: the **billing** page (linked from the project). Libre is free for libre projects but requires **human approval**, and the trial has a hard expiry date — watch it, and chase via the **Contact** link if approval lags more than a week.
+- **Libre was approved on 2026-08-03**, so the plan is settled and the trial clock is gone. Kept for whoever does this next: Libre is free for libre projects but requires **human approval**, the trial has a hard expiry date, and the **Contact** link is how you chase it if approval lags more than a week. Ours was granted partly on the strength of crediting Weblate in the README and on the site — that's a guideline, not a courtesy.
 - Approval criteria are a checklist on that page: one project, a public URL, components under a libre licence. When they're all ticked, there is nothing left for you to do but wait.
 - The **glossary** component (`local:` repository) permanently shows "outbound delivery is manual" and "updates are pulled manually" warnings. They are inapplicable — it has no VCS — and will never clear. Ignore them.
 
@@ -136,13 +141,13 @@ Brand names that must never be translated: Cellarion, CellarTracker, Vivino, and
 
 ## 10. A first-week checklist
 
-- [ ] Chase Libre approval if the trial is close to expiring.
+- [x] ~~Chase Libre approval if the trial is close to expiring.~~ Approved 2026-08-03.
 - [ ] Confirm you personally can approve a string; if not, add yourself to a Review team.
-- [ ] Create `Reviewers (sv)` / `(fr)` / `(de)` teams, empty for now.
+- [ ] Create `Reviewers (sv)` / `(fr)` / `(de)` teams, empty for now — checking each one's language against the locale directory name (§7).
 - [ ] Skim **Insights → Credits** for the last month — those are your reviewer candidates.
 - [ ] Work the Swedish `Unreviewed` queue yourself; you're the native speaker and it needs nobody else.
 - [ ] Triage the pending **Suggestions** (accept, reject, or comment).
-- [ ] Decide on machine suggestions (§7) before inviting reviewers, so they have the tool from day one.
+- [ ] Tick **Use shared translation memory** (Settings → Workflow), then install **MyMemory** and **Glosbe** (§7) — the three site-wide engines are already on, so this is topping up rather than starting from nothing.
 - [ ] Set JSON indentation to 2 if it isn't already.
 
 ---
