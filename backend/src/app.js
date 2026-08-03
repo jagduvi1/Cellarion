@@ -76,7 +76,7 @@ const aiConfig = require('./config/aiConfig');
 const announcementConfig = require('./config/announcement');
 const { logAudit, logger } = require('./services/audit');
 
-const app = express();
+const app = express(); // nosemgrep: express-check-csurf-middleware-usage — API uses JWT Bearer tokens (Authorization header), not session cookies; CSRF does not apply (same-site cookie attacks require a cookie-based session)
 
 // How many reverse-proxy hops sit in front of Express, i.e. how many trailing
 // X-Forwarded-For entries Express may trust when resolving req.ip (the per-IP
