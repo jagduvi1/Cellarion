@@ -615,7 +615,21 @@ Uses Jest. Covers auth middleware, cellar access control, wine normalisation/sim
 
 ### Translations
 
-Want Cellarion in your language? Translations are contributed through Weblate — no coding required. See [TRANSLATING.md](TRANSLATING.md) to get started. (Please don't PR edits to `translation.json` files directly; they conflict with Weblate's sync.)
+[![Translation status](https://hosted.weblate.org/widget/cellarion/frontend/svg-badge.svg)](https://hosted.weblate.org/engage/cellarion/)
+
+Cellarion's interface is community-translated with **[Weblate](https://hosted.weblate.org/engage/cellarion/)** — a web editor, no Git and no coding required. English is maintained by the developers alongside the code; every other language comes from volunteers.
+
+**What's useful differs by language:**
+
+| Language | What it needs |
+|---|---|
+| **French, German** | **Reviewers, not translators.** Both were machine-drafted in bulk, so every field is already filled — the work is reading what's there and correcting it. The queue you want is `state:translated NOT state:approved`, not the untranslated one. |
+| **Swedish** | A native reader. Effectively complete, barely reviewed. |
+| **Estonian, or a language not listed** | Translators, from the top. Request the language in Weblate and start — it shows up in the app from roughly 10 % onwards, and `?lng=<code>` previews it before that. |
+
+Guidelines, the wine-terminology glossary, and how a language graduates out of beta: **[TRANSLATING.md](TRANSLATING.md)**.
+
+(Please don't open pull requests that edit `translation.json` files directly — `en` excepted. They conflict with Weblate's two-way sync.)
 
 ---
 

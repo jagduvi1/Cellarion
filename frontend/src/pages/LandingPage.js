@@ -295,6 +295,16 @@ export default function LandingPage() {
             >
               {t('landing.footerSourceLink')}
             </a>
+            {/* The in-app translation link lives in Settings → Language, behind
+                login. Anonymous visitors — which is every translator who hasn't
+                signed up — had no path to Weblate before this one. */}
+            <a
+              href="https://hosted.weblate.org/engage/cellarion/"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              {t('landing.footerTranslate')}
+            </a>
           </div>
           <span className="landing-footer-copy">
             © {new Date().getFullYear()} {t('landing.footerCopy')}
