@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
@@ -64,6 +64,19 @@ function AddBottle() {
   });
   const [uploadedImages, setUploadedImages] = useState([]);
   const [showDetails, setShowDetails] = useState(false);
+
+  // Whether the user has worked the toggle themselves. Auto-expanding is a
+  // suggestion, not a policy — once someone closes the panel deliberately,
+  // re-opening it under them is worse than leaving the fields hidden.
+  const detailsTouchedRef = useRef(false);
+
+  // Adding several bottles at once is precisely when missing these fields hurts:
+  // the alternative is opening every bottle afterwards and typing the same note
+  // again. A support ticket arrived describing exactly that, from someone who
+  // never found the panel — so for a multi-bottle add we open it for them.
+  useEffect(() => {
+    if (numBottles > 1 && !detailsTouchedRef.current) setShowDetails(true);
+  }, [numBottles]);
   const [saving, setSaving] = useState(false);
   // Bottles already created by earlier attempts of the current submission —
   // when POST k of N fails, a retry only creates the remaining N−k instead of
@@ -940,7 +953,7 @@ function AddBottle() {
             <button
               type="button"
               className={`details-toggle ${showDetails ? 'details-toggle--open' : ''}`}
-              onClick={() => setShowDetails(v => !v)}
+              onClick={() => { detailsTouchedRef.current = true; setShowDetails(v => !v); }}
             >
               <span>{showDetails ? t('addBottle.hideDetails') : t('addBottle.showDetails')}</span>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="details-toggle-chevron">
@@ -951,6 +964,15 @@ function AddBottle() {
             {/* ── Collapsible: purchase info, notes, drink window ── */}
             {showDetails && (
               <div className="details-panel">
+                {/* Both the reporter of the support ticket and the maintainer
+                    independently assumed a note would land on only one of the
+                    bottles. It goes on all of them — but nothing said so, and a
+                    field people believe won't work is a field they don't use. */}
+                {numBottles > 1 && (
+                  <p className="details-applies-all">
+                    {t('addBottle.detailsApplyToAll', { count: numBottles })}
+                  </p>
+                )}
                 <div className="grid-2">
                   <div className="form-group">
                     <label>{t('addBottle.purchaseDate')}</label>

@@ -826,8 +826,8 @@
     "scanSaving": "Saving…",
     "scanNameProducerCountryRequired": "Wine name, producer, and country are required.",
     "scanFailedToSaveWine": "Failed to save wine. Please try again.",
-    "showDetails": "More details",
-    "hideDetails": "Hide details",
+    "showDetails": "Add notes, occasion, purchase info",
+    "hideDetails": "Hide notes, occasion, purchase info",
     "cantFindAiTitle": "Can't find your wine?",
     "cantFindAiHint": "Look it up",
     "aiFoundWine": "Already in the registry",
@@ -853,7 +853,9 @@
     "aiMatchHint": "This wine is already in our registry — using it won't create a duplicate.",
     "aiAddAndUse": "Looks right — add it",
     "aiConfidence": "{{percent}}% confident",
-    "aiSimilarTitle": "Already in the registry — did you mean one of these?"
+    "aiSimilarTitle": "Already in the registry — did you mean one of these?",
+    "detailsApplyToAll_one": "This applies to the bottle you are adding.",
+    "detailsApplyToAll_other": "These details apply to all {{count}} bottles."
   },
   "bottleDetail": {
     "backToCellar": "← Back to Cellar",

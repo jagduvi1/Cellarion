@@ -880,6 +880,18 @@
   margin-top: 0.75rem;
 }
 
+/* Answers "will this go on all of them?" before it is asked. Accent-tinted
+   rather than a plain hint, because it needs to be read, not skimmed past. */
+.details-applies-all {
+  margin: 0 0 0.875rem;
+  padding: 0.5rem 0.75rem;
+  border-left: 3px solid var(--color-accent);
+  border-radius: var(--radius-sm);
+  background: var(--color-accent-light);
+  color: var(--color-text-secondary);
+  font-size: 0.85rem;
+}
+
 /* form-label: block label outside a form-group wrapper */
 .form-label {
   display: block;
