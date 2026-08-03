@@ -624,7 +624,7 @@
     "supporterCtaYear": "Support · {{amount}}/yr",
     "patronCtaYear": "Become a Patron · {{amount}}/yr",
     "reassure": "Cancel anytime · same app either way 💛",
-    "reassureYear": "Billed once a year · cancel anytime · same app either way 💛",
+    "reassureYear": "Billed once a year · fewer card fees, so more of it reaches Cellarion · cancel anytime 💛",
     "alreadySupporting": "💛 You're supporting Cellarion — thank you! You can change or cancel anytime.",
     "donateNote": "Payments are handled securely by Stripe. Cellarion stays free and open whether you support or not."
   },
