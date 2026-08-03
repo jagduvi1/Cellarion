@@ -14,6 +14,26 @@ import './Blog.css';
 // with the rest one tap away.
 const COLLAPSED_TAG_COUNT = 8;
 
+/**
+ * The tags to render: the most-used handful, plus the active one so a filter
+ * always has a visible control to switch it off.
+ *
+ * `activeTag` is only honoured when it is a tag we actually have. It comes
+ * straight off the query string, and rendering it unchecked turned
+ * `?tag=<anything>` into an attacker-chosen pill sitting among the real ones —
+ * React escapes it so it is not XSS, but it is a convincing place to put
+ * "⚠ Verify your account". A tag we don't have matches no posts anyway.
+ *
+ * Exported for the tests: the filtering rule is the security-relevant part and
+ * is far easier to pin here than through a rendered page.
+ */
+export function visibleTagsFor(tags, activeTag, showAll, collapsedCount = COLLAPSED_TAG_COUNT) {
+  const all = Array.isArray(tags) ? tags : [];
+  if (showAll) return all;
+  const keepActive = activeTag && all.includes(activeTag) ? [activeTag] : [];
+  return [...new Set([...all.slice(0, collapsedCount), ...keepActive])];
+}
+
 function Blog() {
   const { t } = useTranslation();
   const { apiFetch } = useAuth();
@@ -79,15 +99,7 @@ function Blog() {
     setSearchParams(params);
   };
 
-  // The active tag is always kept visible, even when it falls outside the
-  // collapsed set: a filter you can see the effect of but not the control for
-  // reads as a broken page, and you'd have no way to switch it off.
-  const visibleTags = showAllTags
-    ? tags
-    : [...new Set([
-        ...tags.slice(0, COLLAPSED_TAG_COUNT),
-        ...(activeTag ? [activeTag] : []),
-      ])];
+  const visibleTags = visibleTagsFor(tags, activeTag, showAllTags);
 
   const formatDate = (dateStr) => {
     if (!dateStr) return '';

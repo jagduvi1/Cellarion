@@ -28,7 +28,7 @@ const { suggestProfile } = require('./labelScan');
 const aiProvider = require('./aiProvider');
 const { embedSinglePair } = require('./embeddingJob');
 const { isValidId } = require('../utils/validation');
-const { PROFILE_ENUMS } = require('./wineProfileOps');
+const { PROFILE_ENUMS, LIST_FIELDS, DESCRIPTION_MAX } = require('./wineProfileOps');
 const WineDefinition = require('../models/WineDefinition');
 const Bottle = require('../models/Bottle');
 
@@ -48,21 +48,50 @@ function cleanDescriptor(field, raw) {
   return PROFILE_ENUMS[field].includes(v) ? v : null;
 }
 
-function cleanStringList(raw, cap) {
+// Bounds come from LIST_FIELDS rather than being repeated here, because the
+// curator path already enforces them on the same fields of the same collection.
+// Capping the array but not its elements meant a model could write unbounded
+// strings into the SHARED registry — which then feed the embedding text and are
+// served verbatim by the MCP profile tools — while a human editing the identical
+// field was held to 40/60 characters. Two write surfaces, one collection, one
+// set of limits.
+function cleanStringList(raw, field) {
   if (!Array.isArray(raw)) return [];
+  const { max, maxLen } = LIST_FIELDS[field];
   return raw
     .filter((x) => typeof x === 'string')
-    .map((x) => x.trim())
-    .filter((x) => !SENTINEL_VALUE_RX.test(x))
-    .slice(0, cap);
+    .map((x) => x.trim().slice(0, maxLen))
+    .filter((x) => x && !SENTINEL_VALUE_RX.test(x))
+    .slice(0, max);
 }
 
 // Prose fields get the same sentinel guard after their existing cleanup — a
 // description or producerNote of "null"/"N/A" is an absent value, not prose.
-function cleanProse(raw) {
+// Length-bounded for the same reason as the lists above: aiProfile.description
+// has no maxlength on the schema and the write is an updateOne with $set, where
+// update validators are off, so nothing else stops it.
+function cleanProse(raw, maxLen = DESCRIPTION_MAX) {
   if (typeof raw !== 'string') return null;
   const v = stripMarkdown(raw);
-  return v && !SENTINEL_VALUE_RX.test(v.trim()) ? v : null;
+  if (!v || SENTINEL_VALUE_RX.test(v.trim())) return null;
+  return v.slice(0, maxLen);
+}
+
+// The generator is prompted for 0..1 but a prompt is advisory, and this number
+// decides whether a row is ever reviewed: the low-confidence queue filters on
+// `aiProfile.confidence: { $lte: threshold }`, so a value above the threshold —
+// or a NaN, or a string — makes the row permanently invisible to the humans
+// meant to check it. Clamped rather than trusted.
+function cleanConfidence(raw) {
+  // Typed narrowly on purpose: Number(null) and Number('') are both 0, so a
+  // blanket Number() would invent a confidence of 0 for a field the model never
+  // answered. 0 is a real value here — the lowest — and fabricating it is a
+  // different lie from the one this function exists to prevent.
+  const n =
+    typeof raw === 'number' ? raw
+      : (typeof raw === 'string' && raw.trim() !== '') ? Number(raw)
+        : NaN;
+  return Number.isFinite(n) ? Math.min(1, Math.max(0, n)) : null;
 }
 
 // ── In-memory job state ────────────────────────────────────────────────────
@@ -252,20 +281,20 @@ async function enrichWine(wine, model) {
           tannin:       cleanDescriptor('tannin', data.tannin),
           acidity:      cleanDescriptor('acidity', data.acidity),
           sweetness:    cleanDescriptor('sweetness', data.sweetness),
-          flavors:      cleanStringList(data.flavors, 10),
-          foodPairings: cleanStringList(data.foodPairings, 8),
+          flavors:      cleanStringList(data.flavors, 'flavors'),
+          foodPairings: cleanStringList(data.foodPairings, 'foodPairings'),
           // Strip markdown, don't just trim: the model reaches for emphasis even
           // when told not to, and the raw string is served un-rendered by the MCP
           // tools. Load-bearing half of the fix — the prompt is only advisory,
           // and a self-hoster can override it via SiteConfig.
           description:  cleanProse(data.description),
-          confidence:   typeof data.confidence === 'number' ? data.confidence : null,
+          confidence:   cleanConfidence(data.confidence),
           // The model's own doubt about the producer FIELD (registry audit
           // follow-up: "Arcane" — a range sold as a producer — sailed past
           // every string gate AND 49 audit agents; only this model hedged).
           // Strict true-check: absent on old/custom prompts → false.
           producerSuspect: data.producerSuspect === true,
-          producerNote: cleanProse(data.producerNote)?.slice(0, 300) ?? null,
+          producerNote: cleanProse(data.producerNote, 300),
           model:        model || aiConfig.get().enrichmentModel,
           generatedAt:  new Date(),
         },
@@ -359,5 +388,5 @@ async function enrichWineById(wineDefId, { budgetUserId } = {}) {
 module.exports = {
   start, requestStop, getStatus, enrichWineById,
   // exported for unit tests
-  cleanDescriptor, cleanStringList, cleanProse,
+  cleanDescriptor, cleanStringList, cleanProse, cleanConfidence,
 };

@@ -16,6 +16,7 @@ const { getReleaseCurve } = require('../services/communityPrice');
 const aiBurstLimiter = require('../middleware/aiBurstLimiter');
 const asyncHandler = require('../utils/asyncHandler');
 const { tryDebitAi, isRefundableFailure, isRefundableScanError } = require('../services/aiBudget');
+const { logAudit } = require('../services/audit');
 
 const REMBG_URL = process.env.REMBG_URL || 'http://rembg:5000';
 
@@ -415,13 +416,20 @@ router.post('/scan-label', requireAuth, aiBurstLimiter, asyncHandler(async (req,
 // (reachable via the AddBottle/Wishlist "create new wine" flow). purgeUserData
 // only reassigns createdBy on reap, so those rows would persist forever. A demo
 // must never create registry entries; it can only resolve existing ones elsewhere.
-router.post('/find-or-create', requireAuth, requireNonDemo, async (req, res) => {
+// asyncHandler: the validation below runs before the try, and `?.trim()` only
+// short-circuits on null/undefined — a numeric `name` threw a rejection Express 4
+// never catches, so the request hung open forever with nothing but an
+// unhandledRejection line in the log. Same hazard the identify-text route
+// documents below; this handler was the one that still had it.
+router.post('/find-or-create', requireAuth, requireNonDemo, asyncHandler(async (req, res) => {
   const { name, producer, country, region, appellation, type, grapes, labelImage, confirmCreate, source } = req.body;
 
-  if (!name?.trim() || !producer?.trim()) {
+  // typeof, not `?.` — see the asyncHandler note above. A non-string here must
+  // be a 400, not a thrown TypeError.
+  if (typeof name !== 'string' || !name.trim() || typeof producer !== 'string' || !producer.trim()) {
     return res.status(400).json({ error: 'name and producer are required' });
   }
-  if (!country?.trim()) {
+  if (typeof country !== 'string' || !country.trim()) {
     return res.status(400).json({ error: 'country is required' });
   }
   // Cap the free-text fields that feed the O(m·n) fuzzy-match scorer. Without
@@ -439,8 +447,11 @@ router.post('/find-or-create', requireAuth, requireNonDemo, async (req, res) => 
     if (!Array.isArray(grapes) || grapes.length > MAX_GRAPES) {
       return res.status(400).json({ error: `grapes must be an array of at most ${MAX_GRAPES} entries` });
     }
-    if (grapes.some(g => typeof g === 'string' && g.length > MAX_WINE_FIELD)) {
-      return res.status(400).json({ error: `each grape must be ${MAX_WINE_FIELD} characters or fewer` });
+    // `typeof g !== 'string' ||`, not `typeof g === 'string' &&`: the latter let a
+    // non-string element straight through to isUnknownName, which calls .trim()
+    // on it and 500s with the internal TypeError message.
+    if (grapes.some(g => typeof g !== 'string' || g.length > MAX_WINE_FIELD)) {
+      return res.status(400).json({ error: `each grape must be a string of ${MAX_WINE_FIELD} characters or fewer` });
     }
   }
 
@@ -462,14 +473,26 @@ router.post('/find-or-create', requireAuth, requireNonDemo, async (req, res) => 
     }
 
     const { wine, created } = result;
-    if (created) submitUrls(`/wines/${wine.slug || wine._id}`);
+    if (created) {
+      // This is the only user-facing path that mints into the SHARED registry,
+      // and since identify-text went read-only it is also where AI suggestions
+      // land once a user accepts them — so it was the one registry-write surface
+      // with no traceable record. `createdVia` alone doesn't serve: it is
+      // client-asserted and later merges rewrite it. Action name matches the MCP
+      // and admin surfaces so the three read as one stream.
+      logAudit(req, 'wine.create',
+        { type: 'wine', id: wine._id },
+        { via: source === 'ai' ? 'ai' : 'ui', name: wine.name, producer: wine.producer }
+      );
+      submitUrls(`/wines/${wine.slug || wine._id}`);
+    }
 
     res.status(created ? 201 : 200).json({ wine, created });
   } catch (err) {
     console.error('Find or create wine error:', err);
     res.status(err.status || 500).json({ error: err.message || 'Failed to find or create wine' });
   }
-});
+}));
 
 // POST /api/wines/identify-text — identify a wine from a free-text query using
 // AI and report what the registry already holds. READ-ONLY: this route creates

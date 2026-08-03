@@ -355,16 +355,30 @@ async function suggestProfile({ name, producer, vintage, country, region, appell
   let client;
   try { client = getClient(); } catch { return { data: null, debugRaw: null, debugReason: 'no_api_key' }; }
 
+  // Every value below is registry text a user can author, and enrichment fires
+  // automatically when a bottle is added — so these substitutions are the one
+  // place user input reaches a prompt whose answer is written back to the SHARED
+  // registry. Collapse whitespace (a newline is what lets injected text pose as
+  // a new instruction), drop control characters, and bound the length. The mint
+  // chokepoint now normalises region and grape names too, but this has to hold
+  // for rows that predate that and for any caller that bypasses it.
+  const field = (v) =>
+    String(v ?? '')
+      .replace(/\p{C}/gu, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, 200);
+
   const prompt = aiConfig.get().enrichmentPrompt
-    .replace('{{name}}', name || '')
-    .replace('{{producer}}', producer || '')
-    .replace('{{vintage}}', vintage || 'NV')
-    .replace('{{country}}', country || '')
-    .replace('{{region}}', region || '')
-    .replace('{{appellation}}', appellation || '')
-    .replace('{{classification}}', classification || '')
-    .replace('{{type}}', type || '')
-    .replace('{{grapes}}', Array.isArray(grapes) ? grapes.join(', ') : (grapes || ''));
+    .replace('{{name}}', field(name))
+    .replace('{{producer}}', field(producer))
+    .replace('{{vintage}}', field(vintage) || 'NV')
+    .replace('{{country}}', field(country))
+    .replace('{{region}}', field(region))
+    .replace('{{appellation}}', field(appellation))
+    .replace('{{classification}}', field(classification))
+    .replace('{{type}}', field(type))
+    .replace('{{grapes}}', field(Array.isArray(grapes) ? grapes.slice(0, 20).join(', ') : grapes));
 
   return callClaudeJson({
     client,
