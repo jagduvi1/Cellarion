@@ -19,8 +19,16 @@ export const scanLabel = (apiFetch, image, mediaType = 'image/jpeg') =>
   });
 
 /**
- * Find an existing wine or create a new one from confirmed label data.
- * Returns: { wine: WineDefinition, created: boolean }
+ * Find an existing wine or create a new one from CONFIRMED data. The only
+ * user-facing registry-write path — call it when the user has explicitly
+ * accepted a wine, never speculatively.
+ *
+ * Pass `source: 'ai'` when the data came from an AI suggestion the user
+ * accepted, so the row's provenance stays measurable.
+ *
+ * Returns: { wine, created: true } | { wine, created: false }
+ *        | { candidates: [{ wine, score }] }  — soft zone: ask "did you mean…?"
+ *          and resubmit with confirmCreate: true to create anyway.
  */
 export const findOrCreateWine = (apiFetch, wineData) =>
   apiFetch('/api/wines/find-or-create', {
@@ -30,9 +38,26 @@ export const findOrCreateWine = (apiFetch, wineData) =>
   });
 
 /**
- * Identify a wine from a free-text search query using AI, then find or create
- * it in the registry.
- * Returns: { wine: WineDefinition | null, created?: boolean, reason?: string }
+ * Identify a wine from a free-text search query using AI and report what the
+ * registry already holds. READ-ONLY — this never creates anything. Accepting a
+ * suggestion is a separate, explicit call to findOrCreateWine below.
+ *
+ * Returns: {
+ *   identified: { name, producer, country, region, appellation, type,
+ *                 grapes: string[], confidence } | null,
+ *   match:      { wine: WineDefinition } | null,
+ *   candidates: [{ wine: WineDefinition, score }],
+ *   reason:     string | null
+ * }
+ *
+ * `identified` is UNSAVED: country/region/grapes are plain name strings, not DB
+ * IDs, and there is no _id — the same shape getAiWineInfo returns. Only
+ * `match.wine` and `candidates[].wine` are persisted documents safe to use as a
+ * selected wine. Four states:
+ *   identified === null                          → the model found nothing (see reason)
+ *   match !== null                               → already in the registry
+ *   candidates.length > 0                        → near-matches to choose from
+ *   identified && !match && !candidates.length   → identified but NOT in the registry
  */
 export const identifyWineByText = (apiFetch, query) =>
   apiFetch('/api/wines/identify-text', {

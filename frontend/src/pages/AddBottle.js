@@ -28,7 +28,14 @@ function AddBottle() {
   const [showTextSearch, setShowTextSearch] = useState(false);
   const [aiSearching, setAiSearching] = useState(false);
   const [aiSearchError, setAiSearchError] = useState(null);
-  const [aiResult, setAiResult] = useState(null); // AI-found wine awaiting user confirmation
+  // identify-text is read-only: it reports what the AI recognised and what the
+  // registry already holds, and creates nothing. `aiIdentified` is UNSAVED data
+  // (plain strings, no _id); only `aiMatch` and `aiCandidates[].wine` are real
+  // registry documents. Accepting an unsaved suggestion goes through
+  // find-or-create, which is where a wine is actually created.
+  const [aiIdentified, setAiIdentified] = useState(null);
+  const [aiMatch, setAiMatch] = useState(null);
+  const [aiCandidates, setAiCandidates] = useState([]);
   const [selectedWine, setSelectedWine] = useState(null);
   const [numBottles, setNumBottles] = useState(1);
   const [bottleData, setBottleData] = useState({
@@ -100,6 +107,12 @@ function AddBottle() {
   // Apply a resolved wine (from find-or-create OR from a soft-zone pick) and
   // advance to the bottle-details step. Centralised so all entry paths share
   // the same teardown.
+  const clearAi = useCallback(() => {
+    setAiIdentified(null);
+    setAiMatch(null);
+    setAiCandidates([]);
+  }, []);
+
   const applyResolvedWine = useCallback((wine, carriedVintage) => {
     createdBottlesRef.current = [];
     imagesLinkedRef.current = false;
@@ -111,8 +124,9 @@ function AddBottle() {
     setPendingWineData(null);
     setSoftCandidates(null);
     setSoftPending(null);
+    clearAi();
     setStep(2);
-  }, []);
+  }, [clearAi]);
 
   // Submit a find-or-create request, handling the three response shapes:
   // resolved wine, soft-zone candidates, or error.
@@ -128,7 +142,9 @@ function AddBottle() {
       }
       if (data.candidates && data.candidates.length > 0) {
         setSoftCandidates(data.candidates);
-        setSoftPending({ wineData, carriedVintage });
+        // queryLabel: quote what the USER typed in the modal, not the AI's
+        // cleaned-up name, so the comparison reads the way they think of it.
+        setSoftPending({ wineData, carriedVintage, queryLabel: search.trim() || wineData.name });
         return;
       }
       applyResolvedWine(data.wine, carriedVintage);
@@ -137,7 +153,7 @@ function AddBottle() {
     } finally {
       setFindingWine(false);
     }
-  }, [apiFetch, t, applyResolvedWine]);
+  }, [apiFetch, t, applyResolvedWine, search]);
 
   // Confirm scan result — find/create the wine, save label image, go to bottle details
   const handleConfirmScan = useCallback(async () => {
@@ -206,36 +222,30 @@ function AddBottle() {
     setShowManualForm(false);
     setPendingWineData(null);
     setError(null);
-  }, []);
+    clearAi();
+  }, [clearAi]);
 
-  // Explicit search (Enter key or button — deliberately not fired per
-  // keystroke, since each search also triggers a paid AI identification).
-  // Runs both fuzzy search and AI identification in parallel so the AI can
-  // correctly distinguish similar wines (e.g. single vineyard vs generic).
+  // Explicit search (Enter key or button). Registry search ONLY — no AI.
+  //
+  // This used to fire identifyWineByText in parallel on every search, which
+  // both spent AI budget per keystroke-batch and (before identify-text became
+  // read-only) minted a registry wine for every guess, whether or not the user
+  // took it. AI is now something the user asks for via the "Can't find your
+  // wine?" row below, which also means the fast library results paint
+  // immediately instead of waiting behind a slower AI call.
   const handleSearch = useCallback(() => {
     if (!search.trim()) { setWines([]); return; }
     const query = search.trim();
     setLoading(true);
     setAiSearchError(null);
-    setAiSearching(true);
-    setAiResult(null);
+    clearAi();
 
-    // Fuzzy search (fast)
     searchWines(apiFetch, `search=${encodeURIComponent(query)}&limit=10`)
       .then(res => res.json())
       .then(data => { if (data.wines) setWines(data.wines); })
       .catch(err => console.error('Search failed:', err))
       .finally(() => setLoading(false));
-
-    // AI identification in parallel (slower but more accurate)
-    identifyWineByText(apiFetch, query)
-      .then(res => res.json())
-      .then(data => {
-        if (data.wine) setAiResult(data.wine);
-      })
-      .catch(() => { /* AI failure is non-fatal — fuzzy results still available */ })
-      .finally(() => setAiSearching(false));
-  }, [search, apiFetch]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [search, apiFetch, clearAi]);
 
   const handleSearchKeyDown = (e) => {
     if (e.key === 'Enter') handleSearch();
@@ -245,13 +255,17 @@ function AddBottle() {
     if (!search.trim()) return;
     setAiSearching(true);
     setAiSearchError(null);
-    setAiResult(null);
+    clearAi();
     try {
       const res = await identifyWineByText(apiFetch, search.trim());
       const data = await res.json();
       if (!res.ok) { setAiSearchError(data.error || t('addBottle.identifyFailed')); return; }
-      if (!data.wine) { setAiSearchError(t('addBottle.aiCouldNotIdentify')); return; }
-      setAiResult(data.wine);
+      // Branch on `identified`, never on a wine: "the model recognised it but
+      // the registry doesn't have it" is a SUCCESS, and is the common case.
+      if (!data.identified) { setAiSearchError(t('addBottle.aiCouldNotIdentify')); return; }
+      setAiIdentified(data.identified);
+      setAiMatch(data.match?.wine || null);
+      setAiCandidates(data.candidates || []);
     } catch {
       setAiSearchError(t('addBottle.identifyNetworkError'));
     } finally {
@@ -259,8 +273,44 @@ function AddBottle() {
     }
   };
 
+  // Seed the (existing) manual edit form from the AI suggestion — used both by
+  // "Not the right wine" and as the escape hatch when the model gave no country,
+  // which find-or-create would reject.
+  const editAiSuggestion = () => {
+    if (!aiIdentified) return;
+    setPendingWineData({
+      name: aiIdentified.name || '',
+      producer: aiIdentified.producer || '',
+      country: aiIdentified.country || '',
+      region: aiIdentified.region || '',
+      appellation: aiIdentified.appellation || '',
+      type: aiIdentified.type || 'red',
+      grapes: (aiIdentified.grapes || []).join(', '),
+      source: 'ai',
+    });
+    setShowManualForm(true);
+  };
+
   const handleAcceptAiResult = () => {
-    if (aiResult) handleSelectWine(aiResult);
+    // Already in the registry — a pure selection, nothing is written.
+    if (aiMatch) { handleSelectWine(aiMatch); return; }
+    if (!aiIdentified) return;
+    // No country means find-or-create would 400; send the user to the edit form
+    // to supply it rather than surfacing a server error.
+    if (!aiIdentified.country) { editAiSuggestion(); return; }
+    // Forward EVERY field, appellation included: it feeds normalizedKey, so
+    // dropping it would both mint an appellation-less row and make the
+    // accept-time match score differently from the identify-time probe.
+    submitFindOrCreate({
+      name: aiIdentified.name,
+      producer: aiIdentified.producer,
+      country: aiIdentified.country,
+      region: aiIdentified.region || '',
+      appellation: aiIdentified.appellation || '',
+      type: aiIdentified.type || 'red',
+      grapes: aiIdentified.grapes || [],
+      source: 'ai',
+    });
   };
 
   const handleSelectWine = (wine) => {
@@ -269,6 +319,27 @@ function AddBottle() {
     setSelectedWine(wine);
     setStep(2);
   };
+
+  // One row renderer for both the registry-search list and the AI near-match
+  // list, so the two can never drift. Takes a SAVED wine only.
+  const renderWineRow = (wine) => (
+    <div key={wine._id} className="wine-row" onClick={() => handleSelectWine(wine)} role="button" tabIndex={0} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleSelectWine(wine); } }}>
+      <WineImage image={wine.image} alt={wine.name} className="wine-row-image" wrapClass="wine-row-img-wrap" credit={wine.imageCredit} creditClass="wine-row-credit" wineType={wine.type} placeholder="wine-row-placeholder" />
+      <div className="wine-info">
+        <h3>{wine.name}</h3>
+        <p className="producer">{wine.producer}</p>
+        <div className="wine-meta">
+          <span>{wine.country?.name}</span>
+          {wine.region && <span>• {wine.region.name}</span>}
+          <span className={`wine-type-pill ${wine.type}`}>{wine.type}</span>
+        </div>
+        {wine.grapes?.length > 0 && (
+          <p className="wine-grapes">{wine.grapes.map(g => g.name).join(', ')}</p>
+        )}
+      </div>
+      <button className="btn btn-primary btn-small">{t('addBottle.selectBtn')}</button>
+    </div>
+  );
 
   // Link the uploaded images to the first created bottle. Called on full
   // success and after a partial failure, so bottles that were created keep
@@ -498,7 +569,10 @@ function AddBottle() {
           )}
 
           {/* ── Scan result: manual edit form (user said "not the right wine") ── */}
-          {scanResult && showManualForm && pendingWineData && (
+          {/* Manual edit form. No longer gated on scanResult: the AI-suggestion
+              card reuses it for "Not the right wine" and for supplying a
+              country the model didn't give. */}
+          {showManualForm && pendingWineData && (
             <div className="scan-result-panel">
               {labelImage && (
                 <div className="scan-manual-image-wrap">
@@ -557,7 +631,7 @@ function AddBottle() {
           )}
 
           {/* ── Camera-first prompt ──────────────────────────────────────── */}
-          {!scanResult && !showTextSearch && !labelCam.open && (
+          {!scanResult && !showTextSearch && !showManualForm && !labelCam.open && (
             <div className="wine-select-default">
               <div className="camera-prompt-card">
                 <svg className="camera-prompt-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -579,7 +653,7 @@ function AddBottle() {
           )}
 
           {/* ── Manual text search ───────────────────────────────────────── */}
-          {!scanResult && showTextSearch && (
+          {!scanResult && showTextSearch && !showManualForm && (
             <>
               <div className="wine-select-manual-header">
                 <h2>{t('addBottle.searchForWine')}</h2>
@@ -588,7 +662,7 @@ function AddBottle() {
                 </button>
               </div>
               <p className="wine-search-hint">
-                {t('addBottle.searchHint', 'Be as specific as possible — include the wine name and producer. We\'ll check our library first; if no match is found, we\'ll identify and add the wine.')}
+                {t('addBottle.searchHint', 'Be as specific as possible — include the wine name and producer. We\'ll search our library first; if nothing matches, you can ask AI to identify it.')}
               </p>
               <div className="search-section">
                 <div className="search-input-wrapper">
@@ -596,7 +670,7 @@ function AddBottle() {
                     type="text"
                     placeholder={t('addBottle.searchPlaceholder')}
                     value={search}
-                    onChange={(e) => { setSearch(e.target.value); setWines([]); setAiSearchError(null); setAiResult(null); }}
+                    onChange={(e) => { setSearch(e.target.value); setWines([]); setAiSearchError(null); setError(null); clearAi(); }}
                     onKeyDown={handleSearchKeyDown}
                     className="search-input-large"
                     autoFocus
@@ -609,71 +683,94 @@ function AddBottle() {
 
               {loading && <p>{t('addBottle.searching')}</p>}
 
-              {/* ── AI result preview card ── */}
-              {aiResult && !aiSearching && (
-                <div className="ai-result-card">
-                  <div className="ai-result-badge">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2a4 4 0 0 1 4 4c0 1.95-1.4 3.58-3.25 3.93L12 22"/><path d="M8 6a4 4 0 0 1 8 0"/><path d="M17 12H7"/></svg>
-                    {t('addBottle.aiFoundWine')}
-                  </div>
-                  <div className="ai-result-wine">
-                    {aiResult.image ? (
-                      <div className="wine-row-img-wrap">
-                        <img src={aiResult.image} alt={aiResult.name} className="wine-row-image" onError={(e) => { e.target.style.display = 'none'; }} />
-                      </div>
-                    ) : (
-                      <div className={`wine-row-placeholder ${aiResult.type}`}></div>
-                    )}
-                    <div className="wine-info">
-                      <h3>{aiResult.name}</h3>
-                      <p className="producer">{aiResult.producer}</p>
-                      <div className="wine-meta">
-                        <span>{aiResult.country?.name}</span>
-                        {aiResult.region && <span>• {aiResult.region.name}</span>}
-                        <span className={`wine-type-pill ${aiResult.type}`}>{aiResult.type}</span>
-                      </div>
-                      {aiResult.grapes?.length > 0 && (
-                        <p className="wine-grapes">{aiResult.grapes.map(g => g.name).join(', ')}</p>
-                      )}
+              {/* ── AI result card. Shape-aware: `card` is EITHER a saved
+                   registry wine (populated country/region/grape refs) OR the
+                   AI's unsaved suggestion (plain strings). Reading .name off a
+                   string would render blanks, so normalise both here. ── */}
+              {(aiMatch || aiIdentified) && !aiSearching && (() => {
+                const card = aiMatch || aiIdentified;
+                const isRegistryWine = Boolean(aiMatch);
+                const countryName = typeof card.country === 'string' ? card.country : card.country?.name;
+                const regionName = typeof card.region === 'string' ? card.region : card.region?.name;
+                const grapeNames = (card.grapes || [])
+                  .map(g => (typeof g === 'string' ? g : g?.name))
+                  .filter(Boolean);
+                return (
+                  <div className="ai-result-card">
+                    <div className="ai-result-badge">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2a4 4 0 0 1 4 4c0 1.95-1.4 3.58-3.25 3.93L12 22"/><path d="M8 6a4 4 0 0 1 8 0"/><path d="M17 12H7"/></svg>
+                      {isRegistryWine ? t('addBottle.aiFoundWine') : t('addBottle.aiIdentifiedTitle')}
                     </div>
-                  </div>
-                  <div className="ai-result-actions">
-                    <button type="button" className="btn btn-success" onClick={handleAcceptAiResult}>
-                      {t('addBottle.aiUseThisWine')}
-                    </button>
-                    <Link to="/wine-requests" className="btn btn-ghost">
-                      {t('addBottle.requestWineInstead')}
-                    </Link>
-                  </div>
-                </div>
-              )}
-
-              {/* ── Search results list ── */}
-              {!aiResult && !aiSearching && wines.length > 0 && (
-                <div className="wines-list">
-                  {wines.map(wine => (
-                    <div key={wine._id} className="wine-row" onClick={() => handleSelectWine(wine)} role="button" tabIndex={0} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleSelectWine(wine); } }}>
-                      <WineImage image={wine.image} alt={wine.name} className="wine-row-image" wrapClass="wine-row-img-wrap" credit={wine.imageCredit} creditClass="wine-row-credit" wineType={wine.type} placeholder="wine-row-placeholder" />
+                    <p className="wine-search-hint">
+                      {isRegistryWine ? t('addBottle.aiMatchHint') : t('addBottle.aiIdentifiedHint')}
+                    </p>
+                    <div className="ai-result-wine">
+                      <WineImage image={card.image} alt={card.name} className="wine-row-image" wrapClass="wine-row-img-wrap" credit={card.imageCredit} creditClass="wine-row-credit" wineType={card.type} placeholder="wine-row-placeholder" />
                       <div className="wine-info">
-                        <h3>{wine.name}</h3>
-                        <p className="producer">{wine.producer}</p>
+                        <h3>{card.name}</h3>
+                        <p className="producer">{card.producer}</p>
                         <div className="wine-meta">
-                          <span>{wine.country?.name}</span>
-                          {wine.region && <span>• {wine.region.name}</span>}
-                          <span className={`wine-type-pill ${wine.type}`}>{wine.type}</span>
+                          {countryName && <span>{countryName}</span>}
+                          {regionName && <span>• {regionName}</span>}
+                          {card.appellation && <span>• {card.appellation}</span>}
+                          <span className={`wine-type-pill ${card.type || 'red'}`}>{card.type || 'red'}</span>
                         </div>
-                        {wine.grapes?.length > 0 && (
-                          <p className="wine-grapes">{wine.grapes.map(g => g.name).join(', ')}</p>
+                        {grapeNames.length > 0 && (
+                          <p className="wine-grapes">{grapeNames.join(', ')}</p>
+                        )}
+                        {!isRegistryWine && card.confidence != null && (
+                          <span className="scan-confidence">{t('addBottle.aiConfidence', { percent: Math.round(card.confidence * 100) })}</span>
                         )}
                       </div>
-                      <button className="btn btn-primary btn-small">{t('addBottle.selectBtn')}</button>
                     </div>
-                  ))}
+                    <div className="ai-result-actions">
+                      {/* Busy state is load-bearing: this is now an async
+                          registry write, and a double-tap could otherwise
+                          create two rows. */}
+                      <button
+                        type="button"
+                        className={`btn ${aiCandidates.length > 0 ? 'btn-secondary' : 'btn-success'}`}
+                        onClick={handleAcceptAiResult}
+                        disabled={findingWine}
+                      >
+                        {findingWine
+                          ? t('addBottle.scanSaving')
+                          : (isRegistryWine ? t('addBottle.aiUseThisWine') : t('addBottle.aiAddAndUse'))}
+                      </button>
+                      <button type="button" className="btn btn-ghost" onClick={isRegistryWine ? clearAi : editAiSuggestion} disabled={findingWine}>
+                        {t('addBottle.scanNotRight')}
+                      </button>
+                      <Link to="/wine-requests" className="btn btn-ghost">
+                        {t('addBottle.requestWineInstead')}
+                      </Link>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* ── Near-matches already in the registry. Picking one is a pure
+                   read — this is what stops a near-duplicate being minted. ── */}
+              {aiCandidates.length > 0 && !aiSearching && (
+                <div className="wines-list">
+                  <h3 className="wine-select-subheading">{t('addBottle.aiSimilarTitle')}</h3>
+                  {aiCandidates.map(c => renderWineRow(c.wine))}
                 </div>
               )}
 
-              {/* ── "Can't find your wine?" row — appears after search when no AI result is shown ── */}
-              {!loading && search.trim() && !aiResult && !aiSearching && (
+              {/* ── Search results list. Never hidden by the AI card any more:
+                   hiding it is how the AI's guess used to beat the correct
+                   registry row. Rows already shown above are filtered out. ── */}
+              {!aiSearching && wines.length > 0 && (
+                <div className="wines-list">
+                  {wines
+                    .filter(w => String(w._id) !== String(aiMatch?._id)
+                      && !aiCandidates.some(c => String(c.wine?._id) === String(w._id)))
+                    .map(wine => renderWineRow(wine))}
+                </div>
+              )}
+
+              {/* ── "Can't find your wine?" row — the AI entry point ── */}
+              {!loading && search.trim() && !aiIdentified && !aiMatch && !aiSearching && (
                 <div className="ai-search-row" onClick={!aiSearching ? handleAiIdentify : undefined} role="button" tabIndex={0} onKeyDown={e => { if ((e.key === 'Enter' || e.key === ' ') && !aiSearching) { e.preventDefault(); handleAiIdentify(); } }}>
                   <div className="ai-search-row-icon">
                     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -1032,7 +1129,7 @@ function AddBottle() {
       {softCandidates && (
         <SimilarWinesModal
           candidates={softCandidates}
-          queryName={softPending?.wineData?.name}
+          queryName={softPending?.queryLabel || softPending?.wineData?.name}
           busy={findingWine}
           onPick={(wine) => applyResolvedWine(wine, softPending?.carriedVintage)}
           onCreateNew={() => softPending && submitFindOrCreate(

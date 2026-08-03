@@ -8,6 +8,15 @@ import './WinePicker.css';
  * Wine search picker for journal pairings.
  * Flow: type to search → your bottles + wine register → AI identify fallback
  *
+ * READ-ONLY by design — this component must never create a registry wine, and
+ * must not import findOrCreateWine. A journal pairing does not need a registry
+ * id: journalOps keeps `wine` only when it is a valid id and stores `wineName`
+ * unconditionally. The trigger here is free-text dinner notes with no
+ * confirmation step, often for a wine the user doesn't own, fired before the
+ * entry is even saved — so a minted row would frequently outlive a cancelled
+ * form. Smart Search therefore resolves to an existing wine when there is one
+ * and otherwise just fills the name.
+ *
  * Props:
  *  - value:      { bottle, wine, wineName } — current selection
  *  - onChange:   (update) => void — called with { bottle, wine, wineName }
@@ -21,6 +30,8 @@ export default function WinePicker({ value, onChange, placeholder }) {
   const [showResults, setShowResults] = useState(false);
   const [searching, setSearching] = useState(false);
   const [aiSearching, setAiSearching] = useState(false);
+  const [aiError, setAiError] = useState(null);
+  const [aiNote, setAiNote] = useState(null);
   const [selected, setSelected] = useState(!!(value?.bottle || value?.wine));
   const debounceRef = useRef(null);
   const wrapRef = useRef(null);
@@ -78,25 +89,51 @@ export default function WinePicker({ value, onChange, placeholder }) {
   const handleAiSearch = async () => {
     if (!query.trim()) return;
     setAiSearching(true);
+    setAiError(null);
+    setAiNote(null);
     try {
       const res = await identifyWineByText(apiFetch, query.trim());
-      if (res.ok) {
-        const data = await res.json();
-        if (data.wine) {
-          setQuery(data.wine.name);
-          setSelected(true);
-          setShowResults(false);
-          onChange({ bottle: null, wine: data.wine._id, wineName: data.wine.name });
-        }
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        // Previously an `if (res.ok)` with no else: a 429 or 403 flipped the
+        // button back with no feedback at all.
+        setAiError(t('journal.aiFailed', 'Wine lookup is unavailable right now.'));
+        return;
       }
-    } catch { /* ignore */ }
-    setAiSearching(false);
+      if (data.match?.wine) {
+        selectWine(data.match.wine);
+        return;
+      }
+      if (data.candidates?.length) {
+        // Offer the existing registry rows as options instead of guessing.
+        setResults(prev => ({ ...prev, wines: data.candidates.map(c => c.wine).filter(Boolean) }));
+        setShowResults(true);
+        return;
+      }
+      if (data.identified) {
+        // Recognised but not in the registry: keep the name, create nothing.
+        const label = [data.identified.producer, data.identified.name].filter(Boolean).join(' ');
+        setQuery(label);
+        setSelected(true);
+        setShowResults(false);
+        onChange({ bottle: null, wine: null, wineName: label });
+        setAiNote(t('journal.aiNotInRegistry', "Not in the wine register — we'll save the name with your entry."));
+        return;
+      }
+      setAiError(t('journal.aiNoResult', "Couldn't identify that wine. You can type the name yourself."));
+    } catch {
+      setAiError(t('journal.aiFailed', 'Wine lookup is unavailable right now.'));
+    } finally {
+      setAiSearching(false);
+    }
   };
 
   const handleClear = () => {
     setQuery('');
     setSelected(false);
     setResults({ bottles: [], wines: [] });
+    setAiError(null);
+    setAiNote(null);
     onChange({ bottle: null, wine: null, wineName: '' });
   };
 
@@ -110,7 +147,7 @@ export default function WinePicker({ value, onChange, placeholder }) {
           type="text"
           className="input wine-picker__input"
           value={query}
-          onChange={(e) => { setQuery(e.target.value); setSelected(false); onChange({ bottle: null, wine: null, wineName: e.target.value }); }}
+          onChange={(e) => { setQuery(e.target.value); setSelected(false); setAiError(null); setAiNote(null); onChange({ bottle: null, wine: null, wineName: e.target.value }); }}
           onFocus={() => { if (hasResults && !selected) setShowResults(true); }}
           placeholder={placeholder || t('journal.winePlaceholder', 'Search wine...')}
           maxLength={200}
@@ -119,6 +156,10 @@ export default function WinePicker({ value, onChange, placeholder }) {
           <button type="button" className="wine-picker__clear" onClick={handleClear}>×</button>
         )}
       </div>
+
+      {/* Smart Search found the wine but the registry doesn't have it — the
+          name is kept with the entry and nothing is written. */}
+      {aiNote && <p className="wine-picker__ai-note">{aiNote}</p>}
 
       {showResults && (
         <div className="wine-picker__dropdown">
@@ -160,8 +201,9 @@ export default function WinePicker({ value, onChange, placeholder }) {
             <div className="wine-picker__no-results">
               <p>{t('journal.noWineResults', 'No wines found')}</p>
               <button type="button" className="btn btn-small btn-primary" onClick={handleAiSearch} disabled={aiSearching}>
-                {aiSearching ? t('journal.aiSearching', 'Searching with AI...') : t('journal.aiSearch', 'Search with AI')}
+                {aiSearching ? t('journal.aiSearching', 'Searching...') : t('journal.aiSearch', 'Smart Search')}
               </button>
+              {aiError && <p className="wine-picker__ai-error">{aiError}</p>}
             </div>
           )}
 

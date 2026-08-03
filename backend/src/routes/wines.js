@@ -26,6 +26,59 @@ const router = express.Router();
 // chat message cap (chat.js).
 const MAX_AI_QUERY_LEN = 300;
 
+// Field caps for anything that reaches the registry-write path. Mirrors the
+// value findOrCreateWine enforces at its own create chokepoint.
+const MAX_WINE_FIELD = 200;
+const MAX_GRAPES = 20;
+const WINE_TYPES = ['red', 'white', 'rosé', 'sparkling', 'dessert', 'fortified'];
+
+const cleanField = (v) => {
+  if (typeof v !== 'string') return null;
+  const s = v.trim().replace(/\s+/g, ' ').slice(0, MAX_WINE_FIELD);
+  return s || null;
+};
+
+/**
+ * Normalize + allowlist the model's identification before it leaves the route.
+ *
+ * identify-text returns this to the client UNSAVED (the user confirms before
+ * anything is written), so it is the last place the shape is guaranteed. Two
+ * jobs: keep the payload inside the same caps findOrCreateWine would apply, and
+ * make the match-only probe throw-free — findOrCreateWine calls .trim() on
+ * name/producer before consulting any option, and labelScan's identity check
+ * only tests truthiness, so a model that returns `"name": 42` would otherwise
+ * 500 inside the probe.
+ *
+ * @returns {object|null} null when name or producer is unusable — the caller
+ *   reports that as "not identified" rather than probing with junk.
+ */
+function normalizeIdentifiedWine(data) {
+  if (!data || typeof data !== 'object') return null;
+
+  const name = cleanField(data.name);
+  const producer = cleanField(data.producer);
+  if (!name || !producer) return null;
+
+  const grapes = Array.isArray(data.grapes)
+    ? data.grapes.map(cleanField).filter(Boolean).slice(0, MAX_GRAPES)
+    : [];
+
+  const confidence = typeof data.confidence === 'number' && Number.isFinite(data.confidence)
+    ? Math.min(1, Math.max(0, data.confidence))
+    : null;
+
+  return {
+    name,
+    producer,
+    country: cleanField(data.country),
+    region: cleanField(data.region),
+    appellation: cleanField(data.appellation),
+    type: WINE_TYPES.includes(data.type) ? data.type : null,
+    grapes,
+    confidence,
+  };
+}
+
 /**
  * 429 for the Anthropic-backed endpoints when the shared per-user daily AI
  * budget (or the site-wide daily cap) is exhausted. These endpoints have no
@@ -349,13 +402,21 @@ router.post('/scan-label', requireAuth, aiBurstLimiter, asyncHandler(async (req,
 //
 // Pass `confirmCreate: true` after the user has reviewed the soft-zone
 // candidates and explicitly chosen to create a new wine anyway.
+//
+// `source: 'ai'` marks "the user accepted an AI suggestion" and stamps
+// createdVia:'ai'. Note the semantic shift: before identify-text became
+// read-only, createdVia:'ai' meant "auto-minted with nobody's confirmation"
+// (the ~162 pre-existing prod rows). From this release it means the opposite —
+// a human looked at the suggestion and said yes. The createdAt deploy boundary
+// separates the two cohorts, which is why this reuses the value rather than
+// adding an enum member.
 // requireNonDemo: find-or-create is a NON-AI registry-write primitive — on a miss
 // it mints a WineDefinition + Country/Region/Grape into the SHARED registry
 // (reachable via the AddBottle/Wishlist "create new wine" flow). purgeUserData
 // only reassigns createdBy on reap, so those rows would persist forever. A demo
 // must never create registry entries; it can only resolve existing ones elsewhere.
 router.post('/find-or-create', requireAuth, requireNonDemo, async (req, res) => {
-  const { name, producer, country, region, appellation, type, grapes, labelImage, confirmCreate } = req.body;
+  const { name, producer, country, region, appellation, type, grapes, labelImage, confirmCreate, source } = req.body;
 
   if (!name?.trim() || !producer?.trim()) {
     return res.status(400).json({ error: 'name and producer are required' });
@@ -366,10 +427,20 @@ router.post('/find-or-create', requireAuth, requireNonDemo, async (req, res) => 
   // Cap the free-text fields that feed the O(m·n) fuzzy-match scorer. Without
   // this, a multi-MB name/producer (the body limit here is 5mb) would drive a
   // huge Levenshtein computation against every candidate — an authenticated DoS.
-  const MAX_WINE_FIELD = 200;
-  for (const [field, value] of Object.entries({ name, producer, appellation })) {
+  // region is capped too: findOrCreateRegion mints whatever arrives, and since
+  // identify-text stopped creating, this is the sole user-facing write path and
+  // now receives machine-generated payloads.
+  for (const [field, value] of Object.entries({ name, producer, appellation, region })) {
     if (typeof value === 'string' && value.length > MAX_WINE_FIELD) {
       return res.status(400).json({ error: `${field} must be ${MAX_WINE_FIELD} characters or fewer` });
+    }
+  }
+  if (grapes !== undefined) {
+    if (!Array.isArray(grapes) || grapes.length > MAX_GRAPES) {
+      return res.status(400).json({ error: `grapes must be an array of at most ${MAX_GRAPES} entries` });
+    }
+    if (grapes.some(g => typeof g === 'string' && g.length > MAX_WINE_FIELD)) {
+      return res.status(400).json({ error: `each grape must be ${MAX_WINE_FIELD} characters or fewer` });
     }
   }
 
@@ -380,7 +451,9 @@ router.post('/find-or-create', requireAuth, requireNonDemo, async (req, res) => 
       // skipSiblingMatch: the user has already reviewed the suggested matches
       // (that's what confirmCreate means here) — an appellation-variant sibling
       // must not silently override their explicit "create a new wine anyway".
-      { confirmCreate: !!confirmCreate, skipSiblingMatch: !!confirmCreate, createdVia: 'ui' }
+      // Strict allowlist on source so an arbitrary body value can't invent a
+      // provenance the enum would reject.
+      { confirmCreate: !!confirmCreate, skipSiblingMatch: !!confirmCreate, createdVia: source === 'ai' ? 'ai' : 'ui' }
     );
 
     // Soft-zone: hand the candidates back so the UI can prompt the user
@@ -398,31 +471,94 @@ router.post('/find-or-create', requireAuth, requireNonDemo, async (req, res) => 
   }
 });
 
-// POST /api/wines/identify-text — identify a wine from a free-text query using AI,
-// then find or create it in the registry. Used by the AddBottle manual search fallback.
+// POST /api/wines/identify-text — identify a wine from a free-text query using
+// AI and report what the registry already holds. READ-ONLY: this route creates
+// nothing.
+//
+// It used to call findOrCreateWine unconditionally, minting a WineDefinition
+// (plus Country/Region/Grape taxonomy) for every AI guess — before the user
+// confirmed and before any bottle existed. Measured on prod 2026-08-03: 85 of
+// 162 createdVia:'ai' rows had zero bottles (52%) against 3% for 'ui', and the
+// same producer arrived spelled three ways from one user retyping a query.
+// Creation now happens only when the user accepts, via POST /find-or-create.
+//
+// Response — 200, one shape with four states:
+//   { identified: {name, producer, country, region, appellation, type,
+//                  grapes: string[], confidence} | null,   // UNSAVED strings
+//     match:      { wine: <populated WineDefinition> } | null,
+//     candidates: [{ wine, score }],
+//     reason:     string | null }
+//
+// Invariants:
+//   1. identified === null  ⟺ the model produced nothing usable; reason is set.
+//   2. match !== null       ⟹ candidates is [] and reason is null.
+//   3. candidates.length>0  ⟹ match is null.
+//   4. identified && !match && !candidates.length ⟹ identified but NOT in the
+//      registry — the state this route exists to report.
+// There is deliberately no top-level `wine`/`created`: the rename makes any
+// consumer that assumed a saved document fail loudly rather than silently
+// dereference undefined.
+//
+// `match` carries no confidence: findOrCreateWine resolves via exact key,
+// canonicalKey, sibling prefix or score ≥ 0.95 without reporting which, so any
+// number here would be fabricated. It stays an object so one can be added later.
+//
+// Stays a POST though it is semantically a read — app.js's writeLimiter skips
+// GET/HEAD/OPTIONS, and this path must keep its rate limit.
+//
 // asyncHandler: tryDebitAi runs before the try; a Mongo error there must 500, not hang (audit HIGH).
 router.post('/identify-text', requireAuth, aiBurstLimiter, asyncHandler(async (req, res) => {
   const query = typeof req.body.query === 'string' ? req.body.query.trim() : '';
   if (!query) return res.status(400).json({ error: 'query is required' });
   if (query.length > MAX_AI_QUERY_LEN) return res.status(400).json({ error: `query must be at most ${MAX_AI_QUERY_LEN} characters` });
 
+  // Demo accounts are stopped here, inside tryDebitAi — no requireNonDemo
+  // needed, and adding one would swap this coded 403 for an uncoded one.
   const debit = await tryDebitAi(req.user.id, { isDemo: req.user.isDemo });
   if (!debit.ok) return sendAiBudgetExhausted(res, debit);
 
+  // Phase 1: the billable call. Only a pre-completion / transport failure refunds.
+  let result;
   try {
-    const result = await identifyWineFromQuery(query);
-    if (!result.data) {
-      // Transport-level failures never produced a billable completion
-      if (isRefundableFailure(result.debugReason)) await debit.refund();
-      return res.json({ wine: null, reason: result.debugReason });
-    }
-
-    const { wine, created } = await findOrCreateWine(result.data, req.user.id, { createdVia: 'ai' });
-    return res.json({ wine: wine.toObject ? wine.toObject() : wine, created });
+    result = await identifyWineFromQuery(query);
   } catch (err) {
     await debit.refund();
     console.error('Identify text error:', err);
     return res.status(500).json({ error: err.message || 'Failed to identify wine' });
+  }
+
+  if (!result.data) {
+    if (isRefundableFailure(result.debugReason)) await debit.refund();
+    return res.json({ identified: null, match: null, candidates: [], reason: result.debugReason });
+  }
+
+  const identified = normalizeIdentifiedWine(result.data);
+  if (!identified) {
+    // A completed, billed call that returned an unusable identity — no refund.
+    return res.json({ identified: null, match: null, candidates: [], reason: 'invalid_identity_fields' });
+  }
+
+  // Phase 2: registry probe. The billable call has completed and been paid for —
+  // a failure here (e.g. a DB error) returns 500 WITHOUT a refund, since the AI
+  // work really happened. The old blanket catch-and-refund reversed both the
+  // per-user debit and the site-wide kill-switch on any throw, and the soft-zone
+  // shape below reached it on every near-match.
+  try {
+    // matchOnly and NOTHING else. confirmCreate would gate off the soft-zone
+    // return that sits above the matchOnly gate, collapsing every 0.85–0.95
+    // near-match into noMatch — which is exactly the duplication this fixes.
+    const probe = await findOrCreateWine(identified, req.user.id, { matchOnly: true });
+
+    if (probe.wine) {
+      return res.json({ identified, match: { wine: probe.wine }, candidates: [], reason: null });
+    }
+    if (probe.candidates?.length) {
+      return res.json({ identified, match: null, candidates: probe.candidates, reason: null });
+    }
+    return res.json({ identified, match: null, candidates: [], reason: null });
+  } catch (err) {
+    console.error('Identify text probe error:', err);
+    return res.status(500).json({ error: 'Failed to identify wine' });
   }
 }));
 

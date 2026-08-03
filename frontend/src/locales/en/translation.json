@@ -828,7 +828,7 @@
     "hideDetails": "Hide details",
     "cantFindAiTitle": "Can't find your wine?",
     "cantFindAiHint": "Look it up",
-    "aiFoundWine": "Match found",
+    "aiFoundWine": "Already in the registry",
     "aiUseThisWine": "Use this wine",
     "requestWineInstead": "Request a wine",
     "aiCouldNotIdentify": "Could not identify this wine. You can submit a request instead.",
@@ -840,12 +840,18 @@
     "useCameraInstead": "Use camera instead",
     "searchManuallyInstead": "No camera? Search manually instead →",
     "searchBtn": "Search",
-    "searchHint": "Be as specific as possible — include the wine name and producer. We'll check our library first; if no match is found, we'll identify and add the wine.",
+    "searchHint": "Be as specific as possible — include the wine name and producer. We'll search our library first; if nothing matches, you can ask AI to identify it.",
     "identifyFailed": "Identification failed",
     "identifyNetworkError": "Network error during identification.",
     "addFailed": "Failed to add bottle",
     "partialAdded_one": "{{msg}} — {{count}} of {{total}} bottles was added. Retrying will add only the remaining {{remaining}}.",
-    "partialAdded_other": "{{msg}} — {{count}} of {{total}} bottles were added. Retrying will add only the remaining {{remaining}}."
+    "partialAdded_other": "{{msg}} — {{count}} of {{total}} bottles were added. Retrying will add only the remaining {{remaining}}.",
+    "aiIdentifiedTitle": "We think this is your wine",
+    "aiIdentifiedHint": "This wine isn't in our registry yet. Check the details — we'll add it to the shared registry when you continue.",
+    "aiMatchHint": "This wine is already in our registry — using it won't create a duplicate.",
+    "aiAddAndUse": "Looks right — add it",
+    "aiConfidence": "{{percent}}% confident",
+    "aiSimilarTitle": "Already in the registry — did you mean one of these?"
   },
   "bottleDetail": {
     "backToCellar": "← Back to Cellar",
@@ -2338,7 +2344,10 @@
     "dontAskAgain": "Don't ask again",
     "loadMore": "Load more",
     "dish": "Dish",
-    "wine": "Wine"
+    "wine": "Wine",
+    "aiNotInRegistry": "Not in the wine register — we'll save the name with your entry.",
+    "aiNoResult": "Couldn't identify that wine. You can type the name yourself.",
+    "aiFailed": "Wine lookup is unavailable right now."
   },
   "restock": {
     "title": "Smart Restock",
@@ -3169,7 +3178,7 @@
     "searchPlaceholder": "e.g. Chateau Margaux 2015",
     "searchBtn": "Search",
     "searching": "Searching...",
-    "aiFound": "AI found this wine",
+    "aiFound": "Already in the registry",
     "useThisWine": "Use this wine",
     "select": "Select",
     "cantFind": "Can't find your wine?",
@@ -3192,7 +3201,13 @@
     "networkError": "Network error",
     "networkErrorIdentify": "Network error during identification.",
     "failedAdd": "Failed to add to wishlist",
-    "addedSuccess": "{{name}} added to your wishlist!"
+    "addedSuccess": "{{name}} added to your wishlist!",
+    "aiIdentified": "We think this is your wine",
+    "aiIdentifiedHint": "This wine isn't in our registry yet. Check the details — we'll add it to the shared registry when you continue.",
+    "aiMatchHint": "This wine is already in our registry — using it won't create a duplicate.",
+    "aiAddIt": "Looks right — add it",
+    "aiSimilarTitle": "Already in the registry — did you mean one of these?",
+    "demoAiBlocked": "AI wine lookup isn't available in the demo. Create a free account to use it."
   },
   "notificationBell": {
     "title": "Notifications",

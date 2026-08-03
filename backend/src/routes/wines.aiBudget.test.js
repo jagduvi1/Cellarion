@@ -243,18 +243,21 @@ describe('POST /api/wines/identify-text — daily AI budget', () => {
     expect(identifyWineFromQuery).not.toHaveBeenCalled();
   });
 
+  // Budget claim only — the response SHAPE is pinned in wines.identifyText.test.js.
+  // This used to assert res.body.wine.name against a { created: true } fixture,
+  // which is impossible under matchOnly and would have stayed green against a
+  // route that still minted.
   test('successful identify debits once', async () => {
     identifyWineFromQuery.mockResolvedValue({
       data: { name: 'Fixin', producer: 'Albert Bichot', country: 'France', grapes: [] },
       debugRaw: 'raw',
       debugReason: null,
     });
-    findOrCreateWine.mockResolvedValue({ wine: { _id: 'w1', name: 'Fixin', producer: 'Albert Bichot' }, created: true });
+    findOrCreateWine.mockResolvedValue({ wine: { _id: 'w1', name: 'Fixin', producer: 'Albert Bichot' } });
 
     const res = await postJson(app, '/api/wines/identify-text', { query: 'Albert Bichot Fixin 2019' });
 
     expect(res.status).toBe(200);
-    expect(res.body.wine.name).toBe('Fixin');
     expect(userDebits()).toBe(1);
   });
 
@@ -262,7 +265,7 @@ describe('POST /api/wines/identify-text — daily AI budget', () => {
     identifyWineFromQuery.mockResolvedValueOnce({ data: null, debugRaw: 'x', debugReason: 'exception: boom' });
     let res = await postJson(app, '/api/wines/identify-text', { query: 'whatever' });
     expect(res.status).toBe(200);
-    expect(res.body.wine).toBeNull();
+    expect(res.body.identified).toBeNull();
     expect(userDebits()).toBe(0); // refunded
 
     identifyWineFromQuery.mockResolvedValueOnce({ data: null, debugRaw: 'x', debugReason: 'ai_unknown: no idea' });

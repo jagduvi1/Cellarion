@@ -702,6 +702,53 @@ describe('findOrCreateWine — creation', () => {
     expect(WineDefinition).not.toHaveBeenCalled();
   });
 
+  // The shape identify-text hits MOST often: an AI-phrased producer rarely lands
+  // on an exact normalizedKey but usually scores in the 0.85-0.95 band. It is
+  // what lets the UI offer "did you mean this existing wine?" instead of
+  // minting a near-duplicate.
+  test('matchOnly still returns soft-zone candidates — the matchOnly gate sits BELOW the candidate return', async () => {
+    primeCandidates([{ wine: EXISTING_WINE, score: 0.9 }]);
+
+    const result = await findOrCreateWine(INPUT, USER_ID, { matchOnly: true });
+
+    expect(result.candidates).toHaveLength(1);
+    expect(result.candidates[0].wine).toBe(EXISTING_WINE);
+    expect(result.noMatch).toBeUndefined();
+    expect(WineDefinition).not.toHaveBeenCalled();
+  });
+
+  test('matchOnly + confirmCreate collapses the soft zone into noMatch — never combine them outside the demo clone', async () => {
+    primeCandidates([{ wine: EXISTING_WINE, score: 0.9 }]);
+
+    const result = await findOrCreateWine(INPUT, USER_ID, { matchOnly: true, confirmCreate: true });
+
+    // confirmCreate gates off the candidate return, and matchOnly then refuses
+    // to create — so a real near-match is reported as "nothing found". Correct
+    // for the demo clone (which wants a hard miss), catastrophic for
+    // identify-text, which is why that route passes matchOnly and nothing else.
+    expect(result.candidates).toBeUndefined();
+    expect(result.noMatch).toBe(true);
+    expect(WineDefinition).not.toHaveBeenCalled();
+  });
+
+  test('matchOnly does not shield junk that would be rejected at create time — it reports noMatch instead of throwing', async () => {
+    // The producer-is-a-place gate, the 2-char producer gate and the
+    // unrecognized-country 400 all sit BELOW the matchOnly return, so they move
+    // from identify time to accept time. identify-text therefore answers "not
+    // in the registry" and find-or-create is where the rejection surfaces.
+    const result = await findOrCreateWine({ ...INPUT, producer: 'Bordeaux' }, USER_ID, { matchOnly: true });
+
+    expect(result.noMatch).toBe(true);
+    expect(WineDefinition).not.toHaveBeenCalled();
+  });
+
+  test('a non-string name throws even under matchOnly — the trim runs before any option is consulted', async () => {
+    // Documents why POST /identify-text normalizes the model payload at the
+    // route instead of relying on this service to be defensive.
+    await expect(findOrCreateWine({ ...INPUT, name: 42 }, USER_ID, { matchOnly: true }))
+      .rejects.toThrow();
+  });
+
   test('unknown wine type defaults to "red"; valid types are kept', async () => {
     await findOrCreateWine({ ...INPUT, type: 'orange' }, USER_ID);
     expect(WineDefinition.mock.calls[0][0].type).toBe('red');
