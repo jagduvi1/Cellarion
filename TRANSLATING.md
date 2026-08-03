@@ -12,7 +12,7 @@ Cellarion's interface is community-translated. Thank you for helping!
 
   Weblate shows each English string with context, tracks per-language completeness, and opens pull requests against this repo automatically.
 
-  Weblate can also offer machine/AI suggestions you correct rather than typing from scratch, but they are **not on by default**: an engine has to be added to the project first, under Operations → Settings → Automatic suggestions. The keyless engines (Weblate Translation Memory, Glosbe, MyMemory) need nothing; the AI ones (Anthropic, OpenAI, DeepL, Google) need an API key the project owner supplies. If the Automatic suggestions tab is empty when you translate, that is why — ask, don't assume it is broken.
+  Weblate also offers **automatic suggestions** you correct rather than typing from scratch, and several are already available: Hosted Weblate enables Weblate Translation Memory, LibreTranslate and Apertium APy for every project. They appear in the *Automatic suggestions* panel under the translation box. Coverage varies by language pair, so a blank panel on one string doesn't mean the feature is off. AI engines (Anthropic, OpenAI, DeepL, Google) are *not* enabled — they bill the project owner's own API key per use, and this project is public.
 
 **Please do not open pull requests that edit `translation.json` files directly** (except for `en`, which is developer-maintained). Direct edits conflict with Weblate's two-way sync and will be closed with a friendly pointer here.
 
