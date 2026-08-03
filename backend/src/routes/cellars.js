@@ -336,15 +336,38 @@ async function attachBottleImageUrls(bottles, userId) {
   if (!bottles.length) return bottles;
   const bottleIds = bottles.map(b => b._id);
 
+  // Matched by bottle OR by wine, mirroring the single-bottle route. A photo
+  // taken while adding five bottles of the same wine is linked to exactly one
+  // of them, so matching on bottle alone left the other four blank in every
+  // list — while the bottle page, which already matches on wineDefinition,
+  // showed the photo on all five. Same bottle, two answers depending on which
+  // page you opened.
+  const wineIdOf = (b) => b.wineDefinition && (b.wineDefinition._id || b.wineDefinition);
+  const wineIds = [...new Set(bottles.map(wineIdOf).filter(Boolean).map(String))];
+
   const pendingImages = await BottleImage.find({
-    bottle: { $in: bottleIds },
+    $or: [
+      { bottle: { $in: bottleIds } },
+      ...(wineIds.length ? [{ wineDefinition: { $in: wineIds } }] : []),
+    ],
     uploadedBy: userId,
     status: { $in: ['uploaded', 'processing', 'processed'] },
   }).sort({ createdAt: -1 }).lean();
+
+  // Two maps, consulted bottle-first: a photo pinned to this exact bottle must
+  // always beat one that merely matches the wine, or choosing a per-bottle
+  // photo would appear to do nothing.
   const pendingByBottle = {};
+  const pendingByWine = {};
   for (const img of pendingImages) {
-    const key = img.bottle.toString();
-    if (!pendingByBottle[key]) pendingByBottle[key] = img.processedUrl || img.originalUrl;
+    const url = img.processedUrl || img.originalUrl;
+    if (!url) continue;
+    if (img.bottle && !pendingByBottle[img.bottle.toString()]) {
+      pendingByBottle[img.bottle.toString()] = url;
+    }
+    if (img.wineDefinition && !pendingByWine[img.wineDefinition.toString()]) {
+      pendingByWine[img.wineDefinition.toString()] = url;
+    }
   }
 
   const defaultImageIds = bottles.filter(b => b.defaultImage).map(b => b.defaultImage);
@@ -356,11 +379,17 @@ async function attachBottleImageUrls(bottles, userId) {
     defaultImageMap[img._id.toString()] = img.processedUrl || img.originalUrl;
   }
 
-  return bottles.map(b => ({
-    ...b,
-    pendingImageUrl: pendingByBottle[b._id.toString()] || null,
-    defaultImageUrl: b.defaultImage ? (defaultImageMap[b.defaultImage.toString()] || null) : null,
-  }));
+  return bottles.map(b => {
+    const wineId = wineIdOf(b);
+    return {
+      ...b,
+      pendingImageUrl:
+        pendingByBottle[b._id.toString()]
+        || (wineId ? pendingByWine[wineId.toString()] : null)
+        || null,
+      defaultImageUrl: b.defaultImage ? (defaultImageMap[b.defaultImage.toString()] || null) : null,
+    };
+  });
 }
 
 // Facets + facetMeta across the cellar set, for the shared filter modal.
@@ -1227,39 +1256,13 @@ router.get('/:id', async (req, res) => {
       bottles = bottles.slice(skip, skip + limit);
     }
 
-    // Attach the uploader's own pending image to each bottle (visible before admin approval)
-    const bottleIds = bottles.map(b => b._id);
-    const pendingImages = await BottleImage.find({
-      bottle: { $in: bottleIds },
-      uploadedBy: req.user.id,
-      status: { $in: ['uploaded', 'processing', 'processed'] }
-    }).sort({ createdAt: -1 }).lean();
-
-    // Keep only the most recent pending image per bottle
-    const pendingByBottle = {};
-    for (const img of pendingImages) {
-      const key = img.bottle.toString();
-      if (!pendingByBottle[key]) {
-        pendingByBottle[key] = img.processedUrl || img.originalUrl;
-      }
-    }
-
-    // Resolve user-chosen default images for bottles that have one set
-    const defaultImageIds = bottles
-      .filter(b => b.defaultImage)
-      .map(b => b.defaultImage);
-    const defaultImages = defaultImageIds.length > 0
-      ? await BottleImage.find({ _id: { $in: defaultImageIds } }).lean()
-      : [];
-    const defaultImageMap = {};
-    for (const img of defaultImages) {
-      defaultImageMap[img._id.toString()] = img.processedUrl || img.originalUrl;
-    }
-
-    const bottleItems = bottles.map(b => ({
+    // Image resolution is attachBottleImageUrls' job — this route used to carry
+    // its own copy of the same logic, which is exactly how the two drifted apart
+    // (the copy matched pending photos on bottle only, the helper's sibling route
+    // on bottle or wine). One implementation, one behaviour.
+    const withImages = await attachBottleImageUrls(bottles, req.user.id);
+    const bottleItems = withImages.map(b => ({
       ...b,
-      pendingImageUrl: pendingByBottle[b._id.toString()] || null,
-      defaultImageUrl: b.defaultImage ? (defaultImageMap[b.defaultImage.toString()] || null) : null,
       ...(maturityStatusMap ? { maturityStatus: maturityStatusMap.get(b._id.toString()) || null } : {})
     }));
 
