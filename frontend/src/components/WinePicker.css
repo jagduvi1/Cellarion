@@ -111,3 +111,18 @@
   color: var(--color-text-secondary);
   text-align: center;
 }
+
+/* Smart Search feedback. The lookup is read-only: aiNote reports "identified
+   but not in the wine register", aiError a failed/unavailable lookup — which
+   previously produced no feedback at all. */
+.wine-picker__ai-note {
+  margin: 0.35rem 0 0;
+  font-size: 0.78rem;
+  color: var(--color-text-secondary);
+}
+
+.wine-picker__ai-error {
+  margin: 0.5rem 0 0;
+  font-size: 0.8rem;
+  color: var(--color-danger, #c0392b);
+}

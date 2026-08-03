@@ -154,9 +154,16 @@ async function findOrCreateGrapes(names, userId) {
  *   so their "create anyway" isn't silently overridden by an appellation-variant sibling.
  * @param {boolean} [opts.matchOnly=false] - Never create. Resolve only to an existing
  *   registry wine (exact/sibling/fuzzy>=threshold); if nothing confident matches, return
- *   { wine: null, noMatch: true } instead of minting a WineDefinition + taxonomy. Used by
- *   the registry-safe ephemeral-demo clone so a throwaway account can't pollute the shared
- *   registry. Combine with confirmCreate:true to also bypass the soft-zone candidate return.
+ *   { wine: null, noMatch: true } instead of minting a WineDefinition + taxonomy. Two
+ *   consumers: the registry-safe ephemeral-demo clone (so a throwaway account can't pollute
+ *   the shared registry), and POST /api/wines/identify-text, which reports what the registry
+ *   already holds and leaves creation to an explicit user confirmation.
+ *   ⚠️ Do NOT combine with confirmCreate outside the demo clone. The soft-zone candidate
+ *   return sits ABOVE the matchOnly gate, so confirmCreate collapses every 0.85–0.95
+ *   near-match into noMatch — for identify-text that would hide exactly the existing wines
+ *   the user should have picked, which is the duplication the read-only change exists to stop.
+ *   ⚠️ Not throw-free: the .trim() on name/producer runs before any option is consulted, so
+ *   callers passing model output must normalize types first (identify-text does).
  */
 async function findOrCreateWine({ name, producer, country, region, appellation, type, grapes }, userId, { confirmCreate = false, skipSiblingMatch = false, matchOnly = false, createdVia = null } = {}) {
   // Cap stored/compared field lengths at this single create chokepoint (covers
