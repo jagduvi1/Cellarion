@@ -451,9 +451,15 @@ const resolveGrapeName = (name) => {
   // returns "70% Monastrell" / "Monastrell 70%" verbatim from a back label,
   // which minted grape documents named "70% Monastrell" on prod. Strip the
   // percentage and resolve what remains ("70%" alone → '' → caller drops it).
+  // Whitespace runs are BOUNDED, not `\s*` (CodeQL js/polynomial-redos, alert
+  // #199 open since 2026-07-18). With `\s*` the trailing pattern is retried at
+  // every index of a long run of spaces, each attempt rescanning the run — a
+  // quadratic walk on an attacker-supplied grape name, and grape names arrive
+  // from label scan, import files and the AI. A real percentage carries at most
+  // one space on either side, so {0,3} changes no legitimate input.
   const stripped = name.trim()
-    .replace(/^\d{1,3}\s*%\s*/, '')
-    .replace(/\s*\d{1,3}\s*%$/, '');
+    .replace(/^\d{1,3}\s{0,3}%\s{0,3}/, '')
+    .replace(/\s{0,3}\d{1,3}\s{0,3}%$/, '');
   const key = normalizeString(stripped);
   return GRAPE_SYNONYMS[key] || stripped;
 };

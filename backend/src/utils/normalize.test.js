@@ -548,6 +548,18 @@ describe('resolveGrapeName — blend-percentage artifacts (taxonomy audit 2026-0
   test('does not touch percentages inside a name', () => {
     expect(resolveGrapeName('Syrah')).toBe('Syrah');
   });
+
+  // CodeQL js/polynomial-redos #199. Grape names arrive from label scan, import
+  // files and AI output, so the input is not trusted. With unbounded `\s*` the
+  // trailing-percentage pattern rescanned the whole run of spaces from every
+  // start index; 50k spaces took seconds. Bounded {0,3} makes it linear.
+  test('a long run of whitespace cannot make the percentage strip quadratic', () => {
+    const hostile = `${' '.repeat(50000)}x`;
+    const start = process.hrtime.bigint();
+    expect(resolveGrapeName(hostile)).toBe('x'); // .trim() leaves just the x
+    const ms = Number(process.hrtime.bigint() - start) / 1e6;
+    expect(ms).toBeLessThan(250);
+  });
 });
 
 describe('resolveGrapeName — Sangiovese Grosso', () => {
