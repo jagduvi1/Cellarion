@@ -28,6 +28,28 @@ export function countUnread(posts, lastSeenAt) {
   }).length;
 }
 
+/**
+ * The last-seen timestamp a first-time reader starts from: one millisecond
+ * before the newest post, so exactly the latest post shows as unread.
+ *
+ * Both obvious alternatives are worse. Seeding to *now* makes the badge
+ * invisible until the next time we publish, which means shipping a feature
+ * nobody sees work. Seeding to the beginning of time counts the entire back
+ * catalogue, and a nav badge reading "12" on a first login is noise people
+ * learn to dismiss. One is an invitation; the others are nothing or spam.
+ *
+ * Pure, and it derives the newest date rather than trusting the response order.
+ */
+export function firstRunLastSeen(posts, now = Date.now()) {
+  const newest = (Array.isArray(posts) ? posts : [])
+    .map((post) => Date.parse(post?.publishedAt))
+    .filter((at) => !Number.isNaN(at))
+    .reduce((max, at) => (at > max ? at : max), -Infinity);
+
+  // No posts at all (or none with a usable date): nothing to invite anyone to.
+  return new Date(newest === -Infinity ? now : newest - 1).toISOString();
+}
+
 // Storage can throw outright — Safari private mode, or a browser configured to
 // block it. The badge is decorative, so every access degrades to "no badge"
 // rather than taking the navigation bar down with it.
@@ -71,15 +93,6 @@ export default function useUnreadBlog() {
       return undefined;
     }
 
-    const stored = readLastSeen();
-    if (!stored) {
-      // First run: treat the back catalogue as already read. A badge counting
-      // every post ever published is noise on someone's first login, not news —
-      // the promise is "new since you last looked", and there is no last look yet.
-      writeLastSeen(new Date().toISOString());
-      return undefined;
-    }
-
     let cancelled = false;
 
     (async () => {
@@ -88,7 +101,18 @@ export default function useUnreadBlog() {
         // apiFetch resolves on non-2xx too, and an error body has no posts array.
         if (!res.ok) return;
         const data = await res.json();
-        if (!cancelled) setCount(countUnread(data?.posts, stored));
+        const posts = data?.posts;
+
+        // The seed needs the posts, so it happens here rather than before the
+        // fetch: a first-time reader is started just behind the newest post so
+        // that exactly one badge is waiting for them.
+        let stored = readLastSeen();
+        if (!stored) {
+          stored = firstRunLastSeen(posts);
+          writeLastSeen(stored);
+        }
+
+        if (!cancelled) setCount(countUnread(posts, stored));
       } catch {
         /* offline or malformed — leave the badge off */
       }
