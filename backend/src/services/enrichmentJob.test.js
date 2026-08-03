@@ -95,3 +95,70 @@ describe('aiProfile.description is persisted as plain text', () => {
     });
   });
 });
+
+/**
+ * Sentinel-string coercion (support tickets 2026-07-30 / 2026-08-03).
+ *
+ * The model sometimes emits the four-character STRING "null" inside a
+ * string-typed descriptor instead of the JSON literal — 161 prod profiles
+ * carried tannin: "null", which passes every truthiness check and leaks the
+ * token into the embedding text. The prompt now forbids it, but the write
+ * point is the guarantee: sentinel strings and out-of-enum values collapse
+ * to a real null.
+ */
+describe('descriptor sanitization at the write point', () => {
+  test('the string "null" persists as a real null (the Fino/Dives case)', async () => {
+    const p = profile('A pale, bone-dry fino style.');
+    p.data.tannin = 'null';
+    suggestProfile.mockResolvedValue(p);
+    await enrichWineById(WINE_ID);
+    expect(persisted().tannin).toBeNull();
+  });
+
+  test.each([['None'], ['N/A'], ['n/a'], ['undefined'], ['unknown'], [''], ['-']])(
+    'sentinel %p collapses to null', async (val) => {
+      const p = profile('Fine.');
+      p.data.sweetness = val;
+      suggestProfile.mockResolvedValue(p);
+      await enrichWineById(WINE_ID);
+      expect(persisted().sweetness).toBeNull();
+    });
+
+  test('an out-of-enum value collapses to null rather than persisting', async () => {
+    const p = profile('Fine.');
+    p.data.body = 'muscular';
+    suggestProfile.mockResolvedValue(p);
+    await enrichWineById(WINE_ID);
+    expect(persisted().body).toBeNull();
+  });
+
+  test('valid values case-fold onto the enum', async () => {
+    const p = profile('Fine.');
+    p.data.tannin = 'High';
+    p.data.sweetness = ' Off-Dry ';
+    suggestProfile.mockResolvedValue(p);
+    await enrichWineById(WINE_ID);
+    expect(persisted().tannin).toBe('high');
+    expect(persisted().sweetness).toBe('off-dry');
+  });
+
+  test('sentinel entries are dropped from flavors/foodPairings, real ones kept', async () => {
+    const p = profile('Fine.');
+    p.data.flavors = ['cherry', 'null', 'N/A', '  ', 'tar'];
+    p.data.foodPairings = ['None', 'roast chicken'];
+    suggestProfile.mockResolvedValue(p);
+    await enrichWineById(WINE_ID);
+    expect(persisted().flavors).toEqual(['cherry', 'tar']);
+    expect(persisted().foodPairings).toEqual(['roast chicken']);
+  });
+
+  test('a producerNote of "null" persists as a real null', async () => {
+    const p = profile('Fine.');
+    p.data.producerSuspect = true;
+    p.data.producerNote = 'null';
+    suggestProfile.mockResolvedValue(p);
+    await enrichWineById(WINE_ID);
+    expect(persisted().producerNote).toBeNull();
+    expect(persisted().producerSuspect).toBe(true);
+  });
+});

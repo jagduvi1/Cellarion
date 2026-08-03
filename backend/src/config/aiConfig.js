@@ -41,6 +41,7 @@ Important rules:
 - Labels often print a founder's or family name as part of the producer's crest/logo lockup (e.g. "DESIDERIUS" in small text above "PONGRÁCZ"). Such words belong to the producer identity, NOT the wine name. The name is the line that distinguishes this bottle within the producer's range (here "Blanc de Blancs") — include a person's name only when it genuinely names the cuvée itself (e.g. Pongrácz's separate prestige bottling "Desiderius").
 - Production-method terms are NOT part of the name — put "Méthode Cap Classique" / "Cap Classique", "Méthode Traditionnelle", "Metodo Classico" / "Traditional Method" in the appellation field instead (name "Blanc de Blancs" + appellation "Méthode Cap Classique", NOT name "Blanc de Blancs Méthode Cap Classique"). Legally-defined aging classifications that belong to the displayed name (Reserva, Gran Reserva, Riserva, Spätlese, Grosses Gewächs) and dosage words that are part of a cuvée name (e.g. "Brut Premier") stay in the name.
 - Do not hallucinate appellation names, producer names, or grape varieties. Only use names you are confident are real and match what is visible on the label or your knowledge of that specific producer/appellation.
+- Grapes: only varieties this specific wine actually contains. Single-variety appellations may be inferred (Barolo → Nebbiolo); for multi-variety appellations (Champagne, southern-Rhône blends, Bordeaux) list only what you know about THIS cuvée — never the appellation's full permitted set by default. Fewer correct grapes beat a complete-looking list.
 - Country must be the canonical English country name: "United States" (never "USA" or "America"), "Germany" (never "Deutschland" or a local-language name like "Tyskland"), "Italy" (never "Italia"/"Italie"), "England" for English wines. Never return a country name in the label's language.
 - If a field is genuinely unknown and cannot be reliably inferred, set it to null rather than guessing.
 - Only return {"error":"cannot read label"} if the image contains no wine label at all.`;
@@ -64,7 +65,7 @@ Rules:
 - Country is REQUIRED — always provide a country name; it is never acceptable to return null for country
 - Country must be the canonical English country name: "United States" (never "USA" or "America"), "Germany" (never "Deutschland"/"Tyskland"), "Italy" (never "Italia"/"Italie"), "England" for English wines — never a local-language or abbreviated name, even if the import data uses one
 - For any other field you are unsure about, use null — do NOT omit the field
-- Grapes: provide an empty array [] if unknown, never null for grapes
+- Grapes: provide an empty array [] if unknown, never null for grapes. List only varieties you know THIS cuvée contains — single-variety appellations may be inferred (Barolo → Nebbiolo), but for multi-variety appellations (Champagne, southern-Rhône blends, Bordeaux) never default to the appellation's full permitted set; fewer correct grapes beat a complete-looking list
 - confidence: 1.0 = well-known wine you are certain about, 0.7 = confident from producer knowledge, 0.5 = reasonably sure
 - IMPORTANT: if you recognise the producer or the wine name, return a result even if some fields are null — partial information is always better than returning unknown
 - Never invent a wine that does not exist in reality
@@ -87,6 +88,7 @@ Rules:
 - Country is REQUIRED — always provide a country name; it is never acceptable to return null for country
 - Country must be the canonical English country name: "United States" (never "USA" or "America"), "Germany" (never "Deutschland"/"Tyskland"), "Italy" (never "Italia"/"Italie"), "England" for English wines — never a local-language or abbreviated name, even if the query uses one
 - For any other unknown field use null; use [] for unknown grapes, never null
+- Grapes: only varieties you know THIS cuvée contains — single-variety appellations may be inferred (Barolo → Nebbiolo), but never default a multi-variety appellation (Champagne, southern-Rhône blends, Bordeaux) to its full permitted set; fewer correct grapes beat a complete-looking list
 - confidence: 1.0 = certain, 0.7 = confident, 0.5 = reasonably sure
 - IMPORTANT: if you recognise the producer or wine name, return a result even if some fields are null — partial information is always better than returning unknown
 - Never invent a wine that does not exist in reality
@@ -247,16 +249,17 @@ Grapes: {{grapes}}
 Base the profile on what you genuinely know about this wine, producer, appellation, and grapes. Be factual and conservative — describe the wine's typical character, not marketing hyperbole. If you don't recognise the specific wine, infer a sensible profile from its grapes, region, and type, and lower your confidence accordingly.
 
 Return ONLY a raw JSON object (no markdown, no code fences, no extra text):
-{"body":"light|medium|full|null","tannin":"low|medium|high|null","acidity":"low|medium|high|null","sweetness":"dry|off-dry|sweet|null","flavors":["3-6 short flavour/aroma descriptors"],"foodPairings":["2-4 classic food pairings"],"description":"2-3 sentence plain-language tasting note for the owner","confidence":0.0,"producerSuspect":false,"producerNote":null}
+{"body":"light|medium|full","tannin":"low|medium|high","acidity":"low|medium|high","sweetness":"dry|off-dry|sweet","flavors":["3-6 short flavour/aroma descriptors"],"foodPairings":["2-4 classic food pairings"],"description":"2-3 sentence plain-language tasting note for the owner","confidence":0.0,"producerSuspect":false,"producerNote":null}
 
 Rules:
-- body/tannin/acidity/sweetness: use one of the listed values, or null if not applicable (e.g. tannin for a white wine should usually be "low" or null).
+- body/tannin/acidity/sweetness: exactly one of the listed values, or the JSON value null when the axis does not apply (e.g. tannin for a white wine is usually "low" or null). null is the unquoted JSON literal — NEVER the quoted string "null".
 - flavors: concrete aromas/flavours (e.g. "dark cherry", "tobacco", "citrus zest"). Avoid vague words like "nice" or "complex".
 - foodPairings: real dishes/categories (e.g. "grilled lamb", "hard cheese", "roast chicken").
-- description: 2-3 sentences, warm but not pretentious. PLAIN TEXT ONLY — no Markdown of any kind: no **bold**, no *italics*, no headings, lists, links, or tables. The field is shown verbatim in places that do not render Markdown.
+- description: 2-3 sentences, warm but not pretentious, about the wine ONLY. Never mention vintages or their absence, your confidence, missing information, or how this profile was derived — no sentences like "without a confirmed vintage..." or "this profile reflects...". State the style directly. PLAIN TEXT ONLY — no Markdown of any kind: no **bold**, no *italics*, no headings, lists, links, or tables. The field is shown verbatim in places that do not render Markdown.
+- Describe THIS wine, not its category: never assert a trait (aging need, quality level, everyday-vs-serious) merely because it is typical for the appellation, region or country.
 - confidence: 1.0 = you know this exact wine well, 0.7 = confident from producer + style, 0.5 = grape/region knowledge only, 0.3 = rough inference.
-- producerSuspect: true when the Producer value above does not look like an actual winery — a cuvée range or brand line that belongs to another house (e.g. "Arcane" is Xavier Vignon's range, "Montes Alpha" is Viña Montes's line), a place name, a retailer/importer/bottler, or a label term. Judge only from what you genuinely know; an unfamiliar small producer is NOT suspect.
-- producerNote: when producerSuspect is true and you are confident of the real producer, name it in one short plain-text sentence (e.g. "Arcane is a range of Xavier Vignon"). Otherwise null — never guess a specific house you are unsure of.
+- producerSuspect: true when the Producer value above does not look like an actual winery — a cuvée range or brand line that belongs to another house (e.g. "Arcane" is Xavier Vignon's range, "Montes Alpha" is Viña Montes's line), a place name, a retailer/importer/bottler, or a label term — and ALSO when you cannot place the producer at all, so this profile is really an appellation-level estimate. A small producer you genuinely half-know is not suspect. If your description would call the producer undocumented or unverifiable, producerSuspect MUST be true — the flag and the prose must agree.
+- producerNote: when producerSuspect is true, one short plain-text sentence saying why — the real producer if you are confident of it (e.g. "Arcane is a range of Xavier Vignon"), or that the producer is unknown to you. Never guess a specific house you are unsure of. Otherwise null.
 - Never invent awards, scores, or specific vintages' weather. If the wine is completely unrecognisable and its grapes/region are unknown, return {"error":"unknown"}.`;
 
 // Models that are known to work reliably for text chat.

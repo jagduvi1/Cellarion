@@ -28,8 +28,42 @@ const { suggestProfile } = require('./labelScan');
 const aiProvider = require('./aiProvider');
 const { embedSinglePair } = require('./embeddingJob');
 const { isValidId } = require('../utils/validation');
+const { PROFILE_ENUMS } = require('./wineProfileOps');
 const WineDefinition = require('../models/WineDefinition');
 const Bottle = require('../models/Bottle');
+
+// The model occasionally emits a placeholder STRING where the prompt asks for
+// JSON null — support ticket 2026-07-30: 161 prod profiles carried the literal
+// string "null" in tannin, which passes every truthiness check downstream and
+// leaks the token into the embedding text. The prompt now spells out "never
+// the quoted string", but a prompt is advisory; this is the guarantee. A value
+// outside the field's enum is equally meaningless to the UI pickers and the
+// embedding text, so both collapse to null.
+const SENTINEL_VALUE_RX = /^(null|none|n\/?a|undefined|unknown|nil|-+|)$/i;
+
+function cleanDescriptor(field, raw) {
+  if (typeof raw !== 'string') return null;
+  const v = raw.trim().toLowerCase();
+  if (SENTINEL_VALUE_RX.test(v)) return null;
+  return PROFILE_ENUMS[field].includes(v) ? v : null;
+}
+
+function cleanStringList(raw, cap) {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .filter((x) => typeof x === 'string')
+    .map((x) => x.trim())
+    .filter((x) => !SENTINEL_VALUE_RX.test(x))
+    .slice(0, cap);
+}
+
+// Prose fields get the same sentinel guard after their existing cleanup — a
+// description or producerNote of "null"/"N/A" is an absent value, not prose.
+function cleanProse(raw) {
+  if (typeof raw !== 'string') return null;
+  const v = stripMarkdown(raw);
+  return v && !SENTINEL_VALUE_RX.test(v.trim()) ? v : null;
+}
 
 // ── In-memory job state ────────────────────────────────────────────────────
 
@@ -214,26 +248,24 @@ async function enrichWine(wine, model) {
     {
       $set: {
         aiProfile: {
-          body:         data.body ?? null,
-          tannin:       data.tannin ?? null,
-          acidity:      data.acidity ?? null,
-          sweetness:    data.sweetness ?? null,
-          flavors:      Array.isArray(data.flavors) ? data.flavors.slice(0, 10) : [],
-          foodPairings: Array.isArray(data.foodPairings) ? data.foodPairings.slice(0, 8) : [],
+          body:         cleanDescriptor('body', data.body),
+          tannin:       cleanDescriptor('tannin', data.tannin),
+          acidity:      cleanDescriptor('acidity', data.acidity),
+          sweetness:    cleanDescriptor('sweetness', data.sweetness),
+          flavors:      cleanStringList(data.flavors, 10),
+          foodPairings: cleanStringList(data.foodPairings, 8),
           // Strip markdown, don't just trim: the model reaches for emphasis even
           // when told not to, and the raw string is served un-rendered by the MCP
           // tools. Load-bearing half of the fix — the prompt is only advisory,
           // and a self-hoster can override it via SiteConfig.
-          description:  typeof data.description === 'string' ? (stripMarkdown(data.description) || null) : null,
+          description:  cleanProse(data.description),
           confidence:   typeof data.confidence === 'number' ? data.confidence : null,
           // The model's own doubt about the producer FIELD (registry audit
           // follow-up: "Arcane" — a range sold as a producer — sailed past
           // every string gate AND 49 audit agents; only this model hedged).
           // Strict true-check: absent on old/custom prompts → false.
           producerSuspect: data.producerSuspect === true,
-          producerNote: typeof data.producerNote === 'string'
-            ? (stripMarkdown(data.producerNote).slice(0, 300) || null)
-            : null,
+          producerNote: cleanProse(data.producerNote)?.slice(0, 300) ?? null,
           model:        model || aiConfig.get().enrichmentModel,
           generatedAt:  new Date(),
         },
@@ -324,4 +356,8 @@ async function enrichWineById(wineDefId, { budgetUserId } = {}) {
   }
 }
 
-module.exports = { start, requestStop, getStatus, enrichWineById };
+module.exports = {
+  start, requestStop, getStatus, enrichWineById,
+  // exported for unit tests
+  cleanDescriptor, cleanStringList, cleanProse,
+};
