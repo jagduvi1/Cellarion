@@ -99,6 +99,39 @@ describe('reconcileRetrySelections', () => {
     const updated = new Map([[4, { index: 4, status: 'no_match', matches: [] }]]);
     expect(reconcileRetrySelections(prev, updated, {})[4]).toBe('oldWine');
   });
+
+  it('fills an empty selection with create when the retry upgraded the row to ai_new', () => {
+    const updated = new Map([
+      [6, { index: 6, status: 'ai_new', aiProposed: { name: 'N', producer: 'P' }, matches: [] }],
+    ]);
+    expect(reconcileRetrySelections({}, updated, {})[6]).toBe('create');
+  });
+
+  it('replaces a stale fuzzy pick with create when the ai_new row no longer offers that wine', () => {
+    const prev = { 6: 'oldWine' };
+    const updated = new Map([
+      [6, { index: 6, status: 'ai_new', aiProposed: { name: 'N', producer: 'P' }, matches: [{ wineId: 'other' }] }],
+    ]);
+    expect(reconcileRetrySelections(prev, updated, {})[6]).toBe('create');
+  });
+
+  it('keeps a fuzzy pick that the ai_new row still offers as a candidate', () => {
+    const prev = { 6: 'keepWine' };
+    const updated = new Map([
+      [6, { index: 6, status: 'ai_new', aiProposed: { name: 'N', producer: 'P' }, matches: [{ wineId: 'keepWine' }] }],
+    ]);
+    expect(reconcileRetrySelections(prev, updated, {})[6]).toBe('keepWine');
+  });
+
+  it('never overrides skip / request / manual match with create', () => {
+    const prev = { 1: 'skip', 2: 'request', 3: 'manualWine' };
+    const manualWines = { 3: { _id: 'manualWine' } };
+    const row = (i) => [i, { index: i, status: 'ai_new', aiProposed: { name: 'N', producer: 'P' }, matches: [] }];
+    const next = reconcileRetrySelections(prev, new Map([row(1), row(2), row(3)]), manualWines);
+    expect(next[1]).toBe('skip');
+    expect(next[2]).toBe('request');
+    expect(next[3]).toBe('manualWine');
+  });
 });
 
 // ---------------------------------------------------------------------------

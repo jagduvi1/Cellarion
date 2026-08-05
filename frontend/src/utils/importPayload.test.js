@@ -59,6 +59,20 @@ describe('buildImportItem', () => {
     expect(out.wineDefinition).toBeUndefined();
   });
 
+  test("create selection forwards aiProposed as aiWine — the sentinel must never leak into wineDefinition", () => {
+    const aiProposed = { name: 'Clos du Test', producer: 'Domaine Fictif', country: 'France', type: 'red' };
+    const out = buildImportItem({ item: { wineName: 'X', producer: 'Y' }, aiProposed }, 'create');
+    expect(out.aiWine).toEqual(aiProposed);
+    expect(out.wineDefinition).toBeUndefined();
+    expect(out.requestWine).toBeUndefined();
+  });
+
+  test('non-create selections never carry aiWine, even when the row has a proposal', () => {
+    const r = { item: { wineName: 'X', producer: 'Y' }, aiProposed: { name: 'N', producer: 'P' } };
+    expect(buildImportItem(r, 'wine123').aiWine).toBeUndefined();
+    expect(buildImportItem(r, 'request').aiWine).toBeUndefined();
+  });
+
   test('forwards addToWishlist (Vivino scan-history wishlist mode)', () => {
     const out = buildImportItem(
       { item: { wineName: 'X', producer: 'Y', vintage: '2018', addToWishlist: true } },

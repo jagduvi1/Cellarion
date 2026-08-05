@@ -8,8 +8,11 @@
  */
 export function buildImportItem(r, selection) {
   return {
-    wineDefinition: selection !== 'request' ? selection : undefined,
+    wineDefinition: selection !== 'request' && selection !== 'create' ? selection : undefined,
     requestWine: selection === 'request' ? true : undefined,
+    // AI-identified NEW wine the user confirmed at review — /confirm creates
+    // it (validate is read-only and returns the proposal as aiProposed).
+    aiWine: selection === 'create' ? r.aiProposed : undefined,
     wineName: r.item.wineName,
     producer: r.item.producer,
     vintage: r.item.vintage,

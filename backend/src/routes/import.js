@@ -374,35 +374,59 @@ router.post('/validate', aiBurstLimiter, async (req, res) => {
       }
     }
 
-    // Pass 2: create/find wines for AI-identified items, deduplicated by wine key.
-    // findOrCreateWine internally does fuzzy matching using the AI-refined
-    // name/producer, which is more accurate than matching raw import data.
-    const createdWineCache = new Map(); // normalizedKey -> { wine, created } | { error }
+    // Pass 2: resolve AI-identified items against the registry, deduplicated by
+    // wine key. findOrCreateWine internally does fuzzy matching using the
+    // AI-refined name/producer, which is more accurate than matching raw import
+    // data. matchOnly — /validate is a PREVIEW and must never write to the
+    // shared registry (security audit 2026-08-03 H-1: every cancelled, re-run
+    // or column-remapped validate minted rows, and this route has no demo
+    // gate). When nothing matches, the canonical AI identification rides back
+    // to the client as `aiProposed`; /confirm creates the wine only for rows
+    // the user actually imports.
+    const matchedWineCache = new Map(); // normalizedKey -> { wine } | { proposed } | { error }
     for (const pr of preResults) {
       if (pr.registryWine || !pr.aiIdentified) continue;
       const key = `${normalizeString(pr.aiIdentified.name)}:${normalizeString(pr.aiIdentified.producer)}`;
-      if (createdWineCache.has(key)) {
-        const cached = createdWineCache.get(key);
-        if (cached.wine) { pr.aiWine = cached.wine; pr.aiWineCreated = false; }
+      if (matchedWineCache.has(key)) {
+        const cached = matchedWineCache.get(key);
+        if (cached.wine) pr.aiWine = cached.wine;
+        else if (cached.proposed) pr.aiProposed = cached.proposed;
         else pr.aiWineError = cached.error;
       } else {
         try {
           // Import-supplied grape names (optional `item.grapes`, e.g. from a
           // CellarTracker export) supplement the AI identification only when
-          // the AI returned no grapes of its own. findOrCreateWine resolves
-          // grape taxonomy (synonyms, find-or-create) and only applies grapes
-          // when it CREATES a wine — matched registry wines are never mutated.
+          // the AI returned no grapes of its own. Grape taxonomy resolution
+          // (synonyms, find-or-create) happens at /confirm and only for NEW
+          // wines — matched registry wines are never mutated.
           const importGrapes = sanitizeGrapeNames(pr.item.grapes);
           const aiHasGrapes = Array.isArray(pr.aiIdentified.grapes) && pr.aiIdentified.grapes.length > 0;
           const wineData = (importGrapes.length > 0 && !aiHasGrapes)
             ? { ...pr.aiIdentified, grapes: importGrapes }
             : pr.aiIdentified;
-          const { wine, created } = await findOrCreateWine(wineData, req.user.id, { createdVia: 'import' });
-          createdWineCache.set(key, { wine, created });
-          pr.aiWine = wine;
-          pr.aiWineCreated = created;
+          const { wine, noMatch } = await findOrCreateWine(wineData, req.user.id, { matchOnly: true });
+          if (noMatch) {
+            // Explicit field list, not the raw AI object: this rides to the
+            // client and back into /confirm, so it should carry exactly what
+            // findOrCreateWine consumes (plus confidence for display).
+            const proposed = {
+              name: wineData.name,
+              producer: wineData.producer,
+              country: wineData.country,
+              region: wineData.region,
+              appellation: wineData.appellation,
+              type: wineData.type,
+              grapes: wineData.grapes,
+              confidence: wineData.confidence,
+            };
+            matchedWineCache.set(key, { proposed });
+            pr.aiProposed = proposed;
+          } else {
+            matchedWineCache.set(key, { wine });
+            pr.aiWine = wine;
+          }
         } catch (err) {
-          createdWineCache.set(key, { error: err.message });
+          matchedWineCache.set(key, { error: err.message });
           pr.aiWineError = err.message;
         }
       }
@@ -447,7 +471,7 @@ router.post('/validate', aiBurstLimiter, async (req, res) => {
           score: Math.round(score * 100) / 100
         }];
       } else if (pr.aiWine) {
-        // AI successfully identified and found/created the wine
+        // AI identified the wine and the registry already knows it
         status = 'ai_match';
         resultMatches = [{
           wineId: pr.aiWine._id,
@@ -461,6 +485,24 @@ router.post('/validate', aiBurstLimiter, async (req, res) => {
           score: pr.aiIdentified.confidence ?? 1,
           aiIdentified: true
         }];
+      } else if (pr.aiProposed) {
+        // AI identified the wine but the registry doesn't know it yet. NOTHING
+        // was created — the proposal (attached below) rides back to the client
+        // and /confirm mints it only for rows the user actually imports. Fuzzy
+        // candidates from the raw import fields are still offered so the user
+        // can pick an existing wine instead of creating.
+        status = 'ai_new';
+        resultMatches = (pr.matches || []).map(m => ({
+          wineId: m.wine._id,
+          name: m.wine.name,
+          producer: m.wine.producer,
+          country: m.wine.country?.name || null,
+          region: m.wine.region?.name || null,
+          appellation: m.wine.appellation || null,
+          type: m.wine.type,
+          image: m.wine.image || null,
+          score: Math.round(m.score * 100) / 100
+        }));
       } else if (pr.matches.length > 0) {
         // AI failed or unavailable, but fuzzy matching found candidates
         const { matches } = pr;
@@ -499,6 +541,7 @@ router.post('/validate', aiBurstLimiter, async (req, res) => {
       }
 
       const result = { index: pr.index, item: pr.item, status, matches: resultMatches };
+      if (pr.aiProposed) result.aiProposed = pr.aiProposed;
       if (aiDebug) result.aiDebug = aiDebug;
       // Flag rows whose AI identify was skipped (daily budget exhausted,
       // per-request cap, or client disconnect) — they fell through to the
@@ -534,6 +577,7 @@ router.post('/validate', aiBurstLimiter, async (req, res) => {
         exact: results.filter(r => r.status === 'exact').length,
         fuzzy: results.filter(r => r.status === 'fuzzy').length,
         aiMatch: results.filter(r => r.status === 'ai_match').length,
+        aiNew: results.filter(r => r.status === 'ai_new').length,
         noMatch: results.filter(r => r.status === 'no_match').length,
         errors: results.filter(r => r.status === 'error').length,
         priceWarnings: results.filter(r => r.priceWarnings?.length).length,
@@ -745,6 +789,10 @@ router.post('/confirm', async (req, res) => {
     const createdBottleIds = []; // Track IDs for Meilisearch bulk sync
     // Dedup map: "wineName|producer" -> WineRequest doc created in this batch
     const pendingRequestCache = new Map();
+    // Dedup map for AI-proposed NEW wines confirmed at review: an import file
+    // routinely repeats the same wine, and each unique one must resolve to ONE
+    // registry row per batch. normalizedKey-style key, same as /validate.
+    const aiWineCache = new Map();
     // Collected rack-placement intents from this batch; processed per-rack
     // after the main loop so multiple bottles claiming the same slot can
     // overflow cleanly into adjacent free slots.
@@ -754,7 +802,7 @@ router.post('/confirm', async (req, res) => {
     for (let i = 0; i < items.length; i++) {
       const item = items[i];
 
-      if (!item.wineDefinition && !item.requestWine) {
+      if (!item.wineDefinition && !item.requestWine && !item.aiWine) {
         skipped.push({ index: i, reason: 'No wine selected' });
         continue;
       }
@@ -770,6 +818,51 @@ router.post('/confirm', async (req, res) => {
 
       try {
         let wineDoc = null;
+
+        // AI-identified NEW wine, confirmed by the user at review. This is the
+        // single place the import flow may write to the shared registry —
+        // /validate is read-only (matchOnly) since the 2026-08-03 H-1 fix.
+        // findOrCreateWine still matches first, so a wine minted meanwhile (a
+        // parallel import, another user) dedupes instead of duplicating.
+        if (!item.wineDefinition && !item.requestWine && item.aiWine) {
+          // Demo accounts never reach here — the router-level requireNonDemo
+          // (top of this file) is the gate, same one /api/wines/find-or-create
+          // uses, so registry writes stay barred at ONE chokepoint.
+          const ai = item.aiWine;
+          // findOrCreateWine .trim()s name/producer before consulting any
+          // option — a non-string must become a row error here, not a throw.
+          const str = (v) => (typeof v === 'string' && v.trim() ? v : undefined);
+          if (typeof ai !== 'object' || !str(ai.name) || !str(ai.producer)) {
+            errors.push({ index: i, reason: 'AI wine data is missing its name or producer' });
+            continue;
+          }
+          const aiKey = `${normalizeString(ai.name)}:${normalizeString(ai.producer)}`;
+          let wine = aiWineCache.get(aiKey);
+          if (!wine) {
+            const { wine: resolved, created } = await findOrCreateWine({
+              name: ai.name,
+              producer: ai.producer,
+              country: str(ai.country),
+              region: str(ai.region),
+              appellation: str(ai.appellation),
+              type: str(ai.type),
+              grapes: sanitizeGrapeNames(ai.grapes),
+            }, req.user.id, { createdVia: 'import' });
+            wine = resolved;
+            aiWineCache.set(aiKey, wine);
+            if (created) {
+              // Same action name as the MCP/admin/find-or-create surfaces so
+              // registry writes read as one audit stream (2026-08-03 M-1).
+              logAudit(req, 'wine.create', { type: 'wine', id: wine._id },
+                { via: 'import', name: wine.name, producer: wine.producer });
+            }
+          }
+          // Hand the resolved doc straight to the bottle-creation flow below —
+          // item.wineDefinition keeps the wishlist branch working, wineDoc
+          // skips the redundant findById re-fetch.
+          item.wineDefinition = wine._id;
+          wineDoc = wine;
+        }
 
         // Wishlist destination (e.g. a Vivino scan-history import sent to
         // the wishlist): the row becomes a WishlistItem instead of a Bottle.
@@ -949,15 +1042,17 @@ router.post('/confirm', async (req, res) => {
           continue;
         }
 
-        // Verify wine definition exists
-        if (!mongoose.Types.ObjectId.isValid(item.wineDefinition)) {
-          errors.push({ index: i, reason: 'Invalid wine definition ID' });
-          continue;
-        }
-        wineDoc = await WineDefinition.findById(item.wineDefinition);
+        // Verify wine definition exists (already resolved for aiWine rows)
         if (!wineDoc) {
-          errors.push({ index: i, reason: 'Wine definition not found' });
-          continue;
+          if (!mongoose.Types.ObjectId.isValid(item.wineDefinition)) {
+            errors.push({ index: i, reason: 'Invalid wine definition ID' });
+            continue;
+          }
+          wineDoc = await WineDefinition.findById(item.wineDefinition);
+          if (!wineDoc) {
+            errors.push({ index: i, reason: 'Wine definition not found' });
+            continue;
+          }
         }
 
         // Validate rating if provided
