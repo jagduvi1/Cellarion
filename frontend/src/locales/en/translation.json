@@ -1257,6 +1257,8 @@
       "title": "Admin: Wine Requests",
       "selectRequest": "Select a request to review",
       "noRequests": "No requests found",
+      "totalCount_one": "{{count}} request",
+      "totalCount_other": "{{count}} requests",
       "requestedBy": "Requested by:",
       "date": "Date:",
       "createNewWine": "Create New Wine",
@@ -3510,7 +3512,10 @@
       "matching": "Matching wines… {{done}} / {{total}}",
       "largeCollectionHint": "Identifying unknown wines — this may take a moment for large collections",
       "matchButton_one": "Match {{count}} bottle against wine library",
-      "matchButton_other": "Match {{count}} bottles against wine library"
+      "matchButton_other": "Match {{count}} bottles against wine library",
+      "resumeMatchButton": "Resume matching — {{remaining}} of {{total}} bottles left",
+      "resumeMatchHint": "The first {{done}} bottles were already matched and will be kept — resuming won't re-run them or re-spend the AI budget.",
+      "partialKept": "The bottles matched before the error have been kept. Resume matching to continue from where it stopped."
     },
     "review": {
       "matched": "Matched",

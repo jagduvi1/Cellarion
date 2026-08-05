@@ -290,11 +290,30 @@ router.put('/:id/reject', async (req, res) => {
 
     await wineRequest.save();
 
+    // Detach any bottles that were imported pending this request — the mirror
+    // of resolve's backfill above. A rejected request can never become
+    // resolvable again, and wineDefinition isn't user-updatable, so a bottle
+    // left pointing at it would be permanently stranded; unset the reference
+    // and the bottle falls back to the normal editable "no wine" state.
+    let bottlesDetached = 0;
+    if (wineRequest.requestType === 'new_wine') {
+      const result = await Bottle.updateMany(
+        { pendingWineRequest: wineRequest._id },
+        { $unset: { pendingWineRequest: '' } }
+      );
+      bottlesDetached = result.modifiedCount || 0;
+    }
+
+    let notifMsg = `Your request for "${wineRequest.wineName}" was declined. Reason: ${adminNotes.trim()}`;
+    if (bottlesDetached > 0) {
+      notifMsg += ` Your ${bottlesDetached} bottle${bottlesDetached !== 1 ? 's' : ''} awaiting this wine remain in your cellar without a linked registry wine.`;
+    }
+
     createNotification(
       wineRequest.user,
       'wine_request_rejected',
       'Wine request declined',
-      `Your request for "${wineRequest.wineName}" was declined. Reason: ${adminNotes.trim()}`,
+      notifMsg,
       '/wine-requests'
     );
 
@@ -305,10 +324,11 @@ router.put('/:id/reject', async (req, res) => {
 
     logAudit(req, 'admin.request.reject',
       { type: 'wineRequest', id: wineRequest._id },
-      { wineName: wineRequest.wineName }
+      { wineName: wineRequest.wineName, bottlesDetached }
     );
 
-    res.json({ wineRequest });
+    // bottlesDetached is additive — existing clients read only wineRequest.
+    res.json({ wineRequest, bottlesDetached });
   } catch (error) {
     console.error('Reject wine request error:', error);
     res.status(500).json({ error: 'Failed to reject wine request' });

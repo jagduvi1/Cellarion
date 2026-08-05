@@ -1,6 +1,10 @@
-jest.mock('../models/WineVintageProfile', () => ({}));
+jest.mock('../models/WineVintageProfile', () => ({ find: jest.fn() }));
 
-const { classifyMaturity, classifyPersonalWindow, maturityLabel } = require('./maturityUtils');
+const WineVintageProfile = require('../models/WineVintageProfile');
+const {
+  classifyMaturity, classifyPersonalWindow, maturityLabel,
+  buildProfileMap, bottleAnchorYear, resolveWindow,
+} = require('./maturityUtils');
 
 // Fix the system clock to 2026 for all tests
 beforeAll(() => {
@@ -43,10 +47,12 @@ describe('classifyMaturity', () => {
     return map;
   }
 
-  test('returns null for NV vintage', () => {
+  test('NV vintage with a reviewed absolute-year profile classifies (matches the frontend)', () => {
+    // Non-relative NV profile: numbers are absolute years, no anchor needed.
+    // The old backend returned null for every NV bottle (audit 2026-08-03 H6).
     const bottle = makeBottle('NV');
     const map = makeMap('NV', { status: 'reviewed', earlyFrom: 2020 });
-    expect(classifyMaturity(bottle, map)).toBeNull();
+    expect(classifyMaturity(bottle, map)).toBe('early');
   });
 
   test('returns null for missing vintage', () => {
@@ -316,6 +322,111 @@ describe('classifyMaturity — personal window precedence', () => {
   });
 });
 
+// ─── Relative (NV) profiles — audit 2026-08-03 H6 ────────────────────────────
+// Offsets are anchored on the bottle's purchase year (falling back to
+// createdAt), mirroring frontend resolveWindow/bottleAnchorYear. Clock: 2026.
+
+describe('classifyMaturity — relative (NV) profiles', () => {
+  const wdId = 'abc123';
+  const nvBottle = (over = {}) => ({ wineDefinition: { _id: wdId }, vintage: 'NV', ...over });
+
+  // Early 0–1y, peak 2–5y, late 6–8y after purchase.
+  function relMap(overrides = {}) {
+    const map = new Map();
+    map.set(`${wdId}:NV`, {
+      status: 'reviewed', relative: true,
+      earlyFrom: 0, earlyUntil: 1, peakFrom: 2, peakUntil: 5, lateFrom: 6, lateUntil: 8,
+      ...overrides,
+    });
+    return map;
+  }
+
+  test('offsets anchor on the purchase year: bought 2024 → peak in 2026', () => {
+    // Peak = 2024+2 … 2024+5 = 2026–2029.
+    expect(classifyMaturity(nvBottle({ purchaseDate: '2024-03-01' }), relMap())).toBe('peak');
+  });
+
+  test('bought this year → early', () => {
+    expect(classifyMaturity(nvBottle({ purchaseDate: '2026-01-10' }), relMap())).toBe('early');
+  });
+
+  test('bought long ago → declining', () => {
+    // Late until 2015+8 = 2023 < 2026.
+    expect(classifyMaturity(nvBottle({ purchaseDate: '2015-06-01' }), relMap())).toBe('declining');
+  });
+
+  test('falls back to createdAt when purchaseDate is missing', () => {
+    expect(classifyMaturity(nvBottle({ createdAt: '2024-08-20' }), relMap())).toBe('peak');
+  });
+
+  test('no anchor at all → null (offsets must never be read as calendar years)', () => {
+    expect(classifyMaturity(nvBottle(), relMap())).toBeNull();
+  });
+
+  test('a zero offset resolves to the anchor year itself', () => {
+    // earlyFrom 0 → drinkable from 2026; peak from 2028 → early now.
+    const map = relMap({ earlyFrom: 0, earlyUntil: 1, peakFrom: 2, peakUntil: 5 });
+    expect(classifyMaturity(nvBottle({ purchaseDate: '2026-02-02' }), map)).toBe('early');
+  });
+
+  test('personal drink window still wins over a relative profile', () => {
+    const bottle = nvBottle({ purchaseDate: '2024-03-01', drinkFrom: 2030 });
+    expect(classifyMaturity(bottle, relMap())).toBe('not-ready');
+  });
+
+  test('unreviewed relative profile → null', () => {
+    const map = relMap({ status: 'pending' });
+    expect(classifyMaturity(nvBottle({ purchaseDate: '2024-03-01' }), map)).toBeNull();
+  });
+});
+
+describe('bottleAnchorYear / resolveWindow', () => {
+  test('anchor prefers purchaseDate over createdAt', () => {
+    expect(bottleAnchorYear({ purchaseDate: '2019-05-01', createdAt: '2023-01-01' })).toBe(2019);
+    expect(bottleAnchorYear({ createdAt: '2023-01-01' })).toBe(2023);
+    expect(bottleAnchorYear({})).toBeNull();
+    expect(bottleAnchorYear(null)).toBeNull();
+  });
+
+  test('resolveWindow adds the anchor to every offset of a relative profile', () => {
+    const w = resolveWindow({ relative: true, earlyFrom: 0, peakFrom: 2, peakUntil: 5 }, 2020);
+    expect(w).toMatchObject({ earlyFrom: 2020, peakFrom: 2022, peakUntil: 2025 });
+    expect(w.lateFrom).toBeUndefined();
+  });
+
+  test('resolveWindow passes absolute profiles through untouched, anchor ignored', () => {
+    const w = resolveWindow({ earlyFrom: 2024, peakUntil: 2030 }, 2020);
+    expect(w).toMatchObject({ earlyFrom: 2024, peakUntil: 2030 });
+  });
+});
+
+describe('buildProfileMap — NV pairs included', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  test('NV bottles are queried and their profiles land in the map', async () => {
+    const profiles = [
+      { wineDefinition: 'wd1', vintage: 'NV', status: 'reviewed', relative: true, peakFrom: 2, peakUntil: 5 },
+      { wineDefinition: 'wd1', vintage: '2019', status: 'reviewed', peakFrom: 2024, peakUntil: 2030 },
+    ];
+    WineVintageProfile.find.mockReturnValue({ lean: () => Promise.resolve(profiles) });
+
+    const map = await buildProfileMap([
+      { wineDefinition: { _id: 'wd1' }, vintage: 'NV' },
+      { wineDefinition: { _id: 'wd1' }, vintage: '2019' },
+    ]);
+
+    expect(map.get('wd1:NV')).toMatchObject({ relative: true });
+    expect(map.get('wd1:2019')).toMatchObject({ peakFrom: 2024 });
+  });
+
+  test('an NV-only bottle set still issues the profile query (previously skipped entirely)', async () => {
+    WineVintageProfile.find.mockReturnValue({ lean: () => Promise.resolve([]) });
+    const map = await buildProfileMap([{ wineDefinition: { _id: 'wd1' }, vintage: 'NV' }]);
+    expect(WineVintageProfile.find).toHaveBeenCalledTimes(1);
+    expect(map.size).toBe(0);
+  });
+});
+
 // ─── maturityLabel ───────────────────────────────────────────────────────────
 
 describe('maturityLabel', () => {
@@ -433,5 +544,24 @@ describe('maturityLabel — personal window precedence', () => {
 
   test('omitting the bottle arg keeps the legacy profile-based behaviour', () => {
     expect(maturityLabel('peak', profileSaysNow)).toBe('At peak — drink now through 2028');
+  });
+});
+
+describe('maturityLabel — relative (NV) profiles quote resolved years', () => {
+  const relProfile = { status: 'reviewed', relative: true, earlyFrom: 0, peakFrom: 2, peakUntil: 5, lateUntil: 8 };
+
+  test('peak label quotes anchor + offset, not the raw offset', () => {
+    const bottle = { vintage: 'NV', purchaseDate: '2024-03-01' };
+    expect(maturityLabel('peak', relProfile, bottle)).toBe('At peak — drink now through 2029');
+  });
+
+  test('late label resolves lateUntil the same way', () => {
+    const bottle = { vintage: 'NV', purchaseDate: '2020-03-01' };
+    expect(maturityLabel('late', relProfile, bottle)).toBe('Late maturity — drink soon, until 2028');
+  });
+
+  test('no anchor → generic year-free labels, never a bare offset', () => {
+    expect(maturityLabel('peak', relProfile, { vintage: 'NV' })).toBe('At peak maturity — drink now');
+    expect(maturityLabel('not-ready', relProfile, { vintage: 'NV' })).toBe('Not ready yet — drinking from ?');
   });
 });

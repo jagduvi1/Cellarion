@@ -4,6 +4,54 @@
 
 const WineVintageProfile = require('../models/WineVintageProfile');
 
+const WINDOW_FIELDS = ['earlyFrom', 'earlyUntil', 'peakFrom', 'peakUntil', 'lateFrom', 'lateUntil'];
+
+/**
+ * The year a relative (NV) window is measured from for a given bottle: its
+ * purchase year, falling back to when it was added to the cellar. Mirrors
+ * frontend/src/utils/maturityUtils.js bottleAnchorYear — the two must not
+ * drift or the bottle page and the backend stats/notifier disagree.
+ */
+function bottleAnchorYear(bottle) {
+  const d = bottle?.purchaseDate || bottle?.createdAt;
+  if (!d) return null;
+  const y = new Date(d).getFullYear();
+  return Number.isFinite(y) ? y : null;
+}
+
+/**
+ * Resolve a profile's drink window to absolute calendar years.
+ *
+ * For `relative` profiles (NV / non-vintage wines) the stored numbers are
+ * year-offsets after the bottle's anchor year, so we add the anchor; otherwise
+ * the numbers are already absolute years and the anchor is ignored. Mirrors
+ * the frontend resolveWindow.
+ */
+function resolveWindow(profile, anchorYear) {
+  const rel = !!(profile?.relative) && Number.isFinite(anchorYear);
+  const out = {};
+  for (const f of WINDOW_FIELDS) {
+    const v = profile?.[f];
+    out[f] = (v === null || v === undefined) ? v : (rel ? v + anchorYear : v);
+  }
+  return out;
+}
+
+/**
+ * Resolve a profile's window against a specific bottle: absolute years pass
+ * through; relative (NV) offsets are anchored on the bottle's purchase year.
+ * Returns null when a relative window has no anchor to resolve against (e.g.
+ * a caller that selected the bottle without purchaseDate/createdAt) — raw
+ * offsets must never be read as calendar years.
+ */
+function resolveWindowForBottle(profile, bottle) {
+  if (!profile) return null;
+  if (!profile.relative) return resolveWindow(profile, null);
+  const anchorYear = bottleAnchorYear(bottle);
+  if (anchorYear === null) return null;
+  return resolveWindow(profile, anchorYear);
+}
+
 /**
  * Classify a bottle against its OWN drinkFrom/drinkTo window (optional integer
  * years the user set on the bottle). Returns 'not-ready' | 'peak' | 'declining'
@@ -33,12 +81,18 @@ function classifyMaturity(bottle, profileMap) {
 
   const wdId    = bottle.wineDefinition?._id?.toString() || bottle.wineDefinition?.toString();
   const vintage = bottle.vintage;
-  if (!wdId || !vintage || vintage === 'NV') return null;
+  if (!wdId || !vintage) return null;
 
   const profile = profileMap.get(`${wdId}:${vintage}`);
   if (!profile || profile.status !== 'reviewed') return null;
 
-  const { earlyFrom, earlyUntil, peakFrom, peakUntil, lateFrom, lateUntil } = profile;
+  // NV bottles carry `relative` profiles whose numbers are offsets after the
+  // purchase year — resolved here, same as the frontend, so NV maturity is no
+  // longer invisible server-side. Null when the offsets can't be anchored.
+  const window = resolveWindowForBottle(profile, bottle);
+  if (!window) return null;
+
+  const { earlyFrom, earlyUntil, peakFrom, peakUntil, lateFrom, lateUntil } = window;
 
   // Need at least one window boundary to classify
   if (!earlyFrom && !peakFrom && !peakUntil) return null;
@@ -67,7 +121,9 @@ async function buildProfileMap(activeBottles) {
   for (const b of activeBottles) {
     const wdId = b.wineDefinition?._id?.toString();
     const v    = b.vintage;
-    if (wdId && v && v !== 'NV') {
+    // 'NV' is a valid key — sommeliers curate `relative` profiles for
+    // non-vintage wines, resolved per bottle by classifyMaturity.
+    if (wdId && v) {
       const key = `${wdId}:${v}`;
       if (!seenPairs.has(key)) {
         seenPairs.add(key);
@@ -129,20 +185,25 @@ function maturityLabel(status, profile, bottle = null) {
     }
   }
 
+  // Quote resolved calendar years, never raw relative (NV) offsets. A
+  // relative profile with no anchor yields no years ('?' / generic labels) —
+  // the same bottles classifyMaturity leaves unclassified anyway.
+  const w = (profile?.relative ? resolveWindowForBottle(profile, bottle) : profile) || {};
+
   switch (status) {
     case 'not-ready':
-      return `Not ready yet — drinking from ${profile?.earlyFrom || profile?.peakFrom || '?'}`;
+      return `Not ready yet — drinking from ${w.earlyFrom || w.peakFrom || '?'}`;
     case 'early':
-      return profile?.peakFrom
-        ? `Early drinking — peak from ${profile.peakFrom}`
+      return w.peakFrom
+        ? `Early drinking — peak from ${w.peakFrom}`
         : 'Early drinking window';
     case 'peak':
-      return profile?.peakUntil
-        ? `At peak — drink now through ${profile.peakUntil}`
+      return w.peakUntil
+        ? `At peak — drink now through ${w.peakUntil}`
         : 'At peak maturity — drink now';
     case 'late':
-      return profile?.lateUntil
-        ? `Late maturity — drink soon, until ${profile.lateUntil}`
+      return w.lateUntil
+        ? `Late maturity — drink soon, until ${w.lateUntil}`
         : 'Late maturity — drink soon';
     case 'declining':
       return 'Past peak — declining, drink immediately if at all';
@@ -151,4 +212,7 @@ function maturityLabel(status, profile, bottle = null) {
   }
 }
 
-module.exports = { classifyMaturity, classifyPersonalWindow, buildProfileMap, maturityLabel };
+module.exports = {
+  classifyMaturity, classifyPersonalWindow, buildProfileMap, maturityLabel,
+  bottleAnchorYear, resolveWindow, resolveWindowForBottle,
+};
