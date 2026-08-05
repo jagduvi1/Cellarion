@@ -1,5 +1,8 @@
 import { useState, useMemo, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import useSlotDrag from '../../hooks/useSlotDrag';
+import { isReserved } from '../../utils/reservation';
+import { ReservedRibbon } from './RackRenderer';
 import './ShelfView.css';
 
 const WINE_COLORS = {
@@ -236,6 +239,7 @@ export default function ShelfView({ rack, activePosition, highlightPos, onSlotCl
 }
 
 function BottleOval({ cx, cy, slot, position, disabled, isActive, isHighlight, onClick, getSlotStyle, onDragStart, isDragOrigin, isDragTarget, zoneColor }) {
+  const { t } = useTranslation();
   const bottle = slot?.bottle;
   const wine = bottle?.wineDefinition;
   const wineType = wine?.type || 'red';
@@ -293,7 +297,9 @@ function BottleOval({ cx, cy, slot, position, disabled, isActive, isHighlight, o
       role="button"
       tabIndex={0}
       className={`shelf-view-bottle ${filled ? 'filled' : 'empty'} ${isActive ? 'active' : ''} ${isHighlight ? 'highlight' : ''}`}
-      aria-label={filled ? `${wine?.name || 'Wine'} ${bottle?.vintage || ''}` : `Empty slot ${position}`}
+      aria-label={filled
+        ? `${wine?.name || 'Wine'} ${bottle?.vintage || ''}${isReserved(bottle) ? ` — ${t('rackView.reservedAria', 'reserved')}` : ''}`
+        : `Empty slot ${position}`}
       style={{ ...(draggable ? { cursor: 'grab' } : null), ...dimStyle }}
     >
       {zoneColor && (
@@ -335,6 +341,7 @@ function BottleOval({ cx, cy, slot, position, disabled, isActive, isHighlight, o
           pointerEvents="none"
         />
       )}
+      {filled && isReserved(bottle) && <ReservedRibbon cx={cx} cy={cy} r={BOTTLE_RY * 0.9} />}
       {filled && bottle?.vintage && bottle.vintage !== 'NV' && (
         <text
           x={cx}

@@ -181,6 +181,9 @@ function exportBottleToItem(b) {
     // like routes/import.js does, so a bad imported year never fails the bottle.
     drinkFrom: b.drinkFrom,
     drinkTo: b.drinkTo,
+    // Reservation ("spoken for") — sanitized in buildBottle like the window.
+    reservedFor: b.reservedFor,
+    reservedUntil: b.reservedUntil,
     rating: b.rating,
     ratingScale: b.ratingScale,
     dateAdded: b.dateAdded,
@@ -455,6 +458,14 @@ function buildBottle({ cellarId, ownerId, item, canonicalVintage, wineDefinition
     drinkTo = undefined;
   }
 
+  // Reservation ("spoken for") — same drop-don't-fail sanitization: a bad
+  // year is silently omitted, the free-text note is stripped and capped.
+  const reservedCheck = parseDrinkYear(item.reservedUntil, 'reservedUntil');
+  const reservedUntil = reservedCheck.ok ? reservedCheck.value : undefined;
+  const reservedFor = typeof item.reservedFor === 'string' && item.reservedFor.trim()
+    ? stripHtml(item.reservedFor).slice(0, 200)
+    : undefined;
+
   const bottle = new Bottle({
     cellar: cellarId,
     user: ownerId,
@@ -472,6 +483,8 @@ function buildBottle({ cellarId, ownerId, item, canonicalVintage, wineDefinition
     occasion: stripHtml(item.occasion),
     drinkFrom,
     drinkTo,
+    reservedFor,
+    reservedUntil,
   });
   if (item.dateAdded) bottle.createdAt = new Date(item.dateAdded);
   // Restore the cellar journey from the export when present (names + dates only —

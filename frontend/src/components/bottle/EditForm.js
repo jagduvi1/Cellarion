@@ -23,6 +23,8 @@ function EditForm({ bottle, onSaved, onCancel, onImageUploaded }) {
     occasion:         bottle.occasion || '',
     drinkFrom:        bottle.drinkFrom != null ? String(bottle.drinkFrom) : '',
     drinkTo:          bottle.drinkTo   != null ? String(bottle.drinkTo)   : '',
+    reservedFor:      bottle.reservedFor || '',
+    reservedUntil:    bottle.reservedUntil != null ? String(bottle.reservedUntil) : '',
     price:            bottle.price   || '',
     // If bottle has a price, keep stored currency (price and currency must stay in sync).
     // If no price yet, default to user's preference so they don't have to change it every time.
@@ -42,6 +44,14 @@ function EditForm({ bottle, onSaved, onCancel, onImageUploaded }) {
     // Mirrors the backend rules: integer years 1900–2200, from ≤ to, ≤500 chars.
     const windowError = validateDrinkWindowFields(form, t);
     if (windowError) { setError(windowError); return; }
+    // Reserved-until follows the same year bounds as the drink window.
+    if (form.reservedUntil) {
+      const y = parseInt(form.reservedUntil, 10);
+      if (!Number.isInteger(y) || String(y) !== String(form.reservedUntil).trim() || y < DRINK_YEAR_MIN || y > DRINK_YEAR_MAX) {
+        setError(t('bottleDetail.reservedUntilInvalid', { min: DRINK_YEAR_MIN, max: DRINK_YEAR_MAX }));
+        return;
+      }
+    }
     setSaving(true);
     setError(null);
     try {
@@ -53,6 +63,8 @@ function EditForm({ bottle, onSaved, onCancel, onImageUploaded }) {
         purchaseDate: form.purchaseDate || null,
         drinkFrom: form.drinkFrom ? parseInt(form.drinkFrom, 10) : null,
         drinkTo:   form.drinkTo   ? parseInt(form.drinkTo, 10)   : null,
+        reservedFor:   form.reservedFor.trim() || null,
+        reservedUntil: form.reservedUntil ? parseInt(form.reservedUntil, 10) : null,
       });
       const data = await res.json();
       if (res.ok) onSaved(data.bottle);
@@ -169,6 +181,35 @@ function EditForm({ bottle, onSaved, onCancel, onImageUploaded }) {
           </div>
         </div>
         <p className="help-text">{t('addBottle.drinkWindowHint')}</p>
+      </div>
+
+      <div className="form-group">
+        <label>{t('bottleDetail.reservationLabel')}</label>
+        <div className="bd-edit-grid">
+          <div className="form-group">
+            <label>{t('bottleDetail.reservedForLabel')}</label>
+            <input
+              type="text"
+              value={form.reservedFor}
+              onChange={set('reservedFor')}
+              placeholder={t('bottleDetail.reservedForPlaceholder')}
+              maxLength={200}
+            />
+          </div>
+          <div className="form-group">
+            <label>{t('bottleDetail.reservedUntilLabel')}</label>
+            <input
+              type="number"
+              value={form.reservedUntil}
+              onChange={set('reservedUntil')}
+              placeholder={t('bottleDetail.reservedUntilPlaceholder')}
+              min={DRINK_YEAR_MIN}
+              max={DRINK_YEAR_MAX}
+              step="1"
+            />
+          </div>
+        </div>
+        <p className="help-text">{t('bottleDetail.reservationEditHint')}</p>
       </div>
 
       <div className="form-group">

@@ -382,6 +382,59 @@ describe('updateBottleFields (real execution)', () => {
     expect(b.location).toBe('Rack 3');
     expect(res.changes.location).toBe('Rack 3');
   });
+
+  // ── Reservation ("spoken for") fields ─────────────────────────────────────
+
+  test('reservation SET: stores stripped reservedFor + year, re-arms the notifier marker, audits from/to', async () => {
+    const b = liveBottle({ reservationNotifiedAt: new Date('2026-01-01') });
+    const res = await updateBottleFields(b, {
+      reservedFor: "Elias's <b>18th</b> birthday", reservedUntil: 2034,
+    }, REQ);
+    expect(res.error).toBeUndefined();
+    expect(b.reservedFor).toBe("Elias's 18th birthday"); // stripHtml applied
+    expect(b.reservedUntil).toBe(2034);
+    expect(res.changes).toEqual({ reservedFor: "Elias's 18th birthday", reservedUntil: 2034 });
+    expect(res.prev).toEqual({ reservedFor: null, reservedUntil: null });
+    // A reservedUntil change re-arms the one-shot alert.
+    expect(b.reservationNotifiedAt).toBeNull();
+    const call = logAudit.mock.calls.find((c) => c[1] === 'bottle.update');
+    expect(call[3].changes.reservedUntil).toEqual({ from: null, to: 2034 });
+  });
+
+  test('reservation CLEAR: null clears both fields and logs { from, to: null }', async () => {
+    const b = liveBottle({ reservedFor: 'Anna', reservedUntil: 2030 });
+    const res = await updateBottleFields(b, { reservedFor: null, reservedUntil: null }, REQ);
+    expect(res.error).toBeUndefined();
+    expect(b.reservedFor).toBeNull();
+    expect(b.reservedUntil).toBeNull();
+    expect(res.changes).toEqual({ reservedFor: null, reservedUntil: null });
+    expect(res.prev).toEqual({ reservedFor: 'Anna', reservedUntil: 2030 });
+    const call = logAudit.mock.calls.find((c) => c[1] === 'bottle.update');
+    expect(call[3].changes.reservedFor).toEqual({ from: 'Anna', to: null });
+  });
+
+  test('reservedFor-only change does NOT touch the reservedUntil notifier marker', async () => {
+    const marker = new Date('2026-01-01');
+    const b = liveBottle({ reservedFor: 'Anna', reservedUntil: 2030, reservationNotifiedAt: marker });
+    const res = await updateBottleFields(b, { reservedFor: 'Anna & Erik' }, REQ);
+    expect(res.changes).toEqual({ reservedFor: 'Anna & Erik' });
+    expect(b.reservationNotifiedAt).toBe(marker); // year unchanged → alert stays fired
+  });
+
+  test('reservation validation: oversized reservedFor and a non-year reservedUntil are 400s', async () => {
+    expect((await updateBottleFields(liveBottle(), { reservedFor: 'x'.repeat(201) }, REQ)).error.message)
+      .toBe('Reserved-for note is too long (max 200 characters)');
+    expect((await updateBottleFields(liveBottle(), { reservedUntil: 'someday' }, REQ)).error.status).toBe(400);
+    expect((await updateBottleFields(liveBottle(), { reservedUntil: 1850 }, REQ)).error.status).toBe(400);
+    expect((await updateBottleFields(liveBottle(), { reservedUntil: 2034.5 }, REQ)).error.status).toBe(400);
+  });
+
+  test('full-form re-send with unchanged reservation records NO phantom change', async () => {
+    const b = liveBottle({ reservedFor: 'Anna', reservedUntil: 2030 });
+    const res = await updateBottleFields(b, { reservedFor: 'Anna', reservedUntil: 2030 }, REQ);
+    expect(res.changes).toEqual({});
+    expect(b.save).not.toHaveBeenCalled();
+  });
 });
 
 describe('removeBottleCascade (real execution)', () => {

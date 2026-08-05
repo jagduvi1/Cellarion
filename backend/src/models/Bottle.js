@@ -141,6 +141,29 @@ const bottleSchema = new mongoose.Schema({
       }
     ]
   },
+  // ── Reservation ("spoken for") ───────────────────────────────────────
+  // A bottle is reserved iff reservedFor and/or reservedUntil is set — no
+  // status change (the active/consumed lifecycle stays untouched). Reserved
+  // bottles are excluded from drink-suggestion surfaces and consume flows
+  // warn before logging one. reservedUntil is a calendar YEAR, matching the
+  // drinkFrom/drinkTo convention ("held for a birthday in 2034").
+  reservedFor: {
+    type: String,
+    trim: true,
+    maxlength: [200, 'Reserved-for note too long (max 200 characters)']
+  },
+  reservedUntil: {
+    type: Number,
+    min: [1900, 'Reserved-until year must be 1900 or later'],
+    max: [2200, 'Reserved-until year must be 2200 or earlier'],
+    validate: {
+      validator: v => v == null || Number.isInteger(v),
+      message: 'Reserved-until must be a whole year'
+    }
+  },
+  // Set by the daily notifier when the reserved-until alert fires, so it fires
+  // exactly once per reservation. Reset whenever reservedUntil changes.
+  reservationNotifiedAt: { type: Date, default: null },
   // Bottle lifecycle — 'active' until the user consumes/gifts/sells it
   status: {
     type: String,

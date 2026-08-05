@@ -225,4 +225,32 @@ describe('update_bottle', () => {
     expect(parse(res).error.code).toBe('not_found');
     expect(bottleOps.updateBottleFields).not.toHaveBeenCalled();
   });
+
+  test('reservation fields map snake→camel into the shared service (set AND null-clear)', async () => {
+    ownBottle();
+    bottleOps.updateBottleFields.mockResolvedValue({
+      bottle: { _id: oid('d'), cellar: oid('c') },
+      changes: { reservedFor: "Elias's 18th", reservedUntil: 2034 },
+      prev: { reservedFor: null, reservedUntil: null },
+    });
+    await tool('update_bottle').handler(
+      { bottle_id: oid('d'), reserved_for: "Elias's 18th", reserved_until: 2034 }, CTX);
+    expect(bottleOps.updateBottleFields.mock.calls[0][1]).toMatchObject({
+      reservedFor: "Elias's 18th", reservedUntil: 2034,
+    });
+
+    bottleOps.updateBottleFields.mockClear();
+    ownBottle();
+    bottleOps.updateBottleFields.mockResolvedValue({
+      bottle: { _id: oid('d'), cellar: oid('c') },
+      changes: { reservedFor: null, reservedUntil: null },
+      prev: { reservedFor: "Elias's 18th", reservedUntil: 2034 },
+    });
+    await tool('update_bottle').handler(
+      { bottle_id: oid('d'), reserved_for: null, reserved_until: null }, CTX);
+    // Explicit nulls must survive the mapping — they mean CLEAR, not "absent".
+    const fields = bottleOps.updateBottleFields.mock.calls[0][1];
+    expect(fields.reservedFor).toBeNull();
+    expect(fields.reservedUntil).toBeNull();
+  });
 });

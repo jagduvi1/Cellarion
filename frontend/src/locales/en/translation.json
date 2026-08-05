@@ -691,6 +691,8 @@
     "appellationLabel": "Appellation",
     "placementLabel": "Placement",
     "unplacedOnly": "Unplaced only",
+    "reservationLabel": "Reservation",
+    "reservedOnly": "Reserved only",
     "grapeLabel": "Grapes",
     "vintageLabel": "Vintage",
     "showMore": "+{{count}} more",
@@ -878,6 +880,18 @@
     "sommelierWillSet": "Our staff will set the aging window for this vintage soon.",
     "sommNotes": "Sommelier notes",
     "occasion": "Occasion",
+    "reservationLabel": "Reservation",
+    "reservationHint": "Held back — excluded from drink suggestions.",
+    "reservedForUntil": "Reserved for {{who}} (until {{year}})",
+    "reservedForOnly": "Reserved for {{who}}",
+    "reservedUntilOnly": "Reserved until {{year}}",
+    "reservedForLabel": "Reserved for",
+    "reservedForPlaceholder": "e.g. Elias's 18th birthday",
+    "reservedUntilLabel": "Reserved until (year)",
+    "reservedUntilPlaceholder": "e.g. 2034",
+    "reservationEditHint": "Mark this bottle as spoken for — it will be excluded from drink suggestions and you'll get a heads-up when the year arrives. Clear both fields to remove the reservation.",
+    "reservedUntilInvalid": "Reserved-until must be a whole year between {{min}} and {{max}}",
+    "consumeReservedWarning": "This bottle is {{reservation}}. Removing it will end that plan — continue only if you're sure.",
     "personalWindow": "Your Drink Window",
     "yourWindow": "your window",
     "yourWindowTooltip": "This status comes from your own drink window for this bottle, not the sommelier profile.",
@@ -3641,7 +3655,12 @@
     "yourWindow": "your window",
     "yourWindowTooltip": "Based on your own drink window for this bottle",
     "unplaced": "Unplaced",
-    "unplacedTooltip": "Added but not placed in a rack"
+    "unplacedTooltip": "Added but not placed in a rack",
+    "reserved": "Reserved",
+    "reservedUntil": "Reserved · {{year}}"
+  },
+  "rackView": {
+    "reservedAria": "reserved"
   },
   "followButton": {
     "follow": "Follow",

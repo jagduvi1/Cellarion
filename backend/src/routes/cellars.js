@@ -17,6 +17,7 @@ const { createNotification } = require('../services/notifications');
 const { sendCellarInviteEmail } = require('../services/mailgun');
 const { toNormalized } = require('../utils/ratingUtils');
 const { classifyMaturity, buildProfileMap } = require('../utils/maturityUtils');
+const { isReserved } = require('../utils/reservationUtils');
 const { CONSUMED_STATUSES, WINE_POPULATE_LIST } = require('../config/constants');
 const mongoose = require('mongoose');
 const { parsePagination } = require('../utils/pagination');
@@ -950,6 +951,10 @@ router.get('/:id', async (req, res) => {
     // Pagination — default 30, max 200; skip defaults to 0
     const { limit, offset: skip } = parsePagination(req.query, { limit: 30, maxLimit: 200 });
 
+    // ?reserved=1 — only bottles that are "spoken for" (reservedFor and/or
+    // reservedUntil set). Applied in memory on both paths, like minRating.
+    const reservedOnly = req.query.reserved === '1' || req.query.reserved === 'true';
+
     // Optional grouping: collapse identical bottles (same wine + same vintage)
     // into one entry. Paginates over GROUPS and nests the member bottles so the
     // client can expand ("split") a group without another request. Opt-in via
@@ -997,7 +1002,7 @@ router.get('/:id', async (req, res) => {
     // Group + paginate inside MongoDB instead of hydrating the whole cellar.
     const groupedInDb = grouped
       && !hasMeiliFilters
-      && !minRating && !maxRating && !maturityFilter
+      && !minRating && !maxRating && !maturityFilter && !reservedOnly
       && ['createdAt', 'vintage', 'price', 'rating'].includes(sortField);
     if (groupedInDb) {
       ({ groupsForPage, bottles, totalCount } = await loadGroupedBottlePage({
@@ -1108,7 +1113,7 @@ router.get('/:id', async (req, res) => {
 
       const directSortFields = ['createdAt', 'vintage', 'price', 'rating'];
       const canSortInDb_ = directSortFields.includes(sortField);
-      const needsInMemoryFilter = !!(search || minRating || maxRating || maturityFilter);
+      const needsInMemoryFilter = !!(search || minRating || maxRating || maturityFilter || reservedOnly);
       const needsInMemorySort = !canSortInDb_;
       // Grouping needs every matching bottle in memory before it can collapse
       // duplicates, so it disables DB-level pagination.
@@ -1183,6 +1188,10 @@ router.get('/:id', async (req, res) => {
     }
 
     // ── Shared post-filters (applied to both Meilisearch and fallback paths) ──
+
+    if (reservedOnly) {
+      bottles = bottles.filter(isReserved);
+    }
 
     if (minRating) {
       const min = parseFloat(minRating);

@@ -69,7 +69,9 @@ function FilterSection({ label, icon, children, defaultExpanded = true }) {
 // showUnplaced: only the single-cellar active list supports the unplaced
 // filter (placement is per-cellar; consumed bottles hold no rack slot), and
 // only when the cellar actually has racks.
-function BottleFilterModal({ filters, onApply, onClose, facets, baseFacets, facetMeta, bottlesTotal, showRatingMaturity = true, showUnplaced = false }) {
+// showReserved: only the single-cellar active endpoint supports ?reserved=1
+// (reserved bottles are active by definition — consumed ones lose relevance).
+function BottleFilterModal({ filters, onApply, onClose, facets, baseFacets, facetMeta, bottlesTotal, showRatingMaturity = true, showUnplaced = false, showReserved = false }) {
   const { t } = useTranslation();
 
   // baseFacets = all options in the cellar (unfiltered) — used to LIST available pills
@@ -88,14 +90,14 @@ function BottleFilterModal({ filters, onApply, onClose, facets, baseFacets, face
     onApply({
       ...filters,
       type: [], country: [], region: [], appellation: [], grapes: [], vintage: [],
-      minRating: '', maturity: '', unplaced: ''
+      minRating: '', maturity: '', unplaced: '', reserved: ''
     });
   };
 
   const activeCount = (filters.type?.length || 0) + (filters.country?.length || 0) +
     (filters.region?.length || 0) + (filters.appellation?.length || 0) + (filters.grapes?.length || 0) +
     (filters.vintage?.length || 0) + (filters.minRating ? 1 : 0) + (filters.maturity ? 1 : 0) +
-    (filters.unplaced ? 1 : 0);
+    (filters.unplaced ? 1 : 0) + (filters.reserved ? 1 : 0);
 
   // For a given facet key, decide which counts to use:
   // - If THIS category has active selections, use baseFacets (so you can still add more)
@@ -277,6 +279,18 @@ function BottleFilterModal({ filters, onApply, onClose, facets, baseFacets, face
               label={t('cellarDetail.unplacedOnly', 'Unplaced only')}
               selected={!!filters.unplaced}
               onClick={() => onApply({ ...filters, unplaced: filters.unplaced ? '' : '1' })}
+            />
+          </FilterSection>
+        )}
+
+        {/* Reservation — single toggle, applied server-side after search (same
+            no-facet-count reasoning as Placement above). */}
+        {showReserved && (
+          <FilterSection label={t('cellarDetail.reservationLabel', 'Reservation')} icon="🔖">
+            <FilterPill
+              label={t('cellarDetail.reservedOnly', 'Reserved only')}
+              selected={!!filters.reserved}
+              onClick={() => onApply({ ...filters, reserved: filters.reserved ? '' : '1' })}
             />
           </FilterSection>
         )}

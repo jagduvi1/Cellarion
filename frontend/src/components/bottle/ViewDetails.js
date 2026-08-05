@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { getMaturityStatus, getPersonalWindowStatus } from '../../utils/drinkStatus';
+import { isReserved, reservationSummary } from '../../utils/reservation';
 import { bottleAnchorYear } from '../../utils/maturityUtils';
 import { convertAmountHistorical } from '../../utils/currency';
 import { bottleSizeLabel } from '../../config/bottleSizes';
@@ -244,6 +245,18 @@ function ViewDetails({ bottle, rackInfo, cellarId, vintageProfile, priceHistory,
         <div className="bd-section">
           <span className="bd-section-label">{t('bottleDetail.occasion')}</span>
           <p className="bd-notes"><span aria-hidden="true">{'\u{1F381}'}</span> {bottle.occasion}</p>
+        </div>
+      )}
+
+      {/* Reservation ("spoken for") — the bottle is being held; it stays out
+          of drink suggestions and the consume flow warns before logging it. */}
+      {isReserved(bottle) && (
+        <div className="bd-section">
+          <span className="bd-section-label">{t('bottleDetail.reservationLabel')}</span>
+          <div className="bd-reservation">
+            <span className="reserved-badge"><span aria-hidden="true">🔖</span> {reservationSummary(bottle, t)}</span>
+            <span className="bd-reservation-hint">{t('bottleDetail.reservationHint')}</span>
+          </div>
         </div>
       )}
 
