@@ -4,6 +4,14 @@ from flask import Flask, request, send_file, jsonify
 from rembg import remove
 from PIL import Image
 
+MAX_FILE_SIZE = 20 * 1024 * 1024  # 20 MB
+
+_ALLOWED_MAGIC = (b'\x89PNG', b'\xff\xd8\xff', b'GIF8', b'BM')
+
+def _is_allowed_image(data):
+    return (any(data.startswith(m) for m in _ALLOWED_MAGIC) or
+            (len(data) >= 12 and data[:4] == b'RIFF' and data[8:12] == b'WEBP'))
+
 # Defense-in-depth against decompression-bomb images: cap decoded pixels so a
 # small compressed payload can't expand to hundreds of millions of pixels and
 # exhaust memory / tie up this single-worker service. ~8000x8000 matches the
@@ -25,7 +33,11 @@ def remove_bg():
         return jsonify({"error": "No image file provided"}), 400
 
     input_file = request.files['image']
-    input_bytes = input_file.read()
+    input_bytes = input_file.read(MAX_FILE_SIZE + 1)
+    if len(input_bytes) > MAX_FILE_SIZE:
+        return jsonify({"error": "File too large"}), 413
+    if not _is_allowed_image(input_bytes):
+        return jsonify({"error": "Unsupported file type"}), 415
 
     try:
         # Check if the image already has a transparent background.
