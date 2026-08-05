@@ -13,11 +13,13 @@ const { z } = require('zod');
 const WineVintageProfile = require('../../models/WineVintageProfile');
 const WineVintagePrice = require('../../models/WineVintagePrice');
 const PriceTrackingRequest = require('../../models/PriceTrackingRequest');
+const PriceTrackingSkip = require('../../models/PriceTrackingSkip');
 const WineDefinition = require('../../models/WineDefinition');
 const { registerTool } = require('../registry');
 const { logAudit } = require('../../services/audit');
 const { SUPPORTED_CURRENCIES } = require('../../config/currencies');
 const { isValidId } = require('../../utils/validation');
+const { stripHtml } = require('../../utils/sanitize');
 const { ok, fail, objectId, pageParams } = require('../toolUtil');
 const { logAction } = require('../actionLedger');
 const {
@@ -390,7 +392,8 @@ registerTool({
   description:
     'Lists wine+vintage pairs users have asked to have price-tracked, where no price exists yet or the latest is ' +
     'older than 3 months. Most-requested first. Call when the somm asks "any price requests waiting?"; fulfil with ' +
-    'set_vintage_price.',
+    'set_vintage_price, or decline unsuitable ones (no secondary market) with reject_price_request. Declined pairs ' +
+    'no longer appear here.',
   scope: 'read',
   requireRole: SOMM_ROLES,
   annotations: { readOnlyHint: true, openWorldHint: false },
@@ -404,7 +407,20 @@ registerTool({
     const requests = await PriceTrackingRequest.find({})
       .populate({ path: 'wineDefinition', select: 'name producer type', populate: ['country', 'region'] })
       .lean();
-    const alive = requests.filter((r) => r.wineDefinition);
+    let alive = requests.filter((r) => r.wineDefinition);
+
+    // Curator-declined pairs never surface: reject_price_request deletes the
+    // request AND records a PriceTrackingSkip, so this filter is normally a
+    // no-op — it exists so a re-request that raced a decline can't resurrect
+    // the row while the skip stands (mirrors routes/somm/prices.js GET /queue).
+    if (alive.length) {
+      const skips = await PriceTrackingSkip.find({ wineDefinition: { $in: alive.map((r) => r.wineDefinition._id) } })
+        .select('wineDefinition vintage').lean();
+      if (skips.length) {
+        const skipped = new Set(skips.map((s) => `${s.wineDefinition}:${s.vintage}`));
+        alive = alive.filter((r) => !skipped.has(`${r.wineDefinition._id}:${r.vintage}`));
+      }
+    }
 
     // Actionable = no price yet, or latest snapshot stale (>90d) — mirrors
     // routes/somm/prices.js GET /queue.
@@ -509,6 +525,119 @@ registerTool({
       tool: 'set_vintage_price',
       action: 'somm_price',
       detail: { entryId: String(entry._id), wineId: String(wine._id), vintage: entry.vintage },
+      result: envelope,
+    });
+    return ok(envelope.summary, envelope.data);
+  },
+});
+
+// Mirror routes/somm/prices.js POST /requests/:id/decline — same bounds, same
+// audit action string, same requester notification wording.
+const DECLINE_REASON_MIN = 5;
+const DECLINE_REASON_MAX = 500;
+
+registerTool({
+  name: 'reject_price_request',
+  title: 'Sommelier: decline a price-tracking request',
+  description:
+    'Declines one price-tracking request WITH a required reason — for pairs that fail the secondary-market test ' +
+    '(everyday retail wines with no auction/resale data) or are otherwise not worth tracking. Every requester is ' +
+    'notified with the reason VERBATIM — confirm the wording with the somm first. The pair leaves the queue and ' +
+    'future tracking requests for the same wine+vintage are refused while the decline stands. Get request_id from ' +
+    'list_price_tracking_requests. To fulfil instead, use set_vintage_price. Reversible via undo_last (restores the ' +
+    'request and lifts the suppression; the notifications already sent stand).',
+  scope: 'write',
+  requireRole: SOMM_ROLES,
+  annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
+  inputSchema: {
+    request_id: objectId.describe('From list_price_tracking_requests'),
+    reason: z.string().min(DECLINE_REASON_MIN).max(DECLINE_REASON_MAX)
+      .describe('Why tracking is declined — sent verbatim to the requester(s), e.g. "Everyday retail wine with no secondary market; prices would not be meaningful."'),
+  },
+  handler: async (args, ctx) => {
+    const denied = requireSomm(ctx);
+    if (denied) return denied;
+    // Same hygiene as the REST route: the reason reaches the skip document and
+    // the requester notifications — plain text only, bounded even after strip.
+    const reason = stripHtml(typeof args.reason === 'string' ? args.reason : '');
+    if (!reason || reason.length < DECLINE_REASON_MIN) {
+      return fail('invalid_input', `reason must be at least ${DECLINE_REASON_MIN} characters of plain text (HTML is stripped) — the requester(s) read it.`);
+    }
+    if (reason.length > DECLINE_REASON_MAX) {
+      return fail('invalid_input', `reason must be at most ${DECLINE_REASON_MAX} characters.`);
+    }
+
+    const request = await PriceTrackingRequest.findById(args.request_id);
+    if (!request) {
+      return fail('not_found', 'No such price-tracking request — it may already be fulfilled or declined. Use list_price_tracking_requests for valid ids.');
+    }
+    const wine = await WineDefinition.findById(request.wineDefinition).select('name producer');
+
+    // Suppression: the skip is what keeps the pair from re-entering the queue
+    // via future user requests (routes/bottles.js refuses on it). $setOnInsert
+    // keeps the FIRST decline's reason if two curators race; updatedExisting
+    // tells the undo whether THIS call created the suppression (only then may
+    // an undo lift it).
+    const skipRes = await PriceTrackingSkip.findOneAndUpdate(
+      { wineDefinition: request.wineDefinition, vintage: request.vintage },
+      { $setOnInsert: {
+        wineDefinition: request.wineDefinition,
+        vintage: request.vintage,
+        reason,
+        skippedBy: ctx.user.id,
+        skippedAt: new Date(),
+      } },
+      { upsert: true, new: false, includeResultMetadata: true }
+    );
+    const skipCreated = !skipRes?.lastErrorObject?.updatedExisting;
+
+    // Everything the undo needs to put the request back verbatim.
+    const prev = {
+      wineDefinition: String(request.wineDefinition),
+      vintage: request.vintage,
+      requesters: (request.requesters || []).map((r) => ({ user: String(r.user), requestedAt: r.requestedAt, note: r.note })),
+      firstRequestedAt: request.firstRequestedAt || null,
+      lastRequestedAt: request.lastRequestedAt || null,
+      skipCreated,
+    };
+    await PriceTrackingRequest.deleteOne({ _id: request._id });
+
+    // Notify every requester with the verbatim reason — best-effort, exactly
+    // like set_vintage_price: delivery never blocks the decline.
+    const wineLabel = wine ? [wine.producer, wine.name].filter(Boolean).join(' — ') : 'this wine';
+    {
+      const { createNotification } = require('../../services/notifications');
+      const title = 'Price tracking request declined';
+      const body = `Your request to track market price for ${wineLabel} ${request.vintage} was declined by a sommelier. Reason: ${reason}`;
+      for (const r of prev.requesters) {
+        createNotification(r.user, 'price_tracking_declined', title, body, null, 'community').catch(() => {});
+      }
+    }
+
+    // Same audit action string as the REST decline route — REST and MCP
+    // curation must audit identically (see this file's header).
+    logAudit(ctx.req, 'somm.price.decline',
+      { type: 'wine', id: request.wineDefinition },
+      { vintage: request.vintage, reason, requesters: prev.requesters.length, via: 'mcp' });
+
+    const envelope = {
+      summary: `Declined price tracking for ${wine?.name || 'wine'} ${request.vintage} — ${prev.requesters.length} requester(s) notified with the reason`,
+      data: {
+        request_id: String(request._id),
+        wine_id: String(request.wineDefinition),
+        vintage: request.vintage,
+        reason,
+        requesters_notified: prev.requesters.length,
+        suppressed: true,
+        note: 'Future tracking requests for this wine+vintage are refused while the decline stands.',
+        undo: 'undo_last restores the request and lifts the suppression',
+      },
+    };
+    await logAction(ctx, {
+      tool: 'reject_price_request',
+      action: 'somm_price_decline',
+      detail: { requestId: String(request._id), wineId: String(request.wineDefinition), vintage: request.vintage, reason },
+      prev,
       result: envelope,
     });
     return ok(envelope.summary, envelope.data);

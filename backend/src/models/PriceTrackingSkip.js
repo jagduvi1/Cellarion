@@ -4,6 +4,11 @@ const mongoose = require('mongoose');
  * PriceTrackingSkip — marks a wine+vintage pair as not worth tracking
  * for price evolution. Wines flagged here are excluded from the somm
  * price queue permanently until the skip is removed.
+ *
+ * Written by the decline flow (POST /api/somm/prices/requests/:id/decline and
+ * the reject_price_request MCP tool): declining a PriceTrackingRequest deletes
+ * the request and records a skip, whose `reason` is what the requester was
+ * told. routes/bottles.js consults it to refuse re-requests for the pair.
  */
 const priceTrackingSkipSchema = new mongoose.Schema({
   wineDefinition: {

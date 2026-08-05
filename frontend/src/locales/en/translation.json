@@ -1637,8 +1637,10 @@
       "sommNotesPlaceholder": "Pricing rationale, market context…",
       "declineRequest": "Decline request",
       "declining": "Declining…",
-      "declineConfirm": "Decline this request? The user(s) who requested it will be notified.",
-      "declineTitle": "Decline this tracking request — the requester(s) will be notified.",
+      "declineTitle": "Decline this tracking request with a reason — the requester(s) will be notified.",
+      "declineReasonLabel": "Reason (sent to the requester)",
+      "declineReasonPlaceholder": "e.g. Everyday retail wine with no secondary market — prices would not be meaningful.",
+      "declineConfirmAction": "Confirm decline",
       "requesterCount_one": "{{count}} requester",
       "requesterCount_other": "{{count}} requesters",
       "requesterNoteLabel": "Requester note"

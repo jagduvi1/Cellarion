@@ -23,3 +23,16 @@ export const updateSommWineProfile = (apiFetch, wineId, patch) =>
  */
 export const removeMaturityProfile = (apiFetch, profileId) =>
   apiFetch(`/api/somm/maturity/${profileId}`, { method: 'DELETE' });
+
+/**
+ * Decline a price-tracking request with a required reason (5–500 chars,
+ * plain text). Every requester is notified with the reason, and the
+ * wine+vintage pair is suppressed from future tracking requests
+ * (PriceTrackingSkip) until an admin lifts it.
+ */
+export const declinePriceTrackingRequest = (apiFetch, requestId, reason) =>
+  apiFetch(`/api/somm/prices/requests/${requestId}/decline`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ reason }),
+  });
