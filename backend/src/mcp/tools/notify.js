@@ -88,10 +88,12 @@ registerTool({
   name: 'climate_status',
   title: 'Cellar climate status',
   description:
-    'Live climate for one cellar: configured temperature/humidity bounds, each sensor device with online state and ' +
-    'every channel\'s latest reading plus whether it is currently in or out of range. Call for "how is the cellar ' +
-    'climate", after a climate-excursion alert, or before advising on storage conditions. Historical charts are ' +
-    'web-app-only.',
+    'Climate for one cellar: configured temperature/humidity bounds, each sensor device with online state and ' +
+    'every channel\'s latest reading plus whether it is currently in or out of range — plus history aggregates per ' +
+    'reading type over 24h / 30d / 12m windows (min/max/mean, out-of-range reading count, excursion episodes with ' +
+    'the longest duration), so "what temperature has this cellar been stored at" is answerable without raw data. ' +
+    'Call for "how is the cellar climate", after a climate-excursion alert, or before advising on storage ' +
+    'conditions. Fine-grained history charts remain web-app-only.',
   scope: 'read',
   annotations: { readOnlyHint: true, openWorldHint: false },
   inputSchema: {
@@ -101,6 +103,7 @@ registerTool({
     // Lazy requires: climateAlerts pulls the notification stack at load time.
     const ClimateDevice = require('../../models/ClimateDevice');
     const { effectiveClimateConfig } = require('../../services/climateAlerts');
+    const { collectClimateHistory, formatHistoryCapsule } = require('../../services/climateHistory');
 
     const access = await resolveCellarAccess(ctx.user.id, args.cellar_id);
     if (!access) return fail('not_found', MSG_CELLAR_NOT_FOUND);
@@ -145,9 +148,22 @@ registerTool({
         warnings: ['This cellar has no climate devices — sensors are added in the web app (Settings → Climate).'],
       });
     }
+
+    // History aggregates (min/max/mean + excursion episodes per 24h/30d/12m
+    // window) — computed inside MongoDB, so the response stays a handful of
+    // numbers no matter how many readings the year holds.
+    const { history, warnings } = await collectClimateHistory({
+      deviceIds: devices.map((d) => d._id),
+      cfg,
+      now: new Date(now),
+    });
+    data.history = history;
+
+    const capsule = formatHistoryCapsule(history);
     return ok(
-      `${devices.length} device(s) in "${access.cellar.name}"${offline ? `, ${offline} offline` : ''}${breached ? `, ${breached} channel(s) OUT OF RANGE` : ' — all readings in range'}`,
-      data
+      `${devices.length} device(s) in "${access.cellar.name}"${offline ? `, ${offline} offline` : ''}${breached ? `, ${breached} channel(s) OUT OF RANGE` : ' — all readings in range'}${capsule ? ` — ${capsule}` : ''}`,
+      data,
+      warnings.length > 0 ? { warnings } : {}
     );
   },
 });
