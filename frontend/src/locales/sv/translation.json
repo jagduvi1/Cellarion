@@ -1520,7 +1520,6 @@
       "sommNotesPlaceholder": "Prisresonemang, marknadskontext…",
       "declineRequest": "Avslå förfrågan",
       "declining": "Avslår…",
-      "declineConfirm": "Avslå denna förfrågan? Användaren/användarna som begärde den meddelas.",
       "declineTitle": "Avslå denna prisbevakningsförfrågan — användaren/användarna meddelas.",
       "requesterCount_one": "{{count}} användare har begärt",
       "requesterCount_other": "{{count}} användare har begärt",

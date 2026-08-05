@@ -9,6 +9,7 @@ const Region = require('../models/Region');
 const Grape = require('../models/Grape');
 const WineVintageProfile = require('../models/WineVintageProfile');
 const PriceTrackingRequest = require('../models/PriceTrackingRequest');
+const PriceTrackingSkip = require('../models/PriceTrackingSkip');
 const BottleImage = require('../models/BottleImage');
 const WineRequest = require('../models/WineRequest');
 const { getCellarRole } = require('../utils/cellarAccess');
@@ -801,6 +802,22 @@ router.post('/:id/request-price-tracking', requireBottleAccess('viewer'), async 
       return res.status(400).json({ error: 'This wine cannot be price-tracked (missing wine definition or vintage).' });
     }
 
+    // A sommelier-declined pair stays declined: the decline flow (somm prices)
+    // records a PriceTrackingSkip, and this check is what keeps the pair from
+    // being re-queued. The decline reason is surfaced so the user learns WHY
+    // instead of silently re-requesting into a void.
+    const skip = await PriceTrackingSkip.findOne({
+      wineDefinition: bottle.wineDefinition,
+      vintage: bottle.vintage
+    }).lean();
+    if (skip) {
+      return res.status(409).json({
+        error: skip.reason
+          ? `A sommelier reviewed this wine and declined price tracking: ${skip.reason}`
+          : 'A sommelier reviewed this wine and declined price tracking.'
+      });
+    }
+
     const note = typeof req.body?.note === 'string' ? req.body.note.trim().slice(0, 500) : undefined;
     const now = new Date();
 
@@ -902,6 +919,16 @@ router.get('/:id/request-price-tracking', requireBottleAccess('viewer'), async (
     const eligible = bottle.vintage !== 'NV' && bottle.vintage !== 'Unknown';
     if (!eligible) {
       return res.json({ requested: false, requesterCount: 0, eligible: false });
+    }
+
+    // Declined by a curator → reported as ineligible so the request toggle
+    // disappears (POST would 409 anyway; don't invite a dead-end click).
+    const skip = await PriceTrackingSkip.findOne({
+      wineDefinition: bottle.wineDefinition,
+      vintage: bottle.vintage
+    }).select('_id').lean();
+    if (skip) {
+      return res.json({ requested: false, requesterCount: 0, eligible: false, declined: true });
     }
 
     const request = await PriceTrackingRequest.findOne({
