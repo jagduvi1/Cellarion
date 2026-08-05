@@ -118,6 +118,7 @@ function evaluateDeviceAlerts(device, cellar, now = new Date()) {
 module.exports = {
   effectiveClimateConfig,
   evaluateDeviceAlerts,
+  boundsFor,
   SUSTAIN_MS,
   COOLDOWN_MS,
 };

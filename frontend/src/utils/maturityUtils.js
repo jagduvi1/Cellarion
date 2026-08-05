@@ -31,7 +31,14 @@ export function resolveWindow(profile, anchorYear) {
 export function bottleAnchorYear(bottle) {
   const d = bottle?.purchaseDate || bottle?.createdAt;
   if (!d) return null;
-  const y = new Date(d).getFullYear();
+  // UTC year, not local: date-only purchase dates ("2026-12-31") parse as UTC
+  // midnight, so a local-time read shifts Dec-31/Jan-1 purchases into the
+  // wrong year in non-UTC timezones (a Dec 31 purchase read in a UTC+13
+  // browser becomes next year while the UTC server keeps this year). The UTC
+  // year is always the calendar year the user picked, in every timezone —
+  // and keeps this and the backend mirror (backend/src/utils/maturityUtils.js)
+  // in exact agreement.
+  const y = new Date(d).getUTCFullYear();
   return Number.isFinite(y) ? y : null;
 }
 

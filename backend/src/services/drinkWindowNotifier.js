@@ -13,7 +13,7 @@ const Cellar = require('../models/Cellar');
 const Bottle = require('../models/Bottle');
 const SiteConfig = require('../models/SiteConfig');
 const { CONSUMED_STATUSES } = require('../config/constants');
-const { classifyMaturity, classifyPersonalWindow, buildProfileMap } = require('../utils/maturityUtils');
+const { classifyMaturity, classifyPersonalWindow, buildProfileMap, resolveWindowForBottle } = require('../utils/maturityUtils');
 const { shouldNotifyOpenBottle, openBottleDaysLeft } = require('../utils/openBottleUtils');
 const { createNotification } = require('./notifications');
 const { sendDrinkWindowDigest, EMAIL_VERIFICATION_ENABLED } = require('./mailgun');
@@ -120,11 +120,13 @@ async function processUser(user, isFirstRun) {
     user: user._id,
     cellar: { $in: cellarIds },
     status: { $nin: CONSUMED_STATUSES },
-    // Profile-classified bottles need a wine definition + real vintage; a
-    // bottle with a PERSONAL drink window (drinkFrom/drinkTo) is classified
-    // from that window directly and qualifies regardless (incl. NV).
+    // Profile-classified bottles need a wine definition — including NV
+    // bottles, whose curated `relative` profiles are resolved per bottle by
+    // classifyMaturity (bottles with no reviewed profile classify to null and
+    // are skipped below). A bottle with a PERSONAL drink window
+    // (drinkFrom/drinkTo) qualifies regardless, even without a definition.
     $or: [
-      { wineDefinition: { $ne: null }, vintage: { $ne: 'NV' } },
+      { wineDefinition: { $ne: null } },
       { drinkFrom: { $ne: null } },
       { drinkTo: { $ne: null } }
     ]
@@ -160,11 +162,12 @@ async function processUser(user, isFirstRun) {
 
     // When the bottle's PERSONAL window governs the status (same precedence as
     // classifyMaturity), "ending soon" is measured against its drinkTo year
-    // rather than the profile's peakUntil.
+    // rather than the profile's peakUntil. Profile windows are resolved per
+    // bottle so a relative (NV) peakUntil is a calendar year, not an offset.
     const personalGoverns = classifyPersonalWindow(bottle, currentYear) !== null;
     const windowEnd = personalGoverns
       ? (Number.isFinite(bottle.drinkTo) ? bottle.drinkTo : null)
-      : profile?.peakUntil;
+      : resolveWindowForBottle(profile, bottle)?.peakUntil;
 
     // Determine notification type based on transition
     let notifType = null;

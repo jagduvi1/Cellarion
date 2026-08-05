@@ -3,11 +3,13 @@ const mongoose = require('mongoose');
 const { requireAuth, requireSommOrAdmin } = require('../../middleware/auth');
 const WineVintagePrice = require('../../models/WineVintagePrice');
 const PriceTrackingRequest = require('../../models/PriceTrackingRequest');
+const PriceTrackingSkip = require('../../models/PriceTrackingSkip');
 const Bottle = require('../../models/Bottle');
 const WineDefinition = require('../../models/WineDefinition');
 const { getOrCreateDailySnapshot, getSnapshotsForDates } = require('../../utils/exchangeRates');
 const { createNotification } = require('../../services/notifications');
 const { logAudit } = require('../../services/audit');
+const { stripHtml } = require('../../utils/sanitize');
 const { SUPPORTED_CURRENCIES } = require('../../config/currencies');
 
 const { suggestPrice } = require('../../services/labelScan');
@@ -17,6 +19,10 @@ const router = express.Router();
 router.use(requireAuth);
 
 const STALE_MS = 90 * 24 * 60 * 60 * 1000; // 3 months
+
+// Decline reasons are written for the requester: required, plain text, bounded.
+const DECLINE_REASON_MIN = 5;
+const DECLINE_REASON_MAX = 500; // matches PriceTrackingSkip.reason maxlength
 
 /**
  * GET /api/somm/prices/queue
@@ -40,8 +46,21 @@ router.get('/queue', requireSommOrAdmin, async (req, res) => {
     if (requests.length === 0) return res.json({ queue: [] });
 
     // Drop any requests whose wine was deleted out from under them.
-    const validRequests = requests.filter(r => r.wineDefinition);
+    let validRequests = requests.filter(r => r.wineDefinition);
     if (validRequests.length === 0) return res.json({ queue: [] });
+
+    // Curator-declined pairs never surface. The decline flow deletes the
+    // request doc AND records a PriceTrackingSkip, so this filter is normally
+    // a no-op — it exists so a re-request that raced a decline can't
+    // resurrect the card while the skip stands.
+    const skips = await PriceTrackingSkip.find({
+      wineDefinition: { $in: validRequests.map(r => r.wineDefinition._id) }
+    }).select('wineDefinition vintage').lean();
+    if (skips.length > 0) {
+      const skippedPairs = new Set(skips.map(s => `${s.wineDefinition}:${s.vintage}`));
+      validRequests = validRequests.filter(r => !skippedPairs.has(`${r.wineDefinition._id}:${r.vintage}`));
+      if (validRequests.length === 0) return res.json({ queue: [] });
+    }
 
     // Step 2: latest price snapshot per pair (for staleness display).
     // $last is only meaningful with a defined input order — sort by setAt
@@ -306,49 +325,78 @@ router.post('/', requireSommOrAdmin, async (req, res) => {
 });
 
 /**
- * DELETE /api/somm/prices/requests/:requestId
- * Decline a price tracking request. Removes the request entirely and notifies
- * all requesters that their request was declined. Somm/admin only.
+ * POST /api/somm/prices/requests/:requestId/decline
+ * Decline a price tracking request WITH a required reason. Somm/admin only.
+ * Body: { reason } — 5–500 chars, HTML-stripped; sent verbatim to every
+ * requester's notification.
+ *
+ * Removes the request and records a PriceTrackingSkip for the pair, which
+ * (a) keeps the pair out of the queue and (b) makes routes/bottles.js refuse
+ * future tracking requests for the same wine+vintage while the skip stands.
+ * (Replaces the old reason-less DELETE /requests/:requestId — support ticket
+ * 6a703236: junk requests need a decline path the requester learns from.)
  */
-router.delete('/requests/:requestId', requireSommOrAdmin, async (req, res) => {
+router.post('/requests/:requestId/decline', requireSommOrAdmin, async (req, res) => {
   try {
     const { requestId } = req.params;
     if (!mongoose.isValidObjectId(requestId)) {
       return res.status(400).json({ error: 'Invalid request ID' });
     }
 
-    const request = await PriceTrackingRequest.findById(requestId)
-      .populate('wineDefinition', 'name producer');
-    if (!request) {
-      return res.status(404).json({ error: 'Tracking request not found' });
+    // Required, human-written reason — HTML-stripped and length-bounded before
+    // it reaches the skip document and the requester notifications.
+    const reason = stripHtml(typeof req.body?.reason === 'string' ? req.body.reason : '');
+    if (!reason || reason.length < DECLINE_REASON_MIN) {
+      return res.status(400).json({ error: `A decline reason of at least ${DECLINE_REASON_MIN} characters is required — the requester(s) will see it` });
+    }
+    if (reason.length > DECLINE_REASON_MAX) {
+      return res.status(400).json({ error: `Reason too long (max ${DECLINE_REASON_MAX} characters)` });
     }
 
-    const wineLabel = request.wineDefinition
-      ? [request.wineDefinition.producer, request.wineDefinition.name].filter(Boolean).join(' — ')
+    // No populate here: a deleted wine would null the ref and lose the id the
+    // skip needs. Load the label separately, best-effort.
+    const request = await PriceTrackingRequest.findById(requestId);
+    if (!request) {
+      return res.status(404).json({ error: 'Tracking request not found — it may already be fulfilled or declined' });
+    }
+    const wine = await WineDefinition.findById(request.wineDefinition).select('name producer').lean();
+
+    // Suppression: the skip keeps the pair from being re-queued by future user
+    // requests. $setOnInsert keeps the FIRST decline's reason if two curators
+    // race on the unique (wineDefinition, vintage) index.
+    await PriceTrackingSkip.findOneAndUpdate(
+      { wineDefinition: request.wineDefinition, vintage: request.vintage },
+      { $setOnInsert: {
+        wineDefinition: request.wineDefinition,
+        vintage: request.vintage,
+        reason,
+        skippedBy: req.user.id,
+        skippedAt: new Date()
+      } },
+      { upsert: true }
+    );
+
+    await request.deleteOne();
+
+    const wineLabel = wine
+      ? [wine.producer, wine.name].filter(Boolean).join(' — ')
       : 'this wine';
     const title = 'Price tracking request declined';
-    const body = `Your request to track market price for ${wineLabel} ${request.vintage} was declined by a sommelier.`;
+    const body = `Your request to track market price for ${wineLabel} ${request.vintage} was declined by a sommelier. Reason: ${reason}`;
     for (const r of request.requesters) {
       createNotification(r.user, 'price_tracking_declined', title, body, null);
     }
 
-    await request.deleteOne();
-
     logAudit(req, 'somm.price.decline',
-      { type: 'wine', id: request.wineDefinition?._id || null },
-      { vintage: request.vintage, requesters: request.requesters.length }
+      { type: 'wine', id: request.wineDefinition },
+      { vintage: request.vintage, reason, requesters: request.requesters.length }
     );
 
-    res.json({ message: 'Tracking request declined' });
+    res.json({ message: 'Tracking request declined', requestersNotified: request.requesters.length });
   } catch (error) {
     console.error('Decline tracking request error:', error);
     res.status(500).json({ error: 'Failed to decline tracking request' });
   }
 });
-
-// NOTE: the old POST/DELETE /skip endpoints (used with PriceTrackingSkip) were
-// removed when the queue became opt-in. The replacement is
-// DELETE /api/somm/prices/requests/:id (above). PriceTrackingSkip docs are
-// no longer read by anything but the collection is left in place for audit.
 
 module.exports = router;

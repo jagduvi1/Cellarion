@@ -1643,7 +1643,6 @@
       "sommNotesPlaceholder": "Justification du prix, contexte de marché…",
       "declineRequest": "Refuser la demande",
       "declining": "Refus…",
-      "declineConfirm": "Refuser cette demande ? Le ou les utilisateurs qui l'ont faite seront prévenus.",
       "declineTitle": "Refuser cette demande de suivi — le ou les demandeurs seront prévenus.",
       "requesterCount_one": "{{count}} demandeur",
       "requesterCount_other": "{{count}} demandeurs",
