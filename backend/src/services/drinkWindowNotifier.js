@@ -79,6 +79,13 @@ async function runDrinkWindowCheck() {
     } catch (err) {
       console.error(`[drinkWindowNotifier] Open-bottle check failed for user ${user._id}:`, err.message);
     }
+    try {
+      // Reservation ("spoken for") alerts: same category and no seed, for the
+      // same reason — reservations can only exist after the feature shipped.
+      totalNotified += await processReservations(user);
+    } catch (err) {
+      console.error(`[drinkWindowNotifier] Reservation check failed for user ${user._id}:`, err.message);
+    }
   }
 
   if (isFirstRun) {
@@ -321,6 +328,53 @@ async function processOpenBottles(user) {
   return count;
 }
 
+/**
+ * Alert once when a bottle's reservedUntil year arrives (currentYear ≥
+ * reservedUntil): the moment the bottle was being held FOR has come, so the
+ * reservation stops being a reason to wait. The reservationNotifiedAt marker
+ * guarantees once-only delivery; editing reservedUntil re-arms it
+ * (bottleOps.updateBottleFields clears the marker on change).
+ * Returns the number of notifications created.
+ */
+async function processReservations(user) {
+  const currentYear = new Date().getFullYear();
+  const bottles = await Bottle.find({
+    user: user._id,
+    status: { $nin: CONSUMED_STATUSES },
+    // $lte on a number never matches null/missing (BSON type bracketing), so
+    // bottles reserved without a year — or not reserved at all — are skipped.
+    reservedUntil: { $lte: currentYear },
+    reservationNotifiedAt: null,
+  }).populate({ path: 'wineDefinition', select: 'name' }).lean();
+  if (bottles.length === 0) return 0;
+
+  const now = new Date();
+  let count = 0;
+  for (const bottle of bottles) {
+    const wineName = bottle.wineDefinition?.name || 'Unknown wine';
+    const wine = bottle.vintage && bottle.vintage !== 'NV' ? `${wineName} ${bottle.vintage}` : wineName;
+    const who = (bottle.reservedFor || '').trim();
+    const message = who
+      ? `${wine} was reserved for ${who} until ${bottle.reservedUntil} — that year is here. Time to enjoy it (or update the reservation).`
+      : `${wine} was reserved until ${bottle.reservedUntil} — that year is here. Time to enjoy it (or update the reservation).`;
+
+    await createNotification(
+      user._id,
+      'reservation_due',
+      'Reserved bottle — the year has arrived',
+      message,
+      `/cellars/${bottle.cellar}/bottles/${bottle._id}`,
+      'drinkWindow'
+    );
+    await Bottle.updateOne(
+      { _id: bottle._id },
+      { $set: { reservationNotifiedAt: now } }
+    );
+    count++;
+  }
+  return count;
+}
+
 function buildNotification(alert) {
   const { name, vintage, status } = alert;
   const wine = `${name} ${vintage}`;
@@ -348,4 +402,4 @@ function buildNotification(alert) {
   }
 }
 
-module.exports = { runDrinkWindowCheck, processUser, processOpenBottles, shouldSendDigestEmail };
+module.exports = { runDrinkWindowCheck, processUser, processOpenBottles, processReservations, shouldSendDigestEmail };

@@ -109,6 +109,7 @@ function wineSummary(wd) {
 
 /** Compact bottle line item for list responses. */
 function bottleSummary(b) {
+  const { isReserved } = require('../utils/reservationUtils');
   return {
     bottle_id: b._id,
     wine: b.wineDefinition
@@ -124,6 +125,10 @@ function bottleSummary(b) {
     drink_from: b.drinkFrom ?? null,
     drink_to: b.drinkTo ?? null,
     opened_at: b.openedAt || undefined,
+    // Only present when the bottle is "spoken for" — keeps unreserved rows lean.
+    reserved: isReserved(b)
+      ? { for: b.reservedFor || null, until: b.reservedUntil ?? null }
+      : undefined,
   };
 }
 

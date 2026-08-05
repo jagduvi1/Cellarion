@@ -132,6 +132,11 @@ function mapBottlesForExport(bottles, racks, imagesByBottle = new Map(), reviews
     if (b.drinkTo != null) item.drinkTo = b.drinkTo;
     if (b.occasion) item.occasion = b.occasion;
 
+    // Reservation ("spoken for") — same emit-only-when-present rule so an
+    // unreserved bottle round-trips to the same (absent) state.
+    if (b.reservedFor) item.reservedFor = b.reservedFor;
+    if (b.reservedUntil != null) item.reservedUntil = b.reservedUntil;
+
     // User-entered rating
     if (b.rating != null) {
       item.rating = b.rating;

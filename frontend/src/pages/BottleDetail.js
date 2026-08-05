@@ -5,6 +5,7 @@ import ReactMarkdown from 'react-markdown';
 import rehypeSanitize from 'rehype-sanitize';
 import { useAuth } from '../contexts/AuthContext';
 import { getBottle, consumeBottle, setBottleDefaultImage, undoBottle, openBottle, restoreBottle } from '../api/bottles';
+import { isReserved, reservationSummary } from '../utils/reservation';
 import OpenBottlePanel from '../components/bottle/OpenBottlePanel';
 import { PRESERVATION_METHODS } from '../utils/openBottle';
 import { getRacks } from '../api/racks';
@@ -770,6 +771,7 @@ function BottleDetail() {
           <ConsumeModal
             wineName={displayName}
             defaultRatingScale={user?.preferences?.ratingScale || '5'}
+            reservationText={isReserved(bottle) ? reservationSummary(bottle, t) : undefined}
             onConfirm={handleConsumeConfirm}
             onCancel={() => setConsumeOpen(false)}
           />

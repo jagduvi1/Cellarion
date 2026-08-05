@@ -200,6 +200,18 @@
   border: 1px solid var(--color-info-border);
 }
 
+/* Reserved ("spoken for") — the bottle is being held for someone/something. */
+.reserved-badge {
+  display: inline-block;
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 1px 7px;
+  border-radius: var(--radius-full);
+  background: var(--color-warning-bg);
+  color: var(--color-warning);
+  border: 1px solid var(--color-warning-border);
+}
+
 /* ── Maturity badges ── */
 .maturity-badge {
   display: inline-block;

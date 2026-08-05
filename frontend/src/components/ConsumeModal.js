@@ -3,7 +3,10 @@ import { useTranslation } from 'react-i18next';
 import RatingInput from './RatingInput';
 import { useDialogA11y } from '../utils/useDialogA11y';
 
-export function ConsumeModal({ wineName, defaultRatingScale, onConfirm, onCancel }) {
+// `reservationText`: when the bottle is reserved ("spoken for"), the caller
+// passes a one-line summary and the modal shows a warning above the form —
+// the confirm button then doubles as the reservation acknowledgment.
+export function ConsumeModal({ wineName, defaultRatingScale, reservationText, onConfirm, onCancel }) {
   const { t } = useTranslation();
   const [reason,       setReason]      = useState('drank');
   const [note,         setNote]        = useState('');
@@ -28,6 +31,12 @@ export function ConsumeModal({ wineName, defaultRatingScale, onConfirm, onCancel
       <div className="modal-box" onClick={e => e.stopPropagation()} ref={boxRef} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1}>
         <h2 id={titleId}>{t('bottleDetail.removeBottleTitle')}</h2>
         {wineName && <p className="modal-wine-name">{wineName}</p>}
+        {reservationText && (
+          <div className="alert alert-warning" role="alert">
+            <span aria-hidden="true">🔖</span>{' '}
+            {t('bottleDetail.consumeReservedWarning', { reservation: reservationText })}
+          </div>
+        )}
         <form onSubmit={handleSubmit}>
           <div className="form-group">
             <label>{t('common.reason')}</label>

@@ -5,6 +5,7 @@ import { buildRackUrl } from '../utils/rackNavigation';
 import { useTranslation } from 'react-i18next';
 import AuthImage from './AuthImage';
 import { glassesLeft, daysLeft, freshnessStatus } from '../utils/openBottle';
+import { isReserved, reservationSummary } from '../utils/reservation';
 import './BottleCard.css';
 
 const MATURITY_LABELS = {
@@ -45,6 +46,9 @@ function BottleCard({ bottle, rackMap, cellarId, viewMode, groupCount = 1, onCli
   // The backend computes maturityStatus with the bottle's OWN drinkFrom/drinkTo
   // window taking precedence over the vintage profile — flag the source here.
   const hasPersonalWindow = Number.isFinite(bottle.drinkFrom) || Number.isFinite(bottle.drinkTo);
+  // Reserved ("spoken for") — suppressed for collapsed groups, whose members
+  // may carry different reservations (same reasoning as the rack badge).
+  const reserved = !isGroup && bottle.status === 'active' && isReserved(bottle);
 
   // onClick overrides navigation — used to expand a collapsed group instead.
   const handleClick = onClick || (() => navigate(`/cellars/${cellarId}/bottles/${bottle._id}`));
@@ -115,6 +119,13 @@ function BottleCard({ bottle, rackMap, cellarId, viewMode, groupCount = 1, onCli
                   glasses: glassesLeft(bottle),
                   days: Math.max(0, daysLeft(bottle) ?? 0),
                 })}
+              </span>
+            )}
+            {reserved && (
+              <span className="reserved-badge" title={reservationSummary(bottle, t)}>
+                <span aria-hidden="true">🔖</span> {bottle.reservedUntil != null
+                  ? t('bottleCard.reservedUntil', { year: bottle.reservedUntil })
+                  : t('bottleCard.reserved')}
               </span>
             )}
             {maturityInfo && (
@@ -196,6 +207,13 @@ function BottleCard({ bottle, rackMap, cellarId, viewMode, groupCount = 1, onCli
           )}
           {isPending && (
             <span className="pending-wine-badge">{t('bottleCard.pendingReview')}</span>
+          )}
+          {reserved && (
+            <span className="reserved-badge" title={reservationSummary(bottle, t)}>
+              <span aria-hidden="true">🔖</span> {bottle.reservedUntil != null
+                ? t('bottleCard.reservedUntil', { year: bottle.reservedUntil })
+                : t('bottleCard.reserved')}
+            </span>
           )}
           {maturityInfo && (
             <span

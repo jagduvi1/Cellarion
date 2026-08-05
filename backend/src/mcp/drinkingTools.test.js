@@ -142,6 +142,30 @@ describe('what_should_i_open_tonight', () => {
     const res = await tool('what_should_i_open_tonight').handler({ cellar_id: oid('9') }, ctxFor(oid('4')));
     expect(parse(res).error.code).toBe('not_found');
   });
+
+  test('reserved ("spoken for") bottles never surface as candidates, and the exclusion is disclosed', async () => {
+    const reserved = mkBottle({ drinkFrom: THIS_YEAR - 2, drinkTo: THIS_YEAR + 2, reservedFor: "Elias's 18th", reservedUntil: 2034 });
+    const reservedYearOnly = mkBottle({ drinkTo: THIS_YEAR - 1, reservedUntil: THIS_YEAR + 8 });
+    const free = mkBottle({ drinkFrom: THIS_YEAR - 2, drinkTo: THIS_YEAR + 2 });
+    wireCandidates([reserved, reservedYearOnly, free]);
+
+    const res = await tool('what_should_i_open_tonight').handler({}, ctxFor(oid('7')));
+    const body = parse(res);
+    expect(body.data).toHaveLength(1);
+    expect(String(body.data[0].bottle_id)).toBe(String(free._id));
+    expect(body.warnings.join(' ')).toMatch(/2 reserved .*excluded/i);
+  });
+
+  test('an all-reserved cellar returns the empty result WITH the reserved disclosure', async () => {
+    // Without the warning the model would tell the user "nothing is ready" and
+    // never mention that their peak bottles are simply spoken for.
+    const reserved = mkBottle({ drinkFrom: THIS_YEAR - 2, drinkTo: THIS_YEAR + 2, reservedFor: 'Anna' });
+    wireCandidates([reserved]);
+    const res = await tool('what_should_i_open_tonight').handler({}, ctxFor(oid('8')));
+    const body = parse(res);
+    expect(body.data).toEqual([]);
+    expect(body.warnings.join(' ')).toMatch(/1 reserved .*excluded/i);
+  });
 });
 
 describe('pair_with_dish', () => {
@@ -171,6 +195,18 @@ describe('pair_with_dish', () => {
     expect(body.data.matched).toEqual([]);
     expect(body.data.style_spread).toHaveLength(1);
     expect(body.warnings.join(' ')).toMatch(/hints|evidence/i);
+  });
+
+  test('reserved bottles are excluded from both the matches and the style spread', async () => {
+    const reserved = mkBottle({ drinkTo: THIS_YEAR + 2, reservedFor: 'the wedding' });
+    const free = mkBottle({ drinkTo: THIS_YEAR + 2 });
+    wireCandidates([reserved, free]);
+    const res = await tool('pair_with_dish').handler({ dish: 'roast chicken' }, ctxFor(oid('a')));
+    const body = parse(res);
+    const allIds = [...body.data.matched, ...body.data.style_spread].map((c) => String(c.bottle_id));
+    expect(allIds).toContain(String(free._id));
+    expect(allIds).not.toContain(String(reserved._id));
+    expect(body.warnings.join(' ')).toMatch(/1 reserved .*excluded/i);
   });
 });
 

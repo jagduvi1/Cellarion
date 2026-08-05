@@ -32,7 +32,7 @@ const BOTTLES_PER_PAGE = 30;
 const FILTERS_STORAGE_PREFIX = 'cellarFilters:';
 const buildDefaultFilters = () => ({
   search: '', type: [], country: [], region: [], appellation: [],
-  grapes: [], vintage: [], minRating: '', maturity: '', unplaced: '', sort: '-createdAt'
+  grapes: [], vintage: [], minRating: '', maturity: '', unplaced: '', reserved: '', sort: '-createdAt'
 });
 const readSavedFilters = (cellarId) => {
   try {
@@ -76,7 +76,7 @@ function CellarDetail() {
     // A deep link with any filter param wins (shared/bookmarked URL). Otherwise
     // restore the last-used selection for this cellar so browser-back keeps it.
     const hasUrlFilters = ['search', 'type', 'country', 'region', 'appellation',
-      'grapes', 'vintage', 'minRating', 'maturity', 'unplaced', 'sort']
+      'grapes', 'vintage', 'minRating', 'maturity', 'unplaced', 'reserved', 'sort']
       .some(k => searchParams.has(k));
     if (!hasUrlFilters) return readSavedFilters(id) || buildDefaultFilters();
     return {
@@ -90,6 +90,7 @@ function CellarDetail() {
       minRating: searchParams.get('minRating') || '',
       maturity: searchParams.get('maturity') || '',
       unplaced: searchParams.get('unplaced') || '',
+      reserved: searchParams.get('reserved') || '',
       sort: searchParams.get('sort') || '-createdAt'
     };
   });
@@ -131,6 +132,12 @@ function CellarDetail() {
     if (multiScope) setFilters(prev => (prev.unplaced ? { ...prev, unplaced: '' } : prev));
   }, [multiScope]);
 
+  // Same single-cellar-only rule for the reserved filter (the cross-cellar
+  // endpoint doesn't support ?reserved).
+  useEffect(() => {
+    if (multiScope) setFilters(prev => (prev.reserved ? { ...prev, reserved: '' } : prev));
+  }, [multiScope]);
+
   // Debounce the search input — only send the API call after the user stops typing
   const [debouncedSearch, setDebouncedSearch] = useState(filters.search);
   const searchTimer = useRef(null);
@@ -142,7 +149,7 @@ function CellarDetail() {
 
   // Clear URL search params after they've been read into filter/tab state
   useEffect(() => {
-    if (searchParams.has('search') || searchParams.has('vintage') || searchParams.has('minRating') || searchParams.has('sort') || searchParams.has('type') || searchParams.has('country') || searchParams.has('region') || searchParams.has('grapes') || searchParams.has('unplaced') || searchParams.has('tab')) {
+    if (searchParams.has('search') || searchParams.has('vintage') || searchParams.has('minRating') || searchParams.has('sort') || searchParams.has('type') || searchParams.has('country') || searchParams.has('region') || searchParams.has('grapes') || searchParams.has('unplaced') || searchParams.has('reserved') || searchParams.has('tab')) {
       setSearchParams({}, { replace: true });
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -160,7 +167,7 @@ function CellarDetail() {
     debouncedSearch,
     filters.type.join(','), filters.country.join(','), filters.region.join(','),
     filters.appellation.join(','), filters.grapes.join(','), filters.vintage.join(','),
-    filters.minRating, filters.maturity, filters.unplaced, filters.sort
+    filters.minRating, filters.maturity, filters.unplaced, filters.reserved, filters.sort
   ].join('|');
 
   // Refetch on cellar id, filters, or scope change. `id` is included so an
@@ -190,6 +197,9 @@ function CellarDetail() {
         } else if (key === 'unplaced') {
           // Mapped to the backend's excludePlaced param below — single-cellar
           // only (the cross-cellar endpoint doesn't resolve rack slots).
+        } else if (key === 'reserved') {
+          // Set below — single-cellar only (the cross-cellar endpoint doesn't
+          // support ?reserved).
         } else if (Array.isArray(val)) {
           if (val.length > 0) params.append(key, val.join(','));
         } else if (val) {
@@ -206,6 +216,7 @@ function CellarDetail() {
       } else {
         params.set('group', '1');
         if (filters.unplaced) params.set('excludePlaced', '1');
+        if (filters.reserved) params.set('reserved', '1');
         res = await getCellar(apiFetch, id, params);
       }
       const data = await res.json();
@@ -528,6 +539,7 @@ function CellarDetail() {
             if (filters.minRating) activeChips.push({ key: 'minRating', value: filters.minRating, label: `${filters.minRating}+ rating` });
             if (filters.maturity) activeChips.push({ key: 'maturity', value: filters.maturity, label: filters.maturity });
             if (filters.unplaced) activeChips.push({ key: 'unplaced', value: '1', label: t('cellarDetail.unplacedOnly', 'Unplaced only') });
+            if (filters.reserved) activeChips.push({ key: 'reserved', value: '1', label: t('cellarDetail.reservedOnly', 'Reserved only') });
 
             const removeChip = (chip) => {
               setFilters(prev => {
@@ -542,7 +554,7 @@ function CellarDetail() {
             const clearAll = () => setFilters(prev => ({
               ...prev,
               type: [], country: [], region: [], appellation: [], grapes: [], vintage: [],
-              minRating: '', maturity: '', unplaced: ''
+              minRating: '', maturity: '', unplaced: '', reserved: ''
             }));
 
             return (
@@ -626,6 +638,7 @@ function CellarDetail() {
                       facetMeta={facetMeta}
                       bottlesTotal={bottlesTotal}
                       showUnplaced={!multiScope && hasRacks === true}
+                      showReserved={!multiScope}
                     />
                   </Suspense>
                 )}
@@ -636,7 +649,7 @@ function CellarDetail() {
           {loading ? (
             <div className="loading">{t('cellarDetail.loadingCellar')}</div>
           ) : bottles.length === 0 && !bottlesLoading ? (
-            (filters.search || filters.vintage?.length || filters.minRating || filters.maturity || filters.unplaced || filters.type?.length || filters.country?.length || filters.region?.length || filters.appellation?.length || filters.grapes?.length) ? (
+            (filters.search || filters.vintage?.length || filters.minRating || filters.maturity || filters.unplaced || filters.reserved || filters.type?.length || filters.country?.length || filters.region?.length || filters.appellation?.length || filters.grapes?.length) ? (
               <div className="empty-state">
                 <p>{t('cellarDetail.noSearchResults')}</p>
               </div>

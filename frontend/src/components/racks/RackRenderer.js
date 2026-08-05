@@ -2,6 +2,7 @@ import { useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { computeLayout, computeModularLayout, SLOT_RADIUS, CELL_SIZE } from '../../utils/rackLayouts';
 import useSlotDrag from '../../hooks/useSlotDrag';
+import { isReserved } from '../../utils/reservation';
 import './RackRenderer.css';
 
 const WINE_COLORS = {
@@ -425,8 +426,30 @@ export default function RackRenderer({
   );
 }
 
+/**
+ * Small gold bookmark-ribbon marker for reserved ("spoken for") bottles —
+ * shared by the compact rack view and the shelf view so the rack speaks the
+ * same 🔖 language as the bottle list badge.
+ */
+export function ReservedRibbon({ cx, cy, r }) {
+  const w = r * 0.52;
+  const h = r * 0.8;
+  const x0 = cx + r * 0.3;
+  const y0 = cy - r * 1.02;
+  return (
+    <path
+      d={`M ${x0} ${y0} h ${w} v ${h} l ${-w / 2} ${-h * 0.3} l ${-w / 2} ${h * 0.3} z`}
+      fill="#E8B931"
+      stroke="#8A6A10"
+      strokeWidth={0.8}
+      pointerEvents="none"
+    />
+  );
+}
+
 /** Single slot circle (bpc=1 standard rendering) */
 function SlotCircle({ position, cx, cy, R, slot, disabled, isActive, isHighlight, onSlotClick, getSlotStyle, onDragStart, isDragOrigin, isDragTarget }) {
+  const { t } = useTranslation();
   const wine = slot?.bottle?.wineDefinition;
   const wineType = wine?.type || 'red';
   const colors = slot ? (WINE_COLORS[wineType] || WINE_COLORS.red) : null;
@@ -478,7 +501,9 @@ function SlotCircle({ position, cx, cy, R, slot, disabled, isActive, isHighlight
       onPointerDown={draggable ? (e) => onDragStart(e, position) : undefined}
       role="button"
       tabIndex={0}
-      aria-label={slot ? `${wine?.name || '?'} (${slot.bottle?.vintage || ''})` : `Empty slot ${position}`}
+      aria-label={slot
+        ? `${wine?.name || '?'} (${slot.bottle?.vintage || ''})${isReserved(slot.bottle) ? ` — ${t('rackView.reservedAria', 'reserved')}` : ''}`
+        : `Empty slot ${position}`}
       style={{ cursor: draggable ? 'grab' : 'pointer', ...dimStyle }}
     >
       <circle cx={cx + 1} cy={cy + 1} r={R} fill="rgba(0,0,0,0.08)" pointerEvents="none" />
@@ -492,6 +517,7 @@ function SlotCircle({ position, cx, cy, R, slot, disabled, isActive, isHighlight
         stroke={slot ? 'rgba(0,0,0,0.15)' : 'rgba(0,0,0,0.08)'} strokeWidth={0.8} pointerEvents="none" />
       {slot && <circle cx={cx} cy={cy} r={R * 0.3} fill="rgba(0,0,0,0.4)" pointerEvents="none" />}
       {slot && <circle cx={cx} cy={cy} r={R * 0.18} fill="rgba(255,255,255,0.15)" pointerEvents="none" />}
+      {slot && isReserved(slot.bottle) && <ReservedRibbon cx={cx} cy={cy} r={R} />}
       {!slot && (
         <text x={cx} y={cy} textAnchor="middle" dominantBaseline="central" className="slot-number" pointerEvents="none">
           {position}
