@@ -1257,6 +1257,8 @@
       "title": "Admin: Wine Requests",
       "selectRequest": "Select a request to review",
       "noRequests": "No requests found",
+      "totalCount_one": "{{count}} request",
+      "totalCount_other": "{{count}} requests",
       "requestedBy": "Requested by:",
       "date": "Date:",
       "createNewWine": "Create New Wine",
@@ -1637,8 +1639,10 @@
       "sommNotesPlaceholder": "Pricing rationale, market context…",
       "declineRequest": "Decline request",
       "declining": "Declining…",
-      "declineConfirm": "Decline this request? The user(s) who requested it will be notified.",
-      "declineTitle": "Decline this tracking request — the requester(s) will be notified.",
+      "declineTitle": "Decline this tracking request with a reason — the requester(s) will be notified.",
+      "declineReasonLabel": "Reason (sent to the requester)",
+      "declineReasonPlaceholder": "e.g. Everyday retail wine with no secondary market — prices would not be meaningful.",
+      "declineConfirmAction": "Confirm decline",
       "requesterCount_one": "{{count}} requester",
       "requesterCount_other": "{{count}} requesters",
       "requesterNoteLabel": "Requester note"
@@ -3510,7 +3514,10 @@
       "matching": "Matching wines… {{done}} / {{total}}",
       "largeCollectionHint": "Identifying unknown wines — this may take a moment for large collections",
       "matchButton_one": "Match {{count}} bottle against wine library",
-      "matchButton_other": "Match {{count}} bottles against wine library"
+      "matchButton_other": "Match {{count}} bottles against wine library",
+      "resumeMatchButton": "Resume matching — {{remaining}} of {{total}} bottles left",
+      "resumeMatchHint": "The first {{done}} bottles were already matched and will be kept — resuming won't re-run them or re-spend the AI budget.",
+      "partialKept": "The bottles matched before the error have been kept. Resume matching to continue from where it stopped."
     },
     "review": {
       "matched": "Matched",

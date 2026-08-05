@@ -31,7 +31,8 @@ jest.mock('../models/WineVintagePrice', () => {
   M.deleteOne = jest.fn();
   return M;
 });
-jest.mock('../models/PriceTrackingRequest', () => ({ find: jest.fn(), findOne: jest.fn() }));
+jest.mock('../models/PriceTrackingRequest', () => ({ find: jest.fn(), findOne: jest.fn(), findById: jest.fn(), deleteOne: jest.fn(), findOneAndUpdate: jest.fn() }));
+jest.mock('../models/PriceTrackingSkip', () => ({ find: jest.fn(), findOne: jest.fn(), findOneAndUpdate: jest.fn(), deleteOne: jest.fn() }));
 jest.mock('../utils/rackGeometry', () => ({ getMaxPosition: jest.fn(() => 12) }));
 jest.mock('../services/search', () => ({ getIsAvailable: jest.fn(() => false), search: jest.fn(), searchBottles: jest.fn(), indexWine: jest.fn().mockResolvedValue(undefined) }));
 jest.mock('../services/statsService', () => ({ computeOverview: jest.fn(), buildEmptyStats: jest.fn() }));
@@ -65,7 +66,7 @@ const USER_CTX = { user: { id: ME, roles: ['user'] }, scopes: ['read', 'write'],
 
 const tool = (name) => allTools().find((t) => t.name === name);
 const parse = (res) => JSON.parse(res.content[0].text);
-const SOMM_TOOLS = ['list_maturity_queue', 'set_vintage_maturity', 'remove_from_maturity_queue', 'set_wine_profile', 'list_price_tracking_requests', 'set_vintage_price'];
+const SOMM_TOOLS = ['list_maturity_queue', 'set_vintage_maturity', 'remove_from_maturity_queue', 'set_wine_profile', 'list_price_tracking_requests', 'set_vintage_price', 'reject_price_request'];
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -86,6 +87,7 @@ describe('role gating (structural + in-handler)', () => {
     const readSomm = toolsForScopes(['read'], ['somm']).map((t) => t.name);
     expect(readSomm).toContain('list_maturity_queue');
     expect(readSomm).not.toContain('set_vintage_maturity');
+    expect(readSomm).not.toContain('reject_price_request');
   });
 
   test('defense-in-depth: handlers refuse a role-less ctx even if reached', async () => {
@@ -336,6 +338,171 @@ describe('set_vintage_price', () => {
     // Requesters (none here) would be notified with the somm-prices link.
     const { createNotification } = require('../services/notifications');
     expect(createNotification).not.toHaveBeenCalled(); // no requesters on this pair
+  });
+});
+
+describe('list_price_tracking_requests', () => {
+  test('declined pairs (PriceTrackingSkip) no longer appear in the queue', async () => {
+    const PriceTrackingRequest = require('../models/PriceTrackingRequest');
+    const PriceTrackingSkip = require('../models/PriceTrackingSkip');
+    PriceTrackingRequest.find.mockReturnValue(chain([
+      { _id: oid('1'), wineDefinition: { _id: oid('e'), name: 'Kept', producer: 'A' }, vintage: '2019', requesters: [{ user: oid('b') }] },
+      { _id: oid('2'), wineDefinition: { _id: oid('f'), name: 'Declined', producer: 'B' }, vintage: '2016', requesters: [{ user: oid('b') }] },
+    ]));
+    PriceTrackingSkip.find.mockReturnValue(chain([{ wineDefinition: oid('f'), vintage: '2016' }]));
+    const body = parse(await tool('list_price_tracking_requests').handler({}, SOMM_CTX));
+    expect(body.error).toBeUndefined();
+    expect(body.data).toHaveLength(1);
+    expect(body.data[0].wine.name).toBe('Kept');
+    expect(body.summary).toMatch(/1 actionable/);
+  });
+
+  test('a skip on the SAME wine but a DIFFERENT vintage does not hide the pair', async () => {
+    const PriceTrackingRequest = require('../models/PriceTrackingRequest');
+    const PriceTrackingSkip = require('../models/PriceTrackingSkip');
+    PriceTrackingRequest.find.mockReturnValue(chain([
+      { _id: oid('1'), wineDefinition: { _id: oid('f'), name: 'Barolo', producer: 'P' }, vintage: '2019', requesters: [] },
+    ]));
+    PriceTrackingSkip.find.mockReturnValue(chain([{ wineDefinition: oid('f'), vintage: '2016' }]));
+    const body = parse(await tool('list_price_tracking_requests').handler({}, SOMM_CTX));
+    expect(body.data).toHaveLength(1);
+  });
+});
+
+describe('reject_price_request', () => {
+  const PriceTrackingRequest = require('../models/PriceTrackingRequest');
+  const PriceTrackingSkip = require('../models/PriceTrackingSkip');
+  const { createNotification } = require('../services/notifications');
+
+  const REQ_ID = oid('9');
+  const WINE_ID = oid('f');
+  const mkRequest = (over = {}) => ({
+    _id: REQ_ID,
+    wineDefinition: WINE_ID,
+    vintage: '2019',
+    requesters: [
+      { user: oid('b'), requestedAt: new Date('2026-07-01'), note: 'please track' },
+      { user: oid('c'), requestedAt: new Date('2026-07-02') },
+    ],
+    firstRequestedAt: new Date('2026-07-01'),
+    lastRequestedAt: new Date('2026-07-02'),
+    ...over,
+  });
+
+  beforeEach(() => {
+    WineDefinition.findById.mockReturnValue(chain({ _id: WINE_ID, name: 'Everyday Shiraz', producer: 'Casella' }));
+    PriceTrackingSkip.findOneAndUpdate.mockResolvedValue({ lastErrorObject: { updatedExisting: false }, value: null });
+    PriceTrackingRequest.deleteOne.mockResolvedValue({ deletedCount: 1 });
+  });
+
+  test('requires a real plain-text reason — missing, too-short, and HTML-only all refused before any read', async () => {
+    for (const reason of [undefined, 'no', '<b><i></i></b>', '<p>hey</p>']) {
+      const res = await tool('reject_price_request').handler({ request_id: REQ_ID, reason }, SOMM_CTX);
+      expect(parse(res).error.code).toBe('invalid_input');
+    }
+    expect(PriceTrackingRequest.findById).not.toHaveBeenCalled();
+    expect(PriceTrackingSkip.findOneAndUpdate).not.toHaveBeenCalled();
+    expect(createNotification).not.toHaveBeenCalled();
+  });
+
+  test('declines: skip upserted with the stripped reason, request deleted, requesters notified verbatim, undoable ledger row', async () => {
+    PriceTrackingRequest.findById.mockReturnValue(chain(mkRequest()));
+    const body = parse(await tool('reject_price_request').handler(
+      { request_id: REQ_ID, reason: '  <b>No secondary market</b> for this wine.  ' }, SOMM_CTX));
+    expect(body.error).toBeUndefined();
+    expect(body.data.suppressed).toBe(true);
+    expect(body.data.requesters_notified).toBe(2);
+    expect(body.data.reason).toBe('No secondary market for this wine.');
+
+    // Suppression: the skip is upserted on the pair with the sanitized reason.
+    const [skipFilter, skipUpdate] = PriceTrackingSkip.findOneAndUpdate.mock.calls[0];
+    expect(skipFilter).toEqual({ wineDefinition: WINE_ID, vintage: '2019' });
+    expect(skipUpdate.$setOnInsert).toMatchObject({ reason: 'No secondary market for this wine.', skippedBy: ME });
+
+    expect(PriceTrackingRequest.deleteOne).toHaveBeenCalledWith({ _id: REQ_ID });
+
+    // Every requester gets the wine label AND the reason, verbatim.
+    expect(createNotification).toHaveBeenCalledTimes(2);
+    expect(createNotification.mock.calls[0][1]).toBe('price_tracking_declined');
+    expect(createNotification.mock.calls[0][3]).toMatch(/Casella — Everyday Shiraz 2019/);
+    expect(createNotification.mock.calls[0][3]).toMatch(/Reason: No secondary market for this wine\./);
+
+    // Same audit action string as the REST decline route.
+    expect(logAudit).toHaveBeenCalledWith(SOMM_CTX.req, 'somm.price.decline',
+      expect.anything(), expect.objectContaining({ reason: 'No secondary market for this wine.', via: 'mcp' }));
+
+    const row = McpActionLog.create.mock.calls[0][0];
+    expect(row.action).toBe('somm_price_decline');
+    expect(row.tool).toBe('reject_price_request');
+    // The request being deleted, prev is ALL the undo has to work from.
+    expect(row.prev).toMatchObject({ wineDefinition: WINE_ID, vintage: '2019', skipCreated: true });
+    expect(row.prev.requesters).toHaveLength(2);
+    expect(row.prev.requesters[0]).toMatchObject({ user: oid('b'), note: 'please track' });
+  });
+
+  test('a pre-existing skip is kept as-is and prev.skipCreated records it (undo must not lift it)', async () => {
+    PriceTrackingRequest.findById.mockReturnValue(chain(mkRequest()));
+    PriceTrackingSkip.findOneAndUpdate.mockResolvedValue({ lastErrorObject: { updatedExisting: true }, value: { _id: 'sk1' } });
+    const body = parse(await tool('reject_price_request').handler(
+      { request_id: REQ_ID, reason: 'No secondary market.' }, SOMM_CTX));
+    expect(body.error).toBeUndefined();
+    expect(McpActionLog.create.mock.calls[0][0].prev.skipCreated).toBe(false);
+  });
+
+  test('double-decline: the second call is a clean not_found (request already gone), nothing mutated or re-notified', async () => {
+    PriceTrackingRequest.findById.mockReturnValue(chain(null));
+    const body = parse(await tool('reject_price_request').handler(
+      { request_id: REQ_ID, reason: 'No secondary market.' }, SOMM_CTX));
+    expect(body.error.code).toBe('not_found');
+    expect(PriceTrackingSkip.findOneAndUpdate).not.toHaveBeenCalled();
+    expect(PriceTrackingRequest.deleteOne).not.toHaveBeenCalled();
+    expect(createNotification).not.toHaveBeenCalled();
+    expect(McpActionLog.create).not.toHaveBeenCalled();
+  });
+
+  test('undo restores the request (upsert) and lifts ONLY the suppression this decline created; role re-checked', async () => {
+    const prev = {
+      wineDefinition: WINE_ID, vintage: '2019',
+      requesters: [{ user: oid('b'), requestedAt: '2026-07-01T00:00:00.000Z', note: 'please track' }],
+      firstRequestedAt: '2026-07-01T00:00:00.000Z', lastRequestedAt: '2026-07-02T00:00:00.000Z',
+      skipCreated: true,
+    };
+    const row = { _id: 'pd', action: 'somm_price_decline', reversed: false, detail: { requestId: REQ_ID, vintage: '2019' }, prev };
+    McpActionLog.findOne.mockReturnValue(chain(row));
+
+    // Role-less caller refused before any claim:
+    let res = await tool('undo_last').handler({}, { ...USER_CTX, scopes: ['consume', 'write'] });
+    expect(parse(res).error.code).toBe('forbidden_scope');
+    expect(McpActionLog.findOneAndUpdate).not.toHaveBeenCalled();
+
+    McpActionLog.findOneAndUpdate.mockResolvedValue(row);
+    PriceTrackingRequest.findOneAndUpdate.mockResolvedValue({});
+    PriceTrackingSkip.deleteOne.mockResolvedValue({ deletedCount: 1 });
+    res = await tool('undo_last').handler({}, { ...SOMM_CTX, scopes: ['consume', 'write'] });
+    expect(parse(res).data.undone).toBe('reject_price_request');
+    // Upsert, not insert: a re-request may already have brought the pair back.
+    expect(PriceTrackingRequest.findOneAndUpdate).toHaveBeenCalledWith(
+      { wineDefinition: WINE_ID, vintage: '2019' },
+      { $setOnInsert: expect.objectContaining({ requesters: prev.requesters }) },
+      { upsert: true }
+    );
+    // The lift is scoped to the caller's own skip, like the somm_price delete.
+    expect(PriceTrackingSkip.deleteOne).toHaveBeenCalledWith({ wineDefinition: WINE_ID, vintage: '2019', skippedBy: ME });
+    expect(McpActionLog.findOneAndUpdate).toHaveBeenCalledWith(
+      { _id: 'pd', reversed: false }, { $set: { reversed: true, idempotencyKey: null } });
+  });
+
+  test('undo leaves a skip that pre-existed the decline in place (skipCreated false)', async () => {
+    const row = {
+      _id: 'pd2', action: 'somm_price_decline', reversed: false, detail: { requestId: REQ_ID, vintage: '2019' },
+      prev: { wineDefinition: WINE_ID, vintage: '2019', requesters: [], skipCreated: false },
+    };
+    McpActionLog.findOne.mockReturnValue(chain(row));
+    McpActionLog.findOneAndUpdate.mockResolvedValue(row);
+    PriceTrackingRequest.findOneAndUpdate.mockResolvedValue({});
+    const res = await tool('undo_last').handler({}, { ...SOMM_CTX, scopes: ['consume', 'write'] });
+    expect(parse(res).error).toBeUndefined();
+    expect(PriceTrackingSkip.deleteOne).not.toHaveBeenCalled();
   });
 });
 

@@ -1,6 +1,6 @@
 const { getOrCreateDailySnapshot, convertCurrency } = require('../utils/exchangeRates');
 const { toNormalized } = require('../utils/ratingUtils');
-const { classifyMaturity, classifyPersonalWindow, buildProfileMap } = require('../utils/maturityUtils');
+const { classifyMaturity, classifyPersonalWindow, buildProfileMap, resolveWindowForBottle } = require('../utils/maturityUtils');
 
 // ── Main export ───────────────────────────────────────────────────────────────
 
@@ -116,14 +116,17 @@ async function computeOverview({ activeBottles, consumedBottles, cellars, target
     // buckets + health score reflect the user's own intent wherever it's set.
     const personalStatus = classifyPersonalWindow(b);
     const wdId = wd?._id?.toString() || (typeof b.wineDefinition === 'string' ? b.wineDefinition : null);
-    const reviewedProfile = (wdId && b.vintage && b.vintage !== 'NV')
+    const reviewedProfile = (wdId && b.vintage)
       ? profileMap.get(`${wdId}:${b.vintage}`)
       : null;
+    // Windows resolved per bottle so relative (NV) offsets become calendar
+    // years; null when a relative window has no anchor — same as classifyMaturity.
+    const resolvedWindow = reviewedProfile ? resolveWindowForBottle(reviewedProfile, b) : null;
     // A reviewed profile only "counts" when it carries a usable window boundary —
     // same guard classifyMaturity uses, so a usable profile always yields a phase
     // (and is never left in the noProfile bucket).
-    const hasUsableProfile = !!reviewedProfile &&
-      (reviewedProfile.earlyFrom != null || reviewedProfile.peakFrom != null || reviewedProfile.peakUntil != null);
+    const hasUsableProfile = !!resolvedWindow &&
+      (resolvedWindow.earlyFrom != null || resolvedWindow.peakFrom != null || resolvedWindow.peakUntil != null);
 
     const maturityStatus = classifyMaturity(b, profileMap);
     if (maturityStatus) {
@@ -154,11 +157,11 @@ async function computeOverview({ activeBottles, consumedBottles, cellars, target
       if (personalStatus) {
         pFrom  = Number.isFinite(b.drinkFrom) ? b.drinkFrom : null;
         pUntil = Number.isFinite(b.drinkTo)   ? b.drinkTo   : null;
-      } else if (reviewedProfile) {
-        pFrom  = reviewedProfile.peakFrom || reviewedProfile.earlyFrom;
-        pUntil = reviewedProfile.lateUntil || reviewedProfile.peakUntil || reviewedProfile.earlyUntil;
+      } else if (resolvedWindow) {
+        pFrom  = resolvedWindow.peakFrom || resolvedWindow.earlyFrom;
+        pUntil = resolvedWindow.lateUntil || resolvedWindow.peakUntil || resolvedWindow.earlyUntil;
       }
-      if (personalStatus || reviewedProfile) {
+      if (personalStatus || resolvedWindow) {
         for (const fy of forecastYears) {
           if ((!pFrom || fy >= pFrom) && (!pUntil || fy <= pUntil)) forecastCounts[fy]++;
         }

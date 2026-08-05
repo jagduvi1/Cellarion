@@ -16,6 +16,10 @@ function AdminRequests() {
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState('pending');
+  // Pagination — the backend caps this list at 50 per request, so without
+  // page/limit params anything beyond the oldest 50 was unreachable forever.
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
   const [selected, setSelected] = useState(null);
   const [resolveData, setResolveData] = useState({
     mode: 'create', // 'create' or 'link'
@@ -53,7 +57,7 @@ function AdminRequests() {
 
   useEffect(() => {
     fetchRequests();
-  }, [statusFilter, apiFetch]);
+  }, [statusFilter, page, apiFetch]);
 
   useEffect(() => {
     fetchCountries();
@@ -80,13 +84,23 @@ function AdminRequests() {
     return () => clearTimeout(timer);
   }, [linkSearch, resolveData.mode, apiFetch]);
 
+  const REQUESTS_PER_PAGE = 50;
+
   const fetchRequests = async () => {
     setLoading(true);
     try {
-      const params = statusFilter ? `?status=${statusFilter}` : '';
-      const res = await adminGetWineRequests(apiFetch, params);
+      const params = new URLSearchParams({ page, limit: REQUESTS_PER_PAGE });
+      if (statusFilter) params.set('status', statusFilter);
+      const res = await adminGetWineRequests(apiFetch, `?${params}`);
       const data = await res.json();
-      if (res.ok) setRequests(data.requests);
+      if (res.ok) {
+        setRequests(data.requests || []);
+        setTotal(data.total || 0);
+        // Resolving/rejecting can shrink the filtered set — if the current
+        // page fell off the end, snap back to the new last page (refetches).
+        const pages = Math.max(1, Math.ceil((data.total || 0) / REQUESTS_PER_PAGE));
+        if (page > pages) setPage(pages);
+      }
     } catch (err) {
       console.error('Failed to fetch requests:', err);
     } finally {
@@ -309,6 +323,8 @@ function AdminRequests() {
     }
   };
 
+  const totalPages = Math.max(1, Math.ceil(total / REQUESTS_PER_PAGE));
+
   return (
     <div className="admin-requests-page">
       <div className="page-header">
@@ -323,12 +339,18 @@ function AdminRequests() {
               <button
                 key={s || 'all'}
                 className={`filter-btn ${statusFilter === s ? 'active' : ''}`}
-                onClick={() => setStatusFilter(s)}
+                onClick={() => { setStatusFilter(s); setPage(1); }}
               >
                 {s || t('admin.requests.statusAll')}
               </button>
             ))}
           </div>
+
+          {!loading && (
+            <div className="requests-total">
+              {t('admin.requests.totalCount', { count: total })}
+            </div>
+          )}
 
           {loading ? (
             <div className="loading">{t('common.loading')}</div>
@@ -355,6 +377,28 @@ function AdminRequests() {
                   </div>
                 </div>
               ))}
+            </div>
+          )}
+
+          {!loading && totalPages > 1 && (
+            <div className="requests-pagination">
+              <button
+                className="btn btn-secondary btn-small"
+                disabled={page <= 1}
+                onClick={() => setPage(p => p - 1)}
+              >
+                {t('common.previous')}
+              </button>
+              <span className="requests-pagination-page">
+                {t('admin.audit.page', { current: page, total: totalPages })}
+              </span>
+              <button
+                className="btn btn-secondary btn-small"
+                disabled={page >= totalPages}
+                onClick={() => setPage(p => p + 1)}
+              >
+                {t('common.next')}
+              </button>
             </div>
           )}
         </div>

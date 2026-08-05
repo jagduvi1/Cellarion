@@ -42,9 +42,29 @@
   font-weight: 600;
 }
 
+.requests-total {
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+  margin-bottom: 0.75rem;
+}
+
 .requests-list {
   display: grid;
   gap: 0.75rem;
+}
+
+.requests-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.requests-pagination-page {
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+  white-space: nowrap;
 }
 
 .request-item {

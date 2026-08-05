@@ -39,10 +39,10 @@ const wineVintageProfileSchema = new mongoose.Schema({
   // When true (used for NV / non-vintage wines), the six phase numbers below are
   // year-OFFSETS after each bottle's purchase year — not absolute calendar years
   // — so the drink window recalculates per bottle (NV has no vintage to anchor
-  // to). Offsets are resolved to absolute years client-side only
-  // (frontend/src/utils/maturityUtils.js); the backend classifier
-  // (backend/src/utils/maturityUtils.js) currently skips NV bottles entirely,
-  // so server-side maturity stats/notifications give NV bottles no status.
+  // to). Offsets are resolved against the bottle's purchase year (falling back
+  // to createdAt) by BOTH classifiers — frontend/src/utils/maturityUtils.js and
+  // backend/src/utils/maturityUtils.js (resolveWindowForBottle) — so NV bottles
+  // get a maturity status in stats, exports and the drink-window notifier too.
   relative: { type: Boolean, default: false },
 
   // Phase 1 — Early drinking (absolute year, or year-offset when `relative`)
