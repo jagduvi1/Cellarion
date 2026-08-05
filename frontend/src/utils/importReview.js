@@ -47,15 +47,28 @@ export function reconcileRetrySelections(prevSelections, updatedByIndex, manualW
     const hasMatch =
       (r.status === 'exact' || r.status === 'fuzzy' || r.status === 'ai_match') &&
       Array.isArray(r.matches) && r.matches.length > 0;
-    if (!hasMatch) continue;
+    // ai_new: the AI identified a wine the registry doesn't have — the usable
+    // outcome is the 'create' proposal rather than a wineId.
+    const hasProposal = r.status === 'ai_new' && r.aiProposed != null;
+    if (!hasMatch && !hasProposal) continue;
 
     const cur = next[idx];
     if (cur === 'skip' || cur === 'request') continue; // deliberate decision
     if (manualWines[idx] != null) continue;            // manual search match
 
-    const stillPresent = cur != null && r.matches.some((m) => m.wineId === cur);
-    if (cur == null || !stillPresent) {
-      next[idx] = r.matches[0].wineId;
+    if (hasMatch) {
+      const stillPresent = cur != null && r.matches.some((m) => m.wineId === cur);
+      if (cur == null || !stillPresent) {
+        next[idx] = r.matches[0].wineId;
+      }
+    } else {
+      // Same replace-a-stale-pick rule as matches: fill an empty selection, or
+      // replace a fuzzy pick the refreshed row no longer offers, with 'create'.
+      const stillPresent = cur === 'create' ||
+        (cur != null && Array.isArray(r.matches) && r.matches.some((m) => m.wineId === cur));
+      if (cur == null || !stillPresent) {
+        next[idx] = 'create';
+      }
     }
   }
   return next;
@@ -111,6 +124,11 @@ export function autoSelectionsFor(rows) {
       Array.isArray(r.matches) && r.matches.length > 0
     ) {
       sel[r.index] = r.matches[0].wineId;
+    } else if (r.status === 'ai_new' && r.aiProposed != null) {
+      // AI-identified NEW wines default to 'create' — the wine is minted at
+      // /confirm, so leaving the row unselected would silently drop it from
+      // the import.
+      sel[r.index] = 'create';
     }
   }
   return sel;

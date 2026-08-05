@@ -485,7 +485,10 @@ describe('regression — imports without budget pressure', () => {
       ['aiIdentified', 'appellation', 'country', 'image', 'name', 'producer', 'region', 'score', 'type', 'wineId'].sort()
     );
     expect(Object.keys(res.body.summary)).toEqual(
-      ['total', 'exact', 'fuzzy', 'aiMatch', 'noMatch', 'errors', 'priceWarnings']
+      // aiNew joined the summary when /validate went read-only (2026-08-03
+      // H-1): AI-identified wines the registry lacks are now proposals, not
+      // silent creations — see import.validateReadonly.test.js.
+      ['total', 'exact', 'fuzzy', 'aiMatch', 'aiNew', 'noMatch', 'errors', 'priceWarnings']
     );
     expect(res.body.summary.aiBudgetExhausted).toBeUndefined();
   });

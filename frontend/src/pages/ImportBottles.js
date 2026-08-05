@@ -58,6 +58,7 @@ const STATUS_LABEL_KEYS = {
   exact: 'importBottles.status.exact',
   fuzzy: 'importBottles.status.fuzzy',
   ai_match: 'importBottles.status.aiMatch',
+  ai_new: 'importBottles.status.aiNew',
   no_match: 'importBottles.status.noMatch',
   error: 'importBottles.status.error',
   skipped: 'importBottles.status.skipped'
@@ -67,6 +68,7 @@ const STATUS_CLASSES = {
   exact: 'status-exact',
   fuzzy: 'status-fuzzy',
   ai_match: 'status-ai',
+  ai_new: 'status-ai',
   no_match: 'status-nomatch',
   error: 'status-error',
   skipped: 'status-skipped'
@@ -318,6 +320,7 @@ function ImportBottles() {
     exact: rs.filter(r => r.status === 'exact').length,
     fuzzy: rs.filter(r => r.status === 'fuzzy').length,
     aiMatch: rs.filter(r => r.status === 'ai_match').length,
+    aiNew: rs.filter(r => r.status === 'ai_new').length,
     noMatch: rs.filter(r => r.status === 'no_match').length,
     errors: rs.filter(r => r.status === 'error').length,
     priceWarnings: rs.filter(r => r.priceWarnings?.length).length
@@ -708,6 +711,10 @@ function ImportBottles() {
       setResults(prev => prev.map(x => x.index === rowIndex ? updated : x));
       if ((updated.status === 'ai_match' || updated.status === 'exact' || updated.status === 'fuzzy') && updated.matches.length > 0) {
         setSelections(prev => ({ ...prev, [rowIndex]: updated.matches[0].wineId }));
+      } else if (updated.status === 'ai_new' && updated.aiProposed) {
+        // AI identified a wine the registry doesn't have — select the
+        // create-on-confirm proposal.
+        setSelections(prev => ({ ...prev, [rowIndex]: 'create' }));
       } else {
         // AI couldn't identify — clear the old fuzzy selection
         setSelections(prev => { const next = { ...prev }; delete next[rowIndex]; return next; });
@@ -1567,6 +1574,12 @@ function ImportBottles() {
               <span className="summary-label">{t('importBottles.review.autoAdded')}</span>
             </div>
           )}
+          {(summary?.aiNew || 0) > 0 && (
+            <div className="summary-stat">
+              <span className="summary-number summary-ai">{summary.aiNew}</span>
+              <span className="summary-label">{t('importBottles.review.newWines')}</span>
+            </div>
+          )}
           <div className="summary-stat">
             <span className="summary-number summary-nomatch">{summary?.noMatch || 0}</span>
             <span className="summary-label">{t('importBottles.review.noMatch')}</span>
@@ -1716,7 +1729,9 @@ function ImportBottles() {
                 const sel = selections[r.index];
                 const isSkipped = sel === 'skip';
                 const isRequested = sel === 'request';
-                const hasReadySel = sel && !isSkipped && !isRequested;
+                // 'create' = AI-identified NEW wine, minted at /confirm
+                const isCreate = sel === 'create' && !!r.aiProposed;
+                const hasReadySel = sel && !isSkipped && !isRequested && !isCreate;
                 const matchedWine = hasReadySel
                   ? r.matches.find(m => m.wineId === sel) || null
                   : null;
@@ -1731,6 +1746,14 @@ function ImportBottles() {
                   region: manualWine.region?.name || '',
                   type: manualWine.type,
                   score: null,
+                } : null) || (isCreate ? {
+                  name: r.aiProposed.name,
+                  producer: r.aiProposed.producer,
+                  country: r.aiProposed.country || '',
+                  region: r.aiProposed.region || '',
+                  type: r.aiProposed.type,
+                  score: null,
+                  willCreate: true,
                 } : null);
                 const isExpanded = expandedRow === r.index;
 
@@ -1770,6 +1793,9 @@ function ImportBottles() {
                           </span>
                           {r.status === 'ai_match' && (
                             <span className="match-ai-badge">{t('importBottles.review.autoBadge')}</span>
+                          )}
+                          {selectedWine.willCreate && (
+                            <span className="match-ai-badge">{t('importBottles.review.willCreateBadge')}</span>
                           )}
                           {selectedWine.score != null && r.status !== 'ai_match' && (
                             <span className="match-score">{t('importBottles.review.matchScore', { score: Math.round(selectedWine.score * 100) })}</span>
@@ -1827,7 +1853,7 @@ function ImportBottles() {
                             {isExpanded ? t('importBottles.review.hide') : r.matches.length > 1 ? t('importBottles.review.options', { count: r.matches.length }) : t('importBottles.review.change')}
                           </button>
                         )}
-                        {r.matches.length > 1 && r.status !== 'fuzzy' && !isSkipped && !isRequested && (
+                        {(r.matches.length > 1 || (r.status === 'ai_new' && r.matches.length > 0)) && r.status !== 'fuzzy' && !isSkipped && !isRequested && (
                           <button
                             className="btn btn-secondary btn-xs"
                             onClick={() => setExpandedRow(isExpanded ? null : r.index)}
@@ -1844,7 +1870,7 @@ function ImportBottles() {
                             {aiSearchingRow === r.index ? t('importBottles.review.searching') : t('importBottles.review.lookUp')}
                           </button>
                         )}
-                        {(r.status === 'no_match' || r.status === 'fuzzy') && !isSkipped && !isRequested && (
+                        {(r.status === 'no_match' || r.status === 'fuzzy' || r.status === 'ai_new') && !isSkipped && !isRequested && (
                           <button
                             className="btn btn-secondary btn-xs"
                             onClick={() => openSearchModal(r.index)}
@@ -1852,7 +1878,7 @@ function ImportBottles() {
                             {t('importBottles.review.searchLibrary')}
                           </button>
                         )}
-                        {(r.status === 'no_match' || r.status === 'fuzzy') && !isSkipped && !isRequested && (
+                        {(r.status === 'no_match' || r.status === 'fuzzy' || r.status === 'ai_new') && !isSkipped && !isRequested && (
                           <button
                             className="btn btn-secondary btn-xs btn-request"
                             onClick={() => requestWine(r.index)}
@@ -1880,6 +1906,24 @@ function ImportBottles() {
                       {/* Expanded candidate list */}
                       {isExpanded && r.matches.length > 0 && (
                         <div className="candidates-list">
+                          {/* ai_new: switching to a fuzzy candidate must stay
+                              reversible — offer the create proposal as the
+                              first "candidate" so the user can switch back. */}
+                          {r.status === 'ai_new' && r.aiProposed && (
+                            <button
+                              className={`candidate-item ${sel === 'create' ? 'selected' : ''}`}
+                              onClick={() => selectWine(r.index, 'create')}
+                            >
+                              <div className="candidate-info">
+                                <strong>{r.aiProposed.producer}</strong> — {r.aiProposed.name}
+                                <span className="candidate-meta">
+                                  <span className="type-dot" style={{ background: TYPE_DOTS[r.aiProposed.type] || '#888' }} />
+                                  {r.aiProposed.country || ''}{r.aiProposed.region ? ` · ${r.aiProposed.region}` : ''}
+                                  {' · '}{t('importBottles.review.keepCreate')}
+                                </span>
+                              </div>
+                            </button>
+                          )}
                           {r.matches.map((m) => (
                             <button
                               key={m.wineId}
