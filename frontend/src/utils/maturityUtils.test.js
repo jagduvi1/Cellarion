@@ -1,4 +1,26 @@
-import { getMaturityPhases, isPhaseActive } from './maturityUtils';
+import { getMaturityPhases, isPhaseActive, bottleAnchorYear } from './maturityUtils';
+
+// ---------------------------------------------------------------------------
+// bottleAnchorYear — must read the year in UTC, mirroring the backend
+// (backend/src/utils/maturityUtils.js). Date-only purchase dates parse as UTC
+// midnight, so a local-time read shifts Dec-31/Jan-1 purchases into the wrong
+// year in non-UTC browsers (e.g. UTC+13 Auckland) and the two mirrors disagree.
+// ---------------------------------------------------------------------------
+describe('bottleAnchorYear', () => {
+  it('prefers purchaseDate over createdAt, null when neither', () => {
+    expect(bottleAnchorYear({ purchaseDate: '2019-05-01', createdAt: '2023-01-01' })).toBe(2019);
+    expect(bottleAnchorYear({ createdAt: '2023-01-01' })).toBe(2023);
+    expect(bottleAnchorYear({})).toBeNull();
+    expect(bottleAnchorYear(null)).toBeNull();
+  });
+
+  it('year-boundary dates anchor to the calendar year the user picked, in any timezone', () => {
+    expect(bottleAnchorYear({ purchaseDate: '2025-12-31' })).toBe(2025);
+    expect(bottleAnchorYear({ purchaseDate: '2026-01-01' })).toBe(2026);
+    expect(bottleAnchorYear({ createdAt: '2025-12-31T23:59:59.000Z' })).toBe(2025);
+    expect(bottleAnchorYear({ purchaseDate: 'not a date' })).toBeNull();
+  });
+});
 
 // ---------------------------------------------------------------------------
 // getMaturityPhases

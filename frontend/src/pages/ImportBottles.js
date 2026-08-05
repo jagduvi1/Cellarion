@@ -15,6 +15,9 @@ import {
   rowsNeedingAiRetry,
   reconcileRetrySelections,
   mergeRetryResults,
+  mergeValidateSummaries,
+  autoSelectionsFor,
+  canResumeValidation,
   restoreSessionMeta,
   nextAiBudgetRequestState,
   isAiBudgetRequestPending
@@ -149,6 +152,13 @@ function ImportBottles() {
   const [summary, setSummary] = useState(null);
   const [validating, setValidating] = useState(false);
   const [validationProgress, setValidationProgress] = useState({ done: 0, total: 0 });
+  // Marker for a partially-completed validate run (mid-loop failure): which
+  // upload it belongs to, how many rows are already committed, and the running
+  // server-summary merge. Lets a retry resume at the first unvalidated batch
+  // instead of re-running — and re-spending the shared daily AI budget on —
+  // batches that already succeeded. Cleared when a run completes so a
+  // deliberate re-Match stays a full fresh validation.
+  const [validationResume, setValidationResume] = useState(null);
   const [selections, setSelections] = useState({}); // index -> wineId or 'skip'
   const [searchModal, setSearchModal] = useState(null); // { index } or null
   const [searchQuery, setSearchQuery] = useState('');
@@ -519,13 +529,25 @@ function ImportBottles() {
 
     const preparedItems = prepareItems();
     const total = preparedItems.length;
-    setValidationProgress({ done: 0, total });
 
-    const allResults = [];
-    let combinedSummary = null;
+    // Resume a previous partially-failed run over the SAME upload + Vivino
+    // mode: keep every batch it already committed (whose AI budget is spent
+    // and non-refundable) and start at the first unvalidated batch.
+    const resuming = canResumeValidation(validationResume, parsedItems, vivinoScanHistory, vivinoImportMode);
+    const startOffset = resuming ? validationResume.doneUpTo : 0;
+    // Current `results` state (not a snapshot) so per-row rewrites made in a
+    // between-failure trip to the review screen survive the resume.
+    let workingResults = resuming ? results : [];
+    let combinedSummary = resuming ? validationResume.summary : null;
+    // Auto-selections accumulate batch-by-batch. A resume seeds from the live
+    // selections map so choices the user already made are preserved (rows in
+    // the remaining batches are new, so no user choice can be overwritten).
+    let workingSelections = resuming ? { ...selections } : {};
+
+    setValidationProgress({ done: startOffset, total });
 
     try {
-      for (let offset = 0; offset < total; offset += VALIDATE_BATCH_SIZE) {
+      for (let offset = startOffset; offset < total; offset += VALIDATE_BATCH_SIZE) {
         // Re-index each batch so indices match their position in parsedItems
         const batch = preparedItems.slice(offset, offset + VALIDATE_BATCH_SIZE);
 
@@ -533,34 +555,37 @@ function ImportBottles() {
 
         // Shift batch-local indices back to global indices
         const shifted = data.results.map(r => ({ ...r, index: r.index + offset }));
-        allResults.push(...shifted);
+        workingResults = [...workingResults, ...shifted];
+        combinedSummary = mergeValidateSummaries(combinedSummary, data.summary);
+        // Auto-select exact, fuzzy, and AI-identified matches in this batch
+        workingSelections = { ...workingSelections, ...autoSelectionsFor(shifted) };
 
-        // Merge summaries
-        if (!combinedSummary) {
-          combinedSummary = { ...data.summary };
-        } else {
-          for (const key of Object.keys(data.summary)) {
-            combinedSummary[key] = (combinedSummary[key] || 0) + (data.summary[key] || 0);
-          }
-        }
-
+        // Commit each batch into state AS IT COMPLETES (mirroring
+        // handleRetryAiLookups) so a mid-loop failure keeps everything
+        // already validated — the catch below then shows the error alongside
+        // the partial results instead of discarding batches 1..n-1.
+        setResults(workingResults);
+        setSummary(combinedSummary);
+        setSelections(workingSelections);
+        setValidationResume({
+          parsedItems,
+          vivinoScanHistory,
+          vivinoImportMode,
+          doneUpTo: offset + batch.length,
+          summary: combinedSummary,
+        });
         setValidationProgress({ done: Math.min(offset + VALIDATE_BATCH_SIZE, total), total });
       }
 
-      setResults(allResults);
-      setSummary(combinedSummary);
-
-      // Auto-select exact, fuzzy, and AI-identified matches
-      const autoSelections = {};
-      allResults.forEach((r) => {
-        if ((r.status === 'exact' || r.status === 'fuzzy' || r.status === 'ai_match') && r.matches.length > 0) {
-          autoSelections[r.index] = r.matches[0].wineId;
-        }
-      });
-      setSelections(autoSelections);
+      // Completed — drop the resume marker so a future deliberate "Match"
+      // click re-runs the full validation, exactly as before.
+      setValidationResume(null);
       setStep('review');
     } catch (err) {
-      setError(err.message || t('importBottles.errors.validationNetwork'));
+      const msg = err.message || t('importBottles.errors.validationNetwork');
+      // Partial progress is committed — say so next to the error instead of
+      // letting the user assume everything was lost.
+      setError(workingResults.length > 0 ? `${msg} ${t('importBottles.validate.partialKept')}` : msg);
     } finally {
       setValidating(false);
     }
@@ -1469,6 +1494,21 @@ function ImportBottles() {
               </div>
               <p className="progress-hint">{t('importBottles.validate.largeCollectionHint')}</p>
             </div>
+          ) : canResumeValidation(validationResume, parsedItems, vivinoScanHistory, vivinoImportMode) ? (
+            <>
+              <button
+                className="btn btn-primary btn-validate"
+                onClick={handleValidate}
+              >
+                {t('importBottles.validate.resumeMatchButton', {
+                  remaining: parsedItems.length - validationResume.doneUpTo,
+                  total: parsedItems.length
+                })}
+              </button>
+              <p className="progress-hint">
+                {t('importBottles.validate.resumeMatchHint', { done: validationResume.doneUpTo })}
+              </p>
+            </>
           ) : (
             <button
               className="btn btn-primary btn-validate"

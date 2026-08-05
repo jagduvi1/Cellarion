@@ -217,7 +217,8 @@ function mapBottlesForExport(bottles, racks, imagesByBottle = new Map(), reviews
     // (the `relative` flag plus phase years, or year-offsets when relative) so the
     // window re-creates identically on import — no resolution to absolute years.
     const wdId = wine?._id?.toString();
-    if (wdId && b.vintage && b.vintage !== 'NV') {
+    // NV included: relative profiles export their raw `relative` flag + offsets.
+    if (wdId && b.vintage) {
       const profile = profilesByWineVintage.get(`${wdId}:${b.vintage}`);
       if (profile) {
         const m = {};

@@ -137,3 +137,89 @@ describe('processUser — definition-less personal-window bottles (BUG 4)', () =
     expect(createNotification).toHaveBeenCalledTimes(1);
   });
 });
+
+/**
+ * Audit 2026-08-03 H6 regression: NV bottles with a curated `relative` profile
+ * were excluded from the candidate query (vintage: { $ne: 'NV' }), so the cron
+ * never even evaluated them — the notification path was structurally dead for
+ * the entire NV/Champagne category despite a fully-curated profile.
+ */
+describe('processUser — NV bottles with relative profiles (H6)', () => {
+  beforeAll(() => {
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date('2026-06-15T00:00:00Z'));
+  });
+  afterAll(() => jest.useRealTimers());
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    Cellar.distinct.mockResolvedValue(['cellar1']);
+    Bottle.updateOne.mockResolvedValue({});
+    Bottle.bulkWrite.mockResolvedValue({});
+  });
+
+  const mockBottles = (bottles) => {
+    Bottle.find.mockReturnValue({ populate: () => ({ lean: () => Promise.resolve(bottles) }) });
+  };
+
+  // Peak 2–5 years after purchase; bought 2024 → peak 2026–2029 → 'peak' now.
+  const relProfile = {
+    wineDefinition: 'wd1', vintage: 'NV', status: 'reviewed', relative: true,
+    earlyFrom: 0, earlyUntil: 1, peakFrom: 2, peakUntil: 5,
+  };
+
+  test('the candidate query no longer excludes NV wine-definition bottles', async () => {
+    mockBottles([]);
+    await processUser({ _id: 'u1' }, false);
+    const query = Bottle.find.mock.calls[0][0];
+    expect(query.$or).toContainEqual({ wineDefinition: { $ne: null } });
+    // The old exclusion shape must be gone.
+    expect(JSON.stringify(query)).not.toContain('NV');
+  });
+
+  test('an NV bottle entering its relative peak window fires a peak notification', async () => {
+    WineVintageProfile.find.mockReturnValue({ lean: () => Promise.resolve([relProfile]) });
+    mockBottles([
+      { _id: 'nv1', cellar: 'cellar1', vintage: 'NV', purchaseDate: '2024-03-01',
+        wineDefinition: { _id: 'wd1', name: 'Grande Cuvée' } },
+    ]);
+
+    const count = await processUser({ _id: 'u1' }, false);
+
+    expect(count).toBe(1);
+    expect(createNotification).toHaveBeenCalledTimes(1);
+    const [, type, , message] = createNotification.mock.calls[0];
+    expect(type).toBe('drink_window_peak');
+    expect(message).toContain('Grande Cuvée');
+  });
+
+  test('an NV bottle with NO anchor (no purchaseDate/createdAt) stays unclassified — no alert, no marker', async () => {
+    WineVintageProfile.find.mockReturnValue({ lean: () => Promise.resolve([relProfile]) });
+    mockBottles([
+      { _id: 'nv1', cellar: 'cellar1', vintage: 'NV',
+        wineDefinition: { _id: 'wd1', name: 'Grande Cuvée' } },
+    ]);
+
+    const count = await processUser({ _id: 'u1' }, false);
+
+    expect(count).toBe(0);
+    expect(createNotification).not.toHaveBeenCalled();
+    expect(Bottle.bulkWrite).not.toHaveBeenCalled();
+  });
+
+  test('first run silently seeds the NV bottle status instead of notifying', async () => {
+    WineVintageProfile.find.mockReturnValue({ lean: () => Promise.resolve([relProfile]) });
+    mockBottles([
+      { _id: 'nv1', cellar: 'cellar1', vintage: 'NV', purchaseDate: '2024-03-01',
+        wineDefinition: { _id: 'wd1', name: 'Grande Cuvée' } },
+    ]);
+
+    const count = await processUser({ _id: 'u1' }, true);
+
+    expect(count).toBe(0);
+    expect(createNotification).not.toHaveBeenCalled();
+    const seedOps = Bottle.bulkWrite.mock.calls[0][0];
+    expect(seedOps[0].updateOne.filter._id).toBe('nv1');
+    expect(seedOps[0].updateOne.update.$set.drinkWindowNotifiedStatus).toBe('peak');
+  });
+});
