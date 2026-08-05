@@ -6,6 +6,7 @@ import { createCheckout, createPortal } from '../api/stripe';
 import './Plans.css';
 
 const GITHUB_URL = 'https://github.com/jagduvi1/Cellarion';
+const SPONSORS_URL = 'https://github.com/sponsors/jagduvi1';
 
 /**
  * Shared support call-to-action — rendered both at the top (compact, the first
@@ -77,6 +78,17 @@ function DonateActions({
         </p>
       )}
       {actionError && <p className="plans-trial-error">{actionError}</p>}
+      <p className="donate-onetime">
+        {t('supporter.oneTimeLead')}{' '}
+        <a
+          className="donate-onetime-link"
+          href={SPONSORS_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          <span aria-hidden="true">♥</span> {t('supporter.oneTimeCta')} →
+        </a>
+      </p>
     </>
   );
 }

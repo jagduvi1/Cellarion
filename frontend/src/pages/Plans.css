@@ -308,6 +308,25 @@
   color: var(--color-text-muted);
 }
 
+/* One-time GitHub Sponsors alternative under the subscription buttons */
+.donate-onetime {
+  margin: 0.9rem 0 0;
+  text-align: center;
+  font-size: 0.82rem;
+  color: var(--color-text-muted);
+}
+
+.donate-onetime-link {
+  color: var(--color-primary);
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.donate-onetime-link:hover {
+  text-decoration: underline;
+}
+
 /* ── Support page: header open-source chips ── */
 .support-emoji {
   font-style: normal;
