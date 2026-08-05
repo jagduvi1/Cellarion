@@ -283,18 +283,16 @@ router.put('/:id/reject', async (req, res) => {
       return res.status(400).json({ error: 'Wine request has already been resolved' });
     }
 
-    wineRequest.status = 'rejected';
-    wineRequest.resolvedBy = req.user.id;
-    wineRequest.resolvedAt = new Date();
-    wineRequest.adminNotes = adminNotes.trim();
-
-    await wineRequest.save();
-
     // Detach any bottles that were imported pending this request — the mirror
     // of resolve's backfill above. A rejected request can never become
     // resolvable again, and wineDefinition isn't user-updatable, so a bottle
     // left pointing at it would be permanently stranded; unset the reference
     // and the bottle falls back to the normal editable "no wine" state.
+    // Runs BEFORE the status flip: if the detach fails the request is still
+    // pending, so the admin's retry re-runs it (the $unset is idempotent).
+    // Saved first, a detach failure would leave the request rejected behind
+    // the not-pending guard above — re-stranding the bottles permanently,
+    // the exact condition this detach exists to fix.
     let bottlesDetached = 0;
     if (wineRequest.requestType === 'new_wine') {
       const result = await Bottle.updateMany(
@@ -303,6 +301,13 @@ router.put('/:id/reject', async (req, res) => {
       );
       bottlesDetached = result.modifiedCount || 0;
     }
+
+    wineRequest.status = 'rejected';
+    wineRequest.resolvedBy = req.user.id;
+    wineRequest.resolvedAt = new Date();
+    wineRequest.adminNotes = adminNotes.trim();
+
+    await wineRequest.save();
 
     let notifMsg = `Your request for "${wineRequest.wineName}" was declined. Reason: ${adminNotes.trim()}`;
     if (bottlesDetached > 0) {

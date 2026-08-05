@@ -388,6 +388,18 @@ describe('bottleAnchorYear / resolveWindow', () => {
     expect(bottleAnchorYear(null)).toBeNull();
   });
 
+  test('year-boundary dates anchor to the calendar year the user picked (UTC read)', () => {
+    // Date-only strings parse as UTC midnight; the year must be read in UTC
+    // too, or Dec-31/Jan-1 purchases shift a year in non-UTC timezones (e.g.
+    // a UTC+13 Auckland browser vs the UTC server) and the frontend/backend
+    // mirrors disagree on the whole window.
+    expect(bottleAnchorYear({ purchaseDate: '2025-12-31' })).toBe(2025);
+    expect(bottleAnchorYear({ purchaseDate: '2026-01-01' })).toBe(2026);
+    // Full ISO timestamps (Mongo createdAt serialization) read the same way.
+    expect(bottleAnchorYear({ createdAt: '2025-12-31T23:59:59.000Z' })).toBe(2025);
+    expect(bottleAnchorYear({ purchaseDate: 'not a date' })).toBeNull();
+  });
+
   test('resolveWindow adds the anchor to every offset of a relative profile', () => {
     const w = resolveWindow({ relative: true, earlyFrom: 0, peakFrom: 2, peakUntil: 5 }, 2020);
     expect(w).toMatchObject({ earlyFrom: 2020, peakFrom: 2022, peakUntil: 2025 });

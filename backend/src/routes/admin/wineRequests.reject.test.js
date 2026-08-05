@@ -133,3 +133,15 @@ test('missing adminNotes is refused before any bottle is touched', async () => {
   expect(res.status).toBe(400);
   expect(Bottle.updateMany).not.toHaveBeenCalled();
 });
+
+test('a detach failure leaves the request PENDING so a retry re-runs the detach', async () => {
+  // Ordering guard: were the status saved first, a detach failure would leave
+  // the request rejected behind the not-pending 400 guard — re-stranding the
+  // bottles permanently, the exact condition the detach exists to fix.
+  Bottle.updateMany.mockRejectedValue(new Error('connection reset'));
+
+  const res = await reject();
+  expect(res.status).toBe(500);
+  expect(requestDoc.save).not.toHaveBeenCalled();
+  expect(requestDoc.status).toBe('pending'); // retryable — the $unset is idempotent
+});
