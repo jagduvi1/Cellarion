@@ -15,6 +15,7 @@ const WineDefinition = require('../models/WineDefinition');
 const { CONSUMED_STATUSES, WINE_POPULATE_LIST } = require('../config/constants');
 const { classifyMaturity, buildProfileMap, maturityLabel } = require('../utils/maturityUtils');
 const { toNormalized } = require('../utils/ratingUtils');
+const { isReserved } = require('../utils/reservationUtils');
 
 // Readiness order: already-open bottles first (finish before opening anew),
 // then closing windows (drinking them tonight is a rescue), then peak.
@@ -39,15 +40,21 @@ function hasContent(obj) {
 
 /**
  * Select and rank ready-to-drink candidates within the given cellars.
- * Returns { ranked, profileMap, considered, notReady, priceWarning }.
+ * Returns { ranked, profileMap, considered, notReady, reservedExcluded, priceWarning }.
  */
 async function readyCandidates(userId, cellarIds, { wineType, maxPrice, currency } = {}) {
-  if (!cellarIds.length) return { ranked: [], profileMap: new Map(), considered: 0, notReady: 0, priceWarning: null };
+  if (!cellarIds.length) return { ranked: [], profileMap: new Map(), considered: 0, notReady: 0, reservedExcluded: 0, priceWarning: null };
 
   const bottles = await Bottle.find({ cellar: { $in: cellarIds }, status: { $nin: CONSUMED_STATUSES } })
     .populate(WINE_POPULATE_LIST).lean();
 
   let pool = bottles;
+  // Reserved ("spoken for") bottles never surface as drink-now suggestions —
+  // they are exactly the bottles the user has decided NOT to open yet. They
+  // stay included in stats/value/export surfaces, which don't route here.
+  const beforeReserved = pool.length;
+  pool = pool.filter((b) => !isReserved(b));
+  const reservedExcluded = beforeReserved - pool.length;
   if (wineType) pool = pool.filter((b) => b.wineDefinition?.type === wineType);
 
   let priceWarning = null;
@@ -82,7 +89,7 @@ async function readyCandidates(userId, cellarIds, { wineType, maxPrice, currency
     return String(a.b.vintage).localeCompare(String(x.b.vintage));
   });
 
-  return { ranked, profileMap, considered: pool.length, notReady, priceWarning };
+  return { ranked, profileMap, considered: pool.length, notReady, reservedExcluded, priceWarning };
 }
 
 /** Serialize the top `limit` ranked entries, enriching with taste + position. */

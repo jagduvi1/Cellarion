@@ -21,6 +21,7 @@ const Bottle = require('../../models/Bottle');
 const { CONSUMED_STATUSES } = require('../../config/constants');
 const { registerTool } = require('../registry');
 const { consumeBottle, restoreBottle, RESTORE_WINDOW_MS } = require('../../services/bottleOps');
+const { isReserved, reservationLabel } = require('../../utils/reservationUtils');
 const { logAction, replay } = require('../actionLedger');
 const { ok, fail, objectId, MSG_BOTTLE_NOT_FOUND, resolveBottleAccess } = require('../toolUtil');
 
@@ -37,7 +38,8 @@ registerTool({
     'Marks one bottle as consumed: drank (default), gifted, sold or other, with an optional note and rating. ' +
     'Frees its rack slot. ALWAYS confirm with the user first, naming the exact wine and vintage — this changes their ' +
     `cellar. Reversible for ${RESTORE_WINDOW_DAYS} days via restore_bottle / undo_last. ` +
-    'Pass an idempotency_key when retrying so the action can never run twice.',
+    'A RESERVED ("spoken for") bottle is refused until you confirm the reservation with the user and retry with ' +
+    'acknowledge_reservation:true. Pass an idempotency_key when retrying so the action can never run twice.',
   scope: 'consume',
   annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
   inputSchema: {
@@ -46,6 +48,8 @@ registerTool({
     note: z.string().max(1000).optional().describe('Tasting note / occasion'),
     rating: z.number().min(0).max(100).optional(),
     rating_scale: z.enum(['5', '20', '100']).optional().describe('Scale the rating is on (required with rating)'),
+    acknowledge_reservation: z.boolean().optional()
+      .describe('Required true to consume a reserved ("spoken for") bottle — only after the user explicitly confirmed'),
     idempotency_key: z.string().max(100).optional().describe('Unique key: a retry with the same key returns the original result'),
   },
   handler: async (args, ctx) => {
@@ -62,6 +66,16 @@ registerTool({
       return fail('conflict',
         `This bottle was already consumed (${bottle.consumedReason || bottle.status}${bottle.consumedAt ? ` on ${bottle.consumedAt.toISOString().slice(0, 10)}` : ''}). ` +
         'Use restore_bottle first if that was a mistake, or check you have the right bottle_id.');
+    }
+
+    // Reservation guard: a "spoken for" bottle needs explicit acknowledgment
+    // (mirrors the web consume flow's reservation confirm). Same conflict
+    // shape as the already-consumed guard — the agent must go back to the
+    // user, then retry with acknowledge_reservation:true.
+    if (isReserved(bottle) && !args.acknowledge_reservation) {
+      return fail('conflict',
+        `This bottle is ${reservationLabel(bottle)}. Confirm with the user that they really want to consume it ` +
+        '(and whether to clear the reservation), then retry with acknowledge_reservation:true.');
     }
 
     const result = await consumeBottle(bottle, {

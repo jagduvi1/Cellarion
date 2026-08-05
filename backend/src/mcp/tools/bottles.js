@@ -36,7 +36,8 @@ registerTool({
   description:
     'Searches the bottles in the cellars the user owns (pass cellar_id to search one specific cellar, including shared ' +
     'ones). Filters: free-text query (wine name, producer, region, grape, notes), status (active | consumed | all), ' +
-    'vintage, wine type. Paginated and bounded; every item includes its rating, so filter by rating yourself from the ' +
+    'vintage, wine type, reserved (only/exclude "spoken for" bottles). Paginated and bounded; every item includes its ' +
+    'rating, so filter by rating yourself from the ' +
     'results. Call for any "what do I have…", "find my…", "do I own…" question. Prefer filters over fetching everything.',
   scope: 'read',
   annotations: { readOnlyHint: true, openWorldHint: false },
@@ -55,6 +56,8 @@ registerTool({
     vintage: z.string().regex(/^[A-Za-z0-9]{1,10}$/, 'alphanumeric, e.g. "2015" or "NV"').optional()
       .describe('e.g. "2015" or "NV"'),
     type: z.enum(['red', 'white', 'rosé', 'sparkling', 'dessert', 'fortified']).optional(),
+    reserved: z.enum(['only', 'exclude']).optional()
+      .describe('only = just reserved ("spoken for") bottles; exclude = hide them'),
     limit: z.number().int().min(1).max(50).default(20),
     offset: z.number().int().min(0).default(0),
   },
@@ -73,8 +76,15 @@ registerTool({
     }
 
     // Meilisearch path — handles text + all filters with correct pagination.
+    // The reserved filter lives only on the bottle document (not in the search
+    // index), and filtering after pagination would shorten pages and inflate
+    // totals — so a reserved filter forces the Mongo path, dropping free-text
+    // matching with an explicit warning (same degradation style as below).
     const searchService = require('../../services/search');
-    if (args.query && searchService.getIsAvailable()) {
+    if (args.query && args.reserved) {
+      warnings.push('reserved filter runs on the database path — free-text matching was skipped for this query.');
+    }
+    if (args.query && !args.reserved && searchService.getIsAvailable()) {
       try {
         const res = await searchService.searchBottles(args.query, {
           cellarIds: cellarIds.map(String),
@@ -98,7 +108,7 @@ registerTool({
       } catch (err) {
         warnings.push('Text search engine unavailable — fell back to basic filters without free-text matching.');
       }
-    } else if (args.query) {
+    } else if (args.query && !args.reserved) {
       warnings.push('Text search engine unavailable — fell back to basic filters without free-text matching.');
     }
 
@@ -110,6 +120,19 @@ registerTool({
       ...statusToMongo(args.status),
       ...(args.vintage ? { vintage: args.vintage } : {}),
     };
+    // Reserved iff reservedFor (non-empty) or reservedUntil is set — the same
+    // definition as utils/reservationUtils.isReserved, expressed as a query.
+    // $in/$nin with null also match a missing field, so pre-feature bottles
+    // (no reservation keys at all) count as unreserved.
+    if (args.reserved === 'only') {
+      filter.$or = [
+        { reservedFor: { $nin: [null, ''] } },
+        { reservedUntil: { $ne: null } },
+      ];
+    } else if (args.reserved === 'exclude') {
+      filter.reservedFor = { $in: [null, ''] };
+      filter.reservedUntil = null;
+    }
     if (args.type) warnings.push('type filter requires the search engine — ignored in this response.');
     const [total, docs] = await Promise.all([
       Bottle.countDocuments(filter),
@@ -128,7 +151,8 @@ registerTool({
   title: 'Get one bottle',
   description:
     'Full detail for one bottle: wine (incl. tasting profile when enriched), vintage, price, ratings, personal drink ' +
-    'window, notes, purchase info, open-bottle state, rack placement, cellar, and consumption info if consumed. ' +
+    'window, notes, reservation ("spoken for") state, purchase info, open-bottle state, rack placement, cellar, and ' +
+    'consumption info if consumed. ' +
     'Call when the user asks about a specific bottle you already have a bottle_id for.',
   scope: 'read',
   annotations: { readOnlyHint: true, openWorldHint: false },
@@ -177,6 +201,11 @@ async function buildBottleDetail(userId, bottleId) {
       drink_to: b.drinkTo ?? null,
       notes: b.notes || null,
       occasion: b.occasion || null,
+      // "Spoken for" — null when unreserved. Reserved bottles are excluded
+      // from drink suggestions and consume_bottle requires acknowledgment.
+      reserved: (b.reservedFor || b.reservedUntil != null)
+        ? { for: b.reservedFor || null, until: b.reservedUntil ?? null }
+        : null,
       purchase: { date: b.purchaseDate || null, location: b.purchaseLocation || null },
       open_bottle: b.openedAt
         ? { opened_at: b.openedAt, preservation: b.preservationMethod || null, pours: (b.pours || []).length }

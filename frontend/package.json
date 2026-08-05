@@ -67,7 +67,7 @@
     "yaml": "2.8.3",
     "serialize-javascript": "7.0.5",
     "postcss": "^8.5.18",
-    "fast-uri": "3.1.4",
+    "fast-uri": "^3.1.5",
     "esbuild": "^0.28.1",
     "markdown-it": "^14.2.0",
     "form-data": "^4.0.6",

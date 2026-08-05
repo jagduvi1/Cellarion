@@ -381,8 +381,10 @@ async function embedSinglePair(wineDefId, vintage) {
 
     console.log(`[embeddingJob] Real-time embedded: ${wine.name} ${vintage}`);
   } catch (err) {
-    // Non-fatal — the batch job will retry on next run
-    console.warn(`[embeddingJob] Real-time embed failed (${wineDefId}, ${vintage}):`, err.message);
+    // Non-fatal — the batch job will retry on next run. Constant format string:
+    // vintage is user-entered free text (Bottle.vintage), so it must stay out of
+    // console.warn's format-string position (CodeQL js/tainted-format-string).
+    console.warn('[embeddingJob] Real-time embed failed (%s, %s):', String(wineDefId), String(vintage), err.message);
   }
 }
 

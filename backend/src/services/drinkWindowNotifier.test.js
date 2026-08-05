@@ -7,7 +7,7 @@ jest.mock('../models/WineVintageProfile', () => ({ find: jest.fn() }));
 jest.mock('./notifications', () => ({ createNotification: jest.fn().mockResolvedValue(undefined) }));
 jest.mock('./mailgun', () => ({ sendDrinkWindowDigest: jest.fn().mockResolvedValue(undefined), EMAIL_VERIFICATION_ENABLED: false }));
 
-const { shouldSendDigestEmail, processUser } = require('./drinkWindowNotifier');
+const { shouldSendDigestEmail, processUser, processReservations } = require('./drinkWindowNotifier');
 const Cellar = require('../models/Cellar');
 const Bottle = require('../models/Bottle');
 const WineVintageProfile = require('../models/WineVintageProfile');
@@ -135,5 +135,171 @@ describe('processUser — definition-less personal-window bottles (BUG 4)', () =
     const count = await processUser({ _id: 'u1' }, false);
     expect(count).toBe(1);
     expect(createNotification).toHaveBeenCalledTimes(1);
+  });
+});
+
+/**
+ * Audit 2026-08-03 H6 regression: NV bottles with a curated `relative` profile
+ * were excluded from the candidate query (vintage: { $ne: 'NV' }), so the cron
+ * never even evaluated them — the notification path was structurally dead for
+ * the entire NV/Champagne category despite a fully-curated profile.
+ */
+describe('processUser — NV bottles with relative profiles (H6)', () => {
+  beforeAll(() => {
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date('2026-06-15T00:00:00Z'));
+  });
+  afterAll(() => jest.useRealTimers());
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    Cellar.distinct.mockResolvedValue(['cellar1']);
+    Bottle.updateOne.mockResolvedValue({});
+    Bottle.bulkWrite.mockResolvedValue({});
+  });
+
+  const mockBottles = (bottles) => {
+    Bottle.find.mockReturnValue({ populate: () => ({ lean: () => Promise.resolve(bottles) }) });
+  };
+
+  // Peak 2–5 years after purchase; bought 2024 → peak 2026–2029 → 'peak' now.
+  const relProfile = {
+    wineDefinition: 'wd1', vintage: 'NV', status: 'reviewed', relative: true,
+    earlyFrom: 0, earlyUntil: 1, peakFrom: 2, peakUntil: 5,
+  };
+
+  test('the candidate query no longer excludes NV wine-definition bottles', async () => {
+    mockBottles([]);
+    await processUser({ _id: 'u1' }, false);
+    const query = Bottle.find.mock.calls[0][0];
+    expect(query.$or).toContainEqual({ wineDefinition: { $ne: null } });
+    // The old exclusion shape must be gone.
+    expect(JSON.stringify(query)).not.toContain('NV');
+  });
+
+  test('an NV bottle entering its relative peak window fires a peak notification', async () => {
+    WineVintageProfile.find.mockReturnValue({ lean: () => Promise.resolve([relProfile]) });
+    mockBottles([
+      { _id: 'nv1', cellar: 'cellar1', vintage: 'NV', purchaseDate: '2024-03-01',
+        wineDefinition: { _id: 'wd1', name: 'Grande Cuvée' } },
+    ]);
+
+    const count = await processUser({ _id: 'u1' }, false);
+
+    expect(count).toBe(1);
+    expect(createNotification).toHaveBeenCalledTimes(1);
+    const [, type, , message] = createNotification.mock.calls[0];
+    expect(type).toBe('drink_window_peak');
+    expect(message).toContain('Grande Cuvée');
+  });
+
+  test('an NV bottle with NO anchor (no purchaseDate/createdAt) stays unclassified — no alert, no marker', async () => {
+    WineVintageProfile.find.mockReturnValue({ lean: () => Promise.resolve([relProfile]) });
+    mockBottles([
+      { _id: 'nv1', cellar: 'cellar1', vintage: 'NV',
+        wineDefinition: { _id: 'wd1', name: 'Grande Cuvée' } },
+    ]);
+
+    const count = await processUser({ _id: 'u1' }, false);
+
+    expect(count).toBe(0);
+    expect(createNotification).not.toHaveBeenCalled();
+    expect(Bottle.bulkWrite).not.toHaveBeenCalled();
+  });
+
+  test('first run silently seeds the NV bottle status instead of notifying', async () => {
+    WineVintageProfile.find.mockReturnValue({ lean: () => Promise.resolve([relProfile]) });
+    mockBottles([
+      { _id: 'nv1', cellar: 'cellar1', vintage: 'NV', purchaseDate: '2024-03-01',
+        wineDefinition: { _id: 'wd1', name: 'Grande Cuvée' } },
+    ]);
+
+    const count = await processUser({ _id: 'u1' }, true);
+
+    expect(count).toBe(0);
+    expect(createNotification).not.toHaveBeenCalled();
+    const seedOps = Bottle.bulkWrite.mock.calls[0][0];
+    expect(seedOps[0].updateOne.filter._id).toBe('nv1');
+    expect(seedOps[0].updateOne.update.$set.drinkWindowNotifiedStatus).toBe('peak');
+  });
+});
+
+/**
+ * Reservation ("spoken for") alerts: fire once when reservedUntil arrives
+ * (currentYear ≥ reservedUntil), marked via reservationNotifiedAt so the daily
+ * cron never repeats the alert. The query itself must exclude already-notified
+ * and not-yet-due bottles — that exclusion IS the one-shot mechanism.
+ */
+describe('processReservations', () => {
+  beforeAll(() => {
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date('2026-06-15T00:00:00Z'));
+  });
+  afterAll(() => jest.useRealTimers());
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    Bottle.updateOne.mockResolvedValue({});
+  });
+
+  const mockBottles = (bottles) => {
+    Bottle.find.mockReturnValue({ populate: () => ({ lean: () => Promise.resolve(bottles) }) });
+  };
+
+  test('queries ONLY due, un-notified, active bottles — the once-only contract lives in the filter', async () => {
+    mockBottles([]);
+    await processReservations({ _id: 'u1' });
+    const q = Bottle.find.mock.calls[0][0];
+    expect(q.user).toBe('u1');
+    expect(q.reservationNotifiedAt).toBeNull();
+    // Due = reservedUntil ≤ current year; $lte on a number never matches a
+    // null/missing reservedUntil (type bracketing), so unreserved bottles and
+    // reservations without a year are structurally excluded.
+    expect(q.reservedUntil).toEqual({ $lte: 2026 });
+    expect(q.status.$nin).toContain('drank');
+  });
+
+  test('notifies with wine + reservedFor, deep-links the bottle, and stamps the one-shot marker', async () => {
+    mockBottles([
+      { _id: 'b1', cellar: 'c1', vintage: '2016', reservedFor: "Elias's 18th birthday",
+        reservedUntil: 2026, reservationNotifiedAt: null,
+        wineDefinition: { _id: 'wd1', name: 'CdP Les Cailloux' } },
+    ]);
+    const count = await processReservations({ _id: 'u1' });
+    expect(count).toBe(1);
+    expect(createNotification).toHaveBeenCalledTimes(1);
+    const [userId, type, title, message, link, category] = createNotification.mock.calls[0];
+    expect(userId).toBe('u1');
+    expect(type).toBe('reservation_due');
+    expect(title).toMatch(/Reserved bottle/);
+    expect(message).toContain('CdP Les Cailloux 2016');
+    expect(message).toContain("Elias's 18th birthday");
+    expect(message).toContain('2026');
+    expect(link).toBe('/cellars/c1/bottles/b1');
+    expect(category).toBe('drinkWindow'); // honours the drinkWindow push opt-in
+    expect(Bottle.updateOne).toHaveBeenCalledWith(
+      { _id: 'b1' },
+      { $set: { reservationNotifiedAt: expect.any(Date) } }
+    );
+  });
+
+  test('a reservation without reservedFor still reads cleanly (no "for undefined")', async () => {
+    mockBottles([
+      { _id: 'b2', cellar: 'c1', vintage: 'NV', reservedUntil: 2025, reservationNotifiedAt: null,
+        wineDefinition: { _id: 'wd2', name: 'Champagne Réserve' } },
+    ]);
+    await processReservations({ _id: 'u1' });
+    const message = createNotification.mock.calls[0][3];
+    expect(message).toContain('Champagne Réserve'); // NV vintage → no year suffix
+    expect(message).not.toContain('undefined');
+    expect(message).not.toMatch(/for\s+until/);
+  });
+
+  test('no due bottles → zero notifications, zero marker writes', async () => {
+    mockBottles([]);
+    const count = await processReservations({ _id: 'u1' });
+    expect(count).toBe(0);
+    expect(createNotification).not.toHaveBeenCalled();
+    expect(Bottle.updateOne).not.toHaveBeenCalled();
   });
 });

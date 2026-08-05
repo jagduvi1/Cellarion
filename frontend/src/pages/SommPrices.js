@@ -3,9 +3,14 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import { CURRENCIES } from '../config/currencies';
 import { fetchRates, convertAmountHistorical } from '../utils/currency';
+import { declinePriceTrackingRequest } from '../api/somm';
 import WineImage from '../components/WineImage';
 import timeAgo from '../utils/timeAgo';
 import './SommPrices.css';
+
+// Mirror of the backend minimum (routes/somm/prices.js DECLINE_REASON_MIN) —
+// the reason is sent verbatim to the requester(s), so an empty one is useless.
+const DECLINE_REASON_MIN = 5;
 
 function SommPrices() {
   const { t } = useTranslation();
@@ -98,6 +103,8 @@ function PriceCard({ item, defaultCurrency, userCurrency, rates, onSaved }) {
     source:   '',
     sommNotes: ''
   });
+  const [declineOpen, setDeclineOpen] = useState(false);
+  const [declineReason, setDeclineReason] = useState('');
   const [declining, setDeclining] = useState(false);
 
   const set = (field) => (e) => setForm(f => ({ ...f, [field]: e.target.value }));
@@ -172,13 +179,12 @@ function PriceCard({ item, defaultCurrency, userCurrency, rates, onSaved }) {
   };
 
   const handleDecline = async () => {
-    if (!window.confirm(t('somm.prices.declineConfirm', 'Decline this request? The user(s) who requested it will be notified.'))) return;
+    const reason = declineReason.trim();
+    if (reason.length < DECLINE_REASON_MIN) return; // button disabled below the minimum
     setDeclining(true);
     setErr(null);
     try {
-      const res = await apiFetch(`/api/somm/prices/requests/${item.requestId}`, {
-        method: 'DELETE'
-      });
+      const res = await declinePriceTrackingRequest(apiFetch, item.requestId, reason);
       if (res.ok) {
         onSaved(wine?._id, item.vintage);
       } else {
@@ -328,13 +334,49 @@ function PriceCard({ item, defaultCurrency, userCurrency, rates, onSaved }) {
             <button
               type="button"
               className="btn btn-secondary sp-skip-btn"
-              onClick={handleDecline}
+              onClick={() => { setDeclineOpen(o => !o); setErr(null); }}
               disabled={declining}
-              title={t('somm.prices.declineTitle', 'Decline this tracking request — the requester(s) will be notified.')}
+              aria-expanded={declineOpen}
+              title={t('somm.prices.declineTitle', 'Decline this tracking request with a reason — the requester(s) will be notified.')}
             >
-              {declining ? t('somm.prices.declining', 'Declining…') : t('somm.prices.declineRequest', 'Decline request')}
+              {t('somm.prices.declineRequest', 'Decline request')}
             </button>
           </div>
+
+          {declineOpen && (
+            <div className="sp-decline-box">
+              <label htmlFor={`sp-decline-reason-${item.requestId}`}>
+                {t('somm.prices.declineReasonLabel', 'Reason (sent to the requester)')}
+              </label>
+              <textarea
+                id={`sp-decline-reason-${item.requestId}`}
+                value={declineReason}
+                onChange={e => setDeclineReason(e.target.value)}
+                rows={2}
+                maxLength={500}
+                placeholder={t('somm.prices.declineReasonPlaceholder', 'e.g. Everyday retail wine with no secondary market — prices would not be meaningful.')}
+                autoFocus
+              />
+              <div className="sp-decline-actions">
+                <button
+                  type="button"
+                  className="btn btn-danger"
+                  onClick={handleDecline}
+                  disabled={declining || declineReason.trim().length < DECLINE_REASON_MIN}
+                >
+                  {declining ? t('somm.prices.declining', 'Declining…') : t('somm.prices.declineConfirmAction', 'Confirm decline')}
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => { setDeclineOpen(false); setDeclineReason(''); setErr(null); }}
+                  disabled={declining}
+                >
+                  {t('common.cancel')}
+                </button>
+              </div>
+            </div>
+          )}
         </form>
       )}
     </div>

@@ -34,6 +34,7 @@ const notificationSchema = new mongoose.Schema({
       'drink_window_ending',
       'drink_window_past',
       'open_bottle_expiring',
+      'reservation_due',
       'wine_recommendation',
       'journal_mention',
       'restock_alert',

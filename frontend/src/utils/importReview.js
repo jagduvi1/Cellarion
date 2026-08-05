@@ -88,6 +88,75 @@ export function mergeRetryResults(results, batchUpdates) {
 }
 
 /**
+ * Merge one validate batch's server-computed summary into the running
+ * combined summary, returning a NEW object (the previous one may already be
+ * committed to React state). Numeric counters add up; the boolean-ish
+ * aiBudgetExhausted flag survives as a truthy number the same way the old
+ * in-place merge handled it.
+ *
+ * @param {object|null} base   running combined summary (null on first batch)
+ * @param {object} add         this batch's summary from the server
+ * @returns {object} the next combined summary
+ */
+export function mergeValidateSummaries(base, add) {
+  if (!base) return { ...(add || {}) };
+  const next = { ...base };
+  for (const key of Object.keys(add || {})) {
+    next[key] = (next[key] || 0) + (add[key] || 0);
+  }
+  return next;
+}
+
+/**
+ * The auto-selections for a set of freshly validated rows: exact, fuzzy and
+ * AI-identified matches pre-select their top match. Pure per-row rule, so it
+ * can be applied batch-by-batch and the union over all batches equals one
+ * pass over the full results array.
+ *
+ * @param {Array} rows  validation-result rows (global indices)
+ * @returns {object} { [index]: wineId }
+ */
+export function autoSelectionsFor(rows) {
+  const sel = {};
+  for (const r of rows || []) {
+    if (
+      (r.status === 'exact' || r.status === 'fuzzy' || r.status === 'ai_match') &&
+      Array.isArray(r.matches) && r.matches.length > 0
+    ) {
+      sel[r.index] = r.matches[0].wineId;
+    } else if (r.status === 'ai_new' && r.aiProposed != null) {
+      // AI-identified NEW wines default to 'create' — the wine is minted at
+      // /confirm, so leaving the row unselected would silently drop it from
+      // the import.
+      sel[r.index] = 'create';
+    }
+  }
+  return sel;
+}
+
+/**
+ * Whether a stored partial-validate marker still applies to the current
+ * upload. Identity-compares the parsed-items array (a new file parse creates
+ * a new array) and the Vivino mode flags (prepareImportItems is pure, so the
+ * same inputs reproduce the exact prepared rows the partial run validated).
+ *
+ * @param {object|null} marker  { parsedItems, vivinoScanHistory, vivinoImportMode, doneUpTo }
+ * @param {Array} parsedItems
+ * @param {boolean} vivinoScanHistory
+ * @param {string} vivinoImportMode
+ * @returns {boolean}
+ */
+export function canResumeValidation(marker, parsedItems, vivinoScanHistory, vivinoImportMode) {
+  return Boolean(
+    marker &&
+    marker.doneUpTo > 0 &&
+    marker.parsedItems === parsedItems &&
+    marker.vivinoScanHistory === vivinoScanHistory &&
+    marker.vivinoImportMode === vivinoImportMode
+  );
+}
+
+/**
  * The cosmetic + warning metadata to restore when resuming a saved session.
  * Kept pure (and defensive about missing/malformed fields) so the resume path
  * re-renders the ct-truncated banner and the encoding/table/fallback notes.

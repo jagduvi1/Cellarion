@@ -257,13 +257,19 @@ router.post('/validate', aiBurstLimiter, async (req, res) => {
     // registry ALREADY knows, the AI's canonicalized result would dedup to
     // the same registry wine anyway — so a confident registry match skips the
     // AI call with an outcome-identical result (audit M-2 cost defense).
-    const aiEligible = aiProvider.isConfigured()
-      ? preResults.filter(pr => !pr.errorMsg && pr.item.wineName && pr.item.producer)
-      : [];
+    //
+    // The dedup-by-wine-key + Pass 1a cascade run regardless of whether AI is
+    // configured: a no-AI self-hosted install still gets ONE shared registry
+    // lookup per unique wine — previously every row of a keyless install fell
+    // through to a sequential per-row findWineMatches in Pass 3, defeating
+    // the cascade's own "zero AI for known wines" intent. Only the AI fan-out
+    // itself (Pass 1b) is gated on availability.
+    const aiConfigured = aiProvider.isConfigured(); // invariant for the whole request
+    const cascadeEligible = preResults.filter(pr => !pr.errorMsg && pr.item.wineName && pr.item.producer);
 
-    // Build unique wine keys — one AI call per unique wine, not per bottle
+    // Build unique wine keys — one cascade/AI attempt per unique wine, not per bottle
     const aiKeyMap = new Map(); // normalizedKey -> preResult (representative)
-    for (const pr of aiEligible) {
+    for (const pr of cascadeEligible) {
       const key = `${normalizeString(pr.item.wineName)}:${normalizeString(pr.item.producer)}`;
       if (!aiKeyMap.has(key)) aiKeyMap.set(key, pr);
       if (pr.forceAi) aiKeyMap.get(key).forceAi = true; // any row's Look-up button forces the key
@@ -289,7 +295,9 @@ router.post('/validate', aiBurstLimiter, async (req, res) => {
     // (c) everything else goes to AI exactly as before.
     for (const pr of uniquePrs) {
       if (clientDisconnected) break; // requester gone — stop the cascade, skip AI entirely
-      if (pr.forceAi) continue;
+      // forceAi bypasses the cascade only when there is an AI to reach; with
+      // no key configured the shared cascade is the best available outcome.
+      if (pr.forceAi && aiConfigured) continue;
       const exactWine = await findExactRegistryWine(pr.item);
       if (exactWine) {
         pr.registryWine = { wine: exactWine, score: 1 };
@@ -308,7 +316,7 @@ router.post('/validate', aiBurstLimiter, async (req, res) => {
     // refunded on transport failure), and a client-disconnect check that
     // stops LAUNCHING new calls once the requester has gone away. All three
     // degrade gracefully to the fuzzy path (aiSkipped: true) — never an error.
-    const needAi = uniquePrs.filter(pr => !pr.registryWine);
+    const needAi = aiConfigured ? uniquePrs.filter(pr => !pr.registryWine) : [];
     const perRequestCap = rateLimitsConfig.get().aiImportPerRequestCap?.max
       ?? rateLimitsConfig.defaults.aiImportPerRequestCap.max;
     const aiRun = needAi.slice(0, perRequestCap);
@@ -356,7 +364,7 @@ router.post('/validate', aiBurstLimiter, async (req, res) => {
 
     // Attach the shared cascade/AI result to every eligible preResult with
     // that key (duplicates share the representative's outcome, as before).
-    for (const pr of aiEligible) {
+    for (const pr of cascadeEligible) {
       const key = `${normalizeString(pr.item.wineName)}:${normalizeString(pr.item.producer)}`;
       const rep = aiKeyMap.get(key);
       if (rep.registryWine) { pr.registryWine = rep.registryWine; continue; }
@@ -442,9 +450,8 @@ router.post('/validate', aiBurstLimiter, async (req, res) => {
       pr.matches = matches;
     }
 
-    // Pass 4: build final results
+    // Pass 4: build final results (aiConfigured hoisted above — don't re-derive per row)
     const results = [];
-    const aiConfigured = aiProvider.isConfigured(); // invariant — don't re-derive per row
     for (const pr of preResults) {
       if (pr.errorMsg) {
         results.push({ index: pr.index, item: pr.item, status: 'error', error: pr.errorMsg, matches: [] });

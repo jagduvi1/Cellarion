@@ -165,6 +165,49 @@ describe('consume_bottle', () => {
     const res = await tool('consume_bottle').handler({ bottle_id: oid('d'), reason: 'drank' }, CTX);
     expect(parse(res).error).toEqual({ code: 'invalid_input', message: 'Invalid reason' });
   });
+
+  // ── Reservation ("spoken for") guard ──────────────────────────────────────
+
+  test('a reserved bottle without acknowledgment → conflict naming the reservation; nothing consumed', async () => {
+    ownBottle({ reservedFor: "Elias's 18th birthday", reservedUntil: 2034 });
+    const res = await tool('consume_bottle').handler({ bottle_id: oid('d') }, CTX);
+    const body = parse(res);
+    expect(body.error.code).toBe('conflict');
+    expect(body.error.message).toContain("reserved for Elias's 18th birthday (until 2034)");
+    expect(body.error.message).toContain('acknowledge_reservation');
+    expect(bottleOps.consumeBottle).not.toHaveBeenCalled();
+  });
+
+  test('acknowledge_reservation:true consumes a reserved bottle normally', async () => {
+    ownBottle({ reservedFor: 'Anna', reservedUntil: 2030 });
+    bottleOps.consumeBottle.mockImplementation(async (bottle, opts) => {
+      bottle.status = opts.reason; bottle.consumedAt = new Date();
+      return { bottle };
+    });
+    const res = await tool('consume_bottle').handler(
+      { bottle_id: oid('d'), acknowledge_reservation: true }, CTX);
+    expect(parse(res).error).toBeUndefined();
+    expect(parse(res).data.status).toBe('drank');
+    expect(bottleOps.consumeBottle).toHaveBeenCalled();
+  });
+
+  test('an unreserved bottle needs no acknowledgment (guard is reservation-scoped)', async () => {
+    ownBottle();
+    bottleOps.consumeBottle.mockImplementation(async (bottle, opts) => {
+      bottle.status = opts.reason; bottle.consumedAt = new Date();
+      return { bottle };
+    });
+    const res = await tool('consume_bottle').handler({ bottle_id: oid('d') }, CTX);
+    expect(parse(res).error).toBeUndefined();
+    expect(bottleOps.consumeBottle).toHaveBeenCalled();
+  });
+
+  test('already-consumed wins over reserved — the guard order keeps the message actionable', async () => {
+    ownBottle({ status: 'drank', reservedFor: 'Anna', consumedAt: new Date('2026-07-01') });
+    const res = await tool('consume_bottle').handler({ bottle_id: oid('d'), acknowledge_reservation: true }, CTX);
+    expect(parse(res).error.message).toMatch(/already consumed/);
+    expect(bottleOps.consumeBottle).not.toHaveBeenCalled();
+  });
 });
 
 describe('restore_bottle', () => {
@@ -293,7 +336,7 @@ describe('undo_last walk-backward + scope gating (e2e-caught regression)', () =>
     await tool('undo_last').handler({}, { ...CTX, scopes: ['consume', 'write'] });
     q = McpActionLog.findOne.mock.calls[0][0];
     expect(q.action.$in).toEqual(['consume', 'restore', 'open', 'pour', 'close', 'add', 'update', 'bulk_add', 'somm_maturity',
-      'somm_maturity_remove', 'somm_wine_profile', 'somm_price',
+      'somm_maturity_remove', 'somm_wine_profile', 'somm_price', 'somm_price_decline',
       'cellar_create', 'rack_create', 'place', 'unplace', 'move', 'arrange', 'tasting_note', 'attach_image',
       'winelist_add', 'winelist_price']);
   });

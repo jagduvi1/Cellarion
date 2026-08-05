@@ -26,7 +26,7 @@ async function unclaim(rowId) {
 
 const CONSUME_REVERSIBLE = ['consume', 'restore', 'open', 'pour', 'close'];
 const WRITE_REVERSIBLE = ['add', 'update', 'bulk_add', 'somm_maturity', 'somm_maturity_remove',
-  'somm_wine_profile', 'somm_price',
+  'somm_wine_profile', 'somm_price', 'somm_price_decline',
   'cellar_create', 'rack_create', 'place', 'unplace', 'move', 'arrange', 'tasting_note', 'attach_image',
   'winelist_add', 'winelist_price'];
 
@@ -335,6 +335,59 @@ async function revertLedgerRow(row, ctx, { ok, fail }) {
     const envelope = {
       summary: `Undid queue removal — vintage ${prev.vintage} is pending again`,
       data: { undone: 'remove_from_maturity_queue', vintage: prev.vintage, status: 'pending' },
+    };
+    await logAction(ctx, { tool: 'undo_last', action: row.action, viaUndo: true, detail: { undid: String(row._id) }, result: envelope });
+    return ok(envelope.summary, envelope.data);
+  }
+
+  // Somm price-request decline — restores the deleted request from the prev
+  // snapshot (upsert on the unique wine+vintage index, like the queue-removal
+  // undo above) and lifts the suppression IF this decline created it (a skip
+  // that pre-existed the decline is someone else's judgement and stays).
+  // The "declined" notifications already sent to requesters stand — same
+  // policy as undoing set_vintage_price, whose "price added" ones also stand.
+  if (row.action === 'somm_price_decline') {
+    const roles = ctx.user?.roles || [];
+    if (!roles.includes('somm') && !roles.includes('admin')) {
+      return fail('forbidden_scope', 'Undoing sommelier curation needs the sommelier (or admin) role.');
+    }
+    const prev = row.prev || {};
+    if (!prev.wineDefinition || !prev.vintage) {
+      return fail('conflict', 'That decline recorded no wine+vintage; nothing to undo.');
+    }
+    const claimed = await McpActionLog.findOneAndUpdate({ _id: row._id, reversed: false }, { $set: { reversed: true, idempotencyKey: null } });
+    if (!claimed) return fail('conflict', 'That action is already being undone by another request.');
+
+    const PriceTrackingRequest = require('../models/PriceTrackingRequest');
+    const PriceTrackingSkip = require('../models/PriceTrackingSkip');
+    try {
+      // Upsert, not insert: if a user re-requested the pair the instant the
+      // skip lifted (or a concurrent undo raced this one), the row is simply
+      // found and the undo still lands on "the request is back in the queue".
+      await PriceTrackingRequest.findOneAndUpdate(
+        { wineDefinition: prev.wineDefinition, vintage: prev.vintage },
+        { $setOnInsert: {
+          wineDefinition: prev.wineDefinition,
+          vintage: prev.vintage,
+          requesters: prev.requesters || [],
+          firstRequestedAt: prev.firstRequestedAt || new Date(),
+          lastRequestedAt: prev.lastRequestedAt || new Date(),
+        } },
+        { upsert: true }
+      );
+      if (prev.skipCreated) {
+        // Only the suppression THIS decline created — scoped to the caller,
+        // like the somm_price snapshot delete below.
+        await PriceTrackingSkip.deleteOne({ wineDefinition: prev.wineDefinition, vintage: prev.vintage, skippedBy: ctx.user.id });
+      }
+    } catch (err) {
+      await unclaim(row._id); // nothing restored yet → let the undo be retried
+      throw err;
+    }
+
+    const envelope = {
+      summary: `Undid price-request decline — vintage ${prev.vintage} is back in the price queue and can be requested again`,
+      data: { undone: 'reject_price_request', vintage: prev.vintage, requesters_restored: (prev.requesters || []).length },
     };
     await logAction(ctx, { tool: 'undo_last', action: row.action, viaUndo: true, detail: { undid: String(row._id) }, result: envelope });
     return ok(envelope.summary, envelope.data);

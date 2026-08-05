@@ -1619,7 +1619,6 @@
       "sommNotesPlaceholder": "Preisbegründung, Marktkontext…",
       "declineRequest": "Anfrage ablehnen",
       "declining": "Wird abgelehnt…",
-      "declineConfirm": "Diese Anfrage ablehnen? Der/die Nutzer, die sie angefordert haben, werden benachrichtigt.",
       "declineTitle": "Diese Verfolgungsanfrage ablehnen – der/die Anfordernde wird benachrichtigt.",
       "requesterCount_one": "{{count}} Anfordernder",
       "requesterCount_other": "{{count}} Anfordernde",

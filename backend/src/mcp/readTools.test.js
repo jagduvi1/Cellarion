@@ -280,6 +280,36 @@ describe('privilege parity & bounds', () => {
     expect(searchService.searchBottles.mock.calls[0][1]).toMatchObject({ cellarIds: [oid('c')] });
   });
 
+  test('search_bottles reserved filter: "only" and "exclude" translate to Mongo shapes that treat missing fields as unreserved', async () => {
+    Cellar.find.mockReturnValue(chain([oid('c')]));
+    Bottle.countDocuments.mockResolvedValue(0);
+    Bottle.find.mockReturnValue(chain([]));
+
+    await tool('search_bottles').handler({ reserved: 'only' }, CTX);
+    let filter = Bottle.find.mock.calls[0][0];
+    expect(filter.$or).toEqual([
+      { reservedFor: { $nin: [null, ''] } },
+      { reservedUntil: { $ne: null } },
+    ]);
+
+    Bottle.find.mockClear();
+    Bottle.find.mockReturnValue(chain([]));
+    await tool('search_bottles').handler({ reserved: 'exclude' }, CTX);
+    filter = Bottle.find.mock.calls[0][0];
+    expect(filter.reservedFor).toEqual({ $in: [null, ''] });
+    expect(filter.reservedUntil).toBeNull();
+  });
+
+  test('search_bottles reserved + query forces the DB path (index has no reservation) and says so', async () => {
+    searchService.getIsAvailable.mockReturnValue(true); // engine up — must still be skipped
+    Cellar.find.mockReturnValue(chain([oid('c')]));
+    Bottle.countDocuments.mockResolvedValue(0);
+    Bottle.find.mockReturnValue(chain([]));
+    const res = await tool('search_bottles').handler({ query: 'barolo', reserved: 'only' }, CTX);
+    expect(searchService.searchBottles).not.toHaveBeenCalled();
+    expect(parse(res).warnings.join(' ')).toMatch(/reserved filter .*database path/i);
+  });
+
   test('per-request tool-call budget rejects call #21 with rate_limited (batch amplification cap)', async () => {
     const t = { name: 'noop', handler: jest.fn(async () => ({ content: [] })) };
     const state = { calls: 0 };

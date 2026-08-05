@@ -419,7 +419,7 @@ const UPDATABLE_FIELDS = [
   'vintage', 'price', 'currency', 'bottleSize',
   'purchaseDate', 'purchaseLocation', 'purchaseUrl',
   'location', 'notes', 'occasion', 'rating', 'ratingScale',
-  'drinkFrom', 'drinkTo',
+  'drinkFrom', 'drinkTo', 'reservedFor', 'reservedUntil',
 ];
 
 // Normalize a value for change detection: Date objects and ISO-ish strings
@@ -504,6 +504,19 @@ async function updateBottleFields(bottle, fields, req) {
     return { error: { status: 400, message: 'drinkFrom cannot be after drinkTo' } };
   }
 
+  // Reservation ("spoken for"): reservedFor is capped free text, reservedUntil
+  // a calendar year like drinkFrom/drinkTo. An explicit null/'' clears.
+  if (fields.reservedFor !== undefined && fields.reservedFor &&
+      (typeof fields.reservedFor !== 'string' || fields.reservedFor.length > 200)) {
+    return { error: { status: 400, message: 'Reserved-for note is too long (max 200 characters)' } };
+  }
+  let reservedUntilYear;
+  if (fields.reservedUntil !== undefined) {
+    const p = parseDrinkYear(fields.reservedUntil, 'reservedUntil');
+    if (!p.ok) return { error: { status: 400, message: p.error } };
+    reservedUntilYear = p.value !== undefined ? p.value : null;
+  }
+
   if (fields.rating === null || fields.rating === '') {
     // Explicit clear — needed so undoing a rating-SET can restore "unrated"
     // (resolveRating treats null/'' as "no input" and would silently skip it,
@@ -535,11 +548,12 @@ async function updateBottleFields(bottle, fields, req) {
   for (const key of UPDATABLE_FIELDS) {
     if (fields[key] === undefined) continue;
     let value = fields[key];
-    if (key === 'notes' || key === 'occasion' || key === 'purchaseLocation' || key === 'location') {
+    if (key === 'notes' || key === 'occasion' || key === 'purchaseLocation' || key === 'location' || key === 'reservedFor') {
       value = value ? stripHtml(value) : value;
     }
     if (key === 'drinkFrom') value = fromYear;
     if (key === 'drinkTo') value = toYear;
+    if (key === 'reservedUntil') value = reservedUntilYear;
     apply(key, value);
   }
 
@@ -564,6 +578,11 @@ async function updateBottleFields(bottle, fields, req) {
   if ('drinkFrom' in changes || 'drinkTo' in changes) {
     bottle.drinkWindowNotifiedStatus = null;
     bottle.drinkWindowNotifiedAt = null;
+  }
+  // A reserved-until change re-arms the one-shot reservation alert (same
+  // pattern as the drink-window markers above).
+  if ('reservedUntil' in changes) {
+    bottle.reservationNotifiedAt = null;
   }
 
   try {

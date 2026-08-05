@@ -2,6 +2,9 @@ import {
   rowsNeedingAiRetry,
   reconcileRetrySelections,
   mergeRetryResults,
+  mergeValidateSummaries,
+  autoSelectionsFor,
+  canResumeValidation,
   restoreSessionMeta,
   nextAiBudgetRequestState,
   isAiBudgetRequestPending,
@@ -154,6 +157,98 @@ describe('mergeRetryResults', () => {
     const afterB2 = mergeRetryResults(afterB1, new Map([[2, { index: 2, status: 'ai_match' }]]));
     expect(afterB2[0].status).toBe('ai_match');
     expect(afterB2[2].status).toBe('ai_match');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// AUDIT 2026-08-03 H4 — handleValidate must commit per batch so a mid-loop
+// failure keeps completed (AI-budget-spending) batches, and a resume must
+// reproduce exactly the state a single full pass would have produced.
+// ---------------------------------------------------------------------------
+describe('mergeValidateSummaries', () => {
+  it('starts from the first batch summary as a copy, not the same object', () => {
+    const first = { total: 25, exact: 10, fuzzy: 5 };
+    const merged = mergeValidateSummaries(null, first);
+    expect(merged).toEqual(first);
+    expect(merged).not.toBe(first);
+  });
+
+  it('adds numeric counters across batches without mutating the base', () => {
+    const base = { total: 25, exact: 10, noMatch: 2 };
+    const merged = mergeValidateSummaries(base, { total: 25, exact: 3, fuzzy: 7 });
+    expect(merged).toEqual({ total: 50, exact: 13, noMatch: 2, fuzzy: 7 });
+    expect(base).toEqual({ total: 25, exact: 10, noMatch: 2 }); // untouched — it may be committed React state
+  });
+
+  it('keeps aiBudgetExhausted truthy once any batch reports it (legacy numeric-add semantics)', () => {
+    const merged = mergeValidateSummaries(
+      mergeValidateSummaries(null, { total: 25, aiBudgetExhausted: false }),
+      { total: 25, aiBudgetExhausted: true }
+    );
+    expect(Boolean(merged.aiBudgetExhausted)).toBe(true);
+  });
+
+  it('tolerates a missing batch summary', () => {
+    expect(mergeValidateSummaries({ total: 25 }, undefined)).toEqual({ total: 25 });
+    expect(mergeValidateSummaries(null, undefined)).toEqual({});
+  });
+});
+
+describe('autoSelectionsFor', () => {
+  const rows = [
+    { index: 0, status: 'exact', matches: [{ wineId: 'a' }] },
+    { index: 1, status: 'fuzzy', matches: [{ wineId: 'b' }, { wineId: 'c' }] },
+    { index: 2, status: 'ai_match', matches: [{ wineId: 'd' }] },
+    { index: 3, status: 'no_match', matches: [] },
+    { index: 4, status: 'error' },
+    { index: 5, status: 'exact', matches: [] }, // defensive: matched status but empty matches
+  ];
+
+  it('pre-selects the top match for exact/fuzzy/ai_match rows only', () => {
+    expect(autoSelectionsFor(rows)).toEqual({ 0: 'a', 1: 'b', 2: 'd' });
+  });
+
+  it("pre-selects 'create' for ai_new rows with a proposal — and nothing without one", () => {
+    const aiRows = [
+      { index: 6, status: 'ai_new', matches: [], aiProposed: { name: 'X', producer: 'Y' } },
+      { index: 7, status: 'ai_new', matches: [] }, // no proposal → no usable outcome
+    ];
+    expect(autoSelectionsFor(aiRows)).toEqual({ 6: 'create' });
+  });
+
+  it('applied per batch, unions to the same map as one pass over all rows', () => {
+    const batch1 = rows.slice(0, 3);
+    const batch2 = rows.slice(3);
+    const perBatch = { ...autoSelectionsFor(batch1), ...autoSelectionsFor(batch2) };
+    expect(perBatch).toEqual(autoSelectionsFor(rows));
+  });
+
+  it('handles empty/missing input', () => {
+    expect(autoSelectionsFor([])).toEqual({});
+    expect(autoSelectionsFor(undefined)).toEqual({});
+  });
+});
+
+describe('canResumeValidation', () => {
+  const parsedItems = [{ wineName: 'A' }];
+  const marker = { parsedItems, vivinoScanHistory: false, vivinoImportMode: 'history', doneUpTo: 25 };
+
+  it('resumes when the marker matches the same upload and mode', () => {
+    expect(canResumeValidation(marker, parsedItems, false, 'history')).toBe(true);
+  });
+
+  it('does not resume with no marker or no committed progress', () => {
+    expect(canResumeValidation(null, parsedItems, false, 'history')).toBe(false);
+    expect(canResumeValidation({ ...marker, doneUpTo: 0 }, parsedItems, false, 'history')).toBe(false);
+  });
+
+  it('does not resume across a re-parsed file (new parsedItems identity)', () => {
+    expect(canResumeValidation(marker, [{ wineName: 'A' }], false, 'history')).toBe(false);
+  });
+
+  it('does not resume when a Vivino mode flag changed (prepared rows would differ)', () => {
+    expect(canResumeValidation(marker, parsedItems, true, 'history')).toBe(false);
+    expect(canResumeValidation(marker, parsedItems, false, 'wishlist')).toBe(false);
   });
 });
 

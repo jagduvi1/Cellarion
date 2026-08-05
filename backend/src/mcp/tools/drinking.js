@@ -40,7 +40,8 @@ registerTool({
     'Ready-to-drink candidates from the user\'s cellar, best-first: already-open bottles (finish those first), then ' +
     'bottles in closing drink windows, then peak-maturity bottles — each with taste profile, rating, price, drink ' +
     'window and exact rack position. Call for "what should I open/drink tonight", picking a bottle for an occasion, ' +
-    'or any drink-now decision. YOU choose for the occasion and explain why; the list is ranked by readiness only.',
+    'or any drink-now decision. YOU choose for the occasion and explain why; the list is ranked by readiness only. ' +
+    'Reserved ("spoken for") bottles are excluded — they are being held for someone or something.',
   scope: 'read',
   annotations: { readOnlyHint: true, openWorldHint: false },
   inputSchema: {
@@ -61,10 +62,14 @@ registerTool({
     const sel = await readyCandidates(ctx.user.id, scope.cellarIds, {
       wineType: args.wine_type, maxPrice: args.max_price, currency: args.currency,
     });
+    const reservedNote = sel.reservedExcluded
+      ? [`${sel.reservedExcluded} reserved ("spoken for") bottle(s) excluded — they are being held and are not drink-now candidates.`]
+      : [];
     if (sel.ranked.length === 0) {
       return ok('No ready-to-drink bottles matched', [], {
         warnings: [
           `${sel.notReady} bottle(s) are not ready yet; ${sel.considered} matched the filters in total.`,
+          ...reservedNote,
           ...(sel.priceWarning ? [sel.priceWarning] : []),
         ],
       });
@@ -79,6 +84,7 @@ registerTool({
       {
         warnings: [
           `Ranked by readiness, not by occasion — weigh price, occasion and taste yourself. ${sel.notReady} not-ready bottle(s) excluded.`,
+          ...reservedNote,
           ...(sel.priceWarning ? [sel.priceWarning] : []),
         ],
       }
@@ -113,7 +119,10 @@ registerTool({
     const sel = await readyCandidates(ctx.user.id, scope.cellarIds, {});
     if (sel.ranked.length === 0) {
       return ok('No ready-to-drink bottles to pair', [], {
-        warnings: [`${sel.notReady} bottle(s) are not ready yet. Suggest the user widens the pool or looks at the registry.`],
+        warnings: [
+          `${sel.notReady} bottle(s) are not ready yet. Suggest the user widens the pool or looks at the registry.`,
+          ...(sel.reservedExcluded ? [`${sel.reservedExcluded} reserved ("spoken for") bottle(s) excluded.`] : []),
+        ],
       });
     }
 
@@ -146,6 +155,7 @@ registerTool({
       {
         warnings: [
           'Keyword matches come from stored pairing/flavour text — evidence, not verdicts. Wines without an enriched taste profile never keyword-match; judge those from grape, region and type.',
+          ...(sel.reservedExcluded ? [`${sel.reservedExcluded} reserved ("spoken for") bottle(s) excluded — they are being held and are not candidates.`] : []),
         ],
       }
     );

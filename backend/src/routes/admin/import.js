@@ -292,11 +292,23 @@ router.post('/wines', csvUpload.single('file'), async (req, res) => {
   let rowIndex = 0;
   const mintedIds = [];
 
-  // Reusable flush closure with userId in scope
+  // Reusable flush closure with userId in scope. Never throws: an UNORDERED
+  // bulkWrite commits every non-failing op even when the promise rejects
+  // (e.g. two rows normalizing to the same unique normalizedKey — common in
+  // LWIN dumps), so both failure shapes are absorbed here instead of letting
+  // a whole-batch rejection be misattributed to one row by the per-row catch:
+  //   - MongoBulkWriteError → credit the ops that DID land (stats + mintedIds,
+  //     so finalizeMintedWines still repairs them) and report only the
+  //     failing ops as row errors (applyBulkWriteError);
+  //   - hard failure (connection drop) → report the whole batch as row errors,
+  //     so the stats of every earlier batch still reach the response and the
+  //     audit log instead of a bare 500.
   const flush = async () => {
     if (batch.length === 0) return;
+    const rows = batch;
+    batch = [];
 
-    const ops = batch.map(({ mapped, countryId, regionId, normalizedKey }) => {
+    const ops = rows.map(({ mapped, countryId, regionId, normalizedKey }) => {
       const filter = mapped.lwin7
         ? { $or: [{ normalizedKey }, { 'lwin.lwin7': mapped.lwin7 }] }
         : { normalizedKey };
@@ -330,7 +342,13 @@ router.post('/wines', csvUpload.single('file'), async (req, res) => {
       };
     });
 
-    const result = await WineDefinition.bulkWrite(ops, { ordered: false });
+    let result;
+    try {
+      result = await WineDefinition.bulkWrite(ops, { ordered: false });
+    } catch (err) {
+      result = applyBulkWriteError(err, rows, stats);
+      if (!result) return; // whole batch failed hard — already reported as row errors
+    }
     stats.created += result.upsertedCount || 0;
     stats.updated += result.modifiedCount || 0;
     // bulkWrite bypasses every mongoose hook, so rows minted here would be
@@ -341,7 +359,6 @@ router.post('/wines', csvUpload.single('file'), async (req, res) => {
     for (const id of Object.values(result.upsertedIds || {})) {
       mintedIds.push(id);
     }
-    batch = [];
   };
 
   try {
@@ -408,7 +425,7 @@ router.post('/wines', csvUpload.single('file'), async (req, res) => {
         await getOrCreateAppellation(mapped.appellation, countryId, regionId, userId, appellationCache);
         const normalizedKey = generateWineKey(mapped.name, mapped.producer, mapped.appellation || '');
 
-        batch.push({ mapped, countryId, regionId, normalizedKey });
+        batch.push({ mapped, countryId, regionId, normalizedKey, rowIndex });
 
         if (batch.length >= BATCH_SIZE) {
           await flush();
@@ -423,6 +440,9 @@ router.post('/wines', csvUpload.single('file'), async (req, res) => {
       }
     }
 
+    // Trailing batch. flush() absorbs its own failures (see above), so a
+    // tail-batch failure can no longer discard the accumulated stats or skip
+    // the audit log below.
     await flush();
 
     // Give the freshly minted rows the invariants the bulkWrite skipped.
@@ -452,6 +472,50 @@ router.post('/wines', csvUpload.single('file'), async (req, res) => {
     res.status(500).json({ error: 'Import failed', details: err.message });
   }
 });
+
+/**
+ * Fold a rejected flush bulkWrite into the running stats.
+ *
+ * An unordered bulkWrite that rejects with MongoBulkWriteError has still
+ * committed every non-failing op; the error carries the partial
+ * BulkWriteResult (`err.result`) plus one WriteError per failing op. Each
+ * failing op is charged to ITS OWN CSV row (mirroring the per-row catch:
+ * total--, skipped++, capped error entry) and the partial result is returned
+ * so the caller credits the surviving ops. Any other error shape (connection
+ * drop mid-batch) has no reliable partial result — every row in the batch is
+ * reported as failed and null is returned.
+ *
+ * @param {Error} err    rejection from WineDefinition.bulkWrite
+ * @param {Array} rows   the batch rows, in op order ({ rowIndex, ... })
+ * @param {object} stats running import stats (mutated)
+ * @returns {object|null} the partial BulkWriteResult to credit, or null
+ */
+function applyBulkWriteError(err, rows, stats) {
+  const failRow = (rowIndex, reason) => {
+    stats.total--;
+    stats.skipped++;
+    stats.skippedReasons.other++;
+    if (stats.errors.length < 100) {
+      stats.errors.push({ row: rowIndex ?? null, reason });
+    }
+  };
+
+  if (err && err.name === 'MongoBulkWriteError' && err.result) {
+    const writeErrors = Array.isArray(err.writeErrors)
+      ? err.writeErrors
+      : err.writeErrors ? [err.writeErrors] : [];
+    for (const we of writeErrors) {
+      failRow(rows[we.index]?.rowIndex, we.errmsg || err.message);
+    }
+    return err.result;
+  }
+
+  console.error('Wine import flush failed (batch dropped):', err?.message);
+  for (const row of rows) {
+    failRow(row.rowIndex, `Batch write failed: ${err?.message}`);
+  }
+  return null;
+}
 
 /**
  * Post-import invariant pass over the rows the bulkWrite INSERTED.
@@ -526,3 +590,7 @@ module.exports.mapRow = mapRow;
 // finalizeMintedWines exported for its unit tests — the invariant repair is
 // load-bearing (strategy 2026-07-29 R4).
 module.exports.finalizeMintedWines = finalizeMintedWines;
+// applyBulkWriteError exported for its unit tests — the partial-success
+// recovery keeps a mid-batch duplicate-key from discarding up to 499
+// created wines' stats and invariants (audit 2026-08-03 H1).
+module.exports.applyBulkWriteError = applyBulkWriteError;

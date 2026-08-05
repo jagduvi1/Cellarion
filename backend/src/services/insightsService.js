@@ -15,7 +15,7 @@ const Cellar = require('../models/Cellar');
 const Bottle = require('../models/Bottle');
 const WishlistItem = require('../models/WishlistItem');
 const { CONSUMED_STATUSES, WINE_POPULATE_LIST } = require('../config/constants');
-const { classifyMaturity, buildProfileMap, maturityLabel } = require('../utils/maturityUtils');
+const { classifyMaturity, buildProfileMap, maturityLabel, resolveWindowForBottle } = require('../utils/maturityUtils');
 const { toNormalized } = require('../utils/ratingUtils');
 
 const WINE_TYPES = ['red', 'white', 'rosé', 'sparkling', 'dessert', 'fortified'];
@@ -444,8 +444,11 @@ async function buildCaseJourneys(userId, { focusWineId = null, focusVintage = nu
     const status = rep ? classifyMaturity(rep, profileMap) : null;
     const wdId = rep?.wineDefinition?._id ? String(rep.wineDefinition._id) : null;
     const vintageProfile = rep && wdId ? profileMap.get(`${wdId}:${rep.vintage}`) : null;
+    // Resolved per bottle: a relative (NV) lateUntil/peakUntil is an offset,
+    // and read raw it would make every NV lot look 'too_slow'.
+    const resolvedWindow = vintageProfile ? resolveWindowForBottle(vintageProfile, rep) : null;
     const windowCloses = rep
-      ? (Number.isFinite(rep.drinkTo) ? rep.drinkTo : vintageProfile?.lateUntil || vintageProfile?.peakUntil || null)
+      ? (Number.isFinite(rep.drinkTo) ? rep.drinkTo : resolvedWindow?.lateUntil || resolvedWindow?.peakUntil || null)
       : null;
 
     let pace = null;

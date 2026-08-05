@@ -997,6 +997,31 @@
   font-size: 0.85rem;
 }
 
+/* ── Reservation ("spoken for") ── */
+.bd-reservation {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+/* Self-contained (BottleCard.css may not be loaded on a deep link here). */
+.bd-reservation .reserved-badge {
+  display: inline-block;
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 1px 8px;
+  border-radius: var(--radius-full);
+  background: var(--color-warning-bg);
+  color: var(--color-warning);
+  border: 1px solid var(--color-warning-border);
+}
+
+.bd-reservation-hint {
+  color: var(--color-text-muted);
+  font-size: 0.8rem;
+}
+
 /* ── Bottle edit image upload ── */
 .bd-image-section {
   border-top: 1px solid var(--color-border);
