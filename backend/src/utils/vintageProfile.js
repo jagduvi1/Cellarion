@@ -14,6 +14,12 @@ const WineVintageProfile = require('../models/WineVintageProfile');
  *   - No-op for the 'Unknown' vintage: there is no calendar year to recommend a
  *     window for. NV *does* get a profile so somms can attach drinking notes to
  *     non-vintage Champagne and sparkling blends.
+ *   - NV seeds with relative:true from the start. The flag is fully determined
+ *     by the vintage string, and leaving it to default false shipped every NV
+ *     wine into the maturity queue in a self-contradictory state — a curator
+ *     who did not notice would write absolute calendar years against a wine
+ *     with no vintage to anchor them to (support ticket d49d2b36: three
+ *     instances from three unrelated entry paths).
  *   - Idempotent: an existing profile (pending OR reviewed) is left untouched
  *     thanks to $setOnInsert, so it never downgrades curated maturity data.
  *   - Non-throwing: any failure (including a unique-index race on concurrent
@@ -29,7 +35,7 @@ async function ensurePendingVintageProfile(wineDefinitionId, vintage) {
   try {
     await WineVintageProfile.findOneAndUpdate(
       { wineDefinition: wineDefinitionId, vintage },
-      { $setOnInsert: { wineDefinition: wineDefinitionId, vintage, status: 'pending' } },
+      { $setOnInsert: { wineDefinition: wineDefinitionId, vintage, status: 'pending', relative: vintage === 'NV' } },
       { upsert: true, new: false }
     );
   } catch (err) {

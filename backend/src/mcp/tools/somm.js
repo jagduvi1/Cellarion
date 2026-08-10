@@ -132,9 +132,10 @@ registerTool({
   title: 'Sommelier: set a vintage\'s drink-window phases',
   description:
     'Sets/records the drink-window (maturity) years for one wine+vintage: early/peak/late, each a from/until pair. ' +
-    'Call whenever the somm wants to set, record, or update when a specific wine is drinkable — get the profile_id from ' +
-    'list_maturity_queue, OR look the wine up with search_registry/get_wine when they name it directly (no need to open ' +
-    'the queue first). Absolute years (1900–2200) — except NV vintages, which use RELATIVE year-offsets 0–100 from ' +
+    'Call whenever the somm wants to set, record, or CORRECT when a specific wine is drinkable. Address the profile ' +
+    'either by profile_id (from list_maturity_queue) or by wine_id + vintage (wine_id from search_registry/get_wine/' +
+    'drink_window_for) — the wine_id route reaches ALREADY-REVIEWED profiles too, so it is how a published window ' +
+    'gets corrected. Absolute years (1900–2200) — except NV vintages, which use RELATIVE year-offsets 0–100 from ' +
     'release. Ordering: each until ≥ its from; peak_from ≥ early_from; late_from ≥ peak_from. Marks the profile ' +
     'reviewed. This is SHARED data powering every user\'s recommendations — confirm the values with the somm first. ' +
     'Reversible via undo_last.',
@@ -142,7 +143,9 @@ registerTool({
   requireRole: SOMM_ROLES,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
   inputSchema: {
-    profile_id: objectId.describe('From list_maturity_queue'),
+    profile_id: objectId.optional().describe('From list_maturity_queue — or address by wine_id + vintage instead'),
+    wine_id: objectId.optional().describe('Registry wine id — pass together with vintage when no profile_id is at hand'),
+    vintage: z.string().min(1).max(10).optional().describe('The vintage of the profile to address, e.g. "2019" or "NV"'),
     early_from: z.number().int().nullable().optional(),
     early_until: z.number().int().nullable().optional(),
     peak_from: z.number().int().nullable().optional(),
@@ -154,8 +157,28 @@ registerTool({
   handler: async (args, ctx) => {
     const denied = requireSomm(ctx);
     if (denied) return denied;
-    const profile = await WineVintageProfile.findById(args.profile_id).populate('wineDefinition', 'name producer');
-    if (!profile) return fail('not_found', 'No such maturity profile. Use list_maturity_queue for valid ids.');
+    // Two address forms (support ticket d49cc924: reviewed profiles were
+    // unreachable — nothing returns a profile_id once a pair leaves the
+    // pending queue, so a published-but-wrong window could not be corrected
+    // over MCP). profile_id wins when both are sent; wine_id+vintage resolves
+    // through the (wineDefinition, vintage) unique index, reviewed or not.
+    let profile;
+    if (args.profile_id) {
+      profile = await WineVintageProfile.findById(args.profile_id).populate('wineDefinition', 'name producer');
+      if (!profile) return fail('not_found', 'No such maturity profile. Use list_maturity_queue for valid ids.');
+    } else if (args.wine_id && args.vintage) {
+      // Same canonical vintage string the profiles store: trimmed, 'NV' upper.
+      const vintage = /^nv$/i.test(args.vintage.trim()) ? 'NV' : args.vintage.trim();
+      profile = await WineVintageProfile.findOne({ wineDefinition: args.wine_id, vintage })
+        .populate('wineDefinition', 'name producer');
+      if (!profile) {
+        return fail('not_found',
+          `No maturity profile exists for that wine + vintage "${vintage}". Profiles are seeded when a bottle of the ` +
+          'vintage is added — check the vintage against drink_window_for or list_maturity_queue before retrying.');
+      }
+    } else {
+      return fail('invalid_input', 'Address the profile: pass profile_id, or wine_id and vintage together.');
+    }
 
     // Mirror REST validation exactly: NV → relative offsets [0,100], else
     // absolute years [1900,2200] (routes/somm/maturity.js).
