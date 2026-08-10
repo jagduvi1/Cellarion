@@ -46,8 +46,10 @@ async function loadContext() {
 /** The string-only row shape the rules (and the queue UI) consume. */
 const flattenWine = (w, regionNamesById, countryNamesById) => ({
   _id: w._id,
-  name: w.name,
-  producer: w.producer,
+  // String-coerce: one raw-driver-written non-string row must not throw and
+  // take the whole scan (and the weekly metrics run) down with it.
+  name: w.name == null ? '' : String(w.name),
+  producer: w.producer == null ? '' : String(w.producer),
   appellation: w.appellation || null,
   region: w.region ? (regionNamesById.get(String(w.region)) || null) : null,
   country: w.country ? (countryNamesById.get(String(w.country)) || null) : null,

@@ -108,7 +108,7 @@ test('submit fires one create per bottle with the copied payload and reports the
   expect(createBottle).toHaveBeenLastCalledWith(apiFetch, COPIED_PAYLOAD);
 });
 
-test('unticking "copy details" sends only wine, cellar, vintage and size', async () => {
+test('unticking "copy details" sends only wine, cellar, vintage, size and currency', async () => {
   createBottle.mockResolvedValue(ok());
   const onAdded = vi.fn();
   renderModal({ onAdded });
@@ -117,11 +117,14 @@ test('unticking "copy details" sends only wine, cellar, vintage and size', async
   fireEvent.click(submitBtn(1));
 
   await waitFor(() => expect(onAdded).toHaveBeenCalledWith(1));
+  // Currency still travels — a blank copy must not fall back to the backend's
+  // USD default for a non-USD user.
   expect(createBottle).toHaveBeenCalledWith(apiFetch, {
     cellar: 'c1',
     wineDefinition: 'w1',
     vintage: '2016',
     bottleSize: '750ml',
+    currency: 'EUR',
   });
 });
 

@@ -96,17 +96,19 @@ function buildCrossFieldRefs({ appellations = [], regions = [], countries = [], 
 }
 
 // Style vocabulary for producer-is-style-term, pre-normalized (normalizeString
-// folds "Roșu" → 'rosu', "off-dry" → 'offdry', "süß" → 'sus'). Two tiers:
-// STYLE words are EVIDENCE a string is a style descriptor; FILLER words
-// merely don't count against it. A multi-token producer flags only when EVERY
-// token is style-or-filler AND at least one is style — "Roșu Demidulce"
-// flags, "Château Doux Rivage" must not (rivage is a real word).
+// folds "Roșu" → 'rosu' and "off-dry" → 'offdry'; ß is NOT decomposable and
+// would be stripped outright, so the detect pre-folds ß→ss before normalizing
+// — "süß" → 'suss', "Weiß" → 'weiss'). Two tiers: STYLE words are EVIDENCE a
+// string is a style descriptor; FILLER words merely don't count against it. A
+// multi-token producer flags only when EVERY token is style-or-filler AND at
+// least one is style — "Roșu Demidulce" flags, "Château Doux Rivage" must not
+// (rivage is a real word).
 const STYLE_WORDS = new Set([
   // sweetness / dryness scales across label languages
   'demidulce', 'demisec', 'dulce', 'seco', 'semiseco', 'semidulce',
   'abboccato', 'amabile', 'halbtrocken', 'feinherb', 'trocken', 'lieblich',
   'offdry', 'semisweet', 'moelleux', 'doux', 'brut', 'sec', 'dry', 'sweet',
-  'sus', 'suss', 'edes',
+  'suss', 'edes',
   // colour-as-style — the other half of the "Roșu Demidulce" prod row
   'rosu', 'alb', 'negru', 'rosso', 'bianco', 'rosato', 'tinto', 'blanco',
   'rouge', 'blanc', 'rose', 'rot', 'weiss', 'red', 'white',
@@ -205,13 +207,14 @@ const CROSS_FIELD_CHECKS = [
   {
     // "Roșu Demidulce" (= semi-sweet red) as producer. Every token must be a
     // style/filler word, with at least one style word — see the vocabulary
-    // comment above for why "Château Doux Rivage" never flags.
-    id: 'producer-is-style-term.v1',
+    // comment above for why "Château Doux Rivage" never flags. v2: pre-fold
+    // ß→ss so "Süß"/"Weiß" reach the vocabulary (normalizeString deletes ß).
+    id: 'producer-is-style-term.v2',
     labelKey: 'producerIsStyleTerm',
     field: 'producer',
     defaultActive: true,
     detect: (w) => {
-      const tokens = normalizeString(w.producer || '').split(' ').filter(Boolean);
+      const tokens = normalizeString((w.producer || '').replace(/ß/g, 'ss')).split(' ').filter(Boolean);
       if (tokens.length === 0) return null;
       const matched = [];
       for (const t of tokens) {

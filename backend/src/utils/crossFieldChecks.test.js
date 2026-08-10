@@ -143,8 +143,8 @@ describe('producer-is-grape.v1', () => {
   });
 });
 
-describe('producer-is-style-term.v1', () => {
-  const detect = byId('producer-is-style-term.v1').detect;
+describe('producer-is-style-term.v2', () => {
+  const detect = byId('producer-is-style-term.v2').detect;
 
   test('flags the evidence row "Roșu Demidulce" (every token is style vocabulary)', () => {
     expect(detect({ producer: 'Roșu Demidulce' })).toBe('rosu demidulce');
@@ -154,6 +154,12 @@ describe('producer-is-style-term.v1', () => {
     expect(detect({ producer: 'Brut' })).toBe('brut');
     expect(detect({ producer: 'Halbtrocken' })).toBe('halbtrocken');
     expect(detect({ producer: 'Vin Demisec' })).toBe('demisec'); // 'vin' is filler, not evidence
+  });
+
+  test('v2: ß spellings reach the vocabulary (normalizeString alone deletes ß)', () => {
+    expect(detect({ producer: 'Süß' })).toBe('suss');
+    expect(detect({ producer: 'Weiß' })).toBe('weiss');
+    expect(detect({ producer: 'Süß Rot' })).toBe('suss rot');
   });
 
   test('one real word disarms it: "Château Doux Rivage" must not flag', () => {
@@ -333,7 +339,7 @@ describe('mental dry-run against the 2026-08-10 evidence rows', () => {
     [{ producer: 'Monbazillac', name: 'Sec' }, 'producer-is-appellation.v1'],
     [{ producer: 'Dragasani', name: 'Feteasca' }, 'producer-is-region.v1'],
     [{ producer: 'Domaine unknown', name: 'Rouge' }, 'producer-placeholder.v1'],
-    [{ producer: 'Roșu Demidulce', name: 'X' }, 'producer-is-style-term.v1'],
+    [{ producer: 'Roșu Demidulce', name: 'X' }, 'producer-is-style-term.v2'],
     [{ producer: 'The Freaky Wines', name: 'Wines' }, 'name-in-producer.v1'],
     [{ producer: "Trader Joe's (Bersano Estate)", name: 'Barolo' }, 'producer-parenthetical.v1'],
     [{ producer: 'X', name: 'Y', appellation: 'Cabernet Sauvignon' }, 'appellation-is-grape.v1'],
