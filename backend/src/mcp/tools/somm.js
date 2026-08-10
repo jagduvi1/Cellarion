@@ -79,13 +79,18 @@ registerTool({
   title: 'Sommelier: list the maturity queue',
   description:
     'Lists wine+vintage pairs awaiting drink-window review (every added bottle seeds one). Pending first, newest ' +
-    'first. Call when the somm asks "anything in my maturity queue?" or before a review session. Use the returned ' +
-    'profile_id with set_vintage_maturity.',
+    'first. Call when the somm asks "anything in my maturity queue?" or before a review session. Pass wine_id ' +
+    '(and optionally vintage) to fetch ONE wine\'s rows — including curator notes, which the public drink_window_for ' +
+    'deliberately omits; a wine-scoped call defaults to status "all" so reviewed rows show without paginating the ' +
+    'whole queue. Use the returned profile_id with set_vintage_maturity (which also accepts wine_id + vintage directly).',
   scope: 'read',
   requireRole: SOMM_ROLES,
   annotations: { readOnlyHint: true, openWorldHint: false },
   inputSchema: {
-    status: z.enum(['pending', 'reviewed', 'all']).default('pending'),
+    status: z.enum(['pending', 'reviewed', 'all']).optional()
+      .describe('Default: "pending" — or "all" when wine_id is given (a wine lookup wants every row)'),
+    wine_id: objectId.optional().describe('Scope to one registry wine (from search_registry/get_wine/drink_window_for)'),
+    vintage: z.string().min(1).max(10).optional().describe('With wine_id: one vintage, e.g. "2019" or "NV"'),
     limit: z.number().int().min(1).max(50).default(20),
     offset: z.number().int().min(0).default(0),
   },
@@ -93,8 +98,19 @@ registerTool({
     const denied = requireSomm(ctx);
     if (denied) return denied;
     const { limit, offset } = pageParams(args, 20, 50);
-    const status = args.status || 'pending';
+    // A wine-scoped call defaults to 'all': the curator asking "what is
+    // curated for THIS wine" wants reviewed rows, and 5,600+ reviewed
+    // profiles made reaching one by pagination ~113 calls (curator feedback
+    // on v1.101.0). Unscoped calls keep the pending-queue default.
+    const status = args.status || (args.wine_id ? 'all' : 'pending');
     const filter = status === 'all' ? {} : { status };
+    if (args.wine_id) {
+      filter.wineDefinition = args.wine_id;
+      if (args.vintage) {
+        // Same canonical vintage form set_vintage_maturity uses.
+        filter.vintage = /^nv$/i.test(args.vintage.trim()) ? 'NV' : args.vintage.trim();
+      }
+    }
     const [total, pending, profiles] = await Promise.all([
       WineVintageProfile.countDocuments(filter),
       WineVintageProfile.countDocuments({ status: 'pending' }),
