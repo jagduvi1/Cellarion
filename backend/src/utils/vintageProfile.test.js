@@ -1,46 +1,54 @@
-// ensurePendingVintageProfile does a single findOneAndUpdate upsert; mock the
-// model so the create-only / skip logic can be asserted without a live MongoDB
-// (the full round-trip is covered by the Docker smoke test).
-jest.mock('../models/WineVintageProfile', () => ({
-  findOneAndUpdate: jest.fn(),
-}));
+/**
+ * ensurePendingVintageProfile — queue-seeding invariants.
+ *
+ * Pins the NV `relative` derivation (support ticket d49d2b36: the flag is
+ * fully determined by the vintage string, and seeding it false shipped every
+ * NV wine into the maturity queue self-contradictory), the $setOnInsert
+ * idempotence contract, the Unknown-vintage no-op, and the non-throwing
+ * best-effort behaviour.
+ */
 
-const { ensurePendingVintageProfile } = require('./vintageProfile');
+jest.mock('../models/WineVintageProfile', () => ({ findOneAndUpdate: jest.fn() }));
+
 const WineVintageProfile = require('../models/WineVintageProfile');
+const { ensurePendingVintageProfile } = require('./vintageProfile');
 
-describe('ensurePendingVintageProfile', () => {
-  beforeEach(() => jest.clearAllMocks());
+const WINE = 'a'.repeat(24);
 
-  test('upserts a pending profile for a year vintage', async () => {
-    WineVintageProfile.findOneAndUpdate.mockResolvedValue(null);
-    await ensurePendingVintageProfile('w1', '2018');
-    expect(WineVintageProfile.findOneAndUpdate).toHaveBeenCalledWith(
-      { wineDefinition: 'w1', vintage: '2018' },
-      { $setOnInsert: { wineDefinition: 'w1', vintage: '2018', status: 'pending' } },
-      { upsert: true, new: false }
-    );
-  });
+beforeEach(() => {
+  jest.clearAllMocks();
+  WineVintageProfile.findOneAndUpdate.mockResolvedValue(null);
+});
 
-  test('creates a profile for NV (somms attach notes to non-vintage wines)', async () => {
-    WineVintageProfile.findOneAndUpdate.mockResolvedValue(null);
-    await ensurePendingVintageProfile('w1', 'NV');
-    expect(WineVintageProfile.findOneAndUpdate).toHaveBeenCalledTimes(1);
-  });
+test('a year vintage seeds a pending stub with relative:false', async () => {
+  await ensurePendingVintageProfile(WINE, '2018');
+  expect(WineVintageProfile.findOneAndUpdate).toHaveBeenCalledWith(
+    { wineDefinition: WINE, vintage: '2018' },
+    { $setOnInsert: { wineDefinition: WINE, vintage: '2018', status: 'pending', relative: false } },
+    { upsert: true, new: false }
+  );
+});
 
-  test('no-ops for the "Unknown" vintage (no year to recommend a window for)', async () => {
-    await ensurePendingVintageProfile('w1', 'Unknown');
-    expect(WineVintageProfile.findOneAndUpdate).not.toHaveBeenCalled();
-  });
+test('NV seeds with relative:true — the flag is derived, never defaulted', async () => {
+  await ensurePendingVintageProfile(WINE, 'NV');
+  const [, update] = WineVintageProfile.findOneAndUpdate.mock.calls[0];
+  expect(update.$setOnInsert).toMatchObject({ vintage: 'NV', status: 'pending', relative: true });
+});
 
-  test('no-ops when the wine id or vintage is missing', async () => {
-    await ensurePendingVintageProfile(null, '2018');
-    await ensurePendingVintageProfile('w1', '');
-    await ensurePendingVintageProfile('w1', undefined);
-    expect(WineVintageProfile.findOneAndUpdate).not.toHaveBeenCalled();
-  });
+test('everything lives under $setOnInsert so an existing profile is never touched', async () => {
+  await ensurePendingVintageProfile(WINE, 'NV');
+  const [, update] = WineVintageProfile.findOneAndUpdate.mock.calls[0];
+  expect(Object.keys(update)).toEqual(['$setOnInsert']);
+});
 
-  test('swallows errors (best-effort) — never throws', async () => {
-    WineVintageProfile.findOneAndUpdate.mockRejectedValue(new Error('E11000 dup key'));
-    await expect(ensurePendingVintageProfile('w1', '2018')).resolves.toBeUndefined();
-  });
+test('Unknown vintage and missing args are no-ops', async () => {
+  await ensurePendingVintageProfile(WINE, 'Unknown');
+  await ensurePendingVintageProfile(null, '2018');
+  await ensurePendingVintageProfile(WINE, '');
+  expect(WineVintageProfile.findOneAndUpdate).not.toHaveBeenCalled();
+});
+
+test('a write failure is swallowed — seeding is best-effort next to the bottle save', async () => {
+  WineVintageProfile.findOneAndUpdate.mockRejectedValue(new Error('duplicate key'));
+  await expect(ensurePendingVintageProfile(WINE, '2018')).resolves.toBeUndefined();
 });
