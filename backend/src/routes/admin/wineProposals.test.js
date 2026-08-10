@@ -25,6 +25,7 @@ jest.mock('../../models/WineVintageProfile', () => ({ deleteMany: jest.fn() }));
 jest.mock('../../models/Bottle', () => ({ distinct: jest.fn() }));
 jest.mock('../../models/Country', () => ({ findOne: jest.fn() }));
 jest.mock('../../services/audit', () => ({ logAudit: jest.fn() }));
+jest.mock('../../services/indexNow', () => ({ submitUrls: jest.fn() }));
 jest.mock('../../services/search', () => ({ indexWine: jest.fn(), bulkIndexBottles: jest.fn() }));
 jest.mock('../../services/embeddingJob', () => ({ reembedActiveVintages: jest.fn().mockResolvedValue(undefined) }));
 jest.mock('../../services/findOrCreateWine', () => ({ findOrCreateRegion: jest.fn() }));
@@ -147,6 +148,9 @@ describe('POST /:id/approve', () => {
     expect(wine.normalizedKey).toBe(generateWineKey('Barolo', 'E. Pira e Figli', 'Barolo'));
     expect(wine.save).toHaveBeenCalled();
     expect(searchService.indexWine).toHaveBeenCalledWith(W1);
+    // IndexNow parity with the PUT: an approved identity fix changes the
+    // public wine page and must ping crawlers the same way (audit 2026-08-10).
+    expect(require('../../services/indexNow').submitUrls).toHaveBeenCalledWith(`/wines/${W1}`);
     // The receipt lands on the row.
     const noteSet = WineCorrectionProposal.updateOne.mock.calls.at(-1);
     expect(noteSet[1].$set.appliedNote).toMatch(/Applied/);

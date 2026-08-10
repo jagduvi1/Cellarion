@@ -24,6 +24,7 @@ const Discussion = require('../../models/Discussion');
 const DiscussionReply = require('../../models/DiscussionReply');
 const WineEmbedding = require('../../models/WineEmbedding');
 const WineNotDuplicate = require('../../models/WineNotDuplicate');
+const WineCorrectionProposal = require('../../models/WineCorrectionProposal');
 const WineList = require('../../models/WineList');
 const WishlistItem = require('../../models/WishlistItem');
 const PriceTrackingRequest = require('../../models/PriceTrackingRequest');
@@ -1223,6 +1224,12 @@ router.delete('/:id', async (req, res) => {
       WineReport.updateMany({ duplicateOf: id }, { $unset: { duplicateOf: '' } }),
       WineRequest.updateMany({ linkedWineDefinition: id }, { $unset: { linkedWineDefinition: '' } }),
       WineNotDuplicate.deleteMany({ $or: [{ wineA: id }, { wineB: id }] }),
+      // Pending correction proposals on (or targeting) a deleted wine would
+      // dangle in the review queue forever — same closure as performWineMerge.
+      WineCorrectionProposal.updateMany(
+        { status: 'pending', $or: [{ wineDefinition: id }, { mergeTargetId: id }] },
+        { $set: { status: 'rejected', decidedAt: new Date(), rejectReason: 'Closed automatically: the wine was deleted before review.' } }
+      ),
       // Qdrant points + WineEmbedding bookkeeping rows (same helper as merge).
       purgeSourceVectors(id),
     ]);
@@ -1430,6 +1437,24 @@ async function performWineMerge(sourceId, targetId, req) {
   searchService.removeWine(String(sourceId));
   // Target was mutated if we adopted the image; re-index so search sees it
   if (imageAction === 'adopted_from_source') searchService.indexWine(targetId);
+
+  // Close the source's PENDING correction proposals — a pending row whose
+  // subject wine is gone would dangle forever: the review list renders a null
+  // wine, approve 404s and reverts its claim back to pending, and the
+  // AdminWines badge stays inflated (audit 2026-08-10 MED). Auto-reject with
+  // the reason rather than re-point: the merge usually RESOLVES the complaint,
+  // and silently re-targeting what an admin later approves would be spookier
+  // than asking the somm to re-file against the keeper. decidedBy stays null —
+  // this is lifecycle closure, not a reviewer's judgement.
+  const keeperLabel = [target.producer, target.name].filter(Boolean).join(' — ');
+  await WineCorrectionProposal.updateMany(
+    { status: 'pending', $or: [{ wineDefinition: sourceId }, { mergeTargetId: sourceId }] },
+    { $set: {
+      status: 'rejected',
+      decidedAt: new Date(),
+      rejectReason: `Closed automatically: the wine was merged into "${keeperLabel}". Re-file against that wine if the issue still applies.`.slice(0, 500),
+    } }
+  );
 
   // Re-embed the keeper's vintages (it just absorbed the source's bottles and
   // possibly its profile) so semantic search reflects the merged wine.

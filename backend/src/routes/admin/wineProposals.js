@@ -32,6 +32,7 @@ const Bottle = require('../../models/Bottle');
 const Country = require('../../models/Country');
 const { requireAuth, requireRole } = require('../../middleware/auth');
 const { logAudit } = require('../../services/audit');
+const { submitUrls } = require('../../services/indexNow');
 const searchService = require('../../services/search');
 const { reembedActiveVintages } = require('../../services/embeddingJob');
 const { findOrCreateRegion } = require('../../services/findOrCreateWine');
@@ -244,7 +245,10 @@ router.post('/:id/approve', async (req, res) => {
         }
 
         // The PUT's follow-through: registry index, the bottles' denormalized
-        // search docs (no scheduled resync exists), and the embedding text.
+        // search docs (no scheduled resync exists), the embedding text — and
+        // the IndexNow ping (an approved identity fix changes the public wine
+        // page exactly like a PUT rename; parity per audit 2026-08-10).
+        submitUrls(`/wines/${wine._id}`);
         searchService.indexWine(wine._id);
         Bottle.distinct('_id', { wineDefinition: wine._id })
           .then((ids) => searchService.bulkIndexBottles(ids))
